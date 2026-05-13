@@ -10,6 +10,7 @@ import {
   LanguageStrings,
   LocalizeKey,
   serialize,
+  Unsubscriber,
   USFM_MARKERS_MAP_PARATEXT_3_0,
   usfmMarkers,
   UsjDocumentLocation,
@@ -17,6 +18,7 @@ import {
 } from 'platform-bible-utils';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { ScriptureRange } from 'platform-scripture-editor';
+import type { SharedProjectsInfo } from 'platform-scripture';
 import { MutableRefObject } from 'react';
 import { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { MarkerMenuItem } from 'platform-bible-react';
@@ -381,3 +383,161 @@ export function generateInlineMarkerMenuListItems(
   });
   return markerMenuItems.sort((a, b) => (a.marker ?? a.title).localeCompare(b.marker ?? b.title));
 }
+
+// #region Default Active Project Picker
+
+/**
+ * Outcome of a single picker attempt.
+ *
+ * - `wrong-mode` — `platform.interfaceMode` is not `'simple'`; nothing to do this session.
+ * - `no-empty` — no Scripture Editor with `projectId === undefined` is currently open; the caller may
+ *   retry when a new web view opens.
+ * - `failed` — `getSharedProjects` or the open command rejected; logged at warn.
+ * - `no-candidate` — no shared project passed the activity / `editedStatus` filter, OR the
+ *   send/receive extension is not installed so there are no shared projects to pick from.
+ * - `filled` — picker successfully called the open command for the top candidate.
+ */
+export type DefaultProjectPickerOutcome =
+  | 'wrong-mode'
+  | 'no-empty'
+  | 'failed'
+  | 'no-candidate'
+  | 'filled';
+
+/**
+ * Attempt to fill the empty Scripture Editor in the simple layout with the most-recently-active
+ * project the current user has non-Observer permission on.
+ *
+ * The picker is stateless — the caller is responsible for idempotency (run-once semantics) and for
+ * subscribing to web-view events to retry when the empty editor appears. See
+ * {@link startDefaultProjectPicker} for the lifecycle driver.
+ *
+ * @param papi The PAPI backend handle. Injected for testability.
+ * @returns The outcome of this attempt — see {@link DefaultProjectPickerOutcome}.
+ */
+export async function openDefaultActiveProjectIfApplicable(
+  papi: typeof PapiBackend,
+): Promise<DefaultProjectPickerOutcome> {
+  const interfaceMode = await papi.settings.get('platform.interfaceMode');
+  if (interfaceMode !== 'simple') return 'wrong-mode';
+
+  const openWebViews = await papi.webViews.getAllOpenWebViewDefinitions();
+  const emptyEditor = openWebViews.find(
+    (def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && !def.projectId,
+  );
+  if (!emptyEditor) return 'no-empty';
+
+  // Pre-check whether the send/receive extension is installed. Mirrors the gating pattern in
+  // `home.web-view.tsx` so we can cleanly distinguish "extension absent" (a quiet no-op) from
+  // genuine errors during `getSharedProjects` (which should still warn). Treat `undefined` (the
+  // command's documented return when nothing is registered) as "not available".
+  let isSendReceiveAvailable: boolean | undefined;
+  try {
+    isSendReceiveAvailable = await papi.commands.sendCommand(
+      'platformGetResources.isSendReceiveAvailable',
+    );
+  } catch (e) {
+    papi.logger.warn(
+      `Default active project picker: isSendReceiveAvailable check failed: ${getErrorMessage(e)}`,
+    );
+    return 'failed';
+  }
+  if (!isSendReceiveAvailable) return 'no-candidate';
+
+  let sharedProjects: SharedProjectsInfo;
+  try {
+    sharedProjects = await papi.commands.sendCommand('paratextBibleSendReceive.getSharedProjects');
+  } catch (e) {
+    papi.logger.warn(
+      `Default active project picker: getSharedProjects failed: ${getErrorMessage(e)}`,
+    );
+    return 'failed';
+  }
+
+  // ISO 8601 string comparison is chronologically sound, so a plain string compare suffices.
+  const candidates = Object.values(sharedProjects)
+    .filter((info) => info.editedStatus !== 'new' && info.lastSendReceiveDate)
+    .sort((a, b) => b.lastSendReceiveDate.localeCompare(a.lastSendReceiveDate));
+
+  if (candidates.length === 0) return 'no-candidate';
+
+  const top = candidates[0];
+  try {
+    await papi.commands.sendCommand('platformScriptureEditor.openScriptureEditor', top.id);
+  } catch (e) {
+    papi.logger.warn(
+      `Default active project picker: openScriptureEditor for ${top.id} failed: ${getErrorMessage(e)}`,
+    );
+    return 'failed';
+  }
+
+  return 'filled';
+}
+
+/**
+ * Lifecycle status of the picker driver.
+ *
+ * - `idle` — ready to attempt; no call in flight.
+ * - `running` — {@link openDefaultActiveProjectIfApplicable} is in flight.
+ * - `stopped` — terminal outcome reached; no further attempts will run this session.
+ */
+type PickerState = 'idle' | 'running' | 'stopped';
+
+/**
+ * Subscribes to web-view-open events and drives {@link openDefaultActiveProjectIfApplicable} until a
+ * terminal outcome is reached, then stops. Returns an unsubscriber the caller should add to its
+ * extension registrations so the subscription is cleaned up on extension deactivate.
+ *
+ * Mirrors the simple-function pattern used in `home.web-view.tsx` rather than a class wrapper — the
+ * driver has one job and is not extended.
+ */
+export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscriber {
+  let state: PickerState = 'idle';
+  // Set when a web-view-open event arrives while a tryPicker call is in flight. The in-flight
+  // attempt may have observed "no empty editor yet" before the event's empty editor materialized;
+  // the `finally` block re-fires tryPicker to close that race window. Kept separate from `state`
+  // because TypeScript's flow analysis cannot track concurrent state mutations across awaits.
+  let isRetryQueued = false;
+
+  const tryPicker = async (): Promise<void> => {
+    if (state === 'stopped') return;
+
+    if (state === 'running') {
+      isRetryQueued = true;
+      return;
+    }
+
+    state = 'running';
+    isRetryQueued = false;
+    try {
+      const outcome = await openDefaultActiveProjectIfApplicable(papi);
+      // Only 'no-empty' is a "wait and retry" outcome; everything else is terminal.
+      if (outcome !== 'no-empty') state = 'stopped';
+    } catch (e) {
+      // The picker function catches its own errors and returns 'failed'; this catch only fires on
+      // unexpected throws (e.g. PAPI plumbing bugs). Stop watching to avoid hot-looping on the
+      // same bug if open-webview events keep firing.
+      state = 'stopped';
+      papi.logger.warn(
+        `Default active project picker: tryPicker threw unexpectedly: ${getErrorMessage(e)}`,
+      );
+    } finally {
+      if (state !== 'stopped') state = 'idle';
+      // If a web-view-open event arrived during the attempt and we're not stopped, re-fire to
+      // close the race window.
+      if (isRetryQueued && state !== 'stopped') tryPicker();
+    }
+  };
+
+  const unsub = papi.webViews.onDidOpenWebView(() => {
+    // Fire-and-forget; tryPicker handles its own errors.
+    tryPicker();
+  });
+
+  // Immediate attempt in case the dock layout's empty editor is already present.
+  tryPicker();
+
+  return unsub;
+}
+
+// #endregion Default Active Project Picker

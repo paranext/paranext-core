@@ -30,6 +30,7 @@ import {
   formatEditorTitle,
   openCommentListAndSelectThread,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+  startDefaultProjectPicker,
 } from './platform-scripture-editor.utils';
 import { MarkersViewNotifier } from './markers-view-notifier.model';
 
@@ -185,24 +186,49 @@ async function open(
     projectForWebView.isEditable = await pdp.getSetting('platform.isEditable');
   }
   if (projectForWebView.projectId) {
-    // If the caller didn't ask for a specific tab to replace, check whether any Scripture Editor
-    // is already open with no project. If so, replace it rather than opening a sibling tab —
-    // this prevents project opens from accumulating extra tabs when an empty editor slot exists.
+    // Determine which existing tab (if any) the new editor should replace.
+    //
+    // Simple mode: the editor column hosts a single Scripture Editor. To keep all opens in that
+    // column rather than opening as sibling tabs in column 1 (where the home tab lives), we:
+    //   (a) focus the existing tab if the requested project is already open (no duplicate tabs);
+    //   (b) otherwise replace whichever Scripture Editor is currently open so the new project
+    //       takes over the column 2 slot;
+    //   (c) otherwise fall through to the empty-editor probe below (covers the very first open
+    //       when only the placeholder is present).
+    //
+    // Power mode: behavior is unchanged from the original branch — only replace if an empty
+    // Scripture Editor exists; otherwise let the platform place the new tab next to the
+    // currently-focused group. This preserves the P9-style "opening the same project twice
+    // creates two tabs" behavior in power mode.
     let tabIdToReplace = existingTabIdToReplace;
     if (!tabIdToReplace) {
       const allOpenDefs = await papi.webViews.getAllOpenWebViewDefinitions();
-      const emptyEditor = allOpenDefs.find(
-        (def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && !def.projectId,
+      const allScriptureEditors = allOpenDefs.filter(
+        (def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE,
       );
-      if (emptyEditor) tabIdToReplace = emptyEditor.id;
+
+      const interfaceMode = await papi.settings.get('platform.interfaceMode');
+      if (interfaceMode === 'simple') {
+        const existingForSameProject = allScriptureEditors.find(
+          (def) => def.projectId === projectForWebView.projectId,
+        );
+        if (existingForSameProject) {
+          tabIdToReplace = existingForSameProject.id;
+        } else if (allScriptureEditors.length > 0) {
+          tabIdToReplace = allScriptureEditors[0].id;
+        }
+      }
+
+      if (!tabIdToReplace) {
+        const emptyEditor = allScriptureEditors.find((def) => !def.projectId);
+        if (emptyEditor) tabIdToReplace = emptyEditor.id;
+      }
     }
     const openWebViewOptions: PlatformScriptureEditorOptions = {
       projectId: projectForWebView.projectId,
       isReadOnly: !projectForWebView.isEditable,
       options,
     };
-    // REVIEW: If an editor is already open for the selected project, we open another.
-    // This matches the current behavior in P9, though it might not be what we want long-term.
     return papi.webViews.openWebView(
       SCRIPTURE_EDITOR_WEBVIEW_TYPE,
       tabIdToReplace ? { type: 'replace-tab', targetTabId: tabIdToReplace } : undefined,
@@ -906,6 +932,11 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     EDITOR_SELECTION_CHANGED_EVENT,
   );
 
+  // Default active project picker for simple layout. Subscribes to web-view-open events and
+  // attempts to fill the empty Scripture Editor with the most-recently-active editable project,
+  // running at most once per session until a terminal outcome is reached.
+  const unsubFromWebViewOpen = startDefaultProjectPicker(papi);
+
   // Await the registration promises at the end so we don't hold everything else up
   const markerNotifier = new MarkersViewNotifier(papi, context.executionToken);
   const markerNotifierUnsubscribers = await markerNotifier.start();
@@ -922,6 +953,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await insertCommentPromise,
     await annotationStyleDataProviderPromise,
     selectionChangedEventEmitter,
+    unsubFromWebViewOpen,
     ...markerNotifierUnsubscribers,
   );
 

@@ -2,7 +2,11 @@ import { describe, it, expect, vi } from 'vitest';
 import { ScriptureRange } from 'platform-scripture-editor';
 import type PapiBackend from '@papi/backend';
 import { UsjTextContentLocation } from 'platform-bible-utils';
-import { convertScriptureRangeToEditorRange } from './platform-scripture-editor.utils';
+import {
+  convertScriptureRangeToEditorRange,
+  openDefaultActiveProjectIfApplicable,
+  SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+} from './platform-scripture-editor.utils';
 
 // Sample USJ chapter data for Genesis chapter 1 with multiple verses
 const SAMPLE_USJ_CHAPTER = Object.freeze({
@@ -396,3 +400,323 @@ describe('convertScriptureRangeToEditorRange', () => {
     });
   });
 });
+
+// #region openDefaultActiveProjectIfApplicable
+
+interface PickerMocks {
+  papi: typeof PapiBackend;
+  mockGetSetting: ReturnType<typeof vi.fn>;
+  mockGetAllOpenWebViewDefinitions: ReturnType<typeof vi.fn>;
+  mockSendCommand: ReturnType<typeof vi.fn>;
+  mockWarn: ReturnType<typeof vi.fn>;
+}
+
+function createPickerMocks(): PickerMocks {
+  const mockGetSetting = vi.fn();
+  const mockGetAllOpenWebViewDefinitions = vi.fn();
+  const mockSendCommand = vi.fn();
+  const mockWarn = vi.fn();
+
+  // Mocking just the parts of PAPI the picker actually touches at runtime.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const papi = {
+    settings: { get: mockGetSetting },
+    webViews: { getAllOpenWebViewDefinitions: mockGetAllOpenWebViewDefinitions },
+    commands: { sendCommand: mockSendCommand },
+    logger: { warn: mockWarn },
+  } as unknown as typeof PapiBackend;
+
+  return {
+    papi,
+    mockGetSetting,
+    mockGetAllOpenWebViewDefinitions,
+    mockSendCommand,
+    mockWarn,
+  };
+}
+
+// Helper: getAllOpenWebViewDefinitions returns WebViewDefinition[], but test fixtures here are
+// plain objects that satisfy only a subset of that interface. Casting through never avoids
+// constructing full WebViewDefinition objects in tests.
+// eslint-disable-next-line no-type-assertion/no-type-assertion
+const asWebViews = (arr: object[]) => arr as never;
+
+describe('openDefaultActiveProjectIfApplicable', () => {
+  it("returns 'wrong-mode' when interfaceMode is not 'simple'", async () => {
+    const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions, mockSendCommand } =
+      createPickerMocks();
+    mockGetSetting.mockResolvedValue('power');
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('wrong-mode');
+    expect(mockGetAllOpenWebViewDefinitions).not.toHaveBeenCalled();
+    expect(mockSendCommand).not.toHaveBeenCalled();
+  });
+
+  it("returns 'no-empty' when no Scripture Editor with undefined projectId is open", async () => {
+    const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions, mockSendCommand } =
+      createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([
+        { webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: 'project1' },
+        { webViewType: 'someOtherType', projectId: undefined },
+      ]),
+    );
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('no-empty');
+    expect(mockGetAllOpenWebViewDefinitions).toHaveBeenCalled();
+    expect(mockSendCommand).not.toHaveBeenCalled();
+  });
+
+  it("returns 'no-candidate' when isSendReceiveAvailable returns false", async () => {
+    const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions, mockSendCommand, mockWarn } =
+      createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'platformGetResources.isSendReceiveAvailable') return false;
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('no-candidate');
+    expect(mockSendCommand).toHaveBeenCalledWith('platformGetResources.isSendReceiveAvailable');
+    expect(mockSendCommand).not.toHaveBeenCalledWith('paratextBibleSendReceive.getSharedProjects');
+    expect(mockWarn).not.toHaveBeenCalled();
+  });
+
+  it("returns 'failed' when the isSendReceiveAvailable check rejects", async () => {
+    const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions, mockSendCommand, mockWarn } =
+      createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'platformGetResources.isSendReceiveAvailable') {
+        throw new Error('isSendReceiveAvailable command not registered');
+      }
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('failed');
+    expect(mockWarn).toHaveBeenCalled();
+  });
+
+  it("returns 'failed' when getSharedProjects rejects", async () => {
+    const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions, mockSendCommand, mockWarn } =
+      createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'platformGetResources.isSendReceiveAvailable') return true;
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        throw new Error('getSharedProjects failed');
+      }
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('failed');
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.getSharedProjects');
+    expect(mockWarn).toHaveBeenCalled();
+  });
+
+  it("returns 'no-candidate' when all entries have editedStatus 'new'", async () => {
+    const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions, mockSendCommand } =
+      createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'platformGetResources.isSendReceiveAvailable') return true;
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          proj1: {
+            id: 'proj1',
+            name: 'P1',
+            fullName: 'Project 1',
+            language: 'en',
+            editedStatus: 'new',
+            lastSendReceiveDate: '2024-01-01T00:00:00Z',
+          },
+        };
+      }
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('no-candidate');
+  });
+
+  it("returns 'no-candidate' when all entries have empty lastSendReceiveDate", async () => {
+    const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions, mockSendCommand } =
+      createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'platformGetResources.isSendReceiveAvailable') return true;
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          proj1: {
+            id: 'proj1',
+            name: 'P1',
+            fullName: 'Project 1',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '',
+          },
+        };
+      }
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('no-candidate');
+  });
+
+  it('picks the project with the highest lastSendReceiveDate and calls openScriptureEditor', async () => {
+    const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions, mockSendCommand } =
+      createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'platformGetResources.isSendReceiveAvailable') return true;
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          older: {
+            id: 'older',
+            name: 'Older',
+            fullName: 'Older',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2024-01-01T00:00:00Z',
+          },
+          newer: {
+            id: 'newer',
+            name: 'Newer',
+            fullName: 'Newer',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2025-06-01T00:00:00Z',
+          },
+          stillOlder: {
+            id: 'stillOlder',
+            name: 'StillOlder',
+            fullName: 'StillOlder',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2023-01-01T00:00:00Z',
+          },
+        };
+      }
+      if (commandName === 'platformScriptureEditor.openScriptureEditor') {
+        return 'opened-webview-id';
+      }
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'newer',
+    );
+  });
+
+  it("skips entries with editedStatus 'new' and picks the newest of the rest", async () => {
+    const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions, mockSendCommand } =
+      createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'platformGetResources.isSendReceiveAvailable') return true;
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          notDownloaded: {
+            id: 'notDownloaded',
+            name: 'ND',
+            fullName: 'ND',
+            language: 'en',
+            editedStatus: 'new',
+            lastSendReceiveDate: '2025-12-01T00:00:00Z',
+          },
+          downloaded: {
+            id: 'downloaded',
+            name: 'D',
+            fullName: 'D',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2025-06-01T00:00:00Z',
+          },
+        };
+      }
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'downloaded',
+    );
+  });
+
+  it("returns 'failed' when the openScriptureEditor command rejects", async () => {
+    const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions, mockSendCommand, mockWarn } =
+      createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'platformGetResources.isSendReceiveAvailable') return true;
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          proj1: {
+            id: 'proj1',
+            name: 'P1',
+            fullName: 'P1',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2025-06-01T00:00:00Z',
+          },
+        };
+      }
+      if (commandName === 'platformScriptureEditor.openScriptureEditor') {
+        throw new Error('open failed');
+      }
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('failed');
+    expect(mockWarn).toHaveBeenCalled();
+  });
+});
+
+// #endregion openDefaultActiveProjectIfApplicable
