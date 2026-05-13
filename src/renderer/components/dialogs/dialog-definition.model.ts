@@ -10,8 +10,6 @@ export const ABOUT_DIALOG_TYPE = 'platform.aboutDialog';
 export const SELECT_PROJECT_DIALOG_TYPE = 'platform.selectProject';
 /** The tabType for the select multiple projects dialog in `select-multiple-projects.dialog.tsx` */
 export const SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE = 'platform.selectMultipleProjects';
-/** The tabType for the select books dialog in `select-books.dialog.tsx` */
-export const SELECT_BOOKS_DIALOG_TYPE = 'platform.selectBooks';
 /** The dialogType for alert dialogs rendered via overlay */
 export const ALERT_DIALOG_TYPE = 'platform.alert';
 /** The dialogType for confirm dialogs rendered via overlay */
@@ -28,12 +26,6 @@ export type SelectProjectDialogOptions = ProjectDialogOptionsBase;
 export type SelectMultipleProjectsDialogOptions = ProjectDialogOptionsBase & {
   /** Project IDs that should start selected in the dialog */
   selectedProjectIds?: string[];
-};
-
-/** Options to provide when showing the Select Books dialog */
-export type SelectBooksDialogOptions = DialogOptions & {
-  /** Books IDs that should start selected in the dialog */
-  selectedBookIds?: string[];
 };
 
 /** Options to provide when showing an alert dialog */
@@ -76,7 +68,6 @@ export interface DialogTypes {
     SelectMultipleProjectsDialogOptions,
     string[]
   >;
-  [SELECT_BOOKS_DIALOG_TYPE]: DialogDataTypes<SelectBooksDialogOptions, string[]>;
   [ALERT_DIALOG_TYPE]: DialogDataTypes<AlertDialogOptions, true>;
   [CONFIRM_DIALOG_TYPE]: DialogDataTypes<ConfirmDialogOptions, boolean>;
   [RESOURCE_PICKER_DIALOG_TYPE]: DialogDataTypes<ResourcePickerDialogOptions, DblResourceData>;
