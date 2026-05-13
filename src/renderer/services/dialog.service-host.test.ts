@@ -49,6 +49,7 @@ const mockDialogs = {
     tabType: 'platform.selectMultipleProjects',
     Component: vi.fn(),
   },
+  'platform.selectBooks': { tabType: 'platform.selectBooks', Component: vi.fn() },
   'platform.alert': {
     tabType: 'platform.alert',
     dialogRole: 'alertdialog',
