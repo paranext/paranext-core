@@ -435,4 +435,62 @@ test('all dialog types render correctly in modal and non-modal form', async ({ m
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     expect((result as string[]).length).toBeGreaterThanOrEqual(1);
   });
+
+  // =========================================================================
+  // Select Books Dialog
+  // =========================================================================
+
+  await test.step('select books dialog - modal', async () => {
+    const resultPromise = showDialogViaWebSocket<string[]>('platform.selectBooks', {
+      title: 'Pick Books',
+      prompt: 'Select some books',
+      selectedBookIds: ['GEN', 'EXO'],
+      isModal: true,
+    });
+
+    const dialog = modalDialog(mainPage);
+    await expect(dialog).toBeVisible({ timeout: 10_000 });
+    await expect(modalBackdrop(mainPage)).toBeVisible();
+    await expect(dialog).toContainText('Select some books');
+
+    // Verify book checklist renders (Genesis and Exodus should be pre-selected)
+    await expect(dialog.getByText('Genesis')).toBeVisible({ timeout: 5_000 });
+    await expect(dialog.getByText('Exodus')).toBeVisible();
+
+    // Submit with pre-selected books using the dialog's specific submit button class.
+    // Fixed modal + overflow can clip the footer; scrollIntoView does not fix that, and Playwright's
+    // click can fail even with force:true when the hit point is outside the viewport.
+    const submitButton = dialog.locator('.select-books-dialog-submit-button');
+    await submitButton.evaluate((el) => {
+      if (el instanceof HTMLElement) el.click();
+    });
+
+    await expect(dialog).not.toBeVisible({ timeout: 3_000 });
+    const result = await resultPromise;
+    expect(Array.isArray(result)).toBe(true);
+    expect(result).toContain('GEN');
+    expect(result).toContain('EXO');
+  });
+
+  await test.step('select books dialog - non-modal (floating tab)', async () => {
+    const resultPromise = showDialogViaWebSocket<string[]>('platform.selectBooks', {
+      prompt: 'Books from tab',
+      selectedBookIds: ['MAT'],
+    });
+
+    const panel = mainPage.locator('.dock-panel').filter({ hasText: 'Books from tab' });
+    await expect(panel).toBeVisible({ timeout: 10_000 });
+    await expect(modalDialog(mainPage)).not.toBeVisible();
+
+    // Verify checklist renders
+    await expect(panel.getByText('Matthew')).toBeVisible({ timeout: 5_000 });
+
+    const submitButton = panel.locator('.select-books-dialog-submit-button');
+    await submitButton.click();
+
+    await expect(panel).not.toBeVisible({ timeout: 3_000 });
+    const result = await resultPromise;
+    expect(Array.isArray(result)).toBe(true);
+    expect(result).toContain('MAT');
+  });
 });

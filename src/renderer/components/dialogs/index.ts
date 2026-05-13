@@ -5,6 +5,7 @@ import { SELECT_MULTIPLE_PROJECTS_DIALOG } from './select-multiple-projects.dial
 import { SELECT_PROJECT_DIALOG } from './select-project.dialog';
 import { DialogDefinition, DialogTabTypes } from './dialog-definition.model';
 import { RESOURCE_PICKER_DIALOG } from './resource-picker.dialog';
+import { SELECT_BOOKS_DIALOG } from './select-books-dialog.component';
 
 /**
  * Map of all available dialog definitions used to create dialogs
@@ -18,6 +19,7 @@ export const DIALOGS: { [DialogTabType in DialogTabTypes]: DialogDefinition<Dial
   [SELECT_PROJECT_DIALOG.tabType]: SELECT_PROJECT_DIALOG,
   [SELECT_MULTIPLE_PROJECTS_DIALOG.tabType]: SELECT_MULTIPLE_PROJECTS_DIALOG,
   [RESOURCE_PICKER_DIALOG.tabType]: RESOURCE_PICKER_DIALOG,
+  [SELECT_BOOKS_DIALOG.tabType]: SELECT_BOOKS_DIALOG,
 };
 
 /** All tab types for available dialogs */
