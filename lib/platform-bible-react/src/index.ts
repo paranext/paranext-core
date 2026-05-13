@@ -151,8 +151,8 @@ export {
 
 export { default as ChapterRangeSelector } from './components/basics/chapter-range-selector.component';
 export type { ChapterRangeSelectorProps } from './components/basics/chapter-range-selector.component';
-export { default as Checklist } from './components/basics/checklist.component';
-export type { ChecklistProps } from './components/basics/checklist.component';
+export { default as CheckboxList } from './components/basics/checkbox-list.component';
+export type { CheckboxListProps } from './components/basics/checkbox-list.component';
 export { default as ComboBox } from './components/basics/combo-box.component';
 export type {
   ComboBoxLabelOption,
