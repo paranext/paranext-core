@@ -7,6 +7,9 @@ import ResourcePickerDialog, {
 } from './resource-picker-dialog.component';
 import { SAMPLE_RESOURCES, SAMPLE_SELECTED_IDS } from './resource-picker-dialog.data';
 
+// jsdom does not implement IntersectionObserver — stub it so the hook can mount
+vi.stubGlobal('IntersectionObserver', vi.fn(() => ({ observe: vi.fn(), disconnect: vi.fn() })));
+
 const STRINGS: ResourcePickerDialogLocalizedStrings = {
   '%resourcePicker_title%': 'Resource picker',
   '%resourcePicker_section_already_selected%': 'Already selected',
@@ -136,5 +139,22 @@ describe('ResourcePickerDialog', () => {
   it('shows no Already Selected section when selectedResourceIds is empty', () => {
     renderDialog({ selectedResourceIds: [] });
     expect(screen.queryByText('Already selected')).not.toBeInTheDocument();
+  });
+
+  it('renders only the first 50 "Available to Download" resources when there are more than 50', () => {
+    const manyResources = Array.from({ length: 60 }, (_, i) => ({
+      dblEntryUid: `dl-${i}`,
+      displayName: `RES-${i}`,
+      fullName: `Resource ${i}`,
+      bestLanguageName: 'English',
+      type: 'ScriptureResource' as const,
+      size: 1_000_000,
+      installed: false,
+      updateAvailable: false,
+      projectId: `prj-${i}`,
+    }));
+    renderDialog({ allResources: manyResources, selectedResourceIds: [] });
+    expect(screen.getByText('RES-49')).toBeInTheDocument();
+    expect(screen.queryByText('RES-50')).not.toBeInTheDocument();
   });
 });
