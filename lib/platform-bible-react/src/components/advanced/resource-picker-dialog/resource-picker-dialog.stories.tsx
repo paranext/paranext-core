@@ -3,7 +3,11 @@ import { Dialog } from '@/components/shadcn-ui/dialog';
 import ResourcePickerDialog, {
   ResourcePickerDialogLocalizedStrings,
 } from './resource-picker-dialog.component';
-import { SAMPLE_RESOURCES, SAMPLE_SELECTED_IDS, LARGE_SAMPLE_RESOURCES } from './resource-picker-dialog.data';
+import {
+  SAMPLE_RESOURCES,
+  SAMPLE_SELECTED_IDS,
+  LARGE_SAMPLE_RESOURCES,
+} from './resource-picker-dialog.data';
 
 const STRINGS: ResourcePickerDialogLocalizedStrings = {
   '%resourcePicker_title%': 'Resource picker',
@@ -14,6 +18,7 @@ const STRINGS: ResourcePickerDialogLocalizedStrings = {
   '%resourcePicker_no_results%': 'No results found',
   '%resourcePicker_search_placeholder%': 'Search resources…',
   '%resourcePicker_language_filter_any%': 'Any language',
+  '%resourcePicker_language_filter_multipleSelected%': '{selectCount} languages',
   '%resourcePicker_showing_count%': 'Showing {filtered} of {total} resources',
 };
 

@@ -25,6 +25,7 @@ export const RESOURCE_PICKER_DIALOG_STRING_KEYS = Object.freeze([
   '%resourcePicker_no_results%',
   '%resourcePicker_search_placeholder%',
   '%resourcePicker_language_filter_any%',
+  '%resourcePicker_language_filter_multipleSelected%',
   '%resourcePicker_showing_count%',
 ] as const);
 
@@ -199,6 +200,21 @@ export default function ResourcePickerDialog({
   const noResultsText = localizeString(localizedStrings, '%resourcePicker_no_results%');
   const showingCountTemplate = localizeString(localizedStrings, '%resourcePicker_showing_count%');
 
+  const customLanguageSelectText = useMemo(() => {
+    if (selectedLanguages.length === languageOptions.length || selectedLanguages.length === 0)
+      return anyLanguageText;
+    if (selectedLanguages.length === 1) {
+      const matchingType = languageOptions.find((type) => type.value === selectedLanguages[0]);
+      if (matchingType) return matchingType.label;
+    }
+    return formatReplacementString(
+      localizeString(localizedStrings, '%resourcePicker_language_filter_multipleSelected%'),
+      {
+        selectCount: selectedLanguages.length,
+      },
+    );
+  }, [selectedLanguages, languageOptions]);
+
   const isFiltered = searchText.length > 0 || selectedLanguages.length > 0;
 
   return (
@@ -217,6 +233,7 @@ export default function ResourcePickerDialog({
           entries={languageOptions}
           selected={selectedLanguages}
           onChange={setSelectedLanguages}
+          customSelectedText={customLanguageSelectText}
           placeholder={anyLanguageText}
           variant="outline"
         />
