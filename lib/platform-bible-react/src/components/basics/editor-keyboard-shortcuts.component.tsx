@@ -3,16 +3,24 @@ import { MutableRefObject, PropsWithChildren, useEffect, useRef } from 'react';
 
 /** Properties for the `KeyboardShortcutsPlugin` component */
 type EditorKeyboardShortcutsProps = PropsWithChildren & {
+  /** The `editorRef` of the editor that this undo/redo plugin is applied to */
   editorRef: MutableRefObject<EditorRef | null>;
+  /** Whether the Undo button is enabled. */
+  canUndo?: boolean;
+  /** Whether the Redo button is enabled. */
+  canRedo?: boolean;
 };
 
 /**
  * Component that provides common undo/redo capability for a scripture `Editorial` component. Must
  * have the `Editorial` component instance as a child of this component.
- *
- * @param editorRef The `editorRef` of the editor that this undo/redo plugin is applied to
  */
-export function EditorKeyboardShortcuts({ children, editorRef }: EditorKeyboardShortcutsProps) {
+export function EditorKeyboardShortcuts({
+  children,
+  editorRef,
+  canUndo = true,
+  canRedo = true,
+}: EditorKeyboardShortcutsProps) {
   // These refs must have default values of `null` to be accepted by the React elements as refs
   // eslint-disable-next-line no-null/no-null
   const divRef = useRef<HTMLDivElement>(null);
@@ -33,13 +41,17 @@ export function EditorKeyboardShortcuts({ children, editorRef }: EditorKeyboardS
         // Undo: ⌘Z
         if (!event.shiftKey && key === 'z') {
           event.preventDefault();
-          editorRef.current?.undo();
+          if (canUndo) {
+            editorRef.current?.undo();
+          }
         }
 
         // Redo: ⌘⇧Z
         else if (event.shiftKey && key === 'z') {
           event.preventDefault();
-          editorRef.current?.redo();
+          if (canRedo) {
+            editorRef.current?.redo();
+          }
         }
       } else {
         if (!event.ctrlKey) return;
@@ -47,20 +59,24 @@ export function EditorKeyboardShortcuts({ children, editorRef }: EditorKeyboardS
         // Undo: Ctrl+Z
         if (!event.shiftKey && key === 'z') {
           event.preventDefault();
-          editorRef.current?.undo();
+          if (canUndo) {
+            editorRef.current?.undo();
+          }
         }
 
         // Redo: Ctrl+Y or Ctrl+Shift+Z
         else if (key === 'y' || (event.shiftKey && key === 'z')) {
           event.preventDefault();
-          editorRef.current?.redo();
+          if (canRedo) {
+            editorRef.current?.redo();
+          }
         }
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [editorRef]);
+  }, [canRedo, canUndo, editorRef]);
 
   return <div ref={divRef}>{children}</div>;
 }

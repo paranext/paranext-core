@@ -12,10 +12,11 @@ import { availableScrollGroupIds } from '@renderer/services/scroll-group.service
 import { localThemeService } from '@renderer/services/theme.service-host';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import { sendCommand } from '@shared/services/command.service';
+import { getNetworkEvent } from '@shared/services/network.service';
 import { logger } from '@shared/services/logger.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { themeServiceDataProviderName } from '@shared/services/theme.service-model';
-import { CircleUserRound, HomeIcon, Moon, Network, Sun } from 'lucide-react';
+import { CircleCheck, CircleUserRound, HomeIcon, Moon, Network, Sun } from 'lucide-react';
 import {
   Badge,
   BookChapterControl,
@@ -23,11 +24,13 @@ import {
   cn,
   getToolbarOSReservedSpaceClassName,
   ScrollGroupSelector,
+  Spinner,
   Toolbar,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  useEvent,
   usePromise,
 } from 'platform-bible-react';
 import {
@@ -47,7 +50,9 @@ const DEFAULT_THEME_VALUE: ThemeDefinitionExpanded = {
   themeFamilyId: '',
   type: 'light',
   id: 'light',
-  label: '%unused%',
+  // Reference-equality sentinel only; this label is never displayed (the loading state is detected
+  // before any render uses the label). Reusing an existing key avoids needing a bogus i18n entry.
+  label: '%toolbar_theme_loading%',
   cssVariables: {},
 };
 
@@ -68,6 +73,10 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%toolbar_theme_change_to_dark%',
   '%toolbar_theme_loading%',
   '%toolbar_theme_loading_error%',
+  '%toolbar_sync%',
+  '%toolbar_sync_open_status%',
+  '%toolbar_sync_status_synced%',
+  '%toolbar_sync_status_syncing%',
 ];
 
 export function PlatformBibleToolbar() {
@@ -145,6 +154,46 @@ export function PlatformBibleToolbar() {
     'Marketing Version',
   );
 
+  // Default is `undefined` (not yet resolved); the command itself always returns `boolean`.
+  const [isSendReceiveAvailable, setIsSendReceiveAvailable] = useState<boolean | undefined>(
+    undefined,
+  );
+
+  const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'synced'>('idle');
+
+  const handleSyncStateChanged = useCallback(
+    ({ isSyncing }: { isSyncing: boolean }) => setSyncState(isSyncing ? 'syncing' : 'synced'),
+    [],
+  );
+
+  const onSyncStateChanged = useMemo(
+    () => getNetworkEvent<{ isSyncing: boolean }>('paratextBibleSendReceive.onSyncStateChanged'),
+    [],
+  );
+  useEvent(onSyncStateChanged, handleSyncStateChanged);
+
+  const checkIfSendReceiveAvailable = useCallback(async () => {
+    try {
+      // This command comes from an extension and is not typed in CommandHandlers.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      const isAvailable = await (sendCommand as any)('platformGetResources.isSendReceiveAvailable');
+      setIsSendReceiveAvailable(isAvailable);
+    } catch (e) {
+      logger.warn(`Toolbar could not determine send/receive availability: ${getErrorMessage(e)}`);
+      setIsSendReceiveAvailable(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkIfSendReceiveAvailable();
+  }, [checkIfSendReceiveAvailable]);
+
+  const onDidReloadExtensions = useMemo(
+    () => getNetworkEvent('platform.onDidReloadExtensions'),
+    [],
+  );
+  useEvent(onDidReloadExtensions, checkIfSendReceiveAvailable);
+
   const themeDataProvider = useDataProvider(themeServiceDataProviderName);
 
   /** Get the theme on first load so we can show the right symbol on the toolbar */
@@ -184,7 +233,7 @@ export function PlatformBibleToolbar() {
       }}
       onSelectMenuItem={handleMenuCommand}
       className={cn(
-        'tw-h-12 tw-bg-transparent',
+        'tw:h-12 tw:bg-transparent',
         getToolbarOSReservedSpaceClassName(osPlatformToReserveSpaceFor),
       )}
       menubarVariant="muted"
@@ -192,19 +241,68 @@ export function PlatformBibleToolbar() {
       appMenuAreaChildren={<img width={24} height={24} src={`${logo}`} alt="Application Logo" />}
       configAreaChildren={
         <>
+          {isSendReceiveAvailable !== false && (
+            // While loading (undefined), the button stays in the DOM so layout doesn't shift, but
+            // is hidden via tw:invisible (visual), aria-hidden (accessibility tree), and tabIndex=-1
+            // (keyboard navigation). All three are required: tw:invisible alone is still reachable
+            // by AT and keyboard; aria-hidden alone is still tab-focusable.
+            <TooltipProvider delayDuration={TOOLTIP_DELAY}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    data-testid="toolbar-sync-button"
+                    variant="ghost"
+                    size="sm"
+                    className={cn(
+                      'pr-twp tw:h-8 tw:shrink-0',
+                      isSendReceiveAvailable === undefined && 'tw:invisible',
+                    )}
+                    // || undefined removes the attribute entirely when visible; aria-hidden="false" has different semantics than omitting it
+                    aria-hidden={isSendReceiveAvailable === undefined || undefined}
+                    tabIndex={isSendReceiveAvailable === undefined ? -1 : undefined}
+                    onClick={() => {
+                      // This command comes from an extension and is not typed in CommandHandlers.
+                      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+                      (sendCommand as any)('paratextBibleSendReceive.openSyncStatus').catch(
+                        (e: unknown) =>
+                          logger.warn(
+                            `Toolbar caught an error while trying to open sync status: ${getErrorMessage(e)}`,
+                          ),
+                      );
+                    }}
+                  >
+                    {syncState === 'syncing' && <Spinner className="tw:h-4 tw:w-4" />}
+                    {syncState === 'synced' && (
+                      <CircleCheck className="tw:h-4 tw:w-4 tw:text-success-foreground" />
+                    )}
+                    {
+                      {
+                        idle: localizedStrings['%toolbar_sync%'],
+                        syncing: localizedStrings['%toolbar_sync_status_syncing%'],
+                        synced: localizedStrings['%toolbar_sync_status_synced%'],
+                      }[syncState]
+                    }
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="tw:font-light">{localizedStrings['%toolbar_sync_open_status%']}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
           {marketingVersion !== '' && (
             <TooltipProvider delayDuration={TOOLTIP_DELAY}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Badge
                     variant="ghost"
-                    className="tw-block tw-max-w-[150px] tw-shrink tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap tw-font-normal"
+                    className="tw:block tw:max-w-[150px] tw:shrink tw:overflow-hidden tw:font-normal tw:text-ellipsis tw:whitespace-nowrap"
                   >
                     {marketingVersion}
                   </Badge>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p className="tw-font-light">{marketingVersion}</p>
+                  <p className="tw:font-light">{marketingVersion}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -215,7 +313,7 @@ export function PlatformBibleToolbar() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="pr-twp tw-h-8 tw-flex-shrink-0"
+                  className="pr-twp tw:h-8 tw:shrink-0"
                   aria-label={themeButtonTooltip}
                   data-testid="theme-toggle"
                   onClick={() => {
@@ -236,7 +334,7 @@ export function PlatformBibleToolbar() {
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p className="tw-font-light">{themeButtonTooltip}</p>
+                <p className="tw:font-light">{themeButtonTooltip}</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -247,15 +345,19 @@ export function PlatformBibleToolbar() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="pr-twp tw-h-8 tw-flex-shrink-0"
-                  onClick={() => sendCommand('paratextRegistration.showInternetSettings')}
+                  className="pr-twp tw:h-8 tw:shrink-0"
+                  onClick={() => {
+                    // This command comes from an extension and is not typed in CommandHandlers.
+                    // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+                    (sendCommand as any)('paratextRegistration.showInternetSettings');
+                  }}
                 >
                   <Network />
                 </Button>
               </TooltipTrigger>
               {localizedStrings['%mainMenu_openInternetSettings%'] && (
                 <TooltipContent>
-                  <p className="tw-font-light">
+                  <p className="tw:font-light">
                     {localizedStrings['%mainMenu_openInternetSettings%']}
                   </p>
                 </TooltipContent>
@@ -268,15 +370,19 @@ export function PlatformBibleToolbar() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="pr-twp tw-h-8 tw-flex-shrink-0"
-                  onClick={() => sendCommand('paratextRegistration.showParatextRegistration')}
+                  className="pr-twp tw:h-8 tw:shrink-0"
+                  onClick={() => {
+                    // This command comes from an extension and is not typed in CommandHandlers.
+                    // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+                    (sendCommand as any)('paratextRegistration.showParatextRegistration');
+                  }}
                 >
                   <CircleUserRound />
                 </Button>
               </TooltipTrigger>
               {localizedStrings['%mainMenu_openParatextRegistration%'] && (
                 <TooltipContent>
-                  <p className="tw-font-light">
+                  <p className="tw:font-light">
                     {localizedStrings['%mainMenu_openParatextRegistration%']}
                   </p>
                 </TooltipContent>
@@ -292,15 +398,19 @@ export function PlatformBibleToolbar() {
             <Button
               variant="ghost"
               size="icon"
-              className="tw-h-8"
-              onClick={() => sendCommand('platformGetResources.openHome')}
+              className="tw:h-8"
+              onClick={() => {
+                // This command comes from an extension and is not typed in CommandHandlers.
+                // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+                (sendCommand as any)('platformGetResources.openHome');
+              }}
             >
               <HomeIcon />
             </Button>
           </TooltipTrigger>
           {localizedStrings['%mainMenu_openHome%'] && (
             <TooltipContent>
-              <p className="tw-font-light">{localizedStrings['%mainMenu_openHome%']}</p>
+              <p className="tw:font-light">{localizedStrings['%mainMenu_openHome%']}</p>
             </TooltipContent>
           )}
         </Tooltip>
@@ -308,7 +418,7 @@ export function PlatformBibleToolbar() {
       <BookChapterControl
         scrRef={scrRef}
         handleSubmit={setScrRef}
-        className="tw-w-96"
+        className="tw:w-96"
         recentSearches={recentScriptureRefs}
         onAddRecentSearch={addRecentScriptureRef}
       />
@@ -317,7 +427,7 @@ export function PlatformBibleToolbar() {
         scrollGroupId={scrollGroupId}
         onChangeScrollGroupId={setScrollGroupId}
         localizedStrings={scrollGroupLocalizedStrings}
-        className="tw-h-8"
+        className="tw:h-8"
       />
     </Toolbar>
   );

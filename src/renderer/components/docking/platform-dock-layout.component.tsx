@@ -9,7 +9,9 @@ import {
 import {
   SavedTabInfo,
   Layout,
-  OnLayoutChangeRCDock,
+  LayoutChangeInfo,
+  LayoutInfo,
+  OnLayoutChange,
   WebViewTabProps,
   TabInfo,
   DirectionFromTab,
@@ -31,12 +33,14 @@ import {
   getTabInfoByElement,
   getTabInfoById,
   getWebViewDefinition,
+  loadLayout,
   loadTab,
   saveTab,
   focusTab,
   updateWebViewDefinition,
   updateTabPartial,
   getTabInfoByDirectionFromTab,
+  findFirstWebViewDefinitionByType,
 } from '@renderer/components/docking/platform-dock-layout-storage.util';
 import {
   isTab,
@@ -59,13 +63,15 @@ export function PlatformDockLayout() {
    * TODO: Strange pattern that we are setting a ref to a service function. Investigate changing
    * this pattern in some way. Maybe just export `onLayoutChange`?
    */
-  const onLayoutChangeRef = useRef<OnLayoutChangeRCDock | undefined>();
+  const onLayoutChangeRef = useRef<OnLayoutChange | undefined>(undefined);
 
   useEffect(() => {
     // Register with `web-view.service.ts` so it can perform operations on us
     const unsub = registerDockLayout({
-      dockLayout: dockLayoutRef.current,
       onLayoutChangeRef,
+      loadLayout: (layout: LayoutInfo) => loadLayout(dockLayoutRef.current, layout),
+      findFirstWebViewDefinitionByType: (webViewType: string) =>
+        findFirstWebViewDefinitionByType(dockLayoutRef.current, webViewType),
       addTabToDock: (savedTabInfo: SavedTabInfo, layout: Layout, shouldBringToFront = true) =>
         addTabToDock(savedTabInfo, layout, shouldBringToFront, dockLayoutRef.current),
       addWebViewToDock: (webView: WebViewTabProps, layout: Layout, shouldBringToFront = true) =>
@@ -100,7 +106,11 @@ export function PlatformDockLayout() {
       getTabInfoById: (tabId: string) =>
         getTabInfoById(dockLayoutRef.current, tabId, 'external getTabInfoById'),
       focusTab: (tabId: string) => focusTab(dockLayoutRef.current, tabId),
-      testLayout,
+      // `LayoutInfo` is intentionally opaque in the shared model so callers don't need to know
+      // about rc-dock's `LayoutBase`. Cross the boundary here at the only place we know the
+      // concrete shape.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      testLayout: testLayout as unknown as LayoutInfo,
     });
     return () => {
       unsub();
@@ -126,9 +136,9 @@ export function PlatformDockLayout() {
         left: 8,
         right: 8,
       }}
-      onLayoutChange={(...args) => {
-        const [layout, currentTabId, direction] = args;
+      onLayoutChange={(layout, currentTabId, direction) => {
         let webViewDefinition: WebViewDefinition | undefined;
+        const didCloseWebView = direction === 'remove';
 
         if (currentTabId) {
           const currentDockItem = dockLayoutRef.current.find(currentTabId);
@@ -205,8 +215,16 @@ export function PlatformDockLayout() {
 
         (async () => {
           if (onLayoutChangeRef.current) {
+            const changeInfo: LayoutChangeInfo = { didCloseWebView, webViewDefinition };
             try {
-              await onLayoutChangeRef.current(...args, webViewDefinition);
+              await onLayoutChangeRef.current(
+                // `layout` is rc-dock's `LayoutBase`. The shared model's `OnLayoutChange` accepts
+                // the opaque `LayoutInfo`; cross the boundary with one cast at the rc-dock edge.
+                // eslint-disable-next-line no-type-assertion/no-type-assertion
+                layout as unknown as LayoutInfo,
+                currentTabId,
+                changeInfo,
+              );
             } catch (e) {
               throw new Error(
                 `platform-dock-layout.component error: Failed to run onLayoutChangeRef.current! currentTabId: ${currentTabId}, direction: ${direction}, error: ${e}`,

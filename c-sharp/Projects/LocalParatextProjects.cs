@@ -46,19 +46,16 @@ internal class LocalParatextProjects
         ProjectInterfaces.MARKER_NAMES,
     ];
 
-    public LocalParatextProjects()
+    public LocalParatextProjects(AppInfo appInfo)
     {
         ProjectRootFolder = Path.Join(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".platform.bible",
+            $".{appInfo.Name}",
             "projects",
             "Paratext 9 Projects"
         );
 
-        Paratext9ProjectsFolder = Path.Join(
-            Path.GetPathRoot(Environment.CurrentDirectory),
-            "My Paratext 9 Projects"
-        );
+        Paratext9ProjectsFolder = ComputeParatext9ProjectsFolder();
     }
 
     #endregion
@@ -123,6 +120,9 @@ internal class LocalParatextProjects
     {
         return [.. s_paratextProjectInterfaces];
     }
+
+    public static string ComputeParatext9ProjectsFolder() =>
+        Path.Join(Path.GetPathRoot(Environment.CurrentDirectory), "My Paratext 9 Projects");
 
     #endregion
 

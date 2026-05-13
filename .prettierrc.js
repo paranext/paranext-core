@@ -8,6 +8,7 @@ module.exports = {
   // prettier-plugin-jsdoc options
   tsdoc: true,
   plugins: ['prettier-plugin-jsdoc', 'prettier-plugin-tailwindcss'],
+  tailwindStylesheet: './lib/platform-bible-react/src/index.css',
   overrides: [
     {
       files: '*.json',

@@ -22,8 +22,8 @@ type Story = StoryObj<typeof Sonner>;
 
 export const Default: Story = {
   render: () => (
-    <div className="tw-space-y-4">
-      <div className="tw-flex tw-flex-wrap tw-gap-2">
+    <div className="tw:space-y-4">
+      <div className="tw:flex tw:flex-wrap tw:gap-2">
         <Button onClick={() => sonner('This is a normal message')}>Normal Toast</Button>
         <Button onClick={() => sonner.success('Operation successful!')}>Success Toast</Button>
         <Button onClick={() => sonner.warning('This is a warning!')}>Warning Toast</Button>
@@ -43,8 +43,8 @@ export const Default: Story = {
 
 export const WithDescription: Story = {
   render: () => (
-    <div className="tw-space-y-4">
-      <div className="tw-flex tw-flex-wrap tw-gap-2">
+    <div className="tw:space-y-4">
+      <div className="tw:flex tw:flex-wrap tw:gap-2">
         <Button
           onClick={() =>
             sonner('This is a normal message', {
@@ -87,8 +87,8 @@ export const WithDescription: Story = {
 
 export const Actions: Story = {
   render: () => (
-    <div className="tw-space-y-4">
-      <div className="tw-flex tw-flex-wrap tw-gap-2">
+    <div className="tw:space-y-4">
+      <div className="tw:flex tw:flex-wrap tw:gap-2">
         <Button
           onClick={() =>
             sonner('Event created', {
@@ -134,7 +134,7 @@ export const Actions: Story = {
 
 export const PromiseToast: Story = {
   render: () => (
-    <div className="tw-space-y-4">
+    <div className="tw:space-y-4">
       <Button
         onClick={() => {
           const promise = new Promise<string>(
@@ -172,8 +172,8 @@ export const PromiseToast: Story = {
 
 export const Positioning: Story = {
   render: () => (
-    <div className="tw-space-y-4">
-      <div className="tw-grid tw-grid-cols-3 tw-gap-2">
+    <div className="tw:space-y-4">
+      <div className="tw:grid tw:grid-cols-3 tw:gap-2">
         <Button onClick={() => sonner('Top Left', { position: 'top-left' })}>Top Left</Button>
         <Button onClick={() => sonner('Top Center', { position: 'top-center' })}>Top Center</Button>
         <Button onClick={() => sonner('Top Right', { position: 'top-right' })}>Top Right</Button>
@@ -201,8 +201,8 @@ export const Positioning: Story = {
 
 export const Interactive: Story = {
   render: () => (
-    <div className="tw-space-y-4">
-      <div className="tw-flex tw-flex-wrap tw-gap-2">
+    <div className="tw:space-y-4">
+      <div className="tw:flex tw:flex-wrap tw:gap-2">
         <Button
           onClick={() =>
             sonner('This is a normal message', { description: 'This is a description' })
@@ -213,7 +213,7 @@ export const Interactive: Story = {
         <Button onClick={() => sonner.warning('This is a warning!')}>Show warning</Button>
         <Button onClick={() => sonner.error('This is an error')}>Show error</Button>
       </div>
-      <p className="tw-text-sm tw-text-muted-foreground">
+      <p className="tw:text-sm tw:text-muted-foreground">
         Click the buttons to see different toast notifications. This matches the original example.
       </p>
       <Sonner />
@@ -223,6 +223,73 @@ export const Interactive: Story = {
     docs: {
       description: {
         story: 'Interactive toast examples matching the original component demo.',
+      },
+    },
+  },
+};
+
+/**
+ * Renders the toaster inside a `light`-classed wrapper, so the toast inherits the light theme's CSS
+ * variables via the cascade. Useful as a Chromatic baseline for the dark counterpart below.
+ */
+export const LightTheme: Story = {
+  render: () => (
+    <div className="light tw:space-y-4 tw:bg-background tw:p-4">
+      <p className="tw:text-sm tw:text-muted-foreground">
+        The toast below should render with light-mode colors (white background, dark text).
+      </p>
+      <Button
+        onClick={() =>
+          sonner('Light theme toast', {
+            description: 'Should have a white background with dark text.',
+          })
+        }
+      >
+        Show light toast
+      </Button>
+      <Sonner />
+    </div>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Toast inside a `light`-classed wrapper — picks up the light theme via the CSS-variable cascade.',
+      },
+    },
+  },
+};
+
+/**
+ * Renders the toaster inside a `dark`-classed wrapper. The shadcn-style `tw:bg-background` /
+ * `tw:text-foreground` classes on the toast resolve to the dark theme's CSS variables purely via
+ * the cascade — no `theme` prop on `<Toaster>` and no DOM-observing hook required. This is the
+ * regression-guard for the original bug where unprefixed classes meant the toast always rendered in
+ * light mode.
+ */
+export const DarkTheme: Story = {
+  render: () => (
+    <div className="tw:space-y-4 tw:bg-background tw:p-4 dark">
+      <p className="tw:text-sm tw:text-muted-foreground">
+        The toast below should render with dark-mode colors (dark background, light text).
+      </p>
+      <Button
+        onClick={() =>
+          sonner('Dark theme toast', {
+            description: 'Should have a dark background with light text.',
+          })
+        }
+      >
+        Show dark toast
+      </Button>
+      <Sonner />
+    </div>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Toast inside a `dark`-classed wrapper — the toast inherits the dark theme via the same CSS-variable cascade every other shadcn-ui component uses.',
       },
     },
   },

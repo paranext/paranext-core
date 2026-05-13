@@ -15,7 +15,7 @@ import {
   CircleXIcon,
 } from 'lucide-react';
 import { ReactNode } from 'react';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { InventoryTableData, Status } from './inventory-utils';
 
 /**
@@ -27,10 +27,10 @@ import { InventoryTableData, Status } from './inventory-utils';
  */
 const getSortingIcon = (sortDirection: false | SortDirection): ReactNode => {
   if (sortDirection === 'asc') {
-    return <ArrowUpIcon className="tw-h-4 tw-w-4" />;
+    return <ArrowUpIcon className="tw:h-4 tw:w-4" />;
   }
   if (sortDirection === 'desc') {
-    return <ArrowDownIcon className="tw-h-4 tw-w-4" />;
+    return <ArrowDownIcon className="tw:h-4 tw:w-4" />;
   }
   return undefined;
 };
@@ -51,11 +51,11 @@ export const getInventoryHeader = (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger
-          className={cn('tw-flex tw-w-full tw-justify-start', buttonClassName)}
+          className={cn('tw:flex tw:w-full tw:justify-start', buttonClassName)}
           variant="ghost"
           onClick={() => column.toggleSorting(undefined)}
         >
-          <span className="tw-w-6 tw-max-w-fit tw-flex-1 tw-overflow-hidden tw-text-ellipsis">
+          <span className="tw:w-6 tw:max-w-fit tw:flex-1 tw:overflow-hidden tw:text-ellipsis">
             {label}
           </span>
           {getSortingIcon(column.getIsSorted())}
@@ -111,9 +111,9 @@ export const inventoryAdditionalItemColumn = (
 export const inventoryCountColumn = (countLabel: string): ColumnDef<InventoryTableData> => {
   return {
     accessorKey: 'count',
-    header: ({ column }) => getInventoryHeader(column, countLabel, 'tw-justify-end'),
+    header: ({ column }) => getInventoryHeader(column, countLabel, 'tw:justify-end'),
     cell: ({ row }) => (
-      <div className="tw-flex tw-justify-end tw-tabular-nums">{row.getValue('count')}</div>
+      <div className="tw:flex tw:justify-end tw:tabular-nums">{row.getValue('count')}</div>
     ),
   };
 };
@@ -182,12 +182,12 @@ export const inventoryStatusColumn = (
 ): ColumnDef<InventoryTableData> => {
   return {
     accessorKey: 'status',
-    header: ({ column }) => getInventoryHeader(column, statusLabel, 'tw-justify-center'),
+    header: ({ column }) => getInventoryHeader(column, statusLabel, 'tw:justify-center'),
     cell: ({ row }) => {
       const status: Status = row.getValue('status');
       const item: string = row.getValue('item');
       return (
-        <ToggleGroup value={status} variant="outline" type="single" className="tw-gap-0">
+        <ToggleGroup value={status} variant="outline" type="single" className="tw:gap-0">
           <ToggleGroupItem
             onClick={(event) => {
               event.stopPropagation();
@@ -201,7 +201,7 @@ export const inventoryStatusColumn = (
               );
             }}
             value="approved"
-            className="tw-rounded-e-none tw-border-e-0"
+            className="tw:rounded-e-none tw:border-e-0"
           >
             <CircleCheckIcon />
           </ToggleGroupItem>
@@ -218,7 +218,7 @@ export const inventoryStatusColumn = (
               );
             }}
             value="unapproved"
-            className="tw-rounded-none"
+            className="tw:rounded-none"
           >
             <CircleXIcon />
           </ToggleGroupItem>
@@ -235,7 +235,7 @@ export const inventoryStatusColumn = (
               );
             }}
             value="unknown"
-            className="tw-rounded-s-none tw-border-s-0"
+            className="tw:rounded-s-none tw:border-s-0"
           >
             <CircleHelpIcon />
           </ToggleGroupItem>

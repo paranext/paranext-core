@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import { Badge } from '@/components/shadcn-ui/badge';
-import { X, Star, CheckCircle, AlertCircle, Info } from 'lucide-react';
+import { X, Star, CheckCircle, AlertCircle, Info, Link } from 'lucide-react';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof Badge> = {
@@ -10,7 +10,17 @@ const meta: Meta<typeof Badge> = {
   tags: ['autodocs', 'test'],
   argTypes: {
     variant: {
-      options: ['default', 'destructive', 'outline', 'secondary', 'muted'],
+      options: [
+        'default',
+        'destructive',
+        'outline',
+        'secondary',
+        'muted',
+        'ghost',
+        'link',
+        'blueIndicator',
+        'mutedIndicator',
+      ],
       control: { type: 'select' },
     },
     className: { control: 'text' },
@@ -18,7 +28,7 @@ const meta: Meta<typeof Badge> = {
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className="tw-p-4">
+        <div className="tw:p-4">
           <Story />
         </div>
       </ThemeProvider>
@@ -46,12 +56,16 @@ export const Default: Story = {
 
 export const Variants: Story = {
   render: () => (
-    <div className="tw-flex tw-flex-wrap tw-gap-2">
+    <div className="tw:flex tw:flex-wrap tw:gap-2">
       <Badge variant="default">Default</Badge>
       <Badge variant="destructive">Destructive</Badge>
       <Badge variant="outline">Outline</Badge>
       <Badge variant="secondary">Secondary</Badge>
       <Badge variant="muted">Muted</Badge>
+      <Badge variant="ghost">Ghost</Badge>
+      <Badge variant="link">Link</Badge>
+      <Badge variant="blueIndicator">Blue Indicator</Badge>
+      <Badge variant="mutedIndicator">Muted Indicator</Badge>
     </div>
   ),
   parameters: {
@@ -65,22 +79,40 @@ export const Variants: Story = {
 
 export const WithIcons: Story = {
   render: () => (
-    <div className="tw-flex tw-flex-wrap tw-gap-2">
+    <div className="tw:flex tw:flex-wrap tw:gap-2">
       <Badge variant="default">
-        <Star className="tw-me-1 tw-h-3 tw-w-3" />
+        <Star className="tw:me-1 tw:h-3 tw:w-3" />
         Featured
       </Badge>
       <Badge variant="destructive">
-        <AlertCircle className="tw-me-1 tw-h-3 tw-w-3" />
+        <AlertCircle className="tw:me-1 tw:h-3 tw:w-3" />
         Error
       </Badge>
       <Badge variant="secondary">
-        <CheckCircle className="tw-me-1 tw-h-3 tw-w-3" />
+        <CheckCircle className="tw:me-1 tw:h-3 tw:w-3" />
         Completed
       </Badge>
       <Badge variant="outline">
-        <Info className="tw-me-1 tw-h-3 tw-w-3" />
+        <Info className="tw:me-1 tw:h-3 tw:w-3" />
         Info
+      </Badge>
+      <Badge variant="ghost">
+        <X className="tw:me-1 tw:h-3 tw:w-3" />
+        Ghost
+      </Badge>
+      <Badge variant="link">
+        {/* False positive - this isn't actually an anchor but is just a link icon */}
+        {/* eslint-disable-next-line jsx-a11y/anchor-is-valid */}
+        <Link className="tw:me-1 tw:h-3 tw:w-3" />
+        Link
+      </Badge>
+      <Badge variant="blueIndicator">
+        <Star className="tw:me-1 tw:h-3 tw:w-3" />
+        Blue Indicator
+      </Badge>
+      <Badge variant="mutedIndicator">
+        <Info className="tw:me-1 tw:h-3 tw:w-3" />
+        Muted Indicator
       </Badge>
     </div>
   ),
@@ -95,15 +127,15 @@ export const WithIcons: Story = {
 
 export const Clickable: Story = {
   render: () => (
-    <div className="tw-flex tw-flex-wrap tw-gap-2">
-      <Badge className="tw-cursor-pointer hover:tw-opacity-80" onClick={fn()} variant="default">
+    <div className="tw:flex tw:flex-wrap tw:gap-2">
+      <Badge className="tw:cursor-pointer tw:hover:opacity-80" onClick={fn()} variant="default">
         Clickable Badge
       </Badge>
-      <Badge className="tw-cursor-pointer hover:tw-opacity-80" onClick={fn()} variant="destructive">
-        Remove <X className="tw-ms-1 tw-h-3 tw-w-3" />
+      <Badge className="tw:cursor-pointer tw:hover:opacity-80" onClick={fn()} variant="destructive">
+        Remove <X className="tw:ms-1 tw:h-3 tw:w-3" />
       </Badge>
-      <Badge className="tw-cursor-pointer hover:tw-opacity-80" onClick={fn()} variant="outline">
-        Select <CheckCircle className="tw-ms-1 tw-h-3 tw-w-3" />
+      <Badge className="tw:cursor-pointer tw:hover:opacity-80" onClick={fn()} variant="outline">
+        Select <CheckCircle className="tw:ms-1 tw:h-3 tw:w-3" />
       </Badge>
     </div>
   ),
@@ -118,8 +150,8 @@ export const Clickable: Story = {
 
 export const DismissibleBadge: Story = {
   render: () => (
-    <Badge className="tw-cursor-pointer hover:tw-opacity-80" onClick={fn()} variant="destructive">
-      Dismissible <X className="tw-ms-1 tw-h-3 tw-w-3" />
+    <Badge className="tw:cursor-pointer tw:hover:opacity-80" onClick={fn()} variant="destructive">
+      Dismissible <X className="tw:ms-1 tw:h-3 tw:w-3" />
     </Badge>
   ),
   parameters: {
@@ -133,23 +165,23 @@ export const DismissibleBadge: Story = {
 
 export const StatusBadges: Story = {
   render: () => (
-    <div className="tw-space-y-2">
-      <div className="tw-flex tw-items-center tw-gap-2">
-        <span className="tw-text-sm">Status:</span>
+    <div className="tw:space-y-2">
+      <div className="tw:flex tw:items-center tw:gap-2">
+        <span className="tw:text-sm">Status:</span>
         <Badge variant="secondary">
-          <CheckCircle className="tw-me-1 tw-h-3 tw-w-3" />
+          <CheckCircle className="tw:me-1 tw:h-3 tw:w-3" />
           Active
         </Badge>
       </div>
-      <div className="tw-flex tw-items-center tw-gap-2">
-        <span className="tw-text-sm">Priority:</span>
+      <div className="tw:flex tw:items-center tw:gap-2">
+        <span className="tw:text-sm">Priority:</span>
         <Badge variant="destructive">
-          <AlertCircle className="tw-me-1 tw-h-3 tw-w-3" />
+          <AlertCircle className="tw:me-1 tw:h-3 tw:w-3" />
           High
         </Badge>
       </div>
-      <div className="tw-flex tw-items-center tw-gap-2">
-        <span className="tw-text-sm">Type:</span>
+      <div className="tw:flex tw:items-center tw:gap-2">
+        <span className="tw:text-sm">Type:</span>
         <Badge variant="outline">Feature</Badge>
       </div>
     </div>
@@ -167,7 +199,7 @@ export const Interactive: Story = {
   render: (args) => <Badge {...args}>Interactive Badge</Badge>,
   args: {
     variant: 'default',
-    className: 'tw-cursor-pointer hover:tw-opacity-80',
+    className: 'tw:cursor-pointer tw:hover:opacity-80',
     onClick: fn(),
   },
   parameters: {

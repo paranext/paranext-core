@@ -192,8 +192,8 @@ export function BookSelector({
   };
 
   return (
-    <div className="tw-space-y-2">
-      <div className="tw-flex tw-flex-wrap tw-gap-2">
+    <div className="tw:space-y-2">
+      <div className="tw:flex tw:flex-wrap tw:gap-2">
         {Object.values(Section).map((section) => {
           return (
             <SectionButton
@@ -222,15 +222,15 @@ export function BookSelector({
             variant="outline"
             role="combobox"
             aria-expanded={isBooksSelectorOpen}
-            className="tw-max-w-64 tw-justify-between"
+            className="tw:max-w-64 tw:justify-between"
           >
             {selectedBookIds.length > 0
               ? `${booksSelectedText}: ${selectedBookIds.length}`
               : selectBooksText}
-            <ChevronsUpDown className="tw-ml-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
+            <ChevronsUpDown className="tw:ml-2 tw:h-4 tw:w-4 tw:shrink-0 tw:opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="tw-w-full tw-p-0" align="start">
+        <PopoverContent className="tw:w-full tw:p-0" align="start">
           <Command
             shouldFilter={false}
             onKeyDown={(e) => {
@@ -245,7 +245,7 @@ export function BookSelector({
               value={inputValue}
               onValueChange={setInputValue}
             />
-            <div className="tw-flex tw-justify-between tw-border-b tw-p-2">
+            <div className="tw:flex tw:justify-between tw:border-b tw:p-2">
               <Button variant="ghost" size="sm" onClick={handleSelectAll}>
                 {selectAllText}
               </Button>
@@ -276,7 +276,7 @@ export function BookSelector({
                           showCheck
                           localizedBookNames={localizedBookNames}
                           commandValue={generateCommandValue(bookId, localizedBookNames)}
-                          className="tw-flex tw-items-center"
+                          className="tw:flex tw:items-center"
                         />
                       ))}
                     </CommandGroup>
@@ -290,7 +290,7 @@ export function BookSelector({
       </Popover>
 
       {selectedBookIds.length > 0 && (
-        <div className="tw-mt-2 tw-flex tw-flex-wrap tw-gap-1">
+        <div className="tw:mt-2 tw:flex tw:flex-wrap tw:gap-1">
           {selectedBookIds
             .slice(
               0,
@@ -299,13 +299,13 @@ export function BookSelector({
                 : VISIBLE_BADGES_COUNT,
             )
             .map((bookId) => (
-              <Badge className="hover:tw-bg-secondary" key={bookId} variant="secondary">
+              <Badge className="tw:hover:bg-secondary" key={bookId} variant="secondary">
                 {getLocalizedBookName(bookId, localizedBookNames)}
               </Badge>
             ))}
           {selectedBookIds.length > MAX_VISIBLE_BADGES && (
             <Badge
-              className="hover:tw-bg-secondary"
+              className="tw:hover:bg-secondary"
               variant="secondary"
             >{`+${selectedBookIds.length - VISIBLE_BADGES_COUNT} ${moreText}`}</Badge>
           )}

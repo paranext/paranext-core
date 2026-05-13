@@ -32,6 +32,9 @@ async function send(notification: PlatformNotification): Promise<string | number
   // be definitely assigned before we can assign effectiveNotificationId, so we use a let and
   // assign it after the switch.
   let effectiveNotificationId: number | string;
+  let duration = Math.min(Math.max(localizedMessage.length * 265, 10000), 35000);
+  if (notification.duration !== undefined)
+    duration = notification.duration <= 0 ? Infinity : notification.duration;
   const toastOptions = {
     action:
       clickCommandLabel && clickCommand
@@ -42,7 +45,7 @@ async function send(notification: PlatformNotification): Promise<string | number
           }
         : undefined,
     // Duration calc from https://paratextstudio.atlassian.net/browse/PT-2196?focusedCommentId=13075
-    duration: Math.min(Math.max(localizedMessage.length * 265, 10000), 35000),
+    duration,
   };
   switch (severity) {
     case 'info':
@@ -63,8 +66,17 @@ async function send(notification: PlatformNotification): Promise<string | number
   return effectiveNotificationId;
 }
 
+async function dismiss(notificationId: string | number): Promise<void> {
+  const toastId = mapOfNotificationIdsToToastIds.get(notificationId);
+  if (toastId !== undefined) {
+    toast.dismiss(toastId);
+    mapOfNotificationIdsToToastIds.delete(notificationId);
+  }
+}
+
 const notificationService: INotificationService = {
   send,
+  dismiss,
 };
 
 /** Register the network object that backs the notification service */
@@ -93,6 +105,7 @@ export async function startNotificationService(): Promise<void> {
                   clickCommand: { type: 'string' },
                   clickCommandLabel: { type: 'string' },
                   notificationId: { type: ['string', 'number'] },
+                  duration: { type: 'number' },
                 },
                 required: ['message', 'severity'],
               },
@@ -101,6 +114,22 @@ export async function startNotificationService(): Promise<void> {
           result: {
             name: 'return value',
             schema: { type: ['string', 'number'] },
+          },
+        },
+        {
+          name: 'dismiss',
+          summary: "Dismiss a notification from the user's UI",
+          params: [
+            {
+              name: 'notificationId',
+              required: true,
+              summary: 'The ID of the notification to dismiss',
+              schema: { type: ['string', 'number'] },
+            },
+          ],
+          result: {
+            name: 'return value',
+            schema: { type: 'null' },
           },
         },
       ],

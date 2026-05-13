@@ -5,6 +5,18 @@
   "%about_db_ip_attribution_terms%": {
     "fallbackKey": "%Paratext.Base.SplashScreen.Splash_Load.&quot;Terms&quot;%"
   },
+  "%acceptButton_tooltip%": {
+    "fallbackKey": "%Paratext.Checklists.ChecklistsTool.saveToolStripButton.ToolTipText%"
+  },
+  "%cancelButton_tooltip%": {
+    "fallbackKey": "%general_cancel%"
+  },
+  "%commentEditor_cancelButton_tooltip%": {
+    "deprecationInfo": {
+      "date": "2026-04-22",
+      "message": "The comment editor now uses the generic %cancelButton_tooltip% key."
+    }
+  },
   "%data_loading_error_paratextData_internet_disabled%": {
     "deprecationInfo": {
       "date": "2025-09-24",
@@ -15,7 +27,11 @@
     "fallbackKey": "%Paratext.Base.ScriptureEditor.NoteCallerForm.NoteCallerForm.Text%"
   },
   "%footnoteEditor_cancelButton_tooltip%": {
-    "fallbackKey": "%general_cancel%"
+    "fallbackKey": "%general_cancel%",
+    "deprecationInfo": {
+      "date": "2026-04-22",
+      "message": "Prefer the generic %cancelButton_tooltip% key for new code."
+    }
   },
   "%footnoteEditor_noteType_crossReference_label%": {
     "fallbackKey": "%Paratext.TextForm.crossReferenceToolStripMenuItem.Text%"

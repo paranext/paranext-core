@@ -29,7 +29,7 @@ A base component for displaying results in a card format. It provides common fun
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className="tw-max-w-lg tw-p-4">
+        <div className="tw:max-w-lg tw:p-4">
           <Story />
         </div>
       </ThemeProvider>
@@ -43,19 +43,19 @@ type Story = StoryObj<typeof meta>;
 const mockDropdownContent = (
   <>
     <DropdownMenuItem>
-      <BookOpen className="tw-mr-2 tw-h-4 tw-w-4" />
+      <BookOpen className="tw:mr-2 tw:h-4 tw:w-4" />
       View Details
     </DropdownMenuItem>
     <DropdownMenuItem>
-      <Copy className="tw-mr-2 tw-h-4 tw-w-4" />
+      <Copy className="tw:mr-2 tw:h-4 tw:w-4" />
       Copy Reference
     </DropdownMenuItem>
     <DropdownMenuItem>
-      <ExternalLink className="tw-mr-2 tw-h-4 tw-w-4" />
+      <ExternalLink className="tw:mr-2 tw:h-4 tw:w-4" />
       Open in New Tab
     </DropdownMenuItem>
     <DropdownMenuItem>
-      <Settings className="tw-mr-2 tw-h-4 tw-w-4" />
+      <Settings className="tw:mr-2 tw:h-4 tw:w-4" />
       Settings
     </DropdownMenuItem>
   </>
@@ -67,9 +67,9 @@ export const Default: Story = {
     onSelect: fn(),
     cardKey: 'default-card',
     children: (
-      <div className="tw-space-y-1">
-        <h3 className="tw-text-lg tw-font-semibold">John 3:16</h3>
-        <p className="tw-text-sm tw-text-muted-foreground">
+      <div className="tw:space-y-1">
+        <h3 className="tw:text-lg tw:font-semibold">John 3:16</h3>
+        <p className="tw:text-sm tw:text-muted-foreground">
           For God so loved the world that he gave his one and only Son, that whoever believes in him
           shall not perish but have eternal life.
         </p>
@@ -117,13 +117,13 @@ export const CheckCards: Story = {
     const [selectedCardKey, setSelectedCardKey] = useState<string | undefined>(defaultSelectedCard);
 
     return (
-      <div className="tw-space-y-2">
-        <p className="tw-mb-4 tw-text-sm tw-text-muted-foreground">
+      <div className="tw:space-y-2">
+        <p className="tw:mb-4 tw:text-sm tw:text-muted-foreground">
           Click a card to select it. Only one card can be selected at a time.
         </p>
         {checkCards.map((card) => {
           const isSelected = selectedCardKey === card.key;
-          const accentColor = 'tw-bg-blue-500';
+          const accentColor = 'tw:bg-blue-500';
 
           return (
             <ResultsCard
@@ -136,28 +136,28 @@ export const CheckCards: Story = {
               }
               dropdownContent={mockDropdownContent}
               additionalContent={
-                <Badge className="tw-block tw-min-w-0 tw-max-w-full tw-truncate tw-rounded-md tw-bg-blue-500">
+                <Badge className="tw:block tw:min-w-0 tw:max-w-full tw:truncate tw:rounded-md tw:bg-blue-500">
                   Characters Check
                 </Badge>
               }
             >
-              <div className="tw-flex tw-flex-col tw-gap-2">
-                <div className="tw-flex tw-items-center tw-gap-2 tw-overflow-hidden">
-                  <span className="tw-shrink-0 tw-text-nowrap tw-text-xs tw-font-medium">
+              <div className="tw:flex tw:flex-col tw:gap-2">
+                <div className="tw:flex tw:items-center tw:gap-2 tw:overflow-hidden">
+                  <span className="tw:shrink-0 tw:text-nowrap tw:text-xs tw:font-medium">
                     {card.title}
                   </span>
                   {card.badges &&
                     card.badges.map((badge) => (
                       <Badge
                         key={`${card.key}-${badge}`}
-                        className="tw-block tw-min-w-0 tw-max-w-full tw-truncate tw-rounded-md"
+                        className="tw:block tw:min-w-0 tw:max-w-full tw:truncate tw:rounded-md"
                         variant="secondary"
                       >
                         {badge}
                       </Badge>
                     ))}
                 </div>
-                <span className="tw-font-regular tw-overflow-hidden tw-text-ellipsis tw-text-xs tw-text-muted-foreground">
+                <span className="tw:font-regular tw:overflow-hidden tw:text-ellipsis tw:text-xs tw:text-muted-foreground">
                   {card.description}
                 </span>
               </div>
@@ -203,8 +203,8 @@ export const FindCards: Story = {
     const [selectedCardKey, setSelectedCardKey] = useState<string | undefined>(defaultSelectedCard);
 
     return (
-      <div className="tw-space-y-2">
-        <p className="tw-mb-4 tw-text-sm tw-text-muted-foreground">
+      <div className="tw:space-y-2">
+        <p className="tw:mb-4 tw:text-sm tw:text-muted-foreground">
           Click a card to select it. Only one card can be selected at a time.
         </p>
         {findCards.map((card) => {
@@ -219,12 +219,12 @@ export const FindCards: Story = {
               }
               dropdownContent={mockDropdownContent}
               additionalContent={
-                <div className="tw-text-xs tw-font-medium tw-text-muted-foreground">
+                <div className="tw:text-xs tw:font-medium tw:text-muted-foreground">
                   {card.description}
                 </div>
               }
             >
-              <div className="tw-text-xs tw-font-medium">{card.title}</div>
+              <div className="tw:text-xs tw:font-medium">{card.title}</div>
             </ResultsCard>
           );
         })}

@@ -8,7 +8,7 @@ import standardStrings from '@/localizedStrings.json';
 const meta: Meta<typeof UndoRedoButtons> = {
   title: 'Basics/UndoRedoButtons',
   component: UndoRedoButtons,
-  tags: ['autodocs'],
+  tags: ['autodocs', 'test'],
   parameters: {
     docs: {
       description: {
@@ -27,6 +27,10 @@ Undo and (optionally) Redo buttons with tooltips for use in editor toolbars.
     // onRedoClick is intentionally absent here: a meta-level action would inject a handler into
     // every story, causing the Redo button to always render even in the UndoOnly story.
     // Stories that want the Redo button add onRedoClick to their own argTypes.
+    variant: {
+      control: 'select',
+      options: ['ghost', 'outline', 'secondary', 'default', 'destructive', 'link'],
+    },
     canUndo: { control: 'boolean' },
     canRedo: { control: 'boolean' },
     showKeyboardShortcuts: { control: 'boolean' },

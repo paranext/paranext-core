@@ -7,7 +7,7 @@
  * connects to the overlay store.
  */
 
-import * as PopoverPrimitive from '@radix-ui/react-popover';
+import { Popover as PopoverPrimitive } from 'radix-ui';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { resolveAndRemoveOverlay } from '@renderer/services/overlays/overlay-store';
 import {
@@ -60,7 +60,7 @@ const MAX_HEIGHT = 400;
 /** Renders the title if present */
 function PopoverTitle({ title }: { title?: string }) {
   if (!title) return undefined;
-  return <div className="tw-mb-2 tw-font-bold">{title}</div>;
+  return <div className="tw:mb-2 tw:font-bold">{title}</div>;
 }
 
 /** Renders text content */
@@ -72,7 +72,7 @@ function TextContentRenderer({
   return (
     <>
       <PopoverTitle title={content.title?.toString()} />
-      <p className="tw-m-0">{content.body}</p>
+      <p className="tw:m-0">{content.body}</p>
     </>
   );
 }
@@ -83,7 +83,7 @@ function MarkdownContentRenderer({
 }: {
   content: Extract<PopoverContentModel, { type: 'markdown' }>;
 }) {
-  return <MarkdownRenderer markdown={content.markdown} className="tw-prose-sm" />;
+  return <MarkdownRenderer markdown={content.markdown} className="tw:prose-sm" />;
 }
 
 /** Renders card content with action buttons */
@@ -97,8 +97,8 @@ function CardContentRenderer({
   return (
     <>
       <PopoverTitle title={content.title?.toString()} />
-      <p className="tw-m-0">{content.body}</p>
-      <div className="tw-mt-3 tw-flex tw-justify-end tw-gap-2">
+      <p className="tw:m-0">{content.body}</p>
+      <div className="tw:mt-3 tw:flex tw:justify-end tw:gap-2">
         {content.actions.map((action) => (
           <Button
             key={action.id}
@@ -196,7 +196,7 @@ export function OverlayPopoverPresentational({
       </PopoverAnchor>
       <PopoverContent
         data-overlay-popover
-        className="tw-overflow-y-auto"
+        className="tw:overflow-y-auto"
         side={side}
         align="start"
         sideOffset={showArrow ? 8 : 4}
@@ -212,8 +212,8 @@ export function OverlayPopoverPresentational({
         {showArrow && (
           <PopoverPrimitive.Arrow
             style={{
-              fill: 'hsl(var(--popover))',
-              stroke: 'hsl(var(--border))',
+              fill: 'var(--popover)',
+              stroke: 'var(--border)',
               strokeWidth: 1,
             }}
           />

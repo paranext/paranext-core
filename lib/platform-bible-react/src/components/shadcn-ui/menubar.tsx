@@ -1,41 +1,33 @@
+import React from 'react';
+import { Menubar as MenubarPrimitive } from 'radix-ui';
+
+import { cn } from '@/utils/shadcn-ui/utils';
+import { IconCheck, IconChevronRight } from '@tabler/icons-react';
+// CUSTOM: Import menu context and variants to support variant prop propagation down the menu tree
 import {
   MenuContext,
   MenuContextProps,
   menuVariants,
   useMenuContext,
 } from '@/context/menu.context';
-import { cn } from '@/utils/shadcn-ui.util';
-import * as MenubarPrimitive from '@radix-ui/react-menubar';
-import { Check, ChevronRight, Circle } from 'lucide-react';
-import React from 'react';
 
-function MenubarMenu({ ...props }: React.ComponentProps<typeof MenubarPrimitive.Menu>) {
-  return <MenubarPrimitive.Menu {...props} />;
-}
-
-function MenubarGroup({ ...props }: React.ComponentProps<typeof MenubarPrimitive.Group>) {
-  return <MenubarPrimitive.Group {...props} />;
-}
-
-function MenubarPortal({ ...props }: React.ComponentProps<typeof MenubarPrimitive.Portal>) {
-  return <MenubarPrimitive.Portal {...props} />;
-}
-
-function MenubarRadioGroup({ ...props }: React.ComponentProps<typeof MenubarPrimitive.RadioGroup>) {
-  return <MenubarPrimitive.RadioGroup {...props} />;
-}
-
-function MenubarSub({ ...props }: React.ComponentProps<typeof MenubarPrimitive.Sub>) {
-  return <MenubarPrimitive.Sub data-slot="menubar-sub" {...props} />;
-}
-
-const Menubar = React.forwardRef<
-  React.ElementRef<typeof MenubarPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof MenubarPrimitive.Root> & {
-    variant?: MenuContextProps['variant'];
-  }
->(({ className, variant = 'default', ...props }, ref) => {
-  /* #region CUSTOM provide context to add variants */
+/**
+ * The Menubar component provides a visually persistent menu that is commonly triggered by a menu
+ * bar. This component is built on Radix UI primitives and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/menubar}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/menubar}
+ */
+function Menubar({
+  className,
+  // CUSTOM: Added variant prop to allow callers to apply visual style variants to all menu items
+  variant = 'default',
+  ...props
+}: React.ComponentProps<typeof MenubarPrimitive.Root> & {
+  // CUSTOM: variant prop that propagates down the menu tree via context
+  variant?: MenuContextProps['variant'];
+}) {
+  /* #region CUSTOM provide context to propagate variant to all menu children */
   const contextValue = React.useMemo<MenuContextProps>(
     () => ({
       variant,
@@ -46,240 +38,304 @@ const Menubar = React.forwardRef<
     <MenuContext.Provider value={contextValue}>
       {/* #endregion CUSTOM */}
       <MenubarPrimitive.Root
-        ref={ref}
+        data-slot="menubar"
         className={cn(
-          'tw-flex tw-h-10 tw-items-center tw-space-x-1 tw-rounded-md tw-border tw-bg-background tw-p-1',
+          'tw:flex tw:h-8 tw:items-center tw:gap-0.5 tw:rounded-lg tw:border tw:p-[3px]',
           className,
         )}
         {...props}
       />
     </MenuContext.Provider>
   );
-});
-Menubar.displayName = MenubarPrimitive.Root.displayName;
+}
 
-const MenubarTrigger = React.forwardRef<
-  React.ElementRef<typeof MenubarPrimitive.Trigger>,
-  React.ComponentPropsWithoutRef<typeof MenubarPrimitive.Trigger>
->(({ className, ...props }, ref) => {
-  const context = useMenuContext(); // CUSTOM use context to add variants
+/** @inheritdoc Menubar */
+function MenubarMenu({ ...props }: React.ComponentProps<typeof MenubarPrimitive.Menu>) {
+  return <MenubarPrimitive.Menu data-slot="menubar-menu" {...props} />;
+}
+
+/** @inheritdoc Menubar */
+function MenubarGroup({ ...props }: React.ComponentProps<typeof MenubarPrimitive.Group>) {
+  return <MenubarPrimitive.Group data-slot="menubar-group" {...props} />;
+}
+
+/** @inheritdoc Menubar */
+function MenubarPortal({ ...props }: React.ComponentProps<typeof MenubarPrimitive.Portal>) {
+  return <MenubarPrimitive.Portal data-slot="menubar-portal" {...props} />;
+}
+
+/** @inheritdoc Menubar */
+function MenubarRadioGroup({ ...props }: React.ComponentProps<typeof MenubarPrimitive.RadioGroup>) {
+  return <MenubarPrimitive.RadioGroup data-slot="menubar-radio-group" {...props} />;
+}
+
+/** @inheritdoc Menubar */
+function MenubarTrigger({
+  className,
+  ...props
+}: React.ComponentProps<typeof MenubarPrimitive.Trigger>) {
+  // CUSTOM: Read menu context to apply variant-driven styles to the trigger
+  const context = useMenuContext();
   return (
     <MenubarPrimitive.Trigger
-      ref={ref}
+      data-slot="menubar-trigger"
       className={cn(
-        'tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-px-3 tw-py-1.5 tw-text-sm tw-font-medium tw-outline-none focus:tw-bg-accent focus:tw-text-accent-foreground data-[state=open]:tw-bg-accent data-[state=open]:tw-text-accent-foreground',
-        // CUSTOM
+        'tw:flex tw:items-center tw:rounded-sm tw:px-1.5 tw:py-[2px] tw:text-sm tw:font-medium tw:outline-hidden tw:select-none tw:hover:bg-muted tw:aria-expanded:bg-muted',
+        // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation (portal-rendered content needs this)
         'pr-twp',
-        menuVariants({ variant: context.variant, className }), // CUSTOM use context to add variants
+        // CUSTOM: Apply variant-driven styles from menu context
+        menuVariants({ variant: context.variant, className }),
       )}
       {...props}
     />
   );
-});
-MenubarTrigger.displayName = MenubarPrimitive.Trigger.displayName;
+}
 
-const MenubarSubTrigger = React.forwardRef<
-  React.ElementRef<typeof MenubarPrimitive.SubTrigger>,
-  React.ComponentPropsWithoutRef<typeof MenubarPrimitive.SubTrigger> & {
-    inset?: boolean;
-  }
->(({ className, inset, children, ...props }, ref) => {
-  const context = useMenuContext(); // CUSTOM use context to add variants
+/** @inheritdoc Menubar */
+function MenubarContent({
+  className,
+  align = 'start',
+  alignOffset = -4,
+  sideOffset = 8,
+  ...props
+}: React.ComponentProps<typeof MenubarPrimitive.Content>) {
+  // CUSTOM: Read menu context to apply variant-driven styles to the content panel
+  const context = useMenuContext();
+  return (
+    <MenubarPortal>
+      <MenubarPrimitive.Content
+        data-slot="menubar-content"
+        align={align}
+        alignOffset={alignOffset}
+        sideOffset={sideOffset}
+        className={cn(
+          // CUSTOM: Fixed tw: prefix not being on some classes and removed erroneous empty tw: tokens
+          'tw:z-50 tw:min-w-36 tw:origin-(--radix-menubar-content-transform-origin) tw:overflow-hidden tw:rounded-lg tw:bg-popover tw:p-1 tw:text-popover-foreground tw:shadow-md tw:ring-1 tw:ring-foreground/10 tw:duration-100 tw:data-[side=bottom]:slide-in-from-top-2 tw:data-[side=left]:slide-in-from-right-2 tw:data-[side=right]:slide-in-from-left-2 tw:data-[side=top]:slide-in-from-bottom-2 tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-open:zoom-in-95 tw:animate-none! tw:bg-popover/70 tw:before:-z-1 tw:**:data-[slot$=-item]:focus:bg-foreground/10 tw:**:data-[slot$=-item]:data-highlighted:bg-foreground/10 tw:**:data-[slot$=-separator]:bg-foreground/5 tw:**:data-[slot$=-trigger]:focus:bg-foreground/10 tw:**:data-[slot$=-trigger]:aria-expanded:bg-foreground/10! tw:**:data-[variant=destructive]:focus:bg-foreground/10! tw:**:data-[variant=destructive]:text-accent-foreground! tw:**:data-[variant=destructive]:**:text-accent-foreground! tw:relative tw:before:pointer-events-none tw:before:absolute tw:before:inset-0 tw:before:rounded-[inherit] tw:before:backdrop-blur-2xl tw:before:backdrop-saturate-150',
+          // CUSTOM: Added pr-twp to reset styles so that only shadcn styles are applied (portal-rendered content needs this)
+          'pr-twp',
+          // CUSTOM: Apply muted background when variant is muted
+          {
+            'tw:bg-popover': context.variant === 'muted',
+          },
+          className,
+        )}
+        {...props}
+      />
+    </MenubarPortal>
+  );
+}
+
+/** @inheritdoc Menubar */
+function MenubarItem({
+  className,
+  inset,
+  variant = 'default',
+  ...props
+}: React.ComponentProps<typeof MenubarPrimitive.Item> & {
+  inset?: boolean;
+  variant?: 'default' | 'destructive';
+}) {
+  // CUSTOM: Read menu context to apply variant-driven styles to each menu item
+  const context = useMenuContext();
+  return (
+    <MenubarPrimitive.Item
+      data-slot="menubar-item"
+      data-inset={inset}
+      data-variant={variant}
+      className={cn(
+        'tw:group/menubar-item tw:relative tw:flex tw:cursor-default tw:items-center tw:gap-1.5 tw:rounded-md tw:px-1.5 tw:py-1 tw:text-sm tw:outline-hidden tw:select-none tw:focus:bg-accent tw:focus:text-accent-foreground tw:not-data-[variant=destructive]:focus:**:text-accent-foreground tw:data-inset:ps-7 tw:data-[variant=destructive]:text-destructive tw:data-[variant=destructive]:focus:bg-destructive/10 tw:data-[variant=destructive]:focus:text-destructive tw:dark:data-[variant=destructive]:focus:bg-destructive/20 tw:data-disabled:pointer-events-none tw:data-disabled:opacity-50 tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0 tw:[&_svg:not([class*=size-])]:size-4 tw:data-[variant=destructive]:*:[svg]:text-destructive!',
+        // CUSTOM: Apply variant-driven styles from menu context
+        menuVariants({ variant: context.variant, className }),
+      )}
+      {...props}
+    />
+  );
+}
+
+/** @inheritdoc Menubar */
+function MenubarCheckboxItem({
+  className,
+  children,
+  checked,
+  inset,
+  ...props
+}: React.ComponentProps<typeof MenubarPrimitive.CheckboxItem> & {
+  inset?: boolean;
+}) {
+  // CUSTOM: Read menu context to apply variant-driven styles to each checkbox item
+  const context = useMenuContext();
+  return (
+    <MenubarPrimitive.CheckboxItem
+      data-slot="menubar-checkbox-item"
+      data-inset={inset}
+      className={cn(
+        'tw:relative tw:flex tw:cursor-default tw:items-center tw:gap-1.5 tw:rounded-md tw:py-1 tw:pe-1.5 tw:ps-7 tw:text-sm tw:outline-hidden tw:select-none tw:focus:bg-accent tw:focus:text-accent-foreground tw:focus:**:text-accent-foreground tw:data-inset:ps-7 tw:data-disabled:pointer-events-none tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0',
+        // CUSTOM: Apply variant-driven styles from menu context
+        menuVariants({ variant: context.variant, className }),
+      )}
+      checked={checked}
+      {...props}
+    >
+      <span className="tw:pointer-events-none tw:absolute tw:start-1.5 tw:flex tw:size-4 tw:items-center tw:justify-center tw:[&_svg:not([class*=size-])]:size-4">
+        <MenubarPrimitive.ItemIndicator>
+          <IconCheck />
+        </MenubarPrimitive.ItemIndicator>
+      </span>
+      {children}
+    </MenubarPrimitive.CheckboxItem>
+  );
+}
+
+/** @inheritdoc Menubar */
+function MenubarRadioItem({
+  className,
+  children,
+  inset,
+  ...props
+}: React.ComponentProps<typeof MenubarPrimitive.RadioItem> & {
+  inset?: boolean;
+}) {
+  // CUSTOM: Read menu context to apply variant-driven styles to each radio item
+  const context = useMenuContext();
+  return (
+    <MenubarPrimitive.RadioItem
+      data-slot="menubar-radio-item"
+      data-inset={inset}
+      className={cn(
+        'tw:relative tw:flex tw:cursor-default tw:items-center tw:gap-1.5 tw:rounded-md tw:py-1 tw:pe-1.5 tw:ps-7 tw:text-sm tw:outline-hidden tw:select-none tw:focus:bg-accent tw:focus:text-accent-foreground tw:focus:**:text-accent-foreground tw:data-inset:ps-7 tw:data-disabled:pointer-events-none tw:data-disabled:opacity-50 tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0 tw:[&_svg:not([class*=size-])]:size-4',
+        // CUSTOM: Apply variant-driven styles from menu context
+        menuVariants({ variant: context.variant, className }),
+      )}
+      {...props}
+    >
+      <span className="tw:pointer-events-none tw:absolute tw:start-1.5 tw:flex tw:size-4 tw:items-center tw:justify-center tw:[&_svg:not([class*=size-])]:size-4">
+        <MenubarPrimitive.ItemIndicator>
+          <IconCheck />
+        </MenubarPrimitive.ItemIndicator>
+      </span>
+      {children}
+    </MenubarPrimitive.RadioItem>
+  );
+}
+
+/** @inheritdoc Menubar */
+function MenubarLabel({
+  className,
+  inset,
+  ...props
+}: React.ComponentProps<typeof MenubarPrimitive.Label> & {
+  inset?: boolean;
+}) {
+  return (
+    <MenubarPrimitive.Label
+      data-slot="menubar-label"
+      data-inset={inset}
+      className={cn('tw:px-1.5 tw:py-1 tw:text-sm tw:font-medium tw:data-inset:ps-7', className)}
+      {...props}
+    />
+  );
+}
+
+/** @inheritdoc Menubar */
+function MenubarSeparator({
+  className,
+  ...props
+}: React.ComponentProps<typeof MenubarPrimitive.Separator>) {
+  return (
+    <MenubarPrimitive.Separator
+      data-slot="menubar-separator"
+      className={cn('tw:-mx-1 tw:my-1 tw:h-px tw:bg-border', className)}
+      {...props}
+    />
+  );
+}
+
+/** @inheritdoc Menubar */
+function MenubarShortcut({ className, ...props }: React.ComponentProps<'span'>) {
+  return (
+    <span
+      data-slot="menubar-shortcut"
+      className={cn(
+        'tw:ms-auto tw:text-xs tw:tracking-widest tw:text-muted-foreground tw:group-focus/menubar-item:text-accent-foreground',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+/** @inheritdoc Menubar */
+function MenubarSub({ ...props }: React.ComponentProps<typeof MenubarPrimitive.Sub>) {
+  return <MenubarPrimitive.Sub data-slot="menubar-sub" {...props} />;
+}
+
+/** @inheritdoc Menubar */
+function MenubarSubTrigger({
+  className,
+  inset,
+  children,
+  ...props
+}: React.ComponentProps<typeof MenubarPrimitive.SubTrigger> & {
+  inset?: boolean;
+}) {
+  // CUSTOM: Read menu context to apply variant-driven styles to the sub-trigger
+  const context = useMenuContext();
   return (
     <MenubarPrimitive.SubTrigger
-      ref={ref}
+      data-slot="menubar-sub-trigger"
+      data-inset={inset}
       className={cn(
-        'tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-px-2 tw-py-1.5 tw-text-sm tw-outline-none focus:tw-bg-accent focus:tw-text-accent-foreground data-[state=open]:tw-bg-accent data-[state=open]:tw-text-accent-foreground',
-        inset && 'tw-pl-8',
-        menuVariants({ variant: context.variant, className }), // CUSTOM use context to add variants
-        className,
+        'tw:flex tw:cursor-default tw:items-center tw:gap-1.5 tw:rounded-md tw:px-1.5 tw:py-1 tw:text-sm tw:outline-none tw:select-none tw:focus:bg-accent tw:focus:text-accent-foreground tw:data-inset:ps-7 tw:data-open:bg-accent tw:data-open:text-accent-foreground tw:[&_svg:not([class*=size-])]:size-4',
+        // CUSTOM: Apply variant-driven styles from menu context
+        menuVariants({ variant: context.variant, className }),
       )}
       {...props}
     >
       {children}
-      <ChevronRight className="tw-ml-auto tw-h-4 tw-w-4" />
+      <IconChevronRight className="tw:ms-auto tw:size-4" />
     </MenubarPrimitive.SubTrigger>
   );
-});
-MenubarSubTrigger.displayName = MenubarPrimitive.SubTrigger.displayName;
+}
 
-const MenubarSubContent = React.forwardRef<
-  React.ElementRef<typeof MenubarPrimitive.SubContent>,
-  React.ComponentPropsWithoutRef<typeof MenubarPrimitive.SubContent>
->(({ className, ...props }, ref) => {
-  const context = useMenuContext(); // CUSTOM use context to add variants
+/** @inheritdoc Menubar */
+function MenubarSubContent({
+  className,
+  ...props
+}: React.ComponentProps<typeof MenubarPrimitive.SubContent>) {
+  // CUSTOM: Read menu context to apply variant-driven styles to the sub-content panel
+  const context = useMenuContext();
   return (
     <MenubarPrimitive.SubContent
-      ref={ref}
+      data-slot="menubar-sub-content"
       className={cn(
-        'tw-z-50 tw-min-w-[8rem] tw-overflow-hidden tw-rounded-md tw-border tw-bg-popover tw-p-1 tw-text-popover-foreground data-[state=open]:tw-animate-in data-[state=closed]:tw-animate-out data-[state=closed]:tw-fade-out-0 data-[state=open]:tw-fade-in-0 data-[state=closed]:tw-zoom-out-95 data-[state=open]:tw-zoom-in-95 data-[side=bottom]:tw-slide-in-from-top-2 data-[side=left]:tw-slide-in-from-right-2 data-[side=right]:tw-slide-in-from-left-2 data-[side=top]:tw-slide-in-from-bottom-2',
-        // CUSTOM use context to add variants
+        // CUSTOM: Fixed tw: prefix not being on some classes and removed erroneous empty tw: tokens
+        'tw:z-50 tw:min-w-32 tw:origin-(--radix-menubar-content-transform-origin) tw:overflow-hidden tw:rounded-lg tw:bg-popover tw:p-1 tw:text-popover-foreground tw:shadow-lg tw:ring-1 tw:ring-foreground/10 tw:duration-100 tw:data-[side=bottom]:slide-in-from-top-2 tw:data-[side=left]:slide-in-from-right-2 tw:data-[side=right]:slide-in-from-left-2 tw:data-[side=top]:slide-in-from-bottom-2 tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-open:zoom-in-95 tw:data-closed:animate-out tw:data-closed:fade-out-0 tw:data-closed:zoom-out-95 tw:animate-none! tw:bg-popover/70 tw:before:-z-1 tw:**:data-[slot$=-item]:focus:bg-foreground/10 tw:**:data-[slot$=-item]:data-highlighted:bg-foreground/10 tw:**:data-[slot$=-separator]:bg-foreground/5 tw:**:data-[slot$=-trigger]:focus:bg-foreground/10 tw:**:data-[slot$=-trigger]:aria-expanded:bg-foreground/10! tw:**:data-[variant=destructive]:focus:bg-foreground/10! tw:**:data-[variant=destructive]:text-accent-foreground! tw:**:data-[variant=destructive]:**:text-accent-foreground! tw:relative tw:before:pointer-events-none tw:before:absolute tw:before:inset-0 tw:before:rounded-[inherit] tw:before:backdrop-blur-2xl tw:before:backdrop-saturate-150',
+        // CUSTOM: Apply muted background when variant is muted
         {
-          'tw-bg-popover': context.variant === 'muted',
+          'tw:bg-popover': context.variant === 'muted',
         },
         className,
       )}
       {...props}
     />
   );
-});
-MenubarSubContent.displayName = MenubarPrimitive.SubContent.displayName;
-
-const MenubarContent = React.forwardRef<
-  React.ElementRef<typeof MenubarPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof MenubarPrimitive.Content>
->(({ className, align = 'start', alignOffset = -4, sideOffset = 8, ...props }, ref) => {
-  const context = useMenuContext(); // CUSTOM use context to add variants
-  return (
-    <MenubarPrimitive.Portal>
-      <MenubarPrimitive.Content
-        ref={ref}
-        align={align}
-        alignOffset={alignOffset}
-        sideOffset={sideOffset}
-        className={cn(
-          'tw-z-50 tw-min-w-[12rem] tw-overflow-hidden tw-rounded-md tw-border tw-bg-popover tw-p-1 tw-text-popover-foreground tw-shadow-md data-[state=open]:tw-animate-in data-[state=closed]:tw-fade-out-0 data-[state=open]:tw-fade-in-0 data-[state=closed]:tw-zoom-out-95 data-[state=open]:tw-zoom-in-95 data-[side=bottom]:tw-slide-in-from-top-2 data-[side=left]:tw-slide-in-from-right-2 data-[side=right]:tw-slide-in-from-left-2 data-[side=top]:tw-slide-in-from-bottom-2',
-          // CUSTOM reset styles so that only shadcn styles are applied
-          'pr-twp',
-          // CUSTOM use context to add variants
-          {
-            'tw-bg-popover': context.variant === 'muted',
-          },
-          className,
-        )}
-        {...props}
-      />
-    </MenubarPrimitive.Portal>
-  );
-});
-MenubarContent.displayName = MenubarPrimitive.Content.displayName;
-
-const MenubarItem = React.forwardRef<
-  React.ElementRef<typeof MenubarPrimitive.Item>,
-  React.ComponentPropsWithoutRef<typeof MenubarPrimitive.Item> & {
-    inset?: boolean;
-  }
->(({ className, inset, ...props }, ref) => {
-  const context = useMenuContext(); // CUSTOM use context to add variants
-  return (
-    <MenubarPrimitive.Item
-      ref={ref}
-      className={cn(
-        'tw-relative tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-px-2 tw-py-1.5 tw-text-sm tw-outline-none focus:tw-bg-accent focus:tw-text-accent-foreground data-[disabled]:tw-pointer-events-none data-[disabled]:tw-opacity-50',
-        inset && 'tw-pl-8',
-        menuVariants({ variant: context.variant, className }), // CUSTOM use context to add variants
-        className,
-      )}
-      {...props}
-    />
-  );
-});
-MenubarItem.displayName = MenubarPrimitive.Item.displayName;
-
-const MenubarCheckboxItem = React.forwardRef<
-  React.ElementRef<typeof MenubarPrimitive.CheckboxItem>,
-  React.ComponentPropsWithoutRef<typeof MenubarPrimitive.CheckboxItem>
->(({ className, children, checked, ...props }, ref) => {
-  const context = useMenuContext(); // CUSTOM use context to add variants
-  return (
-    <MenubarPrimitive.CheckboxItem
-      ref={ref}
-      className={cn(
-        'tw-relative tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-py-1.5 tw-pl-8 tw-pr-2 tw-text-sm tw-outline-none focus:tw-bg-accent focus:tw-text-accent-foreground data-[disabled]:tw-pointer-events-none data-[disabled]:tw-opacity-50',
-        menuVariants({ variant: context.variant, className }), // CUSTOM use context to add variants
-        className,
-      )}
-      checked={checked}
-      {...props}
-    >
-      <span className="tw-absolute tw-left-2 tw-flex tw-h-3.5 tw-w-3.5 tw-items-center tw-justify-center">
-        <MenubarPrimitive.ItemIndicator>
-          <Check className="tw-h-4 tw-w-4" />
-        </MenubarPrimitive.ItemIndicator>
-      </span>
-      {children}
-    </MenubarPrimitive.CheckboxItem>
-  );
-});
-MenubarCheckboxItem.displayName = MenubarPrimitive.CheckboxItem.displayName;
-
-const MenubarRadioItem = React.forwardRef<
-  React.ElementRef<typeof MenubarPrimitive.RadioItem>,
-  React.ComponentPropsWithoutRef<typeof MenubarPrimitive.RadioItem>
->(({ className, children, ...props }, ref) => {
-  const context = useMenuContext(); // CUSTOM use context to add variants
-  return (
-    <MenubarPrimitive.RadioItem
-      ref={ref}
-      className={cn(
-        'tw-relative tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-py-1.5 tw-pl-8 tw-pr-2 tw-text-sm tw-outline-none focus:tw-bg-accent focus:tw-text-accent-foreground data-[disabled]:tw-pointer-events-none data-[disabled]:tw-opacity-50',
-        menuVariants({ variant: context.variant, className }), // CUSTOM use context to add variants
-        className,
-      )}
-      {...props}
-    >
-      <span className="tw-absolute tw-left-2 tw-flex tw-h-3.5 tw-w-3.5 tw-items-center tw-justify-center">
-        <MenubarPrimitive.ItemIndicator>
-          <Circle className="tw-h-2 tw-w-2 tw-fill-current" />
-        </MenubarPrimitive.ItemIndicator>
-      </span>
-      {children}
-    </MenubarPrimitive.RadioItem>
-  );
-});
-MenubarRadioItem.displayName = MenubarPrimitive.RadioItem.displayName;
-
-const MenubarLabel = React.forwardRef<
-  React.ElementRef<typeof MenubarPrimitive.Label>,
-  React.ComponentPropsWithoutRef<typeof MenubarPrimitive.Label> & {
-    inset?: boolean;
-  }
->(({ className, inset, ...props }, ref) => (
-  <MenubarPrimitive.Label
-    ref={ref}
-    className={cn('tw-px-2 tw-py-1.5 tw-text-sm tw-font-semibold', inset && 'tw-pl-8', className)}
-    {...props}
-  />
-));
-MenubarLabel.displayName = MenubarPrimitive.Label.displayName;
-
-const MenubarSeparator = React.forwardRef<
-  React.ElementRef<typeof MenubarPrimitive.Separator>,
-  React.ComponentPropsWithoutRef<typeof MenubarPrimitive.Separator>
->(({ className, ...props }, ref) => (
-  <MenubarPrimitive.Separator
-    ref={ref}
-    className={cn('tw--mx-1 tw-my-1 tw-h-px tw-bg-muted', className)}
-    {...props}
-  />
-));
-MenubarSeparator.displayName = MenubarPrimitive.Separator.displayName;
-
-function MenubarShortcut({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) {
-  return (
-    <span
-      className={cn('tw-ml-auto tw-text-xs tw-tracking-widest tw-text-muted-foreground', className)}
-      {...props}
-    />
-  );
 }
-MenubarShortcut.displayname = 'MenubarShortcut';
 
 export {
   Menubar,
-  MenubarCheckboxItem,
+  MenubarPortal,
+  MenubarMenu,
+  MenubarTrigger,
   MenubarContent,
   MenubarGroup,
-  MenubarItem,
+  MenubarSeparator,
   MenubarLabel,
-  MenubarMenu,
-  MenubarPortal,
+  MenubarItem,
+  MenubarShortcut,
+  MenubarCheckboxItem,
   MenubarRadioGroup,
   MenubarRadioItem,
-  MenubarSeparator,
-  MenubarShortcut,
   MenubarSub,
-  MenubarSubContent,
   MenubarSubTrigger,
-  MenubarTrigger,
+  MenubarSubContent,
 };

@@ -2,7 +2,7 @@
   "name": "platform-bible-utils",
   "version": "0.0.1",
   "type": "module",
-  "description": "Utilities to use in Paranext.",
+  "description": "Utilities to use in Platform.Bible.",
   "license": "MIT",
   "homepage": "https://github.com/paranext/paranext-core/tree/main/lib/platform-bible-utils",
   "bugs": {
@@ -59,7 +59,7 @@
     "dts-bundle-generator": "^9.5.1",
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^9.1.0",
-    "eslint-plugin-prettier": "^5.2.3",
+    "eslint-plugin-prettier": "^5.5.5",
     "prettier": "^3.5.2",
     "prettier-plugin-jsdoc": "^1.3.2",
     "tslib": "^2.8.1",

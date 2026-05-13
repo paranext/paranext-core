@@ -1,4 +1,6 @@
 import { Button, type ButtonProps } from '@/components/shadcn-ui/button';
+import { ButtonGroup, ButtonGroupSeparator } from '@/components/shadcn-ui/button-group';
+import { Kbd } from '@/components/shadcn-ui/kbd';
 import {
   Tooltip,
   TooltipContent,
@@ -44,7 +46,7 @@ export type UndoRedoButtonsProps = {
    * shortcuts functional.
    */
   showKeyboardShortcuts?: boolean;
-  /** CSS class name for the buttons. Defaults to "tw-h-6 tw-w-6". */
+  /** CSS class name for the buttons. Defaults to "tw:h-6 tw:w-6". */
   className?: string;
   /** Variant for the buttons. Defaults to "ghost". */
   variant?: ButtonProps['variant'];
@@ -64,18 +66,21 @@ export function UndoRedoButtons({
   canRedo = true,
   localizedStrings = {},
   showKeyboardShortcuts = true,
-  className = 'tw-h-6 tw-w-6',
+  className = 'tw:h-6 tw:w-6',
   variant = 'ghost',
 }: UndoRedoButtonsProps) {
   const isMac = useMemo(() => /Macintosh/i.test(navigator.userAgent), []);
+  const undoLocalized = localizeString(localizedStrings, '%undoButton_tooltip%');
+  const redoLocalized = localizeString(localizedStrings, '%redoButton_tooltip%');
+  const getsSeparator = variant === 'secondary' || variant === 'default';
 
   return (
-    <>
+    <ButtonGroup>
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              aria-label="Undo"
+              aria-label={undoLocalized}
               className={className}
               size="icon"
               onClick={onUndoClick}
@@ -87,18 +92,24 @@ export function UndoRedoButtons({
           </TooltipTrigger>
           <TooltipContent>
             <p>
-              {localizeString(localizedStrings, '%undoButton_tooltip%')}
-              {showKeyboardShortcuts && ` (${isMac ? '⌘Z' : 'Ctrl+Z'})`}
+              {undoLocalized}
+              {showKeyboardShortcuts && (
+                <>
+                  {' '}
+                  <Kbd>{isMac ? '⌘Z' : 'Ctrl+Z'}</Kbd>
+                </>
+              )}
             </p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
+      {onRedoClick && getsSeparator && <ButtonGroupSeparator />}
       {onRedoClick && (
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                aria-label="Redo"
+                aria-label={redoLocalized}
                 className={className}
                 size="icon"
                 onClick={onRedoClick}
@@ -110,14 +121,19 @@ export function UndoRedoButtons({
             </TooltipTrigger>
             <TooltipContent>
               <p>
-                {localizeString(localizedStrings, '%redoButton_tooltip%')}
-                {showKeyboardShortcuts && ` (${isMac ? '⌘⇧Z' : 'Ctrl+Y'})`}
+                {redoLocalized}
+                {showKeyboardShortcuts && (
+                  <>
+                    {' '}
+                    <Kbd>{isMac ? '⌘⇧Z' : 'Ctrl+Y'}</Kbd>
+                  </>
+                )}
               </p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
       )}
-    </>
+    </ButtonGroup>
   );
 }
 

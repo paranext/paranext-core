@@ -8,19 +8,14 @@ import {
 import { Button } from '@/components/shadcn-ui/button';
 import { Command, CommandItem, CommandList } from '@/components/shadcn-ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/shadcn-ui/tooltip';
+import { CancelAcceptButtons } from '@/components/basics/cancel-accept-buttons.component';
 import {
   SerializedEditorState,
   SerializedElementNode,
   SerializedParagraphNode,
   SerializedTextNode,
 } from 'lexical';
-import { AtSign, Check, X } from 'lucide-react';
+import { AtSign } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CommentEditorLocalizedStrings } from './comment-editor.types';
 import { didPressCtrlOrCmdEnter } from '../comment-list/comment-list.utils';
@@ -151,57 +146,30 @@ export default function CommentEditor({
 
   const placeholder =
     localizedStrings['%commentEditor_placeholder%'] ?? 'Type your comment here...';
-  const saveTooltip = localizedStrings['%commentEditor_saveButton_tooltip%'] ?? 'Save comment';
-  const cancelTooltip = localizedStrings['%commentEditor_cancelButton_tooltip%'] ?? 'Cancel';
   const assignToLabel = localizedStrings['%commentEditor_assignTo_label%'] ?? 'Assign to';
 
   return (
-    <div className="pr-twp tw-grid tw-gap-3">
-      <div className="tw-flex tw-items-center tw-justify-between">
-        <span className="tw-text-sm tw-font-medium">{assignToLabel}</span>
-        <div className="tw-flex tw-gap-2">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button onClick={onClose} className="tw-h-6 tw-w-6" size="icon" variant="secondary">
-                  <X />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{cancelTooltip}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  onClick={handleSave}
-                  className="tw-h-6 tw-w-6"
-                  size="icon"
-                  variant="default"
-                  disabled={!hasEditorContent(editorState)}
-                >
-                  <Check />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{saveTooltip}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
+    <div className="pr-twp tw:grid tw:gap-3">
+      <div className="tw:flex tw:items-center tw:justify-between">
+        <span className="tw:text-sm tw:font-medium">{assignToLabel}</span>
+        <CancelAcceptButtons
+          onCancelClick={onClose}
+          onAcceptClick={handleSave}
+          canAccept={hasEditorContent(editorState)}
+          localizedStrings={localizedStrings}
+          acceptLabel={localizedStrings['%commentEditor_saveButton_tooltip%']}
+        />
       </div>
 
-      <div className="tw-flex tw-items-center tw-gap-2">
+      <div className="tw:flex tw:items-center tw:gap-2">
         <Popover open={isAssignPopoverOpen} onOpenChange={setIsAssignPopoverOpen}>
           <PopoverTrigger asChild>
             <Button
               variant="outline"
-              className="tw-flex tw-w-full tw-items-center tw-justify-start tw-gap-2"
+              className="tw:flex tw:w-full tw:items-center tw:justify-start tw:gap-2"
               disabled={assignableUsers.length === 0}
             >
-              <AtSign className="tw-h-4 tw-w-4" />
+              <AtSign className="tw:h-4 tw:w-4" />
               <span>
                 {selectedUser !== undefined
                   ? getAssignedUserDisplayName(selectedUser, localizedStrings)
@@ -210,7 +178,7 @@ export default function CommentEditor({
             </Button>
           </PopoverTrigger>
           <PopoverContent
-            className="tw-w-auto tw-p-0"
+            className="tw:w-auto tw:p-0"
             align="start"
             onKeyDown={(e) => {
               if (e.key === 'Escape') {
@@ -231,7 +199,7 @@ export default function CommentEditor({
                       setSelectedUser(user || undefined);
                       setIsAssignPopoverOpen(false);
                     }}
-                    className="tw-flex tw-items-center"
+                    className="tw:flex tw:items-center"
                   >
                     <span>{getAssignedUserDisplayName(user, localizedStrings)}</span>
                   </CommandItem>
@@ -246,7 +214,7 @@ export default function CommentEditor({
         ref={editorContainerRef}
         role="textbox"
         tabIndex={-1}
-        className="tw-outline-none"
+        className="tw:outline-hidden"
         onKeyDownCapture={(e) => {
           if (e.key === 'Escape') {
             e.preventDefault();

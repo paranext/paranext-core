@@ -673,8 +673,8 @@ declare module 'shared/global-this.model' {
     /** How much logging should be recorded. Defaults to 'debug' if not packaged, 'info' if packaged */
     var logLevel: LogLevel;
     /**
-     * A function that each React WebView extension must provide for Paranext to display it. Only used
-     * in WebView iframes.
+     * A function that each React WebView extension must provide for Platform.Bible to display it.
+     * Only used in WebView iframes.
      */
     var webViewComponent: FunctionComponent<WebViewProps>;
     /** The id of the current web view. Only used in WebView iframes. */
@@ -791,7 +791,7 @@ declare module 'shared/global-this.model' {
     /** Indicates whether test code meant just for developers to see should be run */
     var isNoisyDevModeEnabled: boolean;
   }
-  /** Type of Paranext process */
+  /** Type of Platform.Bible process */
   export enum ProcessType {
     Main = 'main',
     Renderer = 'renderer',
@@ -1323,11 +1323,13 @@ declare module 'shared/models/rpc.interface' {
      *
      * @param requestType Type of request (or "method" in JSONRPC jargon) to call
      * @param requestParams Parameters associated with this request
+     * @param skipRetry Whether to skip the retry process that will retry up to 10 times
      * @returns Promise that resolves to a JSONRPCSuccessResponse or JSONRPCErrorResponse message
      */
     request: (
       requestType: SerializedRequestType,
       requestParams: RequestParams,
+      skipRetry?: boolean,
     ) => Promise<JSONRPCResponse>;
     /**
      * Sends an event to other processes. Does NOT run the local event subscriptions as they should be
@@ -1522,6 +1524,7 @@ declare module 'main/services/rpc-server' {
     request(
       requestType: SerializedRequestType,
       requestParams: RequestParams,
+      skipRetry?: boolean,
     ): Promise<JSONRPCResponse>;
     emitEventOnNetwork<T>(eventType: string, event: T): void;
     registerRemoteMethod(methodName: string, methodDocs?: SingleMethodDocumentation): boolean;
@@ -1576,6 +1579,7 @@ declare module 'main/services/rpc-websocket-listener' {
     request(
       requestType: SerializedRequestType,
       requestParams: RequestParams,
+      skipRetry?: boolean,
     ): Promise<JSONRPCResponse>;
     registerMethod(
       methodName: string,
@@ -1630,6 +1634,19 @@ declare module 'shared/services/network.service' {
    * @returns Promise that resolves with the response message
    */
   export const request: <TParam extends Array<unknown>, TReturn>(
+    requestType: SerializedRequestType,
+    ...args: TParam
+  ) => Promise<TReturn>;
+  /**
+   * Send a request on the network without retrying if the handler is not yet registered. Use for
+   * requests where immediate failure is preferable to waiting, such as commands sent during app
+   * shutdown.
+   *
+   * @param requestType The type of request
+   * @param args Arguments to send in the request (put in request.contents)
+   * @returns Promise that resolves with the response message
+   */
+  export const requestNoRetry: <TParam extends Array<unknown>, TReturn>(
     requestType: SerializedRequestType,
     ...args: TParam
   ) => Promise<TReturn>;
@@ -2683,9 +2700,34 @@ declare module 'shared/services/network-object-status.service' {
 }
 declare module 'shared/models/docking-framework.model' {
   import { MutableRefObject, ReactNode } from 'react';
-  import { DockLayout, DropDirection, LayoutBase } from 'rc-dock';
   import { WebViewDefinition, WebViewDefinitionUpdateInfo } from 'shared/models/web-view.model';
   import { LocalizeKey } from 'platform-bible-utils';
+  /**
+   * Opaque object representing a saved dock layout. Treat this as a black box: it round-trips through
+   * `localStorage` and back into the dock layout component, but no consumer should inspect its
+   * contents. The renderer's `platform-dock-layout` is the only place that knows the real shape (it
+   * is `LayoutBase` from `rc-dock`).
+   *
+   * Kept opaque here so this shared model does not have to import from `rc-dock`, which keeps
+   * `papi.d.ts` (and therefore every extension's typecheck) free of the rc-dock dependency.
+   *
+   * Eventually, to decouple further from rc-dock, we may implement this as our own layout format and
+   * convert to/from `LayoutBase` at the dock layout boundary.
+   */
+  export type LayoutInfo = Record<string, unknown>;
+  /** Information about a layout change passed from the dock layout to the web view service. */
+  export type LayoutChangeInfo = {
+    /**
+     * Whether the most recent layout change closed a web view. When `true`, `webViewDefinition` is
+     * the definition of the web view that was just closed.
+     */
+    didCloseWebView: boolean;
+    /**
+     * The web view definition associated with the layout change, if the change involved a web view.
+     * `undefined` for non-web-view tabs and for changes that don't target a single tab.
+     */
+    webViewDefinition?: WebViewDefinition;
+  };
   /**
    * Saved information used to recreate a tab.
    *
@@ -2704,7 +2746,7 @@ declare module 'shared/models/docking-framework.model' {
     data?: unknown;
   };
   /**
-   * Information that Paranext uses to create a tab in the dock layout.
+   * Information that Platform.Bible uses to create a tab in the dock layout.
    *
    * - {@link TabLoader} loads {@link SavedTabInfo} into this
    * - {@link TabSaver} saves this into {@link SavedTabInfo}
@@ -2735,25 +2777,34 @@ declare module 'shared/models/docking-framework.model' {
     lastFocusedElement?: HTMLElement;
   };
   /**
-   * Function that takes a {@link SavedTabInfo} and creates a Paranext tab out of it. Each type of tab
-   * must provide a {@link TabLoader}.
+   * Function that takes a {@link SavedTabInfo} and creates a Platform.Bible tab out of it. Each type
+   * of tab must provide a {@link TabLoader}.
    *
    * For now all tab creators must do their own data type verification
    */
   export type TabLoader = (savedTabInfo: SavedTabInfo) => TabInfo;
   /**
-   * Function that takes a Paranext tab and creates a saved tab out of it. Each type of tab can
+   * Function that takes a Platform.Bible tab and creates a saved tab out of it. Each type of tab can
    * provide a {@link TabSaver}. If they do not provide one, the properties added by `TabInfo` are
    * stripped from TabInfo by `saveTabInfoBase` before saving (so it is just a {@link SavedTabInfo}).
    *
-   * @param tabInfo The Paranext tab to save
-   * @returns The saved tab info for Paranext to persist. If `undefined`, does not save the tab
+   * @param tabInfo The Platform.Bible tab to save
+   * @returns The saved tab info for Platform.Bible to persist. If `undefined`, does not save the tab
    */
   export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo | undefined;
+  export const DIRECTION_NEXT_TAB: 'nextTab';
+  export const DIRECTION_PREVIOUS_TAB: 'previousTab';
+  export const DIRECTION_NEXT_TAB_OR_GROUP: 'nextTabOrGroup';
+  export const DIRECTION_PREVIOUS_TAB_OR_GROUP: 'previousTabOrGroup';
+  export const DIRECTION_NEAR_TAB_OR_NEXT_GROUP: 'nearTabOrNextGroup';
+  export const DIRECTION_NEXT_TAB_GROUP: 'nextTabGroup';
+  export const DIRECTION_PREVIOUS_TAB_GROUP: 'previousTabGroup';
   /**
    *
    * Direction relative to a tab pointing to another tab. Can be used to navigate between tabs in the
-   * dock layout.
+   * dock layout. These directions are for navigating to a tab directly before or after the current
+   * tab, which may be within the same tab group or may cross tab groups. For directions that can also
+   * navigate to tabs specifically in other tab groups, see {@link DirectionFromTab}.
    *
    * Note: In the following descriptions, "forward"/"next" means right in LTR and left in RTL, and
    * "backward"/"previous" means left in LTR and right in RTL
@@ -2763,9 +2814,6 @@ declare module 'shared/models/docking-framework.model' {
    * - `previousTab` - go backward one tab. If there are no more tabs before this tab in this tab's tab
    *   group, go to the forward-most tab in the previous tab group (useful for cycling through all
    *   tabs)
-   * - `nextTabGroup` - go to the active tab in the tab group forward from the tab group this tab is in
-   * - `previousTabGroup` - go to the active tab in the tab group backward from the tab group this tab
-   *   is in
    * - `nextTabOrGroup` - go forward one tab. If there are no more tabs after this tab in this tab's tab
    *   group, go to the active tab in the next tab group
    * - `previousTabOrGroup` - go backward one tab. If there are no more tabs before this tab in this
@@ -2774,11 +2822,9 @@ declare module 'shared/models/docking-framework.model' {
    *   If there are no more tabs in this tab's tab group, go to the active tab in the next tab group
    *   (useful for closing a tab)
    */
-  export const DIRECTION_FROM_TAB: readonly [
+  export const DIRECTION_FROM_TAB_ADJACENT: readonly [
     'nextTab',
     'previousTab',
-    'nextTabGroup',
-    'previousTabGroup',
     'nextTabOrGroup',
     'previousTabOrGroup',
     'nearTabOrNextGroup',
@@ -2786,7 +2832,9 @@ declare module 'shared/models/docking-framework.model' {
   /**
    *
    * Direction relative to a tab pointing to another tab. Can be used to navigate between tabs in the
-   * dock layout.
+   * dock layout. These directions are for navigating to a tab directly before or after the current
+   * tab, which may be within the same tab group or may cross tab groups. For directions that can also
+   * navigate to tabs specifically in other tab groups, see {@link DirectionFromTab}.
    *
    * Note: In the following descriptions, "forward"/"next" means right in LTR and left in RTL, and
    * "backward"/"previous" means left in LTR and right in RTL
@@ -2796,9 +2844,6 @@ declare module 'shared/models/docking-framework.model' {
    * - `previousTab` - go backward one tab. If there are no more tabs before this tab in this tab's tab
    *   group, go to the forward-most tab in the previous tab group (useful for cycling through all
    *   tabs)
-   * - `nextTabGroup` - go to the active tab in the tab group forward from the tab group this tab is in
-   * - `previousTabGroup` - go to the active tab in the tab group backward from the tab group this tab
-   *   is in
    * - `nextTabOrGroup` - go forward one tab. If there are no more tabs after this tab in this tab's tab
    *   group, go to the active tab in the next tab group
    * - `previousTabOrGroup` - go backward one tab. If there are no more tabs before this tab in this
@@ -2806,6 +2851,48 @@ declare module 'shared/models/docking-framework.model' {
    * - `nearTabOrNextGroup` - go forward or backward one tab if there is another in the same tab group.
    *   If there are no more tabs in this tab's tab group, go to the active tab in the next tab group
    *   (useful for closing a tab)
+   */
+  export type DirectionFromTabAdjacent = (typeof DIRECTION_FROM_TAB_ADJACENT)[number];
+  /**
+   *
+   * Direction relative to a tab pointing to another tab. Can be used to navigate between tabs in the
+   * dock layout. In addition to navigating sequentially between tabs, these directions can navigate
+   * to tabs specifically in other tab groups. For directions that only navigate to a tab directly
+   * before or after the current tab, see {@link DirectionFromTabAdjacent}.
+   *
+   * Note: In the following descriptions, "forward"/"next" means right in LTR and left in RTL, and
+   * "backward"/"previous" means left in LTR and right in RTL
+   *
+   * - See {@link DirectionFromTabAdjacent} for directions that look for a tab directly before or after
+   *   the current tab, which may be in the same or a different tab group
+   * - `nextTabGroup` - go to the active tab in the tab group forward from the tab group this tab is in
+   * - `previousTabGroup` - go to the active tab in the tab group backward from the tab group this tab
+   *   is in
+   */
+  export const DIRECTION_FROM_TAB: readonly [
+    'nextTab',
+    'previousTab',
+    'nextTabOrGroup',
+    'previousTabOrGroup',
+    'nearTabOrNextGroup',
+    'nextTabGroup',
+    'previousTabGroup',
+  ];
+  /**
+   *
+   * Direction relative to a tab pointing to another tab. Can be used to navigate between tabs in the
+   * dock layout. In addition to navigating sequentially between tabs, these directions can navigate
+   * to tabs specifically in other tab groups. For directions that only navigate to a tab directly
+   * before or after the current tab, see {@link DirectionFromTabAdjacent}.
+   *
+   * Note: In the following descriptions, "forward"/"next" means right in LTR and left in RTL, and
+   * "backward"/"previous" means left in LTR and right in RTL
+   *
+   * - See {@link DirectionFromTabAdjacent} for directions that look for a tab directly before or after
+   *   the current tab, which may be in the same or a different tab group
+   * - `nextTabGroup` - go to the active tab in the tab group forward from the tab group this tab is in
+   * - `previousTabGroup` - go to the active tab in the tab group backward from the tab group this tab
+   *   is in
    */
   export type DirectionFromTab = (typeof DIRECTION_FROM_TAB)[number];
   /**
@@ -2864,37 +2951,47 @@ declare module 'shared/models/docking-framework.model' {
     /** The ID of the tab to replace */
     targetTabId: string;
   }
-  /** Information about how a Paranext tab fits into the dock layout */
+  /** Information about how a Platform.Bible tab fits into the dock layout */
   export type Layout = TabLayout | FloatLayout | PanelLayout | ReplaceTabLayout;
   /** Props that are passed to the web view tab component */
   export type WebViewTabProps = WebViewDefinition;
   /**
-   * Rc-dock's onLayoutChange prop made asynchronous with `webViewDefinition` added. The dock layout
-   * component calls this on the web view service when the layout changes.
+   * Async callback invoked by the dock layout component when the layout changes. The web view service
+   * implements this to persist the layout and to emit web-view lifecycle events.
    *
    * @param newLayout The changed layout to save.
-   * @param currentTabId The tab being changed
-   * @param direction The direction the tab is being moved (or deleted or other things - RCDock uses
-   *   the word "direction" here loosely)
-   * @param webViewDefinition The web view definition if the edit was on a web view; `undefined`
-   *   otherwise
-   * @returns Promise that resolves when finished doing things
+   * @param currentTabId The tab being changed, if a single tab is identifiable.
+   * @param changeInfo Optional metadata about the change (e.g. whether a web view was closed). Only
+   *   populated when meaningful — for example, calls from `loadLayout` pass only `newLayout`.
+   * @returns Promise that resolves when the service has finished handling the change.
    */
-  export type OnLayoutChangeRCDock = (
-    newLayout: LayoutBase,
+  export type OnLayoutChange = (
+    newLayout: LayoutInfo,
     currentTabId?: string,
-    direction?: DropDirection,
-    webViewDefinition?: WebViewDefinition,
+    changeInfo?: LayoutChangeInfo,
   ) => Promise<void>;
   /** Properties related to the dock layout */
   export type PapiDockLayout = {
-    /** The rc-dock dock layout React element ref. Used to perform operations on the layout */
-    dockLayout: DockLayout;
     /**
      * A ref to a function that runs when the layout changes. We set this ref to our
      * {@link onLayoutChange} function
      */
-    onLayoutChangeRef: MutableRefObject<OnLayoutChangeRCDock | undefined>;
+    onLayoutChangeRef: MutableRefObject<OnLayoutChange | undefined>;
+    /**
+     * Apply a saved layout to the dock. Used by the web view service when restoring layouts from
+     * persistent storage. Does not invoke `onLayoutChangeRef`.
+     *
+     * @param layout Saved layout to apply
+     */
+    loadLayout: (layout: LayoutInfo) => void;
+    /**
+     * Find the ID of the first open web view whose `webViewType` matches the one supplied.
+     *
+     * @param webViewType The web view type to search for
+     * @returns The WebViewDefinition of the matching web view, or `undefined` if no web view of that
+     *   type is open
+     */
+    findFirstWebViewDefinitionByType: (webViewType: string) => WebViewDefinition | undefined;
     /**
      * Add or update a tab in the layout
      *
@@ -3033,7 +3130,7 @@ declare module 'shared/models/docking-framework.model' {
      * `platform-dock-layout.component.tsx` is that we cannot import `testLayout` here since this
      * service is currently all shared code. Refactor should happen in #203
      */
-    testLayout: LayoutBase;
+    testLayout: LayoutInfo;
   };
 }
 declare module 'shared/services/web-view.service-model' {
@@ -3552,6 +3649,34 @@ declare module 'papi-shared-types' {
    * @example 'platform.quit';
    */
   type CommandNames = keyof CommandHandlers;
+  /**
+   * Event data types for each network event available on the papi. Each extension can extend this
+   * interface to add events it emits with `papi.network.createNetworkEventEmitter`.
+   *
+   * Note: Event names must consist of two strings separated by at least one period. We recommend
+   * one period and lower camel case in case we expand the api in the future to allow dot notation.
+   *
+   * An extension can extend this interface to add types for the network events it emits by adding
+   * the following to its `.d.ts` file:
+   *
+   * @example
+   *
+   * ```typescript
+   * declare module 'papi-shared-types' {
+   *   export interface NetworkEventHandlers {
+   *     'myExtension.onSomethingChanged': { someData: string };
+   *   }
+   * }
+   * ```
+   */
+  interface NetworkEventHandlers {}
+  /**
+   * Names for each network event available on the papi.
+   *
+   * Automatically includes all extensions' network events that are added to
+   * {@link NetworkEventHandlers}.
+   */
+  type NetworkEventNames = keyof NetworkEventHandlers;
   /**
    * Types corresponding to each user setting available in Platform.Bible. Keys are setting names,
    * and values are setting data types. Extensions can add more user setting types with
@@ -4200,6 +4325,14 @@ declare module 'shared/models/notification.service-model' {
     clickCommand?: keyof CommandHandlers;
     /** Optional ID of a previous notification to update instead of showing a new notification */
     notificationId?: string | number;
+    /**
+     * Optional duration in milliseconds for how long the notification is displayed. To make the
+     * notification show indefinitely, specify a `duration` of `0` or less.
+     *
+     * When omitted, duration is computed from message length (minimum 10 seconds, maximum 35
+     * seconds).
+     */
+    duration?: number;
   }
   /**
    * Type signature for a command handler that is called when a user clicks on a notification.
@@ -4223,6 +4356,12 @@ declare module 'shared/models/notification.service-model' {
      * @returns Promise that resolves with the ID of the notification
      */
     send(notification: PlatformNotification): Promise<string | number>;
+    /**
+     * Dismiss a notification by its ID. If the notification is not found, this is a no-op.
+     *
+     * @param notificationId ID of the notification to dismiss, as returned by {@link send}
+     */
+    dismiss(notificationId: string | number): Promise<void>;
   }
   export const NotificationServiceNetworkObjectName = 'NotificationService';
 }
@@ -4729,7 +4868,7 @@ declare module 'shared/models/project-lookup.service-model' {
   /**
    * Transform a network object id for a pdp factory into its well-known pdp factory id
    *
-   * @param pdpFactoryNetworkObjectName Id for then network object for this pdp factory
+   * @param pdpFactoryNetworkObjectName Id for the network object for this pdp factory
    * @returns Id extensions use to identify this pdp factory
    */
   export function getPDPFactoryIdFromNetworkObjectName(pdpFactoryNetworkObjectName: string): string;
@@ -4826,17 +4965,20 @@ declare module 'shared/models/project-lookup.service-model' {
       projectsMetadata: ProjectMetadata[],
       options: ProjectMetadataFilterOptions,
     ): ProjectMetadata[];
-    /** Combines two project metadata filters, removing duplicate items */
+    /**
+     * Combines two project metadata filters, removing duplicate items
+     *
+     * Note: uses additive (OR) semantics for include lists — if one filter specifies an include list
+     * and the other does not, the merged filter keeps the include list (not "include all"). If you
+     * need "include all" to win, ensure both sides are undefined.
+     */
     mergeMetadataFilters(
       metadataFilter1: ProjectMetadataFilterOptions | undefined,
       metadataFilter2: ProjectMetadataFilterOptions | undefined,
     ): ProjectMetadataFilterOptions;
     /**
-     * Get the PDP Factory info whose `projectInterface`s are most minimally matching to the provided
-     * `projectInterface`
-     *
-     * Hopefully this will allow us to get the PDP that most closely matches the `projectInterface`s
-     * to avoid unnecessary redirects through layered PDPs
+     * Get the best (most specific) PDP Factory match for the provided `projectInterface` to avoid
+     * unnecessary PDP layering
      *
      * @param projectMetadata Metadata for project for which to get minimally matching PDPF
      * @param projectInterface Which `projectInterface` to minimally match for
@@ -4896,11 +5038,8 @@ declare module 'shared/models/project-lookup.service-model' {
     excludeProjectInterfaces: (RegExp | RegExp[])[],
   ): boolean;
   /**
-   * Compare function (for array sorting and such) that compares two PDPF Metadata infos by most
-   * minimal match to the `projectInterface` in question.
-   *
-   * Hopefully this will allow us to get the PDP that most closely matches the `projectInterface`s to
-   * avoid unnecessary redirects through layered PDPs
+   * Compare function (for array sorting and such) that compares two PDPF Metadata infos by best (most
+   * specific) match to the `projectInterface` in question to avoid unnecessary PDP layering
    *
    * @param pdpFMetadataInfoA First ProjectDataProviderFactoryMetadataInfo to compare
    * @param pdpFMetadataInfoB Second ProjectDataProviderFactoryMetadataInfo to compare
@@ -8857,7 +8996,10 @@ declare module '@papi/core' {
   export type { WithNotifyUpdate } from 'shared/models/data-provider-engine.model';
   export type { IDataProviderEngine } from 'shared/models/data-provider-engine.model';
   export type { DialogOptions } from 'shared/models/dialog-options.model';
-  export type { DirectionFromTab } from 'shared/models/docking-framework.model';
+  export type {
+    DirectionFromTab,
+    DirectionFromTabAdjacent,
+  } from 'shared/models/docking-framework.model';
   export type { ElevatedPrivileges } from 'shared/models/elevated-privileges.model';
   export type {
     HandleUri,

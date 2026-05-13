@@ -1,7 +1,34 @@
 import { MutableRefObject, ReactNode } from 'react';
-import { DockLayout, DropDirection, LayoutBase } from 'rc-dock';
 import { WebViewDefinition, WebViewDefinitionUpdateInfo } from '@shared/models/web-view.model';
 import { LocalizeKey } from 'platform-bible-utils';
+
+/**
+ * Opaque object representing a saved dock layout. Treat this as a black box: it round-trips through
+ * `localStorage` and back into the dock layout component, but no consumer should inspect its
+ * contents. The renderer's `platform-dock-layout` is the only place that knows the real shape (it
+ * is `LayoutBase` from `rc-dock`).
+ *
+ * Kept opaque here so this shared model does not have to import from `rc-dock`, which keeps
+ * `papi.d.ts` (and therefore every extension's typecheck) free of the rc-dock dependency.
+ *
+ * Eventually, to decouple further from rc-dock, we may implement this as our own layout format and
+ * convert to/from `LayoutBase` at the dock layout boundary.
+ */
+export type LayoutInfo = Record<string, unknown>;
+
+/** Information about a layout change passed from the dock layout to the web view service. */
+export type LayoutChangeInfo = {
+  /**
+   * Whether the most recent layout change closed a web view. When `true`, `webViewDefinition` is
+   * the definition of the web view that was just closed.
+   */
+  didCloseWebView: boolean;
+  /**
+   * The web view definition associated with the layout change, if the change involved a web view.
+   * `undefined` for non-web-view tabs and for changes that don't target a single tab.
+   */
+  webViewDefinition?: WebViewDefinition;
+};
 
 /**
  * Saved information used to recreate a tab.
@@ -22,7 +49,7 @@ export type SavedTabInfo = {
 };
 
 /**
- * Information that Paranext uses to create a tab in the dock layout.
+ * Information that Platform.Bible uses to create a tab in the dock layout.
  *
  * - {@link TabLoader} loads {@link SavedTabInfo} into this
  * - {@link TabSaver} saves this into {@link SavedTabInfo}
@@ -54,28 +81,38 @@ export type TabInfo = SavedTabInfo & {
 };
 
 /**
- * Function that takes a {@link SavedTabInfo} and creates a Paranext tab out of it. Each type of tab
- * must provide a {@link TabLoader}.
+ * Function that takes a {@link SavedTabInfo} and creates a Platform.Bible tab out of it. Each type
+ * of tab must provide a {@link TabLoader}.
  *
  * For now all tab creators must do their own data type verification
  */
 export type TabLoader = (savedTabInfo: SavedTabInfo) => TabInfo;
 
 /**
- * Function that takes a Paranext tab and creates a saved tab out of it. Each type of tab can
+ * Function that takes a Platform.Bible tab and creates a saved tab out of it. Each type of tab can
  * provide a {@link TabSaver}. If they do not provide one, the properties added by `TabInfo` are
  * stripped from TabInfo by `saveTabInfoBase` before saving (so it is just a {@link SavedTabInfo}).
  *
- * @param tabInfo The Paranext tab to save
- * @returns The saved tab info for Paranext to persist. If `undefined`, does not save the tab
+ * @param tabInfo The Platform.Bible tab to save
+ * @returns The saved tab info for Platform.Bible to persist. If `undefined`, does not save the tab
  */
 export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo | undefined;
 
+export const DIRECTION_NEXT_TAB = 'nextTab' as const;
+export const DIRECTION_PREVIOUS_TAB = 'previousTab' as const;
+export const DIRECTION_NEXT_TAB_OR_GROUP = 'nextTabOrGroup' as const;
+export const DIRECTION_PREVIOUS_TAB_OR_GROUP = 'previousTabOrGroup' as const;
+export const DIRECTION_NEAR_TAB_OR_NEXT_GROUP = 'nearTabOrNextGroup' as const;
+export const DIRECTION_NEXT_TAB_GROUP = 'nextTabGroup' as const;
+export const DIRECTION_PREVIOUS_TAB_GROUP = 'previousTabGroup' as const;
+
 /**
- * JSDOC SOURCE DirectionFromTab
+ * JSDOC SOURCE DirectionFromTabAdjacent
  *
  * Direction relative to a tab pointing to another tab. Can be used to navigate between tabs in the
- * dock layout.
+ * dock layout. These directions are for navigating to a tab directly before or after the current
+ * tab, which may be within the same tab group or may cross tab groups. For directions that can also
+ * navigate to tabs specifically in other tab groups, see {@link DirectionFromTab}.
  *
  * Note: In the following descriptions, "forward"/"next" means right in LTR and left in RTL, and
  * "backward"/"previous" means left in LTR and right in RTL
@@ -85,9 +122,6 @@ export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo | undefined;
  * - `previousTab` - go backward one tab. If there are no more tabs before this tab in this tab's tab
  *   group, go to the forward-most tab in the previous tab group (useful for cycling through all
  *   tabs)
- * - `nextTabGroup` - go to the active tab in the tab group forward from the tab group this tab is in
- * - `previousTabGroup` - go to the active tab in the tab group backward from the tab group this tab
- *   is in
  * - `nextTabOrGroup` - go forward one tab. If there are no more tabs after this tab in this tab's tab
  *   group, go to the active tab in the next tab group
  * - `previousTabOrGroup` - go backward one tab. If there are no more tabs before this tab in this
@@ -96,14 +130,37 @@ export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo | undefined;
  *   If there are no more tabs in this tab's tab group, go to the active tab in the next tab group
  *   (useful for closing a tab)
  */
+export const DIRECTION_FROM_TAB_ADJACENT = Object.freeze([
+  DIRECTION_NEXT_TAB,
+  DIRECTION_PREVIOUS_TAB,
+  DIRECTION_NEXT_TAB_OR_GROUP,
+  DIRECTION_PREVIOUS_TAB_OR_GROUP,
+  DIRECTION_NEAR_TAB_OR_NEXT_GROUP,
+] as const);
+/** JSDOC DESTINATION DirectionFromTabAdjacent */
+export type DirectionFromTabAdjacent = (typeof DIRECTION_FROM_TAB_ADJACENT)[number];
+
+/**
+ * JSDOC SOURCE DirectionFromTab
+ *
+ * Direction relative to a tab pointing to another tab. Can be used to navigate between tabs in the
+ * dock layout. In addition to navigating sequentially between tabs, these directions can navigate
+ * to tabs specifically in other tab groups. For directions that only navigate to a tab directly
+ * before or after the current tab, see {@link DirectionFromTabAdjacent}.
+ *
+ * Note: In the following descriptions, "forward"/"next" means right in LTR and left in RTL, and
+ * "backward"/"previous" means left in LTR and right in RTL
+ *
+ * - See {@link DirectionFromTabAdjacent} for directions that look for a tab directly before or after
+ *   the current tab, which may be in the same or a different tab group
+ * - `nextTabGroup` - go to the active tab in the tab group forward from the tab group this tab is in
+ * - `previousTabGroup` - go to the active tab in the tab group backward from the tab group this tab
+ *   is in
+ */
 export const DIRECTION_FROM_TAB = Object.freeze([
-  'nextTab',
-  'previousTab',
-  'nextTabGroup',
-  'previousTabGroup',
-  'nextTabOrGroup',
-  'previousTabOrGroup',
-  'nearTabOrNextGroup',
+  ...DIRECTION_FROM_TAB_ADJACENT,
+  DIRECTION_NEXT_TAB_GROUP,
+  DIRECTION_PREVIOUS_TAB_GROUP,
 ] as const);
 /** JSDOC DESTINATION DirectionFromTab */
 export type DirectionFromTab = (typeof DIRECTION_FROM_TAB)[number];
@@ -177,40 +234,50 @@ interface ReplaceTabLayout {
   targetTabId: string;
 }
 
-/** Information about how a Paranext tab fits into the dock layout */
+/** Information about how a Platform.Bible tab fits into the dock layout */
 export type Layout = TabLayout | FloatLayout | PanelLayout | ReplaceTabLayout;
 
 /** Props that are passed to the web view tab component */
 export type WebViewTabProps = WebViewDefinition;
 
 /**
- * Rc-dock's onLayoutChange prop made asynchronous with `webViewDefinition` added. The dock layout
- * component calls this on the web view service when the layout changes.
+ * Async callback invoked by the dock layout component when the layout changes. The web view service
+ * implements this to persist the layout and to emit web-view lifecycle events.
  *
  * @param newLayout The changed layout to save.
- * @param currentTabId The tab being changed
- * @param direction The direction the tab is being moved (or deleted or other things - RCDock uses
- *   the word "direction" here loosely)
- * @param webViewDefinition The web view definition if the edit was on a web view; `undefined`
- *   otherwise
- * @returns Promise that resolves when finished doing things
+ * @param currentTabId The tab being changed, if a single tab is identifiable.
+ * @param changeInfo Optional metadata about the change (e.g. whether a web view was closed). Only
+ *   populated when meaningful — for example, calls from `loadLayout` pass only `newLayout`.
+ * @returns Promise that resolves when the service has finished handling the change.
  */
-export type OnLayoutChangeRCDock = (
-  newLayout: LayoutBase,
+export type OnLayoutChange = (
+  newLayout: LayoutInfo,
   currentTabId?: string,
-  direction?: DropDirection,
-  webViewDefinition?: WebViewDefinition,
+  changeInfo?: LayoutChangeInfo,
 ) => Promise<void>;
 
 /** Properties related to the dock layout */
 export type PapiDockLayout = {
-  /** The rc-dock dock layout React element ref. Used to perform operations on the layout */
-  dockLayout: DockLayout;
   /**
    * A ref to a function that runs when the layout changes. We set this ref to our
    * {@link onLayoutChange} function
    */
-  onLayoutChangeRef: MutableRefObject<OnLayoutChangeRCDock | undefined>;
+  onLayoutChangeRef: MutableRefObject<OnLayoutChange | undefined>;
+  /**
+   * Apply a saved layout to the dock. Used by the web view service when restoring layouts from
+   * persistent storage. Does not invoke `onLayoutChangeRef`.
+   *
+   * @param layout Saved layout to apply
+   */
+  loadLayout: (layout: LayoutInfo) => void;
+  /**
+   * Find the ID of the first open web view whose `webViewType` matches the one supplied.
+   *
+   * @param webViewType The web view type to search for
+   * @returns The WebViewDefinition of the matching web view, or `undefined` if no web view of that
+   *   type is open
+   */
+  findFirstWebViewDefinitionByType: (webViewType: string) => WebViewDefinition | undefined;
   /**
    * Add or update a tab in the layout
    *
@@ -349,5 +416,5 @@ export type PapiDockLayout = {
    * `platform-dock-layout.component.tsx` is that we cannot import `testLayout` here since this
    * service is currently all shared code. Refactor should happen in #203
    */
-  testLayout: LayoutBase;
+  testLayout: LayoutInfo;
 };

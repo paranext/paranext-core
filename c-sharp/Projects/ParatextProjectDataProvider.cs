@@ -1090,6 +1090,42 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         }
 
         if (
+            paratextSettingName == ProjectSettingsNames.PT_MODEL_TEXTS
+            || paratextSettingName == ProjectSettingsNames.PT_REFERENCED_PROJECTS_AND_RESOURCES
+        )
+        {
+            if (
+                scrText.Settings.ParametersDictionary.TryGetValue(
+                    paratextSettingName,
+                    out string? storedValue
+                ) && !string.IsNullOrEmpty(storedValue)
+            )
+            {
+                int spaceIndex = storedValue.IndexOf(' ');
+                if (spaceIndex < 0)
+                    throw new InvalidDataException(
+                        $"Setting '{paratextSettingName}' is missing the version prefix."
+                    );
+
+                string versionStr = storedValue[..spaceIndex];
+                string jsonBody = storedValue[(spaceIndex + 1)..];
+
+                if (!System.Version.TryParse(versionStr, out var parsedVersion))
+                    throw new InvalidDataException(
+                        $"Setting '{paratextSettingName}' has an invalid version format: '{versionStr}'"
+                    );
+                if (parsedVersion.Major != ResourceReferenceList.CurrentMajorVersion)
+                    throw new InvalidDataException(
+                        $"Setting '{paratextSettingName}' has incompatible major version "
+                            + $"{parsedVersion.Major}; expected {ResourceReferenceList.CurrentMajorVersion}"
+                    );
+
+                return jsonBody.DeserializeFromJson<ResourceReferenceList>();
+            }
+            return new ResourceReferenceList();
+        }
+
+        if (
             scrText.Settings.ParametersDictionary.TryGetValue(
                 paratextSettingName,
                 out string? settingValue
@@ -1208,7 +1244,34 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 {
                     try
                     {
-                        if (ProjectSettingsNames.IsParatextSettingABoolean(paratextSettingName))
+                        if (
+                            paratextSettingName == ProjectSettingsNames.PT_MODEL_TEXTS
+                            || paratextSettingName
+                                == ProjectSettingsNames.PT_REFERENCED_PROJECTS_AND_RESOURCES
+                        )
+                        {
+                            // Validator code should have ensured that value is not null and
+                            // deserializes cleanly; these checks guard against unexpected states.
+                            if (value is null)
+                                throw new InvalidDataException(
+                                    $"Value for {settingName} must not be null after validation"
+                                );
+                            var serialized =
+                                value.ToString()
+                                ?? throw new InvalidDataException(
+                                    $"Value for {settingName} could not be converted to a string"
+                                );
+                            var list =
+                                serialized.DeserializeFromJson<ResourceReferenceList>()
+                                ?? throw new InvalidDataException(
+                                    $"Value for {settingName} could not be deserialized as a ResourceReferenceList"
+                                );
+                            value =
+                                $"{ResourceReferenceList.CurrentFormatVersion} {list.SerializeToJson()}";
+                        }
+                        else if (
+                            ProjectSettingsNames.IsParatextSettingABoolean(paratextSettingName)
+                        )
                         {
                             var stringValue = value?.ToString() ?? "";
                             value = stringValue.ToUpperInvariant() switch

@@ -1,7 +1,7 @@
 import { Button } from '@/components/shadcn-ui/button';
 import { Input } from '@/components/shadcn-ui/input';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { Search, X } from 'lucide-react';
 import { forwardRef } from 'react';
 
@@ -52,17 +52,17 @@ export const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(
     const dir: Direction = readDirection();
 
     return (
-      <div id={id} className={cn('tw-relative', { 'tw-w-full': isFullWidth }, className)}>
+      <div id={id} className={cn('tw:relative', { 'tw:w-full': isFullWidth }, className)}>
         <Search
           className={cn(
-            'tw-absolute tw-top-1/2 tw-h-4 tw-w-4 tw--translate-y-1/2 tw-transform tw-opacity-50',
-            { 'tw-right-3': dir === 'rtl' },
-            { 'tw-left-3': dir === 'ltr' },
+            'tw:absolute tw:top-1/2 tw:h-4 tw:w-4 tw:-translate-y-1/2 tw:transform tw:opacity-50',
+            { 'tw:right-3': dir === 'rtl' },
+            { 'tw:left-3': dir === 'ltr' },
           )}
         />
         <Input
           ref={inputRef}
-          className="tw-w-full tw-text-ellipsis tw-pe-9 tw-ps-9"
+          className="tw:w-full tw:text-ellipsis tw:pe-9 tw:ps-9"
           placeholder={placeholder}
           value={value}
           onChange={(e) => onSearch(e.target.value)}
@@ -73,16 +73,16 @@ export const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(
             variant="ghost"
             size="icon"
             className={cn(
-              'tw-absolute tw-top-1/2 tw-h-7 tw--translate-y-1/2 tw-transform hover:tw-bg-transparent',
-              { 'tw-left-0': dir === 'rtl' },
-              { 'tw-right-0': dir === 'ltr' },
+              'tw:absolute tw:top-1/2 tw:h-7 tw:-translate-y-1/2 tw:transform tw:hover:bg-transparent',
+              { 'tw:left-0': dir === 'rtl' },
+              { 'tw:right-0': dir === 'ltr' },
             )}
             onClick={() => {
               onSearch('');
             }}
           >
-            <X className="tw-h-4 tw-w-4" />
-            <span className="tw-sr-only">Clear</span>
+            <X className="tw:h-4 tw:w-4" />
+            <span className="tw:sr-only">Clear</span>
           </Button>
         )}
       </div>

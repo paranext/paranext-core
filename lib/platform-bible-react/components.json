@@ -1,21 +1,26 @@
 {
   "$schema": "https://ui.shadcn.com/schema.json",
-  "style": "default",
+  "style": "radix-nova",
   "rsc": false,
   "tsx": true,
+  "rtl": true,
   "tailwind": {
-    "config": "tailwind.config.ts",
+    "config": "",
     "css": "src/index.css",
-    "baseColor": "slate",
+    "baseColor": "olive",
     "cssVariables": true,
-    "prefix": "tw-"
+    "prefix": "tw"
   },
-  "iconLibrary": "lucide",
+  "iconLibrary": "tabler",
   "aliases": {
     "components": "@/components/shadcn-ui",
-    "utils": "@/utils/shadcn-ui.util",
-    "ui": "@/components/shadcn-ui"
+    "utils": "@/utils/shadcn-ui/utils",
+    "ui": "@/components/shadcn-ui",
+    "lib": "@/utils/shadcn-ui",
+    "hooks": "@/hooks/shadcn-ui"
   },
+  "menuColor": "default-translucent",
+  "menuAccent": "subtle",
   "registries": {
     "@shadcn-editor": "https://shadcn-editor.vercel.app/r/{name}.json"
   }

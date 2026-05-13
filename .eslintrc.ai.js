@@ -36,7 +36,7 @@ module.exports = {
 
     // === Styling (Tailwind) ===
 
-    // No hardcoded colors - use theme tokens (tw-bg-background, tw-text-foreground)
+    // No hardcoded colors - use theme tokens (tw:bg-background, tw:text-foreground)
     // See: Code-Style-Guide.md "Theming Requirements"
     'paranext/no-hardcoded-tailwind-colors': 'error',
 
@@ -65,6 +65,13 @@ module.exports = {
     'paranext/registration-cleanup': 'warn',
   },
   overrides: [
+    {
+      // Service files are not WebView source files even if they live in a web-views subfolder
+      files: ['src/renderer/services/**'],
+      rules: {
+        'paranext/webview-file-naming': 'off',
+      },
+    },
     {
       // Extension entry points - strict registration and cleanup
       files: ['extensions/src/**/main.ts', 'src/extension-host/**/*.ts'],

@@ -1,3 +1,3 @@
-Extension template for Platform.Bible. Powered by webpack.
+Legacy Comment Manager extension for Platform.Bible.
 
-This is a webpack project template pre-configured to build a Platform.Bible extension. It contains the bare minimum of what an extension needs.
+Enables creating and managing comment threads compatible with the comment system used in Paratext 9 projects.

@@ -68,7 +68,7 @@
       "%comment_filter_scope_current_chapter%": "Capítulo actual",
       "%comment_filter_unread_assigned_to_me%": "Sin leer asignados a mí",
       "%comment_filter_unresolved_assigned_to_me%": "Pendientes asignados a mí",
-      "%no_comments%": "No hay comentarios todavía",
+      "%no_comments%": "Todavía no hay comentarios",
       "%no_comments_match_filter%": "No hay comentarios que coincidan con sus parámetros de filtros.",
       "%webView_legacyCommentManager_commentList_title%": "Comentarios",
       "%webView_legacyCommentManager_openComments%": "Abrir Comentarios"

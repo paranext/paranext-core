@@ -104,20 +104,20 @@ export function BookSelector({
 
   return (
     <RadioGroup
-      className="pr-twp tw-flex"
+      className="pr-twp tw:flex"
       value={bookSelectionMode}
       // value is always a string but we need it to be BookSelectionMode
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       onValueChange={(value: string) => onSelectionModeChange(value as BookSelectionMode)}
     >
-      <div className="tw-flex tw-w-full tw-flex-col tw-gap-4">
-        <div className="tw-grid tw-grid-cols-[25%,25%,50%]">
-          <div className="tw-flex tw-items-center">
+      <div className="tw:flex tw:w-full tw:flex-col tw:gap-4">
+        <div className="tw:grid tw:grid-cols-[25%_25%_50%]">
+          <div className="tw:flex tw:items-center">
             <RadioGroupItem value={BookSelectionMode.CurrentBook} />
-            <Label className="tw-ms-1">{currentBookText}</Label>
+            <Label className="tw:ms-1">{currentBookText}</Label>
           </div>
-          <Label className="tw-flex tw-items-center">{currentBookName}</Label>
-          <div className="tw-flex tw-items-center tw-justify-end">
+          <Label className="tw:flex tw:items-center">{currentBookName}</Label>
+          <div className="tw:flex tw:items-center tw:justify-end">
             <ChapterRangeSelector
               isDisabled={bookSelectionMode === BookSelectionMode.ChooseBooks}
               handleSelectStartChapter={handleSelectStartChapter}
@@ -128,12 +128,12 @@ export function BookSelector({
             />
           </div>
         </div>
-        <div className="tw-grid tw-grid-cols-[25%,50%,25%]">
-          <div className="tw-flex tw-items-center">
+        <div className="tw:grid tw:grid-cols-[25%_50%_25%]">
+          <div className="tw:flex tw:items-center">
             <RadioGroupItem value={BookSelectionMode.ChooseBooks} />
-            <Label className="tw-ms-1">{chooseBooksText}</Label>
+            <Label className="tw:ms-1">{chooseBooksText}</Label>
           </div>
-          <Label className="tw-flex tw-items-center">
+          <Label className="tw:flex tw:items-center">
             {selectedBookIds.map((bookId: string) => Canon.bookIdToEnglishName(bookId)).join(', ')}
           </Label>
           <Button

@@ -90,6 +90,13 @@ public sealed class ProjectSettingsNames
         "platformScripture.allowInvisibleCharacters";
     public const string PT_ALLOW_INVISIBLE_CHARACTERS = "AllowInvisibleChars";
 
+    public const string PB_MODEL_TEXTS = "platformScripture.modelTexts";
+    public const string PT_MODEL_TEXTS = "ModelTexts";
+
+    public const string PB_REFERENCED_PROJECTS_AND_RESOURCES =
+        "platformScripture.referencedProjectsAndResources";
+    public const string PT_REFERENCED_PROJECTS_AND_RESOURCES = "ReferencedProjectsAndResources";
+
     /// <summary>
     /// Paratext setting names that are either T or F and need to be converted to booleans
     /// </summary>
@@ -123,6 +130,8 @@ public sealed class ProjectSettingsNames
             { PB_WORD_MEDIAL_CHARACTER_REGEX, PT_WORD_MEDIAL_CHARACTER_REGEX },
             { PB_WORD_BREAK_REGEX, PT_WORD_BREAK_REGEX },
             { PB_ALLOW_INVISIBLE_CHARACTERS, PT_ALLOW_INVISIBLE_CHARACTERS },
+            { PB_MODEL_TEXTS, PT_MODEL_TEXTS },
+            { PB_REFERENCED_PROJECTS_AND_RESOURCES, PT_REFERENCED_PROJECTS_AND_RESOURCES },
         };
 
     private static readonly Dictionary<string, string> s_paratextToPlatformBibleSettingsNames =
