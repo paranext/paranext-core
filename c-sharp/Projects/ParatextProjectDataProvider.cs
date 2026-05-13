@@ -1347,14 +1347,14 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         var list = DeserializeResourceReferenceList(value, "ModelTexts");
         var itemsElement = ResourceReferenceList.ToXml(list);
         GetUserProjectSettings().SetSetting("ModelTexts", list.DataVersion, itemsElement);
-        SendDataUpdateEvent(ProjectDataType.USER_SETTING, "user model texts update event");
+        SendDataUpdateEvent("UserModelTexts", "user model texts update event");
         return true;
     }
 
     public bool ResetUserModelTexts()
     {
         GetUserProjectSettings().RemoveSetting("ModelTexts");
-        SendDataUpdateEvent(ProjectDataType.USER_SETTING, "user model texts reset event");
+        SendDataUpdateEvent("UserModelTexts", "user model texts reset event");
         return true;
     }
 
@@ -1375,14 +1375,20 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         var itemsElement = ResourceReferenceList.ToXml(list);
         GetUserProjectSettings()
             .SetSetting("ReferencedProjectsAndResources", list.DataVersion, itemsElement);
-        SendDataUpdateEvent(ProjectDataType.USER_SETTING, "user referenced projects update event");
+        SendDataUpdateEvent(
+            "UserReferencedProjectsAndResources",
+            "user referenced projects update event"
+        );
         return true;
     }
 
     public bool ResetUserReferencedProjectsAndResources()
     {
         GetUserProjectSettings().RemoveSetting("ReferencedProjectsAndResources");
-        SendDataUpdateEvent(ProjectDataType.USER_SETTING, "user referenced projects reset event");
+        SendDataUpdateEvent(
+            "UserReferencedProjectsAndResources",
+            "user referenced projects reset event"
+        );
         return true;
     }
 
