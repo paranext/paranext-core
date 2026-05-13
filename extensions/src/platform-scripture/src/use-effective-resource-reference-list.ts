@@ -3,11 +3,18 @@ import { isPlatformError } from 'platform-bible-utils';
 import type { ResourceReference, ResourceReferenceList } from 'platform-scripture';
 import { useProjectSetting, useProjectDataProvider } from '@papi/frontend/react';
 
+// Module-level constant avoids a useMemo with [] deps inside the hook
+const DEFAULT_LIST: ResourceReferenceList = { dataVersion: '1.0.0', items: [] };
+
 function getDeduplicationKey(item: ResourceReference): string {
   if ('id' in item && typeof item.id === 'string') {
     return `id:${item.id}`;
   }
-  return `name:${item.name}`;
+  // Fallback: name-based deduplication — guard that name is actually a string
+  const name = (item as { name?: unknown }).name;
+  if (typeof name === 'string') return `name:${name}`;
+  // Unknown type with no string name: use type + stringified name to avoid false dedup
+  return `type:${item.type}:${String((item as { name?: unknown }).name ?? '')}`;
 }
 
 function mergeResourceReferenceLists(
@@ -50,15 +57,10 @@ export function useEffectiveResourceReferenceList(
   projectId: string | undefined,
   settingName: 'platformScripture.modelTexts' | 'platformScripture.referencedProjectsAndResources',
 ): ResourceReferenceList | undefined {
-  const defaultList = useMemo<ResourceReferenceList>(
-    () => ({ dataVersion: '1.0.0', items: [] }),
-    [],
-  );
-
   const [projectSettingValue, , , isProjectSettingLoading] = useProjectSetting(
     projectId,
     settingName,
-    defaultList,
+    DEFAULT_LIST,
   );
 
   const userPdp = useProjectDataProvider('platformScripture.userTextConnectionSettings', projectId);
@@ -68,9 +70,10 @@ export function useEffectiveResourceReferenceList(
   useEffect(() => {
     if (!userPdp) {
       setUserList(undefined);
-      return undefined;
+      return;
     }
 
+    let disposed = false;
     let unsubscribe: (() => Promise<boolean>) | undefined;
 
     const subscribeMethod =
@@ -87,11 +90,15 @@ export function useEffectiveResourceReferenceList(
     });
 
     subscribePromise.then((unsub) => {
-      unsubscribe = unsub;
-      return unsub;
+      if (disposed) {
+        unsub();
+      } else {
+        unsubscribe = unsub;
+      }
     });
 
     return () => {
+      disposed = true;
       unsubscribe?.();
     };
   }, [userPdp, settingName]);

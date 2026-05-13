@@ -13,6 +13,11 @@ vi.mock('@papi/frontend/react', () => ({
 import { useProjectSetting, useProjectDataProvider } from '@papi/frontend/react';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list';
 
+/** Minimal PlatformError shape — matches the `isPlatformError` runtime check */
+function makePlatformError(): object {
+  return { platformErrorVersion: 1, message: 'test error' };
+}
+
 const mockUseProjectSetting = vi.mocked(useProjectSetting);
 const mockUseProjectDataProvider = vi.mocked(useProjectDataProvider);
 
@@ -213,5 +218,45 @@ describe('useEffectiveResourceReferenceList', () => {
     expect(result.current?.items).toHaveLength(2);
     expect(result.current?.items[0]).toEqual({ type: 'xmlResource', name: 'Xml Ref' });
     expect(result.current?.items[1]).toEqual({ type: 'sourceLanguageResource', name: 'Hebrew' });
+  });
+
+  it('returns undefined when projectSettingValue is a PlatformError', () => {
+    const platformError = makePlatformError();
+    // Cast through unknown because the mock returns a PlatformError where a ResourceReferenceList
+    // is normally expected — this is the error path we want to test.
+    mockUseProjectSetting.mockReturnValue([
+      platformError as unknown as ResourceReferenceList,
+      undefined,
+      undefined,
+      false,
+    ]);
+    const mockPdp = makeMockPdp(emptyList(), 'subscribeUserModelTexts');
+    mockUseProjectDataProvider.mockReturnValue(mockPdp);
+
+    const { result } = renderHook(() =>
+      useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
+    );
+
+    expect(result.current).toBeUndefined();
+  });
+
+  it('does not deduplicate unknown-type items with different types against each other', () => {
+    const projectList: ResourceReferenceList = {
+      dataVersion: '1.0.0',
+      // Two items with no id and no string name, but different types
+      items: [
+        { type: 'unknownTypeA' } as unknown as ResourceReferenceList['items'][number],
+        { type: 'unknownTypeB' } as unknown as ResourceReferenceList['items'][number],
+      ],
+    };
+    mockUseProjectSetting.mockReturnValue([projectList, undefined, undefined, false]);
+    mockUseProjectDataProvider.mockReturnValue(makeMockPdp(emptyList(), 'subscribeUserModelTexts'));
+
+    const { result } = renderHook(() =>
+      useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
+    );
+
+    // Both items must survive — they are different types, not duplicates
+    expect(result.current?.items).toHaveLength(2);
   });
 });
