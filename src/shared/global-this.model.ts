@@ -31,8 +31,8 @@ declare global {
   /** How much logging should be recorded. Defaults to 'debug' if not packaged, 'info' if packaged */
   var logLevel: LogLevel;
   /**
-   * A function that each React WebView extension must provide for Paranext to display it. Only used
-   * in WebView iframes.
+   * A function that each React WebView extension must provide for Platform.Bible to display it.
+   * Only used in WebView iframes.
    */
   var webViewComponent: FunctionComponent<WebViewProps>;
   /** The id of the current web view. Only used in WebView iframes. */
@@ -72,7 +72,7 @@ declare global {
 }
 /* eslint-enable */
 
-/** Type of Paranext process */
+/** Type of Platform.Bible process */
 export enum ProcessType {
   Main = 'main',
   Renderer = 'renderer',
