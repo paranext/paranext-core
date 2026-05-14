@@ -22,7 +22,11 @@ export type ZeroStateProps = {
   /** Saroj's known languages — drives suggestions. Standard variant doesn't read it. */
   // eslint-disable-next-line react/no-unused-prop-types -- See JSDoc; Standard variant doesn't read.
   userLanguages: string[];
-  /** Opens the full (Area 3) picker. Variants A and B call this from the CTA. */
+  /**
+   * Opens the full (Area 3) picker. Standard and Suggestions call this from the CTA; Split is the
+   * inline picker itself and intentionally has no full-picker handoff.
+   */
+  // eslint-disable-next-line react/no-unused-prop-types -- See JSDoc; Split variant doesn't read.
   onOpenPicker: () => void;
   /**
    * Adds a single resource directly (used by suggestion chips / inline picker). Standard variant
