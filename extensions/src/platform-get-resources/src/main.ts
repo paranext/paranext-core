@@ -23,7 +23,7 @@ const HOME_WEB_VIEW_SIZE = { width: 1000, height: 650 };
 
 const RESOURCES_CACHE_KEY = 'cachedDblResources';
 
-let executionToken: ExecutionToken;
+let executionToken!: ExecutionToken;
 let cachedResources: DblResourceData[] | undefined;
 let isFetching = false;
 
@@ -42,18 +42,16 @@ async function startBackgroundFetch(): Promise<void> {
       if (attempt > 0) await sleep(1000); // eslint-disable-line no-await-in-loop
 
       try {
-        const provider = await papi.dataProviders.get(
-          // eslint-disable-line no-await-in-loop
-          'platformGetResources.dblResourcesProvider',
-        );
+        // eslint-disable-next-line no-await-in-loop
+        const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
         if (!provider) continue;
 
         if (!(await provider.isGetDblResourcesAvailable())) return; // eslint-disable-line no-await-in-loop
 
         const resources = await provider.getDblResources(undefined); // eslint-disable-line no-await-in-loop
         cachedResources = resources;
+        // eslint-disable-next-line no-await-in-loop
         await papi.storage.writeUserData(
-          // eslint-disable-line no-await-in-loop
           executionToken,
           RESOURCES_CACHE_KEY,
           JSON.stringify(cachedResources),
@@ -63,6 +61,7 @@ async function startBackgroundFetch(): Promise<void> {
         logger.debug(`Background resource fetch attempt ${attempt + 1} failed: ${e}`);
       }
     }
+    logger.warn('Background DBL resources fetch failed after 10 attempts');
   } finally {
     isFetching = false;
   }
@@ -73,7 +72,8 @@ async function getCachedResources(): Promise<DblResourceData[] | undefined> {
 
   if (isFetching) {
     while (isFetching) await sleep(100); // eslint-disable-line no-await-in-loop
-    return cachedResources;
+    if (cachedResources !== undefined) return cachedResources;
+    // Fall through to on-demand fetch if background fetch finished with nothing
   }
 
   isFetching = true;
@@ -204,7 +204,7 @@ export async function activate(context: ExecutionActivationContext) {
         { existingId: '?' },
       );
 
-      const resources = await papi.commands.sendCommand('platformGetResources.getCachedResources');
+      const resources = await getCachedResources();
       if (resources === undefined)
         await papi.notifications.send({
           message: '%resources_fetch_failed%',
