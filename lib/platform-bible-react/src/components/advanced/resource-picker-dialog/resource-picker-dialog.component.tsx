@@ -75,25 +75,25 @@ function ResourceSection({
   if (resources.length === 0) return undefined;
   return (
     <>
-      <Label className="tw-text-xs tw-uppercase tw-tracking-wider tw-text-muted-foreground">
+      <Label className="tw:text-xs tw:uppercase tw:tracking-wider tw:text-muted-foreground">
         {label}
       </Label>
       <Table>
         <TableBody>
           {resources.map((r) => (
             <TableRow key={r.dblEntryUid}>
-              <TableCell className="tw-border-0">
+              <TableCell className="tw:border-0">
                 <div>
-                  <span className="tw-font-medium">{r.fullName}</span>
+                  <span className="tw:font-medium">{r.fullName}</span>
                   {' ('}
                   <span>{r.displayName}</span>)
-                  <Badge variant="secondary" className="tw-ml-2">
+                  <Badge variant="secondary" className="tw:ml-2">
                     {r.bestLanguageName}
                   </Badge>
                 </div>
               </TableCell>
               {onSelect && useLabel && (
-                <TableCell className="tw-border-0 tw-text-right">
+                <TableCell className="tw:border-0 tw:text-right">
                   <Button variant="outline" onClick={() => onSelect(r)}>
                     {useLabel}
                   </Button>
@@ -219,10 +219,10 @@ export default function ResourcePickerDialog({
 
   return (
     <>
-      <DialogHeader className="tw-px-4 tw-pt-4">
+      <DialogHeader className="tw:px-4 tw:pt-4">
         <DialogTitle>{titleText}</DialogTitle>
       </DialogHeader>
-      <div className="tw-flex tw-gap-2 tw-p-4">
+      <div className="tw:flex tw:gap-2 tw:p-4">
         <SearchBar
           value={searchText}
           onSearch={setSearchText}
@@ -239,16 +239,16 @@ export default function ResourcePickerDialog({
         />
       </div>
       {isFiltered && (
-        <p className="tw-px-4 tw-pb-1 tw-text-right tw-text-xs tw-text-muted-foreground">
+        <p className="tw:px-4 tw:pb-1 tw:text-right tw:text-xs tw:text-muted-foreground">
           {formatReplacementString(showingCountTemplate, {
             filtered: filteredResources.length,
             total: allResources.length,
           })}
         </p>
       )}
-      <div className="tw-flex-1 tw-overflow-y-auto tw-px-4 tw-pb-4">
+      <div className="tw:flex-1 tw:overflow-y-auto tw:px-4 tw:pb-4">
         {hasNoResults ? (
-          <p className="tw-py-8 tw-text-center tw-text-muted-foreground">{noResultsText}</p>
+          <p className="tw:py-8 tw:text-center tw:text-muted-foreground">{noResultsText}</p>
         ) : (
           <>
             <ResourceSection label={alreadySelectedLabel} resources={alreadySelected} />
