@@ -188,7 +188,7 @@ export const Populated: Story = {
         onChange={() => {}}
         body={
           <>
-            <p className="tw-mb-3 tw-text-xs tw-uppercase tw-tracking-wider tw-text-muted-foreground">
+            <p className="tw:mb-3 tw:text-xs tw:uppercase tw:tracking-wider tw:text-muted-foreground">
               John 1
             </p>
             <p>{SAMPLE_MODEL_TEXT_PARAGRAPH}</p>

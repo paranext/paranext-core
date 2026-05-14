@@ -45,23 +45,23 @@ function ResourceChecklistRow({
 }) {
   const id = `res-${resource.dblEntryUid}`;
   return (
-    <li className="tw-flex tw-items-center tw-gap-2 tw-rounded tw-px-2 tw-py-1.5 hover:tw-bg-muted/60">
+    <li className="tw:flex tw:items-center tw:gap-2 tw:rounded tw:px-2 tw:py-1.5 hover:tw:bg-muted/60">
       <Checkbox id={id} checked={checked} onCheckedChange={(v) => onToggle(Boolean(v))} />
-      <label htmlFor={id} className="tw-flex tw-min-w-0 tw-flex-1 tw-cursor-pointer tw-flex-col">
-        <span className="tw-flex tw-items-center tw-gap-1.5">
-          <span className="tw-truncate tw-text-sm tw-font-medium">{resource.displayName}</span>
+      <label htmlFor={id} className="tw:flex tw:min-w-0 tw:flex-1 tw:cursor-pointer tw:flex-col">
+        <span className="tw:flex tw:items-center tw:gap-1.5">
+          <span className="tw:truncate tw:text-sm tw:font-medium">{resource.displayName}</span>
           {alreadyAssociated && (
-            <Badge variant="secondary" className="tw-h-4 tw-px-1 tw-text-[10px]">
+            <Badge variant="secondary" className="tw:h-4 tw:px-1 tw:text-[10px]">
               {RESOURCES_STRINGS.alreadyAdded}
             </Badge>
           )}
           {resource.installed && !alreadyAssociated && (
-            <Badge variant="outline" className="tw-h-4 tw-px-1 tw-text-[10px]">
+            <Badge variant="outline" className="tw:h-4 tw:px-1 tw:text-[10px]">
               {RESOURCES_STRINGS.installedBadge}
             </Badge>
           )}
         </span>
-        <span className="tw-truncate tw-text-[11px] tw-text-muted-foreground">
+        <span className="tw:truncate tw:text-[11px] tw:text-muted-foreground">
           {resource.fullName} · {resource.bestLanguageName} · {formatResourceSize(resource.size)}
         </span>
       </label>
@@ -69,13 +69,13 @@ function ResourceChecklistRow({
         <Button
           size="sm"
           variant="ghost"
-          className="tw-h-7 tw-px-2 tw-text-xs"
+          className="tw:h-7 tw:px-2 tw:text-xs"
           onClick={(e) => {
             e.preventDefault();
             onDownload?.(resource);
           }}
         >
-          <Download className="tw-mr-1 tw-h-3 tw-w-3" />
+          <Download className="tw:mr-1 tw:h-3 tw:w-3" />
           {RESOURCES_STRINGS.downloadAction}
         </Button>
       )}
@@ -137,24 +137,24 @@ export function ScriptureResourcesPickerModalChecklist({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="tw-flex tw-h-[520px] tw-max-w-md tw-flex-col tw-p-0">
-        <DialogHeader className="tw-border-b tw-px-4 tw-py-3">
-          <DialogTitle className="tw-text-sm">{RESOURCES_STRINGS.pickerTitle}</DialogTitle>
+      <DialogContent className="tw:flex tw:h-[520px] tw:max-w-md tw:flex-col tw:p-0">
+        <DialogHeader className="tw:border-b tw:px-4 tw:py-3">
+          <DialogTitle className="tw:text-sm">{RESOURCES_STRINGS.pickerTitle}</DialogTitle>
         </DialogHeader>
-        <div className="tw-px-4 tw-py-2">
-          <div className="tw-relative">
-            <Search className="tw-pointer-events-none tw-absolute tw-left-2 tw-top-1/2 tw-h-3.5 tw-w-3.5 -tw-translate-y-1/2 tw-text-muted-foreground" />
+        <div className="tw:px-4 tw:py-2">
+          <div className="tw:relative">
+            <Search className="tw:pointer-events-none tw:absolute tw:left-2 tw:top-1/2 tw:h-3.5 tw:w-3.5 -tw:translate-y-1/2 tw:text-muted-foreground" />
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={RESOURCES_STRINGS.searchPlaceholder}
-              className="tw-h-8 tw-pl-7 tw-text-xs"
+              className="tw:h-8 tw:pl-7 tw:text-xs"
             />
           </div>
         </div>
-        <ul className="tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-gap-0.5 tw-overflow-y-auto tw-px-3 tw-pb-2">
+        <ul className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col tw:gap-0.5 tw:overflow-y-auto tw:px-3 tw:pb-2">
           {ranked.length === 0 && (
-            <li className="tw-px-2 tw-py-4 tw-text-center tw-text-xs tw-text-muted-foreground">
+            <li className="tw:px-2 tw:py-4 tw:text-center tw:text-xs tw:text-muted-foreground">
               No matches
             </li>
           )}
@@ -169,19 +169,19 @@ export function ScriptureResourcesPickerModalChecklist({
             />
           ))}
           {suggestedIds.size > 0 && (
-            <li className="tw-px-2 tw-py-1 tw-text-[10px] tw-text-muted-foreground">
+            <li className="tw:px-2 tw:py-1 tw:text-[10px] tw:text-muted-foreground">
               ★ Suggested for your languages ({userLanguages.join(', ')})
             </li>
           )}
         </ul>
-        <div className="tw-flex tw-items-center tw-justify-between tw-border-t tw-px-4 tw-py-2">
-          <span className="tw-text-xs tw-text-muted-foreground">{checkedIds.length} selected</span>
-          <div className="tw-flex tw-gap-2">
+        <div className="tw:flex tw:items-center tw:justify-between tw:border-t tw:px-4 tw:py-2">
+          <span className="tw:text-xs tw:text-muted-foreground">{checkedIds.length} selected</span>
+          <div className="tw:flex tw:gap-2">
             <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
               {RESOURCES_STRINGS.cancelSelection}
             </Button>
             <Button size="sm" onClick={() => onApply(checkedIds)}>
-              <Check className="tw-mr-1 tw-h-3.5 tw-w-3.5" />
+              <Check className="tw:mr-1 tw:h-3.5 tw:w-3.5" />
               {RESOURCES_STRINGS.applySelection}
             </Button>
           </div>
@@ -234,53 +234,53 @@ export function ScriptureResourcesPickerTwoPanel({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="tw-flex tw-h-[540px] tw-max-w-2xl tw-flex-col tw-p-0">
-        <DialogHeader className="tw-border-b tw-px-4 tw-py-3">
-          <DialogTitle className="tw-text-sm">{RESOURCES_STRINGS.pickerTitle}</DialogTitle>
+      <DialogContent className="tw:flex tw:h-[540px] tw:max-w-2xl tw:flex-col tw:p-0">
+        <DialogHeader className="tw:border-b tw:px-4 tw:py-3">
+          <DialogTitle className="tw:text-sm">{RESOURCES_STRINGS.pickerTitle}</DialogTitle>
         </DialogHeader>
-        <div className="tw-flex tw-min-h-0 tw-flex-1">
+        <div className="tw:flex tw:min-h-0 tw:flex-1">
           {/* Catalog */}
-          <div className="tw-flex tw-min-w-0 tw-flex-1 tw-flex-col tw-border-r">
-            <div className="tw-flex tw-items-center tw-justify-between tw-px-3 tw-py-2">
-              <span className="tw-text-[11px] tw-font-medium tw-uppercase tw-tracking-wide tw-text-muted-foreground">
+          <div className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:border-r">
+            <div className="tw:flex tw:items-center tw:justify-between tw:px-3 tw:py-2">
+              <span className="tw:text-[11px] tw:font-medium tw:uppercase tw:tracking-wide tw:text-muted-foreground">
                 Available
               </span>
-              <span className="tw-text-[10px] tw-text-muted-foreground">
+              <span className="tw:text-[10px] tw:text-muted-foreground">
                 {available.length} resources
               </span>
             </div>
-            <div className="tw-px-3 tw-pb-2">
-              <div className="tw-relative">
-                <Search className="tw-pointer-events-none tw-absolute tw-left-2 tw-top-1/2 tw-h-3.5 tw-w-3.5 -tw-translate-y-1/2 tw-text-muted-foreground" />
+            <div className="tw:px-3 tw:pb-2">
+              <div className="tw:relative">
+                <Search className="tw:pointer-events-none tw:absolute tw:left-2 tw:top-1/2 tw:h-3.5 tw:w-3.5 -tw:translate-y-1/2 tw:text-muted-foreground" />
                 <Input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder={RESOURCES_STRINGS.searchPlaceholder}
-                  className="tw-h-8 tw-pl-7 tw-text-xs"
+                  className="tw:h-8 tw:pl-7 tw:text-xs"
                 />
               </div>
             </div>
-            <ul className="tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-gap-0.5 tw-overflow-y-auto tw-px-2 tw-pb-2">
+            <ul className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col tw:gap-0.5 tw:overflow-y-auto tw:px-2 tw:pb-2">
               {available.map((r) => (
                 <li
                   key={r.dblEntryUid}
-                  className="tw-flex tw-items-center tw-gap-2 tw-rounded tw-px-2 tw-py-1.5 hover:tw-bg-muted/60"
+                  className="tw:flex tw:items-center tw:gap-2 tw:rounded tw:px-2 tw:py-1.5 hover:tw:bg-muted/60"
                 >
-                  <div className="tw-min-w-0 tw-flex-1">
-                    <div className="tw-flex tw-items-center tw-gap-1.5">
-                      <span className="tw-truncate tw-text-sm">{r.displayName}</span>
+                  <div className="tw:min-w-0 tw:flex-1">
+                    <div className="tw:flex tw:items-center tw:gap-1.5">
+                      <span className="tw:truncate tw:text-sm">{r.displayName}</span>
                       {suggestedIds.has(r.dblEntryUid) && (
-                        <Badge variant="secondary" className="tw-h-4 tw-px-1 tw-text-[10px]">
+                        <Badge variant="secondary" className="tw:h-4 tw:px-1 tw:text-[10px]">
                           ★ suggested
                         </Badge>
                       )}
                       {r.installed && (
-                        <Badge variant="outline" className="tw-h-4 tw-px-1 tw-text-[10px]">
+                        <Badge variant="outline" className="tw:h-4 tw:px-1 tw:text-[10px]">
                           {RESOURCES_STRINGS.installedBadge}
                         </Badge>
                       )}
                     </div>
-                    <div className="tw-truncate tw-text-[11px] tw-text-muted-foreground">
+                    <div className="tw:truncate tw:text-[11px] tw:text-muted-foreground">
                       {r.bestLanguageName} · {formatResourceSize(r.size)}
                     </div>
                   </div>
@@ -288,56 +288,56 @@ export function ScriptureResourcesPickerTwoPanel({
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="tw-h-7 tw-px-2 tw-text-xs"
+                      className="tw:h-7 tw:px-2 tw:text-xs"
                       onClick={() => onDownload?.(r)}
                     >
-                      <Download className="tw-h-3 tw-w-3" />
+                      <Download className="tw:h-3 tw:w-3" />
                     </Button>
                   )}
                   <Button
                     size="sm"
                     variant="outline"
-                    className="tw-h-7 tw-px-2 tw-text-xs"
+                    className="tw:h-7 tw:px-2 tw:text-xs"
                     onClick={() => add(r.dblEntryUid)}
                   >
-                    <ArrowRight className="tw-h-3 tw-w-3" />
+                    <ArrowRight className="tw:h-3 tw:w-3" />
                   </Button>
                 </li>
               ))}
             </ul>
           </div>
           {/* Selected tray */}
-          <div className="tw-flex tw-w-64 tw-shrink-0 tw-flex-col tw-bg-muted/20">
-            <div className="tw-flex tw-items-center tw-justify-between tw-px-3 tw-py-2">
-              <span className="tw-text-[11px] tw-font-medium tw-uppercase tw-tracking-wide tw-text-muted-foreground">
+          <div className="tw:flex tw:w-64 tw:shrink-0 tw:flex-col tw:bg-muted/20">
+            <div className="tw:flex tw:items-center tw:justify-between tw:px-3 tw:py-2">
+              <span className="tw:text-[11px] tw:font-medium tw:uppercase tw:tracking-wide tw:text-muted-foreground">
                 Selected
               </span>
-              <span className="tw-text-[10px] tw-text-muted-foreground">{selected.length}</span>
+              <span className="tw:text-[10px] tw:text-muted-foreground">{selected.length}</span>
             </div>
             <Separator />
-            <ul className="tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-gap-0.5 tw-overflow-y-auto tw-p-2">
+            <ul className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col tw:gap-0.5 tw:overflow-y-auto tw:p-2">
               {selected.length === 0 && (
-                <li className="tw-px-2 tw-py-4 tw-text-center tw-text-xs tw-text-muted-foreground">
+                <li className="tw:px-2 tw:py-4 tw:text-center tw:text-xs tw:text-muted-foreground">
                   Nothing selected yet
                 </li>
               )}
               {selected.map((r) => (
                 <li
                   key={r.dblEntryUid}
-                  className="tw-flex tw-items-center tw-gap-2 tw-rounded tw-bg-background tw-px-2 tw-py-1.5"
+                  className="tw:flex tw:items-center tw:gap-2 tw:rounded tw:bg-background tw:px-2 tw:py-1.5"
                 >
                   <Button
                     size="icon"
                     variant="ghost"
-                    className="tw-h-6 tw-w-6"
+                    className="tw:h-6 tw:w-6"
                     onClick={() => remove(r.dblEntryUid)}
                     aria-label={`Remove ${r.displayName}`}
                   >
-                    <ArrowLeft className="tw-h-3 tw-w-3" />
+                    <ArrowLeft className="tw:h-3 tw:w-3" />
                   </Button>
-                  <div className="tw-min-w-0 tw-flex-1">
-                    <div className="tw-truncate tw-text-sm">{r.displayName}</div>
-                    <div className="tw-truncate tw-text-[10px] tw-text-muted-foreground">
+                  <div className="tw:min-w-0 tw:flex-1">
+                    <div className="tw:truncate tw:text-sm">{r.displayName}</div>
+                    <div className="tw:truncate tw:text-[10px] tw:text-muted-foreground">
                       {r.bestLanguageName}
                     </div>
                   </div>
@@ -346,14 +346,14 @@ export function ScriptureResourcesPickerTwoPanel({
             </ul>
           </div>
         </div>
-        <div className="tw-flex tw-items-center tw-justify-between tw-border-t tw-px-4 tw-py-2">
-          <span className="tw-text-xs tw-text-muted-foreground">{checkedIds.length} selected</span>
-          <div className="tw-flex tw-gap-2">
+        <div className="tw:flex tw:items-center tw:justify-between tw:border-t tw:px-4 tw:py-2">
+          <span className="tw:text-xs tw:text-muted-foreground">{checkedIds.length} selected</span>
+          <div className="tw:flex tw:gap-2">
             <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
               {RESOURCES_STRINGS.cancelSelection}
             </Button>
             <Button size="sm" onClick={() => onApply(checkedIds)}>
-              <Check className="tw-mr-1 tw-h-3.5 tw-w-3.5" />
+              <Check className="tw:mr-1 tw:h-3.5 tw:w-3.5" />
               {RESOURCES_STRINGS.applySelection}
             </Button>
           </div>
@@ -406,38 +406,38 @@ export function ScriptureResourcesPickerInline({
   if (!open) return <></>;
 
   return (
-    <div className="tw-absolute tw-inset-0 tw-flex tw-flex-col tw-border-l-4 tw-border-primary tw-bg-background tw-shadow-inner">
-      <div className="tw-flex tw-items-center tw-justify-between tw-border-b tw-bg-muted/30 tw-px-3 tw-py-2">
-        <span className="tw-text-sm tw-font-semibold">{RESOURCES_STRINGS.pickerTitle}</span>
+    <div className="tw:absolute tw:inset-0 tw:flex tw:flex-col tw:border-l-4 tw:border-primary tw:bg-background tw:shadow-inner">
+      <div className="tw:flex tw:items-center tw:justify-between tw:border-b tw:bg-muted/30 tw:px-3 tw:py-2">
+        <span className="tw:text-sm tw:font-semibold">{RESOURCES_STRINGS.pickerTitle}</span>
         <Button
           size="icon"
           variant="ghost"
-          className="tw-h-6 tw-w-6"
+          className="tw:h-6 tw:w-6"
           onClick={() => onOpenChange(false)}
           aria-label="Close picker"
         >
-          <X className="tw-h-3.5 tw-w-3.5" />
+          <X className="tw:h-3.5 tw:w-3.5" />
         </Button>
       </div>
-      <div className="tw-px-3 tw-py-2">
-        <div className="tw-relative">
-          <Search className="tw-pointer-events-none tw-absolute tw-left-2 tw-top-1/2 tw-h-3.5 tw-w-3.5 -tw-translate-y-1/2 tw-text-muted-foreground" />
+      <div className="tw:px-3 tw:py-2">
+        <div className="tw:relative">
+          <Search className="tw:pointer-events-none tw:absolute tw:left-2 tw:top-1/2 tw:h-3.5 tw:w-3.5 -tw:translate-y-1/2 tw:text-muted-foreground" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={RESOURCES_STRINGS.searchPlaceholder}
-            className="tw-h-8 tw-pl-7 tw-text-xs"
+            className="tw:h-8 tw:pl-7 tw:text-xs"
           />
         </div>
       </div>
       {suggestedIds.size > 0 && (
-        <div className="tw-px-3 tw-pb-1 tw-text-[10px] tw-text-muted-foreground">
+        <div className="tw:px-3 tw:pb-1 tw:text-[10px] tw:text-muted-foreground">
           ★ Suggested for your languages: {userLanguages.join(', ')}
         </div>
       )}
-      <ul className="tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-gap-0.5 tw-overflow-y-auto tw-px-2 tw-pb-2">
+      <ul className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col tw:gap-0.5 tw:overflow-y-auto tw:px-2 tw:pb-2">
         {ranked.length === 0 && (
-          <li className="tw-px-2 tw-py-4 tw-text-center tw-text-xs tw-text-muted-foreground">
+          <li className="tw:px-2 tw:py-4 tw:text-center tw:text-xs tw:text-muted-foreground">
             No matches
           </li>
         )}
@@ -452,14 +452,14 @@ export function ScriptureResourcesPickerInline({
           />
         ))}
       </ul>
-      <div className="tw-flex tw-items-center tw-justify-between tw-border-t tw-px-3 tw-py-2">
-        <span className="tw-text-xs tw-text-muted-foreground">{checkedIds.length} selected</span>
-        <div className="tw-flex tw-gap-2">
+      <div className="tw:flex tw:items-center tw:justify-between tw:border-t tw:px-3 tw:py-2">
+        <span className="tw:text-xs tw:text-muted-foreground">{checkedIds.length} selected</span>
+        <div className="tw:flex tw:gap-2">
           <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
             {RESOURCES_STRINGS.cancelSelection}
           </Button>
           <Button size="sm" onClick={() => onApply(checkedIds)}>
-            <Check className="tw-mr-1 tw-h-3.5 tw-w-3.5" />
+            <Check className="tw:mr-1 tw:h-3.5 tw:w-3.5" />
             {RESOURCES_STRINGS.applySelection}
           </Button>
         </div>

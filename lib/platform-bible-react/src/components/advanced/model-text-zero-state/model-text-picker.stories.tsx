@@ -27,7 +27,7 @@ function PopulatedColumnBehindPicker({ resource }: { resource: DblResourceData }
       resource={resource}
       body={
         <>
-          <p className="tw-mb-3 tw-text-xs tw-uppercase tw-tracking-wider tw-text-muted-foreground">
+          <p className="tw:mb-3 tw:text-xs tw:uppercase tw:tracking-wider tw:text-muted-foreground">
             John 1
           </p>
           <p>{SAMPLE_MODEL_TEXT_PARAGRAPH}</p>
@@ -62,7 +62,7 @@ export const ModalVariant: Story = {
       const [picked, setPicked] = useState<DblResourceData>(initiallyPickedResource);
       return (
         <WorkspaceShell columnIndex={1}>
-          <div className="tw-flex tw-h-full tw-w-full tw-items-center tw-justify-center tw-text-xs tw-text-muted-foreground">
+          <div className="tw:flex tw:h-full tw:w-full tw:items-center tw:justify-center tw:text-xs tw:text-muted-foreground">
             (Editor column — not the picker target)
           </div>
           {open && (
@@ -95,11 +95,11 @@ export const PopoverVariant: Story = {
       const [picked, setPicked] = useState<DblResourceData>(initiallyPickedResource);
       return (
         <WorkspaceShell columnIndex={0}>
-          <div className="tw-flex tw-h-full tw-w-full tw-flex-col">
-            <div className="tw-flex tw-items-center tw-justify-between tw-gap-2 tw-border-b tw-px-4 tw-py-2">
-              <div className="tw-flex tw-items-center tw-gap-2">
-                <span className="tw-text-sm tw-font-medium">{picked.displayName}</span>
-                <span className="tw-text-xs tw-text-muted-foreground">{picked.fullName}</span>
+          <div className="tw:flex tw:h-full tw:w-full tw:flex-col">
+            <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:border-b tw:px-4 tw:py-2">
+              <div className="tw:flex tw:items-center tw:gap-2">
+                <span className="tw:text-sm tw:font-medium">{picked.displayName}</span>
+                <span className="tw:text-xs tw:text-muted-foreground">{picked.fullName}</span>
               </div>
               <ModelTextPickerPopover
                 defaultOpen
@@ -115,8 +115,8 @@ export const PopoverVariant: Story = {
                 onClose={() => {}}
               />
             </div>
-            <div className="tw-flex-1 tw-overflow-y-auto tw-px-6 tw-py-6 tw-text-sm tw-leading-relaxed">
-              <p className="tw-mb-3 tw-text-xs tw-uppercase tw-tracking-wider tw-text-muted-foreground">
+            <div className="tw:flex-1 tw:overflow-y-auto tw:px-6 tw:py-6 tw:text-sm tw:leading-relaxed">
+              <p className="tw:mb-3 tw:text-xs tw:uppercase tw:tracking-wider tw:text-muted-foreground">
                 John 1
               </p>
               <p>{SAMPLE_MODEL_TEXT_PARAGRAPH}</p>

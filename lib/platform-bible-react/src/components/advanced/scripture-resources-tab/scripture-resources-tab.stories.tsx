@@ -36,7 +36,7 @@ function PopulatedHarness({
 
   return (
     <WorkspaceShell columnIndex={2}>
-      <div className="tw-relative tw-flex tw-h-full tw-w-full tw-flex-col">
+      <div className="tw:relative tw:flex tw:h-full tw:w-full tw:flex-col">
         <Variant
           resources={resources}
           activeResourceId={activeId}

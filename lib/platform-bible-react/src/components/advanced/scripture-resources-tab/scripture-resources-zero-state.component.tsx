@@ -31,18 +31,18 @@ export type ZeroStateProps = {
 // ─────────────────────────────────────────────────────────────────────────────
 export function ScriptureResourcesZeroStateStandard({ onOpenPicker }: ZeroStateProps) {
   return (
-    <div className="tw-flex tw-h-full tw-w-full tw-flex-col tw-items-center tw-justify-center tw-gap-3 tw-p-6 tw-text-center">
-      <div className="tw-flex tw-h-12 tw-w-12 tw-items-center tw-justify-center tw-rounded-full tw-bg-muted">
-        <BookOpen className="tw-h-6 tw-w-6 tw-text-muted-foreground" />
+    <div className="tw:flex tw:h-full tw:w-full tw:flex-col tw:items-center tw:justify-center tw:gap-3 tw:p-6 tw:text-center">
+      <div className="tw:flex tw:h-12 tw:w-12 tw:items-center tw:justify-center tw:rounded-full tw:bg-muted">
+        <BookOpen className="tw:h-6 tw:w-6 tw:text-muted-foreground" />
       </div>
-      <div className="tw-flex tw-flex-col tw-gap-1">
-        <h3 className="tw-text-sm tw-font-semibold">{RESOURCES_STRINGS.noResourcesYet}</h3>
-        <p className="tw-max-w-xs tw-text-xs tw-text-muted-foreground">
+      <div className="tw:flex tw:flex-col tw:gap-1">
+        <h3 className="tw:text-sm tw:font-semibold">{RESOURCES_STRINGS.noResourcesYet}</h3>
+        <p className="tw:max-w-xs tw:text-xs tw:text-muted-foreground">
           {RESOURCES_STRINGS.noResourcesBody}
         </p>
       </div>
-      <Button size="sm" onClick={onOpenPicker} className="tw-mt-2">
-        <Plus className="tw-mr-1 tw-h-4 tw-w-4" />
+      <Button size="sm" onClick={onOpenPicker} className="tw:mt-2">
+        <Plus className="tw:mr-1 tw:h-4 tw:w-4" />
         {RESOURCES_STRINGS.addMore}
       </Button>
     </div>
@@ -67,25 +67,25 @@ export function ScriptureResourcesZeroStateSuggestions({
     [allResources, userLanguages],
   );
   return (
-    <div className="tw-flex tw-h-full tw-w-full tw-flex-col tw-gap-3 tw-p-4">
-      <div className="tw-flex tw-items-center tw-gap-2">
-        <Sparkles className="tw-h-4 tw-w-4 tw-text-muted-foreground" />
-        <span className="tw-text-xs tw-font-medium tw-text-muted-foreground">
+    <div className="tw:flex tw:h-full tw:w-full tw:flex-col tw:gap-3 tw:p-4">
+      <div className="tw:flex tw:items-center tw:gap-2">
+        <Sparkles className="tw:h-4 tw:w-4 tw:text-muted-foreground" />
+        <span className="tw:text-xs tw:font-medium tw:text-muted-foreground">
           {RESOURCES_STRINGS.suggestionsHeading}
         </span>
       </div>
-      <p className="tw-text-xs tw-text-muted-foreground">
+      <p className="tw:text-xs tw:text-muted-foreground">
         Based on your project languages ({userLanguages.join(', ')}). Tap to add one quickly.
       </p>
-      <ul className="tw-flex tw-flex-col tw-gap-2">
+      <ul className="tw:flex tw:flex-col tw:gap-2">
         {suggestions.map((r) => (
           <li
             key={r.dblEntryUid}
-            className="tw-flex tw-items-center tw-justify-between tw-rounded-md tw-border tw-bg-card tw-p-2"
+            className="tw:flex tw:items-center tw:justify-between tw:rounded-md tw:border tw:bg-card tw:p-2"
           >
-            <div className="tw-min-w-0 tw-flex-1">
-              <div className="tw-truncate tw-text-sm tw-font-medium">{r.displayName}</div>
-              <div className="tw-truncate tw-text-xs tw-text-muted-foreground">
+            <div className="tw:min-w-0 tw:flex-1">
+              <div className="tw:truncate tw:text-sm tw:font-medium">{r.displayName}</div>
+              <div className="tw:truncate tw:text-xs tw:text-muted-foreground">
                 {r.fullName} · {r.bestLanguageName}
               </div>
             </div>
@@ -93,19 +93,19 @@ export function ScriptureResourcesZeroStateSuggestions({
               size="sm"
               variant="outline"
               onClick={() => onAddResource?.(r)}
-              className="tw-shrink-0"
+              className="tw:shrink-0"
             >
-              <Plus className="tw-mr-1 tw-h-3 tw-w-3" />
+              <Plus className="tw:mr-1 tw:h-3 tw:w-3" />
               Add
             </Button>
           </li>
         ))}
       </ul>
-      <Separator className="tw-my-1" />
+      <Separator className="tw:my-1" />
       <button
         type="button"
         onClick={onOpenPicker}
-        className="tw-self-start tw-text-xs tw-text-primary tw-underline-offset-2 hover:tw-underline"
+        className="tw:self-start tw:text-xs tw:text-primary tw:underline-offset-2 hover:tw:underline"
       >
         Browse all Bible texts…
       </button>
@@ -135,44 +135,44 @@ export function ScriptureResourcesZeroStateSplit({
   }, [allResources, userLanguages, query]);
 
   return (
-    <div className="tw-flex tw-h-full tw-w-full tw-flex-col">
-      <div className="tw-flex tw-flex-col tw-gap-1 tw-border-b tw-bg-muted/40 tw-p-3">
-        <div className="tw-flex tw-items-center tw-gap-2">
-          <BookOpen className="tw-h-4 tw-w-4 tw-text-muted-foreground" />
-          <span className="tw-text-sm tw-font-semibold">{RESOURCES_STRINGS.noResourcesYet}</span>
+    <div className="tw:flex tw:h-full tw:w-full tw:flex-col">
+      <div className="tw:flex tw:flex-col tw:gap-1 tw:border-b tw:bg-muted/40 tw:p-3">
+        <div className="tw:flex tw:items-center tw:gap-2">
+          <BookOpen className="tw:h-4 tw:w-4 tw:text-muted-foreground" />
+          <span className="tw:text-sm tw:font-semibold">{RESOURCES_STRINGS.noResourcesYet}</span>
         </div>
-        <p className="tw-text-xs tw-text-muted-foreground">
+        <p className="tw:text-xs tw:text-muted-foreground">
           Pick one or more Bible texts to consult while translating. You can change this anytime.
         </p>
       </div>
-      <div className="tw-flex tw-min-h-0 tw-flex-1 tw-flex-col">
-        <div className="tw-p-2">
-          <div className="tw-relative">
-            <Search className="tw-pointer-events-none tw-absolute tw-left-2 tw-top-1/2 tw-h-3.5 tw-w-3.5 -tw-translate-y-1/2 tw-text-muted-foreground" />
+      <div className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col">
+        <div className="tw:p-2">
+          <div className="tw:relative">
+            <Search className="tw:pointer-events-none tw:absolute tw:left-2 tw:top-1/2 tw:h-3.5 tw:w-3.5 -tw:translate-y-1/2 tw:text-muted-foreground" />
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={RESOURCES_STRINGS.searchPlaceholder}
-              className="tw-h-8 tw-pl-7 tw-text-xs"
+              className="tw:h-8 tw:pl-7 tw:text-xs"
             />
           </div>
         </div>
-        <ul className="tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-gap-1 tw-overflow-y-auto tw-px-2 tw-pb-2">
+        <ul className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col tw:gap-1 tw:overflow-y-auto tw:px-2 tw:pb-2">
           {ranked.map((r) => (
             <li
               key={r.dblEntryUid}
-              className="tw-flex tw-items-center tw-justify-between tw-rounded tw-px-2 tw-py-1.5 hover:tw-bg-muted/60"
+              className="tw:flex tw:items-center tw:justify-between tw:rounded tw:px-2 tw:py-1.5 hover:tw:bg-muted/60"
             >
-              <div className="tw-min-w-0 tw-flex-1">
-                <div className="tw-flex tw-items-center tw-gap-2">
-                  <span className="tw-truncate tw-text-sm">{r.displayName}</span>
+              <div className="tw:min-w-0 tw:flex-1">
+                <div className="tw:flex tw:items-center tw:gap-2">
+                  <span className="tw:truncate tw:text-sm">{r.displayName}</span>
                   {r.installed && (
-                    <Badge variant="secondary" className="tw-h-4 tw-px-1 tw-text-[10px]">
+                    <Badge variant="secondary" className="tw:h-4 tw:px-1 tw:text-[10px]">
                       {RESOURCES_STRINGS.installedBadge}
                     </Badge>
                   )}
                 </div>
-                <div className="tw-truncate tw-text-[11px] tw-text-muted-foreground">
+                <div className="tw:truncate tw:text-[11px] tw:text-muted-foreground">
                   {r.bestLanguageName}
                 </div>
               </div>
@@ -182,19 +182,19 @@ export function ScriptureResourcesZeroStateSplit({
                 onClick={() => onAddResource?.(r)}
                 aria-label={`Add ${r.displayName}`}
               >
-                <Plus className="tw-h-4 tw-w-4" />
+                <Plus className="tw:h-4 tw:w-4" />
               </Button>
             </li>
           ))}
           {ranked.length === 0 && (
-            <li className="tw-flex tw-items-center tw-justify-between tw-px-2 tw-py-4 tw-text-xs tw-text-muted-foreground">
+            <li className="tw:flex tw:items-center tw:justify-between tw:px-2 tw:py-4 tw:text-xs tw:text-muted-foreground">
               <span>No matches</span>
               <button
                 type="button"
                 onClick={() => setQuery('')}
-                className="tw-text-primary hover:tw-underline"
+                className="tw:text-primary hover:tw:underline"
               >
-                Clear <X className="tw-inline tw-h-3 tw-w-3" />
+                Clear <X className="tw:inline tw:h-3 tw:w-3" />
               </button>
             </li>
           )}

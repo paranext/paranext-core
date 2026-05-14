@@ -29,8 +29,8 @@ function ZeroStateHarness({
 
   return (
     <WorkspaceShell columnIndex={2}>
-      {/* tw-relative anchors the inline picker variant when used */}
-      <div className="tw-relative tw-flex tw-h-full tw-w-full tw-flex-col">
+      {/* tw:relative anchors the inline picker variant when used */}
+      <div className="tw:relative tw:flex tw:h-full tw:w-full tw:flex-col">
         <Variant
           allResources={SAMPLE_RESOURCES}
           userLanguages={SAMPLE_USER_LANGUAGES}

@@ -64,22 +64,22 @@ export interface ModelTextSetupPanelProps {
  */
 export function ModelTextZeroStateIllustrated({ onOpenPicker }: ModelTextZeroStateCommonProps) {
   return (
-    <div className="tw-flex tw-h-full tw-w-full tw-items-center tw-justify-center tw-p-8">
-      <div className="tw-flex tw-max-w-sm tw-flex-col tw-items-center tw-gap-4 tw-text-center">
+    <div className="tw:flex tw:h-full tw:w-full tw:items-center tw:justify-center tw:p-8">
+      <div className="tw:flex tw:max-w-sm tw:flex-col tw:items-center tw:gap-4 tw:text-center">
         <div
-          className="tw-flex tw-h-16 tw-w-16 tw-items-center tw-justify-center tw-rounded-full tw-bg-muted"
+          className="tw:flex tw:h-16 tw:w-16 tw:items-center tw:justify-center tw:rounded-full tw:bg-muted"
           aria-hidden
         >
-          <BookOpenText className="tw-h-8 tw-w-8 tw-text-muted-foreground" />
+          <BookOpenText className="tw:h-8 tw:w-8 tw:text-muted-foreground" />
         </div>
-        <div className="tw-flex tw-flex-col tw-gap-2">
-          <h2 className="tw-text-lg tw-font-semibold tw-text-foreground">
+        <div className="tw:flex tw:flex-col tw:gap-2">
+          <h2 className="tw:text-lg tw:font-semibold tw:text-foreground">
             {STRINGS.zeroHeadline}
           </h2>
-          <p className="tw-text-sm tw-text-muted-foreground">{STRINGS.zeroBody}</p>
+          <p className="tw:text-sm tw:text-muted-foreground">{STRINGS.zeroBody}</p>
         </div>
-        <Button onClick={onOpenPicker} className="tw-mt-2">
-          <Plus className="tw-h-4 tw-w-4" aria-hidden />
+        <Button onClick={onOpenPicker} className="tw:mt-2">
+          <Plus className="tw:h-4 tw:w-4" aria-hidden />
           {STRINGS.primaryCta}
         </Button>
       </div>
@@ -105,19 +105,19 @@ export function ModelTextZeroStateIllustrated({ onOpenPicker }: ModelTextZeroSta
  */
 export function ModelTextZeroStateInline({ onOpenPicker }: ModelTextZeroStateCommonProps) {
   return (
-    <div className="tw-flex tw-h-full tw-w-full tw-flex-col">
+    <div className="tw:flex tw:h-full tw:w-full tw:flex-col">
       {/* fake verse-line gutter to suggest "this is where text goes" */}
-      <div className="tw-flex tw-flex-1 tw-flex-col tw-px-6 tw-py-8">
-        <div className="tw-mb-2 tw-flex tw-items-center tw-gap-2 tw-text-[11px] tw-uppercase tw-tracking-wider tw-text-muted-foreground">
+      <div className="tw:flex tw:flex-1 tw:flex-col tw:px-6 tw:py-8">
+        <div className="tw:mb-2 tw:flex tw:items-center tw:gap-2 tw:text-[11px] tw:uppercase tw:tracking-wider tw:text-muted-foreground">
           <span>Model text</span>
         </div>
-        <div className="tw-rounded-md tw-border tw-border-dashed tw-bg-muted/30 tw-p-4">
-          <div className="tw-flex tw-items-start tw-justify-between tw-gap-3">
-            <div className="tw-flex tw-flex-col tw-gap-1">
-              <p className="tw-text-sm tw-font-medium tw-text-foreground">
+        <div className="tw:rounded-md tw:border tw:border-dashed tw:bg-muted/30 tw:p-4">
+          <div className="tw:flex tw:items-start tw:justify-between tw:gap-3">
+            <div className="tw:flex tw:flex-col tw:gap-1">
+              <p className="tw:text-sm tw:font-medium tw:text-foreground">
                 {STRINGS.inlinePromptHeadline}
               </p>
-              <p className="tw-text-xs tw-text-muted-foreground">{STRINGS.inlinePromptBody}</p>
+              <p className="tw:text-xs tw:text-muted-foreground">{STRINGS.inlinePromptBody}</p>
             </div>
             <Button size="sm" variant="outline" onClick={onOpenPicker}>
               {STRINGS.inlinePromptCta}
@@ -125,11 +125,11 @@ export function ModelTextZeroStateInline({ onOpenPicker }: ModelTextZeroStateCom
           </div>
         </div>
         {/* faint placeholder lines to reinforce the "text could go here" mental model */}
-        <div className="tw-mt-6 tw-flex tw-flex-col tw-gap-2" aria-hidden>
+        <div className="tw:mt-6 tw:flex tw:flex-col tw:gap-2" aria-hidden>
           {[80, 92, 70, 88, 60].map((w, i) => (
             <div
               key={i}
-              className="tw-h-3 tw-rounded tw-bg-muted/40"
+              className="tw:h-3 tw:rounded tw:bg-muted/40"
               style={{ width: `${w}%` }}
             />
           ))}
@@ -187,21 +187,21 @@ export function ModelTextZeroStateSetupPanel({
   );
 
   return (
-    <div className="tw-flex tw-h-full tw-w-full tw-flex-col">
-      <div className="tw-flex tw-flex-col tw-gap-2 tw-border-b tw-px-4 tw-py-4">
-        <div className="tw-flex tw-items-center tw-gap-2">
-          <Settings2 className="tw-h-4 tw-w-4 tw-text-muted-foreground" aria-hidden />
-          <h2 className="tw-text-sm tw-font-semibold tw-text-foreground">{STRINGS.setupTitle}</h2>
+    <div className="tw:flex tw:h-full tw:w-full tw:flex-col">
+      <div className="tw:flex tw:flex-col tw:gap-2 tw:border-b tw:px-4 tw:py-4">
+        <div className="tw:flex tw:items-center tw:gap-2">
+          <Settings2 className="tw:h-4 tw:w-4 tw:text-muted-foreground" aria-hidden />
+          <h2 className="tw:text-sm tw:font-semibold tw:text-foreground">{STRINGS.setupTitle}</h2>
         </div>
-        <p className="tw-text-xs tw-text-muted-foreground">{STRINGS.setupBody}</p>
+        <p className="tw:text-xs tw:text-muted-foreground">{STRINGS.setupBody}</p>
         <Input
           value={searchText}
           onChange={(e) => setSearchText(e.target.value)}
           placeholder={STRINGS.setupSearch}
-          className="tw-mt-2 tw-h-8"
+          className="tw:mt-2 tw:h-8"
         />
       </div>
-      <div className="tw-flex-1 tw-overflow-y-auto tw-px-3 tw-py-3">
+      <div className="tw:flex-1 tw:overflow-y-auto tw:px-3 tw:py-3">
         {preferred.length > 0 && (
           <SetupSection
             title={STRINGS.setupPreferred}
@@ -221,7 +221,7 @@ export function ModelTextZeroStateSetupPanel({
           />
         )}
         {filtered.length === 0 && (
-          <p className="tw-py-8 tw-text-center tw-text-xs tw-text-muted-foreground">
+          <p className="tw:py-8 tw:text-center tw:text-xs tw:text-muted-foreground">
             No scripture resources match your search.
           </p>
         )}
@@ -244,34 +244,34 @@ function SetupSection({
   onSelect: (resource: DblResourceData) => void;
 }) {
   return (
-    <div className="tw-mb-3">
-      <div className="tw-mb-1 tw-px-2 tw-text-[11px] tw-uppercase tw-tracking-wider tw-text-muted-foreground">
+    <div className="tw:mb-3">
+      <div className="tw:mb-1 tw:px-2 tw:text-[11px] tw:uppercase tw:tracking-wider tw:text-muted-foreground">
         {title}
       </div>
-      <div className="tw-flex tw-flex-col tw-gap-1">
+      <div className="tw:flex tw:flex-col tw:gap-1">
         {resources.map((r) => (
           <div
             key={r.dblEntryUid}
-            className="tw-flex tw-items-center tw-gap-2 tw-rounded-md tw-px-2 tw-py-1.5 hover:tw-bg-accent/40"
+            className="tw:flex tw:items-center tw:gap-2 tw:rounded-md tw:px-2 tw:py-1.5 hover:tw:bg-accent/40"
           >
-            <div className="tw-flex tw-min-w-0 tw-flex-1 tw-flex-col">
-              <div className="tw-flex tw-items-center tw-gap-2">
-                <span className="tw-truncate tw-text-sm tw-font-medium">{r.displayName}</span>
-                <span className="tw-truncate tw-text-xs tw-text-muted-foreground">
+            <div className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col">
+              <div className="tw:flex tw:items-center tw:gap-2">
+                <span className="tw:truncate tw:text-sm tw:font-medium">{r.displayName}</span>
+                <span className="tw:truncate tw:text-xs tw:text-muted-foreground">
                   {r.fullName}
                 </span>
               </div>
-              <div className="tw-flex tw-items-center tw-gap-1 tw-text-[11px] tw-text-muted-foreground">
+              <div className="tw:flex tw:items-center tw:gap-1 tw:text-[11px] tw:text-muted-foreground">
                 <span>{r.bestLanguageName}</span>
                 {!r.installed && <span>• Not installed</span>}
                 {selectedSet.has(r.dblEntryUid) && (
-                  <Badge variant="outline" className="tw-ml-1 tw-h-4 tw-px-1 tw-text-[10px]">
+                  <Badge variant="outline" className="tw:ml-1 tw:h-4 tw:px-1 tw:text-[10px]">
                     In project
                   </Badge>
                 )}
                 {preferredLanguageSet.has(r.bestLanguageName.toLowerCase()) && (
                   <Star
-                    className="tw-h-3 tw-w-3 tw-text-amber-500"
+                    className="tw:h-3 tw:w-3 tw:text-amber-500"
                     aria-label="Preferred for your languages"
                   />
                 )}
@@ -306,15 +306,15 @@ export interface ModelTextPopulatedProps {
  */
 export function ModelTextPopulated({ resource, body, onChange }: ModelTextPopulatedProps) {
   return (
-    <div className="tw-flex tw-h-full tw-w-full tw-flex-col">
-      <div className="tw-flex tw-items-center tw-justify-between tw-gap-2 tw-border-b tw-px-4 tw-py-2">
-        <div className="tw-flex tw-min-w-0 tw-items-center tw-gap-2">
-          <BookOpenText className="tw-h-4 tw-w-4 tw-text-muted-foreground" aria-hidden />
-          <span className="tw-truncate tw-text-sm tw-font-medium">{resource.displayName}</span>
-          <span className="tw-truncate tw-text-xs tw-text-muted-foreground">
+    <div className="tw:flex tw:h-full tw:w-full tw:flex-col">
+      <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:border-b tw:px-4 tw:py-2">
+        <div className="tw:flex tw:min-w-0 tw:items-center tw:gap-2">
+          <BookOpenText className="tw:h-4 tw:w-4 tw:text-muted-foreground" aria-hidden />
+          <span className="tw:truncate tw:text-sm tw:font-medium">{resource.displayName}</span>
+          <span className="tw:truncate tw:text-xs tw:text-muted-foreground">
             {resource.fullName}
           </span>
-          <Badge variant="secondary" className="tw-ml-1">
+          <Badge variant="secondary" className="tw:ml-1">
             {resource.bestLanguageName}
           </Badge>
         </div>
@@ -324,7 +324,7 @@ export function ModelTextPopulated({ resource, body, onChange }: ModelTextPopula
           </Button>
         )}
       </div>
-      <div className="tw-flex-1 tw-overflow-y-auto tw-px-6 tw-py-6 tw-text-sm tw-leading-relaxed">
+      <div className="tw:flex-1 tw:overflow-y-auto tw:px-6 tw:py-6 tw:text-sm tw:leading-relaxed">
         {body}
       </div>
     </div>

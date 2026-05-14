@@ -84,34 +84,34 @@ function ResourceRow({
       type="button"
       onClick={onSelect}
       className={[
-        'tw-flex tw-w-full tw-items-center tw-gap-3 tw-rounded-md tw-px-3 tw-py-2 tw-text-left',
-        'tw-border tw-border-transparent hover:tw-bg-accent hover:tw-text-accent-foreground',
-        'focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring',
-        isSelectedInProject ? 'tw-bg-muted/40' : '',
+        'tw:flex tw:w-full tw:items-center tw:gap-3 tw:rounded-md tw:px-3 tw:py-2 tw:text-left',
+        'tw:border tw:border-transparent hover:tw:bg-accent hover:tw:text-accent-foreground',
+        'focus-visible:tw:outline-none focus-visible:tw:ring-2 focus-visible:tw:ring-ring',
+        isSelectedInProject ? 'tw:bg-muted/40' : '',
       ].join(' ')}
     >
-      <BookOpen className="tw-h-4 tw-w-4 tw-shrink-0 tw-text-muted-foreground" aria-hidden />
-      <div className="tw-flex tw-min-w-0 tw-flex-1 tw-flex-col">
-        <div className="tw-flex tw-items-center tw-gap-2">
-          <span className="tw-truncate tw-font-medium">{resource.displayName}</span>
-          <span className="tw-truncate tw-text-xs tw-text-muted-foreground">
+      <BookOpen className="tw:h-4 tw:w-4 tw:shrink-0 tw:text-muted-foreground" aria-hidden />
+      <div className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col">
+        <div className="tw:flex tw:items-center tw:gap-2">
+          <span className="tw:truncate tw:font-medium">{resource.displayName}</span>
+          <span className="tw:truncate tw:text-xs tw:text-muted-foreground">
             {resource.fullName}
           </span>
         </div>
-        <div className="tw-flex tw-items-center tw-gap-2 tw-text-xs tw-text-muted-foreground">
+        <div className="tw:flex tw:items-center tw:gap-2 tw:text-xs tw:text-muted-foreground">
           <span>{resource.bestLanguageName}</span>
           {!resource.installed && <span>• Not installed</span>}
         </div>
       </div>
-      <div className="tw-flex tw-items-center tw-gap-1">
+      <div className="tw:flex tw:items-center tw:gap-1">
         {isPreferredLanguage && (
-          <Badge variant="secondary" className="tw-gap-1">
-            <Star className="tw-h-3 tw-w-3" aria-hidden /> Preferred
+          <Badge variant="secondary" className="tw:gap-1">
+            <Star className="tw:h-3 tw:w-3" aria-hidden /> Preferred
           </Badge>
         )}
         {isSelectedInProject && (
-          <Badge variant="outline" className="tw-gap-1">
-            <Check className="tw-h-3 tw-w-3" aria-hidden /> In project
+          <Badge variant="outline" className="tw:gap-1">
+            <Check className="tw:h-3 tw:w-3" aria-hidden /> In project
           </Badge>
         )}
       </div>
@@ -165,31 +165,31 @@ export function ModelTextPickerModal({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="tw-flex tw-max-h-[80vh] tw-w-[560px] tw-max-w-[90vw] tw-flex-col tw-gap-0 tw-p-0">
-        <DialogHeader className="tw-space-y-2 tw-px-6 tw-pb-3 tw-pt-6">
+      <DialogContent className="tw:flex tw:max-h-[80vh] tw:w-[560px] tw:max-w-[90vw] tw:flex-col tw:gap-0 tw:p-0">
+        <DialogHeader className="tw:space-y-2 tw:px-6 tw:pb-3 tw:pt-6">
           <DialogTitle>{STRINGS.title}</DialogTitle>
           <DialogDescription>{STRINGS.description}</DialogDescription>
         </DialogHeader>
-        <div className="tw-relative tw-px-6 tw-pb-3">
+        <div className="tw:relative tw:px-6 tw:pb-3">
           <Search
-            className="tw-absolute tw-left-9 tw-top-1/2 tw-h-4 tw-w-4 -tw-translate-y-1/2 tw-text-muted-foreground"
+            className="tw:absolute tw:left-9 tw:top-1/2 tw:h-4 tw:w-4 -tw:translate-y-1/2 tw:text-muted-foreground"
             aria-hidden
           />
           <Input
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
             placeholder={STRINGS.searchPlaceholder}
-            className="tw-pl-9"
+            className="tw:pl-9"
             autoFocus
           />
         </div>
-        <div className="tw-flex-1 tw-overflow-y-auto tw-px-3 tw-pb-2">
+        <div className="tw:flex-1 tw:overflow-y-auto tw:px-3 tw:pb-2">
           {filtered.length === 0 ? (
-            <p className="tw-py-10 tw-text-center tw-text-sm tw-text-muted-foreground">
+            <p className="tw:py-10 tw:text-center tw:text-sm tw:text-muted-foreground">
               {STRINGS.empty}
             </p>
           ) : (
-            <div className="tw-flex tw-flex-col tw-gap-1 tw-px-1 tw-py-1">
+            <div className="tw:flex tw:flex-col tw:gap-1 tw:px-1 tw:py-1">
               {filtered.map((r) => (
                 <ResourceRow
                   key={r.dblEntryUid}
@@ -202,12 +202,12 @@ export function ModelTextPickerModal({
             </div>
           )}
         </div>
-        <div className="tw-flex tw-items-center tw-justify-between tw-gap-2 tw-border-t tw-px-6 tw-py-3">
+        <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:border-t tw:px-6 tw:py-3">
           {onUseProjectAsModelText ? (
             <button
               type="button"
               onClick={onUseProjectAsModelText}
-              className="tw-text-xs tw-text-muted-foreground tw-underline-offset-4 hover:tw-underline"
+              className="tw:text-xs tw:text-muted-foreground tw:underline-offset-4 hover:tw:underline"
             >
               {STRINGS.projectAffordance}
             </button>
@@ -280,23 +280,23 @@ export function ModelTextPickerPopover({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-      <PopoverContent align="start" className="tw-w-[420px] tw-p-0">
-        <div className="tw-relative tw-p-2">
+      <PopoverContent align="start" className="tw:w-[420px] tw:p-0">
+        <div className="tw:relative tw:p-2">
           <Search
-            className="tw-absolute tw-left-5 tw-top-1/2 tw-h-4 tw-w-4 -tw-translate-y-1/2 tw-text-muted-foreground"
+            className="tw:absolute tw:left-5 tw:top-1/2 tw:h-4 tw:w-4 -tw:translate-y-1/2 tw:text-muted-foreground"
             aria-hidden
           />
           <Input
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
             placeholder={STRINGS.searchPlaceholder}
-            className="tw-h-8 tw-pl-9"
+            className="tw:h-8 tw:pl-9"
             autoFocus
           />
         </div>
-        <div className="tw-max-h-[320px] tw-overflow-y-auto tw-px-1 tw-pb-1">
+        <div className="tw:max-h-[320px] tw:overflow-y-auto tw:px-1 tw:pb-1">
           {filtered.length === 0 ? (
-            <p className="tw-py-6 tw-text-center tw-text-xs tw-text-muted-foreground">
+            <p className="tw:py-6 tw:text-center tw:text-xs tw:text-muted-foreground">
               {STRINGS.empty}
             </p>
           ) : (
@@ -366,15 +366,15 @@ export function ModelTextPickerCommandPalette({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent
         showCloseButton={false}
-        className="tw-w-[560px] tw-max-w-[90vw] tw-overflow-hidden tw-p-0"
+        className="tw:w-[560px] tw:max-w-[90vw] tw:overflow-hidden tw:p-0"
       >
-        <Command className="tw-flex tw-max-h-[500px] tw-flex-col">
+        <Command className="tw:flex tw:max-h-[500px] tw:flex-col">
           <CommandInput
             placeholder={STRINGS.searchPlaceholder}
-            className="tw-h-12"
+            className="tw:h-12"
             autoFocus
           />
-          <CommandList className="tw-max-h-[400px]">
+          <CommandList className="tw:max-h-[400px]">
             <CommandEmpty>{STRINGS.empty}</CommandEmpty>
             {preferred.length > 0 && (
               <CommandGroup heading={STRINGS.preferred}>
@@ -384,15 +384,15 @@ export function ModelTextPickerCommandPalette({
                     value={`${r.displayName} ${r.fullName} ${r.bestLanguageName}`}
                     onSelect={() => onSelect(r)}
                   >
-                    <Star className="tw-mr-2 tw-h-4 tw-w-4 tw-text-amber-500" aria-hidden />
-                    <span className="tw-font-medium">{r.displayName}</span>
-                    <span className="tw-ml-2 tw-text-xs tw-text-muted-foreground">
+                    <Star className="tw:mr-2 tw:h-4 tw:w-4 tw:text-amber-500" aria-hidden />
+                    <span className="tw:font-medium">{r.displayName}</span>
+                    <span className="tw:ml-2 tw:text-xs tw:text-muted-foreground">
                       {r.fullName}
                     </span>
-                    <span className="tw-ml-auto tw-flex tw-items-center tw-gap-1 tw-text-xs tw-text-muted-foreground">
+                    <span className="tw:ml-auto tw:flex tw:items-center tw:gap-1 tw:text-xs tw:text-muted-foreground">
                       {r.bestLanguageName}
                       {selectedSet.has(r.dblEntryUid) && (
-                        <Check className="tw-h-3 tw-w-3" aria-hidden />
+                        <Check className="tw:h-3 tw:w-3" aria-hidden />
                       )}
                     </span>
                   </CommandItem>
@@ -408,15 +408,15 @@ export function ModelTextPickerCommandPalette({
                     value={`${r.displayName} ${r.fullName} ${r.bestLanguageName}`}
                     onSelect={() => onSelect(r)}
                   >
-                    <BookOpen className="tw-mr-2 tw-h-4 tw-w-4 tw-text-muted-foreground" aria-hidden />
-                    <span className="tw-font-medium">{r.displayName}</span>
-                    <span className="tw-ml-2 tw-text-xs tw-text-muted-foreground">
+                    <BookOpen className="tw:mr-2 tw:h-4 tw:w-4 tw:text-muted-foreground" aria-hidden />
+                    <span className="tw:font-medium">{r.displayName}</span>
+                    <span className="tw:ml-2 tw:text-xs tw:text-muted-foreground">
                       {r.fullName}
                     </span>
-                    <span className="tw-ml-auto tw-flex tw-items-center tw-gap-1 tw-text-xs tw-text-muted-foreground">
+                    <span className="tw:ml-auto tw:flex tw:items-center tw:gap-1 tw:text-xs tw:text-muted-foreground">
                       {r.bestLanguageName}
                       {selectedSet.has(r.dblEntryUid) && (
-                        <Check className="tw-h-3 tw-w-3" aria-hidden />
+                        <Check className="tw:h-3 tw:w-3" aria-hidden />
                       )}
                     </span>
                   </CommandItem>
@@ -428,20 +428,20 @@ export function ModelTextPickerCommandPalette({
                 <CommandSeparator />
                 <CommandGroup>
                   <CommandItem onSelect={() => onUseProjectAsModelText()}>
-                    <span className="tw-text-muted-foreground">{STRINGS.projectAffordance}</span>
+                    <span className="tw:text-muted-foreground">{STRINGS.projectAffordance}</span>
                   </CommandItem>
                 </CommandGroup>
               </>
             )}
           </CommandList>
-          <div className="tw-flex tw-items-center tw-justify-between tw-border-t tw-px-3 tw-py-2 tw-text-[11px] tw-text-muted-foreground">
+          <div className="tw:flex tw:items-center tw:justify-between tw:border-t tw:px-3 tw:py-2 tw:text-[11px] tw:text-muted-foreground">
             <span>{STRINGS.hint}</span>
             <button
               type="button"
               onClick={onClose}
-              className="tw-flex tw-items-center tw-gap-1 hover:tw-text-foreground"
+              className="tw:flex tw:items-center tw:gap-1 hover:tw:text-foreground"
             >
-              <X className="tw-h-3 tw-w-3" aria-hidden /> Close
+              <X className="tw:h-3 tw:w-3" aria-hidden /> Close
             </button>
           </div>
         </Command>

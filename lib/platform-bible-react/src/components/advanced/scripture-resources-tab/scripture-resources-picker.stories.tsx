@@ -31,7 +31,7 @@ function PickerHarness({ Picker }: { Picker: PickerComp }) {
 
   return (
     <WorkspaceShell columnIndex={2}>
-      <div className="tw-relative tw-flex tw-h-full tw-w-full tw-flex-col">
+      <div className="tw:relative tw:flex tw:h-full tw:w-full tw:flex-col">
         <ScriptureResourcesTabIconStrip
           resources={DEFAULT_POPULATED_STORY_ARGS.resources}
           activeResourceId={activeId}

@@ -40,18 +40,18 @@ export type PopulatedTabProps = {
 /** Stub body shown for the active resource — a few lines of Genesis 1 stand-in. */
 function ResourceReader({ resource }: { resource: DblResourceData }) {
   return (
-    <div className="tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-y-auto tw-p-3">
-      <div className="tw-mb-2 tw-flex tw-items-baseline tw-gap-2">
-        <span className="tw-text-sm tw-font-semibold">{resource.displayName}</span>
-        <span className="tw-text-xs tw-text-muted-foreground">· Genesis 1</span>
+    <div className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col tw:overflow-y-auto tw:p-3">
+      <div className="tw:mb-2 tw:flex tw:items-baseline tw:gap-2">
+        <span className="tw:text-sm tw:font-semibold">{resource.displayName}</span>
+        <span className="tw:text-xs tw:text-muted-foreground">· Genesis 1</span>
       </div>
-      <p className="tw-text-sm tw-leading-relaxed tw-text-foreground/90">
-        <sup className="tw-mr-1 tw-text-[10px] tw-text-muted-foreground">1</sup>
+      <p className="tw:text-sm tw:leading-relaxed tw:text-foreground/90">
+        <sup className="tw:mr-1 tw:text-[10px] tw:text-muted-foreground">1</sup>
         In the beginning God created the heavens and the earth.
-        <sup className="tw-mx-1 tw-text-[10px] tw-text-muted-foreground">2</sup>
+        <sup className="tw:mx-1 tw:text-[10px] tw:text-muted-foreground">2</sup>
         Now the earth was formless and empty, darkness was over the surface of the deep, and the
         Spirit of God was hovering over the waters.
-        <sup className="tw-mx-1 tw-text-[10px] tw-text-muted-foreground">3</sup>
+        <sup className="tw:mx-1 tw:text-[10px] tw:text-muted-foreground">3</sup>
         And God said, “Let there be light,” and there was light.
       </p>
     </div>
@@ -80,20 +80,20 @@ function RemoveResourceButton({
       <Tooltip open={forceTooltipOpen || undefined}>
         <TooltipTrigger asChild>
           {/* span wrapper so the tooltip still fires when the button is disabled */}
-          <span className="tw-inline-flex">
+          <span className="tw:inline-flex">
             <Button
               size="icon"
               variant="ghost"
-              className="tw-h-6 tw-w-6"
+              className="tw:h-6 tw:w-6"
               disabled={isAdminAdded}
               onClick={() => !isAdminAdded && onRemove?.(resource.dblEntryUid)}
               aria-label={`${RESOURCES_STRINGS.remove} ${resource.displayName}`}
             >
-              <X className="tw-h-3.5 tw-w-3.5" />
+              <X className="tw:h-3.5 tw:w-3.5" />
             </Button>
           </span>
         </TooltipTrigger>
-        <TooltipContent side="bottom" className="tw-max-w-xs tw-text-xs">
+        <TooltipContent side="bottom" className="tw:max-w-xs tw:text-xs">
           {isAdminAdded
             ? RESOURCES_STRINGS.adminAddedTooltip
             : `${RESOURCES_STRINGS.remove} ${resource.displayName}`}
@@ -131,8 +131,8 @@ export function ScriptureResourcesTabIconStrip({
   const adminSet = new Set(adminAssociatedIds);
 
   return (
-    <div className="tw-flex tw-h-full tw-w-full tw-flex-col">
-      <div className="tw-flex tw-items-center tw-gap-1 tw-border-b tw-bg-muted/30 tw-px-2 tw-py-1.5">
+    <div className="tw:flex tw:h-full tw:w-full tw:flex-col">
+      <div className="tw:flex tw:items-center tw:gap-1 tw:border-b tw:bg-muted/30 tw:px-2 tw:py-1.5">
         {visible.map((r) => {
           const isActive = r.dblEntryUid === active?.dblEntryUid;
           const isAdmin = adminSet.has(r.dblEntryUid);
@@ -140,22 +140,22 @@ export function ScriptureResourcesTabIconStrip({
             <div
               key={r.dblEntryUid}
               className={[
-                'tw-flex tw-items-center tw-gap-1 tw-rounded tw-border tw-px-2 tw-py-1 tw-text-xs',
+                'tw:flex tw:items-center tw:gap-1 tw:rounded tw:border tw:px-2 tw:py-1 tw:text-xs',
                 isActive
-                  ? 'tw-border-primary tw-bg-background tw-font-semibold'
-                  : 'tw-border-transparent tw-bg-transparent hover:tw-bg-background',
+                  ? 'tw:border-primary tw:bg-background tw:font-semibold'
+                  : 'tw:border-transparent tw:bg-transparent hover:tw:bg-background',
               ].join(' ')}
             >
               <button
                 type="button"
                 draggable={false}
                 onClick={() => onActiveResourceChange(r.dblEntryUid)}
-                className="tw-flex tw-items-center tw-gap-1"
+                className="tw:flex tw:items-center tw:gap-1"
                 title={r.fullName}
               >
                 <span>{r.displayName}</span>
                 {isAdmin && (
-                  <Badge variant="outline" className="tw-h-3.5 tw-px-1 tw-text-[9px]">
+                  <Badge variant="outline" className="tw:h-3.5 tw:px-1 tw:text-[9px]">
                     admin
                   </Badge>
                 )}
@@ -172,8 +172,8 @@ export function ScriptureResourcesTabIconStrip({
         {overflow.length > 0 && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="ghost" className="tw-h-7 tw-px-2 tw-text-xs">
-                <MoreHorizontal className="tw-mr-1 tw-h-3.5 tw-w-3.5" />
+              <Button size="sm" variant="ghost" className="tw:h-7 tw:px-2 tw:text-xs">
+                <MoreHorizontal className="tw:mr-1 tw:h-3.5 tw:w-3.5" />
                 {overflow.length} more
               </Button>
             </DropdownMenuTrigger>
@@ -185,7 +185,7 @@ export function ScriptureResourcesTabIconStrip({
                   onClick={() => onActiveResourceChange(r.dblEntryUid)}
                 >
                   {r.displayName}{' '}
-                  <span className="tw-ml-2 tw-text-xs tw-text-muted-foreground">
+                  <span className="tw:ml-2 tw:text-xs tw:text-muted-foreground">
                     {r.bestLanguageName}
                   </span>
                 </DropdownMenuItem>
@@ -193,16 +193,16 @@ export function ScriptureResourcesTabIconStrip({
             </DropdownMenuContent>
           </DropdownMenu>
         )}
-        <div className="tw-flex-1" />
-        <Button size="sm" variant="ghost" className="tw-h-7 tw-px-2" onClick={onOpenPicker}>
-          <Plus className="tw-mr-1 tw-h-3.5 tw-w-3.5" />
+        <div className="tw:flex-1" />
+        <Button size="sm" variant="ghost" className="tw:h-7 tw:px-2" onClick={onOpenPicker}>
+          <Plus className="tw:mr-1 tw:h-3.5 tw:w-3.5" />
           {RESOURCES_STRINGS.addMoreShort}
         </Button>
       </div>
       {active ? (
         <ResourceReader resource={active} />
       ) : (
-        <div className="tw-flex tw-flex-1 tw-items-center tw-justify-center tw-text-xs tw-text-muted-foreground">
+        <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:text-xs tw:text-muted-foreground">
           Select a resource
         </div>
       )}
@@ -228,52 +228,52 @@ export function ScriptureResourcesTabSidebarList({
   const active = getActive(resources, activeResourceId);
   const adminSet = new Set(adminAssociatedIds);
   return (
-    <div className="tw-flex tw-h-full tw-w-full">
-      <aside className="tw-flex tw-w-40 tw-shrink-0 tw-flex-col tw-border-r tw-bg-muted/20">
-        <div className="tw-flex tw-items-center tw-justify-between tw-px-2 tw-py-1.5">
-          <span className="tw-text-[10px] tw-font-medium tw-uppercase tw-tracking-wide tw-text-muted-foreground">
+    <div className="tw:flex tw:h-full tw:w-full">
+      <aside className="tw:flex tw:w-40 tw:shrink-0 tw:flex-col tw:border-r tw:bg-muted/20">
+        <div className="tw:flex tw:items-center tw:justify-between tw:px-2 tw:py-1.5">
+          <span className="tw:text-[10px] tw:font-medium tw:uppercase tw:tracking-wide tw:text-muted-foreground">
             Bible texts
           </span>
           <Button
             size="icon"
             variant="ghost"
-            className="tw-h-6 tw-w-6"
+            className="tw:h-6 tw:w-6"
             onClick={onOpenPicker}
             aria-label={RESOURCES_STRINGS.addMore}
           >
-            <Plus className="tw-h-3.5 tw-w-3.5" />
+            <Plus className="tw:h-3.5 tw:w-3.5" />
           </Button>
         </div>
         <Separator />
-        <ul className="tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-y-auto">
+        <ul className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col tw:overflow-y-auto">
           {resources.map((r) => {
             const isActive = r.dblEntryUid === active?.dblEntryUid;
             const isAdmin = adminSet.has(r.dblEntryUid);
             return (
-              <li key={r.dblEntryUid} className="tw-group">
+              <li key={r.dblEntryUid} className="tw:group">
                 <button
                   type="button"
                   draggable={false}
                   onClick={() => onActiveResourceChange(r.dblEntryUid)}
                   className={[
-                    'tw-flex tw-w-full tw-items-center tw-justify-between tw-px-2 tw-py-1.5 tw-text-left tw-text-xs',
-                    isActive ? 'tw-bg-background tw-font-semibold' : 'hover:tw-bg-background/60',
+                    'tw:flex tw:w-full tw:items-center tw:justify-between tw:px-2 tw:py-1.5 tw:text-left tw:text-xs',
+                    isActive ? 'tw:bg-background tw:font-semibold' : 'hover:tw:bg-background/60',
                   ].join(' ')}
                 >
-                  <div className="tw-min-w-0 tw-flex-1">
-                    <div className="tw-flex tw-items-center tw-gap-1.5">
-                      <span className="tw-truncate">{r.displayName}</span>
+                  <div className="tw:min-w-0 tw:flex-1">
+                    <div className="tw:flex tw:items-center tw:gap-1.5">
+                      <span className="tw:truncate">{r.displayName}</span>
                       {isAdmin && (
-                        <Badge variant="outline" className="tw-h-3.5 tw-px-1 tw-text-[9px]">
+                        <Badge variant="outline" className="tw:h-3.5 tw:px-1 tw:text-[9px]">
                           admin
                         </Badge>
                       )}
                     </div>
-                    <div className="tw-truncate tw-text-[10px] tw-text-muted-foreground">
+                    <div className="tw:truncate tw:text-[10px] tw:text-muted-foreground">
                       {r.bestLanguageName}
                     </div>
                   </div>
-                  <span className="tw-opacity-0 group-hover:tw-opacity-100">
+                  <span className="tw:opacity-0 group-hover:tw:opacity-100">
                     <RemoveResourceButton
                       resource={r}
                       isAdminAdded={isAdmin}
@@ -287,11 +287,11 @@ export function ScriptureResourcesTabSidebarList({
           })}
         </ul>
       </aside>
-      <div className="tw-flex tw-min-w-0 tw-flex-1 tw-flex-col">
+      <div className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col">
         {active ? (
           <ResourceReader resource={active} />
         ) : (
-          <div className="tw-flex tw-flex-1 tw-items-center tw-justify-center tw-text-xs tw-text-muted-foreground">
+          <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:text-xs tw:text-muted-foreground">
             Select a resource
           </div>
         )}
@@ -323,27 +323,27 @@ export function ScriptureResourcesTabDropdown({
   const activeIsAdmin = active ? adminSet.has(active.dblEntryUid) : false;
 
   return (
-    <div className="tw-flex tw-h-full tw-w-full tw-flex-col">
-      <div className="tw-flex tw-items-center tw-gap-2 tw-border-b tw-bg-muted/20 tw-px-3 tw-py-2">
+    <div className="tw:flex tw:h-full tw:w-full tw:flex-col">
+      <div className="tw:flex tw:items-center tw:gap-2 tw:border-b tw:bg-muted/20 tw:px-3 tw:py-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="outline"
               size="sm"
-              className="tw-h-7 tw-justify-between tw-gap-2 tw-text-xs"
+              className="tw:h-7 tw:justify-between tw:gap-2 tw:text-xs"
             >
-              <span className="tw-flex tw-items-baseline tw-gap-1.5">
-                <span className="tw-font-semibold">{active?.displayName ?? '—'}</span>
+              <span className="tw:flex tw:items-baseline tw:gap-1.5">
+                <span className="tw:font-semibold">{active?.displayName ?? '—'}</span>
                 {active && (
-                  <span className="tw-text-[10px] tw-text-muted-foreground">
+                  <span className="tw:text-[10px] tw:text-muted-foreground">
                     {active.bestLanguageName}
                   </span>
                 )}
               </span>
-              <ChevronDown className="tw-h-3.5 tw-w-3.5" />
+              <ChevronDown className="tw:h-3.5 tw:w-3.5" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="tw-min-w-[220px]">
+          <DropdownMenuContent align="start" className="tw:min-w-[220px]">
             <DropdownMenuLabel>Switch Bible text</DropdownMenuLabel>
             {resources.map((r) => {
               const isAdmin = adminSet.has(r.dblEntryUid);
@@ -352,22 +352,22 @@ export function ScriptureResourcesTabDropdown({
                 <DropdownMenuItem
                   key={r.dblEntryUid}
                   onClick={() => onActiveResourceChange(r.dblEntryUid)}
-                  className="tw-flex tw-items-center tw-justify-between tw-gap-2"
+                  className="tw:flex tw:items-center tw:justify-between tw:gap-2"
                 >
-                  <span className="tw-flex tw-items-center tw-gap-2">
+                  <span className="tw:flex tw:items-center tw:gap-2">
                     <span>{r.displayName}</span>
                     {isAdmin && (
-                      <Badge variant="outline" className="tw-h-3.5 tw-px-1 tw-text-[9px]">
+                      <Badge variant="outline" className="tw:h-3.5 tw:px-1 tw:text-[9px]">
                         admin
                       </Badge>
                     )}
                     {isUser && !isAdmin && (
-                      <Badge variant="secondary" className="tw-h-3.5 tw-px-1 tw-text-[9px]">
+                      <Badge variant="secondary" className="tw:h-3.5 tw:px-1 tw:text-[9px]">
                         yours
                       </Badge>
                     )}
                   </span>
-                  <span className="tw-text-[10px] tw-text-muted-foreground">
+                  <span className="tw:text-[10px] tw:text-muted-foreground">
                     {r.bestLanguageName}
                   </span>
                 </DropdownMenuItem>
@@ -375,12 +375,12 @@ export function ScriptureResourcesTabDropdown({
             })}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onOpenPicker}>
-              <Plus className="tw-mr-2 tw-h-3.5 tw-w-3.5" />
+              <Plus className="tw:mr-2 tw:h-3.5 tw:w-3.5" />
               {RESOURCES_STRINGS.addMore}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <div className="tw-flex-1" />
+        <div className="tw:flex-1" />
         {active && (
           <RemoveResourceButton
             resource={active}
@@ -393,7 +393,7 @@ export function ScriptureResourcesTabDropdown({
       {active ? (
         <ResourceReader resource={active} />
       ) : (
-        <div className="tw-flex tw-flex-1 tw-items-center tw-justify-center tw-text-xs tw-text-muted-foreground">
+        <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:text-xs tw:text-muted-foreground">
           Select a resource
         </div>
       )}
