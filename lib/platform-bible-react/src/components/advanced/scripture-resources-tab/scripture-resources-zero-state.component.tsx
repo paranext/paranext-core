@@ -13,13 +13,22 @@ import {
 } from './scripture-resources-tab.utils';
 
 export type ZeroStateProps = {
-  /** Full catalog the picker will draw from when opened. */
+  /**
+   * Full catalog the picker will draw from when opened. Standard variant doesn't read it directly
+   * (it just opens the full picker via onOpenPicker), but Suggestions and Split do.
+   */
+  // eslint-disable-next-line react/no-unused-prop-types -- See JSDoc; Standard variant doesn't read.
   allResources: DblResourceData[];
-  /** Saroj's known languages — drives suggestions. */
+  /** Saroj's known languages — drives suggestions. Standard variant doesn't read it. */
+  // eslint-disable-next-line react/no-unused-prop-types -- See JSDoc; Standard variant doesn't read.
   userLanguages: string[];
   /** Opens the full (Area 3) picker. Variants A and B call this from the CTA. */
   onOpenPicker: () => void;
-  /** Adds a single resource directly (used by suggestion chips / inline picker). */
+  /**
+   * Adds a single resource directly (used by suggestion chips / inline picker). Standard variant
+   * has no inline-add affordance, so it doesn't read this.
+   */
+  // eslint-disable-next-line react/no-unused-prop-types -- See JSDoc; Standard variant doesn't read.
   onAddResource?: (resource: DblResourceData) => void;
 };
 

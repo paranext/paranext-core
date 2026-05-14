@@ -403,7 +403,7 @@ export function ScriptureResourcesPickerInline({
       next ? Array.from(new Set([...prev, id])) : prev.filter((x) => x !== id),
     );
 
-  if (!open) return <></>;
+  if (!open) return null;
 
   return (
     <div className="tw:absolute tw:inset-0 tw:flex tw:flex-col tw:border-l-4 tw:border-primary tw:bg-background tw:shadow-inner">

@@ -19,12 +19,8 @@ export function filterResourcesByUserLanguages(
 ): DblResourceData[] {
   if (userLanguages.length === 0) return resources;
   const set = new Set(userLanguages.map((l) => l.toLowerCase()));
-  const matching: DblResourceData[] = [];
-  const rest: DblResourceData[] = [];
-  for (const r of resources) {
-    if (set.has(r.bestLanguageName.toLowerCase())) matching.push(r);
-    else rest.push(r);
-  }
+  const matching = resources.filter((r) => set.has(r.bestLanguageName.toLowerCase()));
+  const rest = resources.filter((r) => !set.has(r.bestLanguageName.toLowerCase()));
   return [...matching, ...rest];
 }
 

@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { useMemo, useState } from 'react';
 import { DblResourceData } from 'platform-bible-utils';
 import { BookOpen, Check, Search, Star, X } from 'lucide-react';

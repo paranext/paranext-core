@@ -27,7 +27,12 @@ export type PopulatedTabProps = {
   onActiveResourceChange: (id: string) => void;
   /** Resources Donna (admin) added — Saroj cannot remove. */
   adminAssociatedIds: string[];
-  /** Resources Saroj added — Saroj can remove. */
+  /**
+   * Resources Saroj added — Saroj can remove. Used by the Dropdown variant to visually
+   * differentiate self-added items; IconStrip and SidebarList encode admin-vs-user solely via the
+   * disabled remove button + tooltip and do not need this prop directly.
+   */
+  // eslint-disable-next-line react/no-unused-prop-types -- See JSDoc; only Dropdown variant reads this.
   userAssociatedIds: string[];
   /** Opens the multi-select picker (Area 3). */
   onOpenPicker: () => void;

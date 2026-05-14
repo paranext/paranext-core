@@ -1,6 +1,6 @@
 import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import WorkspaceShell from '@/storybook/decorators/workspace-shell';
+import { WorkspaceShell } from '@/storybook/decorators/workspace-shell';
 import {
   ScriptureResourcesTabIconStrip,
   ScriptureResourcesTabSidebarList,

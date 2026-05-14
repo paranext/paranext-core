@@ -123,8 +123,8 @@ export function ModelTextZeroStateInline({ onOpenPicker }: ModelTextZeroStateCom
         </div>
         {/* faint placeholder lines to reinforce the "text could go here" mental model */}
         <div className="tw:mt-6 tw:flex tw:flex-col tw:gap-2" aria-hidden>
-          {[80, 92, 70, 88, 60].map((w, i) => (
-            <div key={i} className="tw:h-3 tw:rounded tw:bg-muted/40" style={{ width: `${w}%` }} />
+          {[80, 92, 70, 88, 60].map((w) => (
+            <div key={w} className="tw:h-3 tw:rounded tw:bg-muted/40" style={{ width: `${w}%` }} />
           ))}
         </div>
       </div>
