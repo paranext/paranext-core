@@ -8,7 +8,7 @@ import {
   WebViewDefinition,
 } from '@papi/core';
 import type { DblResourceData } from 'platform-bible-utils';
-import { isString, Mutex } from 'platform-bible-utils';
+import { isString, Mutex, wait } from 'platform-bible-utils';
 import getResourcesDialogReact from './get-resources.web-view?inline';
 import homeDialogReact from './home.web-view?inline';
 import newTabReact from './new-tab.web-view?inline';
@@ -22,40 +22,44 @@ const GET_RESOURCES_WEB_VIEW_SIZE = { width: 900, height: 650 };
 const HOME_WEB_VIEW_SIZE = { width: 1000, height: 650 };
 
 const RESOURCES_CACHE_KEY = 'cachedDblResources';
+const RESOURCES_REFRESH_INTERVAL_MS = 12 * 60 * 60 * 1000;
 
-let executionToken!: ExecutionToken;
+let executionToken: ExecutionToken | undefined;
 let cachedResources: DblResourceData[] | undefined;
 const fetchMutex = new Mutex();
+let hasFetchStarted = false;
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
+async function fetchAndCacheResources(): Promise<DblResourceData[] | undefined> {
+  const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
+  if (!provider) return undefined;
+
+  if (!(await provider.isGetDblResourcesAvailable())) return undefined;
+
+  const resources = await provider.getDblResources(undefined);
+  cachedResources = resources;
+  if (executionToken)
+    await papi.storage.writeUserData(
+      executionToken,
+      RESOURCES_CACHE_KEY,
+      JSON.stringify(cachedResources),
+    );
+  return resources;
 }
 
 async function startBackgroundFetchResources(): Promise<void> {
-  if (fetchMutex.isLocked()) return;
+  if (hasFetchStarted) return;
+  hasFetchStarted = true;
   await fetchMutex.runExclusive(async () => {
     for (let attempt = 0; attempt < 10; attempt++) {
-      if (attempt > 0) await sleep(1000); // eslint-disable-line no-await-in-loop
+      // Sequential retry delay requires awaiting inside the loop
+      // eslint-disable-next-line no-await-in-loop
+      if (attempt > 0) await wait(1000);
 
       try {
         // Need to have these await statements inside the loop to retry 10 times
         // eslint-disable-next-line no-await-in-loop
-        const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
-        if (!provider) continue;
-
-        if (!(await provider.isGetDblResourcesAvailable())) return; // eslint-disable-line no-await-in-loop
-
-        const resources = await provider.getDblResources(undefined); // eslint-disable-line no-await-in-loop
-        cachedResources = resources;
-        // eslint-disable-next-line no-await-in-loop
-        await papi.storage.writeUserData(
-          executionToken,
-          RESOURCES_CACHE_KEY,
-          JSON.stringify(cachedResources),
-        );
-        return;
+        const result = await fetchAndCacheResources();
+        if (result !== undefined) return;
       } catch (e) {
         logger.debug(`Background resource fetch attempt ${attempt + 1} failed: ${e}`);
       }
@@ -68,20 +72,9 @@ async function getCachedResources(): Promise<DblResourceData[] | undefined> {
   if (cachedResources !== undefined) return cachedResources;
 
   return fetchMutex.runExclusive(async () => {
+    if (cachedResources !== undefined) return cachedResources;
     try {
-      const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
-      if (!provider) return undefined;
-
-      if (!(await provider.isGetDblResourcesAvailable())) return undefined;
-
-      const resources = await provider.getDblResources(undefined);
-      cachedResources = resources;
-      await papi.storage.writeUserData(
-        executionToken,
-        RESOURCES_CACHE_KEY,
-        JSON.stringify(cachedResources),
-      );
-      return cachedResources;
+      return fetchAndCacheResources();
     } catch (e) {
       logger.warn(`getCachedResources on-demand fetch failed: ${e}`);
       return undefined;
@@ -146,8 +139,10 @@ export async function activate(context: ExecutionActivationContext) {
 
   try {
     const cached = await papi.storage.readUserData(executionToken, RESOURCES_CACHE_KEY);
-    if (typeof cached === 'string' && cached.length > 0)
-      cachedResources = JSON.parse(cached) as DblResourceData[];
+    if (typeof cached === 'string' && cached.length > 0) {
+      const parsed: DblResourceData[] = JSON.parse(cached);
+      cachedResources = parsed;
+    }
   } catch {
     // No cached data from previous session
   }
@@ -282,6 +277,24 @@ export async function activate(context: ExecutionActivationContext) {
   // Need to start async floating promise that continues after activation
   // eslint-disable-next-line @typescript-eslint/no-floating-promises
   startBackgroundFetchResources();
+
+  const refreshIntervalId = setInterval(() => {
+    // The mutex returns a floating promise here; we want fire-and-forget interval behavior
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    fetchMutex.runExclusive(async () => {
+      try {
+        await fetchAndCacheResources();
+      } catch (e) {
+        logger.warn(`Scheduled resource refresh failed: ${e}`);
+      }
+    });
+  }, RESOURCES_REFRESH_INTERVAL_MS);
+  context.registrations.add({
+    dispose: async () => {
+      clearInterval(refreshIntervalId);
+      return true;
+    },
+  });
 
   logger.debug('Platform Get Resources Extension finished activating!');
 }
