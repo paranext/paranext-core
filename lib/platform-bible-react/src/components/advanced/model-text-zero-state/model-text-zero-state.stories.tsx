@@ -8,10 +8,7 @@ import {
   ModelTextZeroStateInline,
   ModelTextZeroStateSetupPanel,
 } from './model-text-zero-state.component';
-import {
-  ModelTextPickerCommandPalette,
-  ModelTextPickerModal,
-} from './model-text-picker.component';
+import { ModelTextPickerCommandPalette, ModelTextPickerModal } from './model-text-picker.component';
 import {
   MODEL_TEXT_RESOURCES,
   SAMPLE_MODEL_TEXT_ID,
@@ -30,7 +27,8 @@ export default meta;
 type Story = StoryObj;
 
 const initiallyPickedResource =
-  MODEL_TEXT_RESOURCES.find((r) => r.dblEntryUid === SAMPLE_MODEL_TEXT_ID) ?? MODEL_TEXT_RESOURCES[0];
+  MODEL_TEXT_RESOURCES.find((r) => r.dblEntryUid === SAMPLE_MODEL_TEXT_ID) ??
+  MODEL_TEXT_RESOURCES[0];
 
 // ---------------------------------------------------------------------------
 // Zero state, picker CLOSED — one story per variant
@@ -73,8 +71,8 @@ export const SetupPanelZeroState: Story = {
 // ---------------------------------------------------------------------------
 
 /**
- * Pairing: Illustrated zero state + Modal picker. The editorial onboarding moment hands off
- * to a focusing modal — most aligned with the "deliberate, considered choice" framing.
+ * Pairing: Illustrated zero state + Modal picker. The editorial onboarding moment hands off to a
+ * focusing modal — most aligned with the "deliberate, considered choice" framing.
  */
 export const IllustratedWithPickerOpen: Story = {
   name: 'A · Illustrated — modal picker open',
@@ -105,8 +103,8 @@ export const IllustratedWithPickerOpen: Story = {
 };
 
 /**
- * Pairing: Inline prompt zero state + Modal picker. The inline prompt is a low-key handoff;
- * the modal then takes over for the actual choice. Keeps the moment-of-decision focused.
+ * Pairing: Inline prompt zero state + Modal picker. The inline prompt is a low-key handoff; the
+ * modal then takes over for the actual choice. Keeps the moment-of-decision focused.
  */
 export const InlineWithPickerOpen: Story = {
   name: 'B · Inline prompt — modal picker open',
@@ -137,9 +135,9 @@ export const InlineWithPickerOpen: Story = {
 };
 
 /**
- * Pairing: Setup panel + Command palette. The setup panel already shows a ranked list inline,
- * so the "picker open" variant for it demonstrates a Cmd-K layered on top — i.e. the
- * panel is the lightweight path, the palette is the power-user shortcut from the same column.
+ * Pairing: Setup panel + Command palette. The setup panel already shows a ranked list inline, so
+ * the "picker open" variant for it demonstrates a Cmd-K layered on top — i.e. the panel is the
+ * lightweight path, the palette is the power-user shortcut from the same column.
  */
 export const SetupPanelWithPickerOpen: Story = {
   name: 'C · Setup panel — command palette open',

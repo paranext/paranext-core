@@ -11,11 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/shadcn-ui/dialog';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/shadcn-ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import {
   Command,
   CommandEmpty,
@@ -39,7 +35,7 @@ import {
 const STRINGS = {
   title: 'Choose a model text',
   description:
-    "Your model text is the published scripture this translation is based on. You can change it later in project settings.",
+    'Your model text is the published scripture this translation is based on. You can change it later in project settings.',
   searchPlaceholder: 'Search by name or language…',
   preferred: 'Preferred for your languages',
   allResources: 'All scripture resources',
@@ -126,14 +122,14 @@ function ResourceRow({
 /**
  * Variant A — "Considered choice".
  *
- * Mental model: a deliberate, focusing modal. Picking a model text is an important decision
- * (this is the text the translation is BASED on, not a casual reference) so the modal grabs
- * attention, shows the description prominently, and presents one ranked list. No tabs, no
- * panels — minimize the chrome around the choice itself.
+ * Mental model: a deliberate, focusing modal. Picking a model text is an important decision (this
+ * is the text the translation is BASED on, not a casual reference) so the modal grabs attention,
+ * shows the description prominently, and presents one ranked list. No tabs, no panels — minimize
+ * the chrome around the choice itself.
  *
  * Layout: centered shadcn Dialog, search at the top, a single ranked list below (preferred-
- * language entries float to the top with a "Preferred" badge; already-in-project entries get
- * an "In project" badge so Saroj recognises Donna's prior setup). Single click confirms.
+ * language entries float to the top with a "Preferred" badge; already-in-project entries get an "In
+ * project" badge so Saroj recognises Donna's prior setup). Single click confirms.
  */
 export function ModelTextPickerModal({
   allResources,
@@ -231,12 +227,12 @@ export function ModelTextPickerModal({
  * Variant B — "Lightweight switcher".
  *
  * Mental model: switching the model text feels closer to changing a dropdown setting than to
- * opening a wizard. Anchoring the picker to the trigger button keeps Saroj in flow — useful
- * when she's already deep in a translation session and just wants to try a different base
- * text for a tricky passage. Less disruptive than a modal; trades focus for context.
+ * opening a wizard. Anchoring the picker to the trigger button keeps Saroj in flow — useful when
+ * she's already deep in a translation session and just wants to try a different base text for a
+ * tricky passage. Less disruptive than a modal; trades focus for context.
  *
- * Layout: shadcn Popover anchored to a trigger you render. Compact search at the top, a
- * single ranked list, no description text (assumes the user already knows what they're doing).
+ * Layout: shadcn Popover anchored to a trigger you render. Compact search at the top, a single
+ * ranked list, no description text (assumes the user already knows what they're doing).
  */
 export function ModelTextPickerPopover({
   trigger,
@@ -324,15 +320,15 @@ export function ModelTextPickerPopover({
  * Variant C — "Keyboard-first power-user".
  *
  * Mental model: a Cmd-K command palette. Search-dominant, results materialise as you type,
- * arrow-keys + Enter complete the action with no mouse. Aimed at translators who do this
- * a lot (consultants moving between projects, or Donna setting up multiple teams). The
- * picker dedicates almost the entire surface to the input and the ranked result list —
- * preferred-language entries are grouped at the top with a divider, everything else below.
+ * arrow-keys + Enter complete the action with no mouse. Aimed at translators who do this a lot
+ * (consultants moving between projects, or Donna setting up multiple teams). The picker dedicates
+ * almost the entire surface to the input and the ranked result list — preferred-language entries
+ * are grouped at the top with a divider, everything else below.
  *
- * Layout: shadcn Command primitive inside a centered Dialog. Two CommandGroups
- * ("Preferred for your languages", "All scripture resources"). Also exposes the
- * project-as-reference affordance as a footer keyboard hint — annotated below as the
- * "one-off project-as-reference" variant per the brief.
+ * Layout: shadcn Command primitive inside a centered Dialog. Two CommandGroups ("Preferred for your
+ * languages", "All scripture resources"). Also exposes the project-as-reference affordance as a
+ * footer keyboard hint — annotated below as the "one-off project-as-reference" variant per the
+ * brief.
  */
 export function ModelTextPickerCommandPalette({
   allResources,
@@ -358,9 +354,7 @@ export function ModelTextPickerCommandPalette({
   const preferred = ranked.filter((r) =>
     preferredLanguageSet.has(r.bestLanguageName.toLowerCase()),
   );
-  const others = ranked.filter(
-    (r) => !preferredLanguageSet.has(r.bestLanguageName.toLowerCase()),
-  );
+  const others = ranked.filter((r) => !preferredLanguageSet.has(r.bestLanguageName.toLowerCase()));
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -369,11 +363,7 @@ export function ModelTextPickerCommandPalette({
         className="tw:w-[560px] tw:max-w-[90vw] tw:overflow-hidden tw:p-0"
       >
         <Command className="tw:flex tw:max-h-[500px] tw:flex-col">
-          <CommandInput
-            placeholder={STRINGS.searchPlaceholder}
-            className="tw:h-12"
-            autoFocus
-          />
+          <CommandInput placeholder={STRINGS.searchPlaceholder} className="tw:h-12" autoFocus />
           <CommandList className="tw:max-h-[400px]">
             <CommandEmpty>{STRINGS.empty}</CommandEmpty>
             {preferred.length > 0 && (
@@ -408,7 +398,10 @@ export function ModelTextPickerCommandPalette({
                     value={`${r.displayName} ${r.fullName} ${r.bestLanguageName}`}
                     onSelect={() => onSelect(r)}
                   >
-                    <BookOpen className="tw:mr-2 tw:h-4 tw:w-4 tw:text-muted-foreground" aria-hidden />
+                    <BookOpen
+                      className="tw:mr-2 tw:h-4 tw:w-4 tw:text-muted-foreground"
+                      aria-hidden
+                    />
                     <span className="tw:font-medium">{r.displayName}</span>
                     <span className="tw:ml-2 tw:text-xs tw:text-muted-foreground">
                       {r.fullName}

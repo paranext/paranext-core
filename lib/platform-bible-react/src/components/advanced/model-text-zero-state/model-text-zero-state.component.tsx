@@ -16,9 +16,9 @@ import {
 // ---------------------------------------------------------------------------
 
 const STRINGS = {
-  zeroHeadline: "Choose a model text to get started",
+  zeroHeadline: 'Choose a model text to get started',
   zeroBody:
-    "Your model text is the published scripture this project is translating from. Pick one to anchor your work — you can change it later.",
+    'Your model text is the published scripture this project is translating from. Pick one to anchor your work — you can change it later.',
   primaryCta: 'Choose model text',
   inlinePromptHeadline: 'No model text yet',
   inlinePromptBody: 'Pick the published scripture this project is translating from.',
@@ -55,10 +55,10 @@ export interface ModelTextSetupPanelProps {
 /**
  * Variant A — "Editorial / onboarding".
  *
- * Mental model: a first-run, calm onboarding moment. Centered art-ish icon, friendly
- * headline, one-sentence explanation in plain language, and a single primary CTA. This
- * is the variant Saroj or Donna sees the first time the project loads with nothing set
- * up — it makes the empty column feel intentional, not broken.
+ * Mental model: a first-run, calm onboarding moment. Centered art-ish icon, friendly headline,
+ * one-sentence explanation in plain language, and a single primary CTA. This is the variant Saroj
+ * or Donna sees the first time the project loads with nothing set up — it makes the empty column
+ * feel intentional, not broken.
  *
  * Trade-off: most "branded" and takes the most vertical space. Best for true first-run.
  */
@@ -73,9 +73,7 @@ export function ModelTextZeroStateIllustrated({ onOpenPicker }: ModelTextZeroSta
           <BookOpenText className="tw:h-8 tw:w-8 tw:text-muted-foreground" />
         </div>
         <div className="tw:flex tw:flex-col tw:gap-2">
-          <h2 className="tw:text-lg tw:font-semibold tw:text-foreground">
-            {STRINGS.zeroHeadline}
-          </h2>
+          <h2 className="tw:text-lg tw:font-semibold tw:text-foreground">{STRINGS.zeroHeadline}</h2>
           <p className="tw:text-sm tw:text-muted-foreground">{STRINGS.zeroBody}</p>
         </div>
         <Button onClick={onOpenPicker} className="tw:mt-2">
@@ -94,11 +92,10 @@ export function ModelTextZeroStateIllustrated({ onOpenPicker }: ModelTextZeroSta
 /**
  * Variant B — "Inline prompt".
  *
- * Mental model: the column already looks like it could hold scripture, but instead shows a
- * subtle message anchored where the text would render. Compact. Lower-key than Variant A —
- * better when a user lands on a project mid-stream (e.g. Saroj just synced and Donna's
- * setup hasn't completed yet) and we want to communicate "nothing here yet" without
- * dominating the screen.
+ * Mental model: the column already looks like it could hold scripture, but instead shows a subtle
+ * message anchored where the text would render. Compact. Lower-key than Variant A — better when a
+ * user lands on a project mid-stream (e.g. Saroj just synced and Donna's setup hasn't completed
+ * yet) and we want to communicate "nothing here yet" without dominating the screen.
  *
  * Trade-off: less hand-holding, doesn't explain the concept at length. Pair with onboarding
  * elsewhere if this is a first-run experience.
@@ -127,11 +124,7 @@ export function ModelTextZeroStateInline({ onOpenPicker }: ModelTextZeroStateCom
         {/* faint placeholder lines to reinforce the "text could go here" mental model */}
         <div className="tw:mt-6 tw:flex tw:flex-col tw:gap-2" aria-hidden>
           {[80, 92, 70, 88, 60].map((w, i) => (
-            <div
-              key={i}
-              className="tw:h-3 tw:rounded tw:bg-muted/40"
-              style={{ width: `${w}%` }}
-            />
+            <div key={i} className="tw:h-3 tw:rounded tw:bg-muted/40" style={{ width: `${w}%` }} />
           ))}
         </div>
       </div>
@@ -146,14 +139,14 @@ export function ModelTextZeroStateInline({ onOpenPicker }: ModelTextZeroStateCom
 /**
  * Variant C — "Setup panel".
  *
- * Mental model: the column itself becomes the configuration surface. No separate dialog —
- * the picker is rendered INLINE as part of the column's zero state. Better for Donna, who
- * is deliberately setting things up, or for the second/third project the team configures
- * (the wow-factor of the editorial variant is gone; they want a faster route to "done").
+ * Mental model: the column itself becomes the configuration surface. No separate dialog — the
+ * picker is rendered INLINE as part of the column's zero state. Better for Donna, who is
+ * deliberately setting things up, or for the second/third project the team configures (the
+ * wow-factor of the editorial variant is gone; they want a faster route to "done").
  *
- * Trade-off: needs more vertical space than the inline prompt, and bakes a specific picker
- * shape (a ranked flat list) into the zero state — variants A and B are flexible about
- * which picker they hand off to.
+ * Trade-off: needs more vertical space than the inline prompt, and bakes a specific picker shape (a
+ * ranked flat list) into the zero state — variants A and B are flexible about which picker they
+ * hand off to.
  */
 export function ModelTextZeroStateSetupPanel({
   allResources,
@@ -300,9 +293,9 @@ export interface ModelTextPopulatedProps {
 }
 
 /**
- * Populated column — after Saroj or Donna has picked a model text. Header row shows the
- * resource identity + a "Change" affordance; body shows the scripture text. Same column
- * width as the zero-state variants.
+ * Populated column — after Saroj or Donna has picked a model text. Header row shows the resource
+ * identity + a "Change" affordance; body shows the scripture text. Same column width as the
+ * zero-state variants.
  */
 export function ModelTextPopulated({ resource, body, onChange }: ModelTextPopulatedProps) {
   return (

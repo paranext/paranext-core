@@ -38,7 +38,8 @@ function PopulatedColumnBehindPicker({ resource }: { resource: DblResourceData }
 }
 
 const initiallyPickedResource =
-  MODEL_TEXT_RESOURCES.find((r) => r.dblEntryUid === SAMPLE_MODEL_TEXT_ID) ?? MODEL_TEXT_RESOURCES[0];
+  MODEL_TEXT_RESOURCES.find((r) => r.dblEntryUid === SAMPLE_MODEL_TEXT_ID) ??
+  MODEL_TEXT_RESOURCES[0];
 
 const meta: Meta = {
   title: 'Advanced/ModelTextPicker',

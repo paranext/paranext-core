@@ -43,8 +43,8 @@ const EXTRA_MODEL_TEXT_CANDIDATES: DblResourceData[] = [
 
 /**
  * Full pool of candidate model-text resources for stories. Combines the existing fixture (so the
- * stories share data with the resource-picker-dialog) with a handful of additional translations
- * to exercise language ranking.
+ * stories share data with the resource-picker-dialog) with a handful of additional translations to
+ * exercise language ranking.
  */
 export const MODEL_TEXT_RESOURCES: DblResourceData[] = [
   ...SAMPLE_RESOURCES,
@@ -62,7 +62,7 @@ export const SAMPLE_USER_LANGUAGES = ['English', 'Tok Pisin'];
 
 /** Stub paragraph used by the "Populated" stories to show real text in the column. */
 export const SAMPLE_MODEL_TEXT_PARAGRAPH =
-  "1 In the beginning was the Word, and the Word was with God, and the Word was God. " +
-  "2 He was with God in the beginning. 3 Through him all things were made; without him " +
-  "nothing was made that has been made. 4 In him was life, and that life was the light of " +
-  "all mankind. 5 The light shines in the darkness, and the darkness has not overcome it.";
+  '1 In the beginning was the Word, and the Word was with God, and the Word was God. ' +
+  '2 He was with God in the beginning. 3 Through him all things were made; without him ' +
+  'nothing was made that has been made. 4 In him was life, and that life was the light of ' +
+  'all mankind. 5 The light shines in the darkness, and the darkness has not overcome it.';

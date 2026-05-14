@@ -7,6 +7,7 @@ import { DblResourceData } from 'platform-bible-utils';
  * stories render convincingly.
  *
  * Behavior:
+ *
  * - If `userLanguages` is empty, returns all resources unchanged.
  * - Otherwise, returns resources whose `bestLanguageName` matches one of the user's languages,
  *   followed by all other resources (preserved order). This lets stories show ranking without
