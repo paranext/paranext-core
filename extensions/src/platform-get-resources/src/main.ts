@@ -8,7 +8,7 @@ import {
   WebViewDefinition,
 } from '@papi/core';
 import type { DblResourceData } from 'platform-bible-utils';
-import { isString } from 'platform-bible-utils';
+import { isString, Mutex } from 'platform-bible-utils';
 import getResourcesDialogReact from './get-resources.web-view?inline';
 import homeDialogReact from './home.web-view?inline';
 import newTabReact from './new-tab.web-view?inline';
@@ -25,7 +25,7 @@ const RESOURCES_CACHE_KEY = 'cachedDblResources';
 
 let executionToken!: ExecutionToken;
 let cachedResources: DblResourceData[] | undefined;
-let isFetching = false;
+const fetchMutex = new Mutex();
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -34,15 +34,13 @@ function sleep(ms: number): Promise<void> {
 }
 
 async function startBackgroundFetchResources(): Promise<void> {
-  if (isFetching) return;
-  isFetching = true;
-
-  try {
+  if (fetchMutex.isLocked()) return;
+  await fetchMutex.runExclusive(async () => {
     for (let attempt = 0; attempt < 10; attempt++) {
       if (attempt > 0) await sleep(1000); // eslint-disable-line no-await-in-loop
 
       try {
-        // Need to have these await statements inside the look to retry 10 times
+        // Need to have these await statements inside the loop to retry 10 times
         // eslint-disable-next-line no-await-in-loop
         const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
         if (!provider) continue;
@@ -63,41 +61,32 @@ async function startBackgroundFetchResources(): Promise<void> {
       }
     }
     logger.warn('Background DBL resources fetch failed after 10 attempts');
-  } finally {
-    isFetching = false;
-  }
+  });
 }
 
 async function getCachedResources(): Promise<DblResourceData[] | undefined> {
   if (cachedResources !== undefined) return cachedResources;
 
-  if (isFetching) {
-    while (isFetching) await sleep(100); // eslint-disable-line no-await-in-loop
-    if (cachedResources !== undefined) return cachedResources;
-    // Fall through to on-demand fetch if background fetch finished with nothing
-  }
+  return fetchMutex.runExclusive(async () => {
+    try {
+      const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
+      if (!provider) return undefined;
 
-  isFetching = true;
-  try {
-    const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
-    if (!provider) return undefined;
+      if (!(await provider.isGetDblResourcesAvailable())) return undefined;
 
-    if (!(await provider.isGetDblResourcesAvailable())) return undefined;
-
-    const resources = await provider.getDblResources(undefined);
-    cachedResources = resources;
-    await papi.storage.writeUserData(
-      executionToken,
-      RESOURCES_CACHE_KEY,
-      JSON.stringify(cachedResources),
-    );
-    return cachedResources;
-  } catch (e) {
-    logger.warn(`getCachedResources on-demand fetch failed: ${e}`);
-    return undefined;
-  } finally {
-    isFetching = false;
-  }
+      const resources = await provider.getDblResources(undefined);
+      cachedResources = resources;
+      await papi.storage.writeUserData(
+        executionToken,
+        RESOURCES_CACHE_KEY,
+        JSON.stringify(cachedResources),
+      );
+      return cachedResources;
+    } catch (e) {
+      logger.warn(`getCachedResources on-demand fetch failed: ${e}`);
+      return undefined;
+    }
+  });
 }
 
 let manageExtensions: ManageExtensions;
@@ -195,27 +184,15 @@ export async function activate(context: ExecutionActivationContext) {
   const openGetResourcesWebViewCommandPromise = papi.commands.registerCommand(
     'platformGetResources.openGetResources',
     async () => {
-      let webViewId;
-      const resources = await getCachedResources();
-      if (resources === undefined) {
-        await papi.notifications.send({
-          message: '%resources_fetch_failed%',
-          severity: 'warning',
-          clickCommandLabel: '%resources_retry%',
-          clickCommand: 'platformGetResources.openGetResources',
-          duration: 0,
-        });
-      } else {
-        webViewId = await papi.webViews.openWebView(
-          GET_RESOURCES_WEB_VIEW_TYPE,
-          {
-            type: 'float',
-            floatSize: GET_RESOURCES_WEB_VIEW_SIZE,
-          },
-          // Focus existing one if one exists
-          { existingId: '?' },
-        );
-      }
+      const webViewId = await papi.webViews.openWebView(
+        GET_RESOURCES_WEB_VIEW_TYPE,
+        {
+          type: 'float',
+          floatSize: GET_RESOURCES_WEB_VIEW_SIZE,
+        },
+        // Focus existing one if one exists
+        { existingId: '?' },
+      );
 
       return webViewId;
     },
