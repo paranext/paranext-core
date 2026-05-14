@@ -1,15 +1,17 @@
-import React from 'react';
+import * as React from 'react';
 
 /**
- * 3-column workspace shell used to host Paratext 10 Simple prototype stories.
+ * Three-column shell that approximates Paratext 10 Simple's workspace chrome for Storybook
+ * decorators.
  *
- * The active column ({@link columnIndex}) is shown normally; the other two are dimmed so
- * reviewers can see which column the story is exercising. A stub toolbar above the columns
- * communicates that BCV scroll-sync lives there — not inside any column. The Column 3 header
- * also renders a tiny tab strip stub (icons-as-pills) so stories that touch Column 3 show
- * the right surrounding chrome.
+ * Renders three columns: Model Text (0), Editor (1), Resources & Tools (2). The non-focused columns
+ * are dimmed and empty so the story can focus the reviewer's attention on a single column. A stub
+ * toolbar at the top reminds reviewers where the BCV control lives — it is intentionally NOT in any
+ * column.
  *
- * Shared across Agents A/B/C — first writer wins; if it already exists, just import it.
+ * Column 3 shows a small icon-tab strip ("Bible", "Commentaries"). These are visual stubs; the
+ * strip is rendered by the shell, not by the story, because the PRD requires tab headers not to
+ * look draggable / not to mimic PT10Power tab chrome.
  */
 export function WorkspaceShell({
   children,
@@ -27,12 +29,12 @@ export function WorkspaceShell({
       <div className="tw-flex tw-h-9 tw-items-center tw-border-b tw-px-3 tw-text-xs tw-text-muted-foreground">
         [main toolbar — BCV control lives here, not in columns]
       </div>
-      <div className="tw-flex tw-flex-1 tw-min-h-0">
+      <div className="tw-flex tw-min-h-0 tw-flex-1">
         {cols.map((label, i) => {
           const focused = i === columnIndex;
           return (
             <div
-              key={i}
+              key={label}
               className={[
                 'tw-flex tw-min-w-0 tw-flex-1 tw-flex-col',
                 i < 2 ? 'tw-border-r' : '',
@@ -51,7 +53,7 @@ export function WorkspaceShell({
                   </span>
                 )}
               </div>
-              {focused ? <div className="tw-flex tw-min-h-0 tw-flex-1">{children}</div> : null}
+              {focused ? <div className="tw-flex tw-min-h-0 tw-flex-1">{children}</div> : undefined}
             </div>
           );
         })}
@@ -59,3 +61,5 @@ export function WorkspaceShell({
     </div>
   );
 }
+
+export default WorkspaceShell;
