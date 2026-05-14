@@ -8,6 +8,7 @@ import {
   resolveOpenEditorDispatch,
   type OpenEditorDispatch,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+  startDefaultProjectPicker,
 } from './platform-scripture-editor.utils';
 
 // Sample USJ chapter data for Genesis chapter 1 with multiple verses
@@ -411,6 +412,14 @@ interface PickerMocks {
   mockGetAllOpenWebViewDefinitions: ReturnType<typeof vi.fn>;
   mockSendCommand: ReturnType<typeof vi.fn>;
   mockWarn: ReturnType<typeof vi.fn>;
+  /** Synthesize a `webViews.onDidOpenWebView` event from within a test. */
+  fireWebViewOpen: () => void;
+  /** Synthesize a `paratextBibleSendReceive.onSyncStateChanged` event from within a test. */
+  fireSync: (event: { isSyncing: boolean }) => void;
+  /** `true` once the driver has unsubscribed from `onDidOpenWebView`. */
+  isWebViewOpenUnsubscribed: () => boolean;
+  /** `true` once the driver has unsubscribed from `onSyncStateChanged`. */
+  isSyncUnsubscribed: () => boolean;
 }
 
 function createPickerMocks(): PickerMocks {
@@ -419,12 +428,42 @@ function createPickerMocks(): PickerMocks {
   const mockSendCommand = vi.fn();
   const mockWarn = vi.fn();
 
-  // Mocking just the parts of PAPI the picker actually touches at runtime.
+  // The driver subscribes to these events; we capture each listener so tests can drive events.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let webViewOpenListener: ((evt: any) => void) | undefined;
+  let webViewOpenUnsubscribed = false;
+  const mockOnDidOpenWebView = vi.fn((listener) => {
+    webViewOpenListener = listener;
+    return () => {
+      webViewOpenUnsubscribed = true;
+      webViewOpenListener = undefined;
+    };
+  });
+
+  let syncListener: ((evt: { isSyncing: boolean }) => void) | undefined;
+  let syncUnsubscribed = false;
+  const mockGetNetworkEvent = vi.fn((eventName: string) => (listener: typeof syncListener) => {
+    if (eventName === 'paratextBibleSendReceive.onSyncStateChanged') {
+      syncListener = listener;
+    }
+    return () => {
+      if (eventName === 'paratextBibleSendReceive.onSyncStateChanged') {
+        syncUnsubscribed = true;
+        syncListener = undefined;
+      }
+    };
+  });
+
+  // Mocking just the parts of PAPI the picker and its driver touch at runtime.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const papi = {
     settings: { get: mockGetSetting },
-    webViews: { getAllOpenWebViewDefinitions: mockGetAllOpenWebViewDefinitions },
+    webViews: {
+      getAllOpenWebViewDefinitions: mockGetAllOpenWebViewDefinitions,
+      onDidOpenWebView: mockOnDidOpenWebView,
+    },
     commands: { sendCommand: mockSendCommand },
+    network: { getNetworkEvent: mockGetNetworkEvent },
     logger: { warn: mockWarn },
   } as unknown as typeof PapiBackend;
 
@@ -434,6 +473,16 @@ function createPickerMocks(): PickerMocks {
     mockGetAllOpenWebViewDefinitions,
     mockSendCommand,
     mockWarn,
+    fireWebViewOpen: () => {
+      if (!webViewOpenListener) throw new Error('fireWebViewOpen: no listener captured');
+      webViewOpenListener({});
+    },
+    fireSync: (event) => {
+      if (!syncListener) throw new Error('fireSync: no listener captured');
+      syncListener(event);
+    },
+    isWebViewOpenUnsubscribed: () => webViewOpenUnsubscribed,
+    isSyncUnsubscribed: () => syncUnsubscribed,
   };
 }
 
@@ -807,3 +856,116 @@ describe('resolveOpenEditorDispatch', () => {
 });
 
 // #endregion resolveOpenEditorDispatch
+
+// #region startDefaultProjectPicker
+
+describe('startDefaultProjectPicker', () => {
+  /**
+   * Configure the mocks so `openDefaultActiveProjectIfApplicable` exits at its cheapest path
+   * (interfaceMode !== 'simple' returns 'wrong-mode'). We use `mockGetSetting` as the call counter
+   * because it's the first PAPI call inside the picker, so its call count equals the run count.
+   */
+  function setUpFastNoOp(mocks: PickerMocks) {
+    mocks.mockGetSetting.mockResolvedValue('power');
+  }
+
+  it('runs the picker immediately on subscribe', async () => {
+    const mocks = createPickerMocks();
+    setUpFastNoOp(mocks);
+
+    startDefaultProjectPicker(mocks.papi);
+
+    await vi.waitFor(() => {
+      expect(mocks.mockGetSetting).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('re-runs the picker when a web view opens', async () => {
+    const mocks = createPickerMocks();
+    setUpFastNoOp(mocks);
+
+    startDefaultProjectPicker(mocks.papi);
+    await vi.waitFor(() => expect(mocks.mockGetSetting).toHaveBeenCalledTimes(1));
+
+    mocks.fireWebViewOpen();
+
+    await vi.waitFor(() => {
+      expect(mocks.mockGetSetting).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it('re-runs the picker when a sync completes (isSyncing becomes false)', async () => {
+    const mocks = createPickerMocks();
+    setUpFastNoOp(mocks);
+
+    startDefaultProjectPicker(mocks.papi);
+    await vi.waitFor(() => expect(mocks.mockGetSetting).toHaveBeenCalledTimes(1));
+
+    mocks.fireSync({ isSyncing: false });
+
+    await vi.waitFor(() => {
+      expect(mocks.mockGetSetting).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it('does NOT re-run the picker when a sync starts (isSyncing true)', async () => {
+    const mocks = createPickerMocks();
+    setUpFastNoOp(mocks);
+
+    startDefaultProjectPicker(mocks.papi);
+    await vi.waitFor(() => expect(mocks.mockGetSetting).toHaveBeenCalledTimes(1));
+
+    mocks.fireSync({ isSyncing: true });
+
+    // Give the microtask queue a chance to flush in case a stray retry was queued.
+    await new Promise((resolve) => {
+      setTimeout(resolve, 20);
+    });
+    expect(mocks.mockGetSetting).toHaveBeenCalledTimes(1);
+  });
+
+  it('coalesces multiple triggers during an in-flight run into a single follow-up', async () => {
+    const mocks = createPickerMocks();
+    // Block the initial picker call on a controllable promise so we can fire triggers while it's
+    // in flight. Subsequent calls resolve immediately to 'power' for a fast no-op.
+    let unblock: () => void = () => {};
+    const initialPromise = new Promise<'power'>((resolve) => {
+      unblock = () => resolve('power');
+    });
+    mocks.mockGetSetting.mockReturnValueOnce(initialPromise).mockResolvedValue('power');
+
+    startDefaultProjectPicker(mocks.papi);
+    // Initial run is now in flight, blocked on `initialPromise`.
+    mocks.fireWebViewOpen();
+    mocks.fireSync({ isSyncing: false });
+    // Two triggers while in flight should coalesce to a single follow-up run.
+
+    unblock();
+
+    await vi.waitFor(() => {
+      // 1 initial + 1 coalesced follow-up = 2 total calls.
+      expect(mocks.mockGetSetting).toHaveBeenCalledTimes(2);
+    });
+
+    // Give any stray retry a chance to fire; assert we're still at 2.
+    await new Promise((resolve) => {
+      setTimeout(resolve, 20);
+    });
+    expect(mocks.mockGetSetting).toHaveBeenCalledTimes(2);
+  });
+
+  it('returned unsubscriber removes both subscriptions', async () => {
+    const mocks = createPickerMocks();
+    setUpFastNoOp(mocks);
+
+    const unsub = startDefaultProjectPicker(mocks.papi);
+    await vi.waitFor(() => expect(mocks.mockGetSetting).toHaveBeenCalledTimes(1));
+
+    unsub();
+
+    expect(mocks.isWebViewOpenUnsubscribed()).toBe(true);
+    expect(mocks.isSyncUnsubscribed()).toBe(true);
+  });
+});
+
+// #endregion startDefaultProjectPicker
