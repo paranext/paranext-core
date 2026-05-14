@@ -13,6 +13,8 @@ const config = defineConfig({
     alias: {
       // Mock @papi/backend for tests
       '@papi/backend': path.resolve(__dirname, '__test-mocks__/@papi/backend.ts'),
+      // Mock @papi/frontend/react for tests
+      '@papi/frontend/react': path.resolve(__dirname, '__test-mocks__/@papi/frontend-react.ts'),
     },
   },
 });

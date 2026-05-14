@@ -36,7 +36,7 @@ vi.mock('@shared/services/network.service', async (importOriginal) => {
 });
 vi.mock('@renderer/components/docking/platform-dock-layout.component', () => ({
   __esModule: true,
-  default: /** ParanextDockLayout Mock */ () => undefined,
+  default: /** PlatformDockLayout Mock */ () => undefined,
   PlatformDockLayout: /** PlatformDockLayout Named Export Mock */ () => <div />,
 }));
 vi.mock('@renderer/components/platform-bible-toolbar', () => ({
