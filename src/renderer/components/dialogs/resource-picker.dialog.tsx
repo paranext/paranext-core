@@ -24,6 +24,7 @@ function ResourcePickerDialogWrapper({
   return (
     <ResourcePickerDialog
       allResources={resources}
+      isResourcesLoading={isResourcesLoading}
       resourceType={resourceType}
       selectedResourceIds={selectedResourceIds}
       localizedStrings={localizedStrings}
