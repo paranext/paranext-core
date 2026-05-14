@@ -35,7 +35,7 @@ function getDeduplicationKey(item: ResourceReference): string | undefined {
  * items (from the project file) are listed first.
  */
 function mergeResourceReferenceLists(
-  projectList: ResourceReferenceList,
+  projectResourceReferenceList: ResourceReferenceList,
   userResourceReferenceList: ResourceReferenceList,
 ): EffectiveResourceReferenceList {
   const seen = new Set<string>();
@@ -53,7 +53,7 @@ function mergeResourceReferenceLists(
       });
   };
 
-  processItems(projectList.items, 'admin');
+  processItems(projectResourceReferenceList.items, 'admin');
   processItems(userResourceReferenceList.items, 'user');
 
   return { dataVersion: CURRENT_DATA_VERSION, items: merged };
