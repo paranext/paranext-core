@@ -306,7 +306,7 @@
   "%resourcePicker_language_filter_multipleSelected%": "{selectCount} languages",
   "%resourcePicker_no_results%": "No results found",
   "%resourcePicker_search_placeholder%": "Search resources…",
-  "%resourcePicker_section_already_selected%": "Already selected",
+  "%resourcePicker_section_already_selected%": "Included",
   "%resourcePicker_section_available_to_download%": "Available to download",
   "%resourcePicker_section_installed%": "Installed",
   "%resourcePicker_showing_count%": "Showing {filtered} of {total} resources",

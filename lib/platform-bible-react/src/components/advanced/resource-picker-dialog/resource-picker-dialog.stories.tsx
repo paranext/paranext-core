@@ -11,7 +11,7 @@ import {
 
 const STRINGS: ResourcePickerDialogLocalizedStrings = {
   '%resourcePicker_title%': 'Resource picker',
-  '%resourcePicker_section_already_selected%': 'Already selected',
+  '%resourcePicker_section_already_selected%': 'Included',
   '%resourcePicker_section_installed%': 'Installed',
   '%resourcePicker_section_available_to_download%': 'Available to download',
   '%resourcePicker_button_use%': 'Use',

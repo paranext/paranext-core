@@ -427,7 +427,7 @@
   "%resourcePicker_language_filter_multipleSelected%": "{selectCount} idiomas",
   "%resourcePicker_no_results%": "No se encontraron resultados",
   "%resourcePicker_search_placeholder%": "Buscar recursos…",
-  "%resourcePicker_section_already_selected%": "Ya seleccionado",
+  "%resourcePicker_section_already_selected%": "Incluido",
   "%resourcePicker_section_available_to_download%": "Disponible para descargar",
   "%resourcePicker_section_installed%": "Instalado",
   "%resourcePicker_showing_count%": "Mostrando {filtered} de {total} recursos",
