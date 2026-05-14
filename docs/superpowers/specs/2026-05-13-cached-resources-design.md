@@ -127,7 +127,7 @@ Clicking "Retry" auto-dismisses the notification (Sonner dismisses on action cli
 ## Localization keys
 
 ```json
-"%resources_fetch_failed%": "Could not fetch resources",
+"%resources_fetch_failed%": "Opened Get Resources, but could not fetch the resource list",
 "%resources_retry%": "Retry"
 ```
 
