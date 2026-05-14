@@ -97,20 +97,39 @@ Branch `pt-3976-shared-resource-picker-ui` contains a fully-built shared picker:
       projectId: string;
     };
 
-There is NO `addedBy`, NO `isAssociatedWithProject`, NO user-language auto-filter.
+There is NO `addedBy` and NO `isAssociatedWithProject` field on `DblResourceData`.
 Model "admin vs user" association as a parallel string[] (e.g. `adminAssociatedIds`), not a flag.
 Model "associated with project" via `selectedResourceIds: string[]` — the same pattern the
-picker already uses.
+existing picker uses.
 
-Commentaries are not a separate `type`. UBS Handbook is `type: 'XmlResource'` in the sample data.
+Commentaries are not a separate `type` in `DblResourceData`. UBS Handbook is `type: 'XmlResource'` in
+the sample data.
+
+NOTE ON STUB UTILITIES — UX DESIGNER MODE: We are upstream of the PT-3976 implementation.
+You may invent named helper utilities in your story files (e.g. `filterResourcesByUserLanguages(resources, userLanguages)`,
+`rankByRelevance(resources)`) provided you ALSO ship a stub implementation that returns plausible
+output from the sample data. The point is to communicate intent in the story, not to commit to a
+final API. Define stubs in `<name>.utils.ts` next to your component, with realistic enough
+behavior that the story renders convincingly.
 
 # 4. One-time setup (run before spawning agents)
 
 # IMPORTANT: branch off pt-3976-shared-resource-picker-ui so the picker is in scope.
+# DO NOT switch the main checkout — the orchestrator's working branch may have other state.
+# Use a worktree to host the integration branch instead.
 git fetch origin pt-3976-shared-resource-picker-ui:pt-3976-shared-resource-picker-ui
-git checkout -B proto/saroj-studies pt-3976-shared-resource-picker-ui
 
-# Create three worktrees. Each worktree shares .git but has its own working tree.
+# Host the integration branch in its own worktree so the main checkout is preserved.
+git worktree add ../pt-integration -b proto/saroj-studies pt-3976-shared-resource-picker-ui
+
+# Bundle the orchestration docs into the integration branch so all worktrees have them.
+# (The docs live on the orchestrator's branch; we copy them in via git checkout from there.)
+ORCHESTRATOR_BRANCH=$(git -C . rev-parse --abbrev-ref HEAD)
+git -C ../pt-integration checkout "$ORCHESTRATOR_BRANCH" -- docs/plans/saroj-studies-orchestration-prompt-v2.md docs/plans/saroj-studies-orchestration-critique.md
+git -C ../pt-integration add docs/plans/
+git -C ../pt-integration commit -m "proto: include orchestration docs"
+
+# Create three worktrees off the integration branch. Each shares .git but has its own tree.
 # We will NOT run Storybook in each worktree (port collision, install time). A single
 # Storybook run on the merged branch is the review surface.
 git worktree add ../pt-worktree-a -b proto/saroj-studies--model-text proto/saroj-studies
@@ -126,9 +145,11 @@ for W in ../pt-worktree-a ../pt-worktree-b ../pt-worktree-c; do
     ln -s "$(pwd)/lib/platform-bible-react/node_modules" "$W/lib/platform-bible-react/node_modules"
 done
 
-When spawning agents, set the Agent tool's working directory to the worktree (pass cwd via
-the prompt and instruct the agent to use absolute paths). Subagents in Claude Code do not
-inherit cwd automatically — every Bash/Edit/Read call must use the absolute worktree path.
+When spawning agents, instruct them to use absolute paths under their worktree
+(e.g. /home/user/pt-worktree-a/...). Subagents in Claude Code do not inherit cwd
+automatically — every Bash/Edit/Read call must use the absolute worktree path. The
+orchestration docs are available at /home/user/pt-worktree-{a,b,c}/docs/plans/ in each
+worktree (bundled into proto/saroj-studies above).
 
 # 5. Shared context block — paste into every agent prompt verbatim
 
@@ -240,11 +261,16 @@ Sample data — REUSE the existing fixture:
 You may extend it inline (e.g. tag a subset as adminAssociatedIds for your stories) but do
 NOT define a parallel resource model.
 
-Existing shared picker:
+Existing shared picker (a developer's in-progress PR — STUDY for fields & sample data,
+do NOT treat as final UX):
     import ResourcePickerDialog from '@/components/advanced/resource-picker-dialog/resource-picker-dialog.component';
-The PRD asks for ONE consistent picker UX (Rabbit Hole #3: "Follow the example of the
-project selection UI"). DO NOT build alternate picker UIs. Instead, design how your column
-triggers the existing picker (button label, placement, opened state in story).
+
+UX-DESIGNER STANCE: The PT-3976 picker was built by a developer, not by UX. We are still
+ideating. You ARE expected to produce 3 meaningfully different picker variants per your
+spec, separate from the existing implementation. Use the existing component's sample data
+and field shape as a reference, but BUILD YOUR OWN picker variants — that's the deliverable.
+The PRD's Rabbit Hole #3 ("be consistent with the project selection UI") is guidance for the
+later convergence step, NOT for this ideation pass.
 
 Localized strings:
 The codebase uses %key% tokens + a LocalizedStrings map. For prototype stories you may
@@ -328,48 +354,82 @@ TASK
 Build prototype Storybook stories for the Model Text column (Column 1).
 This column shows ONE scripture reference text the translation is based on (single value).
 
-You are NOT building a picker. The shared ResourcePickerDialog already exists. Your job
-is the column itself in three states + how it invokes the existing picker.
+You are responsible for two areas:
 
-Areas:
-  1. Zero state — Saroj/Donna sees "this project has no model text yet"
-  2. Populated state — model text selected, scripture-like content placeholder shown
-  3. "Replace model text" affordance from the populated state (deliberate, since this
-     is a single-value override scenario per the PRD sync rules)
+## Area 1: Model Text Zero State (Column 1 zero state)
 
-Required variants — 3 meaningfully different zero-state patterns:
-  A. Illustrated/editorial — centered, headline + 1-sentence explanation + primary button
-     that opens <ResourcePickerDialog resourceType="ScriptureResource" />
-  B. Inline prompt — column renders as if it could have content; subtle "no model text
-     selected" message anchored where text would appear, with a small "Choose model text"
-     action
-  C. Persistent setup panel — picker rendered INLINE in the column (still using
-     <ResourcePickerDialog> but with the dialog wrapper omitted via a story decorator);
-     "Select your model text here" feels like a config panel
+What Saroj (or Donna) sees when no model text has been selected yet.
 
-Hard constraints:
-- Each variant uses <ResourcePickerDialog> with `resourceType="ScriptureResource"` and
-  passes `selectedResourceIds` so the user's existing project-associated resources appear
-  in the "Already selected" section.
-- Explain "model text" in plain language (it's the scripture this translation is BASED ON,
-  distinct from general reference resources).
-- No BCV controls, no navigation in this column.
-- For "Project as reference" (rare, deliberate): include a single subtle affordance in
-  one variant (your choice) — "Use a project as model text…" link that opens a separate
-  flow (story-stub only; no need to implement the project list).
+Requirements:
+- Must clearly communicate: "This project doesn't have a model text yet"
+- Must explain what a model text is in plain, non-technical language (it's the scripture
+  this translation is BASED ON — distinct from general reference resources)
+- Must provide a clear call to action that opens the Resource Picker (Area 2)
+- No BCV controls or navigation in this column
 
-Story coverage (each variant gets at least these stories):
-- ZeroStateClosed
-- ZeroStateWithPickerOpen
-- Populated (placeholder paragraph; show how "Change model text" is invoked)
+Produce 3 variants with meaningfully different mental models:
+  A. Illustrated/editorial — centered, headline + 1-sentence explanation + primary button.
+     Calm, onboarding feel.
+  B. Inline prompt — column renders as if it could have content, but instead shows
+     a subtle "no model text selected" message anchored to where the text would appear,
+     with a small action affordance. More compact, less onboarding-y.
+  C. Persistent setup panel — the zero state looks more like a settings/config panel
+     embedded in the column itself, with the picker UI rendered INLINE rather than in
+     a modal. "Select your model text here" without a separate dialog.
+
+Annotate each variant with a comment explaining the mental model it represents.
+
+## Area 2: Resource Picker (Single-Select)
+
+This picker opens (modal, popover, or inline — your choice per variant) when triggered
+from the zero state. UX-DESIGNER STANCE: ideate freely — see shared context for why we
+are NOT just reusing the PT-3976 picker here.
+
+Requirements:
+- Lists scripture resources (`type: 'ScriptureResource'`) that can serve as model text
+- Accepts `userLanguages: string[]` prop — you may define a stub
+  `filterResourcesByUserLanguages(resources, userLanguages)` in your `.utils.ts` that
+  returns a plausible filtered/ranked subset of SAMPLE_RESOURCES based on `bestLanguageName`
+- Resources already in `selectedResourceIds` should appear first with a visual distinction
+  (these are project-associated resources)
+- Search at top
+- Structure: associated/preferred resources first, then all others
+- If the total list is short (< 6 items), no need for separate sections — flat list is fine
+- Selecting a resource confirms and closes the picker
+- Single-select only
+- For "Project as reference" (rare, deliberate per PRD): expose ONE subtle affordance in
+  ONE variant of your choice (e.g. "Use a project as model text…" link). Story-stub only;
+  no need to implement the project list itself.
+
+Produce 3 variants with meaningfully different mental models:
+  A. Modal with search + flat list (with preference indicators)
+  B. Popover / inline panel — anchored to the trigger, less disruptive
+  C. Command palette style — keyboard-first, search-dominant, results appear as you type
+
+Annotate each variant with a comment explaining the mental model it represents.
+
+## Story requirements
+
+- Each variant of each area gets its own story
+- Wrap zero-state stories in WorkspaceShell with columnIndex={0}
+- Use SAMPLE_RESOURCES from the existing fixture (extend inline as needed)
+- For each picker variant: a story showing it OPEN over a populated workspace shell
+- For each zero state: a story showing the zero state with the picker CLOSED, and one
+  with the picker OPEN (you choose which picker variant to pair, but document the pairing
+  with a comment)
+- A "populated" story showing the column after a model text is selected (even a placeholder
+  paragraph) — proves the column has content after picker selection
 
 Files (work ONLY in your worktree):
     /home/user/pt-worktree-a/lib/platform-bible-react/src/components/advanced/model-text-zero-state/
-        model-text-zero-state.component.tsx       (3 named exports, one per variant)
+        model-text-zero-state.component.tsx       (3 named exports for zero-state variants)
+        model-text-picker.component.tsx           (3 named exports for picker variants)
         model-text-zero-state.stories.tsx         (Storybook title: 'Advanced/ModelTextZeroState')
+        model-text-picker.stories.tsx             (Storybook title: 'Advanced/ModelTextPicker')
         model-text-zero-state.data.ts             (optional)
+        model-text-zero-state.utils.ts            (stub utilities like filterResourcesByUserLanguages)
 
-Commit message: "proto: model text column variants"
+Commit message: "proto: model text zero state + picker variants"
 
 ##################################################################################
 ##################################################################################
@@ -389,57 +449,97 @@ TASK
 Build prototype Storybook stories for the Bible Texts tab of Column 3.
 Commentaries tab is out of scope (similar shape; not duplicating effort here).
 
-You are NOT building a picker. Use <ResourcePickerDialog> from the existing branch for
-adding resources. Your job is the tab's zero state, populated state, and how it triggers
-the picker.
+You are responsible for THREE areas: zero state, populated state, and multi-select picker.
+UX-DESIGNER STANCE: ideate freely on the picker — see shared context for why we are NOT
+just reusing the PT-3976 picker.
 
-Areas:
-  1. Zero state — no resource texts associated with this project yet
-  2. Populated state — 2–4 resource texts associated; user switches between them
-  3. Removal interaction — admin-added resources have disabled remove with tooltip;
-     user-added are removable
+## Area 1: Scripture Resources Zero State
 
-Required variants — 3 meaningfully different zero-state patterns:
+What Saroj (or Donna) sees when no resource texts are associated with this project yet.
+
+Requirements:
+- Must clearly communicate: "No resource texts for this project yet"
+- Must explain what resource texts are (reference scriptures you can consult while translating)
+- Must distinguish from the model text (model text = what you're translating FROM;
+  resources = additional references)
+- Must provide a CTA that opens the Resource Picker (Area 3)
+
+Produce 3 variants with meaningfully different mental models:
   A. Standard empty state — icon, headline, supporting text, "Add resource texts" button
-     that opens <ResourcePickerDialog resourceType="ScriptureResource" />
-  B. Suggestions-first — surface 3 recommended resources from the existing
-     SAMPLE_RESOURCES (pick a stable subset) with one-click "Add" buttons; "See all"
-     opens the full picker
-  C. Split panel — top half explains, bottom half shows a compact embedded scripture-only
-     list (read-only preview style; clicking opens the full picker)
+  B. Suggestions-first — proactively surface 3 recommended resources (based on the user's
+     languages via stub `filterResourcesByUserLanguages`) with one-click "Add" buttons,
+     bypassing the full picker for the happy path
+  C. Split-state panel — half explains what to add, half shows a compact inline version
+     of the picker immediately; no separate "open picker" step
 
-Required variants — 3 meaningfully different populated-state patterns:
-  A. Icon tabs at top — matches the PRD's "icons + tooltips" preference for Column 3 tabs;
-     each downloaded resource gets a small icon; overflow into a "More" dropdown.
-     IMPORTANT: tabs MUST NOT look draggable / must not mimic PT10Power tab chrome.
+## Area 2: Scripture Resources Populated State
+
+What Saroj sees after resources have been added.
+
+Requirements:
+- Shows a list of currently active/selected resources
+- One resource is displayed at a time (the active one); others are selectable
+- A way to add more resources (opens Area 3 picker)
+- Remove behavior:
+    - If `dblEntryUid` is in `adminAssociatedIds` (story arg) → remove button DISABLED,
+      tooltip: "This resource was added by your project administrator."
+    - If in `userAssociatedIds` → remove button ENABLED, working onRemove handler stub
+- The Column 3 tab header (Bible Texts / Commentaries) is shown by the WorkspaceShell;
+  you only need to build the Bible Texts tab content.
+- Tabs in Column 3 MUST NOT look draggable / must not mimic PT10Power tab chrome.
+
+Produce 3 variants with meaningfully different mental models:
+  A. Tab strip at top of column — each resource gets an icon-tab (per PRD's preference
+     for icons + tooltips); overflow into a "More" dropdown
   B. Sidebar list within column — vertical list of resources on the left of Column 3;
-     active resource fills the rest. Compact.
-  C. Dropdown selector — single compact selector at the top of the column; maximum
-     reading space below.
+     active resource fills the rest
+  C. Dropdown selector — single compact selector at the top of the column; clean,
+     minimal chrome, maximum reading space below
 
-For ALL populated variants:
-- Show one resource active at a time.
-- Remove button on each:
-    - if dblEntryUid is in adminAssociatedIds (story arg) → disabled + tooltip
-    - else → enabled + working onRemove handler stub
-- "Add more" entry point that opens <ResourcePickerDialog>.
+## Area 3: Resource Picker (Multi-Select)
 
-Constraints:
-- No BCV controls.
-- Use the WorkspaceShell with columnIndex={2}.
-- Leave a stub for the Column 3 tab strip (Bible / Commentaries) — the WorkspaceShell
-  already shows these as labels.
+Same picker as Agent A's single-select but MULTI-select. Build your own version — it
+will be reconciled with Agent A's later.
 
-Story coverage (use story args for `adminAssociatedIds` and `userAssociatedIds`):
-- For each zero-state variant: Default, WithPickerOpen
-- For each populated-state variant: Default (3 resources, mix of admin/user),
-  AdminRemoveAttempted (tooltip showing)
+Requirements:
+- Multi-select (user can select multiple resources at once)
+- Accepts `userLanguages: string[]` prop with stub `filterResourcesByUserLanguages` utility
+- Resources already in `selectedResourceIds` appear first / marked
+- Shows download state via `installed: boolean`
+- For not-yet-installed resources, include a way to trigger download (button or indicator)
+- Confirm/Apply button to add all selected resources at once
+
+Produce 3 variants with meaningfully different mental models:
+  A. Modal with checklist — search + checkbox list, Apply button at bottom
+  B. Two-panel picker — left panel is browseable/searchable list; right panel is "selected"
+     tray; click (or drag) to move items between panels
+  C. Inline expansion — the "add resources" action expands a section WITHIN the column
+     itself rather than opening a modal; scrollable list with checkboxes; no modal
+
+Annotate each variant with a comment explaining the mental model it represents.
+
+## Story requirements
+
+- Each variant of each area gets its own story
+- Wrap zero-state and populated-state stories in WorkspaceShell with columnIndex={2}
+- Picker stories open over a populated workspace shell
+- Use SAMPLE_RESOURCES from the existing fixture; tag a subset as admin-added via story args
+- Story coverage to include:
+    - Zero state (picker closed)
+    - Zero state with picker open
+    - Populated state (2–4 resources in the list, one active, mix of admin/user)
+    - Populated state with remove attempted on an admin resource (tooltip shown)
 
 Files (work ONLY in your worktree):
     /home/user/pt-worktree-b/lib/platform-bible-react/src/components/advanced/scripture-resources-tab/
-        scripture-resources-tab.component.tsx
-        scripture-resources-tab.stories.tsx        (title: 'Advanced/ScriptureResourcesTab')
-        scripture-resources-tab.data.ts            (extends SAMPLE_RESOURCES with admin/user tagging)
+        scripture-resources-tab.component.tsx       (3 named exports — populated variants)
+        scripture-resources-zero-state.component.tsx (3 named exports — zero-state variants)
+        scripture-resources-picker.component.tsx     (3 named exports — picker variants)
+        scripture-resources-tab.stories.tsx          (title: 'Advanced/ScriptureResourcesTab')
+        scripture-resources-zero-state.stories.tsx   (title: 'Advanced/ScriptureResourcesZeroState')
+        scripture-resources-picker.stories.tsx       (title: 'Advanced/ScriptureResourcesPicker')
+        scripture-resources-tab.data.ts              (extends SAMPLE_RESOURCES with admin/user tagging)
+        scripture-resources-tab.utils.ts             (stub filterResourcesByUserLanguages etc.)
 
 Commit message: "proto: scripture resources tab variants"
 
