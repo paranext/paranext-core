@@ -21,13 +21,11 @@ All logic lives inline in `extensions/src/platform-get-resources/src/main.ts`. N
 ```ts
 let executionToken: ExecutionToken;
 let cachedResources: DblResourceData[] | undefined;
-let fetchNotificationId: string | number | undefined;
 let isFetching = false;
 ```
 
 - `executionToken` is assigned from `context.executionToken` at the top of `activate()` — required by `papi.storage.readUserData` / `writeUserData`
 - `cachedResources` defaults to `undefined` — distinguishes "never fetched / fetch failed" from `[]` (fetched successfully, but the registry returned no entries, e.g. dev/QA server)
-- `fetchNotificationId` tracks an active "could not fetch resources" notification so it can be updated rather than stacked
 - `isFetching` prevents concurrent fetch attempts
 
 ### Storage key
@@ -66,7 +64,7 @@ Per attempt:
 2. `await provider.isGetDblResourcesAvailable()`  
    → if `false`: abort immediately (no credentials configured — no point retrying)
 3. Fetch resources from provider
-4. On success: update `cachedResources`, persist via `papi.storage.writeUserData`, dismiss `fetchNotificationId` if set
+4. On success: update `cachedResources`, persist via `papi.storage.writeUserData`
 5. On failure: wait 1s and retry
 
 If all 10 attempts fail, `isFetching` is cleared and `cachedResources` remains whatever it was (either `undefined` or stale cached data from a previous session).
@@ -95,19 +93,15 @@ This on-demand path exists for the rare case where the user opens `ResourcePicke
 1. Open the Get Resources web view (existing behavior)
 2. Await papi.commands.sendCommand('platformGetResources.getCachedResources')
 3. If result is undefined:
-   a. Send (or update) a warning notification:
-      - message: '%resources_fetch_failed%'
-      - severity: Warning
-      - clickCommandLabel: '%resources_retry%'
-      - clickCommand: 'platformGetResources.openGetResources'
-      - duration: 0  (stays until dismissed)
-      - notificationId: fetchNotificationId  (updates existing if already showing)
-   b. Store returned notification ID in fetchNotificationId
-4. If result is defined and fetchNotificationId is set:
-   - Dismiss the notification and clear fetchNotificationId
+   - Send a warning notification:
+     - message: '%resources_fetch_failed%'
+     - severity: Warning
+     - clickCommandLabel: '%resources_retry%'
+     - clickCommand: 'platformGetResources.openGetResources'
+     - duration: 0  (stays until the user dismisses or clicks Retry)
 ```
 
-The retry button re-invokes `openGetResources`, which re-opens (or focuses) the web view and tries fetching again via `getCachedResources`.
+Clicking "Retry" auto-dismisses the notification (Sonner dismisses on action click) and re-invokes `openGetResources`, which re-opens (or focuses) the web view and tries fetching again. If the background startup loop succeeds before the user clicks Retry, the notification stays on screen until manually dismissed — this is acceptable.
 
 ---
 
