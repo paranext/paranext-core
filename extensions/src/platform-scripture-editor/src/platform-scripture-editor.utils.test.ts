@@ -404,15 +404,19 @@ describe('convertScriptureRangeToEditorRange', () => {
 // #region resolveOpenEditorDispatch
 
 // Helper: build a minimal "Scripture editor" web view definition record for the dispatch helper.
-// `resolveOpenEditorDispatch` only reads `id` and `projectId`, so a partial object is sufficient.
-type ScriptureEditorDef = { id: string; projectId?: string };
+// `resolveOpenEditorDispatch` only reads `id`, `projectId`, and `isReadOnly`, so a partial object
+// is sufficient.
+type ScriptureEditorDef = { id: string; projectId?: string; isReadOnly?: boolean };
 
 describe('resolveOpenEditorDispatch', () => {
   it('simple mode + caller override + different project: caller override is ignored, replaces first editor', () => {
-    const editors: ScriptureEditorDef[] = [{ id: 'editor-other', projectId: 'PROJ_X' }];
+    const editors: ScriptureEditorDef[] = [
+      { id: 'editor-other', projectId: 'PROJ_X', isReadOnly: false },
+    ];
     const result: OpenEditorDispatch = resolveOpenEditorDispatch(
       editors,
       'WEB',
+      false,
       'simple',
       'caller-supplied-tab-id',
     );
@@ -422,65 +426,131 @@ describe('resolveOpenEditorDispatch', () => {
   });
 
   it('simple mode + caller override + same project open: focuses the existing tab (caller override is ignored)', () => {
-    const editors: ScriptureEditorDef[] = [{ id: 'editor-web', projectId: 'WEB' }];
-    const result = resolveOpenEditorDispatch(editors, 'WEB', 'simple', 'caller-supplied-tab-id');
+    const editors: ScriptureEditorDef[] = [
+      { id: 'editor-web', projectId: 'WEB', isReadOnly: false },
+    ];
+    const result = resolveOpenEditorDispatch(
+      editors,
+      'WEB',
+      false,
+      'simple',
+      'caller-supplied-tab-id',
+    );
     // Simple-mode invariant: caller override is ignored. We always route to the editor column,
     // and since the requested project is already in the editor column we focus that tab.
     expect(result).toEqual({ kind: 'focus-existing', existingId: 'editor-web' });
   });
 
   it('power mode + caller override + same project open: caller override still wins (no focus rule)', () => {
-    const editors: ScriptureEditorDef[] = [{ id: 'editor-web', projectId: 'WEB' }];
-    const result = resolveOpenEditorDispatch(editors, 'WEB', 'power', 'caller-supplied-tab-id');
+    const editors: ScriptureEditorDef[] = [
+      { id: 'editor-web', projectId: 'WEB', isReadOnly: false },
+    ];
+    const result = resolveOpenEditorDispatch(
+      editors,
+      'WEB',
+      false,
+      'power',
+      'caller-supplied-tab-id',
+    );
     expect(result).toEqual({ kind: 'replace-tab', targetTabId: 'caller-supplied-tab-id' });
   });
 
   it('power mode + caller override + no editors: replace-tab on the caller-supplied target', () => {
     const editors: ScriptureEditorDef[] = [];
-    const result = resolveOpenEditorDispatch(editors, 'WEB', 'power', 'caller-supplied-tab-id');
+    const result = resolveOpenEditorDispatch(
+      editors,
+      'WEB',
+      false,
+      'power',
+      'caller-supplied-tab-id',
+    );
     expect(result).toEqual({ kind: 'replace-tab', targetTabId: 'caller-supplied-tab-id' });
   });
 
-  it('simple mode: returns focus-existing when an editor for the same project is already open', () => {
-    const editors: ScriptureEditorDef[] = [{ id: 'editor-web', projectId: 'WEB' }];
-    const result = resolveOpenEditorDispatch(editors, 'WEB', 'simple', undefined);
+  it('simple mode: returns focus-existing when an editor for the same project (both editable) is already open', () => {
+    const editors: ScriptureEditorDef[] = [
+      { id: 'editor-web', projectId: 'WEB', isReadOnly: false },
+    ];
+    const result = resolveOpenEditorDispatch(editors, 'WEB', false, 'simple', undefined);
     expect(result).toEqual({ kind: 'focus-existing', existingId: 'editor-web' });
+  });
+
+  it('simple mode: returns focus-existing when a read-only viewer for the same project is already open and a read-only viewer is requested', () => {
+    const editors: ScriptureEditorDef[] = [
+      { id: 'viewer-web', projectId: 'WEB', isReadOnly: true },
+    ];
+    const result = resolveOpenEditorDispatch(editors, 'WEB', true, 'simple', undefined);
+    expect(result).toEqual({ kind: 'focus-existing', existingId: 'viewer-web' });
+  });
+
+  it('simple mode: replaces an editable editor when a read-only viewer is requested for the same project', () => {
+    // Read-only Resource Viewers and editable Scripture Editors share the same webViewType but
+    // are different views. The single editor slot can only host one at a time, so requesting
+    // the opposite mode should replace the existing tab, not focus it.
+    const editors: ScriptureEditorDef[] = [
+      { id: 'editor-web', projectId: 'WEB', isReadOnly: false },
+    ];
+    const result = resolveOpenEditorDispatch(editors, 'WEB', true, 'simple', undefined);
+    expect(result).toEqual({ kind: 'replace-tab', targetTabId: 'editor-web' });
+  });
+
+  it('simple mode: replaces a read-only viewer when an editable editor is requested for the same project', () => {
+    const editors: ScriptureEditorDef[] = [
+      { id: 'viewer-web', projectId: 'WEB', isReadOnly: true },
+    ];
+    const result = resolveOpenEditorDispatch(editors, 'WEB', false, 'simple', undefined);
+    expect(result).toEqual({ kind: 'replace-tab', targetTabId: 'viewer-web' });
   });
 
   it('simple mode: returns replace-tab on the first existing editor when the requested project differs', () => {
     const editors: ScriptureEditorDef[] = [
-      { id: 'editor-a', projectId: 'PROJ_A' },
-      { id: 'editor-b', projectId: 'PROJ_B' },
+      { id: 'editor-a', projectId: 'PROJ_A', isReadOnly: false },
+      { id: 'editor-b', projectId: 'PROJ_B', isReadOnly: false },
     ];
-    const result = resolveOpenEditorDispatch(editors, 'PROJ_C', 'simple', undefined);
+    const result = resolveOpenEditorDispatch(editors, 'PROJ_C', false, 'simple', undefined);
     expect(result).toEqual({ kind: 'replace-tab', targetTabId: 'editor-a' });
   });
 
   it('simple mode: returns replace-tab on the empty placeholder editor when no project editors exist', () => {
-    const editors: ScriptureEditorDef[] = [{ id: 'empty-editor', projectId: undefined }];
-    const result = resolveOpenEditorDispatch(editors, 'WEB', 'simple', undefined);
-    // Same-project lookup misses (no projectId on the empty one). Simple-mode then replaces the
-    // first existing editor — which happens to be the empty placeholder.
+    const editors: ScriptureEditorDef[] = [
+      { id: 'empty-editor', projectId: undefined, isReadOnly: false },
+    ];
+    const result = resolveOpenEditorDispatch(editors, 'WEB', false, 'simple', undefined);
+    // Same-(project, readonly) lookup misses (no projectId on the empty one). Simple-mode then
+    // replaces the first existing editor — which happens to be the empty placeholder.
     expect(result).toEqual({ kind: 'replace-tab', targetTabId: 'empty-editor' });
   });
 
   it('simple mode: returns open-new when no Scripture Editors are open at all', () => {
     const editors: ScriptureEditorDef[] = [];
-    const result = resolveOpenEditorDispatch(editors, 'WEB', 'simple', undefined);
+    const result = resolveOpenEditorDispatch(editors, 'WEB', false, 'simple', undefined);
     expect(result).toEqual({ kind: 'open-new' });
   });
 
   it('power mode: only the empty-editor probe applies — same project clicked twice does not focus', () => {
-    const editors: ScriptureEditorDef[] = [{ id: 'editor-web', projectId: 'WEB' }];
-    const result = resolveOpenEditorDispatch(editors, 'WEB', 'power', undefined);
+    const editors: ScriptureEditorDef[] = [
+      { id: 'editor-web', projectId: 'WEB', isReadOnly: false },
+    ];
+    const result = resolveOpenEditorDispatch(editors, 'WEB', false, 'power', undefined);
     // No empty editor and no caller override → fall through to open-new (P9-style two tabs).
     expect(result).toEqual({ kind: 'open-new' });
   });
 
   it('power mode: falls back to empty-editor probe when one exists', () => {
-    const editors: ScriptureEditorDef[] = [{ id: 'empty-editor', projectId: undefined }];
-    const result = resolveOpenEditorDispatch(editors, 'WEB', 'power', undefined);
+    const editors: ScriptureEditorDef[] = [
+      { id: 'empty-editor', projectId: undefined, isReadOnly: false },
+    ];
+    const result = resolveOpenEditorDispatch(editors, 'WEB', false, 'power', undefined);
     expect(result).toEqual({ kind: 'replace-tab', targetTabId: 'empty-editor' });
+  });
+
+  it('power mode: isReadOnly is ignored — same project, opposite readonly does not focus', () => {
+    const editors: ScriptureEditorDef[] = [
+      { id: 'editor-web', projectId: 'WEB', isReadOnly: false },
+    ];
+    // Power mode never focuses, regardless of (project, readonly) alignment.
+    const result = resolveOpenEditorDispatch(editors, 'WEB', true, 'power', undefined);
+    expect(result).toEqual({ kind: 'open-new' });
   });
 });
 
