@@ -1,5 +1,6 @@
 export type ResourceType =
   | 'ScriptureResource'
+  | 'CommentaryResource'
   | 'EnhancedResource'
   | 'XmlResource'
   | 'SourceLanguageResource';
