@@ -36,7 +36,7 @@ function getDeduplicationKey(item: ResourceReference): string | undefined {
  */
 function mergeResourceReferenceLists(
   projectList: ResourceReferenceList,
-  userList: ResourceReferenceList,
+  userResourceReferenceList: ResourceReferenceList,
 ): EffectiveResourceReferenceList {
   const seen = new Set<string>();
   const merged: EffectiveResourceReference[] = [];
@@ -54,7 +54,7 @@ function mergeResourceReferenceLists(
   };
 
   processItems(projectList.items, 'admin');
-  processItems(userList.items, 'user');
+  processItems(userResourceReferenceList.items, 'user');
 
   return { dataVersion: CURRENT_DATA_VERSION, items: merged };
 }
@@ -72,7 +72,7 @@ export function useEffectiveResourceReferenceList(
   projectId: string | undefined,
   settingName: 'platformScripture.modelTexts' | 'platformScripture.referencedProjectsAndResources',
 ): EffectiveResourceReferenceList | undefined {
-  const [projectSettingValue, , , isProjectSettingLoading] = useProjectSetting(
+  const [projectResourceReferenceList, , , isProjectSettingLoading] = useProjectSetting(
     projectId,
     settingName,
     DEFAULT_LIST,
@@ -80,7 +80,9 @@ export function useEffectiveResourceReferenceList(
 
   const userPdp = useProjectDataProvider('platformScripture.userTextConnectionSettings', projectId);
 
-  const [userList, setUserList] = useState<ResourceReferenceList | undefined>(undefined);
+  const [userResourceReferenceList, setUserList] = useState<ResourceReferenceList | undefined>(
+    undefined,
+  );
 
   useEffect(() => {
     if (!userPdp) {
@@ -121,11 +123,11 @@ export function useEffectiveResourceReferenceList(
 
   return useMemo(() => {
     if (isProjectSettingLoading) return undefined;
-    if (isPlatformError(projectSettingValue)) return undefined;
-    if (userList === undefined) return undefined;
+    if (isPlatformError(projectResourceReferenceList)) return undefined;
+    if (userResourceReferenceList === undefined) return undefined;
 
-    return mergeResourceReferenceLists(projectSettingValue, userList);
-  }, [isProjectSettingLoading, projectSettingValue, userList]);
+    return mergeResourceReferenceLists(projectResourceReferenceList, userResourceReferenceList);
+  }, [isProjectSettingLoading, projectResourceReferenceList, userResourceReferenceList]);
 }
 
 export default useEffectiveResourceReferenceList;
