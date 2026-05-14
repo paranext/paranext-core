@@ -80,13 +80,13 @@ export function useEffectiveResourceReferenceList(
 
   const userPdp = useProjectDataProvider('platformScripture.userTextConnectionSettings', projectId);
 
-  const [userResourceReferenceList, setUserList] = useState<ResourceReferenceList | undefined>(
-    undefined,
-  );
+  const [userResourceReferenceList, setUserResourceReferenceList] = useState<
+    ResourceReferenceList | undefined
+  >(undefined);
 
   useEffect(() => {
     if (!userPdp) {
-      setUserList(undefined);
+      setUserResourceReferenceList(undefined);
       return;
     }
 
@@ -99,7 +99,7 @@ export function useEffectiveResourceReferenceList(
         : 'subscribeUserReferencedProjectsAndResources';
 
     const subscribePromise = userPdp[subscribeMethod](undefined, (value) => {
-      setUserList(isPlatformError(value) ? DEFAULT_LIST : value);
+      setUserResourceReferenceList(isPlatformError(value) ? DEFAULT_LIST : value);
     });
 
     subscribePromise
