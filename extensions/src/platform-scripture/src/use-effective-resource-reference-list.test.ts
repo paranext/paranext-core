@@ -2,16 +2,17 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
-import type { ResourceReferenceList } from 'platform-scripture';
-import type { IUserTextConnectionSettingsProjectDataProvider } from 'platform-scripture';
+import type {
+  ResourceReferenceList,
+  IUserTextConnectionSettingsProjectDataProvider,
+} from 'platform-scripture';
+import { useProjectSetting, useProjectDataProvider } from '@papi/frontend/react';
+import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list';
 
 vi.mock('@papi/frontend/react', () => ({
   useProjectSetting: vi.fn(),
   useProjectDataProvider: vi.fn(),
 }));
-
-import { useProjectSetting, useProjectDataProvider } from '@papi/frontend/react';
-import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list';
 
 /** Minimal PlatformError shape — matches the `isPlatformError` runtime check */
 function makePlatformError(): object {
@@ -31,14 +32,16 @@ function makeMockPdp(
   subscribeMethod: 'subscribeUserModelTexts' | 'subscribeUserReferencedProjectsAndResources',
 ): IUserTextConnectionSettingsProjectDataProvider {
   const mockSubscribe = vi.fn(
-    (_selector: undefined, callback: (val: ResourceReferenceList | undefined) => void) => {
+    async (_selector: undefined, callback: (val: ResourceReferenceList | undefined) => void) => {
       if (returnValue !== undefined) {
         callback(returnValue);
       }
-      return Promise.resolve(() => Promise.resolve(true));
+      return () => Promise.resolve(true);
     },
   );
 
+  // Mock object literal cannot satisfy the full interface — cast is required for test isolation
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   return {
     [subscribeMethod]: mockSubscribe,
   } as unknown as IUserTextConnectionSettingsProjectDataProvider;
@@ -87,7 +90,12 @@ describe('useEffectiveResourceReferenceList', () => {
 
     expect(result.current).toBeDefined();
     expect(result.current?.items).toHaveLength(1);
-    expect(result.current?.items[0]).toEqual({ type: 'project', name: 'My Project', id: 'abc123' });
+    expect(result.current?.items[0]).toEqual({
+      type: 'project',
+      name: 'My Project',
+      id: 'abc123',
+      source: 'admin',
+    });
   });
 
   it('returns user-only list when project list is empty', () => {
@@ -105,7 +113,11 @@ describe('useEffectiveResourceReferenceList', () => {
 
     expect(result.current).toBeDefined();
     expect(result.current?.items).toHaveLength(1);
-    expect(result.current?.items[0]).toEqual({ type: 'enhancedResource', name: 'My Resource' });
+    expect(result.current?.items[0]).toEqual({
+      type: 'enhancedResource',
+      name: 'My Resource',
+      source: 'user',
+    });
   });
 
   it('merges and deduplicates by id for ProjectReferences with the same id', () => {
@@ -129,8 +141,18 @@ describe('useEffectiveResourceReferenceList', () => {
     );
 
     expect(result.current?.items).toHaveLength(2);
-    expect(result.current?.items[0]).toEqual({ type: 'project', name: 'Project A', id: 'id-001' });
-    expect(result.current?.items[1]).toEqual({ type: 'project', name: 'Project B', id: 'id-002' });
+    expect(result.current?.items[0]).toEqual({
+      type: 'project',
+      name: 'Project A',
+      id: 'id-001',
+      source: 'admin',
+    });
+    expect(result.current?.items[1]).toEqual({
+      type: 'project',
+      name: 'Project B',
+      id: 'id-002',
+      source: 'user',
+    });
   });
 
   it('merges and deduplicates by name for EnhancedResourceReferences with the same name', () => {
@@ -154,8 +176,16 @@ describe('useEffectiveResourceReferenceList', () => {
     );
 
     expect(result.current?.items).toHaveLength(2);
-    expect(result.current?.items[0]).toEqual({ type: 'enhancedResource', name: 'Greek NT' });
-    expect(result.current?.items[1]).toEqual({ type: 'enhancedResource', name: 'Hebrew OT' });
+    expect(result.current?.items[0]).toEqual({
+      type: 'enhancedResource',
+      name: 'Greek NT',
+      source: 'admin',
+    });
+    expect(result.current?.items[1]).toEqual({
+      type: 'enhancedResource',
+      name: 'Hebrew OT',
+      source: 'user',
+    });
   });
 
   it('includes all items when there is no overlap', () => {
@@ -176,11 +206,17 @@ describe('useEffectiveResourceReferenceList', () => {
     );
 
     expect(result.current?.items).toHaveLength(2);
-    expect(result.current?.items[0]).toEqual({ type: 'project', name: 'Project A', id: 'id-001' });
+    expect(result.current?.items[0]).toEqual({
+      type: 'project',
+      name: 'Project A',
+      id: 'id-001',
+      source: 'admin',
+    });
     expect(result.current?.items[1]).toEqual({
       type: 'dblResource',
       name: 'DBL Resource',
       id: 'dbl-001',
+      source: 'user',
     });
   });
 
@@ -216,15 +252,59 @@ describe('useEffectiveResourceReferenceList', () => {
     );
 
     expect(result.current?.items).toHaveLength(2);
-    expect(result.current?.items[0]).toEqual({ type: 'xmlResource', name: 'Xml Ref' });
-    expect(result.current?.items[1]).toEqual({ type: 'sourceLanguageResource', name: 'Hebrew' });
+    expect(result.current?.items[0]).toEqual({
+      type: 'xmlResource',
+      name: 'Xml Ref',
+      source: 'admin',
+    });
+    expect(result.current?.items[1]).toEqual({
+      type: 'sourceLanguageResource',
+      name: 'Hebrew',
+      source: 'user',
+    });
+  });
+
+  it('returns project-level list when user setting subscription delivers a PlatformError', () => {
+    const projectList: ResourceReferenceList = {
+      dataVersion: '1.0.0',
+      items: [
+        {
+          type: 'project',
+          name: 'ESV',
+          id: 'abc',
+        } satisfies ResourceReferenceList['items'][0],
+      ],
+    };
+    mockUseProjectSetting.mockReturnValue([projectList, undefined, undefined, false]);
+
+    // PDP mock that calls back with a PlatformError instead of a list
+    const platformError = makePlatformError();
+    const mockSubscribe = vi.fn(async (_selector: undefined, callback: (val: unknown) => void) => {
+      callback(platformError);
+      return () => Promise.resolve(true);
+    });
+    // Mock object literal cannot satisfy the full PDP interface — cast needed for test isolation
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    mockUseProjectDataProvider.mockReturnValue({
+      subscribeUserModelTexts: mockSubscribe,
+    } as unknown as ReturnType<typeof useProjectDataProvider>);
+
+    const { result } = renderHook(() =>
+      useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
+    );
+
+    // Should fall back to project-level list, not return undefined
+    expect(result.current).toBeDefined();
+    expect(result.current?.items).toHaveLength(1);
+    expect(result.current?.items[0]).toMatchObject({ name: 'ESV', source: 'admin' });
   });
 
   it('returns undefined when projectSettingValue is a PlatformError', () => {
     const platformError = makePlatformError();
-    // Cast through unknown because the mock returns a PlatformError where a ResourceReferenceList
-    // is normally expected — this is the error path we want to test.
     mockUseProjectSetting.mockReturnValue([
+      // Cast through unknown because the mock returns a PlatformError where a ResourceReferenceList
+      // is normally expected — this is the error path we want to test.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       platformError as unknown as ResourceReferenceList,
       undefined,
       undefined,
@@ -240,12 +320,41 @@ describe('useEffectiveResourceReferenceList', () => {
     expect(result.current).toBeUndefined();
   });
 
-  it('does not deduplicate unknown-type items with different types against each other', () => {
+  it('discards name-based items that are missing a string name', () => {
     const projectList: ResourceReferenceList = {
       dataVersion: '1.0.0',
-      // Two items with no id and no string name, but different types
       items: [
+        // Cast needed to simulate a malformed item that passes the type boundary at runtime
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        { type: 'enhancedResource' } as unknown as ResourceReferenceList['items'][number],
+        { type: 'enhancedResource', name: 'Valid' },
+      ],
+    };
+    mockUseProjectSetting.mockReturnValue([projectList, undefined, undefined, false]);
+    mockUseProjectDataProvider.mockReturnValue(makeMockPdp(emptyList(), 'subscribeUserModelTexts'));
+
+    const { result } = renderHook(() =>
+      useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
+    );
+
+    // The nameless item is discarded; only the valid one survives
+    expect(result.current?.items).toHaveLength(1);
+    expect(result.current?.items[0]).toEqual({
+      type: 'enhancedResource',
+      name: 'Valid',
+      source: 'admin',
+    });
+  });
+
+  it('excludes unknown-type items from the merged result', () => {
+    const projectList: ResourceReferenceList = {
+      dataVersion: '1.0.0',
+      items: [
+        // Cast needed to simulate unknown types that pass the type boundary at runtime
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
         { type: 'unknownTypeA' } as unknown as ResourceReferenceList['items'][number],
+        // Cast needed to simulate unknown types that pass the type boundary at runtime
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
         { type: 'unknownTypeB' } as unknown as ResourceReferenceList['items'][number],
       ],
     };
@@ -256,7 +365,44 @@ describe('useEffectiveResourceReferenceList', () => {
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
     );
 
-    // Both items must survive — they are different types, not duplicates
-    expect(result.current?.items).toHaveLength(2);
+    // Unknown types are excluded from the merged collection — they exist only for storage round-trips
+    expect(result.current?.items).toHaveLength(0);
+  });
+
+  it('tags items by source and lists admin items before user items', () => {
+    const projectList: ResourceReferenceList = {
+      dataVersion: '1.0.0',
+      items: [
+        { type: 'project', name: 'Admin Only', id: 'a-001' },
+        { type: 'project', name: 'In Both', id: 'b-001' },
+      ],
+    };
+    mockUseProjectSetting.mockReturnValue([projectList, undefined, undefined, false]);
+    const userList: ResourceReferenceList = {
+      dataVersion: '1.0.0',
+      items: [
+        { type: 'project', name: 'In Both (user copy)', id: 'b-001' },
+        { type: 'enhancedResource', name: 'User Only' },
+      ],
+    };
+    mockUseProjectDataProvider.mockReturnValue(makeMockPdp(userList, 'subscribeUserModelTexts'));
+
+    const { result } = renderHook(() =>
+      useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
+    );
+
+    const items = result.current?.items;
+    expect(items).toHaveLength(3);
+    // Admin items come first
+    expect(items?.[0]).toEqual({
+      type: 'project',
+      name: 'Admin Only',
+      id: 'a-001',
+      source: 'admin',
+    });
+    // Duplicate resolved in favour of admin (name from admin copy, source: 'admin')
+    expect(items?.[1]).toEqual({ type: 'project', name: 'In Both', id: 'b-001', source: 'admin' });
+    // User-only item comes last
+    expect(items?.[2]).toEqual({ type: 'enhancedResource', name: 'User Only', source: 'user' });
   });
 });

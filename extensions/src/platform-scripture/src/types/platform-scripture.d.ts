@@ -1708,8 +1708,9 @@ declare module 'platform-scripture' {
 
   /**
    * A resource reference with a type discriminant not recognized by this version of the software.
-   * Preserved as-is for forward compatibility — consumers should treat unknown items as opaque and
-   * round-trip them unchanged.
+   * Exists solely for storage round-trip compatibility — the software never acts on unknown items
+   * meaningfully and they are excluded from merged/derived collections such as
+   * `useEffectiveResourceReferenceList`. Treat them as opaque and pass them through unchanged.
    */
   export type UnknownResourceReference = {
     /** Additional properties preserved from the stored JSON */
@@ -1743,6 +1744,29 @@ declare module 'platform-scripture' {
     dataVersion: string;
     /** Ordered list of project and resource references */
     items: ResourceReference[];
+  };
+
+  /**
+   * A {@link ResourceReference} augmented with a runtime-only `source` tag indicating which settings
+   * file the item came from. This tag is **not stored on disk** — it is computed by
+   * {@link useEffectiveResourceReferenceList} when merging project-level and user-level lists.
+   *
+   * - `'admin'` — the item came from the project-level (shared) settings file.
+   * - `'user'` — the item exists only in the current user's personal settings file.
+   *
+   * When an item appears in both files, it is tagged `'admin'` and the user copy is dropped.
+   */
+  export type EffectiveResourceReference = ResourceReference & {
+    source: 'admin' | 'user';
+  };
+
+  /**
+   * The merged, read-only view produced by {@link useEffectiveResourceReferenceList}. Admin-sourced
+   * items are listed before user-sourced items.
+   */
+  export type EffectiveResourceReferenceList = {
+    dataVersion: string;
+    items: EffectiveResourceReference[];
   };
 
   // #endregion Resource Reference Types

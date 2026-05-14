@@ -10,6 +10,9 @@ public static class ProjectDataType
     public const string COMMENT_THREADS = "CommentThreads";
     public const string EXTENSION_DATA = "ExtensionData";
     public const string SETTING = "Setting";
+    public const string USER_MODEL_TEXTS = "UserModelTexts";
+    public const string USER_REFERENCED_PROJECTS_AND_RESOURCES =
+        "UserReferencedProjectsAndResources";
     public const string VERSE_USFM = "VerseUSFM";
     public const string VERSE_USX = "VerseUSX";
     public const string VERSE_PLAIN_TEXT = "VersePlainText";

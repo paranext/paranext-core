@@ -1339,22 +1339,25 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             return new ResourceReferenceList();
 
         ValidateUserSettingVersion(schemaVersion, "ModelTexts");
-        return ResourceReferenceList.FromXml(content);
+        return ResourceReferenceList.FromXml(content, schemaVersion!);
     }
 
     public bool SetUserModelTexts(object? value)
     {
         var list = DeserializeResourceReferenceList(value, "ModelTexts");
+        ValidateUserSettingVersion(list.DataVersion, "ModelTexts");
+        var (currentVersion, _) = GetUserProjectSettings().GetSetting("ModelTexts");
+        ValidateVersionNotDowngraded(list.DataVersion, currentVersion, "ModelTexts");
         var itemsElement = ResourceReferenceList.ToXml(list);
         GetUserProjectSettings().SetSetting("ModelTexts", list.DataVersion, itemsElement);
-        SendDataUpdateEvent("UserModelTexts", "user model texts update event");
+        SendDataUpdateEvent(ProjectDataType.USER_MODEL_TEXTS, "user model texts update event");
         return true;
     }
 
     public bool ResetUserModelTexts()
     {
         GetUserProjectSettings().RemoveSetting("ModelTexts");
-        SendDataUpdateEvent("UserModelTexts", "user model texts reset event");
+        SendDataUpdateEvent(ProjectDataType.USER_MODEL_TEXTS, "user model texts reset event");
         return true;
     }
 
@@ -1366,17 +1369,25 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             return new ResourceReferenceList();
 
         ValidateUserSettingVersion(schemaVersion, "ReferencedProjectsAndResources");
-        return ResourceReferenceList.FromXml(content);
+        return ResourceReferenceList.FromXml(content, schemaVersion!);
     }
 
     public bool SetUserReferencedProjectsAndResources(object? value)
     {
         var list = DeserializeResourceReferenceList(value, "ReferencedProjectsAndResources");
+        ValidateUserSettingVersion(list.DataVersion, "ReferencedProjectsAndResources");
+        var (currentVersion, _) = GetUserProjectSettings()
+            .GetSetting("ReferencedProjectsAndResources");
+        ValidateVersionNotDowngraded(
+            list.DataVersion,
+            currentVersion,
+            "ReferencedProjectsAndResources"
+        );
         var itemsElement = ResourceReferenceList.ToXml(list);
         GetUserProjectSettings()
             .SetSetting("ReferencedProjectsAndResources", list.DataVersion, itemsElement);
         SendDataUpdateEvent(
-            "UserReferencedProjectsAndResources",
+            ProjectDataType.USER_REFERENCED_PROJECTS_AND_RESOURCES,
             "user referenced projects update event"
         );
         return true;
@@ -1386,7 +1397,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     {
         GetUserProjectSettings().RemoveSetting("ReferencedProjectsAndResources");
         SendDataUpdateEvent(
-            "UserReferencedProjectsAndResources",
+            ProjectDataType.USER_REFERENCED_PROJECTS_AND_RESOURCES,
             "user referenced projects reset event"
         );
         return true;
@@ -1414,6 +1425,31 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             throw new InvalidDataException(
                 $"User setting '{settingName}' has incompatible major version {parsed.Major}; "
                     + $"expected {ResourceReferenceList.CurrentMajorVersion}"
+            );
+    }
+
+    /// <summary>
+    /// Rejects writes that would downgrade the major or minor component of <paramref name="newVersion"/>
+    /// relative to <paramref name="currentVersion"/>. Patch downgrades are allowed.
+    /// Mirrors the downgrade protection in the TypeScript <c>resourceReferenceListValidator</c>.
+    /// </summary>
+    private static void ValidateVersionNotDowngraded(
+        string newVersion,
+        string? currentVersion,
+        string settingName
+    )
+    {
+        if (currentVersion == null)
+            return;
+        if (
+            !Version.TryParse(newVersion, out Version? newV)
+            || !Version.TryParse(currentVersion, out Version? curV)
+        )
+            return; // malformed versions are caught by ValidateUserSettingVersion; skip here
+        if (newV.Major < curV.Major || (newV.Major == curV.Major && newV.Minor < curV.Minor))
+            throw new InvalidDataException(
+                $"Refusing to downgrade user setting '{settingName}' "
+                    + $"from version '{currentVersion}' to '{newVersion}'."
             );
     }
 

@@ -1,7 +1,40 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Xml.Linq;
 
 namespace Paranext.DataProvider.Projects;
+
+[JsonConverter(typeof(ResourceReferenceConverter))]
+public abstract record ResourceReference
+{
+    public string Name { get; init; } = string.Empty;
+}
+
+public record ProjectReference : ResourceReference
+{
+    public string Id { get; init; } = string.Empty;
+}
+
+public record DblResourceReference : ResourceReference
+{
+    public string Id { get; init; } = string.Empty;
+}
+
+public record EnhancedResourceReference : ResourceReference { }
+
+public record XmlResourceReference : ResourceReference { }
+
+public record SourceLanguageResourceReference : ResourceReference { }
+
+/// <summary>
+/// Catch-all for resource references whose type discriminant is not recognized by this version
+/// of the software. All JSON properties are preserved via <c>ExtraData</c> so the item
+/// can be round-tripped back to storage without data loss.
+/// </summary>
+public record UnknownResourceReference : ResourceReference
+{
+    public Dictionary<string, JsonElement>? ExtraData { get; init; }
+}
 
 public record ResourceReferenceList
 {
@@ -75,7 +108,7 @@ public record ResourceReferenceList
     /// type information. Round-tripping through XML is therefore lossless only for string-valued
     /// properties — numeric or boolean JSON values become strings after an XML round-trip.
     /// </remarks>
-    public static ResourceReferenceList FromXml(XElement itemsElement)
+    public static ResourceReferenceList FromXml(XElement itemsElement, string dataVersion)
     {
         var items = itemsElement
             .Elements("Item")
@@ -117,7 +150,7 @@ public record ResourceReferenceList
             })
             .ToList();
 
-        return new ResourceReferenceList { Items = items };
+        return new ResourceReferenceList { Items = items, DataVersion = dataVersion };
     }
 
     private static string GetXmlType(ResourceReference item) =>

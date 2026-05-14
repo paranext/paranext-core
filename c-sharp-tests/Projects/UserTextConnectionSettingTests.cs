@@ -159,4 +159,98 @@ internal class UserTextConnectionSettingTests : PapiTestBase
         var result = _provider.GetUserReferencedProjectsAndResources();
         Assert.That(result.Items, Is.Empty);
     }
+
+    // --- Downgrade protection ---
+
+    [Test]
+    public void SetUserModelTexts_MinorVersionDowngrade_Throws()
+    {
+        var v110 = new ResourceReferenceList
+        {
+            DataVersion = "1.1.0",
+            Items = [new EnhancedResourceReference { Name = "BDAG" }],
+        };
+        _provider.SetUserModelTexts(v110.SerializeToJson());
+
+        var v100 = new ResourceReferenceList { DataVersion = "1.0.0", Items = [] };
+        Assert.That(
+            () => _provider.SetUserModelTexts(v100.SerializeToJson()),
+            Throws.TypeOf<InvalidDataException>().With.Message.Contains("downgrade")
+        );
+    }
+
+    [Test]
+    public void SetUserModelTexts_PatchVersionDowngrade_Succeeds()
+    {
+        var v101 = new ResourceReferenceList
+        {
+            DataVersion = "1.0.1",
+            Items = [new EnhancedResourceReference { Name = "BDAG" }],
+        };
+        _provider.SetUserModelTexts(v101.SerializeToJson());
+
+        var v100 = new ResourceReferenceList { DataVersion = "1.0.0", Items = [] };
+        Assert.That(
+            () => _provider.SetUserModelTexts(v100.SerializeToJson()),
+            Throws.Nothing
+        );
+    }
+
+    [Test]
+    public void SetUserReferencedProjectsAndResources_MinorVersionDowngrade_Throws()
+    {
+        var v110 = new ResourceReferenceList
+        {
+            DataVersion = "1.1.0",
+            Items = [new ProjectReference { Name = "ESV", Id = "abc" }],
+        };
+        _provider.SetUserReferencedProjectsAndResources(v110.SerializeToJson());
+
+        var v100 = new ResourceReferenceList { DataVersion = "1.0.0", Items = [] };
+        Assert.That(
+            () => _provider.SetUserReferencedProjectsAndResources(v100.SerializeToJson()),
+            Throws.TypeOf<InvalidDataException>().With.Message.Contains("downgrade")
+        );
+    }
+
+    [Test]
+    public void SetUserModelTexts_MajorVersionDowngrade_Throws()
+    {
+        var v200 = new ResourceReferenceList { DataVersion = "2.0.0", Items = [] };
+        // Note: 2.0.0 fails the CurrentMajorVersion == 1 check, so we write it directly
+        // via the underlying settings store to simulate a future-version file on disk
+        var settings = new UserProjectSettings(_scrText.Directory, _scrText.User.Name);
+        settings.SetSetting("ModelTexts", "2.0.0", ResourceReferenceList.ToXml(v200));
+
+        // This test is checking ValidateVersionNotDowngraded, so we need a stored 2.0.0
+        // and try to write 1.0.0 — but SetUserModelTexts also calls ValidateUserSettingVersion
+        // which rejects major != 1. The major-downgrade path (2→1) is therefore blocked by
+        // ValidateUserSettingVersion before ValidateVersionNotDowngraded runs. Verify that.
+        var v100 = new ResourceReferenceList { DataVersion = "1.0.0", Items = [] };
+        Assert.That(
+            () => _provider.SetUserModelTexts(v100.SerializeToJson()),
+            Throws.TypeOf<InvalidDataException>()
+        );
+    }
+
+    [Test]
+    public void SetUserModelTexts_MalformedDataVersion_Throws()
+    {
+        const string malformedJson = """{"dataVersion":"garbage","items":[]}""";
+        Assert.That(
+            () => _provider.SetUserModelTexts(malformedJson),
+            Throws.TypeOf<InvalidDataException>().With.Message.Contains("garbage")
+        );
+    }
+
+    [Test]
+    public void SetUserModelTexts_NoCurrentValue_AllowsAnyVersion()
+    {
+        // No prior write — downgrade protection has nothing to compare against
+        var v100 = new ResourceReferenceList { DataVersion = "1.0.0", Items = [] };
+        Assert.That(
+            () => _provider.SetUserModelTexts(v100.SerializeToJson()),
+            Throws.Nothing
+        );
+    }
 }

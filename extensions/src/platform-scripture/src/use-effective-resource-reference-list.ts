@@ -1,62 +1,78 @@
 import { useEffect, useMemo, useState } from 'react';
 import { isPlatformError } from 'platform-bible-utils';
-import type { ResourceReference, ResourceReferenceList } from 'platform-scripture';
+import type {
+  EffectiveResourceReference,
+  EffectiveResourceReferenceList,
+  ResourceReference,
+  ResourceReferenceList,
+} from 'platform-scripture';
+import { logger } from '@papi/frontend';
 import { useProjectSetting, useProjectDataProvider } from '@papi/frontend/react';
 
+const CURRENT_DATA_VERSION = '1.0.0';
 // Module-level constant avoids a useMemo with [] deps inside the hook
-const DEFAULT_LIST: ResourceReferenceList = { dataVersion: '1.0.0', items: [] };
+const DEFAULT_LIST: ResourceReferenceList = { dataVersion: CURRENT_DATA_VERSION, items: [] };
 
-function getDeduplicationKey(item: ResourceReference): string {
-  if ('id' in item && typeof item.id === 'string') {
-    return `id:${item.id}`;
-  }
-  // Fallback: name-based deduplication — guard that name is actually a string
-  const name = (item as { name?: unknown }).name;
-  if (typeof name === 'string') return `name:${name}`;
-  // Unknown type with no string name: use type + stringified name to avoid false dedup
-  return `type:${item.type}:${String(name ?? '')}`;
-}
+const KNOWN_RESOURCE_TYPES = new Set([
+  'project',
+  'dblResource',
+  'enhancedResource',
+  'xmlResource',
+  'sourceLanguageResource',
+]);
 
-function mergeResourceReferenceLists(
-  projectList: ResourceReferenceList,
-  userList: ResourceReferenceList,
-): ResourceReferenceList {
-  const seen = new Set<string>();
-  const merged: ResourceReference[] = [];
-
-  for (const item of projectList.items) {
-    const key = getDeduplicationKey(item);
-    if (!seen.has(key)) {
-      seen.add(key);
-      merged.push(item);
-    }
-  }
-
-  for (const item of userList.items) {
-    const key = getDeduplicationKey(item);
-    if (!seen.has(key)) {
-      seen.add(key);
-      merged.push(item);
-    }
-  }
-
-  return {
-    dataVersion: projectList.dataVersion,
-    items: merged,
-  };
+function getDeduplicationKey(item: ResourceReference): string | undefined {
+  if ('id' in item && typeof item.id === 'string') return `id:${item.id}`;
+  if ('name' in item && typeof item.name === 'string') return `name:${item.name}`;
+  // Should never happen after upstream validation; discard rather than silently misidentify
+  logger.error(`Resource reference of type '${item.type}' has no string name; discarding.`);
+  return undefined;
 }
 
 /**
- * Returns the effective ResourceReferenceList for a setting: the set-union of project-level and
- * user-specific items, deduplicated by `id` (for ProjectReference and DblResourceReference) or
- * `name` (for all other reference types).
+ * Merges two ResourceReferenceLists into a deduplicated union. The result is derived/read-only: it
+ * uses CURRENT_DATA_VERSION (not the source versions) and excludes UnknownResourceReference items,
+ * which exist only for round-trip storage compatibility and cannot be acted upon. Admin-sourced
+ * items (from the project file) are listed first.
+ */
+function mergeResourceReferenceLists(
+  projectList: ResourceReferenceList,
+  userList: ResourceReferenceList,
+): EffectiveResourceReferenceList {
+  const seen = new Set<string>();
+  const merged: EffectiveResourceReference[] = [];
+
+  const processItems = (items: ResourceReference[], source: 'admin' | 'user') => {
+    items
+      .filter((item) => KNOWN_RESOURCE_TYPES.has(item.type))
+      .forEach((item) => {
+        const key = getDeduplicationKey(item);
+        if (key !== undefined && !seen.has(key)) {
+          seen.add(key);
+          merged.push({ ...item, source });
+        }
+      });
+  };
+
+  processItems(projectList.items, 'admin');
+  processItems(userList.items, 'user');
+
+  return { dataVersion: CURRENT_DATA_VERSION, items: merged };
+}
+
+/**
+ * Returns the effective resource reference list for a setting: the set-union of project-level
+ * (admin) and user-specific items, deduplicated by `id` (for ProjectReference and
+ * DblResourceReference) or `name` (for all other reference types). Each item carries a runtime
+ * `source` tag (`'admin'` or `'user'`); admin items are listed first.
  *
- * Returns `undefined` while either setting is loading.
+ * Returns `undefined` while either setting is loading. If the user setting cannot be retrieved, the
+ * project-level items are returned tagged as `'admin'`.
  */
 export function useEffectiveResourceReferenceList(
   projectId: string | undefined,
   settingName: 'platformScripture.modelTexts' | 'platformScripture.referencedProjectsAndResources',
-): ResourceReferenceList | undefined {
+): EffectiveResourceReferenceList | undefined {
   const [projectSettingValue, , , isProjectSettingLoading] = useProjectSetting(
     projectId,
     settingName,
@@ -82,20 +98,21 @@ export function useEffectiveResourceReferenceList(
         : 'subscribeUserReferencedProjectsAndResources';
 
     const subscribePromise = userPdp[subscribeMethod](undefined, (value) => {
-      if (isPlatformError(value)) {
-        setUserList(undefined);
-      } else {
-        setUserList(value);
-      }
+      setUserList(isPlatformError(value) ? DEFAULT_LIST : value);
     });
 
-    subscribePromise.then((unsub) => {
-      if (disposed) {
-        unsub();
-      } else {
-        unsubscribe = unsub;
-      }
-    });
+    subscribePromise
+      .then((unsub) => {
+        if (disposed) {
+          unsub();
+        } else {
+          unsubscribe = unsub;
+        }
+        return undefined;
+      })
+      .catch((err) => {
+        logger.error(`Failed to subscribe to user text connection settings: ${err}`);
+      });
 
     return () => {
       disposed = true;
