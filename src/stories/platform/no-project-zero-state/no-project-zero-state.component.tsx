@@ -91,15 +91,12 @@ export interface NoProjectZeroStateProps {
 // these only exist so the stories render even when args are omitted.
 function defaultOpenRegistry() {
   // In the real app this hands off to the OS shell / embedded browser to load REGISTRY_URL.
-  // eslint-disable-next-line no-console -- Prototype stub; the story handler logs intent.
   console.log('[NoProjectZeroState] open registry ->', REGISTRY_URL);
 }
 function defaultCreateProject() {
-  // eslint-disable-next-line no-console -- Prototype stub; the story handler logs intent.
   console.log('[NoProjectZeroState] create new project (stub)');
 }
 function defaultOpenLocalProject(projectName?: string) {
-  // eslint-disable-next-line no-console -- Prototype stub; the story handler logs intent.
   console.log('[NoProjectZeroState] open local project (stub):', projectName ?? '(picker)');
 }
 

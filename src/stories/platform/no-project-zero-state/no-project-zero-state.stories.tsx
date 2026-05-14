@@ -47,15 +47,12 @@ const meta: Meta<NoProjectZeroStateProps> = {
     hasLocalProjects: false,
     recentProjectNames: ['Greek NT Working Draft', 'Acholi Pilot', 'Sample-Translation'],
     onOpenRegistry: () => {
-      // eslint-disable-next-line no-console
       console.log('[story] open registry -> https://registry.paratext.org');
     },
     onCreateProject: () => {
-      // eslint-disable-next-line no-console
       console.log('[story] create new project');
     },
     onOpenLocalProject: (projectName?: string) => {
-      // eslint-disable-next-line no-console
       console.log('[story] open local project:', projectName ?? '(picker)');
     },
   },
@@ -71,7 +68,7 @@ type Story = StoryObj<NoProjectZeroStateProps>;
  * Single-path onboarding. Toggle `hasLocalProjects` in controls to reveal the recent-projects
  * affordance.
  */
-export const A_RegistryRequired: Story = {
+export const ARegistryRequired: Story = {
   name: 'A · Registry-required',
   render: (args) => <VariantARegistryRequired {...args} />,
 };
@@ -82,7 +79,7 @@ export const A_RegistryRequired: Story = {
  * Local creation and registry are presented as peer cards. Toggle `hasLocalProjects` to reveal the
  * recent-projects affordance.
  */
-export const B_LocalCreation: Story = {
+export const BLocalCreation: Story = {
   name: 'B · Local creation available',
   render: (args) => <VariantBLocalCreation {...args} />,
 };
@@ -94,7 +91,7 @@ export const B_LocalCreation: Story = {
  * card; with `hasLocalProjects=true` real project cards take its place. All three action handlers
  * are exposed as peers below the gallery.
  */
-export const C_Gallery: Story = {
+export const CGallery: Story = {
   name: 'C · Project gallery',
   render: (args) => <VariantCGallery {...args} />,
 };
@@ -103,21 +100,21 @@ export const C_Gallery: Story = {
  * Variant A with the local-projects affordance pre-enabled — useful as a dedicated story for
  * sharing the "returning user" view without asking reviewers to flip the control.
  */
-export const A_WithLocalProjects: Story = {
+export const AWithLocalProjects: Story = {
   name: 'A · Registry-required (with local projects)',
   args: { hasLocalProjects: true },
   render: (args) => <VariantARegistryRequired {...args} />,
 };
 
 /** Variant B with the local-projects affordance pre-enabled. */
-export const B_WithLocalProjects: Story = {
+export const BWithLocalProjects: Story = {
   name: 'B · Local creation (with local projects)',
   args: { hasLocalProjects: true },
   render: (args) => <VariantBLocalCreation {...args} />,
 };
 
 /** Variant C with real project cards populating the gallery. */
-export const C_WithLocalProjects: Story = {
+export const CWithLocalProjects: Story = {
   name: 'C · Project gallery (with local projects)',
   args: { hasLocalProjects: true },
   render: (args) => <VariantCGallery {...args} />,
