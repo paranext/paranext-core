@@ -33,7 +33,7 @@ function sleep(ms: number): Promise<void> {
   });
 }
 
-async function startBackgroundFetch(): Promise<void> {
+async function startBackgroundFetchResources(): Promise<void> {
   if (isFetching) return;
   isFetching = true;
 
@@ -42,6 +42,7 @@ async function startBackgroundFetch(): Promise<void> {
       if (attempt > 0) await sleep(1000); // eslint-disable-line no-await-in-loop
 
       try {
+        // Need to have these await statements inside the look to retry 10 times
         // eslint-disable-next-line no-await-in-loop
         const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
         if (!provider) continue;
@@ -194,18 +195,9 @@ export async function activate(context: ExecutionActivationContext) {
   const openGetResourcesWebViewCommandPromise = papi.commands.registerCommand(
     'platformGetResources.openGetResources',
     async () => {
-      const webViewId = await papi.webViews.openWebView(
-        GET_RESOURCES_WEB_VIEW_TYPE,
-        {
-          type: 'float',
-          floatSize: GET_RESOURCES_WEB_VIEW_SIZE,
-        },
-        // Focus existing one if one exists
-        { existingId: '?' },
-      );
-
+      let webViewId;
       const resources = await getCachedResources();
-      if (resources === undefined)
+      if (resources === undefined) {
         await papi.notifications.send({
           message: '%resources_fetch_failed%',
           severity: 'warning',
@@ -213,6 +205,17 @@ export async function activate(context: ExecutionActivationContext) {
           clickCommand: 'platformGetResources.openGetResources',
           duration: 0,
         });
+      } else {
+        webViewId = await papi.webViews.openWebView(
+          GET_RESOURCES_WEB_VIEW_TYPE,
+          {
+            type: 'float',
+            floatSize: GET_RESOURCES_WEB_VIEW_SIZE,
+          },
+          // Focus existing one if one exists
+          { existingId: '?' },
+        );
+      }
 
       return webViewId;
     },
@@ -299,8 +302,9 @@ export async function activate(context: ExecutionActivationContext) {
     await isSendReceiveAvailableCommandPromise,
   );
 
+  // Need to start async floating promise that continues after activation
   // eslint-disable-next-line @typescript-eslint/no-floating-promises
-  startBackgroundFetch();
+  startBackgroundFetchResources();
 
   logger.debug('Platform Get Resources Extension finished activating!');
 }
