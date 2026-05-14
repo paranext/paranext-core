@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import {
-  VariantA_RegistryRequired,
-  VariantB_LocalCreation,
-  VariantC_Gallery,
+  VariantARegistryRequired,
+  VariantBLocalCreation,
+  VariantCGallery,
   type NoProjectZeroStateProps,
 } from './no-project-zero-state.component';
 
@@ -73,7 +73,7 @@ type Story = StoryObj<NoProjectZeroStateProps>;
  */
 export const A_RegistryRequired: Story = {
   name: 'A · Registry-required',
-  render: (args) => <VariantA_RegistryRequired {...args} />,
+  render: (args) => <VariantARegistryRequired {...args} />,
 };
 
 /**
@@ -84,7 +84,7 @@ export const A_RegistryRequired: Story = {
  */
 export const B_LocalCreation: Story = {
   name: 'B · Local creation available',
-  render: (args) => <VariantB_LocalCreation {...args} />,
+  render: (args) => <VariantBLocalCreation {...args} />,
 };
 
 /**
@@ -96,7 +96,7 @@ export const B_LocalCreation: Story = {
  */
 export const C_Gallery: Story = {
   name: 'C · Project gallery',
-  render: (args) => <VariantC_Gallery {...args} />,
+  render: (args) => <VariantCGallery {...args} />,
 };
 
 /**
@@ -106,19 +106,19 @@ export const C_Gallery: Story = {
 export const A_WithLocalProjects: Story = {
   name: 'A · Registry-required (with local projects)',
   args: { hasLocalProjects: true },
-  render: (args) => <VariantA_RegistryRequired {...args} />,
+  render: (args) => <VariantARegistryRequired {...args} />,
 };
 
 /** Variant B with the local-projects affordance pre-enabled. */
 export const B_WithLocalProjects: Story = {
   name: 'B · Local creation (with local projects)',
   args: { hasLocalProjects: true },
-  render: (args) => <VariantB_LocalCreation {...args} />,
+  render: (args) => <VariantBLocalCreation {...args} />,
 };
 
 /** Variant C with real project cards populating the gallery. */
 export const C_WithLocalProjects: Story = {
   name: 'C · Project gallery (with local projects)',
   args: { hasLocalProjects: true },
-  render: (args) => <VariantC_Gallery {...args} />,
+  render: (args) => <VariantCGallery {...args} />,
 };

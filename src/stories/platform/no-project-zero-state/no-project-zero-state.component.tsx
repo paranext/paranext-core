@@ -8,14 +8,15 @@
  * Three variants are exported, each modelling a different mental model for how the "I have no
  * project" situation should be communicated:
  *
- * - VariantA_RegistryRequired — registry is the only path to a project
- * - VariantB_LocalCreation — local creation is a first-class peer to registry
- * - VariantC_Gallery — empty project gallery (cards-grid mental model)
+ * - VariantARegistryRequired — registry is the only path to a project
+ * - VariantBLocalCreation — local creation is a first-class peer to registry
+ * - VariantCGallery — empty project gallery (cards-grid mental model)
  *
  * All three share the same prop surface (NoProjectZeroStateProps) so the parent app can swap them
  * via a feature flag without changing wiring.
  */
 
+import * as React from 'react';
 import {
   Button,
   Card,
@@ -74,7 +75,13 @@ export interface NoProjectZeroStateProps {
   recentProjectNames?: string[];
   /** Stub handler — would navigate to https://registry.paratext.org in the real app. */
   onOpenRegistry?: () => void;
-  /** Stub handler — would open the "create local project" flow. */
+  /**
+   * Stub handler — would open the "create local project" flow.
+   *
+   * Only used by Variants B and C. Variant A is the "registry is the only path" flow and
+   * intentionally omits this affordance.
+   */
+  // eslint-disable-next-line react/no-unused-prop-types -- Used by B/C; A is registry-only by design.
   onCreateProject?: () => void;
   /** Stub handler — would open the local-project picker. */
   onOpenLocalProject?: (projectName?: string) => void;
@@ -84,15 +91,15 @@ export interface NoProjectZeroStateProps {
 // these only exist so the stories render even when args are omitted.
 function defaultOpenRegistry() {
   // In the real app this hands off to the OS shell / embedded browser to load REGISTRY_URL.
-  // eslint-disable-next-line no-console
+  // eslint-disable-next-line no-console -- Prototype stub; the story handler logs intent.
   console.log('[NoProjectZeroState] open registry ->', REGISTRY_URL);
 }
 function defaultCreateProject() {
-  // eslint-disable-next-line no-console
+  // eslint-disable-next-line no-console -- Prototype stub; the story handler logs intent.
   console.log('[NoProjectZeroState] create new project (stub)');
 }
 function defaultOpenLocalProject(projectName?: string) {
-  // eslint-disable-next-line no-console
+  // eslint-disable-next-line no-console -- Prototype stub; the story handler logs intent.
   console.log('[NoProjectZeroState] open local project (stub):', projectName ?? '(picker)');
 }
 
@@ -196,7 +203,7 @@ const FALLBACK_RECENTS = ['Greek NT Working Draft', 'Acholi Pilot', 'Sample-Tran
  *
  * Tone: calm, single-path, "this is normal." Not an error.
  */
-export function VariantA_RegistryRequired({
+export function VariantARegistryRequired({
   hasLocalProjects = false,
   recentProjectNames = FALLBACK_RECENTS,
   onOpenRegistry = defaultOpenRegistry,
@@ -252,7 +259,7 @@ export function VariantA_RegistryRequired({
  *
  * Tone: agentic, "pick your path."
  */
-export function VariantB_LocalCreation({
+export function VariantBLocalCreation({
   hasLocalProjects = false,
   recentProjectNames = FALLBACK_RECENTS,
   onOpenRegistry = defaultOpenRegistry,
@@ -325,7 +332,7 @@ export function VariantB_LocalCreation({
  * Tone: confident, durable surface — the kind of screen a returning user wouldn't mind seeing
  * again. Not an error, not a single-purpose onboarding.
  */
-export function VariantC_Gallery({
+export function VariantCGallery({
   hasLocalProjects = false,
   recentProjectNames = FALLBACK_RECENTS,
   onOpenRegistry = defaultOpenRegistry,
