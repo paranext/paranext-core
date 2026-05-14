@@ -19,6 +19,7 @@ import {
 import { DialogData } from '@shared/models/dialog-options.model';
 
 import { testLayout } from '@renderer/testing/test-layout.data';
+import { simpleLayout } from '@renderer/components/docking/simple-layout.data';
 import { openWebView, registerDockLayout } from '@renderer/services/web-view.service-host';
 import { hasDialogRequest, resolveDialogRequest } from '@renderer/services/dialog.service-host';
 import { logger } from '@shared/services/logger.service';
@@ -111,6 +112,9 @@ export function PlatformDockLayout() {
       // concrete shape.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       testLayout: testLayout as unknown as LayoutInfo,
+      // Same boundary crossing as `testLayout` above.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      simpleLayout: simpleLayout as unknown as LayoutInfo,
     });
     return () => {
       unsub();

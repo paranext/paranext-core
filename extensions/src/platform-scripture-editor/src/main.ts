@@ -29,6 +29,7 @@ import {
   convertScriptureRangeToEditorRange,
   formatEditorTitle,
   openCommentListAndSelectThread,
+  resolveOpenEditorDispatch,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
 } from './platform-scripture-editor.utils';
 import { MarkersViewNotifier } from './markers-view-notifier.model';
@@ -185,17 +186,41 @@ async function open(
     projectForWebView.isEditable = await pdp.getSetting('platform.isEditable');
   }
   if (projectForWebView.projectId) {
+    // Decide where to route this open. The dispatch helper centralizes the simple-mode invariants
+    // (one editor slot, no duplicate-project tabs) and the empty-editor probe; see
+    // resolveOpenEditorDispatch JSDoc for the priority order.
+    const allOpenDefs = await papi.webViews.getAllOpenWebViewDefinitions();
+    const allScriptureEditors = allOpenDefs.filter(
+      (def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+    );
+    const interfaceMode = await papi.settings.get('platform.interfaceMode');
+
+    const dispatch = resolveOpenEditorDispatch(
+      allScriptureEditors,
+      projectForWebView.projectId,
+      interfaceMode,
+      existingTabIdToReplace,
+    );
+
+    // Focus path: the requested project is already open. Bring the existing tab to the front
+    // without tearing down the editor or re-running its WebView provider.
+    if (dispatch.kind === 'focus-existing') {
+      return papi.webViews.openWebView(SCRIPTURE_EDITOR_WEBVIEW_TYPE, undefined, {
+        existingId: dispatch.existingId,
+        createNewIfNotFound: false,
+        bringToFront: true,
+      });
+    }
+
     const openWebViewOptions: PlatformScriptureEditorOptions = {
       projectId: projectForWebView.projectId,
       isReadOnly: !projectForWebView.isEditable,
       options,
     };
-    // REVIEW: If an editor is already open for the selected project, we open another.
-    // This matches the current behavior in P9, though it might not be what we want long-term.
     return papi.webViews.openWebView(
       SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-      existingTabIdToReplace
-        ? { type: 'replace-tab', targetTabId: existingTabIdToReplace }
+      dispatch.kind === 'replace-tab'
+        ? { type: 'replace-tab', targetTabId: dispatch.targetTabId }
         : undefined,
       openWebViewOptions,
     );
@@ -384,9 +409,16 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
      * selection.
      */
     let currentSelection: ScriptureRangeUsjVerseRefChapterLocation | undefined;
-    /** Variable we will use to wait to get the first selection reported from the editor */
-    const firstSelectionAsync: AsyncVariable<ScriptureRangeUsjVerseRefChapterLocation | undefined> =
-      new AsyncVariable(`platformScriptureEditor.selection.${currentWebViewDefinition.id}`);
+    /**
+     * Variable used to block `getSelection()` callers until the editor reports its first selection.
+     * Constructed lazily on the first `getSelection()` call so its internal 10s timeout timer never
+     * starts if nobody is waiting. If a selection arrives before any `getSelection()` call,
+     * `currentSelection` populates and this variable is never constructed at all — which is the
+     * common case in Platform.Bible when the editor is opened without a `projectId`.
+     */
+    let firstSelectionAsync:
+      | AsyncVariable<ScriptureRangeUsjVerseRefChapterLocation | undefined>
+      | undefined;
     return {
       async selectRange(range) {
         try {
@@ -639,10 +671,16 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
         }
       },
       async getSelection() {
-        // If we haven't yet received the first selection, wait for it
-        if (!firstSelectionAsync.hasSettled) {
-          return firstSelectionAsync.promise;
+        // If we already have a selection, return it directly.
+        if (currentSelection !== undefined) return currentSelection;
+        // Otherwise lazy-construct the AsyncVariable so its 10s timer only starts when a caller
+        // is actually waiting. Subsequent callers reuse the same promise.
+        if (!firstSelectionAsync) {
+          firstSelectionAsync = new AsyncVariable(
+            `platformScriptureEditor.selection.${currentWebViewDefinition.id}`,
+          );
         }
+        if (!firstSelectionAsync.hasSettled) return firstSelectionAsync.promise;
         return currentSelection;
       },
       async updateSelectionInternal(selection) {
@@ -652,14 +690,21 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
         if (deepEqual(currentSelection, selection)) return;
 
         currentSelection = selection;
-        // Resolve the first selection async variable with the first selection we get
-        if (!firstSelectionAsync.hasSettled) firstSelectionAsync.resolveToValue(selection);
+        // Resolve the first selection async variable IF it was lazy-constructed by a caller.
+        // If no caller has called getSelection() yet, firstSelectionAsync is still undefined and
+        // there is nothing to resolve — `currentSelection` is the source of truth from here.
+        if (firstSelectionAsync && !firstSelectionAsync.hasSettled) {
+          firstSelectionAsync.resolveToValue(selection);
+        }
         selectionChangedEventEmitter?.emit({ webViewId, selection });
       },
       async dispose() {
         currentSelection = undefined;
-        // If we never got a selection, reject the first selection promise
-        firstSelectionAsync.rejectWithReason('Disposed before first selection received');
+        // If a caller lazy-constructed the AsyncVariable and it hasn't settled, reject it so
+        // any pending `getSelection()` callers fail fast rather than waiting for the 10s timeout.
+        if (firstSelectionAsync && !firstSelectionAsync.hasSettled) {
+          firstSelectionAsync.rejectWithReason('Disposed before first selection received');
+        }
         return unsubFromWebViewUpdates();
       },
     };

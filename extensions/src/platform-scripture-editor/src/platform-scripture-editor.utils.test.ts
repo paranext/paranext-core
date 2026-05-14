@@ -2,7 +2,11 @@ import { describe, it, expect, vi } from 'vitest';
 import { ScriptureRange } from 'platform-scripture-editor';
 import type PapiBackend from '@papi/backend';
 import { UsjTextContentLocation } from 'platform-bible-utils';
-import { convertScriptureRangeToEditorRange } from './platform-scripture-editor.utils';
+import {
+  convertScriptureRangeToEditorRange,
+  resolveOpenEditorDispatch,
+  type OpenEditorDispatch,
+} from './platform-scripture-editor.utils';
 
 // Sample USJ chapter data for Genesis chapter 1 with multiple verses
 const SAMPLE_USJ_CHAPTER = Object.freeze({
@@ -396,3 +400,88 @@ describe('convertScriptureRangeToEditorRange', () => {
     });
   });
 });
+
+// #region resolveOpenEditorDispatch
+
+// Helper: build a minimal "Scripture editor" web view definition record for the dispatch helper.
+// `resolveOpenEditorDispatch` only reads `id` and `projectId`, so a partial object is sufficient.
+type ScriptureEditorDef = { id: string; projectId?: string };
+
+describe('resolveOpenEditorDispatch', () => {
+  it('simple mode + caller override + different project: caller override is ignored, replaces first editor', () => {
+    const editors: ScriptureEditorDef[] = [{ id: 'editor-other', projectId: 'PROJ_X' }];
+    const result: OpenEditorDispatch = resolveOpenEditorDispatch(
+      editors,
+      'WEB',
+      'simple',
+      'caller-supplied-tab-id',
+    );
+    // Simple-mode invariant: opens land in the editor column. Caller's tab is not the editor —
+    // we ignore it and replace the existing editor instead.
+    expect(result).toEqual({ kind: 'replace-tab', targetTabId: 'editor-other' });
+  });
+
+  it('simple mode + caller override + same project open: focuses the existing tab (caller override is ignored)', () => {
+    const editors: ScriptureEditorDef[] = [{ id: 'editor-web', projectId: 'WEB' }];
+    const result = resolveOpenEditorDispatch(editors, 'WEB', 'simple', 'caller-supplied-tab-id');
+    // Simple-mode invariant: caller override is ignored. We always route to the editor column,
+    // and since the requested project is already in the editor column we focus that tab.
+    expect(result).toEqual({ kind: 'focus-existing', existingId: 'editor-web' });
+  });
+
+  it('power mode + caller override + same project open: caller override still wins (no focus rule)', () => {
+    const editors: ScriptureEditorDef[] = [{ id: 'editor-web', projectId: 'WEB' }];
+    const result = resolveOpenEditorDispatch(editors, 'WEB', 'power', 'caller-supplied-tab-id');
+    expect(result).toEqual({ kind: 'replace-tab', targetTabId: 'caller-supplied-tab-id' });
+  });
+
+  it('power mode + caller override + no editors: replace-tab on the caller-supplied target', () => {
+    const editors: ScriptureEditorDef[] = [];
+    const result = resolveOpenEditorDispatch(editors, 'WEB', 'power', 'caller-supplied-tab-id');
+    expect(result).toEqual({ kind: 'replace-tab', targetTabId: 'caller-supplied-tab-id' });
+  });
+
+  it('simple mode: returns focus-existing when an editor for the same project is already open', () => {
+    const editors: ScriptureEditorDef[] = [{ id: 'editor-web', projectId: 'WEB' }];
+    const result = resolveOpenEditorDispatch(editors, 'WEB', 'simple', undefined);
+    expect(result).toEqual({ kind: 'focus-existing', existingId: 'editor-web' });
+  });
+
+  it('simple mode: returns replace-tab on the first existing editor when the requested project differs', () => {
+    const editors: ScriptureEditorDef[] = [
+      { id: 'editor-a', projectId: 'PROJ_A' },
+      { id: 'editor-b', projectId: 'PROJ_B' },
+    ];
+    const result = resolveOpenEditorDispatch(editors, 'PROJ_C', 'simple', undefined);
+    expect(result).toEqual({ kind: 'replace-tab', targetTabId: 'editor-a' });
+  });
+
+  it('simple mode: returns replace-tab on the empty placeholder editor when no project editors exist', () => {
+    const editors: ScriptureEditorDef[] = [{ id: 'empty-editor', projectId: undefined }];
+    const result = resolveOpenEditorDispatch(editors, 'WEB', 'simple', undefined);
+    // Same-project lookup misses (no projectId on the empty one). Simple-mode then replaces the
+    // first existing editor — which happens to be the empty placeholder.
+    expect(result).toEqual({ kind: 'replace-tab', targetTabId: 'empty-editor' });
+  });
+
+  it('simple mode: returns open-new when no Scripture Editors are open at all', () => {
+    const editors: ScriptureEditorDef[] = [];
+    const result = resolveOpenEditorDispatch(editors, 'WEB', 'simple', undefined);
+    expect(result).toEqual({ kind: 'open-new' });
+  });
+
+  it('power mode: only the empty-editor probe applies — same project clicked twice does not focus', () => {
+    const editors: ScriptureEditorDef[] = [{ id: 'editor-web', projectId: 'WEB' }];
+    const result = resolveOpenEditorDispatch(editors, 'WEB', 'power', undefined);
+    // No empty editor and no caller override → fall through to open-new (P9-style two tabs).
+    expect(result).toEqual({ kind: 'open-new' });
+  });
+
+  it('power mode: falls back to empty-editor probe when one exists', () => {
+    const editors: ScriptureEditorDef[] = [{ id: 'empty-editor', projectId: undefined }];
+    const result = resolveOpenEditorDispatch(editors, 'WEB', 'power', undefined);
+    expect(result).toEqual({ kind: 'replace-tab', targetTabId: 'empty-editor' });
+  });
+});
+
+// #endregion resolveOpenEditorDispatch
