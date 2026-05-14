@@ -1,11 +1,13 @@
 import papi, { logger } from '@papi/backend';
 import {
   ExecutionActivationContext,
+  ExecutionToken,
   IWebViewProvider,
   ManageExtensions,
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
+import type { DblResourceData } from 'platform-bible-utils';
 import { isString } from 'platform-bible-utils';
 import getResourcesDialogReact from './get-resources.web-view?inline';
 import homeDialogReact from './home.web-view?inline';
@@ -18,6 +20,84 @@ const NEW_TAB_WEB_VIEW_TYPE = 'platformGetResources.newTab';
 
 const GET_RESOURCES_WEB_VIEW_SIZE = { width: 900, height: 650 };
 const HOME_WEB_VIEW_SIZE = { width: 1000, height: 650 };
+
+const RESOURCES_CACHE_KEY = 'cachedDblResources';
+
+let executionToken: ExecutionToken;
+let cachedResources: DblResourceData[] | undefined;
+let isFetching = false;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function startBackgroundFetch(): Promise<void> {
+  if (isFetching) return;
+  isFetching = true;
+
+  try {
+    for (let attempt = 0; attempt < 10; attempt++) {
+      if (attempt > 0) await sleep(1000); // eslint-disable-line no-await-in-loop
+
+      try {
+        const provider = await papi.dataProviders.get(
+          // eslint-disable-line no-await-in-loop
+          'platformGetResources.dblResourcesProvider',
+        );
+        if (!provider) continue;
+
+        if (!(await provider.isGetDblResourcesAvailable())) return; // eslint-disable-line no-await-in-loop
+
+        const resources = await provider.getDblResources(undefined); // eslint-disable-line no-await-in-loop
+        cachedResources = resources;
+        await papi.storage.writeUserData(
+          // eslint-disable-line no-await-in-loop
+          executionToken,
+          RESOURCES_CACHE_KEY,
+          JSON.stringify(cachedResources),
+        );
+        return;
+      } catch (e) {
+        logger.debug(`Background resource fetch attempt ${attempt + 1} failed: ${e}`);
+      }
+    }
+  } finally {
+    isFetching = false;
+  }
+}
+
+async function getCachedResources(): Promise<DblResourceData[] | undefined> {
+  if (cachedResources !== undefined) return cachedResources;
+
+  if (isFetching) {
+    while (isFetching) await sleep(100); // eslint-disable-line no-await-in-loop
+    return cachedResources;
+  }
+
+  isFetching = true;
+  try {
+    const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
+    if (!provider) return undefined;
+
+    if (!(await provider.isGetDblResourcesAvailable())) return undefined;
+
+    const resources = await provider.getDblResources(undefined);
+    cachedResources = resources;
+    await papi.storage.writeUserData(
+      executionToken,
+      RESOURCES_CACHE_KEY,
+      JSON.stringify(cachedResources),
+    );
+    return cachedResources;
+  } catch (e) {
+    logger.warn(`getCachedResources on-demand fetch failed: ${e}`);
+    return undefined;
+  } finally {
+    isFetching = false;
+  }
+}
 
 let manageExtensions: ManageExtensions;
 
@@ -72,6 +152,16 @@ const newTabWebViewProvider: IWebViewProvider = {
 export async function activate(context: ExecutionActivationContext) {
   logger.debug('Platform Get Resources Extension is activating!');
 
+  executionToken = context.executionToken;
+
+  try {
+    const cached = await papi.storage.readUserData(executionToken, RESOURCES_CACHE_KEY);
+    if (typeof cached === 'string' && cached.length > 0)
+      cachedResources = JSON.parse(cached) as DblResourceData[];
+  } catch {
+    // No cached data from previous session
+  }
+
   // #region Validate settings
 
   const excludePdpFactoryIdsInHomeValidatorPromise = papi.settings.registerValidator(
@@ -104,7 +194,7 @@ export async function activate(context: ExecutionActivationContext) {
   const openGetResourcesWebViewCommandPromise = papi.commands.registerCommand(
     'platformGetResources.openGetResources',
     async () => {
-      return papi.webViews.openWebView(
+      const webViewId = await papi.webViews.openWebView(
         GET_RESOURCES_WEB_VIEW_TYPE,
         {
           type: 'float',
@@ -113,6 +203,18 @@ export async function activate(context: ExecutionActivationContext) {
         // Focus existing one if one exists
         { existingId: '?' },
       );
+
+      const resources = await papi.commands.sendCommand('platformGetResources.getCachedResources');
+      if (resources === undefined)
+        await papi.notifications.send({
+          message: '%resources_fetch_failed%',
+          severity: 'warning',
+          clickCommandLabel: '%resources_retry%',
+          clickCommand: 'platformGetResources.openGetResources',
+          duration: 0,
+        });
+
+      return webViewId;
     },
   );
 
@@ -163,6 +265,11 @@ export async function activate(context: ExecutionActivationContext) {
     },
   );
 
+  const getCachedResourcesCommandPromise = papi.commands.registerCommand(
+    'platformGetResources.getCachedResources',
+    getCachedResources,
+  );
+
   const isSendReceiveAvailableCommandPromise = papi.commands.registerCommand(
     'platformGetResources.isSendReceiveAvailable',
     async () => {
@@ -188,8 +295,12 @@ export async function activate(context: ExecutionActivationContext) {
     await openGetResourcesWebViewCommandPromise,
     await openHomeWebViewCommandPromise,
     await openNewTabWebViewCommandPromise,
+    await getCachedResourcesCommandPromise,
     await isSendReceiveAvailableCommandPromise,
   );
+
+  // eslint-disable-next-line @typescript-eslint/no-floating-promises
+  startBackgroundFetch();
 
   logger.debug('Platform Get Resources Extension finished activating!');
 }
