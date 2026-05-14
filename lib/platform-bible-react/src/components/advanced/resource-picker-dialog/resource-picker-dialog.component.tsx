@@ -10,6 +10,7 @@ import {
 import { SearchBar } from '@/components/basics/search-bar.component';
 import { DblResourceData, ResourceType, formatReplacementString } from 'platform-bible-utils';
 import { useMemo, useState } from 'react';
+import { Spinner } from '@/components/basics/spinner.component';
 import { useProgressiveList } from './resource-picker-dialog.utils';
 
 /**
@@ -46,6 +47,8 @@ const localizeString = (
 export interface ResourcePickerDialogProps {
   /** Full list of DBL resources fetched by the caller via PAPI */
   allResources: DblResourceData[];
+  /** Whether the `allResources` is still loading */
+  isResourcesLoading?: boolean;
   /** If provided, only resources of this type are shown */
   resourceType?: ResourceType;
   /** IDs of resources already selected in the calling panel */
@@ -132,6 +135,7 @@ function matchesSearch(resource: DblResourceData, searchText: string): boolean {
  */
 export default function ResourcePickerDialog({
   allResources,
+  isResourcesLoading,
   resourceType,
   selectedResourceIds,
   localizedStrings,
@@ -247,9 +251,11 @@ export default function ResourcePickerDialog({
         </p>
       )}
       <div className="tw:flex-1 tw:overflow-y-auto tw:px-4 tw:pb-4">
-        {hasNoResults ? (
+        {hasNoResults && (
           <p className="tw:py-8 tw:text-center tw:text-muted-foreground">{noResultsText}</p>
-        ) : (
+        )}
+        {isResourcesLoading && <Spinner />}
+        {!hasNoResults && !isResourcesLoading && (
           <>
             <ResourceSection label={alreadySelectedLabel} resources={alreadySelected} />
             <ResourceSection

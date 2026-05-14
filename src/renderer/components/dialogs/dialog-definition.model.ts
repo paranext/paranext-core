@@ -46,8 +46,6 @@ export type AlertDialogOptions = DialogOptions & {
 
 /** Options to provide when showing the Resource Picker dialog */
 export type ResourcePickerDialogOptions = DialogOptions & {
-  /** Full list of DBL resources to display, fetched by the caller via PAPI */
-  allResources?: DblResourceData[];
   /** If provided, only resources of this type are shown */
   resourceType?: ResourceType;
   /** IDs of resources already selected in the calling panel */

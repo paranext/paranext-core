@@ -1,4 +1,4 @@
-import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { ResourcePickerDialog, RESOURCE_PICKER_DIALOG_STRING_KEYS } from 'platform-bible-react';
 import { DIALOG_BASE } from '@renderer/components/dialogs/dialog-base.data';
 import {
@@ -10,16 +10,20 @@ import {
 const STRING_KEYS = [...RESOURCE_PICKER_DIALOG_STRING_KEYS];
 
 function ResourcePickerDialogWrapper({
-  allResources = [],
   resourceType,
   selectedResourceIds,
   submitDialog,
 }: DialogTypes[typeof RESOURCE_PICKER_DIALOG_TYPE]['props']) {
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
 
+  // Fetches all resources to pass into the resource picker
+  const [resources, , isResourcesLoading] = useData(
+    'platformGetResources.dblResourcesProvider',
+  ).DblResources(undefined, []);
+
   return (
     <ResourcePickerDialog
-      allResources={allResources}
+      allResources={resources}
       resourceType={resourceType}
       selectedResourceIds={selectedResourceIds}
       localizedStrings={localizedStrings}

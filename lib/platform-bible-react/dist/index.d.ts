@@ -1047,6 +1047,8 @@ export type ResourcePickerDialogLocalizedStrings = {
 export interface ResourcePickerDialogProps {
 	/** Full list of DBL resources fetched by the caller via PAPI */
 	allResources: DblResourceData[];
+	/** Whether the `allResources` is still loading */
+	isResourcesLoading?: boolean;
 	/** If provided, only resources of this type are shown */
 	resourceType?: ResourceType;
 	/** IDs of resources already selected in the calling panel */
@@ -1069,7 +1071,7 @@ export interface ResourcePickerDialogProps {
  *
  * @param props See {@link ResourcePickerDialogProps}
  */
-export function ResourcePickerDialog({ allResources, resourceType, selectedResourceIds, localizedStrings, onSelect, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
+export function ResourcePickerDialog({ allResources, isResourcesLoading, resourceType, selectedResourceIds, localizedStrings, onSelect, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
 export type SelectedSettingsSidebarItem = {
 	label: string;
 	projectId?: string;
