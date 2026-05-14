@@ -1,5 +1,5 @@
 import papi, { logger } from '@papi/frontend';
-import { useData, useDataProvider, useLocalizedStrings, useSetting } from '@papi/frontend/react';
+import { useDataProvider, useLocalizedStrings, useSetting } from '@papi/frontend/react';
 import { CardTitle, useEvent, usePromise } from 'platform-bible-react';
 import { Home as HomeIcon } from 'lucide-react';
 
@@ -54,10 +54,7 @@ globalThis.webViewComponent = function HomeWebView() {
   }, [dblResourcesProvider]);
 
   const [resourcesList] = usePromise(
-    useCallback(
-      async () => await papi.commands.sendCommand('platformGetResources.getCachedResources'),
-      [],
-    ),
+    useCallback(() => papi.commands.sendCommand('platformGetResources.getCachedResources'), []),
     undefined,
   );
 

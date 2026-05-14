@@ -1,6 +1,6 @@
 import { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
-import { useData, useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
+import { useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
 import {
   BookOpen,
   ChevronDown,
@@ -36,12 +36,7 @@ import {
   TableRow,
   usePromise,
 } from 'platform-bible-react';
-import {
-  DblResourceData,
-  getErrorMessage,
-  isPlatformError,
-  LocalizeKey,
-} from 'platform-bible-utils';
+import { DblResourceData, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const GET_RESOURCES_STRING_KEYS: LocalizeKey[] = [
@@ -57,8 +52,10 @@ const GET_RESOURCES_STRING_KEYS: LocalizeKey[] = [
   '%resources_installed%',
   '%resources_language%',
   '%resources_languages%',
+  '%resources_fetch_failed%',
   '%resources_noResults%',
   '%resources_noResultsError%',
+  '%resources_retry%',
   '%resources_open%',
   '%resources_remove%',
   '%resources_results%',
@@ -178,6 +175,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const anyType: string = localizedStrings['%resources_any_type%'];
   const dialogSubtitleText: string = localizedStrings['%resources_dialog_subtitle%'];
   const dialogTitleText: string = localizedStrings['%resources_dialog_title%'];
+  const fetchFailedText: string = localizedStrings['%resources_fetch_failed%'];
   const filterInputText: string = localizedStrings['%resources_filterInput%'];
   const filterByText: string = localizedStrings['%resources_filterBy%'];
   const fullNameText: string = localizedStrings['%resources_fullName%'];
@@ -186,7 +184,6 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const languageText: string = localizedStrings['%resources_language%'];
   const languagesText: string = localizedStrings['%resources_languages%'];
   const noResultsText: string = localizedStrings['%resources_noResults%'];
-  const noResultsErrorText: string = localizedStrings['%resources_noResultsError%'];
   const openText: string = localizedStrings['%resources_open%'];
   const removeText: string = localizedStrings['%resources_remove%'];
   const resultsText: string = localizedStrings['%resources_results%'];
@@ -200,16 +197,21 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const typeSlrText: string = localizedStrings['%resources_type_SLR%'];
   const typeXrText: string = localizedStrings['%resources_type_XR%'];
   const typeUnknownText: string = localizedStrings['%resources_type_unknown%'];
+  const retryText: string = localizedStrings['%resources_retry%'];
   const updateText: string = localizedStrings['%resources_update%'];
 
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
   const installResource = dblResourcesProvider?.installDblResource;
   const uninstallResource = dblResourcesProvider?.uninstallDblResource;
 
+  const [retryCount, setRetryCount] = useState(0);
+
   const [resources, isLoadingResources] = usePromise(
     useCallback(
-      async () => await papi.commands.sendCommand('platformGetResources.getCachedResources'),
-      [],
+      () => papi.commands.sendCommand('platformGetResources.getCachedResources'),
+      // retryCount is an intentional re-fetch trigger, not a real dependency of the callback
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [retryCount],
     ),
     undefined,
   );
@@ -461,9 +463,12 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
             // Can't use if-else here because of how the return statement is structured
             /* eslint-disable no-nested-ternary */
             <div>
-              {isPlatformError(resources) ? (
-                <div className="tw:m-4 tw:flex tw:justify-center">
-                  <Label>{noResultsErrorText}</Label>
+              {resources === undefined && !isLoadingResources ? (
+                <div className="tw:m-4 tw:flex tw:flex-col tw:items-center tw:gap-2">
+                  <Label>{fetchFailedText}</Label>
+                  <Button variant="ghost" onClick={() => setRetryCount((c) => c + 1)}>
+                    {retryText}
+                  </Button>
                 </div>
               ) : sortedResources.length === 0 ? (
                 <div className="tw:m-4 tw:flex tw:justify-center">
