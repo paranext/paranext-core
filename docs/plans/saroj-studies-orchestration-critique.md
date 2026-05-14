@@ -18,10 +18,10 @@ A pre-flight review of the draft orchestration prompt against the actual state o
 
 There are two independent Storybook configs in this repo:
 
-| Storybook | Config | Glob | Port | Builder |
-|---|---|---|---|---|
-| Root (app) | `.storybook/main.ts` | `src/**`, `extensions/src/**` | `6006` | Webpack5 |
-| Library | `lib/platform-bible-react/.storybook/main.ts` | `lib/platform-bible-react/src/**` | `6007` | Vite |
+| Storybook  | Config                                        | Glob                              | Port   | Builder  |
+| ---------- | --------------------------------------------- | --------------------------------- | ------ | -------- |
+| Root (app) | `.storybook/main.ts`                          | `src/**`, `extensions/src/**`     | `6006` | Webpack5 |
+| Library    | `lib/platform-bible-react/.storybook/main.ts` | `lib/platform-bible-react/src/**` | `6007` | Vite     |
 
 The URL the user shared (`http://localhost:6007/?path=/docs/advanced-resourcepickerdialog--docs`) is the **library** Storybook. So Agent A/B stories belong under `lib/platform-bible-react/src/...`. Agent C's full-screen "no project open" state is **app-level**, not a library component — it more naturally lives under `src/stories/platform/` (root Storybook, port 6006).
 
@@ -52,9 +52,10 @@ export type DblResourceData = {
 ```
 
 Field-by-field deltas:
+
 - `id` → `dblEntryUid`
 - `title` → `displayName` (or `fullName`)
-- `abbreviation` → no equivalent; `displayName` typically *is* the short name (e.g. `"NIV"`)
+- `abbreviation` → no equivalent; `displayName` typically _is_ the short name (e.g. `"NIV"`)
 - `language`, `languageCode` → `bestLanguageName`
 - `isDownloaded` → `installed`
 - `isAssociatedWithProject` → not a flag; modeled in the picker via a parallel `selectedResourceIds: string[]`
@@ -65,7 +66,7 @@ Field-by-field deltas:
 
 ### C4. The shared picker already exists on `pt-3976-shared-resource-picker-ui`
 
-The prompt notes the stub exists but tells Agent A and Agent B to build their *own* pickers (single-select and multi-select variants). The reality on that branch:
+The prompt notes the stub exists but tells Agent A and Agent B to build their _own_ pickers (single-select and multi-select variants). The reality on that branch:
 
 - Full component at `lib/platform-bible-react/src/components/advanced/resource-picker-dialog/resource-picker-dialog.component.tsx`
 - Stories at `…/resource-picker-dialog.stories.tsx` (title: `'Advanced/ResourcePickerDialog'`)
@@ -76,7 +77,7 @@ It is also **wired into the app**: `src/renderer/components/dialogs/resource-pic
 
 Plus, the integration branch is created from `main`, which **doesn't include this work**. Agents won't see it.
 
-**Impact:** Re-inventing the picker is wasted effort, and worse, conflicts with the PRD's explicit guidance (see C5). At minimum, base `proto/saroj-studies` off `pt-3976-shared-resource-picker-ui` (or merge it in), and reframe the picker variants as "different *entry points* / different *containers* for the existing picker."
+**Impact:** Re-inventing the picker is wasted effort, and worse, conflicts with the PRD's explicit guidance (see C5). At minimum, base `proto/saroj-studies` off `pt-3976-shared-resource-picker-ui` (or merge it in), and reframe the picker variants as "different _entry points_ / different _containers_ for the existing picker."
 
 ### C5. Direct conflict with the PRD on "variants"
 
@@ -121,13 +122,13 @@ So variants make sense for the **zero states and column shells** (where the ques
 - All three agents running Storybook will collide on port `6007` (lib) or `6006` (root).
 - The prompt doesn't address either.
 
-**Impact:** Real time burn at startup. Either (a) symlink `node_modules` from the base checkout into each worktree (risky but fast), or (b) tell agents *not* to start Storybook locally — review will happen post-merge in a single Storybook instance.
+**Impact:** Real time burn at startup. Either (a) symlink `node_modules` from the base checkout into each worktree (risky but fast), or (b) tell agents _not_ to start Storybook locally — review will happen post-merge in a single Storybook instance.
 
 ### C9. "Use the Task tool" — wrong name
 
 The prompt says "spawn the three agents below in parallel using the Task tool." In current Claude Code the tool is named `Agent` (its tool definition is loaded above). Subagents also do **not** automatically `cd` into a different working directory — the orchestrator must pass `cwd` (via shell prefix or `isolation: "worktree"`) or instruct the agent to operate via absolute paths.
 
-Also: `isolation: "worktree"` on the Agent tool creates *one* worktree per agent, not 3 named worktrees off a shared integration branch. The hand-rolled `git worktree add` flow in the prompt is the right approach for this, but it has to be reconciled with how sub-agents actually receive a working directory (they don't, by default).
+Also: `isolation: "worktree"` on the Agent tool creates _one_ worktree per agent, not 3 named worktrees off a shared integration branch. The hand-rolled `git worktree add` flow in the prompt is the right approach for this, but it has to be reconciled with how sub-agents actually receive a working directory (they don't, by default).
 
 **Impact:** Either the agents will operate in the wrong directory, or the orchestrator will spend a turn discovering this and patching the plan mid-run.
 
@@ -173,13 +174,13 @@ These are in the PRD but not in the agent briefs:
 - **Tab headers should not look draggable / shouldn't mimic 10Power tabs.** Affects Agent B variant A ("Tab strip at top of column"). Risk of producing exactly the thing the PRD warns against.
 - **Column 3 tab UI prefers icons + tooltips** (nice-to-have but called out, because of future expansion to many tabs).
 - **Future Column 3 tabs** (not in scope, but the shell should leave room): Bible texts, Source language texts, Text collection, Commentaries, Comments, Find Biblical Terms, AI Assistant, Checks.
-- **Projects-as-reference**: "In rare cases a team can select a *project* as a reference text, but it should require an extra, deliberate, step to reveal projects in the selection UI. The user will only see projects on which they are a named team member." Agent A's model-text picker brief should call this out as a "secondary, deliberate" affordance, not just a normal list entry.
-- **Sync model**: Donna's selection *overrides* Saroj's for model text (single-value) but *adds to* Saroj's for resource texts and commentaries (multi-value, additive). The "admin can't be removed" rule in Agent B's brief captures the additive case but not the override case for model text.
+- **Projects-as-reference**: "In rare cases a team can select a _project_ as a reference text, but it should require an extra, deliberate, step to reveal projects in the selection UI. The user will only see projects on which they are a named team member." Agent A's model-text picker brief should call this out as a "secondary, deliberate" affordance, not just a normal list entry.
+- **Sync model**: Donna's selection _overrides_ Saroj's for model text (single-value) but _adds to_ Saroj's for resource texts and commentaries (multi-value, additive). The "admin can't be removed" rule in Agent B's brief captures the additive case but not the override case for model text.
 - **Removing resources is flagged as the most important nice-to-have** (footnote 1 in the PRD). Agent B's spec covers it; just confirm it's prioritized.
 
 ### I6. "WorkspaceShell" is inline styles, no resize handles, no dark mode
 
-It's a throwaway, which is fine — but it doesn't communicate any of the actual Column-3 affordances (resizable widths, multi-tab header, sync-scroll indicator). Stories built inside it will *look* like the workspace but won't *demonstrate* the workspace. If the goal is to evaluate columns in context, consider a more honest shell that uses `tw-` classes, shows the tab strip in Column 3, and stubs the BCV control in the main toolbar area above the columns.
+It's a throwaway, which is fine — but it doesn't communicate any of the actual Column-3 affordances (resizable widths, multi-tab header, sync-scroll indicator). Stories built inside it will _look_ like the workspace but won't _demonstrate_ the workspace. If the goal is to evaluate columns in context, consider a more honest shell that uses `tw-` classes, shows the tab strip in Column 3, and stubs the BCV control in the main toolbar area above the columns.
 
 ### I7. Branching strategy: start from `pt-3976-shared-resource-picker-ui`, not `main`
 
@@ -203,15 +204,15 @@ Husky is configured (`.husky/pre-commit`) and there's an ESLint provenance-comme
 - **M1.** Demo date is **June 19, 2026**; today (per session context) is 2026-05-14. ~5 weeks. Worth saying out loud in the brief so agents calibrate fidelity (prototype, not production).
 - **M2.** The prompt's `REPO=<PATH_TO_PARATEXT_CORE>` placeholder isn't filled in. If you're running this from inside Claude Code, the working directory is already the repo; the placeholder dance is unnecessary.
 - **M3.** "Open Registry" CTA → `https://registry.paratext.org`. Worth noting whether this should be a real `<a href>` or stubbed `onOpenRegistry` prop (so the story is reviewable without leaving Storybook). The agent briefs say "handler stubs (onClick props)" — good; just be consistent across all three agents.
-- **M4.** "Don't drop any story" on merge: stories aren't typically barrel-imported in this repo (Storybook auto-discovers via glob), so file-level merges should generally be conflict-free *unless* two agents pick the same filename. Pre-assign filenames in the briefs to eliminate the risk.
+- **M4.** "Don't drop any story" on merge: stories aren't typically barrel-imported in this repo (Storybook auto-discovers via glob), so file-level merges should generally be conflict-free _unless_ two agents pick the same filename. Pre-assign filenames in the briefs to eliminate the risk.
 - **M5.** PRD uses "PT10 / 10Simple" interchangeably; "Paratext 10 Simple" is the long form. The prompt uses all three. Consistent labeling in story titles helps reviewers.
-- **M6.** The PRD lists English variants of UBS Handbook and SIL TNN/TND as the *initial* commentaries. The shared picker's sample data has "UBS HB" as `XmlResource` already — re-use that, don't invent new sample rows that conflict.
+- **M6.** The PRD lists English variants of UBS Handbook and SIL TNN/TND as the _initial_ commentaries. The shared picker's sample data has "UBS HB" as `XmlResource` already — re-use that, don't invent new sample rows that conflict.
 
 ---
 
 ## Open questions (please decide before running)
 
-1. **Should the picker variants in Agents A and B be dropped** in favor of reusing `ResourcePickerDialog` from `pt-3976-shared-resource-picker-ui`? *(My strong recommendation: yes — drop them.)*
+1. **Should the picker variants in Agents A and B be dropped** in favor of reusing `ResourcePickerDialog` from `pt-3976-shared-resource-picker-ui`? _(My strong recommendation: yes — drop them.)_
 2. **Where should Agent C's full-screen "no project" state live** — root Storybook (`src/stories/platform/`, port 6006) or library Storybook (`lib/platform-bible-react/src/stories/`, port 6007)?
 3. **Is `proto/saroj-studies` allowed to branch from `pt-3976-shared-resource-picker-ui`** instead of `main`? If not, what's the policy for getting the picker stub in front of the prototype work?
 4. **Are reviewers OK with a single merged Storybook run** (no per-worktree Storybook), or do agents need to verify their own work locally? The latter forces a port-allocation scheme.
