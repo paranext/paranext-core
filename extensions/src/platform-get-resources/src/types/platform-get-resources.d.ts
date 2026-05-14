@@ -33,6 +33,7 @@ declare module 'platform-get-resources' {
 
 declare module 'papi-shared-types' {
   import type { IDblResourcesProvider } from 'platform-get-resources';
+  import type { DblResourceData } from 'platform-bible-utils';
 
   export interface DataProviders {
     'platformGetResources.dblResourcesProvider': IDblResourcesProvider;
@@ -63,6 +64,14 @@ declare module 'papi-shared-types' {
 
     /** @returns True if Send/Receive is available to the user, false if not */
     'platformGetResources.isSendReceiveAvailable': () => Promise<boolean | undefined>;
+
+    /**
+     * Returns the cached list of DBL resources, fetching on demand if the cache is empty.
+     *
+     * @returns Cached DBL resources, or `undefined` if unavailable (credentials not configured or
+     *   fetch failed)
+     */
+    'platformGetResources.getCachedResources': () => Promise<DblResourceData[] | undefined>;
 
     /**
      * Commits changes in the specified project to the version history. Unless `forceCommit` is
