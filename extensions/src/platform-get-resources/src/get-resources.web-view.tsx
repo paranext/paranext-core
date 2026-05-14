@@ -34,6 +34,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  usePromise,
 } from 'platform-bible-react';
 import {
   DblResourceData,
@@ -205,9 +206,13 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const installResource = dblResourcesProvider?.installDblResource;
   const uninstallResource = dblResourcesProvider?.uninstallDblResource;
 
-  const [resources, , isLoadingResources] = useData(
-    'platformGetResources.dblResourcesProvider',
-  ).DblResources(undefined, []);
+  const [resources, isLoadingResources] = usePromise(
+    useCallback(
+      async () => await papi.commands.sendCommand('platformGetResources.getCachedResources'),
+      [],
+    ),
+    undefined,
+  );
 
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
 
@@ -231,7 +236,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
       setIsInitialized(true);
       return;
     }
-    if (!isPlatformError(resources) && resources.length > 0 && selectedLanguages.length === 0) {
+    if (resources && resources.length > 0 && selectedLanguages.length === 0) {
       setSelectedLanguages(
         Array.from(
           new Set(
@@ -270,7 +275,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   useEffect(() => {
     setInstallInfo((currentInstallInfo) =>
       currentInstallInfo.filter((info) => {
-        if (isPlatformError(resources)) return true;
+        if (!resources) return true;
 
         const resource = resources.find((res) => res.dblEntryUid === info.dblEntryUid);
         if (!resource) return true;
@@ -286,7 +291,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const [textFilter, setTextFilter] = useState<string>('');
 
   const textFilteredResources = useMemo(() => {
-    if (isPlatformError(resources)) return [];
+    if (!resources) return [];
     return resources.filter((resource) => {
       const filter = textFilter.toLowerCase();
       return (
@@ -299,7 +304,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
 
   const typeOptions: MultiSelectComboBoxEntry[] = useMemo(() => {
     const getTypeCount = (type: string): string => {
-      if (isPlatformError(resources)) return '0';
+      if (!resources) return '0';
       return (resources.filter((resource) => resource.type === type).length ?? 0).toString();
     };
 
@@ -435,10 +440,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
               />
 
               <Filter
-                entries={getLanguageOptions(
-                  isPlatformError(resources) ? emptyArray : resources,
-                  selectedLanguages,
-                )}
+                entries={getLanguageOptions(resources ?? emptyArray, selectedLanguages)}
                 selected={selectedLanguages}
                 onChange={setSelectedLanguages}
                 placeholder={languagesText}
