@@ -1460,7 +1460,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     {
         string? json = value?.ToString();
         if (string.IsNullOrEmpty(json))
-            return new ResourceReferenceList();
+            throw new InvalidDataException(
+                $"Value for user setting '{settingName}' must not be null or empty"
+            );
         ResourceReferenceList? list = json.DeserializeFromJson<ResourceReferenceList>();
         if (list is null)
             throw new InvalidDataException(
