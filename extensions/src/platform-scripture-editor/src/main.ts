@@ -29,6 +29,7 @@ import {
   convertScriptureRangeToEditorRange,
   formatEditorTitle,
   openCommentListAndSelectThread,
+  resolveOpenEditorDispatch,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   startDefaultProjectPicker,
 } from './platform-scripture-editor.utils';
@@ -186,44 +187,32 @@ async function open(
     projectForWebView.isEditable = await pdp.getSetting('platform.isEditable');
   }
   if (projectForWebView.projectId) {
-    // Determine which existing tab (if any) the new editor should replace.
-    //
-    // Simple mode: the editor column hosts a single Scripture Editor. To keep all opens in that
-    // column rather than opening as sibling tabs in column 1 (where the home tab lives), we:
-    //   (a) focus the existing tab if the requested project is already open (no duplicate tabs);
-    //   (b) otherwise replace whichever Scripture Editor is currently open so the new project
-    //       takes over the column 2 slot;
-    //   (c) otherwise fall through to the empty-editor probe below (covers the very first open
-    //       when only the placeholder is present).
-    //
-    // Power mode: behavior is unchanged from the original branch — only replace if an empty
-    // Scripture Editor exists; otherwise let the platform place the new tab next to the
-    // currently-focused group. This preserves the P9-style "opening the same project twice
-    // creates two tabs" behavior in power mode.
-    let tabIdToReplace = existingTabIdToReplace;
-    if (!tabIdToReplace) {
-      const allOpenDefs = await papi.webViews.getAllOpenWebViewDefinitions();
-      const allScriptureEditors = allOpenDefs.filter(
-        (def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-      );
+    // Decide where to route this open. The dispatch helper centralizes the simple-mode invariants
+    // (one editor slot, no duplicate-project tabs) and the empty-editor probe; see
+    // resolveOpenEditorDispatch JSDoc for the priority order.
+    const allOpenDefs = await papi.webViews.getAllOpenWebViewDefinitions();
+    const allScriptureEditors = allOpenDefs.filter(
+      (def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+    );
+    const interfaceMode = await papi.settings.get('platform.interfaceMode');
 
-      const interfaceMode = await papi.settings.get('platform.interfaceMode');
-      if (interfaceMode === 'simple') {
-        const existingForSameProject = allScriptureEditors.find(
-          (def) => def.projectId === projectForWebView.projectId,
-        );
-        if (existingForSameProject) {
-          tabIdToReplace = existingForSameProject.id;
-        } else if (allScriptureEditors.length > 0) {
-          tabIdToReplace = allScriptureEditors[0].id;
-        }
-      }
+    const dispatch = resolveOpenEditorDispatch(
+      allScriptureEditors,
+      projectForWebView.projectId,
+      interfaceMode,
+      existingTabIdToReplace,
+    );
 
-      if (!tabIdToReplace) {
-        const emptyEditor = allScriptureEditors.find((def) => !def.projectId);
-        if (emptyEditor) tabIdToReplace = emptyEditor.id;
-      }
+    // Focus path: the requested project is already open. Bring the existing tab to the front
+    // without tearing down the editor or re-running its WebView provider.
+    if (dispatch.kind === 'focus-existing') {
+      return papi.webViews.openWebView(SCRIPTURE_EDITOR_WEBVIEW_TYPE, undefined, {
+        existingId: dispatch.existingId,
+        createNewIfNotFound: false,
+        bringToFront: true,
+      });
     }
+
     const openWebViewOptions: PlatformScriptureEditorOptions = {
       projectId: projectForWebView.projectId,
       isReadOnly: !projectForWebView.isEditable,
@@ -231,7 +220,9 @@ async function open(
     };
     return papi.webViews.openWebView(
       SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-      tabIdToReplace ? { type: 'replace-tab', targetTabId: tabIdToReplace } : undefined,
+      dispatch.kind === 'replace-tab'
+        ? { type: 'replace-tab', targetTabId: dispatch.targetTabId }
+        : undefined,
       openWebViewOptions,
     );
   }
