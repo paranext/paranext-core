@@ -19,11 +19,13 @@ All logic lives inline in `extensions/src/platform-get-resources/src/main.ts`. N
 ### Module-level state
 
 ```ts
+let executionToken: ExecutionToken;
 let cachedResources: DblResourceData[] | undefined;
 let fetchNotificationId: string | number | undefined;
 let isFetching = false;
 ```
 
+- `executionToken` is assigned from `context.executionToken` at the top of `activate()` — required by `papi.storage.readUserData` / `writeUserData`
 - `cachedResources` defaults to `undefined` — distinguishes "never fetched / fetch failed" from `[]` (fetched successfully, but the registry returned no entries, e.g. dev/QA server)
 - `fetchNotificationId` tracks an active "could not fetch resources" notification so it can be updated rather than stacked
 - `isFetching` prevents concurrent fetch attempts
@@ -31,13 +33,10 @@ let isFetching = false;
 ### Storage key
 
 ```ts
-const RESOURCES_CACHE_SCOPE: ExtensionDataScope = {
-  extensionName: 'platformGetResources',
-  dataQualifier: 'cachedDblResources',
-};
+const RESOURCES_CACHE_KEY = 'cachedDblResources';
 ```
 
-Stored as a JSON-serialized `DblResourceData[]` string.
+Read and written via `papi.storage.readUserData(executionToken, RESOURCES_CACHE_KEY)` and `papi.storage.writeUserData(executionToken, RESOURCES_CACHE_KEY, json)`. Stored as a JSON-serialized `DblResourceData[]` string.
 
 ---
 
@@ -45,10 +44,11 @@ Stored as a JSON-serialized `DblResourceData[]` string.
 
 ### On `activate()`
 
-1. Read from storage: `papi.storage.getExtensionData(RESOURCES_CACHE_SCOPE)`
+1. Assign `executionToken = context.executionToken`
+2. Read from storage: `papi.storage.readUserData(executionToken, RESOURCES_CACHE_KEY)`
    - If a string is returned, JSON-parse it into `cachedResources`
-   - If nothing is stored, `cachedResources` remains `undefined`
-2. Fire-and-forget `startBackgroundFetch()` (not awaited — activation does not block)
+   - If nothing is stored (throws or returns empty), `cachedResources` remains `undefined`
+3. Fire-and-forget `startBackgroundFetch()` (not awaited — activation does not block)
 
 ### `startBackgroundFetch()` — startup retry loop
 
@@ -66,7 +66,7 @@ Per attempt:
 2. `await provider.isGetDblResourcesAvailable()`  
    → if `false`: abort immediately (no credentials configured — no point retrying)
 3. Fetch resources from provider
-4. On success: update `cachedResources`, persist JSON to storage, dismiss `fetchNotificationId` if set
+4. On success: update `cachedResources`, persist via `papi.storage.writeUserData`, dismiss `fetchNotificationId` if set
 5. On failure: wait 1s and retry
 
 If all 10 attempts fail, `isFetching` is cleared and `cachedResources` remains whatever it was (either `undefined` or stale cached data from a previous session).
