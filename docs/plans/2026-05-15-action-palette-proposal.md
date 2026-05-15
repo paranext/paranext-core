@@ -1,32 +1,37 @@
 # Action Palette — A Proposal
 
-**To:** TJ Couch
-**From:** Alex Mercado (UX)
+**To:** TJ
 **Date:** 2026-05-15
-**Status:** Seeking architectural approval
+**Status:** RFC — looking for your read and pushback, not a sign-off
 
 ---
 
 ## TL;DR
 
-I'm asking for your blessing to add a feature called the **Action Palette** — a catch-all, searchable launcher (think VS Code's Command Palette, but tighter and Raycast-ish) where users can find and trigger anything the app can do.
+Proposing a feature: the **Action Palette** — a catch-all, searchable launcher (think VS Code's Command Palette, but tighter and Raycast-ish) where users can find and trigger anything the app can do.
 
-To make this work cleanly, I'm also proposing a small vocabulary shift that gives us a sharper mental model:
+To make it work cleanly, also proposing a vocabulary shift that gives us a sharper mental model:
 
 - **Command** = the existing PAPI RPC. The machine-layer contract. Unchanged.
 - **Action** = a new concept. The user-facing wrapper around a Command. Owns the localized label, the description, the argument-collection flow, and the confirmation UX.
 
 The Action Palette displays Actions. Menus, keybindings, and toolbar buttons also dispatch through Actions. Scripts and other extensions keep calling Commands directly. This separation is the load-bearing idea in the proposal.
 
-**The branch this proposal lives on (`refactor/action-palette`) includes a working illustrative rename** that introduces the `ActionPalette*` terminology in the overlay service and keeps `CommandPalette*` as `@deprecated` aliases. **Treat that code as a sketch, not a mandate.** It's there to show that the rename is mechanical, that the tests still pass, and to make the proposal concrete. If you'd rather we land a different shape — or hold off on the rename entirely until the broader feature is approved — that's fine; I'd rather make this decision once with you than twice without you.
+**This branch is docs-only.** While preparing this proposal I started renaming the existing `overlay-command-palette` code to `ActionPalette` to make the proposal concrete — and discovered something that strengthens the case for the proposal itself. See [The existing "command palette" code isn't an Action Palette](#the-existing-command-palette-code-isnt-an-action-palette) below. The exploratory rename (retargeted at a generic name) lives on a separate draft PR — see this PR's description for the link.
 
 ---
 
 ## Why this matters
 
-I want to be able to ship new functionality without having to decide up front _where_ users will reach it from. Today, every new feature negotiates its own home — a menu item, a button somewhere, a keybinding, a context menu entry — and we have to predict that placement before we've watched anyone actually try to use the thing. The Action Palette flips that: every new bit of user-facing functionality lands in the palette first, gets used, and _then_ we earn it a dedicated button or menu placement once we know what users reach for and where.
+Three structural value propositions:
 
-The palette also becomes the unified discovery surface ("I know there's a way to do this — let me search for it") and the keyboard-driven power-user path. Bible translators are knowledge workers; they will benefit.
+**1. Team velocity and decoupling.** Today every new user-facing feature has to negotiate its own home — a menu item, a button placement, a keybinding, a context-menu entry — and someone has to decide that _before_ we've watched anyone try to use the thing. UX gets pulled in to make placement calls on functionality that doesn't exist yet; devs get blocked waiting on those calls. The Action Palette flips that. New functionality lands in the palette first as the always-available default; bespoke UI placement is earned later, once we've watched users reach for it. Devs ship behind a palette entry without waiting on UX; UX validates and prioritizes placement with real usage data instead of guesses.
+
+**2. Triggers decoupled from functionality.** If P10 Power and P10 Simple need to expose the same underlying operation differently — different labels, different keybindings, different confirmation copy, different surfacing — the Action layer is the joint that makes that possible. Same Command, multiple Action declarations, no duplication of the underlying behavior. We build the functionality once and dress it for each audience separately. This generalizes to anything else we might ship on top of the platform: training modes, accessibility shells, partner-branded variants. Without an Action layer, this kind of differentiation forces either duplicated Command implementations or a pile of conditionals inside each Command.
+
+**3. A unified discovery surface for users.** Bible translators are knowledge workers. A searchable launcher meets them halfway between menu-hunting and shortcut memorization. Power users get keyboard speed; new and occasional users get a "what can this thing do?" surface. Every other tool serious knowledge workers use has one (VS Code, Linear, Figma, Notion, Raycast, Slack). We don't. We should.
+
+The user benefit (3) is the most visible. The team-velocity argument (1) is what makes this worth doing soon rather than later — the longer we live with feature-by-feature placement negotiations, the more time we burn that we could be spending on actual problems.
 
 ---
 
@@ -144,24 +149,47 @@ This is the shape of the proposal at the architectural level — the load-bearin
 5. **Composition belongs in the Command layer or in Deep Links — never in Actions.** If "Sync All Projects" is a real operation other callers want, it's a Command. If "open project AND show resources" is just a navigation flow, it's a Deep Link. Actions that loop or orchestrate would grow into a parallel programming model. Don't.
 6. **Keybindings target Actions, not Commands.** This is the call that makes (1)–(5) actually hold. If keybindings could target Commands directly, Commands would have to grow back the human-protection concerns we just moved out. VS Code does it the other way and pays for it.
 
-If you reject (6), we can still make most of this work, but Commands will need optional confirmation/localization metadata and the boundary between Command and Action gets fuzzy. I think (6) is the right call but it's the one I'm least certain about — would value your read.
+If you reject (6), we can still make most of this work, but Commands will need optional confirmation/localization metadata and the boundary between Command and Action gets fuzzy. (6) is the right call but it's the one I'm least certain about — would value your read.
+
+---
+
+## Why two concepts instead of one?
+
+This is the move you're most likely to push back on, so it gets its own section.
+
+The lighter-weight option: **keep one concept (Command), add UI-facing metadata to it (title, description, icon, when-clause), filter the palette by which Commands declare that metadata.** Roughly VS Code's `contributes.commands` model. Simpler. Why two concepts instead?
+
+The case against the one-concept version:
+
+**1. Internal Commands that aren't user-facing.** `platform.restartExtensionHost`, `platform.isSendReceiveAvailable` (a predicate, not a verb), `helloRock3.deleteHelloRock3ProjectByWebViewId` (plumbing keyed by opaque IDs). Either these grow user-facing metadata fields (wrong — they aren't user-facing), or we add an `isUserFacing: true` flag to filter the palette. If we're adding the flag, we already have two implicit concepts — user-facing Commands vs. not — and we're just refusing to name the distinction. Naming it (as Action) makes the split explicit and lets the type system carry it.
+
+**2. Dynamic palette items don't fit static metadata.** "Recent: Genesis 1 — MyProject" isn't a registered Command. Each entry is `platform.navigateToScriptureLocation` with provider-supplied args, produced at query time from a recents list. Static metadata on a Command can't express "one Command, many palette entries, args provided dynamically." You need a separate concept (Bound Action / Action Provider) to express this — at which point the second concept is already there.
+
+**3. Same Command, different exposure per product surface.** P10 Power and P10 Simple may want to expose the same underlying operation with different labels, different keybindings, different confirmation copy, different surfacing. If labels live on the Command, you can't have two of them. Two concepts let one Command have many Action wrappers — one per audience. The same generalizes to future variants (training mode, accessibility shell, partner builds).
+
+**4. Localized titles vs. precise dev names.** The Command name is `platform.assignChapter`. The UI label is "Assign Chapter…" in English, "Asignar capítulo…" in Spanish, with search keywords like "delegate". One-concept means all of that hangs off the Command — which works if there's exactly one canonical UI label, but breaks the moment audience-specific differences appear (see #3).
+
+**5. Confirmation belongs in the human layer, not the machine contract.** A user picking "Delete Project" from the palette needs a modal. A script calling `platform.deleteProject(id)` doesn't. If confirmation lives on the Command, scripts have to bypass it or pass a `skipConfirm` flag everywhere. If confirmation lives on the Action, Commands stay pure and human-protection happens uniformly across every UI surface.
+
+**6. Arg-flow declarations don't fit Command signatures.** "How to collect args from sub-pickers, context, providers" is a real declarative shape with validation, defaults, and skip conditions. Attaching it to the Command ties the Command signature to UI collection patterns — which is exactly the kind of coupling Commands shouldn't have if they're going to remain callable from scripts and other Commands.
+
+Put together: the one-concept version solves each of these by adding optional metadata to Commands, until Commands have grown a bunch of UI fields that internal Commands don't use, plus a flag distinguishing user-facing ones, plus an inline arg-flow spec, plus a confirm hook. At that point the second concept is already present, just unnamed. Two concepts make it explicit, keep Commands pure, and give us natural seams for multi-audience exposure.
+
+### The cost
+
+This proposal is large. Seven concepts where today we have roughly one (Command) plus a generic picker overlay: Command, Action, Action Provider, Bound Action, Arg-flow, Deep Link, Action Palette. A reasonable read is "this is over-engineered; can we do less?"
+
+- Most extension authors will only ever touch Command + Action. Providers, Bound Actions, and arg-flow are advanced features that appear when there's a real need (recents, multi-step arg collection). Deep Links are optional. Simple case stays simple — one Command, one Action declaring a title and a dispatch target, done.
+- The phasing options in Open Questions let us land this incrementally. Command + Action + a minimal palette first; grow Providers and arg-flow when concrete use cases force it.
+- The alternative isn't "no concepts" — it's "the same concepts smuggled into Commands as optional metadata." The complexity exists either way; the question is whether it's named or implicit.
+
+If your read is "start with metadata-on-Commands and grow into the layered shape later," push back below and tell me why. My counter is that the trigger-decoupling case (P10 Power vs. P10 Simple) and the dynamic-palette case (recents) come up soon enough that we'd be refactoring into this shape within a year. "Later" is the right call if there's other architectural work that needs to settle first — say so if there is.
 
 ---
 
 ## Alternatives considered
 
-### A. Metadata on Commands only (no Action concept)
-
-Keep "Command" as the only concept. Add user-facing fields (title, description, icon, when-clause) directly to Commands. Filter the palette by which Commands declare those fields. This is roughly VS Code's `contributes.commands` model.
-
-**Why I'm not proposing this:**
-
-- Doesn't accommodate dynamic palette items. "Recent: Genesis 1 — MyProject" isn't a registered Command; it's `platform.navigateToScriptureLocation` with pre-bound args produced at query time. Static metadata on Commands can't express that.
-- Doesn't accommodate in-palette arg drilling cleanly. The palette would need to inspect Command parameter types and synthesize sub-pickers, which is fragile and ungeneralizable.
-- Conflates the dev name (`platform.assignChapter`) with the UI label ("Assign Chapter…"). Forces you to pick one shape for both audiences.
-- Confirmation/safety logic ends up in Commands, which scripts then have to bypass — exactly the muddling we want to avoid.
-
-It's the lighter-weight option and it's not wrong; it's just under-powered for what we actually want the palette to do.
+The big one — keeping Commands as the single concept — is its own section above. Other alternatives we considered and didn't pursue:
 
 ### B. Actions that hold logic (orchestration layer)
 
@@ -185,25 +213,48 @@ Today's `CommandPaletteItem` is already a generic searchable item (the comment s
 
 ---
 
-## What's in this branch (illustrative)
+## The existing "command palette" code isn't an Action Palette
 
-The `refactor/action-palette` branch currently contains:
+While preparing this proposal I went to rename `overlay-command-palette` to `overlay-action-palette` — and stopped when I looked at what it's actually doing. The findings are concrete evidence for the proposal itself, so I'm including them here.
 
-1. **`CONTEXT.md`** — glossary entry for the new vocabulary. Designed as a stable reference for anyone working in the codebase.
-2. **`docs/adr/0001-action-palette-naming.md`** — the naming decision and considered alternatives.
-3. **A working rename of the existing overlay-command-palette code** — `ActionPaletteItem`, `ActionPaletteRequest`, `showActionPalette`, internal symbol renames, file renames via `git mv` (history preserved), data-attribute renames, LocalizeKey renames, plus localization JSON updates for English and Spanish.
-4. **Backward compatibility**: `CommandPaletteItem`, `CommandPaletteRequest`, and `showCommandPalette` remain as `@deprecated` aliases so out-of-repo extensions don't break.
-5. **`papi.d.ts` regenerated** with both new and deprecated names.
-6. **167 overlay tests pass; ESLint clean.**
+**The only production caller is `hello-rock3.web-view.tsx`, and it uses the overlay to pick USFM markers**, not to invoke actions:
 
-**Please treat the code changes as a sketch.** They demonstrate that the rename is mechanical and low-risk, but the _real_ proposal is the mental model, not these specific edits. If you'd rather:
+```ts
+papi.overlays.showCommandPalette({
+  items: [
+    { id: 'p', label: 'Paragraph (p)', description: 'Normal paragraph', group: 'Paragraphs' },
+    { id: 'q1', label: 'Poetry Line 1 (q1)', description: 'First level poetry', group: 'Poetry' },
+    { id: 'ft', label: 'Footnote (ft)', description: 'Footnote text', group: 'Notes' },
+    { id: 'pro', label: 'Pronoun (pro)', badge: 'Deprecated', disabled: true },
+    /* ... */
+  ],
+});
+```
 
-- Defer the rename until the broader Action feature is approved
-- Keep "Command Palette" as the name and just add the Action concept beneath it
-- Land the docs only and drop the code changes
-- Take a different shape entirely
+Those are **data records** (marker codes) — not user-invocable verbs. The user selects a marker; the caller gets back `'ft'` and inserts that marker into the editor. That's a generic searchable picker pattern — VS Code calls this `QuickPick`. It is _not_ the global, app-wide Action Palette this proposal is asking for.
 
-…any of those is fine. I'd much rather we make the call together than have me presume.
+Even the original `CommandPaletteItem` type doc hints at the dual use:
+
+```ts
+/** Primary display text (e.g., marker code like "ft" or command name) */
+label: string | LocalizeKey;
+```
+
+The overload — "this generic picker is sometimes for markers, sometimes for commands" — was baked in from day one. Renaming the surface from "Command Palette" to "Action Palette" would just swap one wrong name for another.
+
+**What that means for the proposal:**
+
+- The existing overlay is a per-WebView **generic picker primitive**. It deserves a better name (`QuickPick`, `Picker`, etc.) — separate from this proposal. I've put that rename on a companion draft PR (linked in this PR's description) for you to weigh in on independently.
+- The **Action Palette** I'm asking for is a different thing entirely: an **app-global, top-level** surface that lists Actions across the whole product. It would likely be built _on top of_ the same primitive, but it isn't a rename of it.
+- The fact that the original author had to thread "marker code or command name" through a type called `CommandPaletteItem` is a real-world example of the term overload this proposal exists to eliminate.
+
+So this branch is intentionally **docs-only**:
+
+1. **`CONTEXT.md`** — glossary entry for Command, Action, Action Provider, Bound Action, Arg-flow, Deep Link, Action Palette. Designed as a stable reference if the proposal is accepted.
+2. **`docs/adr/0001-action-palette-naming.md`** — naming decision and considered alternatives.
+3. **This proposal.**
+
+No code is touched. The exploratory rename — retargeted at a generic name — is on a separate draft PR so you can evaluate the two decisions independently.
 
 ---
 
@@ -212,7 +263,7 @@ The `refactor/action-palette` branch currently contains:
 1. **Do you buy the Command vs. Action split?** Or do you prefer Alternative A (metadata on Commands, no second concept)?
 2. **Do keybindings target Actions or Commands?** I'm proposing Actions. If you say Commands, the model still mostly works but the layering gets fuzzier.
 3. **Naming**: Action Palette vs. Command Palette. I have an opinion but will follow your call.
-4. **Scope of first delivery.** Reasonable phasing: (a) docs + glossary only, (b) docs + Action declaration API, no UI yet, (c) docs + minimal palette UI dispatching to existing Commands without arg-flow, (d) full feature including Action Providers and arg-flow drilling. I'd suggest (b) → (c) → (d) as separate milestones; (a) alone is also defensible if you want to think more.
+4. **Scope of first delivery.** Phasing options: (a) docs + glossary only, (b) docs + Action declaration API, no UI yet, (c) docs + minimal palette UI dispatching to existing Commands without arg-flow, (d) full feature including Action Providers and arg-flow drilling. Suggested: (b) → (c) → (d) as separate milestones. (a) alone works if you want to defer the rest.
 5. **Where Actions live in the codebase.** Likely a sibling of `command.service.ts` (e.g., `src/shared/services/action.service.ts`) with its own registration API, typed via `papi-shared-types` augmentation just like Commands. Open to your preference.
 6. **How extensions declare Actions.** Programmatic (`papi.actions.registerAction(...)`) or manifest-declared (JSON in the extension), or both? VS Code does both. Has implications for static discoverability and packaging.
 
@@ -220,12 +271,17 @@ The `refactor/action-palette` branch currently contains:
 
 ## The ask
 
-If you're broadly bought in, I'd like permission to:
+I'm not asking you to approve this for shipping. I'm asking you to engage with it: poke at the model, find the parts you don't like, push back on the layering, raise the concerns I haven't anticipated. **Grill me.**
 
-1. Land the docs (CONTEXT.md, ADR) on `main` either as-is or in whatever shape you prefer.
-2. Open a follow-up design issue for the Action service API and palette UI, with you as the architect of record.
-3. Either land the illustrative rename or revert it, your call.
+Specifically, I'd like your read on:
 
-Happy to walk through any of this in person/over a call. The branch is here so you can poke at the rename and see the shape of it in real code.
+1. **Direction.** Is the Command/Action split a shape you'd want this platform to grow into? Or do you instinctively want to keep it one concept and let it grow as needed?
+2. **What's broken about this.** What am I missing? What falls over at scale? What's wrong about the layering? Where does the model fail on a case I haven't thought of?
+3. **Refactor appetite.** If this is roughly the right direction, is it something you'd be open to making space for — yours or someone you'd point at it? A small concept change still costs real refactor work, and I'd rather know your gut on that early than spend cycles pursuing something the platform isn't going to absorb.
+4. **Timing.** My instinct is sooner-rather-than-later. The longer we live with the current Command overload and the case-by-case "where does this button go?" pattern, the more we'll have to unwind. But you have a much better view of the platform roadmap than I do; if there's other architectural work that should land first, I want to plan around that rather than push against it.
 
-Thanks for considering it.
+If your read is "right direction, wrong layering," tell me. If your read is "wrong direction entirely, keep Commands as one concept and add metadata," tell me why — there's likely something you're seeing that I'm not.
+
+Happy to walk through any of this in person or on a call. The doc is here to be reacted to.
+
+Thanks.
