@@ -715,8 +715,6 @@ global.webViewComponent = function ManageBooksWebView({
   // would need a PAPI command + correlation ID + state subscription. Functional tests
   // (manage-books-functional-WP-002.spec.ts) also assert the picker renders inside the
   // manage-books iframe via `frame.getByRole('dialog', ...)`, which requires same-iframe render.
-  // The standalone `greek-esther-template-picker.web-view-provider.ts` exists for future callers
-  // that want a free-floating dialog but is not on the WP-002 hot path.
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerResolverRef = useRef<((value: GreekEstherTemplate | undefined) => void) | undefined>(
     undefined,
