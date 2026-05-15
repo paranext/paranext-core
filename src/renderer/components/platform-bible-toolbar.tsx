@@ -41,9 +41,14 @@ import {
   ScrollGroupId,
   ThemeDefinitionExpanded,
 } from 'platform-bible-utils';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const TOOLTIP_DELAY = 300;
+
+// Heuristic delay before retrying the send/receive availability check on startup. The extension
+// host may not be ready when the toolbar first mounts. onDidReloadExtensions handles recovery
+// after that initial window, so a single retry here is sufficient.
+const SEND_RECEIVE_AVAILABILITY_STARTUP_RETRY_MS = 2000;
 
 /** Placeholder theme to detect when we are loading */
 const DEFAULT_THEME_VALUE: ThemeDefinitionExpanded = {
@@ -172,6 +177,8 @@ export function PlatformBibleToolbar() {
   );
   useEvent(onSyncStateChanged, handleSyncStateChanged);
 
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
   const checkIfSendReceiveAvailable = useCallback(async () => {
     try {
       // This command comes from an extension and is not typed in CommandHandlers.
@@ -179,13 +186,19 @@ export function PlatformBibleToolbar() {
       const isAvailable = await (sendCommand as any)('platformGetResources.isSendReceiveAvailable');
       setIsSendReceiveAvailable(isAvailable);
     } catch (e) {
+      // Don't set false — a throw means the extension host wasn't ready yet (startup race), not
+      // that the extension is absent. Schedule a retry so the button isn't permanently hidden.
       logger.warn(`Toolbar could not determine send/receive availability: ${getErrorMessage(e)}`);
-      setIsSendReceiveAvailable(false);
+      retryTimeoutRef.current = setTimeout(
+        checkIfSendReceiveAvailable,
+        SEND_RECEIVE_AVAILABILITY_STARTUP_RETRY_MS,
+      );
     }
   }, []);
 
   useEffect(() => {
     checkIfSendReceiveAvailable();
+    return () => clearTimeout(retryTimeoutRef.current);
   }, [checkIfSendReceiveAvailable]);
 
   const onDidReloadExtensions = useMemo(

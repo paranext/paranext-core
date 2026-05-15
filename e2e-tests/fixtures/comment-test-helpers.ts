@@ -44,7 +44,7 @@ const WEB_PROJECT_ASSETS_DIR = path.resolve(__dirname, '../../c-sharp/assets/WEB
 /** Platform.Bible's Paratext 9 projects root (matches LocalParatextProjects constructor) */
 const PARATEXT_PROJECTS_ROOT = path.join(
   os.homedir(),
-  '.platform.bible',
+  '.{{ productInfo.name }}',
   'projects',
   'Paratext 9 Projects',
 );
