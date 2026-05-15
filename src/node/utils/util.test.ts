@@ -1,6 +1,7 @@
 import path from 'path';
 import os from 'os';
 import { vi } from 'vitest';
+import { PRODUCT_FOLDER_NAME } from './util';
 
 // getAppDir is memoized, so each test must get a fresh module import.
 // We use vi.resetModules() + dynamic import to clear the memoized value between tests.
@@ -21,7 +22,7 @@ describe('getAppDir', () => {
   it('returns .platform.bible in home directory when packaged', async () => {
     globalThis.isPackaged = true;
     const { getAppDir } = await import('./util');
-    expect(getAppDir()).toBe(path.join(os.homedir(), '/.platform.bible'));
+    expect(getAppDir()).toBe(path.join(os.homedir(), `.${PRODUCT_FOLDER_NAME}`));
   });
 
   it('returns resourcesPath/dev-appdata when not packaged', async () => {
