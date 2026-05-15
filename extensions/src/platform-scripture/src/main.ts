@@ -24,10 +24,6 @@ import {
   ManageBooksWebViewOptions,
   ManageBooksWebViewProvider,
 } from './manage-books.web-view-provider';
-import {
-  GREEK_ESTHER_TEMPLATE_PICKER_WEB_VIEW_TYPE,
-  GreekEstherTemplatePickerWebViewProvider,
-} from './greek-esther-template-picker.web-view-provider';
 import { SCRIPTURE_EXTENDER_PROJECT_INTERFACES } from './project-data-provider/platform-scripture-extender-pdpe.model';
 import {
   SCRIPTURE_EXTENDER_PDPF_ID,
@@ -350,7 +346,6 @@ export async function activate(context: ExecutionActivationContext) {
   const findWebViewProvider = new FindWebViewProvider();
   const markersChecklistWebViewProvider = new ChecklistWebViewProvider();
   const manageBooksWebViewProvider = new ManageBooksWebViewProvider();
-  const greekEstherTemplatePickerWebViewProvider = new GreekEstherTemplatePickerWebViewProvider();
 
   const booksPresentPromise = papi.projectSettings.registerValidator(
     'platformScripture.booksPresent',
@@ -574,11 +569,6 @@ export async function activate(context: ExecutionActivationContext) {
     MANAGE_BOOKS_WEB_VIEW_TYPE,
     manageBooksWebViewProvider,
   );
-  const greekEstherTemplatePickerWebViewProviderPromise =
-    papi.webViewProviders.registerWebViewProvider(
-      GREEK_ESTHER_TEMPLATE_PICKER_WEB_VIEW_TYPE,
-      greekEstherTemplatePickerWebViewProvider,
-    );
 
   const openFindPromise = papi.commands.registerCommand('platformScripture.openFind', openFind, {
     method: {
@@ -664,7 +654,6 @@ export async function activate(context: ExecutionActivationContext) {
     await openFindWebViewProviderPromise,
     await openManageBooksPromise,
     await manageBooksWebViewProviderPromise,
-    await greekEstherTemplatePickerWebViewProviderPromise,
     await invalidateResultsPromise,
     checkHostingService.dispose,
     checkAggregatorService.dispose,
