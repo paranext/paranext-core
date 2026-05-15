@@ -5469,6 +5469,8 @@ declare module 'shared/data/file-system.model' {
 }
 declare module 'node/utils/util' {
   import { Uri } from 'shared/data/file-system.model';
+  /** Folder name used for the user's Platform.Bible data directory */
+  export const PRODUCT_FOLDER_NAME = 'platform.bible';
   /** Name of the directory in app that should be used to hold extension data */
   export const EXTENSION_DATA_DIR = 'extensions';
   /** Name of the directory in app where installed extensions live */
@@ -5485,7 +5487,7 @@ declare module 'node/utils/util' {
    *
    * When running in development: `<repo_directory>/dev-appdata`
    *
-   * When packaged: `<user_home_directory>/.{{ productInfo.name }}`
+   * When packaged: `<user_home_directory>/.platform.bible`
    */
   export const getAppDir: import('memoize-one').MemoizedFn<() => string>;
   /**
