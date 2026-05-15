@@ -149,6 +149,9 @@ const DEFAULT_WEBVIEW_MENU = {
 
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
 
+// Matches the key used by PlatformBibleToolbar to persist its active scroll group
+const TOOLBAR_SCROLL_GROUP_ID_LOCAL_STORAGE_KEY = 'platform-bible-toolbar.scrollGroupId';
+
 /**
  * Extracts scripture text snippets from a selection range.
  *
@@ -344,6 +347,30 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     if (isPlatformError(interfaceModePossiblyError)) return false;
     return interfaceModePossiblyError === 'power';
   }, [interfaceModePossiblyError]);
+
+  // setScrollGroupId changes reference on every scrRef update (it has scrRefLocal in its deps), so
+  // stabilize it via a ref to avoid the effect below calling updateWebViewDefinition on every verse
+  const setScrollGroupIdRef = useRef(setScrollGroupId);
+  setScrollGroupIdRef.current = setScrollGroupId;
+
+  // In simple mode the scroll group selector is hidden, so follow the toolbar's active scroll group
+  useEffect(() => {
+    if (isPowerMode) return undefined;
+
+    const syncToToolbar = () =>
+      setScrollGroupIdRef.current(
+        JSON.parse(localStorage.getItem(TOOLBAR_SCROLL_GROUP_ID_LOCAL_STORAGE_KEY) ?? '0'),
+      );
+
+    syncToToolbar();
+
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === TOOLBAR_SCROLL_GROUP_ID_LOCAL_STORAGE_KEY) syncToToolbar();
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [isPowerMode]);
 
   const textDirectionEffective = useMemo(() => {
     // OHEBGRK is a special case where we want to show the OT in RTL but the NT in LTR
