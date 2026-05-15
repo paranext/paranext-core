@@ -464,7 +464,7 @@ function createPickerMocks(): PickerMocks {
     },
     commands: { sendCommand: mockSendCommand },
     network: { getNetworkEvent: mockGetNetworkEvent },
-    logger: { warn: mockWarn },
+    logger: { warn: mockWarn, info: vi.fn() },
   } as unknown as typeof PapiBackend;
 
   return {
