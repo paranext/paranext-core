@@ -188,17 +188,26 @@ async function open(
   }
   if (projectForWebView.projectId) {
     // Decide where to route this open. The dispatch helper centralizes the simple-mode invariants
-    // (one editor slot, no duplicate-project tabs) and the empty-editor probe; see
+    // (one editor slot, no duplicate-(project, readonly) tabs) and the empty-editor probe; see
     // resolveOpenEditorDispatch JSDoc for the priority order.
     const allOpenDefs = await papi.webViews.getAllOpenWebViewDefinitions();
-    const allScriptureEditors = allOpenDefs.filter(
-      (def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-    );
+    const allScriptureEditors = allOpenDefs
+      .filter((def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE)
+      .map((def) => ({
+        id: def.id,
+        projectId: def.projectId,
+        // WebView state isn't statically typed, but `getWebViewDefinition` always stores
+        // `isReadOnly` as boolean here. Treat any other value as `false` for safety.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        isReadOnly: !!(def.state?.isReadOnly as boolean | undefined),
+      }));
     const interfaceMode = await papi.settings.get('platform.interfaceMode');
+    const requestedIsReadOnly = !projectForWebView.isEditable;
 
     const dispatch = resolveOpenEditorDispatch(
       allScriptureEditors,
       projectForWebView.projectId,
+      requestedIsReadOnly,
       interfaceMode,
       existingTabIdToReplace,
     );

@@ -641,13 +641,14 @@ async function loadLayout(layout?: LayoutInfo): Promise<void> {
   const dockLayoutVar = await getDockLayout();
   if (layout) {
     // Explicit layout change. `loadLayout` doesn't run `onLayoutChange`, so run it manually.
-    // TODO: No callers pass an explicit layout — consider removing this branch and `layout` param
     dockLayoutVar.loadLayout(layout);
     await onLayoutChange(layout);
     return;
   }
 
-  // Startup load — pick the layout based on interface mode.
+  // Startup load — pick the layout based on interface mode. This runs once at startup; changes
+  // to `platform.interfaceMode` at runtime do not re-trigger a layout switch (no user-facing
+  // mode switcher exists yet).
   const interfaceMode = await settingsService.get('platform.interfaceMode');
   const layoutToLoad =
     interfaceMode === 'simple'
