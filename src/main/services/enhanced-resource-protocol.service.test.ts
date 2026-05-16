@@ -96,6 +96,25 @@ describe('enhanced-resource-protocol.service / handleEnhancedResourceRequest', (
     expect(response.status).toBe(400);
   });
 
+  test('decodes percent-encoded imageId before invoking the PAPI command (FN-030)', async () => {
+    const originalId = 'Fauna:2.2b';
+    const seen: { imageId: string; size: string }[] = [];
+    restore = setFetchImageBytesInvokerForTest(async (input) => {
+      seen.push(input);
+      return {
+        contentType: 'image/jpeg',
+        data: Buffer.from('encoded-id-bytes').toString('base64'),
+      };
+    });
+
+    const response = await handleEnhancedResourceRequest({
+      url: `papi-er://images/${encodeURIComponent(originalId)}?size=full`,
+    });
+
+    expect(response.status).toBe(200);
+    expect(seen).toEqual([{ imageId: originalId, size: 'full' }]);
+  });
+
   test('falls back to imageId MIME lookup when the result has empty contentType', async () => {
     restore = setFetchImageBytesInvokerForTest(async () => ({
       contentType: '',

@@ -65,6 +65,50 @@ describe('enhanced-resource.utils / parseEnhancedResourceUri edge cases', () => 
   });
 });
 
+// FN-030: encode <-> decode round-trip. The renderer URL builder
+// (buildPapiErImageUrl in enhanced-resource.web-view.tsx) calls
+// encodeURIComponent(imageId); parseEnhancedResourceUri must invert that so the
+// C# MediaService.FetchImageBytes lookup sees the original imageId. Real marble
+// data contains IDs with `:`, spaces, parens, etc.
+describe('enhanced-resource.utils / parseEnhancedResourceUri imageId URL-decoding (FN-030)', () => {
+  test.each([
+    ['Fauna:2.2b', 'images with `:` in id (marble Fauna collection)'],
+    ['304, Temple Mount', 'images with `,` and space in id'],
+    ['Ark (top view)', 'images with `(`, `)` and spaces'],
+    ['100% Wool', 'images with `%` in id'],
+    ['a/b/c', 'imageIds with `/` (must not be confused with path separators)'],
+    ['name?with=query', 'imageIds with `?` and `=` (must not collide with query parsing)'],
+    ["O'Brien", "imageIds with `'`"],
+    ['héllo+wörld', 'imageIds with non-ASCII and `+`'],
+  ])('round-trips imageId %j (%s)', (originalId) => {
+    const encoded = encodeURIComponent(originalId);
+    const uri = `papi-er://images/${encoded}`;
+    const parsed = parseEnhancedResourceUri(uri);
+    expect(parsed.imageId).toBe(originalId);
+    expect(parsed.size).toBe('thumbnail');
+  });
+
+  test('round-trips imageId with special chars combined with size=full query', () => {
+    const originalId = 'Fauna:2.2b';
+    const uri = `papi-er://images/${encodeURIComponent(originalId)}?size=full`;
+    const parsed = parseEnhancedResourceUri(uri);
+    expect(parsed.imageId).toBe(originalId);
+    expect(parsed.size).toBe('full');
+  });
+
+  test('throws "Invalid papi-er URI" on malformed percent-encoding', () => {
+    // lone `%` not followed by two hex digits triggers URIError from decodeURIComponent
+    expect(() => parseEnhancedResourceUri('papi-er://images/bad%ZZpercent')).toThrow(
+      /Invalid papi-er URI - malformed percent-encoding/,
+    );
+  });
+
+  test('still accepts unencoded alphanumeric imageIds (back-compat)', () => {
+    const parsed = parseEnhancedResourceUri('papi-er://images/ATL-0906_new_testament_world');
+    expect(parsed.imageId).toBe('ATL-0906_new_testament_world');
+  });
+});
+
 describe('enhanced-resource.utils / getMimeTypeForImageId', () => {
   test.each([
     ['Dromedary.jpg', 'image/jpeg'],

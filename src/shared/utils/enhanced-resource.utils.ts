@@ -56,10 +56,26 @@ export function parseEnhancedResourceUri(uri: string): EnhancedResourceUriInfo {
   }
 
   const questionMark = afterFirstSlash.indexOf('?');
-  const imageId = questionMark >= 0 ? afterFirstSlash.substring(0, questionMark) : afterFirstSlash;
+  const encodedImageId =
+    questionMark >= 0 ? afterFirstSlash.substring(0, questionMark) : afterFirstSlash;
   const query = questionMark >= 0 ? afterFirstSlash.substring(questionMark + 1) : '';
 
-  if (!imageId) throw new Error(`Invalid papi-er URI - empty imageId in "${uri}"`);
+  if (!encodedImageId) throw new Error(`Invalid papi-er URI - empty imageId in "${uri}"`);
+
+  // FN-030: the renderer URL builder (`buildPapiErImageUrl` in enhanced-resource.web-view.tsx)
+  // wraps `imageId` in `encodeURIComponent` before embedding it in the URL path. Real marble
+  // IDs can contain `:`, spaces, `(`, etc. (e.g. `Fauna:2.2b`, `304, Temple Mount`). Without
+  // this matching `decodeURIComponent` the C# `MediaService.FetchImageBytes` lookup compares
+  // `image.ImageId == "Fauna%3A2.2b"` and returns null, surfacing as broken-image 404s in the
+  // renderer. `decodeURIComponent` throws `URIError` on malformed escapes (e.g. lone `%`); we
+  // re-throw as our standard "Invalid papi-er URI" shape so the protocol handler maps it to a
+  // 400 response just like any other parse failure.
+  let imageId: string;
+  try {
+    imageId = decodeURIComponent(encodedImageId);
+  } catch {
+    throw new Error(`Invalid papi-er URI - malformed percent-encoding in imageId "${uri}"`);
+  }
 
   const size = parseSizeQuery(query);
   return { pathType: 'images', imageId, size };
