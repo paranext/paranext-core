@@ -50,20 +50,22 @@ type View = 'included' | 'all';
 /**
  * # Scripture text picker
  *
- * A control for managing which scripture texts a project uses **and** for picking which
- * of those texts the calling surface currently displays. One UI, two jobs — see "Why dual
- * purpose" below.
+ * A control for deciding **which scripture texts this project uses** and **which of those is
+ * shown on the calling surface right now**. The two jobs blur in practice — see "Why both
+ * jobs in one picker" below.
  *
  * ## What it does
  *
  * The picker shows three groups of scripture texts:
  *
- * 1. **Included** — already attached to the project. Click a row to ask the host to display
- *    that text on the calling surface. Hover or focus a non-locked row to reveal an X that
- *    removes the text from the project (or press `Delete`/`Backspace` while it's focused).
- * 2. **Installed** — already on disk but not yet in this project. Click to include.
- * 3. **Available to download** — not on disk. Click to download and include. A spinner
- *    appears on the row while the download is in progress.
+ * 1. **Included** — already attached to the project. Click a row to ask the host to
+ *    show/hide that text on the calling surface (single-select: replaces; multi-select:
+ *    toggles). Hover or focus a non-locked row to reveal an X that removes the text from
+ *    the project (or press `Delete`/`Backspace` while it's focused).
+ * 2. **On your computer** — already local but not yet in this project. Click to include
+ *    AND display.
+ * 3. **Available to download** — not local. Click to download, include, AND display.
+ *    A spinner appears on the row while the download is in progress.
  *
  * A footer button toggles between two views:
  *
@@ -76,13 +78,15 @@ type View = 'included' | 'all';
  * The initial view is **captured at open time** — it doesn't flip dynamically as the user
  * adds items mid-session. That would yank the Installed/Available list out from under them.
  *
- * ## Why dual purpose
+ * ## Why both jobs in one picker
  *
- * Splitting these into two separate UIs (a "Manage project" dialog and a "Which text?"
- * dropdown) would force users to remember which one to open for which job. Users usually
+ * Splitting these into two separate UIs (a "Project texts…" dialog and a "Which text?"
+ * dropdown) would force users to remember which one to open for which intent. Users usually
  * want to add a text *and* immediately display it, or remove a text *while* they're picking
- * which to view — the jobs blur in practice. Keeping them in one picker, with a view toggle
- * that captures the right default at open time, lets either intent flow naturally.
+ * which to view — the jobs blur. Keeping them in one picker, with a view toggle that
+ * captures the right default at open time, lets either intent flow naturally. This is also
+ * why the `include` action always implies display: bringing a text into the project is
+ * almost always followed by the user wanting to see it.
  *
  * ## Why this picker is presentational
  *

@@ -49,14 +49,18 @@ export interface LanguageMultipickerProps {
  *
  * # The "Preferred" preset
  *
- * "Preferred" represents the set of languages the user actually reads, derived from their
- * platform-bible profile (typically: their UI language plus any other languages they've added
- * to their preferences). Showing it as a single named preset makes the common case ("only show
- * me texts in languages I can read") one click away, without forcing the user to enumerate.
+ * "Preferred" is the set of languages the user is treated as reading. It is **not** sourced
+ * from a profile-stored preference list — it is **derived from the user's content footprint**:
+ * the union of the languages of the resources and projects they've engaged with. The
+ * definition is specified in
+ * [PT-3980](https://paratextstudio.atlassian.net/browse/PT-3980).
  *
- * If the parent component doesn't know the user's preferred languages, omit the `preferred`
- * prop — the preset disappears from the popover and the trigger label never collapses to
- * "Preferred".
+ * Surfacing it as a single named preset makes the most common case ("only show me texts in
+ * languages I can read") one click away, without forcing the user to enumerate.
+ *
+ * If the parent component doesn't know the user's preferred languages (e.g. brand-new user
+ * with no content history), omit the `preferred` prop — the preset disappears from the
+ * popover and the trigger label never collapses to "Preferred".
  *
  * # Trigger label degradation
  *

@@ -54,7 +54,9 @@ export const SCRIPTURE_TEXT_PICKER_DEFAULTS: Required<ScriptureTextPickerLocaliz
   '%scriptureTextPicker_group_included%': 'Included',
 
   // meaning: group heading for texts on disk but not yet attached to this project. Click adds.
-  '%scriptureTextPicker_group_installed%': 'Installed',
+  // We say "On your computer" rather than the more technical "Installed" because what the
+  // user cares about is that these are local and ready to go — no download needed.
+  '%scriptureTextPicker_group_installed%': 'On your computer',
 
   // meaning: group heading for texts not yet on disk. Click starts a download and includes.
   '%scriptureTextPicker_group_available%': 'Available to download',
@@ -90,11 +92,13 @@ export const SCRIPTURE_TEXT_PICKER_DEFAULTS: Required<ScriptureTextPickerLocaliz
   // meaning: accessible label for the spinner icon on an item that's currently downloading.
   '%scriptureTextPicker_status_downloading%': 'Downloading',
 
-  // meaning: accessible label for the "this is installed, click to include" status icon.
-  '%scriptureTextPicker_status_installed%': 'Installed — click to include',
+  // meaning: accessible label for the "this is on the user's computer, click to add it to
+  // the project and start displaying it" status icon.
+  '%scriptureTextPicker_status_installed%': 'On your computer — click to include and display',
 
-  // meaning: accessible label for the "this is available, click to download and include" icon.
-  '%scriptureTextPicker_status_available%': 'Available to download — click to download and include',
+  // meaning: accessible label for the "this is available, click to download and include + display" icon.
+  '%scriptureTextPicker_status_available%':
+    'Available to download — click to download, include, and display',
 
   // meaning: very short accessible label for the lock icon — used when no tooltip is visible.
   '%scriptureTextPicker_lock_short%': 'Cannot be removed from this project',

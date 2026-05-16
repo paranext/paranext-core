@@ -18,10 +18,13 @@ export const LANGUAGE_MULTIPICKER_DEFAULTS: Required<LanguageMultipickerLocalize
   // texts in any language". Used both as the trigger label and as the popover preset button.
   '%languageMultipicker_preset_any%': 'Any',
 
-  // meaning: preset name for the user's preferred-language set (the languages they read,
-  // including their UI language). When the current selection matches this set exactly, the
-  // trigger label collapses to "Preferred" instead of listing codes. The point is to make the
-  // common case ("only show me texts in languages I can read") expressible without enumerating.
+  // meaning: preset name for the user's preferred-language set. "Preferred" is *derived* from
+  // the user's content footprint — the union of languages of the resources and projects they've
+  // engaged with — not from a stored profile preference. Spec: PT-3980
+  // (https://paratextstudio.atlassian.net/browse/PT-3980). When the current selection matches
+  // this set exactly, the trigger label collapses to "Preferred" instead of listing codes. The
+  // point is to make the common case ("only show me texts in languages I can read") expressible
+  // without enumerating.
   '%languageMultipicker_preset_preferred%': 'Preferred',
 
   // meaning: trigger label fallback when the selection has too many languages to display as

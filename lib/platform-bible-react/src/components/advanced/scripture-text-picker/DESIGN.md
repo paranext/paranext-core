@@ -15,10 +15,12 @@ Each entry has the same shape:
 
 ---
 
-## 1 · Two-axis selection: membership vs surface state
+## 1 · Two-axis selection: project membership vs surface visibility
 
 **Pattern.** When a control governs both "what's *attached* to a project" and "what's *currently
-visible* on the calling surface," keep them as two distinct concepts in the data model.
+visible* on the calling surface," keep them as two distinct concepts in the data model. The
+user usually wants to do both at once (add a text *and* see it) — handle that by having one
+action imply the other, not by collapsing the concepts.
 
 **Chosen.** `ItemStatus` distinguishes `included` / `installed` / `available` (membership). The
 host separately owns `displayedIds: string[]` (surface state). The picker emphasizes displayed
@@ -91,8 +93,16 @@ search input visually and broke down badly with 4+ languages.
 **Pattern.** For a multi-select where one combination is overwhelmingly common, give that
 combination a name and surface it both as a preset button and as a compact trigger label.
 
-**Chosen.** "Preferred" represents the user's read-able language set (UI language + profile
-languages). Single-click selects it; trigger label shows it as a word.
+**Chosen.** "Preferred" represents the user's read-able language set, **derived from their
+content footprint** — the union of languages of the resources and projects they've engaged
+with. Definition lives in
+[PT-3980](https://paratextstudio.atlassian.net/browse/PT-3980). Single-click selects it;
+trigger label shows it as a word.
+
+**Rejected.** Sourcing "Preferred" from a profile-stored preference list. Earlier draft
+described it as "UI language + profile languages" — wrong. Profile-stored prefs require the
+user to maintain a list explicitly; content-footprint derivation does it automatically and
+matches the user's actual reading behavior.
 
 **Rejected.** Showing only "Any" / "Custom". Cost: the most common interaction is two-or-three
 clicks. With "Preferred" it's one.
@@ -290,7 +300,22 @@ should feel gentle rather than technical.
 
 ---
 
-## 17 · Multi-name language data
+## 17 · Plain-language labels for technical states
+
+**Pattern.** When a status group represents a technical concept, prefer a label that names
+what the user *cares about* over the engineering term.
+
+**Chosen.** "On your computer" instead of "Installed" for the group of scripture texts that
+exist locally but aren't yet in this project. What matters to the user is "this is ready to
+go, no download needed." "Installed" is correct but technical; "On your computer" is what
+they'd say to a colleague.
+
+**Rejected.** "Installed." Carries deployment/setup connotations. Forces the user to translate
+the engineering concept to "ready to use without downloading."
+
+---
+
+## 18 · Multi-name language data
 
 **Pattern.** Languages are searchable by multiple names (canonical English, autonym, alternate
 names). The data shape should include all of them, but the display should be opinionated:

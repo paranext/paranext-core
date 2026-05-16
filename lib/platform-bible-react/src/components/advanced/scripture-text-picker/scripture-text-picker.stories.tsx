@@ -33,17 +33,22 @@ const meta: Meta = {
     docs: {
       description: {
         component: `
-A control for managing which scripture texts a project uses **and** for picking which of those
-texts are currently displayed on the calling surface. One UI, two jobs.
+A control for deciding **which scripture texts this project uses** and **which of those is
+shown on the calling surface right now**. The two jobs blur in practice — users often want to
+add a text *and* immediately see it — so the picker keeps them together.
 
-Three groups of texts — **Included** (already in the project), **Installed** (on disk, click
-to include), **Available to download** (click to download + include). A footer button toggles
-between an "Included only" view and a "Browse all" view; the initial view is chosen based on
-project state at open time.
+Three groups of texts:
+
+- **Included** — already in the project. Click to show/hide on the calling surface.
+- **On your computer** — local but not yet in the project. Click to include *and* display.
+- **Available to download** — not local. Click to download, include, *and* display.
+
+A footer button toggles between an "Included only" view and a "Browse all" view; the initial
+view is chosen based on project state at open time.
 
 The picker is presentational — the host owns \`items\`, \`displayedIds\`, and the surrounding
-popover/dialog open state. The picker emits actions; the host applies its own policy (single
-vs multi select, auto-display on include, etc).
+popover/dialog open state. The picker emits actions; the host applies its single- vs multi-
+select policy.
 
 See \`./DESIGN.md\` (co-located with this component) for the decision history and patterns
 that came out of this exploration.
@@ -108,11 +113,9 @@ function ResizableShell({
 function ControlledPicker({
   dataset,
   mode,
-  autoDisplayOnInclude,
 }: {
   dataset: keyof typeof DATASETS;
   mode: Mode;
-  autoDisplayOnInclude: boolean;
 }) {
   const initial = DATASETS[dataset];
   // useState's `dataset` key makes the playground reset when the user switches datasets.
@@ -161,8 +164,13 @@ function ControlledPicker({
           );
         }, 2000);
       }
-      if (autoDisplayOnInclude && displayedIds.length === 0) {
+      // Spec: include always displays the newly-included item too (multi-select hosts add it
+      // to the set; single-select hosts replace whatever's displayed). The user just acted to
+      // bring this text into their workspace — they almost certainly want to see it.
+      if (mode === 'single') {
         setDisplayedIds([id]);
+      } else {
+        setDisplayedIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
       }
     } else if (action.type === 'remove') {
       const id = action.item.data.dblEntryUid;
@@ -197,7 +205,6 @@ function ControlledPicker({
 interface PlaygroundArgs {
   dataset: keyof typeof DATASETS;
   mode: Mode;
-  autoDisplayOnInclude: boolean;
   shellWidth: number;
   shellHeight: number;
 }
@@ -206,7 +213,6 @@ export const Playground: StoryObj<PlaygroundArgs> = {
   args: {
     dataset: 'populated',
     mode: 'single',
-    autoDisplayOnInclude: true,
     shellWidth: 480,
     shellHeight: 520,
   },
@@ -223,11 +229,6 @@ export const Playground: StoryObj<PlaygroundArgs> = {
       description:
         'Host policy: single keeps `displayedIds.length ≤ 1`; multi toggles ids in a set. The picker doesn\'t care which — this control changes the demo host\'s behavior.',
     },
-    autoDisplayOnInclude: {
-      control: { type: 'boolean' },
-      description:
-        'Demo host policy: when a newly-included text comes in while nothing is currently displayed, should it also become displayed? Typical for sparse projects.',
-    },
     shellWidth: {
       control: { type: 'range', min: 260, max: 900, step: 20 },
       description:
@@ -240,11 +241,7 @@ export const Playground: StoryObj<PlaygroundArgs> = {
   },
   render: (args) => (
     <ResizableShell initialWidth={args.shellWidth} initialHeight={args.shellHeight}>
-      <ControlledPicker
-        dataset={args.dataset}
-        mode={args.mode}
-        autoDisplayOnInclude={args.autoDisplayOnInclude}
-      />
+      <ControlledPicker dataset={args.dataset} mode={args.mode} />
     </ResizableShell>
   ),
   parameters: {
@@ -263,7 +260,7 @@ export const SinglePopulated: StoryObj = {
   name: 'Single · populated (display switcher)',
   render: () => (
     <ResizableShell>
-      <ControlledPicker dataset="populated" mode="single" autoDisplayOnInclude={true} />
+      <ControlledPicker dataset="populated" mode="single" />
     </ResizableShell>
   ),
   parameters: {
@@ -280,7 +277,7 @@ export const SingleSparse: StoryObj = {
   name: 'Single · sparse (add-mode)',
   render: () => (
     <ResizableShell>
-      <ControlledPicker dataset="sparse" mode="single" autoDisplayOnInclude={true} />
+      <ControlledPicker dataset="sparse" mode="single" />
     </ResizableShell>
   ),
   parameters: {
@@ -297,7 +294,7 @@ export const MultiPopulated: StoryObj = {
   name: 'Multi · populated',
   render: () => (
     <ResizableShell>
-      <ControlledPicker dataset="populated" mode="multi" autoDisplayOnInclude={true} />
+      <ControlledPicker dataset="populated" mode="multi" />
     </ResizableShell>
   ),
   parameters: {
@@ -314,7 +311,7 @@ export const NarrowWidth: StoryObj = {
   name: 'Narrow (340px) — responsive collapse',
   render: () => (
     <ResizableShell initialWidth={340}>
-      <ControlledPicker dataset="mixed" mode="single" autoDisplayOnInclude={true} />
+      <ControlledPicker dataset="mixed" mode="single" />
     </ResizableShell>
   ),
   parameters: {
@@ -331,7 +328,7 @@ export const ShortHeight: StoryObj = {
   name: 'Short height (260px) — scroll',
   render: () => (
     <ResizableShell initialHeight={260}>
-      <ControlledPicker dataset="mixed" mode="single" autoDisplayOnInclude={true} />
+      <ControlledPicker dataset="mixed" mode="single" />
     </ResizableShell>
   ),
   parameters: {
@@ -402,7 +399,12 @@ function MockScriptureViewer({
           );
         }, 2000);
       }
-      if (displayedIds.length === 0) setDisplayedIds([id]);
+      // Include always displays the newly-included item too — single replaces, multi adds.
+      if (mode === 'single') {
+        setDisplayedIds([id]);
+      } else {
+        setDisplayedIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+      }
     } else if (action.type === 'remove') {
       const id = action.item.data.dblEntryUid;
       setItems((prev) =>
