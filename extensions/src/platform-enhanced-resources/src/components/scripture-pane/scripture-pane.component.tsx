@@ -459,6 +459,11 @@ export function EnhancedScripturePane({
   // eslint-disable-next-line no-null/no-null
   const activePopoverIdRef = useRef<string | null>(null);
   const activeMatchSetRef = useRef<Set<string>>(new Set());
+  // Fix D-14: track the currently-hovered annotation id so re-fires of mouseenter
+  // from editor-induced mark re-renders (caused by setAnnotation('marble-hover-match', ...))
+  // are no-oped. Without this guard, the popover-fetch race kicks in: every re-fire bumps
+  // fetchGenRef, so most in-flight buildTooltipData calls abort at the gen-staleness check.
+  const currentlyHoveredIdRef = useRef<string | undefined>(undefined);
 
   // Build per-lemma annotation index from `lexicalLinks` metadata. Used by hover handlers
   // to compute matching vs non-matching annotations on each mouseenter without iterating
@@ -638,6 +643,12 @@ export function EnhancedScripturePane({
       const annotation = annotationsById.get(id);
       if (!annotation || annotation.kind !== 'word') return;
 
+      // Fix D-14: ignore re-fires for the same id (editor recreates marks after
+      // setAnnotation('marble-hover-match', ...) updates, which re-fires React's
+      // synthetic mouseenter on the new element under the cursor).
+      if (id === currentlyHoveredIdRef.current) return;
+      currentlyHoveredIdRef.current = id;
+
       const target = event.currentTarget;
       if (!(target instanceof Element)) return;
       const rect = target.getBoundingClientRect();
@@ -671,6 +682,7 @@ export function EnhancedScripturePane({
     };
 
     const handleMarbleMouseLeave = () => {
+      currentlyHoveredIdRef.current = undefined;
       fetchGenRef.current += 1;
 
       if (activePopoverIdRef.current) {
@@ -757,6 +769,7 @@ export function EnhancedScripturePane({
         editor.removeAnnotation(ANNOTATION_TYPE_HOVER_MATCH, matchId);
       });
       matchSet.clear();
+      currentlyHoveredIdRef.current = undefined;
       wordAnnotations.forEach((a) => {
         editor.removeAnnotation(annotationTypeFor(a.kind), a.annotationId);
       });
@@ -779,8 +792,9 @@ export function EnhancedScripturePane({
   }, [usj, annotations, filteredTokenId]);
 
   // Effect C - per-annotation marble-highlight overlays via editor.setAnnotation.
-  // Chunked RAF apply matches Effect A's pattern to avoid the 8.5-second click-handler stall
-  // captured during May-06 when this ran un-chunked.
+  // Chunked RAF apply matches Effect A's pattern; running this un-chunked produced a
+  // multi-second click-handler stall (Chrome `[Violation] 'click' handler took >8000ms`)
+  // because ~64 synchronous setAnnotation calls executed end-to-end on the click thread.
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor || !usj || !highlightAllResearchTerms) return undefined;
