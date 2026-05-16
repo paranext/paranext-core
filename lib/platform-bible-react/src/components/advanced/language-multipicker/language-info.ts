@@ -1,30 +1,48 @@
 /**
- * Mock language metadata. Field names align with `LanguageInfo` from
- * `ui-language-selector.component` (`autonym`, `otherNames`). Real implementation should derive
- * from IETF/ISO + autonym datasets and handle thousands of languages efficiently — the current
- * in-memory table is a placeholder.
+ * Placeholder language metadata for `LanguageMultipicker`.
  *
- * This module is the temporary data source for `LanguageMultipicker`. When a system-wide
- * language metadata service exists, swap this out and have the picker consume it.
+ * # Language codes
+ *
+ * The rest of platform-bible identifies languages via **BCP-47** tags (e.g. `en`, `es-419`,
+ * `zh-Hant`) — that's the IETF standard the codebase already uses (see
+ * `ui-language-selector.component.tsx`). Where a language has a 2-letter ISO 639-1 code, BCP-47
+ * tags use it (`en`); where it doesn't, BCP-47 falls back to the 3-letter ISO 639-3 code (`grc`
+ * for Koine Greek).
+ *
+ * The codes in this placeholder follow that same convention. When this component is wired to
+ * the real platform-bible language source, it should accept whatever BCP-47 tag form the
+ * source provides — this module is a *temporary local mock* meant only to feed the prototype
+ * stories.
+ *
+ * # `LanguageInfo` shape
+ *
+ * Mirrors `LanguageInfo` from `ui-language-selector.component.tsx` (`autonym`, `otherNames`)
+ * so the eventual system-wide language source can serve both components without translation.
  */
 export interface LanguageInfo {
-  /** Canonical name in English / ISO. */
+  /** Canonical English name. e.g. "German". */
   name: string;
-  /** 3-letter best-effort code. */
+  /**
+   * Best-effort BCP-47 tag. Prefer 2-letter ISO 639-1 where available, fall back to 3-letter
+   * ISO 639-3 where the language has no 639-1 code.
+   */
   code: string;
-  /** What the language calls itself. */
+  /** What the language calls itself, in its own script. e.g. "Deutsch". */
   autonym: string;
-  /** Alternate names searchable but not normally displayed. */
+  /**
+   * Alternative names the language is also known by. Searchable but not normally displayed —
+   * users can search "Deutsche" or "Castellano" and find the right match.
+   */
   otherNames?: string[];
 }
 
 const TABLE: LanguageInfo[] = [
-  { name: 'English', code: 'eng', autonym: 'English' },
-  { name: 'Spanish', code: 'spa', autonym: 'Español', otherNames: ['Castellano'] },
-  { name: 'French', code: 'fra', autonym: 'Français' },
-  { name: 'German', code: 'deu', autonym: 'Deutsch', otherNames: ['Deutsche'] },
-  { name: 'Portuguese', code: 'por', autonym: 'Português' },
-  { name: 'Hebrew', code: 'heb', autonym: 'עברית' },
+  { name: 'English', code: 'en', autonym: 'English' },
+  { name: 'Spanish', code: 'es', autonym: 'Español', otherNames: ['Castellano'] },
+  { name: 'French', code: 'fr', autonym: 'Français' },
+  { name: 'German', code: 'de', autonym: 'Deutsch', otherNames: ['Deutsche'] },
+  { name: 'Portuguese', code: 'pt', autonym: 'Português' },
+  { name: 'Hebrew', code: 'he', autonym: 'עברית' },
   { name: 'Greek', code: 'grc', autonym: 'Ἑλληνικά', otherNames: ['Koine'] },
 ];
 
@@ -34,7 +52,7 @@ export function getLanguage(name: string): LanguageInfo {
   return byName.get(name) ?? { name, code: name.slice(0, 3).toLowerCase(), autonym: name };
 }
 
-/** Search haystack — name, autonym, code, and otherNames — case-insensitive. */
+/** Case-insensitive match across name, autonym, code, and otherNames. */
 export function languageMatchesQuery(name: string, query: string): boolean {
   const info = getLanguage(name);
   const q = query.toLowerCase();

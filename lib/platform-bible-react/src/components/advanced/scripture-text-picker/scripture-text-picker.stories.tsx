@@ -11,13 +11,57 @@ import {
 } from './scripture-text-picker.data';
 import { ScriptureTextItem, PickerAction } from './scripture-text-picker.types';
 
+/**
+ * Datasets the playground stories can drive the picker with. Stable keys so Storybook control
+ * arg state survives reloads.
+ */
+const DATASETS: Record<string, ScriptureTextItem[]> = {
+  populated: SAMPLE_ITEMS_POPULATED,
+  sparse: SAMPLE_ITEMS_SPARSE,
+  mixed: SAMPLE_ITEMS,
+};
+
+const PREFERRED = ['English', 'Spanish', 'French'];
+
+type Mode = 'single' | 'multi';
+
 const meta: Meta = {
   title: 'Advanced/ScriptureTextPicker',
-  parameters: { layout: 'centered' },
+  tags: ['autodocs'],
+  parameters: {
+    layout: 'centered',
+    docs: {
+      description: {
+        component: `
+A control for managing which scripture texts a project uses **and** for picking which of those
+texts are currently displayed on the calling surface. One UI, two jobs.
+
+Three groups of texts — **Included** (already in the project), **Installed** (on disk, click
+to include), **Available to download** (click to download + include). A footer button toggles
+between an "Included only" view and a "Browse all" view; the initial view is chosen based on
+project state at open time.
+
+The picker is presentational — the host owns \`items\`, \`displayedIds\`, and the surrounding
+popover/dialog open state. The picker emits actions; the host applies its own policy (single
+vs multi select, auto-display on include, etc).
+
+See \`./DESIGN.md\` (co-located with this component) for the decision history and patterns
+that came out of this exploration.
+        `,
+      },
+    },
+  },
 };
 export default meta;
 
-/** Both-dimension resizable shell. Drag the bottom-right corner ↘ to test responsive collapse. */
+// ─── Resizable shell ───────────────────────────────────────────────────────
+
+/**
+ * Resizable container used to demonstrate the picker's container-query responsive collapse and
+ * its shrink-to-fit behavior. Drag the bottom-right grip to change width and height; the
+ * picker reflows accordingly. A subtle "↘" hint sits in the corner with a tooltip via the
+ * `title` attribute.
+ */
 function ResizableShell({
   children,
   initialWidth = 480,
@@ -29,167 +73,278 @@ function ResizableShell({
 }) {
   return (
     <div
+      title="Drag ↘ to resize"
       style={{
         width: initialWidth,
         height: initialHeight,
         resize: 'both',
         overflow: 'hidden',
         minWidth: 260,
-        minHeight: 220,
+        minHeight: 200,
         maxWidth: 900,
         maxHeight: 800,
       }}
-      className="tw:flex tw:flex-col tw:rounded-lg tw:border tw:bg-background tw:shadow-md"
+      className="tw:relative tw:flex tw:flex-col tw:rounded-lg tw:border tw:bg-background tw:shadow-md"
     >
-      <div className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col">{children}</div>
-      <div className="tw:border-t tw:px-3 tw:py-1 tw:text-[0.7rem] tw:text-muted-foreground">
-        Drag the bottom-right corner ↘ to resize both dimensions
-      </div>
+      {children}
+      {/* Decorative resize hint — sits over the native CSS resize grip. pointer-events:none so
+          the native grip below still receives the resize drag. */}
+      <span
+        aria-hidden
+        className="tw:pointer-events-none tw:absolute tw:bottom-0.5 tw:right-0.5 tw:select-none tw:text-[0.65rem] tw:text-muted-foreground/60"
+      >
+        ↘
+      </span>
     </div>
   );
 }
 
-type Mode = 'single' | 'multi';
+// ─── Stateful host wrapper ─────────────────────────────────────────────────
 
 /**
- * Reducer applying picker actions against a host that owns items + displayedIds. Mode determines
- * single (toggleDisplay replaces) vs multi (toggleDisplay toggles in set).
+ * Realistic host that applies actions per the configured mode. Same wrapper drives both the
+ * pure-component stories and the trigger-popover stories.
  */
-function applyAction(
-  state: { items: ScriptureTextItem[]; displayedIds: string[] },
-  action: PickerAction,
-  mode: Mode,
-  setItems: React.Dispatch<React.SetStateAction<ScriptureTextItem[]>>,
-): { items: ScriptureTextItem[]; displayedIds: string[] } {
-  const { items, displayedIds } = state;
-  const id = action.item.data.dblEntryUid;
-
-  if (action.type === 'toggleDisplay') {
-    if (mode === 'single') {
-      const next = displayedIds.includes(id) ? [] : [id];
-      return { items, displayedIds: next };
-    }
-    const next = displayedIds.includes(id)
-      ? displayedIds.filter((x) => x !== id)
-      : [...displayedIds, id];
-    return { items, displayedIds: next };
-  }
-
-  if (action.type === 'include') {
-    const isAvailable = action.item.status.kind === 'available';
-    const nextItems = items.map((it) =>
-      it.data.dblEntryUid === id
-        ? {
-            ...it,
-            status: { kind: 'included' as const, ...(isAvailable ? { downloading: true } : {}) },
-          }
-        : it,
-    );
-    // Available items finish downloading after a beat.
-    if (isAvailable) {
-      setTimeout(() => {
-        setItems((cur) =>
-          cur.map((it) =>
-            it.data.dblEntryUid === id && it.status.kind === 'included'
-              ? { ...it, status: { ...it.status, downloading: false } }
-              : it,
-          ),
-        );
-      }, 2000);
-    }
-    // Auto-display if nothing is currently displayed (host policy — typical for sparse case).
-    const nextDisplayedIds = displayedIds.length === 0 ? [id] : displayedIds;
-    return { items: nextItems, displayedIds: nextDisplayedIds };
-  }
-
-  if (action.type === 'remove') {
-    const item = items.find((i) => i.data.dblEntryUid === id);
-    if (!item) return state;
-    const nextItems = items.map((it) =>
-      it.data.dblEntryUid === id
-        ? {
-            ...it,
-            status: it.data.installed
-              ? ({ kind: 'installed' } as const)
-              : ({ kind: 'available' } as const),
-          }
-        : it,
-    );
-    const nextDisplayedIds = displayedIds.filter((x) => x !== id);
-    return { items: nextItems, displayedIds: nextDisplayedIds };
-  }
-
-  return state;
-}
-
-function ControlledPicker({ initial, mode }: { initial: ScriptureTextItem[]; mode: Mode }) {
-  const [items, setItems] = useState(initial);
+function ControlledPicker({
+  dataset,
+  mode,
+  autoDisplayOnInclude,
+}: {
+  dataset: keyof typeof DATASETS;
+  mode: Mode;
+  autoDisplayOnInclude: boolean;
+}) {
+  const initial = DATASETS[dataset];
+  // useState's `dataset` key makes the playground reset when the user switches datasets.
+  const [items, setItems] = useState<ScriptureTextItem[]>(initial);
   const [displayedIds, setDisplayedIds] = useState<string[]>(() => {
     const first = initial.find((i) => i.status.kind === 'included')?.data.dblEntryUid;
     return first ? [first] : [];
   });
 
   const onAction = (action: PickerAction) => {
-    const next = applyAction({ items, displayedIds }, action, mode, setItems);
-    setItems(next.items);
-    setDisplayedIds(next.displayedIds);
+    if (action.type === 'toggleDisplay') {
+      const id = action.item.data.dblEntryUid;
+      if (mode === 'single') {
+        setDisplayedIds(displayedIds.includes(id) ? [] : [id]);
+      } else {
+        setDisplayedIds(
+          displayedIds.includes(id)
+            ? displayedIds.filter((x) => x !== id)
+            : [...displayedIds, id],
+        );
+      }
+    } else if (action.type === 'include') {
+      const id = action.item.data.dblEntryUid;
+      const isAvailable = action.item.status.kind === 'available';
+      setItems((prev) =>
+        prev.map((it) =>
+          it.data.dblEntryUid === id
+            ? {
+                ...it,
+                status: {
+                  kind: 'included' as const,
+                  ...(isAvailable ? { downloading: true } : {}),
+                },
+              }
+            : it,
+        ),
+      );
+      if (isAvailable) {
+        setTimeout(() => {
+          setItems((cur) =>
+            cur.map((it) =>
+              it.data.dblEntryUid === id && it.status.kind === 'included'
+                ? { ...it, status: { ...it.status, downloading: false } }
+                : it,
+            ),
+          );
+        }, 2000);
+      }
+      if (autoDisplayOnInclude && displayedIds.length === 0) {
+        setDisplayedIds([id]);
+      }
+    } else if (action.type === 'remove') {
+      const id = action.item.data.dblEntryUid;
+      setItems((prev) =>
+        prev.map((it) =>
+          it.data.dblEntryUid === id
+            ? {
+                ...it,
+                status: it.data.installed
+                  ? ({ kind: 'installed' } as const)
+                  : ({ kind: 'available' } as const),
+              }
+            : it,
+        ),
+      );
+      setDisplayedIds((prev) => prev.filter((x) => x !== id));
+    }
   };
 
   return (
     <ScriptureTextPickerProgressive
       items={items}
       displayedIds={displayedIds}
+      preferredLanguages={PREFERRED}
       onAction={onAction}
     />
   );
 }
 
-export const Single_Populated: StoryObj = {
+// ─── Playground ────────────────────────────────────────────────────────────
+
+interface PlaygroundArgs {
+  dataset: keyof typeof DATASETS;
+  mode: Mode;
+  autoDisplayOnInclude: boolean;
+  shellWidth: number;
+  shellHeight: number;
+}
+
+export const Playground: StoryObj<PlaygroundArgs> = {
+  args: {
+    dataset: 'populated',
+    mode: 'single',
+    autoDisplayOnInclude: true,
+    shellWidth: 480,
+    shellHeight: 520,
+  },
+  argTypes: {
+    dataset: {
+      control: { type: 'select' },
+      options: ['populated', 'sparse', 'mixed'],
+      description:
+        'Initial state of the picker. *populated* opens in Included-only view; *sparse* opens in Browse-all (add-mode); *mixed* exercises both groups densely.',
+    },
+    mode: {
+      control: { type: 'inline-radio' },
+      options: ['single', 'multi'],
+      description:
+        'Host policy: single keeps `displayedIds.length ≤ 1`; multi toggles ids in a set. The picker doesn\'t care which — this control changes the demo host\'s behavior.',
+    },
+    autoDisplayOnInclude: {
+      control: { type: 'boolean' },
+      description:
+        'Demo host policy: when a newly-included text comes in while nothing is currently displayed, should it also become displayed? Typical for sparse projects.',
+    },
+    shellWidth: {
+      control: { type: 'range', min: 260, max: 900, step: 20 },
+      description:
+        'Width of the resizable shell. Drag the corner instead for live tweaking; this arg sets the initial value.',
+    },
+    shellHeight: {
+      control: { type: 'range', min: 200, max: 800, step: 20 },
+      description: 'Height of the resizable shell. Initial value only — drag to adjust live.',
+    },
+  },
+  render: (args) => (
+    <ResizableShell initialWidth={args.shellWidth} initialHeight={args.shellHeight}>
+      <ControlledPicker
+        dataset={args.dataset}
+        mode={args.mode}
+        autoDisplayOnInclude={args.autoDisplayOnInclude}
+      />
+    </ResizableShell>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Top-level interactive playground. Use the Controls panel to switch dataset, host mode, auto-display policy, and the shell\'s initial size. The picker itself shrinks to fit content; resize the shell to see container-query responsive collapse trigger at 480px and 360px.',
+      },
+    },
+  },
+};
+
+// ─── Focused exemplars ─────────────────────────────────────────────────────
+
+export const SinglePopulated: StoryObj = {
   name: 'Single · populated (display switcher)',
   render: () => (
     <ResizableShell>
-      <ControlledPicker initial={SAMPLE_ITEMS_POPULATED} mode="single" />
+      <ControlledPicker dataset="populated" mode="single" autoDisplayOnInclude={true} />
     </ResizableShell>
   ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Default story for the most common case: a project with multiple included texts where the user opens the picker to switch *which one* is displayed. Initial view = Included only.',
+      },
+    },
+  },
 };
 
-export const Single_Sparse: StoryObj = {
+export const SingleSparse: StoryObj = {
   name: 'Single · sparse (add-mode)',
   render: () => (
     <ResizableShell>
-      <ControlledPicker initial={SAMPLE_ITEMS_SPARSE} mode="single" />
+      <ControlledPicker dataset="sparse" mode="single" autoDisplayOnInclude={true} />
     </ResizableShell>
   ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A nearly-empty project. Picker opens in Browse-all view so the user can immediately add a text. The view stays in Browse-all even after adding — the captured-at-open initial view is the contract.',
+      },
+    },
+  },
 };
 
-export const Multi_Populated: StoryObj = {
+export const MultiPopulated: StoryObj = {
   name: 'Multi · populated',
   render: () => (
     <ResizableShell>
-      <ControlledPicker initial={SAMPLE_ITEMS_POPULATED} mode="multi" />
+      <ControlledPicker dataset="populated" mode="multi" autoDisplayOnInclude={true} />
     </ResizableShell>
   ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Multi-select host: clicking an Included row toggles it in/out of the displayed set rather than replacing. Multiple Check marks appear simultaneously. Same picker, different host policy.',
+      },
+    },
+  },
 };
 
 export const NarrowWidth: StoryObj = {
-  name: 'Narrow (340px)',
+  name: 'Narrow (340px) — responsive collapse',
   render: () => (
     <ResizableShell initialWidth={340}>
-      <ControlledPicker initial={SAMPLE_ITEMS} mode="single" />
+      <ControlledPicker dataset="mixed" mode="single" autoDisplayOnInclude={true} />
     </ResizableShell>
   ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'At <360px container width, names collapse to abbreviations and language chips collapse to 3-letter BCP-47 codes. Hover tooltips carry the full information. Demonstrates the container-query responsive contract.',
+      },
+    },
+  },
 };
 
 export const ShortHeight: StoryObj = {
-  name: 'Short height (260px)',
+  name: 'Short height (260px) — scroll',
   render: () => (
     <ResizableShell initialHeight={260}>
-      <ControlledPicker initial={SAMPLE_ITEMS} mode="single" />
+      <ControlledPicker dataset="mixed" mode="single" autoDisplayOnInclude={true} />
     </ResizableShell>
   ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Verifies the list scrolls cleanly when the shell is shorter than the picker\'s content. The picker\'s own max-height cap also applies — see the picker shrink-to-fit + max-height behavior.',
+      },
+    },
+  },
 };
 
-// ─── Trigger stories — popover stays open across actions ─────────────────
+// ─── Trigger (in-context) stories ──────────────────────────────────────────
 
 function MockScriptureViewer({
   initial,
@@ -209,10 +364,61 @@ function MockScriptureViewer({
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   const onAction = (action: PickerAction) => {
-    const next = applyAction({ items, displayedIds }, action, mode, setItems);
-    setItems(next.items);
-    setDisplayedIds(next.displayedIds);
-    // Popover stays open — host does not close on any action. User closes via outside-click or Esc.
+    if (action.type === 'toggleDisplay') {
+      const id = action.item.data.dblEntryUid;
+      if (mode === 'single') {
+        setDisplayedIds(displayedIds.includes(id) ? [] : [id]);
+      } else {
+        setDisplayedIds(
+          displayedIds.includes(id)
+            ? displayedIds.filter((x) => x !== id)
+            : [...displayedIds, id],
+        );
+      }
+    } else if (action.type === 'include') {
+      const id = action.item.data.dblEntryUid;
+      const isAvailable = action.item.status.kind === 'available';
+      setItems((prev) =>
+        prev.map((it) =>
+          it.data.dblEntryUid === id
+            ? {
+                ...it,
+                status: {
+                  kind: 'included' as const,
+                  ...(isAvailable ? { downloading: true } : {}),
+                },
+              }
+            : it,
+        ),
+      );
+      if (isAvailable) {
+        setTimeout(() => {
+          setItems((cur) =>
+            cur.map((it) =>
+              it.data.dblEntryUid === id && it.status.kind === 'included'
+                ? { ...it, status: { ...it.status, downloading: false } }
+                : it,
+            ),
+          );
+        }, 2000);
+      }
+      if (displayedIds.length === 0) setDisplayedIds([id]);
+    } else if (action.type === 'remove') {
+      const id = action.item.data.dblEntryUid;
+      setItems((prev) =>
+        prev.map((it) =>
+          it.data.dblEntryUid === id
+            ? {
+                ...it,
+                status: it.data.installed
+                  ? ({ kind: 'installed' } as const)
+                  : ({ kind: 'available' } as const),
+              }
+            : it,
+        ),
+      );
+      setDisplayedIds((prev) => prev.filter((x) => x !== id));
+    }
   };
 
   const displayed = items.filter((i) => displayedIds.includes(i.data.dblEntryUid));
@@ -238,13 +444,12 @@ function MockScriptureViewer({
             </Button>
           </PopoverTrigger>
           <PopoverContent align="end" sideOffset={6} className="tw:w-[440px] tw:p-0">
-            <div className="tw:flex tw:h-[520px] tw:flex-col">
-              <ScriptureTextPickerProgressive
-                items={items}
-                displayedIds={displayedIds}
-                onAction={onAction}
-              />
-            </div>
+            <ScriptureTextPickerProgressive
+              items={items}
+              displayedIds={displayedIds}
+              preferredLanguages={PREFERRED}
+              onAction={onAction}
+            />
           </PopoverContent>
         </Popover>
       </div>
@@ -271,17 +476,41 @@ function MockScriptureViewer({
   );
 }
 
-export const Trigger_Single_Populated: StoryObj = {
+export const TriggerSinglePopulated: StoryObj = {
   name: 'Trigger · Single · populated',
   render: () => <MockScriptureViewer initial={SAMPLE_ITEMS_POPULATED} mode="single" />,
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Picker in its real context: a popover anchored to the calling surface\'s trigger button. The popover stays open across include/toggleDisplay/remove actions — only Esc or an outside click closes it. The picker shrinks to fit content within the popover.',
+      },
+    },
+  },
 };
 
-export const Trigger_Single_Sparse: StoryObj = {
+export const TriggerSingleSparse: StoryObj = {
   name: 'Trigger · Single · sparse',
   render: () => <MockScriptureViewer initial={SAMPLE_ITEMS_SPARSE} mode="single" />,
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Same trigger context, but with a sparse project. Picker opens in Browse-all view. Notice the picker is taller than in the populated case — there are more rows to show.',
+      },
+    },
+  },
 };
 
-export const Trigger_Multi_Populated: StoryObj = {
+export const TriggerMultiPopulated: StoryObj = {
   name: 'Trigger · Multi · populated',
   render: () => <MockScriptureViewer initial={SAMPLE_ITEMS_POPULATED} mode="multi" />,
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Multi-select host in context. The trigger button shows the first displayed text plus a "+N" overflow indicator. Clicking included rows toggles them in/out of the displayed set.',
+      },
+    },
+  },
 };

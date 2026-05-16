@@ -3,14 +3,19 @@ import { Search } from 'lucide-react';
 import { LanguageMultipicker } from '@/components/advanced/language-multipicker/language-multipicker.component';
 import { languageMatchesQuery } from '@/components/advanced/language-multipicker/language-info';
 import { ScriptureTextItem } from './scripture-text-picker.types';
+import {
+  ScriptureTextPickerLocalizedStrings,
+  localizeScriptureTextPicker as L,
+} from './scripture-text-picker.strings';
 
 interface SearchRowProps {
   search: string;
   onSearch: (v: string) => void;
   selectedLanguages: string[];
-  preferredLanguages: string[];
+  preferredLanguages?: string[];
   onLanguagesChange: (langs: string[]) => void;
   allLanguages: string[];
+  localizedStrings?: ScriptureTextPickerLocalizedStrings;
 }
 
 /**
@@ -24,6 +29,7 @@ export function SearchRow({
   preferredLanguages,
   onLanguagesChange,
   allLanguages,
+  localizedStrings,
 }: SearchRowProps) {
   return (
     <div className="tw:flex tw:items-center tw:gap-2 tw:p-2">
@@ -32,7 +38,7 @@ export function SearchRow({
         <Input
           value={search}
           onChange={(e) => onSearch(e.target.value)}
-          placeholder="Search scripture texts…"
+          placeholder={L(localizedStrings, '%scriptureTextPicker_search_placeholder%')}
           className="tw:h-8 tw:pl-8 tw:text-sm"
         />
       </div>

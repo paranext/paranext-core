@@ -7,9 +7,14 @@ import {
 } from '@/components/shadcn-ui/tooltip';
 import { Lock, HardDrive, Cloud, Loader2, X, Check } from 'lucide-react';
 import { forwardRef } from 'react';
+import { formatReplacementString } from 'platform-bible-utils';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { PickerAction, ScriptureTextItem } from './scripture-text-picker.types';
 import { getLanguage } from '@/components/advanced/language-multipicker/language-info';
+import {
+  ScriptureTextPickerLocalizedStrings,
+  localizeScriptureTextPicker as L,
+} from './scripture-text-picker.strings';
 
 interface RowProps {
   item: ScriptureTextItem;
@@ -18,16 +23,23 @@ interface RowProps {
   onAction: (action: PickerAction) => void;
   /** Click on the language chip — host wires this to set the language filter. */
   onLanguageClick?: (languageName: string) => void;
+  localizedStrings?: ScriptureTextPickerLocalizedStrings;
 }
 
-function StatusIcon({ item }: { item: ScriptureTextItem }) {
+function StatusIcon({
+  item,
+  strings,
+}: {
+  item: ScriptureTextItem;
+  strings?: ScriptureTextPickerLocalizedStrings;
+}) {
   const s = item.status;
   if (s.kind === 'included') {
     if (s.downloading) {
       return (
         <Loader2
           className="tw:size-4 tw:animate-spin tw:text-muted-foreground"
-          aria-label="Downloading"
+          aria-label={L(strings, '%scriptureTextPicker_status_downloading%')}
         />
       );
     }
@@ -37,13 +49,15 @@ function StatusIcon({ item }: { item: ScriptureTextItem }) {
           <TooltipTrigger asChild>
             <Lock
               className="tw:size-3.5 tw:text-muted-foreground"
-              aria-label="Cannot be removed from this project"
+              aria-label={L(strings, '%scriptureTextPicker_lock_short%')}
             />
           </TooltipTrigger>
           <TooltipContent side="right">
-            <div className="tw:text-xs">Locked in project</div>
+            <div className="tw:text-xs">
+              {L(strings, '%scriptureTextPicker_lock_tooltipTitle%')}
+            </div>
             <div className="tw:text-[0.65rem] tw:text-muted-foreground">
-              This text is required and cannot be removed
+              {L(strings, '%scriptureTextPicker_lock_tooltipBody%')}
             </div>
           </TooltipContent>
         </Tooltip>
@@ -55,13 +69,13 @@ function StatusIcon({ item }: { item: ScriptureTextItem }) {
     return (
       <HardDrive
         className="tw:size-4 tw:text-muted-foreground"
-        aria-label="Installed — click to include"
+        aria-label={L(strings, '%scriptureTextPicker_status_installed%')}
       />
     );
   return (
     <Cloud
       className="tw:size-4 tw:text-muted-foreground"
-      aria-label="Available to download — click to download and include"
+      aria-label={L(strings, '%scriptureTextPicker_status_available%')}
     />
   );
 }
@@ -75,20 +89,19 @@ export function primaryActionFor(item: ScriptureTextItem): PickerAction {
   return { type: 'include', item };
 }
 
-/**
- * Listbox option for a single scripture text. Uses `role="option"` + roving tabindex managed by
- * the parent listbox. Mouse: full row click = primary action; hover-revealed X = remove (for
- * non-locked included items). Keyboard: parent handles Arrow/Home/End/Delete; the row only fires
- * its primary action on Enter/Space.
- *
- * Container-query responsive: at `<360px` the full name collapses to the abbreviation; at
- * `<480px` the language name collapses to a monospace ISO code.
- */
 export const ScriptureTextRow = forwardRef<HTMLDivElement, RowProps>(
-  ({ item, isDisplayed, isActive, onAction, onLanguageClick }, ref) => {
+  ({ item, isDisplayed, isActive, onAction, onLanguageClick, localizedStrings }, ref) => {
     const { data, status } = item;
     const showRemove = status.kind === 'included' && !status.lockedIncluded;
     const langInfo = getLanguage(data.bestLanguageName);
+
+    const chipAriaLabel = formatReplacementString(
+      L(localizedStrings, '%scriptureTextPicker_chip_ariaLabel%'),
+      { language: langInfo.name },
+    );
+    const removeLabel = L(localizedStrings, '%scriptureTextPicker_row_remove%');
+    const removeKbdHint = L(localizedStrings, '%scriptureTextPicker_row_remove_keyboardHint%');
+    const chipHint = L(localizedStrings, '%scriptureTextPicker_chip_tooltipHint%');
 
     return (
       <TooltipProvider delayDuration={300}>
@@ -99,26 +112,19 @@ export const ScriptureTextRow = forwardRef<HTMLDivElement, RowProps>(
           aria-selected={isDisplayed ?? false}
           data-row-id={data.dblEntryUid}
           onClick={() => onAction(primaryActionFor(item))}
-          // Keyboard activation (Enter/Space) is handled by the parent listbox, which also owns
-          // Arrow/Home/End/Delete. Centralizing key handling there lets us restore focus after a
-          // re-render that moves the row between groups (e.g. installed → included).
           className={cn(
-            // Three visual states need to stay distinguishable:
-            //   • selected (isDisplayed)  → tinted background (bg-accent)
-            //   • focused (keyboard nav)  → inset ring, NO bg change so it doesn't look selected
-            //   • hovered (mouse)         → subtle muted background, lighter than selected
             'tw:group tw:flex tw:w-full tw:cursor-pointer tw:items-center tw:gap-2 tw:rounded-md tw:px-2 tw:py-1.5 tw:text-left tw:transition-colors',
             'tw:hover:bg-muted',
             'tw:focus:outline-none tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:ring-inset',
             isDisplayed && 'tw:bg-accent tw:hover:bg-accent',
           )}
         >
-          {/* Leading status icon (fixed slot so rows align) */}
+          {/* Leading status icon — fixed slot so rows align */}
           <div className="tw:flex tw:size-4 tw:shrink-0 tw:items-center tw:justify-center">
-            <StatusIcon item={item} />
+            <StatusIcon item={item} strings={localizedStrings} />
           </div>
 
-          {/* Name — responsive collapse */}
+          {/* Name + language chip */}
           <div className="tw:flex tw:min-w-0 tw:flex-1 tw:items-center tw:gap-2">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -133,7 +139,6 @@ export const ScriptureTextRow = forwardRef<HTMLDivElement, RowProps>(
               </TooltipContent>
             </Tooltip>
 
-            {/* Language chip — click to filter by this language. Stronger states than a static badge. */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -147,14 +152,11 @@ export const ScriptureTextRow = forwardRef<HTMLDivElement, RowProps>(
                     'tw:shrink-0 tw:rounded-full tw:transition-all',
                     'tw:focus-visible:outline tw:focus-visible:outline-2 tw:focus-visible:outline-offset-1 tw:focus-visible:outline-ring',
                   )}
-                  aria-label={`Filter by ${langInfo.name}`}
+                  aria-label={chipAriaLabel}
                 >
                   <Badge
                     variant="secondary"
                     className={cn(
-                      // Resting → secondary (Badge default). Hover → switch to the accent palette
-                      // so the color is visibly different (was bg-secondary/60, which was too
-                      // close to base to register). Active = press-down feedback.
                       'tw:cursor-pointer tw:font-normal tw:transition-all',
                       'tw:hover:bg-accent tw:hover:text-accent-foreground tw:hover:ring-1 tw:hover:ring-ring/30',
                       'tw:active:scale-[0.95]',
@@ -176,7 +178,7 @@ export const ScriptureTextRow = forwardRef<HTMLDivElement, RowProps>(
                   {langInfo.code}
                 </div>
                 <div className="tw:mt-1 tw:text-[0.65rem] tw:text-muted-foreground">
-                  Click to filter
+                  {chipHint}
                 </div>
               </TooltipContent>
             </Tooltip>
@@ -204,8 +206,8 @@ export const ScriptureTextRow = forwardRef<HTMLDivElement, RowProps>(
                     ? 'tw:hidden tw:group-hover:inline-flex tw:group-focus-visible:inline-flex'
                     : 'tw:opacity-0 tw:group-hover:opacity-100 tw:group-focus-visible:opacity-100',
                 )}
-                aria-label="Remove from project"
-                title="Remove from project (Delete)"
+                aria-label={removeLabel}
+                title={removeKbdHint}
               >
                 <X className="tw:size-3.5" />
               </button>

@@ -2,58 +2,96 @@ import { useMemo } from 'react';
 import { Button } from '@/components/shadcn-ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import { Languages } from 'lucide-react';
+import { formatReplacementString } from 'platform-bible-utils';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { getLanguage } from './language-info';
+import {
+  LANGUAGE_MULTIPICKER_STRING_KEYS,
+  LanguageMultipickerLocalizedStrings,
+  localizeLanguageMultipicker as L,
+} from './language-multipicker.strings';
+
+export { LANGUAGE_MULTIPICKER_STRING_KEYS };
+export type { LanguageMultipickerLocalizedStrings };
 
 export interface LanguageMultipickerProps {
-  /** Currently-selected language names. Empty array = "Any" (no filter). */
+  /** Currently-selected language names. An empty array means "no filter applied" (i.e. "Any"). */
   value: string[];
-  /** Language names available to pick from. */
+  /** Languages available for the user to pick from. */
   options: string[];
   /**
-   * "Preferred" preset. Clicking the Preferred chip in the popover sets `value` to this list.
-   * If the current `value` matches this list exactly, the trigger label collapses to "Preferred".
+   * Preset list of languages that represent the user's preferred set — typically languages they
+   * can read, including their current UI language. When `value` matches `preferred` exactly,
+   * the trigger label collapses to a single word ("Preferred"). Clicking the Preferred preset
+   * inside the popover replaces the selection with this list. Omit to hide the preset.
    */
   preferred?: string[];
-  /** Called when the user changes the selection (or clicks Any / Preferred). */
+  /** Fires when the user changes the selection (toggling a language or picking a preset). */
   onChange: (next: string[]) => void;
-  /**
-   * Optional className passed to the trigger button — handy when the picker sits next to a
-   * search input and the host wants to tune the spacing.
-   */
+  /** Localized strings; see `LANGUAGE_MULTIPICKER_STRING_KEYS`. */
+  localizedStrings?: LanguageMultipickerLocalizedStrings;
+  /** Forwarded to the trigger button — useful for tuning spacing in a search row. */
   triggerClassName?: string;
 }
 
 /**
- * Character budget for the trigger label before collapsing further. Tuned to fit the word
- * "Preferred" so individual ISO codes can fit roughly the same horizontal space.
- */
-const TRIGGER_LABEL_BUDGET = 10;
-
-/**
- * Tertiary, compact multi-select picker for language *filtering*. Designed to sit beside a
- * search input and stay visually quiet until interacted with.
+ * Compact, tertiary multi-select for filtering a list by **content language**.
  *
- * The trigger label degrades by width / count:
- * - 0 selected            → "Any"
- * - matches `preferred`   → "Preferred"
- * - 1 selected            → 3-letter ISO code
- * - codes ≤ budget        → space-separated codes
- * - otherwise             → "{N} langs"
+ * Designed to sit next to a search input and stay quiet visually until the user interacts. The
+ * trigger button shrinks its label aggressively so a long list of selected languages doesn't
+ * crowd out the search field.
  *
- * This is a placeholder for what should become a system-wide content-language picker. Notable
- * gaps for that future component:
- * - Should accept a `LanguageInfo[]` (or a Suspense-friendly async loader) rather than just
- *   names, so callers don't have to look up metadata separately.
- * - Needs to handle thousands of languages — current list rendering is naive and will need
- *   virtualization plus a search input inside the popover.
- * - Should expose a way to surface autonyms in RTL scripts correctly.
+ * # When to use it
+ *
+ * Whenever a list of content items (scripture texts, handbooks, commentaries, …) needs a
+ * language filter. Not for picking the **UI language** of the application itself — use
+ * `UiLanguageSelector` for that.
+ *
+ * # The "Preferred" preset
+ *
+ * "Preferred" represents the set of languages the user actually reads, derived from their
+ * platform-bible profile (typically: their UI language plus any other languages they've added
+ * to their preferences). Showing it as a single named preset makes the common case ("only show
+ * me texts in languages I can read") one click away, without forcing the user to enumerate.
+ *
+ * If the parent component doesn't know the user's preferred languages, omit the `preferred`
+ * prop — the preset disappears from the popover and the trigger label never collapses to
+ * "Preferred".
+ *
+ * # Trigger label degradation
+ *
+ * The trigger button has limited horizontal space (it sits next to a search input). Its label
+ * adapts as the selection grows, from most-readable to most-compact:
+ *
+ * | Condition                              | Trigger label   |
+ * |----------------------------------------|-----------------|
+ * | 0 selected                             | `Any`           |
+ * | matches `preferred` exactly            | `Preferred`     |
+ * | 1 selected                             | `en` (BCP-47)   |
+ * | space-separated codes fit              | `en es fr`      |
+ * | otherwise                              | `5 langs`       |
+ *
+ * # Language codes
+ *
+ * Uses BCP-47 tags throughout — the same standard the rest of platform-bible uses. See
+ * `language-info.ts` for the placeholder data source.
+ *
+ * # Known gaps before this is a fully-featured system component
+ *
+ * - Should accept `LanguageInfo[]` (or an async loader) rather than just language names, so
+ *   callers don't have to look the metadata up separately.
+ * - Needs virtualization + an in-popover search input to handle the thousands of languages a
+ *   real source will provide.
+ * - Should handle RTL autonyms (Hebrew, Arabic, …) with proper bidi isolation.
+ *
+ * These are tracked for the eventual extraction into a system-wide content-language picker.
  */
 export function LanguageMultipicker({
   value,
   options,
   preferred,
   onChange,
+  localizedStrings,
   triggerClassName,
 }: LanguageMultipickerProps) {
   const isAny = value.length === 0;
@@ -62,14 +100,23 @@ export function LanguageMultipicker({
     value.length === preferred.length &&
     value.every((l) => preferred.includes(l));
 
+  const anyLabel = L(localizedStrings, '%languageMultipicker_preset_any%');
+  const preferredLabel = L(localizedStrings, '%languageMultipicker_preset_preferred%');
+  const manyTemplate = L(localizedStrings, '%languageMultipicker_trigger_manyLanguages%');
+  const ariaLabel = L(localizedStrings, '%languageMultipicker_trigger_ariaLabel%');
+
+  // Character budget for the trigger label, tuned to fit the word "Preferred" so single-code
+  // and few-code combinations occupy roughly the same horizontal slot.
+  const TRIGGER_LABEL_BUDGET = 10;
+
   const triggerLabel = useMemo(() => {
-    if (isAny) return 'Any';
-    if (isPreferred) return 'Preferred';
+    if (isAny) return anyLabel;
+    if (isPreferred) return preferredLabel;
     if (value.length === 1) return getLanguage(value[0]).code;
     const codes = value.map((l) => getLanguage(l).code).join(' ');
     if (codes.length <= TRIGGER_LABEL_BUDGET) return codes;
-    return `${value.length} langs`;
-  }, [value, isAny, isPreferred]);
+    return formatReplacementString(manyTemplate, { count: value.length });
+  }, [value, isAny, isPreferred, anyLabel, preferredLabel, manyTemplate]);
 
   const toggleOne = (lang: string) => {
     onChange(value.includes(lang) ? value.filter((l) => l !== lang) : [...value, lang]);
@@ -81,6 +128,7 @@ export function LanguageMultipicker({
         <Button
           variant="ghost"
           size="sm"
+          aria-label={ariaLabel}
           className={cn('tw:shrink-0 tw:gap-1 tw:text-muted-foreground', triggerClassName)}
         >
           <Languages className="tw:size-4 tw:opacity-60" />
@@ -96,7 +144,7 @@ export function LanguageMultipicker({
               onClick={() => onChange(preferred)}
               className="tw:flex-1"
             >
-              Preferred
+              {preferredLabel}
             </Button>
           )}
           <Button
@@ -105,7 +153,7 @@ export function LanguageMultipicker({
             onClick={() => onChange([])}
             className="tw:flex-1"
           >
-            Any
+            {anyLabel}
           </Button>
         </div>
         <div className="tw:max-h-48 tw:overflow-auto tw:text-sm">
