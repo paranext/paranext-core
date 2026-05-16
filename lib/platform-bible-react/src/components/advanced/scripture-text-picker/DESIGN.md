@@ -300,22 +300,7 @@ should feel gentle rather than technical.
 
 ---
 
-## 17 · Plain-language labels for technical states
-
-**Pattern.** When a status group represents a technical concept, prefer a label that names
-what the user *cares about* over the engineering term.
-
-**Chosen.** "On your computer" instead of "Installed" for the group of scripture texts that
-exist locally but aren't yet in this project. What matters to the user is "this is ready to
-go, no download needed." "Installed" is correct but technical; "On your computer" is what
-they'd say to a colleague.
-
-**Rejected.** "Installed." Carries deployment/setup connotations. Forces the user to translate
-the engineering concept to "ready to use without downloading."
-
----
-
-## 18 · Multi-name language data
+## 17 · Multi-name language data
 
 **Pattern.** Languages are searchable by multiple names (canonical English, autonym, alternate
 names). The data shape should include all of them, but the display should be opinionated:
