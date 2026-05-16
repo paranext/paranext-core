@@ -697,7 +697,7 @@ describe('marble hover lifecycle', () => {
   // `renderTooltipMarkdown` describe block at the bottom of this file, which is the right
   // unit-of-test boundary for the emitter. See Task 3a.10.
 
-  it('mouseleave dismisses the popover and removes hover-match annotations', async () => {
+  it('mouseleave dismisses the popover and removes hover-match annotations (after debounce window)', async () => {
     render(
       <EnhancedScripturePane
         usj={makeTestUsj(4)}
@@ -713,10 +713,20 @@ describe('marble hover lifecycle', () => {
     removeAnnotationSpy.mockClear();
     handlers.onMouseLeave!(new MouseEvent('mouseleave'), 'marble-word', 'wg-A', 'logos');
 
-    expect(mockDismissPopover).toHaveBeenCalledWith('overlay-1');
-    // hover-match annotations applied to wg-A and wg-B (both share lemma 'logos') get removed.
-    expect(removeAnnotationSpy).toHaveBeenCalledWith('marble-hover-match', 'wg-A');
+    // D-15: mouseleave defers cleanup with a 50ms timeout so a spurious leave (caused by
+    // the editor recreating a sibling mark when match annotations are applied) doesn't
+    // tear down the popover. Synchronously after leave, cleanup has NOT yet run.
+    expect(mockDismissPopover).not.toHaveBeenCalled();
+
+    // After the debounce window elapses, cleanup runs.
+    await vi.waitFor(() => {
+      expect(mockDismissPopover).toHaveBeenCalledWith('overlay-1');
+    });
+    // hover-match annotation applied to wg-B (the lemma-match of wg-A) gets removed.
+    // Note: D-15 also stopped applying marble-hover-match to the hovered word itself
+    // (wg-A), so it does NOT show up in removeAnnotationSpy here.
     expect(removeAnnotationSpy).toHaveBeenCalledWith('marble-hover-match', 'wg-B');
+    expect(removeAnnotationSpy).not.toHaveBeenCalledWith('marble-hover-match', 'wg-A');
   });
 
   it('RESOURCE_EXHAUSTED from showPopover is swallowed', async () => {
@@ -818,7 +828,7 @@ describe('marble hover lifecycle', () => {
     expect(updateCall[1].markdown).toContain('word, speech, reason');
   });
 
-  it('lemma-matching annotations sharing the hovered lemma get marble-hover-match overlays', async () => {
+  it('lemma-matching annotations sharing the hovered lemma get marble-hover-match overlays (excluding the hovered word itself)', async () => {
     render(
       <EnhancedScripturePane
         usj={makeTestUsj(4)}
@@ -833,15 +843,78 @@ describe('marble hover lifecycle', () => {
     handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-A', 'logos');
 
     // wordA and wordB share 'logos' lemma; wordC has 'theos' (non-matching).
-    // The implementation calls editor.setAnnotation with type 'marble-hover-match' for each
-    // matching annotation id (including the hovered word itself).
+    // D-15: the implementation calls editor.setAnnotation with type 'marble-hover-match'
+    // for each lemma-matching annotation id EXCLUDING the hovered word itself. Re-applying
+    // marble-hover-match to the hovered <mark> caused the editor to recreate that node,
+    // which triggered a synthetic mouseleave/mouseenter loop and a visible flicker storm.
+    // PT9 leaves the hovered word unhighlighted (it's the focal point; other matches get
+    // the match-color background).
     const matchCalls = setAnnotationSpy.mock.calls.filter(
       ([, type]) => type === 'marble-hover-match',
     );
     const matchIds = matchCalls.map(([, , id]) => id).sort();
-    expect(matchIds).toEqual(['wg-A', 'wg-B']);
+    expect(matchIds).toEqual(['wg-B']);
+    // The hovered word does NOT receive a hover-match overlay (D-15 fix).
+    expect(matchIds).not.toContain('wg-A');
     // Non-matching word never receives a hover-match overlay.
     expect(matchIds).not.toContain('wg-C');
+  });
+
+  it('a mouseenter for the same id within the leave-debounce window cancels the pending leave (D-15)', async () => {
+    render(
+      <EnhancedScripturePane
+        usj={makeTestUsj(4)}
+        annotations={[wordA, wordB, wordC]}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    await Promise.resolve();
+    const handlers = getHoverHandlersForCall(0);
+
+    handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-A', 'logos');
+    await Promise.resolve();
+    expect(mockShowPopover).toHaveBeenCalledTimes(1);
+
+    // Simulate the spurious leave/re-enter the editor produces when it recreates marks:
+    // mouseleave on wg-A, then mouseenter on wg-A again before the 50ms debounce elapses.
+    handlers.onMouseLeave!(new MouseEvent('mouseleave'), 'marble-word', 'wg-A', 'logos');
+    handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-A', 'logos');
+
+    // Wait past the debounce window. The pending leave should have been cancelled, so
+    // dismissPopover never fires and the original popover stays.
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 80);
+    });
+    expect(mockDismissPopover).not.toHaveBeenCalled();
+    // The re-entered mouseenter must be a no-op for the same id (D-14 guard) - no second
+    // showPopover call.
+    expect(mockShowPopover).toHaveBeenCalledTimes(1);
+  });
+
+  it('a mouseenter for a different id within the leave-debounce window runs cleanup synchronously then starts the new hover (D-15)', async () => {
+    render(
+      <EnhancedScripturePane
+        usj={makeTestUsj(4)}
+        annotations={[wordA, wordB, wordC]}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    await Promise.resolve();
+    const handlers = getHoverHandlersForCall(0);
+
+    handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-A', 'logos');
+    await Promise.resolve();
+    expect(mockShowPopover).toHaveBeenCalledTimes(1);
+
+    // Leave wg-A, then enter wg-C before the 50ms debounce elapses. The pending leave is
+    // cancelled (D-15 enter-guard) but a different id is hovered, so cleanup must run
+    // synchronously before the new hover starts. dismissPopover for the wg-A overlay fires
+    // immediately, and a fresh showPopover fires for wg-C.
+    handlers.onMouseLeave!(new MouseEvent('mouseleave'), 'marble-word', 'wg-A', 'logos');
+    handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-C', 'theos');
+
+    expect(mockDismissPopover).toHaveBeenCalledWith('overlay-1');
+    expect(mockShowPopover).toHaveBeenCalledTimes(2);
   });
 });
 

@@ -484,6 +484,11 @@ export function EnhancedScripturePane({
   // are no-oped. Without this guard, the popover-fetch race kicks in: every re-fire bumps
   // fetchGenRef, so most in-flight buildTooltipData calls abort at the gen-staleness check.
   const currentlyHoveredIdRef = useRef<string | undefined>(undefined);
+  // Fix D-15: defer mouseleave cleanup so a spurious leave (caused by the editor recreating
+  // sibling marks when match annotations are applied) doesn't tear down the popover and match
+  // state. A mouseenter for the same id within the debounce window cancels the pending leave.
+  // See handleMarbleMouseLeave for the cancel/cleanup flow.
+  const pendingLeaveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Build per-lemma annotation index from `lexicalLinks` metadata. Used by hover handlers
   // to compute matching vs non-matching annotations on each mouseenter without iterating
@@ -659,14 +664,49 @@ export function EnhancedScripturePane({
     // and `editor` from this run. The activePopoverIdRef / activeMatchSetRef bookkeeping
     // is component-lifetime so a delayed mouseleave from a previous render still
     // dismisses correctly.
+    // D-15: extracted so both the debounced leave timer and the synchronous "switching
+    // words" branch in handleMarbleMouseEnter can invoke the same teardown path.
+    const performLeaveCleanup = () => {
+      currentlyHoveredIdRef.current = undefined;
+      fetchGenRef.current += 1;
+
+      if (activePopoverIdRef.current) {
+        papi.overlays.dismissPopover(activePopoverIdRef.current).catch(() => {});
+        // Reset to the null sentinel - see activePopoverIdRef declaration for rationale.
+        // eslint-disable-next-line no-null/no-null
+        activePopoverIdRef.current = null;
+      }
+
+      activeMatchSetRef.current.forEach((matchId) => {
+        editor.removeAnnotation(ANNOTATION_TYPE_HOVER_MATCH, matchId);
+      });
+      activeMatchSetRef.current.clear();
+    };
+
     const handleMarbleMouseEnter = (event: MouseEvent, _type: string, id: string) => {
       const annotation = annotationsById.get(id);
       if (!annotation || annotation.kind !== 'word') return;
+
+      // D-15: a pending leave timer indicates the cursor briefly exited a mark (likely
+      // due to an editor-induced re-render) and has now returned. Cancel the teardown -
+      // the leave was spurious.
+      if (pendingLeaveTimerRef.current !== undefined) {
+        clearTimeout(pendingLeaveTimerRef.current);
+        pendingLeaveTimerRef.current = undefined;
+      }
 
       // Fix D-14: ignore re-fires for the same id (editor recreates marks after
       // setAnnotation('marble-hover-match', ...) updates, which re-fires React's
       // synthetic mouseenter on the new element under the cursor).
       if (id === currentlyHoveredIdRef.current) return;
+
+      // D-15: if a different word is currently hovered, run its leave teardown
+      // synchronously before starting the new hover. (Reachable if a leave timer was
+      // cancelled above but the user has actually moved on to a different mark.)
+      if (currentlyHoveredIdRef.current !== undefined) {
+        performLeaveCleanup();
+      }
+
       currentlyHoveredIdRef.current = id;
 
       const target = event.currentTarget;
@@ -692,6 +732,16 @@ export function EnhancedScripturePane({
       // share their id with the underlying word annotation - the editor merges multiple
       // type+id pairs onto the same range (AnnotationPlugin.test.tsx:97/161).
       matchingIds.forEach((matchingId) => {
+        // D-15: skip the hovered word itself. The lemma index returns the hovered token
+        // as a self-match (because lemmaToAnnotationIds[lemma] includes every id sharing
+        // that lemma, including this one). Re-applying marble-hover-match to the hovered
+        // mark causes the editor to recreate that <mark> element, which triggers a
+        // synthetic mouseleave→mouseenter on the new node. With the leave-side guard in
+        // place that ultimately stabilizes, but the underlying churn is unnecessary -
+        // visually the hovered word is the focal point and PT9 leaves it unhighlighted
+        // (see _marble-overrides.scss "the words that share the hovered token's lemma
+        // are highlighted").
+        if (matchingId === id) return;
         const matchingAnnotation = annotationsById.get(matchingId);
         if (!matchingAnnotation) return;
         const matchRange = annotationToRange(matchingAnnotation, usj);
@@ -702,20 +752,18 @@ export function EnhancedScripturePane({
     };
 
     const handleMarbleMouseLeave = () => {
-      currentlyHoveredIdRef.current = undefined;
-      fetchGenRef.current += 1;
-
-      if (activePopoverIdRef.current) {
-        papi.overlays.dismissPopover(activePopoverIdRef.current).catch(() => {});
-        // Reset to the null sentinel - see activePopoverIdRef declaration for rationale.
-        // eslint-disable-next-line no-null/no-null
-        activePopoverIdRef.current = null;
+      // D-15: defer cleanup so a spurious leave (e.g., the editor recreating a sibling
+      // mark when match annotations are applied, briefly taking the cursor off the
+      // hovered <mark>) doesn't tear down the popover and match state. If a mouseenter
+      // fires within the debounce window, the pending timer is cancelled and the leave
+      // is effectively no-oped.
+      if (pendingLeaveTimerRef.current !== undefined) {
+        clearTimeout(pendingLeaveTimerRef.current);
       }
-
-      activeMatchSetRef.current.forEach((matchId) => {
-        editor.removeAnnotation(ANNOTATION_TYPE_HOVER_MATCH, matchId);
-      });
-      activeMatchSetRef.current.clear();
+      pendingLeaveTimerRef.current = setTimeout(() => {
+        pendingLeaveTimerRef.current = undefined;
+        performLeaveCleanup();
+      }, 50);
     };
 
     const applyChunked = async () => {
@@ -778,6 +826,12 @@ export function EnhancedScripturePane({
 
     return () => {
       cancelled = true;
+      // D-15: clear any pending leave-debounce timer so it doesn't fire after unmount
+      // (or after dependencies change and the next effect run takes over).
+      if (pendingLeaveTimerRef.current !== undefined) {
+        clearTimeout(pendingLeaveTimerRef.current);
+        pendingLeaveTimerRef.current = undefined;
+      }
       const popoverId = activePopoverIdRef.current;
       if (popoverId) {
         papi.overlays.dismissPopover(popoverId).catch(() => {});
