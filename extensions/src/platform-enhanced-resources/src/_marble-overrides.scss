@@ -1,18 +1,15 @@
-// ER-specific overrides — NOT copied from platform-scripture-editor.
-// Do NOT mirror this file's contents into the editor extension's SCSS bundle.
-// Contains marble-annotation hover-state classes that the editor itself does not need
-// (only ER renders <wg> annotations and applies the lemma-match hover state).
+// Marble-overrides for the Enhanced Resources scripture pane. Defines visual treatment for the editor-emitted typed-mark classes (marble-word, marble-note, marble-filter, marble-highlight, marble-hover-match). See scripture-pane.component.tsx for the corresponding setAnnotation call sites.
 
 // "Highlight all research terms" toolbar toggle - applies the light-blue background to
-// every marble-word mark via a body-level class (replaces per-annotation editor.setAnnotation).
-.er-highlight-all-research-terms .editor-typed-mark-external-marble-word {
+// every marble-word mark via per-annotation editor.setAnnotation overlays.
+.editor-typed-mark-external-marble-highlight {
   background-color: hsl(210 100% 90%);
   border-radius: 2px;
 }
 
-// Per-mark filter class - applied via DOM manipulation to the marble-word mark whose
+// Per-mark filter overlay - applied via editor.setAnnotation to the marble-word mark whose
 // annotationId matches the active filter token.
-.editor-typed-mark-external-marble-word.er-marble-filter {
+.editor-typed-mark-external-marble-filter {
   background-color: hsl(45 100% 75%);
   border-radius: 2px;
 }
@@ -21,9 +18,8 @@
 // words - only the words that share the hovered token's lemma are highlighted, in the same
 // light-blue as the "Highlight all research terms" toggle. Words with no link stay visually
 // neutral (avoiding the false-equivalence where unlinked words could look like they match
-// the hovered word). The `er-marble-hover-active` body class gates the rule so it only
-// applies during a hover.
-.er-marble-hover-active .editor-typed-mark-external-marble-word.er-marble-hover-match {
+// the hovered word).
+.editor-typed-mark-external-marble-hover-match {
   background-color: hsl(210 100% 90%);
   border-radius: 2px;
 }

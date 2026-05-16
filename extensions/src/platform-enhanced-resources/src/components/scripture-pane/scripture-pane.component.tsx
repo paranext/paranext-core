@@ -78,6 +78,9 @@ export type EnhancedScripturePaneProps = {
 
 const ANNOTATION_TYPE_MARBLE_WORD = 'marble-word';
 const ANNOTATION_TYPE_MARBLE_NOTE = 'marble-note';
+const ANNOTATION_TYPE_FILTER = 'marble-filter';
+const ANNOTATION_TYPE_HIGHLIGHT = 'marble-highlight';
+const ANNOTATION_TYPE_HOVER_MATCH = 'marble-hover-match';
 const RIGHT_MOUSE_BUTTON = 2;
 
 // Local mirror of the backend `buildTooltipData` PAPI command's return shape. The backend
@@ -102,10 +105,9 @@ type TooltipData = {
  *
  * - Marble-word: linked research term (BHV-301/302). Click to filter the dictionary / open tooltip.
  * - Marble-note: linked study/cross-ref note. Renders as a footnote-style affordance.
- * - Highlight and filter states are applied via CSS class manipulation (not setAnnotation). Effect B
- *   uses `.er-marble-filter` on the mark element; Effect C uses the body-level
- *   `er-highlight-all-research-terms` class. The `marble-highlight` and `marble-filter` annotation
- *   types are no longer registered via setAnnotation.
+ * - Highlight, filter, and lemma-match states are layered via secondary `editor.setAnnotation` calls
+ *   using `marble-highlight`, `marble-filter`, and `marble-hover-match` types. See the
+ *   `_marble-overrides.scss` partial for visual treatment.
  */
 const MARBLE_ANNOTATION_STYLES = `
 .editor-typed-mark-external-marble-word {
@@ -469,30 +471,20 @@ export function EnhancedScripturePane({
           if (ids) ids.forEach((matchingId) => matchingIds.add(matchingId));
         });
       }
-
-      // CSS-based lemma-match highlight (replaces editor-based approach for perf - see
-      // _marble-overrides.scss). Toggle the body-level hover-active class once, then add the
-      // match class to each mark element whose annotationId shares a lemma with the hovered
-      // token. Editor-side annotation marks already carry the `annotationId-{id}` class added
-      // by TypedMarkNode.createDOM. Per PT9 fidelity, non-matching words receive NO visual
-      // change - dimming them would create a false equivalence between "shares lemma" and
-      // "has no link at all."
-      // `target.ownerDocument` gives us the iframe's document; `document` alone would target
-      // the main renderer frame.
-      const { ownerDocument } = target;
-      ownerDocument.body.classList.add('er-marble-hover-active');
+      // Annotate every matching word via editor.setAnnotation. Lemma-match annotations
+      // share their id with the underlying word annotation - the editor merges multiple
+      // type+id pairs onto the same range (AnnotationPlugin.test.tsx:97/161).
       matchingIds.forEach((matchingId) => {
-        const markElements = ownerDocument.querySelectorAll(
-          `[class~="annotationId-${matchingId}"]`,
-        );
-        markElements.forEach((markElement) => {
-          markElement.classList.add('er-marble-hover-match');
-        });
+        const matchingAnnotation = annotationsById.get(matchingId);
+        if (!matchingAnnotation) return;
+        const matchRange = annotationToRange(matchingAnnotation, usj);
+        if (!matchRange) return;
+        editor.setAnnotation(matchRange, ANNOTATION_TYPE_HOVER_MATCH, matchingId, {});
         activeMatchSetRef.current.add(matchingId);
       });
     };
 
-    const handleMarbleMouseLeave = (event: MouseEvent) => {
+    const handleMarbleMouseLeave = () => {
       fetchGenRef.current += 1;
 
       if (activePopoverIdRef.current) {
@@ -502,18 +494,8 @@ export function EnhancedScripturePane({
         activePopoverIdRef.current = null;
       }
 
-      // Mirror handleMarbleMouseEnter: scope DOM queries to the EXACT iframe document of the
-      // element being left. `globalThis.document` should resolve to the same document, but using
-      // the event target's ownerDocument is more robust (and necessary if the leave handler ever
-      // fires from a different context).
-      const target = event.currentTarget;
-      const leaveDocument = target instanceof Element ? target.ownerDocument : globalThis.document;
-      leaveDocument.body.classList.remove('er-marble-hover-active');
       activeMatchSetRef.current.forEach((matchId) => {
-        const markElements = leaveDocument.querySelectorAll(`[class~="annotationId-${matchId}"]`);
-        markElements.forEach((markElement) => {
-          markElement.classList.remove('er-marble-hover-match');
-        });
+        editor.removeAnnotation(ANNOTATION_TYPE_HOVER_MATCH, matchId);
       });
       activeMatchSetRef.current.clear();
     };
@@ -585,16 +567,8 @@ export function EnhancedScripturePane({
         // eslint-disable-next-line no-null/no-null
         activePopoverIdRef.current = null;
       }
-      // CSS-based hover-match cleanup - clear the body-level hover class and the per-mark
-      // match class. No removeAnnotation calls for hover types because we never added them as
-      // editor annotations (see _marble-overrides.scss).
-      const cleanupDocument = globalThis.document;
-      cleanupDocument.body.classList.remove('er-marble-hover-active');
       matchSet.forEach((matchId) => {
-        const markElements = cleanupDocument.querySelectorAll(`[class~="annotationId-${matchId}"]`);
-        markElements.forEach((markElement) => {
-          markElement.classList.remove('er-marble-hover-match');
-        });
+        editor.removeAnnotation(ANNOTATION_TYPE_HOVER_MATCH, matchId);
       });
       matchSet.clear();
       wordAnnotations.forEach((a) => {
@@ -603,42 +577,62 @@ export function EnhancedScripturePane({
     };
   }, [usj, annotations, lemmaIndex]);
 
-  // Effect B — single marble-filter overlay via DOM class on the existing marble-word mark.
-  // Same rationale as Effect C: a secondary editor.setAnnotation on already-marked text fails
-  // in 0.8.15. Use the annotationId class the editor adds to each mark to find and class it.
-  // `globalThis.document` resolves to the iframe's document from inside the webview context.
+  // Effect B - single marble-filter overlay via editor.setAnnotation.
+  // Re-runs when the filtered-token id or annotation set changes.
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor || !usj || !filteredTokenId) return undefined;
     const target = annotations.find((a) => a.annotationId === filteredTokenId);
     if (!target || target.kind !== 'word') return undefined;
-    const markElements = globalThis.document.querySelectorAll(
-      `[class~="annotationId-${filteredTokenId}"]`,
-    );
-    markElements.forEach((markElement: Element) => {
-      markElement.classList.add('er-marble-filter');
-    });
+    const range = annotationToRange(target, usj);
+    if (!range) return undefined;
+    editor.setAnnotation(range, ANNOTATION_TYPE_FILTER, filteredTokenId, {});
     return () => {
-      markElements.forEach((markElement: Element) => {
-        markElement.classList.remove('er-marble-filter');
-      });
+      editor.removeAnnotation(ANNOTATION_TYPE_FILTER, filteredTokenId);
     };
   }, [usj, annotations, filteredTokenId]);
 
-  // Effect C — "highlight all research terms" via a single body class.
-  // Replaces a per-annotation editor.setAnnotation approach (~380 reconcile cycles + every
-  // secondary setAnnotation on already-marked text fails in editor 0.8.15 with "Failed to find
-  // start or end node"). The marble-word marks already exist in DOM with annotationId classes;
-  // we just toggle a body-level class and let CSS specificity paint the highlight.
-  // `globalThis.document` resolves to the iframe's document from inside the webview context.
+  // Effect C - per-annotation marble-highlight overlays via editor.setAnnotation.
+  // Chunked RAF apply matches Effect A's pattern to avoid the 8.5-second click-handler stall
+  // captured during May-06 when this ran un-chunked.
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor || !usj || !highlightAllResearchTerms) return undefined;
-    globalThis.document.body.classList.add('er-highlight-all-research-terms');
-    return () => {
-      globalThis.document.body.classList.remove('er-highlight-all-research-terms');
+    const wordAnnotations = annotations.filter((a) => a.kind === 'word');
+    let cancelled = false;
+    const CHUNK_SIZE = 50;
+    const applyChunked = async () => {
+      for (let i = 0; i < wordAnnotations.length; i += CHUNK_SIZE) {
+        if (cancelled) return;
+        const slice = wordAnnotations.slice(i, i + CHUNK_SIZE);
+        slice.forEach((a) => {
+          const range = annotationToRange(a, usj);
+          if (!range) return;
+          editor.setAnnotation(range, ANNOTATION_TYPE_HIGHLIGHT, a.annotationId, {});
+        });
+        if (i + CHUNK_SIZE < wordAnnotations.length) {
+          // Yield to the event loop so mousedown / setFocus / paint can run between chunks.
+          // eslint-disable-next-line no-await-in-loop
+          await new Promise<void>((resolve) => {
+            requestAnimationFrame(() => resolve());
+          });
+        }
+      }
     };
-  }, [usj, highlightAllResearchTerms]);
+    applyChunked().catch((err) => {
+      logger.warn(
+        `EnhancedScripturePane: highlight-all chunked apply failed: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    });
+    return () => {
+      cancelled = true;
+      wordAnnotations.forEach((a) => {
+        editor.removeAnnotation(ANNOTATION_TYPE_HIGHLIGHT, a.annotationId);
+      });
+    };
+  }, [usj, annotations, highlightAllResearchTerms]);
 
   if (errorMessage) {
     return (
