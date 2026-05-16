@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  type MouseEvent as ReactMouseEvent,
+  type MutableRefObject,
+} from 'react';
 import {
   Editorial,
   getDefaultViewOptions,
@@ -17,7 +24,6 @@ import {
   useStylesheet,
 } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
-import type { MouseEvent as ReactMouseEvent } from 'react';
 import type { MarbleAnnotation } from '../../lib/marble-converter';
 import type { EnhancedResourcesNetworkObject } from '../../lib/use-enhanced-resources-proxy';
 import {
@@ -247,17 +253,23 @@ function escapeMarkdown(text: string): string {
 
 /**
  * Detect Hebrew vs. Greek from a source-form's Unicode block range. Returns 'Hebrew' for any
- * Hebrew-block character (U+0590-U+05FF), 'Greek' for any Greek-block character (U+0370-U+03FF), or
- * undefined for ambiguous / Latin / mixed input.
+ * character in the Hebrew block (U+0590-U+05FF) or Hebrew Presentation Forms A (U+FB1D-U+FB4F),
+ * 'Greek' for any character in the Greek block (U+0370-U+03FF) or Greek Extended (U+1F00-U+1FFF),
+ * or undefined for ambiguous / Latin / mixed input.
  *
  * Used to decide which language to pass to translatePartOfSpeech, since the new TooltipData DTO no
- * longer carries StrongNumber (which previously hinted H/G).
+ * longer carries StrongNumber (which previously hinted H/G). Greek Extended covers polytonic forms
+ * (rough/smooth breathing, iota subscript, etc.) common in Koine resources; Hebrew Presentation
+ * Forms A covers precomposed shin/sin variants used in some BHS-derived sources.
+ *
+ * Exported for unit testing - this helper is callable in isolation so the language-detection rules
+ * can be exercised directly.
  */
-function detectSourceLanguage(sourceForm: string): 'Hebrew' | 'Greek' | undefined {
+export function detectSourceLanguage(sourceForm: string): 'Hebrew' | 'Greek' | undefined {
   for (let i = 0; i < sourceForm.length; i += 1) {
     const code = sourceForm.charCodeAt(i);
-    if (code >= 0x0590 && code <= 0x05ff) return 'Hebrew';
-    if (code >= 0x0370 && code <= 0x03ff) return 'Greek';
+    if ((code >= 0x0590 && code <= 0x05ff) || (code >= 0xfb1d && code <= 0xfb4f)) return 'Hebrew';
+    if ((code >= 0x0370 && code <= 0x03ff) || (code >= 0x1f00 && code <= 0x1fff)) return 'Greek';
   }
   return undefined;
 }
@@ -329,13 +341,17 @@ function renderRenderingStatusLine(
     case 'noVerseText':
       return localize('%enhancedResources_tooltip_missingRendering%').replace('{0}', projectName);
     case 'guessedRenderingFound':
+      // PT9 MarbleForm.cs:2737 - `bldr.AppendFormat(guessedRenderingFoundStr, trackedProject.Name, renderingStatus.FoundRendering)`.
+      // {0} = project name, {1} = found rendering. Matches MarbleForm_9 verbatim ordering.
       return localize('%enhancedResources_tooltip_guessedRenderingFound%')
-        .replace('{0}', foundRendering)
-        .replace('{1}', projectName);
+        .replace('{0}', projectName)
+        .replace('{1}', foundRendering);
     case 'renderingFound':
+      // PT9 MarbleForm.cs:2742 - `bldr.AppendFormat(renderingFoundStr, trackedProject.Name, renderingStatus.FoundRendering)`.
+      // {0} = project name, {1} = found rendering. Matches MarbleForm_10 verbatim ordering.
       return localize('%enhancedResources_tooltip_renderingFound%')
-        .replace('{0}', foundRendering)
-        .replace('{1}', projectName);
+        .replace('{0}', projectName)
+        .replace('{1}', foundRendering);
     default: {
       // Exhaustiveness check - if a new code is added to RenderingStatusViewModel without a
       // case here, TypeScript will fail this assignment at build time.
@@ -348,6 +364,21 @@ function assertNever(value: never): never {
   // The runtime fallthrough should be unreachable; the compile-time `never` parameter is
   // the actual safety guarantee. Keep this trivial helper colocated with the only caller.
   throw new Error(`Unhandled rendering-status code: ${String(value)}`);
+}
+
+/**
+ * Sync the latest value of a prop / closure-captured value into a ref so it can be read from inside
+ * event handlers / async callbacks without forcing the enclosing effect to re-fire when the value
+ * changes. The ref's `.current` is updated in an effect (post-commit), so reads inside other
+ * post-commit effects observe the new value. Used in `EnhancedScripturePane` to keep the chunked
+ * annotation-apply effect from re-firing on every prop change.
+ */
+function useLatestRef<T>(value: T): MutableRefObject<T> {
+  const ref = useRef(value);
+  useEffect(() => {
+    ref.current = value;
+  }, [value]);
+  return ref;
 }
 
 // Module-level Editorial options. CRITICAL: this object MUST be a stable reference. When the
@@ -413,7 +444,9 @@ export function EnhancedScripturePane({
   // annotation effect's onClick closure can read them WITHOUT putting them in
   // its dep array. Combined with Fix 1's stable defaults, this means the
   // base-annotation effect only re-fires when the annotation set or the USJ
-  // document actually changes.
+  // document actually changes. Kept as a plain useRef (not useLatestRef) because
+  // we sync two values into a single bag - useLatestRef would allocate a new bag
+  // every render even when the underlying handlers were identity-stable.
   const handlersRef = useRef({ onTokenClick, onTokenContextMenu });
   useEffect(() => {
     handlersRef.current = { onTokenClick, onTokenContextMenu };
@@ -421,31 +454,18 @@ export function EnhancedScripturePane({
 
   // Hold the proxy + tooltip-input fields in refs so the annotation effect's hover callbacks
   // (declared inside the effect) can read the latest values without taking these in the dep
-  // array - which would re-run the chunked annotation apply on every prop change.
-  const erProxyRef = useRef(erProxy);
-  useEffect(() => {
-    erProxyRef.current = erProxy;
-  }, [erProxy]);
-  const resourceIdRef = useRef(resourceId);
-  useEffect(() => {
-    resourceIdRef.current = resourceId;
-  }, [resourceId]);
-  const glossLanguageRef = useRef(glossLanguage);
-  useEffect(() => {
-    glossLanguageRef.current = glossLanguage;
-  }, [glossLanguage]);
+  // array - which would re-run the chunked annotation apply on every prop change. The
+  // `useLatestRef` helper collapses the previous 3-line useRef+useEffect-sync pattern down to
+  // a single line per prop.
+  const erProxyRef = useLatestRef(erProxy);
+  const resourceIdRef = useLatestRef(resourceId);
+  const glossLanguageRef = useLatestRef(glossLanguage);
 
   // Hold the latest scrRef + localizer in refs so the annotation effect's hover callbacks
   // (which read these inside fetchAndUpdatePopover) don't have to re-fire the chunked apply
   // every time scrRef changes (BCV move) or strings finish loading.
-  const scrRefRef = useRef(scrRef);
-  useEffect(() => {
-    scrRefRef.current = scrRef;
-  }, [scrRef]);
-  const localizeRef = useRef<(key: ScripturePaneLocalizedStringKey) => string>((key) => key);
-  useEffect(() => {
-    localizeRef.current = getLocalizedString;
-  }, [getLocalizedString]);
+  const scrRefRef = useLatestRef(scrRef);
+  const localizeRef = useLatestRef(getLocalizedString);
 
   // Hover lifecycle bookkeeping. fetchGenRef is bumped on every mouseenter/mouseleave so
   // late-arriving showPopover / buildTooltipData promises can detect they are stale and
@@ -577,7 +597,7 @@ export function EnhancedScripturePane({
             verseNum: currentScrRef.verseNum,
           },
           glossLanguage: currentGlossLanguage,
-          // trackedProjectId is reserved for Phase 3b; undefined here.
+          // Phase 3b will add `trackedProjectId` to TooltipInputDto + TooltipInput.cs in lockstep.
         });
       } catch (err) {
         logger.warn(
@@ -774,6 +794,14 @@ export function EnhancedScripturePane({
         editor.removeAnnotation(annotationTypeFor(a.kind), a.annotationId);
       });
     };
+    // The refs returned by `useLatestRef` (erProxyRef, resourceIdRef, glossLanguageRef,
+    // scrRefRef, localizeRef) are identity-stable across renders - `useLatestRef` wraps `useRef`
+    // and only mutates `.current`. The hook is intentionally excluded from this effect's deps so
+    // the chunked annotation apply does NOT re-fire when the underlying prop values change
+    // (changing scrRef on BCV moves, async-resolved erProxy, etc). ESLint's exhaustive-deps rule
+    // cannot see through the custom hook to recognize the values as refs, so a targeted
+    // suppression here is correct.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usj, annotations, lemmaIndex]);
 
   // Effect B - single marble-filter overlay via editor.setAnnotation.

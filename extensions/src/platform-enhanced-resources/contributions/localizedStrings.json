@@ -34,19 +34,19 @@
       "description": "Label prefix for the lemma line in the marble tooltip"
     },
     "%enhancedResources_tooltip_noRenderingsForTerm%": {
-      "description": "Tooltip rendering-status: no renderings entered. Arg {0} is the tracked project name."
+      "description": "Tooltip rendering-status: no renderings entered. Arg {0} is the tracked project name. Verbatim PT9 MarbleForm_1."
     },
     "%enhancedResources_tooltip_deniedRendering%": {
-      "description": "Tooltip rendering-status: all renderings denied. Arg {0} is the tracked project name."
+      "description": "Tooltip rendering-status: a rendering was manually accepted in the verse without a rendering. Arg {0} is the tracked project name. Verbatim PT9 MarbleForm_8."
     },
     "%enhancedResources_tooltip_missingRendering%": {
-      "description": "Tooltip rendering-status: no rendering found in verse. Arg {0} is the tracked project name."
+      "description": "Tooltip rendering-status: no rendering found in verse. Arg {0} is the tracked project name. Verbatim PT9 MarbleForm_7."
     },
     "%enhancedResources_tooltip_guessedRenderingFound%": {
-      "description": "Tooltip rendering-status: a guessed rendering was found. Arg {0} is the rendering, {1} is the tracked project name."
+      "description": "Tooltip rendering-status: a guessed rendering was found. Arg {0} is the tracked project name, {1} is the rendering. Verbatim PT9 MarbleForm_9."
     },
     "%enhancedResources_tooltip_renderingFound%": {
-      "description": "Tooltip rendering-status: a rendering was found. Arg {0} is the rendering, {1} is the tracked project name."
+      "description": "Tooltip rendering-status: a rendering was found. Arg {0} is the tracked project name, {1} is the rendering. Verbatim PT9 MarbleForm_10."
     },
     "%enhancedResources_note_callerType_footnote%": {
       "notes": "Label that identifies a footnote in the scripture pane note popup."
@@ -451,11 +451,11 @@
       "%enhancedResources_tooltip_phrase%": "(phrase)",
       "%enhancedResources_tooltip_noGloss%": "_no gloss_",
       "%enhancedResources_tooltip_lemmaLabel%": "Lemma:",
-      "%enhancedResources_tooltip_noRenderingsForTerm%": "No renderings have been entered for this term in {0}",
-      "%enhancedResources_tooltip_deniedRendering%": "All renderings of this term are denied in {0}",
-      "%enhancedResources_tooltip_missingRendering%": "No rendering of this term found in {0}",
-      "%enhancedResources_tooltip_guessedRenderingFound%": "Guessed rendering '{0}' found in {1}",
-      "%enhancedResources_tooltip_renderingFound%": "Rendering '{0}' found in {1}",
+      "%enhancedResources_tooltip_noRenderingsForTerm%": "No renderings listed in Biblical Terms for \"{0}\"",
+      "%enhancedResources_tooltip_deniedRendering%": "Verse manually accepted without a rendering ({0})",
+      "%enhancedResources_tooltip_missingRendering%": "Rendering not found in verse ({0})",
+      "%enhancedResources_tooltip_guessedRenderingFound%": "Could only guess rendering in verse ({0}): {1}",
+      "%enhancedResources_tooltip_renderingFound%": "Rendering found in verse ({0}): {1}",
       "%enhancedResources_note_callerType_footnote%": "Footnote",
       "%enhancedResources_note_callerType_endnote%": "Endnote",
       "%enhancedResources_note_callerType_crossReference%": "Cross-reference",

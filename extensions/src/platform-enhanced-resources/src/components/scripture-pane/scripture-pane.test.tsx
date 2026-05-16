@@ -11,6 +11,7 @@ import {
   EnhancedScripturePane,
   ENHANCED_SCRIPTURE_PANE_STRING_KEYS,
   annotationToRange,
+  detectSourceLanguage,
   renderTooltipMarkdown,
 } from './scripture-pane.component';
 import type { MarbleAnnotation } from '../../lib/marble-converter';
@@ -22,12 +23,11 @@ import type { TooltipViewModel } from '../../presenters/tooltip-presenter';
 const setAnnotationSpy = vi.fn();
 const removeAnnotationSpy = vi.fn();
 
-// papi.overlays / papi.commands are external boundaries; mock them so unit tests can assert on
-// hover-lifecycle calls without spinning up the real overlay service or PAPI WebSocket.
+// papi.overlays is an external boundary; mock it so unit tests can assert on
+// hover-lifecycle calls without spinning up the real overlay service.
 const mockShowPopover = vi.fn();
 const mockUpdatePopover = vi.fn();
 const mockDismissPopover = vi.fn();
-const mockSendCommand = vi.fn();
 
 vi.mock('@papi/frontend', () => ({
   default: {
@@ -36,12 +36,24 @@ vi.mock('@papi/frontend', () => ({
       updatePopover: (...args: unknown[]) => mockUpdatePopover(...args),
       dismissPopover: (...args: unknown[]) => mockDismissPopover(...args),
     },
-    commands: {
-      sendCommand: (...args: unknown[]) => mockSendCommand(...args),
-    },
   },
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
 }));
+
+// Network-object proxy mock. The component fetches the popover content through this proxy (no
+// papi.commands.sendCommand path remains since the D-02 fix). Methods declared with vi.fn() so
+// individual tests can override .mockResolvedValueOnce / .mockRejectedValueOnce as needed.
+// EnhancedResourcesNetworkObject has many methods we don't exercise in this test - cast through
+// `unknown` so we only need to stub the two methods the scripture pane actually calls.
+const mockErProxy = {
+  buildTooltipData: vi.fn(),
+  translatePartOfSpeech: vi.fn(),
+} as unknown as import('../../lib/use-enhanced-resources-proxy').EnhancedResourcesNetworkObject & {
+  buildTooltipData: ReturnType<typeof vi.fn>;
+  translatePartOfSpeech: ReturnType<typeof vi.fn>;
+};
+
+const SCR_REF_JHN_1_1 = { book: 'JHN', chapterNum: 1, verseNum: 1 };
 
 beforeAll(() => {
   (globalThis as unknown as { webViewId: string }).webViewId = 'test-webview';
@@ -113,13 +125,18 @@ beforeEach(() => {
   mockUpdatePopover.mockResolvedValue(undefined);
   mockDismissPopover.mockReset();
   mockDismissPopover.mockResolvedValue(undefined);
-  mockSendCommand.mockReset();
-  mockSendCommand.mockResolvedValue({
-    lemma: 'logos',
-    gloss: 'word, message',
-    partOfSpeech: 'noun',
-    strongNumber: 'G3056',
-    notes: [],
+  mockErProxy.buildTooltipData.mockReset();
+  mockErProxy.buildTooltipData.mockResolvedValue({
+    sourceForm: 'λόγος',
+    lemma: 'λόγος',
+    partOfSpeechRaw: 'noun',
+    rawGlosses: ['word, speech, reason'],
+  });
+  mockErProxy.translatePartOfSpeech.mockReset();
+  mockErProxy.translatePartOfSpeech.mockResolvedValue({
+    displayString: 'noun (masculine)',
+    isKnown: true,
+    localizationKey: 'pos.noun.m',
   });
 });
 
@@ -720,22 +737,85 @@ describe('marble hover lifecycle', () => {
   });
 
   it('buildTooltipData rejection leaves loading markdown without crashing', async () => {
-    mockSendCommand.mockRejectedValueOnce(new Error('network'));
+    mockErProxy.buildTooltipData.mockRejectedValueOnce(new Error('backend down'));
     render(
       <EnhancedScripturePane
         usj={makeTestUsj(4)}
         annotations={[wordA]}
         localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        erProxy={mockErProxy}
+        resourceId="ESV"
+        glossLanguage="en"
+        scrRef={SCR_REF_JHN_1_1}
       />,
     );
     await Promise.resolve();
     const handlers = getHoverHandlersForCall(0);
     handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-A', 'logos');
+    // Flush the showLoadingPopover and the (rejecting) buildTooltipData promises.
+    await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
 
+    // Loading popover still anchors; structured updatePopover never fires because the backend
+    // fetch rejected. The component logs a warning (mocked) and bails - no throw, no crash.
     expect(mockShowPopover).toHaveBeenCalledTimes(1);
     expect(mockUpdatePopover).not.toHaveBeenCalled();
+  });
+
+  it('happy path: hover fires buildTooltipData -> translatePartOfSpeech -> updatePopover with structured markdown', async () => {
+    render(
+      <EnhancedScripturePane
+        usj={makeTestUsj(4)}
+        annotations={[wordA]}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        erProxy={mockErProxy}
+        resourceId="ESV"
+        glossLanguage="en"
+        scrRef={SCR_REF_JHN_1_1}
+      />,
+    );
+    await Promise.resolve();
+    const handlers = getHoverHandlersForCall(0);
+
+    handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-A', 'logos');
+
+    // Wait for showLoadingPopover + buildTooltipData + translatePartOfSpeech + updatePopover.
+    await vi.waitFor(() => {
+      expect(mockUpdatePopover).toHaveBeenCalled();
+    });
+
+    // buildTooltipData received the wire-shaped TooltipInputDto (resourceId, tokenId,
+    // currentReference in bookNum form, glossLanguage). bookNum 43 = JHN.
+    expect(mockErProxy.buildTooltipData).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resourceId: 'ESV',
+        tokenId: 'wg-A',
+        glossLanguage: 'en',
+        currentReference: expect.objectContaining({
+          bookNum: 43,
+          chapterNum: 1,
+          verseNum: 1,
+        }),
+      }),
+    );
+
+    // After tooltip data lands, the component calls translatePartOfSpeech with the raw POS code.
+    // The source form 'λόγος' is Greek-block, so the language argument is 'Greek'.
+    expect(mockErProxy.translatePartOfSpeech).toHaveBeenCalledWith('noun', 'Greek', 'long');
+
+    // updatePopover receives the structured markdown for the resolved tooltip data.
+    const updateCall = mockUpdatePopover.mock.calls[0];
+    expect(updateCall[0]).toBe('overlay-1');
+    expect(updateCall[1]).toEqual(
+      expect.objectContaining({
+        type: 'markdown',
+        // sourceForm bold header, then localized POS, then lemma label, then gloss.
+        markdown: expect.stringContaining('**λόγος**'),
+      }),
+    );
+    expect(updateCall[1].markdown).toContain('noun (masculine)');
+    expect(updateCall[1].markdown).toContain('word, speech, reason');
   });
 
   it('lemma-matching annotations sharing the hovered lemma get marble-hover-match overlays', async () => {
@@ -994,7 +1074,7 @@ describe('renderTooltipMarkdown', () => {
     expect(out).not.toContain('{0}');
   });
 
-  it('emits guessedRenderingFound with both substitutions', () => {
+  it('emits guessedRenderingFound with both substitutions (PT9 order: {0}=project, {1}=rendering)', () => {
     const vm: TooltipViewModel = {
       kind: 'word',
       sourceForm: 'רֵאשִׁית',
@@ -1009,12 +1089,13 @@ describe('renderTooltipMarkdown', () => {
       },
     };
     const out = renderTooltipMarkdown(vm, localizeWithTemplates);
-    expect(out).toContain('GUESSED[start|NIV]');
+    // PT9 MarbleForm.cs:2737 substitutes (trackedProject.Name, FoundRendering) into MarbleForm_9.
+    expect(out).toContain('GUESSED[NIV|start]');
     expect(out).not.toContain('{0}');
     expect(out).not.toContain('{1}');
   });
 
-  it('emits renderingFound with both substitutions', () => {
+  it('emits renderingFound with both substitutions (PT9 order: {0}=project, {1}=rendering)', () => {
     const vm: TooltipViewModel = {
       kind: 'word',
       sourceForm: 'רֵאשִׁית',
@@ -1029,7 +1110,8 @@ describe('renderTooltipMarkdown', () => {
       },
     };
     const out = renderTooltipMarkdown(vm, localizeWithTemplates);
-    expect(out).toContain('FOUND[beginning|ESV]');
+    // PT9 MarbleForm.cs:2742 substitutes (trackedProject.Name, FoundRendering) into MarbleForm_10.
+    expect(out).toContain('FOUND[ESV|beginning]');
     expect(out).not.toContain('{0}');
     expect(out).not.toContain('{1}');
   });
@@ -1047,5 +1129,32 @@ describe('renderTooltipMarkdown', () => {
     expect(out).toContain('a\\_b\\*c');
     expect(out).toContain('x\\_y');
     expect(out).toContain('foo\\[bar\\]');
+  });
+});
+
+describe('detectSourceLanguage', () => {
+  it('detects Hebrew block (U+0590-U+05FF)', () => {
+    expect(detectSourceLanguage('בָּרָא')).toBe('Hebrew');
+  });
+  it('detects Hebrew Presentation Forms A (U+FB1D-U+FB4F)', () => {
+    // U+FB2A = HEBREW LETTER SHIN WITH SHIN DOT (precomposed presentation form)
+    expect(detectSourceLanguage('שׁ')).toBe('Hebrew');
+  });
+  it('detects Greek basic block (U+0370-U+03FF)', () => {
+    expect(detectSourceLanguage('λόγος')).toBe('Greek');
+  });
+  it('detects Greek Extended block (U+1F00-U+1FFF) for polytonic forms', () => {
+    // 'Ἁγίῳ' contains U+1F09 (Greek capital alpha with dasia) - Greek Extended block.
+    expect(detectSourceLanguage('Ἁγίῳ')).toBe('Greek');
+  });
+  it('returns undefined for Latin transliteration', () => {
+    expect(detectSourceLanguage('logos')).toBeUndefined();
+  });
+  it('returns undefined for empty string', () => {
+    expect(detectSourceLanguage('')).toBeUndefined();
+  });
+  it('detects whichever language appears first in mixed text', () => {
+    // Latin 'logos' first (no detection), then Greek - the loop returns at the first match.
+    expect(detectSourceLanguage('logos λόγος')).toBe('Greek');
   });
 });

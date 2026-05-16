@@ -214,14 +214,15 @@ export type MediaLoadResultDto = {
 
 /**
  * Mirrors c-sharp/EnhancedResources/TooltipInput.cs - the input shape for the C# TooltipService.
- * trackedProjectId is reserved for Phase 3b (rendering-status); the backend ignores it in 3a.
+ * Phase 3b will introduce a `trackedProjectId` field on both sides (TS DTO + C# record) when the
+ * rendering-status feature is wired; intentionally omitted here so the TS contract stays in
+ * lockstep with the C# `TooltipInput` record (which has no such field today).
  */
 export type TooltipInputDto = {
   resourceId: string;
   tokenId: string;
   currentReference: VerseRefDto;
   glossLanguage: string;
-  trackedProjectId?: string;
 };
 
 /**
@@ -236,9 +237,9 @@ export type PosTranslateResultDto = {
 };
 
 /**
- * Mirrors c-sharp/EnhancedResources/TooltipData.cs (raw fields only). Identical in shape to
- * TooltipDataInput in tooltip-presenter.ts; defined here as the wire-DTO per the existing
- * convention. The presenter consumes it as `TooltipDataInput`.
+ * Mirrors c-sharp/EnhancedResources/TooltipData.cs (raw fields only). Canonical wire-DTO shape. The
+ * tooltip presenter re-exports it under the alias `TooltipDataInput` (see
+ * `presenters/tooltip-presenter.ts`) so both names resolve to this single source of truth.
  */
 export type TooltipDataDto = {
   sourceForm: string;

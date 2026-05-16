@@ -77,6 +77,18 @@ internal sealed class TooltipService
         return glosses.ToArray();
     }
 
+    /// <summary>
+    /// Extract the lemma (middle segment) from a lexical-link string shaped "DICT:LEMMA:ID".
+    /// Returns null when the link is null/empty, has fewer than 2 colon-delimited parts, or
+    /// when the lemma segment itself is empty.
+    /// </summary>
+    /// <remarks>
+    /// PT9's <c>MarbleLexicalLink.ParseOneLexicalLink</c> requires <c>parts.Length == 3</c> exactly.
+    /// This implementation accepts <c>parts.Length &gt;= 2</c> (returns the middle segment) to be
+    /// more forgiving of partial / malformed links. Real-world links are always 3-part, so the
+    /// looser semantics are functionally moot - but worth knowing if PT9 parity is later audited
+    /// at this level.
+    /// </remarks>
     private static string? ParseLemmaFromLink(string? link)
     {
         if (string.IsNullOrEmpty(link))

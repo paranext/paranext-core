@@ -14,28 +14,17 @@
  * Does not own: markdown emission, localization key lookup, format-string substitution,
  * `escapeMarkdown`. Those live in `scripture-pane.component.tsx`.
  */
+import type { TooltipDataDto } from '../lib/enhanced-resources-dto';
 
 /**
- * Raw tooltip data as returned by the C# `buildTooltipData` network-object method. Mirrors
- * `c-sharp/EnhancedResources/TooltipData.cs` field-for-field.
+ * Raw tooltip data as returned by the C# `buildTooltipData` network-object method. Aliases the
+ * canonical wire DTO (`TooltipDataDto` in `lib/enhanced-resources-dto.ts`) so the presenter
+ * consumes it without introducing a second source of truth for the field shape.
  */
-export type TooltipDataInput = {
-  sourceForm: string;
-  lemma: string;
-  partOfSpeechRaw: string;
-  rawGlosses: string[];
-  renderingStatus?: {
-    code:
-      | 'noRenderingsEntered'
-      | 'renderingDeniedInVerse'
-      | 'renderingMissingInVerse'
-      | 'noVerseText'
-      | 'guessedRenderingFound'
-      | 'renderingFound';
-    foundRendering?: string;
-    trackedProjectName?: string;
-  };
-};
+export type TooltipDataInput = TooltipDataDto;
+
+// Re-export for callers that already imported the DTO via this module.
+export type { TooltipDataDto };
 
 /**
  * UI-ready tooltip view model. `kind: 'phrase'` collapses to the short PT9-fidelity layout
