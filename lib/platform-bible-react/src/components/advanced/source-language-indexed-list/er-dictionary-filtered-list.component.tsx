@@ -563,13 +563,27 @@ function SegmentDropdown({
 // ---------------------------------------------------------------------------
 
 /**
- * Wraps the domain tree and implements custom keyboard navigation:
+ * Wraps the domain tree and implements custom keyboard navigation following the WAI-ARIA tree-view
+ * pattern (https://www.w3.org/WAI/ARIA/apg/patterns/treeview/):
  *
- * - ArrowDown / ArrowUp: move focus through all visible buttons (domain labels + expand/collapse)
- * - Tab / Shift+Tab: same as arrow keys (cycle through buttons)
- * - Enter / Space on a domain label: select it
- * - Enter / Space on an expand/collapse button: toggle expand
- * - Escape: close the dropdown (stops propagation so the parent drawer stays open)
+ * - ArrowDown / ArrowUp: move focus through all visible buttons (domain labels + expand/collapse).
+ *   Tree visit order matches the visible button order (chevron buttons are visited too, by design,
+ *   so users can tab through chevrons; see "Two-button row" note below).
+ * - ArrowRight: if the current treeitem is collapsed, expand it; if already expanded, move focus to
+ *   its first child treeitem. Leaves are no-ops.
+ * - ArrowLeft: if the current treeitem is expanded, collapse it; if already collapsed (or a leaf),
+ *   move focus to its parent treeitem. Top-level items are no-ops.
+ * - Home / End: jump to the first / last visible button.
+ * - Tab / Shift+Tab: same as arrow keys (cycle through buttons) - the dropdown traps Tab so it never
+ *   escapes into the surrounding Dialog/Drawer.
+ * - Enter / Space on a domain label: select it (handled by the button's native click).
+ * - Enter / Space on an expand/collapse button: toggle expand (handled by the button's native click).
+ * - Escape: close the dropdown (stops propagation so the parent Dialog stays open).
+ *
+ * Two-button row note: depth-0 rows have a single combined chevron+label button (per SBN-019,
+ * depth-0 click only toggles expand); depth>=1 rows have a separate chevron button + label button.
+ * For ARIA purposes each `<li>` is one `treeitem` (with `aria-level`, `aria-expanded`,
+ * `aria-selected`) and the inner buttons are the focusable activation targets.
  */
 function TreeKeyboardContainer({
   domains,
@@ -616,6 +630,76 @@ function TreeKeyboardContainer({
     buttons[nextIdx].focus();
   };
 
+  const focusEdge = (edge: 'first' | 'last') => {
+    const buttons = getFocusableButtons();
+    if (buttons.length === 0) return;
+    buttons[edge === 'first' ? 0 : buttons.length - 1].focus();
+  };
+
+  // Find the <li role="treeitem"> ancestor for a given element. Returns null if not found.
+  const findTreeItem = (el: Element | null): HTMLLIElement | undefined => {
+    let cur: Element | null = el;
+    while (cur && cur !== containerRef.current) {
+      if (cur instanceof HTMLLIElement && cur.getAttribute('role') === 'treeitem') return cur;
+      cur = cur.parentElement;
+    }
+    return undefined;
+  };
+
+  /** Focus a treeitem by finding its primary activation button (chevron or combined). */
+  const focusTreeItem = (li: HTMLLIElement | undefined) => {
+    if (!li) return;
+    const button = li.querySelector<HTMLButtonElement>(':scope > div > button');
+    button?.focus();
+  };
+
+  /** Find direct-child treeitems of an item by descending into its nested <ul role="group">. */
+  const getChildTreeItems = (li: HTMLLIElement): HTMLLIElement[] => {
+    const group = li.querySelector<HTMLUListElement>(':scope > ul[role="group"]');
+    if (!group) return [];
+    return Array.from(group.children).filter(
+      (c): c is HTMLLIElement =>
+        c instanceof HTMLLIElement && c.getAttribute('role') === 'treeitem',
+    );
+  };
+
+  /** Find the parent treeitem of an item by walking up through the group <ul>. */
+  const getParentTreeItem = (li: HTMLLIElement): HTMLLIElement | undefined => {
+    const group = li.parentElement;
+    if (!(group instanceof HTMLUListElement)) return undefined;
+    if (group.getAttribute('role') !== 'group') return undefined;
+    const parent = group.parentElement;
+    return parent instanceof HTMLLIElement && parent.getAttribute('role') === 'treeitem'
+      ? parent
+      : undefined;
+  };
+
+  const handleArrowRight = (li: HTMLLIElement) => {
+    const expanded = li.getAttribute('aria-expanded');
+    if (expanded === 'false') {
+      // Collapsed with children — click the chevron/combined button to expand.
+      const button = li.querySelector<HTMLButtonElement>(':scope > div > button');
+      button?.click();
+    } else if (expanded === 'true') {
+      // Already expanded — move focus to first child treeitem.
+      const [firstChild] = getChildTreeItems(li);
+      focusTreeItem(firstChild);
+    }
+    // Leaf (no aria-expanded) — no-op.
+  };
+
+  const handleArrowLeft = (li: HTMLLIElement) => {
+    const expanded = li.getAttribute('aria-expanded');
+    if (expanded === 'true') {
+      // Expanded — collapse by clicking the chevron/combined button.
+      const button = li.querySelector<HTMLButtonElement>(':scope > div > button');
+      button?.click();
+    } else {
+      // Collapsed or leaf — move focus to parent treeitem.
+      focusTreeItem(getParentTreeItem(li));
+    }
+  };
+
   const handleKeyDown = (e: ReactKeyboardEvent) => {
     switch (e.key) {
       case 'ArrowDown':
@@ -629,6 +713,36 @@ function TreeKeyboardContainer({
         e.stopPropagation();
         e.nativeEvent.stopImmediatePropagation();
         moveFocus(-1);
+        break;
+      case 'ArrowRight': {
+        const li = findTreeItem(document.activeElement);
+        if (!li) break;
+        e.preventDefault();
+        e.stopPropagation();
+        e.nativeEvent.stopImmediatePropagation();
+        handleArrowRight(li);
+        break;
+      }
+      case 'ArrowLeft': {
+        const li = findTreeItem(document.activeElement);
+        if (!li) break;
+        e.preventDefault();
+        e.stopPropagation();
+        e.nativeEvent.stopImmediatePropagation();
+        handleArrowLeft(li);
+        break;
+      }
+      case 'Home':
+        e.preventDefault();
+        e.stopPropagation();
+        e.nativeEvent.stopImmediatePropagation();
+        focusEdge('first');
+        break;
+      case 'End':
+        e.preventDefault();
+        e.stopPropagation();
+        e.nativeEvent.stopImmediatePropagation();
+        focusEdge('last');
         break;
       case 'Tab':
         // Stop native propagation so the surrounding drawer/dialog can't also
@@ -664,6 +778,7 @@ function TreeKeyboardContainer({
         onSelect={onSelect}
         parentPath={[]}
         scrollRef={scrollRef}
+        isRoot
       />
     </div>
   );
@@ -681,6 +796,7 @@ function TreeNodeList({
   onSelect,
   parentPath,
   scrollRef,
+  isRoot = false,
 }: {
   domains: SemanticDomain[];
   currentPath: SemanticDomain[];
@@ -688,6 +804,8 @@ function TreeNodeList({
   onSelect: (path: SemanticDomain[]) => void;
   parentPath: SemanticDomain[];
   scrollRef: RefObject<HTMLButtonElement>;
+  /** When true this is the outermost list — render as `role="tree"`; otherwise `role="group"`. */
+  isRoot?: boolean;
 }) {
   // Depth = number of ancestors. parentPath.length is 0 for the top-level list,
   // 1 for first-level children, etc. Used by TreeNode to decide whether the
@@ -695,7 +813,11 @@ function TreeNodeList({
   // separate controls — chevron toggles expand, label triggers select (depth >= 1).
   const depth = parentPath.length;
   return (
-    <ul className={cn('tw-space-y-0.5', { 'tw-ml-3': parentPath.length > 0 })}>
+    <ul
+      role={isRoot ? 'tree' : 'group'}
+      aria-label={isRoot ? 'Semantic domain tree' : undefined}
+      className={cn('tw-space-y-0.5', { 'tw-ml-3': parentPath.length > 0 })}
+    >
       {domains.map((domain) => {
         const thisPath = [...parentPath, domain];
         // The clicked breadcrumb segment is the selected node in the tree —
@@ -775,8 +897,19 @@ function TreeNode({
 
   const isTopLevelWithChildren = depth === 0 && hasChildren;
 
+  // ARIA tree-view attributes per WAI-ARIA APG. aria-level is 1-indexed; depth here is
+  // 0-indexed (depth=0 means top-level). aria-expanded is only set when the item is
+  // expandable (has children); omitted on leaves so AT announces them as leaf nodes.
+  // aria-selected reflects whether this is the breadcrumb segment that opened the dropdown.
+  const ariaExpanded: boolean | undefined = hasChildren ? expanded : undefined;
+
   return (
-    <li>
+    <li
+      role="treeitem"
+      aria-level={depth + 1}
+      aria-selected={isSelected}
+      aria-expanded={ariaExpanded}
+    >
       <div className="tw-flex tw-items-center tw-gap-0.5">
         {isTopLevelWithChildren ? (
           // Combined chevron + label button. Clicking ONLY expands/collapses; it does not
