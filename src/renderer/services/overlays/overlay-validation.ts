@@ -5,7 +5,7 @@
 
 import { newPlatformError, INVALID_ARGUMENT } from 'platform-bible-utils';
 import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
-import { CommandPaletteRequest, PopoverRequest } from './overlay.service-model';
+import { ComboBoxRequest, PopoverRequest } from './overlay.service-model';
 
 /** Throws a PlatformError with INVALID_ARGUMENT code */
 function throwValidationError(message: string): never {
@@ -112,20 +112,20 @@ export function validatePopoverRequest(request: PopoverRequest): void {
   }
 }
 
-const MAX_COMMAND_PALETTE_ITEMS = 200;
+const MAX_COMBO_BOX_ITEMS = 200;
 
 /**
- * Validates a command palette request's items, anchor, and options.
+ * Validates a combo box request's items, anchor, and options.
  *
- * @param request The command palette request to validate
+ * @param request The combo box request to validate
  * @throws PlatformError with code INVALID_ARGUMENT if validation fails
  */
-export function validateCommandPaletteRequest(request: CommandPaletteRequest): void {
+export function validateComboBoxRequest(request: ComboBoxRequest): void {
   if (!request.items || request.items.length === 0) {
     throwValidationError('Items array must not be empty');
   }
-  if (request.items.length > MAX_COMMAND_PALETTE_ITEMS) {
-    throwValidationError(`Too many items (max ${MAX_COMMAND_PALETTE_ITEMS})`);
+  if (request.items.length > MAX_COMBO_BOX_ITEMS) {
+    throwValidationError(`Too many items (max ${MAX_COMBO_BOX_ITEMS})`);
   }
 
   request.items.forEach((item) => {

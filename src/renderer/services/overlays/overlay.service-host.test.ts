@@ -7,7 +7,7 @@ import {
 } from 'platform-bible-utils';
 import { sendCommand } from '@shared/services/command.service';
 import { menuDataService } from '@shared/services/menu-data.service';
-import { CommandPaletteRequest, PopoverContent, PopoverRequest } from './overlay.service-model';
+import { ComboBoxRequest, PopoverContent, PopoverRequest } from './overlay.service-model';
 import { getOverlays, getOverlayById, clearAllOverlays } from './overlay-store';
 import { isWebViewVisible } from './overlay-coordinates';
 
@@ -16,7 +16,7 @@ const DEBOUNCE_COOLDOWN_MS = 50;
 
 // Mock dependencies
 vi.mock('./overlay-validation', () => ({
-  validateCommandPaletteRequest: vi.fn(),
+  validateComboBoxRequest: vi.fn(),
   validateContextMenuItems: vi.fn(),
   validatePopoverRequest: vi.fn(),
 }));
@@ -507,8 +507,8 @@ describe('overlay.service-host', () => {
     });
   });
 
-  describe('command palettes', () => {
-    const validRequest: CommandPaletteRequest = {
+  describe('combo boxes', () => {
+    const validRequest: ComboBoxRequest = {
       items: [
         { id: 'ft', label: 'Footnote' },
         { id: 'xt', label: 'Cross Reference' },
@@ -516,12 +516,12 @@ describe('overlay.service-host', () => {
       anchor: { x: 100, y: 200 },
     };
 
-    it('should create an overlay entry of type commandPalette', () => {
-      const promise = overlayService.showCommandPalette(validRequest, 'test-webview');
+    it('should create an overlay entry of type comboBox', () => {
+      const promise = overlayService.showComboBox(validRequest, 'test-webview');
 
       const overlays = getOverlays();
       expect(overlays).toHaveLength(1);
-      expect(overlays[0].type).toBe('commandPalette');
+      expect(overlays[0].type).toBe('comboBox');
 
       // Clean up
       overlays[0].resolve(undefined);
@@ -529,12 +529,12 @@ describe('overlay.service-host', () => {
     });
 
     it('should resolve with selected item ID', async () => {
-      const promise = overlayService.showCommandPalette(validRequest, 'test-webview');
+      const promise = overlayService.showComboBox(validRequest, 'test-webview');
 
       const overlays = getOverlays();
-      // Only commandPalette overlays exist in this test
+      // Only comboBox overlays exist in this test
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const overlay = overlays[0] as Extract<(typeof overlays)[0], { type: 'commandPalette' }>;
+      const overlay = overlays[0] as Extract<(typeof overlays)[0], { type: 'comboBox' }>;
       overlay.resolve('ft');
 
       const result = await promise;
@@ -542,37 +542,37 @@ describe('overlay.service-host', () => {
     });
 
     it('should resolve with undefined when dismissed', async () => {
-      const promise = overlayService.showCommandPalette(validRequest, 'test-webview');
+      const promise = overlayService.showComboBox(validRequest, 'test-webview');
 
       const overlays = getOverlays();
       // TypeScript cannot narrow a discriminated union after getOverlays(); cast needed to access typed fields
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const overlay = overlays[0] as Extract<(typeof overlays)[0], { type: 'commandPalette' }>;
+      const overlay = overlays[0] as Extract<(typeof overlays)[0], { type: 'comboBox' }>;
       overlay.resolve(undefined);
 
       const result = await promise;
       expect(result).toBeUndefined();
     });
 
-    it('should replace existing command palette from same webView', async () => {
+    it('should replace existing combo box from same webView', async () => {
       vi.useFakeTimers();
 
-      const promise1 = overlayService.showCommandPalette(validRequest, 'test-webview');
+      const promise1 = overlayService.showComboBox(validRequest, 'test-webview');
 
       vi.advanceTimersByTime(DEBOUNCE_COOLDOWN_MS);
 
-      const request2: CommandPaletteRequest = {
+      const request2: ComboBoxRequest = {
         items: [{ id: 'p', label: 'Paragraph' }],
         anchor: { x: 60, y: 110 },
       };
-      const promise2 = overlayService.showCommandPalette(request2, 'test-webview');
+      const promise2 = overlayService.showComboBox(request2, 'test-webview');
 
       await expect(promise1).rejects.toSatisfy(
         (error: unknown) => isPlatformError(error) && error.code === ABORTED,
       );
 
       const overlays = getOverlays();
-      const palettes = overlays.filter((o) => o.type === 'commandPalette');
+      const palettes = overlays.filter((o) => o.type === 'comboBox');
       expect(palettes).toHaveLength(1);
 
       palettes[0].resolve(undefined);
@@ -581,11 +581,9 @@ describe('overlay.service-host', () => {
     });
 
     it('should reject with RESOURCE_EXHAUSTED within debounce cooldown', async () => {
-      const promise1 = overlayService.showCommandPalette(validRequest, 'test-webview');
+      const promise1 = overlayService.showComboBox(validRequest, 'test-webview');
       // Second call within 50ms should throw
-      await expect(
-        overlayService.showCommandPalette(validRequest, 'test-webview'),
-      ).rejects.toSatisfy(
+      await expect(overlayService.showComboBox(validRequest, 'test-webview')).rejects.toSatisfy(
         (error: unknown) => isPlatformError(error) && error.code === RESOURCE_EXHAUSTED,
       );
       expect(getOverlays()).toHaveLength(1);
@@ -595,17 +593,17 @@ describe('overlay.service-host', () => {
     });
 
     it('should handle centered mode (no anchor)', () => {
-      const request: CommandPaletteRequest = {
+      const request: ComboBoxRequest = {
         items: [{ id: 'ft', label: 'Footnote' }],
         // no anchor — centered mode
       };
-      const promise = overlayService.showCommandPalette(request, 'test-webview');
+      const promise = overlayService.showComboBox(request, 'test-webview');
 
       const overlays = getOverlays();
       expect(overlays).toHaveLength(1);
       // TypeScript cannot narrow a discriminated union after getOverlays(); cast needed to access typed fields
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const overlay = overlays[0] as Extract<(typeof overlays)[0], { type: 'commandPalette' }>;
+      const overlay = overlays[0] as Extract<(typeof overlays)[0], { type: 'comboBox' }>;
       expect(overlay.position).toBeUndefined();
 
       overlay.resolve(undefined);
@@ -642,14 +640,14 @@ describe('overlay.service-host', () => {
       vi.mocked(isWebViewVisible).mockReturnValue(true);
     });
 
-    it('should reject command palette with FAILED_PRECONDITION when webView is not visible', async () => {
+    it('should reject combo box with FAILED_PRECONDITION when webView is not visible', async () => {
       vi.mocked(isWebViewVisible).mockReturnValue(false);
 
-      const request: CommandPaletteRequest = {
+      const request: ComboBoxRequest = {
         items: [{ id: 'ft', label: 'Footnote' }],
       };
 
-      await expect(overlayService.showCommandPalette(request, 'hidden-webview')).rejects.toSatisfy(
+      await expect(overlayService.showComboBox(request, 'hidden-webview')).rejects.toSatisfy(
         (error: unknown) => isPlatformError(error) && error.code === FAILED_PRECONDITION,
       );
 

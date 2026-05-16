@@ -7,7 +7,11 @@ export type { ExecutionToken } from '@node/models/execution-token.model';
 export type { DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
 export type { UseDialogCallbackOptions } from '@renderer/hooks/papi-hooks/use-dialog-callback.hook';
 export type {
+  ComboBoxItem,
+  ComboBoxRequest,
+  /** @deprecated Use {@link ComboBoxItem}. */
   CommandPaletteItem,
+  /** @deprecated Use {@link ComboBoxRequest}. */
   CommandPaletteRequest,
   IOverlayService,
   PopoverAction,

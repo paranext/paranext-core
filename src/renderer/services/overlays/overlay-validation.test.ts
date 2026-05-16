@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { isPlatformError, INVALID_ARGUMENT } from 'platform-bible-utils';
 import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
-import { CommandPaletteRequest, PopoverRequest } from './overlay.service-model';
+import { ComboBoxRequest, PopoverRequest } from './overlay.service-model';
 import {
-  validateCommandPaletteRequest,
+  validateComboBoxRequest,
   validateContextMenuItems,
   validateMenuItems,
   validatePopoverRequest,
@@ -331,21 +331,21 @@ describe('overlay-validation', () => {
     });
   });
 
-  describe('validateCommandPaletteRequest', () => {
-    const validRequest: CommandPaletteRequest = {
+  describe('validateComboBoxRequest', () => {
+    const validRequest: ComboBoxRequest = {
       items: [
         { id: 'ft', label: 'Footnote' },
         { id: 'xt', label: 'Cross Reference' },
       ],
     };
 
-    it('should pass for a valid command palette request', () => {
-      expect(() => validateCommandPaletteRequest(validRequest)).not.toThrow();
+    it('should pass for a valid combo box request', () => {
+      expect(() => validateComboBoxRequest(validRequest)).not.toThrow();
     });
 
     it('should throw for empty items array', () => {
       expectValidationError(
-        () => validateCommandPaletteRequest({ ...validRequest, items: [] }),
+        () => validateComboBoxRequest({ ...validRequest, items: [] }),
         'Items array must not be empty',
       );
     });
@@ -353,61 +353,58 @@ describe('overlay-validation', () => {
     it('should throw for too many items (>200)', () => {
       const items = Array.from({ length: 201 }, (_, i) => ({ id: `id-${i}`, label: `Item ${i}` }));
       expectValidationError(
-        () => validateCommandPaletteRequest({ ...validRequest, items }),
+        () => validateComboBoxRequest({ ...validRequest, items }),
         'Too many items (max 200)',
       );
     });
 
     it('should pass for exactly 200 items', () => {
       const items = Array.from({ length: 200 }, (_, i) => ({ id: `id-${i}`, label: `Item ${i}` }));
-      expect(() => validateCommandPaletteRequest({ ...validRequest, items })).not.toThrow();
+      expect(() => validateComboBoxRequest({ ...validRequest, items })).not.toThrow();
     });
 
     it('should throw for item missing id', () => {
       // Intentionally malformed input to test validation; must bypass TS to simulate bad runtime data
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const request = { items: [{ label: 'No ID' }] } as unknown as CommandPaletteRequest;
-      expectValidationError(
-        () => validateCommandPaletteRequest(request),
-        'Each item must have an id',
-      );
+      const request = { items: [{ label: 'No ID' }] } as unknown as ComboBoxRequest;
+      expectValidationError(() => validateComboBoxRequest(request), 'Each item must have an id');
     });
 
     it('should throw for label too long', () => {
       const items = [{ id: 'long', label: 'a'.repeat(501) }];
       expectValidationError(
-        () => validateCommandPaletteRequest({ ...validRequest, items }),
+        () => validateComboBoxRequest({ ...validRequest, items }),
         'Label exceeds maximum length of 500 characters',
       );
     });
 
     it('should throw for invalid anchor coordinates (NaN)', () => {
       expectValidationError(
-        () => validateCommandPaletteRequest({ ...validRequest, anchor: { x: NaN, y: 100 } }),
+        () => validateComboBoxRequest({ ...validRequest, anchor: { x: NaN, y: 100 } }),
         'Anchor must have valid x and y coordinates',
       );
     });
 
     it('should throw for negative maxWidth', () => {
       expectValidationError(
-        () => validateCommandPaletteRequest({ ...validRequest, maxWidth: -10 }),
+        () => validateComboBoxRequest({ ...validRequest, maxWidth: -10 }),
         'maxWidth must be greater than 0',
       );
     });
 
     it('should throw for zero maxWidth', () => {
-      expectValidationError(() => validateCommandPaletteRequest({ ...validRequest, maxWidth: 0 }));
+      expectValidationError(() => validateComboBoxRequest({ ...validRequest, maxWidth: 0 }));
     });
 
     it('should throw for negative maxHeight', () => {
       expectValidationError(
-        () => validateCommandPaletteRequest({ ...validRequest, maxHeight: -5 }),
+        () => validateComboBoxRequest({ ...validRequest, maxHeight: -5 }),
         'maxHeight must be greater than 0',
       );
     });
 
     it('should throw for zero maxHeight', () => {
-      expectValidationError(() => validateCommandPaletteRequest({ ...validRequest, maxHeight: 0 }));
+      expectValidationError(() => validateComboBoxRequest({ ...validRequest, maxHeight: 0 }));
     });
 
     it('should pass with all optional fields on items', () => {
@@ -422,12 +419,12 @@ describe('overlay-validation', () => {
           disabled: false,
         },
       ];
-      expect(() => validateCommandPaletteRequest({ ...validRequest, items })).not.toThrow();
+      expect(() => validateComboBoxRequest({ ...validRequest, items })).not.toThrow();
     });
 
     it('should pass with valid anchor coordinates', () => {
       expect(() =>
-        validateCommandPaletteRequest({
+        validateComboBoxRequest({
           ...validRequest,
           anchor: { x: 100, y: 200 },
         }),
@@ -435,7 +432,7 @@ describe('overlay-validation', () => {
     });
 
     it('should pass with no anchor (centered mode)', () => {
-      expect(() => validateCommandPaletteRequest(validRequest)).not.toThrow();
+      expect(() => validateComboBoxRequest(validRequest)).not.toThrow();
     });
   });
 });
