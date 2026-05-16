@@ -222,6 +222,85 @@ internal class MediaServiceFetchImageBytesTests
     }
 
     [Test]
+    public void FetchImageBytes_OversizedFile_IsSkippedWithWarning_FallsThroughToNextProject()
+    {
+        // R2 security cap: a file larger than the 50 MB cap is skipped (logged) and
+        // the search order continues to the next package. Here HD holds an oversized
+        // payload and SD holds a valid one - the result should come from SD.
+        const long capBytes = 50L * 1024L * 1024L;
+        var oversizedBytes = new byte[capBytes + 1];
+        // Set just enough magic bytes that nothing else would mistake this for valid JPEG;
+        // we only care that the file-size pre-check trips before any read.
+        oversizedBytes[0] = 0xFF;
+        oversizedBytes[1] = 0xD8;
+
+        var hd = MakeBinaryPackage("IMG_HD").WithBinaryFile("Dromedary.jpg", oversizedBytes);
+        var sd = MakeBinaryPackage("IMG_SD").WithBinaryFile("Dromedary.jpg", FakeJpgBytes);
+        var projects = new Dictionary<string, IMarblePackage>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["IMG_HD"] = hd,
+            ["IMG_SD"] = sd,
+        };
+        var service = new MediaService(
+            DataWithProjects(projects, MakeItem("Dromedary", "Dromedary.jpg"))
+        );
+
+        // Capture Console output so we can assert the warning was emitted.
+        using var consoleOut = new StringWriter();
+        var originalOut = Console.Out;
+        Console.SetOut(consoleOut);
+        FetchImageBytesResult? result;
+        try
+        {
+            result = service.FetchImageBytes(new FetchImageBytesInput("Dromedary", "full"));
+        }
+        finally
+        {
+            Console.SetOut(originalOut);
+        }
+
+        Assert.That(
+            result,
+            Is.Not.Null,
+            "oversized HD file should be skipped and SD result returned"
+        );
+        var decoded = Convert.FromBase64String(result!.Data);
+        Assert.That(decoded, Is.EquivalentTo(FakeJpgBytes), "must come from SD not oversized HD");
+
+        var log = consoleOut.ToString();
+        Assert.That(
+            log,
+            Does.Contain("exceeds").And.Contain("byte cap"),
+            "oversized file should produce a size-cap warning log"
+        );
+        Assert.That(log, Does.Contain("IMG_HD"), "warning should name the offending project");
+    }
+
+    [Test]
+    public void FetchImageBytes_OnlyProjectHasOversizedFile_ReturnsNull()
+    {
+        // R2 security cap: if every candidate in the search order is oversized, the
+        // method returns null rather than allocating any of them.
+        const long capBytes = 50L * 1024L * 1024L;
+        var oversizedBytes = new byte[capBytes + 1];
+        oversizedBytes[0] = 0xFF;
+        oversizedBytes[1] = 0xD8;
+
+        var hd = MakeBinaryPackage("IMG_HD").WithBinaryFile("Dromedary.jpg", oversizedBytes);
+        var projects = new Dictionary<string, IMarblePackage>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["IMG_HD"] = hd,
+        };
+        var service = new MediaService(
+            DataWithProjects(projects, MakeItem("Dromedary", "Dromedary.jpg"))
+        );
+
+        var result = service.FetchImageBytes(new FetchImageBytesInput("Dromedary", "full"));
+
+        Assert.That(result, Is.Null, "all-oversized candidates should yield null");
+    }
+
+    [Test]
     public void FetchImageBytes_PathAndFileName_ComposedAsInternalPath()
     {
         // PT9 MarbleDataAccess.cs:281, 302: Path.Combine(metadata.Path, metadata.FileName).

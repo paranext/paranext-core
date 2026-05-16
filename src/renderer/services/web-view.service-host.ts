@@ -1442,16 +1442,23 @@ async function openOrReloadWebView(
   //   internet access. We must essentially assume they can find a way to access the internet
   //   through the same connect-src as index.ejs. However, it is probably best for them to use only
   //   things we give them from parent, so might as well keep it restricted here.
+  //   Note: `papi-er:` is intentionally NOT in connect-src even though it appears in img-src and
+  //   media-src below. Enhanced Resources image bytes are renderable (the <img> tag works) but
+  //   not fetchable from WebView JS - this prevents WebView code from reading raw image bytes
+  //   via fetch() / XHR. The scheme is also registered as a privileged scheme in main.ts with
+  //   supportFetchAPI=false / corsEnabled=false to enforce the same posture at the Chromium layer.
   // img-src load images
   //   'self' so images can be loaded from us
   //   papi-extension: so images can be loaded from installed extensions
-  //   papi-er: so images can be loaded from the enhanced resources protocol (e.g. Marble images)
+  //   papi-er: so images can be loaded from the enhanced resources protocol (e.g. Marble images).
+  //     Renderable only - see connect-src note above for why this is NOT in connect-src.
   //   https: so they can load images over secure connections
   //   data: so they can load data urls
   // media-src load audio, video, etc
   //   'self' so media can be loaded from us
   //   papi-extension: so media can be loaded from installed extensions
-  //   papi-er: so media can be loaded from the enhanced resources protocol
+  //   papi-er: so media can be loaded from the enhanced resources protocol.
+  //     Renderable only - see connect-src note above for why this is NOT in connect-src.
   //   https: so media can be loaded over secure connections
   //   data: so they can load data urls
   // font-src load fonts

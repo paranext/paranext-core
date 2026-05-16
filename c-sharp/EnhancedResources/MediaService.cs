@@ -26,6 +26,17 @@ internal sealed class MediaService(MediaData data)
     /// </summary>
     private const string SatelliteBibleAtlasCollection = "Satellite Bible Atlas";
 
+    /// <summary>
+    /// Maximum size in bytes for an image returned through the papi-er:// protocol.
+    /// Defends the renderer against unbounded memory use if a marble image file is
+    /// corrupted or maliciously large. 50 MB is comfortably above any legitimate
+    /// IMG_HD payload observed in marble packages while still capping a worst-case
+    /// allocation (base64 encoding inflates the bytes by ~4/3, so the renderer would
+    /// receive at most ~67 MB on the wire). Files larger than this are skipped with
+    /// a warning and the search continues to lower-resolution variants.
+    /// </summary>
+    private const long MaxImageSizeBytes = 50L * 1024L * 1024L;
+
     // Image-project search orders (PT9 MarbleDataAccess.cs:854-866).
     // Task 7 convention: image-binary project short-names match these strings.
     private static readonly string[] FullImageSearchOrder =
@@ -191,6 +202,21 @@ internal sealed class MediaService(MediaData data)
                 var localPath = project.ResolveAccessiblePath(resolvedInternalPath);
                 if (string.IsNullOrWhiteSpace(localPath) || !File.Exists(localPath))
                     continue;
+
+                // Size-cap check before allocating the byte[] - defends against
+                // unbounded memory use if a marble package contains a corrupted or
+                // maliciously large image. Logs and falls through to the next
+                // candidate in the search order.
+                var fileLength = new FileInfo(localPath).Length;
+                if (fileLength > MaxImageSizeBytes)
+                {
+                    Console.WriteLine(
+                        $"Enhanced Resources: warning - skipping {resolvedInternalPath} "
+                            + $"from {projectName}: size {fileLength} bytes exceeds "
+                            + $"{MaxImageSizeBytes}-byte cap"
+                    );
+                    continue;
+                }
 
                 var bytes = File.ReadAllBytes(localPath);
                 var contentType = GetContentTypeFromExtension(resolvedInternalPath);

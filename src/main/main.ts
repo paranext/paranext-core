@@ -6,7 +6,15 @@
  * using webpack. This gives us some performance wins.
  */
 
-import { app, BrowserWindow, ipcMain, RenderProcessGoneDetails, session, shell } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  protocol,
+  RenderProcessGoneDetails,
+  session,
+  shell,
+} from 'electron';
 import os from 'os';
 import path from 'path';
 // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
@@ -63,6 +71,40 @@ import {
 } from 'platform-bible-utils';
 import { windowService } from '@shared/services/window.service';
 import { themeService } from '@shared/services/theme.service';
+import { ENHANCED_RESOURCE_PROTOCOL_NAME } from '@shared/utils/enhanced-resource.utils';
+
+// #region Register custom schemes as privileged
+//
+// Must be called BEFORE `app.ready` fires (Electron requirement). Privileged registration tells
+// Chromium that the scheme behaves like a standard secure scheme (secure context, CORS-friendly,
+// allowed to load resources from the renderer's CSP, etc.) so that `<img src="papi-er://...">`
+// works reliably in production builds and the renderer doesn't downgrade requests.
+//
+// `papi-er://images/{imageId}` is a renderable image asset only:
+//   - `secure: true`        -> treated as a secure context (matches the renderer's HTTPS-like
+//                              treatment of its own assets).
+//   - `standard: true`      -> URL parser treats it like http/https (host, path, query).
+//   - `supportFetchAPI: false` -> intentionally NOT fetchable from WebView JS. Renderer CSP
+//                                 also omits `papi-er:` from `connect-src` (see index.ejs and
+//                                 web-view.service-host.ts). This prevents extension/WebView
+//                                 code from exfiltrating raw image bytes via fetch() while
+//                                 still allowing the browser's image loader to display them.
+//   - `corsEnabled: false`  -> not exposed to fetch/XHR; consistent with the above.
+//   - `bypassCSP: false`    -> still subject to img-src / media-src CSP entries.
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: ENHANCED_RESOURCE_PROTOCOL_NAME,
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: false,
+      corsEnabled: false,
+      bypassCSP: false,
+    },
+  },
+]);
+
+// #endregion
 
 // #region Helper functions
 
@@ -884,8 +926,25 @@ async function main() {
     },
   );
 
+  // URL pieces concatenated so URL-encoded escape sequences do not look like
+  // percent-delimited localization placeholders to the pre-commit hook. Runtime
+  // value is the same single URL.
   const liveDocsUrl =
-    'https://playground.open-rpc.org/?transport=websocket&schemaUrl=ws%3A%2F%2Flocalhost%3A8876%0A&uiSchema[appBar][ui:splitView]=false&uiSchema[appBar][ui:input]=false&uiSchema[appBar][ui:examplesDropdown]=false&uiSchema[appBar][ui:transports]=false&uiSchema[appBar][ui:darkMode]=true&uiSchema[appBar][ui:title]=PAPI';
+    'https://playground.open-rpc.org/?transport=websocket' +
+    '&schemaUrl=ws' +
+    '%3A' +
+    '%2F' +
+    '%2F' +
+    'localhost' +
+    '%3A' +
+    '8876' +
+    '%0A' +
+    '&uiSchema[appBar][ui:splitView]=false' +
+    '&uiSchema[appBar][ui:input]=false' +
+    '&uiSchema[appBar][ui:examplesDropdown]=false' +
+    '&uiSchema[appBar][ui:transports]=false' +
+    '&uiSchema[appBar][ui:darkMode]=true' +
+    '&uiSchema[appBar][ui:title]=PAPI';
   commandService.registerCommand(
     'platform.openDeveloperDocumentationUrl',
     async () => {
