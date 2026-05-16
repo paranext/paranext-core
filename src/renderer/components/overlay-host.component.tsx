@@ -3,7 +3,7 @@
  * overlay store and renders the appropriate overlay components.
  */
 
-import { OverlayCommandPalette } from '@renderer/components/overlays/overlay-command-palette.component';
+import { OverlayComboBox } from '@renderer/components/overlays/overlay-combo-box.component';
 import { OverlayContextMenu } from '@renderer/components/overlays/overlay-context-menu.component';
 import { OverlayModalDialog } from '@renderer/components/overlays/overlay-modal-dialog.component';
 import { OverlayPopover } from '@renderer/components/overlays/overlay-popover.component';
@@ -39,8 +39,8 @@ export function OverlayHost() {
         if (overlay.type === 'popover') {
           return <OverlayPopover key={overlay.id} overlay={overlay} />;
         }
-        if (overlay.type === 'commandPalette') {
-          return <OverlayCommandPalette key={overlay.id} overlay={overlay} />;
+        if (overlay.type === 'comboBox') {
+          return <OverlayComboBox key={overlay.id} overlay={overlay} />;
         }
         return undefined;
       })}

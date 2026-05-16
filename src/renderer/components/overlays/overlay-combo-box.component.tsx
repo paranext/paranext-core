@@ -1,20 +1,27 @@
 /**
- * Overlay command palette component. Renders a searchable, filterable list of items using the
- * shadcn Command component (cmdk). Positioned via a virtual anchor (same pattern as
+ * Overlay combo box component. Renders a searchable, filterable list of items using the shadcn
+ * `Command` component (which wraps cmdk). Positioned via a virtual anchor (same pattern as
  * overlay-popover) or centered in the viewport when no position is provided.
  *
- * Contains both the presentational component (OverlayCommandPalettePresentational, exported for
- * tests and stories) and the store-connected component (OverlayCommandPalette) that resolves
- * LocalizeKeys and connects to the overlay store.
+ * This is the cross-iframe analog of the in-tree `ComboBox` component in `platform-bible-react` —
+ * same item shape and search behavior, but rendered in the parent renderer's React tree so it can
+ * escape iframe bounds. The in-tree `ComboBox` owns its trigger button and dropdown; this overlay
+ * version is invoked imperatively via `papi.overlays.showComboBox(...)` and has no trigger.
+ *
+ * Naming note: cmdk's preferred spelling for non-command-palette uses of `Command` is `Combobox`
+ * (lowercase b). pbr currently uses `ComboBox` (capital B); this overlay matches pbr for
+ * consistency. Harmonizing the capitalization toward cmdk's spelling is intentionally out of scope
+ * here — see the proposal at `docs/plans/2026-05-15-action-palette-proposal.md` for context.
+ *
+ * Contains both the presentational component (OverlayComboBoxPresentational, exported for tests and
+ * stories) and the store-connected component (OverlayComboBox) that resolves LocalizeKeys and
+ * connects to the overlay store.
  */
 
 import { Popover as PopoverPrimitive } from 'radix-ui';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { resolveAndRemoveOverlay } from '@renderer/services/overlays/overlay-store';
-import {
-  CommandPaletteItem,
-  OverlayEntry,
-} from '@renderer/services/overlays/overlay.service-model';
+import { ComboBoxItem, OverlayEntry } from '@renderer/services/overlays/overlay.service-model';
 import {
   Command,
   CommandEmpty,
@@ -32,10 +39,10 @@ import { isLocalizeKey, LanguageStrings, LocalizeKey } from 'platform-bible-util
 
 // ── Public Types ──
 
-/** Props for the presentational OverlayCommandPalettePresentational component */
-export type OverlayCommandPalettePresentationalProps = {
+/** Props for the presentational OverlayComboBoxPresentational component */
+export type OverlayComboBoxPresentationalProps = {
   /** The selectable items to display */
-  items: CommandPaletteItem[];
+  items: ComboBoxItem[];
   /** Document-relative position for the palette anchor. Omit for centered mode. */
   position?: { x: number; y: number };
   /** Optional anchor dimensions */
@@ -63,14 +70,8 @@ const DEFAULT_MAX_HEIGHT = 400;
 
 // ── Internal Components ──
 
-/** Renders a single command palette item with label, description, icon, and badge */
-function PaletteItem({
-  item,
-  onSelect,
-}: {
-  item: CommandPaletteItem;
-  onSelect: (id: string) => void;
-}) {
+/** Renders a single combo box item with label, description, icon, and badge */
+function PaletteItem({ item, onSelect }: { item: ComboBoxItem; onSelect: (id: string) => void }) {
   // Build a searchable value from label + description + badge for cmdk filtering
   const searchValue = [item.label, item.description, item.badge].filter(Boolean).join(' ');
 
@@ -111,11 +112,11 @@ function GroupedItems({
   items,
   onSelect,
 }: {
-  items: CommandPaletteItem[];
+  items: ComboBoxItem[];
   onSelect: (id: string) => void;
 }) {
   const grouped = useMemo(() => {
-    const groups = new Map<string, CommandPaletteItem[]>();
+    const groups = new Map<string, ComboBoxItem[]>();
     items.forEach((item) => {
       const key = item.group ?? '';
       const arr = groups.get(key);
@@ -153,15 +154,15 @@ function GroupedItems({
 // ── Presentational Component ──
 
 /**
- * Pure presentational command palette component. Renders a searchable list of items using cmdk.
+ * Pure presentational combo box component. Renders a searchable list of items using cmdk.
  * Positioned via a Radix Popover virtual anchor when `position` is provided, or centered in the
  * viewport when omitted.
  *
  * This component has no dependency on the overlay store or localization hooks. Use it directly in
  * tests and Storybook stories. For production rendering via the overlay service, use
- * {@link OverlayCommandPalette} instead — it handles LocalizeKey resolution and store lifecycle.
+ * {@link OverlayComboBox} instead — it handles LocalizeKey resolution and store lifecycle.
  */
-export function OverlayCommandPalettePresentational({
+export function OverlayComboBoxPresentational({
   items,
   position,
   anchor,
@@ -172,7 +173,7 @@ export function OverlayCommandPalettePresentational({
   maxHeight = DEFAULT_MAX_HEIGHT,
   onSelect,
   onDismiss,
-}: OverlayCommandPalettePresentationalProps) {
+}: OverlayComboBoxPresentationalProps) {
   // React's useRef requires null as the initial value for DOM refs
   // eslint-disable-next-line no-null/no-null
   const inputRef = useRef<HTMLInputElement>(null);
@@ -194,11 +195,7 @@ export function OverlayCommandPalettePresentational({
   );
 
   const paletteContent = (
-    <Command
-      data-overlay-command-palette
-      className="tw:rounded-lg tw:border"
-      onKeyDown={handleKeyDown}
-    >
+    <Command data-overlay-combo-box className="tw:rounded-lg tw:border" onKeyDown={handleKeyDown}>
       <CommandInput ref={inputRef} placeholder={placeholder} />
       <CommandList style={{ maxHeight: maxHeight - 44 }}>
         <CommandEmpty>{noResultsText}</CommandEmpty>
@@ -213,7 +210,7 @@ export function OverlayCommandPalettePresentational({
       // Backdrop handles click-to-dismiss; keyboard events (Escape) are handled by the child Command component
       // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
       <div
-        data-overlay-command-palette-backdrop
+        data-overlay-combo-box-backdrop
         className="tw:fixed tw:inset-0 tw:flex tw:items-start tw:justify-center"
         style={{ zIndex: Z_INDEX_OVERLAY, paddingTop: '20vh' }}
         onClick={(e) => {
@@ -235,7 +232,7 @@ export function OverlayCommandPalettePresentational({
     <Popover open onOpenChange={handleOpenChange}>
       <PopoverAnchor asChild>
         <div
-          data-overlay-command-palette-anchor
+          data-overlay-combo-box-anchor
           style={{
             position: 'fixed',
             left: position.x,
@@ -247,7 +244,7 @@ export function OverlayCommandPalettePresentational({
         />
       </PopoverAnchor>
       <PopoverContent
-        data-overlay-command-palette
+        data-overlay-combo-box
         className="tw:p-0"
         side={side}
         align="start"
@@ -276,8 +273,8 @@ export function OverlayCommandPalettePresentational({
 // ── Localization Helpers ──
 
 // Platform-level default keys for search placeholder and no-results text
-const DEFAULT_PLACEHOLDER_KEY: LocalizeKey = '%overlay_commandPalette_searchPlaceholder%';
-const DEFAULT_NO_RESULTS_KEY: LocalizeKey = '%overlay_commandPalette_noResults%';
+const DEFAULT_PLACEHOLDER_KEY: LocalizeKey = '%overlay_comboBox_searchPlaceholder%';
+const DEFAULT_NO_RESULTS_KEY: LocalizeKey = '%overlay_comboBox_noResults%';
 
 /** Helper to push a value to the keys array if it is a LocalizeKey */
 function pushIfKey(keys: LocalizeKey[], value: string | LocalizeKey | undefined): void {
@@ -285,19 +282,19 @@ function pushIfKey(keys: LocalizeKey[], value: string | LocalizeKey | undefined)
 }
 
 /**
- * Collects all localization keys from a command palette configuration.
+ * Collects all localization keys from a combo box configuration.
  *
- * Extracts localization keys from the provided command palette items and placeholder, returning an
- * array of keys that need to be localized. Always includes the default "no results" key.
+ * Extracts localization keys from the provided combo box items and placeholder, returning an array
+ * of keys that need to be localized. Always includes the default "no results" key.
  *
- * @param items - Array of command palette items to collect keys from
+ * @param items - Array of combo box items to collect keys from
  * @param placeholder - Optional localization key or placeholder text to display when no items are
  *   shown
  * @returns Array of localization keys found in the items and placeholder, including the default no
  *   results key
  */
-function collectCommandPaletteKeys(
-  items: CommandPaletteItem[],
+function collectComboBoxKeys(
+  items: ComboBoxItem[],
   placeholder: string | LocalizeKey | undefined,
 ): LocalizeKey[] {
   const keys: LocalizeKey[] = [DEFAULT_NO_RESULTS_KEY];
@@ -318,11 +315,11 @@ function resolveValue(
   return isLocalizeKey(value) ? (localizedStrings[value] ?? value) : value;
 }
 
-/** Resolves LocalizeKey values in command palette items using localized strings */
-function localizeCommandPaletteItems(
-  items: CommandPaletteItem[],
+/** Resolves LocalizeKey values in combo box items using localized strings */
+function localizeComboBoxItems(
+  items: ComboBoxItem[],
   localizedStrings: LanguageStrings,
-): CommandPaletteItem[] {
+): ComboBoxItem[] {
   return items.map((item) => ({
     ...item,
     label: resolveValue(item.label, localizedStrings),
@@ -333,30 +330,30 @@ function localizeCommandPaletteItems(
 
 // ── Store-Connected Component ──
 
-type OverlayCommandPaletteProps = {
-  overlay: Extract<OverlayEntry, { type: 'commandPalette' }>;
+type OverlayComboBoxProps = {
+  overlay: Extract<OverlayEntry, { type: 'comboBox' }>;
 };
 
 /**
- * Production command palette component. Resolves LocalizeKey values in items (labels, descriptions,
+ * Production combo box component. Resolves LocalizeKey values in items (labels, descriptions,
  * badges) and placeholder/no-results text via `useLocalizedStrings`, manages overlay lifecycle, and
- * delegates rendering to {@link OverlayCommandPalettePresentational}.
+ * delegates rendering to {@link OverlayComboBoxPresentational}.
  *
  * This is the component rendered by `OverlayHost`. Do not use it directly in tests or Storybook —
- * use {@link OverlayCommandPalettePresentational} instead, which accepts plain props without
- * requiring an `OverlayEntry`.
+ * use {@link OverlayComboBoxPresentational} instead, which accepts plain props without requiring an
+ * `OverlayEntry`.
  */
-export function OverlayCommandPalette({ overlay }: OverlayCommandPaletteProps) {
+export function OverlayComboBox({ overlay }: OverlayComboBoxProps) {
   const hasResolved = useRef(false);
 
   const localizeKeys = useMemo(
-    () => collectCommandPaletteKeys(overlay.items, overlay.request.placeholder),
+    () => collectComboBoxKeys(overlay.items, overlay.request.placeholder),
     [overlay.items, overlay.request.placeholder],
   );
   const [localizedStrings] = useLocalizedStrings(localizeKeys);
 
   const localizedItems = useMemo(
-    () => localizeCommandPaletteItems(overlay.items, localizedStrings),
+    () => localizeComboBoxItems(overlay.items, localizedStrings),
     [overlay.items, localizedStrings],
   );
 
@@ -388,7 +385,7 @@ export function OverlayCommandPalette({ overlay }: OverlayCommandPaletteProps) {
   }, [overlay]);
 
   return (
-    <OverlayCommandPalettePresentational
+    <OverlayComboBoxPresentational
       items={localizedItems}
       position={overlay.position}
       anchor={{

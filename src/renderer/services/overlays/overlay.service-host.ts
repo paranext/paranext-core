@@ -31,7 +31,7 @@ import {
 import type { PlatformError } from 'platform-bible-utils';
 import type { ReactElement } from 'react';
 import {
-  CommandPaletteRequest,
+  ComboBoxRequest,
   IOverlayService,
   OverlayEntry,
   PopoverContent,
@@ -39,7 +39,7 @@ import {
 } from './overlay.service-model';
 import { convertContributionToContextMenuItems } from './overlay-menu-converter';
 import {
-  validateCommandPaletteRequest,
+  validateComboBoxRequest,
   validateContextMenuItems,
   validatePopoverRequest,
 } from './overlay-validation';
@@ -523,35 +523,33 @@ async function onPopoverDismissed(overlayId: string): Promise<string | undefined
 }
 
 /**
- * Shows a command palette overlay with searchable/filterable items. Validates the request, checks
+ * Shows a combo box overlay with searchable/filterable items. Validates the request, checks
  * visibility, translates coordinates, and returns the user's selection or undefined if dismissed.
  *
- * @param request The command palette request with items and optional anchor
+ * @param request The combo box request with items and optional anchor
  * @param webViewId The webViewId that originated the request
  * @returns The selected item's ID, or undefined if dismissed
  * @throws PlatformError with code RESOURCE_EXHAUSTED if a duplicate request arrives within the
  *   debounce cooldown
  */
-async function showCommandPalette(
-  request: CommandPaletteRequest,
+async function showComboBox(
+  request: ComboBoxRequest,
   webViewId: string,
 ): Promise<string | undefined> {
-  validateCommandPaletteRequest(request);
+  validateComboBoxRequest(request);
 
-  // Visibility check (command palettes require visible WebView)
+  // Visibility check (combo boxes require visible WebView)
   if (!isWebViewVisible(webViewId)) {
     throw newPlatformError('Requesting WebView is not visible', FAILED_PRECONDITION);
   }
 
   // Leading-edge debounce: drop rapid re-triggers within 50ms
-  if (!debounceCheck('commandPalette', webViewId)) {
+  if (!debounceCheck('comboBox', webViewId)) {
     throw newPlatformError('Overlay request dropped by debounce cooldown', RESOURCE_EXHAUSTED);
   }
 
-  // Replace any existing command palette from this webView
-  const existingOverlays = getOverlaysByWebView(webViewId).filter(
-    (o) => o.type === 'commandPalette',
-  );
+  // Replace any existing combo box from this webView
+  const existingOverlays = getOverlaysByWebView(webViewId).filter((o) => o.type === 'comboBox');
   existingOverlays.forEach((existing) => {
     rejectAndRemoveOverlay(
       existing.id,
@@ -572,13 +570,13 @@ async function showCommandPalette(
     position = clampToViewport(translatedPosition, 4);
   }
 
-  announceLocalizedToScreenReader('%overlay_aria_commandPaletteOpened%');
+  announceLocalizedToScreenReader('%overlay_aria_comboBoxOpened%');
 
   lastOverlayCreatedAt = Date.now();
 
   return new Promise<string | undefined>((resolve, reject) => {
     addOverlay({
-      type: 'commandPalette',
+      type: 'comboBox',
       id: overlayId,
       webViewId,
       request,
@@ -603,7 +601,9 @@ export const overlayService: IOverlayService = {
   updatePopover,
   dismissPopover,
   onPopoverDismissed,
-  showCommandPalette,
+  showComboBox,
+  /** @deprecated Use {@link showComboBox}. */
+  showCommandPalette: showComboBox,
 };
 
 // ── Event Listeners for Auto-Dismiss ──
@@ -622,7 +622,7 @@ function registerAutoDismissListeners(): void {
       // Don't dismiss overlays when scrolling inside overlay content (e.g., popover with overflow)
       if (
         e.target instanceof Element &&
-        e.target.closest('[data-overlay-popover], [data-overlay-command-palette]')
+        e.target.closest('[data-overlay-popover], [data-overlay-combo-box]')
       )
         return;
 
@@ -631,12 +631,12 @@ function registerAutoDismissListeners(): void {
     { capture: true },
   );
 
-  // Dismiss context menus, command palettes, and popovers on window blur
+  // Dismiss context menus, combo boxes, and popovers on window blur
   window.addEventListener('blur', () => {
     // Skip if an overlay was just created — focus shifts from panel activation can trigger blur
     if (Date.now() - lastOverlayCreatedAt < OVERLAY_CREATION_GRACE_MS) return;
 
-    dismissAll('contextMenu', 'commandPalette');
+    dismissAll('contextMenu', 'comboBox');
     // Popovers with dismissOnClickOutside: false may persist across blur
     const allOverlays = getOverlays();
     allOverlays.forEach((overlay) => {
@@ -663,7 +663,7 @@ function registerAutoDismissListeners(): void {
       // changes that would otherwise immediately dismiss the just-created context menu
       if (Date.now() - lastOverlayCreatedAt < OVERLAY_CREATION_GRACE_MS) return;
 
-      dismissAll('contextMenu', 'commandPalette', 'popover');
+      dismissAll('contextMenu', 'comboBox', 'popover');
     })
     .catch((err) => logger.warn(`Failed to subscribe to window focus changes: ${err}`));
 }

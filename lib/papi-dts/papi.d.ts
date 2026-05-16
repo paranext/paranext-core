@@ -7918,7 +7918,7 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
 declare module 'renderer/services/overlays/overlay.service-model' {
   /**
    * Type definitions for the overlay service, a renderer-only service that manages overlays (context
-   * menus, popovers, command palettes) rendered in the renderer's top-level document outside iframe
+   * menus, popovers, combo boxes) rendered in the renderer's top-level document outside iframe
    * boundaries. Extensions running in sandboxed WebView iframes cannot render UI above other content,
    * so this service provides a way for them to request overlays that the renderer hosts on their
    * behalf.
@@ -8003,13 +8003,13 @@ declare module 'renderer/services/overlays/overlay.service-model' {
     showArrow?: boolean;
   }
   /**
-   * A single item in a command palette. Items are displayed in a searchable, filterable list. The
-   * user types to filter and selects one item.
+   * A single item in a combo box. Items are displayed in a searchable, filterable list. The user
+   * types to filter and selects one item.
    */
-  export type CommandPaletteItem = {
+  export type ComboBoxItem = {
     /** Unique identifier returned when this item is selected */
     id: string;
-    /** Primary display text (e.g., marker code like "ft" or command name) */
+    /** Primary display text (e.g., marker code like "ft") */
     label: string | LocalizeKey;
     /** Secondary description text displayed below the label */
     description?: string | LocalizeKey;
@@ -8022,12 +8022,12 @@ declare module 'renderer/services/overlays/overlay.service-model' {
     /** Whether the item is grayed out and non-selectable. Defaults to false. */
     disabled?: boolean;
   };
-  /** Request payload for {@link IOverlayService.showCommandPalette}. */
-  export interface CommandPaletteRequest {
+  /** Request payload for {@link IOverlayService.showComboBox}. */
+  export interface ComboBoxRequest {
     /** The selectable items to display */
-    items: CommandPaletteItem[];
+    items: ComboBoxItem[];
     /**
-     * Anchor position in pixels relative to the requesting WebView's iframe origin. The palette is
+     * Anchor position in pixels relative to the requesting WebView's iframe origin. The combo box is
      * positioned adjacent to this point. If omitted, centers in the viewport.
      */
     anchor?: {
@@ -8036,7 +8036,7 @@ declare module 'renderer/services/overlays/overlay.service-model' {
       width?: number;
       height?: number;
     };
-    /** Preferred side of the anchor to place the palette. Defaults to 'bottom'. */
+    /** Preferred side of the anchor to place the combo box. Defaults to 'bottom'. */
     side?: 'top' | 'bottom' | 'left' | 'right';
     /** Placeholder text for the search input */
     placeholder?: string | LocalizeKey;
@@ -8044,13 +8044,21 @@ declare module 'renderer/services/overlays/overlay.service-model' {
     maxWidth?: number;
     /** Maximum height in pixels. Defaults to 400. */
     maxHeight?: number;
-    /** Whether clicking outside dismisses the palette. Defaults to true. */
+    /** Whether clicking outside dismisses the combo box. Defaults to true. */
     dismissOnClickOutside?: boolean;
   }
   /**
+   * @deprecated Use {@link ComboBoxItem}. The "command palette" terminology was misleading — this
+   *   overlay is a generic per-WebView searchable picker (used today for USFM marker selection), not
+   *   the global Action Palette concept. See `docs/plans/2026-05-15-action-palette-proposal.md`.
+   */
+  export type CommandPaletteItem = ComboBoxItem;
+  /** @deprecated Use {@link ComboBoxRequest}. See {@link CommandPaletteItem} for context. */
+  export type CommandPaletteRequest = ComboBoxRequest;
+  /**
    *
-   * Service for showing overlays (context menus, popovers, command palettes) that render outside
-   * iframe boundaries in the renderer's top-level document. Renderer-only service.
+   * Service for showing overlays (context menus, popovers, combo boxes) that render outside iframe
+   * boundaries in the renderer's top-level document. Renderer-only service.
    *
    * Extensions in sandboxed WebView iframes cannot render UI above other content or outside their
    * iframe bounds. This service accepts overlay requests from WebViews, translates their
@@ -8058,9 +8066,9 @@ declare module 'renderer/services/overlays/overlay.service-model' {
    * renderer's React tree. Each method returns a promise that resolves when the user interacts with
    * the overlay or it is dismissed.
    *
-   * Only one overlay of each type (context menu, popover, command palette) can be active per WebView
-   * at a time. Requesting a new overlay of the same type from the same WebView replaces the previous
-   * one and rejects its promise with a PlatformError with code ABORTED.
+   * Only one overlay of each type (context menu, popover, combo box) can be active per WebView at a
+   * time. Requesting a new overlay of the same type from the same WebView replaces the previous one
+   * and rejects its promise with a PlatformError with code ABORTED.
    */
   export interface IOverlayService {
     /**
@@ -8131,20 +8139,21 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      */
     onPopoverDismissed(overlayId: string): Promise<string | undefined>;
     /**
-     * Shows a command palette with searchable/filterable items. Returns a promise that resolves with
-     * the selected item's `id`, or `undefined` if dismissed.
+     * Shows a combo box with searchable/filterable items. Returns a promise that resolves with the
+     * selected item's `id`, or `undefined` if dismissed.
      *
      * @param request The items, optional anchor position, and display options
-     * @param webViewId The ID of the WebView requesting the command palette
+     * @param webViewId The ID of the WebView requesting the combo box
      * @returns The selected item's ID, or `undefined` if dismissed
      * @throws PlatformError with code INVALID_ARGUMENT if the request is invalid
-     * @throws PlatformError with code ABORTED if replaced by another command palette from the same
-     *   WebView
+     * @throws PlatformError with code ABORTED if replaced by another combo box from the same WebView
      */
-    showCommandPalette(
-      request: CommandPaletteRequest,
-      webViewId: string,
-    ): Promise<string | undefined>;
+    showComboBox(request: ComboBoxRequest, webViewId: string): Promise<string | undefined>;
+    /**
+     * @deprecated Use {@link showComboBox}. The "command palette" terminology was misleading; see
+     *   `docs/plans/2026-05-15-action-palette-proposal.md`.
+     */
+    showCommandPalette(request: ComboBoxRequest, webViewId: string): Promise<string | undefined>;
   }
   /**
    * Internal representation of an active overlay stored in the overlay store. Each entry holds the
@@ -8156,7 +8165,7 @@ declare module 'renderer/services/overlays/overlay.service-model' {
    * - `'contextMenu'` — An active context menu with translated position and menu items.
    * - `'modalDialog'` — An active modal dialog with its type-specific options.
    * - `'popover'` — An active popover with mutable `content` (updatable via `updatePopover`).
-   * - `'commandPalette'` — An active command palette with searchable/filterable items.
+   * - `'comboBox'` — An active combo box with searchable/filterable items.
    *
    * UI components read entries from the overlay store to render overlays, then call `resolve` or
    * `reject` when the user interacts with or dismisses them.
@@ -8222,15 +8231,15 @@ declare module 'renderer/services/overlays/overlay.service-model' {
         reject: (error: PlatformError) => void;
       }
     | {
-        type: 'commandPalette';
+        type: 'comboBox';
         /** Unique overlay identifier generated by the service */
         id: string;
         /** The WebView that requested this overlay */
         webViewId: string;
         /** The original request */
-        request: CommandPaletteRequest;
+        request: ComboBoxRequest;
         /** Items to render */
-        items: CommandPaletteItem[];
+        items: ComboBoxItem[];
         /** Document-relative position (translated + clamped), or undefined for centered */
         position?: {
           x: number;
@@ -8249,7 +8258,7 @@ declare module 'renderer/services/overlays/overlay.service-model' {
     contextMenu: string | undefined;
     modalDialog: unknown;
     popover: string | undefined;
-    commandPalette: string | undefined;
+    comboBox: string | undefined;
   };
 }
 declare module 'shared/services/app.service-model' {
@@ -8948,7 +8957,11 @@ declare module '@papi/core' {
   export type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
   export type { UseDialogCallbackOptions } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
   export type {
+    ComboBoxItem,
+    ComboBoxRequest,
+    /** @deprecated Use {@link ComboBoxItem}. */
     CommandPaletteItem,
+    /** @deprecated Use {@link ComboBoxRequest}. */
     CommandPaletteRequest,
     IOverlayService,
     PopoverAction,
@@ -10249,7 +10262,7 @@ declare module 'renderer/services/overlays/overlay-menu-converter' {
 declare module 'renderer/services/overlays/overlay-validation' {
   import type { OverlayContextMenuItem } from 'renderer/components/overlays/overlay-context-menu.component';
   import {
-    CommandPaletteRequest,
+    ComboBoxRequest,
     PopoverRequest,
   } from 'renderer/services/overlays/overlay.service-model';
   /**
@@ -10275,12 +10288,12 @@ declare module 'renderer/services/overlays/overlay-validation' {
    */
   export function validatePopoverRequest(request: PopoverRequest): void;
   /**
-   * Validates a command palette request's items, anchor, and options.
+   * Validates a combo box request's items, anchor, and options.
    *
-   * @param request The command palette request to validate
+   * @param request The combo box request to validate
    * @throws PlatformError with code INVALID_ARGUMENT if validation fails
    */
-  export function validateCommandPaletteRequest(request: CommandPaletteRequest): void;
+  export function validateComboBoxRequest(request: ComboBoxRequest): void;
 }
 declare module 'renderer/services/overlays/overlay-coordinates' {
   /**
@@ -10793,8 +10806,8 @@ declare module '@papi/frontend' {
     window: IWindowService;
     /**
      *
-     * Service for showing overlays (context menus, popovers, command palettes) that render outside
-     * iframe boundaries in the renderer's top-level document. Renderer-only service.
+     * Service for showing overlays (context menus, popovers, combo boxes) that render outside iframe
+     * boundaries in the renderer's top-level document. Renderer-only service.
      *
      * Extensions in sandboxed WebView iframes cannot render UI above other content or outside their
      * iframe bounds. This service accepts overlay requests from WebViews, translates their
@@ -10802,9 +10815,9 @@ declare module '@papi/frontend' {
      * renderer's React tree. Each method returns a promise that resolves when the user interacts with
      * the overlay or it is dismissed.
      *
-     * Only one overlay of each type (context menu, popover, command palette) can be active per WebView
-     * at a time. Requesting a new overlay of the same type from the same WebView replaces the previous
-     * one and rejects its promise with a PlatformError with code ABORTED.
+     * Only one overlay of each type (context menu, popover, combo box) can be active per WebView at a
+     * time. Requesting a new overlay of the same type from the same WebView replaces the previous one
+     * and rejects its promise with a PlatformError with code ABORTED.
      */
     overlays: IOverlayService;
   };
@@ -10962,8 +10975,8 @@ declare module '@papi/frontend' {
   export const window: IWindowService;
   /**
    *
-   * Service for showing overlays (context menus, popovers, command palettes) that render outside
-   * iframe boundaries in the renderer's top-level document. Renderer-only service.
+   * Service for showing overlays (context menus, popovers, combo boxes) that render outside iframe
+   * boundaries in the renderer's top-level document. Renderer-only service.
    *
    * Extensions in sandboxed WebView iframes cannot render UI above other content or outside their
    * iframe bounds. This service accepts overlay requests from WebViews, translates their
@@ -10971,9 +10984,9 @@ declare module '@papi/frontend' {
    * renderer's React tree. Each method returns a promise that resolves when the user interacts with
    * the overlay or it is dismissed.
    *
-   * Only one overlay of each type (context menu, popover, command palette) can be active per WebView
-   * at a time. Requesting a new overlay of the same type from the same WebView replaces the previous
-   * one and rejects its promise with a PlatformError with code ABORTED.
+   * Only one overlay of each type (context menu, popover, combo box) can be active per WebView at a
+   * time. Requesting a new overlay of the same type from the same WebView replaces the previous one
+   * and rejects its promise with a PlatformError with code ABORTED.
    */
   export const overlays: IOverlayService;
   export type Papi = typeof papi;
