@@ -29,7 +29,7 @@ Three structural value propositions:
 
 **2. Triggers decoupled from functionality.** If P10 Power and P10 Simple need to expose the same underlying operation differently — different labels, different keybindings, different confirmation copy, different surfacing — the Action layer is the joint that makes that possible. Same Command, multiple Action declarations, no duplication of the underlying behavior. We build the functionality once and dress it for each audience separately. This generalizes to anything else we might ship on top of the platform: training modes, accessibility shells, partner-branded variants. Without an Action layer, this kind of differentiation forces either duplicated Command implementations or a pile of conditionals inside each Command.
 
-**3. A unified discovery surface for users.** Bible translators are knowledge workers. A searchable launcher meets them halfway between menu-hunting and shortcut memorization. Power users get keyboard speed; new and occasional users get a "what can this thing do?" surface. Every other tool serious knowledge workers use has one (VS Code, Linear, Figma, Notion, Raycast, Slack). We don't. We should.
+**3. A unified discovery surface for users.** Bible translators are knowledge workers. A searchable launcher meets them halfway between menu-hunting and shortcut memorization. Power users get keyboard speed; new and occasional users get a "what can this thing do?" surface. Every other tool serious knowledge workers use has one (VS Code, Linear, Notion, Raycast, Slack; Figma's variant is the [Actions Menu](https://help.figma.com/hc/en-us/articles/23570416033943-Use-the-actions-menu-in-Figma-Design)). We don't. We should.
 
 The user benefit (3) is the most visible. The team-velocity argument (1) is what makes this worth doing soon rather than later — the longer we live with feature-by-feature placement negotiations, the more time we burn that we could be spending on actual problems.
 
@@ -199,11 +199,9 @@ Make Actions a richer concept that can chain Commands, run conditionals, hold st
 
 ### C. "Command Palette" as the name (industry standard)
 
-VS Code, Linear, Notion, Figma, JetBrains, shadcn's `cmdk` component all use "Command Palette."
+VS Code, Linear, Notion, JetBrains, and shadcn's `cmdk` component all use "Command Palette." Figma calls theirs the [Actions Menu](https://help.figma.com/hc/en-us/articles/23570416033943-Use-the-actions-menu-in-Figma-Design) — different, and useful precedent for the direction we're proposing.
 
 **Why I'm proposing "Action Palette" instead:** if we go with the Command/Action split, naming the surface "Command Palette" reintroduces the exact overload the split exists to eliminate. The items in it are Actions, not Commands. Extension docs would read "Declare an Action; it appears in the Command Palette" — a small but persistent paper cut for everyone working in the codebase. We pay a one-time 5-second adjustment for ex-VS-Code users in exchange for vocabulary that stays coherent forever. Documented in [ADR-0001](../adr/0001-action-palette-naming.md).
-
-I genuinely don't feel strongly about this name and would defer to your call. If you want "Command Palette" because of brand recognition or muscle memory, we can split — Command Palette as the _surface name_, Actions as the _items_. The internal coherence cost is real but absorbable.
 
 ### D. Use the existing overlay's `CommandPaletteItem` as-is for everything
 
@@ -262,7 +260,7 @@ No code is touched. The exploratory rename — retargeted at a generic name — 
 
 1. **Do you buy the Command vs. Action split?** Or do you prefer Alternative A (metadata on Commands, no second concept)?
 2. **Do keybindings target Actions or Commands?** I'm proposing Actions. If you say Commands, the model still mostly works but the layering gets fuzzier.
-3. **Naming**: Action Palette vs. Command Palette. I have an opinion but will follow your call.
+3. **Naming**: Action Palette vs. Command Palette. Or something else.
 4. **Scope of first delivery.** Phasing options: (a) docs + glossary only, (b) docs + Action declaration API, no UI yet, (c) docs + minimal palette UI dispatching to existing Commands without arg-flow, (d) full feature including Action Providers and arg-flow drilling. Suggested: (b) → (c) → (d) as separate milestones. (a) alone works if you want to defer the rest.
 5. **Where Actions live in the codebase.** Likely a sibling of `command.service.ts` (e.g., `src/shared/services/action.service.ts`) with its own registration API, typed via `papi-shared-types` augmentation just like Commands. Open to your preference.
 6. **How extensions declare Actions.** Programmatic (`papi.actions.registerAction(...)`) or manifest-declared (JSON in the extension), or both? VS Code does both. Has implications for static discoverability and packaging.
