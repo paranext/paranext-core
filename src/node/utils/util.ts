@@ -61,7 +61,7 @@ export function resolveHtmlPath(htmlFileName: string) {
 }
 
 /**
- * Gets the platform-specific user platform.bible folder for this application
+ * Gets the platform-specific user Platform.Bible folder for this application
  *
  * When running in development: `<repo_directory>/dev-appdata`
  *
