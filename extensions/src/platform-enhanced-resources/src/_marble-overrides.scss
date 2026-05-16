@@ -1,4 +1,15 @@
-// Marble-overrides for the Enhanced Resources scripture pane. Defines visual treatment for the editor-emitted typed-mark classes (marble-word, marble-note, marble-filter, marble-highlight, marble-hover-match). See scripture-pane.component.tsx for the corresponding setAnnotation call sites.
+// Marble-overrides for the Enhanced Resources scripture pane. Defines visual treatment
+// for the editor-emitted typed-mark classes (marble-word, marble-note, marble-filter,
+// marble-highlight) plus the host-applied hover-match class (er-marble-hover-match).
+//
+// Hover-match is a partial Branch-L revert: D-15 proved that layering hover-match via
+// editor.setAnnotation triggers AnnotationPlugin's wrap-merge-replace cycle, which
+// destroys+recreates each sibling <mark> DOM element and produces a visible flicker
+// burst on first hover. The fix is to apply hover-match as a direct CSS class on the
+// existing marble-word marks via querySelectorAll (see scripture-pane.component.tsx
+// handleMarbleMouseEnter and working-docs/2026-05-15-er-editor-integration-audit.md
+// D-15). Filter + highlight-all stay on editor.setAnnotation - they don't exhibit
+// flicker (filter is one annotation; highlight-all is chunked across RAFs at mount).
 
 // "Highlight all research terms" toolbar toggle - applies the light-blue background to
 // every marble-word mark via per-annotation editor.setAnnotation overlays.
@@ -18,8 +29,9 @@
 // words - only the words that share the hovered token's lemma are highlighted, in the same
 // light-blue as the "Highlight all research terms" toggle. Words with no link stay visually
 // neutral (avoiding the false-equivalence where unlinked words could look like they match
-// the hovered word).
-.editor-typed-mark-external-marble-hover-match {
+// the hovered word). The hovered word itself is excluded - it's the focal point.
+// Applied as a direct CSS class on marble-word marks (D-15) rather than via setAnnotation.
+.editor-typed-mark-external-marble-word.er-marble-hover-match {
   background-color: hsl(210 100% 90%);
   border-radius: 2px;
 }

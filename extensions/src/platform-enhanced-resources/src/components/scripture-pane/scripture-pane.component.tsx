@@ -110,7 +110,11 @@ const ANNOTATION_TYPE_MARBLE_WORD = 'marble-word';
 const ANNOTATION_TYPE_MARBLE_NOTE = 'marble-note';
 const ANNOTATION_TYPE_FILTER = 'marble-filter';
 const ANNOTATION_TYPE_HIGHLIGHT = 'marble-highlight';
-const ANNOTATION_TYPE_HOVER_MATCH = 'marble-hover-match';
+// Hover-match used to be an editor.setAnnotation type ('marble-hover-match'), but D-15
+// proved that path causes a flicker storm (AnnotationPlugin's wrap-merge-replace cycle
+// destroys+recreates the <mark> DOM element on every overlapping setAnnotation). The
+// hover-match overlay is now applied as a direct CSS class on the existing marble-word
+// marks (`er-marble-hover-match`) - see handleMarbleMouseEnter for the rationale.
 const RIGHT_MOUSE_BUTTON = 2;
 
 /**
@@ -122,9 +126,11 @@ const RIGHT_MOUSE_BUTTON = 2;
  *
  * - Marble-word: linked research term (BHV-301/302). Click to filter the dictionary / open tooltip.
  * - Marble-note: linked study/cross-ref note. Renders as a footnote-style affordance.
- * - Highlight, filter, and lemma-match states are layered via secondary `editor.setAnnotation` calls
- *   using `marble-highlight`, `marble-filter`, and `marble-hover-match` types. See the
- *   `_marble-overrides.scss` partial for visual treatment.
+ * - Highlight and filter states are layered via secondary `editor.setAnnotation` calls using
+ *   `marble-highlight` and `marble-filter` types. Lemma-match (hover) state is applied as a direct
+ *   CSS class (`er-marble-hover-match`) on the existing marble-word marks - see
+ *   handleMarbleMouseEnter for the D-15 rationale. See the `_marble-overrides.scss` partial for
+ *   visual treatment of all three overlay states.
  */
 const MARBLE_ANNOTATION_STYLES = `
 .editor-typed-mark-external-marble-word {
@@ -479,10 +485,12 @@ export function EnhancedScripturePane({
   // eslint-disable-next-line no-null/no-null
   const activePopoverIdRef = useRef<string | null>(null);
   const activeMatchSetRef = useRef<Set<string>>(new Set());
-  // Fix D-14: track the currently-hovered annotation id so re-fires of mouseenter
-  // from editor-induced mark re-renders (caused by setAnnotation('marble-hover-match', ...))
-  // are no-oped. Without this guard, the popover-fetch race kicks in: every re-fire bumps
-  // fetchGenRef, so most in-flight buildTooltipData calls abort at the gen-staleness check.
+  // Fix D-14: track the currently-hovered annotation id so re-fires of mouseenter from any
+  // editor-induced mark re-renders are no-oped. Without this guard, the popover-fetch race
+  // kicks in: every re-fire bumps fetchGenRef, so most in-flight buildTooltipData calls abort
+  // at the gen-staleness check. Defense-in-depth: D-15's CSS-class fix removes the primary
+  // source of those re-renders (setAnnotation('marble-hover-match', ...)) but the guard
+  // still protects against any future editor-side mark-recreation paths we don't anticipate.
   const currentlyHoveredIdRef = useRef<string | undefined>(undefined);
   // Fix D-15: defer mouseleave cleanup so a spurious leave (caused by the editor recreating
   // sibling marks when match annotations are applied) doesn't tear down the popover and match
@@ -677,8 +685,15 @@ export function EnhancedScripturePane({
         activePopoverIdRef.current = null;
       }
 
+      // D-15 final fix: remove the CSS class instead of removing an editor annotation.
+      // See handleMarbleMouseEnter for the full rationale.
       activeMatchSetRef.current.forEach((matchId) => {
-        editor.removeAnnotation(ANNOTATION_TYPE_HOVER_MATCH, matchId);
+        const markElements = globalThis.document.querySelectorAll(
+          `[class~="annotationId-${matchId}"]`,
+        );
+        markElements.forEach((markElement) => {
+          markElement.classList.remove('er-marble-hover-match');
+        });
       });
       activeMatchSetRef.current.clear();
     };
@@ -695,9 +710,10 @@ export function EnhancedScripturePane({
         pendingLeaveTimerRef.current = undefined;
       }
 
-      // Fix D-14: ignore re-fires for the same id (editor recreates marks after
-      // setAnnotation('marble-hover-match', ...) updates, which re-fires React's
-      // synthetic mouseenter on the new element under the cursor).
+      // Fix D-14: ignore re-fires for the same id. Defense-in-depth - D-15's CSS-class
+      // fix eliminates the primary cause (setAnnotation('marble-hover-match') was triggering
+      // editor mark recreation), but the guard remains so any future editor-side mark
+      // re-render path can't induce a synthetic mouseenter cascade on the new <mark>.
       if (id === currentlyHoveredIdRef.current) return;
 
       // D-15: if a different word is currently hovered, run its leave teardown
@@ -728,25 +744,32 @@ export function EnhancedScripturePane({
           if (ids) ids.forEach((matchingId) => matchingIds.add(matchingId));
         });
       }
-      // Annotate every matching word via editor.setAnnotation. Lemma-match annotations
-      // share their id with the underlying word annotation - the editor merges multiple
-      // type+id pairs onto the same range (AnnotationPlugin.test.tsx:97/161).
+
+      // D-15 final fix: toggle a CSS class on the existing marble-word mark elements
+      // instead of layering a marble-hover-match annotation via editor.setAnnotation.
+      // Reason: setAnnotation on a range already inside a marble-word TypedMarkNode triggers
+      // AnnotationPlugin's wrap-merge-replace cycle - registerNestedElementResolver replaces
+      // the parent, Lexical destroys+recreates the <mark> DOM element. Multiple sibling words
+      // = multiple replacements = visible flicker burst on the first session-application for
+      // each lemma group. Direct DOM-class manipulation bypasses the editor entirely and is
+      // purely cosmetic - hover-match has no click handlers, no persistence, no Lexical-tree
+      // role. Filter + highlight-all stay on setAnnotation (no flicker there: filter is a
+      // single annotation; highlight-all is chunked across RAFs at mount time, not on hover).
+      // The hovered word itself is excluded - PT9 leaves it unhighlighted (it's the focal
+      // point; only siblings get the match-color background). See D-15 in
+      // working-docs/2026-05-15-er-editor-integration-audit.md.
+      // `target.ownerDocument` resolves to the iframe document the marble-word marks live in
+      // (the component runs inside the same webview iframe, but using ownerDocument is the
+      // more robust pattern).
+      const { ownerDocument } = target;
       matchingIds.forEach((matchingId) => {
-        // D-15: skip the hovered word itself. The lemma index returns the hovered token
-        // as a self-match (because lemmaToAnnotationIds[lemma] includes every id sharing
-        // that lemma, including this one). Re-applying marble-hover-match to the hovered
-        // mark causes the editor to recreate that <mark> element, which triggers a
-        // synthetic mouseleave→mouseenter on the new node. With the leave-side guard in
-        // place that ultimately stabilizes, but the underlying churn is unnecessary -
-        // visually the hovered word is the focal point and PT9 leaves it unhighlighted
-        // (see _marble-overrides.scss "the words that share the hovered token's lemma
-        // are highlighted").
         if (matchingId === id) return;
-        const matchingAnnotation = annotationsById.get(matchingId);
-        if (!matchingAnnotation) return;
-        const matchRange = annotationToRange(matchingAnnotation, usj);
-        if (!matchRange) return;
-        editor.setAnnotation(matchRange, ANNOTATION_TYPE_HOVER_MATCH, matchingId, {});
+        const markElements = ownerDocument.querySelectorAll(
+          `[class~="annotationId-${matchingId}"]`,
+        );
+        markElements.forEach((markElement) => {
+          markElement.classList.add('er-marble-hover-match');
+        });
         activeMatchSetRef.current.add(matchingId);
       });
     };
@@ -839,8 +862,15 @@ export function EnhancedScripturePane({
         // eslint-disable-next-line no-null/no-null
         activePopoverIdRef.current = null;
       }
+      // D-15 final fix: hover-match is a CSS class on the marble-word marks (not an
+      // editor annotation), so cleanup removes the class via querySelectorAll.
       matchSet.forEach((matchId) => {
-        editor.removeAnnotation(ANNOTATION_TYPE_HOVER_MATCH, matchId);
+        const markElements = globalThis.document.querySelectorAll(
+          `[class~="annotationId-${matchId}"]`,
+        );
+        markElements.forEach((markElement) => {
+          markElement.classList.remove('er-marble-hover-match');
+        });
       });
       matchSet.clear();
       currentlyHoveredIdRef.current = undefined;

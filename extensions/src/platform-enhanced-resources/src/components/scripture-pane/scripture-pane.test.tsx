@@ -117,6 +117,15 @@ beforeEach(() => {
   // restoreAllMocks resets vi.spyOn() targets back to originals - must run BEFORE we install
   // the per-test mock implementations below, otherwise our resolved-value setup gets wiped.
   vi.restoreAllMocks();
+  // Clear any leftover hover/mark fixtures from previous tests. createMarkFixture in the
+  // hover-lifecycle suite appends <mark> elements to document.body, and makeFakeMouseEvent
+  // appends a <span> for the hover event's currentTarget.ownerDocument scope. Leaking
+  // these would cross-contaminate querySelectorAll('[class~="annotationId-{id}"]') results.
+  // Only remove the fixtures (mark+span at the body root), NOT testing-library's render
+  // containers (which @testing-library/react cleans up via its own auto-cleanup).
+  document
+    .querySelectorAll('body > mark, body > span')
+    .forEach((node) => node.parentNode?.removeChild(node));
   setAnnotationSpy.mockClear();
   removeAnnotationSpy.mockClear();
   mockShowPopover.mockReset();
@@ -638,9 +647,26 @@ describe('marble hover lifecycle', () => {
       bottom: 60,
       toJSON: () => '',
     });
+    // D-15 final fix: handleMarbleMouseEnter reads target.ownerDocument to scope the
+    // querySelectorAll for er-marble-hover-match class application. Attach the span to
+    // document.body so ownerDocument resolves to jsdom's document (where any test
+    // fixture marks created with createMarkFixture below live).
+    document.body.appendChild(target);
     const event = new MouseEvent('mouseenter');
     Object.defineProperty(event, 'currentTarget', { value: target });
     return event;
+  }
+
+  /**
+   * Create a fake `<mark>` element with the `annotationId-${id}` class that the editor would
+   * normally emit, append it to document.body, and return it so a test can assert on classList
+   * changes after the D-15 CSS-class hover-match path runs.
+   */
+  function createMarkFixture(id: string): HTMLElement {
+    const mark = document.createElement('mark');
+    mark.className = `editor-typed-mark-external-marble-word annotationId-${id}`;
+    document.body.appendChild(mark);
+    return mark;
   }
 
   // lexicalLinks shape is `NAMESPACE:LEMMA:ID`; the consumer extracts the middle segment as the
@@ -697,7 +723,8 @@ describe('marble hover lifecycle', () => {
   // `renderTooltipMarkdown` describe block at the bottom of this file, which is the right
   // unit-of-test boundary for the emitter. See Task 3a.10.
 
-  it('mouseleave dismisses the popover and removes hover-match annotations (after debounce window)', async () => {
+  it('mouseleave dismisses the popover and removes hover-match CSS class (after debounce window)', async () => {
+    const markB = createMarkFixture('wg-B');
     render(
       <EnhancedScripturePane
         usj={makeTestUsj(4)}
@@ -709,24 +736,27 @@ describe('marble hover lifecycle', () => {
     const handlers = getHoverHandlersForCall(0);
     handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-A', 'logos');
     await Promise.resolve();
+    // Sanity: enter applied the hover-match class to the lemma-matching sibling.
+    expect(markB.classList.contains('er-marble-hover-match')).toBe(true);
 
     removeAnnotationSpy.mockClear();
     handlers.onMouseLeave!(new MouseEvent('mouseleave'), 'marble-word', 'wg-A', 'logos');
 
     // D-15: mouseleave defers cleanup with a 50ms timeout so a spurious leave (caused by
-    // the editor recreating a sibling mark when match annotations are applied) doesn't
-    // tear down the popover. Synchronously after leave, cleanup has NOT yet run.
+    // any editor-induced mark re-render briefly taking the cursor off the hovered <mark>)
+    // doesn't tear down the popover. Synchronously after leave, cleanup has NOT yet run.
     expect(mockDismissPopover).not.toHaveBeenCalled();
+    expect(markB.classList.contains('er-marble-hover-match')).toBe(true);
 
     // After the debounce window elapses, cleanup runs.
     await vi.waitFor(() => {
       expect(mockDismissPopover).toHaveBeenCalledWith('overlay-1');
     });
-    // hover-match annotation applied to wg-B (the lemma-match of wg-A) gets removed.
-    // Note: D-15 also stopped applying marble-hover-match to the hovered word itself
-    // (wg-A), so it does NOT show up in removeAnnotationSpy here.
-    expect(removeAnnotationSpy).toHaveBeenCalledWith('marble-hover-match', 'wg-B');
-    expect(removeAnnotationSpy).not.toHaveBeenCalledWith('marble-hover-match', 'wg-A');
+    // D-15 final fix: hover-match is a CSS class, not an editor annotation. Cleanup
+    // removes the class from the marble-word mark via querySelectorAll - it does NOT
+    // call editor.removeAnnotation('marble-hover-match', ...).
+    expect(markB.classList.contains('er-marble-hover-match')).toBe(false);
+    expect(removeAnnotationSpy).not.toHaveBeenCalledWith('marble-hover-match', expect.anything());
   });
 
   it('RESOURCE_EXHAUSTED from showPopover is swallowed', async () => {
@@ -828,7 +858,20 @@ describe('marble hover lifecycle', () => {
     expect(updateCall[1].markdown).toContain('word, speech, reason');
   });
 
-  it('lemma-matching annotations sharing the hovered lemma get marble-hover-match overlays (excluding the hovered word itself)', async () => {
+  it('lemma-matching annotations sharing the hovered lemma get the er-marble-hover-match class (excluding the hovered word itself)', async () => {
+    // D-15 final fix: hover-match is applied as a direct CSS class on the existing
+    // marble-word marks via querySelectorAll('[class~="annotationId-{id}"]'), NOT via
+    // editor.setAnnotation. Reason: setAnnotation on a range already inside a marble-word
+    // TypedMarkNode triggers AnnotationPlugin's wrap-merge-replace cycle, which destroys
+    // and re-creates the <mark> DOM element - visible flicker burst on first hover after
+    // fresh launch. CSS-class manipulation bypasses the editor entirely; hover-match has
+    // no Lexical-tree role (no click handler, no persistence). Filter + highlight-all
+    // still use setAnnotation - they don't exhibit the flicker.
+    //
+    // Stand up fake <mark> fixtures so the querySelectorAll path has something to match.
+    const markA = createMarkFixture('wg-A');
+    const markB = createMarkFixture('wg-B');
+    const markC = createMarkFixture('wg-C');
     render(
       <EnhancedScripturePane
         usj={makeTestUsj(4)}
@@ -843,21 +886,18 @@ describe('marble hover lifecycle', () => {
     handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-A', 'logos');
 
     // wordA and wordB share 'logos' lemma; wordC has 'theos' (non-matching).
-    // D-15: the implementation calls editor.setAnnotation with type 'marble-hover-match'
-    // for each lemma-matching annotation id EXCLUDING the hovered word itself. Re-applying
-    // marble-hover-match to the hovered <mark> caused the editor to recreate that node,
-    // which triggered a synthetic mouseleave/mouseenter loop and a visible flicker storm.
-    // PT9 leaves the hovered word unhighlighted (it's the focal point; other matches get
-    // the match-color background).
+    // PT9 fidelity: the hovered word itself is excluded - it's the focal point. Only
+    // siblings receive the match-color background.
+    expect(markB.classList.contains('er-marble-hover-match')).toBe(true);
+    expect(markA.classList.contains('er-marble-hover-match')).toBe(false);
+    expect(markC.classList.contains('er-marble-hover-match')).toBe(false);
+
+    // And no marble-hover-match editor annotation was ever applied (this is the whole
+    // point of the D-15 final fix - bypass setAnnotation for the hover-match overlay).
     const matchCalls = setAnnotationSpy.mock.calls.filter(
       ([, type]) => type === 'marble-hover-match',
     );
-    const matchIds = matchCalls.map(([, , id]) => id).sort();
-    expect(matchIds).toEqual(['wg-B']);
-    // The hovered word does NOT receive a hover-match overlay (D-15 fix).
-    expect(matchIds).not.toContain('wg-A');
-    // Non-matching word never receives a hover-match overlay.
-    expect(matchIds).not.toContain('wg-C');
+    expect(matchCalls).toHaveLength(0);
   });
 
   it('a mouseenter for the same id within the leave-debounce window cancels the pending leave (D-15)', async () => {
