@@ -14,16 +14,21 @@ namespace TestParanextDataProvider.EnhancedResources;
 /// Contract: Section 4.14 M-014: GetTooltipDataAsync(TooltipInput, CancellationToken) -> TooltipData
 /// Source: EXT-002 (Tooltip Generation, PT9 MarbleForm.cs:2589-2670)
 ///
-/// GetTooltipData takes a TooltipInput (tokenId + resourceId + glossLanguage) and
-/// returns structured TooltipData containing lemma, gloss, POS, strong number,
-/// notes, and morphology fields. No HTML generation - returns structured data
-/// for frontend React tooltip rendering.
+/// Phase 3a DTO shape (working-docs/2026-05-15-er-editor-integration-followup-design.md §5b):
+/// TooltipData is now a "raw data" DTO with SourceForm, Lemma, PartOfSpeechRaw,
+/// RawGlosses, and RenderingStatus. The TS presenter
+/// (extensions/src/platform-enhanced-resources/src/presenters/tooltip-presenter.ts)
+/// handles gloss filtering, phrase detection, and POS localization; the markdown
+/// emitter handles layout and i18n. RenderingStatus is always null until phase 3b
+/// wires it against the user's tracked project.
 ///
 /// Key behaviors:
 /// - Token not found: NOT_FOUND PlatformError
-/// - No gloss available: returns partial tooltip (not an error)
+/// - No gloss available: RawGlosses is empty (not an error)
+/// - Lemma parsed from first LexicalLink ("DICT:LEMMA:ID") or falls back to surface text
+/// - SourceForm always equals token.Text (the surface form)
+/// - PartOfSpeechRaw is the raw style tag (e.g. "noun-dans"); TS layer localizes
 /// - Uses MarbleDataAccessService for gloss lookup (CAP-001)
-/// - Uses PartOfSpeechTranslator for POS labels (CAP-005)
 /// - Parsed tokens from MarbleTokenParser (CAP-002) provide token data
 ///
 /// No golden masters for this capability (consumed by UI layer).
@@ -40,16 +45,35 @@ internal class GetTooltipDataTests
     private const string TestResourceId = "ESV16UK+";
     private const string TestGlossLanguage = "en";
 
-    // Greek noun token data (simulates a parsed TextLink token with annotations)
+    // Greek noun token data (simulates a parsed TextLink token with annotations).
+    // LexicalLinks contains a single token without ':' separators, so the service's
+    // ParseLemmaFromLink returns null and lemma falls back to token.Text ("λόγος").
     private static readonly MarbleToken s_greekNounToken =
         new(
             Type: MarbleTokenType.TextLink,
-            Text: "\u03BB\u03CC\u03B3\u03BF\u03C2", // logos
+            Text: "λόγος", // logos
             Index: 5,
             VerseRef: new VerseRef(43, 1, 1), // JHN 1:1
             StrongNumber: "G3056",
             LexicalLinks: ["logos_entry_ref"],
             TargetLinks: ["target1"],
+            ThematicLinks: [],
+            ImageLinks: [],
+            MapLinks: []
+        );
+
+    // Greek noun token with well-formed "DICT:LEMMA:ID" lexical link. Used to verify
+    // that the service parses the middle segment as the lemma (SDBG dictionary,
+    // lemma "logos", entry id 001003056).
+    private static readonly MarbleToken s_greekNounTokenWithDictLink =
+        new(
+            Type: MarbleTokenType.TextLink,
+            Text: "λόγος", // logos (surface form)
+            Index: 6,
+            VerseRef: new VerseRef(43, 1, 1),
+            StrongNumber: "G3056",
+            LexicalLinks: ["SDBG:logos:001003056"],
+            TargetLinks: [],
             ThematicLinks: [],
             ImageLinks: [],
             MapLinks: []
@@ -85,11 +109,11 @@ internal class GetTooltipDataTests
             MapLinks: []
         );
 
-    // Token with POS annotation
+    // Token with POS annotation (compound Greek tag in Style attribute)
     private static readonly MarbleToken s_tokenWithPos =
         new(
             Type: MarbleTokenType.TextLink,
-            Text: "\u03BB\u03CC\u03B3\u03BF\u03C2", // logos
+            Text: "λόγος", // logos
             Index: 5,
             VerseRef: new VerseRef(43, 1, 1),
             StrongNumber: "G3056",
@@ -98,23 +122,14 @@ internal class GetTooltipDataTests
             ThematicLinks: [],
             ImageLinks: [],
             MapLinks: [],
-            Style: "noun-dans" // POS tag embedded in style (compound Greek tag)
-        );
-
-    // Plain text token (not a TextLink - should not be valid for tooltip)
-    private static readonly MarbleToken s_plainTextToken =
-        new(
-            Type: MarbleTokenType.PlainText,
-            Text: "In the beginning",
-            Index: 0,
-            VerseRef: new VerseRef(43, 1, 1)
+            Style: "noun-dans" // POS tag (raw - TS presenter handles localization)
         );
 
     #region Acceptance Tests
 
     // =========================================================================
-    // Acceptance Test 1: Full tooltip data with gloss, POS, strong number, notes
-    // "TooltipData returned with gloss, POS info, and note content"
+    // Acceptance Test 1: Full tooltip data with surface form, lemma, POS, glosses
+    // "TooltipData returned with raw fields populated for downstream TS presenter"
     // =========================================================================
 
     [Test]
@@ -123,7 +138,7 @@ internal class GetTooltipDataTests
     [Property("BehaviorId", "BHV-354")]
     [Property("ExtractionId", "EXT-002")]
     [Description(
-        "Full tooltip data contains lemma, gloss, POS, strong number, and notes when all data is available"
+        "Full tooltip data contains source form, lemma, and raw glosses when all data is available"
     )]
     public void GetTooltipData_FullTokenData_ReturnsCompleteTooltipData()
     {
@@ -149,26 +164,26 @@ internal class GetTooltipDataTests
         // Assert: all fields populated for a fully-annotated token
         Assert.That(result, Is.Not.Null, "TooltipData must not be null for a valid token");
         Assert.That(
+            result.SourceForm,
+            Is.EqualTo(s_greekNounToken.Text),
+            "SourceForm must match the token's surface text"
+        );
+        Assert.That(
             result.Lemma,
             Is.Not.Null.And.Not.Empty,
             "Lemma must be present for a TextLink token"
         );
         Assert.That(
-            result.StrongNumber,
-            Is.EqualTo("G3056"),
-            "Strong number must match the token's strong number"
-        );
-        Assert.That(
-            result.Gloss,
+            result.RawGlosses,
             Is.Not.Null,
-            "Gloss must be present when marble data has a matching entry"
+            "RawGlosses must not be null (may be empty if no glosses)"
         );
-        Assert.That(result.Notes, Is.Not.Null, "Notes array must not be null (may be empty)");
+        Assert.That(result.RenderingStatus, Is.Null, "RenderingStatus is always null in phase 3a");
     }
 
     // =========================================================================
     // Acceptance Test 2: Missing gloss returns partial tooltip (not an error)
-    // "missing gloss returns partial result without gloss section"
+    // "missing gloss returns empty RawGlosses without throwing"
     // =========================================================================
 
     [Test]
@@ -177,7 +192,7 @@ internal class GetTooltipDataTests
     [Property("BehaviorId", "BHV-354")]
     [Property("ExtractionId", "EXT-002")]
     [Description(
-        "Missing gloss returns partial TooltipData without gloss field - not an error, partial data is valid"
+        "Missing gloss returns TooltipData with empty RawGlosses - not an error, partial data is valid"
     )]
     public void GetTooltipData_NoGlossAvailable_ReturnsPartialTooltipWithoutGloss()
     {
@@ -203,16 +218,21 @@ internal class GetTooltipDataTests
         // Assert: Tooltip returned with partial data
         Assert.That(result, Is.Not.Null, "Partial tooltip must be returned, not null");
         Assert.That(
-            result.Gloss,
-            Is.Null,
-            "Gloss must be null when no gloss is available in marble data"
+            result.SourceForm,
+            Is.EqualTo(s_tokenWithNoGloss.Text),
+            "SourceForm must match the token's surface text even with no gloss"
         );
         Assert.That(
-            result.StrongNumber,
-            Is.EqualTo("G9999"),
-            "Strong number must still be present in partial tooltip"
+            result.RawGlosses,
+            Is.Empty,
+            "RawGlosses must be empty when no gloss is available in marble data"
         );
-        Assert.That(result.Lemma, Is.Not.Null, "Lemma must still be present in partial tooltip");
+        Assert.That(
+            result.Lemma,
+            Is.Not.Null.And.Not.Empty,
+            "Lemma must still be present in partial tooltip"
+        );
+        Assert.That(result.RenderingStatus, Is.Null);
     }
 
     #endregion
@@ -220,7 +240,8 @@ internal class GetTooltipDataTests
     #region Contract Tests - Happy Path
 
     // =========================================================================
-    // Contract: GetTooltipDataAsync returns structured TooltipData
+    // Contract: GetTooltipData returns Lemma falling back to surface text when
+    // the lexical link is not in "DICT:LEMMA:ID" form.
     // =========================================================================
 
     [Test]
@@ -228,10 +249,14 @@ internal class GetTooltipDataTests
     [Property("CapabilityId", "CAP-014")]
     [Property("BehaviorId", "BHV-354")]
     [Property("ExtractionId", "EXT-002")]
-    [Description("TooltipData.Lemma contains the token text (surface form of the linked word)")]
-    public void GetTooltipData_ValidToken_LemmaMatchesTokenText()
+    [Description(
+        "TooltipData.Lemma falls back to token.Text when LexicalLinks lacks 'DICT:LEMMA:ID' format"
+    )]
+    public void GetTooltipData_LexicalLinkWithoutColons_LemmaFallsBackToSurfaceText()
     {
-        // Arrange
+        // Arrange: s_greekNounToken has LexicalLinks: ["logos_entry_ref"] (no ':'),
+        // so the service's ParseLemmaFromLink returns null and lemma defaults to
+        // token.Text (the surface form).
         var dataAccess = MarbleTestHelper.BuildServiceWithTestData();
         var bookTokensProvider = new FakeMarbleBookTokenProvider().With(
             TestResourceId,
@@ -252,9 +277,14 @@ internal class GetTooltipDataTests
 
         // Assert
         Assert.That(
+            result.SourceForm,
+            Is.EqualTo(s_greekNounToken.Text),
+            "SourceForm should always match the token's surface text"
+        );
+        Assert.That(
             result.Lemma,
             Is.EqualTo(s_greekNounToken.Text),
-            "Lemma should match the token's text content"
+            "Lemma should fall back to surface text when lexical link is not 'DICT:LEMMA:ID'"
         );
     }
 
@@ -263,20 +293,24 @@ internal class GetTooltipDataTests
     [Property("CapabilityId", "CAP-014")]
     [Property("BehaviorId", "BHV-354")]
     [Property("ExtractionId", "EXT-002")]
-    [Description("TooltipData.StrongNumber contains the token's Strong number annotation")]
-    public void GetTooltipData_ValidToken_StrongNumberFromToken()
+    [Description(
+        "TooltipData.Lemma is parsed from the middle segment of a 'DICT:LEMMA:ID' lexical link"
+    )]
+    public void GetTooltipData_WellFormedLexicalLink_LemmaParsedFromMiddleSegment()
     {
-        // Arrange
+        // Arrange: s_greekNounTokenWithDictLink has LexicalLinks: ["SDBG:logos:001003056"],
+        // so the service parses the middle segment ("logos") as the lemma. The surface
+        // form is the Greek "λόγος".
         var dataAccess = MarbleTestHelper.BuildServiceWithTestData();
         var bookTokensProvider = new FakeMarbleBookTokenProvider().With(
             TestResourceId,
             43,
-            s_greekNounToken
+            s_greekNounTokenWithDictLink
         );
         var tooltipService = new TooltipService(dataAccess, bookTokensProvider);
 
         var input = new TooltipInput(
-            TokenId: s_greekNounToken.Index.ToString(),
+            TokenId: s_greekNounTokenWithDictLink.Index.ToString(),
             ResourceId: TestResourceId,
             GlossLanguage: TestGlossLanguage,
             CurrentReference: new VerseRef(43, 1, 1)
@@ -286,7 +320,21 @@ internal class GetTooltipDataTests
         TooltipData result = tooltipService.GetTooltipData(input);
 
         // Assert
-        Assert.That(result.StrongNumber, Is.EqualTo("G3056"));
+        Assert.That(
+            result.SourceForm,
+            Is.EqualTo(s_greekNounTokenWithDictLink.Text),
+            "SourceForm should be the surface form (Greek text)"
+        );
+        Assert.That(
+            result.Lemma,
+            Is.EqualTo("logos"),
+            "Lemma should be parsed from the middle ':'-delimited segment"
+        );
+        Assert.That(
+            result.SourceForm,
+            Is.Not.EqualTo(result.Lemma),
+            "SourceForm and Lemma should differ when the lexical link supplies a distinct lemma"
+        );
     }
 
     [Test]
@@ -294,11 +342,13 @@ internal class GetTooltipDataTests
     [Property("CapabilityId", "CAP-014")]
     [Property("BehaviorId", "BHV-354")]
     [Property("ExtractionId", "EXT-002")]
-    [Description("TooltipData.Gloss contains the localized gloss from MarbleDataAccessService")]
-    public void GetTooltipData_GlossAvailable_GlossFromMarbleData()
+    [Description(
+        "TooltipData.RawGlosses contains the unfiltered glosses from MarbleDataAccessService"
+    )]
+    public void GetTooltipData_GlossAvailable_RawGlossesFromMarbleData()
     {
-        // Arrange: Configure marble data with a known gloss for the token's lemma.
-        // Build a custom MarbleDataAccessService with the specific test gloss inline.
+        // Arrange: Configure marble data with a known gloss list for the token's surface form.
+        // The service uses token.Text as the term key (not the parsed lemma).
         var byLanguage = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(
             StringComparer.OrdinalIgnoreCase
         )
@@ -330,40 +380,14 @@ internal class GetTooltipDataTests
         // Act
         TooltipData result = tooltipService.GetTooltipData(input);
 
-        // Assert: Gloss should contain data from marble data access
-        Assert.That(result.Gloss, Is.Not.Null.And.Not.Empty, "Gloss should be populated");
-    }
-
-    [Test]
-    [Category("Contract")]
-    [Property("CapabilityId", "CAP-014")]
-    [Property("BehaviorId", "BHV-354")]
-    [Property("ExtractionId", "EXT-002")]
-    [Description("TooltipData.Notes is an empty array when no notes are associated with the token")]
-    public void GetTooltipData_NoNotes_NotesArrayEmpty()
-    {
-        // Arrange: Token without note data
-        var dataAccess = MarbleTestHelper.BuildServiceWithTestData();
-        var bookTokensProvider = new FakeMarbleBookTokenProvider().With(
-            TestResourceId,
-            43,
-            s_greekNounToken
+        // Assert: RawGlosses should be populated with the three configured glosses,
+        // unfiltered (the TS presenter applies "{...}" stripping).
+        Assert.That(result.SourceForm, Is.EqualTo(s_greekNounToken.Text));
+        Assert.That(
+            result.RawGlosses,
+            Is.EquivalentTo(new[] { "word", "speech", "reason" }),
+            "RawGlosses should match the configured gloss list verbatim"
         );
-        var tooltipService = new TooltipService(dataAccess, bookTokensProvider);
-
-        var input = new TooltipInput(
-            TokenId: s_greekNounToken.Index.ToString(),
-            ResourceId: TestResourceId,
-            GlossLanguage: TestGlossLanguage,
-            CurrentReference: new VerseRef(43, 1, 1)
-        );
-
-        // Act
-        TooltipData result = tooltipService.GetTooltipData(input);
-
-        // Assert
-        Assert.That(result.Notes, Is.Not.Null);
-        Assert.That(result.Notes, Is.Empty, "Notes should be empty when no notes exist for token");
     }
 
     [Test]
@@ -407,25 +431,16 @@ internal class GetTooltipDataTests
         TooltipData result = tooltipService.GetTooltipData(input);
 
         // Assert: No HTML tags anywhere - Theme 2 mandates structured data, not HTML
+        Assert.That(result.SourceForm, Is.EqualTo(s_greekNounToken.Text));
+        Assert.That(result.SourceForm, Does.Not.Contain("<"), "SourceForm must not contain HTML");
         Assert.That(result.Lemma, Does.Not.Contain("<"), "Lemma must not contain HTML");
-        if (result.Gloss != null)
-            Assert.That(result.Gloss, Does.Not.Contain("<"), "Gloss must not contain HTML");
-        if (result.PartOfSpeech != null)
-            Assert.That(result.PartOfSpeech, Does.Not.Contain("<"), "POS must not contain HTML");
-        if (result.StrongNumber != null)
-            Assert.That(
-                result.StrongNumber,
-                Does.Not.Contain("<"),
-                "StrongNumber must not contain HTML"
-            );
-        if (result.Morphology != null)
-            Assert.That(
-                result.Morphology,
-                Does.Not.Contain("<"),
-                "Morphology must not contain HTML"
-            );
-        foreach (string note in result.Notes)
-            Assert.That(note, Does.Not.Contain("<"), "Notes must not contain HTML");
+        Assert.That(
+            result.PartOfSpeechRaw,
+            Does.Not.Contain("<"),
+            "PartOfSpeechRaw must not contain HTML"
+        );
+        foreach (string gloss in result.RawGlosses)
+            Assert.That(gloss, Does.Not.Contain("<"), "RawGlosses entries must not contain HTML");
     }
 
     #endregion
@@ -437,8 +452,8 @@ internal class GetTooltipDataTests
     [Property("CapabilityId", "CAP-014")]
     [Property("BehaviorId", "BHV-354")]
     [Property("ExtractionId", "EXT-002")]
-    [Description("Hebrew token tooltip returns correct lemma and strong number")]
-    public void GetTooltipData_HebrewToken_ReturnsHebrewLemmaAndStrong()
+    [Description("Hebrew token tooltip returns correct lemma (surface fallback) and source form")]
+    public void GetTooltipData_HebrewToken_ReturnsHebrewLemmaAndSourceForm()
     {
         // Arrange
         var dataAccess = MarbleTestHelper.BuildServiceWithTestData();
@@ -459,9 +474,9 @@ internal class GetTooltipDataTests
         // Act
         TooltipData result = tooltipService.GetTooltipData(input);
 
-        // Assert
+        // Assert: Lexical link is "elohim_entry_ref" (no ':'), so lemma falls back to surface.
+        Assert.That(result.SourceForm, Is.EqualTo(MarbleTestHelper.Elohim));
         Assert.That(result.Lemma, Is.EqualTo(MarbleTestHelper.Elohim));
-        Assert.That(result.StrongNumber, Is.EqualTo("H430"));
     }
 
     [Test]
@@ -469,8 +484,8 @@ internal class GetTooltipDataTests
     [Property("CapabilityId", "CAP-014")]
     [Property("BehaviorId", "BHV-354")]
     [Property("ExtractionId", "EXT-002")]
-    [Description("Hebrew token with known English gloss returns the English gloss")]
-    public void GetTooltipData_HebrewTokenWithEnglishGloss_ReturnsGloss()
+    [Description("Hebrew token with known English gloss returns the English gloss in RawGlosses")]
+    public void GetTooltipData_HebrewTokenWithEnglishGloss_ReturnsRawGlosses()
     {
         // Arrange: MarbleTestHelper sets up "God" as the English gloss for Elohim
         var dataAccess = MarbleTestHelper.BuildServiceWithTestData();
@@ -492,7 +507,12 @@ internal class GetTooltipDataTests
         TooltipData result = tooltipService.GetTooltipData(input);
 
         // Assert: MarbleTestHelper has "God" as gloss for Elohim in English
-        Assert.That(result.Gloss, Is.Not.Null, "Gloss should be present for Elohim in English");
+        Assert.That(result.SourceForm, Is.EqualTo(s_hebrewNounToken.Text));
+        Assert.That(
+            result.RawGlosses,
+            Is.EquivalentTo(new[] { "God" }),
+            "RawGlosses should contain the configured English gloss for Elohim"
+        );
     }
 
     #endregion
@@ -628,10 +648,11 @@ internal class GetTooltipDataTests
     [Property("CapabilityId", "CAP-014")]
     [Property("BehaviorId", "BHV-354")]
     [Property("ExtractionId", "EXT-002")]
-    [Description("Token with no strong number returns tooltip with null StrongNumber")]
-    public void GetTooltipData_NoStrongNumber_ReturnsTooltipWithNullStrong()
+    [Description("Token with no strong number still returns tooltip with raw fields populated")]
+    public void GetTooltipData_NoStrongNumber_ReturnsTooltipWithRawFields()
     {
-        // Arrange: Token without a strong number
+        // Arrange: Token without a strong number. (StrongNumber is no longer a TooltipData
+        // field in the phase 3a DTO; this test now verifies the tooltip still resolves.)
         var tokenNoStrong = new MarbleToken(
             Type: MarbleTokenType.TextLink,
             Text: "someWord",
@@ -664,7 +685,13 @@ internal class GetTooltipDataTests
 
         // Assert
         Assert.That(result, Is.Not.Null, "Tooltip must be returned even without strong number");
-        Assert.That(result.StrongNumber, Is.Null, "StrongNumber should be null when not present");
+        Assert.That(
+            result.SourceForm,
+            Is.EqualTo(tokenNoStrong.Text),
+            "SourceForm must come from token.Text"
+        );
+        Assert.That(result.Lemma, Is.EqualTo(tokenNoStrong.Text));
+        Assert.That(result.RenderingStatus, Is.Null);
     }
 
     [Test]
@@ -672,8 +699,8 @@ internal class GetTooltipDataTests
     [Property("CapabilityId", "CAP-014")]
     [Property("BehaviorId", "BHV-354")]
     [Property("ExtractionId", "EXT-002")]
-    [Description("Token with no lexical links returns tooltip with null gloss")]
-    public void GetTooltipData_NoLexicalLinks_ReturnsTooltipWithNullGloss()
+    [Description("Token with no lexical links returns tooltip with empty RawGlosses")]
+    public void GetTooltipData_NoLexicalLinks_ReturnsTooltipWithEmptyRawGlosses()
     {
         // Arrange: Token with empty lexical links
         var tokenNoLinks = new MarbleToken(
@@ -709,9 +736,19 @@ internal class GetTooltipDataTests
         // Assert
         Assert.That(result, Is.Not.Null, "Tooltip must be returned even without lexical links");
         Assert.That(
-            result.Gloss,
-            Is.Null,
-            "Gloss should be null when no lexical links point to glossary entries"
+            result.SourceForm,
+            Is.EqualTo(tokenNoLinks.Text),
+            "SourceForm must come from token.Text"
+        );
+        Assert.That(
+            result.RawGlosses,
+            Is.Empty,
+            "RawGlosses must be empty when no lexical links point to glossary entries"
+        );
+        Assert.That(
+            result.Lemma,
+            Is.EqualTo(tokenNoLinks.Text),
+            "Lemma falls back to surface text when there is no lexical link"
         );
     }
 
@@ -721,9 +758,9 @@ internal class GetTooltipDataTests
     [Property("BehaviorId", "BHV-354")]
     [Property("ExtractionId", "EXT-002")]
     [Description(
-        "Marble data not initialized (HaveMarbleData=false) returns tooltip with null gloss"
+        "Marble data not initialized (HaveMarbleData=false) returns tooltip with empty RawGlosses"
     )]
-    public void GetTooltipData_NoMarbleData_ReturnsTooltipWithNullGloss()
+    public void GetTooltipData_NoMarbleData_ReturnsTooltipWithEmptyRawGlosses()
     {
         // Arrange: MarbleDataAccessService with no data
         var dataAccess = MarbleTestHelper.BuildServiceWithNoData();
@@ -746,17 +783,62 @@ internal class GetTooltipDataTests
 
         // Assert
         Assert.That(result, Is.Not.Null, "Tooltip must be returned even without marble data");
-        Assert.That(result.Gloss, Is.Null, "Gloss should be null when marble data is unavailable");
+        Assert.That(
+            result.SourceForm,
+            Is.EqualTo(s_greekNounToken.Text),
+            "SourceForm must come from token.Text"
+        );
+        Assert.That(
+            result.RawGlosses,
+            Is.Empty,
+            "RawGlosses should be empty when marble data is unavailable"
+        );
         Assert.That(
             result.Lemma,
             Is.Not.Null.And.Not.Empty,
             "Lemma should still come from the token itself"
         );
-        Assert.That(
-            result.StrongNumber,
-            Is.EqualTo("G3056"),
-            "StrongNumber should still come from the token"
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-014")]
+    [Property("BehaviorId", "BHV-354")]
+    [Property("ExtractionId", "EXT-002")]
+    [Description(
+        "Token with no LexicalLinks (null collection) returns an empty RawGlosses list without throwing"
+    )]
+    public void GetTooltipData_NoLexicalLinks_ReturnsEmptyRawGlosses()
+    {
+        // Arrange: Token where LexicalLinks defaults to null. This complements the
+        // "empty list" case above by exercising the explicit-null branch of the
+        // service's "is not { Count: > 0 }" guard.
+        var tokenWithoutLinks = s_greekNounToken with
+        {
+            LexicalLinks = null
+        };
+        var dataAccess = MarbleTestHelper.BuildServiceWithTestData();
+        var bookTokensProvider = new FakeMarbleBookTokenProvider().With(
+            TestResourceId,
+            43,
+            tokenWithoutLinks
         );
+        var tooltipService = new TooltipService(dataAccess, bookTokensProvider);
+
+        var input = new TooltipInput(
+            TokenId: tokenWithoutLinks.Index.ToString(),
+            ResourceId: TestResourceId,
+            GlossLanguage: TestGlossLanguage,
+            CurrentReference: new VerseRef(43, 1, 1)
+        );
+
+        // Act
+        TooltipData result = tooltipService.GetTooltipData(input);
+
+        // Assert
+        Assert.That(result.SourceForm, Is.EqualTo(tokenWithoutLinks.Text));
+        Assert.That(result.RawGlosses, Is.Empty);
+        Assert.That(result.RenderingStatus, Is.Null);
     }
 
     #endregion
@@ -764,7 +846,8 @@ internal class GetTooltipDataTests
     #region Edge Cases - POS Integration
 
     // =========================================================================
-    // POS integration: Uses PartOfSpeechTranslator (CAP-005) for display labels
+    // POS raw passthrough: Service returns the raw style tag; the TS presenter
+    // localizes and detects the "phrase" case (per phase 3a DTO redesign).
     // =========================================================================
 
     [Test]
@@ -773,9 +856,9 @@ internal class GetTooltipDataTests
     [Property("BehaviorId", "BHV-354")]
     [Property("ExtractionId", "EXT-002")]
     [Description(
-        "Token with POS tag in style attribute returns tooltip with translated POS display string"
+        "Token with POS tag in style attribute returns tooltip with the raw POS tag (not localized)"
     )]
-    public void GetTooltipData_TokenWithPosTag_ReturnsPosDisplayString()
+    public void GetTooltipData_TokenWithPosTag_ReturnsRawPosTag()
     {
         // Arrange: Token with POS info (compound Greek tag)
         var dataAccess = MarbleTestHelper.BuildServiceWithTestData();
@@ -796,17 +879,13 @@ internal class GetTooltipDataTests
         // Act
         TooltipData result = tooltipService.GetTooltipData(input);
 
-        // Assert: POS should be a human-readable string from PartOfSpeechTranslator
+        // Assert: PartOfSpeechRaw should be the raw style tag verbatim - the TS
+        // presenter handles localization and any compound-tag normalization.
+        Assert.That(result.SourceForm, Is.EqualTo(s_tokenWithPos.Text));
         Assert.That(
-            result.PartOfSpeech,
-            Is.Not.Null.And.Not.Empty,
-            "PartOfSpeech must be populated when token has POS tag"
-        );
-        // Should not be the raw tag - should be a translated display string
-        Assert.That(
-            result.PartOfSpeech,
-            Is.Not.EqualTo("noun-dans"),
-            "PartOfSpeech must be translated to display form, not raw tag"
+            result.PartOfSpeechRaw,
+            Is.EqualTo("noun-dans"),
+            "PartOfSpeechRaw must be the raw token.Style value (not localized)"
         );
     }
 
@@ -815,8 +894,8 @@ internal class GetTooltipDataTests
     [Property("CapabilityId", "CAP-014")]
     [Property("BehaviorId", "BHV-354")]
     [Property("ExtractionId", "EXT-002")]
-    [Description("Token without POS tag returns tooltip with null PartOfSpeech")]
-    public void GetTooltipData_NoPosTag_ReturnsNullPartOfSpeech()
+    [Description("Token without POS tag returns tooltip with empty PartOfSpeechRaw")]
+    public void GetTooltipData_NoPosTag_ReturnsEmptyPartOfSpeechRaw()
     {
         // Arrange: Token without POS data (no style attribute)
         var dataAccess = MarbleTestHelper.BuildServiceWithTestData();
@@ -837,11 +916,13 @@ internal class GetTooltipDataTests
         // Act
         TooltipData result = tooltipService.GetTooltipData(input);
 
-        // Assert: No POS data available
+        // Assert: No POS data available - service returns empty string (not null) per
+        // TooltipService: `token.Style ?? string.Empty`.
+        Assert.That(result.SourceForm, Is.EqualTo(s_greekNounToken.Text));
         Assert.That(
-            result.PartOfSpeech,
-            Is.Null,
-            "PartOfSpeech should be null when token has no POS tag"
+            result.PartOfSpeechRaw,
+            Is.Empty,
+            "PartOfSpeechRaw should be empty when token has no Style/POS tag"
         );
     }
 
@@ -884,13 +965,18 @@ internal class GetTooltipDataTests
         // Act
         TooltipData result = tooltipService.GetTooltipData(input);
 
-        // Assert: Should return data for the Hebrew token, not the Greek one
+        // Assert: Should return data for the Hebrew token, not the Greek one. Lexical
+        // link "elohim_entry_ref" has no ':', so lemma falls back to surface form.
+        Assert.That(
+            result.SourceForm,
+            Is.EqualTo(MarbleTestHelper.Elohim),
+            "SourceForm should be the Hebrew token's surface text, not the Greek's"
+        );
         Assert.That(
             result.Lemma,
             Is.EqualTo(MarbleTestHelper.Elohim),
             "Should resolve the Hebrew token (index 3), not the Greek token"
         );
-        Assert.That(result.StrongNumber, Is.EqualTo("H430"));
     }
 
     #endregion
@@ -925,12 +1011,12 @@ internal class GetTooltipDataTests
         TooltipData result1 = tooltipService.GetTooltipData(input);
         TooltipData result2 = tooltipService.GetTooltipData(input);
 
-        // Assert
+        // Assert: every field on the new DTO must be equal across calls
+        Assert.That(result1.SourceForm, Is.EqualTo(result2.SourceForm));
         Assert.That(result1.Lemma, Is.EqualTo(result2.Lemma));
-        Assert.That(result1.Gloss, Is.EqualTo(result2.Gloss));
-        Assert.That(result1.PartOfSpeech, Is.EqualTo(result2.PartOfSpeech));
-        Assert.That(result1.StrongNumber, Is.EqualTo(result2.StrongNumber));
-        Assert.That(result1.Morphology, Is.EqualTo(result2.Morphology));
+        Assert.That(result1.PartOfSpeechRaw, Is.EqualTo(result2.PartOfSpeechRaw));
+        Assert.That(result1.RawGlosses, Is.EqualTo(result2.RawGlosses));
+        Assert.That(result1.RenderingStatus, Is.EqualTo(result2.RenderingStatus));
     }
 
     [Test]
@@ -938,9 +1024,7 @@ internal class GetTooltipDataTests
     [Property("CapabilityId", "CAP-014")]
     [Property("BehaviorId", "BHV-354")]
     [Property("ExtractionId", "EXT-002")]
-    [Description(
-        "TooltipData record contains all six expected fields defined in data-contracts.md"
-    )]
+    [Description("TooltipData record contains all phase-3a fields per design doc §5b")]
     public void GetTooltipData_ValidToken_TooltipDataHasAllContractFields()
     {
         // Arrange
@@ -962,19 +1046,27 @@ internal class GetTooltipDataTests
         // Act
         TooltipData result = tooltipService.GetTooltipData(input);
 
-        // Assert: Verify TooltipData has the 6 fields per Section 4.14 Result Type:
-        // lemma, gloss, partOfSpeech, strongNumber, notes, morphology
-        // This test verifies the structural contract - fields exist and are accessible
+        // Assert: Verify TooltipData has the 5 fields per phase 3a design (§5b):
+        // SourceForm, Lemma, PartOfSpeechRaw, RawGlosses, RenderingStatus.
+        // Structural check: every non-nullable field is present; the lone nullable
+        // (RenderingStatus) is documented to be null in phase 3a.
+        Assert.That(result.SourceForm, Is.Not.Null, "SourceForm field must exist and be non-null");
         Assert.That(result.Lemma, Is.Not.Null, "Lemma field must exist and be non-null");
-        // gloss, partOfSpeech, strongNumber, morphology are nullable per contract
-        // notes is a non-null array (may be empty)
-        Assert.That(result.Notes, Is.Not.Null, "Notes field must be a non-null array");
-
-        // Access all fields to verify they compile (structural check)
-        _ = result.Gloss;
-        _ = result.PartOfSpeech;
-        _ = result.StrongNumber;
-        _ = result.Morphology;
+        Assert.That(
+            result.PartOfSpeechRaw,
+            Is.Not.Null,
+            "PartOfSpeechRaw field must exist and be non-null (may be empty)"
+        );
+        Assert.That(
+            result.RawGlosses,
+            Is.Not.Null,
+            "RawGlosses field must be a non-null list (may be empty)"
+        );
+        Assert.That(
+            result.RenderingStatus,
+            Is.Null,
+            "RenderingStatus must be null in phase 3a (wired in phase 3b)"
+        );
     }
 
     #endregion

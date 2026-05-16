@@ -23,38 +23,50 @@ internal sealed class TooltipService
     }
 
     /// <summary>
-    /// Get structured tooltip data for a linked word identified by token ID.
+    /// Get raw tooltip data for a linked word identified by token ID. Returns raw fields
+    /// only - the TS presenter handles all shaping (gloss filter, phrase detection, POS
+    /// localization) and the markdown emitter handles localization. RenderingStatus is
+    /// always null in phase 3a; phase 3b wires it against the user's tracked project.
+    ///
     /// Token not found: throws PlatformError with NOT_FOUND.
-    /// No gloss available: returns partial TooltipData with null Gloss.
+    /// No gloss available: RawGlosses is empty.
     /// </summary>
     public TooltipData GetTooltipData(TooltipInput input)
     {
         var tokens = _bookTokens.GetTokens(input.ResourceId, input.CurrentReference.BookNum);
         MarbleToken token = FindTokenOrThrow(input.TokenId, tokens.ToArray());
 
-        string lemma = token.Text;
-        string? strongNumber = token.StrongNumber;
-        string? gloss = ResolveGloss(token, input.GlossLanguage);
-        string? partOfSpeech = ResolvePosDisplay(token);
+        // SourceForm = surface text of the linked word as it appears in scripture.
+        // PT9 reads this from MarbleToken.SourceText; PT10's MarbleToken stores it as Text.
+        string sourceForm = token.Text;
+
+        // Lemma = the dictionary form, parsed from the first LexicalLink ("DICT:LEMMA:ID").
+        // PT9 reads this from MarbleLexicalLink.Lemma. Falls back to surface text if no link.
+        string lemma = ParseLemmaFromLink(token.LexicalLinks?.FirstOrDefault()) ?? sourceForm;
+
+        // PartOfSpeechRaw = the raw POS tag (e.g. "noun", "phrase"). PT9 reads this from
+        // MarbleToken.PartOfSpeech; PT10 stores it in Style. The TS presenter decides
+        // whether to apply localization and detects the "phrase" case.
+        string partOfSpeechRaw = token.Style ?? string.Empty;
+
+        // RawGlosses = unfiltered gloss list from the dictionary. PT9 calls FilterGlosses
+        // (strips "{...}" annotations) before display; the TS presenter does that now.
+        IReadOnlyList<string> rawGlosses = ResolveRawGlosses(token, input.GlossLanguage);
 
         return new TooltipData(
+            SourceForm: sourceForm,
             Lemma: lemma,
-            Gloss: gloss,
-            PartOfSpeech: partOfSpeech,
-            StrongNumber: strongNumber,
-            Notes: [],
-            Morphology: null
+            PartOfSpeechRaw: partOfSpeechRaw,
+            RawGlosses: rawGlosses,
+            RenderingStatus: null
         );
     }
 
-    private string? ResolveGloss(MarbleToken token, string glossLanguage)
+    private IReadOnlyList<string> ResolveRawGlosses(MarbleToken token, string glossLanguage)
     {
         if (token.LexicalLinks is not { Count: > 0 } lexicalLinks)
-            return null;
+            return [];
 
-        // PT9 lexical_links carry "Dict:Lemma:Indices" (PT9 MarbleLexicalLink.cs:37-47).
-        // Route through the dictionary that authored the link so a Greek lemma in a
-        // deuterocanonical book resolves against DCLEX rather than SDBG.
         var (dictionary, _) = ParseLexicalLink(lexicalLinks[0]);
 
         IList<string> glosses = _marbleData.FindLocalizedGlossesForTerm(
@@ -62,7 +74,18 @@ internal sealed class TooltipService
             glossLanguage,
             dictionary
         );
-        return glosses.Count > 0 ? string.Join(", ", glosses) : null;
+        return glosses.ToArray();
+    }
+
+    private static string? ParseLemmaFromLink(string? link)
+    {
+        if (string.IsNullOrEmpty(link))
+            return null;
+        var parts = link.Split(':');
+        if (parts.Length < 2)
+            return null;
+        var lemma = parts[1];
+        return string.IsNullOrEmpty(lemma) ? null : lemma;
     }
 
     private static (string? Dictionary, string? Lemma) ParseLexicalLink(string link)
@@ -87,15 +110,5 @@ internal sealed class TooltipService
             );
         }
         return token;
-    }
-
-    private static string? ResolvePosDisplay(MarbleToken token)
-    {
-        if (string.IsNullOrEmpty(token.Style))
-            return null;
-
-        string language = token.StrongNumber is { } sn && sn.StartsWith('H') ? "Hebrew" : "Greek";
-        PosTranslateResult result = PartOfSpeechTranslator.Translate(token.Style, language, "long");
-        return result.IsKnown ? result.DisplayString : null;
     }
 }

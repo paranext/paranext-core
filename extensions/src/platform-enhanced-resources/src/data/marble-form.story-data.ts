@@ -45,13 +45,27 @@ export interface MockSerializedVerseRef {
   book?: string;
 }
 
-export interface MockTooltipData {
+/**
+ * Mock for the raw TooltipDataInput shape returned by the C# buildTooltipData PAPI command. Mirrors
+ * c-sharp/EnhancedResources/TooltipData.cs and the TS presenter's TooltipDataInput type. Use with
+ * `presentTooltip` + `renderTooltipMarkdown` to render the popover in stories.
+ */
+export interface MockTooltipDataInput {
+  sourceForm: string;
   lemma: string;
-  gloss: string | undefined;
-  partOfSpeech: string | undefined;
-  strongNumber: string | undefined;
-  notes: string[];
-  morphology: string | undefined;
+  partOfSpeechRaw: string;
+  rawGlosses: string[];
+  renderingStatus?: {
+    code:
+      | 'noRenderingsEntered'
+      | 'renderingDeniedInVerse'
+      | 'renderingMissingInVerse'
+      | 'noVerseText'
+      | 'guessedRenderingFound'
+      | 'renderingFound';
+    foundRendering?: string;
+    trackedProjectName?: string;
+  };
 }
 
 export interface MockNoteData {
@@ -131,35 +145,66 @@ export const MOCK_GEN_1_TOKENS: MockMarbleToken[] = [
 /** Token id of "beginning" - used for filter stories */
 export const MOCK_FILTERED_TOKEN_ID = '00100100100004';
 
-export const MOCK_TOOLTIP_DEFAULT: MockTooltipData = {
+export const MOCK_TOOLTIP_DEFAULT: MockTooltipDataInput = {
+  sourceForm: 'רֵאשִׁית',
   lemma: 'rēʾšît',
-  gloss: 'beginning, first, chief',
-  partOfSpeech: 'noun (feminine)',
-  strongNumber: 'H7225',
-  notes: [],
-  morphology: undefined,
+  partOfSpeechRaw: 'noun',
+  rawGlosses: ['beginning, first, chief'],
 };
 
-export const MOCK_TOOLTIP_MULTIPLE_SENSES: MockTooltipData = {
+export const MOCK_TOOLTIP_MULTI_GLOSS: MockTooltipDataInput = {
+  sourceForm: 'בָּרָא',
   lemma: 'bārāʾ',
-  gloss: 'to create, shape, form (sense 1 of 3)',
-  partOfSpeech: 'verb (qal stem)',
-  strongNumber: 'H1254a',
-  notes: [
-    'Sense 1: To create as a divine act of bringing into being.',
-    'Sense 2: To shape or fashion from existing material.',
-    'Sense 3: To choose; to select for a particular purpose.',
+  partOfSpeechRaw: 'verb',
+  rawGlosses: [
+    'to create as a divine act of bringing into being',
+    'to shape or fashion from existing material',
+    'to choose; to select for a particular purpose',
   ],
-  morphology: 'qal perfect 3ms',
 };
 
-export const MOCK_TOOLTIP_MISSING_STRONGS: MockTooltipData = {
+export const MOCK_TOOLTIP_NO_GLOSS: MockTooltipDataInput = {
+  sourceForm: 'תְּהוֹם',
   lemma: 'tehôm',
-  gloss: 'deep, abyss',
-  partOfSpeech: 'noun',
-  strongNumber: undefined,
-  notes: [],
-  morphology: undefined,
+  partOfSpeechRaw: 'noun',
+  rawGlosses: [],
+};
+
+export const MOCK_TOOLTIP_BRACE_ANNOTATIONS: MockTooltipDataInput = {
+  sourceForm: 'אֱלֹהִים',
+  lemma: 'ʾĕlōhîm',
+  partOfSpeechRaw: 'noun',
+  rawGlosses: ['{plural-of-majesty} God', '{construct} of'],
+};
+
+export const MOCK_TOOLTIP_PHRASE: MockTooltipDataInput = {
+  sourceForm: 'ἐν ἀρχῇ',
+  lemma: 'ἐν ἀρχῇ',
+  partOfSpeechRaw: 'phrase',
+  rawGlosses: [],
+};
+
+export const MOCK_TOOLTIP_RENDERING_FOUND: MockTooltipDataInput = {
+  ...MOCK_TOOLTIP_DEFAULT,
+  renderingStatus: {
+    code: 'renderingFound',
+    foundRendering: 'beginning',
+    trackedProjectName: 'ESV',
+  },
+};
+
+export const MOCK_TOOLTIP_NO_RENDERINGS: MockTooltipDataInput = {
+  ...MOCK_TOOLTIP_DEFAULT,
+  renderingStatus: { code: 'noRenderingsEntered', trackedProjectName: 'MyProject' },
+};
+
+export const MOCK_TOOLTIP_GUESSED_RENDERING: MockTooltipDataInput = {
+  ...MOCK_TOOLTIP_DEFAULT,
+  renderingStatus: {
+    code: 'guessedRenderingFound',
+    foundRendering: 'In the start',
+    trackedProjectName: 'NIV',
+  },
 };
 
 export const MOCK_NOTE_DEFAULT: MockNoteData = {

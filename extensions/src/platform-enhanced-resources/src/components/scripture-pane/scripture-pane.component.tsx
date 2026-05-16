@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   Editorial,
   getDefaultViewOptions,
@@ -6,7 +6,7 @@ import {
   type AnnotationRange,
 } from '@eten-tech-foundation/platform-editor';
 import type { ContentJsonPath, Usj } from '@eten-tech-foundation/scripture-utilities';
-import type { SerializedVerseRef } from '@sillsdev/scripture';
+import { Canon, type SerializedVerseRef } from '@sillsdev/scripture';
 import papi, { logger } from '@papi/frontend';
 import {
   Alert,
@@ -19,6 +19,13 @@ import {
 import type { LocalizedStringValue } from 'platform-bible-utils';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import type { MarbleAnnotation } from '../../lib/marble-converter';
+import type { EnhancedResourcesNetworkObject } from '../../lib/use-enhanced-resources-proxy';
+import {
+  presentTooltip,
+  type TooltipDataInput,
+  type TooltipViewModel,
+  type TooltipPresenterHelpers,
+} from '../../presenters/tooltip-presenter';
 
 /**
  * EnhancedScripturePane - read-only scripture renderer for the Enhanced Resources web view.
@@ -39,6 +46,14 @@ export const ENHANCED_SCRIPTURE_PANE_STRING_KEYS = Object.freeze([
   '%enhancedResources_scripturePane_emptyDescription%',
   '%enhancedResources_scripturePane_errorTitle%',
   '%enhancedResources_scripturePane_filterActive%',
+  '%enhancedResources_tooltip_phrase%',
+  '%enhancedResources_tooltip_noGloss%',
+  '%enhancedResources_tooltip_lemmaLabel%',
+  '%enhancedResources_tooltip_noRenderingsForTerm%',
+  '%enhancedResources_tooltip_deniedRendering%',
+  '%enhancedResources_tooltip_missingRendering%',
+  '%enhancedResources_tooltip_guessedRenderingFound%',
+  '%enhancedResources_tooltip_renderingFound%',
 ] as const);
 
 type ScripturePaneLocalizedStringKey = (typeof ENHANCED_SCRIPTURE_PANE_STRING_KEYS)[number];
@@ -74,6 +89,15 @@ export type EnhancedScripturePaneProps = {
     event: ReactMouseEvent,
   ) => void;
   localizedStringsWithLoadingState?: [ScripturePaneLocalizedStrings, boolean];
+  /**
+   * Network-object proxy for backend calls (buildTooltipData). When undefined the popover stays on
+   * the loading-state markdown without attempting a backend fetch.
+   */
+  erProxy?: EnhancedResourcesNetworkObject;
+  /** Resource id (e.g., "ESV16UK+") - threaded into TooltipInputDto. Required for popover content. */
+  resourceId?: string;
+  /** User's preferred gloss language (e.g., "en") - threaded into TooltipInputDto. */
+  glossLanguage?: string;
 };
 
 const ANNOTATION_TYPE_MARBLE_WORD = 'marble-word';
@@ -82,19 +106,6 @@ const ANNOTATION_TYPE_FILTER = 'marble-filter';
 const ANNOTATION_TYPE_HIGHLIGHT = 'marble-highlight';
 const ANNOTATION_TYPE_HOVER_MATCH = 'marble-hover-match';
 const RIGHT_MOUSE_BUTTON = 2;
-
-// Local mirror of the backend `buildTooltipData` PAPI command's return shape. The backend
-// command is registered in C# and not yet surfaced in papi-shared-types CommandHandlers,
-// so we type the response locally for now. Keep in sync with MockTooltipData in
-// data/marble-form.story-data.ts and the eventual papi-shared-types entry.
-type TooltipData = {
-  lemma: string;
-  gloss?: string;
-  partOfSpeech?: string;
-  strongNumber?: string;
-  notes: string[];
-  morphology?: string;
-};
 
 /**
  * CSS for marble annotation marks.
@@ -227,11 +238,28 @@ function lemmaFromLexicalLink(link: string): string | undefined {
 }
 
 // Markdown special characters that need escaping when interpolating untrusted text from
-// TooltipData fields (lemma, gloss, partOfSpeech, notes) into the popover markdown body.
-// markdown-to-jsx interprets these by default, so unescaped content can produce surprising
-// formatting when (e.g.) a lemma contains an underscore.
+// TooltipViewModel fields (lemma, gloss, sourceForm, posRaw, etc.) into the popover markdown
+// body. markdown-to-jsx interprets these by default, so unescaped content can produce
+// surprising formatting when (e.g.) a lemma contains an underscore.
 function escapeMarkdown(text: string): string {
   return text.replace(/([\\`*_~[\]<>])/g, '\\$1');
+}
+
+/**
+ * Detect Hebrew vs. Greek from a source-form's Unicode block range. Returns 'Hebrew' for any
+ * Hebrew-block character (U+0590-U+05FF), 'Greek' for any Greek-block character (U+0370-U+03FF), or
+ * undefined for ambiguous / Latin / mixed input.
+ *
+ * Used to decide which language to pass to translatePartOfSpeech, since the new TooltipData DTO no
+ * longer carries StrongNumber (which previously hinted H/G).
+ */
+function detectSourceLanguage(sourceForm: string): 'Hebrew' | 'Greek' | undefined {
+  for (let i = 0; i < sourceForm.length; i += 1) {
+    const code = sourceForm.charCodeAt(i);
+    if (code >= 0x0590 && code <= 0x05ff) return 'Hebrew';
+    if (code >= 0x0370 && code <= 0x03ff) return 'Greek';
+  }
+  return undefined;
 }
 
 function loadingMarkdownFromMetadata(annotation: MarbleAnnotation): string {
@@ -241,17 +269,85 @@ function loadingMarkdownFromMetadata(annotation: MarbleAnnotation): string {
   return lemma ? `**${escapeMarkdown(lemma)}**` : '...';
 }
 
-function renderTooltipMarkdown(data: TooltipData): string {
-  const parts: string[] = [];
-  const lemma = escapeMarkdown(data.lemma);
-  const pos = data.partOfSpeech ? ` *${escapeMarkdown(data.partOfSpeech)}*` : '';
-  parts.push(`**${lemma}**${pos}`);
-  if (data.gloss) parts.push(escapeMarkdown(data.gloss));
-  if (data.strongNumber) parts.push(`Strong: ${escapeMarkdown(data.strongNumber)}`);
-  if (data.notes.length > 0) {
-    parts.push(data.notes.map((n) => `- ${escapeMarkdown(n)}`).join('\n'));
+type TooltipLocalizer = (key: ScripturePaneLocalizedStringKey) => string;
+
+type WordViewModel = Extract<TooltipViewModel, { kind: 'word' }>;
+type RenderingStatusViewModel = NonNullable<WordViewModel['renderingStatus']>;
+
+export function renderTooltipMarkdown(
+  viewModel: TooltipViewModel,
+  localize: TooltipLocalizer,
+): string {
+  if (viewModel.kind === 'phrase') {
+    return [
+      `**${escapeMarkdown(viewModel.sourceForm)}**`,
+      localize('%enhancedResources_tooltip_phrase%'),
+    ].join('\n\n');
   }
-  return parts.join('\n\n');
+
+  const lines: string[] = [`**${escapeMarkdown(viewModel.sourceForm)}**`];
+
+  if (viewModel.posLocalized) {
+    lines.push(
+      `**${escapeMarkdown(viewModel.posLocalized)}** (${escapeMarkdown(viewModel.posRaw)})`,
+    );
+  } else if (viewModel.posRaw) {
+    lines.push(`**${escapeMarkdown(viewModel.posRaw)}**`);
+  }
+
+  lines.push(
+    `${localize('%enhancedResources_tooltip_lemmaLabel%')} **${escapeMarkdown(viewModel.lemma)}**`,
+  );
+  lines.push(
+    viewModel.gloss
+      ? escapeMarkdown(viewModel.gloss)
+      : localize('%enhancedResources_tooltip_noGloss%'),
+  );
+
+  if (viewModel.renderingStatus) {
+    lines.push(renderRenderingStatusLine(viewModel.renderingStatus, localize));
+  }
+
+  return lines.join('\n\n');
+}
+
+function renderRenderingStatusLine(
+  status: RenderingStatusViewModel,
+  localize: TooltipLocalizer,
+): string {
+  const projectName = escapeMarkdown(status.trackedProjectName ?? '');
+  const foundRendering = escapeMarkdown(status.foundRendering ?? '');
+  switch (status.code) {
+    case 'noRenderingsEntered':
+      return localize('%enhancedResources_tooltip_noRenderingsForTerm%').replace(
+        '{0}',
+        projectName,
+      );
+    case 'renderingDeniedInVerse':
+      return localize('%enhancedResources_tooltip_deniedRendering%').replace('{0}', projectName);
+    case 'renderingMissingInVerse':
+    case 'noVerseText':
+      return localize('%enhancedResources_tooltip_missingRendering%').replace('{0}', projectName);
+    case 'guessedRenderingFound':
+      return localize('%enhancedResources_tooltip_guessedRenderingFound%')
+        .replace('{0}', foundRendering)
+        .replace('{1}', projectName);
+    case 'renderingFound':
+      return localize('%enhancedResources_tooltip_renderingFound%')
+        .replace('{0}', foundRendering)
+        .replace('{1}', projectName);
+    default: {
+      // Exhaustiveness check - if a new code is added to RenderingStatusViewModel without a
+      // case here, TypeScript will fail this assignment at build time.
+      return assertNever(status.code);
+    }
+  }
+}
+
+function assertNever(value: never): never {
+  // The runtime fallthrough should be unreachable; the compile-time `never` parameter is
+  // the actual safety guarantee. Keep this trivial helper colocated with the only caller.
+  throw new Error(`Unhandled rendering-status code: ${String(value)}`);
 }
 
 // Module-level Editorial options. CRITICAL: this object MUST be a stable reference. When the
@@ -288,6 +384,9 @@ export function EnhancedScripturePane({
   onTokenClick = NOOP_TOKEN_CLICK,
   onTokenContextMenu = NOOP_TOKEN_CONTEXT_MENU,
   localizedStringsWithLoadingState = [{}, false],
+  erProxy,
+  resourceId,
+  glossLanguage,
 }: EnhancedScripturePaneProps) {
   // Editorial's forwarded ref is typed `EditorRef | null`; we match that to satisfy the prop type.
   // eslint-disable-next-line no-null/no-null
@@ -296,8 +395,13 @@ export function EnhancedScripturePane({
   // visible treatment. The stylesheet is static; useStylesheet adds a single `<style>` tag for
   // the lifetime of this component.
   useStylesheet(MARBLE_ANNOTATION_STYLES);
-  const getLocalizedString = (key: ScripturePaneLocalizedStringKey) =>
-    localizedStringsWithLoadingState[0][key] ?? key;
+  // Stable identity across renders that don't change the strings bag - keeps the localizer
+  // ref's sync effect from firing on every render.
+  const stringsBag = localizedStringsWithLoadingState[0];
+  const getLocalizedString = useCallback(
+    (key: ScripturePaneLocalizedStringKey) => stringsBag[key] ?? key,
+    [stringsBag],
+  );
 
   const loadingText = getLocalizedString('%enhancedResources_scripturePane_loading%');
   const emptyTitle = getLocalizedString('%enhancedResources_scripturePane_emptyTitle%');
@@ -314,6 +418,34 @@ export function EnhancedScripturePane({
   useEffect(() => {
     handlersRef.current = { onTokenClick, onTokenContextMenu };
   }, [onTokenClick, onTokenContextMenu]);
+
+  // Hold the proxy + tooltip-input fields in refs so the annotation effect's hover callbacks
+  // (declared inside the effect) can read the latest values without taking these in the dep
+  // array - which would re-run the chunked annotation apply on every prop change.
+  const erProxyRef = useRef(erProxy);
+  useEffect(() => {
+    erProxyRef.current = erProxy;
+  }, [erProxy]);
+  const resourceIdRef = useRef(resourceId);
+  useEffect(() => {
+    resourceIdRef.current = resourceId;
+  }, [resourceId]);
+  const glossLanguageRef = useRef(glossLanguage);
+  useEffect(() => {
+    glossLanguageRef.current = glossLanguage;
+  }, [glossLanguage]);
+
+  // Hold the latest scrRef + localizer in refs so the annotation effect's hover callbacks
+  // (which read these inside fetchAndUpdatePopover) don't have to re-fire the chunked apply
+  // every time scrRef changes (BCV move) or strings finish loading.
+  const scrRefRef = useRef(scrRef);
+  useEffect(() => {
+    scrRefRef.current = scrRef;
+  }, [scrRef]);
+  const localizeRef = useRef<(key: ScripturePaneLocalizedStringKey) => string>((key) => key);
+  useEffect(() => {
+    localizeRef.current = getLocalizedString;
+  }, [getLocalizedString]);
 
   // Hover lifecycle bookkeeping. fetchGenRef is bumped on every mouseenter/mouseleave so
   // late-arriving showPopover / buildTooltipData promises can detect they are stale and
@@ -414,10 +546,33 @@ export function EnhancedScripturePane({
     };
 
     const fetchAndUpdatePopover = async (id: string, gen: number) => {
-      let data: TooltipData;
+      const proxy = erProxyRef.current;
+      const currentResourceId = resourceIdRef.current;
+      const currentGlossLanguage = glossLanguageRef.current;
+      const currentScrRef = scrRefRef.current;
+      if (!proxy || !currentResourceId || !currentGlossLanguage || !currentScrRef) {
+        // proxy not yet resolved or required inputs missing; loading-state markdown stays.
+        return;
+      }
+
+      // Convert SerializedVerseRef (`book` is the 3-letter id) to the wire VerseRefDto
+      // shape (`bookNum`) the C# network object expects. Mirrors the conversion in
+      // enhanced-resource.web-view.tsx for `loadDictionary` / `loadEncyclopedia` etc.
+      const bookNum = Canon.bookIdToNumber(currentScrRef.book);
+      if (bookNum <= 0) return;
+
+      let data: TooltipDataInput;
       try {
-        data = await papi.commands.sendCommand('platform.enhancedResources.buildTooltipData', {
+        data = await proxy.buildTooltipData({
+          resourceId: currentResourceId,
           tokenId: id,
+          currentReference: {
+            bookNum,
+            chapterNum: currentScrRef.chapterNum,
+            verseNum: currentScrRef.verseNum,
+          },
+          glossLanguage: currentGlossLanguage,
+          // trackedProjectId is reserved for Phase 3b; undefined here.
         });
       } catch (err) {
         logger.warn(
@@ -428,12 +583,43 @@ export function EnhancedScripturePane({
         return;
       }
       if (gen !== fetchGenRef.current) return;
+
+      // Localize POS via the existing translatePartOfSpeech proxy method.
+      // Source language is detected from the source-form script (Hebrew vs. Greek block ranges)
+      // since the new DTO no longer carries StrongNumber. Falls back to raw POS if the lookup
+      // fails or returns IsKnown=false.
+      const posLanguage = detectSourceLanguage(data.sourceForm);
+      let posLocalized: string | undefined;
+      if (data.partOfSpeechRaw && posLanguage) {
+        try {
+          const result = await proxy.translatePartOfSpeech(
+            data.partOfSpeechRaw,
+            posLanguage,
+            'long',
+          );
+          if (result.isKnown) posLocalized = result.displayString;
+        } catch (err) {
+          logger.warn(
+            `EnhancedScripturePane: translatePartOfSpeech failed: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+        }
+      }
+      if (gen !== fetchGenRef.current) return;
+
+      // Inject the resolved POS into the presenter helpers for this single render pass.
+      const helpers: TooltipPresenterHelpers = {
+        localizePartOfSpeech: (raw) => (raw === data.partOfSpeechRaw ? posLocalized : undefined),
+      };
+
       const overlayId = activePopoverIdRef.current;
       if (!overlayId) return;
       try {
+        const viewModel = presentTooltip(data, helpers);
         await papi.overlays.updatePopover(overlayId, {
           type: 'markdown',
-          markdown: renderTooltipMarkdown(data),
+          markdown: renderTooltipMarkdown(viewModel, localizeRef.current),
         });
       } catch (err) {
         logger.warn(

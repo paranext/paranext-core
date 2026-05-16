@@ -12,6 +12,9 @@ import type {
   LoadMarbleChapterXmlInput,
   MediaLoadInputDto,
   MediaLoadResultDto,
+  PosTranslateResultDto,
+  TooltipDataDto,
+  TooltipInputDto,
 } from './enhanced-resources-dto';
 
 // Re-export the DTO catalog so existing wiring-layer imports
@@ -38,6 +41,9 @@ export type {
   MediaDisplayItemDto,
   MediaLoadInputDto,
   MediaLoadResultDto,
+  PosTranslateResultDto,
+  TooltipDataDto,
+  TooltipInputDto,
   VerseRefDto,
   WordFilterInputDto,
 } from './enhanced-resources-dto';
@@ -82,6 +88,22 @@ export type EnhancedResourcesNetworkObject = {
    * `MediaService.LoadResources(input)` which applies the SBA filter server-side per `tabType`.
    */
   loadMedia: (input: MediaLoadInputDto) => Promise<MediaLoadResultDto>;
+  /**
+   * Build the per-token tooltip payload for the marble-word hover popover. Backed by C#
+   * `TooltipService.BuildTooltipData`. The returned shape mirrors `TooltipDataInput` from
+   * `presenters/tooltip-presenter.ts` (the presenter consumes the DTO directly).
+   */
+  buildTooltipData: (input: TooltipInputDto) => Promise<TooltipDataDto>;
+  /**
+   * Localize a raw POS code to a display string. The backend translator (PartOfSpeechTranslator)
+   * takes (tag, language, form) where language is "Hebrew" or "Greek" and form is "long" or
+   * "short".
+   */
+  translatePartOfSpeech: (
+    tag: string,
+    language: string,
+    form: string,
+  ) => Promise<PosTranslateResultDto>;
 };
 
 /**

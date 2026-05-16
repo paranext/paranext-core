@@ -1,27 +1,22 @@
 namespace Paranext.DataProvider.EnhancedResources;
 
 /// <summary>
-/// Structured tooltip data for hovering over linked words in the scripture pane.
-/// Frontend renders this as a React tooltip component - no HTML generation.
-/// Source: Section 4.14 M-014, EXT-002. PT9 source: MarbleForm.GetTooltip
-/// (MarbleForm.cs:2692). PT9's tooltip body also includes a transliteration line
-/// and a per-project term-rendering status; both are intentionally out of scope
-/// here until the rendering-status pipeline is ported.
+/// Raw tooltip data for hovering over a linked word in the Enhanced Resources scripture pane.
+///
+/// Pure data source: only fields directly available from the ER files. The TS presenter
+/// (extensions/src/platform-enhanced-resources/src/presenters/tooltip-presenter.ts) shapes
+/// this into a UI-ready view model; the markdown emitter
+/// (scripture-pane.component.tsx renderTooltipMarkdown) handles localization, format-string
+/// substitution, and markdown layout. No transliteration, no gloss filtering, no POS
+/// localization happens here.
+///
+/// PT9 reference: MarbleForm.cs:2692 (GetTooltip).
+/// Spec: working-docs/2026-05-15-er-editor-integration-followup-design.md §5b.
 /// </summary>
-/// <remarks>
-/// <see cref="Notes"/> and <see cref="Morphology"/> are reserved placeholders. They
-/// are always empty / null today: PT9 derives notes from referenced-note caches
-/// (DictionaryTab.GetBestReferencedNotes) and per-sense morphology from
-/// <c>Lexicon_LexicalMeaning.PartOfSpeech</c>; neither pipeline exists in PT10
-/// yet. Following the convention of <see cref="LexiconEntry.Translit"/>, the
-/// fields stay on the contract so consumers can adopt them without a record
-/// change once the data is wired up.
-/// </remarks>
 public record TooltipData(
+    string SourceForm,
     string Lemma,
-    string? Gloss,
-    string? PartOfSpeech,
-    string? StrongNumber,
-    string[] Notes,
-    string? Morphology
+    string PartOfSpeechRaw,
+    IReadOnlyList<string> RawGlosses,
+    RenderingStatus? RenderingStatus
 );

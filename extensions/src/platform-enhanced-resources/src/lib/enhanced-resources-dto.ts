@@ -211,3 +211,49 @@ export type MediaLoadResultDto = {
   countLabel: string;
   emptyStateMessage: string | null | undefined;
 };
+
+/**
+ * Mirrors c-sharp/EnhancedResources/TooltipInput.cs - the input shape for the C# TooltipService.
+ * trackedProjectId is reserved for Phase 3b (rendering-status); the backend ignores it in 3a.
+ */
+export type TooltipInputDto = {
+  resourceId: string;
+  tokenId: string;
+  currentReference: VerseRefDto;
+  glossLanguage: string;
+  trackedProjectId?: string;
+};
+
+/**
+ * Mirrors c-sharp/EnhancedResources/PosTranslateResult.cs. Returned by the translatePartOfSpeech
+ * network-object method. `displayString` is the localized POS label (e.g., "noun (feminine)");
+ * `isKnown` indicates the lookup succeeded.
+ */
+export type PosTranslateResultDto = {
+  displayString: string;
+  isKnown: boolean;
+  localizationKey: string;
+};
+
+/**
+ * Mirrors c-sharp/EnhancedResources/TooltipData.cs (raw fields only). Identical in shape to
+ * TooltipDataInput in tooltip-presenter.ts; defined here as the wire-DTO per the existing
+ * convention. The presenter consumes it as `TooltipDataInput`.
+ */
+export type TooltipDataDto = {
+  sourceForm: string;
+  lemma: string;
+  partOfSpeechRaw: string;
+  rawGlosses: string[];
+  renderingStatus?: {
+    code:
+      | 'noRenderingsEntered'
+      | 'renderingDeniedInVerse'
+      | 'renderingMissingInVerse'
+      | 'noVerseText'
+      | 'guessedRenderingFound'
+      | 'renderingFound';
+    foundRendering?: string;
+    trackedProjectName?: string;
+  };
+};

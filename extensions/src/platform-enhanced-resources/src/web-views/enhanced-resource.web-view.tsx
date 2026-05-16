@@ -27,6 +27,7 @@ import { convertMarbleChapterXml, type MarbleAnnotation } from '../lib/marble-co
 import { computeScopeKeyedRefKey } from '../lib/scope-keyed-ref-key';
 import {
   useEnhancedResourcesProxy,
+  type EnhancedResourcesNetworkObject,
   type WordFilterInputDto,
   type DictionaryLoadInputDto,
   type DictionaryEntryDataDto,
@@ -170,6 +171,15 @@ export type EnhancedResourceWebViewProps = {
     annotation: MarbleAnnotation,
     event: ReactMouseEvent,
   ) => void;
+  /**
+   * Network-object proxy for EnhancedScripturePane backend calls (buildTooltipData on hover).
+   * Forwarded straight through to the pane; undefined in stories / before the proxy resolves.
+   */
+  erProxy?: EnhancedResourcesNetworkObject;
+  /** Active resource id - threaded into TooltipInputDto on hover. */
+  resourceId?: string;
+  /** User's preferred gloss language (e.g., "en") - threaded into TooltipInputDto on hover. */
+  glossLanguage?: string;
   /**
    * WebView state hook used by EnhancedResourceFootnotesPane to persist its size between sessions.
    * Required at runtime - stories pass a no-op stub since they re-mount on every render anyway.
@@ -426,6 +436,9 @@ export function EnhancedResourceWebView({
   scripturePaneError,
   onTokenClick = () => {},
   onTokenContextMenu = () => {},
+  erProxy,
+  resourceId,
+  glossLanguage,
   useWebViewState: useWebViewStateProp,
   selectedFootnote,
   onFootnoteSelected = () => {},
@@ -643,6 +656,9 @@ export function EnhancedResourceWebView({
                   onTokenClick={onTokenClick}
                   onTokenContextMenu={onTokenContextMenu}
                   localizedStringsWithLoadingState={childStrings}
+                  erProxy={erProxy}
+                  resourceId={resourceId}
+                  glossLanguage={glossLanguage}
                 />
               </EnhancedResourceFootnotesPane>
             </ResizablePanel>
@@ -2925,6 +2941,9 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       scripturePaneError={scripturePaneError}
       onTokenClick={handleTokenClick}
       onTokenContextMenu={handleTokenContextMenu}
+      erProxy={erProxy}
+      resourceId={resourceId}
+      glossLanguage={glossLanguage}
       useWebViewState={useWebViewState}
       selectedFootnote={selectedFootnote}
       onFootnoteSelected={handleFootnoteListSelection}

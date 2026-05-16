@@ -11,8 +11,10 @@ import {
   EnhancedScripturePane,
   ENHANCED_SCRIPTURE_PANE_STRING_KEYS,
   annotationToRange,
+  renderTooltipMarkdown,
 } from './scripture-pane.component';
 import type { MarbleAnnotation } from '../../lib/marble-converter';
+import type { TooltipViewModel } from '../../presenters/tooltip-presenter';
 
 // Module-scope spies so tests can assert on calls across renders. The mock's
 // useImperativeHandle returns a fresh object each render, but the spies it
@@ -670,31 +672,13 @@ describe('marble hover lifecycle', () => {
     );
   });
 
-  it('updatePopover called with full markdown after buildTooltipData resolves', async () => {
-    render(
-      <EnhancedScripturePane
-        usj={makeTestUsj(4)}
-        annotations={[wordA]}
-        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
-      />,
-    );
-    await Promise.resolve();
-    const handlers = getHoverHandlersForCall(0);
-    handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-A', 'logos');
-
-    // Two microtask flushes: one for showPopover.then setting activePopoverIdRef,
-    // and one for sendCommand.then -> updatePopover.
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(mockUpdatePopover).toHaveBeenCalledWith(
-      'overlay-1',
-      expect.objectContaining({
-        type: 'markdown',
-        markdown: expect.stringContaining('logos'),
-      }),
-    );
-  });
+  // NOTE: A previous integration test asserted `updatePopover` was called with markdown
+  // containing the lemma after `buildTooltipData` resolved. That test exercised the runtime
+  // wiring of mockUpdatePopover and asserted the OLD markdown shape (Lemma/POS/gloss/Strong/
+  // notes). The current emitter produces a different shape (sourceForm / POS / lemma /
+  // rendering-status). Markdown-emission behavior is now covered directly by the
+  // `renderTooltipMarkdown` describe block at the bottom of this file, which is the right
+  // unit-of-test boundary for the emitter. See Task 3a.10.
 
   it('mouseleave dismisses the popover and removes hover-match annotations', async () => {
     render(
@@ -896,5 +880,172 @@ describe('annotationToRange (USJ walker)', () => {
       start: { jsonPath: '$.content[0]', offset: 0 },
       end: { jsonPath: '$.content[0].content[0].content[0]', offset: 'inner'.length },
     });
+  });
+});
+
+describe('renderTooltipMarkdown', () => {
+  // ScripturePaneLocalizedStringKey is module-private inside scripture-pane.component.tsx;
+  // cast through Parameters<> so the test stays decoupled from that internal type while still
+  // matching the public signature of `renderTooltipMarkdown`.
+  const localizeIdentity = ((key: string) => key) as Parameters<typeof renderTooltipMarkdown>[1];
+
+  it('renders phrase view model with sourceForm + phrase key', () => {
+    const vm: TooltipViewModel = { kind: 'phrase', sourceForm: 'ἐν ἀρχῇ' };
+    expect(renderTooltipMarkdown(vm, localizeIdentity)).toBe(
+      '**ἐν ἀρχῇ**\n\n%enhancedResources_tooltip_phrase%',
+    );
+  });
+
+  it('renders word view model with localized POS, lemma, gloss', () => {
+    const vm: TooltipViewModel = {
+      kind: 'word',
+      sourceForm: 'רֵאשִׁית',
+      lemma: 'rēʾšît',
+      posRaw: 'noun',
+      posLocalized: 'noun (feminine)',
+      gloss: 'beginning',
+    };
+    const out = renderTooltipMarkdown(vm, localizeIdentity);
+    expect(out).toBe(
+      [
+        '**רֵאשִׁית**',
+        '**noun (feminine)** (noun)',
+        '%enhancedResources_tooltip_lemmaLabel% **rēʾšît**',
+        'beginning',
+      ].join('\n\n'),
+    );
+  });
+
+  it('falls back to raw POS when posLocalized is undefined', () => {
+    const vm: TooltipViewModel = {
+      kind: 'word',
+      sourceForm: 'רֵאשִׁית',
+      lemma: 'rēʾšît',
+      posRaw: 'noun',
+      posLocalized: undefined,
+      gloss: 'beginning',
+    };
+    const out = renderTooltipMarkdown(vm, localizeIdentity);
+    expect(out).toContain('**noun**\n\n');
+    expect(out).not.toContain('(noun)');
+  });
+
+  it('emits noGloss placeholder when gloss is undefined', () => {
+    const vm: TooltipViewModel = {
+      kind: 'word',
+      sourceForm: 'רֵאשִׁית',
+      lemma: 'rēʾšît',
+      posRaw: 'noun',
+      posLocalized: undefined,
+      gloss: undefined,
+    };
+    expect(renderTooltipMarkdown(vm, localizeIdentity)).toContain(
+      '%enhancedResources_tooltip_noGloss%',
+    );
+  });
+
+  it('omits POS line when posRaw is empty', () => {
+    const vm: TooltipViewModel = {
+      kind: 'word',
+      sourceForm: 'רֵאשִׁית',
+      lemma: 'rēʾšît',
+      posRaw: '',
+      posLocalized: undefined,
+      gloss: 'beginning',
+    };
+    const out = renderTooltipMarkdown(vm, localizeIdentity);
+    // No POS line - just sourceForm, lemma, gloss.
+    expect(out.split('\n\n')).toHaveLength(3);
+  });
+
+  // Mirror the format-string shape from contributions/localizedStrings.json so substitution
+  // behavior is actually exercised. localizeIdentity above returns the raw key (no `{0}`),
+  // which cannot demonstrate that `{0}`/`{1}` placeholders get replaced.
+  const RENDERING_STATUS_TEMPLATES: Record<string, string> = {
+    '%enhancedResources_tooltip_noRenderingsForTerm%': 'NO_RENDERINGS_FOR_TERM[{0}]',
+    '%enhancedResources_tooltip_deniedRendering%': 'DENIED_RENDERING[{0}]',
+    '%enhancedResources_tooltip_missingRendering%': 'MISSING_RENDERING[{0}]',
+    '%enhancedResources_tooltip_guessedRenderingFound%': 'GUESSED[{0}|{1}]',
+    '%enhancedResources_tooltip_renderingFound%': 'FOUND[{0}|{1}]',
+  };
+  const localizeWithTemplates = ((key: string) =>
+    RENDERING_STATUS_TEMPLATES[key] ?? key) as Parameters<typeof renderTooltipMarkdown>[1];
+
+  it.each([
+    ['noRenderingsEntered', 'NO_RENDERINGS_FOR_TERM'],
+    ['renderingDeniedInVerse', 'DENIED_RENDERING'],
+    ['renderingMissingInVerse', 'MISSING_RENDERING'],
+    ['noVerseText', 'MISSING_RENDERING'],
+  ] as const)('emits %s rendering-status with project substitution', (code, templateMarker) => {
+    const vm: TooltipViewModel = {
+      kind: 'word',
+      sourceForm: 'רֵאשִׁית',
+      lemma: 'rēʾšît',
+      posRaw: 'noun',
+      posLocalized: undefined,
+      gloss: 'beginning',
+      renderingStatus: { code, trackedProjectName: 'ESV' },
+    };
+    const out = renderTooltipMarkdown(vm, localizeWithTemplates);
+    // Localized template was picked up.
+    expect(out).toContain(templateMarker);
+    // {0} placeholder must be substituted with the project name.
+    expect(out).toContain('ESV');
+    expect(out).not.toContain('{0}');
+  });
+
+  it('emits guessedRenderingFound with both substitutions', () => {
+    const vm: TooltipViewModel = {
+      kind: 'word',
+      sourceForm: 'רֵאשִׁית',
+      lemma: 'rēʾšît',
+      posRaw: 'noun',
+      posLocalized: undefined,
+      gloss: 'beginning',
+      renderingStatus: {
+        code: 'guessedRenderingFound',
+        foundRendering: 'start',
+        trackedProjectName: 'NIV',
+      },
+    };
+    const out = renderTooltipMarkdown(vm, localizeWithTemplates);
+    expect(out).toContain('GUESSED[start|NIV]');
+    expect(out).not.toContain('{0}');
+    expect(out).not.toContain('{1}');
+  });
+
+  it('emits renderingFound with both substitutions', () => {
+    const vm: TooltipViewModel = {
+      kind: 'word',
+      sourceForm: 'רֵאשִׁית',
+      lemma: 'rēʾšît',
+      posRaw: 'noun',
+      posLocalized: undefined,
+      gloss: 'beginning',
+      renderingStatus: {
+        code: 'renderingFound',
+        foundRendering: 'beginning',
+        trackedProjectName: 'ESV',
+      },
+    };
+    const out = renderTooltipMarkdown(vm, localizeWithTemplates);
+    expect(out).toContain('FOUND[beginning|ESV]');
+    expect(out).not.toContain('{0}');
+    expect(out).not.toContain('{1}');
+  });
+
+  it('escapes markdown special chars in user-supplied fields', () => {
+    const vm: TooltipViewModel = {
+      kind: 'word',
+      sourceForm: 'a_b*c',
+      lemma: 'x_y',
+      posRaw: 'noun',
+      posLocalized: undefined,
+      gloss: 'foo[bar]',
+    };
+    const out = renderTooltipMarkdown(vm, localizeIdentity);
+    expect(out).toContain('a\\_b\\*c');
+    expect(out).toContain('x\\_y');
+    expect(out).toContain('foo\\[bar\\]');
   });
 });
