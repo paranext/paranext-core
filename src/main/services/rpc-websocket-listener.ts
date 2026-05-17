@@ -244,8 +244,17 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
   }
 
   emitEventOnNetwork<T>(eventType: string, event: T): void {
+    // Wrap each subscriber's emit in try/catch so one broken socket cannot abort the
+    // broadcast to the remaining (healthy) subscribers. See D-010: `write EPIPE`
+    // unhandled exception during multi-webview scroll-group fan-out.
     this.rpcServerBySocket.forEach((rpcServer) => {
-      rpcServer.emitEventOnNetwork(eventType, event);
+      try {
+        rpcServer.emitEventOnNetwork(eventType, event);
+      } catch (error) {
+        logger.warn(
+          `emitEventOnNetwork: failed to emit '${eventType}' to one subscriber; continuing. ${getErrorMessage(error)}`,
+        );
+      }
     });
   }
 
@@ -255,7 +264,15 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
     if (!Array.isArray(event) || event.length !== 1) throw new Error(`event not wrapped in array`);
     this.localEventHandler(eventType, event[0]);
     this.rpcServerBySocket.forEach((rpcServer) => {
-      if (rpcServer !== source) rpcServer.emitEventOnNetwork(eventType, event[0]);
+      if (rpcServer === source) return;
+      // See note in emitEventOnNetwork — protect the fan-out from a single bad subscriber.
+      try {
+        rpcServer.emitEventOnNetwork(eventType, event[0]);
+      } catch (error) {
+        logger.warn(
+          `propagateEvent: failed to forward '${eventType}' to one subscriber; continuing. ${getErrorMessage(error)}`,
+        );
+      }
     });
   }
 

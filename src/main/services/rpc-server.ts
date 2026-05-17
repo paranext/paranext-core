@@ -137,7 +137,16 @@ export class RpcServer implements IRpcHandler {
 
   // Outgoing event from this server to the client it is connected to
   emitEventOnNetwork<T>(eventType: string, event: T): void {
-    this.jsonRpcClient.notify(eventType, [event]);
+    // Wrap notify so any synchronous throw inside the JSON-RPC client / underlying
+    // WebSocket cannot bubble up as an uncaught exception when the peer socket is
+    // half-closed. See D-010.
+    try {
+      this.jsonRpcClient.notify(eventType, [event]);
+    } catch (error) {
+      logger.warn(
+        `RpcServer ${this.name}: notify('${eventType}') threw; dropping. ${getErrorMessage(error)}`,
+      );
+    }
   }
 
   registerRemoteMethod(methodName: string, methodDocs?: SingleMethodDocumentation): boolean {

@@ -201,11 +201,38 @@ let willRestart = false;
 
 // Add unhandled exception and rejection handlers
 process.on('uncaughtException', (error) => {
-  logger.error(`Unhandled exception in main process: ${getErrorMessage(error)}`);
+  // Defensive: the logger itself can fail (e.g., EPIPE writing to a broken stdio pipe).
+  // If the original error was already an EPIPE-class transient peer error, downgrade
+  // the severity so we don't synthesize a recursive uncaught exception from logger.error.
+  // See D-010: `write EPIPE` was caught here but logger.error to a broken stdio pipe
+  // could then throw again with the same code, terminating the main process.
+  // Errors-as-objects carry a Node.js libuv `code` (e.g. 'EPIPE'); read it defensively
+  // without asserting a Node-specific type so this stays compatible with bundlers that
+  // strip Node globals.
+  // Reading an extra `code` property off Error is a documented Node convention.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const { code } = error as Error & { code?: string };
+  const isTransientPipeError =
+    code === 'EPIPE' || code === 'ECONNRESET' || code === 'ERR_STREAM_DESTROYED';
+  try {
+    if (isTransientPipeError) {
+      logger.warn(
+        `Transient pipe error in main process (${code}); ignoring: ${getErrorMessage(error)}`,
+      );
+    } else {
+      logger.error(`Unhandled exception in main process: ${getErrorMessage(error)}`);
+    }
+  } catch {
+    // Suppress: logger failure during uncaughtException must not crash the process.
+  }
 });
 
 process.on('unhandledRejection', (reason) => {
-  logger.error(`Unhandled promise rejection in main process, reason: ${getErrorMessage(reason)}`);
+  try {
+    logger.error(`Unhandled promise rejection in main process, reason: ${getErrorMessage(reason)}`);
+  } catch {
+    // Suppress: logger failure must not crash the process.
+  }
 });
 
 /**
