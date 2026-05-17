@@ -1,0 +1,8 @@
+SKIP MARKER: Flow 3 Step 2 (hover phrase)
+
+No multi-token marble-phrase annotations present in JHN 1 in the ER pane at iter 26.
+Query `[class*=phrase], [data-marble-phrase], .editor-typed-mark-external-marble-phrase` returned 0 matches.
+Single-token marble-words present (e.g., "Word" with lemma λόγος verified in Step 1).
+
+Per walkthrough script: "Hover a phrase if available in chapter; otherwise note 'no phrase in chapter' and continue."
+Outcome: skipped as not-applicable, not a defect.
