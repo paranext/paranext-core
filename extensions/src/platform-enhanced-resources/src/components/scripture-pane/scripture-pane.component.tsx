@@ -572,6 +572,25 @@ export function EnhancedScripturePane({
     return { lemmaToAnnotationIds, annotationIdToLemmas };
   }, [annotations]);
 
+  // D-012 (2026-05-16): Editorial accepts the chapter USJ via `defaultUsj` at mount only - it does
+  // NOT re-read that prop on subsequent renders. When the wiring layer reloads a new chapter (BCV
+  // nav after the ER pane is open), the scripture pane was stuck on the originally-mounted USJ
+  // because nothing pushed the new value into the editor. Fix: sync subsequent USJ changes through
+  // the imperative `editor.setUsj()` ref API. Skip the initial run because Editorial already has
+  // the same value via `defaultUsj` - calling `setUsj` once more on mount would force a redundant
+  // Lexical re-init. (Pattern mirrors `platform-scripture-editor/use-editor-pdp-sync.hook.ts`.)
+  const lastSyncedUsjRef = useRef<Usj | undefined>(usj);
+  useEffect(() => {
+    // First-mount: Editorial consumed `defaultUsj`. Record the value and skip the imperative push.
+    if (lastSyncedUsjRef.current === usj) return;
+    lastSyncedUsjRef.current = usj;
+    const editor = editorRef.current;
+    // When usj is undefined the component renders the empty state instead of Editorial, so there is
+    // nothing to push. The next render with a defined usj will re-mount Editorial via `defaultUsj`.
+    if (!editor || !usj) return;
+    editor.setUsj(usj);
+  }, [usj]);
+
   // FN-027 / FN-028 / FN-029 wired in Session 2 (2026-05-05). Effect A registers
   // onMouseEnter / onMouseLeave alongside onClick to drive the marble-dictionary popover
   // (via papi.overlays) and lemma-match / lemma-dim annotations. CharNode title

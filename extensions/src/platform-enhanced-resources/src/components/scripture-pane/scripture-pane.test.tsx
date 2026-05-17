@@ -22,6 +22,8 @@ import type { TooltipViewModel } from '../../presenters/tooltip-presenter';
 // references are stable - so assertions stay reliable.
 const setAnnotationSpy = vi.fn();
 const removeAnnotationSpy = vi.fn();
+// D-012: spy on Editorial's imperative `setUsj()` so we can verify the chapter-change sync.
+const setUsjSpy = vi.fn();
 // D-008: capture the logger that EnhancedScripturePane passes to <Editorial> so we can verify
 // the wrapper downgrades the "Failed to find start or end node of the annotation" error.
 let lastEditorialLogger:
@@ -87,11 +89,13 @@ vi.mock('@eten-tech-foundation/platform-editor', () => {
       ref: React.Ref<{
         setAnnotation: (...args: unknown[]) => void;
         removeAnnotation: (...args: unknown[]) => void;
+        setUsj: (...args: unknown[]) => void;
       }>,
     ) {
       React.useImperativeHandle(ref, () => ({
         setAnnotation: setAnnotationSpy,
         removeAnnotation: removeAnnotationSpy,
+        setUsj: setUsjSpy,
       }));
       // D-008: capture the logger so tests can drive it as the editor would.
       lastEditorialLogger = props.logger;
@@ -149,6 +153,7 @@ beforeEach(() => {
     .forEach((node) => node.parentNode?.removeChild(node));
   setAnnotationSpy.mockClear();
   removeAnnotationSpy.mockClear();
+  setUsjSpy.mockClear();
   mockShowPopover.mockReset();
   mockShowPopover.mockResolvedValue('overlay-1');
   mockUpdatePopover.mockReset();
@@ -227,6 +232,90 @@ describe('EnhancedScripturePane', () => {
     expect(ENHANCED_SCRIPTURE_PANE_STRING_KEYS).toContain(
       '%enhancedResources_scripturePane_emptyTitle%',
     );
+  });
+
+  // D-012 (2026-05-16): ER scripture pane was stuck on the initially-loaded chapter when the
+  // wiring layer reloaded USJ after a BCV nav. Editorial reads `defaultUsj` only at mount time,
+  // so subsequent USJ prop changes must be pushed through the imperative `setUsj()` ref API.
+  describe('D-012 chapter-USJ sync on prop change', () => {
+    it('does not call setUsj on the initial mount (defaultUsj covers it)', () => {
+      const initialUsj = makeTestUsj(2);
+      render(
+        <EnhancedScripturePane
+          usj={initialUsj}
+          annotations={[]}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      // Editorial consumes the value via defaultUsj on mount; calling setUsj() once more would
+      // force a redundant Lexical re-init.
+      expect(setUsjSpy).not.toHaveBeenCalled();
+    });
+
+    it('pushes the new USJ through editor.setUsj() when the usj prop changes after mount', () => {
+      const initialUsj = makeTestUsj(2);
+      const { rerender } = render(
+        <EnhancedScripturePane
+          usj={initialUsj}
+          annotations={[]}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      expect(setUsjSpy).not.toHaveBeenCalled();
+
+      const newChapterUsj = makeTestUsj(5);
+      rerender(
+        <EnhancedScripturePane
+          usj={newChapterUsj}
+          annotations={[]}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+
+      expect(setUsjSpy).toHaveBeenCalledTimes(1);
+      expect(setUsjSpy).toHaveBeenCalledWith(newChapterUsj);
+    });
+
+    it('does not call setUsj when re-rendered with the same usj reference', () => {
+      const initialUsj = makeTestUsj(2);
+      const { rerender } = render(
+        <EnhancedScripturePane
+          usj={initialUsj}
+          annotations={[]}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      rerender(
+        <EnhancedScripturePane
+          usj={initialUsj}
+          annotations={[]}
+          highlightAllResearchTerms
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      // Unrelated prop change (highlightAllResearchTerms) must NOT trigger a redundant setUsj push.
+      expect(setUsjSpy).not.toHaveBeenCalled();
+    });
+
+    it('skips the setUsj push when the new usj is undefined (empty state takes over)', () => {
+      const initialUsj = makeTestUsj(2);
+      const { rerender } = render(
+        <EnhancedScripturePane
+          usj={initialUsj}
+          annotations={[]}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      rerender(
+        <EnhancedScripturePane
+          usj={undefined}
+          annotations={[]}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      // No Editorial to push to — the empty state renders instead.
+      expect(setUsjSpy).not.toHaveBeenCalled();
+    });
   });
 
   // D-008 regression: the Editorial-lib annotation resolver logs a noisy `error()` on every
