@@ -120,6 +120,29 @@ const STRINGS_BAG = {
 };
 
 /**
+ * D-013: drain a queue of stubbed requestAnimationFrame callbacks sequentially, yielding to
+ * microtasks twice between each. Callers stub `globalThis.requestAnimationFrame` with a push to the
+ * queue and call this helper to flush. The sequential drain is intentional — we mimic the browser's
+ * one-callback-per-frame ordering, and yielding to microtasks twice lets the async applyChunked()
+ * resume past its `await new Promise(RAF)` and enqueue the next iteration before the helper picks
+ * it up.
+ */
+async function drainRafQueue(queue: FrameRequestCallback[]): Promise<void> {
+  // Use a guarded shift in a while loop with proper handling of the `undefined` shift result.
+  // Sequential awaits are required for ordering (see helper docstring above).
+  /* eslint-disable no-await-in-loop */
+  while (queue.length > 0) {
+    const cb = queue.shift();
+    if (cb) {
+      cb(0);
+      await Promise.resolve();
+      await Promise.resolve();
+    }
+  }
+  /* eslint-enable no-await-in-loop */
+}
+
+/**
  * Build a minimal USJ fixture whose first paragraph has `count` text children. Annotation paths
  * shaped `$.content[0].content[N]` resolve to string leaves, so `annotationToRange` returns a valid
  * non-collapsed range for each.
@@ -315,6 +338,221 @@ describe('EnhancedScripturePane', () => {
       );
       // No Editorial to push to — the empty state renders instead.
       expect(setUsjSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  // D-013 (2026-05-16): D-012's setUsj path was racing the chunked-RAF annotation apply. The
+  // editor schedules its Lexical-tree rebuild on the next render, but Effect A / Effect C started
+  // setAnnotation calls SYNCHRONOUSLY after setUsj — yielding "Failed to find start or end node"
+  // misses in bulk and an intermittent renderer crash when the editor's queued update overlapped
+  // the LoadStatePlugin commit. Fix: defer the first chunk by one RAF after a USJ swap, AND
+  // capture a per-run "epoch" so a subsequent USJ swap aborts the in-flight chunked apply
+  // immediately (per-chunk and per-item) rather than waiting for the effect cleanup to flip
+  // `cancelled`.
+  describe('D-013 chunked-RAF apply coordination with setUsj', () => {
+    it('applies annotations synchronously on first mount (no RAF deferral)', () => {
+      // First mount: Editorial consumed `defaultUsj` synchronously, so the Lexical tree is
+      // already there. We must NOT defer the initial setAnnotation pass — that would regress
+      // first-paint latency for every ER pane open.
+      const annotations: MarbleAnnotation[] = [
+        {
+          usjPath: '$.content[0].content[1]',
+          kind: 'word',
+          annotationId: 'wg-mount-1',
+          metadata: {},
+        },
+      ];
+      render(
+        <EnhancedScripturePane
+          usj={makeTestUsj(3)}
+          annotations={annotations}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      // setAnnotation must fire synchronously inside the effect (no RAF wait) for the first
+      // chunk on mount — otherwise the test runs before the async applyChunked() reaches the
+      // setAnnotation call.
+      expect(setAnnotationSpy).toHaveBeenCalledTimes(1);
+      expect(setAnnotationSpy).toHaveBeenCalledWith(
+        expect.anything(),
+        'marble-word',
+        'wg-mount-1',
+        expect.any(Object),
+      );
+    });
+
+    it('defers the first chunk by one RAF when usj changes after mount', async () => {
+      // Setup: stub requestAnimationFrame so we can drive it deterministically. We have to
+      // restore it after the test so other tests (which use RAF for the chunk-yield) are not
+      // affected.
+      const rafSpy = vi.spyOn(globalThis, 'requestAnimationFrame');
+      const rafCallbacks: FrameRequestCallback[] = [];
+      rafSpy.mockImplementation((cb) => {
+        rafCallbacks.push(cb);
+        return rafCallbacks.length;
+      });
+
+      const initialUsj = makeTestUsj(3);
+      const annotations: MarbleAnnotation[] = [
+        {
+          usjPath: '$.content[0].content[1]',
+          kind: 'word',
+          annotationId: 'wg-001',
+          metadata: {},
+        },
+      ];
+      const { rerender } = render(
+        <EnhancedScripturePane
+          usj={initialUsj}
+          annotations={annotations}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      // Mount-time chunk: synchronous, no RAF needed.
+      expect(setAnnotationSpy).toHaveBeenCalledTimes(1);
+      setAnnotationSpy.mockClear();
+
+      // Now swap USJ. D-012 fires `editor.setUsj()` and D-013 sets the "just changed" flag so
+      // Effect A's next run defers its first chunk by one RAF.
+      const newChapterUsj = makeTestUsj(3);
+      const newChapterAnnotations: MarbleAnnotation[] = [
+        {
+          usjPath: '$.content[0].content[1]',
+          kind: 'word',
+          annotationId: 'wg-002',
+          metadata: {},
+        },
+      ];
+      rerender(
+        <EnhancedScripturePane
+          usj={newChapterUsj}
+          annotations={newChapterAnnotations}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+
+      // Effect A scheduled a RAF; setAnnotation must NOT have fired yet — that's the load-bearing
+      // safety property (we wait for the editor's setUsj-driven re-render to commit first).
+      expect(setAnnotationSpy).not.toHaveBeenCalled();
+      expect(rafCallbacks.length).toBeGreaterThanOrEqual(1);
+
+      // Flush the deferred RAF and yield to microtasks so applyChunked resumes past
+      // `await new Promise(RAF)`.
+      await drainRafQueue(rafCallbacks);
+
+      // Now setAnnotation fires against the new tree with the new annotation id.
+      expect(setAnnotationSpy).toHaveBeenCalledWith(
+        expect.anything(),
+        'marble-word',
+        'wg-002',
+        expect.any(Object),
+      );
+
+      rafSpy.mockRestore();
+    });
+
+    it('aborts an in-flight chunked apply when usj changes again before completion', async () => {
+      // This test simulates a fast double-nav (BCV nav fires twice while the first nav's
+      // chunked apply is still running). The epoch guard must abort the first apply so its
+      // stale setAnnotation calls don't hit the new tree.
+      const rafSpy = vi.spyOn(globalThis, 'requestAnimationFrame');
+      const rafCallbacks: FrameRequestCallback[] = [];
+      rafSpy.mockImplementation((cb) => {
+        rafCallbacks.push(cb);
+        return rafCallbacks.length;
+      });
+
+      const initialUsj = makeTestUsj(3);
+      const chapterAAnnotations: MarbleAnnotation[] = Array.from({ length: 3 }, (_, i) => ({
+        usjPath: `$.content[0].content[${i % 3}]`,
+        kind: 'word',
+        annotationId: `wg-A-${i}`,
+        metadata: {},
+      }));
+      const { rerender } = render(
+        <EnhancedScripturePane
+          usj={initialUsj}
+          annotations={chapterAAnnotations}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      // Mount: synchronous chunk fires for all 3 (one CHUNK_SIZE).
+      expect(setAnnotationSpy).toHaveBeenCalledTimes(3);
+      setAnnotationSpy.mockClear();
+
+      // First USJ swap → schedules a RAF for the deferred first chunk.
+      const chapterBUsj = makeTestUsj(3);
+      const chapterBAnnotations: MarbleAnnotation[] = Array.from({ length: 3 }, (_, i) => ({
+        usjPath: `$.content[0].content[${i % 3}]`,
+        kind: 'word',
+        annotationId: `wg-B-${i}`,
+        metadata: {},
+      }));
+      rerender(
+        <EnhancedScripturePane
+          usj={chapterBUsj}
+          annotations={chapterBAnnotations}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      expect(setAnnotationSpy).not.toHaveBeenCalled();
+
+      // Second USJ swap BEFORE we flush the first RAF — this bumps the epoch and the first
+      // apply must abort instead of touching the editor.
+      const chapterCUsj = makeTestUsj(3);
+      const chapterCAnnotations: MarbleAnnotation[] = Array.from({ length: 3 }, (_, i) => ({
+        usjPath: `$.content[0].content[${i % 3}]`,
+        kind: 'word',
+        annotationId: `wg-C-${i}`,
+        metadata: {},
+      }));
+      rerender(
+        <EnhancedScripturePane
+          usj={chapterCUsj}
+          annotations={chapterCAnnotations}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+
+      // Flush all RAFs that have been scheduled. The first-pass RAF was scheduled by Chapter B's
+      // applyChunked but Chapter C's rerender already incremented the epoch — that pass must NOT
+      // call setAnnotation. The second RAF was scheduled by Chapter C's applyChunked and SHOULD
+      // call setAnnotation for the chapter-C ids. Drain helper isolates the await-in-loop pattern
+      // (which is intentional here - we MUST flush sequentially to mimic browser frame ordering)
+      // out of the test body.
+      await drainRafQueue(rafCallbacks);
+
+      // Only chapter-C annotation ids must have fired — Chapter B's pass was aborted by the
+      // epoch guard before its first setAnnotation call.
+      const calledIds = setAnnotationSpy.mock.calls.map((call) => call[2]);
+      expect(calledIds.every((id) => typeof id === 'string' && id.startsWith('wg-C-'))).toBe(true);
+      expect(calledIds.length).toBeGreaterThan(0);
+      expect(calledIds.some((id) => typeof id === 'string' && id.startsWith('wg-B-'))).toBe(false);
+
+      rafSpy.mockRestore();
+    });
+
+    it('keeps the D-012 setUsj push working alongside the D-013 epoch+RAF coordination', () => {
+      // Regression guard: D-012's setUsj push must still fire on USJ swap. D-013 only adds
+      // coordination around the annotation-apply effects; it must not change the D-012 contract.
+      const initialUsj = makeTestUsj(2);
+      const { rerender } = render(
+        <EnhancedScripturePane
+          usj={initialUsj}
+          annotations={[]}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      const newChapterUsj = makeTestUsj(5);
+      rerender(
+        <EnhancedScripturePane
+          usj={newChapterUsj}
+          annotations={[]}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      expect(setUsjSpy).toHaveBeenCalledTimes(1);
+      expect(setUsjSpy).toHaveBeenCalledWith(newChapterUsj);
     });
   });
 

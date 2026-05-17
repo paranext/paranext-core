@@ -579,11 +579,32 @@ export function EnhancedScripturePane({
   // the imperative `editor.setUsj()` ref API. Skip the initial run because Editorial already has
   // the same value via `defaultUsj` - calling `setUsj` once more on mount would force a redundant
   // Lexical re-init. (Pattern mirrors `platform-scripture-editor/use-editor-pdp-sync.hook.ts`.)
+  //
+  // D-013 (2026-05-16): The setUsj call schedules an asynchronous Lexical-tree rebuild inside the
+  // editor (it calls a React state setter; the rebuild lands on the editor's next render). Effect A
+  // / Effect C run synchronously after this effect in declaration order, so without coordination
+  // they begin applying setAnnotation calls against the OLD Lexical tree while the new tree is
+  // still mounting. ~50-200 annotations per chapter then fail their node lookups in rapid burst
+  // (D-008 warns), and the race intermittently crashes the renderer when setAnnotation's queued
+  // editor.update overlaps the LoadStatePlugin's tree-rebuild commit. The fix has two parts:
+  //   1. usjEpochRef increments on every USJ swap. The annotation-apply effects capture the epoch
+  //      at the start of each run and abort (per-chunk and per-item) if it changes — even faster
+  //      than the existing `cancelled` flag, which only flips on effect cleanup.
+  //   2. usjJustChangedRef tells the annotation-apply effects to defer their first chunk by one
+  //      requestAnimationFrame, giving the editor's setUsj-driven re-render time to commit the new
+  //      Lexical tree before we hit it with setAnnotation. Mount-time application stays
+  //      synchronous (no deferral) because Editorial consumed `defaultUsj` and the tree is ready.
   const lastSyncedUsjRef = useRef<Usj | undefined>(usj);
+  const usjEpochRef = useRef(0);
+  const usjJustChangedRef = useRef(false);
   useEffect(() => {
     // First-mount: Editorial consumed `defaultUsj`. Record the value and skip the imperative push.
     if (lastSyncedUsjRef.current === usj) return;
     lastSyncedUsjRef.current = usj;
+    // D-013: bump the epoch so Effect A / Effect C runs from the prior chapter abort immediately,
+    // and signal that the next Effect A / Effect C run should defer its first chunk by one RAF.
+    usjEpochRef.current += 1;
+    usjJustChangedRef.current = true;
     const editor = editorRef.current;
     // When usj is undefined the component renders the empty state instead of Editorial, so there is
     // nothing to push. The next render with a defined usj will re-mount Editorial via `defaultUsj`.
@@ -855,39 +876,61 @@ export function EnhancedScripturePane({
       }, 50);
     };
 
+    // D-013: capture the epoch at effect-run start. If the USJ changes again before we finish,
+    // usjEpochRef.current advances and we abort the rest of this run.
+    const myEpoch = usjEpochRef.current;
+    // D-013: when usj just changed, defer the first chunk by one RAF so the editor's
+    // setUsj-driven Lexical re-render has a chance to commit before we apply setAnnotation calls
+    // against the new tree. On first mount Editorial consumed `defaultUsj` synchronously and the
+    // tree is already ready, so no deferral is needed there.
+    const shouldDeferFirstChunk = usjJustChangedRef.current;
+    usjJustChangedRef.current = false;
     const applyChunked = async () => {
+      if (shouldDeferFirstChunk) {
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => resolve());
+        });
+        if (cancelled || myEpoch !== usjEpochRef.current) return;
+      }
       for (let i = 0; i < wordAnnotations.length; i += CHUNK_SIZE) {
-        if (cancelled) return;
+        if (cancelled || myEpoch !== usjEpochRef.current) return;
         const slice = wordAnnotations.slice(i, i + CHUNK_SIZE);
-        slice.forEach((annotation) => {
+        // D-013: use a for-loop so we can re-check `cancelled` / epoch between items. Inside a
+        // chunk the editor's update queue can interleave with our setAnnotation calls, so an
+        // item-level abort tightens the race window from CHUNK_SIZE items down to 1. We bail out
+        // early via `return` if aborted; for annotations with no textual content we just log and
+        // skip to the next iteration via a no-op (no `continue` needed).
+        for (let j = 0; j < slice.length; j += 1) {
+          if (cancelled || myEpoch !== usjEpochRef.current) return;
+          const annotation = slice[j];
           const range = annotationToRange(annotation, usj);
           if (!range) {
             logger.info(
               `EnhancedScripturePane: skipping annotation with no textual content: id=${annotation.annotationId} usjPath=${annotation.usjPath}`,
             );
-            return;
+          } else {
+            const baseType = annotationTypeFor(annotation.kind);
+            editor.setAnnotation(range, baseType, annotation.annotationId, {
+              onClick: (event, _type, id, textContent) => {
+                const annotationForId = annotationsById.get(id);
+                if (!annotationForId) return;
+                const { onTokenClick: latestClick, onTokenContextMenu: latestContextMenu } =
+                  handlersRef.current;
+                if (event.button === RIGHT_MOUSE_BUTTON) {
+                  // Editorial gives us a DOM MouseEvent; consumers expect the React
+                  // MouseEvent surface (only `.button`, `.preventDefault()`, etc are
+                  // read), so a structural cast is correct.
+                  // eslint-disable-next-line no-type-assertion/no-type-assertion
+                  latestContextMenu(id, annotationForId, event as unknown as ReactMouseEvent);
+                } else {
+                  latestClick(id, annotationForId, textContent);
+                }
+              },
+              onMouseEnter: handleMarbleMouseEnter,
+              onMouseLeave: handleMarbleMouseLeave,
+            });
           }
-          const baseType = annotationTypeFor(annotation.kind);
-          editor.setAnnotation(range, baseType, annotation.annotationId, {
-            onClick: (event, _type, id, textContent) => {
-              const annotationForId = annotationsById.get(id);
-              if (!annotationForId) return;
-              const { onTokenClick: latestClick, onTokenContextMenu: latestContextMenu } =
-                handlersRef.current;
-              if (event.button === RIGHT_MOUSE_BUTTON) {
-                // Editorial gives us a DOM MouseEvent; consumers expect the React
-                // MouseEvent surface (only `.button`, `.preventDefault()`, etc are
-                // read), so a structural cast is correct.
-                // eslint-disable-next-line no-type-assertion/no-type-assertion
-                latestContextMenu(id, annotationForId, event as unknown as ReactMouseEvent);
-              } else {
-                latestClick(id, annotationForId, textContent);
-              }
-            },
-            onMouseEnter: handleMarbleMouseEnter,
-            onMouseLeave: handleMarbleMouseLeave,
-          });
-        });
+        }
         if (i + CHUNK_SIZE < wordAnnotations.length) {
           // Yield to the event loop so mousedown / setFocus / paint can run.
           // eslint-disable-next-line no-await-in-loop
@@ -979,15 +1022,26 @@ export function EnhancedScripturePane({
     const wordAnnotations = annotations.filter((a) => a.kind === 'word');
     let cancelled = false;
     const CHUNK_SIZE = 50;
+    // D-013: same epoch+RAF coordination as Effect A. Note this effect does NOT consume
+    // `usjJustChangedRef` (Effect A claims it once per usj swap to avoid double-deferring on a
+    // single swap that happens to also enable highlight-all). Effect C still aborts via the epoch
+    // guard if usj swaps mid-apply, which is the load-bearing safety property.
+    const myEpoch = usjEpochRef.current;
     const applyChunked = async () => {
       for (let i = 0; i < wordAnnotations.length; i += CHUNK_SIZE) {
-        if (cancelled) return;
+        if (cancelled || myEpoch !== usjEpochRef.current) return;
         const slice = wordAnnotations.slice(i, i + CHUNK_SIZE);
-        slice.forEach((a) => {
+        // D-013: per-item abort (same rationale as Effect A) - tightens the abort window from
+        // CHUNK_SIZE setAnnotation calls down to 1. `if (range)` instead of `if (!range) continue`
+        // to satisfy the no-continue style rule.
+        for (let j = 0; j < slice.length; j += 1) {
+          if (cancelled || myEpoch !== usjEpochRef.current) return;
+          const a = slice[j];
           const range = annotationToRange(a, usj);
-          if (!range) return;
-          editor.setAnnotation(range, ANNOTATION_TYPE_HIGHLIGHT, a.annotationId, {});
-        });
+          if (range) {
+            editor.setAnnotation(range, ANNOTATION_TYPE_HIGHLIGHT, a.annotationId, {});
+          }
+        }
         if (i + CHUNK_SIZE < wordAnnotations.length) {
           // Yield to the event loop so mousedown / setFocus / paint can run between chunks.
           // eslint-disable-next-line no-await-in-loop
