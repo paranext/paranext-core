@@ -1,8 +1,0 @@
-Flow 3 step 3 (footnote hover): SKIPPED in this dispatch.
-
-Reason: zero footnote markers in current ER scripture-pane DOM (`[class*="footnote"], sup, [data-marker="f"]` = 0). Two contributing factors:
-
-1. Default `showFootnotes` webview-state value is `false` (per enhanced-resource.web-view.tsx:1189), so footnote markers are not rendered in the scripture pane by default.
-2. D-012 (scripture pane stale at GEN 1) means even if footnotes were toggled on, we'd be looking at GEN 1 footnotes, not JHN 1's.
-
-To run this step properly, re-attempt after (a) D-012 is fixed (so scripture pane is at JHN 1) and (b) the hamburger menu is used to toggle `showFootnotes = true`. Flow 3 step 3 is therefore deferred to a future walkthrough cycle.
