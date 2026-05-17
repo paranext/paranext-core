@@ -22,6 +22,16 @@ import type { TooltipViewModel } from '../../presenters/tooltip-presenter';
 // references are stable - so assertions stay reliable.
 const setAnnotationSpy = vi.fn();
 const removeAnnotationSpy = vi.fn();
+// D-008: capture the logger that EnhancedScripturePane passes to <Editorial> so we can verify
+// the wrapper downgrades the "Failed to find start or end node of the annotation" error.
+let lastEditorialLogger:
+  | {
+      error: (...args: unknown[]) => void;
+      warn: (...args: unknown[]) => void;
+      info: (...args: unknown[]) => void;
+      debug: (...args: unknown[]) => void;
+    }
+  | undefined;
 
 // papi.overlays is an external boundary; mock it so unit tests can assert on
 // hover-lifecycle calls without spinning up the real overlay service.
@@ -37,7 +47,7 @@ vi.mock('@papi/frontend', () => ({
       dismissPopover: (...args: unknown[]) => mockDismissPopover(...args),
     },
   },
-  logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
+  logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
 // Network-object proxy mock. The component fetches the popover content through this proxy (no
@@ -64,7 +74,16 @@ beforeAll(() => {
 vi.mock('@eten-tech-foundation/platform-editor', () => {
   return {
     Editorial: React.forwardRef(function MockEditorial(
-      props: { defaultUsj?: unknown; options?: { isReadonly?: boolean } },
+      props: {
+        defaultUsj?: unknown;
+        options?: { isReadonly?: boolean };
+        logger?: {
+          error: (...args: unknown[]) => void;
+          warn: (...args: unknown[]) => void;
+          info: (...args: unknown[]) => void;
+          debug: (...args: unknown[]) => void;
+        };
+      },
       ref: React.Ref<{
         setAnnotation: (...args: unknown[]) => void;
         removeAnnotation: (...args: unknown[]) => void;
@@ -74,6 +93,8 @@ vi.mock('@eten-tech-foundation/platform-editor', () => {
         setAnnotation: setAnnotationSpy,
         removeAnnotation: removeAnnotationSpy,
       }));
+      // D-008: capture the logger so tests can drive it as the editor would.
+      lastEditorialLogger = props.logger;
       return (
         <div
           data-testid="mock-editorial"
@@ -206,6 +227,80 @@ describe('EnhancedScripturePane', () => {
     expect(ENHANCED_SCRIPTURE_PANE_STRING_KEYS).toContain(
       '%enhancedResources_scripturePane_emptyTitle%',
     );
+  });
+
+  // D-008 regression: the Editorial-lib annotation resolver logs a noisy `error()` on every
+  // annotation whose start/end node it cannot find in the freshly-mounted Lexical tree. We
+  // wrap the logger and downgrade just that one message to `debug`. Everything else (including
+  // unrelated errors) must still surface at the original level.
+  describe('D-008 logger wrapper (annotation-resolver miss suppression)', () => {
+    it('passes a logger prop to Editorial that downgrades the annotation-resolver miss to debug', async () => {
+      const papiModule = await import('@papi/frontend');
+      const papiLogger = papiModule.logger as {
+        error: ReturnType<typeof vi.fn>;
+        warn: ReturnType<typeof vi.fn>;
+        info: ReturnType<typeof vi.fn>;
+        debug: ReturnType<typeof vi.fn>;
+      };
+      papiLogger.error.mockClear();
+      papiLogger.debug.mockClear();
+      papiLogger.warn.mockClear();
+      papiLogger.info.mockClear();
+      lastEditorialLogger = undefined;
+
+      render(
+        <EnhancedScripturePane
+          usj={makeTestUsj(2)}
+          annotations={[]}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+
+      expect(lastEditorialLogger).toBeDefined();
+      // Simulate the editor lib's exact log call shape.
+      lastEditorialLogger!.error('Failed to find start or end node of the annotation.');
+
+      expect(papiLogger.error).not.toHaveBeenCalled();
+      expect(papiLogger.debug).toHaveBeenCalledTimes(1);
+      const debugMessage = papiLogger.debug.mock.calls[0]?.[0];
+      expect(String(debugMessage)).toContain('Failed to find start or end node of the annotation');
+    });
+
+    it('still surfaces unrelated editor errors at the original level', async () => {
+      const papiModule = await import('@papi/frontend');
+      const papiLogger = papiModule.logger as {
+        error: ReturnType<typeof vi.fn>;
+        warn: ReturnType<typeof vi.fn>;
+        debug: ReturnType<typeof vi.fn>;
+      };
+      papiLogger.error.mockClear();
+      papiLogger.debug.mockClear();
+      papiLogger.warn.mockClear();
+      lastEditorialLogger = undefined;
+
+      render(
+        <EnhancedScripturePane
+          usj={makeTestUsj(2)}
+          annotations={[]}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+
+      expect(lastEditorialLogger).toBeDefined();
+      lastEditorialLogger!.error('Some other editor error');
+      lastEditorialLogger!.warn('Unrelated warning');
+
+      // Unrelated error still goes to error, not debug.
+      expect(papiLogger.error).toHaveBeenCalledWith('Some other editor error');
+      expect(papiLogger.warn).toHaveBeenCalledWith('Unrelated warning');
+      // No annotation-resolver miss was logged, so debug must not be called for that reason.
+      const debugCallsForAnnotationMiss = papiLogger.debug.mock.calls.filter((args) =>
+        args.some(
+          (arg) => typeof arg === 'string' && arg.includes('Failed to find start or end node'),
+        ),
+      );
+      expect(debugCallsForAnnotationMiss).toHaveLength(0);
+    });
   });
 
   it('calls setAnnotation for each marble annotation when usj + annotations are supplied', () => {

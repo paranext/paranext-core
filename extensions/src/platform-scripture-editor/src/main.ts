@@ -384,9 +384,26 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
      * selection.
      */
     let currentSelection: ScriptureRangeUsjVerseRefChapterLocation | undefined;
-    /** Variable we will use to wait to get the first selection reported from the editor */
+    /**
+     * Variable we will use to wait to get the first selection reported from the editor.
+     *
+     * D-009 (2026-05-16): pass `-1` (no auto-timeout) instead of the AsyncVariable default of
+     * 10000ms. The default timeout produced an "Unhandled promise rejection" every time an editor
+     * took longer than 10s to report its first selection (common with large projects like OHEBGRK
+     * on initial open + the Enhanced Resource pane mounting alongside). Nothing in the codebase
+     * currently awaits this promise except the optional `getSelection()` controller method; that
+     * caller already pattern-matches on `hasSettled` and returns the promise, so an unbounded wait
+     * simply means callers wait for the actual first selection. On disposal the controller's
+     * `dispose()` rejects the variable cleanly with a "Disposed before first selection received"
+     * reason.
+     */
     const firstSelectionAsync: AsyncVariable<ScriptureRangeUsjVerseRefChapterLocation | undefined> =
-      new AsyncVariable(`platformScriptureEditor.selection.${currentWebViewDefinition.id}`);
+      new AsyncVariable(`platformScriptureEditor.selection.${currentWebViewDefinition.id}`, -1);
+    // Attach a no-op catch so that even if the underlying promise is later rejected (e.g., via
+    // dispose() before the editor reports a selection) the rejection is consumed and never
+    // surfaces as an "Unhandled promise rejection" in the extension host. Callers that explicitly
+    // request the selection still receive the rejection through their own await chain.
+    firstSelectionAsync.promise.catch(() => {});
     return {
       async selectRange(range) {
         try {

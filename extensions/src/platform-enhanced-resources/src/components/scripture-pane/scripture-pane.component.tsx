@@ -399,6 +399,53 @@ const EDITORIAL_OPTIONS = {
   view: { ...getDefaultViewOptions(), showCharMarkerTitles: false },
 } as const;
 
+/**
+ * D-008 (2026-05-16): Editorial's `setAnnotation` resolver (`_r` in the editor lib) walks the
+ * Lexical tree from a USJ jsonPath; when an intermediate node hasn't been mounted yet (or the wg
+ * marker's first-text descendant doesn't appear at the expected child slot) it returns `[void 0,
+ * void 0]` and the editor calls `logger.error("Failed to find start or end node of the
+ * annotation.")`. The annotation is silently skipped on its end - there is nothing for us to
+ * recover. ~50-200 of these fire per ER pane open / chapter change while we apply ~hundreds of
+ * marble-word annotations against freshly mounted USJ. Since the resolver's "no-op + log" is the
+ * editor's defined safe-fallback path, the log line is noise to us, not an actionable error.
+ *
+ * Cannot change the editor (yalc-pinned 0.8.15 per the stabilization charter), so we wrap the papi
+ * logger and downgrade exactly this one message to debug. Everything else from Editorial still
+ * surfaces at the original level.
+ */
+const FAILED_TO_FIND_ANNOTATION_MARKER = 'Failed to find start or end node of the annotation';
+
+function makeEditorialLogger(): {
+  error(...params: unknown[]): void;
+  warn(...params: unknown[]): void;
+  info(...params: unknown[]): void;
+  debug(...params: unknown[]): void;
+} {
+  const messageMatches = (params: unknown[]) =>
+    params.some(
+      (param) => typeof param === 'string' && param.includes(FAILED_TO_FIND_ANNOTATION_MARKER),
+    );
+  return {
+    error(...params) {
+      if (messageMatches(params)) {
+        // D-008: downgrade the editor's annotation-resolver miss to debug. Includes the
+        // original args so verbose logging still captures them when enabled.
+        logger.debug(`EnhancedScripturePane (D-008 suppressed): ${params.join(' ')}`);
+        return;
+      }
+      logger.error(...params);
+    },
+    warn: (...params) => logger.warn(...params),
+    info: (...params) => logger.info(...params),
+    debug: (...params) => logger.debug(...params),
+  };
+}
+
+// Module-level Editorial logger so we keep a stable identity for the prop. Editorial doesn't
+// document a hard requirement on logger identity, but other props in this component already
+// follow the stable-reference pattern (EDITORIAL_OPTIONS) to avoid forcing reconciliations.
+const EDITORIAL_LOGGER = makeEditorialLogger();
+
 // Module-level no-op defaults so omitting the callbacks does not generate a fresh
 // function identity on every render (which would falsely invalidate the annotation
 // effect's dependency array). Identity-stable defaults are the cheapest way to
@@ -998,7 +1045,7 @@ export function EnhancedScripturePane({
           ref={editorRef}
           defaultUsj={usj}
           scrRef={scrRef}
-          logger={logger}
+          logger={EDITORIAL_LOGGER}
           options={EDITORIAL_OPTIONS}
         />
         {filteredTokenId && (
