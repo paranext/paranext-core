@@ -23,6 +23,10 @@ import '@main/global-this.model';
 import '@node/utils/log-archiver.util';
 import { subscribeCurrentMacosMenubar } from '@main/platform-macos-menubar.util';
 import {
+  installStdioErrorListeners,
+  silenceConsoleTransportOnPipeError,
+} from '@main/stdio-resilience.util';
+import {
   APP_NAME,
   APP_URI_SCHEME,
   APP_VERSION,
@@ -199,6 +203,13 @@ const TITLE_BAR_BUTTON_BACKGROUND_COLOR = 'hsla(0, 0%, 100%, 0)'; // transparent
  */
 let willRestart = false;
 
+// Absorb stdio stream errors (EPIPE / ECONNRESET / ERR_STREAM_DESTROYED) on
+// process.stdout and process.stderr BEFORE any other logging happens, so a broken
+// parent pipe (electronmon detach, terminal idle-disconnect under WSL2) cannot
+// cascade into the uncaughtException path. See D-014 root cause analysis in
+// `stdio-resilience.util.ts`.
+installStdioErrorListeners(process.stdout, process.stderr);
+
 // Add unhandled exception and rejection handlers
 process.on('uncaughtException', (error) => {
   // Defensive: the logger itself can fail (e.g., EPIPE writing to a broken stdio pipe).
@@ -206,6 +217,8 @@ process.on('uncaughtException', (error) => {
   // the severity so we don't synthesize a recursive uncaught exception from logger.error.
   // See D-010: `write EPIPE` was caught here but logger.error to a broken stdio pipe
   // could then throw again with the same code, terminating the main process.
+  // D-014: also silence the console transport so subsequent log calls don't keep
+  // hammering the broken pipe and re-entering this handler in a tight loop.
   // Errors-as-objects carry a Node.js libuv `code` (e.g. 'EPIPE'); read it defensively
   // without asserting a Node-specific type so this stays compatible with bundlers that
   // strip Node globals.
@@ -214,6 +227,7 @@ process.on('uncaughtException', (error) => {
   const { code } = error as Error & { code?: string };
   const isTransientPipeError =
     code === 'EPIPE' || code === 'ECONNRESET' || code === 'ERR_STREAM_DESTROYED';
+  if (isTransientPipeError) silenceConsoleTransportOnPipeError(error);
   try {
     if (isTransientPipeError) {
       logger.warn(
@@ -228,6 +242,9 @@ process.on('uncaughtException', (error) => {
 });
 
 process.on('unhandledRejection', (reason) => {
+  // D-014: a rejected promise carrying an EPIPE-class error should also silence the
+  // console transport — otherwise the very next log.error below re-enters the broken pipe.
+  silenceConsoleTransportOnPipeError(reason);
   try {
     logger.error(`Unhandled promise rejection in main process, reason: ${getErrorMessage(reason)}`);
   } catch {
