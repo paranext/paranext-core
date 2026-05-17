@@ -1,0 +1,5 @@
+Flow 3 step 2 (phrase hover): SKIPPED.
+
+Reason: no phrase-class marble elements present in ER scripture pane (`[class*="marble-phrase"]` = 0, `mark[class*="phrase"]` = 0). The visible scripture text is stuck at GEN 1 ESV (see D-012 in flows-2-3-4-min-report.md) so the "phrase" annotation set for this passage simply isn't part of the rendered DOM. Skip per walkthrough-script.md Flow 3 Step 2 instruction: "Hover a phrase if available in chapter; otherwise note 'no phrase in chapter' and continue."
+
+Note: skip is partially confounded by D-012 - we are technically looking at GEN 1 marble annotations, not JHN 1's. Re-attempt Flow 3 step 2 once D-012 is fixed.
