@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Button,
   ContextMenu,
@@ -233,6 +233,22 @@ export function DictionaryEntryDetail({
 
   const hasAnyContent = Boolean(sourceText) || (senses && senses.length > 0);
 
+  // D-015: API may return multiple senses sharing the same `sense.id`. We need each rendered
+  // child to carry a unique React key, but we can't rely solely on the index (loses identity
+  // across reorder + violates react/no-array-index-key). Build a stable per-id occurrence
+  // suffix: first appearance of `id` keeps `id`; subsequent collisions become `id#2`, `id#3`,
+  // and so on. The mapping is recomputed only when the senses array reference changes, so
+  // reorder/replace within an entry payload still produces stable keys per (id, occurrence).
+  const senseKeys: string[] = useMemo(() => {
+    if (!senses) return [];
+    const seen = new Map<string, number>();
+    return senses.map((sense) => {
+      const count = (seen.get(sense.id) ?? 0) + 1;
+      seen.set(sense.id, count);
+      return count === 1 ? sense.id : `${sense.id}#${count}`;
+    });
+  }, [senses]);
+
   if (!hasAnyContent) {
     return (
       <div className="tw-flex tw-flex-col">
@@ -332,9 +348,9 @@ export function DictionaryEntryDetail({
             </label>
           </div>
           <div className="tw-flex tw-flex-col tw-gap-2">
-            {senses.map((sense) => (
+            {senses.map((sense, idx) => (
               <DictionarySenseItem
-                key={sense.id}
+                key={senseKeys[idx]}
                 sense={sense}
                 hideLessRelevant={hideLessRelevantSenses}
                 onSenseOccurrencesClick={onSenseOccurrencesClick}
