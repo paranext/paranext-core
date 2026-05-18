@@ -301,7 +301,7 @@
   "%project_settings_project_group1_description%": "Settings pertaining to the selected project",
   "%project_settings_project_group1_label%": "Project properties",
   "%redoButton_tooltip%": "Redo",
-  "%resourcePicker_button_use%": "Use",
+  "%resourcePicker_button_use%": "Include",
   "%resourcePicker_language_filter_any%": "Any language",
   "%resourcePicker_language_filter_multipleSelected%": "{selectCount} languages",
   "%resourcePicker_no_results%": "No results found",

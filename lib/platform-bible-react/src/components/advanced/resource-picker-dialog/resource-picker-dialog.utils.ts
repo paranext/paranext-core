@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 
 /**
- * Progressively renders a large list by slicing it into pages loaded on scroll.
+ * Tracks how many items from a large list should be visible, expanding the count as the user
+ * scrolls a sentinel element into view.
  *
  * Attach `sentinelRef` to a `<div>` placed **inside a scrollable container**, directly after the
  * last rendered item. Each time the sentinel enters the viewport, the next page is appended. When
@@ -34,8 +35,8 @@ export function useProgressiveList<T>(items: T[], pageSize = 50) {
       },
       { threshold: 0 },
     );
-    // el is always set in production (React commits refs before effects), but may be null
-    // in renderHook tests where no real DOM is mounted.
+    // The current element (`el`) is always set in production (React commits refs before effects),
+    // but may be null in renderHook tests where no real DOM is mounted.
     if (el) observer.observe(el);
     return () => observer.disconnect();
   }, [visibleCount, items.length, pageSize]);
