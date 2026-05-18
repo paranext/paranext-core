@@ -16,6 +16,9 @@ const RESOURCES_SCHEME = 'resources';
 const FILE_SCHEME = 'file';
 const PROTOCOL_PART = '://';
 
+/** Folder name used for the user's Platform.Bible data directory */
+const PRODUCT_FOLDER_NAME = 'platform.bible';
+
 /** Name of the directory in app that should be used to hold extension data */
 export const EXTENSION_DATA_DIR = 'extensions';
 /** Name of the directory in app where installed extensions live */
@@ -62,11 +65,11 @@ export function resolveHtmlPath(htmlFileName: string) {
  *
  * When running in development: `<repo_directory>/dev-appdata`
  *
- * When packaged: `<user_home_directory>/.{{ productInfo.name }}`
+ * When packaged: `<user_home_directory>/.platform.bible`
  */
 export const getAppDir = memoizeOne((): string => {
   return globalThis.isPackaged
-    ? path.join(os.homedir(), '/.platform.bible')
+    ? path.join(os.homedir(), `.${PRODUCT_FOLDER_NAME}`)
     : path.join(globalThis.resourcesPath, 'dev-appdata');
 });
 
