@@ -39,8 +39,8 @@ import {
   useProjectSetting,
   useScrollGroupScrRef,
   useRecentScriptureRefs,
-  useSetting,
 } from '@renderer/hooks/papi-hooks';
+import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
 import { getNetworkEvent, registerRequestHandler } from '@shared/services/network.service';
 import {
@@ -444,11 +444,7 @@ export function WebView({
     ),
   );
 
-  const [interfaceModePossiblyError] = useSetting('platform.interfaceMode', 'simple');
-  const isPowerMode = useMemo(() => {
-    if (isPlatformError(interfaceModePossiblyError)) return false;
-    return interfaceModePossiblyError === 'power';
-  }, [interfaceModePossiblyError]);
+  const isPowerMode = useIsPowerMode();
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
