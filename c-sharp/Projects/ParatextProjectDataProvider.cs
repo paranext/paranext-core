@@ -874,6 +874,16 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         }
     }
 
+    /// <summary>
+    /// Determines if the current user is an administrator of the project.
+    /// </summary>
+    /// <returns>True if the user is a administrator of the project, false otherwise</returns>
+    public bool IsCurrentUserAdministrator()
+    {
+        ScrText scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        return scrText.Permissions.AmAdministrator;
+    }
+
     #endregion
 
     private (Comment?, CommentThread?) FindCommentByIdWithThread(string commentId)
