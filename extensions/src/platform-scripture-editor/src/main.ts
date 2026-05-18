@@ -937,7 +937,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   // sync-settled events and attempts to fill the empty Scripture Editor with the
   // most-recently-active editable project. Re-runs on each subscribed event; concurrent
   // triggers coalesce into a single follow-up run.
-  const unsubFromWebViewOpen = startDefaultProjectPicker(papi);
+  const unsubFromDefaultProjectPicker = startDefaultProjectPicker(papi);
 
   // Await the registration promises at the end so we don't hold everything else up
   const markerNotifier = new MarkersViewNotifier(papi, context.executionToken);
@@ -955,7 +955,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await insertCommentPromise,
     await annotationStyleDataProviderPromise,
     selectionChangedEventEmitter,
-    unsubFromWebViewOpen,
+    unsubFromDefaultProjectPicker,
     ...markerNotifierUnsubscribers,
   );
 

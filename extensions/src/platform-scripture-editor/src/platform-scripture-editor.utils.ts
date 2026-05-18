@@ -8,6 +8,7 @@ import {
   formatReplacementString,
   getErrorMessage,
   isLocalizeKey,
+  isPlatformError,
   LanguageStrings,
   LocalizeKey,
   serialize,
@@ -498,10 +499,13 @@ export function resolveOpenEditorDispatch(
  *   registered yet, or the extension is absent). Expected steady state on Platform.Bible; expected
  *   transiently on paratext-10-studio during the window between platform-scripture-editor's
  *   activation and paratextBibleSendReceive's activation. The driver retries on subsequent
- *   web-view-open and sync-completion events. Logged at info, not warn — silent on Platform.Bible.
+ *   web-view-open and sync-completion events. Logged at debug, not warn — silent on
+ *   Platform.Bible.
  * - `'failed'` — the open command rejected; logged at warn. The driver may retry on the next trigger.
  * - `'no-candidate'` — S/R was reachable, but no shared project passed the activity / `editedStatus`
- *   filter. The driver may retry after a sync completes.
+ *   filter. Projects with `editedStatus` of `'new'` (not yet downloaded locally) or
+ *   `'unregistered'` (limited/provisional license) are excluded, as are projects with no
+ *   `lastSendReceiveDate`. The driver may retry after a sync completes.
  * - `'filled'` — the picker successfully called the open command for the top candidate.
  */
 export type DefaultProjectPickerOutcome =
@@ -514,7 +518,9 @@ export type DefaultProjectPickerOutcome =
 
 /**
  * Attempt to fill the empty Scripture Editor in the simple layout with the most-recently-active
- * project the current user has non-Observer permission on.
+ * shared project. Candidates come from `paratextBibleSendReceive.getSharedProjects`, which already
+ * excludes Observer-only projects for internet S/R (note: local-repository S/R does not filter by
+ * role, so an Observer-permission project may slip through in that path).
  *
  * Idempotent: each invocation re-reads the dock and the shared-projects list. The driver in
  * {@link startDefaultProjectPicker} is responsible for re-invoking on events that change those
@@ -527,6 +533,12 @@ export async function openDefaultActiveProjectIfApplicable(
   papi: typeof PapiBackend,
 ): Promise<DefaultProjectPickerOutcome> {
   const interfaceMode = await papi.settings.get('platform.interfaceMode');
+  if (isPlatformError(interfaceMode)) {
+    papi.logger.warn(
+      `Default active project picker: failed to read platform.interfaceMode (${getErrorMessage(interfaceMode)}); returning 'wrong-mode'`,
+    );
+    return 'wrong-mode';
+  }
   if (interfaceMode !== 'simple') return 'wrong-mode';
 
   const openWebViews = await papi.webViews.getAllOpenWebViewDefinitions();
@@ -554,9 +566,16 @@ export async function openDefaultActiveProjectIfApplicable(
     return 'no-send-receive';
   }
 
-  // ISO 8601 string comparison is chronologically sound, so a plain string compare suffices.
+  // Exclude `'new'` (not yet downloaded — can't be opened) and `'unregistered'` (limited/provisional
+  // license — surprising to auto-open as the default). ISO 8601 string comparison is chronologically
+  // sound, so a plain string compare suffices.
   const candidates = Object.values(sharedProjects)
-    .filter((info) => info.editedStatus !== 'new' && info.lastSendReceiveDate)
+    .filter(
+      (info) =>
+        info.editedStatus !== 'new' &&
+        info.editedStatus !== 'unregistered' &&
+        info.lastSendReceiveDate,
+    )
     .sort((a, b) => b.lastSendReceiveDate.localeCompare(a.lastSendReceiveDate));
 
   if (candidates.length === 0) return 'no-candidate';
@@ -600,20 +619,22 @@ export async function openDefaultActiveProjectIfApplicable(
  * Mirrors the simple-function pattern used in `home.web-view.tsx` rather than a class wrapper.
  */
 export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscriber {
-  let isRunning = false;
-  // Set when a trigger fires while a tryPicker call is in flight. The in-flight attempt may have
-  // observed stale inputs before the trigger materialized; the `finally` block re-fires once to
-  // close that race. Kept separate from `isRunning` because TypeScript's flow analysis cannot
-  // track concurrent state mutations across awaits.
-  let isRetryQueued = false;
+  // 'running-with-retry-queued' captures the case where a trigger fires while a tryPicker call is
+  // in flight. The in-flight attempt may have observed stale inputs before the trigger materialized;
+  // the `finally` block re-fires once to close that race. A single string union (rather than two
+  // booleans) makes the impossible 'idle + retry-queued' combination unrepresentable; see
+  // Code-Style-Guide.md "Prefer string unions over multiple interdependent booleans".
+  let pickerState: 'idle' | 'running' | 'running-with-retry-queued' = 'idle';
+  // Read via a helper to defeat TypeScript's flow narrowing — the listeners below can mutate
+  // pickerState concurrently across awaits, which TS's flow analysis can't model.
+  const getPickerState = () => pickerState;
 
   const tryPicker = async (): Promise<void> => {
-    if (isRunning) {
-      isRetryQueued = true;
+    if (pickerState !== 'idle') {
+      pickerState = 'running-with-retry-queued';
       return;
     }
-    isRunning = true;
-    isRetryQueued = false;
+    pickerState = 'running';
     try {
       await openDefaultActiveProjectIfApplicable(papi);
     } catch (e) {
@@ -623,8 +644,16 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
         `Default active project picker: tryPicker threw unexpectedly: ${getErrorMessage(e)}`,
       );
     } finally {
-      isRunning = false;
-      if (isRetryQueued) tryPicker();
+      const wasRetryQueued = getPickerState() === 'running-with-retry-queued';
+      pickerState = 'idle';
+      // Fire-and-forget follow-up to close the race window. `tryPicker` catches its own errors,
+      // so the `.catch` here is defensive against a future change that could leak a rejection.
+      if (wasRetryQueued)
+        tryPicker().catch((e) =>
+          papi.logger.warn(
+            `Default active project picker: coalesced retry threw unexpectedly: ${getErrorMessage(e)}`,
+          ),
+        );
     }
   };
 
@@ -636,15 +665,11 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
     tryPicker();
   });
 
-  const unsubFromSync = papi.network.getNetworkEvent('paratextBibleSendReceive.onSyncStateChanged')(
-    (event: unknown) => {
-      // PAPI network-event payloads are typed `unknown`; the `paratextBibleSendReceive.onSyncStateChanged`
-      // contract is `{ isSyncing: boolean }` (see usage in platform-get-resources/home.web-view.tsx).
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const { isSyncing } = event as { isSyncing: boolean };
-      if (!isSyncing) tryPicker();
-    },
-  );
+  const unsubFromSync = papi.network.getNetworkEvent<{ isSyncing: boolean }>(
+    'paratextBibleSendReceive.onSyncStateChanged',
+  )(({ isSyncing }) => {
+    if (!isSyncing) tryPicker();
+  });
 
   // Cover the case where the empty editor and an eligible synced project are already in place
   // (e.g., second startup after a successful first run).
