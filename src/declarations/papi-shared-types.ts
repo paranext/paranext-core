@@ -112,6 +112,13 @@ declare module 'papi-shared-types' {
     // `extension-host.ts`
     'test.addMany': (...nums: number[]) => number;
     'test.throwErrorExtensionHost': (message: string) => void;
+
+    // These commands are provided in `extension.service.ts`.
+    /**
+     * Get the names of all extensions bundled with (in-repo to) Platform.Bible. Extensions whose
+     * names are not in this list are user-installed (third-party).
+     */
+    'platform.getBundledExtensionNames': () => Promise<string[]>;
   }
 
   /**

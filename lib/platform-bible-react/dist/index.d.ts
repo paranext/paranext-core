@@ -1080,34 +1080,73 @@ export type ProjectInfo = {
 	projectId: string;
 	projectName: string;
 };
+/** A single entry rendered inside a sidebar section. */
+export type SettingsSidebarItem = {
+	/** Stable identifier; unique within a section. */
+	id: string;
+	/** Display label (already localized by the caller). */
+	label: string;
+	/** Visually demote and label the item as a placeholder (e.g., "Coming soon"). */
+	isComingSoon?: boolean;
+};
+/** A section in the generalized sidebar. */
+export type SettingsSidebarSection = {
+	/** Stable identifier for the section. Used as the `sectionId` of the selected entry. */
+	id: string;
+	/** Group label (already localized). */
+	label: string;
+	/** Optional element rendered above the items in the section (e.g., a project picker). */
+	header?: React$1.ReactNode;
+	/** Menu items in display order. */
+	items: ReadonlyArray<SettingsSidebarItem>;
+};
+/** Identifies which item is currently selected. */
+export type SelectedSidebarEntry = {
+	sectionId: string;
+	itemId: string;
+};
 export type SettingsSidebarProps = {
 	/** Optional id for testing */
 	id?: string;
-	/** Extension labels from contribution */
-	extensionLabels: Record<string, string>;
-	/** Project names and ids */
-	projectInfo: ProjectInfo[];
-	/** Handler for selecting a sidebar item */
-	handleSelectSidebarItem: (key: string, projectId?: string) => void;
-	/** The current selected value in the sidebar */
-	selectedSidebarItem: SelectedSettingsSidebarItem;
-	/** Label for the group of extensions setting groups */
-	extensionsSidebarGroupLabel: string;
-	/** Label for the group of projects settings */
-	projectsSidebarGroupLabel: string;
-	/** Placeholder text for the button */
-	buttonPlaceholderText: string;
 	/** Additional css classes to help with unique styling of the sidebar */
 	className?: string;
+	/** Sections to render in order. */
+	sections?: ReadonlyArray<SettingsSidebarSection>;
+	/** Currently selected entry (used with `sections`). */
+	selectedEntry?: SelectedSidebarEntry;
+	/** Called when the user clicks a menu item (used with `sections`). */
+	onSelectEntry?: (entry: SelectedSidebarEntry) => void;
+	/** Extension labels from contribution */
+	extensionLabels?: Record<string, string>;
+	/** Project names and ids */
+	projectInfo?: ProjectInfo[];
+	/** Handler for selecting a sidebar item */
+	handleSelectSidebarItem?: (key: string, projectId?: string) => void;
+	/** The current selected value in the sidebar */
+	selectedSidebarItem?: SelectedSettingsSidebarItem;
+	/** Label for the group of extensions setting groups */
+	extensionsSidebarGroupLabel?: string;
+	/** Label for the group of projects settings */
+	projectsSidebarGroupLabel?: string;
+	/** Placeholder text for the button */
+	buttonPlaceholderText?: string;
 };
 /**
- * The SettingsSidebar component is a sidebar that displays a list of extension settings and project
- * settings. It can be used to navigate to different settings pages. Must be wrapped in a
- * SidebarProvider component otherwise produces errors.
+ * The SettingsSidebar component is a sidebar that displays setting navigation entries. Must be
+ * wrapped in a SidebarProvider component otherwise produces errors.
  *
- * @param props - {@link SettingsSidebarProps} The props for the component.
+ * Two prop shapes are supported:
+ *
+ * - The generalized shape (`sections` + `selectedEntry` + `onSelectEntry`) accepts an arbitrary
+ *   ordered list of sections, each optionally with a header element (e.g., a combo box) above its
+ *   menu items.
+ * - The legacy shape (`extensionLabels` + `projectInfo` + ...) renders exactly two groups:
+ *   extensions as menu items and projects as a combo box. Existing consumers continue to work
+ *   without changes.
+ *
+ * New code should prefer the generalized shape.
  */
-export declare function SettingsSidebar({ id, extensionLabels, projectInfo, handleSelectSidebarItem, selectedSidebarItem, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, className, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
+export declare function SettingsSidebar(props: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
 type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.PropsWithChildren & {
 	/** The search query in the search bar */
 	searchValue: string;
@@ -1122,6 +1161,94 @@ type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.PropsWit
  * @param {string} props.id - The id of the sidebar.
  */
 export declare function SettingsSidebarContentSearch({ id, extensionLabels, projectInfo, children, handleSelectSidebarItem, selectedSidebarItem, searchValue, onSearch, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
+export type SettingsLayoutSectionId = "project" | "general" | "extensions";
+/** A dynamic sidebar item whose right-panel content is rendered by the consumer. */
+export type DynamicSettingsSidebarItem = {
+	kind: "dynamic";
+	id: string;
+	label: string;
+};
+/** A sidebar item with no real content yet; selecting it shows the Coming Soon panel. */
+export type ComingSoonSettingsSidebarItem = {
+	kind: "coming-soon";
+	id: string;
+	label: string;
+};
+export type SettingsLayoutItem = DynamicSettingsSidebarItem | ComingSoonSettingsSidebarItem;
+export type SettingsLayoutProjectInfo = {
+	projectId: string;
+	projectName: string;
+};
+export type SettingsLayoutLabels = {
+	/** Group label for the Project section. */
+	projectSection: string;
+	/** Group label for the General section. */
+	generalSection: string;
+	/** Group label for the Extensions section. */
+	extensionsSection: string;
+	/** Title shown in the Coming Soon panel. */
+	comingSoonTitle: string;
+	/** Body shown in the Coming Soon panel. */
+	comingSoonBody: string;
+	/** Placeholder text for the search bar. */
+	searchPlaceholder: string;
+	/** Placeholder shown in the project picker when no project is selected. */
+	projectPickerPlaceholder: string;
+};
+export type SettingsLayoutSelection = {
+	section: SettingsLayoutSectionId;
+	itemId: string;
+};
+export type SettingsLayoutProps = React$1.PropsWithChildren<{
+	/** Optional id (for testing / story isolation). */
+	id?: string;
+	/** Additional className applied to the outer wrapper. */
+	className?: string;
+	projectOptions: ReadonlyArray<SettingsLayoutProjectInfo>;
+	selectedProjectId: string | undefined;
+	onSelectProject: (projectId: string) => void;
+	/** When true, the project picker is locked (e.g., dialog scoped to a single project). */
+	isProjectLocked?: boolean;
+	projectSectionItems: ReadonlyArray<SettingsLayoutItem>;
+	generalSectionItems: ReadonlyArray<DynamicSettingsSidebarItem>;
+	extensionsSectionItems: ReadonlyArray<DynamicSettingsSidebarItem>;
+	selectedEntry: SettingsLayoutSelection | undefined;
+	onSelectEntry: (entry: SettingsLayoutSelection) => void;
+	searchValue: string;
+	onSearch: (q: string) => void;
+	labels: SettingsLayoutLabels;
+	/**
+	 * Right-panel content. The caller decides what to render based on the current selection. When the
+	 * selected entry is a Coming Soon item, the layout substitutes the ComingSoonPanel and ignores
+	 * this slot.
+	 */
+	children?: React$1.ReactNode;
+}>;
+/**
+ * Pure presentational shell for the application Settings dialog. Renders:
+ *
+ * 1. A top search bar.
+ * 2. A sidebar with three sections: Project (with a project picker header), General, Extensions.
+ * 3. A right-hand content panel that hosts either consumer-provided content (`children`) or a
+ *    "Coming soon" placeholder when the selected sidebar item is hard-coded.
+ *
+ * No PAPI, no extension service, no project lookup — all data and callbacks are passed in. This
+ * makes the component Storybook-testable in isolation.
+ */
+export declare function SettingsLayout({ id, className, projectOptions, selectedProjectId, onSelectProject, isProjectLocked, projectSectionItems, generalSectionItems, extensionsSectionItems, selectedEntry, onSelectEntry, searchValue, onSearch, labels, children, }: SettingsLayoutProps): import("react/jsx-runtime").JSX.Element;
+export type ComingSoonPanelProps = {
+	/** Already-localized title. */
+	title: string;
+	/** Already-localized body text. */
+	body: string;
+	/** Optional className passed to the root container. */
+	className?: string;
+};
+/**
+ * Placeholder right-panel content shown when a settings entry has been laid out in the sidebar but
+ * the actual settings UI for it has not been ported yet.
+ */
+export declare function ComingSoonPanel({ title, body, className }: ComingSoonPanelProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Information (e.g., a checking error or some other type of "transient" annotation) about something
  * noteworthy at a specific place in an instance of the Scriptures.
