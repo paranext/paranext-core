@@ -66,11 +66,14 @@ declare module 'papi-shared-types' {
     'platformGetResources.isSendReceiveAvailable': () => Promise<boolean | undefined>;
 
     /**
-     * Returns the cached list of DBL resources, fetching on demand if the cache is empty.
+     * Returns DBL resources from memory cache.
      *
-     * @returns Cached DBL resources, or `undefined` if unavailable (credentials not configured or
-     *   fetch failed)
+     * If no cached value exists, attempts to fetch them. Failed refresh attempts do NOT clear
+     * existing cached data.
+     *
+     * @returns Cached DBL resources, or `undefined` if none have been successfully fetched.
      */
+
     'platformGetResources.getCachedResources': () => Promise<DblResourceData[] | undefined>;
 
     /**
