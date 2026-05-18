@@ -206,7 +206,7 @@ export const ScrollGroupBinding: Story = {
         />
         <button
           type="button"
-          className="tw:rounded tw:border tw:px-2 tw:py-1 tw:text-xs"
+          className="tw:rounded tw:border tw:border-border tw:px-2 tw:py-1 tw:text-xs"
           onClick={() =>
             setOpenTabs((tabs) =>
               tabs.filter(
