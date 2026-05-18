@@ -319,7 +319,7 @@ export function ManageBooksSidebar({
               'tw:flex tw:items-start tw:gap-3 tw:rounded-md tw:px-3 tw:py-2 tw:text-start tw:text-sm tw:transition-colors',
               !disabled && 'tw:hover:bg-accent tw:hover:text-accent-foreground',
               !disabled &&
-                'tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring',
+                'tw:focus-visible:outline-hidden tw:focus-visible:ring-2 tw:focus-visible:ring-ring',
               isActive && 'tw:bg-accent tw:font-medium tw:text-accent-foreground',
               disabled && 'tw:cursor-not-allowed tw:opacity-50',
             )}

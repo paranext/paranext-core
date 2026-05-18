@@ -708,7 +708,7 @@ export function ChecklistTool({
       <section
         aria-label={getLocalizedString('%markersChecklist_table_aria%')}
         aria-busy={isLoading}
-        className="tw:m-1 tw:flex-1 tw:overflow-auto tw:rounded-md tw:border"
+        className="tw:m-1 tw:flex-1 tw:overflow-auto tw:rounded-md tw:border tw:border-border"
         data-testid="checklist-data-table"
       >
         <DataTable

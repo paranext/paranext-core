@@ -105,7 +105,7 @@ export type BookGridItem = {
  * consistent.
  */
 const BOOK_PILL_BASE_CLASS =
-  'tw:flex tw:w-full tw:items-center tw:gap-2 tw:rounded tw:border tw:px-2 tw:py-1 tw:text-start';
+  'tw:flex tw:w-full tw:items-center tw:gap-2 tw:rounded tw:border tw:border-border tw:px-2 tw:py-1 tw:text-start';
 
 /**
  * Compose the pill's color/border classes for a given `present` flag. In-project (`present`) books
@@ -270,7 +270,7 @@ export function BookGridGroupByToggle({
     groupBy: localizedStrings?.groupByLabel ?? 'Group by',
   };
   const itemClass =
-    'tw:h-6 tw:px-2 tw:text-xs tw:data-[state=on]:!bg-background tw:data-[state=on]:shadow-sm';
+    'tw:h-6 tw:px-2 tw:text-xs tw:data-[state=on]:!bg-background tw:data-[state=on]:shadow-xs';
   return (
     <div className="tw:flex tw:shrink-0 tw:items-center tw:gap-2" data-testid="book-grid-groupby">
       <Label className="tw:hidden tw:shrink-0 tw:text-xs tw:text-muted-foreground tw:[@media(min-width:640px)]:block">
@@ -732,7 +732,7 @@ export function BookGridSelector({
         onFocus={() => setFocusedIndex(flatIndex)}
         className={cn(
           bookPillClasses(item.present),
-          'tw:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:ring-offset-1',
+          'tw:outline-hidden tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:ring-offset-1',
           isSelected && 'tw:text-accent-foreground',
           item.disabled && 'tw:cursor-not-allowed tw:opacity-50',
         )}
