@@ -105,7 +105,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(("canUserAssignThread", CanUserAssignThread));
         retVal.Add(("canUserResolveThread", CanUserResolveThread));
         retVal.Add(("canUserEditOrDeleteComment", CanUserEditOrDeleteComment));
-        retVal.Add(("isCurrentUserAdministrator", IsCurrentUserAdministrator));
 
         retVal.Add(("getSetting", GetProjectSetting));
         retVal.Add(("setSetting", SetProjectSetting));
@@ -124,6 +123,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(
             ("resetUserReferencedProjectsAndResources", ResetUserReferencedProjectsAndResources)
         );
+        retVal.Add(("canUserWriteProjectSettings", CanUserWriteProjectSettings));
 
         retVal.Add(("getMarkerNames", GetMarkerNames));
 
@@ -875,16 +875,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         }
     }
 
-    /// <summary>
-    /// Determines if the current user is an administrator of the project.
-    /// </summary>
-    /// <returns>True if the user is a administrator of the project, false otherwise</returns>
-    public bool IsCurrentUserAdministrator()
-    {
-        ScrText scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
-        return scrText.Permissions.AmAdministrator;
-    }
-
     #endregion
 
     private (Comment?, CommentThread?) FindCommentByIdWithThread(string commentId)
@@ -1341,6 +1331,17 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             ProjectSettingsService.GetDefault(PapiClient, settingName)
             ?? throw new InvalidDataException($"Default value for {settingName} was null");
         return SetProjectSetting(settingName, defaultValue);
+    }
+
+    /// <summary>
+    /// Determines if the current user can write to the project settings (is the current user an
+    /// administrator).
+    /// </summary>
+    /// <returns>True if the user can write the project settings, false otherwise</returns>
+    public bool CanUserWriteProjectSettings()
+    {
+        ScrText scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        return scrText.Permissions.AmAdministrator;
     }
 
     public ResourceReferenceList GetUserModelTexts()

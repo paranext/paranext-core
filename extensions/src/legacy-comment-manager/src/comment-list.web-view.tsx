@@ -18,6 +18,7 @@ import {
   useLocalizedStrings,
   useProjectData,
   useProjectDataProvider,
+  useSetting,
   useWebViewController,
 } from '@papi/frontend/react';
 import { isPlatformError, LegacyCommentThread, serialize } from 'platform-bible-utils';
