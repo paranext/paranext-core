@@ -526,75 +526,43 @@ export type DefaultProjectPickerOutcome =
 export async function openDefaultActiveProjectIfApplicable(
   papi: typeof PapiBackend,
 ): Promise<DefaultProjectPickerOutcome> {
-  // TEMP DIAGNOSTIC LOGGING — remove or downgrade to `debug` once PT-3958 picker bug is diagnosed.
-  papi.logger.info('Default active project picker: picker invoked');
-
   const interfaceMode = await papi.settings.get('platform.interfaceMode');
-  if (interfaceMode !== 'simple') {
-    papi.logger.info(
-      `Default active project picker: interfaceMode=${serialize(interfaceMode)}, returning 'wrong-mode'`,
-    );
-    return 'wrong-mode';
-  }
+  if (interfaceMode !== 'simple') return 'wrong-mode';
 
   const openWebViews = await papi.webViews.getAllOpenWebViewDefinitions();
-  const scriptureEditors = openWebViews.filter(
-    (def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+  const emptyEditor = openWebViews.find(
+    (def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && !def.projectId,
   );
-  const emptyEditor = scriptureEditors.find((def) => !def.projectId);
-  if (!emptyEditor) {
-    papi.logger.info(
-      `Default active project picker: no empty Scripture Editor in dock; scriptureEditorCount=${scriptureEditors.length}, projectIds=${serialize(scriptureEditors.map((def) => def.projectId))}`,
-    );
-    return 'no-empty';
-  }
+  if (!emptyEditor) return 'no-empty';
 
   // Try `paratextBibleSendReceive.getSharedProjects` directly. If S/R hasn't activated yet (cold
   // start, picker fires inside `platformScriptureEditor.activate()` before `paratextBibleSendReceive`
   // registers commands) or isn't installed at all (Platform.Bible), this rejects and we return
-  // `'no-send-receive'`. The driver's existing `webViewOpen` / `syncSettled` triggers handle the
-  // retry once S/R is ready — we do NOT block here. paratextBibleSendReceive does not register a
-  // network object, so PAPI's `waitForNetworkObject` is not a usable readiness signal. See PT-3958.
+  // `'no-send-receive'`. The driver's existing triggers handle the retry once S/R is ready — we
+  // do NOT block here. paratextBibleSendReceive does not register a network object, so PAPI's
+  // `waitForNetworkObject` is not a usable readiness signal. See PT-3958.
   let sharedProjects: SharedProjectsInfo;
   try {
     sharedProjects = await papi.commands.sendCommand('paratextBibleSendReceive.getSharedProjects');
   } catch (e) {
-    // TEMP DIAGNOSTIC LOGGING — keep at `info` for the verification cycle of PT-3958, then
-    // downgrade to `debug` or remove (kept consistent with the other temp-diagnostic lines in this
-    // function added in f28085ed20). Silent (info, not warn) because this is the expected steady
-    // state on Platform.Bible.
-    papi.logger.info(
+    // Expected steady state on Platform.Bible (S/R absent) and transient on paratext-10-studio
+    // cold start. Debug-level — info would be noisy because this fires on every picker run on
+    // Platform.Bible.
+    papi.logger.debug(
       `Default active project picker: getSharedProjects unavailable; returning 'no-send-receive' (${getErrorMessage(e)})`,
     );
     return 'no-send-receive';
   }
 
   // ISO 8601 string comparison is chronologically sound, so a plain string compare suffices.
-  const rawEntries = Object.values(sharedProjects);
-  const candidates = rawEntries
+  const candidates = Object.values(sharedProjects)
     .filter((info) => info.editedStatus !== 'new' && info.lastSendReceiveDate)
     .sort((a, b) => b.lastSendReceiveDate.localeCompare(a.lastSendReceiveDate));
 
-  if (candidates.length === 0) {
-    const sample = rawEntries[0];
-    papi.logger.info(
-      `Default active project picker: getSharedProjects returned ${rawEntries.length}, postFilter=0; sample raw entry=${serialize(
-        sample
-          ? {
-              id: sample.id,
-              editedStatus: sample.editedStatus,
-              lastSendReceiveDate: sample.lastSendReceiveDate,
-            }
-          : undefined,
-      )}`,
-    );
-    return 'no-candidate';
-  }
+  if (candidates.length === 0) return 'no-candidate';
 
   const top = candidates[0];
-  papi.logger.info(
-    `Default active project picker: opening project=${top.id} lastSendReceiveDate=${top.lastSendReceiveDate} (rawN=${rawEntries.length}, postFilter=${candidates.length})`,
-  );
+  papi.logger.info(`Default active project picker: opening project=${top.id}`);
   try {
     await papi.commands.sendCommand('platformScriptureEditor.openScriptureEditor', top.id);
   } catch (e) {
@@ -639,7 +607,7 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
   // track concurrent state mutations across awaits.
   let isRetryQueued = false;
 
-  const tryPicker = async (triggerSource: string): Promise<void> => {
+  const tryPicker = async (): Promise<void> => {
     if (isRunning) {
       isRetryQueued = true;
       return;
@@ -647,8 +615,6 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
     isRunning = true;
     isRetryQueued = false;
     try {
-      // TEMP DIAGNOSTIC LOGGING — remove or downgrade once PT-3958 picker bug is diagnosed.
-      papi.logger.info(`Default active project picker: tryPicker triggered: ${triggerSource}`);
       await openDefaultActiveProjectIfApplicable(papi);
     } catch (e) {
       // `openDefaultActiveProjectIfApplicable` catches its own errors and returns 'failed'; this
@@ -658,16 +624,16 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
       );
     } finally {
       isRunning = false;
-      if (isRetryQueued) tryPicker('coalesced-retry');
+      if (isRetryQueued) tryPicker();
     }
   };
 
   const unsubFromWebViewOpen = papi.webViews.onDidOpenWebView(() => {
-    tryPicker('webViewOpen');
+    tryPicker();
   });
 
   const unsubFromWebViewUpdate = papi.webViews.onDidUpdateWebView(() => {
-    tryPicker('webViewUpdate');
+    tryPicker();
   });
 
   const unsubFromSync = papi.network.getNetworkEvent('paratextBibleSendReceive.onSyncStateChanged')(
@@ -676,13 +642,13 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
       // contract is `{ isSyncing: boolean }` (see usage in platform-get-resources/home.web-view.tsx).
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const { isSyncing } = event as { isSyncing: boolean };
-      if (!isSyncing) tryPicker('syncSettled');
+      if (!isSyncing) tryPicker();
     },
   );
 
   // Cover the case where the empty editor and an eligible synced project are already in place
   // (e.g., second startup after a successful first run).
-  tryPicker('initial');
+  tryPicker();
 
   return aggregateUnsubscribers([unsubFromWebViewOpen, unsubFromWebViewUpdate, unsubFromSync]);
 }

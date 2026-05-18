@@ -413,6 +413,7 @@ interface PickerMocks {
   mockSendCommand: ReturnType<typeof vi.fn>;
   mockWarn: ReturnType<typeof vi.fn>;
   mockInfo: ReturnType<typeof vi.fn>;
+  mockDebug: ReturnType<typeof vi.fn>;
   /** Synthesize a `webViews.onDidOpenWebView` event from within a test. */
   fireWebViewOpen: () => void;
   /** Synthesize a `webViews.onDidUpdateWebView` event from within a test. */
@@ -433,6 +434,7 @@ function createPickerMocks(): PickerMocks {
   const mockSendCommand = vi.fn();
   const mockWarn = vi.fn();
   const mockInfo = vi.fn();
+  const mockDebug = vi.fn();
 
   // The driver subscribes to these events; we capture each listener so tests can drive events.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -484,7 +486,7 @@ function createPickerMocks(): PickerMocks {
     },
     commands: { sendCommand: mockSendCommand },
     network: { getNetworkEvent: mockGetNetworkEvent },
-    logger: { warn: mockWarn, info: mockInfo },
+    logger: { warn: mockWarn, info: mockInfo, debug: mockDebug },
   } as unknown as typeof PapiBackend;
 
   return {
@@ -494,6 +496,7 @@ function createPickerMocks(): PickerMocks {
     mockSendCommand,
     mockWarn,
     mockInfo,
+    mockDebug,
     fireWebViewOpen: () => {
       if (!webViewOpenListener) throw new Error('fireWebViewOpen: no listener captured');
       webViewOpenListener({});
