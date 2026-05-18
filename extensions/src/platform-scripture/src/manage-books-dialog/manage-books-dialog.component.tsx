@@ -342,7 +342,7 @@ function DisabledStubButtonTooltip({
 }) {
   return (
     <>
-      <span id={hintId} className="tw-sr-only">
+      <span id={hintId} className="tw:sr-only">
         {tooltipText}
       </span>
       <Tooltip>
@@ -1764,7 +1764,7 @@ export function ManageBooksDialog({
           it conditionally swaps class sets. */}
       <div
         ref={dialogRootRef}
-        className="tw-flex tw-h-full tw-min-h-0"
+        className="tw:flex tw:h-full tw:min-h-0"
         data-testid="manage-books-dialog"
         data-action={action}
         data-narrow={dialogIsNarrow ? 'true' : undefined}
@@ -1795,7 +1795,7 @@ export function ManageBooksDialog({
                 {/* Header subtitle hides when the dialog is narrow (Sebastian #6/#42).
                     Driven by the JS-resize-observer flag on the dialog root. */}
                 {!dialogIsNarrow && (
-                  <p className="tw-text-xs tw-text-muted-foreground">{headerSubtitle}</p>
+                  <p className="tw:text-xs tw:text-muted-foreground">{headerSubtitle}</p>
                 )}
               </div>
             </header>
@@ -2030,12 +2030,12 @@ export function ManageBooksDialog({
                 onSearch={setFilter}
                 placeholder={t('%manageBooks_filter_placeholder%', 'Filter books…')}
                 // Sebastian review item 37 (2026-05-11): SearchBar's inner shadcn Input
-                // defaults to tw-h-10, making the search component visibly taller than its
-                // siblings (BookGridGroupByToggle, PresenceFilterMenu — all tw-h-8). The
-                // wrapper className already sets tw-h-8 but the Input's intrinsic height
+                // defaults to tw:h-10, making the search component visibly taller than its
+                // siblings (BookGridGroupByToggle, PresenceFilterMenu — all tw:h-8). The
+                // wrapper className already sets tw:h-8 but the Input's intrinsic height
                 // wins; use Tailwind's arbitrary descendant selector to push the height
                 // into the Input itself.
-                className="tw-h-8 tw-min-w-0 tw-max-w-xs tw-flex-1 tw-basis-24 [&_input]:tw-h-8"
+                className="tw:h-8 tw:min-w-0 tw:max-w-xs tw:flex-1 tw:basis-24 tw:[&_input]:h-8"
                 isDisabled={isSubmitting}
               />
               <span
@@ -2122,8 +2122,8 @@ export function ManageBooksDialog({
                   localizedStrings={bookGridStrings}
                   getRowAriaLabel={gridRowAriaLabel}
                   // Sebastian review item 34 (2026-05-11): leave BookGridSelector's
-                  // default tw-p-1 in place so the first pill checkbox horizontally
-                  // aligns with the toolbar's select-all checkbox. The prior tw-px-0
+                  // default tw:p-1 in place so the first pill checkbox horizontally
+                  // aligns with the toolbar's select-all checkbox. The prior tw:px-0
                   // override moved the grid 4px left of the toolbar items.
                 />
               )}
@@ -2136,7 +2136,7 @@ export function ManageBooksDialog({
                 the dialog (alongside the action toggle group); review #11 only landed the
                 label-prefix + default-method changes from that round. */}
             {action === 'create' && (
-              <div className="tw-flex tw-w-full tw-min-w-0 tw-flex-wrap tw-items-center tw-gap-2 tw-border-t tw-px-6 tw-py-2">
+              <div className="tw:flex tw:w-full tw:min-w-0 tw:flex-wrap tw:items-center tw:gap-2 tw:border-t tw:px-6 tw:py-2">
                 <Select
                   value={createMethod}
                   onValueChange={(v) => {
@@ -2144,7 +2144,7 @@ export function ManageBooksDialog({
                   }}
                   disabled={isSubmitting}
                 >
-                  <SelectTrigger id="af-method" className="tw-h-8 tw-min-w-0 tw-flex-1 tw-basis-48">
+                  <SelectTrigger id="af-method" className="tw:h-8 tw:min-w-0 tw:flex-1 tw:basis-48">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -2167,7 +2167,7 @@ export function ManageBooksDialog({
                   </SelectContent>
                 </Select>
                 {!cvAllowed && (
-                  <span id={cvDisabledHintId} className="tw-sr-only">
+                  <span id={cvDisabledHintId} className="tw:sr-only">
                     {t(
                       '%manageBooks_create_method_chapterVerse_disabledTooltip%',
                       'Disabled because the selection contains only non-canonical books.',
@@ -2178,7 +2178,7 @@ export function ManageBooksDialog({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Info
-                        className="tw-h-4 tw-w-4 tw-shrink-0 tw-text-muted-foreground"
+                        className="tw:h-4 tw:w-4 tw:shrink-0 tw:text-muted-foreground"
                         aria-label={t('%manageBooks_create_basedOnInfo%', 'Based on info')}
                       />
                     </TooltipTrigger>
@@ -2213,9 +2213,9 @@ export function ManageBooksDialog({
                       // Mirror the prior <SelectTrigger> "primary fill while empty" affordance —
                       // the picker reads as a call-to-action until a reference project is set.
                       buttonClassName={cn(
-                        'tw-h-8 tw-min-w-0 tw-flex-1 tw-basis-48',
+                        'tw:h-8 tw:min-w-0 tw:flex-1 tw:basis-48',
                         !createReferenceId &&
-                          'tw-border-primary tw-bg-primary tw-text-primary-foreground hover:tw-bg-primary/90',
+                          'tw:border-primary tw:bg-primary tw:text-primary-foreground tw:hover:bg-primary/90',
                       )}
                     />
                   </div>

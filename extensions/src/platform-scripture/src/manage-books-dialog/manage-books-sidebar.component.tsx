@@ -277,21 +277,21 @@ export function ManageBooksSidebar({
       // because the `@md/dialog:` variants weren't reaching the iframe stylesheets in
       // testing — see the dialog wrapper's comment for full background.
       className={cn(
-        'tw-flex tw-shrink-0 tw-flex-col tw-gap-1 tw-overflow-y-auto tw-border-r tw-bg-muted/40',
-        isNarrow ? 'tw-w-14 tw-p-1' : 'tw-w-64 tw-p-3',
+        'tw:flex tw:shrink-0 tw:flex-col tw:gap-1 tw:overflow-y-auto tw:border-r tw:bg-muted/40',
+        isNarrow ? 'tw:w-14 tw:p-1' : 'tw:w-64 tw:p-3',
       )}
       data-testid="manage-books-sidebar"
     >
       <div
         className={cn(
-          'tw-flex tw-flex-col tw-gap-1 tw-pt-2 tw-pb-3',
-          isNarrow ? 'tw-px-0' : 'tw-px-2',
+          'tw:flex tw:flex-col tw:gap-1 tw:pt-2 tw:pb-3',
+          isNarrow ? 'tw:px-0' : 'tw:px-2',
         )}
       >
         {!isNarrow && (
           <Label
             htmlFor="manage-books-sidebar-project"
-            className="tw-text-xs tw-text-muted-foreground"
+            className="tw:text-xs tw:text-muted-foreground"
           >
             {t('%manageBooks_header_projectLabel%', 'Project')}
           </Label>
@@ -307,7 +307,7 @@ export function ManageBooksSidebar({
           const shortName = activeProject?.shortName;
           const showTooltip = !!fullName && fullName !== shortName;
           // In narrow mode the sidebar is a ~56px rail. The default
-          // `tw-w-full` trigger clips the shortName to a glyph or two — confusing. Render
+          // `tw:w-full` trigger clips the shortName to a glyph or two — confusing. Render
           // the trigger as an icon-only button (just chevron) instead; the hover tooltip
           // surfaces the full project name (or shortName fallback). Always show the
           // tooltip in narrow mode so the user has SOME way to identify the active project
@@ -323,8 +323,8 @@ export function ManageBooksSidebar({
                   if (nextId) onProjectIdChange(nextId);
                 }}
                 buttonClassName={cn(
-                  'tw-h-8 tw-font-normal',
-                  isNarrow ? 'tw-w-10 tw-justify-center tw-px-2' : 'tw-w-full',
+                  'tw:h-8 tw:font-normal',
+                  isNarrow ? 'tw:w-10 tw:justify-center tw:px-2' : 'tw:w-full',
                 )}
                 isDisabled={isSubmitting}
                 ariaLabel={t('%manageBooks_header_projectLabel%', 'Project')}
@@ -389,9 +389,9 @@ export function ManageBooksSidebar({
             data-read-only-disabled={isReadOnlyDisabled ? 'true' : undefined}
             // JS-driven (isNarrow) collapse — see <nav>'s comment above.
             className={cn(
-              'tw-flex tw-items-start tw-rounded-md tw-py-2 tw-text-start tw-text-sm tw-transition-colors',
-              isNarrow ? 'tw-justify-center tw-gap-0 tw-px-2' : 'tw-justify-start tw-gap-3 tw-px-3',
-              !disabled && 'hover:tw-bg-accent hover:tw-text-accent-foreground',
+              'tw:flex tw:items-start tw:rounded-md tw:py-2 tw:text-start tw:text-sm tw:transition-colors',
+              isNarrow ? 'tw:justify-center tw:gap-0 tw:px-2' : 'tw:justify-start tw:gap-3 tw:px-3',
+              !disabled && 'tw:hover:bg-accent tw:hover:text-accent-foreground',
               !disabled &&
                 'tw:focus-visible:outline-hidden tw:focus-visible:ring-2 tw:focus-visible:ring-ring',
               isActive && 'tw:bg-accent tw:font-medium tw:text-accent-foreground',
@@ -399,12 +399,12 @@ export function ManageBooksSidebar({
             )}
             aria-label={labels.label}
           >
-            <Icon className="tw-mt-0.5 tw-h-4 tw-w-4 tw-shrink-0" aria-hidden />
+            <Icon className="tw:mt-0.5 tw:h-4 tw:w-4 tw:shrink-0" aria-hidden />
             {!isNarrow && (
-              <span className="tw-flex tw-flex-col">
+              <span className="tw:flex tw:flex-col">
                 <span>{labels.label}</span>
                 {labels.subtitle && (
-                  <span className="tw-text-xs tw-font-normal tw-text-muted-foreground">
+                  <span className="tw:text-xs tw:font-normal tw:text-muted-foreground">
                     {labels.subtitle}
                   </span>
                 )}
@@ -421,9 +421,9 @@ export function ManageBooksSidebar({
         const tooltipText = tooltip ?? labels.label;
         return (
           <Fragment key={id}>
-            {showSeparator && <Separator className="tw-my-1" />}
+            {showSeparator && <Separator className="tw:my-1" />}
             {groupHeading && !isNarrow && (
-              <div className="tw-mt-1 tw-px-3 tw-text-[11px] tw-font-semibold tw-uppercase tw-tracking-wider tw-text-muted-foreground">
+              <div className="tw:mt-1 tw:px-3 tw:text-[11px] tw:font-semibold tw:uppercase tw:tracking-wider tw:text-muted-foreground">
                 {groupHeading}
               </div>
             )}
