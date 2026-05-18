@@ -1334,8 +1334,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     }
 
     /// <summary>
-    /// Determines if the current user can write to the project settings (is the current user an
-    /// administrator).
+    /// Determines if the current user can write to the project settings.
     /// </summary>
     /// <returns>True if the user can write the project settings, false otherwise</returns>
     public bool CanUserWriteProjectSettings()
