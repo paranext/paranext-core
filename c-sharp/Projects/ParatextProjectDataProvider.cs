@@ -105,6 +105,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(("canUserAssignThread", CanUserAssignThread));
         retVal.Add(("canUserResolveThread", CanUserResolveThread));
         retVal.Add(("canUserEditOrDeleteComment", CanUserEditOrDeleteComment));
+        retVal.Add(("isCurrentUserAdministrator", IsCurrentUserAdministrator));
 
         retVal.Add(("getSetting", GetProjectSetting));
         retVal.Add(("setSetting", SetProjectSetting));
