@@ -76,7 +76,7 @@ function StatefulPickerHarness({
         onCancel={handleCancel}
       />
 
-      <div className="tw:rounded tw:border tw:p-3">
+      <div className="tw:rounded tw:border tw:border-border tw:p-3">
         <div className="tw:mb-2 tw:text-sm tw:font-semibold">Result log</div>
         {log.length === 0 ? (
           <div className="tw:text-sm tw:text-muted-foreground">
