@@ -12,7 +12,7 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from '@/components/shadcn-ui/sidebar';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { ScrollText } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 

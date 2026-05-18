@@ -321,19 +321,6 @@ export type PapiDockLayout = {
    */
   floatTabById: (tabId: string) => void;
   /**
-   * Gets all WebView definitions for all currently open web view tabs
-   *
-   * @returns Array of WebView definitions for all open web view tabs
-   */
-  getAllWebViewDefinitions: () => WebViewDefinition[];
-  /**
-   * Gets the WebView definition for the web view with the specified ID
-   *
-   * @param webViewId The ID of the WebView whose web view definition to get
-   * @returns WebView definition with the specified ID or undefined if not found
-   */
-  getWebViewDefinition: (webViewId: string) => WebViewDefinition | undefined;
-  /**
    * Get the WebView definitions for every open WebView tab across the dock layout.
    *
    * Used by consumers (e.g. ProjectSelector) that need to seed initial state at mount time.
@@ -344,6 +331,13 @@ export type PapiDockLayout = {
    *   dock layout has no WebView tabs.
    */
   getAllWebViewDefinitions: () => WebViewDefinition[];
+  /**
+   * Gets the WebView definition for the web view with the specified ID
+   *
+   * @param webViewId The ID of the WebView whose web view definition to get
+   * @returns WebView definition with the specified ID or undefined if not found
+   */
+  getWebViewDefinition: (webViewId: string) => WebViewDefinition | undefined;
   /**
    * Updates the tab with the specified id with the specified properties. No need to have all the
    * tab info; just specify the properties you want to update.

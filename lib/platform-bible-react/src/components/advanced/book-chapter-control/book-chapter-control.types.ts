@@ -2,7 +2,7 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { LanguageStrings } from 'platform-bible-utils';
 import { ComponentPropsWithoutRef, ReactNode } from 'react';
 import { ButtonProps } from '@/components/shadcn-ui/button';
-import * as PopoverPrimitive from '@radix-ui/react-popover';
+import { Popover as PopoverPrimitive } from 'radix-ui';
 
 /**
  * Object containing all keys used for localization in the BookChapterControl component. If you're
