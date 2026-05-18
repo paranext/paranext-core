@@ -17,7 +17,7 @@ const FILE_SCHEME = 'file';
 const PROTOCOL_PART = '://';
 
 /** Folder name used for the user's Platform.Bible data directory */
-export const PRODUCT_FOLDER_NAME = 'platform.bible';
+const PRODUCT_FOLDER_NAME = 'platform.bible';
 
 /** Name of the directory in app that should be used to hold extension data */
 export const EXTENSION_DATA_DIR = 'extensions';

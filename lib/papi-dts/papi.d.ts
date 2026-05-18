@@ -5469,8 +5469,6 @@ declare module 'shared/data/file-system.model' {
 }
 declare module 'node/utils/util' {
   import { Uri } from 'shared/data/file-system.model';
-  /** Folder name used for the user's Platform.Bible data directory */
-  export const PRODUCT_FOLDER_NAME = 'platform.bible';
   /** Name of the directory in app that should be used to hold extension data */
   export const EXTENSION_DATA_DIR = 'extensions';
   /** Name of the directory in app where installed extensions live */
