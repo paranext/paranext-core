@@ -6,6 +6,7 @@ import {
   useLocalizedStrings,
   useScrollGroupScrRef,
   useRecentScriptureRefs,
+  useSetting,
 } from '@renderer/hooks/papi-hooks';
 import { app } from '@renderer/services/papi-frontend.service';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
@@ -104,6 +105,12 @@ export function PlatformBibleToolbar() {
     scrollGroupIdInternal,
     updateScrollGroupIdInternal,
   );
+
+  const [interfaceModePossiblyError] = useSetting('platform.interfaceMode', 'simple');
+  const isPowerMode = useMemo(() => {
+    if (isPlatformError(interfaceModePossiblyError)) return false;
+    return interfaceModePossiblyError === 'power';
+  }, [interfaceModePossiblyError]);
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
@@ -435,13 +442,15 @@ export function PlatformBibleToolbar() {
         recentSearches={recentScriptureRefs}
         onAddRecentSearch={addRecentScriptureRef}
       />
-      <ScrollGroupSelector
-        availableScrollGroupIds={availableScrollGroupIdsTop}
-        scrollGroupId={scrollGroupId}
-        onChangeScrollGroupId={setScrollGroupId}
-        localizedStrings={scrollGroupLocalizedStrings}
-        className="tw:h-8"
-      />
+      {isPowerMode && (
+        <ScrollGroupSelector
+          availableScrollGroupIds={availableScrollGroupIdsTop}
+          scrollGroupId={scrollGroupId}
+          onChangeScrollGroupId={setScrollGroupId}
+          localizedStrings={scrollGroupLocalizedStrings}
+          className="tw:h-8"
+        />
+      )}
     </Toolbar>
   );
 }

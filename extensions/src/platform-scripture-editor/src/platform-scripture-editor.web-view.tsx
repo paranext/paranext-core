@@ -1657,6 +1657,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     />
   ) : undefined;
 
+  const scrollGroupSelector = isPowerMode ? (
+    <ScrollGroupSelector
+      availableScrollGroupIds={availableScrollGroupIds}
+      scrollGroupId={scrollGroupId}
+      onChangeScrollGroupId={setScrollGroupId}
+      localizedStrings={scrollGroupLocalizedStrings}
+    />
+  ) : undefined;
+
   return (
     <div className="tw:flex tw:flex-col tw:h-screen">
       <TabToolbar
@@ -1709,14 +1718,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             )}
           </>
         }
-        endAreaChildren={
-          <ScrollGroupSelector
-            availableScrollGroupIds={availableScrollGroupIds}
-            scrollGroupId={scrollGroupId}
-            onChangeScrollGroupId={setScrollGroupId}
-            localizedStrings={scrollGroupLocalizedStrings}
-          />
-        }
+        endAreaChildren={scrollGroupSelector}
       />
       {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state */}
       <InPortal node={editorPortalNode}>{renderEditor()}</InPortal>
