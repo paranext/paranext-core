@@ -409,7 +409,13 @@ declare module 'platform-scripture-editor' {
     /**
      * Get the current selection in the editor.
      *
-     * @returns The current selection range, or undefined if there is no selection
+     * If the editor has already reported a selection, resolves immediately with that value (or
+     * `undefined` if the editor reported no selection). If the editor has not yet reported any
+     * selection at the time of the call, waits up to 10 seconds for the first selection and
+     * **rejects** if none arrives in that window — callers should be prepared to handle a rejected
+     * promise as well as a resolved `undefined`.
+     *
+     * @returns The current selection range, or `undefined` if the editor reported no selection
      */
     getSelection(): Promise<ScriptureRangeUsjVerseRefChapterLocation | undefined>;
     /**
@@ -680,7 +686,9 @@ declare module 'papi-shared-types' {
      *   select a project if this parameter is not provided.
      * @param options Options for configuring the editor you are opening
      * @param existingTabIdToReplace Optional ID of the tab that should be replaced by the scripture
-     *   editor
+     *   editor. Honored in `platform.interfaceMode === 'power'`. Ignored in `platform.interfaceMode
+     *   === 'simple'` — every open routes to the editor column regardless of which tab the caller
+     *   named.
      * @returns WebView id for new editor WebView or `undefined` if the user canceled the dialog
      */
     'platformScriptureEditor.openScriptureEditor': (
@@ -697,7 +705,9 @@ declare module 'papi-shared-types' {
      *   select a resource if this parameter is not provided.
      * @param options Options for configuring the editor you are opening
      * @param existingTabIdToReplace Optional ID of the tab that should be replaced by the resource
-     *   viewer
+     *   viewer. Honored in `platform.interfaceMode === 'power'`. Ignored in `platform.interfaceMode
+     *   === 'simple'` — every open routes to the editor column regardless of which tab the caller
+     *   named.
      * @returns WebView id for new editor WebView or `undefined` if the user canceled the dialog
      */
     'platformScriptureEditor.openResourceViewer': (

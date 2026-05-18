@@ -44,6 +44,7 @@ import { registerCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { networkObjectService } from '@shared/services/network-object.service';
 import { createNetworkEventEmitter } from '@shared/services/network.service';
+import { settingsService } from '@shared/services/settings.service';
 import { webViewProviderService } from '@shared/services/web-view-provider.service';
 import {
   CloseWebViewEvent,
@@ -638,14 +639,29 @@ const onLayoutChange: OnLayoutChange = async (newLayout, _currentTabId, changeIn
  */
 async function loadLayout(layout?: LayoutInfo): Promise<void> {
   const dockLayoutVar = await getDockLayout();
-  const layoutToLoad = layout || getStorageValue(DOCK_LAYOUT_KEY, dockLayoutVar.testLayout);
-
-  dockLayoutVar.loadLayout(layoutToLoad);
   if (layout) {
-    // A layout was provided, meaning this is a layout change. Since `loadLayout` doesn't run
-    // `onLayoutChange`, we run it manually.
-    await onLayoutChange(layoutToLoad);
+    // Explicit layout change. `loadLayout` doesn't run `onLayoutChange`, so run it manually.
+    dockLayoutVar.loadLayout(layout);
+    await onLayoutChange(layout);
+    return;
   }
+
+  // Startup load — pick the layout based on interface mode. This runs once at startup; changes
+  // to `platform.interfaceMode` at runtime do not re-trigger a layout switch (no user-facing
+  // mode switcher exists yet).
+  //
+  // Note: in simple mode we intentionally ignore `DOCK_LAYOUT_KEY` and always load the static
+  // `simpleLayout` — the 3-column layout should be restored on every startup regardless of what
+  // the user did in the previous session. `onLayoutChange` still fires (and writes to
+  // `DOCK_LAYOUT_KEY`) when the user resizes a column in simple mode, but those writes are
+  // vestigial: the stored value is never read back, so user resizes in simple mode are
+  // ephemeral by design.
+  const interfaceMode = await settingsService.get('platform.interfaceMode');
+  const layoutToLoad =
+    interfaceMode === 'simple'
+      ? dockLayoutVar.simpleLayout
+      : getStorageValue(DOCK_LAYOUT_KEY, dockLayoutVar.testLayout);
+  dockLayoutVar.loadLayout(layoutToLoad);
 }
 
 /**

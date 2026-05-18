@@ -381,3 +381,101 @@ export function generateInlineMarkerMenuListItems(
   });
   return markerMenuItems.sort((a, b) => (a.marker ?? a.title).localeCompare(b.marker ?? b.title));
 }
+
+// #region Open Editor Dispatch
+
+/**
+ * Tagged-union result describing where a new Scripture Editor open should be routed.
+ *
+ * - `focus-existing` — a Scripture Editor for the requested project is already open; the caller
+ *   should focus that tab (via `openWebView` with `existingId`) rather than creating a new one.
+ * - `replace-tab` — the caller should call `openWebView` with `{ type: 'replace-tab', targetTabId }`
+ *   so the named tab is swapped out for a fresh editor.
+ * - `open-new` — no targeting hint applies; the caller should call `openWebView` without a layout so
+ *   the platform places the new tab using its default rules.
+ */
+export type OpenEditorDispatch =
+  | { kind: 'focus-existing'; existingId: string }
+  | { kind: 'replace-tab'; targetTabId: string }
+  | { kind: 'open-new' };
+
+/**
+ * Decide where to route a Scripture Editor open request based on what's currently in the dock and
+ * which interface mode the platform is in.
+ *
+ * Pure function — does not touch PAPI. The caller is responsible for fetching the inputs
+ * (`papi.webViews.getAllOpenWebViewDefinitions` filtered to Scripture Editors, the requested
+ * `projectId`, `papi.settings.get('platform.interfaceMode')`, and the optional caller override).
+ *
+ * Behavior splits cleanly on `interfaceMode`:
+ *
+ * **Simple mode** — the platform's editor column hosts exactly one Scripture Editor at a time.
+ * Every open routes there, and the caller-supplied `existingTabIdToReplace` is intentionally
+ * ignored (e.g., the column 3 NewTab passes its own id so it can be replaced in place; in simple
+ * mode we route to the editor column instead). Editable Scripture Editors and read-only Resource
+ * Viewers share the same `webViewType` but are different views — they're keyed on `(projectId,
+ * isReadOnly)` here so opening a Resource Viewer for project X while an editable editor for project
+ * X is already open replaces (not focuses) it.
+ *
+ * 1. Same `(projectId, isReadOnly)` already open → `focus-existing` on that tab.
+ * 2. Some other Scripture Editor is open (different project, or same project but different readonly
+ *    mode) → `replace-tab` on the first existing Scripture Editor.
+ * 3. No Scripture Editor exists at all → `open-new` (graceful degradation; the simple layout normally
+ *    always has the editor slot).
+ *
+ * **Power mode** — unchanged from the platform's original P9-style behavior:
+ *
+ * 1. Caller-supplied `existingTabIdToReplace` → `replace-tab` on that tab.
+ * 2. An empty Scripture Editor (no `projectId`) exists → `replace-tab` on the placeholder.
+ * 3. Otherwise → `open-new`. (Opening the same project twice in power mode produces two tabs.)
+ *
+ * @param allScriptureEditors All currently-open Scripture Editor web view definitions (filtered by
+ *   the caller from `getAllOpenWebViewDefinitions`). Only `id`, `projectId`, and `isReadOnly` are
+ *   read. `isReadOnly` should be derived from each definition's `state?.isReadOnly`.
+ * @param projectId The project the caller wants to open. The caller should not invoke this helper
+ *   until project selection has resolved.
+ * @param isReadOnly Whether the caller is opening a read-only Resource Viewer (`true`) or an
+ *   editable Scripture Editor (`false`). Used only in simple mode; ignored in power mode.
+ * @param interfaceMode The current `platform.interfaceMode` setting value.
+ * @param existingTabIdToReplace Caller-supplied tab to replace; honored in power mode but ignored
+ *   in simple mode (where every open goes to the editor column).
+ * @returns The dispatch decision — see {@link OpenEditorDispatch}.
+ */
+export function resolveOpenEditorDispatch(
+  allScriptureEditors: ReadonlyArray<{ id: string; projectId?: string; isReadOnly?: boolean }>,
+  projectId: string,
+  isReadOnly: boolean,
+  interfaceMode: 'simple' | 'power',
+  existingTabIdToReplace: string | undefined,
+): OpenEditorDispatch {
+  if (interfaceMode === 'simple') {
+    // Simple mode invariant: every Scripture Editor open lands in the editor column. The
+    // caller-supplied `existingTabIdToReplace` is intentionally ignored — e.g., column 3's
+    // NewTab passes its own id so it can be replaced in place, but in simple mode we route to
+    // the editor column instead so we never have two editors for the same (or different) project.
+    const existingForSameView = allScriptureEditors.find(
+      (def) => def.projectId === projectId && !!def.isReadOnly === isReadOnly,
+    );
+    if (existingForSameView) {
+      return { kind: 'focus-existing', existingId: existingForSameView.id };
+    }
+    if (allScriptureEditors.length > 0) {
+      return { kind: 'replace-tab', targetTabId: allScriptureEditors[0].id };
+    }
+    // Graceful degradation: simple layout should always have a Scripture Editor slot, but if
+    // somehow none exists we open a new one rather than throwing.
+    return { kind: 'open-new' };
+  }
+
+  // Power mode (or unset). Behavior is unchanged from the pre-session original:
+  if (existingTabIdToReplace) {
+    return { kind: 'replace-tab', targetTabId: existingTabIdToReplace };
+  }
+  const emptyEditor = allScriptureEditors.find((def) => !def.projectId);
+  if (emptyEditor) {
+    return { kind: 'replace-tab', targetTabId: emptyEditor.id };
+  }
+  return { kind: 'open-new' };
+}
+
+// #endregion Open Editor Dispatch

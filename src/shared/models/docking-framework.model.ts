@@ -414,7 +414,13 @@ export type PapiDockLayout = {
    * TODO: This should be removed and the `testLayout` imported directly in this file once this
    * service is refactored to split the code between processes. The only reason this is passed from
    * `platform-dock-layout.component.tsx` is that we cannot import `testLayout` here since this
-   * service is currently all shared code. Refactor should happen in #203
+   * service is currently all shared code. Refactor should happen in PT-2799
    */
   testLayout: LayoutInfo;
+  /**
+   * The layout to load when `platform.interfaceMode` is `'simple'`.
+   *
+   * TODO: Same as `testLayout` — should be imported directly once PT-2799 is resolved.
+   */
+  simpleLayout: LayoutInfo;
 };
