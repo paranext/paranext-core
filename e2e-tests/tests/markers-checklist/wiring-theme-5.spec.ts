@@ -141,7 +141,7 @@ function scopeTrigger(frame: FrameLocator): Locator {
 
 /**
  * Open a Radix dropdown trigger. Radix's `DropdownMenu` opens on `pointerdown` rather than `click`,
- * and the toolbar's `tw-overflow-clip` wrapper intercepts Playwright's normal click targeting.
+ * and the toolbar's `tw:overflow-clip` wrapper intercepts Playwright's normal click targeting.
  * Dispatching the synthetic `pointerdown` event directly on the trigger reliably opens the menu in
  * both the in-iframe (Markers Checklist) and main-page (dock-tab) contexts.
  */
@@ -672,7 +672,7 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
     expect(beforeRect).not.toBeNull();
     const beforeTop = beforeRect?.y ?? 0;
 
-    // Scroll the data table down by 500px. The toolbar wrapper uses `tw-sticky tw-top-0` on
+    // Scroll the data table down by 500px. The toolbar wrapper uses `tw:sticky tw:top-0` on
     // the parent, so the trigger should remain at top: 0 (or very close to it) inside the
     // iframe's scrollable container.
     const dataTable = frame.getByTestId('checklist-data-table');
@@ -705,7 +705,7 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
 
     // Initially no comparative texts → columnCount === 1 → Hide-Matches must be disabled.
     // The view-button is a Radix Toggle (also pointer-events-driven). Use the same dispatch
-    // pattern as the dropdown opens above to bypass the toolbar `tw-overflow-clip` interceptor.
+    // pattern as the dropdown opens above to bypass the toolbar `tw:overflow-clip` interceptor.
     //
     // Note: the Hide Matches button is a `<button>` with `disabled` prop — visible whether the
     // surrounding View dropdown is open or not, because the dropdown renders the toggle group

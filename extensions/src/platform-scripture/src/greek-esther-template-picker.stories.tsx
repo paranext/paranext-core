@@ -58,13 +58,13 @@ function StatefulPickerHarness({
   };
 
   return (
-    <div className="tw-flex tw-flex-col tw-gap-4 tw-p-4">
-      <div className="tw-flex tw-items-center tw-gap-2">
+    <div className="tw:flex tw:flex-col tw:gap-4 tw:p-4">
+      <div className="tw:flex tw:items-center tw:gap-2">
         <Button onClick={() => setOpen(true)}>Open picker</Button>
         <Button variant="outline" onClick={() => setLog([])} disabled={log.length === 0}>
           Clear log
         </Button>
-        <span className="tw-text-sm tw-text-muted-foreground">
+        <span className="tw:text-sm tw:text-muted-foreground">
           The dialog closes after each OK / Cancel; click &ldquo;Open picker&rdquo; to re-open.
         </span>
       </div>
@@ -76,14 +76,14 @@ function StatefulPickerHarness({
         onCancel={handleCancel}
       />
 
-      <div className="tw-rounded tw-border tw-p-3">
-        <div className="tw-mb-2 tw-text-sm tw-font-semibold">Result log</div>
+      <div className="tw:rounded tw:border tw:p-3">
+        <div className="tw:mb-2 tw:text-sm tw:font-semibold">Result log</div>
         {log.length === 0 ? (
-          <div className="tw-text-sm tw-text-muted-foreground">
+          <div className="tw:text-sm tw:text-muted-foreground">
             (no events yet — open the picker and click OK or Cancel)
           </div>
         ) : (
-          <ul className="tw-space-y-1 tw-text-sm tw-font-mono">
+          <ul className="tw:space-y-1 tw:text-sm tw:font-mono">
             {log.map((entry) => (
               <li key={entry.id}>
                 [{entry.ts}]{' '}

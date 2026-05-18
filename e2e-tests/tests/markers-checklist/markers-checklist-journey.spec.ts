@@ -281,7 +281,7 @@ test.describe('markers-checklist Journey Tests (cross-WP)', () => {
     // At least one non-marker span appears in a marker-cell row.
     const firstMarker = frame.locator('[aria-label^="marker "]').first();
     const markerRow = firstMarker.locator(
-      'xpath=ancestor::div[contains(@class, "tw-flex-row")][1]',
+      'xpath=ancestor::div[contains(@class, "tw:flex-row")][1]',
     );
     await expect(markerRow).toBeVisible({ timeout: 30_000 });
     const nonMarkerSpans = markerRow.locator('span:not([aria-label^="marker "])');

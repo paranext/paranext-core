@@ -51,7 +51,7 @@ A small primitive that renders a scripture reference (or any short label) as a s
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className="tw-p-4">
+        <div className="tw:p-4">
           <Story />
         </div>
       </ThemeProvider>

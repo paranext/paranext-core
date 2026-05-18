@@ -105,7 +105,7 @@ export type BookGridItem = {
  * consistent.
  */
 const BOOK_PILL_BASE_CLASS =
-  'tw-flex tw-w-full tw-items-center tw-gap-2 tw-rounded tw-border tw-px-2 tw-py-1 tw-text-start';
+  'tw:flex tw:w-full tw:items-center tw:gap-2 tw:rounded tw:border tw:px-2 tw:py-1 tw:text-start';
 
 /**
  * Compose the pill's color/border classes for a given `present` flag. In-project (`present`) books
@@ -113,7 +113,7 @@ const BOOK_PILL_BASE_CLASS =
  * outline plus muted text and the same primary hover treatment. Per Sebastian item 24
  * (2026-05-06).
  *
- * NOTE on `hover:tw-bg-primary/90` vs `hover:tw-bg-primary`: the slashless `hover:tw-bg-primary`
+ * NOTE on `tw:hover:bg-primary/90` vs `tw:hover:bg-primary`: the slashless `tw:hover:bg-primary`
  * does not get JIT-compiled in this build pipeline (only the slash variants `/10`, `/70`, `/80`,
  * `/90` are emitted). Using `/90` keeps a near-solid primary on hover while ensuring the rule
  * actually exists in the stylesheet — without it the hover background falls back to the at-rest
@@ -122,10 +122,10 @@ const BOOK_PILL_BASE_CLASS =
 const bookPillClasses = (present: boolean): string =>
   cn(
     BOOK_PILL_BASE_CLASS,
-    'tw-transition-colors hover:tw-bg-primary/90 hover:tw-text-primary-foreground',
+    'tw:transition-colors tw:hover:bg-primary/90 tw:hover:text-primary-foreground',
     present
-      ? 'tw-border-primary/40 tw-bg-accent'
-      : 'tw-border-dashed tw-border-primary/40 tw-text-muted-foreground',
+      ? 'tw:border-primary/40 tw:bg-accent'
+      : 'tw:border-dashed tw:border-primary/40 tw:text-muted-foreground',
   );
 
 /* ------------------------------------------------------------------ */
@@ -270,10 +270,10 @@ export function BookGridGroupByToggle({
     groupBy: localizedStrings?.groupByLabel ?? 'Group by',
   };
   const itemClass =
-    'tw-h-6 tw-px-2 tw-text-xs data-[state=on]:!tw-bg-background data-[state=on]:tw-shadow-sm';
+    'tw:h-6 tw:px-2 tw:text-xs tw:data-[state=on]:!bg-background tw:data-[state=on]:shadow-sm';
   return (
-    <div className="tw-flex tw-shrink-0 tw-items-center tw-gap-2" data-testid="book-grid-groupby">
-      <Label className="tw-hidden tw-shrink-0 tw-text-xs tw-text-muted-foreground [@media(min-width:640px)]:tw-block">
+    <div className="tw:flex tw:shrink-0 tw:items-center tw:gap-2" data-testid="book-grid-groupby">
+      <Label className="tw:hidden tw:shrink-0 tw:text-xs tw:text-muted-foreground tw:[@media(min-width:640px)]:block">
         {labels.groupBy}
       </Label>
       <ToggleGroup
@@ -282,7 +282,7 @@ export function BookGridGroupByToggle({
         onValueChange={(v) => {
           if (v === 'canon' || v === 'status' || v === 'none') onChange(v);
         }}
-        className="tw-shrink-0 tw-rounded-lg tw-bg-muted tw-p-1"
+        className="tw:shrink-0 tw:rounded-lg tw:bg-muted tw:p-1"
         aria-label={labels.groupBy}
       >
         <ToggleGroupItem
@@ -301,7 +301,7 @@ export function BookGridGroupByToggle({
           aria-label={labels.none}
           data-testid="book-grid-groupby-none"
         >
-          <Ban className="tw-h-3.5 tw-w-3.5" aria-hidden />
+          <Ban className="tw:h-3.5 tw:w-3.5" aria-hidden />
         </ToggleGroupItem>
       </ToggleGroup>
     </div>
@@ -555,7 +555,7 @@ export function BookGridSelector({
 
   // Wider pills when a comparison badge OR an out-of-scope warning glyph could
   // render. The extension's Tailwind compile pass doesn't reliably emit the
-  // arbitrary-media variants (`[@media(min-width:N)]:tw-grid-cols-K`) the
+  // arbitrary-media variants (`tw:[@media(min-width:N)]:grid-cols-K`) the
   // storybook source uses, so we fall through to a CSS Grid `auto-fill +
   // minmax()` track so the grid naturally lays out as many columns as fit at
   // the current container width — Outlook-style. The minmax minimum tracks
@@ -584,7 +584,7 @@ export function BookGridSelector({
     const isSelected = selected.has(item.book);
     const showBadge = item.tone !== 'neutral';
     const badgeClass =
-      'tw-ml-auto tw-shrink-0 tw-whitespace-nowrap tw-px-1.5 tw-py-0 tw-text-[10px] tw-leading-tight';
+      'tw:ml-auto tw:shrink-0 tw:whitespace-nowrap tw:px-1.5 tw:py-0 tw:text-[10px] tw:leading-tight';
     const badgeLabel =
       item.statusLabel === 'New' || item.statusLabel.startsWith('New -') ? 'New' : item.statusLabel;
     const badge = showBadge ? (
@@ -597,8 +597,8 @@ export function BookGridSelector({
       <span
         aria-hidden
         className={cn(
-          'tw-inline-block tw-h-2.5 tw-w-2.5 tw-shrink-0 tw-rounded-full',
-          item.present ? 'tw-bg-primary' : 'tw-bg-muted',
+          'tw:inline-block tw:h-2.5 tw:w-2.5 tw:shrink-0 tw:rounded-full',
+          item.present ? 'tw:bg-primary' : 'tw:bg-muted',
         )}
       />
     );
@@ -606,9 +606,9 @@ export function BookGridSelector({
     const unplannedIcon = item.unplanned ? (
       <span
         aria-label={outOfScopeText}
-        className="tw-inline-flex tw-h-3.5 tw-w-3.5 tw-shrink-0 tw-items-center tw-justify-center tw-text-muted-foreground"
+        className="tw:inline-flex tw:h-3.5 tw:w-3.5 tw:shrink-0 tw:items-center tw:justify-center tw:text-muted-foreground"
       >
-        <AlertTriangle className="tw-h-3.5 tw-w-3.5" aria-hidden />
+        <AlertTriangle className="tw:h-3.5 tw:w-3.5" aria-hidden />
       </span>
     ) : undefined;
 
@@ -619,11 +619,11 @@ export function BookGridSelector({
             checked={isSelected}
             tabIndex={-1}
             aria-hidden
-            className="tw-pointer-events-none tw-shrink-0"
+            className="tw:pointer-events-none tw:shrink-0"
           />
         )}
         {dot}
-        <span className="tw-shrink-0 tw-font-medium">{item.book}</span>
+        <span className="tw:shrink-0 tw:font-medium">{item.book}</span>
         {unplannedIcon}
         {badge}
         {item.trailing}
@@ -637,20 +637,20 @@ export function BookGridSelector({
       item.statusLabel === 'In project' ||
       item.statusLabel === 'Not in project';
     const tooltipContent = (
-      <div className="tw-flex tw-flex-col tw-gap-0.5 tw-text-xs">
-        <div className="tw-font-semibold">{englishName}</div>
+      <div className="tw:flex tw:flex-col tw:gap-0.5 tw:text-xs">
+        <div className="tw:font-semibold">{englishName}</div>
         {!showBadge && !isRedundantStatus && (
-          <div className="tw-inline-flex tw-items-center tw-gap-1">
+          <div className="tw:inline-flex tw:items-center tw:gap-1">
             {item.untracked && (
-              <X className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-destructive" aria-hidden />
+              <X className="tw:h-3 tw:w-3 tw:shrink-0 tw:text-destructive" aria-hidden />
             )}
             <span>{item.untracked ? untrackedText : item.statusLabel}</span>
           </div>
         )}
         {item.unplanned && (
-          <div className="tw-inline-flex tw-items-center tw-gap-1">
+          <div className="tw:inline-flex tw:items-center tw:gap-1">
             <AlertTriangle
-              className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-muted-foreground"
+              className="tw:h-3 tw:w-3 tw:shrink-0 tw:text-muted-foreground"
               aria-hidden
             />
             <span>{outOfScopeText}</span>
@@ -667,7 +667,7 @@ export function BookGridSelector({
           </div>
         )}
         {item.disabled && item.disabledReason && (
-          <div className="tw-text-muted-foreground">{item.disabledReason}</div>
+          <div className="tw:text-muted-foreground">{item.disabledReason}</div>
         )}
       </div>
     );
@@ -732,9 +732,9 @@ export function BookGridSelector({
         onFocus={() => setFocusedIndex(flatIndex)}
         className={cn(
           bookPillClasses(item.present),
-          'tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-1',
-          isSelected && 'tw-text-accent-foreground',
-          item.disabled && 'tw-cursor-not-allowed tw-opacity-50',
+          'tw:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:ring-offset-1',
+          isSelected && 'tw:text-accent-foreground',
+          item.disabled && 'tw:cursor-not-allowed tw:opacity-50',
         )}
       >
         {body}
@@ -753,7 +753,7 @@ export function BookGridSelector({
   return (
     <div
       className={cn(
-        'tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-auto tw-p-1',
+        'tw:flex tw:min-h-0 tw:flex-1 tw:flex-col tw:overflow-auto tw:p-1',
         contentClassName,
       )}
     >
@@ -787,14 +787,14 @@ export function BookGridSelector({
         return (
           <section
             key={group.label ?? 'all'}
-            className="tw-flex tw-flex-col"
+            className="tw:flex tw:flex-col"
             data-testid={group.label ? `book-grid-group-${group.label}` : 'book-grid-group-all'}
           >
             {showHeader && (
               <div
                 className={cn(
-                  'tw-sticky tw-top-0 tw-z-10 tw-flex tw-items-center tw-gap-2 tw-bg-background',
-                  gi === 0 ? 'tw-pt-0' : 'tw-pt-1',
+                  'tw:sticky tw:top-0 tw:z-10 tw:flex tw:items-center tw:gap-2 tw:bg-background',
+                  gi === 0 ? 'tw:pt-0' : 'tw:pt-1',
                 )}
               >
                 <Button
@@ -803,11 +803,11 @@ export function BookGridSelector({
                   size="sm"
                   onClick={() => group.label && toggleCollapsed(group.label)}
                   aria-expanded={!collapsed}
-                  className="tw-h-6 tw-flex-1 tw-justify-start tw-gap-1 tw-px-2 tw-text-[11px] tw-font-semibold tw-uppercase tw-tracking-wider tw-text-muted-foreground hover:tw-text-foreground"
+                  className="tw:h-6 tw:flex-1 tw:justify-start tw:gap-1 tw:px-2 tw:text-[11px] tw:font-semibold tw:uppercase tw:tracking-wider tw:text-muted-foreground tw:hover:text-foreground"
                 >
-                  <Chevron className="tw-h-3.5 tw-w-3.5" aria-hidden />
+                  <Chevron className="tw:h-3.5 tw:w-3.5" aria-hidden />
                   <span>{group.label}</span>
-                  <span className="tw-ml-1 tw-font-normal tw-normal-case tw-tracking-normal tw-text-muted-foreground/70">
+                  <span className="tw:ml-1 tw:font-normal tw:normal-case tw:tracking-normal tw:text-muted-foreground/70">
                     {renderGroupCount && group.label
                       ? renderGroupCount(group.label, group.items)
                       : `(${group.items.length})`}
@@ -819,7 +819,7 @@ export function BookGridSelector({
                       <span
                         onMouseEnter={() => group.label && setHoveredGroupLabel(group.label)}
                         onMouseLeave={() => setHoveredGroupLabel(undefined)}
-                        className="tw-flex tw-shrink-0 tw-items-center"
+                        className="tw:flex tw:shrink-0 tw:items-center"
                       >
                         <Checkbox
                           checked={headerCheckState}
@@ -845,10 +845,10 @@ export function BookGridSelector({
                 aria-multiselectable={ariaMultiselectable}
                 style={gridStyle}
                 className={cn(
-                  'tw-grid tw-auto-rows-min tw-gap-1 tw-text-sm',
-                  group.label && 'tw-mt-0.5',
+                  'tw:grid tw:auto-rows-min tw:gap-1 tw:text-sm',
+                  group.label && 'tw:mt-0.5',
                   hoveredGroupLabel === group.label &&
-                    '[&_>li>button]:!tw-bg-primary [&_>li>button]:!tw-text-primary-foreground [&_>li>div]:!tw-bg-primary [&_>li>div]:!tw-text-primary-foreground',
+                    'tw:[&_>li>button]:!bg-primary tw:[&_>li>button]:!text-primary-foreground tw:[&_>li>div]:!bg-primary tw:[&_>li>div]:!text-primary-foreground',
                 )}
               >
                 {group.items.map((item, i) => {

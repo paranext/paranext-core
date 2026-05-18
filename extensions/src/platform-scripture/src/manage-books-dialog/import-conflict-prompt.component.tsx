@@ -44,8 +44,8 @@ export function ImportConflictPrompt({
         if (!v) onCancel();
       }}
     >
-      <DialogContent className="tw-max-w-md">
-        <div className="tw-flex tw-flex-col tw-gap-4">
+      <DialogContent className="tw:max-w-md">
+        <div className="tw:flex tw:flex-col tw:gap-4">
           <DialogHeader>
             <DialogTitle>
               {t('%manageBooks_import_conflictTitle%', 'Books already exist')}
@@ -61,10 +61,10 @@ export function ImportConflictPrompt({
                 : ''}
             </DialogDescription>
           </DialogHeader>
-          <p className="tw-text-sm tw-text-muted-foreground">
+          <p className="tw:text-sm tw:text-muted-foreground">
             {t('%manageBooks_import_conflictBody2%', 'Choose how to proceed with the import.')}
           </p>
-          <div className="tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-flex-wrap sm:tw-justify-end">
+          <div className="tw:flex tw:flex-col tw:gap-2 tw:sm:flex-row tw:sm:flex-wrap tw:sm:justify-end">
             <Button variant="ghost" onClick={onCancel}>
               {t('%manageBooks_import_conflictCancel%', 'Cancel')}
             </Button>

@@ -131,7 +131,7 @@ export function GreekEstherTemplatePicker({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="tw-max-w-md">
+      <DialogContent className="tw:max-w-md">
         <DialogHeader>
           <DialogTitle>{t('%manageBooks_createEsther_dialogTitle%')}</DialogTitle>
           <DialogDescription>{t('%manageBooks_createEsther_dialogDescription%')}</DialogDescription>
@@ -143,23 +143,23 @@ export function GreekEstherTemplatePicker({
             if (isGreekEstherTemplate(value)) setSelected(value);
           }}
           aria-label={t('%manageBooks_createEsther_radioGroupAriaLabel%')}
-          className="tw-py-2"
+          className="tw:py-2"
         >
-          <div className="tw-flex tw-items-start tw-gap-3">
-            <RadioGroupItem value="lxx" id={lxxId} className="tw-mt-1" />
-            <Label htmlFor={lxxId} className="tw-cursor-pointer tw-leading-snug">
+          <div className="tw:flex tw:items-start tw:gap-3">
+            <RadioGroupItem value="lxx" id={lxxId} className="tw:mt-1" />
+            <Label htmlFor={lxxId} className="tw:cursor-pointer tw:leading-snug">
               {t('%manageBooks_createEsther_lxx%')}
             </Label>
           </div>
-          <div className="tw-flex tw-items-start tw-gap-3">
-            <RadioGroupItem value="vulgate" id={vulgateId} className="tw-mt-1" />
-            <Label htmlFor={vulgateId} className="tw-cursor-pointer tw-leading-snug">
+          <div className="tw:flex tw:items-start tw:gap-3">
+            <RadioGroupItem value="vulgate" id={vulgateId} className="tw:mt-1" />
+            <Label htmlFor={vulgateId} className="tw:cursor-pointer tw:leading-snug">
               {t('%manageBooks_createEsther_vulgate%')}
             </Label>
           </div>
-          <div className="tw-flex tw-items-start tw-gap-3">
-            <RadioGroupItem value="modern_scholars" id={modernScholarsId} className="tw-mt-1" />
-            <Label htmlFor={modernScholarsId} className="tw-cursor-pointer tw-leading-snug">
+          <div className="tw:flex tw:items-start tw:gap-3">
+            <RadioGroupItem value="modern_scholars" id={modernScholarsId} className="tw:mt-1" />
+            <Label htmlFor={modernScholarsId} className="tw:cursor-pointer tw:leading-snug">
               {t('%manageBooks_createEsther_modernScholars%')}
             </Label>
           </div>

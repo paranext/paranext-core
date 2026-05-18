@@ -81,7 +81,7 @@ export function LinkedScrRefButton({
       className={cn(
         // Tight, inline link-button styling — no extra padding / height. Consumers can override
         // typography (font, size) via the `className` prop.
-        'tw-h-auto tw-p-0 tw-text-start tw-font-mono tw-text-sm',
+        'tw:h-auto tw:p-0 tw:text-start tw:font-mono tw:text-sm',
         className,
       )}
       data-testid={testId}

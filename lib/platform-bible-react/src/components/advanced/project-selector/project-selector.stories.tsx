@@ -95,7 +95,7 @@ const meta: Meta<typeof ProjectSelector> = {
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className="tw-w-[320px] tw-p-4">
+        <div className="tw:w-[320px] tw:p-4">
           <Story />
         </div>
       </ThemeProvider>
@@ -187,7 +187,7 @@ export const ScrollGroupBinding: Story = {
     const [openTabs, setOpenTabs] = useState<ProjectSelectorOpenTab[]>(sampleOpenTabs);
 
     return (
-      <div className="tw-flex tw-flex-col tw-gap-2">
+      <div className="tw:flex tw:flex-col tw:gap-2">
         <ProjectSelector
           mode="projectScrollGroup"
           projects={sampleProjects}
@@ -206,7 +206,7 @@ export const ScrollGroupBinding: Story = {
         />
         <button
           type="button"
-          className="tw-rounded tw-border tw-px-2 tw-py-1 tw-text-xs"
+          className="tw:rounded tw:border tw:px-2 tw:py-1 tw:text-xs"
           onClick={() =>
             setOpenTabs((tabs) =>
               tabs.filter(
