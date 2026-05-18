@@ -1970,13 +1970,11 @@ export declare function PopoverTrigger({ ...props }: React$1.ComponentProps<type
  * rendered as React children. It does not retroactively re-portal already-mounted popovers, and it
  * does not affect popovers in sibling subtrees.
  *
- * Initial-mount behavior: pass `null` for `container` (the initial value of a `useState<HTMLElement
- *
- * | null>(null)` paired with a ref callback on the ancestor) to keep Radix's default
- *
- * `document.body` behavior until the ancestor mounts. Once the element exists, future popover opens
- * portal into it. The triggering ancestor (the trap owner) must wrap, not be wrapped by, this
- * provider.
+ * Initial-mount behavior: pass `null` for `container` to keep Radix's default `document.body`
+ * behavior until the ancestor mounts. The typical pattern is to hold the ancestor element in
+ * `useState<HTMLElement | null>(null)` paired with a ref callback on the ancestor — once the
+ * element exists, future popover opens portal into it. The triggering ancestor (the trap owner)
+ * must wrap, not be wrapped by, this provider.
  * @example
  *
  * ```tsx
@@ -2518,83 +2516,8 @@ export declare function DialogHeader({ className, ...props }: React$1.ComponentP
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dialog}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dialog}
  */
-export declare const Label: React$1.ForwardRefExoticComponent<Omit<LabelPrimitive.LabelProps & React$1.RefAttributes<HTMLLabelElement>, "ref"> & VariantProps<(props?: ClassProp | undefined) => string> & React$1.RefAttributes<HTMLLabelElement>>;
-/**
- * The Popover component displays rich content in a portal, triggered by a button. This popover is
- * built on Radix UI's Popover component and styled by Shadcn UI.
- *
- * See Shadcn UI Documentation https://ui.shadcn.com/docs/components/popover See Radix UI
- * Documentation https://www.radix-ui.com/docs/primitives/components/popover
- */
-export declare const Popover: React$1.FC<PopoverPrimitive.PopoverProps>;
-/** @inheritdoc Popover */
-export declare const PopoverTrigger: React$1.ForwardRefExoticComponent<PopoverPrimitive.PopoverTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
-/** @inheritdoc Popover */
-export declare const PopoverAnchor: React$1.ForwardRefExoticComponent<PopoverPrimitive.PopoverAnchorProps & React$1.RefAttributes<HTMLDivElement>>;
-/**
- * Overrides the container that descendant {@link PopoverContent} components portal into. Use it to
- * keep popovers inside a Radix `DialogContent`, `DropdownMenuContent`, or any other ancestor that
- * owns a focus trap or dismiss-on-outside-click layer.
- *
- * @remarks
- * Radix `Popover` portals its content to `document.body` by default, which works fine for top-level
- * UI. The default breaks down whenever a popover trigger lives inside an ancestor that:
- *
- * - Runs a focus trap (`Dialog`, `AlertDialog`, modal `DropdownMenu`) — the trap yanks focus back out
- *   of the popover the instant it opens because the portal'd content is outside the trap's DOM
- *   subtree.
- * - Listens for outside-clicks (Radix `DismissableLayer`, used by every `*Menu`/`Dialog`) — a click
- *   inside the popover reads as "outside the menu" and dismisses the parent immediately.
- *
- * Wrapping the children of the trapping ancestor in this provider, with that ancestor's element as
- * `container`, makes nested `PopoverContent` portal as a DOM descendant of the trap so both focus
- * and dismiss-layer logic accept it.
- *
- * Single descendant scope: a `PopoverPortalContainerProvider` only affects `PopoverContent` mounts
- * rendered as React children. It does not retroactively re-portal already-mounted popovers, and it
- * does not affect popovers in sibling subtrees.
- *
- * Initial-mount behavior: pass `null` for `container` to keep Radix's default `document.body`
- * behavior until the ancestor mounts. The typical pattern is to hold the ancestor element in
- * `useState<HTMLElement | null>(null)` paired with a ref callback on the ancestor — once the
- * element exists, future popover opens portal into it. The triggering ancestor (the trap owner)
- * must wrap, not be wrapped by, this provider.
- * @example
- *
- * ```tsx
- * function ScopeMenu() {
- *   const [dialogEl, setDialogEl] = useState<HTMLDivElement | null>(null);
- *
- *   return (
- *     <Dialog open={isOpen} onOpenChange={setIsOpen}>
- *       <DialogContent ref={setDialogEl}>
- *         <PopoverPortalContainerProvider container={dialogEl}>
- *           <BookChapterControl ... />
- *         </PopoverPortalContainerProvider>
- *       </DialogContent>
- *     </Dialog>
- *   );
- * }
- * ```
- *
- * @example
- *
- * ```tsx
- * // Dropdown variant: same pattern, container is the DropdownMenuContent.
- * const [contentEl, setContentEl] = useState<HTMLDivElement | null>(null);
- * <DropdownMenu>
- *   <DropdownMenuTrigger>...</DropdownMenuTrigger>
- *   <DropdownMenuContent ref={setContentEl}>
- *     <PopoverPortalContainerProvider container={contentEl}>
- *       <BookChapterControl ... />
- *     </PopoverPortalContainerProvider>
- *   </DropdownMenuContent>
- * </DropdownMenu>
- * ```
- */
-export declare function PopoverPortalContainerProvider({ container, children, }: {
-	container: HTMLElement | null;
-	children: React$1.ReactNode;
+export declare function DialogFooter({ className, showCloseButton, children, ...props }: React$1.ComponentProps<"div"> & {
+	showCloseButton?: boolean;
 }): import("react/jsx-runtime").JSX.Element;
 /**
  * Renders the dialog's title as a styled heading. Used inside DialogHeader.
