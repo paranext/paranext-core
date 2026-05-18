@@ -3035,9 +3035,14 @@ declare module 'shared/models/docking-framework.model' {
      */
     floatTabById: (tabId: string) => void;
     /**
-     * Gets all WebView definitions for all currently open web view tabs
+     * Get the WebView definitions for every open WebView tab across the dock layout.
      *
-     * @returns Array of WebView definitions for all open web view tabs
+     * Used by consumers (e.g. ProjectSelector) that need to seed initial state at mount time.
+     * `papi.webViews.onDidOpenWebView` does not replay for tabs already open at subscription time, so
+     * subscribers that mount after some tabs are already open need this enumeration to bootstrap.
+     *
+     * @returns Array of WebView definitions, one per currently-open WebView tab. Empty array when the
+     *   dock layout has no WebView tabs.
      */
     getAllWebViewDefinitions: () => WebViewDefinition[];
     /**
@@ -3238,13 +3243,19 @@ declare module 'shared/services/web-view.service-model' {
      */
     getOpenWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
     /**
-     * Gets the saved properties on all currently open WebView definitions
+     * Get the saved properties on every currently-open WebView definition. Returns the same
+     * representation `getOpenWebViewDefinition` does, just for every open WebView in one call.
+     *
+     * Use this at mount time to seed initial state for subscribers of `onDidOpenWebView` /
+     * `onDidUpdateWebView` / `onDidCloseWebView` — those events do not replay for tabs already open
+     * at subscription time. Combined with the live event stream, this gives a complete picture of the
+     * WebView landscape from any point in the app's lifetime.
      *
      * Note: this only returns a representation of the current WebView definitions, not the actual web
-     * view definitions themselves. Changing properties on the returned definitions does not affect
-     * the actual WebView definitions.
+     * view definitions themselves. Changing properties on returned definitions does not affect the
+     * actual WebView definitions.
      *
-     * @returns Promise that resolves to an array of saved properties for all open WebView definitions
+     * @returns Saved properties of every open WebView. Empty array if no WebViews are open.
      */
     getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]>;
     /**
