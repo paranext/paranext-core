@@ -5932,7 +5932,7 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
   import { DialogDefinitionBase, DialogProps } from 'renderer/components/dialogs/dialog-base.data';
   import { ReactElement } from 'react';
   import { ProjectMetadataFilterOptions } from 'shared/models/project-data-provider-factory.interface';
-  import { LocalizeKey } from 'platform-bible-utils';
+  import { DblResourceData, LocalizeKey, ResourceType } from 'platform-bible-utils';
   /** The tabType for the about dialog in `about-dialog.component.tsx` */
   export const ABOUT_DIALOG_TYPE = 'platform.aboutDialog';
   /** The tabType for the select project dialog in `select-project.dialog.tsx` */
@@ -5945,6 +5945,8 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
   export const ALERT_DIALOG_TYPE = 'platform.alert';
   /** The dialogType for confirm dialogs rendered via overlay */
   export const CONFIRM_DIALOG_TYPE = 'platform.confirm';
+  /** The tabType for the resource picker dialog in `resource-picker.dialog.tsx` */
+  export const RESOURCE_PICKER_DIALOG_TYPE = 'platform.resourcePicker';
   type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
   /** Options to provide when showing the Select Project dialog */
   export type SelectProjectDialogOptions = ProjectDialogOptionsBase;
@@ -5964,6 +5966,13 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
     prompt: string | LocalizeKey;
     /** Custom label for the OK button. Defaults to a localized "OK". */
     okLabel?: string | LocalizeKey;
+  };
+  /** Options to provide when showing the Resource Picker dialog */
+  export type ResourcePickerDialogOptions = DialogOptions & {
+    /** If provided, only resources of this type are shown */
+    resourceType?: ResourceType;
+    /** IDs of resources already selected in the calling panel */
+    selectedResourceIds?: string[];
   };
   /** Options to provide when showing a confirm dialog */
   export type ConfirmDialogOptions = DialogOptions & {
@@ -5991,6 +6000,7 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
     [SELECT_BOOKS_DIALOG_TYPE]: DialogDataTypes<SelectBooksDialogOptions, string[]>;
     [ALERT_DIALOG_TYPE]: DialogDataTypes<AlertDialogOptions, true>;
     [CONFIRM_DIALOG_TYPE]: DialogDataTypes<ConfirmDialogOptions, boolean>;
+    [RESOURCE_PICKER_DIALOG_TYPE]: DialogDataTypes<ResourcePickerDialogOptions, DblResourceData>;
   }
   /** All dialog types that have DialogDefinition entries */
   export type DialogTabTypes = keyof DialogTypes;
