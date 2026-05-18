@@ -453,7 +453,7 @@ export function resolveOpenEditorDispatch(
 ): OpenEditorDispatch {
   if (interfaceMode === 'simple') {
     // Simple mode invariant: every Scripture Editor open lands in the editor column. The
-    // caller-supplied `existingTabIdToReplace` is intentionally ignored — e.g., the column 3
+    // caller-supplied `existingTabIdToReplace` is intentionally ignored — e.g., column 3's
     // NewTab passes its own id so it can be replaced in place, but in simple mode we route to
     // the editor column instead so we never have two editors for the same (or different) project.
     const existingForSameView = allScriptureEditors.find(

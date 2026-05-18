@@ -753,8 +753,8 @@ describe('resolveOpenEditorDispatch', () => {
       'simple',
       'caller-supplied-tab-id',
     );
-    // Simple-mode invariant: opens land in the editor column. Caller's tab is not the editor —
-    // we ignore it and replace the existing editor instead.
+    // Simple-mode invariant: every open routes to the editor column. The caller's tab is not the
+    // editor, so we ignore it and replace the existing editor instead.
     expect(result).toEqual({ kind: 'replace-tab', targetTabId: 'editor-other' });
   });
 
