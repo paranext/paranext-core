@@ -1,5 +1,5 @@
 import { MouseEventHandler, ReactNode } from 'react';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { Button } from '@/components/shadcn-ui/button';
 import {
   Tooltip,

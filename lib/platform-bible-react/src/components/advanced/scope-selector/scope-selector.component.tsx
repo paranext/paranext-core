@@ -21,7 +21,7 @@ import { Label } from '@/components/shadcn-ui/label';
 import { PopoverPortalContainerProvider } from '@/components/shadcn-ui/popover';
 import { RadioGroup, RadioGroupItem } from '@/components/shadcn-ui/radio-group';
 import { Scope, ScopeWithRange } from '@/components/utils/scripture.util';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Check, ChevronDown } from 'lucide-react';
 import {

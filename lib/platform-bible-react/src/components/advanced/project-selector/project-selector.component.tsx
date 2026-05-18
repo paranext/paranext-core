@@ -19,7 +19,7 @@ import {
   getLocalizeKeyForScrollGroupId,
   type ScrollGroupId,
 } from 'platform-bible-utils';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { Z_INDEX_OVERLAY } from '@/components/z-index';
 import { Badge } from '@/components/shadcn-ui/badge';
 import { Button, ButtonProps } from '@/components/shadcn-ui/button';

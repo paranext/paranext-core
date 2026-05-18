@@ -1,5 +1,5 @@
 import { CommandGroup, CommandItem } from '@/components/shadcn-ui/command';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 
 export interface NumberedItemGridProps {
   /** Number of items to render (1..count, inclusive). Returns null if count <= 0. */
