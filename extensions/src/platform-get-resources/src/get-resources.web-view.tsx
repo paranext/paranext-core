@@ -199,15 +199,8 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const installResource = dblResourcesProvider?.installDblResource;
   const uninstallResource = dblResourcesProvider?.uninstallDblResource;
 
-  const [retryCount, setRetryCount] = useState(0);
-
   const [resources, isLoadingResources] = usePromise(
-    useCallback(
-      () => papi.commands.sendCommand('platformGetResources.getCachedResources'),
-      // retryCount is an intentional re-fetch trigger, not a real dependency of the callback
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      [retryCount],
-    ),
+    useCallback(() => papi.commands.sendCommand('platformGetResources.getCachedResources'), []),
     undefined,
   );
 
