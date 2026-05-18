@@ -61,7 +61,7 @@ function StatefulHarness(props: Partial<ManageBooksDialogProps>) {
   const sidebarProjects = useMemo(() => SAMPLE_SIDEBAR_PROJECTS, []);
 
   return (
-    <div className="tw-h-[600px] tw-w-full">
+    <div className="tw:h-[600px] tw:w-full">
       <ManageBooksDialog
         open={open}
         projectId={projectId}

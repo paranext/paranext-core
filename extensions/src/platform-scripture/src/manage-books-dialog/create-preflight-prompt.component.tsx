@@ -58,8 +58,8 @@ export function CreatePreflightPrompt({
         if (!v) onCancel();
       }}
     >
-      <DialogContent className="tw-max-w-md" role="alertdialog">
-        <div className="tw-flex tw-flex-col tw-gap-4">
+      <DialogContent className="tw:max-w-md" role="alertdialog">
+        <div className="tw:flex tw:flex-col tw:gap-4">
           <DialogHeader>
             <DialogTitle>
               {prompt?.kind === 'missing-model'
@@ -96,7 +96,7 @@ export function CreatePreflightPrompt({
               })()}
             </DialogDescription>
           </DialogHeader>
-          <div className="tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-justify-end">
+          <div className="tw:flex tw:flex-col tw:gap-2 tw:sm:flex-row tw:sm:justify-end">
             <Button variant="outline" autoFocus onClick={onCancel}>
               {t('%manageBooks_prompt_cancel%', 'Cancel')}
             </Button>

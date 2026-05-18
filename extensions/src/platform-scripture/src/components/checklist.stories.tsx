@@ -27,7 +27,7 @@ import {
  */
 function sampleTrigger(label: string) {
   return (
-    <Button variant="outline" className="tw-h-8" onClick={() => undefined}>
+    <Button variant="outline" className="tw:h-8" onClick={() => undefined}>
       {label}
     </Button>
   );

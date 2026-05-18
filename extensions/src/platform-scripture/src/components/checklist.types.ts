@@ -277,7 +277,7 @@ export type ChecklistToolProps = {
 
   /**
    * Edit-link click handler. The component renders an inline ghost/link button (variant="link" with
-   * `tw-text-muted-foreground`) on the primary column's row when this is provided AND the row's
+   * `tw:text-muted-foreground`) on the primary column's row when this is provided AND the row's
    * `includeEditLink` flag is true. Receives the row + the row's earliest verse ref.
    */
   onEditLinkClick?: (row: ChecklistRow, verseRef: string) => void;

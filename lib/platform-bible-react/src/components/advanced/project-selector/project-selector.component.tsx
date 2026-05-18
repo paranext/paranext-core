@@ -218,7 +218,7 @@ function ScrollGroupChip({ scrollGroupId, isBoundButClosed }: ScrollGroupChipPro
     return (
       <Badge
         variant="outline"
-        className="tw-relative tw-text-muted-foreground"
+        className="tw:relative tw:text-muted-foreground"
         style={DIAGONAL_STRIKE_STYLE}
       >
         {letter}
@@ -277,7 +277,7 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen }: RowRenderProps)
   }, [hasExtraTooltipContent]);
 
   const leftCheck = (
-    <Check className={cn('tw-h-4 tw-w-4', row.isSelected ? 'tw-opacity-100' : 'tw-opacity-0')} />
+    <Check className={cn('tw:h-4 tw:w-4', row.isSelected ? 'tw:opacity-100' : 'tw:opacity-0')} />
   );
 
   // Right-side content: chip(s) and, for bound-but-closed rows, an "Open" button.
@@ -285,7 +285,7 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen }: RowRenderProps)
   if (mode === 'project') {
     if (row.openGroups.length > 0) {
       rightContent = (
-        <span className="tw-ms-auto tw-flex tw-shrink-0 tw-gap-1">
+        <span className="tw:ms-auto tw:flex tw:shrink-0 tw:gap-1">
           {row.openGroups.map((g) => (
             <Badge key={g} variant="secondary">
               {scrollGroupLetterFromMap(g)}
@@ -296,7 +296,7 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen }: RowRenderProps)
     }
   } else if (row.scrollGroupId !== undefined) {
     rightContent = (
-      <span className="tw-ms-auto tw-flex tw-shrink-0 tw-items-center tw-gap-2">
+      <span className="tw:ms-auto tw:flex tw:shrink-0 tw:items-center tw:gap-2">
         <ScrollGroupChip
           scrollGroupId={row.scrollGroupId}
           isBoundButClosed={row.isBoundButClosed}
@@ -305,7 +305,7 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen }: RowRenderProps)
           <Button
             size="sm"
             variant="ghost"
-            className="tw-h-6 tw-gap-1 tw-px-2 tw-text-xs"
+            className="tw:h-6 tw:gap-1 tw:px-2 tw:text-xs"
             onClick={(event) => {
               event.stopPropagation();
               onOpen(row);
@@ -314,7 +314,7 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen }: RowRenderProps)
             aria-label={strings.openButtonLabel}
             title={strings.openButtonLabel}
           >
-            <ArrowRight className="tw-h-3 tw-w-3" />
+            <ArrowRight className="tw:h-3 tw:w-3" />
             {strings.openButtonLabel}
           </Button>
         )}
@@ -332,17 +332,17 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen }: RowRenderProps)
       disabled={row.isDisabled}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={() => setIsHovered(false)}
-      className="tw-flex tw-items-center tw-gap-2 tw-pe-4"
+      className="tw:flex tw:items-center tw:gap-2 tw:pe-4"
       data-selected={row.isSelected}
     >
-      <span className="tw-flex tw-h-4 tw-w-4 tw-shrink-0 tw-items-center tw-justify-center">
+      <span className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center">
         {leftCheck}
       </span>
       {/* shortName • fullName as a single truncating line. The whole line truncates with ellipsis
           when it overflows; the tooltip surfaces the fullName for clipped rows. */}
-      <span ref={labelRef} className="tw-min-w-0 tw-flex-1 tw-truncate tw-text-start">
+      <span ref={labelRef} className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-start">
         <span>{row.shortName}</span>
-        <span className="tw-text-muted-foreground"> • {row.fullName}</span>
+        <span className="tw:text-muted-foreground"> • {row.fullName}</span>
       </span>
       {rightContent}
     </CommandItem>
@@ -364,27 +364,27 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen }: RowRenderProps)
         align="center"
         sideOffset={8}
         collisionPadding={16}
-        className="tw-max-w-xs tw-text-center"
+        className="tw:max-w-xs tw:text-center"
         style={{ zIndex: Z_INDEX_OVERLAY }}
       >
-        <div className="tw-font-semibold">{row.fullName}</div>
+        <div className="tw:font-semibold">{row.fullName}</div>
         {tooltipHasLanguage && (
-          <div className="tw-text-sm">
+          <div className="tw:text-sm">
             {row.language}
             {row.languageCode && (
-              <span className="tw-text-muted-foreground"> ({row.languageCode})</span>
+              <span className="tw:text-muted-foreground"> ({row.languageCode})</span>
             )}
           </div>
         )}
         {!row.isBoundButClosed && row.scrollGroupScrRefLabel && letter && (
-          <div className="tw-text-sm">
+          <div className="tw:text-sm">
             {row.scrollGroupScrRefLabel}
-            <span className="tw-text-muted-foreground"> ({letter})</span>
+            <span className="tw:text-muted-foreground"> ({letter})</span>
           </div>
         )}
-        {tooltipBoundBut && <div className="tw-text-sm tw-italic">{tooltipBoundBut}</div>}
+        {tooltipBoundBut && <div className="tw:text-sm tw:italic">{tooltipBoundBut}</div>}
         {row.isDisabled && row.disabledReason && (
-          <div className="tw-text-sm tw-italic tw-text-muted-foreground">{row.disabledReason}</div>
+          <div className="tw:text-sm tw:italic tw:text-muted-foreground">{row.disabledReason}</div>
         )}
       </TooltipContent>
     </Tooltip>
@@ -421,21 +421,21 @@ function FilterMenu({
           variant="ghost"
           size="sm"
           className={cn(
-            'tw-h-8 tw-w-8 tw-shrink-0 tw-p-0',
+            'tw:h-8 tw:w-8 tw:shrink-0 tw:p-0',
             // Match shadcn Toggle's "on" styling so the funnel reads as a toggle-group button
             // that's currently pressed when a filter is active.
             isFilterActive &&
-              'tw-bg-accent tw-text-accent-foreground hover:tw-bg-accent/80 data-[state=open]:tw-bg-accent',
+              'tw:bg-accent tw:text-accent-foreground tw:hover:bg-accent/80 tw:data-[state=open]:bg-accent',
           )}
           aria-label={strings.filterAriaLabel}
           aria-pressed={isFilterActive}
           title={strings.filterAriaLabel}
           onMouseDown={(event: MouseEvent) => event.preventDefault()}
         >
-          <Filter className="tw-h-4 tw-w-4" />
+          <Filter className="tw:h-4 tw:w-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="tw-w-56" style={{ zIndex: Z_INDEX_OVERLAY }}>
+      <DropdownMenuContent align="end" className="tw:w-56" style={{ zIndex: Z_INDEX_OVERLAY }}>
         <DropdownMenuLabel>{strings.groupSectionLabel}</DropdownMenuLabel>
         <DropdownMenuCheckboxItem
           checked={groupByOpenTabs}
@@ -679,10 +679,10 @@ export function ProjectSelector(props: ProjectSelectorProps) {
         return {
           node: (
             <>
-              <Badge variant="muted" className="tw-shrink-0">
+              <Badge variant="muted" className="tw:shrink-0">
                 {countText}
               </Badge>
-              <span className="tw-min-w-0 tw-truncate">{items}</span>
+              <span className="tw:min-w-0 tw:truncate">{items}</span>
             </>
           ),
           title: `${countText} ${items}`,
@@ -708,9 +708,9 @@ export function ProjectSelector(props: ProjectSelectorProps) {
 
   const triggerIcon =
     props.mode === 'project-multi' ? (
-      <ChevronsUpDown className="tw-ms-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
+      <ChevronsUpDown className="tw:ms-2 tw:h-4 tw:w-4 tw:shrink-0 tw:opacity-50" />
     ) : (
-      <ChevronDown className="tw-ms-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
+      <ChevronDown className="tw:ms-2 tw:h-4 tw:w-4 tw:shrink-0 tw:opacity-50" />
     );
 
   const openButtonHandler =
@@ -729,13 +729,13 @@ export function ProjectSelector(props: ProjectSelectorProps) {
           aria-label={props.ariaLabel}
           disabled={props.isDisabled ?? false}
           className={cn(
-            'tw-flex tw-w-[180px] tw-items-center tw-justify-between tw-overflow-hidden',
+            'tw:flex tw:w-[180px] tw:items-center tw:justify-between tw:overflow-hidden',
             props.buttonClassName,
           )}
         >
-          <span className="tw-flex tw-min-w-0 tw-flex-1 tw-items-baseline tw-gap-2 tw-overflow-hidden tw-whitespace-nowrap tw-text-start">
+          <span className="tw:flex tw:min-w-0 tw:flex-1 tw:items-baseline tw:gap-2 tw:overflow-hidden tw:whitespace-nowrap tw:text-start">
             {typeof triggerContent.node === 'string' ? (
-              <span className="tw-min-w-0 tw-truncate">{triggerContent.node}</span>
+              <span className="tw:min-w-0 tw:truncate">{triggerContent.node}</span>
             ) : (
               triggerContent.node
             )}
@@ -746,18 +746,18 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       <PopoverContent
         align={props.alignDropDown ?? 'start'}
         collisionPadding={16}
-        className={cn('tw-w-80 tw-max-w-[calc(100vw-2rem)] tw-p-0', props.popoverContentClassName)}
+        className={cn('tw:w-80 tw:max-w-[calc(100vw-2rem)] tw:p-0', props.popoverContentClassName)}
         style={props.popoverContentStyle}
       >
         <TooltipProvider delayDuration={400}>
           <Command shouldFilter={false}>
-            <div className="tw-flex tw-items-center tw-border-b tw-pe-2">
-              <div className="tw-flex-1">
+            <div className="tw:flex tw:items-center tw:border-b tw:pe-2">
+              <div className="tw:flex-1">
                 <CommandInput
                   value={query}
                   onValueChange={setQuery}
                   placeholder={strings.searchPlaceholder}
-                  className="tw-border-0"
+                  className="tw:border-0"
                 />
               </div>
               <FilterMenu
@@ -771,7 +771,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
               />
             </div>
             {props.mode === 'project-multi' && (
-              <div className="tw-flex tw-justify-between tw-border-b tw-py-2 tw-pe-4 tw-ps-2">
+              <div className="tw:flex tw:justify-between tw:border-b tw:py-2 tw:pe-4 tw:ps-2">
                 <Button variant="ghost" size="sm" onClick={handleSelectAll}>
                   {`${strings.selectAll} (${allPairs.length.toString()})`}
                 </Button>

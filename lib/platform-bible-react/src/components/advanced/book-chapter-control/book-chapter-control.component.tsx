@@ -1014,13 +1014,13 @@ export function BookChapterControl({
               {viewMode === 'verses' &&
                 selectedBookForVersesView &&
                 selectedChapterForVersesView !== undefined && (
-                  <span tabIndex={-1} className="tw-text-sm tw-font-medium">
+                  <span tabIndex={-1} className="tw:text-sm tw:font-medium">
                     {`${getLocalizedBookName(selectedBookForVersesView, localizedBookNames)} ${selectedChapterForVersesView}`}
                   </span>
                 )}
               <span
                 tabIndex={-1}
-                className="tw-ms-auto tw-text-sm tw-font-medium tw-text-muted-foreground"
+                className="tw:ms-auto tw:text-sm tw:font-medium tw:text-muted-foreground"
               >
                 {viewMode === 'verses' ? selectVerseTitle : selectChapterTitle}
               </span>
@@ -1170,7 +1170,7 @@ export function BookChapterControl({
                       selectedBookForVersesView,
                       selectedChapterForVersesView,
                     )}
-                    className="tw-p-4"
+                    className="tw:p-4"
                   />
                 )}
             </CommandList>
