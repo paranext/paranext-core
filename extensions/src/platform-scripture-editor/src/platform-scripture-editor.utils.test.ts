@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest';
 import { ScriptureRange } from 'platform-scripture-editor';
 import type PapiBackend from '@papi/backend';
 import { UsjTextContentLocation } from 'platform-bible-utils';
-import type { NetworkObjectDetails } from '@shared/models/network-object.model';
 import {
   convertScriptureRangeToEditorRange,
   openDefaultActiveProjectIfApplicable,
@@ -412,8 +411,8 @@ interface PickerMocks {
   mockGetSetting: ReturnType<typeof vi.fn>;
   mockGetAllOpenWebViewDefinitions: ReturnType<typeof vi.fn>;
   mockSendCommand: ReturnType<typeof vi.fn>;
-  mockWaitForNetworkObject: ReturnType<typeof vi.fn>;
   mockWarn: ReturnType<typeof vi.fn>;
+  mockInfo: ReturnType<typeof vi.fn>;
   /** Synthesize a `webViews.onDidOpenWebView` event from within a test. */
   fireWebViewOpen: () => void;
   /** Synthesize a `paratextBibleSendReceive.onSyncStateChanged` event from within a test. */
@@ -428,8 +427,8 @@ function createPickerMocks(): PickerMocks {
   const mockGetSetting = vi.fn();
   const mockGetAllOpenWebViewDefinitions = vi.fn();
   const mockSendCommand = vi.fn();
-  const mockWaitForNetworkObject = vi.fn();
   const mockWarn = vi.fn();
+  const mockInfo = vi.fn();
 
   // The driver subscribes to these events; we capture each listener so tests can drive events.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -467,8 +466,7 @@ function createPickerMocks(): PickerMocks {
     },
     commands: { sendCommand: mockSendCommand },
     network: { getNetworkEvent: mockGetNetworkEvent },
-    networkObjectStatus: { waitForNetworkObject: mockWaitForNetworkObject },
-    logger: { warn: mockWarn, info: vi.fn() },
+    logger: { warn: mockWarn, info: mockInfo },
   } as unknown as typeof PapiBackend;
 
   return {
@@ -476,8 +474,8 @@ function createPickerMocks(): PickerMocks {
     mockGetSetting,
     mockGetAllOpenWebViewDefinitions,
     mockSendCommand,
-    mockWaitForNetworkObject,
     mockWarn,
+    mockInfo,
     fireWebViewOpen: () => {
       if (!webViewOpenListener) throw new Error('fireWebViewOpen: no listener captured');
       webViewOpenListener({});
@@ -528,84 +526,39 @@ describe('openDefaultActiveProjectIfApplicable', () => {
     expect(mockSendCommand).not.toHaveBeenCalled();
   });
 
-  it("returns 'no-send-receive' when waitForNetworkObject rejects (timeout)", async () => {
-    const {
-      papi,
-      mockGetSetting,
-      mockGetAllOpenWebViewDefinitions,
-      mockSendCommand,
-      mockWaitForNetworkObject,
-      mockWarn,
-    } = createPickerMocks();
+  it("returns 'no-send-receive' when getSharedProjects rejects (S/R not registered yet)", async () => {
+    const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions, mockSendCommand, mockWarn } =
+      createPickerMocks();
     mockGetSetting.mockResolvedValue('simple');
     mockGetAllOpenWebViewDefinitions.mockResolvedValue(
       asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
     );
-    mockWaitForNetworkObject.mockRejectedValue(new Error('timeout'));
-
-    const outcome = await openDefaultActiveProjectIfApplicable(papi);
-
-    expect(outcome).toBe('no-send-receive');
-    expect(mockWaitForNetworkObject).toHaveBeenCalledWith(
-      { id: 'paratextBibleSendReceive' },
-      expect.any(Number),
-    );
-    expect(mockSendCommand).not.toHaveBeenCalledWith('paratextBibleSendReceive.getSharedProjects');
-    // Timeout is the expected path on Platform.Bible — must not log at warn.
-    expect(mockWarn).not.toHaveBeenCalled();
-  });
-
-  it("returns 'failed' when getSharedProjects rejects", async () => {
-    const {
-      papi,
-      mockGetSetting,
-      mockGetAllOpenWebViewDefinitions,
-      mockSendCommand,
-      mockWaitForNetworkObject,
-      mockWarn,
-    } = createPickerMocks();
-    mockGetSetting.mockResolvedValue('simple');
-    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
-      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
-    );
-    mockWaitForNetworkObject.mockResolvedValue({
-      id: 'paratextBibleSendReceive',
-      objectType: 'networkObject',
-      functionNames: [],
-      attributes: {},
-    });
     mockSendCommand.mockImplementation(async (commandName: string) => {
       if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
-        throw new Error('getSharedProjects failed');
+        throw new Error("Command 'paratextBibleSendReceive.getSharedProjects' is not registered");
       }
       return undefined;
     });
 
     const outcome = await openDefaultActiveProjectIfApplicable(papi);
 
-    expect(outcome).toBe('failed');
+    expect(outcome).toBe('no-send-receive');
     expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.getSharedProjects');
-    expect(mockWarn).toHaveBeenCalled();
+    expect(mockSendCommand).not.toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      expect.anything(),
+    );
+    // Expected steady state on Platform.Bible — silent (info), not warn.
+    expect(mockWarn).not.toHaveBeenCalled();
   });
 
   it("returns 'no-candidate' when all entries have editedStatus 'new'", async () => {
-    const {
-      papi,
-      mockGetSetting,
-      mockGetAllOpenWebViewDefinitions,
-      mockSendCommand,
-      mockWaitForNetworkObject,
-    } = createPickerMocks();
+    const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions, mockSendCommand } =
+      createPickerMocks();
     mockGetSetting.mockResolvedValue('simple');
     mockGetAllOpenWebViewDefinitions.mockResolvedValue(
       asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
     );
-    mockWaitForNetworkObject.mockResolvedValue({
-      id: 'paratextBibleSendReceive',
-      objectType: 'networkObject',
-      functionNames: [],
-      attributes: {},
-    });
     mockSendCommand.mockImplementation(async (commandName: string) => {
       if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
         return {
@@ -628,23 +581,12 @@ describe('openDefaultActiveProjectIfApplicable', () => {
   });
 
   it("returns 'no-candidate' when all entries have empty lastSendReceiveDate", async () => {
-    const {
-      papi,
-      mockGetSetting,
-      mockGetAllOpenWebViewDefinitions,
-      mockSendCommand,
-      mockWaitForNetworkObject,
-    } = createPickerMocks();
+    const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions, mockSendCommand } =
+      createPickerMocks();
     mockGetSetting.mockResolvedValue('simple');
     mockGetAllOpenWebViewDefinitions.mockResolvedValue(
       asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
     );
-    mockWaitForNetworkObject.mockResolvedValue({
-      id: 'paratextBibleSendReceive',
-      objectType: 'networkObject',
-      functionNames: [],
-      attributes: {},
-    });
     mockSendCommand.mockImplementation(async (commandName: string) => {
       if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
         return {
@@ -667,23 +609,12 @@ describe('openDefaultActiveProjectIfApplicable', () => {
   });
 
   it('picks the project with the highest lastSendReceiveDate and calls openScriptureEditor', async () => {
-    const {
-      papi,
-      mockGetSetting,
-      mockGetAllOpenWebViewDefinitions,
-      mockSendCommand,
-      mockWaitForNetworkObject,
-    } = createPickerMocks();
+    const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions, mockSendCommand } =
+      createPickerMocks();
     mockGetSetting.mockResolvedValue('simple');
     mockGetAllOpenWebViewDefinitions.mockResolvedValue(
       asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
     );
-    mockWaitForNetworkObject.mockResolvedValue({
-      id: 'paratextBibleSendReceive',
-      objectType: 'networkObject',
-      functionNames: [],
-      attributes: {},
-    });
     mockSendCommand.mockImplementation(async (commandName: string) => {
       if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
         return {
@@ -729,23 +660,12 @@ describe('openDefaultActiveProjectIfApplicable', () => {
   });
 
   it("skips entries with editedStatus 'new' and picks the newest of the rest", async () => {
-    const {
-      papi,
-      mockGetSetting,
-      mockGetAllOpenWebViewDefinitions,
-      mockSendCommand,
-      mockWaitForNetworkObject,
-    } = createPickerMocks();
+    const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions, mockSendCommand } =
+      createPickerMocks();
     mockGetSetting.mockResolvedValue('simple');
     mockGetAllOpenWebViewDefinitions.mockResolvedValue(
       asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
     );
-    mockWaitForNetworkObject.mockResolvedValue({
-      id: 'paratextBibleSendReceive',
-      objectType: 'networkObject',
-      functionNames: [],
-      attributes: {},
-    });
     mockSendCommand.mockImplementation(async (commandName: string) => {
       if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
         return {
@@ -780,24 +700,12 @@ describe('openDefaultActiveProjectIfApplicable', () => {
   });
 
   it("returns 'failed' when the openScriptureEditor command rejects", async () => {
-    const {
-      papi,
-      mockGetSetting,
-      mockGetAllOpenWebViewDefinitions,
-      mockSendCommand,
-      mockWaitForNetworkObject,
-      mockWarn,
-    } = createPickerMocks();
+    const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions, mockSendCommand, mockWarn } =
+      createPickerMocks();
     mockGetSetting.mockResolvedValue('simple');
     mockGetAllOpenWebViewDefinitions.mockResolvedValue(
       asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
     );
-    mockWaitForNetworkObject.mockResolvedValue({
-      id: 'paratextBibleSendReceive',
-      objectType: 'networkObject',
-      functionNames: [],
-      attributes: {},
-    });
     mockSendCommand.mockImplementation(async (commandName: string) => {
       if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
         return {
@@ -821,77 +729,6 @@ describe('openDefaultActiveProjectIfApplicable', () => {
 
     expect(outcome).toBe('failed');
     expect(mockWarn).toHaveBeenCalled();
-  });
-
-  it('waits for paratextBibleSendReceive network object before reading shared projects (PT-3958 race fix)', async () => {
-    const {
-      papi,
-      mockGetSetting,
-      mockGetAllOpenWebViewDefinitions,
-      mockSendCommand,
-      mockWaitForNetworkObject,
-    } = createPickerMocks();
-    mockGetSetting.mockResolvedValue('simple');
-    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
-      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
-    );
-
-    // Block `waitForNetworkObject` on a controllable promise so we can assert ordering.
-    let resolveWait: (value: NetworkObjectDetails) => void = () => {};
-    mockWaitForNetworkObject.mockReturnValueOnce(
-      new Promise((resolve) => {
-        resolveWait = resolve;
-      }),
-    );
-
-    mockSendCommand.mockImplementation(async (commandName: string) => {
-      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
-        return {
-          proj1: {
-            id: 'proj1',
-            name: 'P1',
-            fullName: 'P1',
-            language: 'en',
-            editedStatus: 'edited',
-            lastSendReceiveDate: '2025-06-01T00:00:00Z',
-          },
-        };
-      }
-      if (commandName === 'platformScriptureEditor.openScriptureEditor') return 'opened-webview-id';
-      return undefined;
-    });
-
-    // Start the picker; the wait is currently blocked.
-    const outcomePromise = openDefaultActiveProjectIfApplicable(papi);
-
-    // Wait until the picker has actually called `waitForNetworkObject` and is suspended on it.
-    await vi.waitFor(() =>
-      expect(mockWaitForNetworkObject).toHaveBeenCalledWith(
-        { id: 'paratextBibleSendReceive' },
-        expect.any(Number),
-      ),
-    );
-
-    // The picker is suspended on the wait — `getSharedProjects` must not have been called yet.
-    expect(mockSendCommand).not.toHaveBeenCalledWith('paratextBibleSendReceive.getSharedProjects');
-
-    // Simulate S/R registering its network object.
-    resolveWait({
-      id: 'paratextBibleSendReceive',
-      objectType: 'networkObject',
-      functionNames: [],
-      attributes: {},
-    });
-
-    const outcome = await outcomePromise;
-
-    // Picker should now have proceeded and opened the top candidate.
-    expect(outcome).toBe('filled');
-    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.getSharedProjects');
-    expect(mockSendCommand).toHaveBeenCalledWith(
-      'platformScriptureEditor.openScriptureEditor',
-      'proj1',
-    );
   });
 });
 

@@ -494,11 +494,12 @@ export function resolveOpenEditorDispatch(
  * - `'wrong-mode'` — `platform.interfaceMode` is not `'simple'`; the picker does nothing until it is.
  * - `'no-empty'` — no Scripture Editor with `projectId === undefined` is currently open. The driver
  *   may retry when a new web view opens.
- * - `'no-send-receive'` — the `paratextBibleSendReceive` network object never registered within the
- *   picker's wait ceiling. Expected on Platform.Bible (S/R is not installed); on paratext-10-studio
- *   this would indicate S/R failed to activate.
- * - `'failed'` — `getSharedProjects` or the open command rejected; logged at warn. The driver may
- *   retry on the next trigger.
+ * - `'no-send-receive'` — `paratextBibleSendReceive.getSharedProjects` was unavailable (command not
+ *   registered yet, or the extension is absent). Expected steady state on Platform.Bible; expected
+ *   transiently on paratext-10-studio during the window between platform-scripture-editor's
+ *   activation and paratextBibleSendReceive's activation. The driver retries on subsequent
+ *   web-view-open and sync-completion events. Logged at info, not warn — silent on Platform.Bible.
+ * - `'failed'` — the open command rejected; logged at warn. The driver may retry on the next trigger.
  * - `'no-candidate'` — S/R was reachable, but no shared project passed the activity / `editedStatus`
  *   filter. The driver may retry after a sync completes.
  * - `'filled'` — the picker successfully called the open command for the top candidate.
@@ -510,15 +511,6 @@ export type DefaultProjectPickerOutcome =
   | 'failed'
   | 'no-candidate'
   | 'filled';
-
-/**
- * Maximum time {@link openDefaultActiveProjectIfApplicable} waits for the `paratextBibleSendReceive`
- * network object to register before giving up with `'no-send-receive'`. On observed cold starts S/R
- * registers in ~3 s; 30 s gives ~10× slack for slow disks or CI machines. On Platform.Bible (where
- * S/R is not installed) this is the time the picker spends quietly in the background before
- * settling — fire-and-forget, no UI impact.
- */
-const WAIT_FOR_SEND_RECEIVE_TIMEOUT_MS = 30_000;
 
 /**
  * Attempt to fill the empty Scripture Editor in the simple layout with the most-recently-active
@@ -557,35 +549,24 @@ export async function openDefaultActiveProjectIfApplicable(
     return 'no-empty';
   }
 
-  // Wait for the `paratextBibleSendReceive` network object to register. On paratext-10-studio this
-  // fixes the activation-order race where the picker fires inside `platformScriptureEditor.activate()`
-  // before `paratextBibleSendReceive.activate()` runs (~1.8 s later on a cold start). On
-  // Platform.Bible, where S/R is never installed, the wait times out after
-  // WAIT_FOR_SEND_RECEIVE_TIMEOUT_MS and the picker settles with `'no-send-receive'` — invisible
-  // to the user since the picker is fire-and-forget. See PT-3958.
-  try {
-    await papi.networkObjectStatus.waitForNetworkObject(
-      { id: 'paratextBibleSendReceive' },
-      WAIT_FOR_SEND_RECEIVE_TIMEOUT_MS,
-    );
-  } catch (e) {
-    // TEMP DIAGNOSTIC LOGGING — keep at `info` for the verification cycle of PT-3958, then
-    // downgrade to `debug` or remove (kept consistent with the other temp-diagnostic lines in this
-    // function added in f28085ed20).
-    papi.logger.info(
-      `Default active project picker: paratextBibleSendReceive network object did not appear within ${WAIT_FOR_SEND_RECEIVE_TIMEOUT_MS}ms; returning 'no-send-receive' (${getErrorMessage(e)})`,
-    );
-    return 'no-send-receive';
-  }
-
+  // Try `paratextBibleSendReceive.getSharedProjects` directly. If S/R hasn't activated yet (cold
+  // start, picker fires inside `platformScriptureEditor.activate()` before `paratextBibleSendReceive`
+  // registers commands) or isn't installed at all (Platform.Bible), this rejects and we return
+  // `'no-send-receive'`. The driver's existing `webViewOpen` / `syncSettled` triggers handle the
+  // retry once S/R is ready — we do NOT block here. paratextBibleSendReceive does not register a
+  // network object, so PAPI's `waitForNetworkObject` is not a usable readiness signal. See PT-3958.
   let sharedProjects: SharedProjectsInfo;
   try {
     sharedProjects = await papi.commands.sendCommand('paratextBibleSendReceive.getSharedProjects');
   } catch (e) {
-    papi.logger.warn(
-      `Default active project picker: getSharedProjects failed: ${getErrorMessage(e)}`,
+    // TEMP DIAGNOSTIC LOGGING — keep at `info` for the verification cycle of PT-3958, then
+    // downgrade to `debug` or remove (kept consistent with the other temp-diagnostic lines in this
+    // function added in f28085ed20). Silent (info, not warn) because this is the expected steady
+    // state on Platform.Bible.
+    papi.logger.info(
+      `Default active project picker: getSharedProjects unavailable; returning 'no-send-receive' (${getErrorMessage(e)})`,
     );
-    return 'failed';
+    return 'no-send-receive';
   }
 
   // ISO 8601 string comparison is chronologically sound, so a plain string compare suffices.
