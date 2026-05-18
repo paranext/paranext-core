@@ -415,10 +415,14 @@ interface PickerMocks {
   mockInfo: ReturnType<typeof vi.fn>;
   /** Synthesize a `webViews.onDidOpenWebView` event from within a test. */
   fireWebViewOpen: () => void;
+  /** Synthesize a `webViews.onDidUpdateWebView` event from within a test. */
+  fireWebViewUpdate: () => void;
   /** Synthesize a `paratextBibleSendReceive.onSyncStateChanged` event from within a test. */
   fireSync: (event: { isSyncing: boolean }) => void;
   /** `true` once the driver has unsubscribed from `onDidOpenWebView`. */
   isWebViewOpenUnsubscribed: () => boolean;
+  /** `true` once the driver has unsubscribed from `onDidUpdateWebView`. */
+  isWebViewUpdateUnsubscribed: () => boolean;
   /** `true` once the driver has unsubscribed from `onSyncStateChanged`. */
   isSyncUnsubscribed: () => boolean;
 }
@@ -439,6 +443,19 @@ function createPickerMocks(): PickerMocks {
     return () => {
       webViewOpenUnsubscribed = true;
       webViewOpenListener = undefined;
+    };
+  });
+
+  // Mirrors the open-event capture above — the driver subscribes to `onDidUpdateWebView` too, and
+  // we capture the listener so tests can drive update events.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let webViewUpdateListener: ((evt: any) => void) | undefined;
+  let webViewUpdateUnsubscribed = false;
+  const mockOnDidUpdateWebView = vi.fn((listener) => {
+    webViewUpdateListener = listener;
+    return () => {
+      webViewUpdateUnsubscribed = true;
+      webViewUpdateListener = undefined;
     };
   });
 
@@ -463,6 +480,7 @@ function createPickerMocks(): PickerMocks {
     webViews: {
       getAllOpenWebViewDefinitions: mockGetAllOpenWebViewDefinitions,
       onDidOpenWebView: mockOnDidOpenWebView,
+      onDidUpdateWebView: mockOnDidUpdateWebView,
     },
     commands: { sendCommand: mockSendCommand },
     network: { getNetworkEvent: mockGetNetworkEvent },
@@ -480,11 +498,16 @@ function createPickerMocks(): PickerMocks {
       if (!webViewOpenListener) throw new Error('fireWebViewOpen: no listener captured');
       webViewOpenListener({});
     },
+    fireWebViewUpdate: () => {
+      if (!webViewUpdateListener) throw new Error('fireWebViewUpdate: no listener captured');
+      webViewUpdateListener({});
+    },
     fireSync: (event) => {
       if (!syncListener) throw new Error('fireSync: no listener captured');
       syncListener(event);
     },
     isWebViewOpenUnsubscribed: () => webViewOpenUnsubscribed,
+    isWebViewUpdateUnsubscribed: () => webViewUpdateUnsubscribed,
     isSyncUnsubscribed: () => syncUnsubscribed,
   };
 }
@@ -926,6 +949,20 @@ describe('startDefaultProjectPicker', () => {
     });
   });
 
+  it('re-runs the picker when a web view updates (soft-close-reopen layout restore)', async () => {
+    const mocks = createPickerMocks();
+    setUpFastNoOp(mocks);
+
+    startDefaultProjectPicker(mocks.papi);
+    await vi.waitFor(() => expect(mocks.mockGetSetting).toHaveBeenCalledTimes(1));
+
+    mocks.fireWebViewUpdate();
+
+    await vi.waitFor(() => {
+      expect(mocks.mockGetSetting).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it('re-runs the picker when a sync completes (isSyncing becomes false)', async () => {
     const mocks = createPickerMocks();
     setUpFastNoOp(mocks);
@@ -986,7 +1023,7 @@ describe('startDefaultProjectPicker', () => {
     expect(mocks.mockGetSetting).toHaveBeenCalledTimes(2);
   });
 
-  it('returned unsubscriber removes both subscriptions', async () => {
+  it('returned unsubscriber removes all subscriptions', async () => {
     const mocks = createPickerMocks();
     setUpFastNoOp(mocks);
 
@@ -996,6 +1033,7 @@ describe('startDefaultProjectPicker', () => {
     unsub();
 
     expect(mocks.isWebViewOpenUnsubscribed()).toBe(true);
+    expect(mocks.isWebViewUpdateUnsubscribed()).toBe(true);
     expect(mocks.isSyncUnsubscribed()).toBe(true);
   });
 });

@@ -615,6 +615,11 @@ export async function openDefaultActiveProjectIfApplicable(
  *
  * - `webViews.onDidOpenWebView` — handles a late-arriving empty Scripture Editor (the layout's
  *   placeholder may not be in the dock yet at activate time).
+ * - `webViews.onDidUpdateWebView` — handles soft-close-then-reopen on macOS (red button hides the
+ *   window but keeps the extension host alive). The layout-restore path can re-create the Scripture
+ *   Editor without a `projectId`, and from the extension host's perspective the webview was "always
+ *   there" — so `onDidOpenWebView` doesn't re-fire. `onDidUpdateWebView` fires when any webview's
+ *   definition changes, including the projectId being reset.
  * - `paratextBibleSendReceive.onSyncStateChanged` (when `isSyncing` is `false`) — handles a sync
  *   finishing. Newly-added shared projects look ineligible (`editedStatus === 'new'`, no
  *   `lastSendReceiveDate`) until the first sync settles, so the picker has to re-check after that.
@@ -661,6 +666,10 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
     tryPicker('webViewOpen');
   });
 
+  const unsubFromWebViewUpdate = papi.webViews.onDidUpdateWebView(() => {
+    tryPicker('webViewUpdate');
+  });
+
   const unsubFromSync = papi.network.getNetworkEvent('paratextBibleSendReceive.onSyncStateChanged')(
     (event: unknown) => {
       // PAPI network-event payloads are typed `unknown`; the `paratextBibleSendReceive.onSyncStateChanged`
@@ -675,7 +684,7 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
   // (e.g., second startup after a successful first run).
   tryPicker('initial');
 
-  return aggregateUnsubscribers([unsubFromWebViewOpen, unsubFromSync]);
+  return aggregateUnsubscribers([unsubFromWebViewOpen, unsubFromWebViewUpdate, unsubFromSync]);
 }
 
 // #endregion Default Active Project Picker
