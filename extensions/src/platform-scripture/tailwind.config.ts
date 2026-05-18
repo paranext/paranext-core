@@ -2,8 +2,6 @@
 
 import { Config } from 'tailwindcss';
 import typography from '@tailwindcss/typography';
-import tailwindCssAnimate from 'tailwindcss-animate';
-import containerQueries from '@tailwindcss/container-queries';
 
 const config: Config = {
   // Theme from shadcn/ui
@@ -66,13 +64,6 @@ const config: Config = {
   plugins: [
     // Prose styles as sensible defaults for markdown renderer component
     typography(),
-    // Animations in tailwind style
-    tailwindCssAnimate,
-    // Container queries (`tw-@container/<name>`, `@md/<name>:tw-*`) — needed for the
-    // manage-books-dialog responsive layout (round 2 UX review #6 + #42). Round 1
-    // landed `tw-@container/actions` and `tw-@container/filterbar` classes in JSX but
-    // the plugin was never enabled here, so those rules silently produced no CSS.
-    containerQueries,
 
     // #endregion
   ],
