@@ -4092,7 +4092,7 @@ export declare const localizedStringsDocumentSchema: {
 		};
 	};
 };
-export type ResourceType = "ScriptureResource" | "EnhancedResource" | "XmlResource" | "SourceLanguageResource";
+export type ResourceType = "ScriptureResource" | "CommentaryResource" | "EnhancedResource" | "XmlResource" | "SourceLanguageResource";
 export type DblResourceData = {
 	dblEntryUid: string;
 	displayName: string;
@@ -4977,6 +4977,12 @@ export interface ThemeCssVariables {
 	destructive?: string;
 	/** Text and content color rendered on destructive surfaces. */
 	"destructive-foreground"?: string;
+	/** Color to emphasize the success of some action */
+	"success-foreground"?: string;
+	/** Color representing warning states such as caution, advisories, and non-critical issues. */
+	warning?: string;
+	/** Text and content color rendered on warning surfaces. */
+	"warning-foreground"?: string;
 	/** Default border and separator color. Applied to cards, menus, tables, and layout dividers. */
 	border?: string;
 	/** Border and surface treatment color for form controls such as inputs, text areas, and selects. */
@@ -5026,6 +5032,11 @@ export interface ThemeCssVariables {
 	 * tokens.
 	 */
 	radius?: string;
+	/**
+	 * Base spacing unit. Controls the size of all Tailwind spacing utilities (padding, margin, gap,
+	 * etc.).
+	 */
+	spacing?: string;
 }
 /** JSON schema object for ThemeContribution */
 export declare const themeDocumentSchema: {
@@ -5104,6 +5115,18 @@ export declare const themeDocumentSchema: {
 					description: string;
 					type: string;
 				};
+				"success-foreground": {
+					description: string;
+					type: string;
+				};
+				warning: {
+					description: string;
+					type: string;
+				};
+				"warning-foreground": {
+					description: string;
+					type: string;
+				};
 				border: {
 					description: string;
 					type: string;
@@ -5169,6 +5192,10 @@ export declare const themeDocumentSchema: {
 					type: string;
 				};
 				radius: {
+					description: string;
+					type: string;
+				};
+				spacing: {
 					description: string;
 					type: string;
 				};
