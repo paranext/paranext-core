@@ -46,7 +46,7 @@ export function NumberedItemGrid({
 
   return (
     <CommandGroup>
-      <div className={cn('tw-grid tw-grid-cols-6 tw-gap-1', className)}>
+      <div className={cn('tw:grid tw:grid-cols-6 tw:gap-1', className)}>
         {Array.from({ length: count }, (_, i) => i + 1).map((n) => {
           const disabled = isDisabled?.(n) ?? false;
           return (
@@ -61,21 +61,21 @@ export function NumberedItemGrid({
               disabled={disabled}
               aria-disabled={disabled || undefined}
               className={cn(
-                // No fixed width (previously `tw-w-8`) so cells fill their grid
+                // No fixed width (previously `tw:w-8`) so cells fill their grid
                 // column (1fr) and adapt when the popover is narrower than the
-                // default 280px. `tw-min-w-0` lets cells shrink below their
-                // intrinsic content width; `tw-px-0` overrides CommandItem's
+                // default 280px. `tw:min-w-0` lets cells shrink below their
+                // intrinsic content width; `tw:px-0` overrides CommandItem's
                 // default horizontal padding so multi-digit numbers still fit
-                // in tight cells. Keep `tw-h-8` for a consistent row height.
-                'tw-h-8 tw-min-w-0 tw-cursor-pointer tw-justify-center tw-rounded-md tw-px-0 tw-text-center tw-text-sm',
+                // in tight cells. Keep `tw:h-8` for a consistent row height.
+                'tw:h-8 tw:min-w-0 tw:cursor-pointer tw:justify-center tw:rounded-md tw:px-0 tw:text-center tw:text-sm',
                 {
-                  'tw-bg-primary tw-text-primary-foreground': isSelected?.(n) ?? false,
+                  'tw:bg-primary tw:text-primary-foreground': isSelected?.(n) ?? false,
                 },
                 {
-                  'tw-bg-muted/50 tw-text-muted-foreground/50':
+                  'tw:bg-muted/50 tw:text-muted-foreground/50':
                     (isDimmed?.(n) ?? false) && !disabled,
                 },
-                disabled && 'tw-cursor-not-allowed tw-opacity-40',
+                disabled && 'tw:cursor-not-allowed tw:opacity-40',
               )}
             >
               {n}

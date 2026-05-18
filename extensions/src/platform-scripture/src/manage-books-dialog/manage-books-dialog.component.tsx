@@ -339,9 +339,9 @@ function PresenceFilterMenu({
           variant="ghost"
           size="sm"
           className={cn(
-            'tw-ml-auto tw-h-8 tw-w-8 tw-shrink-0 tw-p-0',
+            'tw:ml-auto tw:h-8 tw:w-8 tw:shrink-0 tw:p-0',
             isFilterActive &&
-              'tw-bg-accent tw-text-accent-foreground hover:tw-bg-accent/80 data-[state=open]:tw-bg-accent',
+              'tw:bg-accent tw:text-accent-foreground tw:hover:bg-accent/80 tw:data-[state=open]:bg-accent',
           )}
           aria-label={ariaLabel}
           aria-pressed={isFilterActive}
@@ -349,10 +349,10 @@ function PresenceFilterMenu({
           data-testid={`${testIdPrefix}-trigger`}
           data-active={isFilterActive ? 'true' : 'false'}
         >
-          <Filter className="tw-h-4 tw-w-4" />
+          <Filter className="tw:h-4 tw:w-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="tw-w-44" style={{ zIndex: Z_INDEX_OVERLAY }}>
+      <DropdownMenuContent align="end" className="tw:w-44" style={{ zIndex: Z_INDEX_OVERLAY }}>
         <DropdownMenuLabel>{menuLabel}</DropdownMenuLabel>
         <DropdownMenuRadioGroup
           value={value}
@@ -1637,7 +1637,7 @@ export function ManageBooksDialog({
   return (
     <>
       <div
-        className="tw-flex tw-h-full tw-min-h-0"
+        className="tw:flex tw:h-full tw:min-h-0"
         data-testid="manage-books-dialog"
         data-action={action}
       >
@@ -1656,23 +1656,23 @@ export function ManageBooksDialog({
             targetShortName={project.shortName}
             t={t}
           />
-          <div className="tw-flex tw-min-w-0 tw-flex-1 tw-flex-col">
-            <header className="tw-flex tw-items-center tw-gap-3 tw-border-b tw-px-6 tw-py-4">
-              <div className="tw-flex tw-flex-col">
-                <h2 className="tw-text-lg tw-font-semibold">
+          <div className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col">
+            <header className="tw:flex tw:items-center tw:gap-3 tw:border-b tw:px-6 tw:py-4">
+              <div className="tw:flex tw:flex-col">
+                <h2 className="tw:text-lg tw:font-semibold">
                   {t('%manageBooks_dialog_title%', 'Manage books')}
                 </h2>
-                <p className="tw-text-xs tw-text-muted-foreground">{headerSubtitle}</p>
+                <p className="tw:text-xs tw:text-muted-foreground">{headerSubtitle}</p>
               </div>
             </header>
 
-            <div className="tw-flex tw-flex-col tw-items-start tw-gap-2 tw-border-b tw-px-6 tw-py-3 tw-@container/actions">
+            <div className="tw:flex tw:flex-col tw:items-start tw:gap-2 tw:border-b tw:px-6 tw:py-3 tw:@container/actions">
               {action === 'view' && (
-                <div className="tw-flex tw-items-center tw-gap-1">
+                <div className="tw:flex tw:items-center tw:gap-1">
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="tw-h-8 tw-px-2 tw-text-xs"
+                    className="tw:h-8 tw:px-2 tw:text-xs"
                     onClick={() => onOpenScriptureReferenceSettings(projectId)}
                   >
                     {t('%manageBooks_view_openScrRefSettings%', 'Scripture reference settings…')}
@@ -1698,7 +1698,7 @@ export function ManageBooksDialog({
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="tw-h-8 tw-px-2 tw-text-xs"
+                        className="tw:h-8 tw:px-2 tw:text-xs"
                         disabled={!enableProjectCanons}
                         aria-disabled={!enableProjectCanons}
                         aria-describedby={
@@ -1715,7 +1715,7 @@ export function ManageBooksDialog({
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="tw-h-8 tw-gap-1.5 tw-px-2 tw-text-xs"
+                        className="tw:h-8 tw:gap-1.5 tw:px-2 tw:text-xs"
                         disabled={!enableRegistry}
                         aria-disabled={!enableRegistry}
                         aria-describedby={!enableRegistry ? registryDisabledHintId : undefined}
@@ -1723,7 +1723,7 @@ export function ManageBooksDialog({
                       >
                         {t('%manageBooks_view_openRegistry%', 'Registry')}
                         <ExternalLink
-                          className="tw-h-3 tw-w-3 tw-text-muted-foreground"
+                          className="tw:h-3 tw:w-3 tw:text-muted-foreground"
                           aria-hidden
                         />
                       </Button>
@@ -1732,7 +1732,7 @@ export function ManageBooksDialog({
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="tw-h-8 tw-px-2 tw-text-xs"
+                        className="tw:h-8 tw:px-2 tw:text-xs"
                         disabled
                         aria-disabled
                         aria-describedby={viewDiffDisabledHintId}
@@ -1744,7 +1744,7 @@ export function ManageBooksDialog({
                       <>
                         {!enableProjectCanons ? (
                           <>
-                            <span id={projectCanonsDisabledHintId} className="tw-sr-only">
+                            <span id={projectCanonsDisabledHintId} className="tw:sr-only">
                               {stubTooltip}
                             </span>
                             <Tooltip>
@@ -1759,7 +1759,7 @@ export function ManageBooksDialog({
                         )}
                         {!enableRegistry ? (
                           <>
-                            <span id={registryDisabledHintId} className="tw-sr-only">
+                            <span id={registryDisabledHintId} className="tw:sr-only">
                               {stubTooltip}
                             </span>
                             <Tooltip>
@@ -1772,7 +1772,7 @@ export function ManageBooksDialog({
                         ) : (
                           registryButton
                         )}
-                        <span id={viewDiffDisabledHintId} className="tw-sr-only">
+                        <span id={viewDiffDisabledHintId} className="tw:sr-only">
                           {stubTooltip}
                         </span>
                         <Tooltip>
@@ -1788,7 +1788,7 @@ export function ManageBooksDialog({
               )}
 
               {action === 'create' && (
-                <div className="tw-flex tw-w-full tw-min-w-0 tw-flex-wrap tw-items-center tw-gap-2">
+                <div className="tw:flex tw:w-full tw:min-w-0 tw:flex-wrap tw:items-center tw:gap-2">
                   <Select
                     value={createMethod}
                     onValueChange={(v) => {
@@ -1798,7 +1798,7 @@ export function ManageBooksDialog({
                   >
                     <SelectTrigger
                       id="af-method"
-                      className="tw-h-8 tw-min-w-0 tw-flex-1 tw-basis-48"
+                      className="tw:h-8 tw:min-w-0 tw:flex-1 tw:basis-48"
                     >
                       <SelectValue />
                     </SelectTrigger>
@@ -1822,7 +1822,7 @@ export function ManageBooksDialog({
                     </SelectContent>
                   </Select>
                   {!cvAllowed && (
-                    <span id={cvDisabledHintId} className="tw-sr-only">
+                    <span id={cvDisabledHintId} className="tw:sr-only">
                       {t(
                         '%manageBooks_create_method_chapterVerse_disabledTooltip%',
                         'Disabled because the selection contains only non-canonical books.',
@@ -1833,7 +1833,7 @@ export function ManageBooksDialog({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Info
-                          className="tw-h-4 tw-w-4 tw-shrink-0 tw-text-muted-foreground"
+                          className="tw:h-4 tw:w-4 tw:shrink-0 tw:text-muted-foreground"
                           aria-label={t('%manageBooks_create_basedOnInfo%', 'Based on info')}
                         />
                       </TooltipTrigger>
@@ -1867,9 +1867,9 @@ export function ManageBooksDialog({
                         // Mirror the prior <SelectTrigger> "primary fill while empty" affordance —
                         // the picker reads as a call-to-action until a reference project is set.
                         buttonClassName={cn(
-                          'tw-h-8 tw-min-w-0 tw-flex-1 tw-basis-48',
+                          'tw:h-8 tw:min-w-0 tw:flex-1 tw:basis-48',
                           !createReferenceId &&
-                            'tw-border-primary tw-bg-primary tw-text-primary-foreground hover:tw-bg-primary/90',
+                            'tw:border-primary tw:bg-primary tw:text-primary-foreground tw:hover:bg-primary/90',
                         )}
                       />
                     </div>
@@ -1878,8 +1878,8 @@ export function ManageBooksDialog({
               )}
 
               {action === 'copy' && (
-                <div className="tw-flex tw-items-center tw-gap-2">
-                  <Label htmlFor="af-source" className="tw-text-xs tw-text-muted-foreground">
+                <div className="tw:flex tw:items-center tw:gap-2">
+                  <Label htmlFor="af-source" className="tw:text-xs tw:text-muted-foreground">
                     {t('%manageBooks_copy_fromLabel%', 'From')}
                   </Label>
                   <div id="af-source" data-testid="manage-books-copy-source-trigger">
@@ -1900,9 +1900,9 @@ export function ManageBooksDialog({
                       // Mirror the prior <SelectTrigger> "primary fill while empty" affordance —
                       // the picker reads as a call-to-action until a source project is set.
                       buttonClassName={cn(
-                        'tw-h-8 tw-w-52',
+                        'tw:h-8 tw:w-52',
                         !copySourceId &&
-                          'tw-border-primary tw-bg-primary tw-text-primary-foreground hover:tw-bg-primary/90',
+                          'tw:border-primary tw:bg-primary tw:text-primary-foreground tw:hover:bg-primary/90',
                       )}
                     />
                   </div>
@@ -1910,13 +1910,13 @@ export function ManageBooksDialog({
               )}
 
               {action === 'import' && (
-                <div className="tw-flex tw-items-center tw-gap-2">
+                <div className="tw:flex tw:items-center tw:gap-2">
                   <input
                     ref={importFileInputRef}
                     type="file"
                     multiple
                     accept=".sfm,.usfm,.usx,.xml"
-                    className="tw-hidden"
+                    className="tw:hidden"
                     onChange={(e) => {
                       handleImportFilesPicked(e.target.files);
                       e.target.value = '';
@@ -1926,20 +1926,20 @@ export function ManageBooksDialog({
                   <Button
                     variant={hasInlineFiles ? 'outline' : 'default'}
                     size="sm"
-                    className="tw-h-8"
+                    className="tw:h-8"
                     onClick={() => {
                       triggerFileBrowser().catch(() => undefined);
                     }}
                     disabled={isSubmitting}
                   >
-                    <FolderOpen className="tw-mr-1.5 tw-h-3.5 tw-w-3.5" aria-hidden />
+                    <FolderOpen className="tw:mr-1.5 tw:h-3.5 tw:w-3.5" aria-hidden />
                     {hasInlineFiles
                       ? t('%manageBooks_import_addMore%', 'Add files…')
                       : t('%manageBooks_import_choose%', 'Choose files…')}
                   </Button>
                   {hasInlineFiles && (
                     <>
-                      <span className="tw-text-xs tw-text-muted-foreground">
+                      <span className="tw:text-xs tw:text-muted-foreground">
                         {Object.keys(importFiles).length === 1
                           ? t('%manageBooks_import_filesMatched_one%', '1 file matched')
                           : fmtTemplate(
@@ -1950,7 +1950,7 @@ export function ManageBooksDialog({
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="tw-h-8"
+                        className="tw:h-8"
                         onClick={() => setImportFiles({})}
                         disabled={isSubmitting}
                       >
@@ -1962,7 +1962,7 @@ export function ManageBooksDialog({
               )}
             </div>
 
-            <div className="tw-flex tw-flex-nowrap tw-items-center tw-gap-2 tw-border-b tw-px-6 tw-py-2 tw-@container/filterbar">
+            <div className="tw:flex tw:flex-nowrap tw:items-center tw:gap-2 tw:border-b tw:px-6 tw:py-2 tw:@container/filterbar">
               {action !== 'view' && (action !== 'import' || hasInlineFiles) && (
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -1997,13 +1997,13 @@ export function ManageBooksDialog({
                 value={filter}
                 onSearch={setFilter}
                 placeholder={t('%manageBooks_filter_placeholder%', 'Filter books…')}
-                className="tw-h-8 tw-min-w-0 tw-max-w-xs tw-flex-1 tw-basis-24"
+                className="tw:h-8 tw:min-w-0 tw:max-w-xs tw:flex-1 tw:basis-24"
                 isDisabled={isSubmitting}
               />
               <span
                 className={cn(
-                  'tw-whitespace-nowrap tw-text-xs tw-text-muted-foreground',
-                  action === 'copy' && 'tw-hidden @md/filterbar:tw-inline',
+                  'tw:whitespace-nowrap tw:text-xs tw:text-muted-foreground',
+                  action === 'copy' && 'tw:hidden tw:@md/filterbar:inline',
                 )}
               >
                 {universe.length === 0
@@ -2050,9 +2050,9 @@ export function ManageBooksDialog({
               />
             </div>
 
-            <div className="tw-min-h-0 tw-flex-1 tw-overflow-auto tw-px-3 tw-py-2">
+            <div className="tw:min-h-0 tw:flex-1 tw:overflow-auto tw:px-3 tw:py-2">
               {visibleBooks.length === 0 ? (
-                <div className="tw-flex tw-min-h-40 tw-flex-col tw-items-center tw-justify-center tw-gap-3 tw-text-center tw-text-sm tw-text-muted-foreground">
+                <div className="tw:flex tw:min-h-40 tw:flex-col tw:items-center tw:justify-center tw:gap-3 tw:text-center tw:text-sm tw:text-muted-foreground">
                   <span>{emptyStateMessage}</span>
                   {isFilterEmptyState && (
                     <Button variant="outline" size="sm" onClick={clearActiveFilters}>
@@ -2083,7 +2083,7 @@ export function ManageBooksDialog({
                   interactive={action !== 'view'}
                   localizedStrings={bookGridStrings}
                   getRowAriaLabel={gridRowAriaLabel}
-                  contentClassName="tw-px-0 tw-py-0"
+                  contentClassName="tw:px-0 tw:py-0"
                 />
               )}
             </div>
@@ -2093,16 +2093,16 @@ export function ManageBooksDialog({
                   and errors now flow through the `onMutationResult` callback
                   prop and are surfaced as toasts by the wiring layer. */}
 
-            <footer className="tw-flex tw-items-center tw-justify-between tw-gap-2 tw-border-t tw-px-6 tw-py-3">
-              <span className="tw-text-xs tw-text-muted-foreground">{summaryText}</span>
+            <footer className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:border-t tw:px-6 tw:py-3">
+              <span className="tw:text-xs tw:text-muted-foreground">{summaryText}</span>
               {/* C4: aria-live region for selection-count + status */}
-              <span id={liveRegionId} aria-live="polite" className="tw-sr-only">
+              <span id={liveRegionId} aria-live="polite" className="tw:sr-only">
                 {liveAnnouncement}
               </span>
-              <div className="tw-flex tw-items-center tw-gap-2">
+              <div className="tw:flex tw:items-center tw:gap-2">
                 {isSubmitting && (
-                  <span className="tw-flex tw-items-center tw-gap-1.5 tw-text-xs tw-text-muted-foreground">
-                    <Loader2 className="tw-h-3.5 tw-w-3.5 tw-animate-spin" aria-hidden />
+                  <span className="tw:flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-muted-foreground">
+                    <Loader2 className="tw:h-3.5 tw:w-3.5 tw:animate-spin" aria-hidden />
                     {liveAnnouncement}
                   </span>
                 )}
@@ -2113,18 +2113,18 @@ export function ManageBooksDialog({
                       if (isSubmitting)
                         return (
                           <Loader2
-                            className="tw-mr-1.5 tw-h-4 tw-w-4 tw-animate-spin"
+                            className="tw:mr-1.5 tw:h-4 tw:w-4 tw:animate-spin"
                             aria-hidden
                           />
                         );
                       if (action === 'create')
-                        return <BookPlus className="tw-mr-1.5 tw-h-4 tw-w-4" aria-hidden />;
+                        return <BookPlus className="tw:mr-1.5 tw:h-4 tw:w-4" aria-hidden />;
                       if (action === 'delete')
-                        return <Trash2 className="tw-mr-1.5 tw-h-4 tw-w-4" aria-hidden />;
+                        return <Trash2 className="tw:mr-1.5 tw:h-4 tw:w-4" aria-hidden />;
                       if (action === 'copy')
-                        return <Copy className="tw-mr-1.5 tw-h-4 tw-w-4" aria-hidden />;
+                        return <Copy className="tw:mr-1.5 tw:h-4 tw:w-4" aria-hidden />;
                       if (action === 'import')
-                        return <Download className="tw-mr-1.5 tw-h-4 tw-w-4" aria-hidden />;
+                        return <Download className="tw:mr-1.5 tw:h-4 tw:w-4" aria-hidden />;
                       return undefined;
                     };
                     const actionButton = (
@@ -2180,7 +2180,7 @@ export function ManageBooksDialog({
                     return (
                       <>
                         {disabled && (
-                          <span id={applyDisabledHintId} className="tw-sr-only">
+                          <span id={applyDisabledHintId} className="tw:sr-only">
                             {tooltipBody}
                           </span>
                         )}

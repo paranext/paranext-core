@@ -667,7 +667,7 @@ global.webViewComponent = function ChecklistWebView({
           openTabs={comparativeOpenTabs}
           selection={comparativeSelection}
           onChangeSelection={handleComparativeTextsChange}
-          buttonClassName="tw-h-8 tw-min-w-32 tw-font-normal"
+          buttonClassName="tw:h-8 tw:min-w-32 tw:font-normal"
         />
       </div>
     ),
@@ -785,7 +785,7 @@ global.webViewComponent = function ChecklistWebView({
           onChangeSelection={(next: { projectId: string }) =>
             updateWebViewDefinition({ projectId: next.projectId })
           }
-          buttonClassName="tw-h-8 tw-min-w-32 tw-font-normal"
+          buttonClassName="tw:h-8 tw:min-w-32 tw:font-normal"
           buttonPlaceholder={
             localizedStrings['%markersChecklist_toolbar_primaryProject%'] ?? primaryProjectLabel
           }
@@ -853,7 +853,7 @@ global.webViewComponent = function ChecklistWebView({
           onRangeEndChange={handleRangeEndChange}
           getEndVerse={getEndVerse}
           hideLabel
-          buttonClassName="tw-h-8 tw-min-w-32 tw-font-normal"
+          buttonClassName="tw:h-8 tw:min-w-32 tw:font-normal"
         />
       </div>
     ),

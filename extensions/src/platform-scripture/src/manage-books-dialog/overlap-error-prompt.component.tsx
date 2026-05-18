@@ -30,8 +30,8 @@ export function OverlapErrorPrompt({ error, t, onDismiss }: OverlapErrorPromptPr
         if (!v) onDismiss();
       }}
     >
-      <DialogContent className="tw-max-w-md" role="alertdialog">
-        <div className="tw-flex tw-flex-col tw-gap-4">
+      <DialogContent className="tw:max-w-md" role="alertdialog">
+        <div className="tw:flex tw:flex-col tw:gap-4">
           <DialogHeader>
             <DialogTitle>
               {t('%manageBooks_import_overlapTitle%', 'Two files map to the same book')}
@@ -45,7 +45,7 @@ export function OverlapErrorPrompt({ error, t, onDismiss }: OverlapErrorPromptPr
             </DialogDescription>
           </DialogHeader>
           {error && (
-            <p className="tw-text-sm tw-text-muted-foreground">
+            <p className="tw:text-sm tw:text-muted-foreground">
               {fmtTemplate(
                 t(
                   '%manageBooks_import_overlapBody%',
@@ -57,7 +57,7 @@ export function OverlapErrorPrompt({ error, t, onDismiss }: OverlapErrorPromptPr
               )}
             </p>
           )}
-          <div className="tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-justify-end">
+          <div className="tw:flex tw:flex-col tw:gap-2 tw:sm:flex-row tw:sm:justify-end">
             <Button autoFocus onClick={onDismiss}>
               {t('%manageBooks_import_overlapDismiss%', 'Got it')}
             </Button>

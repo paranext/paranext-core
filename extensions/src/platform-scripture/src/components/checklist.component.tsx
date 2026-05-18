@@ -100,12 +100,12 @@ type ParagraphRowProps = {
 function ParagraphRow({ paragraph, showVerseText, markerAriaTemplate }: ParagraphRowProps) {
   return (
     <div
-      className="tw-flex tw-flex-row tw-flex-wrap tw-items-baseline tw-gap-1"
+      className="tw:flex tw:flex-row tw:flex-wrap tw:items-baseline tw:gap-1"
       style={getMarkerIndentStyle(paragraph.marker)}
       data-marker={paragraph.marker}
     >
       <span
-        className="tw-font-mono tw-text-xs tw-font-semibold"
+        className="tw:font-mono tw:text-xs tw:font-semibold"
         aria-label={markerAriaTemplate.replace('{marker}', paragraph.marker)}
       >
         {`\\${paragraph.marker}`}
@@ -123,7 +123,7 @@ function ParagraphRow({ paragraph, showVerseText, markerAriaTemplate }: Paragrap
               return (
                 <span
                   key={itemKey}
-                  className="tw-italic tw-text-muted-foreground"
+                  className="tw:italic tw:text-muted-foreground"
                   data-character-style={item.characterStyle}
                 >
                   {`(\\${item.characterStyle} ${item.text.trim()})`}
@@ -131,35 +131,35 @@ function ParagraphRow({ paragraph, showVerseText, markerAriaTemplate }: Paragrap
               );
             }
             return (
-              <span key={itemKey} className="tw-text-foreground">
+              <span key={itemKey} className="tw:text-foreground">
                 {item.text}
               </span>
             );
           }
           if (item.type === 'verse') {
             return (
-              <sup key={itemKey} className="tw-font-semibold tw-text-muted-foreground">
+              <sup key={itemKey} className="tw:font-semibold tw:text-muted-foreground">
                 {item.verseNumber}
               </sup>
             );
           }
           if (item.type === 'link') {
             return (
-              <span key={itemKey} className="tw-underline tw-text-primary">
+              <span key={itemKey} className="tw:underline tw:text-primary">
                 {item.displayText}
               </span>
             );
           }
           if (item.type === 'error') {
             return (
-              <span key={itemKey} className="tw-italic tw-text-destructive">
+              <span key={itemKey} className="tw:italic tw:text-destructive">
                 {item.message}
               </span>
             );
           }
           if (item.type === 'message') {
             return (
-              <span key={itemKey} className="tw-italic tw-text-muted-foreground">
+              <span key={itemKey} className="tw:italic tw:text-muted-foreground">
                 {item.message}
               </span>
             );
@@ -192,17 +192,17 @@ type CellContentProps = {
 
 function CellContent({ cell, showVerseText, dir, markerAriaTemplate }: CellContentProps) {
   if (cell.error) {
-    return <span className="tw-italic tw-text-destructive">{cell.error}</span>;
+    return <span className="tw:italic tw:text-destructive">{cell.error}</span>;
   }
   if (cell.paragraphs.length === 0) {
     return (
-      <span className="tw-text-muted-foreground" aria-hidden="true">
+      <span className="tw:text-muted-foreground" aria-hidden="true">
         —
       </span>
     );
   }
   return (
-    <div className="tw-flex tw-flex-col tw-gap-1" dir={dir}>
+    <div className="tw:flex tw:flex-col tw:gap-1" dir={dir}>
       {cell.paragraphs.map((paragraph, paragraphIndex) => (
         <ParagraphRow
           // Paragraph markers may repeat within a single cell (e.g. two consecutive `\p`s), so the
@@ -242,7 +242,7 @@ function ColumnHeaderWithTooltip({
       <Tooltip>
         <TooltipTrigger asChild>
           <span
-            className="tw-font-semibold"
+            className="tw:font-semibold"
             aria-label={ariaLabel}
             data-testid="checklist-column-header"
           >
@@ -346,11 +346,11 @@ export function ChecklistTool({
       // `.claude/rules/code-quality/eslint-disable-discipline.md`.
       // eslint-disable-next-line react/no-unstable-nested-components
       header: () => (
-        <span className="tw-px-2 tw-py-1 tw-font-semibold" data-testid="checklist-column-headers">
+        <span className="tw:px-2 tw:py-1 tw:font-semibold" data-testid="checklist-column-headers">
           {/* The Ref column header is intentionally unlabeled in the spec — it's axis metadata
               rather than a project column — so we render a visually-hidden label for accessibility.
               BHV-111 requires every row to carry a firstRef, which doubles as the row header.     */}
-          <span className="tw-sr-only">
+          <span className="tw:sr-only">
             {getLocalizedString('%markersChecklist_columnHeader_referenceAria%')}
           </span>
         </span>
@@ -381,7 +381,7 @@ export function ChecklistTool({
           );
         }
         return (
-          <span className="tw-font-mono tw-text-sm" data-testid="checklist-reference-cell">
+          <span className="tw:font-mono tw:text-sm" data-testid="checklist-reference-cell">
             {ref}
           </span>
         );
@@ -398,7 +398,7 @@ export function ChecklistTool({
           // TanStack Table `header` render fn — not a React component; see rationale above.
           // eslint-disable-next-line react/no-unstable-nested-components
           header: () => (
-            <div className="tw-px-2 tw-py-1">
+            <div className="tw:px-2 tw:py-1">
               <ColumnHeaderWithTooltip
                 shortName={shortName}
                 fullName={fullName}
@@ -413,13 +413,13 @@ export function ChecklistTool({
             const cell = rowData.cells[columnIndex];
             if (!cell) {
               return (
-                <span className="tw-text-muted-foreground" aria-hidden="true">
+                <span className="tw:text-muted-foreground" aria-hidden="true">
                   —
                 </span>
               );
             }
             return (
-              <div className="tw-flex tw-flex-col tw-gap-1 tw-px-2 tw-py-2">
+              <div className="tw:flex tw:flex-col tw:gap-1 tw:px-2 tw:py-2">
                 <CellContent
                   cell={cell}
                   showVerseText={showVerseText}
@@ -433,7 +433,7 @@ export function ChecklistTool({
                  * wiring layer supplies an `onEditLinkClick` callback. No more disabled stubs
                  * (DEF-UI-003 means the wiring layer simply does NOT pass the callback until
                  * the scripture-editor edit-link integration lands). The button uses
-                 * `variant="link"` with `tw-text-muted-foreground` per Sebastian's spec.
+                 * `variant="link"` with `tw:text-muted-foreground` per Sebastian's spec.
                  */}
                 {isPrimaryColumn && rowData.includeEditLink && onEditLinkClick && (
                   <EditLink
@@ -535,7 +535,7 @@ export function ChecklistTool({
               <ToggleGroupItem
                 value="hideMatches"
                 size="sm"
-                className="tw-h-8 tw-w-8 tw-p-0"
+                className="tw:h-8 tw:w-8 tw:p-0"
                 disabled={!isHideMatchesEnabled}
                 aria-label={getLocalizedString('%markersChecklist_toolbar_hideMatches%')}
                 data-testid="checklist-hide-matches-item"
@@ -543,9 +543,9 @@ export function ChecklistTool({
                 {/* Icon swaps with state: when matches are hidden, show EyeOff (slashed);
                     when visible, show Eye. Pairs with the data-[state=on] background highlight. */}
                 {isHideMatchesEnabled && hideMatches ? (
-                  <EyeOff className="tw-h-4 tw-w-4" aria-hidden="true" />
+                  <EyeOff className="tw:h-4 tw:w-4" aria-hidden="true" />
                 ) : (
-                  <Eye className="tw-h-4 tw-w-4" aria-hidden="true" />
+                  <Eye className="tw:h-4 tw:w-4" aria-hidden="true" />
                 )}
               </ToggleGroupItem>
             </TooltipTrigger>
@@ -558,14 +558,14 @@ export function ChecklistTool({
               <ToggleGroupItem
                 value="showVerseText"
                 size="sm"
-                className="tw-h-8 tw-w-8 tw-p-0"
+                className="tw:h-8 tw:w-8 tw:p-0"
                 aria-label={getLocalizedString('%markersChecklist_toolbar_showVerseText%')}
                 data-testid="checklist-show-verse-text-item"
               >
                 {showVerseText ? (
-                  <BookOpen className="tw-h-4 tw-w-4" aria-hidden="true" />
+                  <BookOpen className="tw:h-4 tw:w-4" aria-hidden="true" />
                 ) : (
-                  <Book className="tw-h-4 tw-w-4" aria-hidden="true" />
+                  <Book className="tw:h-4 tw:w-4" aria-hidden="true" />
                 )}
               </ToggleGroupItem>
             </TooltipTrigger>
@@ -578,7 +578,7 @@ export function ChecklistTool({
 
       {matchCountLabel !== undefined && matchCountLabel !== '' && (
         <span
-          className="tw-flex tw-items-center tw-px-2 tw-text-sm tw-text-muted-foreground"
+          className="tw:flex tw:items-center tw:px-2 tw:text-sm tw:text-muted-foreground"
           aria-live="polite"
           aria-atomic="true"
           data-testid="checklist-match-count"
@@ -590,7 +590,7 @@ export function ChecklistTool({
   );
 
   // Per Sebastian PR #2219 #3137366113: error and truncated/helpText banners use the SAME
-  // alert component with `tw-bg-background`, do not cause vertical overflow/scrolling, and are
+  // alert component with `tw:bg-background`, do not cause vertical overflow/scrolling, and are
   // dismissible. Both render in a single styled Alert; the only differences are the leading
   // icon (AlertTriangle for errors) + the optional Retry action. Mutual exclusion stays per
   // ui-state-contracts.md T-R-2: a backend failure suppresses helpText until the next
@@ -600,22 +600,22 @@ export function ChecklistTool({
     if (error && !isErrorDismissed) {
       return (
         <Alert
-          // tw-bg-background per Sebastian (consistent surface across error + help-text);
-          // tw-overflow-hidden + tw-flex-row layout prevents the banner from growing
+          // tw:bg-background per Sebastian (consistent surface across error + help-text);
+          // tw:overflow-hidden + tw:flex-row layout prevents the banner from growing
           // vertically when the message is long. Inner content scrolls horizontally if needed.
-          className="tw-m-2 tw-flex tw-items-start tw-gap-2 tw-overflow-hidden tw-bg-background"
+          className="tw:m-2 tw:flex tw:items-start tw:gap-2 tw:overflow-hidden tw:bg-background"
           data-testid="checklist-error-alert"
         >
           <AlertTriangle
-            className="tw-mt-0.5 tw-h-4 tw-w-4 tw-shrink-0 tw-text-destructive"
+            className="tw:mt-0.5 tw:h-4 tw:w-4 tw:shrink-0 tw:text-destructive"
             aria-hidden="true"
           />
-          <div className="tw-flex tw-min-w-0 tw-flex-1 tw-flex-col tw-gap-2">
-            <AlertTitle className="tw-mb-0">
+          <div className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:gap-2">
+            <AlertTitle className="tw:mb-0">
               {getLocalizedString('%markersChecklist_errorTitle%')}
             </AlertTitle>
-            <AlertDescription className="tw-flex tw-min-w-0 tw-flex-col tw-gap-2">
-              <span className="tw-truncate" title={typeof error === 'string' ? error : undefined}>
+            <AlertDescription className="tw:flex tw:min-w-0 tw:flex-col tw:gap-2">
+              <span className="tw:truncate" title={typeof error === 'string' ? error : undefined}>
                 {error}
               </span>
               {onRetry && (
@@ -638,12 +638,12 @@ export function ChecklistTool({
             type="button"
             variant="ghost"
             size="icon"
-            className="tw-h-6 tw-w-6 tw-shrink-0"
+            className="tw:h-6 tw:w-6 tw:shrink-0"
             aria-label={getLocalizedString('%markersChecklist_alert_dismiss%')}
             onClick={handleDismissError}
             data-testid="checklist-error-dismiss"
           >
-            <X className="tw-h-4 tw-w-4" aria-hidden="true" />
+            <X className="tw:h-4 tw:w-4" aria-hidden="true" />
           </Button>
         </Alert>
       );
@@ -651,11 +651,11 @@ export function ChecklistTool({
     if (helpText && !isHelpTextDismissed) {
       return (
         <Alert
-          className="tw-m-2 tw-flex tw-items-start tw-gap-2 tw-overflow-hidden tw-bg-background"
+          className="tw:m-2 tw:flex tw:items-start tw:gap-2 tw:overflow-hidden tw:bg-background"
           data-testid="checklist-help-text"
         >
           <AlertDescription
-            className="tw-flex tw-min-w-0 tw-flex-1 tw-truncate"
+            className="tw:flex tw:min-w-0 tw:flex-1 tw:truncate"
             title={typeof helpText === 'string' ? helpText : undefined}
           >
             {helpText}
@@ -664,12 +664,12 @@ export function ChecklistTool({
             type="button"
             variant="ghost"
             size="icon"
-            className="tw-h-6 tw-w-6 tw-shrink-0"
+            className="tw:h-6 tw:w-6 tw:shrink-0"
             aria-label={getLocalizedString('%markersChecklist_alert_dismiss%')}
             onClick={handleDismissHelpText}
             data-testid="checklist-help-text-dismiss"
           >
-            <X className="tw-h-4 tw-w-4" aria-hidden="true" />
+            <X className="tw:h-4 tw:w-4" aria-hidden="true" />
           </Button>
         </Alert>
       );
@@ -686,10 +686,10 @@ export function ChecklistTool({
 
   return (
     <div
-      className="pr-twp tw-flex tw-h-full tw-flex-col"
+      className="pr-twp tw:flex tw:h-full tw:flex-col"
       aria-label={getLocalizedString('%markersChecklist_toolbar_aria%')}
     >
-      <div className="tw-sticky tw-top-0 tw-z-10 tw-flex tw-items-center tw-bg-background">
+      <div className="tw:sticky tw:top-0 tw:z-10 tw:flex tw:items-center tw:bg-background">
         <TabToolbar
           onSelectProjectMenuItem={handleProjectMenuSelect}
           // Per Sebastian PR #2219 #3137366113, the tool's menu items (Settings, Copy, etc.) live
@@ -708,7 +708,7 @@ export function ChecklistTool({
       <section
         aria-label={getLocalizedString('%markersChecklist_table_aria%')}
         aria-busy={isLoading}
-        className="tw-m-1 tw-flex-1 tw-overflow-auto tw-rounded-md tw-border"
+        className="tw:m-1 tw:flex-1 tw:overflow-auto tw:rounded-md tw:border"
         data-testid="checklist-data-table"
       >
         <DataTable
@@ -728,8 +728,8 @@ export function ChecklistTool({
 // Per Sebastian PR #2219 #3137862427 ("Providing a callback to the checklist component should
 // enable them"), the edit affordance is rendered ONLY when the wiring layer supplies an
 // onEditLinkClick callback. No more disabled stubs. The button uses `variant="link"` styling
-// with `tw-text-muted-foreground` so it reads as a subdued in-row affordance (Sebastian: "Make
-// the edit link a ghost or link button with `tw-text-muted-foreground`").
+// with `tw:text-muted-foreground` so it reads as a subdued in-row affordance (Sebastian: "Make
+// the edit link a ghost or link button with `tw:text-muted-foreground`").
 //
 // Goto is handled by the LinkedScrRefButton on the reference cell — see refColumn above.
 
@@ -749,17 +749,17 @@ function EditLink({ row, cell, getLocalizedString, onEditLinkClick }: EditLinkPr
   }, [firstRef, onEditLinkClick, row]);
 
   return (
-    <div className="tw-flex tw-flex-row tw-gap-2">
+    <div className="tw:flex tw:flex-row tw:gap-2">
       <Button
         type="button"
         variant="link"
         size="sm"
-        className="tw-h-auto tw-gap-1 tw-p-0 tw-text-xs tw-text-muted-foreground"
+        className="tw:h-auto tw:gap-1 tw:p-0 tw:text-xs tw:text-muted-foreground"
         aria-label={editAria}
         onClick={handleEdit}
         data-testid="checklist-edit-link"
       >
-        <Pencil className="tw-h-3 tw-w-3" aria-hidden="true" />
+        <Pencil className="tw:h-3 tw:w-3" aria-hidden="true" />
         <span>{getLocalizedString('%markersChecklist_edit%')}</span>
       </Button>
     </div>

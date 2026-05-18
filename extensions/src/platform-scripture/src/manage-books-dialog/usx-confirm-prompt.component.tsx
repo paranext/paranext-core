@@ -41,8 +41,8 @@ export function UsxConfirmPrompt({
         if (!v) onCancel();
       }}
     >
-      <DialogContent className="tw-max-w-md" role="alertdialog">
-        <div className="tw-flex tw-flex-col tw-gap-4">
+      <DialogContent className="tw:max-w-md" role="alertdialog">
+        <div className="tw:flex tw:flex-col tw:gap-4">
           <DialogHeader>
             <DialogTitle>
               {t('%manageBooks_import_usxConfirmTitle%', 'Import USX files?')}
@@ -57,10 +57,10 @@ export function UsxConfirmPrompt({
               )}
             </DialogDescription>
           </DialogHeader>
-          <ul className="tw-flex tw-flex-col tw-gap-0.5 tw-pl-5 tw-text-xs tw-text-muted-foreground">
+          <ul className="tw:flex tw:flex-col tw:gap-0.5 tw:pl-5 tw:text-xs tw:text-muted-foreground">
             {confirm?.files.map((f) => <li key={f}>{f}</li>)}
           </ul>
-          <div className="tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-justify-end">
+          <div className="tw:flex tw:flex-col tw:gap-2 tw:sm:flex-row tw:sm:justify-end">
             <Button variant="outline" autoFocus onClick={onCancel}>
               {t('%manageBooks_import_usxConfirmCancel%', 'Cancel')}
             </Button>

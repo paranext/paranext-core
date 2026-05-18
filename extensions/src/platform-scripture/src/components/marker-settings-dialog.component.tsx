@@ -125,7 +125,7 @@ const VALIDATION_DEBOUNCE_MS = 150;
  *   prop, which the wiring layer wires to the backend's `validateMarkerSettings` PAPI command
  *   (`IChecklistService.validateMarkerSettings`).
  * - Inline validation drives a `data-invalid` / `aria-invalid` styled Input + a description span with
- *   `tw-text-destructive` class. The OK button is disabled while the input is invalid. This
+ *   `tw:text-destructive` class. The OK button is disabled while the input is invalid. This
  *   replaces the previous nested-Dialog "blocking alert" pattern entirely — there is no second
  *   dialog.
  * - Help icons (lucide `HelpCircle`) sit after each Label with a hover/focus Tooltip carrying the
@@ -260,22 +260,22 @@ export function MarkerSettingsDialog({
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent
-        className="tw-max-w-md"
+        className="tw:max-w-md"
         // Localize the screen-reader close-button label injected by `DialogContent`.
         aria-label={getLocalizedString('%markersChecklist_settings_title%')}
       >
         <DialogHeader>
           <DialogTitle>{getLocalizedString('%markersChecklist_settings_title%')}</DialogTitle>
-          <DialogDescription className="tw-sr-only">
+          <DialogDescription className="tw:sr-only">
             {getLocalizedString('%markersChecklist_settings_description%')}
           </DialogDescription>
         </DialogHeader>
 
         <TooltipProvider delayDuration={0}>
-          <div className="tw-flex tw-flex-col tw-gap-4 tw-py-4">
+          <div className="tw:flex tw:flex-col tw:gap-4 tw:py-4">
             {/* Equivalent markers — with help icon + inline validation */}
-            <div className="tw-flex tw-flex-col tw-gap-2">
-              <div className="tw-flex tw-items-center tw-gap-2">
+            <div className="tw:flex tw:flex-col tw:gap-2">
+              <div className="tw:flex tw:items-center tw:gap-2">
                 <Label htmlFor={equivalentMarkersInputId}>
                   {getLocalizedString('%markersChecklist_settings_equivalentMarkersLabel%')}
                 </Label>
@@ -284,13 +284,13 @@ export function MarkerSettingsDialog({
                     <button
                       type="button"
                       aria-label={helpIconAriaLabel}
-                      className="tw-text-muted-foreground hover:tw-text-foreground"
+                      className="tw:text-muted-foreground tw:hover:text-foreground"
                       data-testid="marker-settings-equivalent-markers-help"
                     >
-                      <HelpCircle className="tw-h-4 tw-w-4" aria-hidden="true" />
+                      <HelpCircle className="tw:h-4 tw:w-4" aria-hidden="true" />
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent side="right" className="tw-max-w-xs tw-whitespace-pre-line">
+                  <TooltipContent side="right" className="tw:max-w-xs tw:whitespace-pre-line">
                     {getLocalizedString('%markersChecklist_settings_equivalentMarkersHelp%')}
                   </TooltipContent>
                 </Tooltip>
@@ -305,14 +305,14 @@ export function MarkerSettingsDialog({
                 aria-describedby={isInvalid ? equivalentMarkersErrorId : undefined}
                 data-invalid={isInvalid ? '' : undefined}
                 className={
-                  isInvalid ? 'tw-border-destructive focus-visible:tw-ring-destructive' : undefined
+                  isInvalid ? 'tw:border-destructive tw:focus-visible:ring-destructive' : undefined
                 }
                 autoFocus
               />
               {isInvalid && (
                 <span
                   id={equivalentMarkersErrorId}
-                  className="tw-text-sm tw-text-destructive"
+                  className="tw:text-sm tw:text-destructive"
                   data-testid="marker-settings-equivalent-markers-error"
                 >
                   {errorMessage}
@@ -321,8 +321,8 @@ export function MarkerSettingsDialog({
             </div>
 
             {/* Marker filter — with help icon */}
-            <div className="tw-flex tw-flex-col tw-gap-2">
-              <div className="tw-flex tw-items-center tw-gap-2">
+            <div className="tw:flex tw:flex-col tw:gap-2">
+              <div className="tw:flex tw:items-center tw:gap-2">
                 <Label htmlFor={markerFilterInputId}>
                   {getLocalizedString('%markersChecklist_settings_markerFilterLabel%')}
                 </Label>
@@ -331,13 +331,13 @@ export function MarkerSettingsDialog({
                     <button
                       type="button"
                       aria-label={helpIconAriaLabel}
-                      className="tw-text-muted-foreground hover:tw-text-foreground"
+                      className="tw:text-muted-foreground tw:hover:text-foreground"
                       data-testid="marker-settings-marker-filter-help"
                     >
-                      <HelpCircle className="tw-h-4 tw-w-4" aria-hidden="true" />
+                      <HelpCircle className="tw:h-4 tw:w-4" aria-hidden="true" />
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent side="right" className="tw-max-w-xs tw-whitespace-pre-line">
+                  <TooltipContent side="right" className="tw:max-w-xs tw:whitespace-pre-line">
                     {getLocalizedString('%markersChecklist_settings_markerFilterHelp%')}
                   </TooltipContent>
                 </Tooltip>

@@ -251,13 +251,13 @@ export function ManageBooksSidebar({
   return (
     <nav
       aria-label={t('%manageBooks_sidebar_heading%', 'Manage books')}
-      className="tw-flex tw-w-64 tw-shrink-0 tw-flex-col tw-gap-1 tw-overflow-y-auto tw-border-r tw-bg-muted/40 tw-p-3"
+      className="tw:flex tw:w-64 tw:shrink-0 tw:flex-col tw:gap-1 tw:overflow-y-auto tw:border-r tw:bg-muted/40 tw:p-3"
       data-testid="manage-books-sidebar"
     >
-      <div className="tw-flex tw-flex-col tw-gap-1 tw-px-2 tw-pt-2 tw-pb-3">
+      <div className="tw:flex tw:flex-col tw:gap-1 tw:px-2 tw:pt-2 tw:pb-3">
         <Label
           htmlFor="manage-books-sidebar-project"
-          className="tw-text-xs tw-text-muted-foreground"
+          className="tw:text-xs tw:text-muted-foreground"
         >
           {t('%manageBooks_header_projectLabel%', 'Project')}
         </Label>
@@ -270,7 +270,7 @@ export function ManageBooksSidebar({
             onChangeSelection={({ projectId: nextId }) => {
               if (nextId) onProjectIdChange(nextId);
             }}
-            buttonClassName="tw-h-8 tw-w-full tw-font-normal"
+            buttonClassName="tw:h-8 tw:w-full tw:font-normal"
             isDisabled={isSubmitting}
             ariaLabel={t('%manageBooks_header_projectLabel%', 'Project')}
             // Fallback when the project list is still loading or the active projectId hasn't
@@ -316,18 +316,18 @@ export function ManageBooksSidebar({
             data-active={isActive ? 'true' : undefined}
             data-read-only-disabled={isReadOnlyDisabled ? 'true' : undefined}
             className={cn(
-              'tw-flex tw-items-start tw-gap-3 tw-rounded-md tw-px-3 tw-py-2 tw-text-start tw-text-sm tw-transition-colors',
-              !disabled && 'hover:tw-bg-accent hover:tw-text-accent-foreground',
+              'tw:flex tw:items-start tw:gap-3 tw:rounded-md tw:px-3 tw:py-2 tw:text-start tw:text-sm tw:transition-colors',
+              !disabled && 'tw:hover:bg-accent tw:hover:text-accent-foreground',
               !disabled &&
-                'focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring',
-              isActive && 'tw-bg-accent tw-font-medium tw-text-accent-foreground',
-              disabled && 'tw-cursor-not-allowed tw-opacity-50',
+                'tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring',
+              isActive && 'tw:bg-accent tw:font-medium tw:text-accent-foreground',
+              disabled && 'tw:cursor-not-allowed tw:opacity-50',
             )}
           >
-            <Icon className="tw-mt-0.5 tw-h-4 tw-w-4 tw-shrink-0" aria-hidden />
-            <span className="tw-flex tw-flex-col">
+            <Icon className="tw:mt-0.5 tw:h-4 tw:w-4 tw:shrink-0" aria-hidden />
+            <span className="tw:flex tw:flex-col">
               <span>{labels.label}</span>
-              <span className="tw-text-xs tw-font-normal tw-text-muted-foreground">
+              <span className="tw:text-xs tw:font-normal tw:text-muted-foreground">
                 {labels.subtitle}
               </span>
             </span>
@@ -336,9 +336,9 @@ export function ManageBooksSidebar({
 
         return (
           <Fragment key={id}>
-            {showSeparator && <Separator className="tw-my-1" />}
+            {showSeparator && <Separator className="tw:my-1" />}
             {groupHeading && (
-              <div className="tw-mt-1 tw-px-3 tw-text-[11px] tw-font-semibold tw-uppercase tw-tracking-wider tw-text-muted-foreground">
+              <div className="tw:mt-1 tw:px-3 tw:text-[11px] tw:font-semibold tw:uppercase tw:tracking-wider tw:text-muted-foreground">
                 {groupHeading}
               </div>
             )}

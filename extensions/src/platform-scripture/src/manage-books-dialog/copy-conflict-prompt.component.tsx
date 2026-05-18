@@ -51,8 +51,8 @@ export function CopyConflictPrompt({
         if (!v) onCancel();
       }}
     >
-      <DialogContent className="tw-max-w-md">
-        <div className="tw-flex tw-flex-col tw-gap-4">
+      <DialogContent className="tw:max-w-md">
+        <div className="tw:flex tw:flex-col tw:gap-4">
           <DialogHeader>
             <DialogTitle>{t('%manageBooks_copy_confirmTitle%', 'Books already exist')}</DialogTitle>
             <DialogDescription>
@@ -69,7 +69,7 @@ export function CopyConflictPrompt({
             </DialogDescription>
           </DialogHeader>
           {/* Bug 2 mirror — wrap on narrow widths so multiple long-label buttons fit the dialog. */}
-          <div className="tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-flex-wrap sm:tw-justify-end">
+          <div className="tw:flex tw:flex-col tw:gap-2 tw:sm:flex-row tw:sm:flex-wrap tw:sm:justify-end">
             <Button variant="ghost" onClick={onCancel}>
               {t('%manageBooks_copy_confirmCancel%', 'Cancel')}
             </Button>

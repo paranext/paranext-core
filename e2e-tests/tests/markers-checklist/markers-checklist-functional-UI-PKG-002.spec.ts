@@ -362,7 +362,7 @@ test.describe('markers-checklist UI-PKG-002: Checklists Tool', () => {
     // backslash marker token.
     const firstMarker = frame.locator('[aria-label^="marker "]').first();
     const markerCellRow = firstMarker.locator(
-      'xpath=ancestor::div[contains(@class, "tw-flex-row")][1]',
+      'xpath=ancestor::div[contains(@class, "tw:flex-row")][1]',
     );
     await expect(markerCellRow).toBeVisible({ timeout: 30_000 });
     // The row should contain at least one sibling <span> that is NOT the marker label.
