@@ -141,7 +141,7 @@ const bookPillClasses = (present: boolean): string =>
     // primary tint on hover and leave the text foreground untouched. The prior treatment
     // (`bg-primary/90` + `text-primary-foreground`) produced a high-contrast "selected"
     // look on hover that confused users about which pills were actually selected.
-    'tw-transition-colors hover:tw-bg-primary/20',
+    'tw:transition-colors tw:hover:bg-primary/20',
     present
       ? 'tw:border-primary/40 tw:bg-accent'
       : 'tw:border-dashed tw:border-primary/40 tw:text-muted-foreground',
@@ -622,11 +622,11 @@ export function BookGridSelector({
           <span
             aria-hidden
             className={cn(
-              'tw-flex tw-h-4 tw-w-4 tw-shrink-0 tw-items-center tw-justify-center tw-rounded-sm tw-border tw-border-primary',
-              isSelected && 'tw-bg-primary tw-text-primary-foreground',
+              'tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center tw:rounded-sm tw:border tw:border-primary',
+              isSelected && 'tw:bg-primary tw:text-primary-foreground',
             )}
           >
-            {isSelected && <Check className="tw-h-4 tw-w-4" />}
+            {isSelected && <Check className="tw:h-4 tw:w-4" />}
           </span>
         )}
         {dot}
@@ -808,21 +808,21 @@ export function BookGridSelector({
             {showHeader && (
               <div
                 className={cn(
-                  'tw-sticky tw-top-0 tw-z-10 tw-flex tw-items-center tw-gap-2 tw-bg-background',
-                  gi === 0 ? 'tw-pt-0' : 'tw-pt-1',
+                  'tw:sticky tw:top-0 tw:z-10 tw:flex tw:items-center tw:gap-2 tw:bg-background',
+                  gi === 0 ? 'tw:pt-0' : 'tw:pt-1',
                   // Sebastian review item 32 (2026-05-11): when the group is collapsed,
                   // visually tie the checkbox to the header by drawing a rounded border
                   // around the whole row. Without it the header label and its select-all
                   // checkbox can read as unrelated when no pills are visible below.
-                  collapsed && 'tw-rounded-md tw-border tw-border-border tw-px-2',
+                  collapsed && 'tw:rounded-md tw:border tw:border-border tw:px-2',
                 )}
               >
                 {isSingleGroup ? (
                   /* Sebastian review item 31 (2026-05-11): single-group static header —
                      no chevron, no <Button>, no toggle. */
-                  <span className="tw-flex tw-h-6 tw-flex-1 tw-items-center tw-gap-1 tw-px-2 tw-text-[11px] tw-font-semibold tw-uppercase tw-tracking-wider tw-text-muted-foreground">
+                  <span className="tw:flex tw:h-6 tw:flex-1 tw:items-center tw:gap-1 tw:px-2 tw:text-[11px] tw:font-semibold tw:uppercase tw:tracking-wider tw:text-muted-foreground">
                     <span>{group.label}</span>
-                    <span className="tw-ml-1 tw-font-normal tw-normal-case tw-tracking-normal tw-text-muted-foreground/70">
+                    <span className="tw:ml-1 tw:font-normal tw:normal-case tw:tracking-normal tw:text-muted-foreground/70">
                       {renderGroupCount && group.label
                         ? renderGroupCount(group.label, group.items)
                         : `(${group.items.length})`}
@@ -835,11 +835,11 @@ export function BookGridSelector({
                     size="sm"
                     onClick={() => group.label && toggleCollapsed(group.label)}
                     aria-expanded={!collapsed}
-                    className="tw-h-6 tw-flex-1 tw-justify-start tw-gap-1 tw-px-2 tw-text-[11px] tw-font-semibold tw-uppercase tw-tracking-wider tw-text-muted-foreground hover:tw-text-foreground"
+                    className="tw:h-6 tw:flex-1 tw:justify-start tw:gap-1 tw:px-2 tw:text-[11px] tw:font-semibold tw:uppercase tw:tracking-wider tw:text-muted-foreground tw:hover:text-foreground"
                   >
-                    <Chevron className="tw-h-3.5 tw-w-3.5" aria-hidden />
+                    <Chevron className="tw:h-3.5 tw:w-3.5" aria-hidden />
                     <span>{group.label}</span>
-                    <span className="tw-ml-1 tw-font-normal tw-normal-case tw-tracking-normal tw-text-muted-foreground/70">
+                    <span className="tw:ml-1 tw:font-normal tw:normal-case tw:tracking-normal tw:text-muted-foreground/70">
                       {renderGroupCount && group.label
                         ? renderGroupCount(group.label, group.items)
                         : `(${group.items.length})`}
@@ -878,13 +878,13 @@ export function BookGridSelector({
                 aria-multiselectable={ariaMultiselectable}
                 style={gridStyle}
                 className={cn(
-                  'tw-grid tw-auto-rows-min tw-gap-1 tw-text-sm',
-                  group.label && 'tw-mt-0.5',
+                  'tw:grid tw:auto-rows-min tw:gap-1 tw:text-sm',
+                  group.label && 'tw:mt-0.5',
                   // Sebastian review item 39 (2026-05-11) overrides round-1 item 24:
                   // group-hover preview uses the same 20%-opacity primary tint as the
                   // pill hover (`bg-primary/20`) and leaves text foreground alone.
                   hoveredGroupLabel === group.label &&
-                    '[&_>li>button]:!tw-bg-primary/20 [&_>li>div]:!tw-bg-primary/20',
+                    'tw:[&_>li>button]:!bg-primary/20 tw:[&_>li>div]:!bg-primary/20',
                 )}
               >
                 {group.items.map((item, i) => {

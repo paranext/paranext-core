@@ -244,7 +244,7 @@ type RowRenderProps = {
    * Sebastian #5 (2026-05-11): forwarded by the parent so it can scroll the selected row into view
    * when the popover opens (replacing the prior float-to-top behavior).
    */
-  selectedRowRef?: RefObject<HTMLDivElement>;
+  selectedRowRef?: RefObject<HTMLDivElement | null>;
 };
 
 function ProjectRowView({ row, mode, strings, onClick, onOpen, selectedRowRef }: RowRenderProps) {
@@ -353,10 +353,10 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen, selectedRowRef }:
           requested before this lands wide. */}
       <span
         ref={labelRef}
-        className="tw-flex tw-min-w-0 tw-flex-1 tw-flex-col tw-items-start tw-overflow-hidden tw-text-start"
+        className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:items-start tw:overflow-hidden tw:text-start"
       >
-        <span className="tw-w-full tw-truncate tw-font-medium">{row.shortName}</span>
-        <span className="tw-w-full tw-truncate tw-text-xs tw-text-muted-foreground">
+        <span className="tw:w-full tw:truncate tw:font-medium">{row.shortName}</span>
+        <span className="tw:w-full tw:truncate tw:text-xs tw:text-muted-foreground">
           {row.fullName}
         </span>
       </span>
