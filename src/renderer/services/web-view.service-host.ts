@@ -649,6 +649,13 @@ async function loadLayout(layout?: LayoutInfo): Promise<void> {
   // Startup load — pick the layout based on interface mode. This runs once at startup; changes
   // to `platform.interfaceMode` at runtime do not re-trigger a layout switch (no user-facing
   // mode switcher exists yet).
+  //
+  // Note: in simple mode we intentionally ignore `DOCK_LAYOUT_KEY` and always load the static
+  // `simpleLayout` — the 3-column layout should be restored on every startup regardless of what
+  // the user did in the previous session. `onLayoutChange` still fires (and writes to
+  // `DOCK_LAYOUT_KEY`) when the user resizes a column in simple mode, but those writes are
+  // vestigial: the stored value is never read back, so user resizes in simple mode are
+  // ephemeral by design.
   const interfaceMode = await settingsService.get('platform.interfaceMode');
   const layoutToLoad =
     interfaceMode === 'simple'

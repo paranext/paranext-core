@@ -8,7 +8,7 @@ vi.mock('@renderer/components/web-view.component', () => ({
 }));
 vi.mock('../../../shared/services/logger.service');
 
-describe('Dock Layout Component', () => {
+describe('simple-layout.data', () => {
   describe('simpleLayout', () => {
     // Narrowing rc-dock's generic dockbox type to BoxData is necessary to inspect its children.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -41,11 +41,11 @@ describe('Dock Layout Component', () => {
       });
     });
 
-    it('column 3 has exactly 2 tabs', () => {
+    it('column 3 has exactly 1 tab', () => {
       // Narrowing column to BoxData and its first child to PanelData to access tabs.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const col3Panel = (columns[2] as BoxData).children[0] as PanelData;
-      expect(col3Panel.tabs).toHaveLength(2);
+      expect(col3Panel.tabs).toHaveLength(1);
     });
 
     it('all tab ids are unique across the layout', () => {

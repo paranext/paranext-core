@@ -69,17 +69,19 @@ export const simpleLayout: LayoutBase = {
                   state: {},
                 },
               },
-              {
-                id: '6c950d23-f8d7-4482-a384-93ea0481698b',
-                tabType: TAB_TYPE_WEBVIEW,
-                data: {
-                  // TODO PT-3963: Replace with Commentaries tab webViewType when implemented
-                  webViewType: 'platformGetResources.newTab',
-                  id: '6c950d23-f8d7-4482-a384-93ea0481698b',
-                  contentType: 'react',
-                  state: {},
-                },
-              },
+              // TODO PT-3963: Hook up the Commentaries tab here. Left commented out (rather than
+              // a second NewTab placeholder) so column 3 doesn't render two visually identical
+              // tabs in the meantime. Will also need to update test at line 44 in simple-layout.data.test.ts once implemented.
+              // {
+              //   id: '6c950d23-f8d7-4482-a384-93ea0481698b',
+              //   tabType: TAB_TYPE_WEBVIEW,
+              //   data: {
+              //     webViewType: '<commentaries webViewType>',
+              //     id: '6c950d23-f8d7-4482-a384-93ea0481698b',
+              //     contentType: 'react',
+              //     state: {},
+              //   },
+              // },
             ] as SavedTabInfo[],
           },
         ],
@@ -88,5 +90,3 @@ export const simpleLayout: LayoutBase = {
   },
 };
 /* eslint-enable no-type-assertion/no-type-assertion */
-
-export default simpleLayout;

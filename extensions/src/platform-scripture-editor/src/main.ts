@@ -683,14 +683,15 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
         // If we already have a selection, return it directly.
         if (currentSelection !== undefined) return currentSelection;
         // Otherwise lazy-construct the AsyncVariable so its 10s timer only starts when a caller
-        // is actually waiting. Subsequent callers reuse the same promise.
+        // is actually waiting. Subsequent callers reuse the same promise — including the cached
+        // rejection if the timeout already fired, so retries get the same rejection rather than
+        // a silent `undefined`.
         if (!firstSelectionAsync) {
           firstSelectionAsync = new AsyncVariable(
             `platformScriptureEditor.selection.${currentWebViewDefinition.id}`,
           );
         }
-        if (!firstSelectionAsync.hasSettled) return firstSelectionAsync.promise;
-        return currentSelection;
+        return firstSelectionAsync.promise;
       },
       async updateSelectionInternal(selection) {
         const webViewId = currentWebViewDefinition.id;
