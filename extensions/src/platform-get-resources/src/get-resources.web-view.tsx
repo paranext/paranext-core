@@ -66,6 +66,7 @@ const GET_RESOURCES_STRING_KEYS: LocalizeKey[] = [
   '%resources_type%',
   '%resources_types%',
   '%resources_type_Scripture%',
+  '%resources_type_Commentary%',
   '%resources_type_ER%',
   '%resources_type_SLR%',
   '%resources_type_XR%',
@@ -193,6 +194,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const typeText: string = localizedStrings['%resources_type%'];
   const typesText: string = localizedStrings['%resources_types%'];
   const typeScriptureText: string = localizedStrings['%resources_type_Scripture%'];
+  const typeCommentaryText: string = localizedStrings['%resources_type_Commentary%'];
   const typeErText: string = localizedStrings['%resources_type_ER%'];
   const typeSlrText: string = localizedStrings['%resources_type_SLR%'];
   const typeXrText: string = localizedStrings['%resources_type_XR%'];
@@ -308,6 +310,11 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
         secondaryLabel: getTypeCount('ScriptureResource'),
       },
       {
+        value: 'CommentaryResource',
+        label: typeCommentaryText,
+        secondaryLabel: getTypeCount('CommentaryResource'),
+      },
+      {
         value: 'EnhancedResource',
         label: typeErText,
         secondaryLabel: getTypeCount('EnhancedResource'),
@@ -323,7 +330,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
         secondaryLabel: getTypeCount('XmlResource'),
       },
     ];
-  }, [typeScriptureText, typeErText, typeSlrText, typeXrText, resources]);
+  }, [typeScriptureText, typeCommentaryText, typeErText, typeSlrText, typeXrText, resources]);
 
   const textAndTypeFilteredResources = useMemo(() => {
     if (selectedTypes.length === 0) return textFilteredResources;
