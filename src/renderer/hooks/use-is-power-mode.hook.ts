@@ -1,6 +1,5 @@
 import { useSetting } from '@renderer/hooks/papi-hooks';
 import { isPlatformError } from 'platform-bible-utils';
-import { useMemo } from 'react';
 
 /**
  * Returns whether the app is currently in `'power'` interface mode. Falls back to `false` (simple
@@ -9,10 +8,8 @@ import { useMemo } from 'react';
  */
 export function useIsPowerMode(): boolean {
   const [interfaceModePossiblyError] = useSetting('platform.interfaceMode', 'simple');
-  return useMemo(() => {
-    if (isPlatformError(interfaceModePossiblyError)) return false;
-    return interfaceModePossiblyError === 'power';
-  }, [interfaceModePossiblyError]);
+  if (isPlatformError(interfaceModePossiblyError)) return false;
+  return interfaceModePossiblyError === 'power';
 }
 
 export default useIsPowerMode;

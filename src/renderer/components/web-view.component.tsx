@@ -514,6 +514,11 @@ export function WebView({
           onSelectViewInfoMenuItem={viewInfoMenuCommandHandler}
           projectMenuData={webViewMenu.topMenu}
           className="web-view-tab-nav"
+          // In simple mode, hide the per-tab BCV control and scroll group selector for ALL webview
+          // types served by this generic tab toolbar (commentary, notes, etc.) — not just scripture
+          // editors. Simple mode assumes the top-toolbar BCV is the single navigation point, so
+          // per-tab BCVs would break that assumption. Revisit this if a future webview type needs
+          // its own per-tab navigation in simple mode.
           startAreaChildren={
             isPowerMode ? (
               <BookChapterControl

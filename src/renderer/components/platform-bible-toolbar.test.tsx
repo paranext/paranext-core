@@ -377,6 +377,9 @@ describe('PlatformBibleToolbar — Sync button', () => {
 describe('PlatformBibleToolbar — Scroll group selector visibility by interface mode', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // `clearAllMocks()` clears call history but does not reset `mockReturnValue`, so restore the
+    // default `useSetting` value explicitly to prevent a per-test `mockReturnValue` from leaking.
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
     mockSendCommand(true);
   });
 
