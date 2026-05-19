@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import React from 'react';
+import { useSetting } from '@renderer/hooks/papi-hooks';
 import { sendCommand } from '@shared/services/command.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { PlatformBibleToolbar } from './platform-bible-toolbar';
@@ -41,6 +42,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
     ]),
   })),
   useDataProvider: vi.fn(() => undefined),
+  useSetting: vi.fn(() => ['simple', vi.fn(), vi.fn(), false]),
 }));
 
 vi.mock('@renderer/services/papi-frontend.service', () => ({
@@ -368,6 +370,32 @@ describe('PlatformBibleToolbar — Sync button', () => {
       expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
         expect.stringContaining('Toolbar caught an error while trying to open sync status:'),
       );
+    });
+  });
+});
+
+describe('PlatformBibleToolbar — Scroll group selector visibility by interface mode', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // `clearAllMocks()` clears call history but does not reset `mockReturnValue`, so restore the
+    // default `useSetting` value explicitly to prevent a per-test `mockReturnValue` from leaking.
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    mockSendCommand(true);
+  });
+
+  it('hides ScrollGroupSelector when platform.interfaceMode is "simple"', async () => {
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    render(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(screen.queryByTestId('scroll-group-selector')).not.toBeInTheDocument();
+    });
+  });
+
+  it('renders ScrollGroupSelector when platform.interfaceMode is "power"', async () => {
+    vi.mocked(useSetting).mockReturnValue(['power', vi.fn(), vi.fn(), false]);
+    render(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(screen.getByTestId('scroll-group-selector')).toBeInTheDocument();
     });
   });
 });

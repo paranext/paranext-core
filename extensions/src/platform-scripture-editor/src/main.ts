@@ -356,6 +356,9 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       ...optionsWebViewState
     } = getWebViewOptions.options ?? {};
 
+    // Re-read every call so mode changes are picked up at open/replace/restore time.
+    const interfaceMode = await papi.settings.get('platform.interfaceMode');
+
     const unformattedTitle =
       optionsTitle ??
       // WebView state is not yet typed, but we know this is string | undefined
@@ -402,6 +405,10 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       projectId,
       allowPopups: true,
       shouldShowToolbar: false,
+      // In simple mode, force the editor's scroll group to 0 so it stays aligned with the top-toolbar
+      // BCV control (which is the single navigation point in simple mode). Power mode preserves the
+      // saved value.
+      scrollGroupScrRef: interfaceMode === 'simple' ? 0 : savedWebView.scrollGroupScrRef,
     };
   }
 
