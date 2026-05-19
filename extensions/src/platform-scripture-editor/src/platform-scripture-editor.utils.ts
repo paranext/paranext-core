@@ -585,6 +585,7 @@ export async function openDefaultActiveProjectIfApplicable(
   if (candidates.length === 0) return 'no-candidate';
 
   const top = candidates[0];
+  let hasFailed = false;
   papi.logger.info(`Default active project picker: opening project=${top.id}`);
   try {
     await papi.commands.sendCommand('platformScriptureEditor.openScriptureEditor', top.id);
@@ -592,10 +593,20 @@ export async function openDefaultActiveProjectIfApplicable(
     papi.logger.warn(
       `Default active project picker: openScriptureEditor for ${top.id} failed: ${getErrorMessage(e)}`,
     );
-    return 'failed';
+    hasFailed = true;
   }
 
-  return 'filled';
+  // Tries to open the model text
+  try {
+    await papi.commands.sendCommand('platformScriptureEditor.openModelText', top.id);
+  } catch (e) {
+    papi.logger.warn(
+      `Default active project picker: openModelText for ${top.id} failed: ${getErrorMessage(e)}`,
+    );
+    hasFailed = true;
+  }
+
+  return hasFailed ? 'failed' : 'filled';
 }
 
 /**

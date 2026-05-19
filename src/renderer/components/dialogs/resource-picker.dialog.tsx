@@ -38,7 +38,7 @@ export const RESOURCE_PICKER_DIALOG: DialogDefinition<typeof RESOURCE_PICKER_DIA
     ...DIALOG_BASE,
     tabType: RESOURCE_PICKER_DIALOG_TYPE,
     defaultTitle: '%resourcePicker_title%',
-    initialSize: { width: 560, height: 520 },
+    initialSize: { width: 900, height: 650 },
     Component: ResourcePickerDialogWrapper,
   });
 

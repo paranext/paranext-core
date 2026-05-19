@@ -46,6 +46,7 @@ const defaultUsj: Usj = {
 
 const MODEL_TEXT_PANEL_STRING_KEYS: LocalizeKey[] = [
   '%webView_modelTextPanel_installing%',
+  '%webView_modelTextPanel_noProject%',
   '%webView_modelTextPanel_pickModelText%',
   '%webView_modelTextPanel_unknownResource%',
   '%webView_modelTextPanel_zeroState_prompt%',
@@ -229,6 +230,17 @@ globalThis.webViewComponent = function ModelTextPanel({
 
   // --- Render ---
 
+  // No project state: panel was opened without a project ID
+  // Note: It's expected that this isn't shown very long and that the `platform-scripture-editor`
+  // extension will show the most recent project (or the picked project).
+  if (!projectId) {
+    return (
+      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
+        <p>{localizedStrings['%webView_modelTextPanel_noProject%']}</p>
+      </div>
+    );
+  }
+
   // Zero state: no model text configured (or still loading)
   if (!effectiveModelTexts || effectiveModelTexts.items.length === 0) {
     return (
@@ -253,17 +265,17 @@ globalThis.webViewComponent = function ModelTextPanel({
   // Installing state: resource found but not yet installed
   if (isInstalling) {
     return (
-      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:gap-2">
+      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
         <Spinner />
         <span>{localizedStrings['%webView_modelTextPanel_installing%']}</span>
       </div>
     );
   }
 
-  // Loading state: USJ not yet fetched (usjPossiblyError is undefined while the subscription is initialising)
+  // Loading state: USJ not yet fetched (usjPossiblyError is undefined while the subscription is initializing)
   if (!resourceProjectId || usjPossiblyError === undefined) {
     return (
-      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center">
+      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
         <Spinner />
       </div>
     );

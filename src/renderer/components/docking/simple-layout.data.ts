@@ -20,7 +20,7 @@ export const simpleLayout: LayoutBase = {
                 tabType: TAB_TYPE_WEBVIEW,
                 data: {
                   // TODO PT-3961: Replace with model text panel webViewType when implemented
-                  webViewType: 'platformGetResources.home',
+                  webViewType: 'platformScriptureEditor.modelText',
                   id: '0a23566d-1b2c-4dd2-8d3d-cda54b598cd2',
                   contentType: 'react',
                   state: {},
