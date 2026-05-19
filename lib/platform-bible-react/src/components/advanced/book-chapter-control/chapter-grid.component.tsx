@@ -42,13 +42,15 @@ export function ChapterGrid({
             onSelect={() => onChapterSelect(chapter)}
             ref={setChapterRef(chapter)}
             className={cn(
-              'tw:h-8 tw:w-8 tw:cursor-pointer tw:justify-center tw:rounded-md tw:text-center tw:text-sm',
+              'tw:h-8 tw:w-8 tw:cursor-pointer tw:justify-center tw:gap-0 tw:rounded-md tw:p-0 tw:text-center tw:text-sm tw:[&>svg]:hidden',
               {
-                'tw:bg-primary tw:text-primary-foreground':
-                  bookId === scrRef.book && chapter === scrRef.chapterNum,
+                'tw:bg-muted/50 tw:text-muted-foreground/50':
+                  (isChapterDimmed?.(chapter) ?? false) &&
+                  !(bookId === scrRef.book && chapter === scrRef.chapterNum),
               },
               {
-                'tw:bg-muted/50 tw:text-muted-foreground/50': isChapterDimmed?.(chapter) ?? false,
+                'tw:bg-primary tw:text-primary-foreground tw:data-selected:bg-primary/80 tw:data-selected:text-primary-foreground':
+                  bookId === scrRef.book && chapter === scrRef.chapterNum,
               },
             )}
           >
