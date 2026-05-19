@@ -13,6 +13,20 @@ import { join, dirname } from 'path';
 function getAbsolutePath(value: string): any {
   return dirname(require.resolve(join(value, 'package.json')));
 }
+/**
+ * Addon list (keep versions aligned with the workspace root `package.json` `storybook` entry).
+ *
+ * - `@storybook/addon-docs` — MDX and autodocs
+ * - `@storybook/addon-links` — cross-story navigation
+ * - `@storybook/addon-a11y` — accessibility checks (`parameters.a11y` in `preview.ts`)
+ * - `@chromatic-com/storybook` — visual testing integration
+ * - `storybook-addon-rtl` — RTL toolbar (`globals.addonRtl`)
+ * - `@storybook/addon-vitest` — run stories in Vitest
+ * - `storybook-addon-code-editor` — Monaco in stories
+ *
+ * Upgrade cadence: bump `storybook` and all `@storybook/*` packages together, then run `npx
+ * storybook doctor`.
+ */
 const config: StorybookConfig = {
   /**
    * `storybook-addon-code-editor` (which integrates Monaco Editor) needs certain static assets

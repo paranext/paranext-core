@@ -1,4 +1,3 @@
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 import { Canon } from '@sillsdev/scripture';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
@@ -22,11 +21,9 @@ A UI for selecting books and chapter ranges. The user can either use the current
   },
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className="tw:max-w-2xl tw:p-4">
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className="tw:max-w-2xl tw:p-4">
+        <Story />
+      </div>
     ),
   ],
   args: {

@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { DataTable, type ColumnDef } from '@/components/advanced/data-table/data-table.component';
+import { DataTable } from '@/components/advanced/data-table/data-table.component';
+import type { ColumnDef } from '@/components/advanced/data-table/data-table.component';
 import { Button } from '@/components/shadcn-ui/button';
 import { Badge } from '@/components/shadcn-ui/badge';
 import { Checkbox } from '@/components/shadcn-ui/checkbox';

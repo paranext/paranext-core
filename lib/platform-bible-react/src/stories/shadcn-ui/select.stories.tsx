@@ -10,19 +10,11 @@ import {
   SelectLabel,
 } from '@/components/shadcn-ui/select';
 import { useState } from 'react';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof Select> = {
   title: 'Shadcn/Select',
   component: Select,
   tags: ['autodocs'],
-  decorators: [
-    (Story) => (
-      <ThemeProvider>
-        <Story />
-      </ThemeProvider>
-    ),
-  ],
   argTypes: {
     onValueChange: { action: 'value changed' },
     disabled: { control: 'boolean' },
