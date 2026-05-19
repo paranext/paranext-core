@@ -71,7 +71,7 @@ function mergeResourceReferenceLists(
 export function useEffectiveResourceReferenceList(
   projectId: string | undefined,
   settingName: 'platformScripture.modelTexts' | 'platformScripture.referencedProjectsAndResources',
-): EffectiveResourceReferenceList | undefined {
+): [EffectiveResourceReferenceList | undefined, boolean] {
   const [projectResourceReferenceList, , , isProjectSettingLoading] = useProjectSetting(
     projectId,
     settingName,
@@ -121,13 +121,16 @@ export function useEffectiveResourceReferenceList(
     };
   }, [userPdp, settingName]);
 
-  return useMemo(() => {
-    if (isProjectSettingLoading) return undefined;
-    if (isPlatformError(projectResourceReferenceList)) return undefined;
-    if (userResourceReferenceList === undefined) return undefined;
+  return [
+    useMemo(() => {
+      if (isProjectSettingLoading) return undefined;
+      if (isPlatformError(projectResourceReferenceList)) return undefined;
+      if (userResourceReferenceList === undefined) return undefined;
 
-    return mergeResourceReferenceLists(projectResourceReferenceList, userResourceReferenceList);
-  }, [isProjectSettingLoading, projectResourceReferenceList, userResourceReferenceList]);
+      return mergeResourceReferenceLists(projectResourceReferenceList, userResourceReferenceList);
+    }, [isProjectSettingLoading, projectResourceReferenceList, userResourceReferenceList]),
+    isProjectSettingLoading,
+  ];
 }
 
 export default useEffectiveResourceReferenceList;

@@ -64,8 +64,10 @@ globalThis.webViewComponent = function ModelTextPanel({
 
   // useEffectiveResourceReferenceList is imported via @ts-ignore path; cast needed for type safety
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const effectiveModelTexts: EffectiveResourceReferenceList | undefined =
-    useEffectiveResourceReferenceList(projectId, 'platformScripture.modelTexts');
+  const [effectiveModelTexts, isEffectiveModelTextsLoading] = useEffectiveResourceReferenceList(
+    projectId,
+    'platformScripture.modelTexts',
+  );
 
   const [adminModelTextsSetting, setAdminModelTexts] = useProjectSetting(
     projectId,
@@ -252,10 +254,16 @@ globalThis.webViewComponent = function ModelTextPanel({
   if (!effectiveModelTexts || effectiveModelTexts.items.length === 0) {
     return (
       <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
-        <p>{localizedStrings['%webView_modelTextPanel_emptyState_prompt%']}</p>
-        <Button onClick={() => showResourcePicker()}>
-          {localizedStrings['%webView_modelTextPanel_pickModelText%']}
-        </Button>
+        {isEffectiveModelTextsLoading ? (
+          <Spinner />
+        ) : (
+          <>
+            <p>{localizedStrings['%webView_modelTextPanel_emptyState_prompt%']}</p>
+            <Button onClick={() => showResourcePicker()}>
+              {localizedStrings['%webView_modelTextPanel_pickModelText%']}
+            </Button>
+          </>
+        )}
       </div>
     );
   }
