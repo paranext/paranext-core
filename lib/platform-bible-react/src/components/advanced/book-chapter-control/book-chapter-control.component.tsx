@@ -973,7 +973,7 @@ export function BookChapterControl({
                 )}
               </div>
               {/* Navigation buttons for previous/next chapter/book */}
-              <div className="tw:flex tw:items-center tw:pe-2">
+              <div className="tw:flex tw:translate-y-px tw:items-center tw:pe-2">
                 <TooltipProvider>
                   {quickNavButtons.map(({ onClick, disabled, title, icon: Icon }, index) => (
                     <Fragment key={title}>
@@ -990,7 +990,7 @@ export function BookChapterControl({
                               onClick();
                             }}
                             disabled={disabled}
-                            className="tw:h-8 tw:w-6 tw:p-0"
+                            className="tw:h-8.5 tw:w-6 tw:p-0"
                             aria-label={title}
                             onKeyDown={handleQuickNavButtonKeyDown}
                           >
@@ -1005,20 +1005,28 @@ export function BookChapterControl({
               </div>
             </div>
           ) : (
-            <div className="tw:flex tw:items-center tw:border-b tw:px-3 tw:py-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={viewMode === 'verses' ? handleBackToChapters : handleBackToBooks}
-                className="tw:mr-2 tw:h-6 tw:w-6 tw:p-0"
-                tabIndex={-1}
-              >
-                {direction === 'ltr' ? (
-                  <ArrowLeft className="tw:h-4 tw:w-4" />
-                ) : (
-                  <ArrowRight className="tw:h-4 tw:w-4" />
-                )}
-              </Button>
+            <div className="tw:flex tw:items-center tw:border-b tw:px-3 tw:py-1">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={viewMode === 'verses' ? handleBackToChapters : handleBackToBooks}
+                      className="tw:mr-2 tw:h-8 tw:w-8 tw:p-0"
+                      tabIndex={-1}
+                      aria-label="Back"
+                    >
+                      {direction === 'ltr' ? (
+                        <ArrowLeft className="tw:h-4 tw:w-4" />
+                      ) : (
+                        <ArrowRight className="tw:h-4 tw:w-4" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Back</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               {viewMode === 'chapters' && selectedBookForChaptersView && (
                 <span tabIndex={-1} className="tw:text-sm tw:font-medium">
                   {getLocalizedBookName(selectedBookForChaptersView, localizedBookNames)}
