@@ -3,6 +3,7 @@ import { NO_PADDING_STYLE, TenPowerInteractiveView, TenPowerView } from './ten-l
 
 type Variant = 'default' | 'no-padding' | 'interactive';
 
+/** ⚠️ Prototype only — not a production layout. */
 function TenPowerLayout({ variant = 'default' }: { variant?: Variant }) {
   const noPadding = variant === 'no-padding';
   return (
@@ -26,7 +27,14 @@ export const Interactive: Story = { args: { variant: 'interactive' } };
 const meta: Meta<typeof TenPowerLayout> = {
   title: 'platform/10Power layout',
   component: TenPowerLayout,
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component: '⚠️ **Prototype only** — not a production layout.',
+      },
+    },
+  },
   tags: ['autodocs'],
 };
 export default meta;

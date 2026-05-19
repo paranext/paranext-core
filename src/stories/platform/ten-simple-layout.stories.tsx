@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { NO_PADDING_STYLE, TenSimpleView } from './ten-layout-shared';
 
+/** ⚠️ Prototype only — not a production layout. */
 function TenSimpleLayout() {
   return (
     <div className="ten-no-padding tw:flex tw:h-[820px] tw:w-full">
@@ -17,7 +18,14 @@ export const Default: Story = { args: {} };
 const meta: Meta<typeof TenSimpleLayout> = {
   title: 'platform/10Simple layout',
   component: TenSimpleLayout,
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component: '⚠️ **Prototype only** — not a production layout.',
+      },
+    },
+  },
   tags: ['autodocs'],
 };
 export default meta;
