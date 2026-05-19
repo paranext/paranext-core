@@ -934,7 +934,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   );
 
   // Default active project picker for simple layout. Subscribes to web-view-open and
-  // sync-settled events and attempts to fill the empty Scripture Editor with the
+  // sync-completion events and attempts to fill the empty Scripture Editor with the
   // most-recently-active editable project. Re-runs on each subscribed event; concurrent
   // triggers coalesce into a single follow-up run.
   const unsubFromDefaultProjectPicker = startDefaultProjectPicker(papi);

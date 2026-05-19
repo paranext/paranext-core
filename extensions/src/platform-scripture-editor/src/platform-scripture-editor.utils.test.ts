@@ -416,8 +416,12 @@ interface PickerMocks {
   mockDebug: ReturnType<typeof vi.fn>;
   /** Synthesize a `webViews.onDidOpenWebView` event from within a test. */
   fireWebViewOpen: () => void;
-  /** Synthesize a `webViews.onDidUpdateWebView` event from within a test. */
-  fireWebViewUpdate: () => void;
+  /**
+   * Synthesize a `webViews.onDidUpdateWebView` event from within a test. The driver filters to
+   * Scripture Editor updates, so the default `webViewType` is `SCRIPTURE_EDITOR_WEBVIEW_TYPE`; pass
+   * another value to simulate an unrelated webview update.
+   */
+  fireWebViewUpdate: (webViewType?: string) => void;
   /** Synthesize a `paratextBibleSendReceive.onSyncStateChanged` event from within a test. */
   fireSync: (event: { isSyncing: boolean }) => void;
   /** `true` once the driver has unsubscribed from `onDidOpenWebView`. */
@@ -501,9 +505,9 @@ function createPickerMocks(): PickerMocks {
       if (!webViewOpenListener) throw new Error('fireWebViewOpen: no listener captured');
       webViewOpenListener({});
     },
-    fireWebViewUpdate: () => {
+    fireWebViewUpdate: (webViewType: string = SCRIPTURE_EDITOR_WEBVIEW_TYPE) => {
       if (!webViewUpdateListener) throw new Error('fireWebViewUpdate: no listener captured');
-      webViewUpdateListener({});
+      webViewUpdateListener({ webView: { webViewType } });
     },
     fireSync: (event) => {
       if (!syncListener) throw new Error('fireSync: no listener captured');
@@ -1023,6 +1027,22 @@ describe('startDefaultProjectPicker', () => {
     await vi.waitFor(() => {
       expect(mocks.mockGetSetting).toHaveBeenCalledTimes(2);
     });
+  });
+
+  it('does NOT re-run the picker when an unrelated web view updates', async () => {
+    const mocks = createPickerMocks();
+    setUpFastNoOp(mocks);
+
+    startDefaultProjectPicker(mocks.papi);
+    await vi.waitFor(() => expect(mocks.mockGetSetting).toHaveBeenCalledTimes(1));
+
+    mocks.fireWebViewUpdate('someOtherExtension.someWebViewType');
+
+    // Give the microtask queue a chance to flush in case a stray retry was queued.
+    await new Promise((resolve) => {
+      setTimeout(resolve, 20);
+    });
+    expect(mocks.mockGetSetting).toHaveBeenCalledTimes(1);
   });
 
   it('re-runs the picker when a sync completes (isSyncing becomes false)', async () => {

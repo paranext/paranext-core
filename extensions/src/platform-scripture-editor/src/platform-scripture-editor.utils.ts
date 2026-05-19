@@ -493,8 +493,8 @@ export function resolveOpenEditorDispatch(
  * themselves naturally.
  *
  * - `'wrong-mode'` — `platform.interfaceMode` is not `'simple'`; the picker does nothing until it is.
- * - `'no-empty'` — no Scripture Editor with `projectId === undefined` is currently open. The driver
- *   may retry when a new web view opens.
+ * - `'no-empty'` — no empty Scripture Editor (no `projectId`) is currently open. The driver may retry
+ *   when a new web view opens.
  * - `'no-send-receive'` — `paratextBibleSendReceive.getSharedProjects` was unavailable (command not
  *   registered yet, or the extension is absent). Expected steady state on Platform.Bible; expected
  *   transiently on paratext-10-studio during the window between platform-scripture-editor's
@@ -567,8 +567,9 @@ export async function openDefaultActiveProjectIfApplicable(
   }
 
   // Exclude `'new'` (not yet downloaded — can't be opened) and `'unregistered'` (limited/provisional
-  // license — surprising to auto-open as the default). ISO 8601 string comparison is chronologically
-  // sound, so a plain string compare suffices.
+  // license — surprising to auto-open as the default). `lastSendReceiveDate` is produced by .NET
+  // upstream and isn't format-guaranteed in the type, so parse to a timestamp before sorting rather
+  // than relying on lexicographic ISO ordering.
   const candidates = Object.values(sharedProjects)
     .filter(
       (info) =>
@@ -576,7 +577,10 @@ export async function openDefaultActiveProjectIfApplicable(
         info.editedStatus !== 'unregistered' &&
         info.lastSendReceiveDate,
     )
-    .sort((a, b) => b.lastSendReceiveDate.localeCompare(a.lastSendReceiveDate));
+    .sort(
+      (a, b) =>
+        new Date(b.lastSendReceiveDate).getTime() - new Date(a.lastSendReceiveDate).getTime(),
+    );
 
   if (candidates.length === 0) return 'no-candidate';
 
@@ -610,6 +614,11 @@ export async function openDefaultActiveProjectIfApplicable(
  * - `paratextBibleSendReceive.onSyncStateChanged` (when `isSyncing` is `false`) — handles a sync
  *   finishing. Newly-added shared projects look ineligible (`editedStatus === 'new'`, no
  *   `lastSendReceiveDate`) until the first sync settles, so the picker has to re-check after that.
+ *
+ * Cold-start gap: there is no explicit "S/R command registered" signal, so if
+ * `paratextBibleSendReceive` activates after `platformScriptureEditor` but before any of the
+ * triggers above fires, the picker sits idle until one does. Webview and sync activity at startup
+ * cover this in practice.
  *
  * The picker is idempotent: each call re-reads the dock and the shared-projects list and quietly
  * does nothing when there is nothing to do (editor already filled, wrong interface mode, no
@@ -657,23 +666,45 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
     }
   };
 
+  // `tryPicker()` catches its own errors internally; the `.catch` blocks below are defensive
+  // against a future change that could leak a rejection — matches the `finally`-block retry above.
   const unsubFromWebViewOpen = papi.webViews.onDidOpenWebView(() => {
-    tryPicker();
+    tryPicker().catch((e) =>
+      papi.logger.warn(
+        `Default active project picker: webView-open handler threw unexpectedly: ${getErrorMessage(e)}`,
+      ),
+    );
   });
 
-  const unsubFromWebViewUpdate = papi.webViews.onDidUpdateWebView(() => {
-    tryPicker();
+  const unsubFromWebViewUpdate = papi.webViews.onDidUpdateWebView(({ webView }) => {
+    // Only Scripture Editor updates can change the picker's outcome — any other webview's update
+    // can't reveal or remove an empty editor.
+    if (webView.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE) return;
+    tryPicker().catch((e) =>
+      papi.logger.warn(
+        `Default active project picker: webView-update handler threw unexpectedly: ${getErrorMessage(e)}`,
+      ),
+    );
   });
 
   const unsubFromSync = papi.network.getNetworkEvent<{ isSyncing: boolean }>(
     'paratextBibleSendReceive.onSyncStateChanged',
   )(({ isSyncing }) => {
-    if (!isSyncing) tryPicker();
+    if (!isSyncing)
+      tryPicker().catch((e) =>
+        papi.logger.warn(
+          `Default active project picker: sync-state handler threw unexpectedly: ${getErrorMessage(e)}`,
+        ),
+      );
   });
 
   // Cover the case where the empty editor and an eligible synced project are already in place
   // (e.g., second startup after a successful first run).
-  tryPicker();
+  tryPicker().catch((e) =>
+    papi.logger.warn(
+      `Default active project picker: initial run threw unexpectedly: ${getErrorMessage(e)}`,
+    ),
+  );
 
   return aggregateUnsubscribers([unsubFromWebViewOpen, unsubFromWebViewUpdate, unsubFromSync]);
 }
