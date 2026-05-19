@@ -942,7 +942,7 @@ export function BookChapterControl({
         >
           {/* Header: Input (with quick nav buttons) for book view, fixed header for chapter view */}
           {viewMode === 'books' ? (
-            <div className="tw:flex tw:items-end">
+            <div className={cn('tw:flex tw:items-end', isCommandListHidden && 'tw:pb-1')}>
               <div className="tw:relative tw:flex-1">
                 <CommandInput
                   ref={commandInputRef}
@@ -950,7 +950,7 @@ export function BookChapterControl({
                   onValueChange={setInputValue}
                   onKeyDown={handleInputKeyDown}
                   onFocus={() => setIsCommandListHidden(false)}
-                  className={recentSearches && recentSearches.length > 0 ? 'tw:!pr-10' : ''}
+                  className={recentSearches && recentSearches.length > 0 ? 'tw:pr-8!' : ''}
                 />
                 {recentSearches && recentSearches.length > 0 && (
                   <RecentSearches
@@ -962,16 +962,16 @@ export function BookChapterControl({
                     }
                     ariaLabel={localizedStrings?.['%history_recentSearches_ariaLabel%']}
                     groupHeading={localizedStrings?.['%history_recent%']}
+                    buttonClassName="tw:absolute tw:right-1 tw:top-1"
                   />
                 )}
               </div>
               {/* Navigation buttons for previous/next chapter/book */}
-              <div className="tw:flex tw:items-center tw:gap-1 tw:border-b tw:pe-2">
-                <div className="tw:h-5 tw:w-px tw:bg-border" aria-hidden="true" />
+              <div className="tw:flex tw:items-center tw:pe-2">
                 {quickNavButtons.map(({ onClick, disabled, title, icon: Icon }, index) => (
                   <Fragment key={title}>
                     {index === 2 && (
-                      <div className="tw:h-5 tw:w-px tw:bg-border" aria-hidden="true" />
+                      <div className="tw:mx-1 tw:h-5 tw:w-px tw:bg-border" aria-hidden="true" />
                     )}
                     <Button
                       variant="ghost"
@@ -981,7 +981,7 @@ export function BookChapterControl({
                         onClick();
                       }}
                       disabled={disabled}
-                      className="tw:h-10 tw:w-6 tw:p-0"
+                      className="tw:h-8 tw:w-6 tw:p-0"
                       title={title}
                       onKeyDown={handleQuickNavButtonKeyDown}
                     >
