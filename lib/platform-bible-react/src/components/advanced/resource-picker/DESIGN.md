@@ -23,9 +23,9 @@ Each entry has the same shape:
 
 ## 1 · Two-axis selection: project membership vs surface visibility
 
-**Pattern.** When a control governs both "what's *attached* to a project" and "what's *currently
-visible* on the calling surface," keep them as two distinct concepts in the data model. The
-user usually wants to do both at once (add a resource *and* see it) — handle that by having one
+**Pattern.** When a control governs both "what's _attached_ to a project" and "what's _currently
+visible_ on the calling surface," keep them as two distinct concepts in the data model. The
+user usually wants to do both at once (add a resource _and_ see it) — handle that by having one
 action imply the other, not by collapsing the concepts.
 
 **Chosen.** `ItemStatus` distinguishes `included` / `installed` / `available` (membership). The
@@ -69,19 +69,19 @@ modal/dialog. A clear handoff (a labeled button) links them.
   to download). Rendered inside `ResourcePickerDialog`.
 - Both share `ResourcePickerItem`, the strings file, and the `PickerAction` contract.
 
-The compact picker frames the modal as a *library* (scope-expansion: "there's more behind this
-door"), not as *management* (settings/admin). The catalog includes resources the user doesn't
+The compact picker frames the modal as a _library_ (scope-expansion: "there's more behind this
+door"), not as _management_ (settings/admin). The catalog includes resources the user doesn't
 have yet, so "Browse" matches user intent better than "Manage" would. (See the alternatives
 considered for the button label in the working notes.)
 
 **Rejected.** Single combined picker with a view toggle ("Included only" ↔ "Browse all") at
 the bottom. Worked, but mixed two distinct intents into one surface; users opening the picker
-to *add* a resource often had to flip the toggle first, and the captured-at-open view default
+to _add_ a resource often had to flip the toggle first, and the captured-at-open view default
 (see §4 below) was a brittle workaround for the conflated jobs. With the compact/full split,
 each surface has a single job, and the captured-view machinery is unnecessary.
 
 **Rejected.** Renaming the bridge button to `Manage resources`. "Manage" reads as
-settings/admin and undersells the *discovery* affordance — the modal's distinctive capability
+settings/admin and undersells the _discovery_ affordance — the modal's distinctive capability
 is revealing resources the user doesn't have yet. "Browse" + "library" matches user mental
 models from app-store-style discovery UIs.
 
@@ -90,14 +90,14 @@ models from app-store-style discovery UIs.
 ## 4 · View captured at open, not derived live **(superseded)**
 
 **Pattern (original).** When a control's initial layout depends on transient input state,
-*capture* the initial value at mount rather than recomputing it on every render.
+_capture_ the initial value at mount rather than recomputing it on every render.
 
 **Original use.** The combined picker opened in "Included only" or "Browse all" view depending
 on whether the project was sparse (≤ 1 included). Deriving live made the view flip mid-task as
 the user added items.
 
 **Superseded by §3.** With the compact/full split there's no view toggle. The compact picker
-*always* shows only Included; the full picker (in the dialog) *always* shows all groups. No
+_always_ shows only Included; the full picker (in the dialog) _always_ shows all groups. No
 captured state needed.
 
 **Pattern still useful elsewhere.** The general idea — capture transient state at mount with
@@ -114,13 +114,13 @@ labels should degrade through a sequence of progressively-smaller forms.
 
 **Chosen.** `LanguageMultipicker`'s trigger label:
 
-| Selection state                | Label           |
-|--------------------------------|-----------------|
-| Empty                          | `Any`           |
-| Matches `preferred` preset     | `Preferred`     |
-| 1 selected                     | `en`            |
-| Codes fit in char budget       | `en es fr`      |
-| Too many                       | `5 langs`       |
+| Selection state            | Label       |
+| -------------------------- | ----------- |
+| Empty                      | `Any`       |
+| Matches `preferred` preset | `Preferred` |
+| 1 selected                 | `en`        |
+| Codes fit in char budget   | `en es fr`  |
+| Too many                   | `5 langs`   |
 
 Character budget tuned to the width of the word "Preferred" so all states occupy a similar
 horizontal slot.
@@ -152,7 +152,7 @@ clicks. With "Preferred" it's one.
 
 ## 7 · Container queries for row text density
 
-**Pattern.** Row layouts that need to adapt to the *container's* width (not the viewport's)
+**Pattern.** Row layouts that need to adapt to the _container's_ width (not the viewport's)
 should use Tailwind `@container` queries. Container queries let the same component reflow
 correctly whether it's in a wide panel or a narrow popover.
 
@@ -191,14 +191,14 @@ DOM node unmounted (moved from Installed to Included group) and focus was lost.
 
 ## 9 · Three distinct row states: selected, focused, hovered
 
-**Pattern.** When a list row has *both* a "selected" semantic (this row represents current
-state) *and* a "focused" semantic (this row will receive keystrokes), make the two visually
+**Pattern.** When a list row has _both_ a "selected" semantic (this row represents current
+state) _and_ a "focused" semantic (this row will receive keystrokes), make the two visually
 distinct. Hover, focus, and selected should not all use the same `bg-accent`.
 
 **Chosen.**
 
 - Selected → `bg-accent` (tinted background)
-- Focused → inset 2px ring in the theme ring color, *no background change*
+- Focused → inset 2px ring in the theme ring color, _no background change_
 - Hovered → `bg-muted` (lighter than `bg-accent`)
 
 Selected + focused at the same time = both signals visible without merging.
@@ -234,7 +234,7 @@ in the library often pick a resource and then keep browsing for another.
 
 ## 11 · Spinner only for real waits
 
-**Pattern.** Loading affordances (spinners, skeletons) should signal an *actual* wait, not
+**Pattern.** Loading affordances (spinners, skeletons) should signal an _actual_ wait, not
 "the system is processing." Operations that complete in <100ms shouldn't show progress UI.
 
 **Chosen.** Available → Included transitions show a `Loader2` spinner during the download.
@@ -276,7 +276,7 @@ The original pattern remains valid for cases where in-place toggling makes sense
 
 **Pattern.** When an inline informational badge (language chip on a row) usefully maps to a
 filter the user might want to apply, make it interactive. The interactive variant needs to be
-*visibly* different from the static badge — explicit hover/active states, focus ring,
+_visibly_ different from the static badge — explicit hover/active states, focus ring,
 `cursor: pointer`.
 
 **Chosen.** Language chips on each row are buttons. Hover swaps from `bg-secondary` to
@@ -303,7 +303,7 @@ them; can produce surprising mass-shifts in the list.
 
 ## 16 · Shrink to fit, but reserve space while typing
 
-**Pattern.** Components that shrink to fit their content should still resist *jitter* during
+**Pattern.** Components that shrink to fit their content should still resist _jitter_ during
 input-driven content changes. Reserve a minimum height while the user is actively typing in
 the search field; release it when search is cleared.
 
@@ -316,7 +316,7 @@ typing into search doesn't shrink it as results filter down.
 ## 17 · String meaning as documentation
 
 **Pattern.** Localizable strings should carry **meaning comments**, not just translation
-target text. Translators and reviewers need to know *what's being communicated*, not just
+target text. Translators and reviewers need to know _what's being communicated_, not just
 substitute words.
 
 **Chosen.** `resource-picker.strings.ts` and `language-multipicker.strings.ts` both define
