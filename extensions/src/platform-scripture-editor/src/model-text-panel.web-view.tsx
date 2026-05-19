@@ -49,7 +49,7 @@ const MODEL_TEXT_PANEL_STRING_KEYS: LocalizeKey[] = [
   '%webView_modelTextPanel_noProject%',
   '%webView_modelTextPanel_pickModelText%',
   '%webView_modelTextPanel_unknownResource%',
-  '%webView_modelTextPanel_zeroState_prompt%',
+  '%webView_modelTextPanel_emptyState_prompt%',
 ];
 
 globalThis.webViewComponent = function ModelTextPanel({
@@ -128,6 +128,8 @@ globalThis.webViewComponent = function ModelTextPanel({
     ),
     defaultUsj,
   );
+
+  const usjFromPdp = !isPlatformError(usjPossiblyError) ? usjPossiblyError : undefined;
 
   // --- Text direction from the resource project ---
 
@@ -228,6 +230,12 @@ globalThis.webViewComponent = function ModelTextPanel({
     [textDirection],
   );
 
+  // --- PDP sync (read-only: push incoming USJ directly into the editor) ---
+
+  useEffect(() => {
+    if (usjFromPdp) editorRef.current?.setUsj(usjFromPdp);
+  }, [usjFromPdp]);
+
   // --- Render ---
 
   // No project state: panel was opened without a project ID
@@ -245,7 +253,7 @@ globalThis.webViewComponent = function ModelTextPanel({
   if (!effectiveModelTexts || effectiveModelTexts.items.length === 0) {
     return (
       <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
-        <p>{localizedStrings['%webView_modelTextPanel_zeroState_prompt%']}</p>
+        <p>{localizedStrings['%webView_modelTextPanel_emptyState_prompt%']}</p>
         <Button onClick={() => showResourcePicker()}>
           {localizedStrings['%webView_modelTextPanel_pickModelText%']}
         </Button>
@@ -265,7 +273,7 @@ globalThis.webViewComponent = function ModelTextPanel({
   // Installing state: resource found but not yet installed
   if (isInstalling) {
     return (
-      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
+      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:gap-2 tw:p-8 tw:text-center">
         <Spinner />
         <span>{localizedStrings['%webView_modelTextPanel_installing%']}</span>
       </div>

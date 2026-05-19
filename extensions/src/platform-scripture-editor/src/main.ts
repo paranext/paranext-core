@@ -743,13 +743,19 @@ const scriptureEditorWebViewProvider: IWebViewProvider = new ScriptureEditorWebV
 let modelTextPendingProjectId: string | undefined | null = null;
 
 const modelTextPanelWebViewProvider: IWebViewProvider = {
-  async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
+  async getWebView(
+    savedWebView: SavedWebViewDefinition,
+    openWebViewOptions: OpenWebViewOptions & { projectId?: string },
+  ): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== MODEL_TEXT_PANEL_WEBVIEW_TYPE)
       throw new Error(
         `${MODEL_TEXT_PANEL_WEBVIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
+    // Priority: pending (reload path) > options (new-panel path) > saved (existing panel reload)
     const projectId =
-      modelTextPendingProjectId !== null ? modelTextPendingProjectId : savedWebView.projectId;
+      modelTextPendingProjectId !== null
+        ? modelTextPendingProjectId
+        : (openWebViewOptions.projectId ?? savedWebView.projectId);
     modelTextPendingProjectId = null;
     return {
       ...savedWebView,
