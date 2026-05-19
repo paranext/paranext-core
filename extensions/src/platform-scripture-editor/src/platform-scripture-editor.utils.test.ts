@@ -710,6 +710,7 @@ describe('openDefaultActiveProjectIfApplicable', () => {
       'platformScriptureEditor.openScriptureEditor',
       'newer',
     );
+    expect(mockSendCommand).toHaveBeenCalledWith('platformScriptureEditor.openModelText', 'newer');
   });
 
   it("skips entries with editedStatus 'new' or 'unregistered' and picks the newest of the rest", async () => {
@@ -786,6 +787,41 @@ describe('openDefaultActiveProjectIfApplicable', () => {
     const outcome = await openDefaultActiveProjectIfApplicable(papi);
 
     expect(outcome).toBe('no-candidate');
+  });
+
+  it("returns 'failed' when openScriptureEditor succeeds but openModelText rejects", async () => {
+    const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions, mockSendCommand, mockWarn } =
+      createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          proj1: {
+            id: 'proj1',
+            name: 'P1',
+            fullName: 'P1',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2025-06-01T00:00:00Z',
+          },
+        };
+      }
+      if (commandName === 'platformScriptureEditor.openScriptureEditor') {
+        return 'opened-webview-id';
+      }
+      if (commandName === 'platformScriptureEditor.openModelText') {
+        throw new Error('model text open failed');
+      }
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('failed');
+    expect(mockWarn).toHaveBeenCalled();
   });
 
   it("returns 'failed' when the openScriptureEditor command rejects", async () => {

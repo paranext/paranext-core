@@ -72,7 +72,7 @@ describe('simple-layout.data', () => {
           if (data?.webViewType) allWebViewTypes.push(data.webViewType);
         });
       });
-      expect(allWebViewTypes).toContain('platformGetResources.home');
+      expect(allWebViewTypes).toContain('platformScriptureEditor.modelText');
       expect(allWebViewTypes).toContain('platformScriptureEditor.react');
       expect(allWebViewTypes).toContain('platformGetResources.newTab');
     });
