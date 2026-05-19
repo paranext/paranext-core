@@ -62,10 +62,18 @@ export interface Selection {
   taskId?: string;
 }
 
+export type ProvidedPlanKind = 'factory' | 'organization';
+
 export interface OrgProvidedPlan {
   id: string;
   name: string;
   version: string;
+  /**
+   * Source of the plan. `'factory'` = built-in default that ships with the product;
+   * `'organization'` = template provided by the user's organization. Undefined is treated as
+   * `'organization'` for backwards compatibility.
+   */
+  kind?: ProvidedPlanKind;
   stages: PlanStage[];
   checks: CheckSetting[];
 }

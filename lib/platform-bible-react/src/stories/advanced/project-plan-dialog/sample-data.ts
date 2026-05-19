@@ -4,6 +4,7 @@ import type {
   PlanTask,
   ProjectPlan,
 } from '@/components/advanced/project-plan-dialog';
+import { FACTORY_PLANS } from './factory-plans';
 
 const task = (
   id: string,
@@ -28,70 +29,46 @@ const stage = (id: string, name: string, tasks: PlanTask[]): PlanStage => ({
   tasks,
 });
 
-export const SAMPLE_ORG_PLANS: OrgProvidedPlan[] = [
-  {
-    id: 'sil-compact',
-    name: 'SIL Compact',
-    version: '1.0.0',
-    stages: [
-      stage('s-draft', 'Drafting', [
-        task('t-draft-1', 'First draft'),
-        task('t-draft-2', 'Self-check'),
-      ]),
-      stage('s-team', 'Team check', [
-        task('t-team-1', 'Team review'),
-        task('t-team-2', 'Reading comprehension'),
-      ]),
-      stage('s-consultant', 'Consultant check', [
-        task('t-consult-1', 'Consultant review'),
-      ]),
-    ],
-    checks: [
-      { checkId: 'basic.markers', notifyOnlyInStage: 's-draft', requiredInStage: 's-team' },
-      { checkId: 'basic.punctuation', notifyOnlyInStage: 's-draft', requiredInStage: 's-team' },
-      {
-        checkId: 'spelling.spelling',
-        notifyOnlyInStage: 's-draft',
-        requiredInStage: 's-consultant',
-      },
-    ],
-  },
-  {
-    id: 'sil-comprehensive',
-    name: 'SIL Comprehensive',
-    version: '2.1.0',
-    stages: [
-      stage('s-c-prep', 'Preparation', [task('t-c-prep-1', 'Background study')]),
-      stage('s-c-draft', 'Drafting', [
-        task('t-c-draft-1', 'First draft'),
-        task('t-c-draft-2', 'Second draft'),
-        task('t-c-draft-3', 'Self-check'),
-      ]),
-      stage('s-c-team', 'Team check', [task('t-c-team-1', 'Team review')]),
-      stage('s-c-back', 'Back translation', [task('t-c-back-1', 'Back translate')]),
-      stage('s-c-consult', 'Consultant', [task('t-c-consult-1', 'Consultant review')]),
-      stage('s-c-publish', 'Publishing', [task('t-c-publish-1', 'Final read-through')]),
-    ],
-    checks: [],
-  },
+const ORG_PLANS: OrgProvidedPlan[] = [
   {
     id: 'eten-quickstart',
     name: 'ETEN Quickstart',
     version: '0.3.0',
+    kind: 'organization',
     stages: [
       stage('s-q-1', 'Draft', [task('t-q-1', 'Draft text')]),
       stage('s-q-2', 'Review', [task('t-q-2', 'Review and finalize')]),
     ],
     checks: [],
   },
+  {
+    id: 'acme-translation',
+    name: 'Acme Translation Team',
+    version: '1.2.0',
+    kind: 'organization',
+    stages: [
+      stage('s-a-1', 'Exegesis', [task('t-a-1', 'Background study')]),
+      stage('s-a-2', 'Draft', [
+        task('t-a-2a', 'Initial draft'),
+        task('t-a-2b', 'Self-revision'),
+      ]),
+      stage('s-a-3', 'Peer review', [task('t-a-3', 'Peer review')]),
+      stage('s-a-4', 'Consultant', [task('t-a-4', 'Consultant check')]),
+    ],
+    checks: [],
+  },
 ];
+
+export const SAMPLE_ORG_PLANS: OrgProvidedPlan[] = [...FACTORY_PLANS, ...ORG_PLANS];
+
+const DEFAULT_FACTORY_PLAN = FACTORY_PLANS.find((p) => p.name === 'SIL Compact Base Plan') ?? FACTORY_PLANS[0];
 
 export const SAMPLE_PROJECT_PLAN: ProjectPlan = {
   id: 'project-plan-1',
-  name: 'SIL Compact',
-  basePlanRef: 'sil-compact',
-  stages: structuredClone(SAMPLE_ORG_PLANS[0].stages),
-  checks: structuredClone(SAMPLE_ORG_PLANS[0].checks),
+  name: DEFAULT_FACTORY_PLAN.name,
+  basePlanRef: DEFAULT_FACTORY_PLAN.id,
+  stages: structuredClone(DEFAULT_FACTORY_PLAN.stages),
+  checks: structuredClone(DEFAULT_FACTORY_PLAN.checks),
 };
 
 export const EMPTY_PROJECT_PLAN: ProjectPlan = {

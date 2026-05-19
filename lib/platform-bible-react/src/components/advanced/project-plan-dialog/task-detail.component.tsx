@@ -70,7 +70,7 @@ export function TaskDetail({ stage, task, onStageChange, onTaskChange }: TaskDet
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="tw:z-600">
               {markCompleteOptions.map((o) => (
                 <SelectItem key={o.value} value={o.value}>
                   {o.label}
@@ -88,7 +88,7 @@ export function TaskDetail({ stage, task, onStageChange, onTaskChange }: TaskDet
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="tw:z-600">
               {taskStartOptions.map((o) => (
                 <SelectItem key={o.value} value={o.value}>
                   {o.label}
@@ -108,7 +108,7 @@ export function TaskDetail({ stage, task, onStageChange, onTaskChange }: TaskDet
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="tw:z-600">
               {requiresEditingOptions.map((o) => (
                 <SelectItem key={o.value} value={o.value}>
                   {o.label}

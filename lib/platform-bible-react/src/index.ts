@@ -124,6 +124,8 @@ export type {
 export {
   ProjectPlanDialog,
   type ProjectPlanDialogProps,
+  ProjectPlanDialogHierarchical,
+  type ProjectPlanDialogHierarchicalProps,
   CHECK_GROUPS as PROJECT_PLAN_CHECK_GROUPS,
   type BookCountsByDifficulty,
   type CheckCatalogItem,

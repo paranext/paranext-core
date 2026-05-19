@@ -9,7 +9,7 @@ import {
 } from '@/components/shadcn-ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shadcn-ui/tabs';
 import { OrgPlanPicker } from '@/components/advanced/project-plan-dialog/org-plan-picker.component';
-import { StagesTasksTab } from '@/components/advanced/project-plan-dialog/stages-tasks-tab.component';
+import { HierarchicalStagesTasks } from '@/components/advanced/project-plan-dialog/hierarchical-stages-tasks.component';
 import { ChecksTab } from '@/components/advanced/project-plan-dialog/checks-tab.component';
 import type {
   CheckSetting,
@@ -17,10 +17,9 @@ import type {
   PlanStage,
   PlanTask,
   ProjectPlan,
-  Selection,
 } from '@/components/advanced/project-plan-dialog/types';
 
-export interface ProjectPlanDialogProps {
+export interface ProjectPlanDialogHierarchicalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectName: string;
@@ -31,7 +30,7 @@ export interface ProjectPlanDialogProps {
   defaultTab?: 'stages-tasks' | 'checks';
 }
 
-export function ProjectPlanDialog({
+export function ProjectPlanDialogHierarchical({
   open,
   onOpenChange,
   projectName,
@@ -40,34 +39,32 @@ export function ProjectPlanDialog({
   onSubmit,
   onCancel,
   defaultTab = 'stages-tasks',
-}: ProjectPlanDialogProps) {
+}: ProjectPlanDialogHierarchicalProps) {
   const [workingPlan, setWorkingPlan] = useState<ProjectPlan>(plan);
-  const [selection, setSelection] = useState<Selection>(() => {
-    const firstStage = plan.stages[0];
-    if (!firstStage) return {};
-    const firstTask = firstStage.tasks[0];
-    return firstTask
-      ? { stageId: firstStage.id, taskId: firstTask.id }
-      : { stageId: firstStage.id };
-  });
   const [activeTab, setActiveTab] = useState<'stages-tasks' | 'checks'>(defaultTab);
 
   useEffect(() => {
-    if (open) {
-      setWorkingPlan(plan);
-    }
+    if (open) setWorkingPlan(plan);
   }, [open, plan]);
-
-  const stages = workingPlan.stages;
-
-  const updateStages = (updater: (prev: PlanStage[]) => PlanStage[]) => {
-    setWorkingPlan((prev) => ({ ...prev, stages: updater(prev.stages) }));
-  };
 
   const isDirty = useMemo(
     () => JSON.stringify(workingPlan) !== JSON.stringify(plan),
     [workingPlan, plan],
   );
+
+  const updateStages = (updater: (prev: PlanStage[]) => PlanStage[]) =>
+    setWorkingPlan((prev) => ({ ...prev, stages: updater(prev.stages) }));
+
+  const handleStageChange = (next: PlanStage) =>
+    updateStages((prev) => prev.map((s) => (s.id === next.id ? next : s)));
+
+  const handleTaskChange = (next: PlanTask) =>
+    updateStages((prev) =>
+      prev.map((s) => ({
+        ...s,
+        tasks: s.tasks.map((t) => (t.id === next.id ? next : t)),
+      })),
+    );
 
   const handleOrgPlanReplace = (selected: OrgProvidedPlan) => {
     setWorkingPlan({
@@ -77,30 +74,6 @@ export function ProjectPlanDialog({
       stages: structuredClone(selected.stages),
       checks: structuredClone(selected.checks),
     });
-    const first = selected.stages[0];
-    setSelection(
-      first?.tasks[0]
-        ? { stageId: first.id, taskId: first.tasks[0].id }
-        : first
-          ? { stageId: first.id }
-          : {},
-    );
-  };
-
-  const handleStageOrTaskSelect = (next: Selection) => setSelection(next);
-
-  const handleTaskChange = (next: PlanTask) => {
-    updateStages((prev) =>
-      prev.map((stage) =>
-        stage.id === selection.stageId
-          ? { ...stage, tasks: stage.tasks.map((t) => (t.id === next.id ? next : t)) }
-          : stage,
-      ),
-    );
-  };
-
-  const handleStageChange = (next: PlanStage) => {
-    updateStages((prev) => prev.map((stage) => (stage.id === next.id ? next : stage)));
   };
 
   const handleCancel = () => {
@@ -115,9 +88,7 @@ export function ProjectPlanDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="tw:inset-0 tw:flex tw:h-screen tw:max-h-none tw:w-screen tw:max-w-none tw:sm:max-w-none tw:translate-x-0 tw:translate-y-0 tw:flex-col tw:gap-0 tw:rounded-none tw:p-0 tw:rtl:translate-x-0"
-      >
+      <DialogContent className="tw:inset-0 tw:flex tw:h-screen tw:max-h-none tw:w-screen tw:max-w-none tw:sm:max-w-none tw:translate-x-0 tw:translate-y-0 tw:flex-col tw:gap-0 tw:rounded-none tw:p-0 tw:rtl:translate-x-0">
         <DialogHeader className="tw:border-b tw:p-4 tw:pb-3">
           <DialogTitle>Project Plan: {projectName}</DialogTitle>
         </DialogHeader>
@@ -145,11 +116,12 @@ export function ProjectPlanDialog({
             <TabsTrigger value="checks">Checks</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="stages-tasks" className="tw:flex-1 tw:overflow-auto tw:px-4 tw:py-3">
-            <StagesTasksTab
-              stages={stages}
-              selection={selection}
-              onSelectionChange={handleStageOrTaskSelect}
+          <TabsContent
+            value="stages-tasks"
+            className="tw:flex-1 tw:overflow-auto tw:px-4 tw:py-3"
+          >
+            <HierarchicalStagesTasks
+              stages={workingPlan.stages}
               onStagesChange={updateStages}
               onStageChange={handleStageChange}
               onTaskChange={handleTaskChange}
@@ -158,7 +130,7 @@ export function ProjectPlanDialog({
 
           <TabsContent value="checks" className="tw:flex-1 tw:overflow-auto tw:px-4 tw:py-3">
             <ChecksTab
-              stages={stages}
+              stages={workingPlan.stages}
               checks={workingPlan.checks}
               onChecksChange={(checks: CheckSetting[]) =>
                 setWorkingPlan((p) => ({ ...p, checks }))
@@ -178,4 +150,4 @@ export function ProjectPlanDialog({
   );
 }
 
-export default ProjectPlanDialog;
+export default ProjectPlanDialogHierarchical;

@@ -157,7 +157,7 @@ function StageSelect({
       <SelectTrigger>
         <SelectValue />
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent className="tw:z-600">
         <SelectItem value={NONE_VALUE}>—</SelectItem>
         {stages.map((s) => (
           <SelectItem key={s.id} value={s.id}>
