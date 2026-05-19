@@ -92,6 +92,7 @@
       "%webView_modelTextPanel_installing%": "Installing resource…",
       "%webView_modelTextPanel_noProject%": "No project selected.",
       "%webView_modelTextPanel_pickModelText%": "Pick model text…",
+      "%webView_modelTextPanel_title%": "Model Text",
       "%webView_modelTextPanel_unknownResource%": "The selected model text could not be found.",
       "%webView_modelTextPanel_emptyState_prompt%": "No model text selected. Pick one to display a reference translation alongside your project."
     },
@@ -167,7 +168,13 @@
       "%webView_platformScriptureEditor_title_editable_no_project%": "Editor de Escrituras",
       "%webView_platformScriptureEditor_title_format%": "{projectId} {editable}",
       "%webView_platformScriptureEditor_title_readonly_no_project%": "Visor de recursos",
-      "%webView_platformScriptureEditor_tools%": "Herramientas"
+      "%webView_platformScriptureEditor_tools%": "Herramientas",
+      "%webView_modelTextPanel_installing%": "Instalando recurso…",
+      "%webView_modelTextPanel_noProject%": "Ningún proyecto seleccionado.",
+      "%webView_modelTextPanel_pickModelText%": "Elegir texto modelo…",
+      "%webView_modelTextPanel_title%": "Texto modelo",
+      "%webView_modelTextPanel_unknownResource%": "No se pudo encontrar el texto modelo seleccionado.",
+      "%webView_modelTextPanel_emptyState_prompt%": "Ningún texto modelo seleccionado. Elige uno para mostrar una traducción de referencia junto a tu proyecto."
     }
   }
 }
