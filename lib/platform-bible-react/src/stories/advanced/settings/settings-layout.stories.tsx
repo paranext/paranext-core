@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import {
   SettingsLayout,
   type SettingsLayoutItem,
@@ -20,9 +20,9 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 const sampleLabels: SettingsLayoutLabels = {
-  projectSection: 'Project',
-  generalSection: 'General',
-  extensionsSection: 'Extensions',
+  projectSection: 'Project Settings',
+  generalSection: 'General Settings',
+  extensionsSection: 'Extension Settings',
   comingSoonTitle: 'Coming soon',
   comingSoonBody: "This settings page hasn't been ported to Platform.Bible yet.",
   searchPlaceholder: 'Search app settings, extension settings, and project settings',
@@ -101,8 +101,18 @@ function SettingsLayoutDemo({
         </PlaceholderRightPanel>
       );
     }
-    return <PlaceholderRightPanel>Dynamic content for {selectedEntry.itemId}</PlaceholderRightPanel>;
+    return (
+      <PlaceholderRightPanel>Dynamic content for {selectedEntry.itemId}</PlaceholderRightPanel>
+    );
   }, [selectedEntry, selectedProjectId, projects]);
+
+  // Disable Project-section items until the user picks a project — same behavior as the live
+  // SettingsTab in the renderer.
+  const isProjectSectionInteractive = !!selectedProjectId;
+  const effectiveProjectSection = useMemo<SettingsLayoutItem[]>(
+    () => projectSection.map((item) => ({ ...item, disabled: !isProjectSectionInteractive })),
+    [projectSection, isProjectSectionInteractive],
+  );
 
   return (
     <div className="tw:h-screen">
@@ -111,7 +121,7 @@ function SettingsLayoutDemo({
         selectedProjectId={selectedProjectId}
         onSelectProject={setSelectedProjectId}
         isProjectLocked={isProjectLocked}
-        projectSectionItems={projectSection}
+        projectSectionItems={effectiveProjectSection}
         generalSectionItems={generalSection}
         extensionsSectionItems={extensionsSection}
         selectedEntry={selectedEntry}
@@ -126,7 +136,7 @@ function SettingsLayoutDemo({
   );
 }
 
-function PlaceholderRightPanel({ children }: { children: React.ReactNode }) {
+function PlaceholderRightPanel({ children }: { children: ReactNode }) {
   return (
     <div className="tw:flex tw:h-full tw:items-center tw:justify-center tw:p-6 tw:text-sm tw:text-muted-foreground">
       {children}
@@ -178,12 +188,16 @@ export const EmptyExtensions: Story = {
 
 export const ComingSoonSelected: Story = {
   render: () => (
-    <SettingsLayoutDemo initialSelection={{ section: 'project', itemId: 'books' }} />
+    <SettingsLayoutDemo
+      initialProjectId="p1"
+      initialSelection={{ section: 'project', itemId: 'books' }}
+    />
   ),
   parameters: {
     docs: {
       description: {
-        story: 'Selecting a hard-coded entry renders the Coming Soon panel on the right.',
+        story:
+          'With a project selected, the Project-section items become interactive. Picking a hard-coded entry renders the Coming Soon panel on the right.',
       },
     },
   },
@@ -199,13 +213,18 @@ export const SearchWithNoResults: Story = {
       });
       const [searchValue, setSearchValue] = useState('zzz-no-match');
 
+      const disabledProjectItems = useMemo<SettingsLayoutItem[]>(
+        () => projectItems.map((item) => ({ ...item, disabled: !selectedProjectId })),
+        [selectedProjectId],
+      );
+
       return (
         <div className="tw:h-screen">
           <SettingsLayout
             projectOptions={sampleProjects}
             selectedProjectId={selectedProjectId}
             onSelectProject={setSelectedProjectId}
-            projectSectionItems={projectItems}
+            projectSectionItems={disabledProjectItems}
             generalSectionItems={generalItems}
             extensionsSectionItems={extensionItems}
             selectedEntry={selectedEntry}
