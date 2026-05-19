@@ -829,6 +829,8 @@ declare module 'platform-scripture' {
         ) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
+      /** Determines whether the current user can write to project settings. */
+      canUserWriteProjectSettings(): Promise<boolean>;
     };
 
   // #endregion User Text Connection Settings Types
