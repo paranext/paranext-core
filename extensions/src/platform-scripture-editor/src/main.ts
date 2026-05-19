@@ -25,6 +25,8 @@ import { AnnotationStyleDataProviderEngine } from './annotations/annotation-styl
 import { mergeDecorations } from './decorations.util';
 import platformScriptureEditorWebViewStyles from './platform-scripture-editor.web-view.scss?inline';
 import platformScriptureEditorWebView from './platform-scripture-editor.web-view?inline';
+import modelTextPanelWebViewStyles from './model-text-panel.web-view.scss?inline';
+import modelTextPanelWebView from './model-text-panel.web-view?inline';
 import {
   convertScriptureRangeToEditorRange,
   formatEditorTitle,
@@ -36,6 +38,8 @@ import {
 import { MarkersViewNotifier } from './markers-view-notifier.model';
 
 logger.debug('Scripture Editor is importing!');
+
+const MODEL_TEXT_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.modelText';
 
 // #region Editor Selection Tracking
 
@@ -730,6 +734,20 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
 }
 const scriptureEditorWebViewProvider: IWebViewProvider = new ScriptureEditorWebViewFactory();
 
+const modelTextPanelWebViewProvider: IWebViewProvider = {
+  async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
+    if (savedWebView.webViewType !== MODEL_TEXT_PANEL_WEBVIEW_TYPE)
+      throw new Error(
+        `${MODEL_TEXT_PANEL_WEBVIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} web view`,
+      );
+    return {
+      ...savedWebView,
+      content: modelTextPanelWebView,
+      styles: modelTextPanelWebViewStyles,
+    };
+  },
+};
+
 export async function activate(context: ExecutionActivationContext): Promise<void> {
   logger.debug('Scripture editor is activating!');
 
@@ -935,6 +953,37 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
+  const modelTextPanelWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    MODEL_TEXT_PANEL_WEBVIEW_TYPE,
+    modelTextPanelWebViewProvider,
+  );
+
+  const openModelTextPanelPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.openModelText',
+    async (projectId: string) => {
+      const openOptions: OpenWebViewOptions & { projectId: string } = { projectId };
+      return papi.webViews.openWebView(MODEL_TEXT_PANEL_WEBVIEW_TYPE, { type: 'tab' }, openOptions);
+    },
+    {
+      method: {
+        summary: 'Open the model text panel for a translation project',
+        params: [
+          {
+            name: 'projectId',
+            required: true,
+            summary: 'The project ID of the translation project',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the opened WebView',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
   // Create the selection changed event emitter
   selectionChangedEventEmitter = papi.network.createNetworkEventEmitter<SelectionChangeEvent>(
     EDITOR_SELECTION_CHANGED_EVENT,
@@ -961,6 +1010,8 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await insertCrossReferencePromise,
     await insertCommentPromise,
     await annotationStyleDataProviderPromise,
+    await modelTextPanelWebViewProviderPromise,
+    await openModelTextPanelPromise,
     selectionChangedEventEmitter,
     unsubFromDefaultProjectPicker,
     ...markerNotifierUnsubscribers,
