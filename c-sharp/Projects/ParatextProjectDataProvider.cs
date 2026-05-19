@@ -1350,7 +1350,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         }
     }
 
-    public ResourceReferenceList GetUserModelTexts()
+    public ResourceReferenceList GetUserModelTexts(object? param = null)
     {
         var (schemaVersion, content) = GetUserProjectSettings().GetSetting("ModelTexts");
         if (content == null)
