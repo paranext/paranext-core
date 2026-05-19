@@ -18,7 +18,7 @@ function Label({ className, ...props }: React.ComponentProps<typeof LabelPrimiti
       data-slot="label"
       className={cn(
         // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
-        'pr-twp tw:flex tw:items-center tw:gap-2 tw:text-sm tw:leading-none tw:font-medium tw:text-foreground tw:select-none tw:group-data-[disabled=true]:pointer-events-none tw:group-data-[disabled=true]:opacity-50 tw:peer-disabled:cursor-not-allowed tw:peer-disabled:opacity-50',
+        'pr-twp tw:flex tw:items-center tw:gap-2 tw:text-sm tw:leading-none tw:font-medium tw:select-none tw:group-data-[disabled=true]:pointer-events-none tw:group-data-[disabled=true]:opacity-50 tw:peer-disabled:cursor-not-allowed tw:peer-disabled:opacity-50',
         className,
       )}
       {...props}
