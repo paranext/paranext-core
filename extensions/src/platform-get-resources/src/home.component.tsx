@@ -505,7 +505,7 @@ export function Home({
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell className="tw:hidden tw:md:!table-cell tw:font-medium tw:break-words tw:cursor-default tw:break-all">
+                          <TableCell className="tw:hidden tw:md:!table-cell tw:font-medium tw:whitespace-normal tw:wrap-anywhere tw:cursor-default">
                             {project.fullName}
                           </TableCell>
                           <TableCell className="tw:hidden tw:sm:!table-cell tw:cursor-default">
