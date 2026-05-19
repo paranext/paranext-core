@@ -61,7 +61,6 @@ const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
   '%settings_project_properties%',
   '%settings_comingSoon_title%',
   '%settings_comingSoon_body%',
-  '%settings_defaultSearchText_searchUserSettings%',
   ...HARDCODED_PROJECT_LABEL_KEYS,
 ];
 
@@ -195,19 +194,27 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
 
   // ---- Derive sidebar entries ----
 
+  /**
+   * Project-section items are disabled until the user picks a project (or the dialog is opened
+   * scoped to one). Without a project, there's nothing meaningful to show.
+   */
+  const isProjectSectionInteractive = !!selectedProjectId;
+
   const projectSectionItems = useMemo<ReadonlyArray<SettingsLayoutItem>>(() => {
     const projectProperties: SettingsLayoutItem = {
       kind: 'dynamic',
       id: PROJECT_PROPERTIES_ENTRY_ID,
       label: localizedStrings['%settings_project_properties%'] || 'Project properties',
+      disabled: !isProjectSectionInteractive,
     };
     const hardcoded: SettingsLayoutItem[] = HARDCODED_PROJECT_ENTRIES.map((entry) => ({
       kind: 'coming-soon',
       id: entry.id,
       label: localizedStrings[entry.labelKey] || entry.id,
+      disabled: !isProjectSectionInteractive,
     }));
     return [projectProperties, ...hardcoded];
-  }, [localizedStrings]);
+  }, [localizedStrings, isProjectSectionInteractive]);
 
   const { generalSectionItems, extensionsSectionItems } = useMemo<{
     generalSectionItems: DynamicSettingsSidebarItem[];
@@ -223,7 +230,10 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
         id: key,
         label: value ? value[0].label : key,
       };
-      if (bundledExtensionNames.has(key)) general.push(item);
+      // The platform's own settings (key 'platform') belong under General Settings — they're part
+      // of the core platform, not a third-party extension. Other in-repo extensions are surfaced
+      // via the `platform.getBundledExtensionNames` command.
+      if (key === 'platform' || bundledExtensionNames.has(key)) general.push(item);
       else extensions.push(item);
     });
     return { generalSectionItems: general, extensionsSectionItems: extensions };
@@ -256,8 +266,7 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
       comingSoonBody:
         localizedStrings['%settings_comingSoon_body%'] ||
         "This settings page hasn't been ported to Platform.Bible yet.",
-      searchPlaceholder:
-        localizedStrings['%settings_defaultSearchText_searchUserSettings%'] || 'Search settings...',
+      searchPlaceholder: 'Search app settings, extension settings, and project settings',
       projectPickerPlaceholder:
         localizedStrings['%settings_sidebar_projectsComboBoxPlaceholder%'] || 'Select project',
     }),
@@ -274,21 +283,31 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
         );
       }
 
+      // The platform-contributed project group has the same label as the "Project properties"
+      // sidebar entry. Suppress its inner header so users don't see the title twice.
+      const projectPropertiesLabel =
+        localizedStrings['%settings_project_properties%'] || 'Project properties';
+
       return (
         <div className="project-settings-tab">
           {Object.entries(filteredAndMatchedProjectSettingsContributions).flatMap(
             ([, settingsGroups]) =>
               settingsGroups
-                ? Object.entries(settingsGroups).map(([, settingsGroup]) => (
-                    <ProjectOrOtherSettingsList
-                      key={settingsGroup.label + projectId}
-                      settingProperties={settingsGroup.properties}
-                      projectId={projectId}
-                      groupLabel={settingsGroup.label}
-                      groupDescription={settingsGroup.description}
-                      className="project-or-settings-list"
-                    />
-                  ))
+                ? Object.entries(settingsGroups).map(([, settingsGroup]) => {
+                    const isDuplicateOfSidebar = settingsGroup.label === projectPropertiesLabel;
+                    return (
+                      <ProjectOrOtherSettingsList
+                        key={settingsGroup.label + projectId}
+                        settingProperties={settingsGroup.properties}
+                        projectId={projectId}
+                        groupLabel={isDuplicateOfSidebar ? '' : settingsGroup.label}
+                        groupDescription={
+                          isDuplicateOfSidebar ? undefined : settingsGroup.description
+                        }
+                        className="project-or-settings-list"
+                      />
+                    );
+                  })
                 : [],
           )}
         </div>

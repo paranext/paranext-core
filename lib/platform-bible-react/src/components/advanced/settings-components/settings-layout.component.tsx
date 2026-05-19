@@ -20,6 +20,8 @@ export type DynamicSettingsSidebarItem = {
   kind: 'dynamic';
   id: string;
   label: string;
+  /** When true, the item is rendered greyed out and ignores clicks. */
+  disabled?: boolean;
 };
 
 /** A sidebar item with no real content yet; selecting it shows the Coming Soon panel. */
@@ -27,6 +29,8 @@ export type ComingSoonSettingsSidebarItem = {
   kind: 'coming-soon';
   id: string;
   label: string;
+  /** When true, the item is rendered greyed out and ignores clicks. */
+  disabled?: boolean;
 };
 
 export type SettingsLayoutItem = DynamicSettingsSidebarItem | ComingSoonSettingsSidebarItem;
@@ -64,6 +68,7 @@ export type SettingsLayoutProps = PropsWithChildren<{
   // ---- Project picker (renders at the top of the Project section) ----
   projectOptions: ReadonlyArray<SettingsLayoutProjectInfo>;
   selectedProjectId: string | undefined;
+  /** Called when the user picks a project from the project picker combo box. */
   onSelectProject: (projectId: string) => void;
   /** When true, the project picker is locked (e.g., dialog scoped to a single project). */
   isProjectLocked?: boolean;
@@ -75,10 +80,12 @@ export type SettingsLayoutProps = PropsWithChildren<{
 
   // ---- Selection ----
   selectedEntry: SettingsLayoutSelection | undefined;
+  /** Called when the user selects a sidebar entry (in any section). */
   onSelectEntry: (entry: SettingsLayoutSelection) => void;
 
   // ---- Search ----
   searchValue: string;
+  /** Called when the user types in the search bar; receives the new query string. */
   onSearch: (q: string) => void;
 
   // ---- Labels ----
@@ -93,7 +100,12 @@ export type SettingsLayoutProps = PropsWithChildren<{
 }>;
 
 function toSidebarItem(item: SettingsLayoutItem): SettingsSidebarItem {
-  return { id: item.id, label: item.label, isComingSoon: item.kind === 'coming-soon' };
+  return {
+    id: item.id,
+    label: item.label,
+    isComingSoon: item.kind === 'coming-soon',
+    disabled: item.disabled,
+  };
 }
 
 function matchesSearch(label: string, query: string): boolean {
@@ -106,8 +118,8 @@ function matchesSearch(label: string, query: string): boolean {
  *
  * 1. A top search bar.
  * 2. A sidebar with three sections: Project (with a project picker header), General, Extensions.
- * 3. A right-hand content panel that hosts either consumer-provided content (`children`) or a
- *    "Coming soon" placeholder when the selected sidebar item is hard-coded.
+ * 3. A right-hand content panel that hosts either consumer-provided content (`children`) or a "Coming
+ *    soon" placeholder when the selected sidebar item is hard-coded.
  *
  * No PAPI, no extension service, no project lookup — all data and callbacks are passed in. This
  * makes the component Storybook-testable in isolation.
@@ -153,9 +165,7 @@ export function SettingsLayout({
   const projectPickerHeader = (
     <ComboBox
       buttonVariant="ghost"
-      buttonClassName={cn('tw:w-full', {
-        'tw:bg-sidebar-accent tw:text-sidebar-accent-foreground': !!selectedProjectId,
-      })}
+      buttonClassName="tw:w-full tw:bg-muted/50 tw:hover:bg-muted"
       popoverContentStyle={{ zIndex: Z_INDEX_OVERLAY }}
       options={projectOptions.map((p) => p.projectId)}
       getOptionLabel={getProjectName}

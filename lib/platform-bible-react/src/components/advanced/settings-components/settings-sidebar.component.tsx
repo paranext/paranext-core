@@ -29,6 +29,8 @@ export type SettingsSidebarItem = {
   label: string;
   /** Visually demote and label the item as a placeholder (e.g., "Coming soon"). */
   isComingSoon?: boolean;
+  /** Render the item as non-interactive (e.g., greyed out, no hover). */
+  disabled?: boolean;
 };
 
 /** A section in the generalized sidebar. */
@@ -108,28 +110,40 @@ function GeneralizedSidebar({
       id={id}
       collapsible="none"
       variant="inset"
-      className={cn('tw:w-96 tw:gap-2 tw:overflow-y-auto', className)}
+      className={cn('tw:w-96 tw:gap-2', className)}
     >
-      <SidebarContent>
+      {/* Custom scrollable wrapper instead of `SidebarContent` so the browser-native scrollbar is
+          visible. `SidebarContent` bakes in `no-scrollbar`, which hides it. */}
+      <div
+        data-slot="sidebar-content"
+        data-sidebar="content"
+        className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col tw:gap-0 tw:overflow-y-auto"
+      >
         {sections.map((section) => (
           <SidebarGroup key={section.id}>
             <SidebarGroupLabel className="tw:text-sm">{section.label}</SidebarGroupLabel>
             {section.header && (
-              <SidebarGroupContent className="tw:pl-3 tw:pb-1">
-                {section.header}
-              </SidebarGroupContent>
+              <SidebarGroupContent className="tw:pb-1">{section.header}</SidebarGroupContent>
             )}
             <SidebarGroupContent>
               <SidebarMenu>
                 {section.items.map((item) => (
                   <SidebarMenuItem key={item.id}>
                     <SidebarMenuButton
-                      onClick={() => onSelectEntry({ sectionId: section.id, itemId: item.id })}
+                      onClick={
+                        item.disabled
+                          ? undefined
+                          : () => onSelectEntry({ sectionId: section.id, itemId: item.id })
+                      }
                       isActive={isActive(section.id, item.id)}
+                      aria-disabled={item.disabled || undefined}
+                      className={cn({
+                        'tw:cursor-not-allowed tw:opacity-50': item.disabled,
+                      })}
                     >
                       <span
-                        className={cn('tw:pl-3', {
-                          'tw:text-muted-foreground tw:italic': item.isComingSoon,
+                        className={cn('tw:pl-6', {
+                          'tw:text-muted-foreground tw:italic': item.isComingSoon && !item.disabled,
                         })}
                       >
                         {item.label}
@@ -141,7 +155,7 @@ function GeneralizedSidebar({
             </SidebarGroupContent>
           </SidebarGroup>
         ))}
-      </SidebarContent>
+      </div>
     </Sidebar>
   );
 }
@@ -254,9 +268,9 @@ function LegacySidebar({
  * - The generalized shape (`sections` + `selectedEntry` + `onSelectEntry`) accepts an arbitrary
  *   ordered list of sections, each optionally with a header element (e.g., a combo box) above its
  *   menu items.
- * - The legacy shape (`extensionLabels` + `projectInfo` + ...) renders exactly two groups:
- *   extensions as menu items and projects as a combo box. Existing consumers continue to work
- *   without changes.
+ * - The legacy shape (`extensionLabels` + `projectInfo` + ...) renders exactly two groups: extensions
+ *   as menu items and projects as a combo box. Existing consumers continue to work without
+ *   changes.
  *
  * New code should prefer the generalized shape.
  */

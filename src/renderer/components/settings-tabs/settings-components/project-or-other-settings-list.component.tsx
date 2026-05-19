@@ -35,10 +35,12 @@ export function ProjectOrOtherSettingsList({
 
   return (
     <Card className={`card ${className}`}>
-      <CardHeader>
-        <CardTitle>{groupLabel}</CardTitle>
-        {groupDescription && <CardDescription>{groupDescription}</CardDescription>}
-      </CardHeader>
+      {groupLabel && (
+        <CardHeader>
+          <CardTitle>{groupLabel}</CardTitle>
+          {groupDescription && <CardDescription>{groupDescription}</CardDescription>}
+        </CardHeader>
+      )}
       <CardContent>
         {Object.entries(settingProperties)
           .filter(([, property]) => !property.isHidden)

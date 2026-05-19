@@ -1088,6 +1088,8 @@ export type SettingsSidebarItem = {
 	label: string;
 	/** Visually demote and label the item as a placeholder (e.g., "Coming soon"). */
 	isComingSoon?: boolean;
+	/** Render the item as non-interactive (e.g., greyed out, no hover). */
+	disabled?: boolean;
 };
 /** A section in the generalized sidebar. */
 export type SettingsSidebarSection = {
@@ -1140,9 +1142,9 @@ export type SettingsSidebarProps = {
  * - The generalized shape (`sections` + `selectedEntry` + `onSelectEntry`) accepts an arbitrary
  *   ordered list of sections, each optionally with a header element (e.g., a combo box) above its
  *   menu items.
- * - The legacy shape (`extensionLabels` + `projectInfo` + ...) renders exactly two groups:
- *   extensions as menu items and projects as a combo box. Existing consumers continue to work
- *   without changes.
+ * - The legacy shape (`extensionLabels` + `projectInfo` + ...) renders exactly two groups: extensions
+ *   as menu items and projects as a combo box. Existing consumers continue to work without
+ *   changes.
  *
  * New code should prefer the generalized shape.
  */
@@ -1167,12 +1169,16 @@ export type DynamicSettingsSidebarItem = {
 	kind: "dynamic";
 	id: string;
 	label: string;
+	/** When true, the item is rendered greyed out and ignores clicks. */
+	disabled?: boolean;
 };
 /** A sidebar item with no real content yet; selecting it shows the Coming Soon panel. */
 export type ComingSoonSettingsSidebarItem = {
 	kind: "coming-soon";
 	id: string;
 	label: string;
+	/** When true, the item is rendered greyed out and ignores clicks. */
+	disabled?: boolean;
 };
 export type SettingsLayoutItem = DynamicSettingsSidebarItem | ComingSoonSettingsSidebarItem;
 export type SettingsLayoutProjectInfo = {
@@ -1206,6 +1212,7 @@ export type SettingsLayoutProps = React$1.PropsWithChildren<{
 	className?: string;
 	projectOptions: ReadonlyArray<SettingsLayoutProjectInfo>;
 	selectedProjectId: string | undefined;
+	/** Called when the user picks a project from the project picker combo box. */
 	onSelectProject: (projectId: string) => void;
 	/** When true, the project picker is locked (e.g., dialog scoped to a single project). */
 	isProjectLocked?: boolean;
@@ -1213,8 +1220,10 @@ export type SettingsLayoutProps = React$1.PropsWithChildren<{
 	generalSectionItems: ReadonlyArray<DynamicSettingsSidebarItem>;
 	extensionsSectionItems: ReadonlyArray<DynamicSettingsSidebarItem>;
 	selectedEntry: SettingsLayoutSelection | undefined;
+	/** Called when the user selects a sidebar entry (in any section). */
 	onSelectEntry: (entry: SettingsLayoutSelection) => void;
 	searchValue: string;
+	/** Called when the user types in the search bar; receives the new query string. */
 	onSearch: (q: string) => void;
 	labels: SettingsLayoutLabels;
 	/**
@@ -1229,8 +1238,8 @@ export type SettingsLayoutProps = React$1.PropsWithChildren<{
  *
  * 1. A top search bar.
  * 2. A sidebar with three sections: Project (with a project picker header), General, Extensions.
- * 3. A right-hand content panel that hosts either consumer-provided content (`children`) or a
- *    "Coming soon" placeholder when the selected sidebar item is hard-coded.
+ * 3. A right-hand content panel that hosts either consumer-provided content (`children`) or a "Coming
+ *    soon" placeholder when the selected sidebar item is hard-coded.
  *
  * No PAPI, no extension service, no project lookup — all data and callbacks are passed in. This
  * makes the component Storybook-testable in isolation.
