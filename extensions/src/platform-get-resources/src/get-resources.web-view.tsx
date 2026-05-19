@@ -492,7 +492,9 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
                           <BookOpen className="tw:pr-0" size={18} />
                         </TableCell>
                         <TableCell>{resource.displayName}</TableCell>
-                        <TableCell className="tw:font-medium">{resource.fullName}</TableCell>
+                        <TableCell className="tw:font-medium tw:whitespace-normal tw:wrap-anywhere">
+                          {resource.fullName}
+                        </TableCell>
                         <TableCell>{resource.bestLanguageName}</TableCell>
                         <TableCell>
                           {typeOptions.find((type) => type.value === resource.type)?.label ??
