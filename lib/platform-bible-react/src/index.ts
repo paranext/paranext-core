@@ -112,6 +112,31 @@ export {
   RESOURCE_PICKER_DIALOG_STRING_KEYS,
 } from './components/advanced/resource-picker-dialog/resource-picker-dialog.component';
 export {
+  ResourcePicker,
+  type ResourcePickerProps,
+} from './components/advanced/resource-picker/resource-picker';
+export {
+  ResourcePickerCompact,
+  type ResourcePickerCompactProps,
+} from './components/advanced/resource-picker/resource-picker-compact';
+export {
+  RESOURCE_PICKER_STRING_KEYS,
+  type ResourcePickerLocalizedStrings,
+} from './components/advanced/resource-picker/resource-picker.strings';
+export type {
+  ResourceItem,
+  ItemStatus,
+  PickerAction,
+  CompactPickerAction,
+  ResourceType,
+} from './components/advanced/resource-picker/resource-picker.types';
+export {
+  LanguageMultipicker,
+  type LanguageMultipickerProps,
+  LANGUAGE_MULTIPICKER_STRING_KEYS,
+  type LanguageMultipickerLocalizedStrings,
+} from './components/advanced/language-multipicker/language-multipicker.component';
+export {
   default as SettingsSidebar,
   type SettingsSidebarProps,
   type ProjectInfo,
