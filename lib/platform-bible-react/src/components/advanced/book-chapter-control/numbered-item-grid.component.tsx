@@ -62,6 +62,9 @@ export function NumberedItemGrid({
               aria-disabled={disabled || undefined}
               className={cn(
                 'tw:h-8 tw:w-8 tw:cursor-pointer tw:justify-center tw:rounded-md tw:text-center tw:text-sm',
+                // cmdk sets data-selected on both keyboard-highlighted and hovered items, so a single
+                // ring rule covers focus + hover.
+                'tw:data-selected:ring-2 tw:data-selected:ring-ring tw:data-selected:ring-inset',
                 {
                   'tw:bg-primary tw:text-primary-foreground': isSelected?.(n) ?? false,
                 },
