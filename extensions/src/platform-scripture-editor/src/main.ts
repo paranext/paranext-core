@@ -759,6 +759,7 @@ const modelTextPanelWebViewProvider: IWebViewProvider = {
     modelTextPendingProjectId = null;
     return {
       ...savedWebView,
+      title: '%webView_modelTextPanel_title%',
       projectId,
       content: modelTextPanelWebView,
       styles: modelTextPanelWebViewStyles,
