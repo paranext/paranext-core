@@ -30,7 +30,6 @@ import { useEffectiveResourceReferenceList } from 'platform-scripture/src/use-ef
 import type {
   DblResourceReference,
   EffectiveResourceReference,
-  EffectiveResourceReferenceList,
   ResourceReferenceList,
 } from 'platform-scripture';
 
