@@ -740,7 +740,7 @@ const scriptureEditorWebViewProvider: IWebViewProvider = new ScriptureEditorWebV
  *
  * Used to pass a new projectId through reloadWebView, which has no options for extra data.
  */
-let modelTextPendingProjectId: string | undefined = undefined;
+let modelTextPendingProjectId: string | undefined;
 
 const modelTextPanelWebViewProvider: IWebViewProvider = {
   async getWebView(
