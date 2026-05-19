@@ -71,6 +71,10 @@ export const Loading: Story = {
 
 export const LargeResourceList: Story = {
   name: 'Large Resource List (2500 entries)',
+  // `!test` negates the meta-level `test` tag so this story is excluded from the storybook
+  // test runner. Rendering 2500 rows synchronously exceeds the 15s test timeout. The story is
+  // preserved for manual visual checks of large-catalog behavior.
+  tags: ['!test'],
   args: {
     allResources: LARGE_SAMPLE_RESOURCES,
     selectedResourceIds: [],
