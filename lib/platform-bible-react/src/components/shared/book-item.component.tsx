@@ -107,7 +107,7 @@ export const BookItem = forwardRef<HTMLDivElement, BookItemProps>(
           role="option"
           aria-selected={isSelected}
           aria-label={`${Canon.bookIdToEnglishName(bookId)} (${bookId.toLocaleUpperCase()})`}
-          className={className}
+          className={cn('tw:[&>svg:last-child]:hidden', className)}
         >
           {showCheck && (
             <Check

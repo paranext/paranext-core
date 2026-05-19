@@ -289,6 +289,21 @@ export function BookChapterControl({
     [topMatch],
   );
 
+  // While the top-match row is shown, the chapter grid below can be navigated with arrow keys.
+  // Reflect the currently highlighted chapter in the top-match row so the user sees what they're
+  // about to submit. ChapterGrid items have commandValues that end with the chapter number; the
+  // top-match row's own commandValue does not, so a missing match falls back to the parsed query.
+  const topMatchDisplayChapter = useMemo(() => {
+    if (!topMatch) return undefined;
+    const trailingDigits = commandValue.match(/(\d+)$/);
+    if (trailingDigits) {
+      const parsed = parseInt(trailingDigits[1], 10);
+      const maxChapter = fetchEndChapter(topMatch.book);
+      if (parsed >= 1 && (maxChapter <= 0 || parsed <= maxChapter)) return parsed;
+    }
+    return topMatch.chapterNum ?? 1;
+  }, [commandValue, topMatch]);
+
   const currentDisplayValue = useMemo(
     () =>
       formatScrRef(
@@ -667,37 +682,38 @@ export function BookChapterControl({
                           topMatch.chapterNum || ''
                         }:${topMatch.verseNum || ''})}`}
                         onSelect={handleTopMatchSelect}
-                        className="tw:font-semibold tw:text-primary"
+                        className="tw:font-semibold tw:text-primary tw:[&_svg]:hidden"
                       >
-                        {formatScrRef(
-                          {
-                            book: topMatch.book,
-                            chapterNum: topMatch.chapterNum ?? 1,
-                            verseNum: topMatch.verseNum ?? 1,
-                          },
-                          localizedBookNames
-                            ? getLocalizedBookId(topMatch.book, localizedBookNames)
-                            : undefined,
-                        )}
+                        <span className="tw:flex-1">
+                          {formatScrRef(
+                            {
+                              book: topMatch.book,
+                              chapterNum: topMatchDisplayChapter ?? 1,
+                              verseNum:
+                                topMatchDisplayChapter === topMatch.chapterNum
+                                  ? (topMatch.verseNum ?? 1)
+                                  : 1,
+                            },
+                            getLocalizedBookName(topMatch.book, localizedBookNames),
+                          )}
+                        </span>
+                        <span className="tw:font-normal tw:text-muted-foreground">
+                          {getLocalizedBookId(topMatch.book, localizedBookNames)}
+                        </span>
                       </CommandItem>
                     </CommandGroup>
                   )}
 
                   {/* Chapter Selector - Show when we have a top match */}
                   {topMatch && fetchEndChapter(topMatch.book) > 1 && (
-                    <>
-                      <div className="tw:mb-2 tw:px-3 tw:text-sm tw:font-medium tw:text-muted-foreground">
-                        {getLocalizedBookName(topMatch.book, localizedBookNames)}
-                      </div>
-                      <ChapterGrid
-                        bookId={topMatch.book}
-                        scrRef={scrRef}
-                        onChapterSelect={handleChapterSelect}
-                        setChapterRef={setChapterRef}
-                        isChapterDimmed={doesChapterMatch}
-                        className="tw:px-4 tw:pb-4"
-                      />
-                    </>
+                    <ChapterGrid
+                      bookId={topMatch.book}
+                      scrRef={scrRef}
+                      onChapterSelect={handleChapterSelect}
+                      setChapterRef={setChapterRef}
+                      isChapterDimmed={doesChapterMatch}
+                      className="tw:px-4 tw:pb-4"
+                    />
                   )}
                 </>
               )}
