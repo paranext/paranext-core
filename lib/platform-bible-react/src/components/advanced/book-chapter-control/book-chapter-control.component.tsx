@@ -82,9 +82,6 @@ export function BookChapterControl({
   >(undefined);
   const [isCommandListHidden, setIsCommandListHidden] = useState(false);
 
-  // Reference to the Command component
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const commandRef = useRef<HTMLDivElement>(undefined!);
   // Reference to the Input component inside the Command
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const commandInputRef = useRef<HTMLInputElement>(undefined!);
@@ -94,8 +91,27 @@ export function BookChapterControl({
   // Reference to the selected book item in the CommandList
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const selectedBookItemRef = useRef<HTMLDivElement>(undefined!);
+  // Reference to the back button in chapter view
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const backButtonRef = useRef<HTMLButtonElement>(undefined!);
   // References to the chapters that are shown as CommandItems
   const chapterRefs = useRef<Record<number, HTMLDivElement | null>>({});
+
+  // Track when the CommandList (the list/grid container) has DOM focus. This is the single
+  // source of truth for "the list/grid is focused"; everything else (input, buttons, back
+  // button) handles its own focus ring via shadcn's focus-visible styles. When the list/grid
+  // doesn't have DOM focus, BookItem / ChapterGrid suppress their data-selected ring so exactly
+  // one focus indicator is visible at any time.
+  const [isListFocused, setIsListFocused] = useState(false);
+
+  // cmdk's CommandPrimitive.List forces tabIndex={-1} on its rendered div *after* spreading
+  // caller props, so passing tabIndex={0} as a prop is silently overridden. Force tabIndex=0
+  // via an imperative ref assignment on every render to keep CommandList in the tab order.
+  useLayoutEffect(() => {
+    if (commandListRef.current) {
+      commandListRef.current.tabIndex = 0;
+    }
+  });
 
   // Wrapper function to handle submit and add to recent searches
   const handleSubmitAndAddToRecent = useCallback(
@@ -323,14 +339,58 @@ export function BookChapterControl({
 
   // #region Keyboard handling
 
-  // Handle keyboard navigation for CommandInput
-  const handleInputKeyDown = useCallback((event: KeyboardEvent<HTMLInputElement>) => {
-    // Override default Home and End key behavior to work normally for cursor movement.
-    // Default behavior was to jump to the start/end of the list of items in the Command
-    if (event.key === 'Home' || event.key === 'End') {
-      event.stopPropagation(); // Prevent Command component from handling these
-    }
+  // Shared "enter the list from outside" helper: moves DOM focus to the CommandList, seeds
+  // commandValue to the first or last visible item (so the focus ring lands on the correct edge
+  // rather than wherever cmdk would advance to from the previous value), and scrolls that item
+  // into view (matters mostly for ArrowUp → last item, which would otherwise be far off-screen).
+  const enterListFromOutside = useCallback((edge: 'first' | 'last') => {
+    commandListRef.current?.focus();
+    const items = commandListRef.current?.querySelectorAll<HTMLElement>(
+      '[cmdk-item]:not([data-disabled="true"])',
+    );
+    if (!items || items.length === 0) return;
+    const target = edge === 'first' ? items[0] : items[items.length - 1];
+    const targetValue = target.getAttribute('data-value');
+    if (targetValue) setCommandValue(targetValue);
+    setTimeout(() => {
+      target.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }, 0);
   }, []);
+
+  // Handle keyboard navigation for CommandInput
+  const handleInputKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      // Override default Home and End key behavior so they perform native cursor movement
+      // instead of cmdk's "jump to start/end of list".
+      if (event.key === 'Home' || event.key === 'End') {
+        event.stopPropagation();
+        return;
+      }
+
+      // Left/Right arrows must move the text cursor within the input — not navigate the list.
+      // stopPropagation prevents the Command's arrow handler from intercepting.
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        event.stopPropagation();
+        return;
+      }
+
+      // Up/Down arrows hand focus off to the list/grid as a unit (per the spec: arrows enter
+      // the list). The first/last *visible* item in the list gets the ring — we query the DOM
+      // because the first item depends on filter state (book list, top-match row, or chapter
+      // grid). Without this explicit seeding, cmdk would advance from the current commandValue
+      // (typically the currently-selected book), so the first ArrowDown press would land on the
+      // *second* row rather than the first. stopPropagation prevents handleCommandKeyDown's 2D
+      // arrow handler from also acting on this event and double-advancing the selection. Tab is
+      // intentionally NOT handled here — natural Tab order walks through the quick-nav buttons
+      // first, per requirement.
+      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+        event.preventDefault();
+        event.stopPropagation();
+        enterListFromOutside(event.key === 'ArrowDown' ? 'first' : 'last');
+      }
+    },
+    [enterListFromOutside],
+  );
 
   // Grid-aware keyboard navigation using Command's controlled value
   const handleCommandKeyDown = useCallback(
@@ -339,52 +399,87 @@ export function BookChapterControl({
 
       const { isLetter, isDigit } = getKeyCharacterType(event.key);
 
-      // Handle keypresses in chapter viewmode
-      if (viewMode === 'chapters') {
-        // Handle backspace for going back to books
-        if (event.key === 'Backspace') {
-          event.preventDefault();
-          event.stopPropagation();
-          handleBackToBooks();
-          return;
-        }
+      // Backspace in chapter view always returns to book list (regardless of which child has
+      // focus — fires even when the event bubbles up from the back button).
+      if (viewMode === 'chapters' && event.key === 'Backspace') {
+        event.preventDefault();
+        event.stopPropagation();
+        handleBackToBooks();
+        return;
+      }
 
-        if (isLetter || isDigit) {
-          event.preventDefault();
-          event.stopPropagation();
+      // Typing letters/digits while the list/grid has focus rounds focus back to the input so
+      // the user can resume editing the search. In chapter view this also exits chapter view
+      // (the new character becomes the start of a new search query).
+      if (isListFocused && (isLetter || isDigit)) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (viewMode === 'chapters') {
           setViewMode('books');
-          setSelectedBookForChaptersView(undefined);
-
           if (isDigit && selectedBookForChaptersView) {
-            // Digit pressed: go back to book list and start search with current book name + digit
+            // Digit: prefix with the current book name so the query reads e.g. "Matthew 5".
             const currentBookName = ALL_ENGLISH_BOOK_NAMES[selectedBookForChaptersView];
             setInputValue(`${currentBookName} ${event.key}`);
           } else {
             setInputValue(event.key);
           }
-
-          setTimeout(() => {
-            if (commandInputRef.current) {
-              commandInputRef.current.focus();
-            }
-          }, 0);
-          return;
+          setSelectedBookForChaptersView(undefined);
+        } else {
+          setInputValue((prev) => prev + event.key);
         }
+        setTimeout(() => commandInputRef.current?.focus(), 0);
+        return;
       }
 
-      // Handle grid navigation for arrow keys in chapter views
+      // Backspace while the list has focus in book view: remove last char and refocus input.
+      // (Chapter-view Backspace is handled above by the broader "back to book list" rule.)
+      if (isListFocused && viewMode === 'books' && event.key === 'Backspace') {
+        event.preventDefault();
+        setInputValue((prev) => prev.slice(0, -1));
+        commandInputRef.current?.focus();
+        return;
+      }
+
+      // Space submits the currently data-selected item, matching Enter's behavior. cmdk's own
+      // Enter handler dispatches a cmdk-item-select event on the active item; we get the same
+      // effect by synthesizing a click, which cmdk's item-level onClick converts into an
+      // onSelect call (this is the same trick RecentSearches uses).
+      if (isListFocused && event.key === ' ') {
+        event.preventDefault();
+        const active = commandListRef.current?.querySelector<HTMLDivElement>(
+          '[cmdk-item][data-selected="true"]',
+        );
+        active?.click();
+        return;
+      }
+
+      // Handle grid navigation for arrow keys in chapter views. Only act when CommandList itself
+      // owns DOM focus — otherwise an arrow key from an outside element (back button, recent
+      // button, etc.) would bubble here and move the grid selection without the user being in
+      // the grid. Up/Down handlers on those outside elements explicitly call commandListRef.focus()
+      // before bubbling, so document.activeElement is already CommandList by the time this check
+      // runs; Left/Right from those elements doesn't focus the list, so the check fails and the
+      // grid stays put.
       if (
         (viewMode === 'chapters' || (viewMode === 'books' && topMatch)) &&
-        ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)
+        ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key) &&
+        document.activeElement === commandListRef.current
       ) {
         // Extract current chapter from commandValue
         const currentBookId =
           viewMode === 'chapters' ? selectedBookForChaptersView : topMatch?.book;
         if (!currentBookId) return;
 
-        // Parse chapter from current command value
+        // Parse chapter from current command value. Returns 0 when no chapter cell is the active
+        // cmdk item — that includes:
+        //   - empty value
+        //   - a non-chapter value like "MAT Matthew" (set on chapter-view entry)
+        //   - the top-match row's value, which has the form "BOOK BookName N:N" (contains a
+        //     colon). The trailing-digit regex would otherwise capture the *verse* and treat it
+        //     as a chapter, so ArrowDown from the top-match row would skip ahead by GRID_COLS.
+        // The entry-point logic below then picks the appropriate starting cell per arrow.
         const currentChapter = (() => {
-          if (!commandValue) return 1;
+          if (!commandValue || commandValue.includes(':')) return 0;
           const match = commandValue.match(/(\d+)$/);
           return match ? parseInt(match[1], 10) : 0;
         })();
@@ -396,22 +491,30 @@ export function BookChapterControl({
         let targetChapter = currentChapter;
         const GRID_COLS = 6;
 
+        // Entry-point chapters when no chapter is currently focused (first arrow key press in
+        // chapter view). Each direction lands on the cell the user would visually expect to
+        // "enter from" that side of the grid.
+        const lastChapterInFirstRow = Math.min(GRID_COLS, maxChapter);
+        const firstChapterInLastRow = Math.floor((maxChapter - 1) / GRID_COLS) * GRID_COLS + 1;
+
         switch (event.key) {
           case 'ArrowLeft':
-            if (currentChapter !== 0)
-              targetChapter = currentChapter > 1 ? currentChapter - 1 : maxChapter;
+            if (currentChapter === 0) targetChapter = lastChapterInFirstRow;
+            else if (currentChapter > 1) targetChapter = currentChapter - 1;
+            else targetChapter = maxChapter;
             break;
           case 'ArrowRight':
-            if (currentChapter !== 0)
-              targetChapter = currentChapter < maxChapter ? currentChapter + 1 : 1;
+            if (currentChapter === 0) targetChapter = 1;
+            else if (currentChapter < maxChapter) targetChapter = currentChapter + 1;
+            else targetChapter = 1;
             break;
           case 'ArrowUp':
-            targetChapter =
-              currentChapter === 0 ? maxChapter : Math.max(1, currentChapter - GRID_COLS);
+            if (currentChapter === 0) targetChapter = firstChapterInLastRow;
+            else targetChapter = Math.max(1, currentChapter - GRID_COLS);
             break;
           case 'ArrowDown':
-            targetChapter =
-              currentChapter === 0 ? 1 : Math.min(maxChapter, currentChapter + GRID_COLS);
+            if (currentChapter === 0) targetChapter = 1;
+            else targetChapter = Math.min(maxChapter, currentChapter + GRID_COLS);
             break;
           default:
             return;
@@ -441,23 +544,75 @@ export function BookChapterControl({
       selectedBookForChaptersView,
       commandValue,
       localizedBookNames,
+      isListFocused,
     ],
   );
 
-  const handleQuickNavButtonKeyDown = useCallback((event: KeyboardEvent<HTMLButtonElement>) => {
-    if (event.shiftKey || event.key === 'Tab' || event.key === ' ') return;
+  // Keyboard handling on the back button:
+  // - Arrow keys: hand focus to the CommandList. The event continues to bubble to
+  //   handleCommandKeyDown which sets data-selected on the entry-point cell for that direction.
+  // - Tab: seed chapter 1 + scroll into view + focus the CommandList. Plain natural Tab would
+  //   also land on the CommandList (it's the next tabbable in DOM order), but we intercept to
+  //   guarantee the chapter-1 seeding rather than relying on whatever cmdk has selected. Plus
+  //   we stop propagation so the (formerly bouncing) Shift+Tab handler in Command can't
+  //   interfere — that handler is now removed, but the defensive stop costs nothing.
+  // - Enter / Space: stop the event from bubbling to the Command so cmdk's Enter / our Space
+  //   submit handler can't fire a data-selected chapter while the back button owns focus. The
+  //   browser still converts the keydown into a click on the button, so the native click handler
+  //   (handleBackToBooks) runs as normal.
+  const handleBackButtonKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLButtonElement>) => {
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
+        commandListRef.current?.focus();
+        return;
+      }
+      if (event.key === 'Tab') {
+        event.preventDefault();
+        event.stopPropagation();
+        if (selectedBookForChaptersView) {
+          setCommandValue(generateCommandValue(selectedBookForChaptersView, localizedBookNames, 1));
+        }
+        commandListRef.current?.focus();
+        setTimeout(() => {
+          chapterRefs.current[1]?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }, 0);
+        return;
+      }
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.stopPropagation();
+      }
+    },
+    [selectedBookForChaptersView, localizedBookNames],
+  );
 
-    const { isLetter, isDigit } = getKeyCharacterType(event.key);
+  const handleQuickNavButtonKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLButtonElement>) => {
+      if (event.shiftKey || event.key === 'Tab' || event.key === ' ') return;
 
-    if (isLetter || isDigit) {
-      event.preventDefault();
+      // Up/Down arrows from a quick-nav button hand focus off to the list (per the spec: arrows
+      // enter the list/grid as a unit). stopPropagation prevents handleCommandKeyDown's 2D arrow
+      // handler from double-advancing.
+      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+        event.preventDefault();
+        event.stopPropagation();
+        setIsCommandListHidden(false);
+        enterListFromOutside(event.key === 'ArrowDown' ? 'first' : 'last');
+        return;
+      }
 
-      setInputValue((prevValue) => prevValue + event.key);
-      commandInputRef.current.focus();
+      const { isLetter, isDigit } = getKeyCharacterType(event.key);
 
-      setIsCommandListHidden(false);
-    }
-  }, []);
+      if (isLetter || isDigit) {
+        event.preventDefault();
+
+        setInputValue((prevValue) => prevValue + event.key);
+        commandInputRef.current.focus();
+
+        setIsCommandListHidden(false);
+      }
+    },
+    [enterListFromOutside],
+  );
 
   // #endregion
 
@@ -496,34 +651,29 @@ export function BookChapterControl({
     };
   }, [isCommandOpen, viewMode, inputValue, topMatch, scrRef.book]);
 
-  // Auto-scroll to appropriate chapter
+  // On entering chapter view, the back button receives DOM focus (it owns the visible focus
+  // indicator initially). The chapter grid is not yet focused — pressing an arrow key (or Tab)
+  // hands off to the Command + sets data-selected on an entry chapter.
   useLayoutEffect(() => {
-    if (viewMode === 'chapters' && selectedBookForChaptersView) {
-      // Check if we're entering chapter view for the currently selected book
-      const isCurrentlySelectedBook = selectedBookForChaptersView === scrRef.book;
+    if (viewMode !== 'chapters' || !selectedBookForChaptersView) return;
 
-      // Reset scroll position to top, except when viewing the currently selected book
-      setTimeout(() => {
-        if (commandListRef.current) {
-          if (isCurrentlySelectedBook) {
-            // Scroll to the currently selected chapter
-            const targetElement = chapterRefs.current[scrRef.chapterNum];
-            if (targetElement) {
-              targetElement.scrollIntoView({ block: 'center', behavior: 'smooth' });
-            }
-          } else {
-            // Reset to top for other books
-            commandListRef.current.scrollTo({ top: 0 });
-          }
-        }
+    // Set commandValue to a non-empty value that does NOT match any chapter cell (the book's
+    // value without a trailing chapter number). Non-empty so cmdk doesn't auto-select the first
+    // item; non-matching so no chapter shows data-selected / the focus ring.
+    setCommandValue(generateCommandValue(selectedBookForChaptersView, localizedBookNames));
 
-        // Ensure Command component has focus for keyboard navigation
-        if (commandRef.current) {
-          commandRef.current.focus();
-        }
-      }, 0);
-    }
-  }, [viewMode, selectedBookForChaptersView, topMatch, scrRef.book, scrRef.chapterNum]);
+    setTimeout(() => {
+      // Reset scroll to top — no specific chapter is highlighted yet.
+      if (commandListRef.current) {
+        commandListRef.current.scrollTo({ top: 0 });
+      }
+
+      // Focus the back button so it owns the initial keyboard-focus indicator.
+      if (backButtonRef.current) {
+        backButtonRef.current.focus();
+      }
+    }, 0);
+  }, [viewMode, selectedBookForChaptersView, localizedBookNames]);
 
   // #endregion
 
@@ -543,19 +693,76 @@ export function BookChapterControl({
           <span className="tw:truncate">{currentDisplayValue}</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent id={id} forceMount className="tw:w-[280px] tw:p-0" align="center">
+      <PopoverContent
+        id={id}
+        forceMount
+        className="tw:w-[280px] tw:p-0"
+        align="center"
+        // In chapter view, Escape returns to the book list instead of closing the popover.
+        // Radix listens for Escape at the document level (capture phase) so we use its
+        // documented onEscapeKeyDown escape hatch rather than relying on our own bubble-phase
+        // keydown handler, which would be too late. In book view we let Radix's default
+        // close-the-popover behavior run. (RecentSearches stops Escape propagation itself when
+        // it's open, so it never reaches this handler in that case.)
+        onEscapeKeyDown={(e) => {
+          if (viewMode === 'chapters') {
+            e.preventDefault();
+            handleBackToBooks();
+          }
+        }}
+        // Tab moving focus out of the popover must NOT close it. Radix's default
+        // close-on-focus-outside behavior is fine for click-outside (handled separately), but
+        // keyboard tab-out should be a no-op for the popover's open state.
+        onFocusOutside={(e) => e.preventDefault()}
+      >
         <Command
-          ref={commandRef}
           onKeyDown={handleCommandKeyDown}
           loop
           value={commandValue}
           onValueChange={setCommandValue}
           shouldFilter={false}
+          // Decouple pointer hover from keyboard focus: hovering an item must not update
+          // commandValue, so the focus ring, the top-match row, and the Enter/Space submission
+          // target are all driven exclusively by keyboard navigation. Clicking still submits
+          // because cmdk attaches onClick independently of pointer-move tracking.
+          disablePointerSelection
         >
           {/* Header: Input (with quick nav buttons) for book view, fixed header for chapter view */}
           {viewMode === 'books' ? (
             <div className={cn('tw:flex tw:items-end', isCommandListHidden && 'tw:pb-1')}>
-              <div className="tw:relative tw:flex-1">
+              {/* Bubble-level handler for the RecentSearches clock button — it's a non-input
+                  wrapper that picks up keydown events bubbling from the trigger button, which
+                  doesn't have its own handler. Adding a role would mislead AT users since the
+                  div is purely a passthrough for event delegation. The input's own arrow keys
+                  are stopped by handleInputKeyDown and the recent popover's internal arrow keys
+                  are stopped by RecentSearches, so only the closed clock-button trigger's arrow
+                  events reach this wrapper. */}
+              {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+              <div
+                className="tw:relative tw:flex-1"
+                onKeyDown={(event) => {
+                  if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    enterListFromOutside(event.key === 'ArrowDown' ? 'first' : 'last');
+                    return;
+                  }
+                  // Route typing from the history (clock) button to the input. Skip events
+                  // that originated in the input itself (they're already being typed there)
+                  // and the keys the button needs to keep (Tab moves focus naturally; Escape
+                  // is handled by Radix/RecentSearches).
+                  if (event.target === commandInputRef.current) return;
+                  if (event.key === 'Tab' || event.key === 'Escape') return;
+                  const { isLetter: isLetterFromButton, isDigit: isDigitFromButton } =
+                    getKeyCharacterType(event.key);
+                  if (isLetterFromButton || isDigitFromButton) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setInputValue((prev) => prev + event.key);
+                    commandInputRef.current?.focus();
+                  }
+                }}
+              >
                 <CommandInput
                   ref={commandInputRef}
                   value={inputValue}
@@ -616,11 +823,12 @@ export function BookChapterControl({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
+                      ref={backButtonRef}
                       variant="ghost"
                       size="sm"
                       onClick={handleBackToBooks}
+                      onKeyDown={handleBackButtonKeyDown}
                       className="tw:mr-2 tw:h-8 tw:w-8 tw:p-0"
-                      tabIndex={-1}
                       aria-label="Back to books"
                     >
                       {direction === 'ltr' ? (
@@ -643,7 +851,30 @@ export function BookChapterControl({
 
           {/** Body */}
           {!isCommandListHidden && (
-            <CommandList ref={commandListRef}>
+            <CommandList
+              ref={commandListRef}
+              // CommandList is the single tab stop representing "the list / grid". Internal
+              // navigation uses arrow keys; Tab / Shift+Tab enters and leaves the list as a unit.
+              // Putting tabIndex on CommandList (rather than on Command) gives screen-reader
+              // semantics for free since cmdk already sets role="listbox" + aria-activedescendant
+              // here, and the tab stop disappears automatically when the list is hidden.
+              tabIndex={0}
+              onFocus={(e) => {
+                if (e.target === e.currentTarget) setIsListFocused(true);
+              }}
+              onBlur={(e) => {
+                if (e.target === e.currentTarget) setIsListFocused(false);
+              }}
+              // - outline-none: the data-selected ring is the focus indicator, not a wrapper outline.
+              // - scrollbar overrides: shadcn's CommandList includes `no-scrollbar` which hides
+              //   the scrollbar via `scrollbar-width: none` and `::-webkit-scrollbar { display:
+              //   none }`. We force a thin scrollbar back on so users can see when the book list
+              //   or chapter grid overflows the 18rem max-height.
+              // - scroll-pt-10: when arrow navigation scrolls a chapter into view, account for the
+              //   ~2.5rem sticky top-match row that occupies the top of the visible area so the
+              //   target chapter isn't hidden behind it.
+              className="tw:outline-none tw:scroll-pt-10 tw:![scrollbar-width:thin] tw:[&::-webkit-scrollbar]:!block tw:[&::-webkit-scrollbar]:!w-2 tw:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 tw:[&::-webkit-scrollbar-thumb]:rounded"
+            >
               {/** Book list mode (also used in case of top matches) */}
               {viewMode === 'books' && (
                 <>
@@ -667,41 +898,61 @@ export function BookChapterControl({
                               commandValue={`${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId]}`}
                               ref={bookId === scrRef.book ? selectedBookItemRef : undefined}
                               localizedBookNames={localizedBookNames}
+                              showActiveRing={isListFocused}
                             />
                           ))}
                         </CommandGroup>
                       );
                     })}
 
-                  {/* Top match scripture reference */}
+                  {/* Top match scripture reference — rendered as a direct child of CommandList
+                      (no CommandGroup wrapper) so its parent's containing block spans the entire
+                      scroll content. Wrapping in a CommandGroup would size the sticky range to
+                      the group's own (tiny) height, which makes the row scroll away after the
+                      first chapter row goes off-screen. */}
                   {topMatch && (
-                    <CommandGroup>
-                      <CommandItem
-                        key="top-match"
-                        value={`${topMatch.book} ${ALL_ENGLISH_BOOK_NAMES[topMatch.book]} ${
-                          topMatch.chapterNum || ''
-                        }:${topMatch.verseNum || ''})}`}
-                        onSelect={handleTopMatchSelect}
-                        className="tw:font-semibold tw:text-primary tw:[&_svg]:hidden"
-                      >
-                        <span className="tw:flex-1">
-                          {formatScrRef(
-                            {
-                              book: topMatch.book,
-                              chapterNum: topMatchDisplayChapter ?? 1,
-                              verseNum:
-                                topMatchDisplayChapter === topMatch.chapterNum
-                                  ? (topMatch.verseNum ?? 1)
-                                  : 1,
-                            },
-                            getLocalizedBookName(topMatch.book, localizedBookNames),
-                          )}
-                        </span>
-                        <span className="tw:font-normal tw:text-muted-foreground">
-                          {getLocalizedBookId(topMatch.book, localizedBookNames)}
-                        </span>
-                      </CommandItem>
-                    </CommandGroup>
+                    <CommandItem
+                      key="top-match"
+                      value={`${topMatch.book} ${ALL_ENGLISH_BOOK_NAMES[topMatch.book]} ${
+                        topMatch.chapterNum ?? 1
+                      }:${topMatch.verseNum ?? 1}`}
+                      onSelect={handleTopMatchSelect}
+                      className={cn(
+                        'tw:font-semibold tw:text-primary tw:[&_svg]:hidden',
+                        // Pin to the top of the scrollable CommandList so the parsed reference
+                        // stays visible while the user navigates the chapter grid below it.
+                        // bg-popover is required because position:sticky elements need a solid
+                        // background; otherwise scrolling chapter cells show through.
+                        'tw:sticky tw:top-0 tw:z-10 tw:bg-popover',
+                        // Override shadcn's default data-selected:bg-muted / text-foreground —
+                        // keep tw:text-primary and a solid popover background even when this
+                        // row is the cmdk-active item. bg-popover (not bg-transparent) so the
+                        // sticky stays opaque against the scrolling chapter cells underneath.
+                        'tw:data-selected:bg-popover tw:data-selected:text-primary',
+                        // Pointer-feedback background; distinct from the focus ring.
+                        'tw:hover:bg-muted',
+                        // Keyboard focus ring only when the list/grid owns DOM focus.
+                        isListFocused &&
+                          'tw:data-selected:ring-2 tw:data-selected:ring-ring/50 tw:data-selected:ring-inset',
+                      )}
+                    >
+                      <span className="tw:flex-1">
+                        {formatScrRef(
+                          {
+                            book: topMatch.book,
+                            chapterNum: topMatchDisplayChapter ?? 1,
+                            verseNum:
+                              topMatchDisplayChapter === topMatch.chapterNum
+                                ? (topMatch.verseNum ?? 1)
+                                : 1,
+                          },
+                          getLocalizedBookName(topMatch.book, localizedBookNames),
+                        )}
+                      </span>
+                      <span className="tw:font-normal tw:text-muted-foreground">
+                        {getLocalizedBookId(topMatch.book, localizedBookNames)}
+                      </span>
+                    </CommandItem>
                   )}
 
                   {/* Chapter Selector - Show when we have a top match */}
@@ -712,6 +963,8 @@ export function BookChapterControl({
                       onChapterSelect={handleChapterSelect}
                       setChapterRef={setChapterRef}
                       isChapterDimmed={doesChapterMatch}
+                      // Hide the chapter ring while the input owns the visible focus indicator.
+                      showActiveRing={isListFocused}
                       className="tw:px-4 tw:pb-4"
                     />
                   )}
@@ -725,6 +978,7 @@ export function BookChapterControl({
                   scrRef={scrRef}
                   onChapterSelect={handleChapterSelect}
                   setChapterRef={setChapterRef}
+                  showActiveRing={isListFocused}
                   className="tw:p-4"
                 />
               )}
