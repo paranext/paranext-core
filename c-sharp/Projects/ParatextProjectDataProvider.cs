@@ -123,6 +123,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(
             ("resetUserReferencedProjectsAndResources", ResetUserReferencedProjectsAndResources)
         );
+        retVal.Add(("canUserWriteProjectSettings", CanUserWriteProjectSettings));
 
         retVal.Add(("getMarkerNames", GetMarkerNames));
 
@@ -1330,6 +1331,23 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             ProjectSettingsService.GetDefault(PapiClient, settingName)
             ?? throw new InvalidDataException($"Default value for {settingName} was null");
         return SetProjectSetting(settingName, defaultValue);
+    }
+
+    /// <summary>
+    /// Determines if the current user can write to the project settings.
+    /// </summary>
+    /// <returns>True if the user can write the project settings, false otherwise</returns>
+    public bool CanUserWriteProjectSettings()
+    {
+        try
+        {
+            ScrText scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+            return scrText.Permissions.AmAdministrator;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public ResourceReferenceList GetUserModelTexts()
