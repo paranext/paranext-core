@@ -487,7 +487,7 @@ If you'd rather skip jsdom-fragile scroll testing, just cover the search-clear c
 
 ### As-built notes
 
-- **Branch**: `ai/feature/manage-books-rolf-05-11-2026`
+- **Branch**: `ai/feature/manage-books/followup-ux-round-2-rolf-05-11-2026`
 - **PR**: paranext-core#2255
 - **#44 implementation**: `c-sharp-tests/ManageBooks/ProjectFilterServiceTests.cs` — added a `ResourceDummyScrText` nested subclass (parallels `EncodingConversionFailingScrText` in `CopyBooksOrchestratorTests.cs`), seeded a `_resource` project as a scripture-typed resource, extended `FilterProjects_Summary_PopulatesAllFieldsFromScrText` to assert `IsResource == false` on the non-resource summaries, and added a new test `FilterProjects_Summary_ResourceProject_IsResourceTrue` that asserts the plumbing.
 - **#45 implementation**: 4 new tests in `CopyBooksOrchestratorTests.cs` exercising `SetDefaultEligibility` (both timestamps present, source empty, dest empty, MinValue mapping) and 1 integration test in `ImportBooksOrchestratorTests.cs` asserting `ParseImportFiles` surfaces a recent ISO-shaped `SourceLastModified`.

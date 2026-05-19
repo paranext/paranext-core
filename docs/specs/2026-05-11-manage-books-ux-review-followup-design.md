@@ -3,7 +3,7 @@
 **Date:** 2026-05-11
 **Author:** Rolf (AI-assisted)
 **Source:** `~/git/workspaces/manage-books/UX Review of Porting Result - Manage Books.csv`
-**Branch (planned):** `ai/feature/manage-books-rolf-05-11-2026` off `origin/ai/main`
+**Branch (planned):** `ai/feature/manage-books/followup-ux-round-2-rolf-05-11-2026` off `origin/ai/main`
 **PR:** single paranext-core PR, staged commits
 
 ## 1. Scope and intent
@@ -108,7 +108,7 @@ Deferred (not in scope): **#19** (needs PO input on per-book delete permission).
 
 Stage 0 is the setup stage; no per-stage investigation needed since the spec itself **is** Stage 0's deliverable.
 
-1. `git fetch origin && git checkout -b ai/feature/manage-books-rolf-05-11-2026 origin/ai/main`
+1. `git fetch origin && git checkout -b ai/feature/manage-books/followup-ux-round-2-rolf-05-11-2026 origin/ai/main`
 2. Push, open **draft** paranext-core PR titled `[P3][ui+backend] manage-books: UX review round 2`
 3. Fetch design PR #2224's `manage-books` branch into a temp ref so subsequent stages can grep its source
 4. Write `docs/specs/2026-05-11-manage-books-ux-review-followup-pr-2224-refs.md` listing each pattern + the PR #2224 file:line ranges it comes from
