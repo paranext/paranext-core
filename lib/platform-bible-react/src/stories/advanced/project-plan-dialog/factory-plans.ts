@@ -12,8 +12,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
     "stages": [
       {
         "id": "b708cb04-830d-46ba-b465-6567c05b323b",
-        "name": "Complete translation brief",
-        "description": "The translation brief is a statement of the standards for the project, such as which source texts are used, and the specific audience and intended uses of the translation. Setting these principles out at the beginning will help the translation team work together towards the common goal.",
+        "name": "Drafting",
+        "description": "",
         "tasks": [
           {
             "id": "ca3ebec0-0178-4bf6-9a3d-b79db3054baa",
@@ -145,8 +145,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "ce775768-3acc-401f-8ad3-38de5ed34d46",
-        "name": "Translators read aloud the translation to each other",
-        "description": "The translator, a mother-tongue speaker of the receptor language, reads the draft aloud to the team, and possibly other mother-tongue speakers of the language to check for naturalness and clarity. Then they adjust the text based on feedback.",
+        "name": "Team Checking",
+        "description": "If there is only one translator, most of the tasks in this stage can be deleted except for the spell checking and other checks. These checks could just be moved into Stage 1.",
         "tasks": [
           {
             "id": "ddbcd260-c8d7-4b8d-80f7-116c369c73ff",
@@ -278,8 +278,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "263c68ef-98cb-4868-9978-b85d7837e3ee",
-        "name": "Share text with RRC",
-        "description": "Open the \"Assignments and Progress\" window and correct all errors/issues shown there. Once all errors are corrected and open notes are resolved, print a copy of the books or chapters to be reviewed by community group. The two simplest ways to print text from Paratext are found under the \"File\" menu. They are \"Print Draft\" and \"Save as RTF\". There are other methods available for more advanced formatting, such as \"Export to Pathway\". Use the method specified by your project administrator or translation consultant.",
+        "name": "Committee Review",
+        "description": "",
         "tasks": [
           {
             "id": "202d77b4-e361-4ee3-a996-23a76edcfef9",
@@ -369,8 +369,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "378ea5cc-ea2e-4e17-9868-aa25d76fcfb3",
-        "name": "Draft the back translation",
-        "description": "A back-translation is a translation into the major national or trade language of the area. It should be done by a speaker of the language other than the translator. It helps to show whether the translation is communicating effectively and accurately, and it serves as the basis for the consultant check.",
+        "name": "Preparing for consultant check",
+        "description": "",
         "tasks": [
           {
             "id": "856e1b6d-01a8-4d71-bca4-7bc3ecb8e7b8",
@@ -404,8 +404,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "95112c7d-92ea-4dbc-ade8-7c0168c2ba48",
-        "name": "Evaluation of text",
-        "description": "Consultant evaluates the text and places notes with his observations in the text (or back translation). The evaluation should focus on accuracy, clarity, naturalness, and acceptability of the translation including all supplementary materials and illustrations used.",
+        "name": "Consultant check",
+        "description": "",
         "tasks": [
           {
             "id": "c22afa1d-4da0-48f1-9a67-3e72cff70521",
@@ -607,8 +607,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "ec667895-c466-4fd0-a0b0-893ca22f42f2",
-        "name": "Testing of translation with community through trial edition",
-        "description": "Once proper approvals have been obtained and a system of gaining feedback has been written, the translation team can distribute the trial edition to learn how to improve their translation. \n\nTrial editions should be done every 3 years for the life of a project.",
+        "name": "Review by community",
+        "description": "",
         "tasks": [
           {
             "id": "a39dffa8-2a28-40f2-8d4d-10c1003724d5",
@@ -656,8 +656,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "52bb0a4e-8cc3-43fc-a054-e944ea8366ac",
-        "name": "Draft Book Introductions",
-        "description": "Translation team drafts the book introduction. Be careful to use the same key terms in the introduction as in the text.",
+        "name": "Prepare translation add-ons",
+        "description": "",
         "tasks": [
           {
             "id": "3aeeb53e-0726-48a4-812c-640667fabbdc",
@@ -901,8 +901,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "18598fb7-8ba2-442a-8ee9-dab02e06c152",
-        "name": "Proper Names - final check",
-        "description": "Verify that all Proper Names are correct and that there are no lingering issues.",
+        "name": "Finalizing for Publication",
+        "description": "",
         "tasks": [
           {
             "id": "60d959ba-9eb9-4b11-9d8d-ba957f1517b2",
@@ -1328,8 +1328,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "c0bc1039-fadc-4126-8e54-cb7d0dbaf6ca",
-        "name": "Final read-through by translation team and RRC",
-        "description": "This should use a draft produced by Publishing Assitant/InDesign so that the text is in close to final format.",
+        "name": "Preparation for publication",
+        "description": "All the final stages after translation add-ons and quality checks are done.",
         "tasks": [
           {
             "id": "c2d742fc-33ee-4751-bdf7-77d845a0d81e",
@@ -1460,7 +1460,13 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
         ]
       }
     ],
-    "checks": []
+    "checks": [
+      {
+        "checkId": "notes.translator",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "b708cb04-830d-46ba-b465-6567c05b323b"
+      }
+    ]
   },
   {
     "id": "81c0ccbe-e874-4751-b97a-fb4f8d3eabcd",
@@ -1470,8 +1476,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
     "stages": [
       {
         "id": "1703c346-ce9e-427e-9476-9f3a8af26c67",
-        "name": "1.1 Initiate Project Increment",
-        "description": "Global Project Manager with the Project Manager \n - Agree on overall target completion dates for the Increment and the intermediate Stages\nGlobal Project Manager\n - Sets the Working Project progress parameters for the Increment in the Paratext Registry:\n - Scope: (Current Increment)\n - Status: Active\n - Expected Completion Date: (Current Increment)\nProject Manager\n - Sets scope of the Current Increment in Project Properties\n - Sets Stage target completion dates in Assignments and Progress\n - Assigns tasks to team members in Assignments and Progress\n - Unchecks Task 1.4 Edit Peripheral Books and 4.1 Complete Peripheral Books, if necessary \nGlobal Project Manager \n - Verifies all project increment parameters are set",
+        "name": "Setup and Drafting",
+        "description": "Prerequisites\n* Research and Development  Document  approved \n* Translation/Revision team recruited \n* ICAs signed \n* Translation/Revision Brief  written  \n* Preliminary Preface written by Translators based on Brief\n* Translation/Revision Brief and Preface  approved\n* Translation training \n* Paratext and Project Style Guide workshop   \n* Initial translation of metatext in FRT and BAK books\n1) Global Translation Technology staff creates and registers the Paratext Working Project (WP): \n - Sets up Project Plan based on approved project brief and style guide\n - Adds/Updates Paratext project plan\n - Adds standard custom.sty and custom.vrs\n - Adds autocorrect.txt\n - Adds BiblicaBiblicalTerms\n - Adds/Updates standard Translation Metatext template\n - Sets up language settings\n - Creates Back translation project and tasks if needed\n - Creates “Consultant Check” note type\n - Adds personnel and grants Roles and Permissions\n2) Global Project Manager initiates Project plan \n3) Translation team drafts/revises translation, introductions, and metatext",
         "tasks": [
           {
             "id": "ba420c79-b942-4ffc-95dd-178b8e755fe5",
@@ -1533,8 +1539,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "3afcc381-cf1a-4677-8bd5-2ed6a25d56a2",
-        "name": "2.1 Grammar and Spelling Review",
-        "description": "Linguist\n - Reads through text\n - Flags grammatical, punctuation, capitalization, clarity, and naturalness errors with “To Do” notes\nUsing Wordlist tool:\n - runs advanced spelling checks: \n   (Tools>Spell Check and Tools> Incorrectly Joined and Split Words)\n - marks misspelled words as incorrect\n - resolves spelling notes in the Wordlist tool",
+        "name": "Internal Review",
+        "description": "Text is updated based on:\n1) Grammar and Spelling Review\n2) Co-Translator Review\n3) Oral Testing",
         "tasks": [
           {
             "id": "ab82beac-f8e8-4657-b5a1-e0ea88020c09",
@@ -1596,8 +1602,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "119d5d2b-4f84-420d-8acd-4738afdb546c",
-        "name": "3.1 Consultant Review",
-        "description": "Consultant\n - Checks text using Interlinearizer tool, Parallel Passage tool, and back translation, if available\nCreates or responds to:\n - “To Do” and “Consultant Check” notes \n - Rendering Notes in the Biblical Terms tool",
+        "name": "External Review",
+        "description": "Text is updated based on: \n1) Consultant review\n2) Community Check\n3) Parallel passage check",
         "tasks": [
           {
             "id": "a7e0f9f9-d26f-40d6-8bc3-199562f99921",
@@ -1645,8 +1651,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "bc28f9f8-0367-4df7-b541-c113abfd1eb4",
-        "name": "4.1 Complete Peripheral Books",
-        "description": "Translation team \n - Completes/updates translation of metatext in FRT and BAK books\n - Writes/updates preface",
+        "name": "Signoff",
+        "description": "Text is updated and prepared for publication:\n1) Metatext completed\n2) Quality of Paratext checks verified",
         "tasks": [
           {
             "id": "b4e60deb-7230-4549-896b-09f008f9f03a",
@@ -1722,8 +1728,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "9cbd63b4-81a7-4111-912a-6ffc71906a0a",
-        "name": "5.1 Preliminary Typeset Review",
-        "description": "Community members review the Preliminary Typeset using “Guidelines for Preliminary Typeset Review” document",
+        "name": "Typesetting and Publication",
+        "description": "Issues discovered during typesetting resolved:\n1) Preliminary typeset review\n2) Final typeset proofread\nPublished to DBL",
         "tasks": [
           {
             "id": "4a5c6f55-3d13-4a04-b171-ffb4a1d28f74",
@@ -1812,18 +1818,114 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
         ]
       }
     ],
-    "checks": []
+    "checks": [
+      {
+        "checkId": "basic.chapter-verse-numbers",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1703c346-ce9e-427e-9476-9f3a8af26c67"
+      },
+      {
+        "checkId": "basic.markers",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1703c346-ce9e-427e-9476-9f3a8af26c67"
+      },
+      {
+        "checkId": "basic.characters",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1703c346-ce9e-427e-9476-9f3a8af26c67"
+      },
+      {
+        "checkId": "basic.punctuation",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1703c346-ce9e-427e-9476-9f3a8af26c67"
+      },
+      {
+        "checkId": "basic.references",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1703c346-ce9e-427e-9476-9f3a8af26c67"
+      },
+      {
+        "checkId": "basic.unmatched-pairs",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1703c346-ce9e-427e-9476-9f3a8af26c67"
+      },
+      {
+        "checkId": "basic.repeated-words",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1703c346-ce9e-427e-9476-9f3a8af26c67"
+      },
+      {
+        "checkId": "basic.matched-pairs",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1703c346-ce9e-427e-9476-9f3a8af26c67"
+      },
+      {
+        "checkId": "basic.quotations",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1703c346-ce9e-427e-9476-9f3a8af26c67"
+      },
+      {
+        "checkId": "basic.numbers",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1703c346-ce9e-427e-9476-9f3a8af26c67"
+      },
+      {
+        "checkId": "notes.translator",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1703c346-ce9e-427e-9476-9f3a8af26c67"
+      },
+      {
+        "checkId": "basic.capitalization",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1703c346-ce9e-427e-9476-9f3a8af26c67"
+      },
+      {
+        "checkId": "spelling.word-list",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1703c346-ce9e-427e-9476-9f3a8af26c67"
+      },
+      {
+        "checkId": "spelling.spelling",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1703c346-ce9e-427e-9476-9f3a8af26c67"
+      },
+      {
+        "checkId": "notes.consultant",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1703c346-ce9e-427e-9476-9f3a8af26c67"
+      },
+      {
+        "checkId": "other.biblical-terms",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1703c346-ce9e-427e-9476-9f3a8af26c67"
+      },
+      {
+        "checkId": "other.parallel-passages",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "119d5d2b-4f84-420d-8acd-4738afdb546c"
+      },
+      {
+        "checkId": "notes.spelling-discussion",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "119d5d2b-4f84-420d-8acd-4738afdb546c"
+      },
+      {
+        "checkId": "notes.rendering-discussion",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "119d5d2b-4f84-420d-8acd-4738afdb546c"
+      }
+    ]
   },
   {
     "id": "da3ed33a-1f62-453c-9a16-af0ab1dec374",
     "name": "GILLBT Plan",
-    "version": "2.0",
+    "version": "1.0",
     "kind": "factory",
     "stages": [
       {
         "id": "1fee04f4-ddb8-4cfb-8a32-762328d6ba6c",
-        "name": "Exegesis",
-        "description": "Use the Source Language Tools, UBS Handbooks, and other available commentaries to get a good understanding of the background to the text.",
+        "name": "Drafting",
+        "description": "The Drafting stage incorporates exegetical research, drafting the text into Paratext, and basic checks.",
         "tasks": [
           {
             "id": "cd202fa7-80f2-4925-8f9b-57a2f985c383",
@@ -1871,8 +1973,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "7d2a59e8-67e5-4a73-9080-27e3da4c1029",
-        "name": "Team Check",
-        "description": "",
+        "name": "Team Checking",
+        "description": "Checking of the text will also entail team checking for key terms, names, numbers, weights, and supplementary helps. The team should refer to any decisions previously made about dialect. First testing may also be done and revision made based on feedback from testing. \n\nIn sum, it involves co-translators reading through translated draft and comparing with base texts such as NIV and other relevant bible resources, harmonizing key biblical terms with co-translators, checking for clarity and naturalness in translation, running further Paratext checks such as section heading, footnotes, relatively long and relatively short verses and paragraphs.",
         "tasks": [
           {
             "id": "f3a66e3a-7bdb-4aed-acee-c0bcca67c222",
@@ -1892,8 +1994,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "fe0f2c67-06b7-42d6-91f7-2ed52c690940",
-        "name": "Reviewers Feedback",
-        "description": "",
+        "name": "Preparing for Consultant",
+        "description": "The team will print out hard copies for reviewing by the review committee, hold review sessions by review panel to check for naturalness and clarity as well as give feedback on the translation. \n\nConsultants may request a back translation which should be prepared ahead of time. Lastly, translators will discuss input by reviewers and insert corrections.",
         "tasks": [
           {
             "id": "c480c038-cdf0-4948-b98f-07e7526644ea",
@@ -1913,8 +2015,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "c2523b4a-8267-495d-b903-f45d98ebe0f0",
-        "name": "Consultant Check",
-        "description": "",
+        "name": "Consultant Checking",
+        "description": "Process: Consultant will receive a version of the book for study prior to meeting translators.\n\nThe consultant will meet with the translators to check all aspects of translation (introduction to book, chapters and verses of books)\n\nThe consultant will receive an oral back translation of verses during the checking.  The consultant will then probe, discuss and suggest areas for improvement.\n\nTranslators will input corrections from consultant checking and the consultant may later approve the corrections.",
         "tasks": [
           {
             "id": "2ef0350c-1efd-46ff-9cd5-711b8fa81e1c",
@@ -1948,8 +2050,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "3e4ce946-cfc3-4fe9-a32e-81c1606a918c",
-        "name": "Community Testing",
-        "description": "",
+        "name": "Community Review",
+        "description": "Print copies of Consultant checked books. Community groups will test the books for comprehension, \n\nTrial reading should be done in churches, meetings with groups and individuals, in Bible Studies, or family devotions. The community will need to be educated on the use of the text including features such as footnotes, headings, and introductions.\n\nCorrections from community review will be input back into Paratext on the approval of the cosultant.",
         "tasks": [
           {
             "id": "1f87c9fa-f873-40a1-af1b-27d2989f6a6a",
@@ -1983,8 +2085,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "86ac513a-15c2-45c4-9603-9cde6008b6b5",
-        "name": "Finalize Illustrations, Captions and Maps",
-        "description": "",
+        "name": "Finalizing for Publication",
+        "description": "The translators will run all of the Paratext checks to make sure that the text is in good condition. They will also make sure that illustrations are in the correct places and have appropriate captions.\n\nOnce the Consultant has given approval, the typesetter will format the text, illustrations, and maps to prepare it for printing. Decisions will be made about the size of the text and the type of cover and spine. A final read through is done by the translators before being printed.",
         "tasks": [
           {
             "id": "d5930bdc-a280-42ad-a5c5-709cf8b8813a",
@@ -2073,7 +2175,103 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
         ]
       }
     ],
-    "checks": []
+    "checks": [
+      {
+        "checkId": "basic.chapter-verse-numbers",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1fee04f4-ddb8-4cfb-8a32-762328d6ba6c"
+      },
+      {
+        "checkId": "basic.markers",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1fee04f4-ddb8-4cfb-8a32-762328d6ba6c"
+      },
+      {
+        "checkId": "basic.characters",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1fee04f4-ddb8-4cfb-8a32-762328d6ba6c"
+      },
+      {
+        "checkId": "basic.punctuation",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1fee04f4-ddb8-4cfb-8a32-762328d6ba6c"
+      },
+      {
+        "checkId": "notes.translator",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1fee04f4-ddb8-4cfb-8a32-762328d6ba6c"
+      },
+      {
+        "checkId": "basic.quotations",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1fee04f4-ddb8-4cfb-8a32-762328d6ba6c"
+      },
+      {
+        "checkId": "other.biblical-terms",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "7d2a59e8-67e5-4a73-9080-27e3da4c1029"
+      },
+      {
+        "checkId": "basic.references",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "fe0f2c67-06b7-42d6-91f7-2ed52c690940"
+      },
+      {
+        "checkId": "basic.capitalization",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "fe0f2c67-06b7-42d6-91f7-2ed52c690940"
+      },
+      {
+        "checkId": "basic.repeated-words",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "fe0f2c67-06b7-42d6-91f7-2ed52c690940"
+      },
+      {
+        "checkId": "basic.matched-pairs",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "fe0f2c67-06b7-42d6-91f7-2ed52c690940"
+      },
+      {
+        "checkId": "basic.numbers",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "fe0f2c67-06b7-42d6-91f7-2ed52c690940"
+      },
+      {
+        "checkId": "basic.unmatched-pairs",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "fe0f2c67-06b7-42d6-91f7-2ed52c690940"
+      },
+      {
+        "checkId": "spelling.word-list",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "fe0f2c67-06b7-42d6-91f7-2ed52c690940"
+      },
+      {
+        "checkId": "spelling.spelling",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "fe0f2c67-06b7-42d6-91f7-2ed52c690940"
+      },
+      {
+        "checkId": "notes.consultant",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "fe0f2c67-06b7-42d6-91f7-2ed52c690940"
+      },
+      {
+        "checkId": "other.parallel-passages",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "c2523b4a-8267-495d-b903-f45d98ebe0f0"
+      },
+      {
+        "checkId": "notes.spelling-discussion",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "3e4ce946-cfc3-4fe9-a32e-81c1606a918c"
+      },
+      {
+        "checkId": "notes.rendering-discussion",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "3e4ce946-cfc3-4fe9-a32e-81c1606a918c"
+      }
+    ]
   },
   {
     "id": "c24b3d94-892e-4643-b9a8-0c9db40c9c05",
@@ -2083,8 +2281,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
     "stages": [
       {
         "id": "b6cd2718-36c9-472c-84d6-753fca853c02",
-        "name": "Study the passage (exegesis)",
-        "description": "The first translation task is to study the text carefully, using Bible versions and commentaries. This is called “doing the exegesis”. There should be at least one person on each translation team who is a skilled exegete.",
+        "name": "Drafting",
+        "description": "",
         "tasks": [
           {
             "id": "9f99673c-cb6a-4c05-a9cd-4629eb7f6b20",
@@ -2216,8 +2414,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "75704aa3-5afe-4d6e-be69-92aae825799c",
-        "name": "Exegetical check: text",
-        "description": "This check is done by the translation advisor/exegetical specialist with the rest of the translation team.",
+        "name": "Exegetical Checking",
+        "description": "",
         "tasks": [
           {
             "id": "e51e5efb-465b-4e47-9146-4c122966a545",
@@ -2321,8 +2519,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "7580b0c4-40f7-4f03-80b6-d33b749370a7",
-        "name": "Prepare text for group checking",
-        "description": "Open the \"Assignments and Progress\" window and correct all errors/issues shown there. Once all errors are corrected and open notes are resolved, you can print a copy of the books or chapters to be reviewed by community group. The two simplest ways to print text from Paratext are found under the \"File\" menu. They are \"Print Draft\" and \"Save as RTF\". There are other methods available for more advanced formatting, such as \"Export to Pathway\". Use the method specified by your project administrator or translation consultant.",
+        "name": "Comprehension Checking",
+        "description": "",
         "tasks": [
           {
             "id": "0b6cbd07-9f68-4ec9-9eb6-684ce68f7dac",
@@ -2412,8 +2610,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "aa953eb8-215c-4e1e-bfbe-ab16866a3a3a",
-        "name": "Make text available to consultant",
-        "description": "The team needs to make the translated text available to the consultant who will  evaluate the text for accuracy, clarity, naturalness, and acceptability of the translation including all supplementary materials and illustrations used. This can be done by adding the consultant as a user to the project if they are not already listed as a user. Be sure to let the consultant know that the text (and interlinear or back translation)  is ready for checking.",
+        "name": "Consultant Checking",
+        "description": "",
         "tasks": [
           {
             "id": "fd6c2f9b-c34f-4762-bcd0-845ff03c1785",
@@ -2559,8 +2757,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "67ebcabd-8d8f-4132-8991-58515e2fdf7d",
-        "name": "Draft the Title Page and Verso Page",
-        "description": "These pages are mandatory and need to be approved by Branch or Field Directors as they contain copyright statements.",
+        "name": "Pre-publication",
+        "description": "",
         "tasks": [
           {
             "id": "819e4803-d2fb-465e-8242-3ce0d58edde2",
@@ -2873,7 +3071,13 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
         ]
       }
     ],
-    "checks": []
+    "checks": [
+      {
+        "checkId": "notes.translator",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "b6cd2718-36c9-472c-84d6-753fca853c02"
+      }
+    ]
   },
   {
     "id": "2ddd9e23-894e-4c1f-89a5-81291597bfca",
@@ -2883,8 +3087,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
     "stages": [
       {
         "id": "9eddb82d-ed66-4e24-bdab-060dea2294de",
-        "name": "Complete translation brief",
-        "description": "Developing the translation Brief\n\nThe translation brief is a statement of the standards for the project, such as which source texts are used,  and the specific audience and intended uses of the translation. Setting these principles out at the beginning will help the translation team work together towards the common goal.\n\nFor more information about the translation brief read:\n\n\nIntroducing the Translation Brief: A Practical Tool for Improving Translations\nThe translation brief, also referred to as translation instructions (Nord, 1991b), is a\nset of instructions prepared by a requester that accompanies a translation assignment,\nthus enabling the requester to convey information about the source text, the specific\ncommunicative purpose and context in which the text is used, the intended uses of\nthe translation and what it aims to accomplish. In short, it enables the requester and\ntranslator to be, quite literally, on the same page from start to finish.\n\nhttp://www.hablamosjuntos.org/mtw/html_toolkit/pdf/tool_3dev_transbrief-feb5_final.pdf",
+        "name": "Drafting",
+        "description": "",
         "tasks": [
           {
             "id": "79540c20-9aed-4d84-8e64-d3a3e1e98ccd",
@@ -2932,8 +3136,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "9443afef-8302-4727-8f85-1cb4ef464168",
-        "name": "Exegetical check",
-        "description": "This check is done by the translation team. Compare the draft with one or two translations in the national language, discuss exegetical choices that have been made in the translation, identify possible exegetical mistakes in the translation; identify any missing verses or sentences.)",
+        "name": "Team Checking",
+        "description": "",
         "tasks": [
           {
             "id": "3480d1ca-6ee7-40eb-a31e-f0e06dbf73a8",
@@ -3079,8 +3283,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "20974cee-9f40-43c4-a0ae-5e733238e134",
-        "name": "Prepare for comprehension testing",
-        "description": "This is comprehension testing done with members of the language community who were not involved in preparing the Preliminary Version of the text. (Re-read the translation draft; Draft general retell questions for comprehension testing; Identify possible issues of misunderstanding; Draft specific questions related to the main events in the passage, participant reference, key terms, foreign concepts, metaphors, rhetorical questions, inferential information, positive or negative associations, etc.)",
+        "name": "Comprehension checks",
+        "description": "",
         "tasks": [
           {
             "id": "75365725-9717-46de-85f9-413d44af9b59",
@@ -3142,8 +3346,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "b270751c-03d8-463b-abbf-5c8e3c4a188b",
-        "name": "Update Biblical terms tool",
-        "description": "Open Biblical terms tool and filter for chapter(s) being prepared for consultant check. Verify that all the Biblical terms have approved renderings. Update any that are missing, or need to be changed because of a better understanding of what the Greek or Hebrew means. It is likely some are out-of-date, because of the revisions made after comprehension testing.",
+        "name": "Consultant Check",
+        "description": "",
         "tasks": [
           {
             "id": "f8afb80c-dab6-470b-a564-89b3d44dbaad",
@@ -3303,8 +3507,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "16385cc6-d555-4b29-b342-1f78a9853656",
-        "name": "Naturalness review & revision",
-        "description": "The community does a naturalness review of the text based on the oral and/or written communication of the third revision.\nThe team should discuss the comments of the naturalness review and make the changes suggested that are valid.",
+        "name": "Review by the community",
+        "description": "",
         "tasks": [
           {
             "id": "ad1e60e2-0340-4832-b914-16fc9c76c76e",
@@ -3436,8 +3640,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "c66ede6b-1e7b-4d55-b5c3-f8aff60217d7",
-        "name": "Choose final illustrations and write captions",
-        "description": "Make final decisions on illustrations. If captions contain text not directly from the scriptures, they should be consultant checked. This should be done in conjunction with the publications department. Sample illustrations can be seen at: https://www.dropbox.com/sh/cs0qspb52iwa2rj/AACr9xi7s2LVoheonn0OnjPla?dl=0",
+        "name": "Finalizing for Publication",
+        "description": "",
         "tasks": [
           {
             "id": "4363aa1f-aeca-4831-8562-085b9381bad6",
@@ -3750,7 +3954,103 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
         ]
       }
     ],
-    "checks": []
+    "checks": [
+      {
+        "checkId": "basic.chapter-verse-numbers",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9eddb82d-ed66-4e24-bdab-060dea2294de"
+      },
+      {
+        "checkId": "basic.markers",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9eddb82d-ed66-4e24-bdab-060dea2294de"
+      },
+      {
+        "checkId": "notes.translator",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9eddb82d-ed66-4e24-bdab-060dea2294de"
+      },
+      {
+        "checkId": "notes.consultant",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "basic.characters",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "basic.punctuation",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "basic.capitalization",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "basic.repeated-words",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "basic.references",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "20974cee-9f40-43c4-a0ae-5e733238e134"
+      },
+      {
+        "checkId": "basic.unmatched-pairs",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "20974cee-9f40-43c4-a0ae-5e733238e134"
+      },
+      {
+        "checkId": "basic.numbers",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "20974cee-9f40-43c4-a0ae-5e733238e134"
+      },
+      {
+        "checkId": "basic.matched-pairs",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "20974cee-9f40-43c4-a0ae-5e733238e134"
+      },
+      {
+        "checkId": "basic.quotations",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "20974cee-9f40-43c4-a0ae-5e733238e134"
+      },
+      {
+        "checkId": "spelling.word-list",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "20974cee-9f40-43c4-a0ae-5e733238e134"
+      },
+      {
+        "checkId": "spelling.spelling",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "20974cee-9f40-43c4-a0ae-5e733238e134"
+      },
+      {
+        "checkId": "notes.spelling-discussion",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "20974cee-9f40-43c4-a0ae-5e733238e134"
+      },
+      {
+        "checkId": "notes.rendering-discussion",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "20974cee-9f40-43c4-a0ae-5e733238e134"
+      },
+      {
+        "checkId": "other.biblical-terms",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "20974cee-9f40-43c4-a0ae-5e733238e134"
+      },
+      {
+        "checkId": "other.parallel-passages",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "c66ede6b-1e7b-4d55-b5c3-f8aff60217d7"
+      }
+    ]
   },
   {
     "id": "ec747b2c-a9b2-41c6-9de1-e6fd564ab4bb",
@@ -3760,8 +4060,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
     "stages": [
       {
         "id": "9eddb82d-ed66-4e24-bdab-060dea2294de",
-        "name": "Complete translation brief",
-        "description": "Developing the translation Brief\n\nThe translation brief is a statement of the standards for the project, such as which source texts are used,  and the specific audience and intended uses of the translation. Setting these principles out at the beginning will help the translation team work together towards the common goal.\n\nFor more information about the translation brief read:\n\n\nIntroducing the Translation Brief: A Practical Tool for Improving Translations\nThe translation brief, also referred to as translation instructions (Nord, 1991b), is a\nset of instructions prepared by a requester that accompanies a translation assignment,\nthus enabling the requester to convey information about the source text, the specific\ncommunicative purpose and context in which the text is used, the intended uses of\nthe translation and what it aims to accomplish. In short, it enables the requester and\ntranslator to be, quite literally, on the same page from start to finish.\n\nhttp://www.hablamosjuntos.org/mtw/html_toolkit/pdf/tool_3dev_transbrief-feb5_final.pdf",
+        "name": "Drafting",
+        "description": "",
         "tasks": [
           {
             "id": "79540c20-9aed-4d84-8e64-d3a3e1e98ccd",
@@ -3907,8 +4207,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "9443afef-8302-4727-8f85-1cb4ef464168",
-        "name": "Naturalness check",
-        "description": "This check is done by the translation team (Read the draft, check the general flow of the discourse, its logic, chronology, participant reference, sentence length & rhythm, language style and register, etc.)",
+        "name": "Team Checking",
+        "description": "",
         "tasks": [
           {
             "id": "7bebeaeb-5932-4232-add9-22f60ac05007",
@@ -4068,8 +4368,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "20974cee-9f40-43c4-a0ae-5e733238e134",
-        "name": "First comprehension testing",
-        "description": "In this plan it is assumed that any checks found unfinished from a previous stage should be dealt with appropriately. NOTE: if a check from a previously completed stage is found to have errors it will show up in the current working stage.\nWhile supplementary helps are specifically mentioned in the drafting section, it is assumed that all other checks will also be completed on supplementary materials and that these are a part of the final text.",
+        "name": "Preparing for the consultant check",
+        "description": "",
         "tasks": [
           {
             "id": "e2642958-0d86-450b-8c6d-df076b05ab5f",
@@ -4229,8 +4529,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "b270751c-03d8-463b-abbf-5c8e3c4a188b",
-        "name": "Evaluation of text",
-        "description": "Consultant evaluates the text and places notes with his observations in the text (or back translation). The evaluation should focus on accuracy, clarity, naturalness, and acceptability of the translation including all supplementary materials and illustrations used.",
+        "name": "Consultant Check",
+        "description": "",
         "tasks": [
           {
             "id": "fd6c2f9b-c34f-4762-bcd0-845ff03c1785",
@@ -4334,8 +4634,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "16385cc6-d555-4b29-b342-1f78a9853656",
-        "name": "Naturalness review",
-        "description": "The community does a naturalness review of the text based on the oral and/or written communication of the third revision.",
+        "name": "Review by the community",
+        "description": "",
         "tasks": [
           {
             "id": "ad1e60e2-0340-4832-b914-16fc9c76c76e",
@@ -4425,8 +4725,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "c66ede6b-1e7b-4d55-b5c3-f8aff60217d7",
-        "name": "Choose final illustrations and write captions",
-        "description": "Make final decisions on illustrations. If captions contain text not directly from the scriptures, they should be consultant checked. This should be done in conjunction with the publications department. Sample illustrations can be seen at: https://www.dropbox.com/sh/cs0qspb52iwa2rj/AACr9xi7s2LVoheonn0OnjPla?dl=0",
+        "name": "Finalizing for Publication",
+        "description": "",
         "tasks": [
           {
             "id": "4363aa1f-aeca-4831-8562-085b9381bad6",
@@ -4767,7 +5067,103 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
         ]
       }
     ],
-    "checks": []
+    "checks": [
+      {
+        "checkId": "basic.chapter-verse-numbers",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9eddb82d-ed66-4e24-bdab-060dea2294de"
+      },
+      {
+        "checkId": "basic.markers",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9eddb82d-ed66-4e24-bdab-060dea2294de"
+      },
+      {
+        "checkId": "notes.translator",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9eddb82d-ed66-4e24-bdab-060dea2294de"
+      },
+      {
+        "checkId": "notes.consultant",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "basic.characters",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "basic.punctuation",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "basic.capitalization",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "basic.repeated-words",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "basic.references",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "20974cee-9f40-43c4-a0ae-5e733238e134"
+      },
+      {
+        "checkId": "basic.unmatched-pairs",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "20974cee-9f40-43c4-a0ae-5e733238e134"
+      },
+      {
+        "checkId": "basic.numbers",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "20974cee-9f40-43c4-a0ae-5e733238e134"
+      },
+      {
+        "checkId": "basic.matched-pairs",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "20974cee-9f40-43c4-a0ae-5e733238e134"
+      },
+      {
+        "checkId": "basic.quotations",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "20974cee-9f40-43c4-a0ae-5e733238e134"
+      },
+      {
+        "checkId": "spelling.word-list",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "20974cee-9f40-43c4-a0ae-5e733238e134"
+      },
+      {
+        "checkId": "spelling.spelling",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "20974cee-9f40-43c4-a0ae-5e733238e134"
+      },
+      {
+        "checkId": "notes.spelling-discussion",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "20974cee-9f40-43c4-a0ae-5e733238e134"
+      },
+      {
+        "checkId": "notes.rendering-discussion",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "20974cee-9f40-43c4-a0ae-5e733238e134"
+      },
+      {
+        "checkId": "other.biblical-terms",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "20974cee-9f40-43c4-a0ae-5e733238e134"
+      },
+      {
+        "checkId": "other.parallel-passages",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "c66ede6b-1e7b-4d55-b5c3-f8aff60217d7"
+      }
+    ]
   },
   {
     "id": "c3aa9e71-02d8-4f4b-aaf1-42a84d90c86d",
@@ -4777,8 +5173,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
     "stages": [
       {
         "id": "9eddb82d-ed66-4e24-bdab-060dea2294de",
-        "name": "Exegesis",
-        "description": "Study the text carefully, using Paratext resources, recommended commentaries, and other recommended resources. The Translator's Workplace collection of resources contains many recommended resources that are not available in Paratext.  To learn more about Translator's Workplace and to see if you qualify for this collection of resources go to: https://www.sil.org/resources/publications/tw/licensing\n\nExegesis may involve: \n   ● chunking the text into meaningful units\n   ● identifying translation issues including key terms\n   ● identifying cultural issues\n   ● studying the meaning of key terms in the passage and considering what receptor      language rendering would be best for each sense of each term\n   ● oral retelling and processing of the text\n\n    Oral retelling can free the translator's mind from the form of the model language, creating a more natural translation. The basic process is first to study the text until you completely understand and have internalized the passage, then retelling the passage to other speakers of the receptor language. It is best to retell it in the vernacular without looking at the model text(s).  \n\nStudying key terms can be done in one of the Enhanced resources in Paratext, looking at the UBS handbook, the SIL translation notes, or a good Bible Dictionary such as those available in the Translator's Workplace collection or other source recommended by your supervisor.",
+        "name": "Drafting",
+        "description": "View this plan by opening the accompanying SIL_Compact_Plan.html document.\n\nThis stage involves creating the first draft of the translation.",
         "tasks": [
           {
             "id": "9f99673c-cb6a-4c05-a9cd-4629eb7f6b20",
@@ -4812,8 +5208,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "9443afef-8302-4727-8f85-1cb4ef464168",
-        "name": "Exegetical check",
-        "description": "The exegetical checking should include at least the following:\n   ●compare the draft with one or two translations in the national language\n   ●identify any missing verses or sentences\n   ●discuss exegetical choices that have been made in the translation\n   ●identify possible exegetical mistakes in the translation\n   ●adjust text as necessary to resolve any issues found",
+        "name": "Team Check & Comprehension Check",
+        "description": "The team checks the naturalness and exegesis of the draft, and then tests it with the target audience to make sure that it communicates well. \n\nIf you add any custom project note tags to your project, you will have to specify which stage(s) the automated checks for those tags will need to begin.",
         "tasks": [
           {
             "id": "3480d1ca-6ee7-40eb-a31e-f0e06dbf73a8",
@@ -4917,8 +5313,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "20974cee-9f40-43c4-a0ae-5e733238e134",
-        "name": "Draft the back translation",
-        "description": "The back translation is created by someone who was not involved in the translation. The goal is to show how a reader will understand the text. It must be prepared without looking at any other translation or version or resource. The text is entered into the back translation project.",
+        "name": "Preparing for Consultant",
+        "description": "The goal of this stage is to prepare the back translation for the consultant. \n\nAutomatic checks for missing and out of date verses in the back translation must be set to run at this stage. This check requires that the back translation project is associated with your project.\n\nNote: The translation consultant may ask that other tasks be completed before the consultant check occurs. For example, the consultant may ask that the renderings for certain Biblical terms be added to the Biblical terms tool, or all project notes be resolved.  If additional tasks such as these are part of your team's process, then add them to your project plan in this stage.",
         "tasks": [
           {
             "id": "0b6970df-00ce-4da4-a46a-28be4c7f2e6a",
@@ -4952,8 +5348,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "b270751c-03d8-463b-abbf-5c8e3c4a188b",
-        "name": "Preliminary evaluation of text",
-        "description": "The consultant receives the text in advance and makes preliminary evaluations. The consultant’s comments for the team are placed in the translation or back translation using project notes. The evaluation should focus on accuracy, clarity, naturalness, and acceptability of the translation. The consultant will also evaluate all supplementary materials and illustrations used. The team may review and implement suggestions made by the consultant prior to the direct interaction, if asked to do so by the consultant.",
+        "name": "Consultant Check",
+        "description": "The consultant interacts with the team remotely to prepare for the checking session, and then plans a time when they can meet to review the text together.  At the end of the checking session, the team has some work to comply with the consultant's suggestions.  When the consultant is satisfied the improvements have been made, a report or statement is submitted to the team showing the text has been approved.",
         "tasks": [
           {
             "id": "fd6c2f9b-c34f-4762-bcd0-845ff03c1785",
@@ -5015,8 +5411,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "16385cc6-d555-4b29-b342-1f78a9853656",
-        "name": "Review Biblical terms and revise",
-        "description": "Community leaders, church leaders, and other community members discuss how key terms are rendered. The team discusses comments about key terms made at the community review and uses those changes they think are valid.\n\nConsider using Paratext lite on an Android tablet to collect information at comprehension testing meetings, and Scripture Forge for situations when the language community is in several different countries.",
+        "name": "Community Review",
+        "description": "The goal of this stage is to have one or more community groups to review the text and make suggestions and recommendations.\n\nNote:  If your team's process requires other community reviewing and testing tasks add them to your plan in this stage.  For example, some teams have special community meetings to test key terms, or to resolve issues related to different language variants.",
         "tasks": [
           {
             "id": "ab24ebef-f715-4a6e-b505-b5c9172ba6c9",
@@ -5064,8 +5460,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "c66ede6b-1e7b-4d55-b5c3-f8aff60217d7",
-        "name": "Check and link glossary entries",
-        "description": "For users to discover your glossary entries, the words must be marked for a print publication, or hyperlinked for digital publication.  Use the tools in Paratext to add the necessary markup, which will create hyperlinked entries or other highlighting in print to identify glossary words.",
+        "name": "Final Preparation for Publication",
+        "description": "The text is finalized for publication and uploaded to the DBL. If a typeset publication is in view, the typesetting requirements will be furnished by the typesetter.",
         "tasks": [
           {
             "id": "b3877769-af37-45c4-b225-24c988148bff",
@@ -5126,7 +5522,103 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
         ]
       }
     ],
-    "checks": []
+    "checks": [
+      {
+        "checkId": "basic.chapter-verse-numbers",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9eddb82d-ed66-4e24-bdab-060dea2294de"
+      },
+      {
+        "checkId": "basic.markers",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9eddb82d-ed66-4e24-bdab-060dea2294de"
+      },
+      {
+        "checkId": "notes.translator",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9eddb82d-ed66-4e24-bdab-060dea2294de"
+      },
+      {
+        "checkId": "spelling.spelling",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9eddb82d-ed66-4e24-bdab-060dea2294de"
+      },
+      {
+        "checkId": "notes.consultant",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "basic.characters",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "basic.punctuation",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "basic.capitalization",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "basic.repeated-words",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "basic.unmatched-pairs",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "basic.matched-pairs",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "basic.quotations",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "basic.numbers",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "other.biblical-terms",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "spelling.word-list",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "basic.references",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "16385cc6-d555-4b29-b342-1f78a9853656"
+      },
+      {
+        "checkId": "notes.spelling-discussion",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "16385cc6-d555-4b29-b342-1f78a9853656"
+      },
+      {
+        "checkId": "notes.rendering-discussion",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "16385cc6-d555-4b29-b342-1f78a9853656"
+      },
+      {
+        "checkId": "other.parallel-passages",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "c66ede6b-1e7b-4d55-b5c3-f8aff60217d7"
+      }
+    ]
   },
   {
     "id": "ac0f7277-5315-408f-a4da-09f0bf591ec8",
@@ -5136,8 +5628,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
     "stages": [
       {
         "id": "9eddb82d-ed66-4e24-bdab-060dea2294de",
-        "name": "Exegesis",
-        "description": "Study the text carefully, using Paratext resources, recommended commentaries, and other resources (e.g. those found in Translator's Workplace).\nThis should involve: \n● chunking the text into meaningful units\n● identifying translation issues\n● identifying cultural issues\n● identifying and studying the meaning of key terms in the book/passage and considering what RL rendering would be best for each sense of a term\n\nIt may also involve:\n● oral retelling and processing of the text\n\nAfter understanding and internalizing the passage, it may be helpful to retell it in the vernacular without looking at the model text(s).  Doing this can free the translator's mind from the form of the model language, creating a more natural translation.",
+        "name": "Drafting",
+        "description": "This stage involves creating the first draft of the translation.",
         "tasks": [
           {
             "id": "9f99673c-cb6a-4c05-a9cd-4629eb7f6b20",
@@ -5185,8 +5677,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "9443afef-8302-4727-8f85-1cb4ef464168",
-        "name": "Accuracy/Exegetical check",
-        "description": "Compare the draft with one or two translations in the national language or a fairly literal English version. See if any meaning of the Source Text has been omitted, added, or changed in the drafted translation. Discuss exegetical choices that have been made in the translation and identify possible exegetical mistakes. Discuss Biblical terms renderings as a team. Adjust text as necessary to resolve any issues found.",
+        "name": "Team Check & Comprehension Check",
+        "description": "The team checks the naturalness and accuracy of the draft, and then tests it with the target audience to make sure that it communicates well.",
         "tasks": [
           {
             "id": "3480d1ca-6ee7-40eb-a31e-f0e06dbf73a8",
@@ -5290,8 +5782,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "20974cee-9f40-43c4-a0ae-5e733238e134",
-        "name": "Draft the back translation",
-        "description": "The back translation is created by someone who was not involved in the translation. The goal is to show how a reader will understand the text. The text is entered into the back translation project. It must be prepared without looking at any other translation or version or resource.",
+        "name": "Prepare for Consultant",
+        "description": "The goal of this stage is to prepare the back translation for the consultant. \n\nAutomatic checks for missing and out of date verses in the back translation must be set to run at this stage. This check requires that the back translation project is associated with your project.",
         "tasks": [
           {
             "id": "0b6970df-00ce-4da4-a46a-28be4c7f2e6a",
@@ -5339,8 +5831,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "b270751c-03d8-463b-abbf-5c8e3c4a188b",
-        "name": "Preliminary evaluation of text",
-        "description": "The consultant receives the text in advance and makes preliminary evaluations. The consultant’s comments for the team are placed in the translation or back translation using project notes. The evaluation should focus on accuracy, clarity, naturalness, and acceptability of the translation. The consultant will also evaluate all supplementary materials and illustrations used.",
+        "name": "Consultant Check",
+        "description": "The consultant interacts with the team remotely to prepare for the checking session, and then plans a time when they can meet to review the text together.  At the end of the checking session, the team has some work to comply with the consultant's suggestions.  When the consultant is satisfied and the improvements have been made, a report or statement is submitted to the team showing that the text has been approved.",
         "tasks": [
           {
             "id": "fd6c2f9b-c34f-4762-bcd0-845ff03c1785",
@@ -5402,8 +5894,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "16385cc6-d555-4b29-b342-1f78a9853656",
-        "name": "Community review",
-        "description": "Community leaders, church leaders, and other community members review the audio or written text, especially for naturalness.  They are also invited to comment on words used in the translation that may not be in general usage, difficult to understand, etc.  This would include any key biblical terms that the reviewers may point out and discuss with the team.",
+        "name": "Review by the Community",
+        "description": "The goal of this stage is to have one or more community groups to review the text and make suggestions and recommendations.\n\nIt is understood that the feasibility of a community check may well be limited in certain contexts.",
         "tasks": [
           {
             "id": "ad1e60e2-0340-4832-b914-16fc9c76c76e",
@@ -5437,8 +5929,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "c66ede6b-1e7b-4d55-b5c3-f8aff60217d7",
-        "name": "Check and link glossary entries",
-        "description": "For users to discover your glossary entries, the words must be marked for a print publication, or hyperlinked for digital publication.  Use the tools in Paratext to add the necessary markup, which will create hyperlinked entries or other highlighting in print to identify glossary words.",
+        "name": "Finalizing for Publication",
+        "description": "The text is finalized for publication and uploaded to the DBL. If a typeset publication is in view, the typesetting requirements will be furnished by the typesetter.",
         "tasks": [
           {
             "id": "b3877769-af37-45c4-b225-24c988148bff",
@@ -5499,7 +5991,108 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
         ]
       }
     ],
-    "checks": []
+    "checks": [
+      {
+        "checkId": "basic.chapter-verse-numbers",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9eddb82d-ed66-4e24-bdab-060dea2294de"
+      },
+      {
+        "checkId": "basic.markers",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9eddb82d-ed66-4e24-bdab-060dea2294de"
+      },
+      {
+        "checkId": "notes.translator",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9eddb82d-ed66-4e24-bdab-060dea2294de"
+      },
+      {
+        "checkId": "spelling.spelling",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9eddb82d-ed66-4e24-bdab-060dea2294de"
+      },
+      {
+        "checkId": "notes.consultant",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "basic.characters",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "basic.punctuation",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "basic.capitalization",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "basic.repeated-words",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "basic.unmatched-pairs",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "basic.matched-pairs",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "basic.quotations",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "basic.numbers",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "spelling.word-list",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "other.biblical-terms",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "9443afef-8302-4727-8f85-1cb4ef464168"
+      },
+      {
+        "checkId": "other.interlinear",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "20974cee-9f40-43c4-a0ae-5e733238e134"
+      },
+      {
+        "checkId": "basic.references",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "16385cc6-d555-4b29-b342-1f78a9853656"
+      },
+      {
+        "checkId": "notes.spelling-discussion",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "16385cc6-d555-4b29-b342-1f78a9853656"
+      },
+      {
+        "checkId": "notes.rendering-discussion",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "16385cc6-d555-4b29-b342-1f78a9853656"
+      },
+      {
+        "checkId": "other.parallel-passages",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "c66ede6b-1e7b-4d55-b5c3-f8aff60217d7"
+      }
+    ]
   },
   {
     "id": "21f4f750-3f6a-4b34-b015-4ad4de69a7ae",
@@ -5509,7 +6102,7 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
     "stages": [
       {
         "id": "1fee04f4-ddb8-4cfb-8a32-762328d6ba6c",
-        "name": "Exegesis",
+        "name": "Drafting",
         "description": "",
         "tasks": [
           {
@@ -5572,7 +6165,7 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "7d2a59e8-67e5-4a73-9080-27e3da4c1029",
-        "name": "Team Check",
+        "name": "Team Checking & First Testing",
         "description": "",
         "tasks": [
           {
@@ -5663,7 +6256,7 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "fe0f2c67-06b7-42d6-91f7-2ed52c690940",
-        "name": "Prepare Back-Translation",
+        "name": "Preparing for Consultant",
         "description": "",
         "tasks": [
           {
@@ -5712,7 +6305,7 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "c2523b4a-8267-495d-b903-f45d98ebe0f0",
-        "name": "Create project notes",
+        "name": "Consultant Checking",
         "description": "",
         "tasks": [
           {
@@ -5761,7 +6354,7 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "3e4ce946-cfc3-4fe9-a32e-81c1606a918c",
-        "name": "Community Testing",
+        "name": "Community Testing and Reviewing",
         "description": "",
         "tasks": [
           {
@@ -5880,7 +6473,7 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "86ac513a-15c2-45c4-9603-9cde6008b6b5",
-        "name": "Choose Illustrations and Write Captions",
+        "name": "Finalizing for Publication",
         "description": "",
         "tasks": [
           {
@@ -6012,7 +6605,103 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
         ]
       }
     ],
-    "checks": []
+    "checks": [
+      {
+        "checkId": "basic.chapter-verse-numbers",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1fee04f4-ddb8-4cfb-8a32-762328d6ba6c"
+      },
+      {
+        "checkId": "basic.markers",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1fee04f4-ddb8-4cfb-8a32-762328d6ba6c"
+      },
+      {
+        "checkId": "other.biblical-terms",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "7d2a59e8-67e5-4a73-9080-27e3da4c1029"
+      },
+      {
+        "checkId": "basic.characters",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "fe0f2c67-06b7-42d6-91f7-2ed52c690940"
+      },
+      {
+        "checkId": "basic.punctuation",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "fe0f2c67-06b7-42d6-91f7-2ed52c690940"
+      },
+      {
+        "checkId": "basic.references",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "fe0f2c67-06b7-42d6-91f7-2ed52c690940"
+      },
+      {
+        "checkId": "basic.capitalization",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "fe0f2c67-06b7-42d6-91f7-2ed52c690940"
+      },
+      {
+        "checkId": "basic.repeated-words",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "fe0f2c67-06b7-42d6-91f7-2ed52c690940"
+      },
+      {
+        "checkId": "basic.matched-pairs",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "fe0f2c67-06b7-42d6-91f7-2ed52c690940"
+      },
+      {
+        "checkId": "basic.quotations",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "fe0f2c67-06b7-42d6-91f7-2ed52c690940"
+      },
+      {
+        "checkId": "basic.numbers",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "fe0f2c67-06b7-42d6-91f7-2ed52c690940"
+      },
+      {
+        "checkId": "basic.unmatched-pairs",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "fe0f2c67-06b7-42d6-91f7-2ed52c690940"
+      },
+      {
+        "checkId": "spelling.word-list",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "fe0f2c67-06b7-42d6-91f7-2ed52c690940"
+      },
+      {
+        "checkId": "spelling.spelling",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "fe0f2c67-06b7-42d6-91f7-2ed52c690940"
+      },
+      {
+        "checkId": "notes.consultant",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "fe0f2c67-06b7-42d6-91f7-2ed52c690940"
+      },
+      {
+        "checkId": "back.placeholder",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "fe0f2c67-06b7-42d6-91f7-2ed52c690940"
+      },
+      {
+        "checkId": "other.parallel-passages",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "c2523b4a-8267-495d-b903-f45d98ebe0f0"
+      },
+      {
+        "checkId": "notes.spelling-discussion",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "3e4ce946-cfc3-4fe9-a32e-81c1606a918c"
+      },
+      {
+        "checkId": "notes.rendering-discussion",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "3e4ce946-cfc3-4fe9-a32e-81c1606a918c"
+      }
+    ]
   },
   {
     "id": "7e4cea18-4f66-4d4f-813c-a206b08e8502",
@@ -6022,8 +6711,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
     "stages": [
       {
         "id": "1703c346-ce9e-427e-9476-9f3a8af26c67",
-        "name": "Study and translate",
-        "description": "Thorough exegesis at fundamental level",
+        "name": "Drafting",
+        "description": "",
         "tasks": [
           {
             "id": "97876b3b-e8b4-44f7-bdb4-e24d5072dbd6",
@@ -6043,8 +6732,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "c132ac10-5985-4d99-8ad9-3e823809720a",
-        "name": "Co-translator comments on translation",
-        "description": "Thorough exegetical review, or second cycle of review",
+        "name": "Internal review",
+        "description": "",
         "tasks": [
           {
             "id": "a4d088eb-e23b-4294-9971-6024621ea486",
@@ -6092,7 +6781,7 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "2a64a7e8-052d-42f3-8e01-e44086f14090",
-        "name": "Exegete comments on translation",
+        "name": "External review",
         "description": "",
         "tasks": [
           {
@@ -6169,7 +6858,7 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "dbad86ec-fc46-4f93-a943-362155ccec49",
-        "name": "Stylist/editor comments on text",
+        "name": "Final review",
         "description": "",
         "tasks": [
           {
@@ -6231,7 +6920,98 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
         ]
       }
     ],
-    "checks": []
+    "checks": [
+      {
+        "checkId": "basic.chapter-verse-numbers",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1703c346-ce9e-427e-9476-9f3a8af26c67"
+      },
+      {
+        "checkId": "basic.markers",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1703c346-ce9e-427e-9476-9f3a8af26c67"
+      },
+      {
+        "checkId": "basic.characters",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1703c346-ce9e-427e-9476-9f3a8af26c67"
+      },
+      {
+        "checkId": "basic.punctuation",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1703c346-ce9e-427e-9476-9f3a8af26c67"
+      },
+      {
+        "checkId": "basic.references",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1703c346-ce9e-427e-9476-9f3a8af26c67"
+      },
+      {
+        "checkId": "basic.unmatched-pairs",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1703c346-ce9e-427e-9476-9f3a8af26c67"
+      },
+      {
+        "checkId": "basic.capitalization",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1703c346-ce9e-427e-9476-9f3a8af26c67"
+      },
+      {
+        "checkId": "basic.repeated-words",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1703c346-ce9e-427e-9476-9f3a8af26c67"
+      },
+      {
+        "checkId": "basic.matched-pairs",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1703c346-ce9e-427e-9476-9f3a8af26c67"
+      },
+      {
+        "checkId": "basic.quotations",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1703c346-ce9e-427e-9476-9f3a8af26c67"
+      },
+      {
+        "checkId": "basic.numbers",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1703c346-ce9e-427e-9476-9f3a8af26c67"
+      },
+      {
+        "checkId": "other.biblical-terms",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "c132ac10-5985-4d99-8ad9-3e823809720a"
+      },
+      {
+        "checkId": "other.parallel-passages",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "c132ac10-5985-4d99-8ad9-3e823809720a"
+      },
+      {
+        "checkId": "spelling.spelling",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "c132ac10-5985-4d99-8ad9-3e823809720a"
+      },
+      {
+        "checkId": "spelling.word-list",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "c132ac10-5985-4d99-8ad9-3e823809720a"
+      },
+      {
+        "checkId": "notes.spelling-discussion",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "c132ac10-5985-4d99-8ad9-3e823809720a"
+      },
+      {
+        "checkId": "notes.rendering-discussion",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "c132ac10-5985-4d99-8ad9-3e823809720a"
+      },
+      {
+        "checkId": "notes.consultant",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "c132ac10-5985-4d99-8ad9-3e823809720a"
+      }
+    ]
   },
   {
     "id": "f1c03f36-ab68-4f6a-b472-5964bc2da43e",
@@ -6241,8 +7021,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
     "stages": [
       {
         "id": "ee9fbe0a-b5c2-4180-babd-d21d88e60755",
-        "name": "create study notes",
-        "description": "# Create comprehensive study materials\n## Define specific instructions\n- Read and study the entire book\n- Identify the historical context\n- Look at the source texts\n- Read other books (exegesis)\n- Identify keywords, add to glossary\n- Create articles and sidebars\n- Add cross-references\n- Select appropriate illustrations\n\n## Study, draft and polish\n***\n* considerations\n   - When/how do you refer to earlier information?\n   - Are categories for articles and notes defined?\n   - What consistency checks are necessary?",
+        "name": "Drafting",
+        "description": "# Study Bible projects\n**Time (progress) impacted by:**\n* Content: quantity and type\n* People: number involved and level\n* Time: hours of work per member \n\nBe specific with the publication goals and ensure that the content can be managed. Defining and using categories will help with complex layouts.\n\n**Effort calculated by:**\n\nThe effort settings are put on tasks and calculated by stage. Change the efforts (verse per day) for the tasks to adapt progress. For more information: go to help section on the [Paratext web site](https://paratext.org/). For effort, there is not a different number of verses per day for easier or harder books. All effort settings in this plan are the same.\n\n## Drafting\n*Note to administrator: Please edit this description to define your team's specific process for this stage. You may want to include some or all of the following tasks.*\n\nCreate the first draft of study content\n* study notes\n* introductions\n* sidebars and articles",
         "tasks": [
           {
             "id": "044b17b7-2ea6-4077-afa7-1b3607863f9f",
@@ -6290,8 +7070,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "704889eb-0578-4a10-8ecc-fc4e7a1ccaf9",
-        "name": "review first draft",
-        "description": "## Comments by reviewer\n- insert project notes (flags)\n- assign notes to drafter\n- summarize issues for team discussion",
+        "name": "Initial review",
+        "description": "## Initial review\n\nThis stage ensures that everything is at the right place and not duplicated nor too much repeated, the content is accurate, coherent, and ready for broader review.\n\n*Note to administrator: Please edit this description to define your team's specific process for this stage. You may want to include tasks from the section below the horizontal line.*\n\n1. Task 1 description\n1. Task 2 description\n   - sub task 1\n   - sub task 2\n* Example notes\n\n---\n* Editors read contributors' work\n   - Check and correct the content (source texts, theology, concepts, references...)\n   - Make notes in Paratext\n   - Submit any work that the contributor still needs to do\n* Contributors refine/improve their work\n   - Take the editors' notes (Paratext) and insert them\n   - Return the work to the editor (Paratext)\n* The editors ensure that everything is at the right place\n   - Receive the revision from the contributor\n   - Inserting improvements\n   - Reading (team)",
         "tasks": [
           {
             "id": "52710316-309d-4a47-9173-4d1153c34a27",
@@ -6325,8 +7105,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "fae1bcdb-8ac5-4ce0-a28f-307d3492ee11",
-        "name": "team meeting",
-        "description": "### Discuss unresolved comments from stage #2\n- discuss issues (project notes) that are not resolved\n- prepare for editorial and consultant checking\n---\n### review, work on extra materials\n* thematic index\n* maps, tables",
+        "name": "Team review",
+        "description": "## Team review\n\n*Note to administrator: Please edit this description to define your team's specific process for this stage. You may want to include tasks from the section below the horizontal line.*\n\n1. Task 1 description\n1. Task 2 description\n   - sub task 1\n   - sub task 2\n* Example notes\n--- \n- Read the revised draft\n- The reader makes notes and give advice\n- Linguists improve the language\n- Collect the feedback according to the time agreed\n- Include comments from readers (team)\n- Insert improvements from contributors and linguists\n- Read the book",
         "tasks": [
           {
             "id": "ad5d7396-8a04-4406-aa83-422896332506",
@@ -6360,8 +7140,8 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
       },
       {
         "id": "1a3630e4-be85-4ba7-bbf8-ad5b7b64ca81",
-        "name": "consultant checking",
-        "description": "## Consultant checking\n- Check and finalize all the study materials (with team)\n---\nIn the final stage, the Translation Consultant (TC) and/or Global Translation Advisor (GTA) works closely with the editorial team to check and finalize all the study materials, ensuring that everything meets the highest standards of accuracy, clarity, and cultural relevance. \n\n* Sometimes, during the consultant checking sessions, we realise that some specific articles are still needed. In that case, we assign the task of producing it to the editorial team which has a better understanding of the reason why such extra material are needed.",
+        "name": "Final review",
+        "description": "## Final review\n*Note to administrator: Please edit this description to define your team's specific process for this stage. You may want to include tasks from the section below the horizontal line.*\n\n1. Task 1 description\n1. Task 2 description\n   - sub task 1\n   - sub task 2\n* Example notes\n---\n- Check and finalize all the study materials\n- Oral final reading\n- Final verification with a linguist\n- Final verification with the editor and CAP\n* GTA provides approval",
         "tasks": [
           {
             "id": "be393981-72a5-4299-8e80-1f6afb1fd898",
@@ -6408,6 +7188,67 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
         ]
       }
     ],
-    "checks": []
+    "checks": [
+      {
+        "checkId": "notes.translator",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "ee9fbe0a-b5c2-4180-babd-d21d88e60755"
+      },
+      {
+        "checkId": "basic.chapter-verse-numbers",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "ee9fbe0a-b5c2-4180-babd-d21d88e60755"
+      },
+      {
+        "checkId": "basic.markers",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "ee9fbe0a-b5c2-4180-babd-d21d88e60755"
+      },
+      {
+        "checkId": "basic.characters",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "ee9fbe0a-b5c2-4180-babd-d21d88e60755"
+      },
+      {
+        "checkId": "basic.punctuation",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "704889eb-0578-4a10-8ecc-fc4e7a1ccaf9"
+      },
+      {
+        "checkId": "basic.unmatched-pairs",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "704889eb-0578-4a10-8ecc-fc4e7a1ccaf9"
+      },
+      {
+        "checkId": "basic.capitalization",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "704889eb-0578-4a10-8ecc-fc4e7a1ccaf9"
+      },
+      {
+        "checkId": "basic.repeated-words",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "704889eb-0578-4a10-8ecc-fc4e7a1ccaf9"
+      },
+      {
+        "checkId": "basic.matched-pairs",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "704889eb-0578-4a10-8ecc-fc4e7a1ccaf9"
+      },
+      {
+        "checkId": "basic.numbers",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "704889eb-0578-4a10-8ecc-fc4e7a1ccaf9"
+      },
+      {
+        "checkId": "basic.references",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1a3630e4-be85-4ba7-bbf8-ad5b7b64ca81"
+      },
+      {
+        "checkId": "basic.quotations",
+        "notifyOnlyInStage": null,
+        "requiredInStage": "1a3630e4-be85-4ba7-bbf8-ad5b7b64ca81"
+      }
+    ]
   }
 ];

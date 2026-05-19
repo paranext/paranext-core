@@ -6,6 +6,10 @@ export {
   ProjectPlanDialogHierarchical,
   type ProjectPlanDialogHierarchicalProps,
 } from '@/components/advanced/project-plan-dialog/project-plan-dialog-hierarchical.component';
+export {
+  ProjectPlanDialogChecksMerged,
+  type ProjectPlanDialogChecksMergedProps,
+} from '@/components/advanced/project-plan-dialog/project-plan-dialog-checks-merged.component';
 export type {
   BookCountsByDifficulty,
   CheckCatalogItem,

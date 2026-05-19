@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ChevronDown,
   ChevronRight,
@@ -7,6 +7,7 @@ import {
   GripVertical,
   Plus,
   Trash2,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/shadcn-ui/button';
 import { Input } from '@/components/shadcn-ui/input';
@@ -25,7 +26,10 @@ import {
 } from '@/components/shadcn-ui/select';
 import { Textarea } from '@/components/shadcn-ui/textarea';
 import { cn } from '@/utils/shadcn-ui/utils';
+import { CHECK_GROUPS } from '@/components/advanced/project-plan-dialog/checks-tab.component';
 import type {
+  CheckCatalogItem,
+  CheckSetting,
   MarkCompleteMode,
   PlanStage,
   PlanTask,
@@ -33,11 +37,13 @@ import type {
   TaskStartCondition,
 } from '@/components/advanced/project-plan-dialog/types';
 
-interface HierarchicalStagesTasksProps {
+interface MergedStagesTasksChecksProps {
   stages: PlanStage[];
+  checks: CheckSetting[];
   onStagesChange: (updater: (prev: PlanStage[]) => PlanStage[]) => void;
   onStageChange: (next: PlanStage) => void;
   onTaskChange: (next: PlanTask) => void;
+  onChecksChange: (next: CheckSetting[]) => void;
 }
 
 const newId = () => `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -87,12 +93,18 @@ const requiresEditingOptions: { value: RequiresEditingMode; label: string }[] = 
   { value: 'scripture-text', label: 'Scripture Text' },
 ];
 
-export function HierarchicalStagesTasks({
+const CATALOG_BY_ID = new Map<string, CheckCatalogItem>();
+for (const group of CHECK_GROUPS) for (const item of group.items) CATALOG_BY_ID.set(item.id, item);
+const checkLabel = (id: string) => CATALOG_BY_ID.get(id)?.name ?? id;
+
+export function MergedStagesTasksChecks({
   stages,
+  checks,
   onStagesChange,
   onStageChange,
   onTaskChange,
-}: HierarchicalStagesTasksProps) {
+  onChecksChange,
+}: MergedStagesTasksChecksProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [dragSrc, setDragSrc] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
@@ -103,9 +115,7 @@ export function HierarchicalStagesTasks({
     stageIdx: number;
     taskIdx: number;
   } | null>(null);
-
-  const toggle = (id: string) =>
-    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
+  const toggle = (id: string) => setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const taskDragHandlers = (stageIdx: number, taskIdx: number, taskId: string) => ({
     draggable: true,
@@ -123,19 +133,13 @@ export function HierarchicalStagesTasks({
         e.preventDefault();
         e.stopPropagation();
         e.dataTransfer.dropEffect = 'move';
-        if (
-          taskDragOver?.stageIdx !== stageIdx ||
-          taskDragOver?.taskIdx !== taskIdx
-        ) {
+        if (taskDragOver?.stageIdx !== stageIdx || taskDragOver?.taskIdx !== taskIdx) {
           setTaskDragOver({ stageIdx, taskIdx });
         }
       }
     },
     onDragLeave: () => {
-      if (
-        taskDragOver?.stageIdx === stageIdx &&
-        taskDragOver?.taskIdx === taskIdx
-      ) {
+      if (taskDragOver?.stageIdx === stageIdx && taskDragOver?.taskIdx === taskIdx) {
         setTaskDragOver(null);
       }
     },
@@ -216,20 +220,29 @@ export function HierarchicalStagesTasks({
     setExpanded((prev) => ({ ...prev, [task.id]: true }));
   };
 
-  const moveStage = (index: number, dir: -1 | 1) => {
+  const moveStage = (index: number, dir: -1 | 1) =>
     onStagesChange((prev) => moveItem(prev, index, index + dir));
-  };
 
-  const moveTask = (stageIndex: number, taskIndex: number, dir: -1 | 1) => {
+  const moveTask = (stageIndex: number, taskIndex: number, dir: -1 | 1) =>
     onStagesChange((prev) =>
       prev.map((s, i) =>
         i === stageIndex ? { ...s, tasks: moveItem(s.tasks, taskIndex, taskIndex + dir) } : s,
       ),
     );
-  };
 
-  const removeStage = (id: string) =>
+  const removeStage = (id: string) => {
     onStagesChange((prev) => prev.filter((s) => s.id !== id));
+    // Strip references to the removed stage from check settings
+    onChecksChange(
+      checks
+        .map((c) => ({
+          ...c,
+          notifyOnlyInStage: c.notifyOnlyInStage === id ? null : c.notifyOnlyInStage,
+          requiredInStage: c.requiredInStage === id ? null : c.requiredInStage,
+        }))
+        .filter((c) => c.notifyOnlyInStage !== null || c.requiredInStage !== null),
+    );
+  };
 
   const removeTask = (stageId: string, taskId: string) =>
     onStagesChange((prev) =>
@@ -255,6 +268,8 @@ export function HierarchicalStagesTasks({
         <ul className="tw:flex tw:flex-col tw:gap-1">
           {stages.map((stage, stageIndex) => {
             const stageOpen = !!expanded[stage.id];
+            const requiredChecks = checks.filter((c) => c.requiredInStage === stage.id);
+            const notifyChecks = checks.filter((c) => c.notifyOnlyInStage === stage.id);
             const isDragging = dragSrc === stageIndex;
             const isDropTarget =
               dragOver === stageIndex && dragSrc !== null && dragSrc !== stageIndex;
@@ -273,7 +288,7 @@ export function HierarchicalStagesTasks({
                   open={stageOpen}
                   onToggle={() => toggle(stage.id)}
                   name={stage.name || '(unnamed stage)'}
-                  subtitle={`${stage.tasks.length} task${stage.tasks.length === 1 ? '' : 's'}`}
+                  subtitle={`${stage.tasks.length} task${stage.tasks.length === 1 ? '' : 's'} • ${requiredChecks.length} required check${requiredChecks.length === 1 ? '' : 's'}`}
                   onMoveUp={() => moveStage(stageIndex, -1)}
                   onMoveDown={() => moveStage(stageIndex, 1)}
                   upDisabled={stageIndex === 0}
@@ -282,8 +297,16 @@ export function HierarchicalStagesTasks({
                 />
 
                 {stageOpen && (
-                  <div className="tw:border-t tw:p-3">
+                  <div className="tw:flex tw:flex-col tw:gap-4 tw:border-t tw:p-3">
                     <StageInlineForm stage={stage} onChange={onStageChange} />
+                    <StageChecks
+                      stage={stage}
+                      stages={stages}
+                      checks={checks}
+                      onChecksChange={onChecksChange}
+                      requiredChecks={requiredChecks}
+                      notifyChecks={notifyChecks}
+                    />
                   </div>
                 )}
 
@@ -313,7 +336,7 @@ export function HierarchicalStagesTasks({
                           open={taskOpen}
                           onToggle={() => toggle(task.id)}
                           name={task.name || '(unnamed task)'}
-                          subtitle={summarizeTask(task)}
+                          subtitle={`Mark: ${markCompleteOptions.find((o) => o.value === task.markComplete)?.label ?? task.markComplete}`}
                           onMoveUp={() => moveTask(stageIndex, taskIndex, -1)}
                           onMoveDown={() => moveTask(stageIndex, taskIndex, 1)}
                           upDisabled={taskIndex === 0}
@@ -321,7 +344,6 @@ export function HierarchicalStagesTasks({
                           onDelete={() => removeTask(stage.id, task.id)}
                           rightExtras={<EffortPopover task={task} onChange={onTaskChange} />}
                         />
-
                         {taskOpen && (
                           <div className="tw:border-t tw:p-3">
                             <TaskInlineForm task={task} onChange={onTaskChange} />
@@ -351,9 +373,221 @@ export function HierarchicalStagesTasks({
   );
 }
 
-function summarizeTask(task: PlanTask): string {
-  const mc = markCompleteOptions.find((o) => o.value === task.markComplete)?.label ?? task.markComplete;
-  return `Mark: ${mc}`;
+interface StageChecksProps {
+  stage: PlanStage;
+  stages: PlanStage[];
+  checks: CheckSetting[];
+  onChecksChange: (next: CheckSetting[]) => void;
+  requiredChecks: CheckSetting[];
+  notifyChecks: CheckSetting[];
+}
+
+function StageChecks({
+  stage,
+  stages,
+  checks,
+  onChecksChange,
+  requiredChecks,
+  notifyChecks,
+}: StageChecksProps) {
+  const upsert = (checkId: string, patch: Partial<CheckSetting>) => {
+    const existing = checks.find((c) => c.checkId === checkId);
+    if (existing) {
+      onChecksChange(
+        checks
+          .map((c) => (c.checkId === checkId ? { ...c, ...patch } : c))
+          .filter((c) => c.notifyOnlyInStage !== null || c.requiredInStage !== null),
+      );
+    } else {
+      onChecksChange([
+        ...checks,
+        { checkId, notifyOnlyInStage: null, requiredInStage: null, ...patch },
+      ]);
+    }
+  };
+
+  const setRequired = (checkId: string) => upsert(checkId, { requiredInStage: stage.id });
+  const unsetRequired = (checkId: string) => upsert(checkId, { requiredInStage: null });
+  const setNotify = (checkId: string) => upsert(checkId, { notifyOnlyInStage: stage.id });
+  const unsetNotify = (checkId: string) => upsert(checkId, { notifyOnlyInStage: null });
+
+  return (
+    <div className="tw:flex tw:flex-col tw:gap-3 tw:rounded tw:border tw:bg-muted/30 tw:p-3">
+      <div className="tw:flex tw:items-center tw:gap-2">
+        <span className="tw:text-sm tw:font-semibold">Checks</span>
+        <span className="tw:text-xs tw:text-muted-foreground">
+          Configure which checks fire for this stage
+        </span>
+      </div>
+
+      <ChecksRow
+        title="Required to leave this stage"
+        helpText="Checks must pass before the next stage can begin."
+        items={requiredChecks}
+        onRemove={unsetRequired}
+        addPopover={
+          <AddCheckPopover
+            label="Add required check"
+            stage={stage}
+            stages={stages}
+            checks={checks}
+            slot="required"
+            onPick={setRequired}
+          />
+        }
+      />
+
+      <ChecksRow
+        title="Notify only (optional) in this stage"
+        helpText="Errors surface in All Tasks / My Tasks, but do not block progression."
+        items={notifyChecks}
+        onRemove={unsetNotify}
+        addPopover={
+          <AddCheckPopover
+            label="Add notify-only check"
+            stage={stage}
+            stages={stages}
+            checks={checks}
+            slot="notify"
+            onPick={setNotify}
+          />
+        }
+      />
+    </div>
+  );
+}
+
+interface ChecksRowProps {
+  title: string;
+  helpText: string;
+  items: CheckSetting[];
+  onRemove: (checkId: string) => void;
+  addPopover: React.ReactNode;
+}
+
+function ChecksRow({ title, helpText, items, onRemove, addPopover }: ChecksRowProps) {
+  return (
+    <div className="tw:flex tw:flex-col tw:gap-1">
+      <div className="tw:flex tw:items-baseline tw:justify-between tw:gap-2">
+        <div>
+          <div className="tw:text-sm tw:font-medium">{title}</div>
+          <div className="tw:text-xs tw:text-muted-foreground">{helpText}</div>
+        </div>
+        {addPopover}
+      </div>
+      <div className="tw:flex tw:flex-wrap tw:gap-1">
+        {items.length === 0 ? (
+          <span className="tw:text-xs tw:italic tw:text-muted-foreground">None</span>
+        ) : (
+          items.map((c) => (
+            <span
+              key={c.checkId}
+              className="tw:inline-flex tw:items-center tw:gap-1 tw:rounded-full tw:border tw:bg-background tw:px-2 tw:py-0.5 tw:text-xs"
+            >
+              {checkLabel(c.checkId)}
+              <button
+                type="button"
+                aria-label={`Remove ${checkLabel(c.checkId)}`}
+                onClick={() => onRemove(c.checkId)}
+                className="tw:rounded tw:p-0.5 tw:hover:bg-accent"
+              >
+                <X className="tw:h-3 tw:w-3" />
+              </button>
+            </span>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface AddCheckPopoverProps {
+  label: string;
+  stage: PlanStage;
+  stages: PlanStage[];
+  checks: CheckSetting[];
+  slot: 'required' | 'notify';
+  onPick: (checkId: string) => void;
+}
+
+function AddCheckPopover({
+  label,
+  stage,
+  stages,
+  checks,
+  slot,
+  onPick,
+}: AddCheckPopoverProps) {
+  const [open, setOpen] = useState(false);
+  const currentStageIdx = stages.findIndex((s) => s.id === stage.id);
+  const assigned = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of checks) {
+      if (slot === 'required' && c.requiredInStage === stage.id) set.add(c.checkId);
+      if (slot === 'notify' && c.notifyOnlyInStage === stage.id) set.add(c.checkId);
+    }
+    return set;
+  }, [checks, stage.id, slot]);
+  // For the notify-only slot, exclude checks whose `requiredInStage` lives in this stage or any
+  // earlier stage. A notify-only assignment after-or-at the required stage adds no value: the
+  // check is already required by the time you reach this stage.
+  const excludedByOrdering = useMemo(() => {
+    if (slot !== 'notify' || currentStageIdx < 0) return new Set<string>();
+    const set = new Set<string>();
+    for (const c of checks) {
+      if (!c.requiredInStage) continue;
+      const reqIdx = stages.findIndex((s) => s.id === c.requiredInStage);
+      if (reqIdx >= 0 && reqIdx <= currentStageIdx) set.add(c.checkId);
+    }
+    return set;
+  }, [checks, stages, currentStageIdx, slot]);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button size="sm" variant="ghost" className="tw:h-7 tw:text-xs">
+          <Plus className="tw:me-1 tw:h-3 tw:w-3" />
+          {label}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        style={{ zIndex: 600 }}
+        className="tw:max-h-96 tw:w-80 tw:overflow-auto"
+      >
+        <div className="tw:flex tw:flex-col tw:gap-3">
+          {CHECK_GROUPS.map((group) => {
+            const available = group.items.filter(
+              (item) => !assigned.has(item.id) && !excludedByOrdering.has(item.id),
+            );
+            if (available.length === 0) return null;
+            return (
+              <div key={group.id} className="tw:flex tw:flex-col tw:gap-1">
+                <div className="tw:text-xs tw:font-semibold tw:text-muted-foreground">
+                  {group.label}
+                </div>
+                <div className="tw:flex tw:flex-col">
+                  {available.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        onPick(item.id);
+                        setOpen(false);
+                      }}
+                      className="tw:rounded tw:px-2 tw:py-1 tw:text-start tw:text-sm tw:hover:bg-accent"
+                    >
+                      {item.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 interface RowHeaderProps {
@@ -638,4 +872,4 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export default HierarchicalStagesTasks;
+export default MergedStagesTasksChecks;
