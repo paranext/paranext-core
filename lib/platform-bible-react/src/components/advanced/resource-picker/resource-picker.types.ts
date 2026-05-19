@@ -17,8 +17,14 @@ export type ItemStatus =
   /** Not on disk; clicking starts a background download and moves the item to `included`. */
   | { kind: 'available' };
 
+/**
+ * A resource paired with its project-membership status. This is the shape both
+ * {@link ResourcePicker} and {@link ResourcePickerCompact} accept in their `items` prop.
+ */
 export interface ResourceItem {
+  /** The DBL-sourced resource metadata. */
   data: DblResourceData;
+  /** Whether the resource is included in the project, only installed, or only available. */
   status: ItemStatus;
 }
 

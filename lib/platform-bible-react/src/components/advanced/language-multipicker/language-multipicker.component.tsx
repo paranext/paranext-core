@@ -14,6 +14,7 @@ import {
 export { LANGUAGE_MULTIPICKER_STRING_KEYS };
 export type { LanguageMultipickerLocalizedStrings };
 
+/** Props for {@link LanguageMultipicker}. */
 export interface LanguageMultipickerProps {
   /** Currently-selected language names. An empty array means "no filter applied" (i.e. "Any"). */
   value: string[];

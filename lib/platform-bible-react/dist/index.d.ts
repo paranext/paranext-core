@@ -1021,23 +1021,37 @@ export interface SelectMenuItemHandler {
 	(selectedMenuItem: MenuItemContainingCommand): void;
 }
 /**
- * Localization keys used by {@link ResourcePickerDialog}. Pass to `useLocalizedStrings` and forward
- * the result as the `localizedStrings` prop.
+ * Localization keys used by {@link ResourcePickerDialog}. The dialog forwards everything except the
+ * title to the underlying {@link ResourcePicker}, so this is `%resourcePicker_title%` plus the
+ * picker's full key set. Pass to `useLocalizedStrings` and forward the result as the
+ * `localizedStrings` prop.
  */
 export declare const RESOURCE_PICKER_DIALOG_STRING_KEYS: readonly [
 	"%resourcePicker_title%",
-	"%resourcePicker_section_already_selected%",
-	"%resourcePicker_section_installed%",
-	"%resourcePicker_section_available_to_download%",
-	"%resourcePicker_button_use%",
-	"%resourcePicker_no_results%",
 	"%resourcePicker_search_placeholder%",
-	"%resourcePicker_language_filter_any%",
-	"%resourcePicker_language_filter_multipleSelected%",
-	"%resourcePicker_showing_count%"
+	"%resourcePicker_group_included%",
+	"%resourcePicker_group_installed%",
+	"%resourcePicker_group_available%",
+	"%resourcePicker_group_maybeYouMeant%",
+	"%resourcePicker_empty_nothingIncluded%",
+	"%resourcePicker_empty_noMatches%",
+	"%resourcePicker_empty_noResults%",
+	"%resourcePicker_listbox_label%",
+	"%resourcePicker_status_downloading%",
+	"%resourcePicker_status_installed%",
+	"%resourcePicker_status_available%",
+	"%resourcePicker_lock_short%",
+	"%resourcePicker_lock_tooltipTitle%",
+	"%resourcePicker_lock_tooltipBody%",
+	"%resourcePicker_chip_ariaLabel%",
+	"%resourcePicker_chip_tooltipHint%",
+	"%resourcePicker_row_remove%",
+	"%resourcePicker_row_remove_keyboardHint%",
+	"%resourcePicker_compact_browseLibrary%",
+	"%resourcePicker_compact_empty%"
 ];
 /**
- * Map of localized strings required by {@link ResourcePickerDialog}. Derive from
+ * Map of localized strings required by {@link ResourcePickerDialog}. Derived from
  * {@link RESOURCE_PICKER_DIALOG_STRING_KEYS}.
  */
 export type ResourcePickerDialogLocalizedStrings = {
@@ -1045,33 +1059,403 @@ export type ResourcePickerDialogLocalizedStrings = {
 };
 /** Props for {@link ResourcePickerDialog} */
 export interface ResourcePickerDialogProps {
-	/** Full list of DBL resources fetched by the caller via PAPI */
+	/** Full list of DBL resources fetched by the caller via PAPI. */
 	allResources: DblResourceData[];
-	/** Whether the `allResources` is still loading */
+	/** Whether `allResources` is still loading. When true, a spinner replaces the picker body. */
 	isResourcesLoading?: boolean;
-	/** If provided, only resources of this type are shown */
+	/** If provided, only resources of this type are shown. */
 	resourceType?: ResourceType;
-	/** IDs of resources already selected in the calling panel */
+	/** IDs of resources already selected (i.e. attached to the calling project). */
 	selectedResourceIds?: string[];
-	/** Localized strings — use RESOURCE_PICKER_DIALOG_STRING_KEYS with useLocalizedStrings */
+	/** Localized strings — use `RESOURCE_PICKER_DIALOG_STRING_KEYS` with `useLocalizedStrings`. */
 	localizedStrings: ResourcePickerDialogLocalizedStrings;
-	/** Called when the user clicks "Use" on a resource entry */
+	/** Called when the user picks a resource to add to the calling project. */
 	onSelect: (resource: DblResourceData) => void;
 }
 /**
- * Presentational dialog content for picking a DBL resource. Renders three sections — Already
- * Selected, Installed, and Available to Download — derived from `allResources` and
- * `selectedResourceIds`. Supports text search and language filtering.
+ * Presentational dialog content for picking a DBL resource to add to a project. Renders a
+ * {@link ResourcePicker} (the full library view) inside dialog chrome. Search, language filtering,
+ * and the Included / On-your-computer / Available-to-download grouping all come from the underlying
+ * picker.
  *
- * Does not include an outer `Dialog` or `DialogContent` wrapper; the host (paranext-core dialog
- * infrastructure or a Storybook decorator) is responsible for providing that context.
+ * The dialog scopes the picker to "library" semantics:
+ *
+ * - **No remove affordance.** `allowRemove={false}` — the dialog's contract is "pick something to
+ *   add"; remove is the calling surface's concern.
+ * - **`onSelect` fires only on add.** The picker's `toggleDisplay` action (clicks on already-
+ *   included rows) is ignored here, since included rows in this context exist for context only.
+ *
+ * Does not include an outer `Dialog` / `DialogContent`; the host (paranext-core dialog
+ * infrastructure or a Storybook decorator) provides that.
  *
  * Obtain localized strings by passing {@link RESOURCE_PICKER_DIALOG_STRING_KEYS} to
- * `useLocalizedStrings` and forwarding the result as `localizedStrings`.
- *
- * @param props See {@link ResourcePickerDialogProps}
+ * `useLocalizedStrings` and forwarding the result.
  */
 export function ResourcePickerDialog({ allResources, isResourcesLoading, resourceType, selectedResourceIds, localizedStrings, onSelect, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Status of an item relative to the current project.
+ *
+ * "Currently displayed" lives on the host (it's calling-surface state, not picker state). The
+ * picker takes `displayedIds` as a prop and emphasizes those rows; clicks on an included row emit
+ * `toggleDisplay` for the host to interpret per its own single- or multi-select policy.
+ */
+export type ItemStatus = 
+/** Included in project. `lockedIncluded` items cannot be removed. */
+{
+	kind: "included";
+	lockedIncluded?: boolean;
+	downloading?: boolean;
+}
+/** On disk, not yet included. */
+ | {
+	kind: "installed";
+}
+/** Not on disk; clicking starts a background download and moves the item to `included`. */
+ | {
+	kind: "available";
+};
+/**
+ * A resource paired with its project-membership status. This is the shape both
+ * {@link ResourcePicker} and {@link ResourcePickerCompact} accept in their `items` prop.
+ */
+export interface ResourceItem {
+	/** The DBL-sourced resource metadata. */
+	data: DblResourceData;
+	/** Whether the resource is included in the project, only installed, or only available. */
+	status: ItemStatus;
+}
+/**
+ * Actions the picker emits. The host owns state for items + which are displayed and decides what to
+ * do for each action. The host is also responsible for closing the picker — neither variant (full
+ * or compact) closes itself in response to actions.
+ */
+export type PickerAction = 
+/** Click on an included row — host toggles this item's "displayed" state. */
+{
+	type: "toggleDisplay";
+	item: ResourceItem;
+}
+/** Click on an installed or available row — host adds the item to the project. */
+ | {
+	type: "include";
+	item: ResourceItem;
+}
+/** Remove icon or Delete key — host removes the (non-locked) item from the project. */
+ | {
+	type: "remove";
+	item: ResourceItem;
+};
+/**
+ * The subset of actions that {@link ResourcePickerCompact} can emit. The compact variant only shows
+ * already-included items, so `include` is impossible.
+ */
+export type CompactPickerAction = Extract<PickerAction, {
+	type: "toggleDisplay" | "remove";
+}>;
+/**
+ * Localized strings shared by {@link ResourcePicker} and {@link ResourcePickerCompact}.
+ *
+ * Each key carries a `// meaning:` comment describing _what the string is for_ — not just how it's
+ * translated. Translators and future devs should read the comment before changing the English
+ * default. The English defaults serve as a reference implementation; they're applied automatically
+ * when a key isn't provided in `localizedStrings`.
+ *
+ * Usage:
+ *
+ * 1. Pass `RESOURCE_PICKER_STRING_KEYS` to `useLocalizedStrings` (or your localization hook).
+ * 2. Forward the result as the component's `localizedStrings` prop.
+ */
+export declare const RESOURCE_PICKER_STRING_KEYS: readonly [
+	"%resourcePicker_search_placeholder%",
+	"%resourcePicker_group_included%",
+	"%resourcePicker_group_installed%",
+	"%resourcePicker_group_available%",
+	"%resourcePicker_group_maybeYouMeant%",
+	"%resourcePicker_empty_nothingIncluded%",
+	"%resourcePicker_empty_noMatches%",
+	"%resourcePicker_empty_noResults%",
+	"%resourcePicker_listbox_label%",
+	"%resourcePicker_status_downloading%",
+	"%resourcePicker_status_installed%",
+	"%resourcePicker_status_available%",
+	"%resourcePicker_lock_short%",
+	"%resourcePicker_lock_tooltipTitle%",
+	"%resourcePicker_lock_tooltipBody%",
+	"%resourcePicker_chip_ariaLabel%",
+	"%resourcePicker_chip_tooltipHint%",
+	"%resourcePicker_row_remove%",
+	"%resourcePicker_row_remove_keyboardHint%",
+	"%resourcePicker_compact_browseLibrary%",
+	"%resourcePicker_compact_empty%"
+];
+export type ResourcePickerLocalizedStrings = {
+	[k in (typeof RESOURCE_PICKER_STRING_KEYS)[number]]?: string;
+};
+/** Props for {@link ResourcePicker}. */
+export interface ResourcePickerProps {
+	/** Full set of resources the user can act on — included, installed, and available. */
+	items: ResourceItem[];
+	/**
+	 * IDs of items currently displayed on the calling surface. Single-select hosts pass 0 or 1 entry;
+	 * multi-select hosts pass any number. The picker emphasizes these rows visually and emits
+	 * `toggleDisplay` on click — the host applies its own single/multi semantics.
+	 */
+	displayedIds?: string[];
+	/**
+	 * Preferred languages for filtering (typically the user's UI language + any languages they read).
+	 * Drives the default state of the language filter and unlocks the "Preferred" preset.
+	 */
+	preferredLanguages?: string[];
+	/**
+	 * If provided, restricts the picker to items whose `data.type` matches one of these. Useful for
+	 * scoping a picker to a specific kind of resource (e.g. scripture texts only, commentaries only).
+	 * When omitted, every item is eligible.
+	 */
+	allowedResourceTypes?: ResourceType[];
+	/**
+	 * Hide the X (remove) affordance on included rows. Use in surfaces that are read-mostly or where
+	 * remove is reachable through another control. Defaults to `true` (X is shown).
+	 */
+	allowRemove?: boolean;
+	/** Receives every user action. Host updates `items` and `displayedIds` accordingly. */
+	onAction: (action: PickerAction) => void;
+	/** Localized strings; pass `RESOURCE_PICKER_STRING_KEYS` to `useLocalizedStrings`. */
+	localizedStrings?: ResourcePickerLocalizedStrings;
+}
+/**
+ * # Resource picker (full)
+ *
+ * The library-style picker showing every resource — included, installed, and available to download
+ * — for managing project membership. Use this as the body of a modal or a wide panel.
+ *
+ * For the in-context single-select dropdown that switches _which_ included resource is shown (and
+ * links out to this picker via a "Browse library" button), see {@link ResourcePickerCompact}.
+ *
+ * ## What it shows
+ *
+ * Three groups of resources, top-to-bottom:
+ *
+ * 1. **Included** — already attached to the project. Click a row to ask the host to show/hide that
+ *    resource on the calling surface. Hover or focus a non-locked row to reveal an X that removes
+ *    the resource from the project (or press `Delete`/`Backspace`).
+ * 2. **On your computer** — already local but not yet in this project. Click to include AND display.
+ * 3. **Available to download** — not local. Click to download, include, AND display. A spinner appears
+ *    on the row while the download is in progress.
+ *
+ * When a search produces few in-filter results, a "Maybe you meant…" section is appended with
+ * out-of-filter matches.
+ *
+ * ## Why this picker is presentational
+ *
+ * The host owns `items`, `displayedIds`, the project state, and the surrounding modal's open state.
+ * Every interaction emits a `PickerAction`; the picker never mutates state or closes itself. That
+ * keeps single-select vs multi-select, auto-display vs explicit-display, and "should the surface
+ * close on this action?" entirely the host's policy.
+ *
+ * ## Keyboard model
+ *
+ * The list is a `listbox` with roving tabindex:
+ *
+ * | Key                    | Effect                                     |
+ * | ---------------------- | ------------------------------------------ |
+ * | `↓` / `↑`              | Move focus to next / previous row          |
+ * | `Home` / `End`         | Move focus to first / last row             |
+ * | `Enter` / `Space`      | Activate the focused row's primary action  |
+ * | `Delete` / `Backspace` | Remove the focused non-locked included row |
+ * | `Tab`                  | Leave the list (search, language filter)   |
+ *
+ * Focus is preserved across action-driven re-renders.
+ *
+ * ## Responsive collapse
+ *
+ * Uses container queries so each row decides its layout based on the picker's container width:
+ *
+ * - `<480px` → language chip collapses to a monospace 3-letter code
+ * - `<360px` → resource name collapses to its abbreviation
+ *
+ * Tooltips carry the full information.
+ */
+export declare function ResourcePicker({ items, displayedIds, preferredLanguages, allowedResourceTypes, allowRemove, onAction, localizedStrings, }: ResourcePickerProps): import("react/jsx-runtime").JSX.Element;
+/** Props for {@link ResourcePickerCompact}. */
+export interface ResourcePickerCompactProps {
+	/** Full set of resources. Only `included` items render in the compact list. */
+	items: ResourceItem[];
+	/**
+	 * IDs of items currently displayed on the calling surface. The picker emphasizes these rows and
+	 * emits `toggleDisplay` on click — the host applies its own single/multi semantics.
+	 */
+	displayedIds?: string[];
+	/**
+	 * If provided, restricts the list to items whose `data.type` matches one of these. Useful for
+	 * scoping the picker to a specific kind of resource (e.g. scripture texts only).
+	 */
+	allowedResourceTypes?: ResourceType[];
+	/**
+	 * Label for the footer button that opens the broader library surface. Pass a pre-localized string
+	 * — e.g. `"Browse all scripture texts"` for a scripture-only picker. Falls back to
+	 * `%resourcePicker_compact_browseLibrary%` ("Browse library") when omitted.
+	 */
+	browseLabel?: string;
+	/**
+	 * Fires when the user clicks the footer button. Host opens the full library surface (typically a
+	 * dialog rendering {@link ResourcePicker}). The compact popover closes automatically before this
+	 * is called.
+	 */
+	onBrowse: () => void;
+	/**
+	 * Receives clicks on included rows and the X (remove) button. The compact picker only emits
+	 * `toggleDisplay` and `remove` — `include` is not possible because installed/available items
+	 * aren't shown.
+	 */
+	onAction: (action: CompactPickerAction) => void;
+	/** The element that opens the popover. Slotted into `PopoverTrigger asChild`. */
+	trigger: React$1.ReactNode;
+	/**
+	 * Controlled open state. Omit to let the popover manage its own state; provide both `open` and
+	 * `onOpenChange` to control it from the host (e.g. to bridge into a modal).
+	 */
+	open?: boolean;
+	/** Fires when the controlled open state changes. Pair with `open`. */
+	onOpenChange?: (open: boolean) => void;
+	/**
+	 * Where the popover anchors relative to the trigger. Defaults to `end` to match the common
+	 * "trigger on the right side of a toolbar" pattern.
+	 */
+	align?: "start" | "center" | "end";
+	/**
+	 * Width of the popover content area. Defaults to `'18rem'`. Pass a number for pixels or a full
+	 * CSS length string.
+	 */
+	width?: number | string;
+	localizedStrings?: ResourcePickerLocalizedStrings;
+}
+/**
+ * # Resource picker (compact)
+ *
+ * A single-select-style dropdown for switching **which included resource is currently shown** on
+ * the calling surface, with a footer "Browse library" affordance that hands off to the full library
+ * surface for project-membership management.
+ *
+ * The compact picker is the everyday surface — opens from a toolbar button, lets the user pick one
+ * of the resources already in the project, closes on selection. The full {@link ResourcePicker}
+ * (rendered inside a dialog) is the deeper surface for adding, removing, and discovering resources
+ * across the whole catalog.
+ *
+ * ## What it shows
+ *
+ * Only the `included` items from `items` — filtered further by `allowedResourceTypes` if provided.
+ * Each row uses the same internal `ResourcePickerItem` as the full picker, so visuals (status icon,
+ * name, language chip, remove affordance) stay consistent across surfaces.
+ *
+ * A footer button labeled `Browse library` (or the consumer-provided `browseLabel`) opens the
+ * broader library — the host handles what that means (typically a dialog).
+ *
+ * ## Action model
+ *
+ * - Click an included row → `onAction({ type: 'toggleDisplay', item })`. The popover closes.
+ * - Click the X on a non-locked included row → `onAction({ type: 'remove', item })`. The popover
+ *   stays open so the user can pick another.
+ * - Press `Delete` / `Backspace` while a non-locked included row is focused → same `remove`.
+ * - Click the footer button → popover closes, then `onBrowse` fires.
+ *
+ * The picker always emits actions uniformly; if the host doesn't want re-click of the currently
+ * displayed item to do anything, it can no-op on `toggleDisplay` of an already-displayed id.
+ *
+ * ## Open state
+ *
+ * Uncontrolled by default. Pass both `open` and `onOpenChange` to control it (e.g. to keep the
+ * popover open while a dialog is mounted, or to gate it behind some other host policy).
+ */
+export declare function ResourcePickerCompact({ items, displayedIds, allowedResourceTypes, browseLabel, onBrowse, onAction, trigger, open: controlledOpen, onOpenChange: controlledOnOpenChange, align, width, localizedStrings, }: ResourcePickerCompactProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Localized strings for `LanguageMultipicker`. Each key has a `// meaning:` comment describing
+ * _intent_ — what the string communicates, not just how it translates.
+ */
+export declare const LANGUAGE_MULTIPICKER_STRING_KEYS: readonly [
+	"%languageMultipicker_preset_any%",
+	"%languageMultipicker_preset_preferred%",
+	"%languageMultipicker_trigger_manyLanguages%",
+	"%languageMultipicker_trigger_ariaLabel%"
+];
+export type LanguageMultipickerLocalizedStrings = {
+	[k in (typeof LANGUAGE_MULTIPICKER_STRING_KEYS)[number]]?: string;
+};
+/** Props for {@link LanguageMultipicker}. */
+export interface LanguageMultipickerProps {
+	/** Currently-selected language names. An empty array means "no filter applied" (i.e. "Any"). */
+	value: string[];
+	/** Languages available for the user to pick from. */
+	options: string[];
+	/**
+	 * Preset list of languages that represent the user's preferred set — typically languages they can
+	 * read, including their current UI language. When `value` matches `preferred` exactly, the
+	 * trigger label collapses to a single word ("Preferred"). Clicking the Preferred preset inside
+	 * the popover replaces the selection with this list. Omit to hide the preset.
+	 */
+	preferred?: string[];
+	/** Fires when the user changes the selection (toggling a language or picking a preset). */
+	onChange: (next: string[]) => void;
+	/** Localized strings; see `LANGUAGE_MULTIPICKER_STRING_KEYS`. */
+	localizedStrings?: LanguageMultipickerLocalizedStrings;
+	/** Forwarded to the trigger button — useful for tuning spacing in a search row. */
+	triggerClassName?: string;
+}
+/**
+ * Compact, tertiary multi-select for filtering a list by **content language**.
+ *
+ * Designed to sit next to a search input and stay quiet visually until the user interacts. The
+ * trigger button shrinks its label aggressively so a long list of selected languages doesn't crowd
+ * out the search field.
+ *
+ * # When to use it
+ *
+ * Whenever a list of content items (scripture texts, handbooks, commentaries, …) needs a language
+ * filter. Not for picking the **UI language** of the application itself — use `UiLanguageSelector`
+ * for that.
+ *
+ * # The "Preferred" preset
+ *
+ * "Preferred" is the set of languages the user is treated as reading. It is **not** sourced from a
+ * profile-stored preference list — it is **derived from the user's content footprint**: the union
+ * of the languages of the resources and projects they've engaged with. The definition is specified
+ * in [PT-3980](https://paratextstudio.atlassian.net/browse/PT-3980).
+ *
+ * Surfacing it as a single named preset makes the most common case ("only show me texts in
+ * languages I can read") one click away, without forcing the user to enumerate.
+ *
+ * If the parent component doesn't know the user's preferred languages (e.g. brand-new user with no
+ * content history), omit the `preferred` prop — the preset disappears from the popover and the
+ * trigger label never collapses to "Preferred".
+ *
+ * # Trigger label degradation
+ *
+ * The trigger button has limited horizontal space (it sits next to a search input). Its label
+ * adapts as the selection grows, from most-readable to most-compact:
+ *
+ * | Condition                   | Trigger label |
+ * | --------------------------- | ------------- |
+ * | 0 selected                  | `Any`         |
+ * | matches `preferred` exactly | `Preferred`   |
+ * | 1 selected                  | `en` (BCP-47) |
+ * | space-separated codes fit   | `en es fr`    |
+ * | otherwise                   | `5 langs`     |
+ *
+ * # Language codes
+ *
+ * Uses BCP-47 tags throughout — the same standard the rest of platform-bible uses. See
+ * `language-info.ts` for the placeholder data source.
+ *
+ * # Known gaps before this is a fully-featured system component
+ *
+ * - Should accept `LanguageInfo[]` (or an async loader) rather than just language names, so callers
+ *   don't have to look the metadata up separately.
+ * - Needs virtualization + an in-popover search input to handle the thousands of languages a real
+ *   source will provide.
+ * - Should handle RTL autonyms (Hebrew, Arabic, …) with proper bidi isolation.
+ *
+ * These are tracked for the eventual extraction into a system-wide content-language picker.
+ */
+export declare function LanguageMultipicker({ value, options, preferred, onChange, localizedStrings, triggerClassName, }: LanguageMultipickerProps): import("react/jsx-runtime").JSX.Element;
 export type SelectedSettingsSidebarItem = {
 	label: string;
 	projectId?: string;
@@ -2939,6 +3323,7 @@ export declare const Z_INDEX_MODAL = 500;
 export declare function cn(...inputs: ClassValue[]): string;
 
 export {
+	ResourceType,
 	TabNavigationContentSearch as NavigationContentSearch,
 	Toaster as Sonner,
 	sonner,

@@ -26,6 +26,7 @@ import {
 export { RESOURCE_PICKER_STRING_KEYS };
 export type { ResourcePickerLocalizedStrings };
 
+/** Props for {@link ResourcePicker}. */
 export interface ResourcePickerProps {
   /** Full set of resources the user can act on — included, installed, and available. */
   items: ResourceItem[];

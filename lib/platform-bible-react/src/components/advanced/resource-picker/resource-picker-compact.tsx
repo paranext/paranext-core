@@ -22,6 +22,7 @@ import {
   localizeResourcePicker as L,
 } from './resource-picker.strings';
 
+/** Props for {@link ResourcePickerCompact}. */
 export interface ResourcePickerCompactProps {
   /** Full set of resources. Only `included` items render in the compact list. */
   items: ResourceItem[];
@@ -60,6 +61,7 @@ export interface ResourcePickerCompactProps {
    * `onOpenChange` to control it from the host (e.g. to bridge into a modal).
    */
   open?: boolean;
+  /** Fires when the controlled open state changes. Pair with `open`. */
   onOpenChange?: (open: boolean) => void;
   /**
    * Where the popover anchors relative to the trigger. Defaults to `end` to match the common
@@ -89,7 +91,7 @@ export interface ResourcePickerCompactProps {
  * ## What it shows
  *
  * Only the `included` items from `items` — filtered further by `allowedResourceTypes` if provided.
- * Each row uses the same {@link ResourcePickerItem} as the full picker, so visuals (status icon,
+ * Each row uses the same internal `ResourcePickerItem` as the full picker, so visuals (status icon,
  * name, language chip, remove affordance) stay consistent across surfaces.
  *
  * A footer button labeled `Browse library` (or the consumer-provided `browseLabel`) opens the
