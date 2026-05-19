@@ -734,14 +734,26 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
 }
 const scriptureEditorWebViewProvider: IWebViewProvider = new ScriptureEditorWebViewFactory();
 
+/**
+ * Pending projectId to apply during the next model text panel getWebView call. `null` means no
+ * pending value; `undefined` is a valid pending value (opens the panel with no project).
+ *
+ * Used to pass a new projectId through reloadWebView, which has no options for extra data.
+ */
+let modelTextPendingProjectId: string | undefined | null = null;
+
 const modelTextPanelWebViewProvider: IWebViewProvider = {
   async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== MODEL_TEXT_PANEL_WEBVIEW_TYPE)
       throw new Error(
         `${MODEL_TEXT_PANEL_WEBVIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
+    const projectId =
+      modelTextPendingProjectId !== null ? modelTextPendingProjectId : savedWebView.projectId;
+    modelTextPendingProjectId = null;
     return {
       ...savedWebView,
+      projectId,
       content: modelTextPanelWebView,
       styles: modelTextPanelWebViewStyles,
     };
@@ -960,8 +972,20 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
 
   const openModelTextPanelPromise = papi.commands.registerCommand(
     'platformScriptureEditor.openModelText',
-    async (projectId: string) => {
-      const openOptions: OpenWebViewOptions & { projectId: string } = { projectId };
+    async (projectId?: string) => {
+      const allOpenDefs = await papi.webViews.getAllOpenWebViewDefinitions();
+      const existingPanel = allOpenDefs.find(
+        (def) => def.webViewType === MODEL_TEXT_PANEL_WEBVIEW_TYPE,
+      );
+
+      if (existingPanel) {
+        modelTextPendingProjectId = projectId;
+        return papi.webViews.reloadWebView(MODEL_TEXT_PANEL_WEBVIEW_TYPE, existingPanel.id, {
+          bringToFront: true,
+        });
+      }
+
+      const openOptions: OpenWebViewOptions & { projectId?: string } = { projectId };
       return papi.webViews.openWebView(MODEL_TEXT_PANEL_WEBVIEW_TYPE, { type: 'tab' }, openOptions);
     },
     {
@@ -970,7 +994,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
         params: [
           {
             name: 'projectId',
-            required: true,
+            required: false,
             summary: 'The project ID of the translation project',
             schema: { type: 'string' },
           },
