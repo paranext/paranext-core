@@ -9,6 +9,14 @@ import {
 const meta: Meta = {
   title: 'Shadcn/Resizable',
   tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'Accessible resizable panel groups and layouts with keyboard support.\n\nShadcn docs: [Resizable](https://ui.shadcn.com/docs/components/resizable)',
+      },
+    },
+  },
   decorators: [
     (Story) => (
       <ThemeProvider>

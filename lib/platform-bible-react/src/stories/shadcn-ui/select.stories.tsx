@@ -16,6 +16,14 @@ const meta: Meta<typeof Select> = {
   title: 'Shadcn/Select',
   component: Select,
   tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'Displays a list of options for the user to pick from—triggered by a button.\n\nShadcn docs: [Select](https://ui.shadcn.com/docs/components/select)',
+      },
+    },
+  },
   decorators: [
     (Story) => (
       <ThemeProvider>

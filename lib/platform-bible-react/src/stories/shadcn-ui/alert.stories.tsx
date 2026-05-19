@@ -8,6 +8,14 @@ const meta: Meta<typeof Alert> = {
   title: 'Shadcn/Alert',
   component: Alert,
   tags: ['autodocs', 'test'],
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'Displays a callout for user attention.\n\nShadcn docs: [Alert](https://ui.shadcn.com/docs/components/alert)',
+      },
+    },
+  },
   argTypes: {
     variant: {
       options: ['default', 'destructive'],

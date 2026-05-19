@@ -8,6 +8,14 @@ const meta: Meta<typeof Badge> = {
   title: 'Shadcn/Badge',
   component: Badge,
   tags: ['autodocs', 'test'],
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'Displays a badge or a component that looks like a badge.\n\nShadcn docs: [Badge](https://ui.shadcn.com/docs/components/badge)',
+      },
+    },
+  },
   argTypes: {
     variant: {
       options: [

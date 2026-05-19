@@ -22,6 +22,14 @@ const meta: Meta<typeof DropdownMenu> = {
   title: 'Shadcn/DropdownMenu',
   component: DropdownMenu,
   tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'Displays a menu to the user — such as a set of actions or functions — triggered by a button.\n\nShadcn docs: [Dropdown Menu](https://ui.shadcn.com/docs/components/dropdown-menu)',
+      },
+    },
+  },
   decorators: [
     (Story) => (
       <ThemeProvider>

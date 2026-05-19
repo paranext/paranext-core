@@ -16,6 +16,14 @@ const meta: Meta<typeof Skeleton> = {
   argTypes: {
     className: { control: 'text' },
   },
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'Use to show a placeholder while content is loading.\n\nShadcn docs: [Skeleton](https://ui.shadcn.com/docs/components/skeleton)',
+      },
+    },
+  },
 };
 
 export default meta;

@@ -34,6 +34,14 @@ const meta: Meta<typeof Sidebar> = {
     variant: { control: 'select', options: ['sidebar', 'floating', 'inset'] },
     collapsible: { control: 'select', options: ['offcanvas', 'icon', 'none'] },
   },
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'A composable, themeable, and accessible sidebar component.\n\nShadcn docs: [Sidebar](https://ui.shadcn.com/docs/components/sidebar)',
+      },
+    },
+  },
 };
 
 export default meta;

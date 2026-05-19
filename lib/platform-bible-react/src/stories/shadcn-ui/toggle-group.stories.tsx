@@ -23,6 +23,14 @@ const meta: Meta<typeof ToggleGroup> = {
     disabled: { control: 'boolean' },
     onValueChange: { action: 'value changed' },
   },
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'A set of two-state buttons that can be toggled on or off.\n\nShadcn docs: [Toggle Group](https://ui.shadcn.com/docs/components/toggle-group)',
+      },
+    },
+  },
 };
 
 export default meta;

@@ -21,6 +21,14 @@ const meta: Meta<typeof Menubar> = {
   title: 'Shadcn/Menubar',
   component: Menubar,
   tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'A visually persistent menu common in desktop applications that provides quick access to a consistent set of commands.\n\nShadcn docs: [Menubar](https://ui.shadcn.com/docs/components/menubar)',
+      },
+    },
+  },
   decorators: [
     (Story) => (
       <ThemeProvider>

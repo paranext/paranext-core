@@ -26,6 +26,14 @@ const meta: Meta<typeof Card> = {
   title: 'Shadcn/Card',
   component: Card,
   tags: ['autodocs', 'test'],
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'Displays a card with header, content, and footer.\n\nShadcn docs: [Card](https://ui.shadcn.com/docs/components/card)',
+      },
+    },
+  },
   argTypes: {
     className: { control: 'text' },
   },

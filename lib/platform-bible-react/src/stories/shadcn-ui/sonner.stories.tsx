@@ -14,6 +14,14 @@ const meta: Meta<typeof Sonner> = {
       </ThemeProvider>
     ),
   ],
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'An opinionated toast component for React built on top of Sonner.\n\nShadcn docs: [Sonner](https://ui.shadcn.com/docs/components/sonner)',
+      },
+    },
+  },
 };
 
 export default meta;

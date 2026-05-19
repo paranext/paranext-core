@@ -14,6 +14,14 @@ const meta: Meta<typeof InputGroup> = {
   title: 'Shadcn/InputGroup',
   component: InputGroup,
   tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'A composable input group that combines an input with inline or block addons such as icons, buttons, and labels.\n\nShadcn docs: [Input Group](https://ui.shadcn.com/docs/components/input-group)',
+      },
+    },
+  },
 };
 
 export default meta;

@@ -18,6 +18,14 @@ const meta: Meta<typeof Drawer> = {
   title: 'Shadcn/Drawer',
   component: Drawer,
   tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'A drawer component for React that is built on top of Vaul.\n\nShadcn docs: [Drawer](https://ui.shadcn.com/docs/components/drawer)',
+      },
+    },
+  },
   decorators: [
     (Story) => (
       <ThemeProvider>

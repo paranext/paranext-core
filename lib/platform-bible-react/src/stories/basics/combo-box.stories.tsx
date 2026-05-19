@@ -65,6 +65,14 @@ const meta: Meta<typeof ComboBox<string>> = {
       </ThemeProvider>
     ),
   ],
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'A searchable dropdown that combines a text input with a list of selectable options.\n\nShadcn docs: [Combobox](https://ui.shadcn.com/docs/components/combobox)',
+      },
+    },
+  },
 };
 
 export default meta;

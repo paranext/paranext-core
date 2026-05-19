@@ -6,6 +6,14 @@ const meta: Meta<typeof Kbd> = {
   title: 'Shadcn/Kbd',
   component: Kbd,
   tags: ['autodocs', 'test'],
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'Displays a keyboard key or shortcut.\n\nShadcn docs: [Kbd](https://ui.shadcn.com/docs/components/kbd)',
+      },
+    },
+  },
   decorators: [
     (Story) => (
       <ThemeProvider>
