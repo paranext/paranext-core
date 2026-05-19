@@ -44,9 +44,9 @@ describe('book-chapter-control.navigation', () => {
 
       expect(result.current).toHaveLength(4);
       expect(result.current[0].title).toBe('Previous chapter');
-      expect(result.current[1].title).toBe('Previous verse');
-      expect(result.current[2].title).toBe('Next verse');
-      expect(result.current[3].title).toBe('Next chapter');
+      expect(result.current[1].title).toBe('Next chapter');
+      expect(result.current[2].title).toBe('Previous verse');
+      expect(result.current[3].title).toBe('Next verse');
     });
 
     describe('Previous chapter navigation', () => {
@@ -131,7 +131,7 @@ describe('book-chapter-control.navigation', () => {
         );
 
         act(() => {
-          result.current[3].onClick(); // Next chapter
+          result.current[1].onClick(); // Next chapter
         });
 
         expect(mockHandleSubmit).toHaveBeenCalledWith({
@@ -152,7 +152,7 @@ describe('book-chapter-control.navigation', () => {
         );
 
         act(() => {
-          result.current[3].onClick(); // Next chapter
+          result.current[1].onClick(); // Next chapter
         });
 
         expect(mockHandleSubmit).toHaveBeenCalledWith({
@@ -172,7 +172,7 @@ describe('book-chapter-control.navigation', () => {
           ),
         );
 
-        expect(result.current[3].disabled).toBe(true);
+        expect(result.current[1].disabled).toBe(true);
       });
 
       test('Is disabled when fetchEndChapter returns -1 and at last book', () => {
@@ -187,7 +187,7 @@ describe('book-chapter-control.navigation', () => {
           ),
         );
 
-        expect(result.current[3].disabled).toBe(true);
+        expect(result.current[1].disabled).toBe(true);
       });
     });
 
@@ -203,7 +203,7 @@ describe('book-chapter-control.navigation', () => {
         );
 
         act(() => {
-          result.current[1].onClick(); // Previous verse
+          result.current[2].onClick(); // Previous verse
         });
 
         expect(mockHandleSubmit).toHaveBeenCalledWith({
@@ -224,7 +224,7 @@ describe('book-chapter-control.navigation', () => {
         );
 
         act(() => {
-          result.current[1].onClick(); // Previous verse
+          result.current[2].onClick(); // Previous verse
         });
 
         expect(mockHandleSubmit).toHaveBeenCalledWith({
@@ -244,7 +244,7 @@ describe('book-chapter-control.navigation', () => {
           ),
         );
 
-        expect(result.current[1].disabled).toBe(true);
+        expect(result.current[2].disabled).toBe(true);
       });
     });
 
@@ -260,7 +260,7 @@ describe('book-chapter-control.navigation', () => {
         );
 
         act(() => {
-          result.current[2].onClick(); // Next verse
+          result.current[3].onClick(); // Next verse
         });
 
         expect(mockHandleSubmit).toHaveBeenCalledWith({
@@ -280,7 +280,7 @@ describe('book-chapter-control.navigation', () => {
           ),
         );
 
-        expect(result.current[2].disabled).toBeFalsy();
+        expect(result.current[3].disabled).toBeFalsy();
       });
     });
 
@@ -304,15 +304,14 @@ describe('book-chapter-control.navigation', () => {
           ),
         );
 
-        // Icons should be different for RTL vs LTR
+        // Chapter icons (indices 0, 1) flip between LTR and RTL
         expect(ltrResult.current[0].icon).not.toBe(rtlResult.current[0].icon);
         expect(ltrResult.current[1].icon).not.toBe(rtlResult.current[1].icon);
-        expect(ltrResult.current[2].icon).not.toBe(rtlResult.current[2].icon);
-        expect(ltrResult.current[3].icon).not.toBe(rtlResult.current[3].icon);
-        expect(ltrResult.current[0].icon).toBe(rtlResult.current[3].icon);
-        expect(ltrResult.current[1].icon).toBe(rtlResult.current[2].icon);
-        expect(ltrResult.current[2].icon).toBe(rtlResult.current[1].icon);
-        expect(ltrResult.current[3].icon).toBe(rtlResult.current[0].icon);
+        expect(ltrResult.current[0].icon).toBe(rtlResult.current[1].icon);
+        expect(ltrResult.current[1].icon).toBe(rtlResult.current[0].icon);
+        // Verse icons (indices 2, 3) are direction-independent (ChevronUp/ChevronDown)
+        expect(ltrResult.current[2].icon).toBe(rtlResult.current[2].icon);
+        expect(ltrResult.current[3].icon).toBe(rtlResult.current[3].icon);
       });
 
       test('Returns correct number of navigation buttons in RTL', () => {
@@ -327,9 +326,9 @@ describe('book-chapter-control.navigation', () => {
 
         expect(result.current).toHaveLength(4);
         expect(result.current[0].title).toBe('Previous chapter');
-        expect(result.current[1].title).toBe('Previous verse');
-        expect(result.current[2].title).toBe('Next verse');
-        expect(result.current[3].title).toBe('Next chapter');
+        expect(result.current[1].title).toBe('Next chapter');
+        expect(result.current[2].title).toBe('Previous verse');
+        expect(result.current[3].title).toBe('Next verse');
       });
 
       test('Navigates to previous chapter within same book in RTL', () => {
@@ -364,7 +363,7 @@ describe('book-chapter-control.navigation', () => {
         );
 
         act(() => {
-          result.current[3].onClick(); // Next chapter
+          result.current[1].onClick(); // Next chapter
         });
 
         expect(mockHandleSubmit).toHaveBeenCalledWith({
@@ -385,7 +384,7 @@ describe('book-chapter-control.navigation', () => {
         );
 
         act(() => {
-          result.current[1].onClick(); // Previous verse
+          result.current[2].onClick(); // Previous verse
         });
 
         expect(mockHandleSubmit).toHaveBeenCalledWith({
@@ -406,7 +405,7 @@ describe('book-chapter-control.navigation', () => {
         );
 
         act(() => {
-          result.current[2].onClick(); // Next verse
+          result.current[3].onClick(); // Next verse
         });
 
         expect(mockHandleSubmit).toHaveBeenCalledWith({
@@ -439,7 +438,7 @@ describe('book-chapter-control.navigation', () => {
           ),
         );
 
-        expect(result.current[3].disabled).toBe(true);
+        expect(result.current[1].disabled).toBe(true);
       });
 
       test('Is disabled when at verse 0 in RTL', () => {
@@ -452,7 +451,7 @@ describe('book-chapter-control.navigation', () => {
           ),
         );
 
-        expect(result.current[1].disabled).toBe(true);
+        expect(result.current[2].disabled).toBe(true);
       });
 
       test('Next verse is never disabled in RTL', () => {
@@ -465,7 +464,7 @@ describe('book-chapter-control.navigation', () => {
           ),
         );
 
-        expect(result.current[2].disabled).toBeFalsy();
+        expect(result.current[3].disabled).toBeFalsy();
       });
     });
 
@@ -505,7 +504,7 @@ describe('book-chapter-control.navigation', () => {
         expect(result.current[0].disabled).toBe(false);
 
         // Next chapter should be enabled (not at last chapter)
-        expect(result.current[3].disabled).toBe(false);
+        expect(result.current[1].disabled).toBe(false);
       });
 
       test('Handles book not in available books list', () => {
