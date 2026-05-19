@@ -1,0 +1,52 @@
+{
+  "feature": "checklist",
+  "version": "1.0.0",
+  "webViewProvider": {
+    "id": "checklist.mainWebView",
+    "file": "extensions/src/checklist/src/main.ts",
+    "title": "%checklist.title%"
+  },
+  "components": [
+    {
+      "name": "ChecklistPanel",
+      "path": "extensions/src/checklist/src/components/ChecklistPanel.tsx",
+      "kind": "panel"
+    },
+    {
+      "name": "ChecklistItem",
+      "path": "extensions/src/checklist/src/components/ChecklistItem.tsx",
+      "kind": "shared"
+    }
+  ],
+  "paranextReactImports": [
+    {
+      "name": "Dialog",
+      "source": "platform-bible-react",
+      "useFor": "Confirm-delete dialog"
+    },
+    {
+      "name": "useProjectData",
+      "source": "platform-bible-react",
+      "useFor": "Subscribing to project data updates"
+    }
+  ],
+  "utilities": [
+    {
+      "id": "UTL-TS-001",
+      "name": "formatChecklistDate",
+      "location": "extensions/src/checklist/src/utils/format.ts:12",
+      "useFor": "Locale-aware date formatting"
+    }
+  ],
+  "testInfra": {
+    "framework": "vitest+playwright",
+    "storybookLocation": "colocated with components",
+    "mocks": ["mockPapiCommands"]
+  },
+  "patternRefs": [
+    {
+      "description": "WebView provider boilerplate",
+      "location": "extensions/src/bookmarks/src/main.ts:24"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "feature": "checklist",
+  "version": "1.0.0",
+  "namespace": "Paranext.DataProvider.Checklist",
+  "files": [],
+  "utilities": [],
+  "testInfra": { "baseClass": "ParatextDataProviderTestBase" },
+  "patternRefs": [
+    {
+      "description": "Bare path without :line",
+      "location": "c-sharp/Bookmarks/Program.cs"
+    }
+  ]
+}

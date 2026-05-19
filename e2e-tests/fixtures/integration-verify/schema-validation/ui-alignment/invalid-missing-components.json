@@ -1,0 +1,10 @@
+{
+  "feature": "checklist",
+  "version": "1.0.0",
+  "webViewProvider": {
+    "id": "checklist.mainWebView",
+    "file": "extensions/src/checklist/src/main.ts"
+  },
+  "paranextReactImports": [],
+  "testInfra": { "framework": "vitest" }
+}

@@ -1,0 +1,13 @@
+{
+  "feature": "checklist",
+  "version": "1.0.0",
+  "namespace": "Paranext.DataProvider.Checklist",
+  "files": [],
+  "utilities": [
+    {
+      "id": "UTIL-1",
+      "location": "c-sharp/Helpers/Foo.cs:10"
+    }
+  ],
+  "testInfra": { "baseClass": "ParatextDataProviderTestBase" }
+}

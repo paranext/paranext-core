@@ -1,0 +1,28 @@
+{
+  "feature": "checklist",
+  "version": "1.0.0",
+  "namespace": "Paranext.DataProvider.Checklist",
+  "files": [
+    { "path": "c-sharp/Checklist/ChecklistDataProvider.cs", "kind": "data-provider" },
+    { "path": "c-sharp/Checklist/Program.cs", "kind": "service" }
+  ],
+  "utilities": [
+    {
+      "id": "UTL-CS-001",
+      "name": "LocalParatextProjects",
+      "location": "c-sharp/Helpers/LocalParatextProjects.cs:42",
+      "useFor": "Resolving project IDs to filesystem paths",
+      "usedInFiles": ["c-sharp/Checklist/ChecklistDataProvider.cs"]
+    }
+  ],
+  "testInfra": {
+    "baseClass": "ParatextDataProviderTestBase",
+    "mocks": ["IProjectAccessor", "IScrTextCollection"]
+  },
+  "patternRefs": [
+    {
+      "description": "NetworkObject registration pattern",
+      "location": "c-sharp/Bookmarks/Program.cs:18"
+    }
+  ]
+}

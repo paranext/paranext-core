@@ -1,0 +1,22 @@
+{
+  "feature": "checklist",
+  "proposed_at": "2026-05-19T15:00:00Z",
+  "amendments": [
+    {
+      "id": "AMEND-001",
+      "kind": "add-command",
+      "command": "checklist.exportAll",
+      "summary": "alignment-agent found this command in PT9 but it's missing from data-contracts.json",
+      "proposed_change": {
+        "name": "checklist.exportAll",
+        "params": [{ "name": "projectId", "tsType": "string", "csType": "string" }],
+        "returnSchema": { "type": "string" },
+        "coverage": "partial"
+      },
+      "evidence": "backend-alignment.md line 47; behavior BHV-23",
+      "raised_by_agent": "alignment-agent",
+      "decision": null,
+      "decision_rationale": null
+    }
+  ]
+}

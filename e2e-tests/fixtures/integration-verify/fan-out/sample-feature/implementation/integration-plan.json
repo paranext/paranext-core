@@ -1,0 +1,26 @@
+{
+  "feature": "sample",
+  "version": "1.0.0",
+  "phase": 3,
+  "commands": [
+    {
+      "name": "sample.getThing",
+      "params": [],
+      "returnSchema": { "type": "object" }
+    }
+  ],
+  "journeys": [],
+  "navigation": { "menuItems": [], "webViewTitle": "" },
+  "touchpoints": [
+    {
+      "id": "TP-001",
+      "producer": { "cap": "CAP-001", "command": "sample.makeThing" },
+      "consumer": { "cap": "CAP-002", "command": "sample.useThing" },
+      "inputFromProducerKey": "/id"
+    }
+  ],
+  "startup": {
+    "services": [{ "className": "SampleService", "registrarFile": "c-sharp/Sample/Program.cs" }],
+    "commandPairs": []
+  }
+}

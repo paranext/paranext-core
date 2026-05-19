@@ -1,0 +1,76 @@
+{
+  "feature": "checklist",
+  "version": "1.0.0",
+  "phase": 3,
+  "approved_at": "2026-05-19T12:00:00Z",
+  "commands": [
+    {
+      "name": "checklist.getItem",
+      "params": [{ "name": "itemId", "tsType": "string", "csType": "string" }],
+      "returnSchema": {
+        "type": "object",
+        "required": ["id", "text", "checked"],
+        "properties": {
+          "id": { "type": "string" },
+          "text": { "type": "string" },
+          "checked": { "type": "boolean" }
+        }
+      },
+      "errors": [{ "code": -32001, "when": "itemId does not exist" }],
+      "representativeInput": {
+        "params": ["item-001"],
+        "setup": "create-test-project",
+        "sourceScenario": "TS-T012"
+      },
+      "coverage": "full"
+    }
+  ],
+  "journeys": [
+    {
+      "id": "J-001",
+      "scenarioRef": "TS-T012",
+      "testFile": "e2e-tests/tests/checklist/get-item.spec.ts",
+      "steps": [
+        { "action": "navigate", "locator": "menu:Project>Checklist" },
+        { "action": "click", "locator": "[data-testid=checklist-item-001]" },
+        { "action": "expect", "locator": "[data-testid=checklist-detail]", "expect": "visible" }
+      ]
+    }
+  ],
+  "navigation": {
+    "menuItems": [
+      {
+        "groupId": "checklistMenu",
+        "label": "%checklist.open%",
+        "command": "checklist.openWebView"
+      }
+    ],
+    "webViewTitle": "%checklist.title%",
+    "dialogs": [{ "id": "checklist-confirm-delete", "title": "%checklist.confirmDelete%" }],
+    "testIds": [{ "role": "primary-action", "value": "checklist-add-item" }]
+  },
+  "touchpoints": [
+    {
+      "id": "TP-001",
+      "producer": { "cap": "CAP-001", "command": "checklist.buildChecklistData" },
+      "consumer": { "cap": "CAP-002", "command": "checklist.renderItem" },
+      "inputFromProducerKey": "/items/0/id",
+      "expect": "renderItem returns rendered HTML for the first item"
+    }
+  ],
+  "startup": {
+    "services": [
+      { "className": "ChecklistDataProvider", "registrarFile": "c-sharp/Checklist/Program.cs" }
+    ],
+    "commandPairs": [
+      {
+        "name": "checklist.getItem",
+        "dts": "extensions/src/checklist/src/types.d.ts",
+        "csharp": "c-sharp/Checklist/ChecklistDataProvider.cs"
+      }
+    ],
+    "menuContributions": [
+      { "file": "extensions/src/checklist/contributions/menus.json", "entry": "checklistMenu" }
+    ]
+  }
+}

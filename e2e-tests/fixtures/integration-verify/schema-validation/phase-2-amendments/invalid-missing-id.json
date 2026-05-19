@@ -1,0 +1,14 @@
+{
+  "feature": "checklist",
+  "proposed_at": "2026-05-19T15:00:00Z",
+  "amendments": [
+    {
+      "kind": "add-command",
+      "command": "checklist.foo",
+      "summary": "Missing id field",
+      "proposed_change": null,
+      "evidence": "n/a",
+      "decision": null
+    }
+  ]
+}

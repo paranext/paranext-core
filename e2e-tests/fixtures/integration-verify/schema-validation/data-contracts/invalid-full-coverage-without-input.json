@@ -1,0 +1,13 @@
+{
+  "feature": "checklist",
+  "version": "1.0.0",
+  "phase": 2,
+  "commands": [
+    {
+      "name": "checklist.getItem",
+      "params": [{ "name": "itemId", "tsType": "string", "csType": "string" }],
+      "returnSchema": { "type": "object" },
+      "coverage": "full"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "feature": "checklist",
+  "version": "1.0.0",
+  "phase": 3,
+  "commands": [],
+  "journeys": [
+    {
+      "id": "JOURNEY-1",
+      "scenarioRef": "TS-T001",
+      "testFile": "test.spec.ts",
+      "steps": [{ "action": "click", "locator": "[data-testid=x]" }]
+    }
+  ],
+  "navigation": { "menuItems": [], "webViewTitle": "" },
+  "touchpoints": [],
+  "startup": { "services": [], "commandPairs": [] }
+}

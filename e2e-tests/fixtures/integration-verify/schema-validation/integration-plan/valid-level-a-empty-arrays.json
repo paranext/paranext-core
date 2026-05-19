@@ -1,0 +1,16 @@
+{
+  "feature": "level-a-reuse",
+  "version": "0.1.0",
+  "phase": 3,
+  "commands": [],
+  "journeys": [],
+  "navigation": {
+    "menuItems": [],
+    "webViewTitle": ""
+  },
+  "touchpoints": [],
+  "startup": {
+    "services": [],
+    "commandPairs": []
+  }
+}
