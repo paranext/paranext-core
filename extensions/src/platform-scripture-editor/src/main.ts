@@ -740,7 +740,7 @@ const scriptureEditorWebViewProvider: IWebViewProvider = new ScriptureEditorWebV
  *
  * Used to pass a new projectId through reloadWebView, which has no options for extra data.
  */
-let modelTextPendingProjectId: string | undefined | null = null;
+let modelTextPendingProjectId: string | undefined = undefined;
 
 const modelTextPanelWebViewProvider: IWebViewProvider = {
   async getWebView(
@@ -753,10 +753,10 @@ const modelTextPanelWebViewProvider: IWebViewProvider = {
       );
     // Priority: pending (reload path) > options (new-panel path) > saved (existing panel reload)
     const projectId =
-      modelTextPendingProjectId !== null
+      modelTextPendingProjectId !== undefined
         ? modelTextPendingProjectId
         : (openWebViewOptions.projectId ?? savedWebView.projectId);
-    modelTextPendingProjectId = null;
+    modelTextPendingProjectId = undefined;
     return {
       ...savedWebView,
       title: '%webView_modelTextPanel_title%',
