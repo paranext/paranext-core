@@ -142,10 +142,10 @@ export function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
           onChange(option);
           setOpen(false);
         }}
-        className="tw:flex tw:items-center"
+        className="tw:gap-1.5!"
       >
         <Check
-          className={cn('tw:me-2 tw:h-4 tw:w-4 tw:shrink-0', {
+          className={cn('tw:h-4 tw:w-4 tw:shrink-0', {
             'tw:opacity-0': !value || getOptionLabel(value) !== optionLabel,
           })}
         />
@@ -195,13 +195,15 @@ export function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
           <CommandInput placeholder={textPlaceholder} className="tw:text-inherit" />
           <CommandEmpty>{commandEmptyMessage}</CommandEmpty>
           <CommandList>
-            {isGroupedOptions(options)
-              ? options.map((group) => (
-                  <CommandGroup key={group.groupHeading} heading={group.groupHeading}>
-                    {group.options.map((option) => renderCommandItem(option, group.groupHeading))}
-                  </CommandGroup>
-                ))
-              : options.map((option) => renderCommandItem(option))}
+            {isGroupedOptions(options) ? (
+              options.map((group) => (
+                <CommandGroup key={group.groupHeading} heading={group.groupHeading}>
+                  {group.options.map((option) => renderCommandItem(option, group.groupHeading))}
+                </CommandGroup>
+              ))
+            ) : (
+              <CommandGroup>{options.map((option) => renderCommandItem(option))}</CommandGroup>
+            )}
           </CommandList>
         </Command>
       </PopoverContent>
