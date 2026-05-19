@@ -1339,8 +1339,15 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <returns>True if the user can write the project settings, false otherwise</returns>
     public bool CanUserWriteProjectSettings()
     {
-        ScrText scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
-        return scrText.Permissions.AmAdministrator;
+        try
+        {
+            ScrText scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+            return scrText.Permissions.AmAdministrator;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public ResourceReferenceList GetUserModelTexts()
