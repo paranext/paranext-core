@@ -4,12 +4,15 @@ import { LocalizationSelectors } from '@papi/core';
 import type PapiBackend from '@papi/backend';
 import type PapiFrontend from '@papi/frontend';
 import {
+  aggregateUnsubscribers,
   formatReplacementString,
   getErrorMessage,
   isLocalizeKey,
+  isPlatformError,
   LanguageStrings,
   LocalizeKey,
   serialize,
+  Unsubscriber,
   USFM_MARKERS_MAP_PARATEXT_3_0,
   usfmMarkers,
   UsjDocumentLocation,
@@ -17,6 +20,7 @@ import {
 } from 'platform-bible-utils';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { ScriptureRange } from 'platform-scripture-editor';
+import type { SharedProjectsInfo } from 'platform-scripture';
 import { MutableRefObject } from 'react';
 import { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { MarkerMenuItem } from 'platform-bible-react';
@@ -479,3 +483,230 @@ export function resolveOpenEditorDispatch(
 }
 
 // #endregion Open Editor Dispatch
+
+// #region Default Active Project Picker
+
+/**
+ * Outcome of a single picker attempt. Every outcome other than `'filled'` is a "may retry on the
+ * next trigger" — the driver in {@link startDefaultProjectPicker} re-invokes on web-view-open and
+ * sync-completion events, so transient causes (sync still in flight, layout not loaded yet) clear
+ * themselves naturally.
+ *
+ * - `'wrong-mode'` — `platform.interfaceMode` is not `'simple'`; the picker does nothing until it is.
+ * - `'no-empty'` — no empty Scripture Editor (no `projectId`) is currently open. The driver may retry
+ *   when a new web view opens.
+ * - `'no-send-receive'` — `paratextBibleSendReceive.getSharedProjects` was unavailable (command not
+ *   registered yet, or the extension is absent). Expected steady state on Platform.Bible; expected
+ *   transiently on paratext-10-studio during the window between platform-scripture-editor's
+ *   activation and paratextBibleSendReceive's activation. The driver retries on subsequent
+ *   web-view-open and sync-completion events. Logged at debug, not warn — silent on
+ *   Platform.Bible.
+ * - `'failed'` — the open command rejected; logged at warn. The driver may retry on the next trigger.
+ * - `'no-candidate'` — S/R was reachable, but no shared project passed the activity / `editedStatus`
+ *   filter. Projects with `editedStatus` of `'new'` (not yet downloaded locally) or
+ *   `'unregistered'` (limited/provisional license) are excluded, as are projects with no
+ *   `lastSendReceiveDate`. The driver may retry after a sync completes.
+ * - `'filled'` — the picker successfully called the open command for the top candidate.
+ */
+export type DefaultProjectPickerOutcome =
+  | 'wrong-mode'
+  | 'no-empty'
+  | 'no-send-receive'
+  | 'failed'
+  | 'no-candidate'
+  | 'filled';
+
+/**
+ * Attempt to fill the empty Scripture Editor in the simple layout with the most-recently-active
+ * shared project. Candidates come from `paratextBibleSendReceive.getSharedProjects`, which already
+ * excludes Observer-only projects for internet S/R (note: local-repository S/R does not filter by
+ * role, so an Observer-permission project may slip through in that path).
+ *
+ * Idempotent: each invocation re-reads the dock and the shared-projects list. The driver in
+ * {@link startDefaultProjectPicker} is responsible for re-invoking on events that change those
+ * inputs (web-view opens, sync completions).
+ *
+ * @param papi The PAPI backend handle. Injected for testability.
+ * @returns The outcome of this attempt — see {@link DefaultProjectPickerOutcome}.
+ */
+export async function openDefaultActiveProjectIfApplicable(
+  papi: typeof PapiBackend,
+): Promise<DefaultProjectPickerOutcome> {
+  const interfaceMode = await papi.settings.get('platform.interfaceMode');
+  if (isPlatformError(interfaceMode)) {
+    papi.logger.warn(
+      `Default active project picker: failed to read platform.interfaceMode (${getErrorMessage(interfaceMode)}); returning 'wrong-mode'`,
+    );
+    return 'wrong-mode';
+  }
+  if (interfaceMode !== 'simple') return 'wrong-mode';
+
+  const openWebViews = await papi.webViews.getAllOpenWebViewDefinitions();
+  const emptyEditor = openWebViews.find(
+    (def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && !def.projectId,
+  );
+  if (!emptyEditor) return 'no-empty';
+
+  // Try `paratextBibleSendReceive.getSharedProjects` directly. If S/R hasn't activated yet (cold
+  // start, picker fires inside `platformScriptureEditor.activate()` before `paratextBibleSendReceive`
+  // registers commands) or isn't installed at all (Platform.Bible), this rejects and we return
+  // `'no-send-receive'`. The driver's existing triggers handle the retry once S/R is ready — we
+  // do NOT block here. paratextBibleSendReceive does not register a network object, so PAPI's
+  // `waitForNetworkObject` is not a usable readiness signal. See PT-3958.
+  let sharedProjects: SharedProjectsInfo;
+  try {
+    sharedProjects = await papi.commands.sendCommand('paratextBibleSendReceive.getSharedProjects');
+  } catch (e) {
+    // Expected steady state on Platform.Bible (S/R absent) and transient on paratext-10-studio
+    // cold start. Debug-level — info would be noisy because this fires on every picker run on
+    // Platform.Bible.
+    papi.logger.debug(
+      `Default active project picker: getSharedProjects unavailable; returning 'no-send-receive' (${getErrorMessage(e)})`,
+    );
+    return 'no-send-receive';
+  }
+
+  // Exclude `'new'` (not yet downloaded — can't be opened) and `'unregistered'` (limited/provisional
+  // license — surprising to auto-open as the default). `lastSendReceiveDate` is produced by .NET
+  // upstream and isn't format-guaranteed in the type, so parse to a timestamp before sorting rather
+  // than relying on lexicographic ISO ordering.
+  const candidates = Object.values(sharedProjects)
+    .filter(
+      (info) =>
+        info.editedStatus !== 'new' &&
+        info.editedStatus !== 'unregistered' &&
+        info.lastSendReceiveDate,
+    )
+    .sort(
+      (a, b) =>
+        new Date(b.lastSendReceiveDate).getTime() - new Date(a.lastSendReceiveDate).getTime(),
+    );
+
+  if (candidates.length === 0) return 'no-candidate';
+
+  const top = candidates[0];
+  papi.logger.info(`Default active project picker: opening project=${top.id}`);
+  try {
+    await papi.commands.sendCommand('platformScriptureEditor.openScriptureEditor', top.id);
+  } catch (e) {
+    papi.logger.warn(
+      `Default active project picker: openScriptureEditor for ${top.id} failed: ${getErrorMessage(e)}`,
+    );
+    return 'failed';
+  }
+
+  return 'filled';
+}
+
+/**
+ * Subscribe to the events that change the default-project picker's inputs, and run the picker each
+ * time one fires. Returns an unsubscriber that closes every subscription.
+ *
+ * Triggers:
+ *
+ * - `webViews.onDidOpenWebView` — handles a late-arriving empty Scripture Editor (the layout's
+ *   placeholder may not be in the dock yet at activate time).
+ * - `webViews.onDidUpdateWebView` — handles soft-close-then-reopen on macOS (red button hides the
+ *   window but keeps the extension host alive). The layout-restore path can re-create the Scripture
+ *   Editor without a `projectId`, and from the extension host's perspective the webview was "always
+ *   there" — so `onDidOpenWebView` doesn't re-fire. `onDidUpdateWebView` fires when any webview's
+ *   definition changes, including the projectId being reset.
+ * - `paratextBibleSendReceive.onSyncStateChanged` (when `isSyncing` is `false`) — handles a sync
+ *   finishing. Newly-added shared projects look ineligible (`editedStatus === 'new'`, no
+ *   `lastSendReceiveDate`) until the first sync settles, so the picker has to re-check after that.
+ *
+ * Cold-start gap: there is no explicit "S/R command registered" signal, so if
+ * `paratextBibleSendReceive` activates after `platformScriptureEditor` but before any of the
+ * triggers above fires, the picker sits idle until one does. Webview and sync activity at startup
+ * cover this in practice.
+ *
+ * The picker is idempotent: each call re-reads the dock and the shared-projects list and quietly
+ * does nothing when there is nothing to do (editor already filled, wrong interface mode, no
+ * eligible project yet). At most one run is in flight at a time; concurrent triggers coalesce into
+ * a single follow-up run.
+ *
+ * Mirrors the simple-function pattern used in `home.web-view.tsx` rather than a class wrapper.
+ */
+export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscriber {
+  // 'running-with-retry-queued' captures the case where a trigger fires while a tryPicker call is
+  // in flight. The in-flight attempt may have observed stale inputs before the trigger materialized;
+  // the `finally` block re-fires once to close that race. A single string union (rather than two
+  // booleans) makes the impossible 'idle + retry-queued' combination unrepresentable; see
+  // Code-Style-Guide.md "Prefer string unions over multiple interdependent booleans".
+  let pickerState: 'idle' | 'running' | 'running-with-retry-queued' = 'idle';
+  // Read via a helper to defeat TypeScript's flow narrowing — the listeners below can mutate
+  // pickerState concurrently across awaits, which TS's flow analysis can't model.
+  const getPickerState = () => pickerState;
+
+  const tryPicker = async (): Promise<void> => {
+    if (pickerState !== 'idle') {
+      pickerState = 'running-with-retry-queued';
+      return;
+    }
+    pickerState = 'running';
+    try {
+      await openDefaultActiveProjectIfApplicable(papi);
+    } catch (e) {
+      // `openDefaultActiveProjectIfApplicable` catches its own errors and returns 'failed'; this
+      // catch only fires on unexpected throws (e.g. PAPI plumbing bugs).
+      papi.logger.warn(
+        `Default active project picker: tryPicker threw unexpectedly: ${getErrorMessage(e)}`,
+      );
+    } finally {
+      const wasRetryQueued = getPickerState() === 'running-with-retry-queued';
+      pickerState = 'idle';
+      // Fire-and-forget follow-up to close the race window. `tryPicker` catches its own errors,
+      // so the `.catch` here is defensive against a future change that could leak a rejection.
+      if (wasRetryQueued)
+        tryPicker().catch((e) =>
+          papi.logger.warn(
+            `Default active project picker: coalesced retry threw unexpectedly: ${getErrorMessage(e)}`,
+          ),
+        );
+    }
+  };
+
+  // `tryPicker()` catches its own errors internally; the `.catch` blocks below are defensive
+  // against a future change that could leak a rejection — matches the `finally`-block retry above.
+  const unsubFromWebViewOpen = papi.webViews.onDidOpenWebView(() => {
+    tryPicker().catch((e) =>
+      papi.logger.warn(
+        `Default active project picker: webView-open handler threw unexpectedly: ${getErrorMessage(e)}`,
+      ),
+    );
+  });
+
+  const unsubFromWebViewUpdate = papi.webViews.onDidUpdateWebView(({ webView }) => {
+    // Only Scripture Editor updates can change the picker's outcome — any other webview's update
+    // can't reveal or remove an empty editor.
+    if (webView.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE) return;
+    tryPicker().catch((e) =>
+      papi.logger.warn(
+        `Default active project picker: webView-update handler threw unexpectedly: ${getErrorMessage(e)}`,
+      ),
+    );
+  });
+
+  const unsubFromSync = papi.network.getNetworkEvent<{ isSyncing: boolean }>(
+    'paratextBibleSendReceive.onSyncStateChanged',
+  )(({ isSyncing }) => {
+    if (!isSyncing)
+      tryPicker().catch((e) =>
+        papi.logger.warn(
+          `Default active project picker: sync-state handler threw unexpectedly: ${getErrorMessage(e)}`,
+        ),
+      );
+  });
+
+  // Cover the case where the empty editor and an eligible synced project are already in place
+  // (e.g., second startup after a successful first run).
+  tryPicker().catch((e) =>
+    papi.logger.warn(
+      `Default active project picker: initial run threw unexpectedly: ${getErrorMessage(e)}`,
+    ),
+  );
+
+  return aggregateUnsubscribers([unsubFromWebViewOpen, unsubFromWebViewUpdate, unsubFromSync]);
+}
+
+// #endregion Default Active Project Picker
