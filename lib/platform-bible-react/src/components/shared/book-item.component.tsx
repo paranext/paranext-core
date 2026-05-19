@@ -28,6 +28,12 @@ type BookItemProps = {
   localizedBookNames?: Map<string, { localizedId: string; localizedName: string }>;
   /** Value to use for Command component matching */
   commandValue?: string;
+  /**
+   * Whether to render the focus ring on the currently active (data-selected) item. Defaults to
+   * true. Set to false when another element owns the visible focus indicator (e.g. the input or a
+   * button outside the list) so two rings aren't shown at once.
+   */
+  showActiveRing?: boolean;
 };
 
 /**
@@ -51,6 +57,7 @@ export const BookItem = forwardRef<HTMLDivElement, BookItemProps>(
       showCheck = false,
       localizedBookNames,
       commandValue,
+      showActiveRing = true,
     },
     ref,
   ) => {
@@ -107,7 +114,23 @@ export const BookItem = forwardRef<HTMLDivElement, BookItemProps>(
           role="option"
           aria-selected={isSelected}
           aria-label={`${Canon.bookIdToEnglishName(bookId)} (${bookId.toLocaleUpperCase()})`}
-          className={cn('tw:[&>svg:last-child]:hidden', className)}
+          className={cn(
+            // Hide the CommandItem's built-in trailing check icon (we render our own leading
+            // <Check/> for multiselect via showCheck).
+            'tw:[&>svg:last-child]:hidden',
+            // Suppress shadcn CommandItem's default data-selected:bg-muted / text-foreground —
+            // DOM focus is the source of truth for the visible focus indicator; hover is the
+            // pointer-feedback channel.
+            'tw:data-selected:bg-transparent tw:data-selected:text-inherit',
+            // Hover indication (pointer feedback) — kept distinct from the focus ring.
+            'tw:hover:bg-muted',
+            // Keyboard focus ring on the data-selected item. cmdk's pointer selection is
+            // disabled on the parent Command, so data-selected only reflects keyboard nav.
+            // Suppressed when another element owns the focus indicator (e.g. the input).
+            showActiveRing &&
+              'tw:data-selected:ring-2 tw:data-selected:ring-ring/50 tw:data-selected:ring-inset',
+            className,
+          )}
         >
           {showCheck && (
             <Check
