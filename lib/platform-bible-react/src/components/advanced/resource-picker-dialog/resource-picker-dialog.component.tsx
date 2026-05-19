@@ -251,10 +251,14 @@ export default function ResourcePickerDialog({
         </p>
       )}
       <div className="tw:flex-1 tw:overflow-y-auto tw:px-4 tw:pb-4">
-        {hasNoResults && (
+        {hasNoResults && !isResourcesLoading && (
           <p className="tw:py-8 tw:text-center tw:text-muted-foreground">{noResultsText}</p>
         )}
-        {isResourcesLoading && <Spinner />}
+        {isResourcesLoading && (
+          <p className="tw:py-8 tw:text-center">
+            <Spinner />
+          </p>
+        )}
         {!hasNoResults && !isResourcesLoading && (
           <>
             <ResourceSection label={alreadySelectedLabel} resources={alreadySelected} />
