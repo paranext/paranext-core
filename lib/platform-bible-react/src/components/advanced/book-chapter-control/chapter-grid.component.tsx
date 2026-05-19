@@ -43,6 +43,9 @@ export function ChapterGrid({
             ref={setChapterRef(chapter)}
             className={cn(
               'tw:h-8 tw:w-8 tw:cursor-pointer tw:justify-center tw:gap-0 tw:rounded-md tw:p-0 tw:text-center tw:text-sm tw:[&>svg]:hidden',
+              // cmdk sets data-selected on both keyboard-highlighted and hovered items, so a single
+              // ring rule covers focus + hover.
+              'tw:data-selected:ring-2 tw:data-selected:ring-ring tw:data-selected:ring-inset',
               {
                 'tw:bg-muted/50 tw:text-muted-foreground/50':
                   (isChapterDimmed?.(chapter) ?? false) &&
