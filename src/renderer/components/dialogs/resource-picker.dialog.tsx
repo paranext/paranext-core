@@ -6,6 +6,7 @@ import {
   DialogTypes,
   RESOURCE_PICKER_DIALOG_TYPE,
 } from '@renderer/components/dialogs/dialog-definition.model';
+import { isPlatformError } from 'platform-bible-utils';
 
 const STRING_KEYS = [...RESOURCE_PICKER_DIALOG_STRING_KEYS];
 
@@ -23,7 +24,7 @@ function ResourcePickerDialogWrapper({
 
   return (
     <ResourcePickerDialog
-      allResources={resources}
+      allResources={isPlatformError(resources) ? [] : resources}
       isResourcesLoading={isResourcesLoading}
       resourceType={resourceType}
       selectedResourceIds={selectedResourceIds}
@@ -38,6 +39,8 @@ export const RESOURCE_PICKER_DIALOG: DialogDefinition<typeof RESOURCE_PICKER_DIA
     ...DIALOG_BASE,
     tabType: RESOURCE_PICKER_DIALOG_TYPE,
     defaultTitle: '%resourcePicker_title%',
+    // Matches the get resources UI width so that there is no additional scroll bar on the bottom
+    // for some resources that have long names
     initialSize: { width: 900, height: 650 },
     Component: ResourcePickerDialogWrapper,
   });
