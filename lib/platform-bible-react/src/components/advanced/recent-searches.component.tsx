@@ -1,4 +1,5 @@
 import { Clock } from 'lucide-react';
+import { Command as CommandPrimitive } from 'cmdk';
 import { Button } from '@/components/shadcn-ui/button';
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/shadcn-ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
@@ -8,7 +9,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
-import { useState } from 'react';
+import { KeyboardEvent, useRef, useState } from 'react';
 import { cn } from '@/utils/shadcn-ui/utils';
 
 /** Interface defining the properties for the RecentSearches component */
@@ -55,6 +56,10 @@ export default function RecentSearches<T>({
   buttonVariant = 'ghost',
 }: RecentSearchesProps<T>) {
   const [isOpen, setIsOpen] = useState(false);
+  // The non-null assertion lets us keep the ref typed as HTMLInputElement (not undefined) for
+  // ergonomic call sites. The ref is always set by React before any handler that uses it runs.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const inputRef = useRef<HTMLInputElement>(undefined!);
 
   if (recentSearches.length === 0) {
     return undefined;
@@ -63,6 +68,26 @@ export default function RecentSearches<T>({
   const handleSearchItemSelect = (item: T) => {
     onSearchItemSelect(item);
     setIsOpen(false);
+  };
+
+  const handleContentKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    // Keep navigation/selection keys inside the popover so they don't trigger handlers
+    // on parent components (e.g. the surrounding book/chapter Command).
+    if (['ArrowUp', 'ArrowDown', 'Enter', ' ', 'Escape', 'Home', 'End', 'Tab'].includes(e.key)) {
+      e.stopPropagation();
+    }
+    // Swallow Tab so focus stays inside the popover and Radix doesn't auto-close on focus-out.
+    if (e.key === 'Tab') {
+      e.preventDefault();
+    }
+    // Space is not a select key in cmdk, so synthesize it by clicking the highlighted item.
+    if (e.key === ' ') {
+      e.preventDefault();
+      const selected = e.currentTarget.querySelector<HTMLElement>(
+        '[cmdk-item][data-selected="true"]',
+      );
+      selected?.click();
+    }
   };
 
   return (
@@ -84,8 +109,26 @@ export default function RecentSearches<T>({
           <TooltipContent>{ariaLabel}</TooltipContent>
         </Tooltip>
       </TooltipProvider>
-      <PopoverContent id={id} className="tw:w-[300px] tw:p-0" align="start">
-        <Command>
+      <PopoverContent
+        id={id}
+        className="tw:w-[300px] tw:p-0"
+        align="start"
+        onKeyDown={handleContentKeyDown}
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          inputRef.current?.focus();
+        }}
+      >
+        <Command shouldFilter={false}>
+          {/* Hidden input that owns focus so cmdk handles arrow/Enter keys natively */}
+          <CommandPrimitive.Input
+            ref={inputRef}
+            value=""
+            onValueChange={() => {}}
+            className="tw:sr-only"
+            aria-hidden="true"
+            tabIndex={-1}
+          />
           <CommandList>
             <CommandGroup heading={groupHeading}>
               {recentSearches.map((item) => (
