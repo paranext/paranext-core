@@ -8,6 +8,12 @@ import {
   CommandList,
 } from '@/components/shadcn-ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
@@ -559,27 +565,34 @@ export function BookChapterControl({
               </div>
               {/* Navigation buttons for previous/next chapter/book */}
               <div className="tw:flex tw:items-center tw:pe-2">
-                {quickNavButtons.map(({ onClick, disabled, title, icon: Icon }, index) => (
-                  <Fragment key={title}>
-                    {index === 2 && (
-                      <div className="tw:mx-1 tw:h-5 tw:w-px tw:bg-border" aria-hidden="true" />
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setIsCommandListHidden(true);
-                        onClick();
-                      }}
-                      disabled={disabled}
-                      className="tw:h-8 tw:w-6 tw:p-0"
-                      title={title}
-                      onKeyDown={handleQuickNavButtonKeyDown}
-                    >
-                      <Icon />
-                    </Button>
-                  </Fragment>
-                ))}
+                <TooltipProvider>
+                  {quickNavButtons.map(({ onClick, disabled, title, icon: Icon }, index) => (
+                    <Fragment key={title}>
+                      {index === 2 && (
+                        <div className="tw:mx-1 tw:h-5 tw:w-px tw:bg-border" aria-hidden="true" />
+                      )}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setIsCommandListHidden(true);
+                              onClick();
+                            }}
+                            disabled={disabled}
+                            className="tw:h-8 tw:w-6 tw:p-0"
+                            aria-label={title}
+                            onKeyDown={handleQuickNavButtonKeyDown}
+                          >
+                            <Icon />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{title}</TooltipContent>
+                      </Tooltip>
+                    </Fragment>
+                  ))}
+                </TooltipProvider>
               </div>
             </div>
           ) : (

@@ -2,6 +2,12 @@ import { Clock } from 'lucide-react';
 import { Button } from '@/components/shadcn-ui/button';
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/shadcn-ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
 import { useState } from 'react';
 import { cn } from '@/utils/shadcn-ui/utils';
 
@@ -61,16 +67,23 @@ export default function RecentSearches<T>({
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant={buttonVariant}
-          size="icon"
-          className={buttonClassName}
-          aria-label={ariaLabel}
-        >
-          <Clock className="tw:h-4 tw:w-4" />
-        </Button>
-      </PopoverTrigger>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <Button
+                variant={buttonVariant}
+                size="icon"
+                className={buttonClassName}
+                aria-label={ariaLabel}
+              >
+                <Clock className="tw:h-4 tw:w-4" />
+              </Button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent>{ariaLabel}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       <PopoverContent id={id} className="tw:w-[300px] tw:p-0" align="start">
         <Command>
           <CommandList>
