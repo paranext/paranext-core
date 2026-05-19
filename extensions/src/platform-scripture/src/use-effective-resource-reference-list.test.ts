@@ -61,7 +61,7 @@ describe('useEffectiveResourceReferenceList', () => {
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
     );
 
-    expect(result.current).toBeUndefined();
+    expect(result.current[0]).toBeUndefined();
   });
 
   it('returns undefined while user setting is loading', () => {
@@ -72,7 +72,7 @@ describe('useEffectiveResourceReferenceList', () => {
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
     );
 
-    expect(result.current).toBeUndefined();
+    expect(result.current[0]).toBeUndefined();
   });
 
   it('returns project-only list when user list is empty', () => {
@@ -228,7 +228,7 @@ describe('useEffectiveResourceReferenceList', () => {
       useEffectiveResourceReferenceList(undefined, 'platformScripture.modelTexts'),
     );
 
-    expect(result.current).toBeUndefined();
+    expect(result.current[0]).toBeUndefined();
   });
 
   it('uses subscribeUserReferencedProjectsAndResources for referencedProjectsAndResources setting', () => {
@@ -317,7 +317,7 @@ describe('useEffectiveResourceReferenceList', () => {
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
     );
 
-    expect(result.current).toBeUndefined();
+    expect(result.current[0]).toBeUndefined();
   });
 
   it('discards name-based items that are missing a string name', () => {
