@@ -73,9 +73,6 @@ globalThis.webViewComponent = function ModelTextPanel({
     DEFAULT_LIST,
   );
 
-  // isAdmin: the project-level setting setter is only defined when the user has write access
-  const isAdmin = setAdminModelTexts !== undefined;
-
   const pdp = useProjectDataProvider('platformScripture.userTextConnectionSettings', projectId);
 
   // --- DBL resource resolution ---
@@ -164,7 +161,9 @@ globalThis.webViewComponent = function ModelTextPanel({
         id: resource.dblEntryUid,
       };
 
-      if (isAdmin) {
+      const canUserWriteProjectSettings = await pdp?.canUserWriteProjectSettings();
+
+      if (canUserWriteProjectSettings && setAdminModelTexts) {
         if (isPlatformError(adminModelTextsSetting)) return;
         // ResourceReference union: .id is not on all members; cast is safe after checking .type
         const existingItems = adminModelTextsSetting.items.filter(
@@ -175,7 +174,7 @@ globalThis.webViewComponent = function ModelTextPanel({
             return (item as DblResourceReference).id !== resource.dblEntryUid;
           },
         );
-        await setAdminModelTexts({
+        setAdminModelTexts({
           dataVersion: adminModelTextsSetting.dataVersion,
           items: [newRef, ...existingItems],
         });
@@ -192,7 +191,7 @@ globalThis.webViewComponent = function ModelTextPanel({
         });
       }
     },
-    [isAdmin, adminModelTextsSetting, effectiveModelTexts, setAdminModelTexts, pdp],
+    [adminModelTextsSetting, effectiveModelTexts, setAdminModelTexts, pdp],
   );
 
   const showResourcePicker = useDialogCallback(
