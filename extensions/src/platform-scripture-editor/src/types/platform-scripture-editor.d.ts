@@ -773,6 +773,14 @@ declare module 'papi-shared-types' {
      * receives the `notificationId` when the notification's click action is used.
      */
     'platformScriptureEditor.dismissMarkerNotificationForProjectToday': NotificationClickCommandHandler;
+    /**
+     * Opens the model text panel WebView for a translation project
+     *
+     * @param projectId The project ID of the translation project (not the resource). If not
+     *   provided, the panel opens in a "no project" state.
+     * @returns WebView id for the opened panel, or `undefined` if it could not be opened
+     */
+    'platformScriptureEditor.openModelText': (projectId?: string) => Promise<string | undefined>;
   }
 
   export interface DataProviders {
