@@ -69,7 +69,41 @@ async function startBackgroundFetchResources(): Promise<void> {
 }
 
 async function getCachedResources(): Promise<DblResourceData[] | undefined> {
-  if (cachedResources !== undefined) return cachedResources;
+  if (cachedResources !== undefined) {
+    // Checks to make sure all the `installed` flags are accurate
+    let isChanged = false;
+    const localProjectMetadata = await papi.projectLookup.getMetadataForAllProjects({
+      includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
+    });
+    const newCachedResource = cachedResources.map((resource) => {
+      const newIsInstalled = !!localProjectMetadata.find(
+        (localProject) => localProject.id === resource.projectId,
+      );
+      if (newIsInstalled !== resource.installed) {
+        isChanged = true;
+        return {
+          ...resource,
+          installed: newIsInstalled,
+        };
+      }
+
+      return resource;
+    });
+
+    // If a change was detected updates the cache
+    if (isChanged) {
+      cachedResources = newCachedResource;
+      // Writes the updated cached resources to user data
+      if (executionToken)
+        await papi.storage.writeUserData(
+          executionToken,
+          RESOURCES_CACHE_KEY,
+          JSON.stringify(cachedResources),
+        );
+    }
+
+    return cachedResources;
+  }
 
   return fetchMutex.runExclusive(async () => {
     if (cachedResources !== undefined) return cachedResources;
