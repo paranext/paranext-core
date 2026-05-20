@@ -1,11 +1,47 @@
 import { FloatPosition } from 'rc-dock';
 import { vi } from 'vitest';
 import { FloatLayout } from '@shared/models/docking-framework.model';
-import { getFloatPosition } from './platform-dock-layout-positioning.util';
+import {
+  getFloatPosition,
+  getGroups,
+  HEADLESS_GROUP,
+  TAB_GROUP,
+  TAB_GROUP_RESOURCES,
+} from './platform-dock-layout-positioning.util';
 
 vi.mock('../../../shared/services/logger.service');
 
 describe('Dock Layout Component', () => {
+  describe('getGroups()', () => {
+    it('power mode: returns TAB_GROUP with panelExtra and without tabLocked', () => {
+      const groups = getGroups(true);
+      expect(typeof groups[TAB_GROUP].panelExtra).toBe('function');
+      expect(groups[TAB_GROUP].tabLocked).toBeUndefined();
+      expect(groups[TAB_GROUP].maximizable).toBe(false);
+      expect(groups[TAB_GROUP].floatable).toBe(false);
+      expect(groups[TAB_GROUP].animated).toBe(false);
+    });
+
+    it('simple mode: returns TAB_GROUP with tabLocked and without panelExtra', () => {
+      const groups = getGroups(false);
+      expect(groups[TAB_GROUP].tabLocked).toBe(true);
+      expect(groups[TAB_GROUP].panelExtra).toBeUndefined();
+      expect(groups[TAB_GROUP].maximizable).toBe(false);
+      expect(groups[TAB_GROUP].floatable).toBe(false);
+      expect(groups[TAB_GROUP].animated).toBe(false);
+    });
+
+    it('simple mode: registers HEADLESS_GROUP and TAB_GROUP_RESOURCES with locked config', () => {
+      const groups = getGroups(false);
+      [HEADLESS_GROUP, TAB_GROUP_RESOURCES].forEach((groupKey) => {
+        expect(groups[groupKey].tabLocked).toBe(true);
+        expect(groups[groupKey].panelExtra).toBeUndefined();
+        expect(groups[groupKey].maximizable).toBe(false);
+        expect(groups[groupKey].floatable).toBe(false);
+      });
+    });
+  });
+
   describe('getFloatPosition()', () => {
     it('should cascade from top-left of layout', () => {
       const layout: FloatLayout = { type: 'float', floatSize: { width: 20, height: 10 } };

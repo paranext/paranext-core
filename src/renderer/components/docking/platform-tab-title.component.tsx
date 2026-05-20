@@ -1,4 +1,5 @@
 import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { floatTab, updateTabPartialSync } from '@renderer/services/web-view.service-host';
 import { logger } from '@shared/services/logger.service';
 import { windowService } from '@shared/services/window.service';
@@ -69,6 +70,8 @@ export function PlatformTabTitle({
   flashTriggerTime,
   id,
 }: PlatformTabTitleProps) {
+  const isPowerMode = useIsPowerMode();
+
   const lastFlashTriggerTimeRef = useRef<number | undefined>(undefined);
 
   // This ref will always be defined
@@ -209,27 +212,34 @@ export function PlatformTabTitle({
     />
   );
 
+  const titleWithTooltip = (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div ref={containerRef} className="platform-tab-title" aria-label={tabLabel}>
+            <span>{icon}</span>
+            <span>{title}</span>
+          </div>
+        </TooltipTrigger>
+        {tooltip &&
+          createPortal(
+            <TooltipContent className="platform-tab-tooltip" side="bottom">
+              <p>{tooltip}</p>
+            </TooltipContent>,
+            document.body,
+          )}
+      </Tooltip>
+    </TooltipProvider>
+  );
+
+  // Simple mode: skip the context menu entirely. Its only item is "Float Tab", which is already a
+  // no-op because the group config has floatable: false. Removing the menu prevents a dead option
+  // from being shown.
+  if (!isPowerMode) return titleWithTooltip;
+
   return (
     <ContextMenu>
-      <ContextMenuTrigger>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div ref={containerRef} className="platform-tab-title" aria-label={tabLabel}>
-                <span>{icon}</span>
-                <span>{title}</span>
-              </div>
-            </TooltipTrigger>
-            {tooltip &&
-              createPortal(
-                <TooltipContent className="platform-tab-tooltip" side="bottom">
-                  <p>{tooltip}</p>
-                </TooltipContent>,
-                document.body,
-              )}
-          </Tooltip>
-        </TooltipProvider>
-      </ContextMenuTrigger>
+      <ContextMenuTrigger>{titleWithTooltip}</ContextMenuTrigger>
       <ContextMenuContent>
         <ContextMenuItem onClick={() => handleFloatTab(id)}>{floatTabText}</ContextMenuItem>
       </ContextMenuContent>

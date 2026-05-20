@@ -47,6 +47,7 @@ import {
   isTab,
   RCDockTabInfo,
 } from '@renderer/components/docking/docking-framework-internal.model';
+import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 
 export function PlatformDockLayout() {
   // This ref will always be defined
@@ -66,6 +67,14 @@ export function PlatformDockLayout() {
    */
   const onLayoutChangeRef = useRef<OnLayoutChange | undefined>(undefined);
 
+  const isPowerMode = useIsPowerMode();
+  // Stash isPowerMode in a ref so closures registered with the web-view service (loadTab,
+  // updateWebViewDefinition) always read the current value rather than the value captured at
+  // registration time. Mode-switching at runtime doesn't currently re-trigger a layout switch
+  // (see web-view.service-host.ts), but the ref keeps these closures consistent if that changes.
+  const isPowerModeRef = useRef(isPowerMode);
+  isPowerModeRef.current = isPowerMode;
+
   useEffect(() => {
     // Register with `web-view.service.ts` so it can perform operations on us
     const unsub = registerDockLayout({
@@ -74,9 +83,21 @@ export function PlatformDockLayout() {
       findFirstWebViewDefinitionByType: (webViewType: string) =>
         findFirstWebViewDefinitionByType(dockLayoutRef.current, webViewType),
       addTabToDock: (savedTabInfo: SavedTabInfo, layout: Layout, shouldBringToFront = true) =>
-        addTabToDock(savedTabInfo, layout, shouldBringToFront, dockLayoutRef.current),
+        addTabToDock(
+          savedTabInfo,
+          layout,
+          shouldBringToFront,
+          dockLayoutRef.current,
+          isPowerModeRef.current,
+        ),
       addWebViewToDock: (webView: WebViewTabProps, layout: Layout, shouldBringToFront = true) =>
-        addWebViewToDock(webView, layout, shouldBringToFront, dockLayoutRef.current),
+        addWebViewToDock(
+          webView,
+          layout,
+          shouldBringToFront,
+          dockLayoutRef.current,
+          isPowerModeRef.current,
+        ),
       removeTabFromDock: (tabId: string) => {
         const tabToRemove = dockLayoutRef.current.find(tabId);
         // Null required by the external API
@@ -93,13 +114,26 @@ export function PlatformDockLayout() {
         tabId: string,
         partialTabInfo: Partial<TabInfo>,
         shouldBringToFront = false,
-      ) => updateTabPartial(dockLayoutRef.current, tabId, partialTabInfo, shouldBringToFront),
+      ) =>
+        updateTabPartial(
+          dockLayoutRef.current,
+          tabId,
+          partialTabInfo,
+          shouldBringToFront,
+          isPowerModeRef.current,
+        ),
       updateWebViewDefinition: (
         webViewId: string,
         updateInfo: Partial<WebViewDefinitionUpdatableProperties>,
         shouldBringToFront = false,
       ) =>
-        updateWebViewDefinition(webViewId, updateInfo, shouldBringToFront, dockLayoutRef.current),
+        updateWebViewDefinition(
+          webViewId,
+          updateInfo,
+          shouldBringToFront,
+          dockLayoutRef.current,
+          isPowerModeRef.current,
+        ),
       getTabInfoByDirectionFromTab: (sourceTabId: string, direction: DirectionFromTab) =>
         getTabInfoByDirectionFromTab(dockLayoutRef.current, sourceTabId, direction),
       getTabInfoByElement: (tabElement: Element) =>
@@ -129,7 +163,7 @@ export function PlatformDockLayout() {
   return (
     <DockLayoutWrapper
       ref={dockLayoutRef}
-      loadTab={loadTab}
+      loadTab={(savedTabInfo) => loadTab(savedTabInfo, false, isPowerModeRef.current)}
       saveTab={saveTab}
       /* Put a visual space around all tab-groups.
        * I tried using CSS padding and margin for this, but both causes overflows. */

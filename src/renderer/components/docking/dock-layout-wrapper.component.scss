@@ -347,6 +347,66 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
 
 // #endregion TAB HEADER ////////////////////////////////////////////////
 
+// #region SIMPLE-MODE DROP BLOCK //////////////////////////////////////
+// In simple mode the resources column uses its own group (`.dock-style-resources`). rc-dock's
+// `tabLocked: true` blocks the DockDropLayer/DockDropEdge paths (panel edge/middle drops), but
+// the per-tab onDrop handler in `node_modules/rc-dock/lib/DockTabs.js` calls `dockMove` with no
+// group check, which is what lets cross-column drops succeed. Removing pointer events from
+// `.dock-tab-hit-area` (the drop target inside each tab) prevents that handler from firing
+// without breaking tab activation, which happens via the title's drag-initiator. The home and
+// editor columns (`.dock-style-headless`) don't need this rule because the entire dock-bar
+// already has `pointer-events: none` (see SIMPLE-MODE HEADLESS BAR below).
+.dock-panel.dock-style-resources .dock-tab-hit-area {
+  pointer-events: none;
+}
+// #endregion SIMPLE-MODE DROP BLOCK ///////////////////////////////////
+
+// #region SIMPLE-MODE DRAG APPEARANCE /////////////////////////////////
+// Tabs in simple mode behaviorally snap back when dragged (see DROP BLOCK above), but
+// rc-dock still renders them as if they were draggable: tabs use `cursor: pointer`/`default`
+// from rc-dock's tabs.less and a `.dragging-layer` ghost element is appended to `<body>`
+// during drag (DragManager.js `createDraggingElement`). Make tabs look click-only.
+// Tabs ARE clickable to activate, so `cursor: pointer` is the natural choice and overrides
+// the `cursor: default` rc-dock applies to active tabs.
+.dock-panel.dock-style-resources .dock-tab,
+.dock-panel.dock-style-resources .dock-tab.dock-tab-active,
+.dock-panel.dock-style-resources .dock-tab .drag-initiator {
+  cursor: pointer;
+}
+
+// rc-dock fades the source tab to 30% opacity during drag (tabs.less `.dock-tab.dragging`).
+// Suppress that so the tab doesn't appear to react to drag attempts.
+.dock-panel.dock-style-resources .dock-tab.dragging {
+  opacity: 1;
+}
+
+// rc-dock appends `.dragging-layer` to `<body>` with the tab group's class
+// (`groupClassNames` in `node_modules/rc-dock/lib/Utils.js` → e.g. `dock-style-resources`), so
+// we can scope hiding it to simple-mode columns. `visibility: hidden` keeps the element
+// in the DOM (rc-dock measures it during drag) without showing the ghost.
+body > .dragging-layer.dock-style-resources {
+  visibility: hidden;
+}
+// #endregion SIMPLE-MODE DRAG APPEARANCE //////////////////////////////
+
+// #region SIMPLE-MODE HEADLESS BAR /////////////////////////////////////
+// In simple mode, columns 1 (home) and 2 (editor) use HEADLESS_GROUP so their tab bars are
+// invisible — a single fixed locked tab doesn't benefit from a tab bar. The `pointer-events: none`
+// keeps the bar from intercepting clicks/drags. The hover/focus/dropping selectors override
+// rc-dock's built-in headless behavior, which would otherwise fade the bar back in. Mirrors
+// HEADLESS_STYLE in `src/stories/platform/ten-layout-shared.tsx`.
+.dock-layout > :not(.dock-fbox) .dock-panel.dock-style-headless .dock-bar {
+  pointer-events: none;
+}
+
+.dock-layout > :not(.dock-fbox) .dock-panel.dock-style-headless .dock-bar:hover,
+.dock-layout > :not(.dock-fbox) .dock-panel.dock-style-headless .dock-bar:focus-within,
+.dock-layout > :not(.dock-fbox) .dock-panel.dock-style-headless.dock-panel-dropping .dock-bar {
+  opacity: 0;
+  height: 20px;
+}
+// #endregion SIMPLE-MODE HEADLESS BAR //////////////////////////////////
+
 // #region TAB SEPARATOR (DIVIDER) //////////////////////////////////////
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab:not(.dock-tab-active) {
   &::before {

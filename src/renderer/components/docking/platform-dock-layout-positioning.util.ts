@@ -26,19 +26,56 @@ const DOCK_FLOAT_OFFSET = 28;
 // Appears in DOM as `dock-style-card` and `dock-style-platform-bible`.
 export const TAB_GROUP = 'card platform-bible';
 
-export const GROUPS: { [key: string]: TabGroup } = {
-  [TAB_GROUP]: {
+// Simple-mode column groups. Different groups can't share a panel, so giving simple-mode columns
+// distinct groups prevents tabs from being dragged between columns (rc-dock's tabLocked only blocks
+// drag-to-create-new-panel, not drag-between-existing-panels). The 'card platform-bible' prefix
+// preserves shared CSS styling — see the .dock-style-* selectors.
+export const TAB_GROUP_RESOURCES = 'card platform-bible resources';
+
+/**
+ * Group for simple-mode columns whose tab bar should be invisible (home, editor). Tabs in this
+ * group are locked and the dock-bar is hidden via CSS in `dock-layout-wrapper.component.scss`. The
+ * `'platform-bible'` token keeps the shared `.dock-style-platform-bible` styling rules in play.
+ */
+export const HEADLESS_GROUP = 'headless platform-bible';
+
+/**
+ * Build the rc-dock group config for `TAB_GROUP`. The shape depends on `platform.interfaceMode`:
+ * power mode allows new tabs (`panelExtra` "+"), simple mode locks tabs in place (`tabLocked`) and
+ * drops `panelExtra`. In simple mode, also registers `HEADLESS_GROUP` (for the home and editor
+ * columns, whose tab bars are hidden via CSS) and `TAB_GROUP_RESOURCES` (for the resources column,
+ * which still shows its tab bar) so tabs can't be dragged across columns.
+ */
+export function getGroups(isPowerMode: boolean): { [key: string]: TabGroup } {
+  const baseConfig: TabGroup = {
     maximizable: false, // Don't allow groups of tabs to be maximized
     floatable: false, // Don't allow tabs to be floated
     animated: false, // Don't animate tab transitions
     // TODO: Currently allowing newWindow crashes since electron doesn't seem to have window.open defined?
     // newWindow: true, // Allow floating windows to show in a native window
     moreIcon: createElement(ChevronsUpDown),
-    panelExtra: (panelData) => {
-      return createElement(PanelExtraContent, { panelData });
-    },
-  },
-};
+  };
+
+  if (isPowerMode) {
+    return {
+      [TAB_GROUP]: {
+        ...baseConfig,
+        panelExtra: (panelData) => createElement(PanelExtraContent, { panelData }),
+      },
+    };
+  }
+
+  // Simple mode: lock tabs (no drag-to-reorder, no drag-to-split) and hide the "+" new-tab button.
+  // Register `HEADLESS_GROUP` (home + editor columns) and `TAB_GROUP_RESOURCES` (resources column)
+  // so tabs can't be dragged across columns. `TAB_GROUP` itself is kept for any tabs that end up
+  // using the default group (e.g. createRCDockTabFromTabInfo's fallback).
+  const simpleConfig: TabGroup = { ...baseConfig, tabLocked: true };
+  return {
+    [TAB_GROUP]: simpleConfig,
+    [HEADLESS_GROUP]: simpleConfig,
+    [TAB_GROUP_RESOURCES]: simpleConfig,
+  };
+}
 
 /** Initial sizes for each tab in CSS `px` units if created as floating tabs */
 const tabInitialFloatingSize: Record<TabType, FloatSize> = Object.fromEntries(
