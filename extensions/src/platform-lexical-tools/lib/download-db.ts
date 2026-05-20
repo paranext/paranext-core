@@ -396,6 +396,9 @@ export async function runDownload(opts: RunDownloadOptions, deps: DownloadDeps):
   } catch (error) {
     if (error instanceof FileNotFoundError) {
       if (isStrict) throw error;
+      // Use log (not warn) because a 404 on a fork is the documented, expected outcome:
+      // the fork hasn't published their own lexical DB. Detection failure (no origin / no git)
+      // uses warn because that situation is unexpected and warrants attention.
       deps.log(
         `Lexical database files not found at ${error.url} — extension will run without lexical data.`,
       );

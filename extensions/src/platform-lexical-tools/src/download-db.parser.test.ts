@@ -32,6 +32,12 @@ describe('parseGitHubOrgFromRemoteUrl', () => {
     });
   });
 
+  it('parses SSH URL without .git suffix', () => {
+    expect(parseGitHubOrgFromRemoteUrl('git@github.com:paranext/paranext-core')).toEqual({
+      org: 'paranext',
+    });
+  });
+
   it('returns undefined with reason for non-github host', () => {
     expect(parseGitHubOrgFromRemoteUrl('https://gitlab.com/foo/bar.git')).toEqual({
       org: undefined,

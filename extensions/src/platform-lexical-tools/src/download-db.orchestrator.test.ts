@@ -145,6 +145,33 @@ describe('runDownload', () => {
     expect(deps.extractXzFile).toHaveBeenCalledTimes(1);
   });
 
+  it('local file present + checksum mismatch: re-downloads and re-extracts', async () => {
+    // Simulate the "stale local file" scenario: file exists locally, but its checksum differs
+    // from the remote, so we should re-download and re-extract.
+    const deps = makeDeps({
+      fileExists: vi.fn((p: string) => p === '/tmp/lexical-db/lexical.db.xz'),
+      fetchRemoteChecksum: vi.fn(async () => 'remote-hash'),
+      calculateChecksum: vi
+        .fn()
+        .mockResolvedValueOnce('local-hash-stale') // local file → stale
+        .mockResolvedValueOnce('remote-hash'), // re-downloaded file → matches
+    });
+    await runDownload({ ...baseOpts, detection: { org: 'paranext' } }, deps);
+    expect(deps.downloadFile).toHaveBeenCalledTimes(1);
+    expect(deps.extractXzFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('lenient + happy path (fork with dependencies repo): downloads and extracts', async () => {
+    const deps = makeDeps();
+    await runDownload(
+      { ...baseOpts, detection: { org: 'tjcouch-sil' } satisfies OrgDetectionResult },
+      deps,
+    );
+    expect(deps.downloadFile).toHaveBeenCalledTimes(1);
+    expect(deps.extractXzFile).toHaveBeenCalledTimes(1);
+    expect(deps.warn).not.toHaveBeenCalled();
+  });
+
   it('downloaded file with mismatched checksum: throws', async () => {
     const deps = makeDeps({
       fetchRemoteChecksum: vi.fn(async () => 'remote-hash'),
