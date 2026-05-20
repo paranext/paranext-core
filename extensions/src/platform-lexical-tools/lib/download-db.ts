@@ -9,20 +9,8 @@ import { XzReadableStream } from 'xz-decompress';
 // GitHub repository: https://github.com/paranext/dependencies
 const DB_FILENAME = 'lexical.db.xz';
 const CHECKSUM_FILENAME = 'lexical.db.xz.sha256';
-// Use raw.githubusercontent.com URL directly to avoid redirects
-const RAW_CONTENT_BASE_URL =
-  'https://raw.githubusercontent.com/paranext/dependencies/main/lexical-db';
-// For large files, GitHub uses media.githubusercontent.com
-const MEDIA_CONTENT_BASE_URL =
-  'https://media.githubusercontent.com/media/paranext/dependencies/main/lexical-db';
 const LOCAL_DB_DIR = path.join(__dirname, '..', 'assets', 'lexical-db');
 const LOCAL_DB_PATH = path.join(LOCAL_DB_DIR, DB_FILENAME);
-
-// Create the DB directory if it doesn't exist
-if (!fs.existsSync(LOCAL_DB_DIR)) {
-  fs.mkdirSync(LOCAL_DB_DIR, { recursive: true });
-  console.log(`Created directory: ${LOCAL_DB_DIR}`);
-}
 
 /** Result of attempting to detect the GitHub organization. */
 export type OrgDetectionResult = { org: string } | { org: undefined; reason: string };
@@ -61,7 +49,7 @@ export function parseGitHubOrgFromRemoteUrl(url: string): OrgDetectionResult {
  * network/IO errors so the orchestrator can treat "file missing" leniently for non-paranext orgs.
  */
 export class FileNotFoundError extends Error {
-  constructor(public readonly url: string) {
+  constructor(readonly url: string) {
     super(`File not found at ${url}`);
     this.name = 'FileNotFoundError';
   }
@@ -300,81 +288,158 @@ async function fetchRemoteChecksum(url: string): Promise<string> {
   });
 }
 
-/** Main function to handle the download and extraction process */
-async function main(): Promise<void> {
-  try {
-    // Fetch the remote checksum
-    const remoteChecksum = await fetchRemoteChecksum(
-      `${RAW_CONTENT_BASE_URL}/${CHECKSUM_FILENAME}`,
+/**
+ * Injectable dependencies for `runDownload`. The `main()` entry point composes real
+ * implementations; tests can substitute fakes.
+ */
+export interface DownloadDeps {
+  fetchRemoteChecksum: (url: string) => Promise<string>;
+  downloadFile: (url: string, destination: string) => Promise<void>;
+  calculateChecksum: (filePath: string) => Promise<string>;
+  extractXzFile: (filePath: string) => Promise<string>;
+  fileExists: (path: string) => boolean;
+  ensureDir: (path: string) => void;
+  log: (msg: string) => void;
+  warn: (msg: string) => void;
+}
+
+export interface RunDownloadOptions {
+  detection: OrgDetectionResult;
+  localDbDir: string;
+  localDbPath: string;
+  dbFilename: string;
+  checksumFilename: string;
+}
+
+/**
+ * Orchestrates lexical DB download: discover org → compute URLs → fetch checksum → skip/download →
+ * verify → extract. Applies strict-vs-lenient policy: when the detected org is exactly `paranext`,
+ * missing files (HTTP 404) hard-fail; otherwise they are logged and skipped so non-paranext orgs
+ * (or unparseable origins) don't break `npm install`.
+ */
+export async function runDownload(opts: RunDownloadOptions, deps: DownloadDeps): Promise<void> {
+  const { detection, localDbDir, localDbPath, dbFilename, checksumFilename } = opts;
+
+  if (detection.org === undefined) {
+    deps.warn(
+      `Could not detect GitHub org from origin remote (${detection.reason}) — running in lenient mode (missing files will be skipped)`,
     );
-    console.log(`Remote checksum: ${remoteChecksum}`);
+    return;
+  }
 
-    // Check if we already have the file with the correct checksum
+  const isStrict = detection.org === 'paranext';
+  if (isStrict) {
+    deps.log(
+      `Detected GitHub org "paranext" from origin remote — running in strict mode (missing files will error)`,
+    );
+  } else {
+    deps.log(
+      `Detected GitHub org "${detection.org}" from origin remote — running in lenient mode (missing files will be skipped)`,
+    );
+  }
+
+  const rawBaseUrl = `https://raw.githubusercontent.com/${detection.org}/dependencies/main/lexical-db`;
+  const mediaBaseUrl = `https://media.githubusercontent.com/media/${detection.org}/dependencies/main/lexical-db`;
+
+  deps.ensureDir(localDbDir);
+
+  try {
+    const checksumUrl = `${rawBaseUrl}/${checksumFilename}`;
+    const remoteChecksum = await deps.fetchRemoteChecksum(checksumUrl);
+    deps.log(`Remote checksum: ${remoteChecksum}`);
+
     let needsDownload = true;
-
-    if (fs.existsSync(LOCAL_DB_PATH)) {
-      console.log('Local DB file exists, checking if it needs updating...');
-
+    if (deps.fileExists(localDbPath)) {
+      deps.log('Local DB file exists, checking if it needs updating...');
       try {
-        const localChecksum = await calculateChecksum(LOCAL_DB_PATH);
-        console.log(`Local checksum: ${localChecksum}`);
-
-        // For debugging, also show the exact format and length of each checksum
-        console.log(`Remote checksum length: ${remoteChecksum.length}, value: [${remoteChecksum}]`);
-        console.log(`Local checksum length: ${localChecksum.length}, value: [${localChecksum}]`);
-
+        const localChecksum = await deps.calculateChecksum(localDbPath);
+        deps.log(`Local checksum: ${localChecksum}`);
         if (localChecksum === remoteChecksum) {
-          console.log('Checksums match, no need to download again.');
+          deps.log('Checksums match, no need to download again.');
           needsDownload = false;
         } else {
-          console.log('Checksums differ, will download updated file.');
+          deps.log('Checksums differ, will download updated file.');
         }
       } catch (error) {
-        console.warn(
+        deps.warn(
           `Error calculating local checksum: ${error instanceof Error ? error.message : String(error)}`,
         );
-        console.log('Will download the file to be safe.');
+        deps.log('Will download the file to be safe.');
       }
     } else {
-      console.log('Local DB file does not exist, will download it.');
+      deps.log('Local DB file does not exist, will download it.');
     }
 
-    // Download the file if needed
     if (needsDownload) {
-      console.log(`Downloading ${DB_FILENAME}...`);
+      deps.log(`Downloading ${dbFilename}...`);
+      const dbUrl = `${mediaBaseUrl}/${dbFilename}`;
+      await deps.downloadFile(dbUrl, localDbPath);
+      deps.log(`Downloaded ${dbFilename} to ${localDbPath}`);
 
-      // Download DB file using media content URL for large files
-      const dbUrl = `${MEDIA_CONTENT_BASE_URL}/${DB_FILENAME}`;
-      await downloadFile(dbUrl, LOCAL_DB_PATH);
-      console.log(`Downloaded ${DB_FILENAME} to ${LOCAL_DB_PATH}`);
-
-      // Verify the downloaded file
-      const downloadedChecksum = await calculateChecksum(LOCAL_DB_PATH);
+      const downloadedChecksum = await deps.calculateChecksum(localDbPath);
       if (downloadedChecksum !== remoteChecksum) {
         throw new Error(
           `Checksum verification failed after download. Expected: ${remoteChecksum}, Got: ${downloadedChecksum}`,
         );
       }
-
-      console.log('Checksum verification passed.');
-
-      // Extract the file
-      await extractXzFile(LOCAL_DB_PATH);
+      deps.log('Checksum verification passed.');
+      await deps.extractXzFile(localDbPath);
     } else {
-      // Check if the extracted file exists
-      const extractedPath = LOCAL_DB_PATH.replace('.xz', '');
-      if (!fs.existsSync(extractedPath)) {
-        console.log('Extracted DB file does not exist, extracting now...');
-        await extractXzFile(LOCAL_DB_PATH);
+      const extractedPath = localDbPath.replace('.xz', '');
+      if (!deps.fileExists(extractedPath)) {
+        deps.log('Extracted DB file does not exist, extracting now...');
+        await deps.extractXzFile(localDbPath);
       }
     }
 
-    console.log('DB file preparation complete.');
+    deps.log('DB file preparation complete.');
+  } catch (error) {
+    if (error instanceof FileNotFoundError) {
+      if (isStrict) throw error;
+      deps.log(
+        `Lexical database files not found at ${error.url} — extension will run without lexical data.`,
+      );
+      return;
+    }
+    throw error;
+  }
+}
+
+/** Main function to handle the download and extraction process */
+async function main(): Promise<void> {
+  try {
+    await runDownload(
+      {
+        detection: detectGitHubOrg(),
+        localDbDir: LOCAL_DB_DIR,
+        localDbPath: LOCAL_DB_PATH,
+        dbFilename: DB_FILENAME,
+        checksumFilename: CHECKSUM_FILENAME,
+      },
+      {
+        fetchRemoteChecksum,
+        downloadFile,
+        calculateChecksum,
+        extractXzFile,
+        fileExists: fs.existsSync,
+        ensureDir: (dir: string) => {
+          if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+            console.log(`Created directory: ${dir}`);
+          }
+        },
+        log: (msg: string) => console.log(msg),
+        warn: (msg: string) => console.warn(msg),
+      },
+    );
   } catch (error) {
     console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);
   }
 }
 
-// Run the main function
-main();
+// Only run when invoked directly (e.g., via `ts-node ./lib/download-db.ts` in postinstall).
+// When imported by tests, this guard prevents an accidental real download.
+if (require.main === module) {
+  main();
+}
