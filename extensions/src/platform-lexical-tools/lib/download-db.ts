@@ -23,6 +23,38 @@ if (!fs.existsSync(LOCAL_DB_DIR)) {
   console.log(`Created directory: ${LOCAL_DB_DIR}`);
 }
 
+/** Result of attempting to detect the GitHub organization. */
+export type OrgDetectionResult = { org: string } | { org: undefined; reason: string };
+
+/**
+ * Pure parser: given a git remote URL, extract the GitHub organization name.
+ *
+ * Recognizes:
+ *
+ * - https://github.com/<org>/<repo>[.git][/]
+ * - Git@github.com:<org>/<repo>[.git][/]
+ *
+ * Returns `{ org }` on success, or `{ org: undefined, reason }` describing why parsing failed
+ * (empty input, unrecognized host, etc.).
+ */
+export function parseGitHubOrgFromRemoteUrl(url: string): OrgDetectionResult {
+  const trimmed = url.trim();
+  if (!trimmed) {
+    return { org: undefined, reason: 'origin remote URL was empty' };
+  }
+
+  const httpsMatch = trimmed.match(/^https?:\/\/github\.com\/([^/]+)\/[^/]+?(?:\.git)?\/?$/);
+  if (httpsMatch) return { org: httpsMatch[1] };
+
+  const sshMatch = trimmed.match(/^git@github\.com:([^/]+)\/[^/]+?(?:\.git)?\/?$/);
+  if (sshMatch) return { org: sshMatch[1] };
+
+  return {
+    org: undefined,
+    reason: `origin URL did not match a recognized github.com pattern: ${trimmed}`,
+  };
+}
+
 /**
  * Calculate SHA-256 checksum of a file
  *
