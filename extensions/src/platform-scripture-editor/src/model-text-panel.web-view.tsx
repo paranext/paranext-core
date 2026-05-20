@@ -7,9 +7,8 @@ import {
 } from '@eten-tech-foundation/platform-editor';
 import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import type { WebViewProps } from '@papi/core';
-import { logger } from '@papi/frontend';
+import papi, { logger } from '@papi/frontend';
 import {
-  useData,
   useDataProvider,
   useDialogCallback,
   useLocalizedStrings,
@@ -17,7 +16,7 @@ import {
   useProjectDataProvider,
   useProjectSetting,
 } from '@papi/frontend/react';
-import { Button, Spinner } from 'platform-bible-react';
+import { Button, Spinner, usePromise } from 'platform-bible-react';
 import {
   DblResourceData,
   getErrorMessage,
@@ -79,10 +78,14 @@ globalThis.webViewComponent = function ModelTextPanel({
   // --- DBL resource resolution ---
 
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
-  const [resourcesPossiblyError] = useData(
-    'platformGetResources.dblResourcesProvider',
-  ).DblResources(undefined, []);
-  const dblResources = isPlatformError(resourcesPossiblyError) ? [] : resourcesPossiblyError;
+  const [resourcesPossiblyUndefined, isLoadingResources] = usePromise(
+    useCallback(
+      async () => papi.commands.sendCommand('platformGetResources.getCachedResources'),
+      [],
+    ),
+    undefined,
+  );
+  const dblResources = resourcesPossiblyUndefined ?? [];
 
   const effectiveModelText = effectiveModelTexts?.items[0];
   // EffectiveResourceReference is a discriminated union; checking `.type` narrows to DblResourceReference
@@ -250,10 +253,10 @@ globalThis.webViewComponent = function ModelTextPanel({
   }
 
   // Zero state: no model text configured (or still loading)
-  if (!effectiveModelTexts || effectiveModelTexts.items.length === 0) {
+  if (!effectiveModelTexts || effectiveModelTexts.items.length === 0 || isLoadingResources) {
     return (
       <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
-        {isEffectiveModelTextsLoading ? (
+        {isEffectiveModelTextsLoading || isLoadingResources ? (
           <Spinner />
         ) : (
           <>

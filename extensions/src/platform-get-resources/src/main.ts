@@ -8,7 +8,7 @@ import {
   WebViewDefinition,
 } from '@papi/core';
 import type { DblResourceData } from 'platform-bible-utils';
-import { isString, Mutex, wait } from 'platform-bible-utils';
+import { getErrorMessage, isString, Mutex, wait } from 'platform-bible-utils';
 import getResourcesDialogReact from './get-resources.web-view?inline';
 import homeDialogReact from './home.web-view?inline';
 import newTabReact from './new-tab.web-view?inline';
@@ -70,36 +70,40 @@ async function startBackgroundFetchResources(): Promise<void> {
 
 async function getCachedResources(): Promise<DblResourceData[] | undefined> {
   if (cachedResources !== undefined) {
-    // Checks to make sure all the `installed` flags are accurate
-    let isChanged = false;
-    const localProjectMetadata = await papi.projectLookup.getMetadataForAllProjects({
-      includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
-    });
-    const newCachedResource = cachedResources.map((resource) => {
-      const newIsInstalled = !!localProjectMetadata.find(
-        (localProject) => localProject.id === resource.projectId,
-      );
-      if (newIsInstalled !== resource.installed) {
-        isChanged = true;
-        return {
-          ...resource,
-          installed: newIsInstalled,
-        };
-      }
-
-      return resource;
-    });
-
-    // If a change was detected updates the cache
-    if (isChanged) {
-      cachedResources = newCachedResource;
-      // Writes the updated cached resources to user data
-      if (executionToken)
-        await papi.storage.writeUserData(
-          executionToken,
-          RESOURCES_CACHE_KEY,
-          JSON.stringify(cachedResources),
+    try {
+      // Checks to make sure all the `installed` flags are accurate
+      let isChanged = false;
+      const localProjectMetadata = await papi.projectLookup.getMetadataForAllProjects({
+        includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
+      });
+      const newCachedResource = cachedResources.map((resource) => {
+        const newIsInstalled = !!localProjectMetadata.find(
+          (localProject) => localProject.id === resource.projectId,
         );
+        if (newIsInstalled !== resource.installed) {
+          isChanged = true;
+          return {
+            ...resource,
+            installed: newIsInstalled,
+          };
+        }
+
+        return resource;
+      });
+
+      // If a change was detected updates the cache
+      if (isChanged) {
+        cachedResources = newCachedResource;
+        // Writes the updated cached resources to user data
+        if (executionToken)
+          await papi.storage.writeUserData(
+            executionToken,
+            RESOURCES_CACHE_KEY,
+            JSON.stringify(cachedResources),
+          );
+      }
+    } catch (error: unknown) {
+      logger.warn(`Error getting cached resources: ${getErrorMessage(error)}`);
     }
 
     return cachedResources;

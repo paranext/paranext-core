@@ -1,12 +1,17 @@
-import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { ResourcePickerDialog, RESOURCE_PICKER_DIALOG_STRING_KEYS } from 'platform-bible-react';
+import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import {
+  ResourcePickerDialog,
+  RESOURCE_PICKER_DIALOG_STRING_KEYS,
+  usePromise,
+} from 'platform-bible-react';
 import { DIALOG_BASE } from '@renderer/components/dialogs/dialog-base.data';
 import {
   DialogDefinition,
   DialogTypes,
   RESOURCE_PICKER_DIALOG_TYPE,
 } from '@renderer/components/dialogs/dialog-definition.model';
-import { isPlatformError } from 'platform-bible-utils';
+import { useCallback } from 'react';
+import { commands } from '@renderer/services/papi-frontend.service';
 
 const STRING_KEYS = [...RESOURCE_PICKER_DIALOG_STRING_KEYS];
 
@@ -18,13 +23,14 @@ function ResourcePickerDialogWrapper({
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
 
   // Fetches all resources to pass into the resource picker
-  const [resources, , isResourcesLoading] = useData(
-    'platformGetResources.dblResourcesProvider',
-  ).DblResources(undefined, []);
+  const [resources, isResourcesLoading] = usePromise(
+    useCallback(async () => commands.sendCommand('platformGetResources.getCachedResources'), []),
+    undefined,
+  );
 
   return (
     <ResourcePickerDialog
-      allResources={isPlatformError(resources) ? [] : resources}
+      allResources={resources ?? []}
       isResourcesLoading={isResourcesLoading}
       resourceType={resourceType}
       selectedResourceIds={selectedResourceIds}
