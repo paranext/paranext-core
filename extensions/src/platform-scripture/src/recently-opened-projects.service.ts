@@ -1,6 +1,10 @@
 import papi, { DataProviderEngine, logger } from '@papi/backend';
-import type { IDisposableDataProvider } from '@papi/core';
-import { createSyncProxyForAsyncObject, getErrorMessage } from 'platform-bible-utils';
+import type {
+  DataProviderUpdateInstructions,
+  IDataProviderEngine,
+  IDisposableDataProvider,
+} from '@papi/core';
+import { createSyncProxyForAsyncObject, deepEqual, getErrorMessage } from 'platform-bible-utils';
 import type {
   IRecentlyOpenedProjectsService,
   RecentlyOpenedProjectsDataTypes,
@@ -13,8 +17,7 @@ export const RECENTLY_OPENED_PROJECTS_STORAGE_KEY = 'recentlyOpenedProjects';
 export const MAX_RECENT_PROJECTS = 5;
 
 /** Name used to register and look up this data provider on the PAPI. */
-export const RECENTLY_OPENED_PROJECTS_DATA_PROVIDER_NAME =
-  'platformScripture.recentlyOpenedProjects';
+const RECENTLY_OPENED_PROJECTS_DATA_PROVIDER_NAME = 'platformScripture.recentlyOpenedProjects';
 
 /**
  * Parse a raw JSON string from user storage into a validated list of project IDs. Returns `[]` on
@@ -36,14 +39,6 @@ function parseAndValidate(raw: string): string[] {
   return filtered.slice(0, MAX_RECENT_PROJECTS);
 }
 
-function arraysShallowEqual(a: readonly string[], b: readonly string[]): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i += 1) {
-    if (a[i] !== b[i]) return false;
-  }
-  return true;
-}
-
 /**
  * Engine for the recently-opened-projects data provider.
  *
@@ -51,7 +46,10 @@ function arraysShallowEqual(a: readonly string[], b: readonly string[]): boolean
  * without standing up papi.storage. Production wiring in main.ts supplies callbacks backed by
  * `papi.storage.readUserData` / `writeUserData` scoped to the extension's execution token.
  */
-export class RecentlyOpenedProjectsDataProviderEngine extends DataProviderEngine<RecentlyOpenedProjectsDataTypes> {
+export class RecentlyOpenedProjectsDataProviderEngine
+  extends DataProviderEngine<RecentlyOpenedProjectsDataTypes>
+  implements IDataProviderEngine<RecentlyOpenedProjectsDataTypes>
+{
   private cache: string[] | undefined;
 
   constructor(
@@ -62,14 +60,16 @@ export class RecentlyOpenedProjectsDataProviderEngine extends DataProviderEngine
   }
 
   async getRecentProjects(): Promise<string[]> {
-    return this.loadCache();
+    // Return a copy so callers cannot mutate the engine's internal cache by reference.
+    return [...(await this.loadCache())];
   }
 
-  // Set is not supported externally; recordProjectOpened is the only mutation path. The data type
-  // declares the set value as `never`, so TypeScript prevents external callers; this throw is the
-  // runtime safety net for callers that bypass types.
+  // setRecentProjects is not supported externally; recordProjectOpened is the only mutation path.
+  // The data type declares the set value as `never`, so TypeScript prevents external callers;
+  // this throw is the runtime safety net for callers that bypass types. It cannot be static
+  // because it implements the IDataProviderEngine<RecentlyOpenedProjectsDataTypes> interface.
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-  setRecentProjects(): never {
+  setRecentProjects(): Promise<DataProviderUpdateInstructions<RecentlyOpenedProjectsDataTypes>> {
     throw new Error('setRecentProjects is not supported; use recordProjectOpened instead');
   }
 
@@ -80,7 +80,7 @@ export class RecentlyOpenedProjectsDataProviderEngine extends DataProviderEngine
       0,
       MAX_RECENT_PROJECTS,
     );
-    if (arraysShallowEqual(next, current)) return;
+    if (deepEqual(next, current)) return;
     await this.writeRaw(JSON.stringify(next));
     this.cache = next;
     this.notifyUpdate('RecentProjects');
@@ -133,7 +133,7 @@ const serviceObject = createSyncProxyForAsyncObject<IRecentlyOpenedProjectsServi
 }, serviceObjectToProxy);
 
 async function dispose(): Promise<boolean> {
-  return dataProvider ? dataProvider.dispose() : true;
+  return dataProvider.dispose();
 }
 
 /** Service for tracking which projects the user has opened as a main project in Simple mode. */

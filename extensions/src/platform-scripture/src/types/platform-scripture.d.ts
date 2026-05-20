@@ -1779,7 +1779,7 @@ declare module 'platform-scripture' {
   export type RecentlyOpenedProjectsDataTypes = {
     /**
      * Ordered list of project IDs that the user has opened as their main/active project in the
-     * Simple interface, most-recent first. Capped at 5 entries.
+     * Simple interface, most-recent first. Capped at a small number of entries (currently 5).
      *
      * `get` takes no selector and returns `string[]`. `set` is not supported — use
      * {@link IRecentlyOpenedProjectsService.recordProjectOpened} instead.
@@ -1799,8 +1799,9 @@ declare module 'platform-scripture' {
   export type IRecentlyOpenedProjectsService = IDataProvider<RecentlyOpenedProjectsDataTypes> & {
     /**
      * Records that the given project was opened as the active/main project in the Simple interface.
-     * The project ID is moved (or pushed) to the front of the recents list, the list is capped at 5
-     * entries, persisted to user storage, and subscribers are notified.
+     * The project ID is moved (or pushed) to the front of the recents list, the list is capped at a
+     * small number of entries (currently 5), persisted to user storage, and subscribers are
+     * notified.
      *
      * Re-recording the project that is already at the front of the list is a no-op (no write, no
      * notification). Empty or whitespace-only `projectId` values are rejected silently.

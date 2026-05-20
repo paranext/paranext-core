@@ -598,8 +598,8 @@ export async function openDefaultActiveProjectIfApplicable(
     hasFailed = true;
   }
 
-  // Best-effort: record the project in the recent projects list so the toolbar picker (PT-3983) can surface
-  // it. Failure here must NOT change the outcome — opening succeeded.
+  // Best-effort: record the project in the recent projects list so the future Recent projects picker
+  // can surface it. Failure here must NOT change the outcome — opening succeeded.
   if (openedScriptureEditor) {
     try {
       const recentlyOpenedProjects = await papi.dataProviders.get(

@@ -12,10 +12,6 @@ import {
   notifyCheckResultsInvalidated,
 } from './checks/check-aggregator.service';
 import { checkHostingService } from './checks/extension-host-check-runner.service';
-import {
-  recentlyOpenedProjectsService,
-  RECENTLY_OPENED_PROJECTS_STORAGE_KEY,
-} from './recently-opened-projects.service';
 import { InventoryWebViewOptions, InventoryWebViewProvider } from './inventory.web-view-provider';
 import { SCRIPTURE_EXTENDER_PROJECT_INTERFACES } from './project-data-provider/platform-scripture-extender-pdpe.model';
 import {
@@ -27,6 +23,10 @@ import {
   ScriptureFinderProjectDataProviderEngineFactory,
 } from './project-data-provider/platform-scripture-finder.pdpef.model';
 import { SCRIPTURE_FINDER_PROJECT_INTERFACES } from './project-data-provider/platform-scripture-finder-pdpe.model';
+import {
+  recentlyOpenedProjectsService,
+  RECENTLY_OPENED_PROJECTS_STORAGE_KEY,
+} from './recently-opened-projects.service';
 import { resourceReferenceListValidator } from './resource-reference-list.utils';
 
 const characterInventoryWebViewType = 'platformScripture.characterInventory';
