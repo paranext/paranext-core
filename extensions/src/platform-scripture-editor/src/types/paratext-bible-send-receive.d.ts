@@ -1,4 +1,4 @@
-// File copied from https://github.com/paranext/paratext-bible-internal-extensions/blob/eb0c22f8cf90b5e0b028fb833d03ab6f70ca0dc2/src/paratext-bible-send-receive/src/types/paratext-bible-send-receive.d.ts
+// File copied from https://github.com/paranext/paratext-bible-internal-extensions/blob/f43d4e35cbef074311e6bdbbdf1083e91d031252/src/paratext-bible-send-receive/src/types/paratext-bible-send-receive.d.ts
 
 declare module 'paratext-bible-send-receive' {
   /**
@@ -14,6 +14,10 @@ declare module 'paratext-bible-send-receive' {
    *   administrator must upgrade it
    * - `projectVersionUpgraded` = S/R sort-of failed. The project was upgraded to a higher version of
    *   Paratext. You must update Paratext to open the project
+   * - `sentChanges` = S/R sent ≥1 non-merge revision
+   * - `receivedChanges` = S/R received ≥1 revision (RevisionsReceived.Count > 0)
+   * - `noChangesToSend` = S/R sent no non-merge revisions
+   * - `noChangesReceived` = S/R received no revisions (RevisionsReceived is empty)
    */
   export type ResultStatus =
     | 'succeeded'
@@ -21,7 +25,11 @@ declare module 'paratext-bible-send-receive' {
     | 'initialReceive'
     | 'failed'
     | 'notUpgraded'
-    | 'projectVersionUpgraded';
+    | 'projectVersionUpgraded'
+    | 'sentChanges'
+    | 'receivedChanges'
+    | 'noChangesToSend'
+    | 'noChangesReceived';
 
   /** Base information common to multiple types of revisions */
   type RevisionBase = {
@@ -89,11 +97,6 @@ declare module 'paratext-bible-send-receive' {
    * - `autoreplace` = Autoreplace.txt
    */
   export type ProjectFileType =
-    | ''
-    | 'edited'
-    | 'new'
-    | 'unregistered'
-    | 'stuff'
     | 'notAProjectFile'
     | 'autocorrect'
     | 'bookNames'
@@ -164,6 +167,10 @@ declare module 'paratext-bible-send-receive' {
     conflictsInfo: ConflictInfo[];
     /** Additional information provided in some cases when a S/R fails */
     failureMessage?: string;
+    /** Granular statuses that apply to this result (multiple can apply, e.g., sent AND received) */
+    resultStatuses?: ResultStatus[];
+    /** Total conflict count computed by C# */
+    conflictCount?: number;
   };
 
   /**
@@ -182,12 +189,33 @@ declare module 'paratext-bible-send-receive' {
     sendReceiveDate: string;
     resultsInfo: ResultsInfo;
   };
+
+  /** Event payload emitted by the `paratextBibleSendReceive.onSyncStateChanged` network event */
+  export type SyncProgressEvent = {
+    isSyncing: boolean;
+    // Future fine-grained progress fields (not implemented yet):
+    // currentProjectName?: string;
+    // completedCount?: number;
+    // totalCount?: number;
+    // phase?: 'projects' | 'connectedResources';
+  };
+
+  export type SyncState = {
+    isSyncing: boolean;
+    lastResults?: ResultsData;
+    lastRequestedProjectIds: string[];
+  };
 }
 
 declare module 'papi-shared-types' {
-  import type { ResultsData, RevisionInfo } from 'paratext-bible-send-receive';
+  import type {
+    ResultsData,
+    RevisionInfo,
+    SyncProgressEvent,
+    SyncState,
+  } from 'paratext-bible-send-receive';
   import type { SharedProjectsInfo } from 'platform-scripture';
-  import { VerseRef } from '@sillsdev/scripture';
+  import { SerializedVerseRef } from '@sillsdev/scripture';
 
   export interface SettingTypes {
     /** Selected project ids in the send receive dialog */
@@ -265,7 +293,7 @@ declare module 'papi-shared-types' {
     'paratextBibleSendReceive.getUSFMForRevision': (
       projectId: string,
       revisionId: string,
-      verseRef: VerseRef,
+      verseRef: SerializedVerseRef,
     ) => Promise<string>;
     /**
      * Accepts a project id and the id of the other currently selected revision and returns the
@@ -279,7 +307,48 @@ declare module 'papi-shared-types' {
     'paratextBibleSendReceive.getUSFMForBaseVersion': (
       projectId: string,
       otherRevisionId: string,
-      verseRef: VerseRef,
+      verseRef: SerializedVerseRef,
     ) => Promise<string>;
+    /**
+     * Returns the current sync state
+     *
+     * @returns Current {@link SyncState}
+     */
+    'paratextBibleSendReceive.getSyncState': () => Promise<SyncState>;
+    /**
+     * Sync Paratext projects via the dotnet process
+     *
+     * Note: this command is served from the dotnet process.
+     *
+     * @param projectIds Ids of projects to sync
+     * @returns S/R results
+     */
+    'paratextBibleSendReceive.syncProjects': (projectIds: string[]) => Promise<ResultsData>;
+    /**
+     * Manually triggers a Send/Receive sync for the given project ids
+     *
+     * @param projectIds Ids of projects to sync
+     * @returns S/R results
+     */
+    'paratextBibleSendReceive.runManualSync': (projectIds: string[]) => Promise<ResultsData>;
+    /**
+     * Opens the sync status web view and returns its WebView id
+     *
+     * @returns WebView id for the sync status WebView or `undefined` if not created
+     */
+    'paratextBibleSendReceive.openSyncStatus': () => Promise<string | undefined>;
+    /** Syncs all currently open Paratext projects */
+    'paratextBibleSendReceive.syncOpenProjects': () => Promise<void>;
+  }
+
+  export interface NetworkEventHandlers {
+    /** Fired whenever a sync starts or ends. */
+    'paratextBibleSendReceive.onSyncStateChanged': { isSyncing: boolean };
+  }
+
+  /** Event types for network objects provided by the Paratext Bible Send/Receive extension */
+  export interface NetworkEventTypes {
+    /** Fired whenever a sync starts or ends */
+    'paratextBibleSendReceive.onSyncStateChanged': SyncProgressEvent;
   }
 }
