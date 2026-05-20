@@ -9,6 +9,13 @@ const meta: Meta<typeof Checklist> = {
   title: 'Basics/Checklist',
   component: Checklist,
   tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component: `Built on shadcn/ui's [Checkbox](https://ui.shadcn.com/docs/components/checkbox) primitive.`,
+      },
+    },
+  },
   decorators: [
     (Story) => (
       <ThemeProvider>

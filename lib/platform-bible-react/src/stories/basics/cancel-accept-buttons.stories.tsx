@@ -12,7 +12,8 @@ const meta: Meta<typeof CancelAcceptButtons> = {
   parameters: {
     docs: {
       description: {
-        component: `
+        component: `Composed from shadcn/ui primitives: [Button](https://ui.shadcn.com/docs/components/button) (incl. Button Group) and [Tooltip](https://ui.shadcn.com/docs/components/tooltip).
+
 Cancel and Accept buttons with tooltips for use in editor toolbars.
 
 - Pass \`canAccept\` to control the disabled state of each button.

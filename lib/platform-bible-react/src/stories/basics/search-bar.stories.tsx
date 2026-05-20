@@ -30,6 +30,13 @@ const meta: Meta<typeof SearchBar> = {
   title: 'Basics/SearchBar',
   component: SearchBar,
   tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component: `Wraps shadcn/ui's [Input](https://ui.shadcn.com/docs/components/input) with a clear [Button](https://ui.shadcn.com/docs/components/button).`,
+      },
+    },
+  },
   decorators: [
     (Story) => (
       <ThemeProvider>
