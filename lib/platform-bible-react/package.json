@@ -31,7 +31,9 @@
       "require": "./dist/index.cjs"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "start": "npm run storybook",
     "apply-shadcn-preset-destructive": "tsx scripts/apply-shadcn-preset.ts",
@@ -68,6 +70,9 @@
     "react-dom": ">=19.0.0"
   },
   "dependencies": {
+    "@dnd-kit/accessibility": "^3.1.1",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
     "@eten-tech-foundation/platform-editor": "~0.8.14",
     "@eten-tech-foundation/scripture-utilities": "~0.1.6",
     "@fontsource-variable/ibm-plex-sans": "^5.2.8",
