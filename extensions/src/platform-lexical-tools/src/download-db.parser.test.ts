@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseGitHubOrgFromRemoteUrl } from './download-db';
+import { parseGitHubOrgFromRemoteUrl } from '../lib/download-db';
 
 describe('parseGitHubOrgFromRemoteUrl', () => {
   it('parses HTTPS URL with .git suffix (paranext)', () => {
