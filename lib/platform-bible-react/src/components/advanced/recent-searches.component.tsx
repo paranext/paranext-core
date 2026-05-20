@@ -1,16 +1,20 @@
 import { Clock } from 'lucide-react';
-import { Command as CommandPrimitive } from 'cmdk';
 import { Button } from '@/components/shadcn-ui/button';
-import { Command, CommandGroup, CommandItem, CommandList } from '@/components/shadcn-ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@/components/shadcn-ui/dropdown-menu';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
-import { KeyboardEvent, useRef, useState } from 'react';
-import { cn } from '@/utils/shadcn-ui/utils';
+import { Z_INDEX_OVERLAY } from '@/components/z-index';
+import { useState } from 'react';
 
 /** Interface defining the properties for the RecentSearches component */
 export interface RecentSearchesProps<T> {
@@ -26,9 +30,9 @@ export interface RecentSearchesProps<T> {
   ariaLabel?: string;
   /** Heading text for the recent searches group */
   groupHeading?: string;
-  /** Optional ID for the popover content for accessibility */
+  /** Optional ID for the dropdown menu content for accessibility */
   id?: string;
-  /** Class name for styling the `CommandItem` for each recent search result */
+  /** Class name for styling the menu item for each recent search result */
   classNameForItems?: string;
   /**
    * Class name for the trigger button. Defaults to absolute positioning inside an input field. Pass
@@ -40,8 +44,12 @@ export interface RecentSearchesProps<T> {
 }
 
 /**
- * Generic component that displays a button to show recent searches in a popover. Only renders if
- * there are recent searches available. Works with any data type T.
+ * Generic component that displays a button to show recent searches in a dropdown menu. Only renders
+ * if there are recent searches available. Works with any data type T.
+ *
+ * Built on shadcn's `DropdownMenu`, which provides accessible menu semantics and native keyboard
+ * handling (arrow navigation, Enter/Space to select, Escape to close, type-ahead, and focus return
+ * to the trigger) out of the box.
  */
 export default function RecentSearches<T>({
   recentSearches,
@@ -52,14 +60,10 @@ export default function RecentSearches<T>({
   groupHeading = 'Recent',
   id,
   classNameForItems,
-  buttonClassName = 'tw:absolute tw:right-0 tw:top-0 tw:h-full tw:px-3 tw:py-2',
+  buttonClassName = 'tw:absolute tw:end-0 tw:top-0 tw:h-full tw:px-3 tw:py-2',
   buttonVariant = 'ghost',
 }: RecentSearchesProps<T>) {
   const [isOpen, setIsOpen] = useState(false);
-  // The non-null assertion lets us keep the ref typed as HTMLInputElement (not undefined) for
-  // ergonomic call sites. The ref is always set by React before any handler that uses it runs.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const inputRef = useRef<HTMLInputElement>(undefined!);
 
   if (recentSearches.length === 0) {
     return undefined;
@@ -70,32 +74,12 @@ export default function RecentSearches<T>({
     setIsOpen(false);
   };
 
-  const handleContentKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    // Keep navigation/selection keys inside the popover so they don't trigger handlers
-    // on parent components (e.g. the surrounding book/chapter Command).
-    if (['ArrowUp', 'ArrowDown', 'Enter', ' ', 'Escape', 'Home', 'End', 'Tab'].includes(e.key)) {
-      e.stopPropagation();
-    }
-    // Swallow Tab so focus stays inside the popover and Radix doesn't auto-close on focus-out.
-    if (e.key === 'Tab') {
-      e.preventDefault();
-    }
-    // Space is not a select key in cmdk, so synthesize it by clicking the highlighted item.
-    if (e.key === ' ') {
-      e.preventDefault();
-      const selected = e.currentTarget.querySelector<HTMLElement>(
-        '[cmdk-item][data-selected="true"]',
-      );
-      selected?.click();
-    }
-  };
-
   return (
-    <Popover open={isOpen} onOpenChange={setIsOpen}>
+    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
-            <PopoverTrigger asChild>
+            <DropdownMenuTrigger asChild>
               <Button
                 variant={buttonVariant}
                 size="icon"
@@ -104,48 +88,28 @@ export default function RecentSearches<T>({
               >
                 <Clock className="tw:h-4 tw:w-4" />
               </Button>
-            </PopoverTrigger>
+            </DropdownMenuTrigger>
           </TooltipTrigger>
           <TooltipContent>{ariaLabel}</TooltipContent>
         </Tooltip>
       </TooltipProvider>
-      <PopoverContent
-        id={id}
-        className="tw:w-[300px] tw:p-0"
-        align="start"
-        onKeyDown={handleContentKeyDown}
-        onOpenAutoFocus={(e) => {
-          e.preventDefault();
-          inputRef.current?.focus();
-        }}
-      >
-        <Command shouldFilter={false}>
-          {/* Hidden input that owns focus so cmdk handles arrow/Enter keys natively */}
-          <CommandPrimitive.Input
-            ref={inputRef}
-            value=""
-            onValueChange={() => {}}
-            className="tw:sr-only"
-            aria-hidden="true"
-            tabIndex={-1}
-          />
-          <CommandList>
-            <CommandGroup heading={groupHeading}>
-              {recentSearches.map((item) => (
-                <CommandItem
-                  key={getItemKey(item)}
-                  onSelect={() => handleSearchItemSelect(item)}
-                  className={cn('tw:flex tw:items-center', classNameForItems)}
-                >
-                  <Clock className="tw:mr-2 tw:h-4 tw:w-4 tw:opacity-50" />
-                  <span>{renderItem(item)}</span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+      {/* Float above other overlay popovers. The default DropdownMenu z-index (z-50) renders behind
+          host popovers that use the shared Z_INDEX_ABOVE_DOCK (e.g. the BookChapterControl popover
+          this menu opens inside of), so use the overlay/context-menu tier to stay on top. */}
+      <DropdownMenuContent id={id} align="start" style={{ zIndex: Z_INDEX_OVERLAY }}>
+        <DropdownMenuLabel>{groupHeading}</DropdownMenuLabel>
+        {recentSearches.map((item) => (
+          <DropdownMenuItem
+            key={getItemKey(item)}
+            className={classNameForItems}
+            onSelect={() => handleSearchItemSelect(item)}
+          >
+            <Clock className="tw:mr-2 tw:h-4 tw:w-4 tw:opacity-50" />
+            <span>{renderItem(item)}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
