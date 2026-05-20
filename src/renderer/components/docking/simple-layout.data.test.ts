@@ -2,8 +2,13 @@ import { vi } from 'vitest';
 import { BoxData, PanelData } from 'rc-dock';
 import { SavedTabInfo } from '@shared/models/docking-framework.model';
 import { simpleLayout } from './simple-layout.data';
+import { HEADLESS_GROUP, TAB_GROUP_RESOURCES } from './platform-dock-layout-positioning.util';
 
 vi.mock('../../../shared/services/logger.service');
+vi.mock('@renderer/services/theme.service-host', () => ({
+  __esModule: true,
+  localThemeService: {},
+}));
 
 describe('simple-layout.data', () => {
   describe('simpleLayout', () => {
@@ -54,6 +59,16 @@ describe('simple-layout.data', () => {
         panel.tabs.forEach((tab) => allIds.push(tab.id ?? ''));
       });
       expect(new Set(allIds).size).toBe(allIds.length);
+    });
+
+    it('columns 1 and 2 use HEADLESS_GROUP; column 3 uses TAB_GROUP_RESOURCES', () => {
+      const expectedGroups = [HEADLESS_GROUP, HEADLESS_GROUP, TAB_GROUP_RESOURCES];
+      columns.forEach((col, index) => {
+        // Narrowing column to BoxData and its first child to PanelData to read its group.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const panel = (col as BoxData).children[0] as PanelData;
+        expect(panel.group).toBe(expectedGroups[index]);
+      });
     });
 
     it('contains the five expected webViewType strings', () => {
