@@ -3647,8 +3647,11 @@ declare module 'papi-shared-types' {
     'test.addMany': (...nums: number[]) => number;
     'test.throwErrorExtensionHost': (message: string) => void;
     /**
-     * Get the names of all extensions packaged with (in-repo to) Platform.Bible. Extensions whose
-     * names are not in this list are user-installed (third-party).
+     * Get the names of all extensions packaged with (in-repo to) Platform.Bible.
+     *
+     * Note that an extension's name being absent from this list does not necessarily mean it is
+     * user-installed (third-party). Some extensions that ship with Platform.Bible (e.g. text
+     * collection, wordlist, Paratext assistant) are not in this repo and so are not in this list.
      */
     'platform.getPackagedExtensionNames': () => Promise<string[]>;
   }
