@@ -124,16 +124,22 @@ function loadSavedTabInfo(savedTabInfo: SavedTabInfo): TabInfo {
  *
  * @param savedTabInfo Data that is to be used to create the new tab (comes from rc-dock)
  * @param shouldFlash If true, the tab info will be adjusted to start flashing when next rendered.
- *   Defaults to `false`
- * @returns Live dock layout tab ready to used
+ *   Defaults to `false`.
+ * @param isPowerMode Whether the app is in power interface mode. When `false` (simple mode), the
+ *   tab is not closable. Defaults to `true`. Wired from `PlatformDockLayout` via `useIsPowerMode`.
+ * @returns Live dock layout tab ready to use.
  */
-export function loadTab(savedTabInfo: SavedTabInfo, shouldFlash = false): RCDockTabInfo {
+export function loadTab(
+  savedTabInfo: SavedTabInfo,
+  shouldFlash = false,
+  isPowerMode = true,
+): RCDockTabInfo {
   if (!savedTabInfo.id) throw new LogError('loadTab: "id" is missing.');
 
   // Load the tab from the saved tab info
   const tabInfo = loadSavedTabInfo(savedTabInfo);
 
-  return createRCDockTabFromTabInfo(tabInfo, shouldFlash);
+  return createRCDockTabFromTabInfo(tabInfo, { shouldFlash, isPowerMode });
 }
 
 /**
@@ -720,6 +726,9 @@ export function findFirstWebViewDefinitionByType(
  * @param partialTabInfo Partial tab info to update. Any unspecified properties will stay the same
  * @param shouldBringToFront If true, the tab will flash, will be brought to the front, and will be
  *   unobscured by other tabs. Defaults to `false`
+ * @param isPowerMode Whether the app is in power interface mode. When `false` (simple mode), the
+ *   rebuilt tab is not closable. Defaults to `true`. Wired from `PlatformDockLayout` via
+ *   `useIsPowerMode`.
  * @returns Updated tab info or `undefined` if the tab was not found
  * @throws If the item found in the dock layout with the specified ID is not a tab
  */
@@ -728,13 +737,18 @@ export function updateTabPartial(
   tabId: string,
   partialTabInfo: Partial<TabInfo>,
   shouldBringToFront = false,
+  isPowerMode = true,
 ) {
   const targetTabInfo = getTabInfoById(dockLayout, tabId, 'updateTabPartial');
 
   // If we didn't find the webview, return nothing
   if (!targetTabInfo) return undefined;
 
-  const updatedTabInfo = loadTab({ ...targetTabInfo, ...partialTabInfo }, shouldBringToFront);
+  const updatedTabInfo = loadTab(
+    { ...targetTabInfo, ...partialTabInfo },
+    shouldBringToFront,
+    isPowerMode,
+  );
 
   updateTab(dockLayout, updatedTabInfo, shouldBringToFront, updatedTabInfo.id);
 
@@ -754,6 +768,9 @@ export function updateTabPartial(
  *   tabs
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
  *   layout
+ * @param isPowerMode Whether the app is in power interface mode. When `false` (simple mode), the
+ *   rebuilt tab is not closable. Defaults to `true`. Wired from `PlatformDockLayout` via
+ *   `useIsPowerMode`.
  * @returns True if successfully found the WebView to update and actually updated any properties;
  *   false otherwise
  */
@@ -762,6 +779,7 @@ export function updateWebViewDefinition(
   updateInfo: WebViewDefinitionUpdateInfo,
   shouldBringToFront: boolean,
   dockLayout: DockLayout,
+  isPowerMode = true,
 ): boolean {
   const [targetTabInfo, targetTabWebViewData] = getWebViewTabInfoById(
     webViewId,
@@ -784,7 +802,7 @@ export function updateWebViewDefinition(
 
   const updatedTabData = createRCDockTabFromTabInfo(
     updateWebViewTab(targetTabInfo, updatedWebViewData ?? targetTabWebViewData),
-    shouldBringToFront,
+    { shouldFlash: shouldBringToFront, isPowerMode },
   );
 
   // Update existing tab
@@ -917,6 +935,9 @@ function findTabGroupById(
  *   layout
  * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
  *   tabs
+ * @param isPowerMode Whether the app is in power interface mode. When `false` (simple mode), the
+ *   rebuilt tab is not closable. Defaults to `true`. Wired from `PlatformDockLayout` via
+ *   `useIsPowerMode`.
  * @returns If tab added, final layout used to display the new tab. If existing tab updated,
  *   `undefined`
  */
@@ -925,8 +946,9 @@ export function addTabToDock(
   layout: Layout,
   shouldBringToFront: boolean,
   dockLayout: DockLayout,
+  isPowerMode = true,
 ): Layout | undefined {
-  const tab = loadTab(savedTabInfo, shouldBringToFront);
+  const tab = loadTab(savedTabInfo, shouldBringToFront, isPowerMode);
   let targetTab = dockLayout.find(tab.id);
 
   // Update existing tab
@@ -1083,6 +1105,9 @@ export function addTabToDock(
  *   layout
  * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
  *   tabs
+ * @param isPowerMode Whether the app is in power interface mode. When `false` (simple mode), the
+ *   created tab is not closable. Defaults to `true`. Wired from `PlatformDockLayout` via
+ *   `useIsPowerMode`.
  * @returns If WebView added, final layout used to display the new webView. If existing webView
  *   updated, `undefined`
  */
@@ -1091,6 +1116,7 @@ export function addWebViewToDock(
   layout: Layout,
   shouldBringToFront: boolean,
   dockLayout: DockLayout,
+  isPowerMode = true,
 ): Layout | undefined {
   const tabId = webView.id;
   if (!tabId)
@@ -1102,6 +1128,7 @@ export function addWebViewToDock(
     layout,
     shouldBringToFront,
     dockLayout,
+    isPowerMode,
   );
 }
 

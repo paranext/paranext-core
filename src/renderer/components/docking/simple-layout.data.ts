@@ -1,6 +1,7 @@
 import { SavedTabInfo, TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
 import { LayoutBase } from 'rc-dock';
+import { HEADLESS_GROUP, TAB_GROUP_RESOURCES } from './platform-dock-layout-positioning.util';
 
 // Using `as` here simplifies type changes.
 /* eslint-disable no-type-assertion/no-type-assertion */
@@ -14,6 +15,7 @@ export const simpleLayout: LayoutBase = {
         size: 1,
         children: [
           {
+            group: HEADLESS_GROUP,
             tabs: [
               {
                 id: '0a23566d-1b2c-4dd2-8d3d-cda54b598cd2',
@@ -35,6 +37,7 @@ export const simpleLayout: LayoutBase = {
         size: 2,
         children: [
           {
+            group: HEADLESS_GROUP,
             tabs: [
               {
                 id: '3cf575f0-2cc2-464b-8765-b588f216dfce',
@@ -56,6 +59,7 @@ export const simpleLayout: LayoutBase = {
         size: 1,
         children: [
           {
+            group: TAB_GROUP_RESOURCES,
             tabs: [
               {
                 id: '27616073-bf60-4f2b-9518-922d1a7d3601',
