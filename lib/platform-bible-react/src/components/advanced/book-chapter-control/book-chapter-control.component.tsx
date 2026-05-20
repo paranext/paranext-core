@@ -307,15 +307,20 @@ export function BookChapterControl({
 
   // While the top-match row is shown, the chapter grid below can be navigated with arrow keys.
   // Reflect the currently highlighted chapter in the top-match row so the user sees what they're
-  // about to submit. ChapterGrid items have commandValues that end with the chapter number; the
-  // top-match row's own commandValue does not, so a missing match falls back to the parsed query.
+  // about to submit. ChapterGrid cells have commandValues that end with the (colon-free) chapter
+  // number, whereas the top-match row's own commandValue has the form "BOOK BookName N:N" (it
+  // contains a colon). Skip the colon case so we don't mistake the parsed *verse* for a
+  // highlighted chapter — falling back to the parsed query chapter instead. (Same guard as the
+  // arrow-key handler in handleCommandKeyDown.)
   const topMatchDisplayChapter = useMemo(() => {
     if (!topMatch) return undefined;
-    const trailingDigits = commandValue.match(/(\d+)$/);
-    if (trailingDigits) {
-      const parsed = parseInt(trailingDigits[1], 10);
-      const maxChapter = fetchEndChapter(topMatch.book);
-      if (parsed >= 1 && (maxChapter <= 0 || parsed <= maxChapter)) return parsed;
+    if (!commandValue.includes(':')) {
+      const trailingDigits = commandValue.match(/(\d+)$/);
+      if (trailingDigits) {
+        const parsed = parseInt(trailingDigits[1], 10);
+        const maxChapter = fetchEndChapter(topMatch.book);
+        if (parsed >= 1 && (maxChapter <= 0 || parsed <= maxChapter)) return parsed;
+      }
     }
     return topMatch.chapterNum ?? 1;
   }, [commandValue, topMatch]);
@@ -698,12 +703,13 @@ export function BookChapterControl({
         forceMount
         className="tw:w-[280px] tw:p-0"
         align="center"
-        // In chapter view, Escape returns to the book list instead of closing the popover.
-        // Radix listens for Escape at the document level (capture phase) so we use its
-        // documented onEscapeKeyDown escape hatch rather than relying on our own bubble-phase
-        // keydown handler, which would be too late. In book view we let Radix's default
-        // close-the-popover behavior run. (RecentSearches stops Escape propagation itself when
-        // it's open, so it never reaches this handler in that case.)
+        // In chapter view, Escape returns to the book list instead of closing the popover; in book
+        // view we let Radix's default close-the-popover behavior run. We use Radix's document-level
+        // onEscapeKeyDown escape hatch rather than our own keydown handler. Note that the back
+        // button and quick-nav buttons are wrapped in Radix Tooltips: per the default shadcn/Radix
+        // behavior, an open tooltip consumes the first Escape to dismiss itself, and only the next
+        // Escape reaches this handler. (RecentSearches stops Escape propagation itself when it's
+        // open, so it never reaches this handler in that case.)
         onEscapeKeyDown={(e) => {
           if (viewMode === 'chapters') {
             e.preventDefault();

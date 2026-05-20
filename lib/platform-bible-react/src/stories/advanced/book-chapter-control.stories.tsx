@@ -242,8 +242,8 @@ export const SmartParsingDemo: Story = {
       await userEvent.clear(searchInput);
       await userEvent.type(searchInput, 'John 3:16');
 
-      // Look for the top match suggestion in the dropdown
-      const topMatch = await within(dropdownContent).findByText('JHN 3:16');
+      // Look for the top match suggestion in the dropdown (shows the long book name + reference)
+      const topMatch = await within(dropdownContent).findByText('John 3:16');
       await expect(topMatch).toBeInTheDocument();
 
       // Click the top match
@@ -268,7 +268,7 @@ export const SmartParsingDemo: Story = {
       await userEvent.type(searchInput, 'Roma 8');
 
       // Look for the top match in dropdown
-      const topMatch = await within(dropdownContent).findByText('ROM 8:1');
+      const topMatch = await within(dropdownContent).findByText('Romans 8:1');
       await expect(topMatch).toBeInTheDocument();
 
       // Click the top match
@@ -293,7 +293,7 @@ export const SmartParsingDemo: Story = {
       await userEvent.type(searchInput, '1 co 13:4');
 
       // Look for the top match in dropdown
-      const topMatch = await within(dropdownContent).findByText('1CO 13:4');
+      const topMatch = await within(dropdownContent).findByText('1 Corinthians 13:4');
       await expect(topMatch).toBeInTheDocument();
 
       // Click the top match
@@ -481,13 +481,13 @@ export const SingleChapterBookDemo: Story = {
 
     await step('Verify Odes smart parsing result appears', async () => {
       const dropdownContent = getDropdown();
-      const odesItem = await within(dropdownContent).findByText('ODA 1:1');
+      const odesItem = await within(dropdownContent).findByText('Odes 1:1');
       await expect(odesItem).toBeInTheDocument();
     });
 
     await step('Click Odes result to submit', async () => {
       const dropdownContent = getDropdown();
-      const odesItem = within(dropdownContent).getByText('ODA 1:1');
+      const odesItem = within(dropdownContent).getByText('Odes 1:1');
       await userEvent.click(odesItem);
     });
 
@@ -650,13 +650,30 @@ export const ComprehensiveInteractionTest: Story = {
       await userEvent.click(johnItems);
     });
 
-    await step('Test first Escape key press in chapter view', async () => {
-      await userEvent.keyboard('{Escape}');
+    await step(
+      'Escape in chapter view is consumed by the focused back-button tooltip',
+      async () => {
+        // On entering chapter view the back button is auto-focused and shows its tooltip. Per the
+        // default shadcn/Radix behavior an open tooltip consumes the first Escape, so the popover
+        // stays open rather than closing.
+        await userEvent.keyboard('{Escape}');
+        const dropdownContent = getDropdown();
+        await expect(dropdownContent).toBeVisible();
+      },
+    );
+
+    await step('Back button returns to book view', async () => {
       const dropdownContent = getDropdown();
-      expect(dropdownContent).toBeVisible();
+      const backButton = within(dropdownContent).getByRole('button', { name: 'Back to books' });
+      await userEvent.click(backButton);
+      const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
+      await expect(searchInput).toBeInTheDocument();
     });
 
-    await step('Test second Escape key press to close component', async () => {
+    await step('Escape in book view closes the component', async () => {
+      const dropdownContent = getDropdown();
+      const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
+      await userEvent.click(searchInput);
       await userEvent.keyboard('{Escape}');
       await expectPopoverToBeClosed();
     });
@@ -681,7 +698,7 @@ export const ComprehensiveInteractionTest: Story = {
 
     await step('Click Obadiah smart parsing result', async () => {
       const dropdownContent = getDropdown();
-      const obadiahItem = await within(dropdownContent).findByText('OBA 1:1');
+      const obadiahItem = await within(dropdownContent).findByText('Obadiah 1:1');
       await userEvent.click(obadiahItem);
     });
 
@@ -709,7 +726,7 @@ export const ComprehensiveInteractionTest: Story = {
 
     await step('Click Revelation smart parsing result', async () => {
       const dropdownContent = getDropdown();
-      const revMatch = await within(dropdownContent).findByText('REV 22:21');
+      const revMatch = await within(dropdownContent).findByText('Revelation 22:21');
       await userEvent.click(revMatch);
     });
 
