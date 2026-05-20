@@ -1,7 +1,10 @@
 import { CommandGroup, CommandItem } from '@/components/shadcn-ui/command';
 import { cn } from '@/utils/shadcn-ui/utils';
-import { ALL_ENGLISH_BOOK_NAMES } from '@/components/shared/book.utils';
-import { fetchEndChapter } from './book-chapter-control.utils';
+import {
+  ALL_ENGLISH_BOOK_NAMES,
+  LIST_ITEM_KEYBOARD_FOCUS_RING,
+} from '@/components/shared/book.utils';
+import { CHAPTER_GRID_COLUMNS, fetchEndChapter } from './book-chapter-control.utils';
 
 export interface ChapterGridProps {
   /** The book ID to render chapters for */
@@ -41,7 +44,13 @@ export function ChapterGrid({
 
   return (
     <CommandGroup>
-      <div className={cn('tw:grid tw:grid-cols-6 tw:gap-1', className)}>
+      {/* Drive the grid column count from CHAPTER_GRID_COLUMNS (the single source of truth shared
+          with the keyboard navigation math) via an inline gridTemplateColumns so the layout and the
+          arrow-key arithmetic can never drift apart. */}
+      <div
+        className={cn('tw:grid tw:gap-1', className)}
+        style={{ gridTemplateColumns: `repeat(${CHAPTER_GRID_COLUMNS}, minmax(0, 1fr))` }}
+      >
         {Array.from({ length: fetchEndChapter(bookId) }, (_, i) => i + 1).map((chapter) => (
           <CommandItem
             key={chapter}
@@ -60,21 +69,22 @@ export function ChapterGrid({
               // cmdk sets data-selected only on keyboard-highlighted items (pointer selection is
               // disabled on the parent Command), so this ring is keyboard-focus only. Suppressed
               // when another element owns the focus indicator (e.g. the back button or input).
-              // Uses ring-ring/50 to match shadcn's standard focus-ring "glow" (Button uses the
-              // same semi-transparent ring color).
-              showActiveRing &&
-                'tw:data-selected:ring-2 tw:data-selected:ring-ring/50 tw:data-selected:ring-inset',
+              // Uses the shared LIST_ITEM_KEYBOARD_FOCUS_RING (shadcn's standard ring-3 +
+              // ring-ring/50 tokens, matching the Button focus ring).
+              showActiveRing && LIST_ITEM_KEYBOARD_FOCUS_RING,
               {
-                'tw:bg-muted/50 tw:text-muted-foreground/50':
+                // Dimmed (non-matching) chapters: muted text only, no background — the absence of a
+                // background already reads as "de-emphasized" without adding visual weight.
+                'tw:text-muted-foreground/50':
                   (isChapterDimmed?.(chapter) ?? false) &&
                   !(bookId === scrRef.book && chapter === scrRef.chapterNum),
               },
               {
-                // Re-assert primary highlight under data-selected so the currently-selected
+                // Re-assert the primary highlight under data-selected so the currently-selected
                 // chapter keeps its primary background/text when keyboard focus also lands on it.
-                // Hover uses bg-primary/70 to distinguish pointer feedback from the rest of the
-                // grid (which uses bg-muted on hover).
-                'tw:bg-primary/70 tw:text-primary-foreground tw:data-selected:bg-primary/70 tw:data-selected:text-primary-foreground tw:hover:bg-primary':
+                // hover:bg-primary overrides the grid's general hover:bg-muted so the selected
+                // chapter shows no hover effect (its appearance doesn't change on pointer-over).
+                'tw:bg-primary tw:text-primary-foreground tw:data-selected:bg-primary tw:data-selected:text-primary-foreground tw:hover:bg-primary':
                   bookId === scrRef.book && chapter === scrRef.chapterNum,
               },
             )}

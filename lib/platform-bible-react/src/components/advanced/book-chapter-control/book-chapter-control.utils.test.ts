@@ -2,6 +2,7 @@ import { ALL_BOOK_IDS, ALL_ENGLISH_BOOK_NAMES } from '@/components/shared/book.u
 import {
   fetchEndChapter,
   calculateTopMatch,
+  computeTargetChapter,
   SCRIPTURE_REGEX_PATTERNS,
 } from './book-chapter-control.utils';
 
@@ -299,6 +300,88 @@ describe('book-chapter-control.utils', () => {
       expect(SCRIPTURE_REGEX_PATTERNS.BOOK_CHAPTER_VERSE.test('GEN 1:1')).toBe(true);
       expect(SCRIPTURE_REGEX_PATTERNS.BOOK_CHAPTER_VERSE.test('Genesis 1:')).toBe(true);
       expect(SCRIPTURE_REGEX_PATTERNS.BOOK_CHAPTER_VERSE.test('Genesis 1')).toBe(false);
+    });
+  });
+
+  describe('computeTargetChapter', () => {
+    // Matthew-like grid: 28 chapters across 6 columns.
+    //   firstChapterInLastRow = floor((28 - 1) / 6) * 6 + 1 = 4 * 6 + 1 = 25
+    //   lastChapterInFirstRow = min(6, 28) = 6
+    const maxChapter = 28;
+    const gridColumns = 6;
+
+    describe('entry points (currentChapter = 0)', () => {
+      test('ArrowRight enters at chapter 1', () => {
+        expect(computeTargetChapter(0, 'ArrowRight', maxChapter, gridColumns)).toBe(1);
+      });
+
+      test('ArrowDown enters at chapter 1', () => {
+        expect(computeTargetChapter(0, 'ArrowDown', maxChapter, gridColumns)).toBe(1);
+      });
+
+      test('ArrowLeft enters at the last chapter in the first row', () => {
+        // lastChapterInFirstRow = min(6, 28) = 6
+        expect(computeTargetChapter(0, 'ArrowLeft', maxChapter, gridColumns)).toBe(6);
+      });
+
+      test('ArrowUp enters at the first chapter in the last row', () => {
+        // firstChapterInLastRow = floor((28 - 1) / 6) * 6 + 1 = 25
+        expect(computeTargetChapter(0, 'ArrowUp', maxChapter, gridColumns)).toBe(25);
+      });
+    });
+
+    describe('horizontal movement and wrap-around', () => {
+      test('ArrowLeft moves one chapter back', () => {
+        expect(computeTargetChapter(5, 'ArrowLeft', maxChapter, gridColumns)).toBe(4);
+      });
+
+      test('ArrowLeft wraps from chapter 1 to maxChapter', () => {
+        expect(computeTargetChapter(1, 'ArrowLeft', maxChapter, gridColumns)).toBe(maxChapter);
+      });
+
+      test('ArrowRight moves one chapter forward', () => {
+        expect(computeTargetChapter(5, 'ArrowRight', maxChapter, gridColumns)).toBe(6);
+      });
+
+      test('ArrowRight wraps from maxChapter to chapter 1', () => {
+        expect(computeTargetChapter(maxChapter, 'ArrowRight', maxChapter, gridColumns)).toBe(1);
+      });
+    });
+
+    describe('vertical movement and clamping', () => {
+      test('ArrowUp moves up one row (minus gridColumns)', () => {
+        expect(computeTargetChapter(13, 'ArrowUp', maxChapter, gridColumns)).toBe(7);
+      });
+
+      test('ArrowUp clamps to chapter 1 (Math.max(1, ...))', () => {
+        // 3 - 6 = -3, clamped to 1
+        expect(computeTargetChapter(3, 'ArrowUp', maxChapter, gridColumns)).toBe(1);
+      });
+
+      test('ArrowDown moves down one row (plus gridColumns)', () => {
+        expect(computeTargetChapter(7, 'ArrowDown', maxChapter, gridColumns)).toBe(13);
+      });
+
+      test('ArrowDown clamps to maxChapter (Math.min(maxChapter, ...))', () => {
+        // 25 + 6 = 31, clamped to 28
+        expect(computeTargetChapter(25, 'ArrowDown', maxChapter, gridColumns)).toBe(maxChapter);
+      });
+    });
+
+    describe('partial last row', () => {
+      // maxChapter = 28, gridColumns = 6 → the last row holds chapters 25-28 (partial row of 4).
+      test('firstChapterInLastRow entry point is 25', () => {
+        expect(computeTargetChapter(0, 'ArrowUp', 28, 6)).toBe(25);
+      });
+
+      test('lastChapterInFirstRow entry point is 6', () => {
+        expect(computeTargetChapter(0, 'ArrowLeft', 28, 6)).toBe(6);
+      });
+
+      test('ArrowDown from a chapter beyond the partial last row clamps to maxChapter', () => {
+        // 24 + 6 = 30, clamped to 28
+        expect(computeTargetChapter(24, 'ArrowDown', 28, 6)).toBe(28);
+      });
     });
   });
 });
