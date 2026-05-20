@@ -1,10 +1,7 @@
 import { ReactNode, useCallback, useMemo, useState } from 'react';
 import {
-  SettingsLayout,
-  type DynamicSettingsSidebarItem,
-  type SettingsLayoutItem,
-  type SettingsLayoutLabels,
-  type SettingsLayoutSelection,
+  type SelectedSidebarEntry,
+  type SettingsSidebarItem,
   usePromise,
 } from 'platform-bible-react';
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
@@ -26,6 +23,13 @@ import {
   HARDCODED_PROJECT_ENTRIES,
   PROJECT_PROPERTIES_ENTRY_ID,
 } from './hardcoded-project-entries';
+import {
+  SettingsLayout,
+  SETTINGS_PROJECT_SECTION_ID as PROJECT_SECTION_ID,
+  SETTINGS_GENERAL_SECTION_ID as GENERAL_SECTION_ID,
+  SETTINGS_EXTENSIONS_SECTION_ID as EXTENSIONS_SECTION_ID,
+  type SettingsLayoutLabels,
+} from './settings-components/settings-layout.component';
 
 export const TAB_TYPE_SETTINGS_TAB = 'settings-tab';
 
@@ -54,10 +58,11 @@ const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
   '%settings_defaultMessage_noSettings%',
   '%settings_defaultMessage_noSettingsFound%',
   '%settings_defaultMessage_noSettingsFoundDetails%',
-  '%settings_sidebar_projectSectionLabel%',
-  '%settings_sidebar_generalSectionLabel%',
-  '%settings_sidebar_extensionsSectionLabel%',
+  '%settings_sidebar_projectSettingsLabel%',
+  '%settings_sidebar_generalSettingsLabel%',
+  '%settings_sidebar_extensionsSettingsLabel%',
   '%settings_sidebar_projectsComboBoxPlaceholder%',
+  '%settings_searchBar_placeholder%',
   '%settings_project_properties%',
   '%settings_comingSoon_title%',
   '%settings_comingSoon_body%',
@@ -95,9 +100,7 @@ const filterSettingsContributions = (
 export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZE_SETTING_KEYS, []));
 
-  const [selectedEntry, setSelectedEntry] = useState<SettingsLayoutSelection | undefined>(
-    undefined,
-  );
+  const [selectedEntry, setSelectedEntry] = useState<SelectedSidebarEntry | undefined>(undefined);
   const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(
     projectIdToLimitSettings,
   );
@@ -179,10 +182,10 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
     [],
   );
 
-  const [bundledExtensionNames, isLoadingBundledExtensionNames] = usePromise(
+  const [packagedExtensionNames, isLoadingPackagedExtensionNames] = usePromise(
     useCallback(async () => {
       try {
-        return new Set(await sendCommand('platform.getBundledExtensionNames'));
+        return new Set(await sendCommand('platform.getPackagedExtensionNames'));
       } catch {
         // If the command isn't available (e.g., during startup race), behave as if every extension
         // is third-party. The user can refresh once the platform comes up.
@@ -200,78 +203,86 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
    */
   const isProjectSectionInteractive = !!selectedProjectId;
 
-  const projectSectionItems = useMemo<ReadonlyArray<SettingsLayoutItem>>(() => {
-    const projectProperties: SettingsLayoutItem = {
-      kind: 'dynamic',
+  const projectSectionItems = useMemo<ReadonlyArray<SettingsSidebarItem>>(() => {
+    const projectProperties: SettingsSidebarItem = {
       id: PROJECT_PROPERTIES_ENTRY_ID,
       label: localizedStrings['%settings_project_properties%'] || 'Project properties',
       disabled: !isProjectSectionInteractive,
     };
-    const hardcoded: SettingsLayoutItem[] = HARDCODED_PROJECT_ENTRIES.map((entry) => ({
-      kind: 'coming-soon',
+    const hardcoded: SettingsSidebarItem[] = HARDCODED_PROJECT_ENTRIES.map((entry) => ({
       id: entry.id,
       label: localizedStrings[entry.labelKey] || entry.id,
+      isComingSoon: true,
       disabled: !isProjectSectionInteractive,
     }));
     return [projectProperties, ...hardcoded];
   }, [localizedStrings, isProjectSectionInteractive]);
 
   const { generalSectionItems, extensionsSectionItems } = useMemo<{
-    generalSectionItems: DynamicSettingsSidebarItem[];
-    extensionsSectionItems: DynamicSettingsSidebarItem[];
+    generalSectionItems: SettingsSidebarItem[];
+    extensionsSectionItems: SettingsSidebarItem[];
   }>(() => {
     if (!settingsContributions) return { generalSectionItems: [], extensionsSectionItems: [] };
 
-    const general: DynamicSettingsSidebarItem[] = [];
-    const extensions: DynamicSettingsSidebarItem[] = [];
+    const general: SettingsSidebarItem[] = [];
+    const extensions: SettingsSidebarItem[] = [];
     Object.entries(settingsContributions).forEach(([key, value]) => {
-      const item: DynamicSettingsSidebarItem = {
-        kind: 'dynamic',
+      const item: SettingsSidebarItem = {
         id: key,
         label: value ? value[0].label : key,
       };
       // The platform's own settings (key 'platform') belong under General Settings — they're part
       // of the core platform, not a third-party extension. Other in-repo extensions are surfaced
-      // via the `platform.getBundledExtensionNames` command.
-      if (key === 'platform' || bundledExtensionNames.has(key)) general.push(item);
+      // via the `platform.getPackagedExtensionNames` command.
+      if (key === 'platform' || packagedExtensionNames.has(key)) general.push(item);
       else extensions.push(item);
     });
     return { generalSectionItems: general, extensionsSectionItems: extensions };
-  }, [settingsContributions, bundledExtensionNames]);
+  }, [settingsContributions, packagedExtensionNames]);
 
   // ---- Default selection: prefer the scoped project's properties; otherwise the first available
   // General entry. Done lazily via useMemo so the first render with data picks correctly. ----
 
-  const effectiveSelectedEntry = useMemo<SettingsLayoutSelection | undefined>(() => {
+  const effectiveSelectedEntry = useMemo<SelectedSidebarEntry | undefined>(() => {
     if (selectedEntry) return selectedEntry;
     if (projectIdToLimitSettings) {
-      return { section: 'project', itemId: PROJECT_PROPERTIES_ENTRY_ID };
+      return { sectionId: PROJECT_SECTION_ID, itemId: PROJECT_PROPERTIES_ENTRY_ID };
     }
     const firstGeneral = generalSectionItems[0];
-    if (firstGeneral) return { section: 'general', itemId: firstGeneral.id };
+    if (firstGeneral) return { sectionId: GENERAL_SECTION_ID, itemId: firstGeneral.id };
     const firstExtension = extensionsSectionItems[0];
-    if (firstExtension) return { section: 'extensions', itemId: firstExtension.id };
-    return { section: 'project', itemId: PROJECT_PROPERTIES_ENTRY_ID };
+    if (firstExtension) return { sectionId: EXTENSIONS_SECTION_ID, itemId: firstExtension.id };
+    return { sectionId: PROJECT_SECTION_ID, itemId: PROJECT_PROPERTIES_ENTRY_ID };
   }, [selectedEntry, projectIdToLimitSettings, generalSectionItems, extensionsSectionItems]);
 
-  // ---- Right-panel content for dynamic entries ----
+  // ---- Project selection + labels handed to the presentational layout ----
+
+  const handleSelectProject = useCallback((projectId: string) => {
+    setSelectedProjectId(projectId);
+    // Selecting a project should navigate into "Project properties" so users see content.
+    setSelectedEntry({ sectionId: PROJECT_SECTION_ID, itemId: PROJECT_PROPERTIES_ENTRY_ID });
+  }, []);
 
   const labels = useMemo<SettingsLayoutLabels>(
     () => ({
-      projectSection: localizedStrings['%settings_sidebar_projectSectionLabel%'] || 'Project',
-      generalSection: localizedStrings['%settings_sidebar_generalSectionLabel%'] || 'General',
+      projectSection: localizedStrings['%settings_sidebar_projectSettingsLabel%'] || 'Project',
+      generalSection: localizedStrings['%settings_sidebar_generalSettingsLabel%'] || 'General',
       extensionsSection:
-        localizedStrings['%settings_sidebar_extensionsSectionLabel%'] || 'Extensions',
+        localizedStrings['%settings_sidebar_extensionsSettingsLabel%'] || 'Extensions',
       comingSoonTitle: localizedStrings['%settings_comingSoon_title%'] || 'Coming soon',
       comingSoonBody:
         localizedStrings['%settings_comingSoon_body%'] ||
         "This settings page hasn't been ported to Platform.Bible yet.",
-      searchPlaceholder: 'Search app settings, extension settings, and project settings',
+      searchPlaceholder:
+        localizedStrings['%settings_searchBar_placeholder%'] ||
+        'Search app settings, extension settings, and project settings',
       projectPickerPlaceholder:
         localizedStrings['%settings_sidebar_projectsComboBoxPlaceholder%'] || 'Select project',
     }),
     [localizedStrings],
   );
+
+  // ---- Right-panel content for dynamic entries ----
 
   const renderProjectSettings = useCallback(
     (projectId: string) => {
@@ -315,12 +326,6 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
     },
     [filteredAndMatchedProjectSettingsContributions, localizedStrings],
   );
-
-  const handleSelectProject = useCallback((projectId: string) => {
-    setSelectedProjectId(projectId);
-    // Selecting a project should navigate into "Project properties" so users see content.
-    setSelectedEntry({ section: 'project', itemId: PROJECT_PROPERTIES_ENTRY_ID });
-  }, []);
 
   const renderExtensionSettings = useCallback(
     (extensionKey: string) => {
@@ -375,7 +380,7 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
     isLoadingProjectSettingsContributions ||
     isLoadingAllProjectOptions ||
     isLoadingFilteredProjectSettingsContributions ||
-    isLoadingBundledExtensionNames;
+    isLoadingPackagedExtensionNames;
 
   if (isLoading && !settingsContributions) {
     return (
@@ -395,7 +400,7 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
 
   let rightPanel: ReactNode;
   if (effectiveSelectedEntry) {
-    if (effectiveSelectedEntry.section === 'project') {
+    if (effectiveSelectedEntry.sectionId === PROJECT_SECTION_ID) {
       if (effectiveSelectedEntry.itemId === PROJECT_PROPERTIES_ENTRY_ID) {
         rightPanel = selectedProjectId ? (
           renderProjectSettings(selectedProjectId)
@@ -405,7 +410,8 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
           </div>
         );
       }
-      // Hard-coded entries are handled by SettingsLayout's ComingSoonPanel.
+      // Coming-soon project entries are left undefined here — SettingsLayout substitutes the
+      // ComingSoonPanel for items flagged `isComingSoon`.
     } else {
       rightPanel = renderExtensionSettings(effectiveSelectedEntry.itemId);
     }

@@ -51,6 +51,21 @@ export type SelectedSidebarEntry = {
   itemId: string;
 };
 
+/**
+ * Props for {@link SettingsSidebar}. Two mutually-exclusive prop shapes are supported, and exactly
+ * one must be fully provided:
+ *
+ * - **Generalized (preferred):** provide `sections` together with `onSelectEntry` (and usually
+ *   `selectedEntry`). Renders an arbitrary, dynamic set of sections. When `sections` is provided,
+ *   the legacy props below are ignored.
+ * - **Legacy:** provide the full set of `extensionLabels`, `projectInfo`, `handleSelectSidebarItem`,
+ *   `selectedSidebarItem`, `extensionsSidebarGroupLabel`, `projectsSidebarGroupLabel`, and
+ *   `buttonPlaceholderText`.
+ *
+ * Every field is individually optional at the type level, so the contract is enforced at runtime:
+ * the component throws if neither complete shape is supplied. Prefer the generalized shape for new
+ * code.
+ */
 export type SettingsSidebarProps = {
   /** Optional id for testing */
   id?: string;

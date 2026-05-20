@@ -1571,12 +1571,12 @@ export const initialize = () => {
     await registerRequestHandler(HANDLE_URI_REQUEST_TYPE, handleExtensionUri);
 
     await registerCommand(
-      'platform.getBundledExtensionNames',
+      'platform.getPackagedExtensionNames',
       async () => (await getInstalledExtensions()).packaged.map((p) => p.extensionName),
       {
         method: {
           summary:
-            'Get the names of all extensions bundled with (in-repo to) Platform.Bible. Extensions whose names are not in this list are user-installed (third-party).',
+            'Get the names of all extensions packaged with (in-repo to) Platform.Bible. Extensions whose names are not in this list are user-installed (third-party).',
           params: [],
           result: {
             name: 'return value',
