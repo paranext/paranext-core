@@ -7,6 +7,7 @@ import {
   OpenWebViewOptions,
   ScrollGroupScrRef,
 } from '@papi/core';
+import { getErrorMessage } from 'platform-bible-utils';
 import dictionaryWebViewReact from './web-views/dictionary.web-view?inline';
 import tailwindCssStyles from './tailwind.css?inline';
 import { LexicalReferenceService } from './lexical-reference.service';
@@ -98,9 +99,15 @@ export async function activate(context: ExecutionActivationContext) {
     );
 
   const lexicalReferenceService = await lexicalReferenceServicePromise;
-  await lexicalReferenceTextManager.registerLexicalReferenceText(
-    'papi-extension://platformLexicalTools/assets/lexical-db/lexical.db',
-  );
+  try {
+    await lexicalReferenceTextManager.registerLexicalReferenceText(
+      'papi-extension://platformLexicalTools/assets/lexical-db/lexical.db',
+    );
+  } catch (error) {
+    logger.warn(
+      `Platform Lexical Tools: Failed to load lexical database. The Dictionary will open but show no entries, and lexical reference queries will return empty results. Reason: ${getErrorMessage(error)}`,
+    );
+  }
 
   context.registrations.add(
     await dictionaryWebViewProviderPromise,
