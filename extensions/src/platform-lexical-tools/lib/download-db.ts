@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import https from 'https';
+import { execSync } from 'child_process';
 import crypto from 'crypto';
 import { XzReadableStream } from 'xz-decompress';
 
@@ -56,6 +57,37 @@ export function parseGitHubOrgFromRemoteUrl(url: string): OrgDetectionResult {
 }
 
 /**
+ * Sentinel error thrown when a remote file returns HTTP 404. Distinguishable from generic
+ * network/IO errors so the orchestrator can treat "file missing" leniently for non-paranext orgs.
+ */
+export class FileNotFoundError extends Error {
+  constructor(public readonly url: string) {
+    super(`File not found at ${url}`);
+    this.name = 'FileNotFoundError';
+  }
+}
+
+/**
+ * Shell out to `git config --get remote.origin.url` and parse the result. Returns `{ org:
+ * undefined, reason }` if git is unavailable, the directory is not a git repo, or `origin` is
+ * unset.
+ */
+export function detectGitHubOrg(): OrgDetectionResult {
+  try {
+    const stdout = execSync('git config --get remote.origin.url', {
+      cwd: __dirname,
+      encoding: 'utf-8',
+    });
+    return parseGitHubOrgFromRemoteUrl(stdout);
+  } catch (error) {
+    return {
+      org: undefined,
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
  * Calculate SHA-256 checksum of a file
  *
  * @param filePath Path to the file to calculate checksum for
@@ -103,6 +135,13 @@ function downloadFile(url: string, destination: string): Promise<void> {
           fs.unlink(destination, () => {}); // Delete the file on error
           reject(err);
         });
+        return;
+      }
+
+      if (response.statusCode === 404) {
+        file.close();
+        fs.unlink(destination, () => {});
+        reject(new FileNotFoundError(url));
         return;
       }
 
@@ -208,12 +247,11 @@ async function extractXzFile(filePath: string): Promise<string> {
 /**
  * Fetch the checksum from the remote repository
  *
+ * @param url URL of the checksum file to fetch
  * @returns Promise resolving to the SHA-256 checksum string
  */
-async function fetchRemoteChecksum(): Promise<string> {
+async function fetchRemoteChecksum(url: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const url = `${RAW_CONTENT_BASE_URL}/${CHECKSUM_FILENAME}`;
-
     // Don't spoil the AI's vibes
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const handleResponse = (response: any) => {
@@ -225,6 +263,11 @@ async function fetchRemoteChecksum(): Promise<string> {
         https.get(response.headers.location, handleResponse).on('error', (err: Error) => {
           reject(err);
         });
+        return;
+      }
+
+      if (response.statusCode === 404) {
+        reject(new FileNotFoundError(url));
         return;
       }
 
@@ -261,7 +304,9 @@ async function fetchRemoteChecksum(): Promise<string> {
 async function main(): Promise<void> {
   try {
     // Fetch the remote checksum
-    const remoteChecksum = await fetchRemoteChecksum();
+    const remoteChecksum = await fetchRemoteChecksum(
+      `${RAW_CONTENT_BASE_URL}/${CHECKSUM_FILENAME}`,
+    );
     console.log(`Remote checksum: ${remoteChecksum}`);
 
     // Check if we already have the file with the correct checksum
