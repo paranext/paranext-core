@@ -26,7 +26,12 @@ export declare const BOOK_CHAPTER_CONTROL_STRING_KEYS: readonly [
 	"%scripture_section_dc_long%",
 	"%scripture_section_extra_long%",
 	"%history_recent%",
-	"%history_recentSearches_ariaLabel%"
+	"%history_recentSearches_ariaLabel%",
+	"%bookChapterControl_backToBooks%",
+	"%bookChapterControl_previousChapter%",
+	"%bookChapterControl_nextChapter%",
+	"%bookChapterControl_previousVerse%",
+	"%bookChapterControl_nextVerse%"
 ];
 /** Type definition for the localized strings used in the BookChapterControl component */
 export type BookChapterControlLocalizedStrings = {
@@ -155,9 +160,9 @@ export interface RecentSearchesProps<T> {
 	ariaLabel?: string;
 	/** Heading text for the recent searches group */
 	groupHeading?: string;
-	/** Optional ID for the popover content for accessibility */
+	/** Optional ID for the dropdown menu content for accessibility */
 	id?: string;
-	/** Class name for styling the `CommandItem` for each recent search result */
+	/** Class name for styling the menu item for each recent search result */
 	classNameForItems?: string;
 	/**
 	 * Class name for the trigger button. Defaults to absolute positioning inside an input field. Pass
@@ -168,8 +173,12 @@ export interface RecentSearchesProps<T> {
 	buttonVariant?: "ghost" | "outline" | "default" | "destructive" | "secondary" | "link";
 }
 /**
- * Generic component that displays a button to show recent searches in a popover. Only renders if
- * there are recent searches available. Works with any data type T.
+ * Generic component that displays a button to show recent searches in a dropdown menu. Only renders
+ * if there are recent searches available. Works with any data type T.
+ *
+ * Built on shadcn's `DropdownMenu`, which provides accessible menu semantics and native keyboard
+ * handling (arrow navigation, Enter/Space to select, Escape to close, type-ahead, and focus return
+ * to the trigger) out of the box.
  */
 export function RecentSearches<T>({ recentSearches, onSearchItemSelect, renderItem, getItemKey, ariaLabel, groupHeading, id, classNameForItems, buttonClassName, buttonVariant, }: RecentSearchesProps<T>): import("react/jsx-runtime").JSX.Element | undefined;
 /** Generic hook for managing recent searches state and operations. */

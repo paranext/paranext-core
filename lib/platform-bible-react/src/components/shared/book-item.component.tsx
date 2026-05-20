@@ -1,5 +1,9 @@
 import { CommandItem } from '@/components/shadcn-ui/command';
-import { getLocalizedBookId, getLocalizedBookName } from '@/components/shared/book.utils';
+import {
+  getLocalizedBookId,
+  getLocalizedBookName,
+  LIST_ITEM_KEYBOARD_FOCUS_RING,
+} from '@/components/shared/book.utils';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Canon } from '@sillsdev/scripture';
 import { Check } from 'lucide-react';
@@ -126,9 +130,9 @@ export const BookItem = forwardRef<HTMLDivElement, BookItemProps>(
             'tw:hover:bg-muted',
             // Keyboard focus ring on the data-selected item. cmdk's pointer selection is
             // disabled on the parent Command, so data-selected only reflects keyboard nav.
-            // Suppressed when another element owns the focus indicator (e.g. the input).
-            showActiveRing &&
-              'tw:data-selected:ring-2 tw:data-selected:ring-ring/50 tw:data-selected:ring-inset',
+            // Suppressed when another element owns the focus indicator (e.g. the input). Uses the
+            // shared LIST_ITEM_KEYBOARD_FOCUS_RING (shadcn's standard ring tokens).
+            showActiveRing && LIST_ITEM_KEYBOARD_FOCUS_RING,
             className,
           )}
         >

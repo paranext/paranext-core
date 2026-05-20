@@ -26,6 +26,7 @@ import {
   ALL_BOOK_IDS,
   ALL_ENGLISH_BOOK_NAMES,
   doesBookMatchQuery,
+  LIST_ITEM_KEYBOARD_FOCUS_RING,
 } from '@/components/shared/book.utils';
 import {
   Fragment,
@@ -42,8 +43,11 @@ import { useQuickNavButtons } from './book-chapter-control.navigation';
 import { BookChapterControlProps, ViewMode } from './book-chapter-control.types';
 import {
   calculateTopMatch,
+  CHAPTER_GRID_COLUMNS,
+  computeTargetChapter,
   fetchEndChapter,
   getKeyCharacterType,
+  isArrowKey,
 } from './book-chapter-control.utils';
 import { ChapterGrid } from './chapter-grid.component';
 
@@ -244,7 +248,16 @@ export function BookChapterControl({
   // #region Navigation and view changes
 
   // Hook that provides navigation buttons for quick chapter/verse navigation
-  const quickNavButtons = useQuickNavButtons(scrRef, availableBooks, direction, handleSubmit);
+  const quickNavButtons = useQuickNavButtons(
+    scrRef,
+    availableBooks,
+    direction,
+    handleSubmit,
+    localizedStrings,
+  );
+
+  const backToBooksLabel =
+    localizedStrings?.['%bookChapterControl_backToBooks%'] ?? 'Back to books';
 
   const handleBackToBooks = useCallback(() => {
     setViewMode('books');
@@ -467,7 +480,7 @@ export function BookChapterControl({
       // grid stays put.
       if (
         (viewMode === 'chapters' || (viewMode === 'books' && topMatch)) &&
-        ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key) &&
+        isArrowKey(event.key) &&
         document.activeElement === commandListRef.current
       ) {
         // Extract current chapter from commandValue
@@ -481,7 +494,8 @@ export function BookChapterControl({
         //   - a non-chapter value like "MAT Matthew" (set on chapter-view entry)
         //   - the top-match row's value, which has the form "BOOK BookName N:N" (contains a
         //     colon). The trailing-digit regex would otherwise capture the *verse* and treat it
-        //     as a chapter, so ArrowDown from the top-match row would skip ahead by GRID_COLS.
+        //     as a chapter, so ArrowDown from the top-match row would skip ahead by
+        //     CHAPTER_GRID_COLUMNS.
         // The entry-point logic below then picks the appropriate starting cell per arrow.
         const currentChapter = (() => {
           if (!commandValue || commandValue.includes(':')) return 0;
@@ -493,37 +507,15 @@ export function BookChapterControl({
 
         if (!maxChapter) return;
 
-        let targetChapter = currentChapter;
-        const GRID_COLS = 6;
-
-        // Entry-point chapters when no chapter is currently focused (first arrow key press in
-        // chapter view). Each direction lands on the cell the user would visually expect to
-        // "enter from" that side of the grid.
-        const lastChapterInFirstRow = Math.min(GRID_COLS, maxChapter);
-        const firstChapterInLastRow = Math.floor((maxChapter - 1) / GRID_COLS) * GRID_COLS + 1;
-
-        switch (event.key) {
-          case 'ArrowLeft':
-            if (currentChapter === 0) targetChapter = lastChapterInFirstRow;
-            else if (currentChapter > 1) targetChapter = currentChapter - 1;
-            else targetChapter = maxChapter;
-            break;
-          case 'ArrowRight':
-            if (currentChapter === 0) targetChapter = 1;
-            else if (currentChapter < maxChapter) targetChapter = currentChapter + 1;
-            else targetChapter = 1;
-            break;
-          case 'ArrowUp':
-            if (currentChapter === 0) targetChapter = firstChapterInLastRow;
-            else targetChapter = Math.max(1, currentChapter - GRID_COLS);
-            break;
-          case 'ArrowDown':
-            if (currentChapter === 0) targetChapter = 1;
-            else targetChapter = Math.min(maxChapter, currentChapter + GRID_COLS);
-            break;
-          default:
-            return;
-        }
+        // The isArrowKey type guard in the surrounding `if` narrows event.key to ArrowKey, so no
+        // type assertion is needed here. The pure 2D grid arithmetic (entry points, wrap-around,
+        // row clamping) lives in computeTargetChapter so it can be unit-tested in isolation.
+        const targetChapter = computeTargetChapter(
+          currentChapter,
+          event.key,
+          maxChapter,
+          CHAPTER_GRID_COLUMNS,
+        );
 
         if (targetChapter !== currentChapter) {
           event.preventDefault();
@@ -708,8 +700,8 @@ export function BookChapterControl({
         // onEscapeKeyDown escape hatch rather than our own keydown handler. Note that the back
         // button and quick-nav buttons are wrapped in Radix Tooltips: per the default shadcn/Radix
         // behavior, an open tooltip consumes the first Escape to dismiss itself, and only the next
-        // Escape reaches this handler. (RecentSearches stops Escape propagation itself when it's
-        // open, so it never reaches this handler in that case.)
+        // Escape reaches this handler. (RecentSearches is a portaled DropdownMenu, so when it's
+        // open Escape closes the menu without ever bubbling to this handler.)
         onEscapeKeyDown={(e) => {
           if (viewMode === 'chapters') {
             e.preventDefault();
@@ -739,15 +731,23 @@ export function BookChapterControl({
               {/* Bubble-level handler for the RecentSearches clock button — it's a non-input
                   wrapper that picks up keydown events bubbling from the trigger button, which
                   doesn't have its own handler. Adding a role would mislead AT users since the
-                  div is purely a passthrough for event delegation. The input's own arrow keys
-                  are stopped by handleInputKeyDown and the recent popover's internal arrow keys
-                  are stopped by RecentSearches, so only the closed clock-button trigger's arrow
-                  events reach this wrapper. */}
+                  div is purely a passthrough for event delegation. The RecentSearches menu is
+                  portaled (it's a shadcn DropdownMenu), so its internal key events never bubble
+                  to this wrapper; only events from the input and the closed clock-button trigger
+                  reach it. */}
               {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
               <div
                 className="tw:relative tw:flex-1"
                 onKeyDown={(event) => {
-                  if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                  // ArrowUp/Down only enter the list when they come from the INPUT. The input's
+                  // own handleInputKeyDown already stops propagation for these keys, so in
+                  // practice they don't bubble here — but we still scope this branch to the input
+                  // so an arrow press on the focused clock button is NOT hijacked: it must fall
+                  // through to Radix's DropdownMenu default, which opens the recent menu.
+                  if (
+                    event.target === commandInputRef.current &&
+                    (event.key === 'ArrowUp' || event.key === 'ArrowDown')
+                  ) {
                     event.preventDefault();
                     event.stopPropagation();
                     enterListFromOutside(event.key === 'ArrowDown' ? 'first' : 'last');
@@ -756,7 +756,7 @@ export function BookChapterControl({
                   // Route typing from the history (clock) button to the input. Skip events
                   // that originated in the input itself (they're already being typed there)
                   // and the keys the button needs to keep (Tab moves focus naturally; Escape
-                  // is handled by Radix/RecentSearches).
+                  // and the arrow keys are handled by Radix's DropdownMenu on the trigger).
                   if (event.target === commandInputRef.current) return;
                   if (event.key === 'Tab' || event.key === 'Escape') return;
                   const { isLetter: isLetterFromButton, isDigit: isDigitFromButton } =
@@ -775,7 +775,7 @@ export function BookChapterControl({
                   onValueChange={setInputValue}
                   onKeyDown={handleInputKeyDown}
                   onFocus={() => setIsCommandListHidden(false)}
-                  className={recentSearches && recentSearches.length > 0 ? 'tw:pr-8!' : ''}
+                  className={recentSearches && recentSearches.length > 0 ? 'tw:pe-8!' : ''}
                 />
                 {recentSearches && recentSearches.length > 0 && (
                   <RecentSearches
@@ -787,7 +787,7 @@ export function BookChapterControl({
                     }
                     ariaLabel={localizedStrings?.['%history_recentSearches_ariaLabel%']}
                     groupHeading={localizedStrings?.['%history_recent%']}
-                    buttonClassName="tw:absolute tw:right-1 tw:top-1"
+                    buttonClassName="tw:absolute tw:end-1 tw:top-1"
                   />
                 )}
               </div>
@@ -835,7 +835,7 @@ export function BookChapterControl({
                       onClick={handleBackToBooks}
                       onKeyDown={handleBackButtonKeyDown}
                       className="tw:mr-2 tw:h-8 tw:w-8 tw:p-0"
-                      aria-label="Back to books"
+                      aria-label={backToBooksLabel}
                     >
                       {direction === 'ltr' ? (
                         <ArrowLeft className="tw:h-4 tw:w-4" />
@@ -844,7 +844,7 @@ export function BookChapterControl({
                       )}
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Back to books</TooltipContent>
+                  <TooltipContent>{backToBooksLabel}</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
               {selectedBookForChaptersView && (
@@ -937,9 +937,9 @@ export function BookChapterControl({
                         'tw:data-selected:bg-popover tw:data-selected:text-primary',
                         // Pointer-feedback background; distinct from the focus ring.
                         'tw:hover:bg-muted',
-                        // Keyboard focus ring only when the list/grid owns DOM focus.
-                        isListFocused &&
-                          'tw:data-selected:ring-2 tw:data-selected:ring-ring/50 tw:data-selected:ring-inset',
+                        // Keyboard focus ring only when the list/grid owns DOM focus. Uses the
+                        // shared LIST_ITEM_KEYBOARD_FOCUS_RING (shadcn's standard ring tokens).
+                        isListFocused && LIST_ITEM_KEYBOARD_FOCUS_RING,
                       )}
                     >
                       <span className="tw:flex-1">
