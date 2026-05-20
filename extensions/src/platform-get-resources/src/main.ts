@@ -36,13 +36,15 @@ async function fetchAndCacheResources(): Promise<DblResourceData[] | undefined> 
   if (!(await provider.isGetDblResourcesAvailable())) return undefined;
 
   const resources = await provider.getDblResources(undefined);
-  cachedResources = resources;
-  if (executionToken)
-    await papi.storage.writeUserData(
-      executionToken,
-      RESOURCES_CACHE_KEY,
-      JSON.stringify(cachedResources),
-    );
+  if (resources) {
+    cachedResources = resources;
+    if (executionToken)
+      await papi.storage.writeUserData(
+        executionToken,
+        RESOURCES_CACHE_KEY,
+        JSON.stringify(cachedResources),
+      );
+  }
   return resources;
 }
 
@@ -76,7 +78,7 @@ async function getCachedResources(): Promise<DblResourceData[] | undefined> {
       const localProjectMetadata = await papi.projectLookup.getMetadataForAllProjects({
         includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
       });
-      const newCachedResource = cachedResources.map((resource) => {
+      const newCachedResources = cachedResources.map((resource) => {
         const newIsInstalled = !!localProjectMetadata.find(
           (localProject) => localProject.id === resource.projectId,
         );
@@ -93,7 +95,7 @@ async function getCachedResources(): Promise<DblResourceData[] | undefined> {
 
       // If a change was detected updates the cache
       if (isChanged) {
-        cachedResources = newCachedResource;
+        cachedResources = newCachedResources;
         // Writes the updated cached resources to user data
         if (executionToken)
           await papi.storage.writeUserData(

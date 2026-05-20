@@ -202,7 +202,10 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const uninstallResource = dblResourcesProvider?.uninstallDblResource;
 
   const [resources, isLoadingResources] = usePromise(
-    useCallback(() => papi.commands.sendCommand('platformGetResources.getCachedResources'), []),
+    useCallback(
+      async () => papi.commands.sendCommand('platformGetResources.getCachedResources'),
+      [],
+    ),
     undefined,
   );
 

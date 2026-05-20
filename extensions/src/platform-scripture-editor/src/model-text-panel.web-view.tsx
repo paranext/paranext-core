@@ -253,10 +253,10 @@ globalThis.webViewComponent = function ModelTextPanel({
   }
 
   // Zero state: no model text configured (or still loading)
-  if (!effectiveModelTexts || effectiveModelTexts.items.length === 0 || isLoadingResources) {
+  if (!effectiveModelTexts || effectiveModelTexts.items.length === 0) {
     return (
       <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
-        {isEffectiveModelTextsLoading || isLoadingResources ? (
+        {isEffectiveModelTextsLoading ? (
           <Spinner />
         ) : (
           <>
@@ -290,7 +290,7 @@ globalThis.webViewComponent = function ModelTextPanel({
   }
 
   // Loading state: USJ not yet fetched (usjPossiblyError is undefined while the subscription is initializing)
-  if (!resourceProjectId || usjPossiblyError === undefined) {
+  if (isLoadingResources || !resourceProjectId || usjPossiblyError === undefined) {
     return (
       <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
         <Spinner />

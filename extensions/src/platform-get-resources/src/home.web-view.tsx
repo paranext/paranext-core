@@ -54,7 +54,10 @@ globalThis.webViewComponent = function HomeWebView() {
   }, [dblResourcesProvider]);
 
   const [resourcesList] = usePromise(
-    useCallback(() => papi.commands.sendCommand('platformGetResources.getCachedResources'), []),
+    useCallback(
+      async () => papi.commands.sendCommand('platformGetResources.getCachedResources'),
+      [],
+    ),
     undefined,
   );
 

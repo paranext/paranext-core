@@ -73,7 +73,6 @@ declare module 'papi-shared-types' {
      *
      * @returns Cached DBL resources, or `undefined` if none have been successfully fetched.
      */
-
     'platformGetResources.getCachedResources': () => Promise<DblResourceData[] | undefined>;
 
     /**
