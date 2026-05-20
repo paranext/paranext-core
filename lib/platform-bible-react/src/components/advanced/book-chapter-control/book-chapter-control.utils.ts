@@ -25,6 +25,71 @@ export function getKeyCharacterType(key: string) {
   return { isLetter, isDigit };
 }
 
+/**
+ * Single source of truth for the chapter grid column count. This value MUST drive both the keyboard
+ * navigation math (the 2D arrow-key arithmetic in `computeTargetChapter`) and the grid layout (the
+ * `gridTemplateColumns` of the chapter grid) so the two can never drift out of sync.
+ */
+export const CHAPTER_GRID_COLUMNS = 6;
+
+/** The four arrow keys that drive 2D chapter-grid navigation. */
+export const ARROW_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'] as const;
+
+/** A keyboard `event.key` value for one of the four arrow keys. */
+export type ArrowKey = (typeof ARROW_KEYS)[number];
+
+/**
+ * Type guard that narrows an arbitrary keyboard `event.key` string to an {@link ArrowKey}. Used so
+ * callers can hand `event.key` to {@link computeTargetChapter} without a type assertion.
+ */
+export function isArrowKey(key: string): key is ArrowKey {
+  return ARROW_KEYS.some((arrowKey) => arrowKey === key);
+}
+
+/**
+ * Computes the target chapter when navigating the 2D chapter grid with arrow keys. Pure function
+ * extracted from `BookChapterControl`'s keyboard handler so it can be unit-tested in isolation.
+ *
+ * @param currentChapter The currently focused chapter (1-based). 0 means "no chapter currently
+ *   focused" (entry into the grid), in which case each arrow lands on the cell the user would
+ *   visually expect to enter from that side.
+ * @param key The arrow key that was pressed.
+ * @param maxChapter The number of chapters in the current book.
+ * @param gridColumns The number of columns in the chapter grid.
+ * @returns The chapter number to move focus to.
+ */
+export function computeTargetChapter(
+  currentChapter: number,
+  key: ArrowKey,
+  maxChapter: number,
+  gridColumns: number,
+): number {
+  // Entry-point chapters when no chapter is currently focused (first arrow key press in chapter
+  // view). Each direction lands on the cell the user would visually expect to "enter from" that
+  // side of the grid.
+  const lastChapterInFirstRow = Math.min(gridColumns, maxChapter);
+  const firstChapterInLastRow = Math.floor((maxChapter - 1) / gridColumns) * gridColumns + 1;
+
+  switch (key) {
+    case 'ArrowLeft':
+      if (currentChapter === 0) return lastChapterInFirstRow;
+      if (currentChapter > 1) return currentChapter - 1;
+      return maxChapter;
+    case 'ArrowRight':
+      if (currentChapter === 0) return 1;
+      if (currentChapter < maxChapter) return currentChapter + 1;
+      return 1;
+    case 'ArrowUp':
+      if (currentChapter === 0) return firstChapterInLastRow;
+      return Math.max(1, currentChapter - gridColumns);
+    case 'ArrowDown':
+      if (currentChapter === 0) return 1;
+      return Math.min(maxChapter, currentChapter + gridColumns);
+    default:
+      return currentChapter;
+  }
+}
+
 export function fetchEndChapter(bookId: string) {
   // getChaptersForBook returns -1 if not found in scrBookData
   // scrBookData only includes OT and NT, so all DC will return -1

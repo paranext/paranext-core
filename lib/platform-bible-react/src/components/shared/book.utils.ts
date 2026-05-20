@@ -97,6 +97,16 @@ export function getLocalizedBookId(
   return localizedId ?? bookId.toUpperCase();
 }
 
+/**
+ * Tailwind classes for the keyboard focus ring shown on the currently active list/grid item. Uses
+ * shadcn's standard focus-ring tokens (`ring-3` + `ring-ring/50`, matching the `Button`'s
+ * `focus-visible` ring) but triggers them on `data-selected` rather than `:focus-visible` because
+ * cmdk list items are never DOM-focused (the list container owns focus; items only carry
+ * `data-selected`). `ring-inset` keeps the ring from being clipped inside the scrolling list.
+ */
+export const LIST_ITEM_KEYBOARD_FOCUS_RING =
+  'tw:data-selected:ring-3 tw:data-selected:ring-ring/50 tw:data-selected:ring-inset';
+
 /** Book IDs for all books that are not considered obsolete in the SIL Canon library */
 export const ALL_BOOK_IDS = Canon.allBookIds.filter(
   (bookId) => !Canon.isObsolete(Canon.bookIdToNumber(bookId)),

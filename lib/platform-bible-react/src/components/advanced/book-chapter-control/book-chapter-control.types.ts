@@ -13,6 +13,11 @@ export const BOOK_CHAPTER_CONTROL_STRING_KEYS = Object.freeze([
   '%scripture_section_extra_long%',
   '%history_recent%',
   '%history_recentSearches_ariaLabel%',
+  '%bookChapterControl_backToBooks%',
+  '%bookChapterControl_previousChapter%',
+  '%bookChapterControl_nextChapter%',
+  '%bookChapterControl_previousVerse%',
+  '%bookChapterControl_nextVerse%',
 ] as const);
 
 /** Type definition for the localized strings used in the BookChapterControl component */
