@@ -12,6 +12,10 @@ import {
   notifyCheckResultsInvalidated,
 } from './checks/check-aggregator.service';
 import { checkHostingService } from './checks/extension-host-check-runner.service';
+import {
+  recentlyOpenedProjectsService,
+  RECENTLY_OPENED_PROJECTS_STORAGE_KEY,
+} from './recently-opened-projects.service';
 import { InventoryWebViewOptions, InventoryWebViewProvider } from './inventory.web-view-provider';
 import { SCRIPTURE_EXTENDER_PROJECT_INTERFACES } from './project-data-provider/platform-scripture-extender-pdpe.model';
 import {
@@ -457,6 +461,24 @@ export async function activate(context: ExecutionActivationContext) {
   await checkHostingService.initialize();
   await checkAggregatorService.initialize();
 
+  const readRecentlyOpenedProjectsRaw = async (): Promise<string> => {
+    try {
+      return await papi.storage.readUserData(
+        context.executionToken,
+        RECENTLY_OPENED_PROJECTS_STORAGE_KEY,
+      );
+    } catch {
+      // No data yet — treat as empty list.
+      return '[]';
+    }
+  };
+  const writeRecentlyOpenedProjectsRaw = (data: string): Promise<void> =>
+    papi.storage.writeUserData(context.executionToken, RECENTLY_OPENED_PROJECTS_STORAGE_KEY, data);
+  await recentlyOpenedProjectsService.initialize(
+    readRecentlyOpenedProjectsRaw,
+    writeRecentlyOpenedProjectsRaw,
+  );
+
   context.registrations.add(
     await scriptureExtenderPdpefPromise,
     await scriptureFinderPdpefPromise,
@@ -487,6 +509,7 @@ export async function activate(context: ExecutionActivationContext) {
     await invalidateResultsPromise,
     checkHostingService.dispose,
     checkAggregatorService.dispose,
+    recentlyOpenedProjectsService.dispose,
   );
 
   logger.debug('platformScripture is finished activating!');

@@ -1772,6 +1772,45 @@ declare module 'platform-scripture' {
   };
 
   // #endregion Resource Reference Types
+
+  // #region Recently Opened Projects Types
+
+  /** Data types for the recently-opened-projects data provider. */
+  export type RecentlyOpenedProjectsDataTypes = {
+    /**
+     * Ordered list of project IDs that the user has opened as their main/active project in the
+     * Simple interface, most-recent first. Capped at 5 entries.
+     *
+     * `get` takes no selector and returns `string[]`. `set` is not supported — use
+     * {@link IRecentlyOpenedProjectsService.recordProjectOpened} instead.
+     */
+    RecentProjects: DataProviderDataType<undefined, string[], never>;
+  };
+
+  /**
+   * Service that maintains an ordered list of the projects the user has most recently opened as
+   * their main/active project in the Simple interface. Use the
+   * "platformScripture.recentlyOpenedProjects" data provider name to access it.
+   *
+   * History is stored locally for the OS user only; it is not synced via the Paratext Registry.
+   *
+   * Opens of a project as a resource or model text MUST NOT be recorded — only main-project opens.
+   */
+  export type IRecentlyOpenedProjectsService = IDataProvider<RecentlyOpenedProjectsDataTypes> & {
+    /**
+     * Records that the given project was opened as the active/main project in the Simple interface.
+     * The project ID is moved (or pushed) to the front of the recents list, the list is capped at 5
+     * entries, persisted to user storage, and subscribers are notified.
+     *
+     * Re-recording the project that is already at the front of the list is a no-op (no write, no
+     * notification). Empty or whitespace-only `projectId` values are rejected silently.
+     *
+     * @param projectId The ID of the project that was just opened as a main project.
+     */
+    recordProjectOpened: (projectId: string) => Promise<void>;
+  };
+
+  // #endregion Recently Opened Projects Types
 }
 
 declare module 'papi-shared-types' {
@@ -1799,6 +1838,7 @@ declare module 'papi-shared-types' {
     CheckCreatorFunction,
     CheckResultsInvalidated,
     ResourceReferenceList,
+    IRecentlyOpenedProjectsService,
   } from 'platform-scripture';
 
   export interface ProjectDataProviderInterfaces {
@@ -1829,6 +1869,11 @@ declare module 'papi-shared-types' {
     'platformScripture.extensionHostCheckRunner': ICheckRunner;
     /** Data provider for managing inventories and their options */
     'platformScripture.inventoryDataProvider': IInventoryDataProvider;
+    /**
+     * Service that maintains the list of projects most recently opened as a main project in the
+     * Simple interface. See {@link IRecentlyOpenedProjectsService}.
+     */
+    'platformScripture.recentlyOpenedProjects': IRecentlyOpenedProjectsService;
   }
 
   export interface CommandHandlers {
