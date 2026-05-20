@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Paranext.DataProvider.Checklists;
 using Paranext.DataProvider.Checklists.Markers;
 using Paratext.Data;
+using SIL.Scripture;
 
 namespace TestParanextDataProvider.Checklists.Markers;
 
@@ -57,7 +58,14 @@ internal class MarkersDataSourceTests
             {
                 paragraphs.Add(new ChecklistParagraph(marker, new List<ChecklistContentItem>()));
             }
-            cells.Add(new ChecklistCell(paragraphs, "GEN 1:1", "GEN 1:1", "en", Error: null));
+            cells.Add(
+                new ChecklistCell(
+                    paragraphs,
+                    new ScriptureRange(new VerseRef("GEN 1:1"), null),
+                    "en",
+                    Error: null
+                )
+            );
         }
         return new ChecklistRow(
             cells,

@@ -1,3 +1,5 @@
+import type { SerializedVerseRef } from '@sillsdev/scripture';
+import type { ScriptureRange } from 'platform-scripture';
 import type { ChecklistData, ChecklistRow } from '../components/checklist.types';
 
 // Mock `ChecklistData` payloads for the `ChecklistTool` Storybook stories.
@@ -19,6 +21,25 @@ import type { ChecklistData, ChecklistRow } from '../components/checklist.types'
 
 /** ---------- Helpers ---------- */
 
+/**
+ * Parse a checklist reference string — a single verse (`"EXO 20:1"`) or a bridge (`"EXO 20:1-2"`) —
+ * into a structured `ScriptureRange`. Story-data-only convenience; the real backend emits the
+ * structured range directly.
+ */
+function makeRange(reference: string): ScriptureRange {
+  const [startPart, endVerse] = reference.split('-');
+  const [book, chapterVerse] = startPart.trim().split(/\s+/);
+  const [chapterStr, verseStr] = chapterVerse.split(':');
+  const start: SerializedVerseRef = {
+    book,
+    chapterNum: Number.parseInt(chapterStr, 10),
+    verseNum: Number.parseInt(verseStr, 10),
+  };
+  return endVerse === undefined
+    ? { start }
+    : { start, end: { ...start, verseNum: Number.parseInt(endVerse, 10) } };
+}
+
 function row(
   firstRef: string,
   cells: ChecklistRow['cells'],
@@ -26,7 +47,7 @@ function row(
 ): ChecklistRow {
   const { isMatch = false, includeEditLink = false } = options;
   return {
-    firstRef,
+    firstRef: makeRange(firstRef),
     cells,
     isMatch,
     includeEditLink,
@@ -64,8 +85,7 @@ export const CHECKLIST_STORY_DATA_DEFAULT: ChecklistData = {
       'EXO 20:1-2',
       [
         {
-          reference: 'EXO 20:1',
-          displayedReference: 'EXO 20:1-2',
+          reference: makeRange('EXO 20:1-2'),
           language: 'en',
           paragraphs: [
             {
@@ -86,8 +106,7 @@ export const CHECKLIST_STORY_DATA_DEFAULT: ChecklistData = {
       'EXO 20:3',
       [
         {
-          reference: 'EXO 20:3',
-          displayedReference: 'EXO 20:3',
+          reference: makeRange('EXO 20:3'),
           language: 'en',
           paragraphs: [
             {
@@ -110,8 +129,7 @@ export const CHECKLIST_STORY_DATA_DEFAULT: ChecklistData = {
       'EXO 20:4',
       [
         {
-          reference: 'EXO 20:4',
-          displayedReference: 'EXO 20:4',
+          reference: makeRange('EXO 20:4'),
           language: 'en',
           paragraphs: [
             {
@@ -140,8 +158,7 @@ export const CHECKLIST_STORY_DATA_MULTI_COLUMN: ChecklistData = {
       'EXO 20:3',
       [
         {
-          reference: 'EXO 20:3',
-          displayedReference: 'EXO 20:3',
+          reference: makeRange('EXO 20:3'),
           language: 'en',
           paragraphs: [
             {
@@ -158,8 +175,7 @@ export const CHECKLIST_STORY_DATA_MULTI_COLUMN: ChecklistData = {
           ],
         },
         {
-          reference: 'EXO 20:3',
-          displayedReference: 'EXO 20:3',
+          reference: makeRange('EXO 20:3'),
           language: 'en',
           paragraphs: [
             {
@@ -176,8 +192,7 @@ export const CHECKLIST_STORY_DATA_MULTI_COLUMN: ChecklistData = {
           ],
         },
         {
-          reference: 'EXO 20:3',
-          displayedReference: 'EXO 20:3',
+          reference: makeRange('EXO 20:3'),
           language: 'en',
           paragraphs: [
             {
@@ -196,8 +211,7 @@ export const CHECKLIST_STORY_DATA_MULTI_COLUMN: ChecklistData = {
       'EXO 20:4',
       [
         {
-          reference: 'EXO 20:4',
-          displayedReference: 'EXO 20:4',
+          reference: makeRange('EXO 20:4'),
           language: 'en',
           paragraphs: [
             {
@@ -210,8 +224,7 @@ export const CHECKLIST_STORY_DATA_MULTI_COLUMN: ChecklistData = {
           ],
         },
         {
-          reference: 'EXO 20:4',
-          displayedReference: 'EXO 20:4',
+          reference: makeRange('EXO 20:4'),
           language: 'en',
           paragraphs: [
             {
@@ -224,8 +237,7 @@ export const CHECKLIST_STORY_DATA_MULTI_COLUMN: ChecklistData = {
           ],
         },
         {
-          reference: 'EXO 20:4',
-          displayedReference: 'EXO 20:4',
+          reference: makeRange('EXO 20:4'),
           language: 'en',
           paragraphs: [
             {
@@ -254,8 +266,7 @@ export const CHECKLIST_STORY_DATA_HIDE_MATCHES: ChecklistData = {
       'EXO 20:3',
       [
         {
-          reference: 'EXO 20:3',
-          displayedReference: 'EXO 20:3',
+          reference: makeRange('EXO 20:3'),
           language: 'en',
           paragraphs: [
             {
@@ -272,8 +283,7 @@ export const CHECKLIST_STORY_DATA_HIDE_MATCHES: ChecklistData = {
           ],
         },
         {
-          reference: 'EXO 20:3',
-          displayedReference: 'EXO 20:3',
+          reference: makeRange('EXO 20:3'),
           language: 'en',
           paragraphs: [
             {
@@ -296,8 +306,7 @@ export const CHECKLIST_STORY_DATA_HIDE_MATCHES: ChecklistData = {
       'EXO 20:4',
       [
         {
-          reference: 'EXO 20:4',
-          displayedReference: 'EXO 20:4',
+          reference: makeRange('EXO 20:4'),
           language: 'en',
           paragraphs: [
             {
@@ -310,8 +319,7 @@ export const CHECKLIST_STORY_DATA_HIDE_MATCHES: ChecklistData = {
           ],
         },
         {
-          reference: 'EXO 20:4',
-          displayedReference: 'EXO 20:4',
+          reference: makeRange('EXO 20:4'),
           language: 'en',
           paragraphs: [
             {
@@ -353,8 +361,7 @@ export const CHECKLIST_STORY_DATA_SHOW_VERSE_TEXT: ChecklistData = {
       'EXO 20:2',
       [
         {
-          reference: 'EXO 20:2',
-          displayedReference: 'EXO 20:2',
+          reference: makeRange('EXO 20:2'),
           language: 'en',
           paragraphs: [
             {
@@ -372,8 +379,7 @@ export const CHECKLIST_STORY_DATA_SHOW_VERSE_TEXT: ChecklistData = {
           ],
         },
         {
-          reference: 'EXO 20:2',
-          displayedReference: 'EXO 20:2',
+          reference: makeRange('EXO 20:2'),
           language: 'en',
           paragraphs: [
             {

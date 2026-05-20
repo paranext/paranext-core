@@ -66,9 +66,8 @@ internal class ChecklistRowBuilderTests
 
     /// <summary>
     /// Build a single-paragraph <see cref="ChecklistCell"/> with one
-    /// <see cref="VerseItem"/> + <see cref="TextItem"/> pair. The
-    /// <c>Reference</c> and <c>DisplayedReference</c> are identical (i.e. no
-    /// verse-bridge merging has happened yet on this cell).
+    /// <see cref="VerseItem"/> + <see cref="TextItem"/> pair. <c>Reference</c> is a
+    /// single-verse <see cref="ScriptureRange"/> (no verse-bridge merging on this cell).
     /// </summary>
     private static ChecklistCell Cell(string reference, string text)
     {
@@ -80,8 +79,7 @@ internal class ChecklistRowBuilderTests
         var paragraph = new ChecklistParagraph("p", items);
         return new ChecklistCell(
             Paragraphs: new List<ChecklistParagraph> { paragraph },
-            Reference: reference,
-            DisplayedReference: reference,
+            Reference: SingleRange(reference),
             Language: "dmy",
             Error: null
         );
@@ -89,9 +87,9 @@ internal class ChecklistRowBuilderTests
 
     /// <summary>
     /// Build a bridge <see cref="ChecklistCell"/> — the cell represents a verse
-    /// bridge like <c>EXO 20:2-3</c>. Its <c>Reference</c> is the first verse
-    /// of the bridge (used for alignment); <c>DisplayedReference</c> holds the
-    /// bridge notation (for display and for the golden-master comparison).
+    /// bridge like <c>EXO 20:2-3</c>. Its <c>Reference</c> is a
+    /// <see cref="ScriptureRange"/> spanning <paramref name="firstVerseRef"/> through the
+    /// last verse of <paramref name="bridgeDisplayRef"/> ({Start, End}).
     /// </summary>
     private static ChecklistCell BridgeCell(
         string firstVerseRef,
@@ -108,11 +106,44 @@ internal class ChecklistRowBuilderTests
         var paragraph = new ChecklistParagraph("p", items);
         return new ChecklistCell(
             Paragraphs: new List<ChecklistParagraph> { paragraph },
-            Reference: firstVerseRef,
-            DisplayedReference: bridgeDisplayRef,
+            Reference: BridgeRange(firstVerseRef, bridgeDisplayRef),
             Language: "dmy",
             Error: null
         );
+    }
+
+    /// <summary>Build a single-verse <see cref="ScriptureRange"/> from a string like "GEN 1:1".</summary>
+    private static ScriptureRange SingleRange(string reference) =>
+        new ScriptureRange(new VerseRef(reference), null);
+
+    /// <summary>
+    /// Build a bridge <see cref="ScriptureRange"/> spanning <paramref name="firstVerseRef"/>
+    /// (e.g. "EXO 20:2") through the last verse of <paramref name="bridgeRef"/> (e.g.
+    /// "EXO 20:2-5") — i.e. {Start = EXO 20:2, End = EXO 20:5}.
+    /// </summary>
+    private static ScriptureRange BridgeRange(string firstVerseRef, string bridgeRef)
+    {
+        var start = new VerseRef(firstVerseRef);
+        int dash = bridgeRef.LastIndexOf('-');
+        string endVerse = dash >= 0 ? bridgeRef[(dash + 1)..] : start.VerseNum.ToString();
+        var end = new VerseRef(
+            start.Book,
+            start.ChapterNum.ToString(),
+            endVerse,
+            start.Versification
+        );
+        return new ScriptureRange(start, end);
+    }
+
+    /// <summary>
+    /// Render a <see cref="ScriptureRange"/> back to a canonical assertion string —
+    /// "GEN 1:1" for a single verse, "GEN 1:1-3" for a bridge, "" for null.
+    /// </summary>
+    private static string RefString(ScriptureRange? range)
+    {
+        if (range is null)
+            return string.Empty;
+        return range.End is { } end ? $"{range.Start}-{end.VerseNum}" : range.Start.ToString();
     }
 
     /// <summary>Extracts the verse-number portion of a reference like "EXO 20:3".</summary>
@@ -170,7 +201,7 @@ internal class ChecklistRowBuilderTests
 
         Assert.That(rows.Count, Is.EqualTo(1));
         Assert.That(rows[0].Cells.Count, Is.EqualTo(1), "INV-001: cells.Count == columns.Count");
-        Assert.That(rows[0].Cells[0].Reference, Is.EqualTo("GEN 1:1"));
+        Assert.That(RefString(rows[0].Cells[0].Reference), Is.EqualTo("GEN 1:1"));
     }
 
     [Test]
@@ -188,9 +219,9 @@ internal class ChecklistRowBuilderTests
         var rows = ChecklistRowBuilder.BuildRowsMergingCells(columns);
 
         Assert.That(rows.Count, Is.EqualTo(3));
-        Assert.That(rows[0].Cells[0].Reference, Is.EqualTo("GEN 1:1"));
-        Assert.That(rows[1].Cells[0].Reference, Is.EqualTo("GEN 1:2"));
-        Assert.That(rows[2].Cells[0].Reference, Is.EqualTo("GEN 1:3"));
+        Assert.That(RefString(rows[0].Cells[0].Reference), Is.EqualTo("GEN 1:1"));
+        Assert.That(RefString(rows[1].Cells[0].Reference), Is.EqualTo("GEN 1:2"));
+        Assert.That(RefString(rows[2].Cells[0].Reference), Is.EqualTo("GEN 1:3"));
     }
 
     // =====================================================================
@@ -220,10 +251,10 @@ internal class ChecklistRowBuilderTests
         Assert.That(rows.Count, Is.EqualTo(3), "one row per shared reference");
         foreach (var row in rows)
             Assert.That(row.Cells.Count, Is.EqualTo(2), "INV-001: 2 columns → 2 cells");
-        Assert.That(rows[0].Cells[0].Reference, Is.EqualTo("GEN 1:1"));
-        Assert.That(rows[0].Cells[1].Reference, Is.EqualTo("GEN 1:1"));
-        Assert.That(rows[2].Cells[0].Reference, Is.EqualTo("GEN 1:3"));
-        Assert.That(rows[2].Cells[1].Reference, Is.EqualTo("GEN 1:3"));
+        Assert.That(RefString(rows[0].Cells[0].Reference), Is.EqualTo("GEN 1:1"));
+        Assert.That(RefString(rows[0].Cells[1].Reference), Is.EqualTo("GEN 1:1"));
+        Assert.That(RefString(rows[2].Cells[0].Reference), Is.EqualTo("GEN 1:3"));
+        Assert.That(RefString(rows[2].Cells[1].Reference), Is.EqualTo("GEN 1:3"));
     }
 
     [Test]
@@ -307,7 +338,7 @@ internal class ChecklistRowBuilderTests
             Assert.That(row.Cells.Count, Is.EqualTo(2), "INV-001");
 
         // Row for GEN 1:2 has empty placeholder in col 1.
-        var rowV2 = rows.Single(r => r.Cells[0].Reference == "GEN 1:2");
+        var rowV2 = rows.Single(r => RefString(r.Cells[0].Reference) == "GEN 1:2");
         Assert.That(IsEmptyPlaceholder(rowV2.Cells[1]), Is.True, "col 1 missing v2 → empty cell");
         Assert.That(IsEmptyPlaceholder(rowV2.Cells[0]), Is.False, "col 0 populated for v2");
     }
@@ -548,11 +579,11 @@ internal class ChecklistRowBuilderTests
         var rows = ChecklistRowBuilder.BuildRowsMergingCells(columns);
 
         Assert.That(rows.Count, Is.EqualTo(2));
-        Assert.That(rows[0].FirstRef, Is.EqualTo("EXO 20:1"));
+        Assert.That(RefString(rows[0].FirstRef), Is.EqualTo("EXO 20:1"));
         // Row 1's FirstRef is the earliest verse in the merged block; col 0 starts
         // with v2 (via v2-5 bridge) which is earlier than col 1's v4-7.
         Assert.That(
-            rows[1].FirstRef,
+            RefString(rows[1].FirstRef),
             Is.EqualTo("EXO 20:2"),
             "FirstRef reflects earliest verse across all grabbed cells"
         );
@@ -596,8 +627,8 @@ internal class ChecklistRowBuilderTests
 
         Assert.That(rows.Count, Is.EqualTo(1), "pre-normalized refs align into one row");
         Assert.That(rows[0].Cells.Count, Is.EqualTo(2), "INV-001");
-        Assert.That(rows[0].Cells[0].Reference, Is.EqualTo("GEN 31:55"));
-        Assert.That(rows[0].Cells[1].Reference, Is.EqualTo("GEN 31:55"));
+        Assert.That(RefString(rows[0].Cells[0].Reference), Is.EqualTo("GEN 31:55"));
+        Assert.That(RefString(rows[0].Cells[1].Reference), Is.EqualTo("GEN 31:55"));
     }
 
     [Test]
@@ -624,8 +655,8 @@ internal class ChecklistRowBuilderTests
         var rows = ChecklistRowBuilder.BuildRowsMergingCells(columns);
 
         Assert.That(rows.Count, Is.EqualTo(2));
-        Assert.That(rows[0].Cells[0].Reference, Is.EqualTo("GEN 31:54"));
-        Assert.That(rows[1].Cells[0].Reference, Is.EqualTo("GEN 31:55"));
+        Assert.That(RefString(rows[0].Cells[0].Reference), Is.EqualTo("GEN 31:54"));
+        Assert.That(RefString(rows[1].Cells[0].Reference), Is.EqualTo("GEN 31:55"));
         foreach (var row in rows)
             Assert.That(row.Cells.Count, Is.EqualTo(2), "INV-001");
     }
@@ -675,7 +706,7 @@ internal class ChecklistRowBuilderTests
         int mrk16v1Rows = rows.Count(r =>
             r.Cells.Count > 0
             && !IsEmptyPlaceholder(r.Cells[0])
-            && r.Cells[0].Reference == "MRK 16:1"
+            && RefString(r.Cells[0].Reference) == "MRK 16:1"
         );
         Assert.That(mrk16v1Rows, Is.EqualTo(2), "both occurrences of MRK 16:1 get their own row");
     }
@@ -745,21 +776,16 @@ internal class ChecklistRowBuilderTests
 
         foreach (var row in rows)
         {
-            Assert.That(
-                row.FirstRef,
-                Is.Not.Null.And.Not.Empty,
-                "every row has a FirstRef (BHV-111)"
-            );
+            Assert.That(row.FirstRef, Is.Not.Null, "every row has a FirstRef (BHV-111)");
         }
 
         // Rows should be ordered by FirstRef ascending (binary-search insertion).
-        // Assert each row's FirstRef sorts canonically via VerseRef.CompareTo,
-        // not string ordinal (string ordinal breaks across book/chapter
-        // transitions where the canonical ordering is semantic).
+        // Assert each row's FirstRef sorts canonically via VerseRef.CompareTo
+        // (the structured ScriptureRange carries the start VerseRef directly).
         for (int i = 1; i < rows.Count; i++)
         {
-            var prevRef = new VerseRef(rows[i - 1].FirstRef!, ScrVers.English);
-            var currRef = new VerseRef(rows[i].FirstRef!, ScrVers.English);
+            VerseRef prevRef = rows[i - 1].FirstRef!.Start;
+            VerseRef currRef = rows[i].FirstRef!.Start;
             Assert.That(
                 prevRef.CompareTo(currRef),
                 Is.LessThanOrEqualTo(0),
