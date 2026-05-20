@@ -1107,6 +1107,21 @@ export type SelectedSidebarEntry = {
 	sectionId: string;
 	itemId: string;
 };
+/**
+ * Props for {@link SettingsSidebar}. Two mutually-exclusive prop shapes are supported, and exactly
+ * one must be fully provided:
+ *
+ * - **Generalized (preferred):** provide `sections` together with `onSelectEntry` (and usually
+ *   `selectedEntry`). Renders an arbitrary, dynamic set of sections. When `sections` is provided,
+ *   the legacy props below are ignored.
+ * - **Legacy:** provide the full set of `extensionLabels`, `projectInfo`, `handleSelectSidebarItem`,
+ *   `selectedSidebarItem`, `extensionsSidebarGroupLabel`, `projectsSidebarGroupLabel`, and
+ *   `buttonPlaceholderText`.
+ *
+ * Every field is individually optional at the type level, so the contract is enforced at runtime:
+ * the component throws if neither complete shape is supplied. Prefer the generalized shape for new
+ * code.
+ */
 export type SettingsSidebarProps = {
 	/** Optional id for testing */
 	id?: string;
@@ -1154,97 +1169,36 @@ type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.PropsWit
 	searchValue: string;
 	/** Handler to run when the value of the search bar changes */
 	onSearch: (searchQuery: string) => void;
+	/**
+	 * Placeholder text for the search bar. Defaults to a generic settings-search prompt so existing
+	 * callers are unaffected.
+	 */
+	searchPlaceholder?: string;
 };
 /**
  * A component that wraps a search bar and a settings sidebar, providing a way to search and
  * navigate to different settings pages.
  *
+ * The sidebar layout is **dynamic**: when the generalized `sections` shape is used, the structure
+ * is driven entirely by the caller. Any number of sections may be supplied, in any order, each with
+ * its own label, an arbitrary list of items, and an optional `header` element (e.g., a project
+ * picker). This component does not hard-code which sections or entries appear — callers compose the
+ * layout they need. Each section's items are filtered against `searchValue` (case-insensitive label
+ * substring match) before being forwarded to the sidebar.
+ *
+ * Two prop shapes are supported, mirroring {@link SettingsSidebar}:
+ *
+ * - The generalized shape (`sections` + `selectedEntry` + `onSelectEntry`) — the dynamic layout
+ *   described above.
+ * - The legacy shape (`extensionLabels` + `projectInfo` + ...) — forwarded unchanged; no filtering is
+ *   applied (legacy callers handle their own filtering).
+ *
+ * The right-hand `SidebarInset` always renders `children`, so the caller supplies the content for
+ * the selected entry.
+ *
  * @param {SettingsSidebarContentSearchProps} props - The props for the component.
- * @param {string} props.id - The id of the sidebar.
  */
-export declare function SettingsSidebarContentSearch({ id, extensionLabels, projectInfo, children, handleSelectSidebarItem, selectedSidebarItem, searchValue, onSearch, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
-export type SettingsLayoutSectionId = "project" | "general" | "extensions";
-/** A dynamic sidebar item whose right-panel content is rendered by the consumer. */
-export type DynamicSettingsSidebarItem = {
-	kind: "dynamic";
-	id: string;
-	label: string;
-	/** When true, the item is rendered greyed out and ignores clicks. */
-	disabled?: boolean;
-};
-/** A sidebar item with no real content yet; selecting it shows the Coming Soon panel. */
-export type ComingSoonSettingsSidebarItem = {
-	kind: "coming-soon";
-	id: string;
-	label: string;
-	/** When true, the item is rendered greyed out and ignores clicks. */
-	disabled?: boolean;
-};
-export type SettingsLayoutItem = DynamicSettingsSidebarItem | ComingSoonSettingsSidebarItem;
-export type SettingsLayoutProjectInfo = {
-	projectId: string;
-	projectName: string;
-};
-export type SettingsLayoutLabels = {
-	/** Group label for the Project section. */
-	projectSection: string;
-	/** Group label for the General section. */
-	generalSection: string;
-	/** Group label for the Extensions section. */
-	extensionsSection: string;
-	/** Title shown in the Coming Soon panel. */
-	comingSoonTitle: string;
-	/** Body shown in the Coming Soon panel. */
-	comingSoonBody: string;
-	/** Placeholder text for the search bar. */
-	searchPlaceholder: string;
-	/** Placeholder shown in the project picker when no project is selected. */
-	projectPickerPlaceholder: string;
-};
-export type SettingsLayoutSelection = {
-	section: SettingsLayoutSectionId;
-	itemId: string;
-};
-export type SettingsLayoutProps = React$1.PropsWithChildren<{
-	/** Optional id (for testing / story isolation). */
-	id?: string;
-	/** Additional className applied to the outer wrapper. */
-	className?: string;
-	projectOptions: ReadonlyArray<SettingsLayoutProjectInfo>;
-	selectedProjectId: string | undefined;
-	/** Called when the user picks a project from the project picker combo box. */
-	onSelectProject: (projectId: string) => void;
-	/** When true, the project picker is locked (e.g., dialog scoped to a single project). */
-	isProjectLocked?: boolean;
-	projectSectionItems: ReadonlyArray<SettingsLayoutItem>;
-	generalSectionItems: ReadonlyArray<DynamicSettingsSidebarItem>;
-	extensionsSectionItems: ReadonlyArray<DynamicSettingsSidebarItem>;
-	selectedEntry: SettingsLayoutSelection | undefined;
-	/** Called when the user selects a sidebar entry (in any section). */
-	onSelectEntry: (entry: SettingsLayoutSelection) => void;
-	searchValue: string;
-	/** Called when the user types in the search bar; receives the new query string. */
-	onSearch: (q: string) => void;
-	labels: SettingsLayoutLabels;
-	/**
-	 * Right-panel content. The caller decides what to render based on the current selection. When the
-	 * selected entry is a Coming Soon item, the layout substitutes the ComingSoonPanel and ignores
-	 * this slot.
-	 */
-	children?: React$1.ReactNode;
-}>;
-/**
- * Pure presentational shell for the application Settings dialog. Renders:
- *
- * 1. A top search bar.
- * 2. A sidebar with three sections: Project (with a project picker header), General, Extensions.
- * 3. A right-hand content panel that hosts either consumer-provided content (`children`) or a "Coming
- *    soon" placeholder when the selected sidebar item is hard-coded.
- *
- * No PAPI, no extension service, no project lookup — all data and callbacks are passed in. This
- * makes the component Storybook-testable in isolation.
- */
-export declare function SettingsLayout({ id, className, projectOptions, selectedProjectId, onSelectProject, isProjectLocked, projectSectionItems, generalSectionItems, extensionsSectionItems, selectedEntry, onSelectEntry, searchValue, onSearch, labels, children, }: SettingsLayoutProps): import("react/jsx-runtime").JSX.Element;
+export declare function SettingsSidebarContentSearch({ id, sections, selectedEntry, onSelectEntry, extensionLabels, projectInfo, children, handleSelectSidebarItem, selectedSidebarItem, searchValue, onSearch, searchPlaceholder, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
 export type ComingSoonPanelProps = {
 	/** Already-localized title. */
 	title: string;

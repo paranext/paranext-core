@@ -3647,10 +3647,10 @@ declare module 'papi-shared-types' {
     'test.addMany': (...nums: number[]) => number;
     'test.throwErrorExtensionHost': (message: string) => void;
     /**
-     * Get the names of all extensions bundled with (in-repo to) Platform.Bible. Extensions whose
+     * Get the names of all extensions packaged with (in-repo to) Platform.Bible. Extensions whose
      * names are not in this list are user-installed (third-party).
      */
-    'platform.getBundledExtensionNames': () => Promise<string[]>;
+    'platform.getPackagedExtensionNames': () => Promise<string[]>;
   }
   /**
    * Names for each command available on the papi.
