@@ -445,7 +445,7 @@ export function PlatformBibleToolbar() {
           currentProject={currentProject}
           recentProjects={recentProjects}
           allProjects={allProjects}
-          onSelect={(projectId) => {
+          onSelect={(projectId: string) => {
             // This command comes from an extension and is not typed in CommandHandlers.
             // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
             (sendCommand as any)('platformScriptureEditor.openScriptureEditor', projectId).catch(
