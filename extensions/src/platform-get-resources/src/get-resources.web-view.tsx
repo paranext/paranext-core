@@ -201,11 +201,12 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const installResource = dblResourcesProvider?.installDblResource;
   const uninstallResource = dblResourcesProvider?.uninstallDblResource;
 
+  const [fetchResources, setFetchResources] = useState(false);
   const [resources, isLoadingResources] = usePromise(
-    useCallback(
-      async () => papi.commands.sendCommand('platformGetResources.getCachedResources'),
-      [],
-    ),
+    useCallback(async () => {
+      setFetchResources(false);
+      papi.commands.sendCommand('platformGetResources.getCachedResources');
+    }, [fetchResources]),
     undefined,
   );
 
@@ -259,9 +260,11 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
 
       const actionFunction = action === 'install' ? installResource : uninstallResource;
 
-      actionFunction(dblEntryUid).catch((error) => {
-        logger.debug(getErrorMessage(error));
-      });
+      actionFunction(dblEntryUid)
+        .then(() => setFetchResources(true))
+        .catch((error) => {
+          logger.debug(getErrorMessage(error));
+        });
     },
     [installResource, uninstallResource],
   );
