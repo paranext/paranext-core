@@ -123,7 +123,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(
             ("resetUserReferencedProjectsAndResources", ResetUserReferencedProjectsAndResources)
         );
-        retVal.Add(("canUserWriteProjectSettings", CanUserWriteProjectSettings));
+        retVal.Add(
+            ("canUserWriteProjectTextConnectionSettings", CanUserWriteProjectTextConnectionSettings)
+        );
 
         retVal.Add(("getMarkerNames", GetMarkerNames));
 
@@ -1334,10 +1336,23 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     }
 
     /// <summary>
-    /// Determines if the current user can write to the project settings.
+    /// Determines if the current user can write the project settings for "text connections"
+    /// (model text and referenced resources).
     /// </summary>
-    /// <returns>True if the user can write the project settings, false otherwise</returns>
-    public bool CanUserWriteProjectSettings()
+    /// <returns>True if the user can write these settings, false otherwise</returns>
+    /// <remarks>At this time, the only check for this is whether the user is an administrator on
+    /// the project.
+    public bool CanUserWriteProjectTextConnectionSettings() => IsUserProjectAdministrator();
+
+    /// <summary>
+    /// Determines if the current user id a project administrator
+    /// </summary>
+    /// <returns>
+    /// True if the user has an Administrator role on this project, false otherwise
+    /// </returns>
+    /// <remarks>All project-level settings *should* only be able to be set by administrators, but
+    /// this is not currently enforced for most settings.
+    private bool IsUserProjectAdministrator()
     {
         try
         {
