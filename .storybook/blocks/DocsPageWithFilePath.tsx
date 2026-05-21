@@ -5,9 +5,9 @@ function FilePath() {
   // import path (e.g. "./src/renderer/components/overlays/overlay-popover.stories.tsx"). No build
   // step or per-story configuration is required.
   const resolved = useOf('meta');
-  if (resolved.type !== 'meta') return null;
+  if (resolved.type !== 'meta') return undefined;
   const { fileName } = resolved.preparedMeta.parameters;
-  if (typeof fileName !== 'string') return null;
+  if (typeof fileName !== 'string') return undefined;
 
   return (
     <code
