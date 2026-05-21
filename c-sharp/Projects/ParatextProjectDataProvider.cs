@@ -1341,17 +1341,17 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// </summary>
     /// <returns>True if the user can write these settings, false otherwise</returns>
     /// <remarks>At this time, the only check for this is whether the user is an administrator on
-    /// the project.
+    /// the project.</remarks>
     public bool CanUserWriteProjectTextConnectionSettings() => IsUserProjectAdministrator();
 
     /// <summary>
-    /// Determines if the current user id a project administrator
+    /// Determines if the current user is a project administrator
     /// </summary>
     /// <returns>
     /// True if the user has an Administrator role on this project, false otherwise
     /// </returns>
     /// <remarks>All project-level settings *should* only be able to be set by administrators, but
-    /// this is not currently enforced for most settings.
+    /// this is not currently enforced for most settings.</remarks>
     private bool IsUserProjectAdministrator()
     {
         try

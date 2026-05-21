@@ -758,7 +758,7 @@ declare module 'platform-scripture' {
 
   // #endregion Replace Types
 
-  // #region User Text Connection Settings Types
+  // #region Text Connection Settings Types
 
   /** Provides user-specific text connection settings (model texts and referenced projects/resources) */
   export type UserTextConnectionSettingsProjectInterfaceDataTypes = {
