@@ -11,11 +11,7 @@ import {
 import { Button } from '@/components/shadcn-ui/button';
 import { Input } from '@/components/shadcn-ui/input';
 import { Label } from '@/components/shadcn-ui/label';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/shadcn-ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import {
   Select,
   SelectContent,
@@ -108,8 +104,7 @@ export function HierarchicalStagesTasks({
     taskIdx: number;
   } | null>(null);
 
-  const toggle = (id: string) =>
-    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
+  const toggle = (id: string) => setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const taskDragHandlers = (stageIdx: number, taskIdx: number, taskId: string) => ({
     draggable: true,
@@ -127,19 +122,13 @@ export function HierarchicalStagesTasks({
         e.preventDefault();
         e.stopPropagation();
         e.dataTransfer.dropEffect = 'move';
-        if (
-          taskDragOver?.stageIdx !== stageIdx ||
-          taskDragOver?.taskIdx !== taskIdx
-        ) {
+        if (taskDragOver?.stageIdx !== stageIdx || taskDragOver?.taskIdx !== taskIdx) {
           setTaskDragOver({ stageIdx, taskIdx });
         }
       }
     },
     onDragLeave: () => {
-      if (
-        taskDragOver?.stageIdx === stageIdx &&
-        taskDragOver?.taskIdx === taskIdx
-      ) {
+      if (taskDragOver?.stageIdx === stageIdx && taskDragOver?.taskIdx === taskIdx) {
         setTaskDragOver(null);
       }
     },
@@ -232,8 +221,7 @@ export function HierarchicalStagesTasks({
     );
   };
 
-  const removeStage = (id: string) =>
-    onStagesChange((prev) => prev.filter((s) => s.id !== id));
+  const removeStage = (id: string) => onStagesChange((prev) => prev.filter((s) => s.id !== id));
 
   const removeTask = (stageId: string, taskId: string) =>
     onStagesChange((prev) =>
@@ -300,9 +288,7 @@ export function HierarchicalStagesTasks({
                       taskDragOver?.stageIdx === stageIndex &&
                       taskDragOver?.taskIdx === taskIndex &&
                       taskDragSrc !== null &&
-                      !(
-                        taskDragSrc.stageIdx === stageIndex && taskDragSrc.taskIdx === taskIndex
-                      );
+                      !(taskDragSrc.stageIdx === stageIndex && taskDragSrc.taskIdx === taskIndex);
                     return (
                       <li
                         key={task.id}
@@ -356,7 +342,8 @@ export function HierarchicalStagesTasks({
 }
 
 function summarizeTask(task: PlanTask): string {
-  const mc = markCompleteOptions.find((o) => o.value === task.markComplete)?.label ?? task.markComplete;
+  const mc =
+    markCompleteOptions.find((o) => o.value === task.markComplete)?.label ?? task.markComplete;
   return `Mark: ${mc}`;
 }
 
@@ -414,9 +401,7 @@ function RowHeader({
           <ChevronRight className="tw:h-4 tw:w-4 tw:text-muted-foreground" />
         )}
         <span className={cn('tw:text-sm', isStage && 'tw:font-semibold')}>{name}</span>
-        {subtitle && (
-          <span className="tw:text-xs tw:text-muted-foreground">— {subtitle}</span>
-        )}
+        {subtitle && <span className="tw:text-xs tw:text-muted-foreground">— {subtitle}</span>}
       </button>
       <div className="tw:flex tw:items-center tw:gap-1 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100">
         {rightExtras}
@@ -561,9 +546,7 @@ function TaskInlineForm({
       <Field label="Requires editing">
         <Select
           value={task.requiresEditing}
-          onValueChange={(v) =>
-            onChange({ ...task, requiresEditing: v as RequiresEditingMode })
-          }
+          onValueChange={(v) => onChange({ ...task, requiresEditing: v as RequiresEditingMode })}
         >
           <SelectTrigger>
             <SelectValue />
@@ -581,13 +564,7 @@ function TaskInlineForm({
   );
 }
 
-function EffortPopover({
-  task,
-  onChange,
-}: {
-  task: PlanTask;
-  onChange: (next: PlanTask) => void;
-}) {
+function EffortPopover({ task, onChange }: { task: PlanTask; onChange: (next: PlanTask) => void }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -606,7 +583,9 @@ function EffortPopover({
         <div className="tw:flex tw:flex-col tw:gap-3">
           <div>
             <div className="tw:text-sm tw:font-semibold">Expected rate of progress</div>
-            <div className="tw:text-xs tw:text-muted-foreground">Verses per day per book difficulty</div>
+            <div className="tw:text-xs tw:text-muted-foreground">
+              Verses per day per book difficulty
+            </div>
           </div>
           {(['easiest', 'easy', 'moderate', 'difficult'] as const).map((key) => {
             const labels = {

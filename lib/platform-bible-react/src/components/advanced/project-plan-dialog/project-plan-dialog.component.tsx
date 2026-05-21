@@ -115,9 +115,7 @@ export function ProjectPlanDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="tw:inset-0 tw:flex tw:h-screen tw:max-h-none tw:w-screen tw:max-w-none tw:sm:max-w-none tw:translate-x-0 tw:translate-y-0 tw:flex-col tw:gap-0 tw:rounded-none tw:p-0 tw:rtl:translate-x-0"
-      >
+      <DialogContent className="tw:inset-0 tw:flex tw:h-screen tw:max-h-none tw:w-screen tw:max-w-none tw:sm:max-w-none tw:translate-x-0 tw:translate-y-0 tw:flex-col tw:gap-0 tw:rounded-none tw:p-0 tw:rtl:translate-x-0">
         <DialogHeader className="tw:border-b tw:p-4 tw:pb-3">
           <DialogTitle>Project Plan: {projectName}</DialogTitle>
         </DialogHeader>
@@ -160,9 +158,7 @@ export function ProjectPlanDialog({
             <ChecksTab
               stages={stages}
               checks={workingPlan.checks}
-              onChecksChange={(checks: CheckSetting[]) =>
-                setWorkingPlan((p) => ({ ...p, checks }))
-              }
+              onChecksChange={(checks: CheckSetting[]) => setWorkingPlan((p) => ({ ...p, checks }))}
             />
           </TabsContent>
         </Tabs>

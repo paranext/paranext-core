@@ -205,11 +205,7 @@ function NameAndDescription({
         <Input value={name} onChange={(e) => onChange(e.target.value, description)} />
       </FieldRow>
       <FieldRow label="Description">
-        <Textarea
-          value={description}
-          onChange={(e) => onChange(name, e.target.value)}
-          rows={3}
-        />
+        <Textarea value={description} onChange={(e) => onChange(name, e.target.value)} rows={3} />
       </FieldRow>
     </div>
   );

@@ -9,11 +9,7 @@ import {
   DialogTitle,
 } from '@/components/shadcn-ui/dialog';
 import { Input } from '@/components/shadcn-ui/input';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/shadcn-ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import { Toggle } from '@/components/shadcn-ui/toggle';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { OrgPlanPicker } from '@/components/advanced/project-plan-dialog/org-plan-picker.component';
@@ -121,8 +117,7 @@ export function ProjectPlanDialogChecksMerged({
       })),
     );
 
-  const handleChecksChange = (checks: CheckSetting[]) =>
-    setWorkingPlan((p) => ({ ...p, checks }));
+  const handleChecksChange = (checks: CheckSetting[]) => setWorkingPlan((p) => ({ ...p, checks }));
 
   const handleOrgPlanReplace = (selected: OrgProvidedPlan) => {
     setWorkingPlan({
@@ -259,9 +254,7 @@ function LanguageSwitcher({
                 )}
               >
                 <span>{langDisplayName(lang)}</span>
-                <span className="tw:text-[10px] tw:uppercase tw:text-muted-foreground">
-                  {lang}
-                </span>
+                <span className="tw:text-[10px] tw:uppercase tw:text-muted-foreground">{lang}</span>
               </button>
             </li>
           ))}

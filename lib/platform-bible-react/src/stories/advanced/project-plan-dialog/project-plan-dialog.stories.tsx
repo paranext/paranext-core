@@ -1,10 +1,7 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Button } from '@/components/shadcn-ui/button';
-import {
-  ProjectPlanDialog,
-  type ProjectPlan,
-} from '@/components/advanced/project-plan-dialog';
+import { ProjectPlanDialog, type ProjectPlan } from '@/components/advanced/project-plan-dialog';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
 import {
   CUSTOM_PROJECT_PLAN,
@@ -44,7 +41,16 @@ function Harness({
     <div className="tw:p-4">
       <Button onClick={() => setOpen(true)}>Open Project Plan dialog</Button>
       <pre className="tw:mt-3 tw:max-h-40 tw:overflow-auto tw:rounded tw:border tw:bg-muted tw:p-2 tw:text-xs">
-        {JSON.stringify({ name: plan.name, basePlanRef: plan.basePlanRef, stages: plan.stages.length, checks: plan.checks.length }, null, 2)}
+        {JSON.stringify(
+          {
+            name: plan.name,
+            basePlanRef: plan.basePlanRef,
+            stages: plan.stages.length,
+            checks: plan.checks.length,
+          },
+          null,
+          2,
+        )}
       </pre>
       <ProjectPlanDialog
         open={open}

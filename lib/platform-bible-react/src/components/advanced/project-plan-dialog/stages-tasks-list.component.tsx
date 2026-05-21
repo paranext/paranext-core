@@ -86,7 +86,9 @@ export function StagesTasksList({
 
   const removeTask = (stageId: string, taskId: string) => {
     onStagesChange((prev) =>
-      prev.map((s) => (s.id === stageId ? { ...s, tasks: s.tasks.filter((t) => t.id !== taskId) } : s)),
+      prev.map((s) =>
+        s.id === stageId ? { ...s, tasks: s.tasks.filter((t) => t.id !== taskId) } : s,
+      ),
     );
     if (selection.taskId === taskId) onSelectionChange({ stageId });
   };
@@ -148,9 +150,7 @@ export function StagesTasksList({
                       <li key={task.id}>
                         <Row
                           selected={taskSelected}
-                          onClick={() =>
-                            onSelectionChange({ stageId: stage.id, taskId: task.id })
-                          }
+                          onClick={() => onSelectionChange({ stageId: stage.id, taskId: task.id })}
                           label={getLocalized(task.names, DEFAULT_LANG) || '(unnamed task)'}
                         >
                           <RowAction

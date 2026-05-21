@@ -12,11 +12,7 @@ import {
 import { Button } from '@/components/shadcn-ui/button';
 import { Input } from '@/components/shadcn-ui/input';
 import { Label } from '@/components/shadcn-ui/label';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/shadcn-ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import {
   Select,
   SelectContent,
@@ -48,8 +44,8 @@ interface MergedStagesTasksChecksProps {
   stages: PlanStage[];
   checks: CheckSetting[];
   /**
-   * Language being viewed/edited. Inline form inputs read and write THIS language's value.
-   * Row headers fall back through `previousLang` and `DEFAULT_LANG` when this language is empty.
+   * Language being viewed/edited. Inline form inputs read and write THIS language's value. Row
+   * headers fall back through `previousLang` and `DEFAULT_LANG` when this language is empty.
    */
   displayLang: LangCode;
   /**
@@ -58,8 +54,8 @@ interface MergedStagesTasksChecksProps {
    */
   previousLang?: LangCode;
   /**
-   * When true, each Name/Description field shows a reference line, "Copy from <lang>" button,
-   * and translation-coverage chips. When false (default), only the editable input is rendered.
+   * When true, each Name/Description field shows a reference line, "Copy from <lang>" button, and
+   * translation-coverage chips. When false (default), only the editable input is rendered.
    */
   translateMode?: boolean;
   onStagesChange: (updater: (prev: PlanStage[]) => PlanStage[]) => void;
@@ -355,9 +351,7 @@ export function MergedStagesTasksChecks({
                       taskDragOver?.stageIdx === stageIndex &&
                       taskDragOver?.taskIdx === taskIndex &&
                       taskDragSrc !== null &&
-                      !(
-                        taskDragSrc.stageIdx === stageIndex && taskDragSrc.taskIdx === taskIndex
-                      );
+                      !(taskDragSrc.stageIdx === stageIndex && taskDragSrc.taskIdx === taskIndex);
                     return (
                       <li
                         key={task.id}
@@ -557,14 +551,7 @@ interface AddCheckPopoverProps {
   onPick: (checkId: string) => void;
 }
 
-function AddCheckPopover({
-  label,
-  stage,
-  stages,
-  checks,
-  slot,
-  onPick,
-}: AddCheckPopoverProps) {
+function AddCheckPopover({ label, stage, stages, checks, slot, onPick }: AddCheckPopoverProps) {
   const [open, setOpen] = useState(false);
   const currentStageIdx = stages.findIndex((s) => s.id === stage.id);
   const assigned = useMemo(() => {
@@ -691,9 +678,7 @@ function RowHeader({
           <ChevronRight className="tw:h-4 tw:w-4 tw:text-muted-foreground" />
         )}
         <span className={cn('tw:text-sm', isStage && 'tw:font-semibold')}>{name}</span>
-        {subtitle && (
-          <span className="tw:text-xs tw:text-muted-foreground">— {subtitle}</span>
-        )}
+        {subtitle && <span className="tw:text-xs tw:text-muted-foreground">— {subtitle}</span>}
       </button>
       <div className="tw:flex tw:items-center tw:gap-1 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100">
         {rightExtras}
@@ -803,9 +788,7 @@ function TaskInlineForm({
         displayLang={displayLang}
         previousLang={previousLang}
         translateMode={translateMode}
-        onChange={(value) =>
-          onChange({ ...task, names: { ...task.names, [displayLang]: value } })
-        }
+        onChange={(value) => onChange({ ...task, names: { ...task.names, [displayLang]: value } })}
       />
       <LocalizedField
         label="Description"
@@ -855,9 +838,7 @@ function TaskInlineForm({
       <Field label="Requires editing">
         <Select
           value={task.requiresEditing}
-          onValueChange={(v) =>
-            onChange({ ...task, requiresEditing: v as RequiresEditingMode })
-          }
+          onValueChange={(v) => onChange({ ...task, requiresEditing: v as RequiresEditingMode })}
         >
           <SelectTrigger>
             <SelectValue />
@@ -875,13 +856,7 @@ function TaskInlineForm({
   );
 }
 
-function EffortPopover({
-  task,
-  onChange,
-}: {
-  task: PlanTask;
-  onChange: (next: PlanTask) => void;
-}) {
+function EffortPopover({ task, onChange }: { task: PlanTask; onChange: (next: PlanTask) => void }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -900,7 +875,9 @@ function EffortPopover({
         <div className="tw:flex tw:flex-col tw:gap-3">
           <div>
             <div className="tw:text-sm tw:font-semibold">Expected rate of progress</div>
-            <div className="tw:text-xs tw:text-muted-foreground">Verses per day per book difficulty</div>
+            <div className="tw:text-xs tw:text-muted-foreground">
+              Verses per day per book difficulty
+            </div>
           </div>
           {(['easiest', 'easy', 'moderate', 'difficult'] as const).map((key) => {
             const labels = {
@@ -1040,13 +1017,7 @@ function LocalizedField({
   );
 }
 
-function CoverageChips({
-  covered,
-  displayLang,
-}: {
-  covered: LangCode[];
-  displayLang: LangCode;
-}) {
+function CoverageChips({ covered, displayLang }: { covered: LangCode[]; displayLang: LangCode }) {
   const all = covered.includes(displayLang) ? covered : [displayLang, ...covered];
   return (
     <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-1">

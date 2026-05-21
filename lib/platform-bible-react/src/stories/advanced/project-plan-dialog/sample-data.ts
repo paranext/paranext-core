@@ -6,11 +6,7 @@ import type {
 } from '@/components/advanced/project-plan-dialog';
 import { FACTORY_PLANS } from './factory-plans';
 
-const task = (
-  id: string,
-  name: string,
-  overrides: Partial<PlanTask> = {},
-): PlanTask => ({
+const task = (id: string, name: string, overrides: Partial<PlanTask> = {}): PlanTask => ({
   id,
   names: { en: name },
   descriptions: {},
@@ -48,10 +44,7 @@ const ORG_PLANS: OrgProvidedPlan[] = [
     kind: 'organization',
     stages: [
       stage('s-a-1', 'Exegesis', [task('t-a-1', 'Background study')]),
-      stage('s-a-2', 'Draft', [
-        task('t-a-2a', 'Initial draft'),
-        task('t-a-2b', 'Self-revision'),
-      ]),
+      stage('s-a-2', 'Draft', [task('t-a-2a', 'Initial draft'), task('t-a-2b', 'Self-revision')]),
       stage('s-a-3', 'Peer review', [task('t-a-3', 'Peer review')]),
       stage('s-a-4', 'Consultant', [task('t-a-4', 'Consultant check')]),
     ],
@@ -61,7 +54,8 @@ const ORG_PLANS: OrgProvidedPlan[] = [
 
 export const SAMPLE_ORG_PLANS: OrgProvidedPlan[] = [...FACTORY_PLANS, ...ORG_PLANS];
 
-const DEFAULT_FACTORY_PLAN = FACTORY_PLANS.find((p) => p.name === 'SIL Compact Base Plan') ?? FACTORY_PLANS[0];
+const DEFAULT_FACTORY_PLAN =
+  FACTORY_PLANS.find((p) => p.name === 'SIL Compact Base Plan') ?? FACTORY_PLANS[0];
 
 export const SAMPLE_PROJECT_PLAN: ProjectPlan = {
   id: 'project-plan-1',

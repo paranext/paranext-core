@@ -116,10 +116,7 @@ export function ProjectPlanDialogHierarchical({
             <TabsTrigger value="checks">Checks</TabsTrigger>
           </TabsList>
 
-          <TabsContent
-            value="stages-tasks"
-            className="tw:flex-1 tw:overflow-auto tw:px-4 tw:py-3"
-          >
+          <TabsContent value="stages-tasks" className="tw:flex-1 tw:overflow-auto tw:px-4 tw:py-3">
             <HierarchicalStagesTasks
               stages={workingPlan.stages}
               onStagesChange={updateStages}
@@ -132,9 +129,7 @@ export function ProjectPlanDialogHierarchical({
             <ChecksTab
               stages={workingPlan.stages}
               checks={workingPlan.checks}
-              onChecksChange={(checks: CheckSetting[]) =>
-                setWorkingPlan((p) => ({ ...p, checks }))
-              }
+              onChecksChange={(checks: CheckSetting[]) => setWorkingPlan((p) => ({ ...p, checks }))}
             />
           </TabsContent>
         </Tabs>
