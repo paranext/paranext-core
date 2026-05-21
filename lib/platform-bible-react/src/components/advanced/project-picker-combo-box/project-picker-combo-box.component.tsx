@@ -25,6 +25,8 @@ export type ProjectPickerComboBoxProps = {
   onSelect: (projectId: string) => void;
   isLoading?: boolean;
   localizedStrings?: ProjectPickerLocalizedStrings;
+  /** Accessible label for the trigger button */
+  ariaLabel?: string;
   className?: string;
 };
 
@@ -42,6 +44,7 @@ export function ProjectPickerComboBox({
   onSelect,
   isLoading = false,
   localizedStrings = {},
+  ariaLabel,
   className,
 }: ProjectPickerComboBoxProps) {
   const groups: ComboBoxGroup<ProjectComboOption>[] = [];
@@ -76,6 +79,7 @@ export function ProjectPickerComboBox({
       textPlaceholder={localizedStrings.searchPlaceholder ?? 'Search projects...'}
       commandEmptyMessage={localizedStrings.noResultsMessage ?? 'No projects found'}
       buttonClassName={className}
+      ariaLabel={ariaLabel}
       isDisabled={isLoading}
     />
   );
