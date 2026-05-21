@@ -28,6 +28,8 @@ type BookItemProps = {
   localizedBookNames?: Map<string, { localizedId: string; localizedName: string }>;
   /** Value to use for Command component matching */
   commandValue?: string;
+  /** When true, renders the item as disabled: suppresses onSelect and dims the visuals. */
+  disabled?: boolean;
 };
 
 /**
@@ -51,12 +53,14 @@ export const BookItem = forwardRef<HTMLDivElement, BookItemProps>(
       showCheck = false,
       localizedBookNames,
       commandValue,
+      disabled = false,
     },
     ref,
   ) => {
     const isMouseClick = useRef(false);
 
     const handleSelect = () => {
+      if (disabled) return;
       if (!isMouseClick.current) {
         onSelect?.(bookId);
       }
@@ -67,6 +71,10 @@ export const BookItem = forwardRef<HTMLDivElement, BookItemProps>(
     };
 
     const handleMouseDown = (e: MouseEvent) => {
+      if (disabled) {
+        e.preventDefault();
+        return;
+      }
       isMouseClick.current = true;
 
       if (onMouseDown) {
@@ -106,8 +114,10 @@ export const BookItem = forwardRef<HTMLDivElement, BookItemProps>(
           onMouseDown={handleMouseDown}
           role="option"
           aria-selected={isSelected}
+          aria-disabled={disabled || undefined}
           aria-label={`${Canon.bookIdToEnglishName(bookId)} (${bookId.toLocaleUpperCase()})`}
-          className={className}
+          disabled={disabled}
+          className={cn(className, disabled && 'tw:cursor-not-allowed tw:opacity-50')}
         >
           {showCheck && (
             <Check

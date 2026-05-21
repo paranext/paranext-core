@@ -884,13 +884,7 @@ export function BookChapterControl({
       <PopoverContent
         id={id}
         forceMount
-        // Adaptive width: follow the trigger's width (Radix exposes it as
-        // `--radix-popper-anchor-width`) with sensible bounds so the popover works
-        // in narrow host contexts (e.g. a 200px scope dropdown) without forcing a
-        // fixed 280px that would overflow the container. Floor at 200px so very
-        // small triggers still get a usable picker; cap at 280px so a wide trigger
-        // (full-row menu item) doesn't spawn an unnecessarily large popover.
-        className="tw:w-[var(--radix-popper-anchor-width,280px)] tw:min-w-[200px] tw:max-w-[280px] tw:p-0"
+        className="tw:w-[280px] tw:p-0"
         align={align}
         // Capture-phase handler at the popover root so grid / view-switch key handling works
         // regardless of which element inside the popover has focus. When `modal` is true Radix's
