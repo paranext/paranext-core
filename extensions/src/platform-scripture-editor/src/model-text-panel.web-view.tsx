@@ -92,7 +92,11 @@ globalThis.webViewComponent = function ModelTextPanel({
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     dblRef = effectiveModelText as EffectiveResourceReference & DblResourceReference;
   }
-  const match = dblRef ? dblResources.find((r) => r.dblEntryUid === dblRef.id) : undefined;
+  // memoized because dblResources.find iterates the full DBL list on every render
+  const match = useMemo(
+    () => (dblRef ? dblResources.find((r) => r.projectId === dblRef.id) : undefined),
+    [dblRef, dblResources],
+  );
 
   // Auto-install when the resource exists but isn't installed yet
   const isInstalling = dblRef !== undefined && match !== undefined && !match.installed;
@@ -151,15 +155,18 @@ globalThis.webViewComponent = function ModelTextPanel({
     const adminDblItems = dblItems.filter((r) => r.source === 'admin');
     const relevantItems =
       adminDblItems.length > 0 ? adminDblItems : dblItems.filter((r) => r.source === 'user');
-    return relevantItems.map((r) => r.id);
-  }, [effectiveModelTexts]);
+    // IDs are stored as projectId; convert back to dblEntryUid for the resource picker dialog
+    return relevantItems
+      .map((r) => dblResources.find((dr) => dr.projectId === r.id)?.dblEntryUid)
+      .filter((id): id is string => id !== undefined);
+  }, [effectiveModelTexts, dblResources]);
 
   const handleResourceSelect = useCallback(
     async (resource: DblResourceData) => {
       const newRef: DblResourceReference = {
         type: 'dblResource',
         name: resource.displayName,
-        id: resource.dblEntryUid,
+        id: resource.projectId,
       };
 
       const canUserWriteProjectSettings = await pdp?.canUserWriteProjectSettings();
@@ -172,7 +179,7 @@ globalThis.webViewComponent = function ModelTextPanel({
             if (item.type !== 'dblResource') return false;
             // DblResourceReference.id exists after .type check; ResourceReference union requires cast
             // eslint-disable-next-line no-type-assertion/no-type-assertion
-            return (item as DblResourceReference).id !== resource.dblEntryUid;
+            return (item as DblResourceReference).id !== resource.projectId;
           },
         );
         setAdminModelTexts({
@@ -184,7 +191,7 @@ globalThis.webViewComponent = function ModelTextPanel({
           .filter((r) => r.source === 'user')
           .filter(
             (r): r is EffectiveResourceReference & DblResourceReference =>
-              r.type === 'dblResource' && r.id !== resource.dblEntryUid,
+              r.type === 'dblResource' && r.id !== resource.projectId,
           );
         await pdp?.setUserModelTexts({
           dataVersion: DEFAULT_LIST.dataVersion,
