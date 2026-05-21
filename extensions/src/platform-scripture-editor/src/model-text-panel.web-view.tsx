@@ -23,7 +23,7 @@ import {
   isPlatformError,
   LocalizeKey,
 } from 'platform-bible-utils';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 // @ts-ignore: platform-scripture/src is not a published module entry-point; accessible via typeRoots symlink at dev time
 import { useEffectiveResourceReferenceList } from 'platform-scripture/src/use-effective-resource-reference-list';
 import type {
@@ -77,12 +77,13 @@ globalThis.webViewComponent = function ModelTextPanel({
 
   // --- DBL resource resolution ---
 
+  const [fetchResources, setFetchResources] = useState(false);
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
   const [resourcesPossiblyUndefined, isLoadingResources] = usePromise(
-    useCallback(
-      async () => papi.commands.sendCommand('platformGetResources.getCachedResources'),
-      [],
-    ),
+    useCallback(async () => {
+      setFetchResources(false);
+      return papi.commands.sendCommand('platformGetResources.getCachedResources');
+    }, [fetchResources]),
     undefined,
   );
   const dblResources = resourcesPossiblyUndefined ?? [];
@@ -104,6 +105,7 @@ globalThis.webViewComponent = function ModelTextPanel({
     if (isInstalling && dblResourcesProvider && matchDblEntryUid !== undefined) {
       dblResourcesProvider
         .installDblResource(matchDblEntryUid)
+        .then(() => setFetchResources(true))
         .catch((e: unknown) =>
           logger.error(`Model text auto-install failed: ${getErrorMessage(e)}`),
         );
