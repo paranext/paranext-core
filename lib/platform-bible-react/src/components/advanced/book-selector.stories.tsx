@@ -6,7 +6,7 @@ import { fn } from 'storybook/test';
 import { BookSelector, BookSelectionMode } from './book-selector.component';
 
 const meta: Meta<typeof BookSelector> = {
-  title: 'Advanced/BookSelector',
+  title: 'Advanced/🚫 BookSelector',
   component: BookSelector,
   tags: ['autodocs'],
   parameters: {
