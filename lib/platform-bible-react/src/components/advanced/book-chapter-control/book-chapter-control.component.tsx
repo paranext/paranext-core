@@ -375,6 +375,34 @@ export function BookChapterControl({
     }, 0);
   }, []);
 
+  // Route a typed letter/digit into the search input and move focus there, so typing from any
+  // focusable child (list/grid, back button, quick-nav, clock) lands in the input. In chapter view
+  // this also exits chapter view: the character starts a new search (a digit is prefixed with the
+  // current book name so it reads e.g. "Matthew 5"). isListFocused is cleared synchronously rather
+  // than waiting for the list's async onBlur — otherwise there is a window where the input already
+  // owns the typed text but the list still "has focus", leaving a focus ring visible and letting
+  // the next Space/Enter be captured by the list's submit handler instead of the input.
+  const routeTypedCharacterToInput = useCallback(
+    (key: string) => {
+      setIsListFocused(false);
+      if (viewMode === 'chapters') {
+        setViewMode('books');
+        const { isDigit } = getKeyCharacterType(key);
+        if (isDigit && selectedBookForChaptersView) {
+          const currentBookName = ALL_ENGLISH_BOOK_NAMES[selectedBookForChaptersView];
+          setInputValue(`${currentBookName} ${key}`);
+        } else {
+          setInputValue(key);
+        }
+        setSelectedBookForChaptersView(undefined);
+      } else {
+        setInputValue((prev) => prev + key);
+      }
+      setTimeout(() => commandInputRef.current?.focus(), 0);
+    },
+    [viewMode, selectedBookForChaptersView],
+  );
+
   // Handle keyboard navigation for CommandInput
   const handleInputKeyDown = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
@@ -426,32 +454,13 @@ export function BookChapterControl({
         return;
       }
 
-      // Typing letters/digits while the list/grid has focus rounds focus back to the input so
-      // the user can resume editing the search. In chapter view this also exits chapter view
-      // (the new character becomes the start of a new search query).
+      // Typing letters/digits while the list/grid has focus routes the character back into the
+      // input so the user can resume editing the search (routeTypedCharacterToInput also handles
+      // the chapter-view exit and book-name prefixing).
       if (isListFocused && (isLetter || isDigit)) {
         event.preventDefault();
         event.stopPropagation();
-        // We're routing this character back into the input. Clear isListFocused synchronously
-        // (don't wait for the list's async onBlur to fire once the setTimeout focus below lands):
-        // otherwise there is a window where the input already owns the typed text but the list
-        // still "has focus", leaving the top-match row's focus ring visible and letting the next
-        // Space/Enter be captured by the list's submit handler instead of the input.
-        setIsListFocused(false);
-        if (viewMode === 'chapters') {
-          setViewMode('books');
-          if (isDigit && selectedBookForChaptersView) {
-            // Digit: prefix with the current book name so the query reads e.g. "Matthew 5".
-            const currentBookName = ALL_ENGLISH_BOOK_NAMES[selectedBookForChaptersView];
-            setInputValue(`${currentBookName} ${event.key}`);
-          } else {
-            setInputValue(event.key);
-          }
-          setSelectedBookForChaptersView(undefined);
-        } else {
-          setInputValue((prev) => prev + event.key);
-        }
-        setTimeout(() => commandInputRef.current?.focus(), 0);
+        routeTypedCharacterToInput(event.key);
         return;
       }
 
@@ -549,6 +558,7 @@ export function BookChapterControl({
       commandValue,
       localizedBookNames,
       isListFocused,
+      routeTypedCharacterToInput,
     ],
   );
 
@@ -570,6 +580,16 @@ export function BookChapterControl({
         commandListRef.current?.focus();
         return;
       }
+      // Typing a letter/digit while the back button is focused routes the character to the search
+      // input (exiting chapter view to start a new search), so typing from anywhere lands in the
+      // input — matching the list/grid, quick-nav, and clock-button behavior.
+      const { isLetter, isDigit } = getKeyCharacterType(event.key);
+      if (isLetter || isDigit) {
+        event.preventDefault();
+        event.stopPropagation();
+        routeTypedCharacterToInput(event.key);
+        return;
+      }
       if (event.key === 'Tab') {
         event.preventDefault();
         event.stopPropagation();
@@ -586,7 +606,7 @@ export function BookChapterControl({
         event.stopPropagation();
       }
     },
-    [selectedBookForChaptersView, localizedBookNames],
+    [selectedBookForChaptersView, localizedBookNames, routeTypedCharacterToInput],
   );
 
   const handleQuickNavButtonKeyDown = useCallback(
