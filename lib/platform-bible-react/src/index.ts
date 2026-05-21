@@ -128,6 +128,8 @@ export {
   type ProjectPlanDialogHierarchicalProps,
   ProjectPlanDialogChecksMerged,
   type ProjectPlanDialogChecksMergedProps,
+  ProjectPlanDialogStageTabs,
+  type ProjectPlanDialogStageTabsProps,
   CHECK_GROUPS as PROJECT_PLAN_CHECK_GROUPS,
   type BookCountsByDifficulty,
   type CheckCatalogItem,

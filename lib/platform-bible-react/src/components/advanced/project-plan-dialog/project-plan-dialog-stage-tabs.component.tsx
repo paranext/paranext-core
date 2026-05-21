@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Globe, Languages, Plus } from 'lucide-react';
+import { Languages } from 'lucide-react';
 import { Button } from '@/components/shadcn-ui/button';
 import {
   Dialog,
@@ -8,19 +8,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/shadcn-ui/dialog';
-import { Input } from '@/components/shadcn-ui/input';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/shadcn-ui/popover';
 import { Toggle } from '@/components/shadcn-ui/toggle';
-import { cn } from '@/utils/shadcn-ui/utils';
 import { OrgPlanPicker } from '@/components/advanced/project-plan-dialog/org-plan-picker.component';
-import { MergedStagesTasksChecks } from '@/components/advanced/project-plan-dialog/merged-stages-tasks-checks.component';
+import { LanguageSwitcher } from '@/components/advanced/project-plan-dialog/project-plan-dialog-checks-merged.component';
+import { StageTabsStages } from '@/components/advanced/project-plan-dialog/stage-tabs-stages.component';
+import { GlobalToggleStages } from '@/components/advanced/project-plan-dialog/global-toggle-stages.component';
 import {
   DEFAULT_LANG,
-  langDisplayName,
   planLangs,
   type LangCode,
 } from '@/components/advanced/project-plan-dialog/localized.utils';
@@ -32,25 +26,34 @@ import type {
   ProjectPlan,
 } from '@/components/advanced/project-plan-dialog/types';
 
-export interface ProjectPlanDialogChecksMergedProps {
+export interface ProjectPlanDialogStageTabsProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectName: string;
   plan: ProjectPlan;
   orgProvidedPlans: OrgProvidedPlan[];
+  /**
+   * How the per-stage Description / Checks / Tasks sections are presented:
+   *
+   * - `'tabs'` (default): each stage exposes its own tabs inside its accordion.
+   * - `'global'`: a single section toggle above the stage list switches every stage at once, and
+   *   stage/task names are edited inline in their row headers.
+   */
+  stagesVariant?: 'tabs' | 'global';
   onSubmit: (plan: ProjectPlan) => void;
   onCancel?: () => void;
 }
 
-export function ProjectPlanDialogChecksMerged({
+export function ProjectPlanDialogStageTabs({
   open,
   onOpenChange,
   projectName,
   plan,
   orgProvidedPlans,
+  stagesVariant = 'tabs',
   onSubmit,
   onCancel,
-}: ProjectPlanDialogChecksMergedProps) {
+}: ProjectPlanDialogStageTabsProps) {
   const [workingPlan, setWorkingPlan] = useState<ProjectPlan>(plan);
   const [displayLang, setDisplayLangState] = useState<LangCode>(DEFAULT_LANG);
   const [previousLang, setPreviousLang] = useState<LangCode | undefined>(undefined);
@@ -121,8 +124,7 @@ export function ProjectPlanDialogChecksMerged({
       })),
     );
 
-  const handleChecksChange = (checks: CheckSetting[]) =>
-    setWorkingPlan((p) => ({ ...p, checks }));
+  const handleChecksChange = (checks: CheckSetting[]) => setWorkingPlan((p) => ({ ...p, checks }));
 
   const handleOrgPlanReplace = (selected: OrgProvidedPlan) => {
     setWorkingPlan({
@@ -184,17 +186,31 @@ export function ProjectPlanDialogChecksMerged({
         </div>
 
         <div className="tw:flex-1 tw:overflow-auto tw:px-4 tw:py-3">
-          <MergedStagesTasksChecks
-            stages={workingPlan.stages}
-            checks={workingPlan.checks}
-            displayLang={displayLang}
-            previousLang={previousLang}
-            translateMode={translateMode}
-            onStagesChange={updateStages}
-            onStageChange={handleStageChange}
-            onTaskChange={handleTaskChange}
-            onChecksChange={handleChecksChange}
-          />
+          {stagesVariant === 'global' ? (
+            <GlobalToggleStages
+              stages={workingPlan.stages}
+              checks={workingPlan.checks}
+              displayLang={displayLang}
+              previousLang={previousLang}
+              translateMode={translateMode}
+              onStagesChange={updateStages}
+              onStageChange={handleStageChange}
+              onTaskChange={handleTaskChange}
+              onChecksChange={handleChecksChange}
+            />
+          ) : (
+            <StageTabsStages
+              stages={workingPlan.stages}
+              checks={workingPlan.checks}
+              displayLang={displayLang}
+              previousLang={previousLang}
+              translateMode={translateMode}
+              onStagesChange={updateStages}
+              onStageChange={handleStageChange}
+              onTaskChange={handleTaskChange}
+              onChecksChange={handleChecksChange}
+            />
+          )}
         </div>
 
         <DialogFooter className="tw:border-t tw:p-4">
@@ -208,104 +224,4 @@ export function ProjectPlanDialogChecksMerged({
   );
 }
 
-export interface LanguageSwitcherProps {
-  displayLang: LangCode;
-  availableLangs: LangCode[];
-  onChangeLang: (next: LangCode) => void;
-  onAddLanguage: (code: LangCode) => void;
-}
-
-export function LanguageSwitcher({
-  displayLang,
-  availableLangs,
-  onChangeLang,
-  onAddLanguage,
-}: LanguageSwitcherProps) {
-  const [open, setOpen] = useState(false);
-  const [addOpen, setAddOpen] = useState(false);
-  const [newCode, setNewCode] = useState('');
-
-  const handleAdd = () => {
-    const code = newCode.trim();
-    if (!code) return;
-    onAddLanguage(code);
-    setNewCode('');
-    setAddOpen(false);
-    setOpen(false);
-  };
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="tw:h-9 tw:gap-1.5">
-          <Globe className="tw:h-4 tw:w-4" />
-          <span className="tw:text-xs tw:font-normal tw:text-muted-foreground">Lang:</span>
-          <span>{langDisplayName(displayLang)}</span>
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" style={{ zIndex: 600 }} className="tw:w-64 tw:p-1">
-        <ul className="tw:flex tw:flex-col">
-          {availableLangs.map((lang) => (
-            <li key={lang}>
-              <button
-                type="button"
-                onClick={() => {
-                  onChangeLang(lang);
-                  setOpen(false);
-                }}
-                className={cn(
-                  'tw:flex tw:w-full tw:items-center tw:justify-between tw:rounded tw:px-2 tw:py-1 tw:text-start tw:text-sm tw:hover:bg-accent',
-                  lang === displayLang && 'tw:bg-accent',
-                )}
-              >
-                <span>{langDisplayName(lang)}</span>
-                <span className="tw:text-[10px] tw:uppercase tw:text-muted-foreground">
-                  {lang}
-                </span>
-              </button>
-            </li>
-          ))}
-          <li className="tw:my-1 tw:border-t" />
-          <li>
-            {addOpen ? (
-              <div className="tw:flex tw:items-center tw:gap-1 tw:px-2 tw:py-1">
-                <Input
-                  autoFocus
-                  placeholder="e.g. de, id, zh-Hant"
-                  value={newCode}
-                  onChange={(e) => setNewCode(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAdd();
-                    }
-                    if (e.key === 'Escape') {
-                      e.preventDefault();
-                      setAddOpen(false);
-                      setNewCode('');
-                    }
-                  }}
-                  className="tw:h-7 tw:text-xs"
-                />
-                <Button size="sm" className="tw:h-7" onClick={handleAdd}>
-                  Add
-                </Button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setAddOpen(true)}
-                className="tw:flex tw:w-full tw:items-center tw:gap-1 tw:rounded tw:px-2 tw:py-1 tw:text-start tw:text-sm tw:text-muted-foreground tw:hover:bg-accent"
-              >
-                <Plus className="tw:h-3.5 tw:w-3.5" />
-                Add language…
-              </button>
-            )}
-          </li>
-        </ul>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-export default ProjectPlanDialogChecksMerged;
+export default ProjectPlanDialogStageTabs;

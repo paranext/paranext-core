@@ -70,7 +70,7 @@ interface MergedStagesTasksChecksProps {
 
 const newId = () => `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 
-const moveItem = <T,>(arr: T[], from: number, to: number): T[] => {
+export const moveItem = <T,>(arr: T[], from: number, to: number): T[] => {
   if (to < 0 || to >= arr.length) return arr;
   const next = [...arr];
   const [item] = next.splice(from, 1);
@@ -78,14 +78,14 @@ const moveItem = <T,>(arr: T[], from: number, to: number): T[] => {
   return next;
 };
 
-const makeStage = (lang: LangCode): PlanStage => ({
+export const makeStage = (lang: LangCode): PlanStage => ({
   id: newId(),
   names: { [lang]: 'New stage' },
   descriptions: {},
   tasks: [],
 });
 
-const makeTask = (lang: LangCode): PlanTask => ({
+export const makeTask = (lang: LangCode): PlanTask => ({
   id: newId(),
   names: { [lang]: 'New task' },
   descriptions: {},
@@ -96,7 +96,7 @@ const makeTask = (lang: LangCode): PlanTask => ({
   bookCountsByDifficulty: { easiest: 7, easy: 18, moderate: 22, difficult: 19 },
 });
 
-const markCompleteOptions: { value: MarkCompleteMode; label: string }[] = [
+export const markCompleteOptions: { value: MarkCompleteMode; label: string }[] = [
   { value: 'by-book', label: 'By book' },
   { value: 'by-chapter', label: 'By chapter' },
   { value: 'by-project', label: 'By project' },
@@ -429,7 +429,7 @@ interface StageChecksProps {
   notifyChecks: CheckSetting[];
 }
 
-function StageChecks({
+export function StageChecks({
   stage,
   stages,
   checks,
@@ -649,9 +649,17 @@ interface RowHeaderProps {
   downDisabled: boolean;
   onDelete: () => void;
   rightExtras?: React.ReactNode;
+  /**
+   * When provided, the name is rendered as an inline editable input (instead of a read-only label)
+   * and the chevron alone toggles expansion. `name` should be the raw value for the current
+   * language so edits map directly to it.
+   */
+  onNameChange?: (value: string) => void;
+  /** Placeholder shown in the editable name input when `name` is empty. */
+  namePlaceholder?: string;
 }
 
-function RowHeader({
+export function RowHeader({
   isStage,
   open,
   onToggle,
@@ -663,6 +671,8 @@ function RowHeader({
   downDisabled,
   onDelete,
   rightExtras,
+  onNameChange,
+  namePlaceholder,
 }: RowHeaderProps) {
   return (
     <div
@@ -679,22 +689,53 @@ function RowHeader({
       >
         <GripVertical className="tw:h-4 tw:w-4" />
       </button>
-      <button
-        type="button"
-        onClick={onToggle}
-        className="tw:flex tw:flex-1 tw:items-center tw:gap-2 tw:text-start"
-        aria-expanded={open}
-      >
-        {open ? (
-          <ChevronDown className="tw:h-4 tw:w-4 tw:text-muted-foreground" />
-        ) : (
-          <ChevronRight className="tw:h-4 tw:w-4 tw:text-muted-foreground" />
-        )}
-        <span className={cn('tw:text-sm', isStage && 'tw:font-semibold')}>{name}</span>
-        {subtitle && (
-          <span className="tw:text-xs tw:text-muted-foreground">— {subtitle}</span>
-        )}
-      </button>
+      {onNameChange ? (
+        <>
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-label={open ? 'Collapse' : 'Expand'}
+            aria-expanded={open}
+            className="tw:rounded tw:p-1 tw:text-muted-foreground tw:hover:bg-accent"
+          >
+            {open ? (
+              <ChevronDown className="tw:h-4 tw:w-4" />
+            ) : (
+              <ChevronRight className="tw:h-4 tw:w-4" />
+            )}
+          </button>
+          <Input
+            value={name}
+            placeholder={namePlaceholder}
+            onChange={(e) => onNameChange(e.target.value)}
+            onClick={(e) => e.stopPropagation()}
+            className={cn(
+              'tw:h-7 tw:flex-1 tw:border-transparent tw:bg-transparent tw:px-1 tw:text-sm tw:hover:border-input tw:focus:border-input',
+              isStage && 'tw:font-semibold',
+            )}
+          />
+          {subtitle && (
+            <span className="tw:shrink-0 tw:text-xs tw:text-muted-foreground">— {subtitle}</span>
+          )}
+        </>
+      ) : (
+        <button
+          type="button"
+          onClick={onToggle}
+          className="tw:flex tw:flex-1 tw:items-center tw:gap-2 tw:text-start"
+          aria-expanded={open}
+        >
+          {open ? (
+            <ChevronDown className="tw:h-4 tw:w-4 tw:text-muted-foreground" />
+          ) : (
+            <ChevronRight className="tw:h-4 tw:w-4 tw:text-muted-foreground" />
+          )}
+          <span className={cn('tw:text-sm', isStage && 'tw:font-semibold')}>{name}</span>
+          {subtitle && (
+            <span className="tw:text-xs tw:text-muted-foreground">— {subtitle}</span>
+          )}
+        </button>
+      )}
       <div className="tw:flex tw:items-center tw:gap-1 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100">
         {rightExtras}
         <RowIconButton label="Move up" onClick={onMoveUp} disabled={upDisabled}>
@@ -739,31 +780,36 @@ function RowIconButton({
   );
 }
 
-function StageInlineForm({
+export function StageInlineForm({
   stage,
   displayLang,
   previousLang,
   translateMode,
+  hideName,
   onChange,
 }: {
   stage: PlanStage;
   displayLang: LangCode;
   previousLang?: LangCode;
   translateMode: boolean;
+  /** When true, the Name field is omitted (e.g. when the name is edited inline in the row header). */
+  hideName?: boolean;
   onChange: (next: PlanStage) => void;
 }) {
   return (
     <div className="tw:grid tw:grid-cols-1 tw:gap-3 tw:md:grid-cols-2">
-      <LocalizedField
-        label="Name"
-        map={stage.names}
-        displayLang={displayLang}
-        previousLang={previousLang}
-        translateMode={translateMode}
-        onChange={(value) =>
-          onChange({ ...stage, names: { ...stage.names, [displayLang]: value } })
-        }
-      />
+      {!hideName && (
+        <LocalizedField
+          label="Name"
+          map={stage.names}
+          displayLang={displayLang}
+          previousLang={previousLang}
+          translateMode={translateMode}
+          onChange={(value) =>
+            onChange({ ...stage, names: { ...stage.names, [displayLang]: value } })
+          }
+        />
+      )}
       <LocalizedField
         label="Description"
         multiline
@@ -782,31 +828,36 @@ function StageInlineForm({
   );
 }
 
-function TaskInlineForm({
+export function TaskInlineForm({
   task,
   displayLang,
   previousLang,
   translateMode,
+  hideName,
   onChange,
 }: {
   task: PlanTask;
   displayLang: LangCode;
   previousLang?: LangCode;
   translateMode: boolean;
+  /** When true, the Name field is omitted (e.g. when the name is edited inline in the row header). */
+  hideName?: boolean;
   onChange: (next: PlanTask) => void;
 }) {
   return (
     <div className="tw:grid tw:grid-cols-1 tw:gap-3 tw:md:grid-cols-2">
-      <LocalizedField
-        label="Name"
-        map={task.names}
-        displayLang={displayLang}
-        previousLang={previousLang}
-        translateMode={translateMode}
-        onChange={(value) =>
-          onChange({ ...task, names: { ...task.names, [displayLang]: value } })
-        }
-      />
+      {!hideName && (
+        <LocalizedField
+          label="Name"
+          map={task.names}
+          displayLang={displayLang}
+          previousLang={previousLang}
+          translateMode={translateMode}
+          onChange={(value) =>
+            onChange({ ...task, names: { ...task.names, [displayLang]: value } })
+          }
+        />
+      )}
       <LocalizedField
         label="Description"
         multiline
@@ -875,7 +926,7 @@ function TaskInlineForm({
   );
 }
 
-function EffortPopover({
+export function EffortPopover({
   task,
   onChange,
 }: {
