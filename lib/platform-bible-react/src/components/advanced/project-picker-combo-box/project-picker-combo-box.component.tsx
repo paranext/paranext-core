@@ -1,0 +1,84 @@
+import {
+  ComboBox,
+  type ComboBoxGroup,
+  type ComboBoxLabelOption,
+} from '@/components/basics/combo-box.component';
+
+export type ProjectOption = {
+  id: string;
+  name: string;
+};
+
+export type ProjectPickerLocalizedStrings = {
+  recentProjectsHeading?: string;
+  allProjectsHeading?: string;
+  loadingPlaceholder?: string;
+  selectPlaceholder?: string;
+  searchPlaceholder?: string;
+  noResultsMessage?: string;
+};
+
+export type ProjectPickerComboBoxProps = {
+  currentProject: ProjectOption | undefined;
+  recentProjects: ProjectOption[];
+  allProjects: ProjectOption[];
+  onSelect: (projectId: string) => void;
+  isLoading?: boolean;
+  localizedStrings?: ProjectPickerLocalizedStrings;
+  className?: string;
+};
+
+type ProjectComboOption = ComboBoxLabelOption & { projectId: string };
+
+const toOption = (project: ProjectOption): ProjectComboOption => ({
+  label: project.name,
+  projectId: project.id,
+});
+
+export function ProjectPickerComboBox({
+  currentProject,
+  recentProjects,
+  allProjects,
+  onSelect,
+  isLoading = false,
+  localizedStrings = {},
+  className,
+}: ProjectPickerComboBoxProps) {
+  const groups: ComboBoxGroup<ProjectComboOption>[] = [];
+
+  if (recentProjects.length > 0) {
+    groups.push({
+      groupHeading: localizedStrings.recentProjectsHeading ?? 'Recent',
+      options: recentProjects.map(toOption),
+    });
+  }
+
+  if (allProjects.length > 0) {
+    groups.push({
+      groupHeading: localizedStrings.allProjectsHeading ?? 'All projects',
+      options: allProjects.map(toOption),
+    });
+  }
+
+  const currentOption = currentProject ? toOption(currentProject) : undefined;
+
+  return (
+    <ComboBox<ProjectComboOption>
+      options={groups}
+      value={currentOption}
+      onChange={(option) => onSelect(option.projectId)}
+      getOptionLabel={(option) => option.label}
+      buttonPlaceholder={
+        isLoading
+          ? (localizedStrings.loadingPlaceholder ?? '...')
+          : (localizedStrings.selectPlaceholder ?? 'Select project')
+      }
+      textPlaceholder={localizedStrings.searchPlaceholder ?? 'Search projects...'}
+      commandEmptyMessage={localizedStrings.noResultsMessage ?? 'No projects found'}
+      buttonClassName={className}
+      isDisabled={isLoading}
+    />
+  );
+}
+
+export default ProjectPickerComboBox;
