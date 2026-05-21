@@ -1877,7 +1877,6 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
     checks: [
       {
         checkId: 'notes.translator',
-        notifyOnlyInStage: null,
         requiredInStage: 'b708cb04-830d-46ba-b465-6567c05b323b',
       },
     ],
@@ -2343,97 +2342,78 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
     checks: [
       {
         checkId: 'basic.chapter-verse-numbers',
-        notifyOnlyInStage: null,
         requiredInStage: '1703c346-ce9e-427e-9476-9f3a8af26c67',
       },
       {
         checkId: 'basic.markers',
-        notifyOnlyInStage: null,
         requiredInStage: '1703c346-ce9e-427e-9476-9f3a8af26c67',
       },
       {
         checkId: 'basic.characters',
-        notifyOnlyInStage: null,
         requiredInStage: '1703c346-ce9e-427e-9476-9f3a8af26c67',
       },
       {
         checkId: 'basic.punctuation',
-        notifyOnlyInStage: null,
         requiredInStage: '1703c346-ce9e-427e-9476-9f3a8af26c67',
       },
       {
         checkId: 'basic.references',
-        notifyOnlyInStage: null,
         requiredInStage: '1703c346-ce9e-427e-9476-9f3a8af26c67',
       },
       {
         checkId: 'basic.unmatched-pairs',
-        notifyOnlyInStage: null,
         requiredInStage: '1703c346-ce9e-427e-9476-9f3a8af26c67',
       },
       {
         checkId: 'basic.repeated-words',
-        notifyOnlyInStage: null,
         requiredInStage: '1703c346-ce9e-427e-9476-9f3a8af26c67',
       },
       {
         checkId: 'basic.matched-pairs',
-        notifyOnlyInStage: null,
         requiredInStage: '1703c346-ce9e-427e-9476-9f3a8af26c67',
       },
       {
         checkId: 'basic.quotations',
-        notifyOnlyInStage: null,
         requiredInStage: '1703c346-ce9e-427e-9476-9f3a8af26c67',
       },
       {
         checkId: 'basic.numbers',
-        notifyOnlyInStage: null,
         requiredInStage: '1703c346-ce9e-427e-9476-9f3a8af26c67',
       },
       {
         checkId: 'notes.translator',
-        notifyOnlyInStage: null,
         requiredInStage: '1703c346-ce9e-427e-9476-9f3a8af26c67',
       },
       {
         checkId: 'basic.capitalization',
-        notifyOnlyInStage: null,
         requiredInStage: '1703c346-ce9e-427e-9476-9f3a8af26c67',
       },
       {
         checkId: 'spelling.word-list',
-        notifyOnlyInStage: null,
         requiredInStage: '1703c346-ce9e-427e-9476-9f3a8af26c67',
       },
       {
         checkId: 'spelling.spelling',
-        notifyOnlyInStage: null,
         requiredInStage: '1703c346-ce9e-427e-9476-9f3a8af26c67',
       },
       {
         checkId: 'notes.consultant',
-        notifyOnlyInStage: null,
         requiredInStage: '1703c346-ce9e-427e-9476-9f3a8af26c67',
       },
       {
         checkId: 'other.biblical-terms',
-        notifyOnlyInStage: null,
         requiredInStage: '1703c346-ce9e-427e-9476-9f3a8af26c67',
       },
       {
         checkId: 'other.parallel-passages',
-        notifyOnlyInStage: null,
         requiredInStage: '119d5d2b-4f84-420d-8acd-4738afdb546c',
       },
       {
         checkId: 'notes.spelling-discussion',
-        notifyOnlyInStage: null,
         requiredInStage: '119d5d2b-4f84-420d-8acd-4738afdb546c',
       },
       {
         checkId: 'notes.rendering-discussion',
-        notifyOnlyInStage: null,
         requiredInStage: '119d5d2b-4f84-420d-8acd-4738afdb546c',
       },
     ],
@@ -2762,97 +2742,78 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
     checks: [
       {
         checkId: 'basic.chapter-verse-numbers',
-        notifyOnlyInStage: null,
         requiredInStage: '1fee04f4-ddb8-4cfb-8a32-762328d6ba6c',
       },
       {
         checkId: 'basic.markers',
-        notifyOnlyInStage: null,
         requiredInStage: '1fee04f4-ddb8-4cfb-8a32-762328d6ba6c',
       },
       {
         checkId: 'basic.characters',
-        notifyOnlyInStage: null,
         requiredInStage: '1fee04f4-ddb8-4cfb-8a32-762328d6ba6c',
       },
       {
         checkId: 'basic.punctuation',
-        notifyOnlyInStage: null,
         requiredInStage: '1fee04f4-ddb8-4cfb-8a32-762328d6ba6c',
       },
       {
         checkId: 'notes.translator',
-        notifyOnlyInStage: null,
         requiredInStage: '1fee04f4-ddb8-4cfb-8a32-762328d6ba6c',
       },
       {
         checkId: 'basic.quotations',
-        notifyOnlyInStage: null,
         requiredInStage: '1fee04f4-ddb8-4cfb-8a32-762328d6ba6c',
       },
       {
         checkId: 'other.biblical-terms',
-        notifyOnlyInStage: null,
         requiredInStage: '7d2a59e8-67e5-4a73-9080-27e3da4c1029',
       },
       {
         checkId: 'basic.references',
-        notifyOnlyInStage: null,
         requiredInStage: 'fe0f2c67-06b7-42d6-91f7-2ed52c690940',
       },
       {
         checkId: 'basic.capitalization',
-        notifyOnlyInStage: null,
         requiredInStage: 'fe0f2c67-06b7-42d6-91f7-2ed52c690940',
       },
       {
         checkId: 'basic.repeated-words',
-        notifyOnlyInStage: null,
         requiredInStage: 'fe0f2c67-06b7-42d6-91f7-2ed52c690940',
       },
       {
         checkId: 'basic.matched-pairs',
-        notifyOnlyInStage: null,
         requiredInStage: 'fe0f2c67-06b7-42d6-91f7-2ed52c690940',
       },
       {
         checkId: 'basic.numbers',
-        notifyOnlyInStage: null,
         requiredInStage: 'fe0f2c67-06b7-42d6-91f7-2ed52c690940',
       },
       {
         checkId: 'basic.unmatched-pairs',
-        notifyOnlyInStage: null,
         requiredInStage: 'fe0f2c67-06b7-42d6-91f7-2ed52c690940',
       },
       {
         checkId: 'spelling.word-list',
-        notifyOnlyInStage: null,
         requiredInStage: 'fe0f2c67-06b7-42d6-91f7-2ed52c690940',
       },
       {
         checkId: 'spelling.spelling',
-        notifyOnlyInStage: null,
         requiredInStage: 'fe0f2c67-06b7-42d6-91f7-2ed52c690940',
       },
       {
         checkId: 'notes.consultant',
-        notifyOnlyInStage: null,
         requiredInStage: 'fe0f2c67-06b7-42d6-91f7-2ed52c690940',
       },
       {
         checkId: 'other.parallel-passages',
-        notifyOnlyInStage: null,
         requiredInStage: 'c2523b4a-8267-495d-b903-f45d98ebe0f0',
       },
       {
         checkId: 'notes.spelling-discussion',
-        notifyOnlyInStage: null,
         requiredInStage: '3e4ce946-cfc3-4fe9-a32e-81c1606a918c',
       },
       {
         checkId: 'notes.rendering-discussion',
-        notifyOnlyInStage: null,
         requiredInStage: '3e4ce946-cfc3-4fe9-a32e-81c1606a918c',
       },
     ],
@@ -3882,7 +3843,6 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
     checks: [
       {
         checkId: 'notes.translator',
-        notifyOnlyInStage: null,
         requiredInStage: 'b6cd2718-36c9-472c-84d6-753fca853c02',
       },
     ],
@@ -5536,97 +5496,78 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
     checks: [
       {
         checkId: 'basic.chapter-verse-numbers',
-        notifyOnlyInStage: null,
         requiredInStage: '9eddb82d-ed66-4e24-bdab-060dea2294de',
       },
       {
         checkId: 'basic.markers',
-        notifyOnlyInStage: null,
         requiredInStage: '9eddb82d-ed66-4e24-bdab-060dea2294de',
       },
       {
         checkId: 'notes.translator',
-        notifyOnlyInStage: null,
         requiredInStage: '9eddb82d-ed66-4e24-bdab-060dea2294de',
       },
       {
         checkId: 'notes.consultant',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'basic.characters',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'basic.punctuation',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'basic.capitalization',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'basic.repeated-words',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'basic.references',
-        notifyOnlyInStage: null,
         requiredInStage: '20974cee-9f40-43c4-a0ae-5e733238e134',
       },
       {
         checkId: 'basic.unmatched-pairs',
-        notifyOnlyInStage: null,
         requiredInStage: '20974cee-9f40-43c4-a0ae-5e733238e134',
       },
       {
         checkId: 'basic.numbers',
-        notifyOnlyInStage: null,
         requiredInStage: '20974cee-9f40-43c4-a0ae-5e733238e134',
       },
       {
         checkId: 'basic.matched-pairs',
-        notifyOnlyInStage: null,
         requiredInStage: '20974cee-9f40-43c4-a0ae-5e733238e134',
       },
       {
         checkId: 'basic.quotations',
-        notifyOnlyInStage: null,
         requiredInStage: '20974cee-9f40-43c4-a0ae-5e733238e134',
       },
       {
         checkId: 'spelling.word-list',
-        notifyOnlyInStage: null,
         requiredInStage: '20974cee-9f40-43c4-a0ae-5e733238e134',
       },
       {
         checkId: 'spelling.spelling',
-        notifyOnlyInStage: null,
         requiredInStage: '20974cee-9f40-43c4-a0ae-5e733238e134',
       },
       {
         checkId: 'notes.spelling-discussion',
-        notifyOnlyInStage: null,
         requiredInStage: '20974cee-9f40-43c4-a0ae-5e733238e134',
       },
       {
         checkId: 'notes.rendering-discussion',
-        notifyOnlyInStage: null,
         requiredInStage: '20974cee-9f40-43c4-a0ae-5e733238e134',
       },
       {
         checkId: 'other.biblical-terms',
-        notifyOnlyInStage: null,
         requiredInStage: '20974cee-9f40-43c4-a0ae-5e733238e134',
       },
       {
         checkId: 'other.parallel-passages',
-        notifyOnlyInStage: null,
         requiredInStage: 'c66ede6b-1e7b-4d55-b5c3-f8aff60217d7',
       },
     ],
@@ -7548,97 +7489,78 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
     checks: [
       {
         checkId: 'basic.chapter-verse-numbers',
-        notifyOnlyInStage: null,
         requiredInStage: '9eddb82d-ed66-4e24-bdab-060dea2294de',
       },
       {
         checkId: 'basic.markers',
-        notifyOnlyInStage: null,
         requiredInStage: '9eddb82d-ed66-4e24-bdab-060dea2294de',
       },
       {
         checkId: 'notes.translator',
-        notifyOnlyInStage: null,
         requiredInStage: '9eddb82d-ed66-4e24-bdab-060dea2294de',
       },
       {
         checkId: 'notes.consultant',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'basic.characters',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'basic.punctuation',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'basic.capitalization',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'basic.repeated-words',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'basic.references',
-        notifyOnlyInStage: null,
         requiredInStage: '20974cee-9f40-43c4-a0ae-5e733238e134',
       },
       {
         checkId: 'basic.unmatched-pairs',
-        notifyOnlyInStage: null,
         requiredInStage: '20974cee-9f40-43c4-a0ae-5e733238e134',
       },
       {
         checkId: 'basic.numbers',
-        notifyOnlyInStage: null,
         requiredInStage: '20974cee-9f40-43c4-a0ae-5e733238e134',
       },
       {
         checkId: 'basic.matched-pairs',
-        notifyOnlyInStage: null,
         requiredInStage: '20974cee-9f40-43c4-a0ae-5e733238e134',
       },
       {
         checkId: 'basic.quotations',
-        notifyOnlyInStage: null,
         requiredInStage: '20974cee-9f40-43c4-a0ae-5e733238e134',
       },
       {
         checkId: 'spelling.word-list',
-        notifyOnlyInStage: null,
         requiredInStage: '20974cee-9f40-43c4-a0ae-5e733238e134',
       },
       {
         checkId: 'spelling.spelling',
-        notifyOnlyInStage: null,
         requiredInStage: '20974cee-9f40-43c4-a0ae-5e733238e134',
       },
       {
         checkId: 'notes.spelling-discussion',
-        notifyOnlyInStage: null,
         requiredInStage: '20974cee-9f40-43c4-a0ae-5e733238e134',
       },
       {
         checkId: 'notes.rendering-discussion',
-        notifyOnlyInStage: null,
         requiredInStage: '20974cee-9f40-43c4-a0ae-5e733238e134',
       },
       {
         checkId: 'other.biblical-terms',
-        notifyOnlyInStage: null,
         requiredInStage: '20974cee-9f40-43c4-a0ae-5e733238e134',
       },
       {
         checkId: 'other.parallel-passages',
-        notifyOnlyInStage: null,
         requiredInStage: 'c66ede6b-1e7b-4d55-b5c3-f8aff60217d7',
       },
     ],
@@ -8535,97 +8457,78 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
     checks: [
       {
         checkId: 'basic.chapter-verse-numbers',
-        notifyOnlyInStage: null,
         requiredInStage: '9eddb82d-ed66-4e24-bdab-060dea2294de',
       },
       {
         checkId: 'basic.markers',
-        notifyOnlyInStage: null,
         requiredInStage: '9eddb82d-ed66-4e24-bdab-060dea2294de',
       },
       {
         checkId: 'notes.translator',
-        notifyOnlyInStage: null,
         requiredInStage: '9eddb82d-ed66-4e24-bdab-060dea2294de',
       },
       {
         checkId: 'spelling.spelling',
-        notifyOnlyInStage: null,
         requiredInStage: '9eddb82d-ed66-4e24-bdab-060dea2294de',
       },
       {
         checkId: 'notes.consultant',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'basic.characters',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'basic.punctuation',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'basic.capitalization',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'basic.repeated-words',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'basic.unmatched-pairs',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'basic.matched-pairs',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'basic.quotations',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'basic.numbers',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'other.biblical-terms',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'spelling.word-list',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'basic.references',
-        notifyOnlyInStage: null,
         requiredInStage: '16385cc6-d555-4b29-b342-1f78a9853656',
       },
       {
         checkId: 'notes.spelling-discussion',
-        notifyOnlyInStage: null,
         requiredInStage: '16385cc6-d555-4b29-b342-1f78a9853656',
       },
       {
         checkId: 'notes.rendering-discussion',
-        notifyOnlyInStage: null,
         requiredInStage: '16385cc6-d555-4b29-b342-1f78a9853656',
       },
       {
         checkId: 'other.parallel-passages',
-        notifyOnlyInStage: null,
         requiredInStage: 'c66ede6b-1e7b-4d55-b5c3-f8aff60217d7',
       },
     ],
@@ -9280,102 +9183,82 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
     checks: [
       {
         checkId: 'basic.chapter-verse-numbers',
-        notifyOnlyInStage: null,
         requiredInStage: '9eddb82d-ed66-4e24-bdab-060dea2294de',
       },
       {
         checkId: 'basic.markers',
-        notifyOnlyInStage: null,
         requiredInStage: '9eddb82d-ed66-4e24-bdab-060dea2294de',
       },
       {
         checkId: 'notes.translator',
-        notifyOnlyInStage: null,
         requiredInStage: '9eddb82d-ed66-4e24-bdab-060dea2294de',
       },
       {
         checkId: 'spelling.spelling',
-        notifyOnlyInStage: null,
         requiredInStage: '9eddb82d-ed66-4e24-bdab-060dea2294de',
       },
       {
         checkId: 'notes.consultant',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'basic.characters',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'basic.punctuation',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'basic.capitalization',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'basic.repeated-words',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'basic.unmatched-pairs',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'basic.matched-pairs',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'basic.quotations',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'basic.numbers',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'spelling.word-list',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'other.biblical-terms',
-        notifyOnlyInStage: null,
         requiredInStage: '9443afef-8302-4727-8f85-1cb4ef464168',
       },
       {
         checkId: 'other.interlinear',
-        notifyOnlyInStage: null,
         requiredInStage: '20974cee-9f40-43c4-a0ae-5e733238e134',
       },
       {
         checkId: 'basic.references',
-        notifyOnlyInStage: null,
         requiredInStage: '16385cc6-d555-4b29-b342-1f78a9853656',
       },
       {
         checkId: 'notes.spelling-discussion',
-        notifyOnlyInStage: null,
         requiredInStage: '16385cc6-d555-4b29-b342-1f78a9853656',
       },
       {
         checkId: 'notes.rendering-discussion',
-        notifyOnlyInStage: null,
         requiredInStage: '16385cc6-d555-4b29-b342-1f78a9853656',
       },
       {
         checkId: 'other.parallel-passages',
-        notifyOnlyInStage: null,
         requiredInStage: 'c66ede6b-1e7b-4d55-b5c3-f8aff60217d7',
       },
     ],
@@ -9990,97 +9873,78 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
     checks: [
       {
         checkId: 'basic.chapter-verse-numbers',
-        notifyOnlyInStage: null,
         requiredInStage: '1fee04f4-ddb8-4cfb-8a32-762328d6ba6c',
       },
       {
         checkId: 'basic.markers',
-        notifyOnlyInStage: null,
         requiredInStage: '1fee04f4-ddb8-4cfb-8a32-762328d6ba6c',
       },
       {
         checkId: 'other.biblical-terms',
-        notifyOnlyInStage: null,
         requiredInStage: '7d2a59e8-67e5-4a73-9080-27e3da4c1029',
       },
       {
         checkId: 'basic.characters',
-        notifyOnlyInStage: null,
         requiredInStage: 'fe0f2c67-06b7-42d6-91f7-2ed52c690940',
       },
       {
         checkId: 'basic.punctuation',
-        notifyOnlyInStage: null,
         requiredInStage: 'fe0f2c67-06b7-42d6-91f7-2ed52c690940',
       },
       {
         checkId: 'basic.references',
-        notifyOnlyInStage: null,
         requiredInStage: 'fe0f2c67-06b7-42d6-91f7-2ed52c690940',
       },
       {
         checkId: 'basic.capitalization',
-        notifyOnlyInStage: null,
         requiredInStage: 'fe0f2c67-06b7-42d6-91f7-2ed52c690940',
       },
       {
         checkId: 'basic.repeated-words',
-        notifyOnlyInStage: null,
         requiredInStage: 'fe0f2c67-06b7-42d6-91f7-2ed52c690940',
       },
       {
         checkId: 'basic.matched-pairs',
-        notifyOnlyInStage: null,
         requiredInStage: 'fe0f2c67-06b7-42d6-91f7-2ed52c690940',
       },
       {
         checkId: 'basic.quotations',
-        notifyOnlyInStage: null,
         requiredInStage: 'fe0f2c67-06b7-42d6-91f7-2ed52c690940',
       },
       {
         checkId: 'basic.numbers',
-        notifyOnlyInStage: null,
         requiredInStage: 'fe0f2c67-06b7-42d6-91f7-2ed52c690940',
       },
       {
         checkId: 'basic.unmatched-pairs',
-        notifyOnlyInStage: null,
         requiredInStage: 'fe0f2c67-06b7-42d6-91f7-2ed52c690940',
       },
       {
         checkId: 'spelling.word-list',
-        notifyOnlyInStage: null,
         requiredInStage: 'fe0f2c67-06b7-42d6-91f7-2ed52c690940',
       },
       {
         checkId: 'spelling.spelling',
-        notifyOnlyInStage: null,
         requiredInStage: 'fe0f2c67-06b7-42d6-91f7-2ed52c690940',
       },
       {
         checkId: 'notes.consultant',
-        notifyOnlyInStage: null,
         requiredInStage: 'fe0f2c67-06b7-42d6-91f7-2ed52c690940',
       },
       {
         checkId: 'back.placeholder',
-        notifyOnlyInStage: null,
         requiredInStage: 'fe0f2c67-06b7-42d6-91f7-2ed52c690940',
       },
       {
         checkId: 'other.parallel-passages',
-        notifyOnlyInStage: null,
         requiredInStage: 'c2523b4a-8267-495d-b903-f45d98ebe0f0',
       },
       {
         checkId: 'notes.spelling-discussion',
-        notifyOnlyInStage: null,
         requiredInStage: '3e4ce946-cfc3-4fe9-a32e-81c1606a918c',
       },
       {
         checkId: 'notes.rendering-discussion',
-        notifyOnlyInStage: null,
         requiredInStage: '3e4ce946-cfc3-4fe9-a32e-81c1606a918c',
       },
     ],
@@ -10462,92 +10326,74 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
     checks: [
       {
         checkId: 'basic.chapter-verse-numbers',
-        notifyOnlyInStage: null,
         requiredInStage: '1703c346-ce9e-427e-9476-9f3a8af26c67',
       },
       {
         checkId: 'basic.markers',
-        notifyOnlyInStage: null,
         requiredInStage: '1703c346-ce9e-427e-9476-9f3a8af26c67',
       },
       {
         checkId: 'basic.characters',
-        notifyOnlyInStage: null,
         requiredInStage: '1703c346-ce9e-427e-9476-9f3a8af26c67',
       },
       {
         checkId: 'basic.punctuation',
-        notifyOnlyInStage: null,
         requiredInStage: '1703c346-ce9e-427e-9476-9f3a8af26c67',
       },
       {
         checkId: 'basic.references',
-        notifyOnlyInStage: null,
         requiredInStage: '1703c346-ce9e-427e-9476-9f3a8af26c67',
       },
       {
         checkId: 'basic.unmatched-pairs',
-        notifyOnlyInStage: null,
         requiredInStage: '1703c346-ce9e-427e-9476-9f3a8af26c67',
       },
       {
         checkId: 'basic.capitalization',
-        notifyOnlyInStage: null,
         requiredInStage: '1703c346-ce9e-427e-9476-9f3a8af26c67',
       },
       {
         checkId: 'basic.repeated-words',
-        notifyOnlyInStage: null,
         requiredInStage: '1703c346-ce9e-427e-9476-9f3a8af26c67',
       },
       {
         checkId: 'basic.matched-pairs',
-        notifyOnlyInStage: null,
         requiredInStage: '1703c346-ce9e-427e-9476-9f3a8af26c67',
       },
       {
         checkId: 'basic.quotations',
-        notifyOnlyInStage: null,
         requiredInStage: '1703c346-ce9e-427e-9476-9f3a8af26c67',
       },
       {
         checkId: 'basic.numbers',
-        notifyOnlyInStage: null,
         requiredInStage: '1703c346-ce9e-427e-9476-9f3a8af26c67',
       },
       {
         checkId: 'other.biblical-terms',
-        notifyOnlyInStage: null,
         requiredInStage: 'c132ac10-5985-4d99-8ad9-3e823809720a',
       },
       {
         checkId: 'other.parallel-passages',
-        notifyOnlyInStage: null,
         requiredInStage: 'c132ac10-5985-4d99-8ad9-3e823809720a',
       },
       {
         checkId: 'spelling.spelling',
-        notifyOnlyInStage: null,
         requiredInStage: 'c132ac10-5985-4d99-8ad9-3e823809720a',
       },
       {
         checkId: 'spelling.word-list',
-        notifyOnlyInStage: null,
         requiredInStage: 'c132ac10-5985-4d99-8ad9-3e823809720a',
       },
       {
         checkId: 'notes.spelling-discussion',
-        notifyOnlyInStage: null,
         requiredInStage: 'c132ac10-5985-4d99-8ad9-3e823809720a',
       },
       {
         checkId: 'notes.rendering-discussion',
-        notifyOnlyInStage: null,
         requiredInStage: 'c132ac10-5985-4d99-8ad9-3e823809720a',
       },
       {
         checkId: 'notes.consultant',
-        notifyOnlyInStage: null,
         requiredInStage: 'c132ac10-5985-4d99-8ad9-3e823809720a',
       },
     ],
@@ -10786,62 +10632,50 @@ export const FACTORY_PLANS: OrgProvidedPlan[] = [
     checks: [
       {
         checkId: 'notes.translator',
-        notifyOnlyInStage: null,
         requiredInStage: 'ee9fbe0a-b5c2-4180-babd-d21d88e60755',
       },
       {
         checkId: 'basic.chapter-verse-numbers',
-        notifyOnlyInStage: null,
         requiredInStage: 'ee9fbe0a-b5c2-4180-babd-d21d88e60755',
       },
       {
         checkId: 'basic.markers',
-        notifyOnlyInStage: null,
         requiredInStage: 'ee9fbe0a-b5c2-4180-babd-d21d88e60755',
       },
       {
         checkId: 'basic.characters',
-        notifyOnlyInStage: null,
         requiredInStage: 'ee9fbe0a-b5c2-4180-babd-d21d88e60755',
       },
       {
         checkId: 'basic.punctuation',
-        notifyOnlyInStage: null,
         requiredInStage: '704889eb-0578-4a10-8ecc-fc4e7a1ccaf9',
       },
       {
         checkId: 'basic.unmatched-pairs',
-        notifyOnlyInStage: null,
         requiredInStage: '704889eb-0578-4a10-8ecc-fc4e7a1ccaf9',
       },
       {
         checkId: 'basic.capitalization',
-        notifyOnlyInStage: null,
         requiredInStage: '704889eb-0578-4a10-8ecc-fc4e7a1ccaf9',
       },
       {
         checkId: 'basic.repeated-words',
-        notifyOnlyInStage: null,
         requiredInStage: '704889eb-0578-4a10-8ecc-fc4e7a1ccaf9',
       },
       {
         checkId: 'basic.matched-pairs',
-        notifyOnlyInStage: null,
         requiredInStage: '704889eb-0578-4a10-8ecc-fc4e7a1ccaf9',
       },
       {
         checkId: 'basic.numbers',
-        notifyOnlyInStage: null,
         requiredInStage: '704889eb-0578-4a10-8ecc-fc4e7a1ccaf9',
       },
       {
         checkId: 'basic.references',
-        notifyOnlyInStage: null,
         requiredInStage: '1a3630e4-be85-4ba7-bbf8-ad5b7b64ca81',
       },
       {
         checkId: 'basic.quotations',
-        notifyOnlyInStage: null,
         requiredInStage: '1a3630e4-be85-4ba7-bbf8-ad5b7b64ca81',
       },
     ],

@@ -35,7 +35,12 @@ export function StagesTasksTab({
   // MIN_OVERLAP_PX. If the previous offset already satisfies that, we don't move at all.
   // Only when a newly-selected row sits outside the flyout's current extent (plus the overlap
   // margin) do we shift the flyout the minimum amount needed to re-establish overlap.
+  // React's ref typing (RefObject<T | null>) requires the initial value to be `null`, not
+  // `undefined`. `no-null/no-null` is disabled on this line for that reason.
+  // eslint-disable-next-line no-null/no-null
   const gridRef = useRef<HTMLDivElement | null>(null);
+  // Same reason as gridRef above — React's ref API requires a null initial value.
+  // eslint-disable-next-line no-null/no-null
   const leftPaneRef = useRef<HTMLDivElement | null>(null);
   const [flyoutOffset, setFlyoutOffset] = useState(0);
 

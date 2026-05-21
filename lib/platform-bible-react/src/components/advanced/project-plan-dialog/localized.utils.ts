@@ -16,10 +16,10 @@ export function getLocalized(
   if (direct && direct.length > 0) return direct;
   if (fallback) {
     const fallbacks = Array.isArray(fallback) ? fallback : [fallback];
-    for (const f of fallbacks) {
-      const v = map[f];
-      if (v && v.length > 0) return v;
-    }
+    const found = fallbacks
+      .map((f) => map[f])
+      .find((v): v is string => typeof v === 'string' && v.length > 0);
+    if (found) return found;
   }
   return '';
 }
@@ -33,19 +33,13 @@ export function langsWithContent(map: LocalizedMap | undefined): LangCode[] {
 }
 
 export function planLangs(stages: PlanStage[]): LangCode[] {
-  const set = new Set<LangCode>();
-  const collect = (m: LocalizedMap | undefined) => {
-    if (!m) return;
-    for (const k of Object.keys(m)) set.add(k);
-  };
-  for (const stage of stages) {
-    collect(stage.names);
-    collect(stage.descriptions);
-    for (const task of stage.tasks) {
-      collect(task.names);
-      collect(task.descriptions);
-    }
-  }
+  const keysOf = (m: LocalizedMap | undefined): LangCode[] => (m ? Object.keys(m) : []);
+  const all = stages.flatMap((stage) => [
+    ...keysOf(stage.names),
+    ...keysOf(stage.descriptions),
+    ...stage.tasks.flatMap((task) => [...keysOf(task.names), ...keysOf(task.descriptions)]),
+  ]);
+  const set = new Set<LangCode>(all);
   if (set.size === 0) set.add(DEFAULT_LANG);
   return Array.from(set).sort();
 }

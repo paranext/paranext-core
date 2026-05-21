@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type DragEvent as ReactDragEvent, type ReactNode } from 'react';
 import {
   ChevronDown,
   ChevronRight,
@@ -111,8 +111,16 @@ const requiresEditingOptions: { value: RequiresEditingMode; label: string }[] = 
   { value: 'scripture-text', label: 'Scripture Text' },
 ];
 
-const CATALOG_BY_ID = new Map<string, CheckCatalogItem>();
-for (const group of CHECK_GROUPS) for (const item of group.items) CATALOG_BY_ID.set(item.id, item);
+const isMarkCompleteMode = (v: string): v is MarkCompleteMode =>
+  markCompleteOptions.some((o) => o.value === v);
+const isTaskStartCondition = (v: string): v is TaskStartCondition =>
+  taskStartOptions.some((o) => o.value === v);
+const isRequiresEditingMode = (v: string): v is RequiresEditingMode =>
+  requiresEditingOptions.some((o) => o.value === v);
+
+const CATALOG_BY_ID = new Map<string, CheckCatalogItem>(
+  CHECK_GROUPS.flatMap((group) => group.items.map((item) => [item.id, item] as const)),
+);
 const checkLabel = (id: string) => CATALOG_BY_ID.get(id)?.name ?? id;
 
 export function MergedStagesTasksChecks({
@@ -127,28 +135,27 @@ export function MergedStagesTasksChecks({
   onChecksChange,
 }: MergedStagesTasksChecksProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [dragSrc, setDragSrc] = useState<number | null>(null);
-  const [dragOver, setDragOver] = useState<number | null>(null);
-  const [taskDragSrc, setTaskDragSrc] = useState<{ stageIdx: number; taskIdx: number } | null>(
-    null,
+  const [dragSrc, setDragSrc] = useState<number | undefined>(undefined);
+  const [dragOver, setDragOver] = useState<number | undefined>(undefined);
+  const [taskDragSrc, setTaskDragSrc] = useState<{ stageIdx: number; taskIdx: number } | undefined>(
+    undefined,
   );
-  const [taskDragOver, setTaskDragOver] = useState<{
-    stageIdx: number;
-    taskIdx: number;
-  } | null>(null);
+  const [taskDragOver, setTaskDragOver] = useState<
+    { stageIdx: number; taskIdx: number } | undefined
+  >(undefined);
   const toggle = (id: string) => setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const taskDragHandlers = (stageIdx: number, taskIdx: number, taskId: string) => ({
     draggable: true,
-    onDragStart: (e: React.DragEvent) => {
+    onDragStart: (e: ReactDragEvent) => {
       e.stopPropagation();
       setTaskDragSrc({ stageIdx, taskIdx });
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', taskId);
     },
-    onDragOver: (e: React.DragEvent) => {
+    onDragOver: (e: ReactDragEvent) => {
       if (
-        taskDragSrc !== null &&
+        taskDragSrc !== undefined &&
         !(taskDragSrc.stageIdx === stageIdx && taskDragSrc.taskIdx === taskIdx)
       ) {
         e.preventDefault();
@@ -161,14 +168,14 @@ export function MergedStagesTasksChecks({
     },
     onDragLeave: () => {
       if (taskDragOver?.stageIdx === stageIdx && taskDragOver?.taskIdx === taskIdx) {
-        setTaskDragOver(null);
+        setTaskDragOver(undefined);
       }
     },
-    onDrop: (e: React.DragEvent) => {
+    onDrop: (e: ReactDragEvent) => {
       e.preventDefault();
       e.stopPropagation();
       if (
-        taskDragSrc !== null &&
+        taskDragSrc !== undefined &&
         !(taskDragSrc.stageIdx === stageIdx && taskDragSrc.taskIdx === taskIdx)
       ) {
         const from = taskDragSrc;
@@ -187,43 +194,43 @@ export function MergedStagesTasksChecks({
           return next;
         });
       }
-      setTaskDragSrc(null);
-      setTaskDragOver(null);
+      setTaskDragSrc(undefined);
+      setTaskDragOver(undefined);
     },
     onDragEnd: () => {
-      setTaskDragSrc(null);
-      setTaskDragOver(null);
+      setTaskDragSrc(undefined);
+      setTaskDragOver(undefined);
     },
   });
 
   const stageDragHandlers = (stageIndex: number, stageId: string) => ({
     draggable: true,
-    onDragStart: (e: React.DragEvent) => {
+    onDragStart: (e: ReactDragEvent) => {
       setDragSrc(stageIndex);
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', stageId);
     },
-    onDragOver: (e: React.DragEvent) => {
-      if (dragSrc !== null && dragSrc !== stageIndex) {
+    onDragOver: (e: ReactDragEvent) => {
+      if (dragSrc !== undefined && dragSrc !== stageIndex) {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
         if (dragOver !== stageIndex) setDragOver(stageIndex);
       }
     },
     onDragLeave: () => {
-      if (dragOver === stageIndex) setDragOver(null);
+      if (dragOver === stageIndex) setDragOver(undefined);
     },
-    onDrop: (e: React.DragEvent) => {
+    onDrop: (e: ReactDragEvent) => {
       e.preventDefault();
-      if (dragSrc !== null && dragSrc !== stageIndex) {
+      if (dragSrc !== undefined && dragSrc !== stageIndex) {
         onStagesChange((prev) => moveItem(prev, dragSrc, stageIndex));
       }
-      setDragSrc(null);
-      setDragOver(null);
+      setDragSrc(undefined);
+      setDragOver(undefined);
     },
     onDragEnd: () => {
-      setDragSrc(null);
-      setDragOver(null);
+      setDragSrc(undefined);
+      setDragOver(undefined);
     },
   });
 
@@ -258,10 +265,10 @@ export function MergedStagesTasksChecks({
       checks
         .map((c) => ({
           ...c,
-          notifyOnlyInStage: c.notifyOnlyInStage === id ? null : c.notifyOnlyInStage,
-          requiredInStage: c.requiredInStage === id ? null : c.requiredInStage,
+          notifyOnlyInStage: c.notifyOnlyInStage === id ? undefined : c.notifyOnlyInStage,
+          requiredInStage: c.requiredInStage === id ? undefined : c.requiredInStage,
         }))
-        .filter((c) => c.notifyOnlyInStage !== null || c.requiredInStage !== null),
+        .filter((c) => c.notifyOnlyInStage !== undefined || c.requiredInStage !== undefined),
     );
   };
 
@@ -293,11 +300,17 @@ export function MergedStagesTasksChecks({
             const notifyChecks = checks.filter((c) => c.notifyOnlyInStage === stage.id);
             const isDragging = dragSrc === stageIndex;
             const isDropTarget =
-              dragOver === stageIndex && dragSrc !== null && dragSrc !== stageIndex;
+              dragOver === stageIndex && dragSrc !== undefined && dragSrc !== stageIndex;
+            const sh = stageDragHandlers(stageIndex, stage.id);
             return (
               <li
                 key={stage.id}
-                {...stageDragHandlers(stageIndex, stage.id)}
+                draggable={sh.draggable}
+                onDragStart={sh.onDragStart}
+                onDragOver={sh.onDragOver}
+                onDragLeave={sh.onDragLeave}
+                onDrop={sh.onDrop}
+                onDragEnd={sh.onDragEnd}
                 className={cn(
                   'tw:rounded tw:border',
                   isDragging && 'tw:opacity-50',
@@ -350,12 +363,18 @@ export function MergedStagesTasksChecks({
                     const taskIsDropTarget =
                       taskDragOver?.stageIdx === stageIndex &&
                       taskDragOver?.taskIdx === taskIndex &&
-                      taskDragSrc !== null &&
+                      taskDragSrc !== undefined &&
                       !(taskDragSrc.stageIdx === stageIndex && taskDragSrc.taskIdx === taskIndex);
+                    const th = taskDragHandlers(stageIndex, taskIndex, task.id);
                     return (
                       <li
                         key={task.id}
-                        {...taskDragHandlers(stageIndex, taskIndex, task.id)}
+                        draggable={th.draggable}
+                        onDragStart={th.onDragStart}
+                        onDragOver={th.onDragOver}
+                        onDragLeave={th.onDragLeave}
+                        onDrop={th.onDrop}
+                        onDragEnd={th.onDragEnd}
                         className={cn(
                           'tw:rounded tw:border',
                           taskIsDragging && 'tw:opacity-50',
@@ -437,20 +456,17 @@ function StageChecks({
       onChecksChange(
         checks
           .map((c) => (c.checkId === checkId ? { ...c, ...patch } : c))
-          .filter((c) => c.notifyOnlyInStage !== null || c.requiredInStage !== null),
+          .filter((c) => c.notifyOnlyInStage !== undefined || c.requiredInStage !== undefined),
       );
     } else {
-      onChecksChange([
-        ...checks,
-        { checkId, notifyOnlyInStage: null, requiredInStage: null, ...patch },
-      ]);
+      onChecksChange([...checks, { checkId, ...patch }]);
     }
   };
 
   const setRequired = (checkId: string) => upsert(checkId, { requiredInStage: stage.id });
-  const unsetRequired = (checkId: string) => upsert(checkId, { requiredInStage: null });
+  const unsetRequired = (checkId: string) => upsert(checkId, { requiredInStage: undefined });
   const setNotify = (checkId: string) => upsert(checkId, { notifyOnlyInStage: stage.id });
-  const unsetNotify = (checkId: string) => upsert(checkId, { notifyOnlyInStage: null });
+  const unsetNotify = (checkId: string) => upsert(checkId, { notifyOnlyInStage: undefined });
 
   return (
     <div className="tw:flex tw:flex-col tw:gap-3 tw:rounded tw:border tw:bg-muted/30 tw:p-3">
@@ -503,7 +519,7 @@ interface ChecksRowProps {
   helpText: string;
   items: CheckSetting[];
   onRemove: (checkId: string) => void;
-  addPopover: React.ReactNode;
+  addPopover: ReactNode;
 }
 
 function ChecksRow({ title, helpText, items, onRemove, addPopover }: ChecksRowProps) {
@@ -554,26 +570,31 @@ interface AddCheckPopoverProps {
 function AddCheckPopover({ label, stage, stages, checks, slot, onPick }: AddCheckPopoverProps) {
   const [open, setOpen] = useState(false);
   const currentStageIdx = stages.findIndex((s) => s.id === stage.id);
-  const assigned = useMemo(() => {
-    const set = new Set<string>();
-    for (const c of checks) {
-      if (slot === 'required' && c.requiredInStage === stage.id) set.add(c.checkId);
-      if (slot === 'notify' && c.notifyOnlyInStage === stage.id) set.add(c.checkId);
-    }
-    return set;
-  }, [checks, stage.id, slot]);
+  const assigned = useMemo(
+    () =>
+      new Set(
+        checks
+          .filter((c) =>
+            slot === 'required' ? c.requiredInStage === stage.id : c.notifyOnlyInStage === stage.id,
+          )
+          .map((c) => c.checkId),
+      ),
+    [checks, stage.id, slot],
+  );
   // For the notify-only slot, exclude checks whose `requiredInStage` lives in this stage or any
   // earlier stage. A notify-only assignment after-or-at the required stage adds no value: the
   // check is already required by the time you reach this stage.
   const excludedByOrdering = useMemo(() => {
     if (slot !== 'notify' || currentStageIdx < 0) return new Set<string>();
-    const set = new Set<string>();
-    for (const c of checks) {
-      if (!c.requiredInStage) continue;
-      const reqIdx = stages.findIndex((s) => s.id === c.requiredInStage);
-      if (reqIdx >= 0 && reqIdx <= currentStageIdx) set.add(c.checkId);
-    }
-    return set;
+    return new Set(
+      checks
+        .filter((c) => {
+          if (!c.requiredInStage) return false;
+          const reqIdx = stages.findIndex((s) => s.id === c.requiredInStage);
+          return reqIdx >= 0 && reqIdx <= currentStageIdx;
+        })
+        .map((c) => c.checkId),
+    );
   }, [checks, stages, currentStageIdx, slot]);
 
   return (
@@ -590,12 +611,14 @@ function AddCheckPopover({ label, stage, stages, checks, slot, onPick }: AddChec
         className="tw:max-h-96 tw:w-80 tw:overflow-auto"
       >
         <div className="tw:flex tw:flex-col tw:gap-3">
-          {CHECK_GROUPS.map((group) => {
-            const available = group.items.filter(
+          {CHECK_GROUPS.map((group) => ({
+            group,
+            available: group.items.filter(
               (item) => !assigned.has(item.id) && !excludedByOrdering.has(item.id),
-            );
-            if (available.length === 0) return null;
-            return (
+            ),
+          }))
+            .filter(({ available }) => available.length > 0)
+            .map(({ group, available }) => (
               <div key={group.id} className="tw:flex tw:flex-col tw:gap-1">
                 <div className="tw:text-xs tw:font-semibold tw:text-muted-foreground">
                   {group.label}
@@ -616,8 +639,7 @@ function AddCheckPopover({ label, stage, stages, checks, slot, onPick }: AddChec
                   ))}
                 </div>
               </div>
-            );
-          })}
+            ))}
         </div>
       </PopoverContent>
     </Popover>
@@ -635,7 +657,7 @@ interface RowHeaderProps {
   upDisabled: boolean;
   downDisabled: boolean;
   onDelete: () => void;
-  rightExtras?: React.ReactNode;
+  rightExtras?: ReactNode;
 }
 
 function RowHeader({
@@ -705,7 +727,7 @@ function RowIconButton({
   label: string;
   onClick: () => void;
   disabled?: boolean;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <button
@@ -804,7 +826,9 @@ function TaskInlineForm({
       <Field label="Mark task as complete">
         <Select
           value={task.markComplete}
-          onValueChange={(v) => onChange({ ...task, markComplete: v as MarkCompleteMode })}
+          onValueChange={(v) => {
+            if (isMarkCompleteMode(v)) onChange({ ...task, markComplete: v });
+          }}
         >
           <SelectTrigger>
             <SelectValue />
@@ -821,7 +845,9 @@ function TaskInlineForm({
       <Field label="When can this task start?">
         <Select
           value={task.taskStart}
-          onValueChange={(v) => onChange({ ...task, taskStart: v as TaskStartCondition })}
+          onValueChange={(v) => {
+            if (isTaskStartCondition(v)) onChange({ ...task, taskStart: v });
+          }}
         >
           <SelectTrigger>
             <SelectValue />
@@ -838,7 +864,9 @@ function TaskInlineForm({
       <Field label="Requires editing">
         <Select
           value={task.requiresEditing}
-          onValueChange={(v) => onChange({ ...task, requiresEditing: v as RequiresEditingMode })}
+          onValueChange={(v) => {
+            if (isRequiresEditingMode(v)) onChange({ ...task, requiresEditing: v });
+          }}
         >
           <SelectTrigger>
             <SelectValue />
@@ -921,7 +949,7 @@ function EffortPopover({ task, onChange }: { task: PlanTask; onChange: (next: Pl
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="tw:flex tw:flex-col tw:gap-1">
       <Label className="tw:text-xs tw:text-muted-foreground">{label}</Label>
@@ -939,14 +967,12 @@ function pickReferenceLang(
     const v = map[previousLang];
     if (v && v.length > 0) return previousLang;
   }
-  let best: LangCode | undefined;
-  for (const lang of Object.keys(map)) {
-    if (lang === displayLang) continue;
-    const v = map[lang];
-    if (!v || v.length === 0) continue;
-    if (!best || v.length > (map[best]?.length ?? 0)) best = lang;
-  }
-  return best;
+  return Object.keys(map)
+    .filter((lang) => lang !== displayLang && (map[lang]?.length ?? 0) > 0)
+    .reduce<LangCode | undefined>(
+      (best, lang) => (!best || (map[lang]?.length ?? 0) > (map[best]?.length ?? 0) ? lang : best),
+      undefined,
+    );
 }
 
 function LocalizedField({

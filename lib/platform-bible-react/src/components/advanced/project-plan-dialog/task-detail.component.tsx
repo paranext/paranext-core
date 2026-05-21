@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/shadcn-ui/select';
+import type { ReactNode } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shadcn-ui/tabs';
 import { Textarea } from '@/components/shadcn-ui/textarea';
 import {
@@ -48,6 +49,13 @@ const requiresEditingOptions: { value: RequiresEditingMode; label: string }[] = 
   { value: 'scripture-text', label: 'Scripture Text' },
 ];
 
+const isMarkCompleteMode = (v: string): v is MarkCompleteMode =>
+  markCompleteOptions.some((o) => o.value === v);
+const isTaskStartCondition = (v: string): v is TaskStartCondition =>
+  taskStartOptions.some((o) => o.value === v);
+const isRequiresEditingMode = (v: string): v is RequiresEditingMode =>
+  requiresEditingOptions.some((o) => o.value === v);
+
 export function TaskDetail({ stage, task, onStageChange, onTaskChange }: TaskDetailProps) {
   if (!task) {
     return <StageBasicEditor stage={stage} onStageChange={onStageChange} />;
@@ -75,7 +83,9 @@ export function TaskDetail({ stage, task, onStageChange, onTaskChange }: TaskDet
         <FieldRow label="Mark task as complete">
           <Select
             value={task.markComplete}
-            onValueChange={(v) => onTaskChange({ ...task, markComplete: v as MarkCompleteMode })}
+            onValueChange={(v) => {
+              if (isMarkCompleteMode(v)) onTaskChange({ ...task, markComplete: v });
+            }}
           >
             <SelectTrigger>
               <SelectValue />
@@ -93,7 +103,9 @@ export function TaskDetail({ stage, task, onStageChange, onTaskChange }: TaskDet
         <FieldRow label="When can this task start?">
           <Select
             value={task.taskStart}
-            onValueChange={(v) => onTaskChange({ ...task, taskStart: v as TaskStartCondition })}
+            onValueChange={(v) => {
+              if (isTaskStartCondition(v)) onTaskChange({ ...task, taskStart: v });
+            }}
           >
             <SelectTrigger>
               <SelectValue />
@@ -111,9 +123,9 @@ export function TaskDetail({ stage, task, onStageChange, onTaskChange }: TaskDet
         <FieldRow label="Requires editing">
           <Select
             value={task.requiresEditing}
-            onValueChange={(v) =>
-              onTaskChange({ ...task, requiresEditing: v as RequiresEditingMode })
-            }
+            onValueChange={(v) => {
+              if (isRequiresEditingMode(v)) onTaskChange({ ...task, requiresEditing: v });
+            }}
           >
             <SelectTrigger>
               <SelectValue />
@@ -211,7 +223,7 @@ function NameAndDescription({
   );
 }
 
-function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
+function FieldRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="tw:grid tw:grid-cols-[160px_1fr] tw:items-center tw:gap-2">
       <Label className="tw:text-sm">{label}</Label>

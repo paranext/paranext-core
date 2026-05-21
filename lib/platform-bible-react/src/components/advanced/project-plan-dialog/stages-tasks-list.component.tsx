@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/shadcn-ui/button';
 import { cn } from '@/utils/shadcn-ui/utils';
@@ -192,7 +193,7 @@ interface RowProps {
   bold?: boolean;
   label: string;
   onClick: () => void;
-  children?: React.ReactNode;
+  children?: ReactNode;
 }
 
 function Row({ selected, bold, label, onClick, children }: RowProps) {
@@ -226,7 +227,7 @@ interface RowActionProps {
   label: string;
   onClick: () => void;
   disabled?: boolean;
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 function RowAction({ label, onClick, disabled, children }: RowActionProps) {

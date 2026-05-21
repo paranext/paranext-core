@@ -49,8 +49,8 @@ export type StageId = string;
 
 export interface CheckSetting {
   checkId: string;
-  notifyOnlyInStage: StageId | null;
-  requiredInStage: StageId | null;
+  notifyOnlyInStage?: StageId;
+  requiredInStage?: StageId;
 }
 
 export interface ProjectPlan {

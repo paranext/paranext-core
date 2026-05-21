@@ -70,10 +70,12 @@ export function ProjectPlanDialogChecksMerged({
   }, [open, plan]);
 
   const availableLangs = useMemo(() => {
-    const set = new Set<LangCode>(planLangs(workingPlan.stages));
-    for (const lang of extraLangs) set.add(lang);
-    set.add(DEFAULT_LANG);
-    set.add(displayLang);
+    const set = new Set<LangCode>([
+      ...planLangs(workingPlan.stages),
+      ...extraLangs,
+      DEFAULT_LANG,
+      displayLang,
+    ]);
     return Array.from(set).sort();
   }, [workingPlan.stages, extraLangs, displayLang]);
 

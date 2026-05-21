@@ -40,7 +40,7 @@ export function OrgPlanPicker({
   isDirty,
   onReplaceWith,
 }: OrgPlanPickerProps) {
-  const [pendingPlan, setPendingPlan] = useState<OrgProvidedPlan | null>(null);
+  const [pendingPlan, setPendingPlan] = useState<OrgProvidedPlan | undefined>(undefined);
 
   const value = currentBasePlanRef ?? CUSTOM_VALUE;
   const currentIsKnown = orgProvidedPlans.some((p) => p.id === currentBasePlanRef);
@@ -63,14 +63,14 @@ export function OrgPlanPicker({
 
   const confirmReplace = () => {
     if (pendingPlan) onReplaceWith(pendingPlan);
-    setPendingPlan(null);
+    setPendingPlan(undefined);
   };
 
   return (
     <div className="tw:flex tw:items-center tw:gap-2">
-      <label className="tw:text-sm tw:text-muted-foreground">Based on:</label>
+      <span className="tw:text-sm tw:text-muted-foreground">Based on:</span>
       <Select value={value} onValueChange={handleChange}>
-        <SelectTrigger className="tw:w-80">
+        <SelectTrigger aria-label="Based on" className="tw:w-80">
           <SelectValue placeholder="Select a plan template" />
         </SelectTrigger>
         <SelectContent className="tw:z-600">
@@ -101,7 +101,10 @@ export function OrgPlanPicker({
         </SelectContent>
       </Select>
 
-      <Dialog open={pendingPlan !== null} onOpenChange={(o) => !o && setPendingPlan(null)}>
+      <Dialog
+        open={pendingPlan !== undefined}
+        onOpenChange={(o) => !o && setPendingPlan(undefined)}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Replace plan?</DialogTitle>
@@ -112,7 +115,7 @@ export function OrgPlanPicker({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPendingPlan(null)}>
+            <Button variant="outline" onClick={() => setPendingPlan(undefined)}>
               Cancel
             </Button>
             <Button onClick={confirmReplace}>Replace plan</Button>

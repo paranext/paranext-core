@@ -58,7 +58,7 @@ export function ProjectPlanDialog({
     }
   }, [open, plan]);
 
-  const stages = workingPlan.stages;
+  const { stages } = workingPlan;
 
   const updateStages = (updater: (prev: PlanStage[]) => PlanStage[]) => {
     setWorkingPlan((prev) => ({ ...prev, stages: updater(prev.stages) }));
@@ -78,13 +78,11 @@ export function ProjectPlanDialog({
       checks: structuredClone(selected.checks),
     });
     const first = selected.stages[0];
-    setSelection(
-      first?.tasks[0]
-        ? { stageId: first.id, taskId: first.tasks[0].id }
-        : first
-          ? { stageId: first.id }
-          : {},
-    );
+    const firstTask = first?.tasks[0];
+    let nextSelection: Selection = {};
+    if (firstTask && first) nextSelection = { stageId: first.id, taskId: firstTask.id };
+    else if (first) nextSelection = { stageId: first.id };
+    setSelection(nextSelection);
   };
 
   const handleStageOrTaskSelect = (next: Selection) => setSelection(next);
@@ -135,7 +133,9 @@ export function ProjectPlanDialog({
 
         <Tabs
           value={activeTab}
-          onValueChange={(v) => setActiveTab(v as 'stages-tasks' | 'checks')}
+          onValueChange={(v) => {
+            if (v === 'stages-tasks' || v === 'checks') setActiveTab(v);
+          }}
           className="tw:flex tw:flex-1 tw:flex-col tw:overflow-hidden"
         >
           <TabsList className="tw:mx-4 tw:mt-3 tw:w-fit">

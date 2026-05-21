@@ -108,7 +108,9 @@ export function ProjectPlanDialogHierarchical({
 
         <Tabs
           value={activeTab}
-          onValueChange={(v) => setActiveTab(v as 'stages-tasks' | 'checks')}
+          onValueChange={(v) => {
+            if (v === 'stages-tasks' || v === 'checks') setActiveTab(v);
+          }}
           className="tw:flex tw:flex-1 tw:flex-col tw:overflow-hidden"
         >
           <TabsList className="tw:mx-4 tw:mt-3 tw:w-fit">

@@ -48,7 +48,7 @@ function Harness({
             stages: plan.stages.length,
             checks: plan.checks.length,
           },
-          null,
+          undefined,
           2,
         )}
       </pre>
@@ -59,11 +59,13 @@ function Harness({
         plan={plan}
         orgProvidedPlans={SAMPLE_ORG_PLANS}
         onSubmit={(p) => {
+          // Storybook harness logs the submitted plan so reviewers can inspect it in the addon panel.
           // eslint-disable-next-line no-console
           console.log('onSubmit', p);
           setPlan(p);
         }}
         onCancel={() => {
+          // Storybook harness logs the cancel event for parity with onSubmit.
           // eslint-disable-next-line no-console
           console.log('onCancel');
         }}

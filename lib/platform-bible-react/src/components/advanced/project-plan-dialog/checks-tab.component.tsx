@@ -89,10 +89,7 @@ export function ChecksTab({ stages, checks, onChecksChange }: ChecksTabProps) {
     if (existing) {
       onChecksChange(checks.map((c) => (c.checkId === checkId ? { ...c, ...patch } : c)));
     } else {
-      onChecksChange([
-        ...checks,
-        { checkId, notifyOnlyInStage: null, requiredInStage: null, ...patch },
-      ]);
+      onChecksChange([...checks, { checkId, ...patch }]);
     }
   };
 
@@ -128,12 +125,12 @@ export function ChecksTab({ stages, checks, onChecksChange }: ChecksTabProps) {
                   <div className="tw:text-sm">{item.name}</div>
                   <StageSelect
                     stages={stages}
-                    value={setting?.notifyOnlyInStage ?? null}
+                    value={setting?.notifyOnlyInStage}
                     onChange={(v) => updateCheck(item.id, { notifyOnlyInStage: v })}
                   />
                   <StageSelect
                     stages={stages}
-                    value={setting?.requiredInStage ?? null}
+                    value={setting?.requiredInStage}
                     onChange={(v) => updateCheck(item.id, { requiredInStage: v })}
                   />
                 </div>
@@ -152,13 +149,13 @@ function StageSelect({
   onChange,
 }: {
   stages: PlanStage[];
-  value: StageId | null;
-  onChange: (next: StageId | null) => void;
+  value: StageId | undefined;
+  onChange: (next: StageId | undefined) => void;
 }) {
   return (
     <Select
       value={value ?? NONE_VALUE}
-      onValueChange={(v) => onChange(v === NONE_VALUE ? null : v)}
+      onValueChange={(v) => onChange(v === NONE_VALUE ? undefined : v)}
     >
       <SelectTrigger>
         <SelectValue />

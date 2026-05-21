@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type DragEvent as ReactDragEvent, type ReactNode } from 'react';
 import {
   ChevronDown,
   ChevronRight,
@@ -87,6 +87,13 @@ const requiresEditingOptions: { value: RequiresEditingMode; label: string }[] = 
   { value: 'scripture-text', label: 'Scripture Text' },
 ];
 
+const isMarkCompleteMode = (v: string): v is MarkCompleteMode =>
+  markCompleteOptions.some((o) => o.value === v);
+const isTaskStartCondition = (v: string): v is TaskStartCondition =>
+  taskStartOptions.some((o) => o.value === v);
+const isRequiresEditingMode = (v: string): v is RequiresEditingMode =>
+  requiresEditingOptions.some((o) => o.value === v);
+
 export function HierarchicalStagesTasks({
   stages,
   onStagesChange,
@@ -94,29 +101,28 @@ export function HierarchicalStagesTasks({
   onTaskChange,
 }: HierarchicalStagesTasksProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [dragSrc, setDragSrc] = useState<number | null>(null);
-  const [dragOver, setDragOver] = useState<number | null>(null);
-  const [taskDragSrc, setTaskDragSrc] = useState<{ stageIdx: number; taskIdx: number } | null>(
-    null,
+  const [dragSrc, setDragSrc] = useState<number | undefined>(undefined);
+  const [dragOver, setDragOver] = useState<number | undefined>(undefined);
+  const [taskDragSrc, setTaskDragSrc] = useState<{ stageIdx: number; taskIdx: number } | undefined>(
+    undefined,
   );
-  const [taskDragOver, setTaskDragOver] = useState<{
-    stageIdx: number;
-    taskIdx: number;
-  } | null>(null);
+  const [taskDragOver, setTaskDragOver] = useState<
+    { stageIdx: number; taskIdx: number } | undefined
+  >(undefined);
 
   const toggle = (id: string) => setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const taskDragHandlers = (stageIdx: number, taskIdx: number, taskId: string) => ({
     draggable: true,
-    onDragStart: (e: React.DragEvent) => {
+    onDragStart: (e: ReactDragEvent) => {
       e.stopPropagation();
       setTaskDragSrc({ stageIdx, taskIdx });
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', taskId);
     },
-    onDragOver: (e: React.DragEvent) => {
+    onDragOver: (e: ReactDragEvent) => {
       if (
-        taskDragSrc !== null &&
+        taskDragSrc !== undefined &&
         !(taskDragSrc.stageIdx === stageIdx && taskDragSrc.taskIdx === taskIdx)
       ) {
         e.preventDefault();
@@ -129,14 +135,14 @@ export function HierarchicalStagesTasks({
     },
     onDragLeave: () => {
       if (taskDragOver?.stageIdx === stageIdx && taskDragOver?.taskIdx === taskIdx) {
-        setTaskDragOver(null);
+        setTaskDragOver(undefined);
       }
     },
-    onDrop: (e: React.DragEvent) => {
+    onDrop: (e: ReactDragEvent) => {
       e.preventDefault();
       e.stopPropagation();
       if (
-        taskDragSrc !== null &&
+        taskDragSrc !== undefined &&
         !(taskDragSrc.stageIdx === stageIdx && taskDragSrc.taskIdx === taskIdx)
       ) {
         const from = taskDragSrc;
@@ -155,43 +161,43 @@ export function HierarchicalStagesTasks({
           return next;
         });
       }
-      setTaskDragSrc(null);
-      setTaskDragOver(null);
+      setTaskDragSrc(undefined);
+      setTaskDragOver(undefined);
     },
     onDragEnd: () => {
-      setTaskDragSrc(null);
-      setTaskDragOver(null);
+      setTaskDragSrc(undefined);
+      setTaskDragOver(undefined);
     },
   });
 
   const stageDragHandlers = (stageIndex: number, stageId: string) => ({
     draggable: true,
-    onDragStart: (e: React.DragEvent) => {
+    onDragStart: (e: ReactDragEvent) => {
       setDragSrc(stageIndex);
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', stageId);
     },
-    onDragOver: (e: React.DragEvent) => {
-      if (dragSrc !== null && dragSrc !== stageIndex) {
+    onDragOver: (e: ReactDragEvent) => {
+      if (dragSrc !== undefined && dragSrc !== stageIndex) {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
         if (dragOver !== stageIndex) setDragOver(stageIndex);
       }
     },
     onDragLeave: () => {
-      if (dragOver === stageIndex) setDragOver(null);
+      if (dragOver === stageIndex) setDragOver(undefined);
     },
-    onDrop: (e: React.DragEvent) => {
+    onDrop: (e: ReactDragEvent) => {
       e.preventDefault();
-      if (dragSrc !== null && dragSrc !== stageIndex) {
+      if (dragSrc !== undefined && dragSrc !== stageIndex) {
         onStagesChange((prev) => moveItem(prev, dragSrc, stageIndex));
       }
-      setDragSrc(null);
-      setDragOver(null);
+      setDragSrc(undefined);
+      setDragOver(undefined);
     },
     onDragEnd: () => {
-      setDragSrc(null);
-      setDragOver(null);
+      setDragSrc(undefined);
+      setDragOver(undefined);
     },
   });
 
@@ -249,11 +255,17 @@ export function HierarchicalStagesTasks({
             const stageOpen = !!expanded[stage.id];
             const isDragging = dragSrc === stageIndex;
             const isDropTarget =
-              dragOver === stageIndex && dragSrc !== null && dragSrc !== stageIndex;
+              dragOver === stageIndex && dragSrc !== undefined && dragSrc !== stageIndex;
+            const sh = stageDragHandlers(stageIndex, stage.id);
             return (
               <li
                 key={stage.id}
-                {...stageDragHandlers(stageIndex, stage.id)}
+                draggable={sh.draggable}
+                onDragStart={sh.onDragStart}
+                onDragOver={sh.onDragOver}
+                onDragLeave={sh.onDragLeave}
+                onDrop={sh.onDrop}
+                onDragEnd={sh.onDragEnd}
                 className={cn(
                   'tw:rounded tw:border',
                   isDragging && 'tw:opacity-50',
@@ -287,12 +299,18 @@ export function HierarchicalStagesTasks({
                     const taskIsDropTarget =
                       taskDragOver?.stageIdx === stageIndex &&
                       taskDragOver?.taskIdx === taskIndex &&
-                      taskDragSrc !== null &&
+                      taskDragSrc !== undefined &&
                       !(taskDragSrc.stageIdx === stageIndex && taskDragSrc.taskIdx === taskIndex);
+                    const th = taskDragHandlers(stageIndex, taskIndex, task.id);
                     return (
                       <li
                         key={task.id}
-                        {...taskDragHandlers(stageIndex, taskIndex, task.id)}
+                        draggable={th.draggable}
+                        onDragStart={th.onDragStart}
+                        onDragOver={th.onDragOver}
+                        onDragLeave={th.onDragLeave}
+                        onDrop={th.onDrop}
+                        onDragEnd={th.onDragEnd}
                         className={cn(
                           'tw:rounded tw:border',
                           taskIsDragging && 'tw:opacity-50',
@@ -358,7 +376,7 @@ interface RowHeaderProps {
   upDisabled: boolean;
   downDisabled: boolean;
   onDelete: () => void;
-  rightExtras?: React.ReactNode;
+  rightExtras?: ReactNode;
 }
 
 function RowHeader({
@@ -428,7 +446,7 @@ function RowIconButton({
   label: string;
   onClick: () => void;
   disabled?: boolean;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <button
@@ -512,7 +530,9 @@ function TaskInlineForm({
       <Field label="Mark task as complete">
         <Select
           value={task.markComplete}
-          onValueChange={(v) => onChange({ ...task, markComplete: v as MarkCompleteMode })}
+          onValueChange={(v) => {
+            if (isMarkCompleteMode(v)) onChange({ ...task, markComplete: v });
+          }}
         >
           <SelectTrigger>
             <SelectValue />
@@ -529,7 +549,9 @@ function TaskInlineForm({
       <Field label="When can this task start?">
         <Select
           value={task.taskStart}
-          onValueChange={(v) => onChange({ ...task, taskStart: v as TaskStartCondition })}
+          onValueChange={(v) => {
+            if (isTaskStartCondition(v)) onChange({ ...task, taskStart: v });
+          }}
         >
           <SelectTrigger>
             <SelectValue />
@@ -546,7 +568,9 @@ function TaskInlineForm({
       <Field label="Requires editing">
         <Select
           value={task.requiresEditing}
-          onValueChange={(v) => onChange({ ...task, requiresEditing: v as RequiresEditingMode })}
+          onValueChange={(v) => {
+            if (isRequiresEditingMode(v)) onChange({ ...task, requiresEditing: v });
+          }}
         >
           <SelectTrigger>
             <SelectValue />
@@ -629,7 +653,7 @@ function EffortPopover({ task, onChange }: { task: PlanTask; onChange: (next: Pl
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="tw:flex tw:flex-col tw:gap-1">
       <Label className="tw:text-xs tw:text-muted-foreground">{label}</Label>
