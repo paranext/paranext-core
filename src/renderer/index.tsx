@@ -85,16 +85,23 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
 (async () => {
   try {
     // The network service has to start first, and it uses the shared store after initialization
+    logger.debug('renderer startup: initializing network service');
     await networkService.initialize();
+    logger.debug('renderer startup: network service initialized');
     await initializeSharedStoreService(networkService);
+    logger.debug('renderer startup: shared store service initialized');
 
     // This needs to run before web views start running and after the network service is running
     blockWebSocketsToPapiNetwork();
+    logger.debug('renderer startup: WebSockets to PAPI network blocked');
 
     // This needs to run before the web view service host starts running and blocks us from creating
     // an iframe for the Usersnap feedback forms
+    logger.debug('renderer startup: initializing Usersnap API');
     await initializeUsersnapApi();
+    logger.debug('renderer startup: Usersnap API initialized');
 
+    logger.debug('renderer startup: starting core services');
     await runPromisesAndThrowIfRejected(
       webViewProviderService.initialize(),
       startWebViewService(),
@@ -105,6 +112,7 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
       initializeThemeService(),
       initializeWindowService(),
     );
+    logger.debug('renderer startup: all core services started');
 
     // Subscribe to updates to the current theme
     await localThemeService.subscribeCurrentTheme(undefined, (newTheme) => {
