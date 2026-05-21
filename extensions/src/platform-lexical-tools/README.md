@@ -4,6 +4,25 @@
 
 Lexical tools integration with Platform.Bible
 
+## Lexical database downloads (forks)
+
+At `npm install` time, this extension's `postinstall` script downloads a prebuilt lexical
+database from `https://github.com/<your-org>/dependencies` (branch `main`, subdirectory
+`lexical-db/`). The download is:
+
+- **Strict** when the detected GitHub org is `paranext`. Missing files (HTTP 404) fail
+  `npm install` — the canonical org is expected to publish the DB.
+- **Lenient** for every other org (including forks). Missing files are logged and skipped,
+  so a fork without its own `dependencies` repo can still install successfully. The
+  extension activates and the Dictionary opens — it just shows no entries until a DB is
+  provided.
+
+Network errors that aren't 404 (e.g. DNS failure, connection refused) still fail in both
+modes — "expected missing" is the only condition treated leniently.
+
+To publish your own DB for a fork, create a `dependencies` repo in your org with
+`lexical-db/lexical.db.xz` and `lexical-db/lexical.db.xz.sha256` on the `main` branch.
+
 <!-- Opening comment tag for Template Info Section. Ignore this for now. More info in [Hide Template Info](#hide-template-info).
 
 ## Template Info

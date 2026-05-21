@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseGitHubOrgFromRemoteUrl } from '../lib/download-db';
+import { parseGitHubOrgFromRemoteUrl } from './download-db';
 
 describe('parseGitHubOrgFromRemoteUrl', () => {
   it('parses HTTPS URL with .git suffix (paranext)', () => {
@@ -36,6 +36,32 @@ describe('parseGitHubOrgFromRemoteUrl', () => {
     expect(parseGitHubOrgFromRemoteUrl('git@github.com:paranext/paranext-core')).toEqual({
       org: 'paranext',
     });
+  });
+
+  it('parses HTTPS URL with embedded credentials (user@)', () => {
+    expect(
+      parseGitHubOrgFromRemoteUrl('https://tjcouch-sil@github.com/paranext/paranext-core.git'),
+    ).toEqual({ org: 'paranext' });
+  });
+
+  it('parses HTTPS URL with embedded credentials (user:token@)', () => {
+    expect(
+      parseGitHubOrgFromRemoteUrl(
+        'https://tjcouch-sil:ghp_secret@github.com/paranext/paranext-core.git',
+      ),
+    ).toEqual({ org: 'paranext' });
+  });
+
+  it('parses SSH URL form (ssh://git@github.com/...)', () => {
+    expect(parseGitHubOrgFromRemoteUrl('ssh://git@github.com/paranext/paranext-core.git')).toEqual({
+      org: 'paranext',
+    });
+  });
+
+  it('parses SSH URL form with explicit port', () => {
+    expect(
+      parseGitHubOrgFromRemoteUrl('ssh://git@github.com:22/paranext/paranext-core.git'),
+    ).toEqual({ org: 'paranext' });
   });
 
   it('returns undefined with reason for non-github host', () => {

@@ -6,11 +6,26 @@ import crypto from 'crypto';
 import { XzReadableStream } from 'xz-decompress';
 
 // Configuration
-// GitHub repository: https://github.com/paranext/dependencies
+// GitHub repository: https://github.com/paranext/dependencies (or any fork's equivalent)
 const DB_FILENAME = 'lexical.db.xz';
 const CHECKSUM_FILENAME = 'lexical.db.xz.sha256';
 const LOCAL_DB_DIR = path.join(__dirname, '..', 'assets', 'lexical-db');
 const LOCAL_DB_PATH = path.join(LOCAL_DB_DIR, DB_FILENAME);
+
+/**
+ * GitHub org whose missing dependency files cause a hard failure ("strict mode"). Any other org
+ * runs in lenient mode — see {@link runDownload}.
+ */
+const STRICT_ORG = 'paranext';
+
+/** Name of the repository under `<org>` where the lexical DB lives. */
+const DEPENDENCIES_REPO = 'dependencies';
+
+/** Branch within {@link DEPENDENCIES_REPO} the DB is fetched from. */
+const DEPENDENCIES_BRANCH = 'main';
+
+/** Subdirectory within {@link DEPENDENCIES_REPO} that holds the DB and checksum files. */
+const DEPENDENCIES_SUBDIR = 'lexical-db';
 
 /** Result of attempting to detect the GitHub organization. */
 export type OrgDetectionResult = { org: string } | { org: undefined; reason: string };
@@ -20,8 +35,9 @@ export type OrgDetectionResult = { org: string } | { org: undefined; reason: str
  *
  * Recognizes:
  *
- * - https://github.com/<org>/<repo>[.git][/]
- * - Git@github.com:<org>/<repo>[.git][/]
+ * - `https://github.com/<org>/<repo>[.git][/]` (optionally with `user:token@` embedded credentials)
+ * - `git@github.com:<org>/<repo>[.git][/]` (SSH short form)
+ * - `ssh://git@github.com[:port]/<org>/<repo>[.git][/]` (SSH URL form)
  *
  * Returns `{ org }` on success, or `{ org: undefined, reason }` describing why parsing failed
  * (empty input, unrecognized host, etc.).
@@ -32,11 +48,21 @@ export function parseGitHubOrgFromRemoteUrl(url: string): OrgDetectionResult {
     return { org: undefined, reason: 'origin remote URL was empty' };
   }
 
-  const httpsMatch = trimmed.match(/^https?:\/\/github\.com\/([^/]+)\/[^/]+?(?:\.git)?\/?$/);
+  // HTTPS, optionally with `user@` or `user:token@` credentials before the host
+  const httpsMatch = trimmed.match(
+    /^https?:\/\/(?:[^@/]+@)?github\.com\/([^/]+)\/[^/]+?(?:\.git)?\/?$/,
+  );
   if (httpsMatch) return { org: httpsMatch[1] };
 
-  const sshMatch = trimmed.match(/^git@github\.com:([^/]+)\/[^/]+?(?:\.git)?\/?$/);
-  if (sshMatch) return { org: sshMatch[1] };
+  // SSH short form: `git@github.com:org/repo`
+  const sshShortMatch = trimmed.match(/^git@github\.com:([^/]+)\/[^/]+?(?:\.git)?\/?$/);
+  if (sshShortMatch) return { org: sshShortMatch[1] };
+
+  // SSH URL form: `ssh://git@github.com[:port]/org/repo`
+  const sshUrlMatch = trimmed.match(
+    /^ssh:\/\/git@github\.com(?::\d+)?\/([^/]+)\/[^/]+?(?:\.git)?\/?$/,
+  );
+  if (sshUrlMatch) return { org: sshUrlMatch[1] };
 
   return {
     org: undefined,
@@ -56,16 +82,35 @@ export class FileNotFoundError extends Error {
 }
 
 /**
+ * Function that runs a git command and returns its stdout. Extracted so `detectGitHubOrg` can be
+ * tested without shelling out for real.
+ */
+export type ExecGitCmd = (cmd: string, cwd: string) => string;
+
+/**
+ * Default {@link ExecGitCmd} implementation: shells out via `execSync` with a hard timeout, stdin
+ * ignored (so a misconfigured credential helper waiting on a TTY can't hang `npm install`), and
+ * stderr piped (captured but not printed) so noisy git errors don't pollute the postinstall log
+ * before the catch handler converts them to a clean reason string.
+ */
+const defaultExecGitCmd: ExecGitCmd = (cmd, cwd) =>
+  execSync(cmd, {
+    cwd,
+    encoding: 'utf-8',
+    timeout: 5000,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+/**
  * Shell out to `git config --get remote.origin.url` and parse the result. Returns `{ org:
  * undefined, reason }` if git is unavailable, the directory is not a git repo, or `origin` is
  * unset.
+ *
+ * @param execGitCmd Optional override for the underlying exec call — tests inject a fake.
  */
-export function detectGitHubOrg(): OrgDetectionResult {
+export function detectGitHubOrg(execGitCmd: ExecGitCmd = defaultExecGitCmd): OrgDetectionResult {
   try {
-    const stdout = execSync('git config --get remote.origin.url', {
-      cwd: __dirname,
-      encoding: 'utf-8',
-    });
+    const stdout = execGitCmd('git config --get remote.origin.url', __dirname);
     return parseGitHubOrgFromRemoteUrl(stdout);
   } catch (error) {
     return {
@@ -313,9 +358,10 @@ export interface RunDownloadOptions {
 
 /**
  * Orchestrates lexical DB download: discover org → compute URLs → fetch checksum → skip/download →
- * verify → extract. Applies strict-vs-lenient policy: when the detected org is exactly `paranext`,
- * missing files (HTTP 404) hard-fail; otherwise they are logged and skipped so non-paranext orgs
- * (or unparseable origins) don't break `npm install`.
+ * verify → extract. Applies strict-vs-lenient policy: when the detected org is exactly
+ * {@link STRICT_ORG}, missing files (HTTP 404) hard-fail; otherwise they are logged and skipped so
+ * forks (or unparseable origins) don't break `npm install`. See the README section "Lexical
+ * database downloads (forks)" for the contract.
  */
 export async function runDownload(opts: RunDownloadOptions, deps: DownloadDeps): Promise<void> {
   const { detection, localDbDir, localDbPath, dbFilename, checksumFilename } = opts;
@@ -327,10 +373,10 @@ export async function runDownload(opts: RunDownloadOptions, deps: DownloadDeps):
     return;
   }
 
-  const isStrict = detection.org === 'paranext';
+  const isStrict = detection.org === STRICT_ORG;
   if (isStrict) {
     deps.log(
-      `Detected GitHub org "paranext" from origin remote — running in strict mode (missing files will error)`,
+      `Detected GitHub org "${STRICT_ORG}" from origin remote — running in strict mode (missing files will error)`,
     );
   } else {
     deps.log(
@@ -338,8 +384,9 @@ export async function runDownload(opts: RunDownloadOptions, deps: DownloadDeps):
     );
   }
 
-  const rawBaseUrl = `https://raw.githubusercontent.com/${detection.org}/dependencies/main/lexical-db`;
-  const mediaBaseUrl = `https://media.githubusercontent.com/media/${detection.org}/dependencies/main/lexical-db`;
+  const repoPath = `${detection.org}/${DEPENDENCIES_REPO}/${DEPENDENCIES_BRANCH}/${DEPENDENCIES_SUBDIR}`;
+  const rawBaseUrl = `https://raw.githubusercontent.com/${repoPath}`;
+  const mediaBaseUrl = `https://media.githubusercontent.com/media/${repoPath}`;
 
   deps.ensureDir(localDbDir);
 
@@ -396,9 +443,10 @@ export async function runDownload(opts: RunDownloadOptions, deps: DownloadDeps):
   } catch (error) {
     if (error instanceof FileNotFoundError) {
       if (isStrict) throw error;
-      // Use log (not warn) because a 404 on a fork is the documented, expected outcome:
-      // the fork hasn't published their own lexical DB. Detection failure (no origin / no git)
-      // uses warn because that situation is unexpected and warrants attention.
+      // Use log (not warn) because a 404 on a fork is an expected outcome — the fork hasn't
+      // published their own lexical DB. Detection failure (no origin / no git) uses warn because
+      // that situation is unexpected and warrants attention. See the README section "Lexical
+      // database downloads (forks)" for the user-facing contract.
       deps.log(
         `Lexical database files not found at ${error.url} — extension will run without lexical data.`,
       );

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { runDownload, FileNotFoundError, type OrgDetectionResult } from '../lib/download-db';
+import { runDownload, FileNotFoundError, type OrgDetectionResult } from './download-db';
 
 type Deps = Parameters<typeof runDownload>[1];
 
