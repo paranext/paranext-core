@@ -59,9 +59,9 @@ const config: StorybookConfig = {
         preserveSymlinks: true,
       },
       optimizeDeps: {
-        include: ['quill-delta', 'react-dom', 'react-dom/client'],
+        include: ['quill-delta', 'react-dom', 'react-dom/client', '@babel/standalone'],
         exclude: ['@eten-tech-foundation/platform-editor'],
-        needsInterop: ['quill-delta'],
+        needsInterop: ['quill-delta', '@babel/standalone'],
       },
     }),
 };
