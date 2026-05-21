@@ -39,6 +39,12 @@ export type {
   SortDirection,
   TableContents,
 } from './components/advanced/data-table/data-table.component';
+export {
+  default as ProjectSelector,
+  type ProjectSelectorProject,
+  type ProjectSelectorOpenTab,
+  type ProjectSelectorProjectPair,
+} from './components/advanced/project-selector/project-selector.component';
 export { default as MarkdownRenderer } from './components/advanced/extension-marketplace/markdown-renderer.component';
 export {
   ErrorPopover,
@@ -129,7 +135,10 @@ export type {
 } from './components/advanced/scripture-results-viewer/scripture-results-viewer.component';
 export { default as ScopeSelector } from './components/advanced/scope-selector/scope-selector.component';
 export { SCOPE_SELECTOR_STRING_KEYS } from './components/advanced/scope-selector/scope-selector.component';
-export type { ScopeSelectorLocalizedStrings } from './components/advanced/scope-selector/scope-selector.component';
+export type {
+  ScopeSelectorLocalizedStrings,
+  ScopeSelectorVariant,
+} from './components/advanced/scope-selector/scope-selector.component';
 export {
   default as ScrollGroupSelector,
   type ScrollGroupSelectorProps,
@@ -256,7 +265,7 @@ export {
   TooltipProvider,
   TooltipTrigger,
 } from './components/shadcn-ui/tooltip';
-export type { Scope } from './components/utils/scripture.util';
+export type { Scope, ScopeWithRange } from './components/utils/scripture.util';
 
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';

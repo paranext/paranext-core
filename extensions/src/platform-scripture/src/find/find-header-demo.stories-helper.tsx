@@ -20,6 +20,7 @@ import {
   RecentSearches,
   Scope,
   ScopeSelector,
+  ScopeWithRange,
   SCOPE_SELECTOR_STRING_KEYS,
   Spinner,
   ToggleGroup,
@@ -343,7 +344,13 @@ export function FindHeaderDemo() {
             <ScopeSelector
               scope={scope}
               availableScopes={['chapter', 'book', 'selectedBooks']}
-              onScopeChange={setScope}
+              // See find.web-view.tsx: ScopeSelector's onScopeChange takes the wider
+              // ScopeWithRange. The find demo never enables `'range'`, so this wrapper
+              // guards that contract before forwarding to the narrow `setScope` setter.
+              onScopeChange={(newScope: ScopeWithRange) => {
+                if (newScope === 'range') return;
+                setScope(newScope);
+              }}
               selectedBookIds={selectedBookIds}
               onSelectedBookIdsChange={setSelectedBookIds}
               localizedStrings={scopeSelectorLocalizedStrings}

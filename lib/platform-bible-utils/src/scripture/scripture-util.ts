@@ -325,6 +325,42 @@ export function getLocalizeKeyForScrollGroupId(
 }
 
 /**
+ * Default English localizations for scroll group ids: `'Ø'` for `undefined` and `'A'`–`'Z'` for ids
+ * 0–25. Keyed by {@link getLocalizeKeyForScrollGroupId}. Used as the fallback map for
+ * scroll-group-aware UI (selectors, badges, chips) before user-supplied localized strings load and
+ * as a stable lookup table for code that only needs the letter representation.
+ */
+export const DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS = {
+  [getLocalizeKeyForScrollGroupId('undefined')]: 'Ø',
+  [getLocalizeKeyForScrollGroupId(0)]: 'A',
+  [getLocalizeKeyForScrollGroupId(1)]: 'B',
+  [getLocalizeKeyForScrollGroupId(2)]: 'C',
+  [getLocalizeKeyForScrollGroupId(3)]: 'D',
+  [getLocalizeKeyForScrollGroupId(4)]: 'E',
+  [getLocalizeKeyForScrollGroupId(5)]: 'F',
+  [getLocalizeKeyForScrollGroupId(6)]: 'G',
+  [getLocalizeKeyForScrollGroupId(7)]: 'H',
+  [getLocalizeKeyForScrollGroupId(8)]: 'I',
+  [getLocalizeKeyForScrollGroupId(9)]: 'J',
+  [getLocalizeKeyForScrollGroupId(10)]: 'K',
+  [getLocalizeKeyForScrollGroupId(11)]: 'L',
+  [getLocalizeKeyForScrollGroupId(12)]: 'M',
+  [getLocalizeKeyForScrollGroupId(13)]: 'N',
+  [getLocalizeKeyForScrollGroupId(14)]: 'O',
+  [getLocalizeKeyForScrollGroupId(15)]: 'P',
+  [getLocalizeKeyForScrollGroupId(16)]: 'Q',
+  [getLocalizeKeyForScrollGroupId(17)]: 'R',
+  [getLocalizeKeyForScrollGroupId(18)]: 'S',
+  [getLocalizeKeyForScrollGroupId(19)]: 'T',
+  [getLocalizeKeyForScrollGroupId(20)]: 'U',
+  [getLocalizeKeyForScrollGroupId(21)]: 'V',
+  [getLocalizeKeyForScrollGroupId(22)]: 'W',
+  [getLocalizeKeyForScrollGroupId(23)]: 'X',
+  [getLocalizeKeyForScrollGroupId(24)]: 'Y',
+  [getLocalizeKeyForScrollGroupId(25)]: 'Z',
+};
+
+/**
  * Gets a list of localized string keys for provided scroll group Ids. Uses
  * {@link getLocalizeKeyForScrollGroupId} internally
  *
