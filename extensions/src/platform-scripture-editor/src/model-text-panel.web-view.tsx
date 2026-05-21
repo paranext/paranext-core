@@ -193,19 +193,26 @@ globalThis.webViewComponent = function ModelTextPanel({
           items: [newRef, ...existingItems],
         });
       } else {
-        const currentUserDblItems = (effectiveModelTexts?.items ?? [])
-          .filter((r) => r.source === 'user')
-          .filter(
-            (r): r is EffectiveResourceReference & DblResourceReference =>
-              r.type === 'dblResource' && r.id !== resource.dblEntryUid,
-          );
+        // Read the raw user list directly — do NOT filter effectiveModelTexts by source.
+        // Filtering by source drops user items that also appear in the admin list (tagged 'admin'),
+        // which would silently remove them if the admin later deletes their copy.
+        const rawUserList = await pdp?.getUserModelTexts();
+        const rawUserItems = rawUserList?.items ?? [];
         await pdp?.setUserModelTexts({
-          dataVersion: DEFAULT_LIST.dataVersion,
-          items: [newRef, ...currentUserDblItems],
+          dataVersion: rawUserList?.dataVersion ?? DEFAULT_LIST.dataVersion,
+          items: [
+            newRef,
+            ...rawUserItems.filter((item) => {
+              if (item.type !== 'dblResource') return true;
+              // DblResourceReference.id exists after .type check; ResourceReference union requires cast
+              // eslint-disable-next-line no-type-assertion/no-type-assertion
+              return (item as DblResourceReference).id !== resource.dblEntryUid;
+            }),
+          ],
         });
       }
     },
-    [adminModelTextsSetting, effectiveModelTexts, setAdminModelTexts, pdp],
+    [adminModelTextsSetting, setAdminModelTexts, pdp],
   );
 
   const showResourcePicker = useDialogCallback(
