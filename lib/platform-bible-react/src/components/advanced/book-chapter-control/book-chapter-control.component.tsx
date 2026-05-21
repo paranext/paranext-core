@@ -432,6 +432,12 @@ export function BookChapterControl({
       if (isListFocused && (isLetter || isDigit)) {
         event.preventDefault();
         event.stopPropagation();
+        // We're routing this character back into the input. Clear isListFocused synchronously
+        // (don't wait for the list's async onBlur to fire once the setTimeout focus below lands):
+        // otherwise there is a window where the input already owns the typed text but the list
+        // still "has focus", leaving the top-match row's focus ring visible and letting the next
+        // Space/Enter be captured by the list's submit handler instead of the input.
+        setIsListFocused(false);
         if (viewMode === 'chapters') {
           setViewMode('books');
           if (isDigit && selectedBookForChaptersView) {
@@ -453,6 +459,7 @@ export function BookChapterControl({
       // (Chapter-view Backspace is handled above by the broader "back to book list" rule.)
       if (isListFocused && viewMode === 'books' && event.key === 'Backspace') {
         event.preventDefault();
+        setIsListFocused(false);
         setInputValue((prev) => prev.slice(0, -1));
         commandInputRef.current?.focus();
         return;
@@ -774,7 +781,15 @@ export function BookChapterControl({
                   value={inputValue}
                   onValueChange={setInputValue}
                   onKeyDown={handleInputKeyDown}
-                  onFocus={() => setIsCommandListHidden(false)}
+                  onFocus={() => {
+                    setIsCommandListHidden(false);
+                    // The input owning DOM focus is definitive proof the list/grid does not.
+                    // Force isListFocused false here as a safety net so a stale "true" (e.g. left
+                    // over when focus returns to the input after list navigation) can never keep a
+                    // list item's focus ring visible or let the list's Space/Enter submit handlers
+                    // capture keys meant for the input. Exactly one element holds focus at a time.
+                    setIsListFocused(false);
+                  }}
                   className={recentSearches && recentSearches.length > 0 ? 'tw:pe-8!' : ''}
                 />
                 {recentSearches && recentSearches.length > 0 && (
