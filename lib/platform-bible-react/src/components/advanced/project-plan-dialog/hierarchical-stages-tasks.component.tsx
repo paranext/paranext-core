@@ -25,6 +25,10 @@ import {
 } from '@/components/shadcn-ui/select';
 import { Textarea } from '@/components/shadcn-ui/textarea';
 import { cn } from '@/utils/shadcn-ui/utils';
+import {
+  DEFAULT_LANG,
+  getLocalized,
+} from '@/components/advanced/project-plan-dialog/localized.utils';
 import type {
   MarkCompleteMode,
   PlanStage,
@@ -52,15 +56,15 @@ const moveItem = <T,>(arr: T[], from: number, to: number): T[] => {
 
 const makeStage = (): PlanStage => ({
   id: newId(),
-  name: 'New stage',
-  description: '',
+  names: { [DEFAULT_LANG]: 'New stage' },
+  descriptions: {},
   tasks: [],
 });
 
 const makeTask = (): PlanTask => ({
   id: newId(),
-  name: 'New task',
-  description: '',
+  names: { [DEFAULT_LANG]: 'New task' },
+  descriptions: {},
   markComplete: 'by-chapter',
   taskStart: 'after-previous-task-on-same-book',
   requiresEditing: 'no',
@@ -272,7 +276,7 @@ export function HierarchicalStagesTasks({
                   isStage
                   open={stageOpen}
                   onToggle={() => toggle(stage.id)}
-                  name={stage.name || '(unnamed stage)'}
+                  name={getLocalized(stage.names, DEFAULT_LANG) || '(unnamed stage)'}
                   subtitle={`${stage.tasks.length} task${stage.tasks.length === 1 ? '' : 's'}`}
                   onMoveUp={() => moveStage(stageIndex, -1)}
                   onMoveDown={() => moveStage(stageIndex, 1)}
@@ -312,7 +316,7 @@ export function HierarchicalStagesTasks({
                         <RowHeader
                           open={taskOpen}
                           onToggle={() => toggle(task.id)}
-                          name={task.name || '(unnamed task)'}
+                          name={getLocalized(task.names, DEFAULT_LANG) || '(unnamed task)'}
                           subtitle={summarizeTask(task)}
                           onMoveUp={() => moveTask(stageIndex, taskIndex, -1)}
                           onMoveDown={() => moveTask(stageIndex, taskIndex, 1)}
@@ -469,15 +473,22 @@ function StageInlineForm({
     <div className="tw:grid tw:grid-cols-1 tw:gap-3 tw:md:grid-cols-2">
       <Field label="Name">
         <Input
-          value={stage.name}
-          onChange={(e) => onChange({ ...stage, name: e.target.value })}
+          value={getLocalized(stage.names, DEFAULT_LANG)}
+          onChange={(e) =>
+            onChange({ ...stage, names: { ...stage.names, [DEFAULT_LANG]: e.target.value } })
+          }
         />
       </Field>
       <Field label="Description">
         <Textarea
           rows={2}
-          value={stage.description ?? ''}
-          onChange={(e) => onChange({ ...stage, description: e.target.value })}
+          value={getLocalized(stage.descriptions, DEFAULT_LANG)}
+          onChange={(e) =>
+            onChange({
+              ...stage,
+              descriptions: { ...stage.descriptions, [DEFAULT_LANG]: e.target.value },
+            })
+          }
         />
       </Field>
     </div>
@@ -494,13 +505,23 @@ function TaskInlineForm({
   return (
     <div className="tw:grid tw:grid-cols-1 tw:gap-3 tw:md:grid-cols-2">
       <Field label="Name">
-        <Input value={task.name} onChange={(e) => onChange({ ...task, name: e.target.value })} />
+        <Input
+          value={getLocalized(task.names, DEFAULT_LANG)}
+          onChange={(e) =>
+            onChange({ ...task, names: { ...task.names, [DEFAULT_LANG]: e.target.value } })
+          }
+        />
       </Field>
       <Field label="Description">
         <Textarea
           rows={2}
-          value={task.description ?? ''}
-          onChange={(e) => onChange({ ...task, description: e.target.value })}
+          value={getLocalized(task.descriptions, DEFAULT_LANG)}
+          onChange={(e) =>
+            onChange({
+              ...task,
+              descriptions: { ...task.descriptions, [DEFAULT_LANG]: e.target.value },
+            })
+          }
         />
       </Field>
       <Field label="Mark task as complete">

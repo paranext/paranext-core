@@ -1,6 +1,10 @@
 import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/shadcn-ui/button';
 import { cn } from '@/utils/shadcn-ui/utils';
+import {
+  DEFAULT_LANG,
+  getLocalized,
+} from '@/components/advanced/project-plan-dialog/localized.utils';
 import type {
   PlanStage,
   PlanTask,
@@ -26,15 +30,15 @@ const moveItem = <T,>(arr: T[], from: number, to: number): T[] => {
 
 const makeStage = (): PlanStage => ({
   id: newId(),
-  name: 'New stage',
-  description: '',
+  names: { [DEFAULT_LANG]: 'New stage' },
+  descriptions: {},
   tasks: [],
 });
 
 const makeTask = (): PlanTask => ({
   id: newId(),
-  name: 'New task',
-  description: '',
+  names: { [DEFAULT_LANG]: 'New task' },
+  descriptions: {},
   markComplete: 'by-chapter',
   taskStart: 'after-previous-task-on-same-book',
   requiresEditing: 'no',
@@ -115,7 +119,7 @@ export function StagesTasksList({
                 <Row
                   selected={stageSelected}
                   onClick={() => onSelectionChange({ stageId: stage.id })}
-                  label={stage.name || '(unnamed stage)'}
+                  label={getLocalized(stage.names, DEFAULT_LANG) || '(unnamed stage)'}
                   bold
                 >
                   <RowAction
@@ -147,7 +151,7 @@ export function StagesTasksList({
                           onClick={() =>
                             onSelectionChange({ stageId: stage.id, taskId: task.id })
                           }
-                          label={task.name || '(unnamed task)'}
+                          label={getLocalized(task.names, DEFAULT_LANG) || '(unnamed task)'}
                         >
                           <RowAction
                             label="Move task up"

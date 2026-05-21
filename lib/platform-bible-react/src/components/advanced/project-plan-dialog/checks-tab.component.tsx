@@ -5,6 +5,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/shadcn-ui/select';
+import {
+  DEFAULT_LANG,
+  getLocalized,
+} from '@/components/advanced/project-plan-dialog/localized.utils';
 import type {
   CheckGroup,
   CheckSetting,
@@ -161,7 +165,7 @@ function StageSelect({
         <SelectItem value={NONE_VALUE}>—</SelectItem>
         {stages.map((s) => (
           <SelectItem key={s.id} value={s.id}>
-            {s.name || '(unnamed stage)'}
+            {getLocalized(s.names, DEFAULT_LANG) || '(unnamed stage)'}
           </SelectItem>
         ))}
       </SelectContent>

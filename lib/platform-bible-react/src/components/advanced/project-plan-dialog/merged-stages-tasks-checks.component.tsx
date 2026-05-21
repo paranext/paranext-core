@@ -27,6 +27,13 @@ import {
 import { Textarea } from '@/components/shadcn-ui/textarea';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { CHECK_GROUPS } from '@/components/advanced/project-plan-dialog/checks-tab.component';
+import {
+  DEFAULT_LANG,
+  getLocalized,
+  langDisplayName,
+  langsWithContent,
+  type LangCode,
+} from '@/components/advanced/project-plan-dialog/localized.utils';
 import type {
   CheckCatalogItem,
   CheckSetting,
@@ -40,6 +47,21 @@ import type {
 interface MergedStagesTasksChecksProps {
   stages: PlanStage[];
   checks: CheckSetting[];
+  /**
+   * Language being viewed/edited. Inline form inputs read and write THIS language's value.
+   * Row headers fall back through `previousLang` and `DEFAULT_LANG` when this language is empty.
+   */
+  displayLang: LangCode;
+  /**
+   * Language the user was viewing immediately before switching to `displayLang`. Used as the
+   * preferred source for reference text shown above each editable field.
+   */
+  previousLang?: LangCode;
+  /**
+   * When true, each Name/Description field shows a reference line, "Copy from <lang>" button,
+   * and translation-coverage chips. When false (default), only the editable input is rendered.
+   */
+  translateMode?: boolean;
   onStagesChange: (updater: (prev: PlanStage[]) => PlanStage[]) => void;
   onStageChange: (next: PlanStage) => void;
   onTaskChange: (next: PlanTask) => void;
@@ -56,17 +78,17 @@ const moveItem = <T,>(arr: T[], from: number, to: number): T[] => {
   return next;
 };
 
-const makeStage = (): PlanStage => ({
+const makeStage = (lang: LangCode): PlanStage => ({
   id: newId(),
-  name: 'New stage',
-  description: '',
+  names: { [lang]: 'New stage' },
+  descriptions: {},
   tasks: [],
 });
 
-const makeTask = (): PlanTask => ({
+const makeTask = (lang: LangCode): PlanTask => ({
   id: newId(),
-  name: 'New task',
-  description: '',
+  names: { [lang]: 'New task' },
+  descriptions: {},
   markComplete: 'by-chapter',
   taskStart: 'after-previous-task-on-same-book',
   requiresEditing: 'no',
@@ -100,6 +122,9 @@ const checkLabel = (id: string) => CATALOG_BY_ID.get(id)?.name ?? id;
 export function MergedStagesTasksChecks({
   stages,
   checks,
+  displayLang,
+  previousLang,
+  translateMode = false,
   onStagesChange,
   onStageChange,
   onTaskChange,
@@ -207,13 +232,13 @@ export function MergedStagesTasksChecks({
   });
 
   const addStageAtEnd = () => {
-    const stage = makeStage();
+    const stage = makeStage(displayLang);
     onStagesChange((prev) => [...prev, stage]);
     setExpanded((prev) => ({ ...prev, [stage.id]: true }));
   };
 
   const addTaskTo = (stageId: string) => {
-    const task = makeTask();
+    const task = makeTask(displayLang);
     onStagesChange((prev) =>
       prev.map((s) => (s.id === stageId ? { ...s, tasks: [...s.tasks, task] } : s)),
     );
@@ -287,7 +312,12 @@ export function MergedStagesTasksChecks({
                   isStage
                   open={stageOpen}
                   onToggle={() => toggle(stage.id)}
-                  name={stage.name || '(unnamed stage)'}
+                  name={
+                    getLocalized(stage.names, displayLang, [
+                      ...(previousLang ? [previousLang] : []),
+                      DEFAULT_LANG,
+                    ]) || '(unnamed stage)'
+                  }
                   subtitle={`${stage.tasks.length} task${stage.tasks.length === 1 ? '' : 's'} • ${requiredChecks.length} required check${requiredChecks.length === 1 ? '' : 's'}`}
                   onMoveUp={() => moveStage(stageIndex, -1)}
                   onMoveDown={() => moveStage(stageIndex, 1)}
@@ -298,7 +328,13 @@ export function MergedStagesTasksChecks({
 
                 {stageOpen && (
                   <div className="tw:flex tw:flex-col tw:gap-4 tw:border-t tw:p-3">
-                    <StageInlineForm stage={stage} onChange={onStageChange} />
+                    <StageInlineForm
+                      stage={stage}
+                      displayLang={displayLang}
+                      previousLang={previousLang}
+                      translateMode={translateMode}
+                      onChange={onStageChange}
+                    />
                     <StageChecks
                       stage={stage}
                       stages={stages}
@@ -335,7 +371,12 @@ export function MergedStagesTasksChecks({
                         <RowHeader
                           open={taskOpen}
                           onToggle={() => toggle(task.id)}
-                          name={task.name || '(unnamed task)'}
+                          name={
+                            getLocalized(task.names, displayLang, [
+                              ...(previousLang ? [previousLang] : []),
+                              DEFAULT_LANG,
+                            ]) || '(unnamed task)'
+                          }
                           subtitle={`Mark: ${markCompleteOptions.find((o) => o.value === task.markComplete)?.label ?? task.markComplete}`}
                           onMoveUp={() => moveTask(stageIndex, taskIndex, -1)}
                           onMoveDown={() => moveTask(stageIndex, taskIndex, 1)}
@@ -346,7 +387,13 @@ export function MergedStagesTasksChecks({
                         />
                         {taskOpen && (
                           <div className="tw:border-t tw:p-3">
-                            <TaskInlineForm task={task} onChange={onTaskChange} />
+                            <TaskInlineForm
+                              task={task}
+                              displayLang={displayLang}
+                              previousLang={previousLang}
+                              translateMode={translateMode}
+                              onChange={onTaskChange}
+                            />
                           </div>
                         )}
                       </li>
@@ -694,49 +741,83 @@ function RowIconButton({
 
 function StageInlineForm({
   stage,
+  displayLang,
+  previousLang,
+  translateMode,
   onChange,
 }: {
   stage: PlanStage;
+  displayLang: LangCode;
+  previousLang?: LangCode;
+  translateMode: boolean;
   onChange: (next: PlanStage) => void;
 }) {
   return (
     <div className="tw:grid tw:grid-cols-1 tw:gap-3 tw:md:grid-cols-2">
-      <Field label="Name">
-        <Input
-          value={stage.name}
-          onChange={(e) => onChange({ ...stage, name: e.target.value })}
-        />
-      </Field>
-      <Field label="Description">
-        <Textarea
-          rows={2}
-          value={stage.description ?? ''}
-          onChange={(e) => onChange({ ...stage, description: e.target.value })}
-        />
-      </Field>
+      <LocalizedField
+        label="Name"
+        map={stage.names}
+        displayLang={displayLang}
+        previousLang={previousLang}
+        translateMode={translateMode}
+        onChange={(value) =>
+          onChange({ ...stage, names: { ...stage.names, [displayLang]: value } })
+        }
+      />
+      <LocalizedField
+        label="Description"
+        multiline
+        map={stage.descriptions}
+        displayLang={displayLang}
+        previousLang={previousLang}
+        translateMode={translateMode}
+        onChange={(value) =>
+          onChange({
+            ...stage,
+            descriptions: { ...stage.descriptions, [displayLang]: value },
+          })
+        }
+      />
     </div>
   );
 }
 
 function TaskInlineForm({
   task,
+  displayLang,
+  previousLang,
+  translateMode,
   onChange,
 }: {
   task: PlanTask;
+  displayLang: LangCode;
+  previousLang?: LangCode;
+  translateMode: boolean;
   onChange: (next: PlanTask) => void;
 }) {
   return (
     <div className="tw:grid tw:grid-cols-1 tw:gap-3 tw:md:grid-cols-2">
-      <Field label="Name">
-        <Input value={task.name} onChange={(e) => onChange({ ...task, name: e.target.value })} />
-      </Field>
-      <Field label="Description">
-        <Textarea
-          rows={2}
-          value={task.description ?? ''}
-          onChange={(e) => onChange({ ...task, description: e.target.value })}
-        />
-      </Field>
+      <LocalizedField
+        label="Name"
+        map={task.names}
+        displayLang={displayLang}
+        previousLang={previousLang}
+        translateMode={translateMode}
+        onChange={(value) =>
+          onChange({ ...task, names: { ...task.names, [displayLang]: value } })
+        }
+      />
+      <LocalizedField
+        label="Description"
+        multiline
+        map={task.descriptions}
+        displayLang={displayLang}
+        previousLang={previousLang}
+        translateMode={translateMode}
+        onChange={(value) =>
+          onChange({ ...task, descriptions: { ...task.descriptions, [displayLang]: value } })
+        }
+      />
       <Field label="Mark task as complete">
         <Select
           value={task.markComplete}
@@ -868,6 +949,127 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div className="tw:flex tw:flex-col tw:gap-1">
       <Label className="tw:text-xs tw:text-muted-foreground">{label}</Label>
       {children}
+    </div>
+  );
+}
+
+function pickReferenceLang(
+  map: Record<string, string>,
+  displayLang: LangCode,
+  previousLang: LangCode | undefined,
+): LangCode | undefined {
+  if (previousLang && previousLang !== displayLang) {
+    const v = map[previousLang];
+    if (v && v.length > 0) return previousLang;
+  }
+  let best: LangCode | undefined;
+  for (const lang of Object.keys(map)) {
+    if (lang === displayLang) continue;
+    const v = map[lang];
+    if (!v || v.length === 0) continue;
+    if (!best || v.length > (map[best]?.length ?? 0)) best = lang;
+  }
+  return best;
+}
+
+function LocalizedField({
+  label,
+  map,
+  displayLang,
+  previousLang,
+  translateMode,
+  multiline,
+  onChange,
+}: {
+  label: string;
+  map: Record<string, string>;
+  displayLang: LangCode;
+  previousLang?: LangCode;
+  translateMode: boolean;
+  multiline?: boolean;
+  onChange: (value: string) => void;
+}) {
+  const value = map[displayLang] ?? '';
+  const refLang = useMemo(
+    () => (translateMode ? pickReferenceLang(map, displayLang, previousLang) : undefined),
+    [map, displayLang, previousLang, translateMode],
+  );
+  const refValue = refLang ? map[refLang] : undefined;
+  const covered = useMemo(() => langsWithContent(map), [map]);
+
+  return (
+    <div className="tw:flex tw:flex-col tw:gap-1">
+      <Label className="tw:text-xs tw:text-muted-foreground">
+        {label}
+        {translateMode && ` — editing ${langDisplayName(displayLang)}`}
+      </Label>
+      {translateMode &&
+        (refLang && refValue ? (
+          <div className="tw:flex tw:items-start tw:justify-between tw:gap-2 tw:rounded tw:bg-muted/40 tw:px-2 tw:py-1">
+            <div className="tw:flex tw:flex-1 tw:items-baseline tw:gap-1 tw:min-w-0">
+              <span className="tw:text-[10px] tw:font-semibold tw:uppercase tw:text-muted-foreground">
+                {refLang}:
+              </span>
+              <span className="tw:line-clamp-3 tw:text-xs tw:italic tw:text-muted-foreground">
+                {refValue}
+              </span>
+            </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="tw:h-6 tw:shrink-0 tw:text-xs"
+              onClick={() => onChange(refValue)}
+              title={`Copy ${langDisplayName(refLang)} text into ${langDisplayName(displayLang)}`}
+              type="button"
+            >
+              Copy from {refLang.toUpperCase()}
+            </Button>
+          </div>
+        ) : (
+          <div className="tw:rounded tw:bg-muted/40 tw:px-2 tw:py-1 tw:text-xs tw:italic tw:text-muted-foreground">
+            No other translation available as reference
+          </div>
+        ))}
+      {multiline ? (
+        <Textarea rows={3} value={value} onChange={(e) => onChange(e.target.value)} />
+      ) : (
+        <Input value={value} onChange={(e) => onChange(e.target.value)} />
+      )}
+      {translateMode && <CoverageChips covered={covered} displayLang={displayLang} />}
+    </div>
+  );
+}
+
+function CoverageChips({
+  covered,
+  displayLang,
+}: {
+  covered: LangCode[];
+  displayLang: LangCode;
+}) {
+  const all = covered.includes(displayLang) ? covered : [displayLang, ...covered];
+  return (
+    <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-1">
+      <span className="tw:text-[10px] tw:text-muted-foreground">Translations:</span>
+      {all.map((lang) => {
+        const hasContent = covered.includes(lang);
+        const isCurrent = lang === displayLang;
+        return (
+          <span
+            key={lang}
+            title={hasContent ? langDisplayName(lang) : `${langDisplayName(lang)} (empty)`}
+            className={cn(
+              'tw:rounded-full tw:border tw:px-1.5 tw:py-0 tw:text-[10px] tw:uppercase',
+              isCurrent && 'tw:border-primary tw:font-semibold',
+              hasContent
+                ? 'tw:bg-background tw:text-foreground'
+                : 'tw:bg-transparent tw:text-muted-foreground tw:border-dashed',
+            )}
+          >
+            {lang}
+          </span>
+        );
+      })}
     </div>
   );
 }

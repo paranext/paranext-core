@@ -25,8 +25,10 @@ export interface BookCountsByDifficulty {
 
 export interface PlanTask {
   id: string;
-  name: string;
-  description?: string;
+  /** Per-locale display names. Keys are BCP-47-ish lang codes (e.g. "en", "pt-BR", "zh-Hans"). */
+  names: Record<string, string>;
+  /** Per-locale descriptions. Same key convention as `names`. */
+  descriptions: Record<string, string>;
   markComplete: MarkCompleteMode;
   taskStart: TaskStartCondition;
   requiresEditing: RequiresEditingMode;
@@ -36,8 +38,10 @@ export interface PlanTask {
 
 export interface PlanStage {
   id: string;
-  name: string;
-  description?: string;
+  /** Per-locale display names. Keys are BCP-47-ish lang codes (e.g. "en", "pt-BR", "zh-Hans"). */
+  names: Record<string, string>;
+  /** Per-locale descriptions. Same key convention as `names`. */
+  descriptions: Record<string, string>;
   tasks: PlanTask[];
 }
 

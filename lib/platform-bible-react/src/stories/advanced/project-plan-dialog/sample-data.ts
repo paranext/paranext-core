@@ -12,8 +12,8 @@ const task = (
   overrides: Partial<PlanTask> = {},
 ): PlanTask => ({
   id,
-  name,
-  description: '',
+  names: { en: name },
+  descriptions: {},
   markComplete: 'by-chapter',
   taskStart: 'after-previous-task-on-same-book',
   requiresEditing: 'no',
@@ -24,8 +24,8 @@ const task = (
 
 const stage = (id: string, name: string, tasks: PlanTask[]): PlanStage => ({
   id,
-  name,
-  description: '',
+  names: { en: name },
+  descriptions: {},
   tasks,
 });
 

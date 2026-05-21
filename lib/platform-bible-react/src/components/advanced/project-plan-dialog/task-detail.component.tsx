@@ -10,6 +10,10 @@ import {
 } from '@/components/shadcn-ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shadcn-ui/tabs';
 import { Textarea } from '@/components/shadcn-ui/textarea';
+import {
+  DEFAULT_LANG,
+  getLocalized,
+} from '@/components/advanced/project-plan-dialog/localized.utils';
 import type {
   MarkCompleteMode,
   PlanStage,
@@ -57,9 +61,15 @@ export function TaskDetail({ stage, task, onStageChange, onTaskChange }: TaskDet
 
       <TabsContent value="basic" className="tw:flex tw:flex-col tw:gap-3">
         <NameAndDescription
-          name={task.name}
-          description={task.description ?? ''}
-          onChange={(name, description) => onTaskChange({ ...task, name, description })}
+          name={getLocalized(task.names, DEFAULT_LANG)}
+          description={getLocalized(task.descriptions, DEFAULT_LANG)}
+          onChange={(name, description) =>
+            onTaskChange({
+              ...task,
+              names: { ...task.names, [DEFAULT_LANG]: name },
+              descriptions: { ...task.descriptions, [DEFAULT_LANG]: description },
+            })
+          }
         />
 
         <FieldRow label="Mark task as complete">
@@ -166,9 +176,15 @@ function StageBasicEditor({
   return (
     <div className="tw:flex tw:flex-col tw:gap-3">
       <NameAndDescription
-        name={stage.name}
-        description={stage.description ?? ''}
-        onChange={(name, description) => onStageChange({ ...stage, name, description })}
+        name={getLocalized(stage.names, DEFAULT_LANG)}
+        description={getLocalized(stage.descriptions, DEFAULT_LANG)}
+        onChange={(name, description) =>
+          onStageChange({
+            ...stage,
+            names: { ...stage.names, [DEFAULT_LANG]: name },
+            descriptions: { ...stage.descriptions, [DEFAULT_LANG]: description },
+          })
+        }
       />
     </div>
   );
