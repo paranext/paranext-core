@@ -5,7 +5,10 @@ import { webViews } from '@renderer/services/papi-frontend.service';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
-import { EVENT_NAME_ON_DID_UPDATE_WEB_VIEW } from '@shared/services/web-view.service-model';
+import {
+  EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
+  EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
+} from '@shared/services/web-view.service-model';
 import { getErrorMessage } from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
 
@@ -36,6 +39,10 @@ export function useProjectPickerData(): ProjectPickerData {
   // Subscribe to web view updates to keep current project in sync
   const onDidUpdateWebView = useMemo(() => getNetworkEvent(EVENT_NAME_ON_DID_UPDATE_WEB_VIEW), []);
   useEvent(onDidUpdateWebView, refresh);
+
+  // Subscribe to web view closes to clear current project when editor is closed
+  const onDidCloseWebView = useMemo(() => getNetworkEvent(EVENT_NAME_ON_DID_CLOSE_WEB_VIEW), []);
+  useEvent(onDidCloseWebView, refresh);
 
   // Subscribe to extension reloads to refresh the project list
   const onDidReloadExtensions = useMemo(
