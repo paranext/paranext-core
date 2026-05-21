@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
+using Paranext.DataProvider.Scripture;
 
 namespace Paranext.DataProvider.Checklists;
 

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Paranext.DataProvider.Checklists;
 using Paranext.DataProvider.Checklists.Markers;
+using Paranext.DataProvider.Scripture;
 using Paratext.Data;
 using SIL.Scripture;
 

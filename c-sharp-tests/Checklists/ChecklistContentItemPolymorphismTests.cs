@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Text.Json;
 using Paranext.DataProvider.Checklists;
 using Paranext.DataProvider.JsonUtils;
+using Paranext.DataProvider.Scripture;
 using SIL.Scripture;
 
 namespace TestParanextDataProvider.Checklists;
