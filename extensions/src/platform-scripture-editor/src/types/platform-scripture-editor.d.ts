@@ -781,6 +781,21 @@ declare module 'papi-shared-types' {
      * @returns WebView id for the opened panel, or `undefined` if it could not be opened
      */
     'platformScriptureEditor.openModelText': (projectId?: string) => Promise<string | undefined>;
+    /**
+     * Opens the Bible Texts or Commentaries resource panel WebView for a project. If a panel of the
+     * requested type is already open, focuses it and updates its project; otherwise opens a new
+     * tab.
+     *
+     * @param resourceType 'ScriptureResource' for the Bible Texts tab, 'CommentaryResource' for the
+     *   Commentaries tab
+     * @param projectId The project ID to display resources for. If not provided, the panel opens
+     *   with whatever project was previously shown (or no project if it is new).
+     * @returns WebView id for the opened panel, or `undefined` if it could not be opened
+     */
+    'platformScriptureEditor.openResourceText': (
+      resourceType: 'ScriptureResource' | 'CommentaryResource',
+      projectId?: string,
+    ) => Promise<string | undefined>;
   }
 
   export interface DataProviders {

@@ -27,6 +27,8 @@ import platformScriptureEditorWebViewStyles from './platform-scripture-editor.we
 import platformScriptureEditorWebView from './platform-scripture-editor.web-view?inline';
 import modelTextPanelWebViewStyles from './model-text-panel.web-view.scss?inline';
 import modelTextPanelWebView from './model-text-panel.web-view?inline';
+import resourcePanelWebViewStyles from './resource-panel.web-view.scss?inline';
+import resourcePanelWebView from './resource-panel.web-view?inline';
 import {
   convertScriptureRangeToEditorRange,
   formatEditorTitle,
@@ -40,6 +42,8 @@ import { MarkersViewNotifier } from './markers-view-notifier.model';
 logger.debug('Scripture Editor is importing!');
 
 const MODEL_TEXT_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.modelText';
+const BIBLE_TEXTS_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.bibleTexts';
+const COMMENTARIES_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.commentaries';
 
 // #region Editor Selection Tracking
 
@@ -767,6 +771,86 @@ const modelTextPanelWebViewProvider: IWebViewProvider = {
   },
 };
 
+/**
+ * Pending projectIds to apply during the next resource panel getWebView call, keyed by web view
+ * type. A Map entry present (even with value `undefined`) means a reload is in progress and the
+ * pending value should be used. Absence means no pending value.
+ *
+ * Used to pass a new projectId through reloadWebView, which has no options for extra data.
+ */
+const resourcePanelPendingProjectIds = new Map<string, string | undefined>();
+
+/**
+ * Creates a resource panel web view provider that injects the given resourceType into web view
+ * state so the shared component can filter resources appropriately.
+ */
+function createResourcePanelProvider(
+  webViewType: string,
+  title: string,
+  resourceType: 'ScriptureResource' | 'CommentaryResource',
+): IWebViewProvider {
+  return {
+    async getWebView(
+      savedWebView: SavedWebViewDefinition,
+      openWebViewOptions: OpenWebViewOptions & { projectId?: string },
+    ): Promise<WebViewDefinition | undefined> {
+      if (savedWebView.webViewType !== webViewType)
+        throw new Error(
+          `${webViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
+        );
+      // Priority: pending (reload path) > options (new-panel path) > saved (existing panel reload)
+      const projectId = resourcePanelPendingProjectIds.has(webViewType)
+        ? resourcePanelPendingProjectIds.get(webViewType)
+        : (openWebViewOptions.projectId ?? savedWebView.projectId);
+      resourcePanelPendingProjectIds.delete(webViewType);
+      return {
+        ...savedWebView,
+        title,
+        projectId,
+        content: resourcePanelWebView,
+        styles: resourcePanelWebViewStyles,
+        state: {
+          ...savedWebView.state,
+          resourceType,
+        },
+      };
+    },
+  };
+}
+
+const bibleTextsPanelWebViewProvider: IWebViewProvider = createResourcePanelProvider(
+  BIBLE_TEXTS_PANEL_WEBVIEW_TYPE,
+  '%webView_resourcePanel_bibleTexts_title%',
+  'ScriptureResource',
+);
+
+const commentariesPanelWebViewProvider: IWebViewProvider = createResourcePanelProvider(
+  COMMENTARIES_PANEL_WEBVIEW_TYPE,
+  '%webView_resourcePanel_commentaries_title%',
+  'CommentaryResource',
+);
+
+async function openResourceText(
+  resourceType: 'ScriptureResource' | 'CommentaryResource',
+  projectId?: string,
+): Promise<string | undefined> {
+  const webViewType =
+    resourceType === 'ScriptureResource'
+      ? BIBLE_TEXTS_PANEL_WEBVIEW_TYPE
+      : COMMENTARIES_PANEL_WEBVIEW_TYPE;
+
+  const allOpenDefs = await papi.webViews.getAllOpenWebViewDefinitions();
+  const existingPanel = allOpenDefs.find((def) => def.webViewType === webViewType);
+
+  if (existingPanel) {
+    resourcePanelPendingProjectIds.set(webViewType, projectId);
+    return papi.webViews.reloadWebView(webViewType, existingPanel.id, { bringToFront: true });
+  }
+
+  const openOptions: OpenWebViewOptions & { projectId?: string } = { projectId };
+  return papi.webViews.openWebView(webViewType, { type: 'tab' }, openOptions);
+}
+
 export async function activate(context: ExecutionActivationContext): Promise<void> {
   logger.debug('Scripture editor is activating!');
 
@@ -977,6 +1061,46 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     modelTextPanelWebViewProvider,
   );
 
+  const bibleTextsPanelWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    BIBLE_TEXTS_PANEL_WEBVIEW_TYPE,
+    bibleTextsPanelWebViewProvider,
+  );
+
+  const commentariesPanelWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    COMMENTARIES_PANEL_WEBVIEW_TYPE,
+    commentariesPanelWebViewProvider,
+  );
+
+  const openResourceTextPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.openResourceText',
+    openResourceText,
+    {
+      method: {
+        summary: 'Open the Bible Texts or Commentaries resource panel for a project',
+        params: [
+          {
+            name: 'resourceType',
+            required: true,
+            summary:
+              'The type of resource panel to open: ScriptureResource for Bible Texts, CommentaryResource for Commentaries',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'projectId',
+            required: false,
+            summary: 'The project ID to display resources for',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the opened WebView, or undefined if it could not be opened',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
   const openModelTextPanelPromise = papi.commands.registerCommand(
     'platformScriptureEditor.openModelText',
     async (projectId?: string) => {
@@ -1043,6 +1167,9 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await annotationStyleDataProviderPromise,
     await modelTextPanelWebViewProviderPromise,
     await openModelTextPanelPromise,
+    await bibleTextsPanelWebViewProviderPromise,
+    await commentariesPanelWebViewProviderPromise,
+    await openResourceTextPromise,
     selectionChangedEventEmitter,
     unsubFromDefaultProjectPicker,
     ...markerNotifierUnsubscribers,
