@@ -86,6 +86,15 @@ vi.mock('@shared/services/logger.service', () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
 
+vi.mock('@renderer/hooks/use-project-picker-data.hook', () => ({
+  useProjectPickerData: vi.fn(() => ({
+    currentProject: { id: 'proj-1', name: 'Test Project' },
+    recentProjects: [],
+    allProjects: [{ id: 'proj-1', name: 'Test Project' }],
+    isLoading: false,
+  })),
+}));
+
 vi.mock('platform-bible-react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('platform-bible-react')>();
   return {
@@ -104,6 +113,7 @@ vi.mock('platform-bible-react', async (importOriginal) => {
     ),
     BookChapterControl: () => <div data-testid="book-chapter-control" />,
     ScrollGroupSelector: () => <div data-testid="scroll-group-selector" />,
+    ProjectPickerComboBox: () => <div data-testid="project-picker-combo-box" />,
   };
 });
 
@@ -396,6 +406,30 @@ describe('PlatformBibleToolbar — Scroll group selector visibility by interface
     render(<PlatformBibleToolbar />);
     await waitFor(() => {
       expect(screen.getByTestId('scroll-group-selector')).toBeInTheDocument();
+    });
+  });
+});
+
+describe('PlatformBibleToolbar — ProjectPickerComboBox visibility by interface mode', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    mockSendCommand(true);
+  });
+
+  it('renders ProjectPickerComboBox when platform.interfaceMode is "simple"', async () => {
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    render(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(screen.getByTestId('project-picker-combo-box')).toBeInTheDocument();
+    });
+  });
+
+  it('hides ProjectPickerComboBox when platform.interfaceMode is "power"', async () => {
+    vi.mocked(useSetting).mockReturnValue(['power', vi.fn(), vi.fn(), false]);
+    render(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(screen.queryByTestId('project-picker-combo-box')).not.toBeInTheDocument();
     });
   });
 });

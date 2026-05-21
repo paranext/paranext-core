@@ -8,6 +8,7 @@ import {
   useRecentScriptureRefs,
 } from '@renderer/hooks/papi-hooks';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
+import { useProjectPickerData } from '@renderer/hooks/use-project-picker-data.hook';
 import { app } from '@renderer/services/papi-frontend.service';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
 import { localThemeService } from '@renderer/services/theme.service-host';
@@ -24,6 +25,7 @@ import {
   Button,
   cn,
   getToolbarOSReservedSpaceClassName,
+  ProjectPickerComboBox,
   ScrollGroupSelector,
   Spinner,
   Toolbar,
@@ -107,6 +109,13 @@ export function PlatformBibleToolbar() {
   );
 
   const isPowerMode = useIsPowerMode();
+
+  const {
+    currentProject,
+    recentProjects,
+    allProjects,
+    isLoading: isProjectPickerLoading,
+  } = useProjectPickerData();
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
@@ -432,6 +441,24 @@ export function PlatformBibleToolbar() {
           )}
         </Tooltip>
       </TooltipProvider>
+      {!isPowerMode && (
+        <ProjectPickerComboBox
+          currentProject={currentProject}
+          recentProjects={recentProjects}
+          allProjects={allProjects}
+          onSelect={(projectId) => {
+            // This command comes from an extension and is not typed in CommandHandlers.
+            // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+            (sendCommand as any)('platformScriptureEditor.openScriptureEditor', projectId).catch(
+              (e: unknown) =>
+                logger.warn(
+                  `Toolbar caught an error while trying to open project ${projectId}: ${getErrorMessage(e)}`,
+                ),
+            );
+          }}
+          isLoading={isProjectPickerLoading}
+        />
+      )}
       <BookChapterControl
         scrRef={scrRef}
         handleSubmit={setScrRef}
