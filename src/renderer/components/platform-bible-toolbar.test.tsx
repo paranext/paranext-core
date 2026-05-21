@@ -418,7 +418,6 @@ describe('PlatformBibleToolbar — ProjectPickerComboBox visibility by interface
   });
 
   it('renders ProjectPickerComboBox when platform.interfaceMode is "simple"', async () => {
-    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
     render(<PlatformBibleToolbar />);
     await waitFor(() => {
       expect(screen.getByTestId('project-picker-combo-box')).toBeInTheDocument();
