@@ -81,8 +81,11 @@ globalThis.webViewComponent = function ModelTextPanel({
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
   const [resourcesPossiblyUndefined, isLoadingResources] = usePromise(
     useCallback(async () => {
+      const cachedResources = await papi.commands.sendCommand(
+        'platformGetResources.getCachedResources',
+      );
       setFetchResources(false);
-      return papi.commands.sendCommand('platformGetResources.getCachedResources');
+      return cachedResources;
       // Need to have this hook to retrigger the fetch
       // eslint-disable-next-line react-hook/exhaustive-deps
     }, [fetchResources]),
@@ -104,7 +107,7 @@ globalThis.webViewComponent = function ModelTextPanel({
   const isInstalling = dblRef !== undefined && match !== undefined && !match.installed;
   const matchDblEntryUid = match?.dblEntryUid;
   useEffect(() => {
-    if (isInstalling && dblResourcesProvider && matchDblEntryUid !== undefined) {
+    if (!fetchResources && isInstalling && dblResourcesProvider && matchDblEntryUid !== undefined) {
       dblResourcesProvider
         .installDblResource(matchDblEntryUid)
         .then(() => setFetchResources(true))
@@ -112,7 +115,7 @@ globalThis.webViewComponent = function ModelTextPanel({
           logger.error(`Model text auto-install failed: ${getErrorMessage(e)}`),
         );
     }
-  }, [isInstalling, dblResourcesProvider, matchDblEntryUid]);
+  }, [isInstalling, fetchResources, dblResourcesProvider, matchDblEntryUid]);
 
   const resourceProjectId = match?.installed ? match.projectId : undefined;
 
