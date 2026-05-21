@@ -38,6 +38,7 @@ import {
   useState,
 } from 'react';
 import { generateCommandValue } from '@/components/shared/book-item.utils';
+import { getKeyCharacterType, isArrowKey } from '@/utils/keyboard.util';
 import RecentSearches from '../recent-searches.component';
 import { useQuickNavButtons } from './book-chapter-control.navigation';
 import { BookChapterControlProps, ViewMode } from './book-chapter-control.types';
@@ -46,8 +47,6 @@ import {
   CHAPTER_GRID_COLUMNS,
   computeTargetChapter,
   fetchEndChapter,
-  getKeyCharacterType,
-  isArrowKey,
 } from './book-chapter-control.utils';
 import { ChapterGrid } from './chapter-grid.component';
 

@@ -1,6 +1,7 @@
 import { Canon } from '@sillsdev/scripture';
 import { getChaptersForBook } from 'platform-bible-utils';
 import { ALL_ENGLISH_BOOK_NAMES, doesBookMatchQuery } from '@/components/shared/book.utils';
+import { ArrowKey } from '@/utils/keyboard.util';
 import { BookWithOptionalChapterAndVerse } from './book-chapter-control.types';
 
 // Smart parsing regex patterns
@@ -19,32 +20,12 @@ export const SEARCH_QUERY_FORMATS = [
   SCRIPTURE_REGEX_PATTERNS.BOOK_CHAPTER_VERSE,
 ];
 
-export function getKeyCharacterType(key: string) {
-  const isLetter = /^[a-zA-Z]$/.test(key);
-  const isDigit = /^[0-9]$/.test(key);
-  return { isLetter, isDigit };
-}
-
 /**
  * Single source of truth for the chapter grid column count. This value MUST drive both the keyboard
  * navigation math (the 2D arrow-key arithmetic in `computeTargetChapter`) and the grid layout (the
  * `gridTemplateColumns` of the chapter grid) so the two can never drift out of sync.
  */
 export const CHAPTER_GRID_COLUMNS = 6;
-
-/** The four arrow keys that drive 2D chapter-grid navigation. */
-export const ARROW_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'] as const;
-
-/** A keyboard `event.key` value for one of the four arrow keys. */
-export type ArrowKey = (typeof ARROW_KEYS)[number];
-
-/**
- * Type guard that narrows an arbitrary keyboard `event.key` string to an {@link ArrowKey}. Used so
- * callers can hand `event.key` to {@link computeTargetChapter} without a type assertion.
- */
-export function isArrowKey(key: string): key is ArrowKey {
-  return ARROW_KEYS.some((arrowKey) => arrowKey === key);
-}
 
 /**
  * Computes the target chapter when navigating the 2D chapter grid with arrow keys. Pure function
