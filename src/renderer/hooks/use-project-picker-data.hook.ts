@@ -8,9 +8,10 @@ import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-pro
 import { EVENT_NAME_ON_DID_UPDATE_WEB_VIEW } from '@shared/services/web-view.service-model';
 import { getErrorMessage } from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
-import type { ProjectOption } from 'platform-bible-react';
 
 const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
+
+type ProjectItem = { id: string; name: string };
 
 async function fetchProjectName(projectId: string): Promise<string> {
   const pdp = await papiFrontendProjectDataProviderService.get(
@@ -21,9 +22,9 @@ async function fetchProjectName(projectId: string): Promise<string> {
 }
 
 export type ProjectPickerData = {
-  currentProject: ProjectOption | undefined;
-  recentProjects: ProjectOption[];
-  allProjects: ProjectOption[];
+  currentProject: ProjectItem | undefined;
+  recentProjects: ProjectItem[];
+  allProjects: ProjectItem[];
   isLoading: boolean;
 };
 
@@ -43,7 +44,7 @@ export function useProjectPickerData(): ProjectPickerData {
   );
   useEvent(onDidReloadExtensions, refresh);
 
-  const [currentProject, isCurrentProjectLoading] = usePromise<ProjectOption | undefined>(
+  const [currentProject, isCurrentProjectLoading] = usePromise<ProjectItem | undefined>(
     useCallback(async () => {
       const allDefs = await webViews.getAllOpenWebViewDefinitions();
       const editorDef = allDefs.find(
@@ -65,7 +66,7 @@ export function useProjectPickerData(): ProjectPickerData {
     undefined,
   );
 
-  const [allProjects, isAllProjectsLoading] = usePromise<ProjectOption[]>(
+  const [allProjects, isAllProjectsLoading] = usePromise<ProjectItem[]>(
     useCallback(async () => {
       const metadata = await projectLookupService.getMetadataForAllProjects();
       const projects = await Promise.all(
