@@ -79,18 +79,19 @@ async function getCachedResources(): Promise<DblResourceData[] | undefined> {
         includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
       });
       const newCachedResources = cachedResources.map((resource) => {
-        const newIsInstalled = !!localProjectMetadata.find((localProject) =>
+        const foundLocalProject = localProjectMetadata.find((localProject) =>
           // If the `projectId` is defined then tries to use that
           resource.projectId
             ? resource.projectId === localProject.id
             : // Otherwise uses the `dblEntryUid` which contains the first part of the project id
               localProject.id.toLowerCase().startsWith(resource.dblEntryUid.toLowerCase()),
         );
-        if (newIsInstalled !== resource.installed) {
+        if (!!foundLocalProject !== resource.installed) {
           isChanged = true;
           return {
             ...resource,
-            installed: newIsInstalled,
+            installed: !!foundLocalProject,
+            projectId: foundLocalProject?.id ?? '',
           };
         }
 
