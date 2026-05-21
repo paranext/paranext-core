@@ -81,6 +81,7 @@ function getRefId(ref: EffectiveResourceReference): string | undefined {
  */
 function getRefLabel(ref: EffectiveResourceReference, dblResourcesList: DblResourceData[]): string {
   if (ref.type === 'dblResource') {
+    // EffectiveResourceReference union check doesn't satisfy TS discriminated union refinement
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const dblRef = ref as EffectiveResourceReference & DblResourceReference;
     const dblData = dblResourcesList.find((r) => r.dblEntryUid === dblRef.id);
@@ -88,6 +89,7 @@ function getRefLabel(ref: EffectiveResourceReference, dblResourcesList: DblResou
     return dblRef.name;
   }
   if (ref.type === 'project') {
+    // ProjectReference.name exists after .type check; EffectiveResourceReference union requires cast
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     return (ref as EffectiveResourceReference & ProjectReference).name;
   }
@@ -133,7 +135,11 @@ globalThis.webViewComponent = function ResourcePanel({
   const [resourcesPossiblyError] = useData(
     'platformGetResources.dblResourcesProvider',
   ).DblResources(undefined, []);
-  const dblResources = isPlatformError(resourcesPossiblyError) ? [] : resourcesPossiblyError;
+  // Memoize to prevent a new [] reference on every render when resourcesPossiblyError is an error
+  const dblResources = useMemo(
+    () => (isPlatformError(resourcesPossiblyError) ? [] : resourcesPossiblyError),
+    [resourcesPossiblyError],
+  );
 
   // --- Filter list based on resourceType ---
 
@@ -141,6 +147,7 @@ globalThis.webViewComponent = function ResourcePanel({
     if (!effectiveResources) return [];
     return effectiveResources.items.filter((ref) => {
       if (ref.type === 'dblResource') {
+        // EffectiveResourceReference union check doesn't satisfy TS discriminated union refinement
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         const dblRef = ref as EffectiveResourceReference & DblResourceReference;
         return dblResources.find((r) => r.dblEntryUid === dblRef.id)?.type === resourceType;
@@ -172,6 +179,7 @@ globalThis.webViewComponent = function ResourcePanel({
   let dblMatch: (typeof dblResources)[number] | undefined;
 
   if (selectedRef?.type === 'dblResource') {
+    // EffectiveResourceReference union check doesn't satisfy TS discriminated union refinement
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const dblRef = selectedRef as EffectiveResourceReference & DblResourceReference;
     dblMatch = dblResources.find((r) => r.dblEntryUid === dblRef.id);
@@ -179,6 +187,7 @@ globalThis.webViewComponent = function ResourcePanel({
     resourceProjectId = dblMatch?.installed ? dblMatch.projectId : undefined;
   } else if (selectedRef?.type === 'project') {
     // ProjectReferences resolve directly; no installation check needed
+    // ProjectReference.id exists after .type check; EffectiveResourceReference union requires cast
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     resourceProjectId = (selectedRef as EffectiveResourceReference & ProjectReference).id;
   }
@@ -252,6 +261,7 @@ globalThis.webViewComponent = function ResourcePanel({
         if (isPlatformError(adminResourcesSetting)) return;
         const existingItems = adminResourcesSetting.items.filter((item) => {
           if (item.type !== 'dblResource') return true;
+          // DblResourceReference.id exists after .type check; ResourceReference union requires cast
           // eslint-disable-next-line no-type-assertion/no-type-assertion
           return (item as DblResourceReference).id !== resource.dblEntryUid;
         });
@@ -271,6 +281,7 @@ globalThis.webViewComponent = function ResourcePanel({
             newRef,
             ...rawUserItems.filter((item) => {
               if (item.type !== 'dblResource') return true;
+              // DblResourceReference.id exists after .type check; ResourceReference union requires cast
               // eslint-disable-next-line no-type-assertion/no-type-assertion
               return (item as DblResourceReference).id !== resource.dblEntryUid;
             }),
