@@ -54,7 +54,6 @@ describe('validate-schema.ts against fixture matrix', () => {
     expect(schemas.has('integration-plan')).toBe(true);
     expect(schemas.has('backend-alignment')).toBe(true);
     expect(schemas.has('ui-alignment')).toBe(true);
-    expect(schemas.has('phase-2-amendments')).toBe(true);
   });
 
   for (const c of cases) {

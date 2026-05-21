@@ -34,7 +34,6 @@ type CategoryKey =
   | 'skipped_na'
   | 'deferred_functionality'
   | 'post_phase_3_followups'
-  | 'pending_amendments'
   | 'red_stub_provenance'
   | 'blocked_verdicts';
 
@@ -188,25 +187,6 @@ describe('aggregate-incompleteness.ts (PR-A A.0/A.6)', () => {
     expect(result.report!.totals.blocker_kinds).toBeGreaterThanOrEqual(1);
   }, 30_000);
 
-  it('seeded phase-2-amendments.json with null + accepted → only null contributes to pending_amendments', () => {
-    const result = setupCase({
-      'characterization/phase-2-amendments.json': JSON.stringify({
-        amendments: [
-          { id: 'AMD-001', decision: null, summary: 'add missing param' },
-          { id: 'AMD-002', decision: 'accept', summary: 'add returnSchema field' },
-          { id: 'AMD-003', decision: null, summary: 'split command' },
-        ],
-      }),
-    });
-    expect(result.exitCode).toBe(0);
-    const pa = result.report!.categories.pending_amendments;
-    expect(pa.count).toBe(2);
-    const ids = pa.items.map((i) => i.snippet ?? '').sort();
-    expect(ids).toEqual(['pending decision: AMD-001', 'pending decision: AMD-003']);
-    // Blocker category — should bump blocker_kinds
-    expect(result.report!.totals.blocker_kinds).toBeGreaterThanOrEqual(2);
-  }, 30_000);
-
   it('seeded deferred-functionality.md with bullet items → items counted', () => {
     const result = setupCase({
       'implementation/deferred-functionality.md': [
@@ -304,10 +284,6 @@ describe('aggregate-incompleteness.ts (PR-A A.0/A.6)', () => {
       'implementation/deferred-functionality.md': '- DEF-001: a\n- DEF-002: b\n',
       // 1 post-phase-3-followup
       'implementation/post-phase-3-followups.md': '- FU-001: revisit caching\n',
-      // 1 pending amendment
-      'characterization/phase-2-amendments.json': JSON.stringify({
-        amendments: [{ id: 'AMD-1', decision: null }],
-      }),
       // 1 RED-stub provenance
       'implementation/traceability-matrix-CAP-001.json': JSON.stringify({
         notes: 'Provenance coverage 0% — RED',
@@ -327,9 +303,8 @@ describe('aggregate-incompleteness.ts (PR-A A.0/A.6)', () => {
     expect(cats.skipped_na.count).toBe(1);
     expect(cats.deferred_functionality.count).toBe(2);
     expect(cats.post_phase_3_followups.count).toBe(1);
-    expect(cats.pending_amendments.count).toBe(1);
     expect(cats.red_stub_provenance.count).toBe(1);
-    // blocker_kinds == superseded + pending_amendments + blocked = 1 + 1 + 1
-    expect(result.report!.totals.blocker_kinds).toBe(3);
+    // blocker_kinds == superseded + blocked = 1 + 1
+    expect(result.report!.totals.blocker_kinds).toBe(2);
   }, 30_000);
 });
