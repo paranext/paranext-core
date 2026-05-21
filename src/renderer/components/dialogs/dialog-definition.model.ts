@@ -13,7 +13,9 @@ export const SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE = 'platform.selectMultipleProj
 /**
  * The tabType for the select books dialog in `select-books-dialog.component.tsx`
  *
- * @deprecated 2026-05-13. This dialog is no longer used by Platform.Bible.
+ * @deprecated 2026-05-13. This dialog is no longer used by Platform.Bible and will be removed in a
+ *   later version. To let users select books, use the `SelectBooks` component from
+ *   `platform-bible-react` instead.
  */
 export const SELECT_BOOKS_DIALOG_TYPE = 'platform.selectBooks';
 /** The dialogType for alert dialogs rendered via overlay */
@@ -37,7 +39,9 @@ export type SelectMultipleProjectsDialogOptions = ProjectDialogOptionsBase & {
 /**
  * Options to provide when showing the Select Books dialog
  *
- * @deprecated 2026-05-13. This dialog is no longer used by Platform.Bible.
+ * @deprecated 2026-05-13. This dialog is no longer used by Platform.Bible and will be removed in a
+ *   later version. To let users select books, use the `SelectBooks` component from
+ *   `platform-bible-react` instead.
  */
 export type SelectBooksDialogOptions = DialogOptions & {
   /** Books IDs that should start selected in the dialog */
@@ -84,7 +88,11 @@ export interface DialogTypes {
     SelectMultipleProjectsDialogOptions,
     string[]
   >;
-  /** @deprecated 2026-05-13. This dialog is no longer used by Platform.Bible. */
+  /**
+   * @deprecated 2026-05-13. This dialog is no longer used by Platform.Bible and will be removed in
+   *   a later version. To let users select books, use the `SelectBooks` component from
+   *   `platform-bible-react` instead.
+   */
   [SELECT_BOOKS_DIALOG_TYPE]: DialogDataTypes<SelectBooksDialogOptions, string[]>;
   [ALERT_DIALOG_TYPE]: DialogDataTypes<AlertDialogOptions, true>;
   [CONFIRM_DIALOG_TYPE]: DialogDataTypes<ConfirmDialogOptions, boolean>;

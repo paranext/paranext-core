@@ -1,4 +1,5 @@
-import { BookSelector } from '@/components/advanced/scope-selector/book-selector.component';
+import { SelectBooks } from '@/components/advanced/scope-selector/select-books.component';
+import { SELECT_BOOKS_STRING_KEYS } from '@/components/advanced/scope-selector/select-books.types';
 import { Label } from '@/components/shadcn-ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/shadcn-ui/radio-group';
 import { Scope } from '@/components/utils/scripture.util';
@@ -17,21 +18,8 @@ export const SCOPE_SELECTOR_STRING_KEYS = Object.freeze([
   '%webView_scope_selector_choose_books%',
   '%webView_scope_selector_scope%',
   '%webView_scope_selector_select_books%',
-  '%webView_book_selector_books_selected%',
-  '%webView_book_selector_select_books%',
-  '%webView_book_selector_search_books%',
-  '%webView_book_selector_select_all%',
-  '%webView_book_selector_clear_all%',
-  '%webView_book_selector_no_book_found%',
-  '%webView_book_selector_more%',
-  '%scripture_section_ot_long%',
-  '%scripture_section_ot_short%',
-  '%scripture_section_nt_long%',
-  '%scripture_section_nt_short%',
-  '%scripture_section_dc_long%',
-  '%scripture_section_dc_short%',
-  '%scripture_section_extra_long%',
-  '%scripture_section_extra_short%',
+  // The ScopeSelector renders a SelectBooks component, so it also needs its localized strings
+  ...SELECT_BOOKS_STRING_KEYS,
 ] as const);
 
 /** Type definition for the localized strings used in this component */
@@ -98,7 +86,7 @@ interface ScopeSelectorProps {
 
 /**
  * A component that allows users to select the scope of their search or operation. Available scopes
- * are defined in the Scope type. When 'selectedBooks' is chosen as the scope, a BookSelector
+ * are defined in the Scope type. When 'selectedBooks' is chosen as the scope, a SelectBooks
  * component is displayed to allow users to choose specific books.
  */
 export function ScopeSelector({
@@ -162,7 +150,7 @@ export function ScopeSelector({
       {scope === 'selectedBooks' && (
         <div className="tw:grid tw:gap-2">
           <Label>{selectBooksText}</Label>
-          <BookSelector
+          <SelectBooks
             availableBookInfo={availableBookInfo}
             selectedBookIds={selectedBookIds}
             onChangeSelectedBookIds={onSelectedBookIdsChange}
