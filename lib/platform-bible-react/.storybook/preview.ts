@@ -1,6 +1,7 @@
 import type { Preview } from '@storybook/react-vite';
 import { setupMonaco } from 'storybook-addon-code-editor';
 import { persistDirection, readDirection } from '../src/utils/dir-helper.util';
+import { DocsPageWithFilePath } from './blocks/DocsPageWithFilePath';
 import '../src/index.css';
 
 // Setup Monaco editor
@@ -24,6 +25,7 @@ const preview: Preview = {
 
     options: {
       storySort: {
+        method: 'alphabetical',
         order: ['Home', 'Guidelines', 'Guides', 'Shadcn', 'Basics', 'Advanced', 'Demo'],
       },
     },
@@ -33,6 +35,11 @@ const preview: Preview = {
       // 'error' - fail CI on a11y violations
       // 'off' - skip a11y checks entirely
       test: 'todo',
+    },
+
+    docs: {
+      // Show each story's source file path at the top of its autodocs page.
+      page: DocsPageWithFilePath,
     },
   },
   initialGlobals: {

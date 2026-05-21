@@ -1,6 +1,7 @@
 import type { Preview } from '@storybook/react-webpack5';
 import { fn } from 'storybook/test';
 import React, { useEffect } from 'react';
+import { DocsPageWithFilePath } from './blocks/DocsPageWithFilePath';
 import '../lib/platform-bible-react/src/index.css';
 
 const preview: Preview = {
@@ -12,6 +13,11 @@ const preview: Preview = {
         color: /(background|color)$/i,
         date: /Date$/,
       },
+    },
+
+    docs: {
+      // Show each story's source file path at the top of its autodocs page.
+      page: DocsPageWithFilePath,
     },
   },
 
