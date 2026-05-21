@@ -2295,3 +2295,125 @@ export const EnterInInputSubmitsTopMatch: Story = {
     },
   },
 };
+
+export const InputArrowEntersFilteredListEdges: Story = {
+  // A book set whose canonical first/last (Genesis/Revelation) get filtered out by the query
+  // below, so the test proves the arrow keys enter the *currently visible* list edges rather
+  // than the full unfiltered list.
+  args: {
+    scrRef: defaultScrRef,
+    getActiveBookIds: () => ['GEN', 'EXO', 'LEV', 'MAT', 'MRK', 'JHN', 'REV'],
+  },
+  play: async ({ canvas, userEvent, step }) => {
+    await step('Open and filter the book list to a subset', async () => {
+      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+      const searchInput = within(getDropdown()).getByRole(INPUT_ROLE);
+      // "h" matches only Matthew and John out of the active set — so the visible edges are no
+      // longer Genesis/Revelation.
+      await userEvent.type(searchInput, 'h');
+      await within(getDropdown()).findByText('Matthew');
+    });
+
+    await step('ArrowDown enters the FIRST visible item, ArrowUp the LAST', async () => {
+      const dropdownContent = getDropdown();
+      // Derive the expected edges from the live (filtered) DOM so this test stays correct
+      // regardless of exact match ordering — and so it fails loudly if enterListFromOutside's
+      // `[cmdk-item]` query ever stops finding the rendered items (e.g. after a shadcn/cmdk
+      // upgrade renames the attribute), since the highlight would then never land on these rows.
+      const options = within(dropdownContent).getAllByRole(CHAPTER_BUTTON_ROLE);
+      expect(options.length).toBeGreaterThanOrEqual(2);
+      const firstText = options[0].textContent?.trim() ?? '';
+      const lastText = options[options.length - 1].textContent?.trim() ?? '';
+      expect(firstText).not.toBe(lastText);
+
+      const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
+      await userEvent.click(searchInput);
+      await userEvent.keyboard('{ArrowDown}');
+      await waitFor(() => expect(getSelectedItemText(dropdownContent)).toBe(firstText));
+
+      // Re-focus the input (clears list focus) without changing the query, then check the other edge.
+      await userEvent.click(searchInput);
+      await userEvent.keyboard('{ArrowUp}');
+      await waitFor(() => expect(getSelectedItemText(dropdownContent)).toBe(lastText));
+    });
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Guards the fragile DOM lookup in `enterListFromOutside` (it queries the rendered `[cmdk-item]` elements to seed the first/last edge): with the book list filtered, ArrowDown from the input enters the first *visible* item and ArrowUp the last *visible* item, derived from the live DOM. If a shadcn/cmdk update changed how list items are rendered, the highlight would stop landing on these rows and this test would fail.',
+      },
+    },
+  },
+};
+
+export const BackButtonDigitPrefixesBook: Story = {
+  args: { scrRef: MATTHEW_REF },
+  play: async ({ canvas, userEvent, step }) => {
+    await step('Open and enter Matthew chapter view (back button auto-focused)', async () => {
+      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+      await userEvent.click(within(getDropdown()).getByText('Matthew'));
+      const backButton = within(getDropdown()).getByRole('button', { name: BACK_TO_BOOKS_LABEL });
+      await waitFor(() => expect(backButton).toHaveFocus());
+    });
+
+    await step(
+      'Typing a digit on the back button seeds "Matthew <digit>" in the input',
+      async () => {
+        const dropdownContent = getDropdown();
+        await userEvent.keyboard('5');
+        const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
+        await waitFor(() => expect(searchInput).toHaveFocus());
+        await expect(searchInput).toHaveValue('Matthew 5');
+      },
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Mirror of the chapter-grid digit behavior, but routed from the back button: a digit typed while the back button is focused exits chapter view and seeds the query with the current book name plus the digit (e.g. "Matthew 5"), so it reads as a book+chapter reference. Guards the digit branch of the shared routeTypedCharacterToInput helper from the back-button entry point.',
+      },
+    },
+  },
+};
+
+export const GridSelectionUpdatesTopMatchRow: Story = {
+  args: { scrRef: defaultScrRef },
+  play: async ({ canvas, userEvent, step }) => {
+    await step(
+      'Type a book+chapter so a sticky top-match row sits above the chapter grid',
+      async () => {
+        const trigger = canvas.getByRole(TRIGGER_ROLE);
+        await userEvent.click(trigger);
+        await expectPopoverToBeOpenAndVisible();
+        const searchInput = within(getDropdown()).getByRole(INPUT_ROLE);
+        await userEvent.type(searchInput, 'Matthew 3');
+        // The top-match row initially reflects the parsed chapter.
+        await within(getDropdown()).findByText('Matthew 3:1');
+      },
+    );
+
+    await step('Navigating the chapter grid updates the sticky top-match row', async () => {
+      const dropdownContent = getDropdown();
+      await userEvent.keyboard('{ArrowDown}'); // input -> list (highlights the top-match row)
+      await userEvent.keyboard('{ArrowDown}'); // -> into the grid (chapter 1)
+      await userEvent.keyboard('{ArrowRight}'); // -> chapter 2
+      await waitFor(() => expect(getSelectedItemText(dropdownContent)).toBe('2'));
+      // The top-match row's displayed reference follows the highlighted grid chapter.
+      await within(dropdownContent).findByText('Matthew 2:1');
+    });
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Guards `topMatchDisplayChapter`: while a parsed top-match row is pinned above the chapter grid, navigating the grid with arrow keys updates the row to show the currently highlighted chapter (e.g. moving to chapter 2 changes the row to "Matthew 2:1"). This exercises the colon-guard logic that distinguishes a highlighted *chapter* from the parsed *verse* in the controlled command value.',
+      },
+    },
+  },
+};
