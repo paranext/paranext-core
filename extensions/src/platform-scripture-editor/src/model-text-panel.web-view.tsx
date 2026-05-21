@@ -83,6 +83,8 @@ globalThis.webViewComponent = function ModelTextPanel({
     useCallback(async () => {
       setFetchResources(false);
       return papi.commands.sendCommand('platformGetResources.getCachedResources');
+      // Need to have this hook to retrigger the fetch
+      // eslint-disable-next-line react-hook/exhaustive-deps
     }, [fetchResources]),
     undefined,
   );

@@ -80,7 +80,7 @@ async function getCachedResources(): Promise<DblResourceData[] | undefined> {
       });
       const newCachedResources = cachedResources.map((resource) => {
         const newIsInstalled = !!localProjectMetadata.find((localProject) =>
-          localProject.id.startsWith(resource.dblEntryUid),
+          localProject.id.toLowerCase().startsWith(resource.dblEntryUid.toLowerCase()),
         );
         if (newIsInstalled !== resource.installed) {
           isChanged = true;
