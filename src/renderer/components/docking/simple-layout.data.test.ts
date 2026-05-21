@@ -41,11 +41,11 @@ describe('simple-layout.data', () => {
       });
     });
 
-    it('column 3 has exactly 1 tab', () => {
+    it('column 3 has exactly 2 tabs', () => {
       // Narrowing column to BoxData and its first child to PanelData to access tabs.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const col3Panel = (columns[2] as BoxData).children[0] as PanelData;
-      expect(col3Panel.tabs).toHaveLength(1);
+      expect(col3Panel.tabs).toHaveLength(2);
     });
 
     it('all tab ids are unique across the layout', () => {
@@ -59,7 +59,7 @@ describe('simple-layout.data', () => {
       expect(new Set(allIds).size).toBe(allIds.length);
     });
 
-    it('contains the three expected placeholder webViewType strings', () => {
+    it('contains the three expected webViewType strings', () => {
       const allWebViewTypes: string[] = [];
       columns.forEach((col) => {
         // Narrowing column to BoxData and its first child to PanelData to iterate tabs.
@@ -74,7 +74,8 @@ describe('simple-layout.data', () => {
       });
       expect(allWebViewTypes).toContain('platformScriptureEditor.modelText');
       expect(allWebViewTypes).toContain('platformScriptureEditor.react');
-      expect(allWebViewTypes).toContain('platformGetResources.newTab');
+      expect(allWebViewTypes).toContain('platformScriptureEditor.bibleTexts');
+      expect(allWebViewTypes).toContain('platformScriptureEditor.commentaries');
     });
   });
 });
