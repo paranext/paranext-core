@@ -129,8 +129,9 @@ type BookSelectorProps = ChapterRangeSelectorProps & {
  * will display the range of chapters in the selected book, and in the latter case it will display a
  * list of the selected books.
  *
- * @deprecated Jul 18 2025. This component is no longer supported or tested. Use of this component
- *   is discouraged and it may be removed in the future.
+ * @deprecated Jul 18 2025. This component is no longer supported or tested and will be removed in a
+ *   later version. To let users select books, use the `SelectBooks` component instead (or
+ *   `ScopeSelector` to combine scope and book selection).
  * @param {BookSelectorProps} props
  * @param {function} props.handleBookSelectionModeChange - Callback function to handle changes in
  *   book selection mode.
@@ -1280,10 +1281,102 @@ interface ScopeSelectorProps {
 }
 /**
  * A component that allows users to select the scope of their search or operation. Available scopes
- * are defined in the Scope type. When 'selectedBooks' is chosen as the scope, a BookSelector
+ * are defined in the Scope type. When 'selectedBooks' is chosen as the scope, a SelectBooks
  * component is displayed to allow users to choose specific books.
  */
 export declare function ScopeSelector({ scope, availableScopes, onScopeChange, availableBookInfo, selectedBookIds, onSelectedBookIdsChange, localizedStrings, localizedBookNames, id, }: ScopeSelectorProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Object containing all keys used for localization in the SelectBooks component. If you're using
+ * this component in an extension, you can pass it into the useLocalizedStrings hook to easily
+ * obtain the localized strings and pass them into the localizedStrings prop of this component
+ */
+export declare const SELECT_BOOKS_STRING_KEYS: readonly [
+	"%webView_book_selector_books_selected%",
+	"%webView_book_selector_select_books%",
+	"%webView_book_selector_search_books%",
+	"%webView_book_selector_select_all%",
+	"%webView_book_selector_clear_all%",
+	"%webView_book_selector_no_book_found%",
+	"%webView_book_selector_more%",
+	"%scripture_section_ot_long%",
+	"%scripture_section_ot_short%",
+	"%scripture_section_nt_long%",
+	"%scripture_section_nt_short%",
+	"%scripture_section_dc_long%",
+	"%scripture_section_dc_short%",
+	"%scripture_section_extra_long%",
+	"%scripture_section_extra_short%"
+];
+/** Type definition for the localized strings used in the SelectBooks component */
+export type SelectBooksLocalizedStrings = {
+	[selectBooksKey in (typeof SELECT_BOOKS_STRING_KEYS)[number]]?: LocalizedStringValue;
+};
+type SelectBooksProps = {
+	/**
+	 * Information about available books, formatted as a 123 character long string as defined in a
+	 * projects BooksPresent setting
+	 */
+	availableBookInfo: string;
+	/** Array of currently selected book IDs */
+	selectedBookIds: string[];
+	/** Callback function that is executed when the book selection changes */
+	onChangeSelectedBookIds: (books: string[]) => void;
+	/** Object containing the localized strings for the component */
+	localizedStrings: SelectBooksLocalizedStrings;
+	/**
+	 * Optional map of localized book IDs/short names and full names. Key is the (English) book ID,
+	 * value contains localized versions of the ID and full book name
+	 */
+	localizedBookNames?: Map<string, {
+		localizedId: string;
+		localizedName: string;
+	}>;
+};
+/**
+ * A component for selecting multiple books from the Bible canon. It provides:
+ *
+ * - Quick selection buttons for major sections (OT, NT, DC, Extra)
+ * - A searchable dropdown with all available books (see {@link SelectBooksPicker})
+ * - Support for shift-click range selection
+ * - Visual feedback with badges showing selected books
+ */
+export declare function SelectBooks({ availableBookInfo, selectedBookIds, onChangeSelectedBookIds, localizedStrings, localizedBookNames, }: SelectBooksProps): import("react/jsx-runtime").JSX.Element;
+type SelectBooksPickerProps = {
+	/**
+	 * Information about available books, formatted as a 123 character long string as defined in a
+	 * projects BooksPresent setting
+	 */
+	availableBookInfo: string;
+	/** Array of currently selected book IDs */
+	selectedBookIds: string[];
+	/** Callback function that is executed when the book selection changes */
+	onChangeSelectedBookIds: (books: string[]) => void;
+	/**
+	 * Object containing the localized strings for the component. The picker uses a subset of
+	 * {@link SelectBooksLocalizedStrings} (the badge and section-button keys are not used here)
+	 */
+	localizedStrings: SelectBooksLocalizedStrings;
+	/**
+	 * Optional map of localized book IDs/short names and full names. Key is the (English) book ID,
+	 * value contains localized versions of the ID and full book name
+	 */
+	localizedBookNames?: Map<string, {
+		localizedId: string;
+		localizedName: string;
+	}>;
+};
+/**
+ * A searchable dropdown (combobox) for picking multiple books from the Bible canon. It provides:
+ *
+ * - A trigger button summarizing how many books are selected
+ * - A searchable list of all available books, grouped by section
+ * - "Select all" / "Clear all" shortcuts
+ * - Support for shift-click and shift-Enter range selection
+ *
+ * This is the standalone picker used by {@link SelectBooks}, which additionally renders section
+ * quick-select buttons and badges for the current selection.
+ */
+export declare function SelectBooksPicker({ availableBookInfo, selectedBookIds, onChangeSelectedBookIds, localizedStrings, localizedBookNames, }: SelectBooksPickerProps): import("react/jsx-runtime").JSX.Element;
 export type ScrollGroupSelectorProps = {
 	/**
 	 * List of scroll group ids to show to the user. Either a `ScrollGroupId` or `undefined` for no
