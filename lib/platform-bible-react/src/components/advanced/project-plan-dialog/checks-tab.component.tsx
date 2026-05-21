@@ -27,7 +27,11 @@ export const CHECK_GROUPS: CheckGroup[] = [
       { id: 'basic.punctuation', name: 'Punctuation', group: 'basic-checks' },
       { id: 'basic.capitalization', name: 'Capitalization', group: 'basic-checks' },
       { id: 'basic.repeated-words', name: 'Repeated words', group: 'basic-checks' },
-      { id: 'basic.unmatched-pairs', name: 'Unmatched pairs of punctuation', group: 'basic-checks' },
+      {
+        id: 'basic.unmatched-pairs',
+        name: 'Unmatched pairs of punctuation',
+        group: 'basic-checks',
+      },
       { id: 'basic.quotations', name: 'Quotations', group: 'basic-checks' },
       { id: 'basic.numbers', name: 'Numbers', group: 'basic-checks' },
       { id: 'basic.references', name: 'References', group: 'basic-checks' },
@@ -112,9 +116,7 @@ export function ChecksTab({ stages, checks, onChecksChange }: ChecksTabProps) {
 
       {CHECK_GROUPS.map((group) => (
         <details key={group.id} open className="tw:rounded tw:border tw:p-2">
-          <summary className="tw:cursor-pointer tw:text-sm tw:font-semibold">
-            {group.label}
-          </summary>
+          <summary className="tw:cursor-pointer tw:text-sm tw:font-semibold">{group.label}</summary>
           <div className="tw:mt-2 tw:flex tw:flex-col tw:gap-2">
             {group.items.map((item) => {
               const setting = findCheck(item.id);

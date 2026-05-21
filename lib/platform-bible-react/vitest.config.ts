@@ -7,6 +7,13 @@ const workspace = defineConfig({
   test: {
     ...config.test,
     name: 'platform-bible-react tests',
+    // Bump the default test/teardown timeouts so the suite tolerates CPU contention when run
+    // via `npm test --workspaces` alongside the other workspaces. In particular the Storybook
+    // project spins up a Playwright Chromium browser whose teardown can exceed the default 10s
+    // close timeout under load.
+    testTimeout: 30000,
+    hookTimeout: 30000,
+    teardownTimeout: 30000,
     projects: [
       // Unit tests configuration
       {
