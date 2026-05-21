@@ -14,6 +14,7 @@ const sampleProjects: ProjectOption[] = [
 const localizedStrings = {
   recentProjectsHeading: 'Recent',
   allProjectsHeading: 'All projects',
+  loadingPlaceholder: 'Loading...',
   selectPlaceholder: 'Select project',
   searchPlaceholder: 'Search projects...',
   noResultsMessage: 'No projects found',
@@ -39,7 +40,7 @@ const meta: Meta<typeof ProjectPickerComboBox> = {
 };
 
 export default meta;
-type Story = StoryObj<typeof ProjectPickerComboBox>;
+type Story = StoryObj<typeof meta>;
 
 export const WithBothSections: Story = {
   args: {

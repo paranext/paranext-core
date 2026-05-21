@@ -84,5 +84,3 @@ export function ProjectPickerComboBox({
     />
   );
 }
-
-export default ProjectPickerComboBox;
