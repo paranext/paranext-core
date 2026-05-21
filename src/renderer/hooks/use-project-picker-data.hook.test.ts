@@ -2,6 +2,7 @@ import { renderHook, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import { useProjectPickerData } from './use-project-picker-data.hook';
+import { EVENT_NAME_ON_DID_UPDATE_WEB_VIEW } from '@shared/services/web-view.service-model';
 
 // --- Mocks ---
 
@@ -131,11 +132,12 @@ describe('useProjectPickerData', () => {
   it('refreshes currentProject when onDidUpdateWebView fires', async () => {
     const { getNetworkEvent } = await import('@shared/services/network.service');
     let capturedCallback: (() => void) | undefined;
-    vi.mocked(getNetworkEvent).mockReturnValue(
-      vi.fn((cb: () => void) => {
-        capturedCallback = cb;
-        return vi.fn();
-      }) as never,
+    vi.mocked(getNetworkEvent).mockImplementation(
+      (eventName: string) =>
+        vi.fn((cb: () => void) => {
+          if (eventName === EVENT_NAME_ON_DID_UPDATE_WEB_VIEW) capturedCallback = cb;
+          return vi.fn();
+        }) as never,
     );
 
     const { webViews, papiFrontendProjectDataProviderService } = await importMocks();
