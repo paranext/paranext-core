@@ -461,7 +461,7 @@ export async function activate(context: ExecutionActivationContext) {
   await checkHostingService.initialize();
   await checkAggregatorService.initialize();
 
-  const readRecentlyOpenedProjectsRaw = async (): Promise<string> => {
+  async function readRawRecentlyOpenedProjects(): Promise<string> {
     try {
       return await papi.storage.readUserData(
         context.executionToken,
@@ -471,12 +471,17 @@ export async function activate(context: ExecutionActivationContext) {
       // No data yet — treat as empty list.
       return '[]';
     }
-  };
-  const writeRecentlyOpenedProjectsRaw = (data: string): Promise<void> =>
-    papi.storage.writeUserData(context.executionToken, RECENTLY_OPENED_PROJECTS_STORAGE_KEY, data);
+  }
+  function writeRawRecentlyOpenedProjects(data: string): Promise<void> {
+    return papi.storage.writeUserData(
+      context.executionToken,
+      RECENTLY_OPENED_PROJECTS_STORAGE_KEY,
+      data,
+    );
+  }
   await recentlyOpenedProjectsService.initialize(
-    readRecentlyOpenedProjectsRaw,
-    writeRecentlyOpenedProjectsRaw,
+    readRawRecentlyOpenedProjects,
+    writeRawRecentlyOpenedProjects,
   );
 
   context.registrations.add(

@@ -1794,7 +1794,8 @@ declare module 'platform-scripture' {
    *
    * History is stored locally for the OS user only; it is not synced via the Paratext Registry.
    *
-   * Opens of a project as a resource or model text MUST NOT be recorded — only main-project opens.
+   * Only record opens of a project as the main project; do not record opens as a resource or model
+   * text.
    */
   export type IRecentlyOpenedProjectsService = IDataProvider<RecentlyOpenedProjectsDataTypes> & {
     /**

@@ -74,7 +74,7 @@ export class RecentlyOpenedProjectsDataProviderEngine
   }
 
   async recordProjectOpened(projectId: string): Promise<void> {
-    if (!projectId || !projectId.trim()) return;
+    if (!projectId?.trim()) return;
     const current = await this.loadCache();
     const next = [projectId, ...current.filter((id) => id !== projectId)].slice(
       0,
@@ -110,14 +110,12 @@ async function initialize(
   readRaw: () => Promise<string>,
   writeRaw: (data: string) => Promise<void>,
 ): Promise<void> {
-  if (!initializationPromise) {
-    initializationPromise = (async () => {
-      dataProvider = await papi.dataProviders.registerEngine(
-        RECENTLY_OPENED_PROJECTS_DATA_PROVIDER_NAME,
-        new RecentlyOpenedProjectsDataProviderEngine(readRaw, writeRaw),
-      );
-    })();
-  }
+  initializationPromise ??= (async () => {
+    dataProvider = await papi.dataProviders.registerEngine(
+      RECENTLY_OPENED_PROJECTS_DATA_PROVIDER_NAME,
+      new RecentlyOpenedProjectsDataProviderEngine(readRaw, writeRaw),
+    );
+  })();
   return initializationPromise;
 }
 
@@ -142,5 +140,3 @@ export const recentlyOpenedProjectsService = {
   dispose,
   serviceObject,
 };
-
-export default recentlyOpenedProjectsService;
