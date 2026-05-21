@@ -165,7 +165,21 @@ export async function initializeUsersnapApi() {
     };
 
     const startTime = performance.now();
-    const api = await loadSpace(USERSNAP_SPACE_API_KEY);
+    const api = await new Promise<Awaited<ReturnType<typeof loadSpace>>>((resolve, reject) => {
+      const id = setTimeout(
+        () => reject(new Error('Usersnap loadSpace timed out after 5 s')),
+        5000,
+      );
+      loadSpace(USERSNAP_SPACE_API_KEY)
+        .then((result) => {
+          clearTimeout(id);
+          return resolve(result);
+        })
+        .catch((error: unknown) => {
+          clearTimeout(id);
+          reject(error);
+        });
+    });
     await api.init(defaultInitParams);
     const endTime = performance.now();
     logger.info(`UserSnap initialized successfully in ${endTime - startTime}ms`);
