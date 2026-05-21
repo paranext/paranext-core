@@ -82,9 +82,12 @@ globalThis.webViewComponent = function ModelTextPanel({
   const [resourcesPossiblyError] = useData(
     'platformGetResources.dblResourcesProvider',
   ).DblResources(undefined, []);
-  const dblResources = isPlatformError(resourcesPossiblyError) ? [] : resourcesPossiblyError;
+  const dblResources = useMemo(
+    () => (isPlatformError(resourcesPossiblyError) ? [] : resourcesPossiblyError),
+    [resourcesPossiblyError],
+  );
 
-  const effectiveModelText = effectiveModelTexts?.items[0];
+  const effectiveModelText = useMemo(() => effectiveModelTexts?.items[0], [effectiveModelTexts]);
   // EffectiveResourceReference is a discriminated union; checking `.type` narrows to DblResourceReference
   let dblRef: (EffectiveResourceReference & DblResourceReference) | undefined;
   if (effectiveModelText?.type === 'dblResource') {
