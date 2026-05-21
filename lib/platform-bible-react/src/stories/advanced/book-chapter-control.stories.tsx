@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useCallback, useState } from 'react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { defaultScrRef, LanguageStrings } from 'platform-bible-utils';
-import { expect, fn, screen, waitFor, within } from 'storybook/test';
+import { expect, fireEvent, fn, screen, waitFor, within } from 'storybook/test';
 import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
 import { useRecentSearches } from '@/components/advanced/recent-searches.component';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
@@ -68,6 +68,33 @@ async function expectPopoverToBeClosed() {
 
 function getDropdown() {
   return screen.getByRole('dialog');
+}
+
+/** Returns the trimmed text of the currently keyboard-highlighted (`data-selected`) list item. */
+function getSelectedItemText(dropdownContent: HTMLElement): string {
+  const selected = dropdownContent.querySelector('[data-selected="true"]');
+  return selected?.textContent?.trim() ?? '';
+}
+
+/** Reads the caret position of the focused search input without a type assertion. */
+function getInputCaret(input: HTMLElement): number {
+  if (!(input instanceof HTMLInputElement)) throw new Error('Expected an <input> element');
+  return input.selectionStart ?? -1;
+}
+
+const BACK_TO_BOOKS_LABEL = 'Back to books';
+const MATTHEW_REF = { book: 'MAT', chapterNum: 15, verseNum: 1 };
+
+/**
+ * Presses Escape and waits briefly for the resulting state change to settle (Radix tooltip
+ * dismissal and/or the chapter-view → book-view switch). Used by the chapter-view Escape test,
+ * where each press depends on the previous one having fully applied.
+ */
+async function pressEscapeAndSettle(press: () => Promise<void>): Promise<void> {
+  await press();
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, 80);
+  });
 }
 
 const meta: Meta<typeof BookChapterControl> = {
@@ -617,6 +644,672 @@ This interactive test demonstrates:
   },
 };
 
+export const TypingReturnsFocusToInput: Story = {
+  args: {
+    scrRef: defaultScrRef,
+  },
+  play: async ({ canvas, userEvent, step, args }) => {
+    await step('Open the component', async () => {
+      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+    });
+
+    await step('Move focus into the list/grid with ArrowDown', async () => {
+      const dropdownContent = getDropdown();
+      const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
+      await userEvent.click(searchInput);
+      // ArrowDown hands focus from the input to the list as a unit (highlights the first item).
+      await userEvent.keyboard('{ArrowDown}');
+      // The list now owns focus and a list item is highlighted (data-selected).
+      await waitFor(() =>
+        expect(dropdownContent.querySelector('[data-selected="true"]')).toBeTruthy(),
+      );
+    });
+
+    await step('A routed letter immediately followed by Space must not submit', async () => {
+      // Reproduce the focus race deterministically: dispatch the letter and the space
+      // synchronously, with no event-loop turn between them, so the async `setTimeout` that
+      // returns focus to the input cannot run in between. The letter is routed back into the
+      // input; the very next Space must NOT be captured by the list's submit handler (which would
+      // submit the highlighted single-match preview the user can still see). `fireEvent` (rather
+      // than `userEvent`) is required here precisely because it does not yield to the event loop
+      // between the two key presses.
+      const focused = document.activeElement;
+      if (!focused) throw new Error('Expected the list to own focus after ArrowDown');
+      fireEvent.keyDown(focused, { key: 'r' });
+      fireEvent.keyDown(focused, { key: ' ' });
+      await expect(args.handleSubmit).not.toHaveBeenCalled();
+      await expect(getDropdown()).toBeVisible();
+    });
+
+    await step('Focus settles back on the input', async () => {
+      const dropdownContent = getDropdown();
+      const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
+      await waitFor(() => expect(searchInput).toHaveFocus());
+    });
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: `
+**Typing Returns Focus To Input** - Regression test for focus management while typing.
+
+After the user moves focus into the list/grid with the arrow keys and then resumes typing, focus
+must return to the search input and the input alone must own subsequent key presses. This guards
+against a regression where a routed character left a stale "list focused" state, so the very next
+Space/Enter submitted the single-match preview's highlighted item while the user believed they
+were typing in the input.
+
+This interactive test:
+1. Opens the component
+2. Presses ArrowDown to hand focus to the list/grid (highlighting an item)
+3. Synchronously dispatches a letter then Space (reproducing the focus race)
+4. Verifies the Space did not submit a list item (the popover stays open)
+5. Verifies focus settles back on the input
+        `,
+      },
+    },
+  },
+};
+
+export const InputCursorKeysStayInInput: Story = {
+  args: { scrRef: defaultScrRef },
+  play: async ({ canvas, userEvent, step }) => {
+    await step('Open the component and type a query', async () => {
+      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+      const searchInput = within(getDropdown()).getByRole(INPUT_ROLE);
+      await userEvent.type(searchInput, 'Genesis');
+      await expect(searchInput).toHaveFocus();
+      expect(getInputCaret(searchInput)).toBe('Genesis'.length);
+    });
+
+    await step('ArrowLeft / ArrowRight move the caret instead of navigating the list', async () => {
+      const searchInput = within(getDropdown()).getByRole(INPUT_ROLE);
+      await userEvent.keyboard('{ArrowLeft}');
+      await expect(searchInput).toHaveFocus();
+      expect(getInputCaret(searchInput)).toBe('Genesis'.length - 1);
+      await userEvent.keyboard('{ArrowRight}');
+      await expect(searchInput).toHaveFocus();
+      expect(getInputCaret(searchInput)).toBe('Genesis'.length);
+    });
+
+    await step('Home / End perform native cursor movement (not cmdk jump-to-list)', async () => {
+      const searchInput = within(getDropdown()).getByRole(INPUT_ROLE);
+      await userEvent.keyboard('{Home}');
+      await expect(searchInput).toHaveFocus();
+      expect(getInputCaret(searchInput)).toBe(0);
+      await userEvent.keyboard('{End}');
+      await expect(searchInput).toHaveFocus();
+      expect(getInputCaret(searchInput)).toBe('Genesis'.length);
+    });
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Verifies that ArrowLeft/ArrowRight and Home/End move the text caret within the search input and keep focus on the input, rather than being hijacked by cmdk to navigate or jump within the list.',
+      },
+    },
+  },
+};
+
+export const InputArrowEntersListEdges: Story = {
+  args: { scrRef: defaultScrRef, getActiveBookIds: () => ['GEN', 'EXO', 'MAT', 'REV'] },
+  play: async ({ canvas, userEvent, step }) => {
+    await step('Open the component', async () => {
+      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+    });
+
+    await step('ArrowDown from the input highlights the FIRST list item', async () => {
+      const dropdownContent = getDropdown();
+      const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
+      await userEvent.click(searchInput);
+      await userEvent.keyboard('{ArrowDown}');
+      await waitFor(() => expect(getSelectedItemText(dropdownContent)).toContain('Genesis'));
+    });
+
+    await step('Reopen, then ArrowUp from the input highlights the LAST list item', async () => {
+      // Escape closes the popover in book view; reopen for a fresh input-focused state.
+      await userEvent.keyboard('{Escape}');
+      await expectPopoverToBeClosed();
+      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+      const dropdownContent = getDropdown();
+      const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
+      await userEvent.click(searchInput);
+      await userEvent.keyboard('{ArrowUp}');
+      await waitFor(() => expect(getSelectedItemText(dropdownContent)).toContain('Revelation'));
+    });
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'ArrowDown from the input hands focus to the list and seeds the FIRST item; ArrowUp seeds the LAST item. The list is the single tab/arrow target, entered as a unit from the input.',
+      },
+    },
+  },
+};
+
+export const TabFromInputMovesToQuickNav: Story = {
+  args: { scrRef: MATTHEW_REF },
+  play: async ({ canvas, userEvent, step }) => {
+    await step('Open the component', async () => {
+      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+    });
+
+    await step('Tab from the input lands on a quick-nav button, not the list', async () => {
+      const dropdownContent = getDropdown();
+      const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
+      await userEvent.click(searchInput);
+      await userEvent.tab();
+      // Natural tab order walks the quick-nav buttons before the list (Tab is intentionally not
+      // intercepted by the input's keydown handler).
+      const prevChapter = within(dropdownContent).getByRole('button', { name: 'Previous chapter' });
+      await expect(prevChapter).toHaveFocus();
+    });
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Tab is intentionally NOT intercepted in the input: natural tab order moves focus to the quick-nav buttons first, not into the list.',
+      },
+    },
+  },
+};
+
+export const ListTypingRoutesToInput: Story = {
+  args: { scrRef: defaultScrRef },
+  play: async ({ canvas, userEvent, step }) => {
+    await step('Open and type a multi-result query', async () => {
+      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+      const searchInput = within(getDropdown()).getByRole(INPUT_ROLE);
+      // "Jo" matches several books, so no single top match — the book list is shown.
+      await userEvent.type(searchInput, 'Jo');
+    });
+
+    await step('A letter typed while the list is focused is appended to the input', async () => {
+      const dropdownContent = getDropdown();
+      await userEvent.keyboard('{ArrowDown}'); // hand focus to the list
+      await waitFor(() =>
+        expect(dropdownContent.querySelector('[data-selected="true"]')).toBeTruthy(),
+      );
+      await userEvent.keyboard('h');
+      const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
+      await waitFor(() => expect(searchInput).toHaveFocus());
+      await expect(searchInput).toHaveValue('Joh');
+    });
+
+    await step(
+      'Backspace while the list is focused removes the last char and refocuses the input',
+      async () => {
+        const dropdownContent = getDropdown();
+        await userEvent.keyboard('{ArrowDown}'); // re-enter the list
+        await waitFor(() =>
+          expect(dropdownContent.querySelector('[data-selected="true"]')).toBeTruthy(),
+        );
+        await userEvent.keyboard('{Backspace}');
+        const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
+        await waitFor(() => expect(searchInput).toHaveFocus());
+        await expect(searchInput).toHaveValue('Jo');
+      },
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'While the list/grid owns focus, typing a letter/digit is routed back into the input (appended), and Backspace removes the last character — both return focus to the input so editing resumes seamlessly.',
+      },
+    },
+  },
+};
+
+export const SpaceInListSubmitsHighlighted: Story = {
+  args: { scrRef: defaultScrRef },
+  play: async ({ canvas, userEvent, step, args }) => {
+    await step('Open and parse a full reference', async () => {
+      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+      const searchInput = within(getDropdown()).getByRole(INPUT_ROLE);
+      await userEvent.type(searchInput, 'John 3:16');
+      await within(getDropdown()).findByText('John 3:16');
+    });
+
+    await step('Enter the list, then Space submits the highlighted top match', async () => {
+      const dropdownContent = getDropdown();
+      await userEvent.keyboard('{ArrowDown}');
+      await waitFor(() => expect(getSelectedItemText(dropdownContent)).toContain('John'));
+      await userEvent.keyboard(' ');
+      await expect(args.handleSubmit).toHaveBeenCalledWith({
+        book: 'JHN',
+        chapterNum: 3,
+        verseNum: 16,
+      });
+      await expectPopoverToBeClosed();
+    });
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'When the list/grid owns focus, Space submits the currently highlighted item (matching Enter). Here it submits the parsed single-match preview "John 3:16".',
+      },
+    },
+  },
+};
+
+export const ListLetterInChapterViewStartsNewSearch: Story = {
+  args: { scrRef: MATTHEW_REF },
+  play: async ({ canvas, userEvent, step }) => {
+    await step('Open and enter Matthew chapter view', async () => {
+      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+      await userEvent.click(within(getDropdown()).getByText('Matthew'));
+    });
+
+    await step('Move focus into the chapter grid', async () => {
+      const dropdownContent = getDropdown();
+      const backButton = within(dropdownContent).getByRole('button', { name: BACK_TO_BOOKS_LABEL });
+      await waitFor(() => expect(backButton).toHaveFocus());
+      await userEvent.keyboard('{ArrowDown}'); // hand focus to the grid
+      await waitFor(() =>
+        expect(dropdownContent.querySelector('[data-selected="true"]')).toBeTruthy(),
+      );
+    });
+
+    await step('Typing a letter exits chapter view and starts a new book search', async () => {
+      const dropdownContent = getDropdown();
+      await userEvent.keyboard('j');
+      const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
+      await waitFor(() => expect(searchInput).toHaveFocus());
+      await expect(searchInput).toHaveValue('j');
+    });
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A letter typed while the chapter grid is focused exits chapter view and seeds a fresh search query (just that letter), returning focus to the input.',
+      },
+    },
+  },
+};
+
+export const ListDigitInChapterViewPrefixesBook: Story = {
+  args: { scrRef: MATTHEW_REF },
+  play: async ({ canvas, userEvent, step }) => {
+    await step('Open and enter Matthew chapter view', async () => {
+      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+      await userEvent.click(within(getDropdown()).getByText('Matthew'));
+    });
+
+    await step('Move focus into the chapter grid', async () => {
+      const dropdownContent = getDropdown();
+      const backButton = within(dropdownContent).getByRole('button', { name: BACK_TO_BOOKS_LABEL });
+      await waitFor(() => expect(backButton).toHaveFocus());
+      await userEvent.keyboard('{ArrowDown}');
+      await waitFor(() =>
+        expect(dropdownContent.querySelector('[data-selected="true"]')).toBeTruthy(),
+      );
+    });
+
+    await step(
+      'Typing a digit exits chapter view, prefixed with the current book name',
+      async () => {
+        const dropdownContent = getDropdown();
+        await userEvent.keyboard('5');
+        const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
+        await waitFor(() => expect(searchInput).toHaveFocus());
+        await expect(searchInput).toHaveValue('Matthew 5');
+      },
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A digit typed while the chapter grid is focused exits chapter view and seeds the query with the current book name plus the digit (e.g. "Matthew 5"), so it reads as a book+chapter reference.',
+      },
+    },
+  },
+};
+
+export const BackspaceInChapterViewReturnsToBooks: Story = {
+  args: { scrRef: MATTHEW_REF },
+  play: async ({ canvas, userEvent, step }) => {
+    await step('Open and enter Matthew chapter view', async () => {
+      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+      await userEvent.click(within(getDropdown()).getByText('Matthew'));
+    });
+
+    await step('The back button receives focus on entering chapter view', async () => {
+      const backButton = within(getDropdown()).getByRole('button', { name: BACK_TO_BOOKS_LABEL });
+      await waitFor(() => expect(backButton).toHaveFocus());
+    });
+
+    await step('Backspace (from the back button) returns to the book list', async () => {
+      await userEvent.keyboard('{Backspace}');
+      const dropdownContent = getDropdown();
+      const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
+      await waitFor(() => expect(searchInput).toBeInTheDocument());
+      await expect(searchInput).toHaveFocus();
+    });
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Backspace in chapter view always returns to the book list regardless of which child holds focus (here it fires while the back button is focused) and restores focus to the search input.',
+      },
+    },
+  },
+};
+
+export const BackButtonTabSeedsChapterOne: Story = {
+  args: { scrRef: MATTHEW_REF },
+  play: async ({ canvas, userEvent, step }) => {
+    await step('Open and enter Matthew chapter view', async () => {
+      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+      await userEvent.click(within(getDropdown()).getByText('Matthew'));
+    });
+
+    await step('Tab from the back button seeds chapter 1 and focuses the grid', async () => {
+      const dropdownContent = getDropdown();
+      const backButton = within(dropdownContent).getByRole('button', { name: BACK_TO_BOOKS_LABEL });
+      await waitFor(() => expect(backButton).toHaveFocus());
+      await userEvent.tab();
+      await waitFor(() => expect(getSelectedItemText(dropdownContent)).toBe('1'));
+    });
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Tab from the back button seeds chapter 1 as the highlighted grid cell (rather than relying on whatever cmdk had selected) and moves focus into the grid.',
+      },
+    },
+  },
+};
+
+export const BackButtonArrowEntersGrid: Story = {
+  args: { scrRef: MATTHEW_REF },
+  play: async ({ canvas, userEvent, step }) => {
+    await step('Open and enter Matthew chapter view', async () => {
+      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+      await userEvent.click(within(getDropdown()).getByText('Matthew'));
+    });
+
+    await step(
+      'ArrowUp from the back button enters the grid at the first chapter of the last row',
+      async () => {
+        const dropdownContent = getDropdown();
+        const backButton = within(dropdownContent).getByRole('button', {
+          name: BACK_TO_BOOKS_LABEL,
+        });
+        await waitFor(() => expect(backButton).toHaveFocus());
+        await userEvent.keyboard('{ArrowUp}');
+        // Matthew has 28 chapters across 6 columns → ArrowUp entry point = firstChapterInLastRow = 25.
+        await waitFor(() => expect(getSelectedItemText(dropdownContent)).toBe('25'));
+      },
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'An arrow key from the back button hands focus to the grid and selects the entry-point cell for that direction (ArrowUp → first chapter of the last row).',
+      },
+    },
+  },
+};
+
+export const BackButtonEnterReturnsToBooks: Story = {
+  args: { scrRef: MATTHEW_REF },
+  play: async ({ canvas, userEvent, step, args }) => {
+    await step('Open and enter Matthew chapter view', async () => {
+      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+      await userEvent.click(within(getDropdown()).getByText('Matthew'));
+    });
+
+    await step(
+      'Enter on the back button returns to books without submitting a chapter',
+      async () => {
+        const dropdownContent = getDropdown();
+        const backButton = within(dropdownContent).getByRole('button', {
+          name: BACK_TO_BOOKS_LABEL,
+        });
+        await waitFor(() => expect(backButton).toHaveFocus());
+        await userEvent.keyboard('{Enter}');
+        const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
+        await waitFor(() => expect(searchInput).toBeInTheDocument());
+        await expect(args.handleSubmit).not.toHaveBeenCalled();
+      },
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Enter/Space on the back button activates the button (back to the book list) and is prevented from bubbling to cmdk, so no chapter is submitted.',
+      },
+    },
+  },
+};
+
+export const GridArrowNavigationAndEnterSubmits: Story = {
+  args: { scrRef: MATTHEW_REF },
+  play: async ({ canvas, userEvent, step, args }) => {
+    await step('Open and enter Matthew chapter view', async () => {
+      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+      await userEvent.click(within(getDropdown()).getByText('Matthew'));
+    });
+
+    await step('Seed the grid with Tab, then navigate with arrows', async () => {
+      const dropdownContent = getDropdown();
+      const backButton = within(dropdownContent).getByRole('button', { name: BACK_TO_BOOKS_LABEL });
+      await waitFor(() => expect(backButton).toHaveFocus());
+      await userEvent.tab(); // seeds chapter 1, focuses the grid
+      await waitFor(() => expect(getSelectedItemText(dropdownContent)).toBe('1'));
+      await userEvent.keyboard('{ArrowRight}'); // 1 -> 2
+      await waitFor(() => expect(getSelectedItemText(dropdownContent)).toBe('2'));
+      await userEvent.keyboard('{ArrowDown}'); // 2 -> 8 (one row down, 6 columns)
+      await waitFor(() => expect(getSelectedItemText(dropdownContent)).toBe('8'));
+    });
+
+    await step('Enter submits the highlighted chapter', async () => {
+      await userEvent.keyboard('{Enter}');
+      await expect(args.handleSubmit).toHaveBeenCalledWith({
+        book: 'MAT',
+        chapterNum: 8,
+        verseNum: 1,
+      });
+      await expectPopoverToBeClosed();
+    });
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '2D chapter-grid navigation: ArrowRight moves one chapter, ArrowDown moves down one row (by the grid column count), and Enter submits the highlighted chapter.',
+      },
+    },
+  },
+};
+
+export const QuickNavArrowEntersList: Story = {
+  args: { scrRef: MATTHEW_REF },
+  play: async ({ canvas, userEvent, step }) => {
+    await step('Open the component', async () => {
+      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+    });
+
+    await step('ArrowDown from a quick-nav button hands focus into the list', async () => {
+      const dropdownContent = getDropdown();
+      const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
+      await userEvent.click(searchInput);
+      await userEvent.tab(); // focus the first quick-nav button
+      const prevChapter = within(dropdownContent).getByRole('button', { name: 'Previous chapter' });
+      await expect(prevChapter).toHaveFocus();
+      await userEvent.keyboard('{ArrowDown}');
+      // ArrowDown seeds the FIRST item of the (full) book list, which is Genesis.
+      await waitFor(() => expect(getSelectedItemText(dropdownContent)).toContain('Genesis'));
+    });
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'ArrowUp/ArrowDown from a quick-nav button hands focus to the list and seeds the first/last item, mirroring the input arrow behavior.',
+      },
+    },
+  },
+};
+
+export const QuickNavTypingRoutesToInput: Story = {
+  args: { scrRef: MATTHEW_REF },
+  play: async ({ canvas, userEvent, step }) => {
+    await step('Open the component', async () => {
+      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+    });
+
+    await step('Typing a letter on a quick-nav button is routed into the input', async () => {
+      const dropdownContent = getDropdown();
+      const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
+      await userEvent.click(searchInput);
+      await userEvent.tab();
+      const prevChapter = within(dropdownContent).getByRole('button', { name: 'Previous chapter' });
+      await expect(prevChapter).toHaveFocus();
+      await userEvent.keyboard('p');
+      await waitFor(() => expect(searchInput).toHaveFocus());
+      await expect(searchInput).toHaveValue('p');
+    });
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Typing a letter/digit while a quick-nav button is focused appends it to the search input and moves focus there, so the user can start searching without first clicking the input.',
+      },
+    },
+  },
+};
+
+export const QuickNavClickHidesListThenArrowReopens: Story = {
+  args: { scrRef: MATTHEW_REF },
+  play: async ({ canvas, userEvent, step }) => {
+    await step('Open the component', async () => {
+      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+    });
+
+    await step('Clicking a quick-nav button hides the list', async () => {
+      const dropdownContent = getDropdown();
+      const nextVerse = within(dropdownContent).getByRole('button', { name: 'Next verse' });
+      await userEvent.click(nextVerse);
+      await waitFor(() => expect(within(getDropdown()).queryAllByRole('option')).toHaveLength(0));
+    });
+
+    await step('ArrowDown on the quick-nav button re-shows the list and enters it', async () => {
+      const dropdownContent = getDropdown();
+      await userEvent.keyboard('{ArrowDown}');
+      await waitFor(() =>
+        expect(within(dropdownContent).queryAllByRole('option').length).toBeGreaterThan(0),
+      );
+      await waitFor(() =>
+        expect(dropdownContent.querySelector('[data-selected="true"]')).toBeTruthy(),
+      );
+    });
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Clicking a quick-nav button hides the list (so the popover collapses to the header). Pressing an arrow on that button re-shows the list and hands focus into it.',
+      },
+    },
+  },
+};
+
+export const EscapeInChapterViewReturnsToBookView: Story = {
+  args: { scrRef: MATTHEW_REF },
+  play: async ({ canvas, userEvent, step }) => {
+    await step('Open and enter Matthew chapter view', async () => {
+      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+      await userEvent.click(within(getDropdown()).getByText('Matthew'));
+    });
+
+    await step(
+      'Escape never closes the popover from chapter view and returns to books',
+      async () => {
+        const backButton = within(getDropdown()).getByRole('button', { name: BACK_TO_BOOKS_LABEL });
+        await waitFor(() => expect(backButton).toHaveFocus());
+
+        // The guarantee under test: from chapter view, Escape returns to the book list and the
+        // popover never closes. The exact number of Escape presses is influenced by Radix's
+        // tooltip dismissal (the auto-focused back button shows a tooltip that consumes one or more
+        // Escapes before the popover's own onEscapeKeyDown handler runs), so we press until we reach
+        // the book list — asserting on every press that the popover stayed open.
+        let reachedBookView = false;
+        for (let i = 0; i < 6 && !reachedBookView; i += 1) {
+          // Escapes must be dispatched and settle one at a time: each press changes state (tooltip
+          // dismissal, then the view switch) that the next press depends on, so they cannot run
+          // concurrently.
+          // eslint-disable-next-line no-await-in-loop
+          await pressEscapeAndSettle(() => userEvent.keyboard('{Escape}'));
+          const dialog = screen.queryByRole('dialog');
+          // Must never close from chapter view.
+          expect(dialog).toBeTruthy();
+          if (dialog && within(dialog).queryAllByRole(INPUT_ROLE).length > 0)
+            reachedBookView = true;
+        }
+        expect(reachedBookView).toBe(true);
+        await expect(getDropdown()).toBeVisible();
+      },
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'In chapter view, Escape returns to the book list and never closes the popover (so the user cannot accidentally lose their place by pressing Escape while choosing a chapter). The auto-focused back button shows a tooltip that may consume one or more Escapes before the popover handler runs, so the test presses Escape until it reaches the book list, asserting the popover stays open throughout.',
+      },
+    },
+  },
+};
+
 export const ComprehensiveInteractionTest: Story = {
   args: {
     scrRef: defaultScrRef,
@@ -1014,6 +1707,59 @@ export const WithRecentSearches: Story = {
       description: {
         story:
           'BookChapterControl with recent searches functionality. Click the clock icon in the search input to see recent scripture references.',
+      },
+    },
+  },
+};
+
+const RECENT_SEARCHES_BUTTON_LABEL = 'Show recent searches';
+
+export const RecentSearchesClockKeyboard: Story = {
+  args: {
+    scrRef: defaultScrRef,
+  },
+  render: (args) => <BookChapterControlWithRecentSearches {...args} />,
+  play: async ({ canvas, userEvent, step }) => {
+    await step('Open the component', async () => {
+      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+    });
+
+    await step('Typing a letter on the clock button is routed into the input', async () => {
+      const dropdownContent = getDropdown();
+      const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
+      await userEvent.click(searchInput);
+      await userEvent.tab(); // Tab from the input lands on the clock (recent searches) button
+      const clockButton = within(dropdownContent).getByRole('button', {
+        name: RECENT_SEARCHES_BUTTON_LABEL,
+      });
+      await expect(clockButton).toHaveFocus();
+      await userEvent.keyboard('m');
+      await waitFor(() => expect(searchInput).toHaveFocus());
+      await expect(searchInput).toHaveValue('m');
+    });
+
+    await step('ArrowDown on the clock button opens the recent-searches menu', async () => {
+      const dropdownContent = getDropdown();
+      const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
+      await userEvent.click(searchInput);
+      await userEvent.tab();
+      const clockButton = within(dropdownContent).getByRole('button', {
+        name: RECENT_SEARCHES_BUTTON_LABEL,
+      });
+      await expect(clockButton).toHaveFocus();
+      // The arrow is NOT hijacked to enter the list (that is input-only); it falls through to the
+      // Radix DropdownMenu trigger, which opens the recent-searches menu.
+      await userEvent.keyboard('{ArrowDown}');
+      await waitFor(() => expect(screen.queryByRole('menu')).toBeInTheDocument());
+    });
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Keyboard handling on the recent-searches (clock) button: typing a letter/digit routes it into the search input, while an arrow key falls through to the Radix DropdownMenu and opens the recent-searches menu (it does not enter the list).',
       },
     },
   },
