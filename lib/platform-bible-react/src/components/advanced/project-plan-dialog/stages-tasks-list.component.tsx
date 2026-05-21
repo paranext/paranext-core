@@ -198,9 +198,11 @@ interface RowProps {
 function Row({ selected, bold, label, onClick, children }: RowProps) {
   return (
     <div
+      data-selected={selected ? 'true' : undefined}
       className={cn(
         'tw:group tw:flex tw:items-center tw:justify-between tw:gap-2 tw:rounded tw:px-2 tw:py-1 tw:hover:bg-accent/40 tw:focus-within:bg-accent/40',
-        selected && 'tw:bg-accent',
+        selected &&
+          'tw:rounded-s-md tw:rounded-e-none tw:bg-[#ECF2F9] tw:hover:bg-[#ECF2F9] tw:focus-within:bg-[#ECF2F9]',
       )}
     >
       <button
