@@ -8,18 +8,10 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/shadcn-ui/card';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta = {
   title: 'Demo/Text Direction',
   tags: ['autodocs'],
-  decorators: [
-    (Story) => (
-      <ThemeProvider>
-        <Story />
-      </ThemeProvider>
-    ),
-  ],
 };
 
 export default meta;

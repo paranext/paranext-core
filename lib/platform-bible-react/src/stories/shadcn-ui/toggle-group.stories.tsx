@@ -3,19 +3,11 @@ import { fn } from 'storybook/test';
 import { ToggleGroup, ToggleGroupItem } from '@/components/shadcn-ui/toggle-group';
 import { Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
 import { useState } from 'react';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof ToggleGroup> = {
   title: 'Shadcn/ToggleGroup',
   component: ToggleGroup,
   tags: ['autodocs'],
-  decorators: [
-    (Story) => (
-      <ThemeProvider>
-        <Story />
-      </ThemeProvider>
-    ),
-  ],
   argTypes: {
     type: { control: 'select', options: ['single', 'multiple'] },
     variant: { control: 'select', options: ['default', 'outline'] },
