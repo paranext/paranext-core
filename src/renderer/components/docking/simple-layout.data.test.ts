@@ -59,7 +59,7 @@ describe('simple-layout.data', () => {
       expect(new Set(allIds).size).toBe(allIds.length);
     });
 
-    it('contains the three expected webViewType strings', () => {
+    it('contains the four expected webViewType strings', () => {
       const allWebViewTypes: string[] = [];
       columns.forEach((col) => {
         // Narrowing column to BoxData and its first child to PanelData to iterate tabs.

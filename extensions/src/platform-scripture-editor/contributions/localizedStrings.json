@@ -95,15 +95,15 @@
       "%webView_modelTextPanel_title%": "Model Text",
       "%webView_modelTextPanel_unknownResource%": "The selected model text could not be found.",
       "%webView_modelTextPanel_emptyState_prompt%": "No model text selected. Pick one to display a reference translation alongside your project.",
-      "%webView_resourcePanel_noProject%": "No project selected.",
-      "%webView_resourcePanel_installing%": "Installing resource…",
-      "%webView_resourcePanel_downloadResources%": "Download resources…",
-      "%webView_resourcePanel_bibleTexts_title%": "Bible Texts",
       "%webView_resourcePanel_bibleTexts_emptyState_prompt%": "No Bible texts selected. Pick one to display a reference translation alongside your project.",
-      "%webView_resourcePanel_bibleTexts_pick%": "Select Bible texts…",
-      "%webView_resourcePanel_commentaries_title%": "Commentaries",
+      "%webView_resourcePanel_bibleTexts_pick%": "Pick Bible texts…",
+      "%webView_resourcePanel_bibleTexts_title%": "Bible texts",
       "%webView_resourcePanel_commentaries_emptyState_prompt%": "No commentaries selected. Pick one to display a commentary alongside your project.",
-      "%webView_resourcePanel_commentaries_pick%": "Select commentaries…"
+      "%webView_resourcePanel_commentaries_pick%": "Pick commentaries…",
+      "%webView_resourcePanel_commentaries_title%": "Commentaries",
+      "%webView_resourcePanel_downloadResources%": "Download resources…",
+      "%webView_resourcePanel_installing%": "Installing resource…",
+      "%webView_resourcePanel_noProject%": "No project selected."
     },
     "es": {
       "%mainMenu_openPlatformResourceViewer%": "Abrir el visor de recursos",
@@ -184,15 +184,15 @@
       "%webView_modelTextPanel_title%": "Texto modelo",
       "%webView_modelTextPanel_unknownResource%": "No se pudo encontrar el texto modelo seleccionado.",
       "%webView_modelTextPanel_emptyState_prompt%": "Ningún texto modelo seleccionado. Elige uno para mostrar una traducción de referencia junto a tu proyecto.",
-      "%webView_resourcePanel_noProject%": "Ningún proyecto seleccionado.",
-      "%webView_resourcePanel_installing%": "Instalando recurso…",
-      "%webView_resourcePanel_downloadResources%": "Descargar recursos…",
-      "%webView_resourcePanel_bibleTexts_title%": "Textos bíblicos",
       "%webView_resourcePanel_bibleTexts_emptyState_prompt%": "Ningún texto bíblico seleccionado. Elige uno para mostrar una traducción de referencia junto a tu proyecto.",
-      "%webView_resourcePanel_bibleTexts_pick%": "Seleccionar textos bíblicos…",
-      "%webView_resourcePanel_commentaries_title%": "Comentarios",
+      "%webView_resourcePanel_bibleTexts_pick%": "Elegir textos bíblicos…",
+      "%webView_resourcePanel_bibleTexts_title%": "Textos bíblicos",
       "%webView_resourcePanel_commentaries_emptyState_prompt%": "Ningún comentario seleccionado. Elige uno para mostrar un comentario junto a tu proyecto.",
-      "%webView_resourcePanel_commentaries_pick%": "Seleccionar comentarios…"
+      "%webView_resourcePanel_commentaries_pick%": "Elegir comentarios…",
+      "%webView_resourcePanel_commentaries_title%": "Comentarios",
+      "%webView_resourcePanel_downloadResources%": "Descargar recursos…",
+      "%webView_resourcePanel_installing%": "Instalando recurso…",
+      "%webView_resourcePanel_noProject%": "Ningún proyecto seleccionado."
     }
   }
 }

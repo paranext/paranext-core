@@ -34,6 +34,7 @@ import {
   LocalizeKey,
   ResourceType,
 } from 'platform-bible-utils';
+import { ChevronDown } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 // @ts-ignore: platform-scripture/src is not a published module entry-point; accessible via typeRoots symlink at dev time
 import { useEffectiveResourceReferenceList } from 'platform-scripture/src/use-effective-resource-reference-list';
@@ -41,11 +42,9 @@ import type {
   DblResourceReference,
   EffectiveResourceReference,
   ProjectReference,
-  ResourceReferenceList,
 } from 'platform-scripture';
+import { DEFAULT_RESOURCE_REFERENCE_LIST, selectDblResource } from './select-dbl-resource';
 
-const CURRENT_DATA_VERSION = '1.0.0';
-const DEFAULT_LIST: ResourceReferenceList = { dataVersion: CURRENT_DATA_VERSION, items: [] };
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
 const defaultUsj: Usj = {
@@ -118,7 +117,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // useEffectiveResourceReferenceList is imported via @ts-ignore path; cast needed for type safety
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const [effectiveResources, isEffectiveResourcesLoading] = useEffectiveResourceReferenceList(
+  const [effectiveResources] = useEffectiveResourceReferenceList(
     projectId,
     'platformScripture.referencedProjectsAndResources',
   ) as [{ items: EffectiveResourceReference[] } | undefined, boolean];
@@ -126,7 +125,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
   const [adminResourcesSetting, setAdminResources] = useProjectSetting(
     projectId,
     'platformScripture.referencedProjectsAndResources',
-    DEFAULT_LIST,
+    DEFAULT_RESOURCE_REFERENCE_LIST,
   );
 
   const pdp = useProjectDataProvider('platformScripture.userTextConnectionSettings', projectId);
@@ -248,49 +247,15 @@ globalThis.webViewComponent = function ResourceTextPanel({
   }, [filteredResources]);
 
   const handleResourceSelect = useCallback(
-    async (resource: DblResourceData) => {
-      const newRef: DblResourceReference = {
-        type: 'dblResource',
-        name: resource.displayName,
-        id: resource.dblEntryUid,
-      };
-
-      const canWrite = await pdp?.canUserWriteProjectSettings();
-
-      if (canWrite && setAdminResources) {
-        if (isPlatformError(adminResourcesSetting)) return;
-        const existingItems = adminResourcesSetting.items.filter((item) => {
-          if (item.type !== 'dblResource') return true;
-          // DblResourceReference.id exists after .type check; ResourceReference union requires cast
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          return (item as DblResourceReference).id !== resource.dblEntryUid;
-        });
-        setAdminResources({
-          dataVersion: adminResourcesSetting.dataVersion,
-          items: [newRef, ...existingItems],
-        });
-      } else {
-        // Read the raw user list directly — do NOT filter effectiveResources by source.
-        // Filtering by source drops user items that also appear in the admin list (tagged 'admin'),
-        // which would silently remove them if the admin later deletes their copy.
-        const rawUserList = await pdp?.getUserReferencedProjectsAndResources();
-        const rawUserItems = rawUserList?.items ?? [];
-        await pdp?.setUserReferencedProjectsAndResources({
-          dataVersion: rawUserList?.dataVersion ?? DEFAULT_LIST.dataVersion,
-          items: [
-            newRef,
-            ...rawUserItems.filter((item) => {
-              if (item.type !== 'dblResource') return true;
-              // DblResourceReference.id exists after .type check; ResourceReference union requires cast
-              // eslint-disable-next-line no-type-assertion/no-type-assertion
-              return (item as DblResourceReference).id !== resource.dblEntryUid;
-            }),
-          ],
-        });
-      }
-
-      setSelectedResourceId(resource.dblEntryUid);
-    },
+    (resource: DblResourceData) =>
+      selectDblResource(resource, {
+        adminSetting: adminResourcesSetting,
+        setAdminSetting: setAdminResources,
+        canUserWriteProjectSettings: pdp ? () => pdp.canUserWriteProjectSettings() : undefined,
+        getUserList: pdp ? () => pdp.getUserReferencedProjectsAndResources() : undefined,
+        setUserList: pdp ? (list) => pdp.setUserReferencedProjectsAndResources(list) : undefined,
+        onSelect: setSelectedResourceId,
+      }),
     [adminResourcesSetting, setAdminResources, pdp, setSelectedResourceId],
   );
 
@@ -355,7 +320,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
     );
   }
 
-  if (!effectiveResources || isEffectiveResourcesLoading) {
+  if (!effectiveResources) {
     return (
       <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
         <Spinner />
@@ -406,7 +371,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
               <span className="tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
                 {selectedRef ? getRefLabel(selectedRef, dblResources) : ''}
               </span>
-              <span className="tw:ml-1 tw:shrink-0">▾</span>
+              <ChevronDown className="tw:ml-1 tw:h-4 tw:w-4 tw:shrink-0" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="tw:w-72">
