@@ -21,6 +21,14 @@ const meta: Meta<typeof Checklist> = {
     listItems: { control: 'object' },
     selectedListItems: { control: 'object' },
   },
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'A scrollable list of labeled checkboxes for toggling multiple items independently. This paranext component implements the Checkbox Group pattern from shadcn.\n\nShadcn docs: [Checkbox](https://ui.shadcn.com/docs/components/checkbox)',
+      },
+    },
+  },
 };
 
 export default meta;

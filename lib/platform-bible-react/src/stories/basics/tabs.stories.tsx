@@ -24,6 +24,14 @@ const meta: Meta<typeof Tabs> = {
     defaultValue: { control: 'text' },
     orientation: { control: 'select', options: ['horizontal', 'vertical'] },
   },
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'A set of layered sections of content—known as tab panels—that are displayed one at a time. The `TabsList`/`TabsTrigger` acts as the segmented control (tab picker) and `TabsContent` renders the selected panel. This story also demonstrates `VerticalTabs`, a paranext variant with a side-by-side layout.\n\nShadcn docs: [Tabs](https://ui.shadcn.com/docs/components/tabs)',
+      },
+    },
+  },
 };
 
 export default meta;

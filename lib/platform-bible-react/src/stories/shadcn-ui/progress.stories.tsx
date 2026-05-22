@@ -7,6 +7,14 @@ const meta: Meta<typeof Progress> = {
   title: 'Shadcn/Progress',
   component: Progress,
   tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'Displays an indicator showing the completion progress of a task, typically displayed as a progress bar.\n\nShadcn docs: [Progress](https://ui.shadcn.com/docs/components/progress)',
+      },
+    },
+  },
   decorators: [
     (Story) => (
       <ThemeProvider>

@@ -17,6 +17,14 @@ const meta: Meta<typeof Spinner> = {
     size: { control: { type: 'number', min: 1, max: 100 } },
     className: { control: 'text' },
   },
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'An animated loading indicator that signals background activity.\n\nShadcn docs: [Spinner](https://ui.shadcn.com/docs/components/spinner)',
+      },
+    },
+  },
 };
 
 export default meta;

@@ -35,7 +35,7 @@ const meta: Meta<typeof ContextMenu> = {
     docs: {
       description: {
         component:
-          'Context Menu component displays a menu to the user — such as a set of actions or functions, triggered by right-clicking on an element.',
+          'Displays a menu to the user — such as a set of actions or functions — triggered by right-clicking on an element.\n\nShadcn docs: [Context Menu](https://ui.shadcn.com/docs/components/context-menu)',
       },
     },
   },

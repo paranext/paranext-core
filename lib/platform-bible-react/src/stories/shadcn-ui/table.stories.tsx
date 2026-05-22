@@ -25,6 +25,14 @@ const meta: Meta<typeof Table> = {
   argTypes: {
     stickyHeader: { control: 'boolean' },
   },
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'A responsive table component.\n\nShadcn docs: [Table](https://ui.shadcn.com/docs/components/table)',
+      },
+    },
+  },
 };
 
 export default meta;

@@ -22,6 +22,14 @@ const meta: Meta<typeof Slider> = {
     disabled: { control: 'boolean' },
     onValueChange: { action: 'value changed' },
   },
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'An input where the user selects a value from within a given range.\n\nShadcn docs: [Slider](https://ui.shadcn.com/docs/components/slider)',
+      },
+    },
+  },
 };
 
 export default meta;

@@ -7,6 +7,14 @@ const meta: Meta<typeof Input> = {
   title: 'Shadcn/Input',
   component: Input,
   tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'Displays a form input field or a component that looks like an input field.\n\nShadcn docs: [Input](https://ui.shadcn.com/docs/components/input)',
+      },
+    },
+  },
   argTypes: {
     placeholder: { control: 'text' },
     disabled: { control: 'boolean' },

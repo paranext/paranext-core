@@ -9,6 +9,14 @@ const meta: Meta<typeof Checkbox> = {
   title: 'Shadcn/Checkbox',
   component: Checkbox,
   tags: ['autodocs', 'test'],
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'A control that allows the user to toggle between checked and not checked.\n\nShadcn docs: [Checkbox](https://ui.shadcn.com/docs/components/checkbox)',
+      },
+    },
+  },
   argTypes: {
     checked: { control: 'boolean' },
     disabled: { control: 'boolean' },

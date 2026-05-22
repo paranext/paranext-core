@@ -21,6 +21,14 @@ const meta: Meta<typeof Switch> = {
     disabled: { control: 'boolean' },
     onCheckedChange: { action: 'checked changed' },
   },
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'A control that allows the user to toggle between two states.\n\nShadcn docs: [Switch](https://ui.shadcn.com/docs/components/switch)',
+      },
+    },
+  },
 };
 
 export default meta;

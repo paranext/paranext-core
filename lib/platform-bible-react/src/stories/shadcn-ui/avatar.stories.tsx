@@ -6,6 +6,14 @@ const meta: Meta<typeof Avatar> = {
   title: 'Shadcn/Avatar',
   component: Avatar,
   tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'An image element with a fallback for representing the user.\n\nShadcn docs: [Avatar](https://ui.shadcn.com/docs/components/avatar)',
+      },
+    },
+  },
   decorators: [
     (Story) => (
       <ThemeProvider>

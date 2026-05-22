@@ -10,11 +10,8 @@ const meta: Meta<typeof TextField> = {
   parameters: {
     docs: {
       description: {
-        component: `
-A text input field component with label, validation, and helper text support.
-
-Based on shadcn-ui Input component with additional features like error states and full-width support.
-        `,
+        component:
+          'A text input field with label, helper text, required, error, and full-width support. Wraps the shadcn Input component with additional field-level features.\n\nShadcn docs: [Input](https://ui.shadcn.com/docs/components/input)',
       },
     },
   },

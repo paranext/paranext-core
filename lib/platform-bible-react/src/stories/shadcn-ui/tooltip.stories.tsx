@@ -17,6 +17,14 @@ const meta: Meta<typeof Tooltip> = {
     delayDuration: { control: 'number' },
     disableHoverableContent: { control: 'boolean' },
   },
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'A popup that displays information related to an element when the element receives keyboard focus or the mouse hovers over it.\n\nShadcn docs: [Tooltip](https://ui.shadcn.com/docs/components/tooltip)',
+      },
+    },
+  },
   decorators: [
     (Story) => (
       <ThemeProvider>

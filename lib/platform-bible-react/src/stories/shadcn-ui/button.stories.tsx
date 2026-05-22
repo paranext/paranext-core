@@ -7,6 +7,14 @@ const meta: Meta<typeof Button> = {
   title: 'Shadcn/Button',
   component: Button,
   tags: ['autodocs', 'test'],
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'Displays a button or a component that looks like a button.\n\nShadcn docs: [Button](https://ui.shadcn.com/docs/components/button)',
+      },
+    },
+  },
   argTypes: {
     variant: {
       options: ['default', 'destructive', 'outline', 'secondary', 'ghost', 'link'],

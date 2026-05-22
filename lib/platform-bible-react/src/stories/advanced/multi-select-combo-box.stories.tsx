@@ -166,6 +166,14 @@ const meta: Meta<typeof MultiSelectComboBox> = {
     selected: { control: 'object' },
     onChange: { action: 'selection changed' },
   },
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'A searchable dropdown that supports selecting multiple options simultaneously, extending the Combobox pattern with multi-select and "select all" functionality.\n\nShadcn docs: [Combobox](https://ui.shadcn.com/docs/components/combobox)',
+      },
+    },
+  },
 };
 
 export default meta;

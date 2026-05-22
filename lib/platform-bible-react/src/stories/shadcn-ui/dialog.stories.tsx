@@ -18,6 +18,14 @@ const meta: Meta<typeof Dialog> = {
   title: 'Shadcn/Dialog',
   component: Dialog,
   tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'A window overlaid on either the primary window or another dialog window, rendering the content underneath inert.\n\nShadcn docs: [Dialog](https://ui.shadcn.com/docs/components/dialog)',
+      },
+    },
+  },
   decorators: [
     (Story) => (
       <ThemeProvider>
