@@ -11,10 +11,8 @@ import {
 import { ChevronUpIcon } from 'lucide-react';
 import { Entry, Sense } from 'platform-lexical-tools';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocalizedStrings } from '@papi/frontend/react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { formatReplacementString, formatScrRef } from 'platform-bible-utils';
-import { DICTIONARY_LOCALIZED_STRING_KEYS } from '../../utils/dictionary-ui.utils';
+import { formatReplacementString, formatScrRef, LanguageStrings } from 'platform-bible-utils';
 import {
   getFormatGlossesStringFromDictionaryEntrySenses,
   getDeduplicatedOccurrencesFromSenses,
@@ -25,6 +23,8 @@ import { BackToListButton } from './back-to-list-button.component';
 
 /** Props for the DictionaryEntryDisplay component */
 export type DictionaryEntryDisplayProps = {
+  /** Localized strings for the dictionary; resolve via `DICTIONARY_LOCALIZED_STRING_KEYS`. */
+  localizedStrings: LanguageStrings;
   /** Dictionary entry object to display */
   dictionaryEntry: Entry;
   /** Whether the display is in a drawer or just next to the list */
@@ -45,6 +45,7 @@ export type DictionaryEntryDisplayProps = {
  * back button to navigate back to the list view.
  */
 export function DictionaryEntryDisplay({
+  localizedStrings,
   dictionaryEntry,
   isDrawer,
   handleBackToListButton,
@@ -52,7 +53,6 @@ export function DictionaryEntryDisplay({
   onSelectOccurrence,
   onClickScrollToTop,
 }: DictionaryEntryDisplayProps) {
-  const [localizedStrings] = useLocalizedStrings(DICTIONARY_LOCALIZED_STRING_KEYS);
   const [selectedSense, setSelectedSense] = useState<Sense | undefined>();
   const [selectedSenseIndex, setSelectedSenseIndex] = useState<number | undefined>();
   const [occurrenceView, setOccurrenceView] = useState<DictionaryOccurrenceView>('chapter');
