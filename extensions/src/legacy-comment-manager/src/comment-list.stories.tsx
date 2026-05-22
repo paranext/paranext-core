@@ -170,14 +170,14 @@ function createDecorator(config: DecoratorConfig) {
   };
 }
 
-/** Threads are still loading — show skeletons. */
-export const Loading: Story = {
-  decorators: [createDecorator({ isLoading: true })],
-};
-
 /** A populated, unfiltered list with an open and a resolved thread. */
 export const Populated: Story = {
   decorators: [createDecorator({})],
+};
+
+/** Threads are still loading — show skeletons. */
+export const Loading: Story = {
+  decorators: [createDecorator({ isLoading: true })],
 };
 
 /** No comments exist at all (both filters unset) — shows the "no comments" message. */
