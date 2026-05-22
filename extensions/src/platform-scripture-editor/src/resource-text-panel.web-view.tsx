@@ -96,7 +96,7 @@ function getRefLabel(ref: EffectiveResourceReference, dblResourcesList: DblResou
   return '';
 }
 
-globalThis.webViewComponent = function ResourcePanel({
+globalThis.webViewComponent = function ResourceTextPanel({
   projectId,
   useWebViewState,
   useWebViewScrollGroupScrRef,

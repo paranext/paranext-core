@@ -27,8 +27,8 @@ import platformScriptureEditorWebViewStyles from './platform-scripture-editor.we
 import platformScriptureEditorWebView from './platform-scripture-editor.web-view?inline';
 import modelTextPanelWebViewStyles from './model-text-panel.web-view.scss?inline';
 import modelTextPanelWebView from './model-text-panel.web-view?inline';
-import resourcePanelWebViewStyles from './resource-panel.web-view.scss?inline';
-import resourcePanelWebView from './resource-panel.web-view?inline';
+import resourceTextPanelWebViewStyles from './resource-text-panel.web-view.scss?inline';
+import resourceTextPanelWebView from './resource-text-panel.web-view?inline';
 import {
   convertScriptureRangeToEditorRange,
   formatEditorTitle,
@@ -848,13 +848,13 @@ const modelTextPanelWebViewProvider: IWebViewProvider = {
  *
  * Used to pass a new projectId through reloadWebView, which has no options for extra data.
  */
-const resourcePanelPendingProjectIds = new Map<string, string | undefined>();
+const resourceTextPanelPendingProjectIds = new Map<string, string | undefined>();
 
 /**
  * Creates a resource panel web view provider that injects the given resourceType into web view
  * state so the shared component can filter resources appropriately.
  */
-function createResourcePanelProvider(
+function createResourceTextPanelProvider(
   webViewType: string,
   title: string,
   resourceType: 'ScriptureResource' | 'CommentaryResource',
@@ -869,16 +869,16 @@ function createResourcePanelProvider(
           `${webViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
         );
       // Priority: pending (reload path) > options (new-panel path) > saved (existing panel reload)
-      const projectId = resourcePanelPendingProjectIds.has(webViewType)
-        ? resourcePanelPendingProjectIds.get(webViewType)
+      const projectId = resourceTextPanelPendingProjectIds.has(webViewType)
+        ? resourceTextPanelPendingProjectIds.get(webViewType)
         : (openWebViewOptions.projectId ?? savedWebView.projectId);
-      resourcePanelPendingProjectIds.delete(webViewType);
+      resourceTextPanelPendingProjectIds.delete(webViewType);
       return {
         ...savedWebView,
         title,
         projectId,
-        content: resourcePanelWebView,
-        styles: resourcePanelWebViewStyles,
+        content: resourceTextPanelWebView,
+        styles: resourceTextPanelWebViewStyles,
         state: {
           ...savedWebView.state,
           resourceType,
@@ -888,13 +888,13 @@ function createResourcePanelProvider(
   };
 }
 
-const bibleTextsPanelWebViewProvider: IWebViewProvider = createResourcePanelProvider(
+const bibleTextsPanelWebViewProvider: IWebViewProvider = createResourceTextPanelProvider(
   BIBLE_TEXTS_PANEL_WEBVIEW_TYPE,
   '%webView_resourcePanel_bibleTexts_title%',
   'ScriptureResource',
 );
 
-const commentariesPanelWebViewProvider: IWebViewProvider = createResourcePanelProvider(
+const commentariesPanelWebViewProvider: IWebViewProvider = createResourceTextPanelProvider(
   COMMENTARIES_PANEL_WEBVIEW_TYPE,
   '%webView_resourcePanel_commentaries_title%',
   'CommentaryResource',
@@ -913,7 +913,7 @@ async function openResourceText(
   const existingPanel = allOpenDefs.find((def) => def.webViewType === webViewType);
 
   if (existingPanel) {
-    resourcePanelPendingProjectIds.set(webViewType, projectId);
+    resourceTextPanelPendingProjectIds.set(webViewType, projectId);
     return papi.webViews.reloadWebView(webViewType, existingPanel.id, { bringToFront: true });
   }
 
