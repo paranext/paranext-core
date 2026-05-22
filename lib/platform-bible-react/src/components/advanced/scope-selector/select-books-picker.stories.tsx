@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { ComponentProps, useState } from 'react';
 import { Canon } from '@sillsdev/scripture';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 import { SelectBooksPicker } from './select-books-picker.component';
 
 // Mock book information - represents which books are available (all books available in this case)
@@ -29,18 +28,16 @@ function SelectBooksPickerWrapper({
   const [selectedBookIds, setSelectedBookIds] = useState<string[]>(initialSelectedBookIds);
 
   return (
-    <ThemeProvider>
-      <div className="tw:max-w-md tw:p-4">
-        <SelectBooksPicker
-          {...rest}
-          selectedBookIds={selectedBookIds}
-          onChangeSelectedBookIds={(books) => {
-            setSelectedBookIds(books);
-            onChangeSelectedBookIds(books);
-          }}
-        />
-      </div>
-    </ThemeProvider>
+    <div className="tw:max-w-md tw:p-4">
+      <SelectBooksPicker
+        {...rest}
+        selectedBookIds={selectedBookIds}
+        onChangeSelectedBookIds={(books) => {
+          setSelectedBookIds(books);
+          onChangeSelectedBookIds(books);
+        }}
+      />
+    </div>
   );
 }
 
