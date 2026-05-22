@@ -19,6 +19,5 @@ public static class ProjectInterfaces
     public const string PLAIN_TEXT_VERSE = "platformScripture.PlainText_Verse";
     public const string LEGACY_COMMENT = "legacyCommentManager.comments";
     public const string MARKER_NAMES = "platformScripture.MarkerNames";
-    public const string USER_TEXT_CONNECTION_SETTINGS =
-        "platformScripture.userTextConnectionSettings";
+    public const string TEXT_CONNECTION_SETTINGS = "platformScripture.textConnectionSettings";
 }
