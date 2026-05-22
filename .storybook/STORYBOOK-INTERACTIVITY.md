@@ -26,14 +26,39 @@ component (and everything a story imports) is `@papi`-free.
 **Hard gate:** `npm run storybook:build` must pass. Storybook's webpack builder cannot resolve
 `@papi/*`, so nothing reachable from a story may import it (directly or transitively).
 
+## Where logic lives (the line the story must not cross)
+
+A story may **only stand in for backend/data-layer behavior** — what PAPI does: queries, server-side
+filtering, install/uninstall, server validation, persistence. It must **never contain UI logic**
+(validation rules, enable/disable gating, display-state derivation). If a story needs UI behavior to
+look right, that behavior is needed by the app too, so **put it in the presentational component** —
+then the app and the story both get it for free, from one source.
+
+Quick test: "Would the real web view compute this by calling PAPI, or is it client-side rendering
+logic?"
+
+- Client-side rule (format validation, "is the save button enabled", deriving display state from
+  props) → **component**.
+- Backend result (does the server accept this code, what rows match this query) → **story mock**.
+
+> Cautionary example: the registration form's malformed-code hint and save-enabled gating were first
+> reproduced in the story — wrong, that's UI logic. They were moved into `RegistrationFormView`
+> (which derives them from its props), and the story was reduced to mocking only the backend
+> `validateParatextRegistrationData` result. See `registration-form-view.component.tsx` /
+> `.stories.tsx`.
+
 ## Make it interactive (the part that's easy to get wrong)
 
 The presentational component usually renders **already-derived** data — the web view does the
-filtering/searching/scoping via its PAPI queries and feeds the component the result. **The story
-harness must reproduce that derivation in-memory**, not pass the raw seed straight through.
+filtering/searching/scoping via its **PAPI queries** (a data-layer concern) and feeds the component
+the result. **The story harness must reproduce that data-layer behavior in-memory** (it's a backend
+mock), not pass the raw seed straight through. This is distinct from UI logic, which belongs in the
+component (see "Where logic lives" above) — the story mocks the _query/service_, never client-side
+rules.
 
 - **Filters / scope / search are controlled** → the harness holds the filter state AND derives the
-  displayed data from it, mirroring the web view's query semantics. Examples in this repo:
+  displayed data from it, mirroring the web view's **query** semantics (the data layer the web view
+  would hit). Examples in this repo:
   - `comment-list.stories.tsx` — derives the visible threads from the comment/scope filters.
   - `checks-side-panel.stories.tsx` — derives `checkResults` from the selected check types + scope.
   - `find.stories.tsx` — a small in-memory search engine over a seed corpus; the term, match-case,
@@ -99,3 +124,6 @@ borders into other stories — keep them scoped if you touch that file.
 4. Open each story and exercise it: filters/search/scope change the results, writes reflect,
    transitions run, the failure story shows its business error, and there are no runtime errors in
    the console.
+5. Re-read the story diff for **UI logic that snuck in** (validation, enable/disable gating,
+   display-state derivation). If you find any, move it into the component — the story should hold
+   only data, backend mocks, and callback wiring (see "Where logic lives").
