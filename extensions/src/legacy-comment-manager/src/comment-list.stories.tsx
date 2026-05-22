@@ -108,8 +108,9 @@ type DecoratorConfig = {
 };
 
 /**
- * Wires the controlled filters and the selected-thread state to local state, and mocks the
- * PAPI-backed callbacks so reviewers can exercise the panel in isolation.
+ * Wires the controlled filters and the selected-thread state to local state, and backs the comment
+ * writes with a thin in-memory store so add/edit/delete/read changes reflect in the UI (like the
+ * real app). Navigating to the editor is announced via `alertCommand` (different UI).
  */
 function createDecorator(config: DecoratorConfig) {
   return function CommentListPanelDecorator(
@@ -120,6 +121,7 @@ function createDecorator(config: DecoratorConfig) {
     );
     const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(UNFILTERED);
     const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>(undefined);
+    const [threads, setThreads] = useState<LegacyCommentThread[]>(config.threads ?? sampleThreads);
 
     return (
       <div className="tw:h-screen">
@@ -127,7 +129,7 @@ function createDecorator(config: DecoratorConfig) {
           args={{
             localizedStrings,
             isLoading: config.isLoading ?? false,
-            threads: config.threads ?? sampleThreads,
+            threads,
             currentUser: CURRENT_USER,
             commentFilter,
             onCommentFilterChange: setCommentFilter,
@@ -139,24 +141,67 @@ function createDecorator(config: DecoratorConfig) {
             canUserResolveThreadCallback: resolveTrue,
             canUserEditOrDeleteCommentCallback: resolveTrue,
             handleAddCommentToThread: (options) => {
-              alertCommand('legacyCommentManager.comments.addCommentToThread', {
-                threadId: options.threadId,
-              });
-              return Promise.resolve(`${options.threadId}-new`);
+              const newCommentId = `${options.threadId}-${Date.now()}`;
+              setThreads((prev) =>
+                prev.map((thread) =>
+                  thread.id === options.threadId
+                    ? {
+                        ...thread,
+                        comments: [
+                          ...thread.comments,
+                          makeComment({
+                            id: newCommentId,
+                            thread: thread.id,
+                            verseRef: thread.verseRef,
+                            user: CURRENT_USER,
+                            contents: options.contents ?? '',
+                            isRead: false,
+                            ...(options.status && { status: options.status }),
+                            ...(options.assignedUser !== undefined && {
+                              assignedUser: options.assignedUser,
+                            }),
+                          }),
+                        ],
+                        ...(options.status && { status: options.status }),
+                        ...(options.assignedUser !== undefined && {
+                          assignedUser: options.assignedUser,
+                        }),
+                      }
+                    : thread,
+                ),
+              );
+              return Promise.resolve(newCommentId);
             },
-            handleUpdateComment: (commentId) => {
-              alertCommand('legacyCommentManager.comments.updateComment', { commentId });
+            handleUpdateComment: (commentId, contents) => {
+              setThreads((prev) =>
+                prev.map((thread) => ({
+                  ...thread,
+                  comments: thread.comments.map((comment) =>
+                    comment.id === commentId ? { ...comment, contents } : comment,
+                  ),
+                })),
+              );
               return Promise.resolve(true);
             },
             handleDeleteComment: (commentId) => {
-              alertCommand('legacyCommentManager.comments.deleteComment', { commentId });
+              setThreads((prev) =>
+                prev
+                  .map((thread) => ({
+                    ...thread,
+                    comments: thread.comments.map((comment) =>
+                      comment.id === commentId ? { ...comment, deleted: true } : comment,
+                    ),
+                  }))
+                  .filter((thread) => thread.comments.some((comment) => !comment.deleted)),
+              );
               return Promise.resolve(true);
             },
             handleReadStatusChange: (threadId, markAsRead) => {
-              alertCommand('legacyCommentManager.comments.setIsCommentThreadRead', {
-                threadId,
-                markAsRead,
-              });
+              setThreads((prev) =>
+                prev.map((thread) =>
+                  thread.id === threadId ? { ...thread, isRead: markAsRead } : thread,
+                ),
+              );
               return Promise.resolve(true);
             },
             selectedThreadId,
