@@ -1,0 +1,159 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+import { ThemeMatrixDemo } from './theme-matrix-demo';
+
+<Meta title="Guidelines/Theming" />
+
+# Theming
+
+Guidance for theming with the shadcn design system in this library: tokens, Storybook toolbar themes,
+CSS variables, and how they line up with the Paranext app. Details below.
+
+A comprehensive guide on theming components using the shadcn design system, including best
+practices for color usage, theme switching, and CSS variable management.
+
+By default we stick to the existing shadcn styles. Components we install from shadcn already
+come with styles that expect design tokens—see which properties and class patterns they use
+so they can set their own appearance and stay themeable.
+
+Token values for Storybook and the app live in
+[index.css](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css).
+For a live table of variables for the toolbar-selected theme, see
+[Guides / Theme Colors](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/guides-theme-colors--docs).
+
+Use the **Color scheme** (light, dark, or system) and **Theme** (Shadcn Neutral, Platform, or
+Paratext) controls in the Storybook toolbar to switch palettes. Selection is stored as
+`{ family, colorScheme }` (when **system** is chosen, light vs dark follows
+`prefers-color-scheme`). Classes on `document.documentElement` come from
+[index.css](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css).
+The effective row is always one of the six legacy composite ids below (also used for
+`parameters.themes.themeOverride` strings):
+
+- **shadcn-light** / **shadcn-dark** — Stock Shadcn Neutral (HSL, from the docs OKLCH scaffold)
+  in `.theme-shadcn-neutral`; Storybook preview only (not in `themes.data.json`).
+- **platform-light** / **platform-dark** — Platform.Bible default (Slate-based) light and dark;
+  matches the running app.
+- **paratext-light** / **paratext-dark** — Paratext palettes.
+
+## Platform vs Shadcn Neutral vs Paratext
+
+CSS variables live in
+[index.css](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css):
+Platform light is `:root` / `.light`; Platform dark is `.dark`; stock Shadcn
+Neutral is `.theme-shadcn-neutral` (and `.dark.theme-shadcn-neutral`); Paratext is
+`.paratext-light` / `.paratext-dark`. The running app loads Platform and Paratext HSLs from
+[themes.data.json](https://github.com/paranext/paranext-core/blob/main/src/shared/data/themes.data.json)
+(default Platform family key and `paratext`); Shadcn Neutral is Storybook-only.
+
+**Platform** default (`:root` / `.dark`) is **Slate-based** (blue-gray neutrals) but **not
+identical** to the stock Shadcn Neutral preset under `.theme-shadcn-neutral` in `storybook-themes.css`.
+Use the toolbar's **Shadcn Neutral** options when you need the closest match to
+[shadcn/ui docs](https://ui.shadcn.com/docs/theming#neutral) for development, UX review, or
+debugging. Pick **Shadcn Neutral** under Theme and set Color scheme to light or dark (or system).
+
+**Light:** Platform differs from stock Neutral on **popover** (tinted vs pure white),
+**secondary / muted / accent** neutrals (Platform `210 50% 95%` vs Neutral `0 0% 96.1%`), and
+the full **sidebar-\*** token block (Platform stays Slate-aligned; Neutral follows the docs
+scaffold).
+
+**Dark:** Platform uses solid **border** / **input** grays; stock Neutral uses semi-transparent
+white on dark. Sidebar styling also differs (including Neutral's violet **sidebar-primary** in
+the docs preset).
+
+**Paratext** is a separate palette (Caffeine-inspired in tweakcn), not vanilla Shadcn; it is not
+"mostly Slate."
+
+## Try it: change theme
+
+Shadcn-style theming is driven by CSS variables in
+[index.css](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css).
+In this Storybook, use the **Color scheme** and **Theme** toolbar controls (not a separate
+preview-app toggle) to switch palettes and confirm your story respects tokens—foreground,
+background, borders, and components that use the same variables should track the selection.
+
+## In the running application
+
+The Paranext renderer loads built-in theme definitions from
+[themes.data.json](https://github.com/paranext/paranext-core/blob/main/src/shared/data/themes.data.json)
+(Platform and Paratext families) and applies the same HSL tokens as `index.css` for those (see
+[theme.service-host.ts](https://github.com/paranext/paranext-core/blob/main/src/renderer/services/theme.service-host.ts)).
+Keep `index.css` and `themes.data.json` in sync when you change theme colors. End-user theme
+selection is handled by the platform theme service, not Storybook.
+
+## Bad example
+
+Manual colors on primitives do not follow the active theme.
+
+<table>
+  <tbody>
+    <tr>
+      <td>
+        Bad example<div className="tw:text-xs">manual styles, unable to be themed</div>
+      </td>
+      <td>
+        <input
+          value="this has manual colors"
+          aria-label="Bad example input with manual colors"
+          readOnly
+          className="tw:full tw:file:border-0 tw:col-span-2 tw:flex tw:h-8 tw:rounded-md tw:border tw:border-slate-300 tw:bg-white tw:px-3 tw:py-2 tw:text-sm tw:text-slate-900 tw:ring-offset-white tw:file:bg-transparent tw:file:text-sm tw:file:font-medium tw:placeholder:text-slate-400 tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-slate-400 tw:focus-visible:ring-offset-2 tw:disabled:cursor-not-allowed tw:disabled:opacity-50"
+        />
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+```jsx
+<input
+  value="this has manual colors"
+  aria-label="Bad example input with manual colors"
+  readOnly
+  className="tw:full tw:file:border-0 tw:col-span-2 tw:flex tw:h-8 tw:rounded-md tw:border
+    tw:border-slate-300 tw:bg-white tw:px-3 tw:py-2 tw:text-sm tw:text-slate-900
+    tw:ring-offset-white tw:file:bg-transparent tw:file:text-sm tw:file:font-medium
+    tw:placeholder:text-slate-400 tw:focus-visible:outline-none tw:focus-visible:ring-2
+    tw:focus-visible:ring-slate-400 tw:focus-visible:ring-offset-2
+    tw:disabled:cursor-not-allowed tw:disabled:opacity-50"
+/>
+```
+
+## Overwriting styles
+
+Try not to overwrite styles (colors). When you need to, use Tailwind classes that apply the same
+color variables shadcn uses, in the same way shadcn does. You can see token names on
+[Guides / Theme Colors](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/guides-theme-colors--docs)
+and in the [shadcn theming docs](https://ui.shadcn.com/docs/theming).
+
+For example, use `className="tw:bg-muted"` on a header-like surface and
+`className="tw:text-muted-foreground"` for supporting text. You can use shades such as
+`tw:bg-muted/50` sparingly, in line with how shadcn applies them.
+
+## Per-story theme override
+
+To lock a story to one palette (for example to show a dark-mode edge case), set a **legacy
+composite id** such as `parameters: { themes: { themeOverride: 'paratext-dark' } }` on the story
+or meta. You can also pass `themeOverride: { family: 'paratext', colorScheme: 'system' }` for
+system light/dark. The preview decorator reads this in `.storybook/theme-decorator.ts` (toolbar
+changes use `localStorage` and a channel event instead of `globals.theme`).
+
+## Adding a new theme
+
+1. Add a CSS class in `index.css` with `--background`, `--foreground`, and the other variables
+   (see existing blocks).
+2. Update `themes.data.json` in paranext-core if the app should expose the theme.
+3. Register the composite id in `.storybook/theme-constants.ts` (`STORYBOOK_THEME_IDS` and
+   `STORYBOOK_THEME_LABELS`), map classes in `.storybook/theme-apply.ts` (`CLASS_MAP`,
+   `compositeThemeIdFromFamilyAndEffective`, `themeStateFromLegacyThemeId`, and
+   `ALL_THEME_CLASSES`). Toolbar family and color-scheme options live in
+   `STORYBOOK_THEME_FAMILIES` / `STORYBOOK_COLOR_SCHEMES` in the same file;
+   `.storybook/manager.tsx` reads those lists for the two toolbar tools.
+
+Descriptions of which colors to use in which context are still being expanded. If you are
+unsure, see how [shadcn](https://ui.shadcn.com/) handles a similar pattern or talk to the
+[Paratext UX team](https://discord.com/channels/1064938364597436416/1082713526780575845).
+
+## Theme matrix
+
+Compares Platform and Paratext palettes in one view using scoped wrappers. Useful for visual review
+of theme tokens. For the live token table for the toolbar-selected theme, see [Guides / Theme
+Colors](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/guides-theme-colors--docs).
+
+<ThemeMatrixDemo />

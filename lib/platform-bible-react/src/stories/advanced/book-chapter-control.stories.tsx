@@ -5,7 +5,6 @@ import { defaultScrRef, LanguageStrings } from 'platform-bible-utils';
 import { expect, fn, screen, waitFor, within } from 'storybook/test';
 import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
 import { useRecentSearches } from '@/components/advanced/recent-searches.component';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 type BookChapterControlWrapperProps = {
   scrRef: SerializedVerseRef;
@@ -31,14 +30,12 @@ function BookChapterControlWrapper({
   );
 
   return (
-    <ThemeProvider>
-      <div className="tw:p-4">
-        <BookChapterControl {...rest} scrRef={scrRef} handleSubmit={handleSubmitWrapper} />
-        <div className="tw:mt-4 tw:text-sm tw:text-gray-600">
-          Current Reference: {JSON.stringify(scrRef, undefined, 2)}
-        </div>
+    <div className="tw:p-4">
+      <BookChapterControl {...rest} scrRef={scrRef} handleSubmit={handleSubmitWrapper} />
+      <div className="tw:mt-4 tw:text-sm tw:text-gray-600">
+        Current Reference: {JSON.stringify(scrRef, undefined, 2)}
       </div>
-    </ThemeProvider>
+    </div>
   );
 }
 
@@ -966,24 +963,22 @@ function BookChapterControlWithRecentSearches({
   );
 
   return (
-    <ThemeProvider>
-      <div className="tw:p-4">
-        <BookChapterControl
-          {...rest}
-          scrRef={scrRef}
-          handleSubmit={handleScrRef}
-          recentSearches={recentSearches}
-          onAddRecentSearch={handleAddRecentSearch}
-        />
-        <div className="tw:mt-4 tw:text-sm tw:text-gray-600">
-          Current Reference: {JSON.stringify(scrRef, undefined, 2)}
-        </div>
-        <div className="tw:mt-2 tw:text-sm tw:text-gray-500">
-          Recent Searches:{' '}
-          {recentSearches.map((ref) => `${ref.book} ${ref.chapterNum}:${ref.verseNum}`).join(', ')}
-        </div>
+    <div className="tw:p-4">
+      <BookChapterControl
+        {...rest}
+        scrRef={scrRef}
+        handleSubmit={handleScrRef}
+        recentSearches={recentSearches}
+        onAddRecentSearch={handleAddRecentSearch}
+      />
+      <div className="tw:mt-4 tw:text-sm tw:text-gray-600">
+        Current Reference: {JSON.stringify(scrRef, undefined, 2)}
       </div>
-    </ThemeProvider>
+      <div className="tw:mt-2 tw:text-sm tw:text-gray-500">
+        Recent Searches:{' '}
+        {recentSearches.map((ref) => `${ref.book} ${ref.chapterNum}:${ref.verseNum}`).join(', ')}
+      </div>
+    </div>
   );
 }
 

@@ -87,7 +87,6 @@ import {
   MultiSelectComboBox,
   type MultiSelectComboBoxEntry,
 } from '@/components/advanced/multi-select-combo-box.component';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 type TooltipSide = 'top' | 'right' | 'bottom' | 'left';
 type TooltipAlign = 'start' | 'center' | 'end';
@@ -126,13 +125,11 @@ const meta = {
   },
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <TooltipProvider>
-          <div className="tw:flex tw:justify-center tw:p-8">
-            <Story />
-          </div>
-        </TooltipProvider>
-      </ThemeProvider>
+      <TooltipProvider>
+        <div className="tw:flex tw:justify-center tw:p-8">
+          <Story />
+        </div>
+      </TooltipProvider>
     ),
   ],
 } satisfies Meta<TooltipStoryArgs>;

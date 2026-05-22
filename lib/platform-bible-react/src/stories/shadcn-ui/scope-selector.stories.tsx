@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { ScopeSelector } from '@/components/advanced/scope-selector/scope-selector.component';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 import { ComponentProps, useCallback, useState } from 'react';
 import { Scope } from '@/components/utils/scripture.util';
 
@@ -67,15 +66,13 @@ function ScopeSelectorWrapper({
   );
 
   return (
-    <ThemeProvider>
-      <ScopeSelector
-        {...rest}
-        scope={scope}
-        selectedBookIds={selectedBooks}
-        onScopeChange={handleScopeChange}
-        onSelectedBookIdsChange={handleSelectedBooksChange}
-      />
-    </ThemeProvider>
+    <ScopeSelector
+      {...rest}
+      scope={scope}
+      selectedBookIds={selectedBooks}
+      onScopeChange={handleScopeChange}
+      onSelectedBookIdsChange={handleSelectedBooksChange}
+    />
   );
 }
 
@@ -83,7 +80,6 @@ const meta: Meta<typeof ScopeSelector> = {
   title: 'Advanced/ScopeSelector',
   component: ScopeSelector,
   tags: ['autodocs'],
-  decorators: [(Story) => <Story />],
   args: {
     scope: 'chapter',
     availableBookInfo:

@@ -1,0 +1,74 @@
+/**
+ * Storybook-only theme palettes. This file is imported in preview.ts and is NOT shipped in the
+ * library dist. Add CSS classes here that are only needed for the Storybook preview (e.g. theme
+ * switcher options that are not part of the production app).
+ */
+
+/**
+ * Stock Shadcn Neutral (HSL) — Storybook-only preview. Not applied in the running app.
+ * Converted from OKLCH in https://ui.shadcn.com/docs/theming (neutral "Default Theme CSS").
+ * Pair with `.dark` on the same element for dark mode: `.dark.theme-shadcn-neutral`.
+ */
+.theme-shadcn-neutral {
+  --background: hsl(0 0% 100%);
+  --foreground: hsl(0 0% 3.9%);
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(0 0% 3.9%);
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(0 0% 3.9%);
+  --primary: hsl(0 0% 9.1%);
+  --primary-foreground: hsl(0 0% 98%);
+  --secondary: hsl(0 0% 96.1%);
+  --secondary-foreground: hsl(0 0% 9.1%);
+  --muted: hsl(0 0% 96.1%);
+  --muted-foreground: hsl(0 0% 45.2%);
+  --accent: hsl(0 0% 96.1%);
+  --accent-foreground: hsl(0 0% 9.1%);
+  --destructive: hsl(351.7 100% 40.5%);
+  --destructive-foreground: hsl(0 0% 98%);
+  --border: hsl(0 0% 89.8%);
+  --input: hsl(0 0% 89.8%);
+  --ring: hsl(0 0% 63%);
+
+  --sidebar: hsl(0 0% 98%);
+  --sidebar-foreground: hsl(0 0% 3.9%);
+  --sidebar-primary: hsl(0 0% 9.1%);
+  --sidebar-primary-foreground: hsl(0 0% 98%);
+  --sidebar-accent: hsl(0 0% 96.1%);
+  --sidebar-accent-foreground: hsl(0 0% 9.1%);
+  --sidebar-border: hsl(0 0% 89.8%);
+  --sidebar-ring: hsl(0 0% 63%);
+
+  --radius: 0.625rem;
+}
+
+.dark.theme-shadcn-neutral {
+  --background: hsl(0 0% 3.9%);
+  --foreground: hsl(0 0% 98%);
+  --card: hsl(0 0% 9.1%);
+  --card-foreground: hsl(0 0% 98%);
+  --popover: hsl(0 0% 9.1%);
+  --popover-foreground: hsl(0 0% 98%);
+  --primary: hsl(0 0% 89.8%);
+  --primary-foreground: hsl(0 0% 9.1%);
+  --secondary: hsl(0 0% 14.9%);
+  --secondary-foreground: hsl(0 0% 98%);
+  --muted: hsl(0 0% 14.9%);
+  --muted-foreground: hsl(0 0% 63%);
+  --accent: hsl(0 0% 14.9%);
+  --accent-foreground: hsl(0 0% 98%);
+  --destructive: hsl(358.8 100% 69.8%);
+  --destructive-foreground: hsl(0 0% 98%);
+  --border: hsl(0 0% 100% / 0.1);
+  --input: hsl(0 0% 100% / 0.15);
+  --ring: hsl(0 0% 45.2%);
+
+  --sidebar: hsl(0 0% 9.1%);
+  --sidebar-foreground: hsl(0 0% 98%);
+  --sidebar-primary: hsl(225.3 84.1% 49%);
+  --sidebar-primary-foreground: hsl(0 0% 98%);
+  --sidebar-accent: hsl(0 0% 14.9%);
+  --sidebar-accent-foreground: hsl(0 0% 98%);
+  --sidebar-border: hsl(0 0% 100% / 0.1);
+  --sidebar-ring: hsl(0 0% 45.2%);
+}
