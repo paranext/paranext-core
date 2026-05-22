@@ -22,6 +22,7 @@ export type ProjectPickerComboBoxProps = {
   currentProject: ProjectOption | undefined;
   recentProjects: ProjectOption[];
   allProjects: ProjectOption[];
+  /** Callback invoked with the selected project's ID when the user picks a project */
   onSelect: (projectId: string) => void;
   isLoading?: boolean;
   localizedStrings?: ProjectPickerLocalizedStrings;
@@ -37,6 +38,7 @@ const toOption = (project: ProjectOption): ProjectComboOption => ({
   projectId: project.id,
 });
 
+/** Combo box for selecting a project from recent and all-projects lists */
 export function ProjectPickerComboBox({
   currentProject,
   recentProjects,

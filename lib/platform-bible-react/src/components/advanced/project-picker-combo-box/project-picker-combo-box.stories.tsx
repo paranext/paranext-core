@@ -1,4 +1,3 @@
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import { ProjectPickerComboBox, type ProjectOption } from './project-picker-combo-box.component';
@@ -26,11 +25,9 @@ const meta: Meta<typeof ProjectPickerComboBox> = {
   tags: ['autodocs'],
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className="tw:max-w-sm tw:p-4">
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className="tw:max-w-sm tw:p-4">
+        <Story />
+      </div>
     ),
   ],
   args: {
