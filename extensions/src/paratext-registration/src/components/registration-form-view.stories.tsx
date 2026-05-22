@@ -3,6 +3,7 @@ import { ReactElement, useState } from 'react';
 import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
 import { alertCommand } from '../../../../../.storybook/story.utils';
 import {
+  REGISTRATION_CODE_REGEX_STRING,
   RegistrationFormView,
   RegistrationFormViewProps,
 } from './registration-form-view.component';
@@ -50,10 +51,8 @@ type DecoratorConfig = Partial<
     | 'hasSavedCode'
     | 'isFormDisabled'
     | 'isSaveDisabled'
-    | 'showInvalidCode'
     | 'saveState'
     | 'isLoading'
-    | 'registrationIsValid'
     | 'error'
     | 'errorDescription'
   >
@@ -80,6 +79,21 @@ function createDecorator(config: DecoratorConfig) {
     );
     const [isEditing, setIsEditing] = useState(config.isEditing ?? true);
 
+    // Reproduce the container's field validation so the form validates live in the story like the
+    // app does: a non-empty code that doesn't match the registration-code format is flagged
+    // (red field + length warning), and the registration is "valid" only with a name and a
+    // well-formed code. (The app additionally validates the code against the backend; the story
+    // treats a well-formed code + name as valid.)
+    const isCodeWellFormed = !!registrationCode.match(REGISTRATION_CODE_REGEX_STRING);
+    const showInvalidCode = isEditing && registrationCode.length > 0 && !isCodeWellFormed;
+    const registrationIsValid = isEditing && name.trim().length > 0 && isCodeWellFormed;
+    const isFormDisabled = (config.isFormDisabled ?? false) || !isEditing;
+    const hasUnsavedChanges = name !== savedName || registrationCode !== savedCode;
+    const error = config.error ?? '';
+    const isSaveDisabled =
+      config.isSaveDisabled ??
+      (isFormDisabled || !hasUnsavedChanges || !registrationIsValid || !!error);
+
     return (
       <div className="tw:max-w-2xl tw:p-4">
         <Story
@@ -91,13 +105,13 @@ function createDecorator(config: DecoratorConfig) {
             savedName,
             savedCode,
             hasSavedCode: config.hasSavedCode ?? savedCode.length > 0,
-            isFormDisabled: (config.isFormDisabled ?? false) || !isEditing,
-            isSaveDisabled: config.isSaveDisabled ?? false,
-            showInvalidCode: config.showInvalidCode ?? false,
+            isFormDisabled,
+            isSaveDisabled,
+            showInvalidCode,
             saveState: config.saveState ?? SaveState.HasNotSaved,
             isLoading: config.isLoading ?? false,
-            registrationIsValid: config.registrationIsValid ?? false,
-            error: config.error ?? '',
+            registrationIsValid,
+            error,
             errorDescription: config.errorDescription ?? '',
             onNameChange: (e) => setName(e.target.value),
             onRegistrationCodeChange: (e) => setRegistrationCode(e.target.value),
@@ -141,17 +155,17 @@ export const InitialRegistration: Story = {
   decorators: [createDecorator({ isEditing: true })],
 };
 
-/** Editing a valid registration code — the success alert is shown. */
+/** Editing a valid registration code — the success alert is shown (validity is computed live). */
 export const ValidRegistration: Story = {
   decorators: [
     createDecorator({
       isEditing: true,
       initialName: 'Jane Translator',
       initialCode: SAMPLE_CODE,
+      // A previous (different) valid code so there are unsaved changes and Save is enabled.
       savedName: 'Jane Translator',
-      savedCode: SAMPLE_CODE,
+      savedCode: 'ZZZ999-YYY888-XXX777-WWW666-VVV555',
       hasSavedCode: true,
-      registrationIsValid: true,
     }),
   ],
 };
