@@ -161,7 +161,10 @@ internal sealed class MarbleDataAccessService
     {
         if (
             view.TryGetValue(language, out var byLemma)
-            && byLemma.TryGetValue(termLemma, out var glossList)
+            && byLemma.TryGetValue(
+                termLemma.Normalize(System.Text.NormalizationForm.FormD),
+                out var glossList
+            )
         )
         {
             glosses = [.. glossList];

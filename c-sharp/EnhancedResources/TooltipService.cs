@@ -67,10 +67,10 @@ internal sealed class TooltipService
         if (token.LexicalLinks is not { Count: > 0 } lexicalLinks)
             return [];
 
-        var (dictionary, _) = ParseLexicalLink(lexicalLinks[0]);
+        var (dictionary, lemma) = ParseLexicalLink(lexicalLinks[0]);
 
         IList<string> glosses = _marbleData.FindLocalizedGlossesForTerm(
-            token.Text,
+            lemma ?? token.Text,
             glossLanguage,
             dictionary
         );
