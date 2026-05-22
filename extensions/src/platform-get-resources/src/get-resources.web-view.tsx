@@ -201,13 +201,15 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const installResource = dblResourcesProvider?.installDblResource;
   const uninstallResource = dblResourcesProvider?.uninstallDblResource;
 
-  const [fetchResources, setFetchResources] = useState(false);
+  const [fetchResources, setFetchResources] = useState(true);
   const [resources, isLoadingResources] = usePromise(
     useCallback(async () => {
-      setFetchResources(false);
-      return papi.commands.sendCommand('platformGetResources.getCachedResources');
-      // Need to have this hook to retrigger the fetch
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+      if (fetchResources) {
+        setFetchResources(false);
+        return papi.commands.sendCommand('platformGetResources.getCachedResources');
+      }
+
+      return Promise.resolve(undefined);
     }, [fetchResources]),
     undefined,
   );

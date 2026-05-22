@@ -77,17 +77,19 @@ globalThis.webViewComponent = function ModelTextPanel({
 
   // --- DBL resource resolution ---
 
-  const [fetchResources, setFetchResources] = useState(false);
+  const [fetchResources, setFetchResources] = useState(true);
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
   const [resourcesPossiblyUndefined, isLoadingResources] = usePromise(
     useCallback(async () => {
-      const cachedResources = await papi.commands.sendCommand(
-        'platformGetResources.getCachedResources',
-      );
-      setFetchResources(false);
-      return cachedResources;
-      // Need to have this hook to retrigger the fetch
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+      if (fetchResources) {
+        const cachedResources = await papi.commands.sendCommand(
+          'platformGetResources.getCachedResources',
+        );
+        setFetchResources(false);
+        return cachedResources;
+      }
+
+      return Promise.resolve(undefined);
     }, [fetchResources]),
     undefined,
   );
