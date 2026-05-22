@@ -411,6 +411,8 @@ interface PickerMocks {
   mockGetSetting: ReturnType<typeof vi.fn>;
   mockGetAllOpenWebViewDefinitions: ReturnType<typeof vi.fn>;
   mockSendCommand: ReturnType<typeof vi.fn>;
+  mockDataProvidersGet: ReturnType<typeof vi.fn>;
+  mockRecordProjectOpened: ReturnType<typeof vi.fn>;
   mockWarn: ReturnType<typeof vi.fn>;
   mockInfo: ReturnType<typeof vi.fn>;
   mockDebug: ReturnType<typeof vi.fn>;
@@ -479,6 +481,14 @@ function createPickerMocks(): PickerMocks {
     };
   });
 
+  const mockRecordProjectOpened = vi.fn().mockResolvedValue(undefined);
+  const mockDataProvidersGet = vi.fn().mockImplementation(async (name: string) => {
+    if (name === 'platformScripture.recentlyOpenedProjects') {
+      return { recordProjectOpened: mockRecordProjectOpened };
+    }
+    return undefined;
+  });
+
   // Mocking just the parts of PAPI the picker and its driver touch at runtime.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const papi = {
@@ -490,6 +500,7 @@ function createPickerMocks(): PickerMocks {
     },
     commands: { sendCommand: mockSendCommand },
     network: { getNetworkEvent: mockGetNetworkEvent },
+    dataProviders: { get: mockDataProvidersGet },
     logger: { warn: mockWarn, info: mockInfo, debug: mockDebug },
   } as unknown as typeof PapiBackend;
 
@@ -498,6 +509,8 @@ function createPickerMocks(): PickerMocks {
     mockGetSetting,
     mockGetAllOpenWebViewDefinitions,
     mockSendCommand,
+    mockDataProvidersGet,
+    mockRecordProjectOpened,
     mockWarn,
     mockInfo,
     mockDebug,
@@ -854,6 +867,162 @@ describe('openDefaultActiveProjectIfApplicable', () => {
 
     expect(outcome).toBe('failed');
     expect(mockWarn).toHaveBeenCalled();
+  });
+
+  it('records the opened project as recently-opened on the filled path', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      mockRecordProjectOpened,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          proj1: {
+            id: 'proj1',
+            name: 'P1',
+            fullName: 'Project 1',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2025-06-01T00:00:00Z',
+          },
+        };
+      }
+      if (commandName === 'platformScriptureEditor.openScriptureEditor') {
+        return 'opened-webview-id';
+      }
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockRecordProjectOpened).toHaveBeenCalledWith('proj1');
+    expect(mockRecordProjectOpened).toHaveBeenCalledTimes(1);
+  });
+
+  it('still reports filled even if recordProjectOpened throws', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      mockRecordProjectOpened,
+      mockWarn,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          proj1: {
+            id: 'proj1',
+            name: 'P1',
+            fullName: 'Project 1',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2025-06-01T00:00:00Z',
+          },
+        };
+      }
+      if (commandName === 'platformScriptureEditor.openScriptureEditor') {
+        return 'opened-webview-id';
+      }
+      return undefined;
+    });
+    mockRecordProjectOpened.mockRejectedValueOnce(new Error('storage write blew up'));
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockWarn).toHaveBeenCalled();
+  });
+
+  it('does not record when openScriptureEditor fails', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      mockRecordProjectOpened,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          proj1: {
+            id: 'proj1',
+            name: 'P1',
+            fullName: 'Project 1',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2025-06-01T00:00:00Z',
+          },
+        };
+      }
+      if (commandName === 'platformScriptureEditor.openScriptureEditor') {
+        throw new Error('open failed');
+      }
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('failed');
+    expect(mockRecordProjectOpened).not.toHaveBeenCalled();
+  });
+
+  it('still reports filled when dataProviders.get returns undefined', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      mockDataProvidersGet,
+      mockRecordProjectOpened,
+      mockWarn,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          proj1: {
+            id: 'proj1',
+            name: 'P1',
+            fullName: 'Project 1',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2025-06-01T00:00:00Z',
+          },
+        };
+      }
+      if (commandName === 'platformScriptureEditor.openScriptureEditor') {
+        return 'opened-webview-id';
+      }
+      return undefined;
+    });
+    // Override the default mock so dataProviders.get returns undefined for the recents service.
+    mockDataProvidersGet.mockResolvedValue(undefined);
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockRecordProjectOpened).not.toHaveBeenCalled();
+    expect(mockWarn).not.toHaveBeenCalled();
   });
 });
 
