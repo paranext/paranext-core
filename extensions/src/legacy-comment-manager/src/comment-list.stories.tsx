@@ -1,0 +1,191 @@
+import type { Meta, StoryObj } from '@storybook/react-webpack5';
+import { COMMENT_LIST_STRING_KEYS } from 'platform-bible-react';
+import type { LegacyComment, LegacyCommentThread } from 'platform-bible-utils';
+import { ReactElement, useState } from 'react';
+import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
+import { alertCommand } from '../../../../.storybook/story.utils';
+import {
+  CommentFilter,
+  CommentListPanel,
+  CommentListPanelProps,
+  COMMENT_LIST_PANEL_EXTRA_STRING_KEYS,
+  ScopeFilter,
+  UNFILTERED,
+} from './comment-list.component';
+
+/**
+ * `CommentListPanel` is the presentational half of the legacy comment-list web view: a comment /
+ * scope filter toolbar above the comment list, with loading and empty states. The web view supplies
+ * the threads and the PAPI-backed callbacks; the filters are controlled because the web view uses
+ * them to query threads.
+ */
+
+const localizedStrings = getLocalizedStrings([
+  ...Array.from(COMMENT_LIST_STRING_KEYS),
+  ...COMMENT_LIST_PANEL_EXTRA_STRING_KEYS,
+]);
+
+const CURRENT_USER = 'Current User';
+
+const makeComment = (
+  overrides: Partial<LegacyComment> & Pick<LegacyComment, 'id'>,
+): LegacyComment => ({
+  user: 'Alice',
+  date: '2024-01-02T09:30:00.0000000-00:00',
+  contents: 'We should double-check this rendering against the source text.',
+  deleted: false,
+  hideInTextWindow: false,
+  language: 'en',
+  isRead: true,
+  startPosition: 0,
+  thread: overrides.thread ?? 'thread-1',
+  verseRef: overrides.verseRef ?? 'GEN 1:1',
+  ...overrides,
+});
+
+const sampleThreads: LegacyCommentThread[] = [
+  {
+    id: 'thread-1',
+    verseRef: 'GEN 1:1',
+    status: 'Todo',
+    type: 'Normal',
+    modifiedDate: '2024-01-02T10:00:00.0000000-00:00',
+    isSpellingNote: false,
+    isBTNote: false,
+    isConsultantNote: false,
+    isRead: false,
+    assignedUser: CURRENT_USER,
+    comments: [
+      makeComment({ id: 'c1', thread: 'thread-1', verseRef: 'GEN 1:1' }),
+      makeComment({
+        id: 'c2',
+        thread: 'thread-1',
+        verseRef: 'GEN 1:1',
+        user: 'Bob',
+        contents: 'Good catch — I will update the draft.',
+        date: '2024-01-02T10:00:00.0000000-00:00',
+      }),
+    ],
+  },
+  {
+    id: 'thread-2',
+    verseRef: 'GEN 1:3',
+    status: 'Resolved',
+    type: 'Normal',
+    modifiedDate: '2024-01-03T14:15:00.0000000-00:00',
+    isSpellingNote: false,
+    isBTNote: false,
+    isConsultantNote: false,
+    isRead: true,
+    comments: [
+      makeComment({
+        id: 'c3',
+        thread: 'thread-2',
+        verseRef: 'GEN 1:3',
+        user: 'Charlie',
+        contents: 'Resolved in the latest send/receive.',
+        status: 'Resolved',
+      }),
+    ],
+  },
+];
+
+const resolveTrue = () => Promise.resolve(true);
+
+const meta: Meta<typeof CommentListPanel> = {
+  title: 'Bundled Extensions/legacy-comment-manager/CommentListPanel',
+  component: CommentListPanel,
+  tags: ['autodocs'],
+};
+export default meta;
+
+type Story = StoryObj<typeof CommentListPanel>;
+
+type DecoratorConfig = {
+  isLoading?: boolean;
+  threads?: LegacyCommentThread[];
+  initialCommentFilter?: CommentFilter;
+};
+
+/**
+ * Wires the controlled filters and the selected-thread state to local state, and mocks the
+ * PAPI-backed callbacks so reviewers can exercise the panel in isolation.
+ */
+function createDecorator(config: DecoratorConfig) {
+  return function CommentListPanelDecorator(
+    Story: (update?: { args: CommentListPanelProps }) => ReactElement,
+  ) {
+    const [commentFilter, setCommentFilter] = useState<CommentFilter>(
+      config.initialCommentFilter ?? UNFILTERED,
+    );
+    const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(UNFILTERED);
+    const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>(undefined);
+
+    return (
+      <div className="tw:h-screen">
+        <Story
+          args={{
+            localizedStrings,
+            isLoading: config.isLoading ?? false,
+            threads: config.threads ?? sampleThreads,
+            currentUser: CURRENT_USER,
+            commentFilter,
+            onCommentFilterChange: setCommentFilter,
+            scopeFilter,
+            onScopeFilterChange: setScopeFilter,
+            assignableUsers: ['', 'Alice', 'Bob', 'Charlie', CURRENT_USER],
+            canUserAddCommentToThread: true,
+            canUserAssignThreadCallback: resolveTrue,
+            canUserResolveThreadCallback: resolveTrue,
+            canUserEditOrDeleteCommentCallback: resolveTrue,
+            handleAddCommentToThread: (options) => {
+              alertCommand('legacyCommentManager.comments.addCommentToThread', {
+                threadId: options.threadId,
+              });
+              return Promise.resolve(`${options.threadId}-new`);
+            },
+            handleUpdateComment: (commentId) => {
+              alertCommand('legacyCommentManager.comments.updateComment', { commentId });
+              return Promise.resolve(true);
+            },
+            handleDeleteComment: (commentId) => {
+              alertCommand('legacyCommentManager.comments.deleteComment', { commentId });
+              return Promise.resolve(true);
+            },
+            handleReadStatusChange: (threadId, markAsRead) => {
+              alertCommand('legacyCommentManager.comments.setIsCommentThreadRead', {
+                threadId,
+                markAsRead,
+              });
+              return Promise.resolve(true);
+            },
+            selectedThreadId,
+            onSelectedThreadChange: setSelectedThreadId,
+            onVerseRefClick: (thread) =>
+              alertCommand('platformScriptureEditor.selectRange', { verseRef: thread.verseRef }),
+          }}
+        />
+      </div>
+    );
+  };
+}
+
+/** Threads are still loading — show skeletons. */
+export const Loading: Story = {
+  decorators: [createDecorator({ isLoading: true })],
+};
+
+/** A populated, unfiltered list with an open and a resolved thread. */
+export const Populated: Story = {
+  decorators: [createDecorator({})],
+};
+
+/** No comments exist at all (both filters unset) — shows the "no comments" message. */
+export const Empty: Story = {
+  decorators: [createDecorator({ threads: [] })],
+};
+
+/** No comments match the active filter — shows the "no comments match filter" message. */
+export const EmptyFiltered: Story = {
+  decorators: [createDecorator({ threads: [], initialCommentFilter: 'unread-assigned-to-me' })],
+};
