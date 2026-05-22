@@ -128,7 +128,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
     DEFAULT_RESOURCE_REFERENCE_LIST,
   );
 
-  const pdp = useProjectDataProvider('platformScripture.userTextConnectionSettings', projectId);
+  const pdp = useProjectDataProvider('platformScripture.textConnectionSettings', projectId);
 
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
   const [resourcesPossiblyError] = useData(
@@ -251,7 +251,9 @@ globalThis.webViewComponent = function ResourceTextPanel({
       selectDblResource(resource, {
         adminSetting: adminResourcesSetting,
         setAdminSetting: setAdminResources,
-        canUserWriteProjectSettings: pdp ? () => pdp.canUserWriteProjectSettings() : undefined,
+        canUserWriteProjectSettings: pdp
+          ? () => pdp.canUserWriteProjectTextConnectionSettings()
+          : undefined,
         getUserList: pdp ? () => pdp.getUserReferencedProjectsAndResources() : undefined,
         setUserList: pdp ? (list) => pdp.setUserReferencedProjectsAndResources(list) : undefined,
         onSelect: setSelectedResourceId,
