@@ -39,6 +39,7 @@ globalThis.webViewComponent = function DictionaryWebView({
     };
     try {
       const dp = await papi.dataProviders.get('platformLexicalTools.lexicalReferenceService');
+      if (!dp) throw new Error('Could not get lexical reference service data provider');
       const entriesById = await dp.getEntriesById(selector);
       return { entriesById: entriesById ?? {} };
     } catch (e) {
@@ -57,6 +58,7 @@ globalThis.webViewComponent = function DictionaryWebView({
     };
     try {
       const dp = await papi.dataProviders.get('platformLexicalTools.lexicalReferenceService');
+      if (!dp) throw new Error('Could not get lexical reference service data provider');
       const fullEntriesById = await dp.getEntriesById(selector);
       if (!fullEntriesById || isPlatformError(fullEntriesById)) return undefined;
       return fullEntriesById[entry.id]?.[0];
