@@ -1,10 +1,3 @@
-import {
-  Editorial,
-  EditorOptions,
-  EditorRef,
-  getDefaultViewOptions,
-  UsjNodeOptions,
-} from '@eten-tech-foundation/platform-editor';
 import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
@@ -16,7 +9,7 @@ import {
   useProjectDataProvider,
   useProjectSetting,
 } from '@papi/frontend/react';
-import { Button, Spinner, usePromise } from 'platform-bible-react';
+import { usePromise } from 'platform-bible-react';
 import {
   DblResourceData,
   formatReplacementString,
@@ -24,11 +17,16 @@ import {
   isPlatformError,
   LocalizeKey,
 } from 'platform-bible-utils';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { DblResourceReference, EffectiveResourceReference } from 'platform-scripture';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { isDblResourceReference } from './resource-reference.utils';
 import { DEFAULT_RESOURCE_REFERENCE_LIST, selectTextConnection } from './select-dbl-resource';
+import {
+  ModelTextPanel,
+  ModelTextPanelStatus,
+  MODEL_TEXT_PANEL_STRING_KEYS,
+} from './model-text-panel.component';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
@@ -38,22 +36,20 @@ const defaultUsj: Usj = {
   content: [],
 };
 
-const MODEL_TEXT_PANEL_STRING_KEYS: LocalizeKey[] = [
-  '%webView_modelTextPanel_installing%',
-  '%webView_modelTextPanel_noProject%',
-  '%webView_modelTextPanel_pickModelText%',
+// Webview-only localized strings — used for the dynamic title via updateWebViewDefinition. The
+// presentational component doesn't know about the title.
+const ALL_STRING_KEYS: LocalizeKey[] = [
+  ...MODEL_TEXT_PANEL_STRING_KEYS,
   '%webView_modelTextPanel_title%',
   '%webView_modelTextPanel_title_withResource%',
-  '%webView_modelTextPanel_unknownResource%',
-  '%webView_modelTextPanel_emptyState_prompt%',
 ];
 
-globalThis.webViewComponent = function ModelTextPanel({
+globalThis.webViewComponent = function ModelTextPanelWebView({
   projectId,
   updateWebViewDefinition,
   useWebViewScrollGroupScrRef,
 }: WebViewProps) {
-  const [localizedStrings] = useLocalizedStrings(useMemo(() => MODEL_TEXT_PANEL_STRING_KEYS, []));
+  const [localizedStrings] = useLocalizedStrings(useMemo(() => ALL_STRING_KEYS, []));
 
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
 
@@ -95,7 +91,7 @@ globalThis.webViewComponent = function ModelTextPanel({
   const dblResources = resourcesPossiblyUndefined ?? [];
 
   const effectiveModelText = effectiveModelTexts?.items[0];
-  // EffectiveResourceReference is a discriminated union; checking `.type` narrows to DblResourceReference
+  // EffectiveResourceReference is a discriminated union; isDblResourceReference narrows it
   let dblRef: (EffectiveResourceReference & DblResourceReference) | undefined;
   if (isDblResourceReference(effectiveModelText)) {
     dblRef = effectiveModelText;
@@ -211,102 +207,43 @@ globalThis.webViewComponent = function ModelTextPanel({
     ),
   );
 
-  // --- Editor options ---
+  // --- Resolve which mutually-exclusive state to render ---
+  // Mirrors original priority order: no project → loading/empty → unknown → installing →
+  // loading text → active.
 
-  // EditorRef requires null initial value per React ref convention
-  // eslint-disable-next-line no-null/no-null
-  const editorRef = useRef<EditorRef | null>(null);
-  const options: EditorOptions = useMemo(
-    () => ({
-      isReadonly: true,
-      hasSpellCheck: false,
-      // UsjNodeOptions is a complex type; empty-object initializer requires assertion
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      nodes: {} as UsjNodeOptions,
-      textDirection,
-      view: getDefaultViewOptions(),
-    }),
-    [textDirection],
-  );
-
-  // --- PDP sync (read-only: push incoming USJ directly into the editor) ---
-
-  useEffect(() => {
-    if (usjFromPdp) editorRef.current?.setUsj(usjFromPdp);
-  }, [usjFromPdp]);
-
-  // --- Render ---
-
-  // No project state: panel was opened without a project ID
-  // Note: It's expected that this isn't shown very long and that the `platform-scripture-editor`
-  // extension will show the most recent project (or the picked project).
+  let status: ModelTextPanelStatus;
   if (!projectId) {
-    return (
-      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
-        <p>{localizedStrings['%webView_modelTextPanel_noProject%']}</p>
-      </div>
-    );
+    // It's expected this isn't shown long; the `platform-scripture-editor` extension will show
+    // the most recent project (or the picked project).
+    status = 'noProject';
+  } else if (!effectiveModelTexts || effectiveModelTexts.items.length === 0) {
+    status = isEffectiveModelTextsLoading ? 'loadingModelTexts' : 'noModelText';
+  } else if (isLoadingResources) {
+    // PT-3991: a model text is configured but the DBL resource list is still loading — show a
+    // spinner instead of falling through to 'unknownResource' (which would happen because the
+    // empty dblResources array yields match === undefined).
+    status = 'loadingModelTexts';
+  } else if (dblRef && match === undefined) {
+    status = 'unknownResource';
+  } else if (isInstalling) {
+    status = 'installing';
+  } else if (!resourceProjectId || usjPossiblyError === undefined) {
+    // usjPossiblyError is undefined while the subscription is initializing
+    status = 'loadingText';
+  } else {
+    status = 'active';
   }
 
-  // Zero state: no model text configured (or still loading)
-  if (isLoadingResources || !effectiveModelTexts || effectiveModelTexts.items.length === 0) {
-    return (
-      <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
-        {/* Also shows spinner for if loading resources, except if there is no model text then */}
-        {/* it should directly show the button to pick a model text bellow */}
-        {isEffectiveModelTextsLoading ||
-        (isLoadingResources && effectiveModelText && effectiveModelTexts.items.length !== 0) ? (
-          <Spinner />
-        ) : (
-          <>
-            <p>{localizedStrings['%webView_modelTextPanel_emptyState_prompt%']}</p>
-            <Button onClick={() => showResourcePicker()}>
-              {localizedStrings['%webView_modelTextPanel_pickModelText%']}
-            </Button>
-          </>
-        )}
-      </div>
-    );
-  }
-
-  // Error state: UID not found in DBL list at all
-  if (dblRef && match === undefined) {
-    return (
-      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
-        <p>{localizedStrings['%webView_modelTextPanel_unknownResource%']}</p>
-      </div>
-    );
-  }
-
-  // Installing state: resource found but not yet installed
-  if (isInstalling) {
-    return (
-      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:gap-2 tw:p-8 tw:text-center">
-        <Spinner />
-        <span>{localizedStrings['%webView_modelTextPanel_installing%']}</span>
-      </div>
-    );
-  }
-
-  // Loading state: USJ not yet fetched (usjPossiblyError is undefined while the subscription is initializing)
-  if (!resourceProjectId || usjPossiblyError === undefined) {
-    return (
-      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
-        <Spinner />
-      </div>
-    );
-  }
-
-  // Active state
   return (
-    <div className="tw:h-screen tw:overflow-auto" dir={options.textDirection}>
-      <Editorial
-        ref={editorRef}
-        scrRef={scrRef}
-        onScrRefChange={setScrRef}
-        options={options}
-        logger={logger}
-      />
-    </div>
+    <ModelTextPanel
+      localizedStrings={localizedStrings}
+      status={status}
+      onPickModelText={() => showResourcePicker()}
+      usj={usjFromPdp}
+      textDirection={textDirection}
+      scrRef={scrRef}
+      onScrRefChange={setScrRef}
+      logger={logger}
+    />
   );
 };
