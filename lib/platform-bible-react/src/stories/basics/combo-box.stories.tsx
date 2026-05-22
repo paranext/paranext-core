@@ -40,6 +40,13 @@ const meta: Meta<typeof ComboBox<string>> = {
   title: 'Basics/ComboBox',
   component: ComboBox<string>,
   tags: ['autodocs', 'test'],
+  parameters: {
+    docs: {
+      description: {
+        component: `Built on shadcn/ui's [Combobox](https://ui.shadcn.com/docs/components/combobox) primitive.`,
+      },
+    },
+  },
   argTypes: {
     options: { control: 'object' },
     textPlaceholder: { control: 'text' },

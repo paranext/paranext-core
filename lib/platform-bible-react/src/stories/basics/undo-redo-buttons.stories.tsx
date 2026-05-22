@@ -12,7 +12,8 @@ const meta: Meta<typeof UndoRedoButtons> = {
   parameters: {
     docs: {
       description: {
-        component: `
+        component: `Composed from shadcn/ui primitives: [Button](https://ui.shadcn.com/docs/components/button) (incl. Button Group), [Tooltip](https://ui.shadcn.com/docs/components/tooltip), and [Kbd](https://ui.shadcn.com/docs/components/radix/kbd).
+
 Undo and (optionally) Redo buttons with tooltips for use in editor toolbars.
 
 - Omit \`onRedoClick\` to render only the Undo button.

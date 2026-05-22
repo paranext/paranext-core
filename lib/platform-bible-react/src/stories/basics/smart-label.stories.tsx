@@ -11,7 +11,8 @@ const meta: Meta<typeof SmartLabel> = {
   parameters: {
     docs: {
       description: {
-        component: `
+        component: `Built on shadcn/ui's [Label](https://ui.shadcn.com/docs/components/label) primitive.
+
 A flexible label component that can create labels with plain text, transformed text, or complex React elements.
 
 This component provides three ways to render labels:

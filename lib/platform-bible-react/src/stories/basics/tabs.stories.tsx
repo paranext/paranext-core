@@ -13,6 +13,13 @@ const meta: Meta<typeof Tabs> = {
   title: 'Basics/Tabs',
   component: Tabs,
   tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component: `Built on shadcn/ui's [Tabs](https://ui.shadcn.com/docs/components/tabs) primitive.`,
+      },
+    },
+  },
   decorators: [
     (Story) => (
       <ThemeProvider>
