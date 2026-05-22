@@ -46,8 +46,15 @@ function RadioGroupItem({
     <RadioGroupPrimitive.Item
       data-slot="radio-group-item"
       className={cn(
-        // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
-        'pr-twp tw:group/radio-group-item tw:peer tw:relative tw:flex tw:aspect-square tw:size-4 tw:shrink-0 tw:rounded-full tw:border tw:border-input tw:outline-none tw:after:absolute tw:after:-inset-x-3 tw:after:-inset-y-2 tw:focus-visible:border-ring tw:focus-visible:ring-3 tw:focus-visible:ring-ring/50 tw:disabled:cursor-not-allowed tw:disabled:opacity-50 tw:aria-invalid:border-destructive tw:aria-invalid:ring-3 tw:aria-invalid:ring-destructive/20 tw:aria-invalid:aria-checked:border-primary tw:dark:bg-input/30 tw:dark:aria-invalid:border-destructive/50 tw:dark:aria-invalid:ring-destructive/40 tw:data-checked:border-primary tw:data-checked:bg-primary tw:data-checked:text-primary-foreground tw:dark:data-checked:bg-primary',
+        // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation.
+        // CUSTOM: Use the upstream shadcn "outline" radio design instead of the b6rt8cvlC preset's
+        // "filled" variant: added tw:text-primary (drives the indicator dot color), tw:shadow-xs and
+        // tw:transition-[color,box-shadow] (the subtle outer shadow ring shadcn renders), and removed
+        // tw:data-checked:bg-primary / tw:data-checked:text-primary-foreground / tw:dark:data-checked:bg-primary.
+        // The filled variant turned the whole circle dark, which made the inner dot read as dimmed and
+        // merged the gray focus ring into the dark fill so it was no longer visible. Keeping the circle
+        // unfilled lets the focus ring contrast against the light interior, matching ui.shadcn.com.
+        'pr-twp tw:group/radio-group-item tw:peer tw:relative tw:flex tw:aspect-square tw:size-4 tw:shrink-0 tw:rounded-full tw:border tw:border-input tw:text-primary tw:shadow-xs tw:transition-[color,box-shadow] tw:outline-none tw:after:absolute tw:after:-inset-x-3 tw:after:-inset-y-2 tw:focus-visible:border-ring tw:focus-visible:ring-3 tw:focus-visible:ring-ring/50 tw:disabled:cursor-not-allowed tw:disabled:opacity-50 tw:aria-invalid:border-destructive tw:aria-invalid:ring-3 tw:aria-invalid:ring-destructive/20 tw:aria-invalid:aria-checked:border-primary tw:dark:bg-input/30 tw:dark:aria-invalid:border-destructive/50 tw:dark:aria-invalid:ring-destructive/40 tw:data-checked:border-primary',
         className,
       )}
       {...props}
@@ -56,7 +63,9 @@ function RadioGroupItem({
         data-slot="radio-group-indicator"
         className="tw:flex tw:size-4 tw:items-center tw:justify-center"
       >
-        <span className="tw:absolute tw:top-1/2 tw:start-1/2 tw:size-2 tw:-translate-x-1/2 tw:rtl:translate-x-1/2 tw:-translate-y-1/2 tw:rounded-full tw:bg-primary-foreground" />
+        {/* CUSTOM: Dot uses tw:bg-primary (was tw:bg-primary-foreground) so the dark primary dot
+            shows on the unfilled light circle, matching the upstream shadcn outline radio. */}
+        <span className="tw:absolute tw:top-1/2 tw:start-1/2 tw:size-2 tw:-translate-x-1/2 tw:rtl:translate-x-1/2 tw:-translate-y-1/2 tw:rounded-full tw:bg-primary" />
       </RadioGroupPrimitive.Indicator>
     </RadioGroupPrimitive.Item>
   );
