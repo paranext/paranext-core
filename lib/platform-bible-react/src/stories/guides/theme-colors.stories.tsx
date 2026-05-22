@@ -21,8 +21,8 @@ const TOKEN_NAMES = [
   'card',
 ] as const;
 
-function hslVar(token: string) {
-  return `hsl(var(--${token}))`;
+function colorVar(token: string) {
+  return `var(--${token})`;
 }
 
 function useRootCssVar(name: string) {
@@ -64,9 +64,9 @@ function TokenSwatch({ token, foregroundToken }: { token: string; foregroundToke
   return (
     <Input
       style={{
-        backgroundColor: hslVar(token),
-        color: hslVar(foregroundToken),
-        borderColor: hslVar('border'),
+        backgroundColor: colorVar(token),
+        color: colorVar(foregroundToken),
+        borderColor: colorVar('border'),
       }}
       className="tw:border-2"
       value={`bg: ${rawBg} | fg: ${rawFg}`}
