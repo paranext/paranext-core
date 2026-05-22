@@ -105,11 +105,6 @@ function createDecorator(config: DecoratorConfig) {
   };
 }
 
-/** First-time registration: empty editable fields, no saved registration to cancel back to. */
-export const InitialRegistration: Story = {
-  decorators: [createDecorator({ isEditing: true })],
-};
-
 /** An existing registration shown read-only with a Change button. */
 export const ExistingRegistration: Story = {
   decorators: [
@@ -120,6 +115,11 @@ export const ExistingRegistration: Story = {
       hasSavedCode: true,
     }),
   ],
+};
+
+/** First-time registration: empty editable fields, no saved registration to cancel back to. */
+export const InitialRegistration: Story = {
+  decorators: [createDecorator({ isEditing: true })],
 };
 
 /** Editing a valid registration code — the success alert is shown. */
