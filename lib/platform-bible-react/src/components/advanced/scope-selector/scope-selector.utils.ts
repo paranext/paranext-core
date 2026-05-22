@@ -10,7 +10,7 @@ import { getSectionForBook, Section } from 'platform-bible-utils';
  * @returns Array of available, non-obsolete book IDs in canon order
  * @throws If `availableBookInfo` length does not match the number of canon books
  */
-export const getAvailableBookIds = (availableBookInfo: string): string[] => {
+export function getAvailableBookIds(availableBookInfo: string): string[] {
   if (availableBookInfo.length !== Canon.allBookIds.length) {
     throw new Error('availableBookInfo length must match Canon.allBookIds length');
   }
@@ -19,7 +19,7 @@ export const getAvailableBookIds = (availableBookInfo: string): string[] => {
     (bookId, index) =>
       availableBookInfo[index] === '1' && !Canon.isObsolete(Canon.bookIdToNumber(bookId)),
   );
-};
+}
 
 /**
  * Filters an array of book IDs to only include books from a specific section
@@ -28,7 +28,7 @@ export const getAvailableBookIds = (availableBookInfo: string): string[] => {
  * @param section The section to filter by
  * @returns Array of book IDs that belong to the specified section
  */
-export const getBooksForSection = (bookIds: string[], section: Section) => {
+export function getBooksForSection(bookIds: string[], section: Section) {
   return bookIds.filter((bookId) => {
     try {
       return getSectionForBook(bookId) === section;
@@ -36,7 +36,7 @@ export const getBooksForSection = (bookIds: string[], section: Section) => {
       return false;
     }
   });
-};
+}
 
 /**
  * Checks if all books in a given section are included in the selectedBookIds array
