@@ -1,9 +1,8 @@
 import { Usj, usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
-import { SerializedVerseRef } from '@sillsdev/scripture';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { Scope, SCOPE_SELECTOR_STRING_KEYS } from 'platform-bible-react';
 import {
-  Canon,
   USFM_MARKERS_MAP_PARATEXT_3_0,
   UsjReaderWriter,
   type UsfmVerseRefVerseLocation,
