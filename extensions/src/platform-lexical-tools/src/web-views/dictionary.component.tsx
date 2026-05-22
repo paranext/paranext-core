@@ -193,7 +193,12 @@ export function Dictionary({
       <div className="tw:sticky tw:bg-background tw:top-0 tw:z-10 tw:shrink-0 tw:p-2 tw:border-b tw:h-auto">
         <div className="tw:flex tw:items-center tw:gap-2">
           <div className="tw:max-w-56">
-            <Select value={scope} onValueChange={setScope}>
+            <Select
+              value={scope}
+              // value is always a string but we need it to be DictionaryScope
+              // eslint-disable-next-line no-type-assertion/no-type-assertion
+              onValueChange={(value: string) => setScope(value as DictionaryScope)}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
