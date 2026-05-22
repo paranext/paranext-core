@@ -108,9 +108,9 @@ globalThis.webViewComponent = function ModelTextPanel({
   const matchDblEntryUid = match?.dblEntryUid;
   useEffect(() => {
     if (!fetchResources && isInstalling && dblResourcesProvider && matchDblEntryUid !== undefined) {
+      setFetchResources(true);
       dblResourcesProvider
         .installDblResource(matchDblEntryUid)
-        .then(() => setFetchResources(true))
         .catch((e: unknown) =>
           logger.error(`Model text auto-install failed: ${getErrorMessage(e)}`),
         );
