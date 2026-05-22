@@ -11,8 +11,23 @@ import {
 import { Check, Settings, X } from 'lucide-react';
 import { useMemo } from 'react';
 import { CheckRunResult } from 'platform-scripture';
-import { useLocalizedStrings } from '@papi/frontend/react';
-import { formatScrRef } from 'platform-bible-utils';
+import { formatScrRef, LanguageStrings } from 'platform-bible-utils';
+
+/**
+ * Object containing all keys used for localization in this component. Pass these keys into the
+ * Platform's localization hook and pass the resulting localized strings into the `localizedStrings`
+ * prop.
+ */
+export const CHECK_CARD_STRING_KEYS = Object.freeze([
+  '%webView_checksSidePanel_fixedBadge_title%',
+  '%webView_checksSidePanel_deniedBadge_title%',
+  '%webView_checksSidePanel_checkingBadge_title%',
+  '%webView_checksSidePanel_checkRequiresSetup%',
+  '%webView_checksSidePanel_checkRequiresSetup_tooltip%',
+  '%webView_checksSidePanel_focusedCheckDropdown_allowItem%',
+  '%webView_checksSidePanel_focusedCheckDropdown_denyItem%',
+  '%webView_checksSidePanel_focusedCheckDropdown_settingsItem%',
+] as const);
 
 /** Enum representing the possible states of a check */
 export enum CheckStates {
@@ -30,10 +45,12 @@ export enum CheckStates {
 type CheckStateBadgeProps = {
   /** The check state to display */
   state: CheckStates.Fixed | CheckStates.Denied | CheckStates.Checking;
+  /** Localized strings; resolve via `CHECK_CARD_STRING_KEYS`. */
+  localizedStrings: LanguageStrings;
 };
 
 /** Generic badge component for displaying check states */
-function CheckStateBadge({ state }: CheckStateBadgeProps) {
+function CheckStateBadge({ state, localizedStrings }: CheckStateBadgeProps) {
   const localizationKeys = useMemo(
     () => ({
       [CheckStates.Fixed]: '%webView_checksSidePanel_fixedBadge_title%' as const,
@@ -41,10 +58,6 @@ function CheckStateBadge({ state }: CheckStateBadgeProps) {
       [CheckStates.Checking]: '%webView_checksSidePanel_checkingBadge_title%' as const,
     }),
     [],
-  );
-
-  const [localizedStrings] = useLocalizedStrings(
-    useMemo(() => [localizationKeys[state]], [localizationKeys, state]),
   );
 
   const isOutlineVariant = state === CheckStates.Fixed || state === CheckStates.Denied;
@@ -62,6 +75,8 @@ function CheckStateBadge({ state }: CheckStateBadgeProps) {
 
 /** Props for the CheckCard component */
 export type CheckCardProps = {
+  /** Localized strings; resolve via `CHECK_CARD_STRING_KEYS`. */
+  localizedStrings: LanguageStrings;
   /** Object containing the check result details */
   checkResult: CheckRunResult;
   /** Unique identifier of the check */
@@ -95,6 +110,7 @@ export type CheckCardProps = {
  * The card styling changes based on the current check and selection status.
  */
 export function CheckCard({
+  localizedStrings,
   checkResult,
   checkId,
   isSelected,
@@ -109,19 +125,6 @@ export function CheckCard({
   isCheckSetup = true,
   className,
 }: CheckCardProps) {
-  const [localizedStrings] = useLocalizedStrings(
-    useMemo(
-      () => [
-        '%webView_checksSidePanel_checkRequiresSetup%',
-        '%webView_checksSidePanel_checkRequiresSetup_tooltip%',
-        '%webView_checksSidePanel_focusedCheckDropdown_allowItem%',
-        '%webView_checksSidePanel_focusedCheckDropdown_denyItem%',
-        '%webView_checksSidePanel_focusedCheckDropdown_settingsItem%',
-      ],
-      [],
-    ),
-  );
-
   const isFixedOrDenied = useMemo(
     () => checkState === CheckStates.Fixed || checkState === CheckStates.Denied,
     [checkState],
@@ -190,7 +193,9 @@ export function CheckCard({
         {showBadge &&
           (checkState === CheckStates.Fixed ||
             checkState === CheckStates.Denied ||
-            checkState === CheckStates.Checking) && <CheckStateBadge state={checkState} />}
+            checkState === CheckStates.Checking) && (
+            <CheckStateBadge state={checkState} localizedStrings={localizedStrings} />
+          )}
         {!isCheckSetup && (
           <TooltipProvider>
             <Tooltip>

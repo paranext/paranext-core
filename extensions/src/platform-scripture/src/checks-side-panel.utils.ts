@@ -1,4 +1,3 @@
-import { projectDataProviders } from '@papi/frontend';
 import { LocalizeKey } from 'platform-bible-utils';
 
 export const CHECK_SCOPE_FILTER_STRINGS: { [key in CheckScopes]: LocalizeKey } = {
@@ -70,18 +69,3 @@ export type ProjectOption = {
   fullName: string;
   shortName: string;
 };
-
-/**
- * Gets the short and full names of a project from its ID.
- *
- * @param projectId The ID of the project to get the names of.
- * @returns An object with the short and full names of the project.
- */
-export async function getProjectNames(projectId: string): Promise<ProjectOption> {
-  const pdp = await projectDataProviders.get('platform.base', projectId);
-
-  const projectShortName = await pdp.getSetting('platform.name');
-  const projectFullName = await pdp.getSetting('platform.fullName');
-
-  return { shortName: projectShortName, fullName: projectFullName };
-}
