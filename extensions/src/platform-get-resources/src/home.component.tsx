@@ -1,5 +1,15 @@
-import { BookOpen, ChevronDown, ChevronsUpDown, ChevronUp, ScrollText } from 'lucide-react';
 import {
+  AlertCircle,
+  BookOpen,
+  ChevronDown,
+  ChevronsUpDown,
+  ChevronUp,
+  ScrollText,
+} from 'lucide-react';
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
   Button,
   Card,
   CardContent,
@@ -18,7 +28,7 @@ import {
   TableRow,
 } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
-import { formatTimeSpan } from 'platform-bible-utils';
+import { formatTimeSpan, getErrorMessage } from 'platform-bible-utils';
 import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
 import { ReactNode, useMemo, useState } from 'react';
 import { HomeItemDropdownMenu } from './home-item-menu';
@@ -29,6 +39,7 @@ import { HomeItemDropdownMenu } from './home-item-menu';
  * localized strings and pass them into the localizedStrings prop of this component
  */
 export const HOME_STRING_KEYS = Object.freeze([
+  '%general_error_title%',
   '%resources_action%',
   '%resources_activity%',
   '%resources_clearSearch%',
@@ -104,11 +115,12 @@ export type HomeProps = {
    */
   onOpenProject?: (projectId: string, isPublished: boolean) => void;
   /**
-   * Callback function to send/receive a project.
+   * Callback function to send/receive a project. May be async; if it rejects, the component shows
+   * the error message in a destructive alert.
    *
    * @param projectId - The ID of the project to send/receive.
    */
-  onSendReceiveProject?: (projectId: string) => void;
+  onSendReceiveProject?: (projectId: string) => void | Promise<void>;
   /** Callback function to open the get started website of platform. */
   onGetStarted?: () => void;
   /** Whether to show the Get Resources button. */
@@ -196,6 +208,20 @@ export function Home({
   const openText: string = getLocalizedString('%resources_open%');
   const searchedForText: string = getLocalizedString('%resources_searchedFor%');
   const syncText: string = getLocalizedString('%resources_sync%');
+  const errorTitleText: string = getLocalizedString('%general_error_title%');
+
+  // Surfaces a business error (e.g. a project locked by another user) when an async action
+  // callback rejects, so failures are visible in the UI rather than only logged by the webview.
+  const [actionError, setActionError] = useState<string | undefined>(undefined);
+
+  const handleSendReceiveProject = async (projectId: string) => {
+    setActionError(undefined);
+    try {
+      await onSendReceiveProject(projectId);
+    } catch (e) {
+      setActionError(getErrorMessage(e));
+    }
+  };
 
   const mergedProjectInfo: MergedProjectInfo[] = useMemo(() => {
     const newMergedProjectInfo: MergedProjectInfo[] = [];
@@ -336,14 +362,14 @@ export function Home({
   const syncOrGetButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
     if (isMenuItem)
       return (
-        <DropdownMenuItem onClick={() => onSendReceiveProject(project.projectId)}>
+        <DropdownMenuItem onClick={() => handleSendReceiveProject(project.projectId)}>
           <span>{getSendReceiveButtonContent(project)}</span>
         </DropdownMenuItem>
       );
     return (
       <Button
         disabled={isSendReceiveInProgress && activeSendReceiveProjects.includes(project.projectId)}
-        onClick={() => onSendReceiveProject(project.projectId)}
+        onClick={() => handleSendReceiveProject(project.projectId)}
       >
         {getSendReceiveButtonContent(project)}
       </Button>
@@ -388,6 +414,15 @@ export function Home({
           )}
         </div>
       </CardHeader>
+      {actionError && (
+        <div className="tw:mx-4 tw:mb-2">
+          <Alert variant="destructive">
+            <AlertCircle className="tw:h-4 tw:w-4" />
+            <AlertTitle>{errorTitleText}</AlertTitle>
+            <AlertDescription>{actionError}</AlertDescription>
+          </Alert>
+        </div>
+      )}
       {isLoadingLocalProjects || isLoadingRemoteProjects ? (
         <CardContent className="tw:flex tw:flex-grow tw:flex-col tw:items-center tw:justify-center tw:gap-2">
           <Spinner />
@@ -459,7 +494,8 @@ export function Home({
                           onDoubleClick={() =>
                             project.isLocallyAvailable
                               ? onOpenProject(project.projectId, project.isPublished)
-                              : !isSendReceiveInProgress && onSendReceiveProject(project.projectId)
+                              : !isSendReceiveInProgress &&
+                                handleSendReceiveProject(project.projectId)
                           }
                           key={project.projectId}
                           className={cn('tw:rounded-sm', {
