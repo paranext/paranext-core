@@ -207,7 +207,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
       setFetchResources(false);
       return papi.commands.sendCommand('platformGetResources.getCachedResources');
       // Need to have this hook to retrigger the fetch
-      // eslint-disable-next-line react-hook/exhaustive-deps
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fetchResources]),
     undefined,
   );
