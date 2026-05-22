@@ -122,6 +122,9 @@ export function RegistrationFormView({
               className="tw:max-w-[260px]"
               value={name}
               required
+              // Use shadcn's field-validation styling (destructive border + ring) for the required
+              // name when it's empty.
+              aria-invalid={name.trim().length === 0}
               disabled={isFormDisabled}
               onChange={onNameChange}
             />
@@ -133,13 +136,14 @@ export function RegistrationFormView({
           </span>
           {isEditing ? (
             <Input
-              className={cn('tw:font-mono tw:box-content tw:h-6 tw:max-w-[350px]', {
-                'tw:invalid:border-destructive': showInvalidCode,
-              })}
+              className="tw:font-mono tw:box-content tw:h-6 tw:max-w-[350px]"
               pattern={REGISTRATION_CODE_REGEX_STRING}
               maxLength={REGISTRATION_CODE_LENGTH_WITH_DASHES}
               placeholder="XXXXXX-XXXXXX-XXXXXX-XXXXXX-XXXXXX"
               required
+              // Use shadcn's field-validation styling (destructive border + ring) when the entered
+              // code fails the length/format check.
+              aria-invalid={showInvalidCode}
               value={registrationCode}
               disabled={isFormDisabled}
               onChange={onRegistrationCodeChange}
