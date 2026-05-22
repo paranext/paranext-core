@@ -7,11 +7,11 @@ import {
   useListbox,
   type ListboxOption,
 } from 'platform-bible-react';
-import { useLocalizedStrings } from '@papi/frontend/react';
 import { RefObject, useRef } from 'react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
+import { LanguageStrings } from 'platform-bible-utils';
 import { DictionaryEntryDisplay } from './dictionary-entry-display.component';
-import { DICTIONARY_LOCALIZED_STRING_KEYS, useIsWideScreen } from '../../utils/dictionary-ui.utils';
+import { useIsWideScreen } from '../../utils/dictionary-ui.utils';
 import { DictionaryScope } from '../../utils/dictionary.utils';
 import { DictionaryListItem } from './dictionary-list-item.component';
 
@@ -21,6 +21,8 @@ function getEntryId(entry: Entry): string {
 
 /** Props for the DictionaryList component */
 type DictionaryListProps = {
+  /** Localized strings for the dictionary; resolve via `DICTIONARY_LOCALIZED_STRING_KEYS`. */
+  localizedStrings: LanguageStrings;
   /** Array of dictionary entries */
   dictionaryData: Entry[];
   /** Scripture reference to filter the dictionary entries by */
@@ -57,6 +59,7 @@ type DictionaryListProps = {
  * handle keyboard navigation of the list.
  */
 export function DictionaryList({
+  localizedStrings,
   dictionaryData,
   scriptureReferenceToFilterBy,
   scope,
@@ -66,7 +69,6 @@ export function DictionaryList({
   onEntrySelected,
   fullSelectedEntry,
 }: DictionaryListProps) {
-  const [localizedStrings] = useLocalizedStrings(DICTIONARY_LOCALIZED_STRING_KEYS);
   const isWideScreen = useIsWideScreen();
 
   const selectedEntryId = selectedEntry ? getEntryId(selectedEntry) : undefined;
@@ -135,6 +137,7 @@ export function DictionaryList({
         (isWideScreen ? (
           <div ref={dictionaryEntryRef} className="tw:w-1/2 tw:overflow-y-auto tw:p-4">
             <DictionaryEntryDisplay
+              localizedStrings={localizedStrings}
               scriptureReferenceToFilterBy={scriptureReferenceToFilterBy}
               isDrawer={false}
               dictionaryEntry={fullSelectedEntry ?? selectedEntry}
@@ -155,6 +158,7 @@ export function DictionaryList({
             <DrawerContent hideDrawerHandle className="tw:max-w-xl">
               <div ref={dictionaryEntryRef} className="tw:overflow-y-auto tw:p-4">
                 <DictionaryEntryDisplay
+                  localizedStrings={localizedStrings}
                   scriptureReferenceToFilterBy={scriptureReferenceToFilterBy}
                   isDrawer
                   dictionaryEntry={fullSelectedEntry ?? selectedEntry}
