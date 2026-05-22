@@ -15,28 +15,25 @@ describe('detectGitHubOrg', () => {
     const execGitCmd: ExecGitCmd = vi.fn(() => {
       throw new Error('fatal: not a git repository');
     });
-    const result = detectGitHubOrg(execGitCmd);
-    expect(result.org).toBeUndefined();
-    if (result.org === undefined) {
-      expect(result.reason).toContain('not a git repository');
-    }
+    expect(detectGitHubOrg(execGitCmd)).toEqual({
+      org: undefined,
+      reason: expect.stringContaining('not a git repository'),
+    });
   });
 
   it('returns reason when exec returns an unparseable URL', () => {
     const execGitCmd: ExecGitCmd = vi.fn(() => 'https://gitlab.com/foo/bar.git\n');
-    const result = detectGitHubOrg(execGitCmd);
-    expect(result.org).toBeUndefined();
-    if (result.org === undefined) {
-      expect(result.reason).toContain('did not match a recognized github.com pattern');
-    }
+    expect(detectGitHubOrg(execGitCmd)).toEqual({
+      org: undefined,
+      reason: expect.stringContaining('did not match a recognized github.com pattern'),
+    });
   });
 
   it('returns reason when exec returns empty string (no origin remote)', () => {
     const execGitCmd: ExecGitCmd = vi.fn(() => '');
-    const result = detectGitHubOrg(execGitCmd);
-    expect(result.org).toBeUndefined();
-    if (result.org === undefined) {
-      expect(result.reason).toContain('empty');
-    }
+    expect(detectGitHubOrg(execGitCmd)).toEqual({
+      org: undefined,
+      reason: expect.stringContaining('empty'),
+    });
   });
 });
