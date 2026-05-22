@@ -3,19 +3,11 @@ import { fn } from 'storybook/test';
 import { useState } from 'react';
 import { Checklist } from '@/components/basics/checklist.component';
 import { Card, CardContent } from '@/components/shadcn-ui/card';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof Checklist> = {
   title: 'Basics/Checklist',
   component: Checklist,
   tags: ['autodocs'],
-  decorators: [
-    (Story) => (
-      <ThemeProvider>
-        <Story />
-      </ThemeProvider>
-    ),
-  ],
   argTypes: {
     handleSelectListItem: { action: 'item selected' },
     listItems: { control: 'object' },

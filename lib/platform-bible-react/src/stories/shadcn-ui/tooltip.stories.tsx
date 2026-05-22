@@ -7,7 +7,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof Tooltip> = {
   title: 'Shadcn/Tooltip',
@@ -19,13 +18,11 @@ const meta: Meta<typeof Tooltip> = {
   },
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <TooltipProvider>
-          <div className="tw:flex tw:justify-center tw:p-8">
-            <Story />
-          </div>
-        </TooltipProvider>
-      </ThemeProvider>
+      <TooltipProvider>
+        <div className="tw:flex tw:justify-center tw:p-8">
+          <Story />
+        </div>
+      </TooltipProvider>
     ),
   ],
 };

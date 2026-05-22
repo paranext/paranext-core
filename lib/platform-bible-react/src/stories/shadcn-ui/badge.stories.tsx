@@ -2,7 +2,6 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import { Badge } from '@/components/shadcn-ui/badge';
 import { X, Star, CheckCircle, AlertCircle, Info, Link } from 'lucide-react';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof Badge> = {
   title: 'Shadcn/Badge',
@@ -27,11 +26,9 @@ const meta: Meta<typeof Badge> = {
   },
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className="tw:p-4">
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className="tw:p-4">
+        <Story />
+      </div>
     ),
   ],
 };

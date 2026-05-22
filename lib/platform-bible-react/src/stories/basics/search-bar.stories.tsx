@@ -2,8 +2,6 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import { SearchBar } from '@/components/basics/search-bar.component';
 import { ComponentProps, useCallback, useState } from 'react';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
-
 // Reusable wrapper component with state management
 function SearchBarWithState({
   initialValue = '',
@@ -30,13 +28,6 @@ const meta: Meta<typeof SearchBar> = {
   title: 'Basics/SearchBar',
   component: SearchBar,
   tags: ['autodocs'],
-  decorators: [
-    (Story) => (
-      <ThemeProvider>
-        <Story />
-      </ThemeProvider>
-    ),
-  ],
   argTypes: {
     onSearch: { action: 'search' },
     placeholder: { control: 'text' },

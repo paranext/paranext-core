@@ -1,8 +1,12 @@
 import type { Preview } from '@storybook/react-vite';
+import { createElement } from 'react';
 import { setupMonaco } from 'storybook-addon-code-editor';
 import { persistDirection, readDirection } from '../src/utils/dir-helper.util';
 import { DocsPageWithFilePath } from './blocks/DocsPageWithFilePath';
+import { withPlatformBibleThemes } from './theme-decorator';
 import '../src/index.css';
+import './preview-storybook.css';
+import './storybook-themes.css';
 
 // Setup Monaco editor
 setupMonaco({
@@ -41,11 +45,29 @@ const preview: Preview = {
       // Show each story's source file path at the top of its autodocs page.
       page: DocsPageWithFilePath,
     },
+
+    /**
+     * Toolbar Color scheme + Theme: `.storybook/manager.tsx` + `.storybook/theme-decorator.ts` (not
+     * `globals.theme`)
+     */
+    backgrounds: {
+      default: 'theme',
+      values: [
+        /**
+         * Canvas fill uses `--background` from `index.css` (toolbar theme classes via
+         * theme-decorator)
+         */
+        { name: 'theme', value: 'transparent' },
+        { name: 'light', value: '#ffffff' },
+        { name: 'dark', value: '#0f172a' },
+      ],
+    },
   },
   initialGlobals: {
     addonRtl: readDirection(),
   },
   decorators: [
+    withPlatformBibleThemes(),
     (Story, context) => {
       const direction = context.globals.addonRtl;
 
@@ -64,6 +86,20 @@ const preview: Preview = {
 
       return Story();
     },
+    /**
+     * Layout wrapper: themed backgrounds are scoped in preview-storybook.css (`#storybook-root`,
+     * Docs roots, `.sbdocs-preview`). This div only supplies min-height and width for the story
+     * subtree.
+     */
+    (Story) =>
+      // .ts extension — JSX unavailable, use createElement
+      createElement(
+        'div',
+        {
+          className: 'tw:box-border tw:min-h-full tw:w-full',
+        },
+        createElement(Story),
+      ),
   ],
   tags: [
     /* Auto-generate "Docs" page by default for each Storybook component.
