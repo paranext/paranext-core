@@ -87,7 +87,7 @@ globalThis.webViewComponent = function ModelTextPanel({
       setFetchResources(false);
       return cachedResources;
       // Need to have this hook to retrigger the fetch
-      // eslint-disable-next-line react-hook/exhaustive-deps
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fetchResources]),
     undefined,
   );
