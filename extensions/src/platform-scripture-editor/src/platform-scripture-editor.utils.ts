@@ -585,17 +585,45 @@ export async function openDefaultActiveProjectIfApplicable(
   if (candidates.length === 0) return 'no-candidate';
 
   const top = candidates[0];
+  let hasFailed = false;
+  let openedScriptureEditor = false;
   papi.logger.info(`Default active project picker: opening project=${top.id}`);
   try {
     await papi.commands.sendCommand('platformScriptureEditor.openScriptureEditor', top.id);
+    openedScriptureEditor = true;
   } catch (e) {
     papi.logger.warn(
       `Default active project picker: openScriptureEditor for ${top.id} failed: ${getErrorMessage(e)}`,
     );
-    return 'failed';
+    hasFailed = true;
   }
 
-  return 'filled';
+  // Best-effort: record the project in the recent projects list so the future Recent projects picker
+  // can surface it. Failure here must NOT change the outcome — opening succeeded.
+  if (openedScriptureEditor) {
+    try {
+      const recentlyOpenedProjects = await papi.dataProviders.get(
+        'platformScripture.recentlyOpenedProjects',
+      );
+      await recentlyOpenedProjects?.recordProjectOpened(top.id);
+    } catch (e) {
+      papi.logger.warn(
+        `Default active project picker: failed to record recently-opened project ${top.id}: ${getErrorMessage(e)}`,
+      );
+    }
+  }
+
+  // Tries to open the model text
+  try {
+    await papi.commands.sendCommand('platformScriptureEditor.openModelText', top.id);
+  } catch (e) {
+    papi.logger.warn(
+      `Default active project picker: openModelText for ${top.id} failed: ${getErrorMessage(e)}`,
+    );
+    hasFailed = true;
+  }
+
+  return hasFailed ? 'failed' : 'filled';
 }
 
 /**

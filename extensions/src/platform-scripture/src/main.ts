@@ -23,6 +23,10 @@ import {
   ScriptureFinderProjectDataProviderEngineFactory,
 } from './project-data-provider/platform-scripture-finder.pdpef.model';
 import { SCRIPTURE_FINDER_PROJECT_INTERFACES } from './project-data-provider/platform-scripture-finder-pdpe.model';
+import {
+  recentlyOpenedProjectsService,
+  RECENTLY_OPENED_PROJECTS_STORAGE_KEY,
+} from './recently-opened-projects.service';
 import { resourceReferenceListValidator } from './resource-reference-list.utils';
 
 const characterInventoryWebViewType = 'platformScripture.characterInventory';
@@ -457,6 +461,29 @@ export async function activate(context: ExecutionActivationContext) {
   await checkHostingService.initialize();
   await checkAggregatorService.initialize();
 
+  async function readRawRecentlyOpenedProjects(): Promise<string> {
+    try {
+      return await papi.storage.readUserData(
+        context.executionToken,
+        RECENTLY_OPENED_PROJECTS_STORAGE_KEY,
+      );
+    } catch {
+      // No data yet — treat as empty list.
+      return '[]';
+    }
+  }
+  function writeRawRecentlyOpenedProjects(data: string): Promise<void> {
+    return papi.storage.writeUserData(
+      context.executionToken,
+      RECENTLY_OPENED_PROJECTS_STORAGE_KEY,
+      data,
+    );
+  }
+  await recentlyOpenedProjectsService.initialize(
+    readRawRecentlyOpenedProjects,
+    writeRawRecentlyOpenedProjects,
+  );
+
   context.registrations.add(
     await scriptureExtenderPdpefPromise,
     await scriptureFinderPdpefPromise,
@@ -487,6 +514,7 @@ export async function activate(context: ExecutionActivationContext) {
     await invalidateResultsPromise,
     checkHostingService.dispose,
     checkAggregatorService.dispose,
+    recentlyOpenedProjectsService.dispose,
   );
 
   logger.debug('platformScripture is finished activating!');

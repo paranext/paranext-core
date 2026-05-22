@@ -61,7 +61,7 @@ describe('useEffectiveResourceReferenceList', () => {
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
     );
 
-    expect(result.current).toBeUndefined();
+    expect(result.current[0]).toBeUndefined();
   });
 
   it('returns undefined while user setting is loading', () => {
@@ -72,7 +72,7 @@ describe('useEffectiveResourceReferenceList', () => {
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
     );
 
-    expect(result.current).toBeUndefined();
+    expect(result.current[0]).toBeUndefined();
   });
 
   it('returns project-only list when user list is empty', () => {
@@ -88,9 +88,9 @@ describe('useEffectiveResourceReferenceList', () => {
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
     );
 
-    expect(result.current).toBeDefined();
-    expect(result.current?.items).toHaveLength(1);
-    expect(result.current?.items[0]).toEqual({
+    expect(result.current[0]).toBeDefined();
+    expect(result.current[0]?.items).toHaveLength(1);
+    expect(result.current[0]?.items[0]).toEqual({
       type: 'project',
       name: 'My Project',
       id: 'abc123',
@@ -111,9 +111,9 @@ describe('useEffectiveResourceReferenceList', () => {
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
     );
 
-    expect(result.current).toBeDefined();
-    expect(result.current?.items).toHaveLength(1);
-    expect(result.current?.items[0]).toEqual({
+    expect(result.current[0]).toBeDefined();
+    expect(result.current[0]?.items).toHaveLength(1);
+    expect(result.current[0]?.items[0]).toEqual({
       type: 'enhancedResource',
       name: 'My Resource',
       source: 'user',
@@ -140,14 +140,14 @@ describe('useEffectiveResourceReferenceList', () => {
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
     );
 
-    expect(result.current?.items).toHaveLength(2);
-    expect(result.current?.items[0]).toEqual({
+    expect(result.current[0]?.items).toHaveLength(2);
+    expect(result.current[0]?.items[0]).toEqual({
       type: 'project',
       name: 'Project A',
       id: 'id-001',
       source: 'admin',
     });
-    expect(result.current?.items[1]).toEqual({
+    expect(result.current[0]?.items[1]).toEqual({
       type: 'project',
       name: 'Project B',
       id: 'id-002',
@@ -175,13 +175,13 @@ describe('useEffectiveResourceReferenceList', () => {
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
     );
 
-    expect(result.current?.items).toHaveLength(2);
-    expect(result.current?.items[0]).toEqual({
+    expect(result.current[0]?.items).toHaveLength(2);
+    expect(result.current[0]?.items[0]).toEqual({
       type: 'enhancedResource',
       name: 'Greek NT',
       source: 'admin',
     });
-    expect(result.current?.items[1]).toEqual({
+    expect(result.current[0]?.items[1]).toEqual({
       type: 'enhancedResource',
       name: 'Hebrew OT',
       source: 'user',
@@ -205,14 +205,14 @@ describe('useEffectiveResourceReferenceList', () => {
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
     );
 
-    expect(result.current?.items).toHaveLength(2);
-    expect(result.current?.items[0]).toEqual({
+    expect(result.current[0]?.items).toHaveLength(2);
+    expect(result.current[0]?.items[0]).toEqual({
       type: 'project',
       name: 'Project A',
       id: 'id-001',
       source: 'admin',
     });
-    expect(result.current?.items[1]).toEqual({
+    expect(result.current[0]?.items[1]).toEqual({
       type: 'dblResource',
       name: 'DBL Resource',
       id: 'dbl-001',
@@ -228,7 +228,7 @@ describe('useEffectiveResourceReferenceList', () => {
       useEffectiveResourceReferenceList(undefined, 'platformScripture.modelTexts'),
     );
 
-    expect(result.current).toBeUndefined();
+    expect(result.current[0]).toBeUndefined();
   });
 
   it('uses subscribeUserReferencedProjectsAndResources for referencedProjectsAndResources setting', () => {
@@ -251,13 +251,13 @@ describe('useEffectiveResourceReferenceList', () => {
       ),
     );
 
-    expect(result.current?.items).toHaveLength(2);
-    expect(result.current?.items[0]).toEqual({
+    expect(result.current[0]?.items).toHaveLength(2);
+    expect(result.current[0]?.items[0]).toEqual({
       type: 'xmlResource',
       name: 'Xml Ref',
       source: 'admin',
     });
-    expect(result.current?.items[1]).toEqual({
+    expect(result.current[0]?.items[1]).toEqual({
       type: 'sourceLanguageResource',
       name: 'Hebrew',
       source: 'user',
@@ -295,8 +295,8 @@ describe('useEffectiveResourceReferenceList', () => {
 
     // Should fall back to project-level list, not return undefined
     expect(result.current).toBeDefined();
-    expect(result.current?.items).toHaveLength(1);
-    expect(result.current?.items[0]).toMatchObject({ name: 'ESV', source: 'admin' });
+    expect(result.current[0]?.items).toHaveLength(1);
+    expect(result.current[0]?.items[0]).toMatchObject({ name: 'ESV', source: 'admin' });
   });
 
   it('returns undefined when projectSettingValue is a PlatformError', () => {
@@ -317,7 +317,7 @@ describe('useEffectiveResourceReferenceList', () => {
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
     );
 
-    expect(result.current).toBeUndefined();
+    expect(result.current[0]).toBeUndefined();
   });
 
   it('discards name-based items that are missing a string name', () => {
@@ -338,8 +338,8 @@ describe('useEffectiveResourceReferenceList', () => {
     );
 
     // The nameless item is discarded; only the valid one survives
-    expect(result.current?.items).toHaveLength(1);
-    expect(result.current?.items[0]).toEqual({
+    expect(result.current[0]?.items).toHaveLength(1);
+    expect(result.current[0]?.items[0]).toEqual({
       type: 'enhancedResource',
       name: 'Valid',
       source: 'admin',
@@ -366,7 +366,7 @@ describe('useEffectiveResourceReferenceList', () => {
     );
 
     // Unknown types are excluded from the merged collection — they exist only for storage round-trips
-    expect(result.current?.items).toHaveLength(0);
+    expect(result.current[0]?.items).toHaveLength(0);
   });
 
   it('tags items by source and lists admin items before user items', () => {
@@ -391,7 +391,7 @@ describe('useEffectiveResourceReferenceList', () => {
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
     );
 
-    const items = result.current?.items;
+    const items = result.current[0]?.items;
     expect(items).toHaveLength(3);
     // Admin items come first
     expect(items?.[0]).toEqual({

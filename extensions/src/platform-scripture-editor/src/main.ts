@@ -25,6 +25,8 @@ import { AnnotationStyleDataProviderEngine } from './annotations/annotation-styl
 import { mergeDecorations } from './decorations.util';
 import platformScriptureEditorWebViewStyles from './platform-scripture-editor.web-view.scss?inline';
 import platformScriptureEditorWebView from './platform-scripture-editor.web-view?inline';
+import modelTextPanelWebViewStyles from './model-text-panel.web-view.scss?inline';
+import modelTextPanelWebView from './model-text-panel.web-view?inline';
 import {
   convertScriptureRangeToEditorRange,
   formatEditorTitle,
@@ -36,6 +38,8 @@ import {
 import { MarkersViewNotifier } from './markers-view-notifier.model';
 
 logger.debug('Scripture Editor is importing!');
+
+const MODEL_TEXT_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.modelText';
 
 // #region Editor Selection Tracking
 
@@ -730,6 +734,39 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
 }
 const scriptureEditorWebViewProvider: IWebViewProvider = new ScriptureEditorWebViewFactory();
 
+/**
+ * Pending projectId to apply during the next model text panel getWebView call. `null` means no
+ * pending value; `undefined` is a valid pending value (opens the panel with no project).
+ *
+ * Used to pass a new projectId through reloadWebView, which has no options for extra data.
+ */
+let modelTextPendingProjectId: string | undefined;
+
+const modelTextPanelWebViewProvider: IWebViewProvider = {
+  async getWebView(
+    savedWebView: SavedWebViewDefinition,
+    openWebViewOptions: OpenWebViewOptions & { projectId?: string },
+  ): Promise<WebViewDefinition | undefined> {
+    if (savedWebView.webViewType !== MODEL_TEXT_PANEL_WEBVIEW_TYPE)
+      throw new Error(
+        `${MODEL_TEXT_PANEL_WEBVIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} web view`,
+      );
+    // Priority: pending (reload path) > options (new-panel path) > saved (existing panel reload)
+    const projectId =
+      modelTextPendingProjectId !== undefined
+        ? modelTextPendingProjectId
+        : (openWebViewOptions.projectId ?? savedWebView.projectId);
+    modelTextPendingProjectId = undefined;
+    return {
+      ...savedWebView,
+      title: '%webView_modelTextPanel_title%',
+      projectId,
+      content: modelTextPanelWebView,
+      styles: modelTextPanelWebViewStyles,
+    };
+  },
+};
+
 export async function activate(context: ExecutionActivationContext): Promise<void> {
   logger.debug('Scripture editor is activating!');
 
@@ -935,6 +972,49 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
+  const modelTextPanelWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    MODEL_TEXT_PANEL_WEBVIEW_TYPE,
+    modelTextPanelWebViewProvider,
+  );
+
+  const openModelTextPanelPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.openModelText',
+    async (projectId?: string) => {
+      const allOpenDefs = await papi.webViews.getAllOpenWebViewDefinitions();
+      const existingPanel = allOpenDefs.find(
+        (def) => def.webViewType === MODEL_TEXT_PANEL_WEBVIEW_TYPE,
+      );
+
+      if (existingPanel) {
+        modelTextPendingProjectId = projectId;
+        return papi.webViews.reloadWebView(MODEL_TEXT_PANEL_WEBVIEW_TYPE, existingPanel.id, {
+          bringToFront: true,
+        });
+      }
+
+      const openOptions: OpenWebViewOptions & { projectId?: string } = { projectId };
+      return papi.webViews.openWebView(MODEL_TEXT_PANEL_WEBVIEW_TYPE, { type: 'tab' }, openOptions);
+    },
+    {
+      method: {
+        summary: 'Open the model text panel for a translation project',
+        params: [
+          {
+            name: 'projectId',
+            required: false,
+            summary: 'The project ID of the translation project',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the opened WebView',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
   // Create the selection changed event emitter
   selectionChangedEventEmitter = papi.network.createNetworkEventEmitter<SelectionChangeEvent>(
     EDITOR_SELECTION_CHANGED_EVENT,
@@ -961,6 +1041,8 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await insertCrossReferencePromise,
     await insertCommentPromise,
     await annotationStyleDataProviderPromise,
+    await modelTextPanelWebViewProviderPromise,
+    await openModelTextPanelPromise,
     selectionChangedEventEmitter,
     unsubFromDefaultProjectPicker,
     ...markerNotifierUnsubscribers,
