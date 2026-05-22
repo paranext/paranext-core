@@ -9,13 +9,19 @@ import {
   Spinner,
 } from 'platform-bible-react';
 import type { LanguageStrings } from 'platform-bible-utils';
-import { ChangeEvent } from 'react';
+import { ChangeEvent, useEffect, useState } from 'react';
 import { SaveState, scrollToRef } from '../utils';
 import { Grid } from './grid.component';
 
 export const REGISTRATION_CODE_LENGTH_WITH_DASHES = 34;
 export const REGISTRATION_CODE_REGEX_STRING =
   '^(?:[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}|\\*{6}-\\*{6}-\\*{6}-\\*{6}-\\*{6})$';
+
+/**
+ * How long to wait after the last keystroke before flagging a malformed registration code, so the
+ * field doesn't flash invalid while the user is still typing it out.
+ */
+const SHOW_INVALID_CODE_DEBOUNCE_MS = 1000;
 
 export type RegistrationFormViewProps = {
   /** Localized strings for the form. */
@@ -34,15 +40,15 @@ export type RegistrationFormViewProps = {
   hasSavedCode: boolean;
   /** Whether the form fields are disabled (loading, saving, restarting, or not editing). */
   isFormDisabled: boolean;
-  /** Whether the save-and-restart button is disabled. */
-  isSaveDisabled: boolean;
-  /** Whether to flag the registration code input as invalid (length hint). */
-  showInvalidCode: boolean;
   /** Progress of the save/restart flow; drives the success alert and button label. */
   saveState: SaveState;
   /** Whether the registration code is currently being validated against the backend. */
   isLoading: boolean;
-  /** Whether the current registration is valid (drives the success alert). */
+  /**
+   * Whether the backend confirmed the current name + code is a real registration (drives the
+   * success alert and enables saving). Supplied by the container's validation command (mocked in
+   * stories). The code's _format_ validity is derived in this component, not here.
+   */
   registrationIsValid: boolean;
   /** Error alert title, or empty for none. */
   error: string;
@@ -62,9 +68,10 @@ export type RegistrationFormViewProps = {
 
 /**
  * Presentational Paratext registration form: name/code fields (editable or read-only), validation
- * hints, success/error alerts, and the change / save-and-restart buttons. All state, validation,
- * and PAPI calls live in the `RegistrationForm` container; this view is fully controlled via
- * props.
+ * hints, success/error alerts, and the change / save-and-restart buttons. It owns the field-level
+ * validation (the code-format check and the save-enabled gating); the container supplies the
+ * backend-dependent signals (whether the name + code is a recognized registration, loading, and
+ * errors).
  */
 export function RegistrationFormView({
   localizedStrings,
@@ -75,8 +82,6 @@ export function RegistrationFormView({
   savedCode,
   hasSavedCode,
   isFormDisabled,
-  isSaveDisabled,
-  showInvalidCode,
   saveState,
   isLoading,
   registrationIsValid,
@@ -88,6 +93,22 @@ export function RegistrationFormView({
   onCancelEditing,
   onSaveAndRestart,
 }: RegistrationFormViewProps) {
+  // Flag a malformed registration code (debounced so it doesn't flash while the user is typing).
+  const [showInvalidCode, setShowInvalidCode] = useState(false);
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setShowInvalidCode(
+        registrationCode.length > 0 && !registrationCode.match(REGISTRATION_CODE_REGEX_STRING),
+      );
+    }, SHOW_INVALID_CODE_DEBOUNCE_MS);
+    return () => clearTimeout(timeout);
+  }, [registrationCode]);
+
+  // Save is allowed only for an unsaved, backend-confirmed registration that isn't mid-operation.
+  const hasUnsavedChanges = name !== savedName || registrationCode !== savedCode;
+  const isSaveDisabled =
+    isFormDisabled || !hasUnsavedChanges || isLoading || !registrationIsValid || !!error;
+
   const formatSuccessAlertDescription = () => {
     if (saveState === SaveState.IsRestarting) {
       return localizedStrings['%paratextRegistration_alert_updatedRegistration_description%'];
