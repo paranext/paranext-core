@@ -120,7 +120,7 @@ export function InternetSettingsForm({
   };
 
   return (
-    <div className="tw:flex tw:flex-col tw:gap-2 tw:h-screen tw:p-4">
+    <div className="tw:flex tw:flex-col tw:gap-2 tw:h-screen tw:overflow-y-auto tw:p-4">
       <div className="tw:m-2">
         {localizedStrings['%paratextRegistration_description_internetUse_disclaimer%']}
       </div>
@@ -215,7 +215,11 @@ export function InternetSettingsForm({
         </Card>
       )}
       <Grid>
-        <span>{localizedStrings['%paratextRegistration_label_selectedServer%']}</span>
+        {/* Keep this label left-aligned: Grid right-aligns label columns for the multi-row forms,
+            but this standalone row's label drifts far right on a wide panel, so override it. */}
+        <span className="tw:!justify-self-start">
+          {localizedStrings['%paratextRegistration_label_selectedServer%']}
+        </span>
         <Select
           disabled={isFormDisabled}
           value={internetSettings.selectedServer}
