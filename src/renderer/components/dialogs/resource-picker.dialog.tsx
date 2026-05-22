@@ -11,7 +11,7 @@ import {
   RESOURCE_PICKER_DIALOG_TYPE,
 } from '@renderer/components/dialogs/dialog-definition.model';
 import { useCallback } from 'react';
-import { commands } from '@renderer/services/papi-frontend.service';
+import { sendCommand } from '@shared/services/command.service';
 
 const STRING_KEYS = [...RESOURCE_PICKER_DIALOG_STRING_KEYS];
 
@@ -24,7 +24,7 @@ function ResourcePickerDialogWrapper({
 
   // Fetches all resources to pass into the resource picker
   const [resources, isResourcesLoading] = usePromise(
-    useCallback(async () => commands.sendCommand('platformGetResources.getCachedResources'), []),
+    useCallback(async () => sendCommand('platformGetResources.getCachedResources'), []),
     undefined,
   );
 
