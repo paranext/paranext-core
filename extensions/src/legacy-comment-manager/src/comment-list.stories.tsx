@@ -9,7 +9,10 @@ import {
   CommentListPanel,
   CommentListPanelProps,
   COMMENT_LIST_PANEL_EXTRA_STRING_KEYS,
+  FILTER_UNREAD_ASSIGNED,
+  FILTER_UNRESOLVED_ASSIGNED,
   ScopeFilter,
+  SCOPE_FILTER_CURRENT_CHAPTER,
   UNFILTERED,
 } from './comment-list.component';
 
@@ -88,7 +91,59 @@ const sampleThreads: LegacyCommentThread[] = [
       }),
     ],
   },
+  // In a different chapter (GEN 2) so the "current chapter" scope filter visibly removes it.
+  {
+    id: 'thread-3',
+    verseRef: 'GEN 2:7',
+    status: 'Todo',
+    type: 'Normal',
+    modifiedDate: '2024-01-04T08:00:00.0000000-00:00',
+    isSpellingNote: false,
+    isBTNote: false,
+    isConsultantNote: false,
+    isRead: false,
+    assignedUser: CURRENT_USER,
+    comments: [
+      makeComment({
+        id: 'c4',
+        thread: 'thread-3',
+        verseRef: 'GEN 2:7',
+        user: 'Dana',
+        contents: 'Should this be "formed" or "created"?',
+        isRead: false,
+      }),
+    ],
+  },
 ];
+
+/** The "current chapter" the scope filter narrows to in these stories (GEN 1). */
+const STORY_SCR_REF = { book: 'GEN', chapterNum: 1 };
+
+/**
+ * Mirrors the web view's comment-thread selector: the panel renders already-filtered threads, so
+ * here we derive the visible threads from the toolbar filters the same way the web view's PDP query
+ * would (unresolved/unread + assigned-to-me, and the current-chapter scope).
+ */
+function filterThreads(
+  threads: LegacyCommentThread[],
+  commentFilter: CommentFilter,
+  scopeFilter: ScopeFilter,
+  currentUser: string,
+): LegacyCommentThread[] {
+  return threads.filter((thread) => {
+    if (scopeFilter === SCOPE_FILTER_CURRENT_CHAPTER) {
+      const chapterPrefix = `${STORY_SCR_REF.book} ${STORY_SCR_REF.chapterNum}:`;
+      if (!thread.verseRef?.startsWith(chapterPrefix)) return false;
+    }
+    if (commentFilter === FILTER_UNRESOLVED_ASSIGNED) {
+      return thread.status === 'Todo' && thread.assignedUser === currentUser;
+    }
+    if (commentFilter === FILTER_UNREAD_ASSIGNED) {
+      return !thread.isRead && thread.assignedUser === currentUser;
+    }
+    return true;
+  });
+}
 
 const resolveTrue = () => Promise.resolve(true);
 
@@ -123,13 +178,17 @@ function createDecorator(config: DecoratorConfig) {
     const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>(undefined);
     const [threads, setThreads] = useState<LegacyCommentThread[]>(config.threads ?? sampleThreads);
 
+    // The panel renders already-filtered threads (the web view filters via its query), so derive the
+    // visible list from the toolbar filters here.
+    const displayedThreads = filterThreads(threads, commentFilter, scopeFilter, CURRENT_USER);
+
     return (
       <div className="tw:h-screen">
         <Story
           args={{
             localizedStrings,
             isLoading: config.isLoading ?? false,
-            threads,
+            threads: displayedThreads,
             currentUser: CURRENT_USER,
             commentFilter,
             onCommentFilterChange: setCommentFilter,

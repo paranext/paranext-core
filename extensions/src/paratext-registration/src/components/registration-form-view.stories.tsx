@@ -62,26 +62,36 @@ type DecoratorConfig = Partial<
   initialCode?: string;
 };
 
-/** Holds the name/code fields in local state so typing works (validation lives in the container). */
+/**
+ * Backs the form with thin in-memory state so the whole flow is interactive: "Change" enters edit
+ * mode (revealing the editable name/code fields), typing updates the fields, Cancel reverts to the
+ * saved values, and Save persists them back to the read-only view (and announces the command the
+ * web view would run — saving registration restarts the app).
+ */
 function createDecorator(config: DecoratorConfig) {
   return function RegistrationFormViewDecorator(
     Story: (update?: { args: RegistrationFormViewProps }) => ReactElement,
   ) {
-    const [name, setName] = useState(config.initialName ?? '');
-    const [registrationCode, setRegistrationCode] = useState(config.initialCode ?? '');
+    const [savedName, setSavedName] = useState(config.savedName ?? '');
+    const [savedCode, setSavedCode] = useState(config.savedCode ?? '');
+    const [name, setName] = useState(config.initialName ?? config.savedName ?? '');
+    const [registrationCode, setRegistrationCode] = useState(
+      config.initialCode ?? config.savedCode ?? '',
+    );
+    const [isEditing, setIsEditing] = useState(config.isEditing ?? true);
 
     return (
       <div className="tw:max-w-2xl tw:p-4">
         <Story
           args={{
             localizedStrings,
-            isEditing: config.isEditing ?? true,
+            isEditing,
             name,
             registrationCode,
-            savedName: config.savedName ?? '',
-            savedCode: config.savedCode ?? '',
-            hasSavedCode: config.hasSavedCode ?? false,
-            isFormDisabled: config.isFormDisabled ?? false,
+            savedName,
+            savedCode,
+            hasSavedCode: config.hasSavedCode ?? savedCode.length > 0,
+            isFormDisabled: (config.isFormDisabled ?? false) || !isEditing,
             isSaveDisabled: config.isSaveDisabled ?? false,
             showInvalidCode: config.showInvalidCode ?? false,
             saveState: config.saveState ?? SaveState.HasNotSaved,
@@ -91,13 +101,22 @@ function createDecorator(config: DecoratorConfig) {
             errorDescription: config.errorDescription ?? '',
             onNameChange: (e) => setName(e.target.value),
             onRegistrationCodeChange: (e) => setRegistrationCode(e.target.value),
-            onClickChange: () => alertCommand('registration.edit'),
-            onCancelEditing: () => alertCommand('registration.cancel'),
-            onSaveAndRestart: () =>
+            onClickChange: () => setIsEditing(true),
+            onCancelEditing: () => {
+              setName(savedName);
+              setRegistrationCode(savedCode);
+              setIsEditing(false);
+            },
+            onSaveAndRestart: () => {
+              // Saving registration restarts the app in the real web view — announce the command.
               alertCommand('paratextRegistration.setParatextRegistrationData', {
                 name,
                 code: registrationCode,
-              }),
+              });
+              setSavedName(name);
+              setSavedCode(registrationCode);
+              setIsEditing(false);
+            },
           }}
         />
       </div>
