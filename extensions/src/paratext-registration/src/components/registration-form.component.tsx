@@ -147,7 +147,6 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
   const [saveState, setSaveState] = useWebViewState('saveState', SaveState.HasNotSaved);
   const [error, setError] = useState('');
   const [errorDescription, setErrorDescription] = useState('');
-  const [showInvalidCode, setShowInvalidCode] = useState(false);
   const [registrationIsValid, setRegistrationIsValid] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const validationTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -214,9 +213,6 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
     saveState === SaveState.IsRestarting ||
     !isEditing;
 
-  const isButtonDisabled =
-    isFormDisabled || !hasUnsavedChanges || isLoading || !registrationIsValid || !!error;
-
   const onEditingChange = () => {
     setSaveState(SaveState.HasNotSaved);
     setRegistrationIsValid(false);
@@ -246,8 +242,9 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
     const timeout = setTimeout(async () => {
       setError('');
       setErrorDescription('');
+      // The code's format check (and the invalid-code hint) is derived in RegistrationFormView; here
+      // we only gate the backend validation on a well-formed code.
       const newCodeIsValid = newRegistrationCode.match(REGISTRATION_CODE_REGEX_STRING);
-      setShowInvalidCode(!!newRegistrationCode && !newCodeIsValid);
 
       // If the new code is valid, then validates the code with the name on the backend
       if (newCodeIsValid && newName && !isLoading) {
@@ -334,8 +331,6 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
       savedCode={currentRegistrationData.code}
       hasSavedCode={currentRegistrationData.code !== ''}
       isFormDisabled={isFormDisabled}
-      isSaveDisabled={isButtonDisabled}
-      showInvalidCode={showInvalidCode}
       saveState={saveState}
       isLoading={isLoading}
       registrationIsValid={registrationIsValid}
