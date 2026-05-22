@@ -3,7 +3,6 @@ import { ReactElement, useState } from 'react';
 import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
 import { alertCommand } from '../../../../../.storybook/story.utils';
 import {
-  REGISTRATION_CODE_REGEX_STRING,
   RegistrationFormView,
   RegistrationFormViewProps,
 } from './registration-form-view.component';
@@ -50,7 +49,6 @@ type DecoratorConfig = Partial<
     | 'savedCode'
     | 'hasSavedCode'
     | 'isFormDisabled'
-    | 'isSaveDisabled'
     | 'saveState'
     | 'isLoading'
     | 'error'
@@ -79,20 +77,10 @@ function createDecorator(config: DecoratorConfig) {
     );
     const [isEditing, setIsEditing] = useState(config.isEditing ?? true);
 
-    // Reproduce the container's field validation so the form validates live in the story like the
-    // app does: a non-empty code that doesn't match the registration-code format is flagged
-    // (red field + length warning), and the registration is "valid" only with a name and a
-    // well-formed code. (The app additionally validates the code against the backend; the story
-    // treats a well-formed code + name as valid.)
-    const isCodeWellFormed = !!registrationCode.match(REGISTRATION_CODE_REGEX_STRING);
-    const showInvalidCode = isEditing && registrationCode.length > 0 && !isCodeWellFormed;
-    const registrationIsValid = isEditing && name.trim().length > 0 && isCodeWellFormed;
-    const isFormDisabled = (config.isFormDisabled ?? false) || !isEditing;
-    const hasUnsavedChanges = name !== savedName || registrationCode !== savedCode;
-    const error = config.error ?? '';
-    const isSaveDisabled =
-      config.isSaveDisabled ??
-      (isFormDisabled || !hasUnsavedChanges || !registrationIsValid || !!error);
+    // Mock of the backend `validateParatextRegistrationData` command: it recognizes the sample
+    // registration (a non-empty name with the known sample code). The component derives the code's
+    // *format* validity and the save gating itself — the story only stands in for the backend.
+    const registrationIsValid = name.trim().length > 0 && registrationCode === SAMPLE_CODE;
 
     return (
       <div className="tw:max-w-2xl tw:p-4">
@@ -105,13 +93,11 @@ function createDecorator(config: DecoratorConfig) {
             savedName,
             savedCode,
             hasSavedCode: config.hasSavedCode ?? savedCode.length > 0,
-            isFormDisabled,
-            isSaveDisabled,
-            showInvalidCode,
+            isFormDisabled: config.isFormDisabled ?? false,
             saveState: config.saveState ?? SaveState.HasNotSaved,
             isLoading: config.isLoading ?? false,
             registrationIsValid,
-            error,
+            error: config.error ?? '',
             errorDescription: config.errorDescription ?? '',
             onNameChange: (e) => setName(e.target.value),
             onRegistrationCodeChange: (e) => setRegistrationCode(e.target.value),
@@ -193,7 +179,6 @@ export const Restarting: Story = {
       initialCode: SAMPLE_CODE,
       hasSavedCode: true,
       isFormDisabled: true,
-      isSaveDisabled: true,
       saveState: SaveState.IsRestarting,
     }),
   ],
