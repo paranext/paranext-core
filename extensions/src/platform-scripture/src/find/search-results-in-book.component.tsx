@@ -1,13 +1,10 @@
+import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
-  getErrorMessage,
-  isPlatformError,
   LocalizedStringValue,
   USFM_MARKERS_MAP_PARATEXT_3_0,
   UsjReaderWriter,
 } from 'platform-bible-utils';
-import { useProjectData } from '@papi/frontend/react';
-import { useMemo } from 'react';
-import { logger } from '@papi/frontend';
+import { useEffect, useMemo, useState } from 'react';
 import { LocalizedBookData } from './find-types';
 import SearchResult, {
   HidableFindResult,
@@ -15,8 +12,12 @@ import SearchResult, {
 } from './search-result.component';
 
 type SearchResultsInBookProps = {
-  /** The ID of the project being searched */
-  projectId: string | undefined;
+  /**
+   * Retrieves the USJ for the given book so the verse context for each result can be computed.
+   * Provided by the container (webview reads it from the USJ_Book project data provider; the story
+   * returns seed USJ) so this component stays free of `@papi`.
+   */
+  getBookUsj: (bookId: string) => Promise<Usj | undefined>;
   /** The book ID of the book these results are from */
   bookId: string;
   /** The list of search results in this book */
@@ -44,7 +45,7 @@ type SearchResultsInBookProps = {
 
 /** Handles rendering the results within a single book of a search. */
 export function SearchResultsInBook({
-  projectId,
+  getBookUsj,
   bookId,
   results,
   localizedBookData,
@@ -57,40 +58,35 @@ export function SearchResultsInBook({
   isReplaceMode,
   isReplacing,
 }: SearchResultsInBookProps) {
-  const verseRefForBook = useMemo(() => {
-    return {
-      book: bookId,
-      chapterNum: 1,
-      verseNum: 0,
+  const [usjBook, setUsjBook] = useState<Usj | undefined>(undefined);
+
+  useEffect(() => {
+    let isActive = true;
+    getBookUsj(bookId)
+      .then((usj) => {
+        if (isActive) setUsjBook(usj);
+        return undefined;
+      })
+      .catch(() => {
+        // The verse context is best-effort; if loading the book USJ fails, leave it undefined so
+        // results still render without surrounding context.
+        if (isActive) setUsjBook(undefined);
+      });
+    return () => {
+      isActive = false;
     };
-  }, [bookId]);
-
-  const [usjBookPossiblyError] = useProjectData(
-    'platformScripture.USJ_Book',
-    projectId ?? undefined,
-  ).BookUSJ(verseRefForBook, undefined);
-
-  const usjBook = useMemo(() => {
-    if (isPlatformError(usjBookPossiblyError)) {
-      logger.warn(
-        `Error retrieving USJ Book ${bookId} for search results in book: ${getErrorMessage(usjBookPossiblyError)}`,
-      );
-      return undefined;
-    }
-    return usjBookPossiblyError;
-  }, [usjBookPossiblyError, bookId]);
+  }, [getBookUsj, bookId]);
 
   const usjReaderWriter = useMemo(() => {
     if (!usjBook) return undefined;
     try {
       return new UsjReaderWriter(usjBook, { markersMap: USFM_MARKERS_MAP_PARATEXT_3_0 });
-    } catch (error) {
-      logger.warn(
-        `Error creating UsjReaderWriter ${bookId} for search results in book: ${getErrorMessage(error)}`,
-      );
+    } catch {
+      // If the USJ can't be parsed, fall back to rendering results without verse context rather
+      // than surfacing an error.
       return undefined;
     }
-  }, [usjBook, bookId]);
+  }, [usjBook]);
 
   const firstReplacedIndex = results.findIndex((r) => r.isReplaced);
 
