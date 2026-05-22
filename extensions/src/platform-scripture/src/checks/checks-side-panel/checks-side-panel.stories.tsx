@@ -87,7 +87,39 @@ const seedResults: CheckRunResult[] = [
     itemText: 'ḥ',
     messageFormatString: 'Character is not in the approved inventory',
   }),
+  // In a different book (EXO) so the "All" scope shows more than the "Book" (GEN) scope.
+  makeResult({
+    checkResultUniqueId: 'r5',
+    checkId: 'capitalization',
+    checkResultType: 'capitalization',
+    verseRef: { book: 'EXO', chapterNum: 3, verseNum: 2 },
+    itemText: 'and',
+    messageFormatString: 'Sentence should start with a capital letter',
+  }),
 ];
+
+/** The "current" reference the scope filter is relative to in these stories (GEN 1). */
+const STORY_SCR_REF = { book: 'GEN', chapterNum: 1 };
+
+/**
+ * Mirrors the web view's check run: the panel renders already-filtered results, so derive the
+ * visible results from the selected check types and scope the same way the web view's job would
+ * (Chapter = current chapter, Book = current book, All = everywhere).
+ */
+function filterResults(
+  results: CheckRunResult[],
+  selectedCheckTypeIds: string[],
+  scope: CheckScopes,
+): CheckRunResult[] {
+  return results.filter((result) => {
+    const typeId = result.checkId ?? result.checkResultType;
+    if (!selectedCheckTypeIds.includes(typeId)) return false;
+    if (scope === CheckScopes.All) return true;
+    if (result.verseRef.book !== STORY_SCR_REF.book) return false;
+    if (scope === CheckScopes.Book) return true;
+    return result.verseRef.chapterNum === STORY_SCR_REF.chapterNum;
+  });
+}
 
 const completedJobReport: CheckJobStatusReport = {
   jobId: 'job-1',
@@ -185,6 +217,24 @@ function ChecksSidePanelHarness({ config }: { config: HarnessConfig }) {
     [config.failWrites, failingWrite, setDenied],
   );
 
+  // The panel renders already-filtered results, so derive the visible results from the toolbar's
+  // check-type and scope selections (the web view would re-run/re-query for these).
+  const displayedResults = useMemo(
+    () => filterResults(results, selectedCheckTypeIds, scope),
+    [results, selectedCheckTypeIds, scope],
+  );
+
+  // When the default completed job is in use, keep the total in sync with what's shown so the status
+  // bar reports "all loaded" rather than a phantom in-progress count as filters change.
+  const jobStatusReport = useMemo<CheckJobStatusReport>(
+    () =>
+      config.jobStatusReport ?? {
+        ...completedJobReport,
+        totalResultsCount: displayedResults.length,
+      },
+    [config.jobStatusReport, displayedResults.length],
+  );
+
   return (
     <ChecksSidePanel
       localizedStrings={localizedStrings}
@@ -194,8 +244,8 @@ function ChecksSidePanelHarness({ config }: { config: HarnessConfig }) {
       scope={scope}
       selectedCheckTypeIds={selectedCheckTypeIds}
       checksInfo={seedChecksInfo}
-      checkResults={results}
-      jobStatusReport={config.jobStatusReport ?? completedJobReport}
+      checkResults={displayedResults}
+      jobStatusReport={jobStatusReport}
       hasActiveJob={config.hasActiveJob ?? true}
       isResultLoadingCancelled={false}
       getLocalizedCheckDescription={getLocalizedCheckDescription}

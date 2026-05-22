@@ -1,6 +1,10 @@
 /**
  * Shared Storybook helpers for the bundled-extension webview component stories.
  *
+ * See `.storybook/STORYBOOK-INTERACTIVITY.md` for the full guidelines on writing fully-interactive,
+ * real-app-like stories (the split pattern, reproducing the web view's filtering/search derivation,
+ * callback conventions, editor styling, and verification).
+ *
  * Webview components are split into a presentational component (covered by these stories) and a
  * thin data-loading `*.web-view.tsx` wrapper. In the real app the wrapper implements the `on*`
  * action callbacks with PAPI commands; in Storybook we mock them here so reviewers can exercise the
