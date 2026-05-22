@@ -1,18 +1,18 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
-import {
-  ProjectPickerComboBox,
-  type ProjectOption,
-} from './project-picker-combo-box.component';
+import { ProjectPickerComboBox, type ProjectOption } from './project-picker-combo-box.component';
 
 // Radix Popover uses ResizeObserver; jsdom doesn't provide it
 beforeAll(() => {
   global.ResizeObserver = class {
+    // jsdom stub — instance state not needed
     // eslint-disable-next-line @typescript-eslint/class-methods-use-this
     observe() {}
+    // jsdom stub — instance state not needed
     // eslint-disable-next-line @typescript-eslint/class-methods-use-this
     unobserve() {}
+    // jsdom stub — instance state not needed
     // eslint-disable-next-line @typescript-eslint/class-methods-use-this
     disconnect() {}
   };
