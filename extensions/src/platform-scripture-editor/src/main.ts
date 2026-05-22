@@ -1,4 +1,4 @@
-import papi, { logger, WebViewFactory } from '@papi/backend';
+﻿import papi, { logger, WebViewFactory } from '@papi/backend';
 import type {
   ExecutionActivationContext,
   IWebViewProvider,
@@ -56,6 +56,32 @@ let selectionChangedEventEmitter: PlatformEventEmitter<SelectionChangeEvent> | u
 // Selection is stored per-WebViewController instance in createWebViewController.
 
 // #endregion Editor Selection Tracking
+
+// #region Project Switch Events
+
+/**
+ * Network event name emitted just before a scripture editor web view is opened or replaced with a
+ * new project. Subscribe via
+ * `papi.network.getNetworkEvent('platformScriptureEditor.onWillSwitchProject')`.
+ */
+export const PROJECT_SWITCH_WILL_START_EVENT = 'platformScriptureEditor.onWillSwitchProject';
+
+/**
+ * Network event name emitted after the scripture editor web view open/replace call resolves.
+ * Subscribe via `papi.network.getNetworkEvent('platformScriptureEditor.onDidSwitchProject')`.
+ */
+export const PROJECT_SWITCH_DID_FINISH_EVENT = 'platformScriptureEditor.onDidSwitchProject';
+
+/**
+ * Event emitter fired before a project switch. Created lazily on the first call to open() to avoid
+ * network initialization races during extension activation.
+ */
+let projectSwitchWillStartEmitter: PlatformEventEmitter<Record<string, never>> | undefined;
+
+/** Event emitter fired after a project switch completes. Created lazily on the first call to open(). */
+let projectSwitchDidFinishEmitter: PlatformEventEmitter<Record<string, never>> | undefined;
+
+// #endregion Project Switch Events
 
 interface PlatformScriptureEditorOptions extends OpenWebViewOptions {
   projectId: string | undefined;
@@ -192,65 +218,102 @@ async function open(
     projectForWebView.isEditable = await pdp.getSetting('platform.isEditable');
   }
   if (projectForWebView.projectId) {
-    // Decide where to route this open. The dispatch helper centralizes the simple-mode invariants
-    // (one editor slot, no duplicate-(project, readonly) tabs) and the empty-editor probe; see
-    // resolveOpenEditorDispatch JSDoc for the priority order.
-    const allOpenDefs = await papi.webViews.getAllOpenWebViewDefinitions();
-    const allScriptureEditors = allOpenDefs
-      .filter((def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE)
-      .map((def) => ({
-        id: def.id,
-        projectId: def.projectId,
-        // WebView state isn't statically typed, but `getWebViewDefinition` always stores
-        // `isReadOnly` as boolean here. Treat any other value as `false` for safety.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        isReadOnly: !!(def.state?.isReadOnly as boolean | undefined),
-      }));
-    const interfaceMode = await papi.settings.get('platform.interfaceMode');
-    const requestedIsReadOnly = !projectForWebView.isEditable;
+    // Create emitters lazily on first use, after full activation, to avoid network init races.
+    if (!projectSwitchWillStartEmitter)
+      projectSwitchWillStartEmitter = papi.network.createNetworkEventEmitter<Record<string, never>>(
+        PROJECT_SWITCH_WILL_START_EVENT,
+      );
+    if (!projectSwitchDidFinishEmitter)
+      projectSwitchDidFinishEmitter = papi.network.createNetworkEventEmitter<Record<string, never>>(
+        PROJECT_SWITCH_DID_FINISH_EVENT,
+      );
 
-    const dispatch = resolveOpenEditorDispatch(
-      allScriptureEditors,
-      projectForWebView.projectId,
-      requestedIsReadOnly,
-      interfaceMode,
-      existingTabIdToReplace,
-    );
+    // Emit before any async work so the overlay appears even if a later service call fails.
+    // The catch block guarantees the matching did-finish event always fires to clear the overlay.
+    projectSwitchWillStartEmitter.emit({});
+    try {
+      // Decide where to route this open. The dispatch helper centralizes the simple-mode invariants
+      // (one editor slot, no duplicate-(project, readonly) tabs) and the empty-editor probe; see
+      // resolveOpenEditorDispatch JSDoc for the priority order.
+      const allOpenDefs = await papi.webViews.getAllOpenWebViewDefinitions();
+      const allScriptureEditors = allOpenDefs
+        .filter((def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE)
+        .map((def) => ({
+          id: def.id,
+          projectId: def.projectId,
+          // WebView state isn't statically typed, but `getWebViewDefinition` always stores
+          // `isReadOnly` as boolean here. Treat any other value as `false` for safety.
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          isReadOnly: !!(def.state?.isReadOnly as boolean | undefined),
+        }));
+      const interfaceMode = await papi.settings.get('platform.interfaceMode');
+      const requestedIsReadOnly = !projectForWebView.isEditable;
 
-    // Focus path: the requested project is already open. Bring the existing tab to the front
-    // without tearing down the editor or re-running its WebView provider.
-    if (dispatch.kind === 'focus-existing') {
-      return papi.webViews.openWebView(SCRIPTURE_EDITOR_WEBVIEW_TYPE, undefined, {
-        existingId: dispatch.existingId,
-        createNewIfNotFound: false,
-        bringToFront: true,
-      });
+      const dispatch = resolveOpenEditorDispatch(
+        allScriptureEditors,
+        projectForWebView.projectId,
+        requestedIsReadOnly,
+        interfaceMode,
+        existingTabIdToReplace,
+      );
+
+      // Focus path: the requested project is already open. Bring the existing tab to the front
+      // without tearing down the editor or re-running its WebView provider.
+      if (dispatch.kind === 'focus-existing') {
+        return papi.webViews
+          .openWebView(SCRIPTURE_EDITOR_WEBVIEW_TYPE, undefined, {
+            existingId: dispatch.existingId,
+            createNewIfNotFound: false,
+            bringToFront: true,
+          })
+          .finally(() => {
+            if (projectSwitchDidFinishEmitter) projectSwitchDidFinishEmitter.emit({});
+            else
+              logger.warn(
+                'projectSwitchDidFinishEmitter was disposed before the project switch completed — workspace-updating overlay may be stuck',
+              );
+          });
+      }
+
+      const openWebViewOptions: PlatformScriptureEditorOptions = {
+        projectId: projectForWebView.projectId,
+        isReadOnly: !projectForWebView.isEditable,
+        options,
+      };
+
+      if (interfaceMode === 'simple' && dispatch.kind === 'replace-tab') {
+        const outgoing = allScriptureEditors.find((e) => e.id === dispatch.targetTabId);
+        // Skip outgoing S/R for read-only viewers — no local changes are possible.
+        // ENHANCE: also skip if the outgoing editor had no user edits during the session (would
+        // require tracking a dirty flag in the editor controller, which doesn't exist yet).
+        const outgoingProjectId = outgoing?.isReadOnly ? undefined : outgoing?.projectId;
+        // Fire-and-forget: runs concurrently with `openWebView`.
+        syncOnProjectSwitch(papi, projectForWebView.projectId, outgoingProjectId);
+      }
+
+      return papi.webViews
+        .openWebView(
+          SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+          dispatch.kind === 'replace-tab'
+            ? { type: 'replace-tab', targetTabId: dispatch.targetTabId }
+            : undefined,
+          openWebViewOptions,
+        )
+        .finally(() => {
+          if (projectSwitchDidFinishEmitter) projectSwitchDidFinishEmitter.emit({});
+          else
+            logger.warn(
+              'projectSwitchDidFinishEmitter was disposed before the project switch completed — workspace-updating overlay may be stuck',
+            );
+        });
+    } catch (e) {
+      if (projectSwitchDidFinishEmitter) projectSwitchDidFinishEmitter.emit({});
+      else
+        logger.warn(
+          'projectSwitchDidFinishEmitter was disposed before the project switch completed — workspace-updating overlay may be stuck',
+        );
+      throw e;
     }
-
-    if (interfaceMode === 'simple' && dispatch.kind === 'replace-tab') {
-      const outgoing = allScriptureEditors.find((e) => e.id === dispatch.targetTabId);
-      // Skip outgoing S/R for read-only viewers — no local changes are possible.
-      // ENHANCE: also skip if the outgoing editor had no user edits during the session (would
-      // require tracking a dirty flag in the editor controller, which doesn't exist yet).
-      const outgoingProjectId = outgoing?.isReadOnly ? undefined : outgoing?.projectId;
-      // Fire-and-forget: runs concurrently with `openWebView`.
-      syncOnProjectSwitch(papi, projectForWebView.projectId, outgoingProjectId);
-    }
-
-    const openWebViewOptions: PlatformScriptureEditorOptions = {
-      projectId: projectForWebView.projectId,
-      isReadOnly: !projectForWebView.isEditable,
-      options,
-    };
-    const openedWebViewId = await papi.webViews.openWebView(
-      SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-      dispatch.kind === 'replace-tab'
-        ? { type: 'replace-tab', targetTabId: dispatch.targetTabId }
-        : undefined,
-      openWebViewOptions,
-    );
-
-    return openedWebViewId;
   }
   return undefined;
 }
@@ -1057,6 +1120,15 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await modelTextPanelWebViewProviderPromise,
     await openModelTextPanelPromise,
     selectionChangedEventEmitter,
+    {
+      dispose: async () => {
+        projectSwitchWillStartEmitter?.dispose();
+        projectSwitchWillStartEmitter = undefined;
+        projectSwitchDidFinishEmitter?.dispose();
+        projectSwitchDidFinishEmitter = undefined;
+        return true;
+      },
+    },
     unsubFromDefaultProjectPicker,
     ...markerNotifierUnsubscribers,
   );
