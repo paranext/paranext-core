@@ -1394,7 +1394,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return true;
     }
 
-    public ResourceReferenceList GetUserReferencedProjectsAndResources()
+    public ResourceReferenceList GetUserReferencedProjectsAndResources(object? param = null)
     {
         var (schemaVersion, content) = GetUserProjectSettings()
             .GetSetting("ReferencedProjectsAndResources");
