@@ -1,12 +1,6 @@
-import { logger } from '@papi/frontend';
 import { Copy, X } from 'lucide-react';
 import { Button, DropdownMenuItem, ResultsCard } from 'platform-bible-react';
-import {
-  getErrorMessage,
-  LocalizedStringValue,
-  LocalizeKey,
-  UsjReaderWriter,
-} from 'platform-bible-utils';
+import { LocalizedStringValue, LocalizeKey, UsjReaderWriter } from 'platform-bible-utils';
 import { FindResult } from 'platform-scripture';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { LocalizedBookData } from './find-types';
@@ -153,8 +147,9 @@ export default function SearchResult({
       }
 
       return { beforeText, text, afterText };
-    } catch (error) {
-      logger.warn(`Error determining text parts for search result: ${getErrorMessage(error)}`);
+    } catch {
+      // The verse context is best-effort; if locating the result within the USFM fails, fall back
+      // to showing the result without surrounding context rather than surfacing an error.
       return undefined;
     }
   }, [usjReaderWriter, searchResult, isVisible]);
