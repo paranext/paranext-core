@@ -1,25 +1,15 @@
 import { UseWebViewStateHook } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import { useLocalizedStrings } from '@papi/frontend/react';
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-  Button,
-  cn,
-  Input,
-  Spinner,
-  usePromise,
-} from 'platform-bible-react';
+import { usePromise } from 'platform-bible-react';
 import { getErrorMessage, LocalizeKey, wait } from 'platform-bible-utils';
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, CircleCheck, PenIcon } from 'lucide-react';
-import { SaveState, scrollToRef } from '../utils';
-import { Grid } from './grid.component';
+import { SaveState } from '../utils';
+import {
+  REGISTRATION_CODE_REGEX_STRING,
+  RegistrationFormView,
+} from './registration-form-view.component';
 
-const REGISTRATION_CODE_LENGTH_WITH_DASHES = 34;
-const REGISTRATION_CODE_REGEX_STRING =
-  '^(?:[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}|\\*{6}-\\*{6}-\\*{6}-\\*{6}-\\*{6})$';
 const REGISTRATION_CODE_CHARACTER_VALIDATION_REGEX = '^[a-zA-Z0-9\\-]*$';
 const REGISTRATION_CODE_INSERT_DASH_REGEX_STRING = '^[a-zA-Z0-9]{6}$|-[[a-zA-Z0-9\\-]{6}$';
 /**
@@ -227,20 +217,6 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
   const isButtonDisabled =
     isFormDisabled || !hasUnsavedChanges || isLoading || !registrationIsValid || !!error;
 
-  const formatSuccessAlertDescription = () => {
-    if (saveState === SaveState.IsRestarting) {
-      return localizedStrings['%paratextRegistration_alert_updatedRegistration_description%'];
-    }
-
-    if (saveState === SaveState.HasSaved) {
-      return localizedStrings[
-        '%paratextRegistration_alert_updatedRegistration_description_hasRestarted%'
-      ];
-    }
-
-    return localizedStrings['%paratextRegistration_alert_validRegistration_description%'];
-  };
-
   const onEditingChange = () => {
     setSaveState(SaveState.HasNotSaved);
     setRegistrationIsValid(false);
@@ -349,116 +325,27 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
   };
 
   return (
-    <div className="tw:rounded-md tw:border tw:p-4 tw:shadow-md">
-      <div className="tw:flex tw:flex-col">
-        <Grid>
-          {!isEditing && (
-            <>
-              <h1 className="tw:font-semibold tw:text-lg">
-                {localizedStrings['%paratextRegistration_label_yourRegistration%']}
-              </h1>
-              <span />
-            </>
-          )}
-          <span className={cn({ 'tw:font-semibold': !isEditing })}>
-            {localizedStrings['%paratextRegistration_label_registrationName%']}
-          </span>
-          {isEditing ? (
-            <Input
-              className="tw:max-w-[260px]"
-              value={name}
-              required
-              disabled={isFormDisabled}
-              onChange={onNameChange}
-            />
-          ) : (
-            <span>{currentRegistrationData.name}</span>
-          )}
-          <span className={cn({ 'tw:font-semibold': !isEditing })}>
-            {localizedStrings['%paratextRegistration_label_registrationCode%']}
-          </span>
-          {isEditing ? (
-            <Input
-              className={cn('tw:font-mono tw:box-content tw:h-6 tw:max-w-[350px]', {
-                'tw:invalid:border-destructive': showInvalidCode,
-              })}
-              pattern={REGISTRATION_CODE_REGEX_STRING}
-              maxLength={REGISTRATION_CODE_LENGTH_WITH_DASHES}
-              placeholder="XXXXXX-XXXXXX-XXXXXX-XXXXXX-XXXXXX"
-              required
-              value={registrationCode}
-              disabled={isFormDisabled}
-              onChange={onRegistrationCodeChange}
-            />
-          ) : (
-            <span>{currentRegistrationData.code}</span>
-          )}
-          <span />
-          {showInvalidCode && (
-            <p className="tw:text-muted-foreground">
-              {localizedStrings['%paratextRegistration_warning_invalid_registration_length%']}
-            </p>
-          )}
-        </Grid>
-        {/* UX said to remove supporter info until we are using it in P10S. Leaving here for uncommenting when the time is right */}
-        {/* <Section>Please specify who provides Paratext support to you:</Section>
-          <Grid className="tw:mt-8">
-            <span>Supporter name</span>
-            <Input value={supporter} disabled={isFormDisabled} onChange={(e) => setSupporter(e.target.value)} />
-          </Grid> */}
-      </div>
-      <div>
-        {!error &&
-          (saveState === SaveState.IsRestarting ||
-            saveState === SaveState.HasSaved ||
-            (!isLoading && registrationIsValid)) && (
-            <div className="tw:mx-2 tw:my-4">
-              <Alert ref={scrollToRef}>
-                <CircleCheck className="tw:h-4 tw:w-4" />
-                <AlertTitle>
-                  {saveState === SaveState.IsRestarting || saveState === SaveState.HasSaved
-                    ? localizedStrings['%paratextRegistration_alert_updatedRegistration%']
-                    : localizedStrings['%paratextRegistration_alert_validRegistration%']}
-                </AlertTitle>
-                <AlertDescription>{formatSuccessAlertDescription()}</AlertDescription>
-              </Alert>
-            </div>
-          )}
-        {error && (
-          <div className="tw:mx-2 tw:my-4">
-            <Alert ref={scrollToRef} variant="destructive">
-              <AlertCircle className="tw:h-4 tw:w-4" />
-              <AlertTitle>{error}</AlertTitle>
-              <AlertDescription>{errorDescription}</AlertDescription>
-            </Alert>
-          </div>
-        )}
-        <Grid className="tw:grid-cols-[1fr_auto] tw:items-end">
-          <span />
-          {isEditing ? (
-            <div className="tw:flex tw:gap-3">
-              {currentRegistrationData.code !== '' && (
-                <Button variant="outline" onClick={cancelEditing}>
-                  {localizedStrings['%general_cancel%']}
-                </Button>
-              )}
-              <Button variant="default" disabled={isButtonDisabled} onClick={saveAndRestart}>
-                {saveState === SaveState.IsRestarting ? (
-                  <>
-                    <Spinner /> {localizedStrings['%paratextRegistration_button_restarting%']}
-                  </>
-                ) : (
-                  localizedStrings['%paratextRegistration_button_saveAndRestart%']
-                )}
-              </Button>
-            </div>
-          ) : (
-            <Button variant="default" onClick={onClickChange}>
-              <PenIcon /> {localizedStrings['%paratextRegistration_button_change%']}
-            </Button>
-          )}
-        </Grid>
-      </div>
-    </div>
+    <RegistrationFormView
+      localizedStrings={localizedStrings}
+      isEditing={isEditing}
+      name={name}
+      registrationCode={registrationCode}
+      savedName={currentRegistrationData.name}
+      savedCode={currentRegistrationData.code}
+      hasSavedCode={currentRegistrationData.code !== ''}
+      isFormDisabled={isFormDisabled}
+      isSaveDisabled={isButtonDisabled}
+      showInvalidCode={showInvalidCode}
+      saveState={saveState}
+      isLoading={isLoading}
+      registrationIsValid={registrationIsValid}
+      error={error}
+      errorDescription={errorDescription}
+      onNameChange={onNameChange}
+      onRegistrationCodeChange={onRegistrationCodeChange}
+      onClickChange={onClickChange}
+      onCancelEditing={cancelEditing}
+      onSaveAndRestart={saveAndRestart}
+    />
   );
 }
