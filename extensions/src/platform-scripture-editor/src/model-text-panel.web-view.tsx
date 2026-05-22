@@ -27,14 +27,9 @@ import {
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 // @ts-ignore: platform-scripture/src is not a published module entry-point; accessible via typeRoots symlink at dev time
 import { useEffectiveResourceReferenceList } from 'platform-scripture/src/use-effective-resource-reference-list';
-import type {
-  DblResourceReference,
-  EffectiveResourceReference,
-  ResourceReferenceList,
-} from 'platform-scripture';
+import type { DblResourceReference, EffectiveResourceReference } from 'platform-scripture';
+import { DEFAULT_RESOURCE_REFERENCE_LIST, selectDblResource } from './select-dbl-resource';
 
-const CURRENT_DATA_VERSION = '1.0.0';
-const DEFAULT_LIST: ResourceReferenceList = { dataVersion: CURRENT_DATA_VERSION, items: [] };
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
 const defaultUsj: Usj = {
@@ -71,7 +66,7 @@ globalThis.webViewComponent = function ModelTextPanel({
   const [adminModelTextsSetting, setAdminModelTexts] = useProjectSetting(
     projectId,
     'platformScripture.modelTexts',
-    DEFAULT_LIST,
+    DEFAULT_RESOURCE_REFERENCE_LIST,
   );
 
   const pdp = useProjectDataProvider('platformScripture.textConnectionSettings', projectId);
@@ -155,51 +150,16 @@ globalThis.webViewComponent = function ModelTextPanel({
   }, [effectiveModelTexts]);
 
   const handleResourceSelect = useCallback(
-    async (resource: DblResourceData) => {
-      const newRef: DblResourceReference = {
-        type: 'dblResource',
-        name: resource.displayName,
-        id: resource.dblEntryUid,
-      };
-
-      const canUserWriteProjectTextConnectionSettings =
-        await pdp?.canUserWriteProjectTextConnectionSettings();
-
-      if (canUserWriteProjectTextConnectionSettings && setAdminModelTexts) {
-        if (isPlatformError(adminModelTextsSetting)) return;
-        // ResourceReference union: .id is not on all members; cast is safe after checking .type
-        const existingItems = adminModelTextsSetting.items.filter(
-          (item): item is DblResourceReference => {
-            if (item.type !== 'dblResource') return false;
-            // DblResourceReference.id exists after .type check; ResourceReference union requires cast
-            // eslint-disable-next-line no-type-assertion/no-type-assertion
-            return (item as DblResourceReference).id !== resource.dblEntryUid;
-          },
-        );
-        setAdminModelTexts({
-          dataVersion: adminModelTextsSetting.dataVersion,
-          items: [newRef, ...existingItems],
-        });
-      } else {
-        // Read the raw user list directly — do NOT filter effectiveModelTexts by source.
-        // Filtering by source drops user items that also appear in the admin list (tagged 'admin'),
-        // which would silently remove them if the admin later deletes their copy.
-        const rawUserList = await pdp?.getUserModelTexts();
-        const rawUserItems = rawUserList?.items ?? [];
-        await pdp?.setUserModelTexts({
-          dataVersion: rawUserList?.dataVersion ?? DEFAULT_LIST.dataVersion,
-          items: [
-            newRef,
-            ...rawUserItems.filter((item) => {
-              if (item.type !== 'dblResource') return true;
-              // DblResourceReference.id exists after .type check; ResourceReference union requires cast
-              // eslint-disable-next-line no-type-assertion/no-type-assertion
-              return (item as DblResourceReference).id !== resource.dblEntryUid;
-            }),
-          ],
-        });
-      }
-    },
+    (resource: DblResourceData) =>
+      selectDblResource(resource, {
+        adminSetting: adminModelTextsSetting,
+        setAdminSetting: setAdminModelTexts,
+        canUserWriteProjectSettings: pdp
+          ? () => pdp.canUserWriteProjectTextConnectionSettings()
+          : undefined,
+        getUserList: pdp ? () => pdp.getUserModelTexts() : undefined,
+        setUserList: pdp ? (list) => pdp.setUserModelTexts(list) : undefined,
+      }),
     [adminModelTextsSetting, setAdminModelTexts, pdp],
   );
 

@@ -674,6 +674,7 @@ declare module 'papi-shared-types' {
     OpenEditorOptions,
     PlatformScriptureEditorWebViewController,
   } from 'platform-scripture-editor';
+  import type { ResourceType } from 'platform-bible-utils';
   // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
   import type { NotificationClickCommandHandler } from '@papi/core';
 
@@ -783,8 +784,8 @@ declare module 'papi-shared-types' {
     'platformScriptureEditor.openModelText': (projectId?: string) => Promise<string | undefined>;
     /**
      * Opens the Bible Texts or Commentaries resource panel WebView for a project. If a panel of the
-     * requested type is already open, focuses it and updates its project; otherwise opens a new
-     * tab.
+     * requested type is already open, reloads it with the new project and brings it to front;
+     * otherwise opens a new tab.
      *
      * @param resourceType 'ScriptureResource' for the Bible Texts tab, 'CommentaryResource' for the
      *   Commentaries tab
@@ -793,7 +794,7 @@ declare module 'papi-shared-types' {
      * @returns WebView id for the opened panel, or `undefined` if it could not be opened
      */
     'platformScriptureEditor.openResourceText': (
-      resourceType: 'ScriptureResource' | 'CommentaryResource',
+      resourceType: Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
       projectId?: string,
     ) => Promise<string | undefined>;
   }
