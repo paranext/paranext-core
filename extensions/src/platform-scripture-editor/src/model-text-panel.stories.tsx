@@ -15,7 +15,37 @@ import type {
 } from 'platform-scripture';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
+// The editor's nodes/context menu + USJ node styling. The real app loads these globally; Storybook
+// doesn't, so without them the editor's context menu is unstyled and its read-only marker toolbar
+// renders as a stray inline label. We import the same icon-free subset the editorial layout stories
+// use (editor.css/editor-overrides.css are skipped — they reference toolbar icon SVGs by absolute
+// URL that the css-loader can't resolve; the minimal wrapper styles are inlined in
+// EDITOR_WRAPPER_STYLE below).
+/* eslint-disable import/no-relative-packages -- these editor demo CSS files are not part of
+   platform-bible-react's package exports (only `.` → dist is exported), so they can only be pulled
+   in by relative path; this mirrors src/stories/platform/ten-layout-shared.tsx. */
+import '../../../../lib/platform-bible-react/src/components/demo/scripture-editor/usj-nodes.css';
+import '../../../../lib/platform-bible-react/src/components/demo/scripture-editor/nodes-menu.css';
+/* eslint-enable import/no-relative-packages */
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
+
+/**
+ * Icon-free subset of the editor's wrapper styles (from the platform scripture-editor
+ * `editor.css`). Crucially it hides the read-only toolbar container — otherwise the editor's
+ * current-marker label (e.g. "p - Paragraph - Normal - First Line Indent") shows as stray text
+ * above the editor.
+ */
+const EDITOR_WRAPPER_STYLE = `
+  .editor-container { color: inherit; position: relative; line-height: 20px; font-weight: 400; text-align: start; }
+  .editor-toolbar-container-readonly { display: none; }
+  .editor-toolbar-container-editable { display: inline; }
+  .editor-inner { position: relative; }
+  .editor-input { min-height: 150px; font-size: 15px; position: relative; tab-size: 1; outline: 0; padding: 15px 10px; flex: auto; }
+  .editor-input > p { direction: inherit; margin-top: 0; margin-bottom: 0; line-height: 1.5; }
+  .editor-text-bold { font-weight: bold; }
+  .editor-text-italic { font-style: italic; }
+  .editor-text-underline { text-decoration: underline; }
+`;
 
 /**
  * `ModelTextPanel` shows a project's configured "model text" Scripture resource read-only. It owns
@@ -132,6 +162,7 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
 
   return (
     <>
+      <style>{EDITOR_WRAPPER_STYLE}</style>
       <ModelTextPanel
         localizedStrings={localizedStrings}
         hasProject={config.hasProject ?? true}

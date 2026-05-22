@@ -3,6 +3,7 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { INVENTORY_STRING_KEYS, InventorySummaryItem, Scope } from 'platform-bible-react';
 import { useCallback, useMemo, useState } from 'react';
 import { getLocalizedStrings } from '../../../../../../.storybook/localization.utils';
+import { alertCommand } from '../../../../../../.storybook/story.utils';
 import {
   CharacterInventory,
   CHARACTER_INVENTORY_STRING_KEYS,
@@ -161,9 +162,16 @@ type HarnessConfig = {
  * presentational inventory.
  */
 function InventoryHarness({ config }: { config: HarnessConfig }) {
-  // The app navigates the scroll group on setVerseRef; in the story we just track it locally.
   const [, setScrRef] = useState<SerializedVerseRef>(DEFAULT_SCR_REF);
   const [scope, setScope] = useState<Scope>('chapter');
+
+  // Clicking an occurrence row navigates the scroll group / editor to that reference in the app.
+  const setVerseRef = useCallback((verseRef: SerializedVerseRef) => {
+    setScrRef(verseRef);
+    alertCommand('platformScriptureEditor.scrollGroupSetVerseRef', {
+      verseRef: `${verseRef.book} ${verseRef.chapterNum}:${verseRef.verseNum}`,
+    });
+  }, []);
   const [approvedItems, setApprovedItems] = useState<string[]>(config.initialApproved ?? []);
   const [unapprovedItems, setUnapprovedItems] = useState<string[]>(config.initialUnapproved ?? []);
   // Occurrences loaded on demand, keyed by item key (mirrors the webview's occurrence cache).
@@ -190,19 +198,33 @@ function InventoryHarness({ config }: { config: HarnessConfig }) {
   }, [config.items, config.loading, approvedItems, unapprovedItems, occurrencesByKey]);
 
   // Approve/unapprove move the key between the two lists so the row's status updates immediately.
-  const onApprovedItemsChange = useCallback((items: string[]) => {
-    // Settings write in the app; here we reflect it in-memory so the list re-renders.
-    // eslint-disable-next-line no-console
-    console.log('setValidItems', items);
-    setApprovedItems(items);
-  }, []);
+  // Changing an item's status is a real edit (it changes which items are valid), so announce the
+  // newly-approved/unapproved items via alert and reflect the change in-memory.
+  const onApprovedItemsChange = useCallback(
+    (items: string[]) => {
+      const newlyApproved = items.filter((item) => !approvedItems.includes(item));
+      if (newlyApproved.length > 0)
+        alertCommand('platformScripture.inventory.setItemStatus', {
+          items: newlyApproved,
+          status: 'approved',
+        });
+      setApprovedItems(items);
+    },
+    [approvedItems],
+  );
 
-  const onUnapprovedItemsChange = useCallback((items: string[]) => {
-    // Settings write in the app; here we reflect it in-memory so the list re-renders.
-    // eslint-disable-next-line no-console
-    console.log('setInvalidItems', items);
-    setUnapprovedItems(items);
-  }, []);
+  const onUnapprovedItemsChange = useCallback(
+    (items: string[]) => {
+      const newlyUnapproved = items.filter((item) => !unapprovedItems.includes(item));
+      if (newlyUnapproved.length > 0)
+        alertCommand('platformScripture.inventory.setItemStatus', {
+          items: newlyUnapproved,
+          status: 'unapproved',
+        });
+      setUnapprovedItems(items);
+    },
+    [unapprovedItems],
+  );
 
   // Selecting an item loads its occurrences from the seed (the app reads them from the provider).
   const onItemSelected = useCallback(
@@ -218,7 +240,7 @@ function InventoryHarness({ config }: { config: HarnessConfig }) {
 
   const sharedProps = {
     inventoryItems,
-    setVerseRef: setScrRef,
+    setVerseRef,
     localizedStrings: sharedStrings,
     approvedItems,
     onApprovedItemsChange,

@@ -8,7 +8,7 @@ import {
   type UsfmVerseRefVerseLocation,
 } from 'platform-bible-utils';
 import { FindJobStatus, WordRestriction } from 'platform-scripture';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
 import { alertCommand } from '../../../../../.storybook/story.utils';
 import { Find, FIND_LOCALIZED_STRING_KEYS, type BookResultEntry } from './find.component';
@@ -20,18 +20,24 @@ import { HidableFindResult, SEARCH_RESULT_LOCALIZED_STRING_KEYS } from './search
  * scope selector, filters, a find/replace mode toggle, and a results list grouped by book. In the
  * app the webview owns the find-job lifecycle (begin/poll/stop), replace-with-revert,
  * version-history commits, and editor navigation, feeding the panel the derived results and
- * progress. These stories feed it from a thin in-memory service so the flow is interactive: replace
- * mutates the seed results in place, the scope/filters/mode are driven by local state, and editor
- * navigation announces the command the webview would run.
+ * progress.
+ *
+ * These stories stand in for that webview with a thin in-memory search engine over a small seed
+ * corpus, so the flow is fully interactive: typing a term, toggling the filters (match case, word
+ * restriction, regex), and changing the scope all re-run the search and update the results and the
+ * highlighting live. Replace / Replace All announce the command the webview would run, show the
+ * "replaced" state, then commit (the matched result drops out, as a real re-find would); Cancel
+ * reverts the pending replace. Selecting a result announces the editor navigation command.
  */
 
 const localizedStrings = getLocalizedStrings([...FIND_LOCALIZED_STRING_KEYS]);
 const scopeSelectorLocalizedStrings = getLocalizedStrings([...SCOPE_SELECTOR_STRING_KEYS]);
 const searchResultLocalizedStrings = getLocalizedStrings([...SEARCH_RESULT_LOCALIZED_STRING_KEYS]);
 
-const SEARCH_TERM = 'God';
+const DEFAULT_SEARCH_TERM = 'God';
 
-// Seed USX for the two books we search across, so the selected result can render verse context.
+// Seed USX for the books we search across, so results can render verse context and the search
+// engine has real text to scan.
 const seedUsxByBook: Record<string, string> = {
   GEN: `<?xml version="1.0" encoding="utf-8"?>
 <usx version="3.1">
@@ -55,47 +61,15 @@ const seedUsjByBook: Record<string, Usj> = Object.fromEntries(
   Object.entries(seedUsxByBook).map(([bookId, usx]) => [bookId, usxStringToUsj(usx)]),
 );
 
-/**
- * Build a {@link HidableFindResult} for an occurrence of the search term in a verse, computing the
- * USFM offsets from the seed USJ so the selected result renders the matched text in context. Uses
- * the same `UsjReaderWriter` the component uses (no `@papi`).
- */
-function makeResult(
-  bookId: string,
-  chapterNum: number,
-  verseNum: number,
-  occurrence = 1,
-): HidableFindResult {
-  const verseRef: SerializedVerseRef = { book: bookId, chapterNum, verseNum };
-  const readerWriter = new UsjReaderWriter(seedUsjByBook[bookId], {
-    markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
-  });
-  const usfm = readerWriter.toUsfm();
-  const verseStartIndex = readerWriter.usfmVerseLocationToIndexInUsfm(verseRef);
-
-  // Find the requested occurrence of the term at or after the verse start.
-  let matchIndex = -1;
-  let searchFrom = verseStartIndex;
-  for (let i = 0; i < occurrence; i++) {
-    matchIndex = usfm.indexOf(SEARCH_TERM, searchFrom);
-    searchFrom = matchIndex + SEARCH_TERM.length;
-  }
-
-  const start: UsfmVerseRefVerseLocation = { verseRef, offset: matchIndex - verseStartIndex };
-  const end: UsfmVerseRefVerseLocation = {
-    verseRef,
-    offset: matchIndex - verseStartIndex + SEARCH_TERM.length,
-  };
-  return { start, end, text: SEARCH_TERM };
-}
-
-const seedResults: HidableFindResult[] = [
-  makeResult('GEN', 1, 1),
-  makeResult('GEN', 1, 2),
-  makeResult('GEN', 1, 3),
-  makeResult('JHN', 1, 1, 1),
-  makeResult('JHN', 1, 1, 2),
-];
+/** The verses present in each seed book, in order, used to scan verse regions of the USFM. */
+const seedVersesByBook: Record<string, SerializedVerseRef[]> = {
+  GEN: [
+    { book: 'GEN', chapterNum: 1, verseNum: 1 },
+    { book: 'GEN', chapterNum: 1, verseNum: 2 },
+    { book: 'GEN', chapterNum: 1, verseNum: 3 },
+  ],
+  JHN: [{ book: 'JHN', chapterNum: 1, verseNum: 1 }],
+};
 
 const availableBookIds = ['GEN', 'JHN'];
 
@@ -108,35 +82,153 @@ const localizedBookData = new Map<string, LocalizedBookData>([
   ['JHN', { localizedId: 'John', localizedName: 'John' }],
 ]);
 
+type SearchParams = {
+  term: string;
+  shouldMatchCase: boolean;
+  wordRestriction: WordRestriction;
+  searchTextType: SearchTextType;
+  isRegexAllowed: boolean;
+  scope: Scope;
+  selectedBookIds: string[];
+  verseRef: SerializedVerseRef;
+};
+
+/** Escape regex metacharacters so a plain search term is matched literally. */
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Build the regular expression for the current search params (or `undefined` for an empty term or
+ * an invalid user-supplied regex). Honors match-case, the word-boundary restriction, and the
+ * allow-regex toggle the same way the real find job's options would.
+ */
+function buildSearchRegex(params: SearchParams): RegExp | undefined {
+  if (!params.term) return undefined;
+  const flags = `g${params.shouldMatchCase ? '' : 'i'}`;
+  if (params.isRegexAllowed) {
+    try {
+      return new RegExp(params.term, flags);
+    } catch {
+      // Invalid regex while the user is typing → no matches (matches the app surfacing zero results).
+      return undefined;
+    }
+  }
+  const escaped = escapeRegExp(params.term);
+  switch (params.wordRestriction) {
+    case 'wholeWord':
+      return new RegExp(`\\b${escaped}\\b`, flags);
+    case 'startOfWord':
+      return new RegExp(`\\b${escaped}`, flags);
+    case 'endOfWord':
+      return new RegExp(`${escaped}\\b`, flags);
+    default:
+      return new RegExp(escaped, flags);
+  }
+}
+
+/**
+ * The books the current scope searches: the current book for chapter/book, the chosen set
+ * otherwise.
+ */
+function booksInScope(params: SearchParams): string[] {
+  if (params.scope === 'selectedBooks')
+    return params.selectedBookIds.filter((id) => seedUsjByBook[id]);
+  return [params.verseRef.book];
+}
+
+/**
+ * The in-memory search engine standing in for the find job: scans the seed USFM verse-by-verse for
+ * the term and returns a result per occurrence, with USFM offsets computed the same way the verse
+ * context is rendered (`usfmVerseLocationToIndexInUsfm`) so the highlight lands on the match. (The
+ * seed corpus has no non-verse text, so the match-content-in filter re-runs the search but returns
+ * the same set here.)
+ */
+function runSearch(params: SearchParams): HidableFindResult[] {
+  const baseRegex = buildSearchRegex(params);
+  if (!baseRegex) return [];
+
+  const results: HidableFindResult[] = [];
+  booksInScope(params).forEach((bookId) => {
+    const usj = seedUsjByBook[bookId];
+    if (!usj) return;
+    const readerWriter = new UsjReaderWriter(usj, { markersMap: USFM_MARKERS_MAP_PARATEXT_3_0 });
+    const usfm = readerWriter.toUsfm();
+    const verses = seedVersesByBook[bookId] ?? [];
+    verses.forEach((verse, index) => {
+      if (params.scope === 'chapter' && verse.chapterNum !== params.verseRef.chapterNum) return;
+      const verseStart = readerWriter.usfmVerseLocationToIndexInUsfm(verse);
+      const nextVerse = verses[index + 1];
+      const verseEnd = nextVerse
+        ? readerWriter.usfmVerseLocationToIndexInUsfm(nextVerse)
+        : usfm.length;
+      const region = usfm.slice(verseStart, verseEnd);
+      // Fresh regex per region so the shared lastIndex never leaks between verses.
+      const regex = new RegExp(baseRegex.source, baseRegex.flags);
+      Array.from(region.matchAll(regex)).forEach((match) => {
+        if (!match[0]) return;
+        const offset = match.index ?? 0;
+        const start: UsfmVerseRefVerseLocation = { verseRef: verse, offset };
+        const end: UsfmVerseRefVerseLocation = {
+          verseRef: verse,
+          offset: offset + match[0].length,
+        };
+        results.push({ start, end, text: match[0] });
+      });
+    });
+  });
+  return results;
+}
+
+/** Stable per-result key (book chapter:verse@offset) for tracking hidden/replaced/committed state. */
+const resultKey = (result: HidableFindResult): string =>
+  `${result.start.verseRef.book} ${result.start.verseRef.chapterNum}:${result.start.verseRef.verseNum}@${result.start.offset}`;
+
 const completedStatus: FindJobStatus = 'completed';
 const runningStatus: FindJobStatus = 'running';
 
+/** How long the simulated replace takes before it commits (matches the result card's progress bar). */
+const REPLACE_COMMIT_DELAY_MS = 1300;
+
 type HarnessConfig = {
-  /** Seed results the in-memory service serves. */
+  /** Live in-memory search (default). Set false for fixed-state showcase stories. */
+  live?: boolean;
+  /** Fixed results when `live` is false. */
   results?: HidableFindResult[];
   /** Initial search term. */
   searchTerm?: string;
   /** Initial mode. */
   activeMode?: 'find' | 'replace';
-  /** The find-job status the status bar reflects. */
-  searchStatus?: FindJobStatus | undefined;
+  /** Initial scope. */
+  scope?: Scope;
+  /** Initial selected books for the `selectedBooks` scope. */
+  selectedBookIds?: string[];
+  /** The find-job status the status bar reflects (fixed-state stories only). */
+  searchStatus?: FindJobStatus;
   /** Percent complete for an in-progress search. */
   searchProgress?: number;
-  /** Total results the job reports. */
+  /** Total results the job reports (fixed-state stories only). */
   totalNumberOfResults?: number;
+  /** Start with every result already in the replaced state (the Replaced showcase). */
+  initiallyReplacedAll?: boolean;
 };
 
 /**
- * Thin in-memory service container: holds the search/replace/filter state and the results, mutates
- * the results on replace/replace-all (mark replaced) and on hide, returns seed USJ for verse
- * context, and routes editor navigation to `alertCommand` (the different-UI action the webview
- * would perform).
+ * Thin in-memory service container. It owns the search/replace/filter state and runs the search
+ * engine reactively, then layers hidden / replaced / committed result state on top so hide and
+ * replace behave like the app: replace shows the "replaced" state, announces the command, and after
+ * a short delay commits (the result drops out as a re-find would); Cancel reverts pending
+ * replaces.
  */
 function FindHarness({ config }: { config: HarnessConfig }) {
-  const [searchTerm, setSearchTerm] = useState(config.searchTerm ?? SEARCH_TERM);
+  const isLive = config.live !== false;
+
+  const [searchTerm, setSearchTerm] = useState(config.searchTerm ?? DEFAULT_SEARCH_TERM);
   const [recentSearches, setRecentSearches] = useState<string[]>(['Lord', 'beginning']);
-  const [scope, setScope] = useState<Scope>('book');
-  const [selectedBookIds, setSelectedBookIds] = useState<string[]>(['GEN']);
+  const [scope, setScope] = useState<Scope>(config.scope ?? 'selectedBooks');
+  const [selectedBookIds, setSelectedBookIds] = useState<string[]>(
+    config.selectedBookIds ?? ['GEN', 'JHN'],
+  );
   const [shouldMatchCase, setShouldMatchCase] = useState(false);
   const [searchTextType, setSearchTextType] = useState<SearchTextType>('all');
   const [wordRestriction, setWordRestriction] = useState<WordRestriction>('none');
@@ -146,27 +238,85 @@ function FindHarness({ config }: { config: HarnessConfig }) {
   const [replaceTerm, setReplaceTerm] = useState('Yahweh');
   const [preserveCase, setPreserveCase] = useState(false);
 
-  const [results, setResults] = useState<HidableFindResult[]>(config.results ?? seedResults);
-  const [focusedResultIndex, setFocusedResultIndex] = useState<number | undefined>(
-    config.activeMode === 'replace' ? 0 : undefined,
-  );
-  const [numberOfHiddenResults, setNumberOfHiddenResults] = useState(0);
+  const [focusedResultIndex, setFocusedResultIndex] = useState<number | undefined>(undefined);
+
+  // Result overlay: user-dismissed, pending-replace (red), and committed (replace ran through).
+  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
+  const [replacedKeys, setReplacedKeys] = useState<Set<string>>(new Set());
+  const [committedKeys, setCommittedKeys] = useState<Set<string>>(new Set());
+
+  const replacedKeysRef = useRef<Set<string>>(replacedKeys);
+  useEffect(() => {
+    replacedKeysRef.current = replacedKeys;
+  }, [replacedKeys]);
+  const commitTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const verseRef = useMemo<SerializedVerseRef>(
     () => ({ book: 'GEN', chapterNum: 1, verseNum: 1 }),
     [],
   );
 
+  const baseResults = useMemo<HidableFindResult[]>(() => {
+    if (!isLive) return config.results ?? [];
+    return runSearch({
+      term: searchTerm,
+      shouldMatchCase,
+      wordRestriction,
+      searchTextType,
+      isRegexAllowed,
+      scope,
+      selectedBookIds,
+      verseRef,
+    });
+  }, [
+    isLive,
+    config.results,
+    searchTerm,
+    shouldMatchCase,
+    wordRestriction,
+    searchTextType,
+    isRegexAllowed,
+    scope,
+    selectedBookIds,
+    verseRef,
+  ]);
+
+  // A fresh result set (new search) clears the transient overlay and resets focus. The Replaced
+  // showcase seeds every result into the replaced state instead.
+  useEffect(() => {
+    setHiddenKeys(new Set());
+    setCommittedKeys(new Set());
+    setReplacedKeys(config.initiallyReplacedAll ? new Set(baseResults.map(resultKey)) : new Set());
+    setFocusedResultIndex(activeMode === 'replace' && baseResults.length > 0 ? 0 : undefined);
+    if (commitTimerRef.current) {
+      clearTimeout(commitTimerRef.current);
+      commitTimerRef.current = undefined;
+    }
+  }, [baseResults, config.initiallyReplacedAll, activeMode]);
+
+  const displayedResults = useMemo<HidableFindResult[]>(
+    () =>
+      baseResults.map((result) => {
+        const key = resultKey(result);
+        return {
+          ...result,
+          isHidden: hiddenKeys.has(key) || committedKeys.has(key),
+          isReplaced: replacedKeys.has(key) && !committedKeys.has(key),
+        };
+      }),
+    [baseResults, hiddenKeys, replacedKeys, committedKeys],
+  );
+
   const resultsByBook = useMemo<Map<string, BookResultEntry[]>>(() => {
     const map = new Map<string, BookResultEntry[]>();
-    results.forEach((result, originalIndex) => {
+    displayedResults.forEach((result, originalIndex) => {
       const bookId = result.start.verseRef.book;
       const entries = map.get(bookId) ?? [];
       entries.push({ result, originalIndex });
       map.set(bookId, entries);
     });
     return map;
-  }, [results]);
+  }, [displayedResults]);
 
   const addRecentSearchItem = useCallback((term: string) => {
     if (term.trim() === '') return;
@@ -187,36 +337,78 @@ function FindHarness({ config }: { config: HarnessConfig }) {
     [],
   );
 
-  const handleHideResult = useCallback((index: number) => {
-    setResults((prev) =>
-      prev.map((result, i) => (i === index ? { ...result, isHidden: true } : result)),
-    );
-    setNumberOfHiddenResults((prev) => prev + 1);
-    setFocusedResultIndex(undefined);
+  const handleHideResult = useCallback(
+    (index: number) => {
+      const target = displayedResults[index];
+      if (!target) return;
+      const key = resultKey(target);
+      setHiddenKeys((prev) => new Set(prev).add(key));
+      setFocusedResultIndex(undefined);
+    },
+    [displayedResults],
+  );
+
+  // After the replaced animation, commit the pending replaces: the matched results drop out, just
+  // as the app's mandatory re-find would no longer return the replaced occurrences.
+  const scheduleReplaceCommit = useCallback(() => {
+    if (commitTimerRef.current) clearTimeout(commitTimerRef.current);
+    commitTimerRef.current = setTimeout(() => {
+      setCommittedKeys((prev) => new Set([...prev, ...replacedKeysRef.current]));
+      setReplacedKeys(new Set());
+      commitTimerRef.current = undefined;
+    }, REPLACE_COMMIT_DELAY_MS);
   }, []);
 
   const handleReplace = useCallback(
     (resultIndex?: number) => {
       const indexToReplace = resultIndex ?? focusedResultIndex;
       if (indexToReplace === undefined) return;
-      // Mark the replaced result so the UI reflects it; in the app a re-find then refreshes.
-      setResults((prev) =>
-        prev.map((result, i) => (i === indexToReplace ? { ...result, isReplaced: true } : result)),
-      );
+      const target = displayedResults[indexToReplace];
+      if (!target || target.isReplaced || target.isHidden) return;
+      alertCommand('platformScripture.replaceText', {
+        reference: `${target.start.verseRef.book} ${target.start.verseRef.chapterNum}:${target.start.verseRef.verseNum}`,
+        search: searchTerm,
+        replace: replaceTerm,
+      });
+      setReplacedKeys((prev) => new Set(prev).add(resultKey(target)));
+      scheduleReplaceCommit();
     },
-    [focusedResultIndex],
+    [displayedResults, focusedResultIndex, searchTerm, replaceTerm, scheduleReplaceCommit],
   );
 
   const handleReplaceAll = useCallback(() => {
-    setResults((prev) =>
-      prev.map((result) => (result.isHidden ? result : { ...result, isReplaced: true })),
-    );
-  }, []);
+    const toReplace = displayedResults.filter((result) => !result.isHidden && !result.isReplaced);
+    if (toReplace.length === 0) return;
+    alertCommand('platformScripture.replaceAllText', {
+      search: searchTerm,
+      replace: replaceTerm,
+      count: toReplace.length,
+    });
+    setReplacedKeys((prev) => {
+      const next = new Set(prev);
+      toReplace.forEach((result) => next.add(resultKey(result)));
+      return next;
+    });
+    scheduleReplaceCommit();
+  }, [displayedResults, searchTerm, replaceTerm, scheduleReplaceCommit]);
 
   const handleCancelReplace = useCallback(() => {
-    // Cancel/revert the pending replace: unmark the replaced results.
-    setResults((prev) => prev.map((result) => ({ ...result, isReplaced: false })));
+    if (commitTimerRef.current) {
+      clearTimeout(commitTimerRef.current);
+      commitTimerRef.current = undefined;
+    }
+    // Revert the pending (not-yet-committed) replaces.
+    setReplacedKeys(new Set());
   }, []);
+
+  const numberOfHiddenResults = hiddenKeys.size + committedKeys.size;
+  const liveSearchStatus: FindJobStatus | undefined = searchTerm.trim()
+    ? completedStatus
+    : undefined;
+  const searchStatus: FindJobStatus | undefined = isLive ? liveSearchStatus : config.searchStatus;
+  const totalNumberOfResults = isLive
+    ? baseResults.length
+    : (config.totalNumberOfResults ?? baseResults.length);
 
   return (
     <Find
@@ -238,13 +430,13 @@ function FindHarness({ config }: { config: HarnessConfig }) {
       replaceTerm={replaceTerm}
       preserveCase={preserveCase}
       isReplacing={false}
-      results={results}
+      results={displayedResults}
       resultsByBook={resultsByBook}
       focusedResultIndex={focusedResultIndex}
-      searchStatus={config.searchStatus ?? completedStatus}
+      searchStatus={searchStatus}
       searchError={undefined}
       searchProgress={config.searchProgress ?? 0}
-      totalNumberOfResults={config.totalNumberOfResults ?? results.length}
+      totalNumberOfResults={totalNumberOfResults}
       numberOfHiddenResults={numberOfHiddenResults}
       isPostReplaceSearch={false}
       onSearchTermChange={setSearchTerm}
@@ -286,16 +478,18 @@ function createDecorator(config: HarnessConfig) {
 }
 
 /**
- * A populated find result list across two books. Click a result to select it (announces the editor
- * command the webview would run) and watch its verse context render.
+ * A live, fully interactive find across Genesis and John. Edit the search term, toggle the filters
+ * (match case / word restriction / regex), and change the scope — the results and the highlighting
+ * update live. Click a result to select it (announces the editor command the webview would run).
  */
 export const Populated: Story = {
   decorators: [createDecorator({})],
 };
 
 /**
- * Replace mode: the replace input and Replace / Replace All buttons show. Clicking Replace marks
- * the focused result as replaced; Replace All marks all visible results; Cancel reverts them.
+ * Replace mode against the same live search. Clicking Replace (or Replace All) announces the
+ * command, shows the "replaced" state, then commits (the result drops out as a re-find would);
+ * Cancel reverts a pending replace before it commits.
  */
 export const ReplaceMode: Story = {
   decorators: [createDecorator({ activeMode: 'replace' })],
@@ -305,6 +499,7 @@ export const ReplaceMode: Story = {
 export const InProgress: Story = {
   decorators: [
     createDecorator({
+      live: false,
       results: [],
       searchStatus: runningStatus,
       searchProgress: 40,
@@ -316,19 +511,19 @@ export const InProgress: Story = {
 /** No results were found for the search term — the empty-state message renders. */
 export const NoResults: Story = {
   decorators: [
-    createDecorator({ results: [], searchStatus: completedStatus, totalNumberOfResults: 0 }),
+    createDecorator({
+      live: false,
+      results: [],
+      searchStatus: completedStatus,
+      totalNumberOfResults: 0,
+    }),
   ],
 };
 
 /**
- * Replace mode with results already marked as replaced (the red "replaced" state + revert Cancel
- * button). Use Cancel to revert them back.
+ * Replace mode with every result already in the "replaced" state (the red state + revert Cancel
+ * button). Use Cancel to revert them.
  */
 export const Replaced: Story = {
-  decorators: [
-    createDecorator({
-      activeMode: 'replace',
-      results: seedResults.map((result) => ({ ...result, isReplaced: true })),
-    }),
-  ],
+  decorators: [createDecorator({ activeMode: 'replace', initiallyReplacedAll: true })],
 };
