@@ -139,7 +139,7 @@ async function insertCommentAtSelection(webViewId: string | undefined): Promise<
   await webViewController.insertCommentAtSelection();
 }
 
-/** Function to prompt for a project and open it in the editor */
+/** Function to prompt for a project or use the one passed in and open it in the editor */
 async function open(
   isReadOnly: boolean,
   projectId?: string,
