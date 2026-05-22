@@ -5,7 +5,6 @@ import {
 } from '@/components/advanced/multi-select-combo-box.component';
 import { Blocks } from 'lucide-react';
 import { useState } from 'react';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const resources = [
   {
@@ -153,11 +152,9 @@ const meta: Meta<typeof MultiSelectComboBox> = {
   tags: ['autodocs'],
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className="tw:p-4">
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className="tw:p-4">
+        <Story />
+      </div>
     ),
   ],
   argTypes: {

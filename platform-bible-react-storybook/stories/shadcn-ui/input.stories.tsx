@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Input } from '@/components/shadcn-ui/input';
-import { useState, type ChangeEvent } from 'react';
-// import { ThemeProvider } from '@/storybook/theme-provider.component'; // Temporarily disabled
+import { useState } from 'react';
+import type { ChangeEvent } from 'react';
 
 const meta: Meta<typeof Input> = {
   title: 'Shadcn/Input',
@@ -12,14 +12,6 @@ const meta: Meta<typeof Input> = {
     disabled: { control: 'boolean' },
     className: { control: 'text' },
   },
-  decorators: [
-    (Story) => (
-      // Temporarily removing ThemeProvider due to known issues
-      // <ThemeProvider>
-      <Story />
-      // </ThemeProvider>
-    ),
-  ],
 };
 
 export default meta;

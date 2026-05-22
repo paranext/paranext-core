@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { ScopeSelector } from '@/components/advanced/scope-selector/scope-selector.component';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 import { Scope } from '@/components/utils/scripture.util';
 
 // Mock book information - represents which books are available (all books available in this case)
@@ -26,11 +25,9 @@ const meta: Meta<typeof ScopeSelector> = {
   tags: ['autodocs'],
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className="tw:max-w-md tw:p-4">
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className="tw:max-w-md tw:p-4">
+        <Story />
+      </div>
     ),
   ],
 };

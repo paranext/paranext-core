@@ -1,19 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Progress } from '@/components/shadcn-ui/progress';
 import { useState, useEffect } from 'react';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof Progress> = {
   title: 'Shadcn/Progress',
   component: Progress,
   tags: ['autodocs'],
-  decorators: [
-    (Story) => (
-      <ThemeProvider>
-        <Story />
-      </ThemeProvider>
-    ),
-  ],
   argTypes: {
     value: { control: { type: 'range', min: 0, max: 100, step: 1 } },
     className: { control: 'text' },
