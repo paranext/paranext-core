@@ -661,6 +661,33 @@ export async function openDefaultActiveProjectIfApplicable(
     hasFailed = true;
   }
 
+  // Tries to open the resource text panels
+  try {
+    await papi.commands.sendCommand(
+      'platformScriptureEditor.openResourceText',
+      'ScriptureResource',
+      top.id,
+    );
+  } catch (e) {
+    papi.logger.warn(
+      `Default active project picker: openModelText for ${top.id} failed: ${getErrorMessage(e)}`,
+    );
+    hasFailed = true;
+  }
+
+  try {
+    await papi.commands.sendCommand(
+      'platformScriptureEditor.openResourceText',
+      'CommentaryResource',
+      top.id,
+    );
+  } catch (e) {
+    papi.logger.warn(
+      `Default active project picker: openModelText for ${top.id} failed: ${getErrorMessage(e)}`,
+    );
+    hasFailed = true;
+  }
+
   return hasFailed ? 'failed' : 'filled';
 }
 
