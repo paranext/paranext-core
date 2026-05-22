@@ -1815,7 +1815,7 @@ declare module 'papi-shared-types' {
     'platformScripture.MarkerNames': IMarkerNamesProjectDataProvider;
     'platformScripture.findInScripture': IFindInScriptureProjectDataProvider;
     'platformScripture.replaceWithUsfm': IReplaceWithUsfmProjectDataProvider;
-    'platformScripture.userTextConnectionSettings': ITextConnectionSettingsProjectDataProvider;
+    'platformScripture.textConnectionSettings': ITextConnectionSettingsProjectDataProvider;
   }
 
   export interface DataProviders {

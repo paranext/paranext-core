@@ -74,7 +74,7 @@ globalThis.webViewComponent = function ModelTextPanel({
     DEFAULT_LIST,
   );
 
-  const pdp = useProjectDataProvider('platformScripture.userTextConnectionSettings', projectId);
+  const pdp = useProjectDataProvider('platformScripture.textConnectionSettings', projectId);
 
   // --- DBL resource resolution ---
 
