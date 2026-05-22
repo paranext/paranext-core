@@ -71,6 +71,7 @@ import {
   createNetworkEventEmitter,
   registerRequestHandler,
 } from '@shared/services/network.service';
+import { registerCommand } from '@shared/services/command.service';
 import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
 import { notificationService } from '@shared/services/notification.service';
 import { localizationService } from '@shared/services/localization.service';
@@ -1568,6 +1569,22 @@ export const initialize = () => {
     );
 
     await registerRequestHandler(HANDLE_URI_REQUEST_TYPE, handleExtensionUri);
+
+    await registerCommand(
+      'platform.getPackagedExtensionNames',
+      async () => (await getInstalledExtensions()).packaged.map((p) => p.extensionName),
+      {
+        method: {
+          summary:
+            "Get the names of all extensions packaged with (in-repo to) Platform.Bible. Note that an extension's name being absent from this list does not necessarily mean it is user-installed (third-party); some extensions that ship with Platform.Bible (e.g. text collection, wordlist, Paratext assistant) are not in this repo and so are not in this list.",
+          params: [],
+          result: {
+            name: 'return value',
+            schema: { type: 'array', items: { type: 'string' } },
+          },
+        },
+      },
+    );
 
     await normalizeExtensionFileNames();
 

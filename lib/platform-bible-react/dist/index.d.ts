@@ -1080,48 +1080,138 @@ export type ProjectInfo = {
 	projectId: string;
 	projectName: string;
 };
+/** A single entry rendered inside a sidebar section. */
+export type SettingsSidebarItem = {
+	/** Stable identifier; unique within a section. */
+	id: string;
+	/** Display label (already localized by the caller). */
+	label: string;
+	/** Visually demote and label the item as a placeholder (e.g., "Coming soon"). */
+	isComingSoon?: boolean;
+	/** Render the item as non-interactive (e.g., greyed out, no hover). */
+	disabled?: boolean;
+};
+/** A section in the generalized sidebar. */
+export type SettingsSidebarSection = {
+	/** Stable identifier for the section. Used as the `sectionId` of the selected entry. */
+	id: string;
+	/** Group label (already localized). */
+	label: string;
+	/** Optional element rendered above the items in the section (e.g., a project picker). */
+	header?: React$1.ReactNode;
+	/** Menu items in display order. */
+	items: ReadonlyArray<SettingsSidebarItem>;
+};
+/** Identifies which item is currently selected. */
+export type SelectedSidebarEntry = {
+	sectionId: string;
+	itemId: string;
+};
+/**
+ * Props for {@link SettingsSidebar}. Two mutually-exclusive prop shapes are supported, and exactly
+ * one must be fully provided:
+ *
+ * - **Generalized (preferred):** provide `sections` together with `onSelectEntry` (and usually
+ *   `selectedEntry`). Renders an arbitrary, dynamic set of sections. When `sections` is provided,
+ *   the legacy props below are ignored.
+ * - **Legacy:** provide the full set of `extensionLabels`, `projectInfo`, `handleSelectSidebarItem`,
+ *   `selectedSidebarItem`, `extensionsSidebarGroupLabel`, `projectsSidebarGroupLabel`, and
+ *   `buttonPlaceholderText`.
+ *
+ * Every field is individually optional at the type level, so the contract is enforced at runtime:
+ * the component throws if neither complete shape is supplied. Prefer the generalized shape for new
+ * code.
+ */
 export type SettingsSidebarProps = {
 	/** Optional id for testing */
 	id?: string;
-	/** Extension labels from contribution */
-	extensionLabels: Record<string, string>;
-	/** Project names and ids */
-	projectInfo: ProjectInfo[];
-	/** Handler for selecting a sidebar item */
-	handleSelectSidebarItem: (key: string, projectId?: string) => void;
-	/** The current selected value in the sidebar */
-	selectedSidebarItem: SelectedSettingsSidebarItem;
-	/** Label for the group of extensions setting groups */
-	extensionsSidebarGroupLabel: string;
-	/** Label for the group of projects settings */
-	projectsSidebarGroupLabel: string;
-	/** Placeholder text for the button */
-	buttonPlaceholderText: string;
 	/** Additional css classes to help with unique styling of the sidebar */
 	className?: string;
+	/** Sections to render in order. */
+	sections?: ReadonlyArray<SettingsSidebarSection>;
+	/** Currently selected entry (used with `sections`). */
+	selectedEntry?: SelectedSidebarEntry;
+	/** Called when the user clicks a menu item (used with `sections`). */
+	onSelectEntry?: (entry: SelectedSidebarEntry) => void;
+	/** Extension labels from contribution */
+	extensionLabels?: Record<string, string>;
+	/** Project names and ids */
+	projectInfo?: ProjectInfo[];
+	/** Handler for selecting a sidebar item */
+	handleSelectSidebarItem?: (key: string, projectId?: string) => void;
+	/** The current selected value in the sidebar */
+	selectedSidebarItem?: SelectedSettingsSidebarItem;
+	/** Label for the group of extensions setting groups */
+	extensionsSidebarGroupLabel?: string;
+	/** Label for the group of projects settings */
+	projectsSidebarGroupLabel?: string;
+	/** Placeholder text for the button */
+	buttonPlaceholderText?: string;
 };
 /**
- * The SettingsSidebar component is a sidebar that displays a list of extension settings and project
- * settings. It can be used to navigate to different settings pages. Must be wrapped in a
- * SidebarProvider component otherwise produces errors.
+ * The SettingsSidebar component is a sidebar that displays setting navigation entries. Must be
+ * wrapped in a SidebarProvider component otherwise produces errors.
  *
- * @param props - {@link SettingsSidebarProps} The props for the component.
+ * Two prop shapes are supported:
+ *
+ * - The generalized shape (`sections` + `selectedEntry` + `onSelectEntry`) accepts an arbitrary
+ *   ordered list of sections, each optionally with a header element (e.g., a combo box) above its
+ *   menu items.
+ * - The legacy shape (`extensionLabels` + `projectInfo` + ...) renders exactly two groups: extensions
+ *   as menu items and projects as a combo box. Existing consumers continue to work without
+ *   changes.
+ *
+ * New code should prefer the generalized shape.
  */
-export declare function SettingsSidebar({ id, extensionLabels, projectInfo, handleSelectSidebarItem, selectedSidebarItem, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, className, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
+export declare function SettingsSidebar(props: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
 type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.PropsWithChildren & {
 	/** The search query in the search bar */
 	searchValue: string;
 	/** Handler to run when the value of the search bar changes */
 	onSearch: (searchQuery: string) => void;
+	/**
+	 * Placeholder text for the search bar. Defaults to a generic settings-search prompt so existing
+	 * callers are unaffected.
+	 */
+	searchPlaceholder?: string;
 };
 /**
  * A component that wraps a search bar and a settings sidebar, providing a way to search and
  * navigate to different settings pages.
  *
+ * The sidebar layout is **dynamic**: when the generalized `sections` shape is used, the structure
+ * is driven entirely by the caller. Any number of sections may be supplied, in any order, each with
+ * its own label, an arbitrary list of items, and an optional `header` element (e.g., a project
+ * picker). This component does not hard-code which sections or entries appear — callers compose the
+ * layout they need. Each section's items are filtered against `searchValue` (case-insensitive label
+ * substring match) before being forwarded to the sidebar.
+ *
+ * Two prop shapes are supported, mirroring {@link SettingsSidebar}:
+ *
+ * - The generalized shape (`sections` + `selectedEntry` + `onSelectEntry`) — the dynamic layout
+ *   described above.
+ * - The legacy shape (`extensionLabels` + `projectInfo` + ...) — forwarded unchanged; no filtering is
+ *   applied (legacy callers handle their own filtering).
+ *
+ * The right-hand `SidebarInset` always renders `children`, so the caller supplies the content for
+ * the selected entry.
+ *
  * @param {SettingsSidebarContentSearchProps} props - The props for the component.
- * @param {string} props.id - The id of the sidebar.
  */
-export declare function SettingsSidebarContentSearch({ id, extensionLabels, projectInfo, children, handleSelectSidebarItem, selectedSidebarItem, searchValue, onSearch, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
+export declare function SettingsSidebarContentSearch({ id, sections, selectedEntry, onSelectEntry, extensionLabels, projectInfo, children, handleSelectSidebarItem, selectedSidebarItem, searchValue, onSearch, searchPlaceholder, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
+export type ComingSoonPanelProps = {
+	/** Already-localized title. */
+	title: string;
+	/** Already-localized body text. */
+	body: string;
+	/** Optional className passed to the root container. */
+	className?: string;
+};
+/**
+ * Placeholder right-panel content shown when a settings entry has been laid out in the sidebar but
+ * the actual settings UI for it has not been ported yet.
+ */
+export declare function ComingSoonPanel({ title, body, className }: ComingSoonPanelProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Information (e.g., a checking error or some other type of "transient" annotation) about something
  * noteworthy at a specific place in an instance of the Scriptures.

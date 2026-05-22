@@ -114,10 +114,17 @@ export {
 export {
   default as SettingsSidebar,
   type SettingsSidebarProps,
+  type SettingsSidebarSection,
+  type SettingsSidebarItem,
+  type SelectedSidebarEntry,
   type ProjectInfo,
   type SelectedSettingsSidebarItem,
 } from './components/advanced/settings-components/settings-sidebar.component';
 export { default as SettingsSidebarContentSearch } from './components/advanced/settings-components/settings-sidebar-content-search.component';
+export {
+  default as ComingSoonPanel,
+  type ComingSoonPanelProps,
+} from './components/advanced/settings-components/coming-soon-panel.component';
 export { default as ScriptureResultsViewer } from './components/advanced/scripture-results-viewer/scripture-results-viewer.component';
 export type {
   ResultsSet,

@@ -12,7 +12,7 @@ import {
 } from '@/components/shadcn-ui/sidebar';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { ScrollText } from 'lucide-react';
-import { useCallback } from 'react';
+import { ReactNode, useCallback } from 'react';
 
 export type SelectedSettingsSidebarItem = {
   label: string;
@@ -21,44 +21,175 @@ export type SelectedSettingsSidebarItem = {
 
 export type ProjectInfo = { projectId: string; projectName: string };
 
-export type SettingsSidebarProps = {
-  /** Optional id for testing */
-  id?: string;
+/** A single entry rendered inside a sidebar section. */
+export type SettingsSidebarItem = {
+  /** Stable identifier; unique within a section. */
+  id: string;
+  /** Display label (already localized by the caller). */
+  label: string;
+  /** Visually demote and label the item as a placeholder (e.g., "Coming soon"). */
+  isComingSoon?: boolean;
+  /** Render the item as non-interactive (e.g., greyed out, no hover). */
+  disabled?: boolean;
+};
 
-  /** Extension labels from contribution */
-  extensionLabels: Record<string, string>;
+/** A section in the generalized sidebar. */
+export type SettingsSidebarSection = {
+  /** Stable identifier for the section. Used as the `sectionId` of the selected entry. */
+  id: string;
+  /** Group label (already localized). */
+  label: string;
+  /** Optional element rendered above the items in the section (e.g., a project picker). */
+  header?: ReactNode;
+  /** Menu items in display order. */
+  items: ReadonlyArray<SettingsSidebarItem>;
+};
 
-  /** Project names and ids */
-  projectInfo: ProjectInfo[];
-
-  /** Handler for selecting a sidebar item */
-  handleSelectSidebarItem: (key: string, projectId?: string) => void;
-
-  /** The current selected value in the sidebar */
-  selectedSidebarItem: SelectedSettingsSidebarItem;
-
-  /** Label for the group of extensions setting groups */
-  extensionsSidebarGroupLabel: string;
-
-  /** Label for the group of projects settings */
-  projectsSidebarGroupLabel: string;
-
-  /** Placeholder text for the button */
-  buttonPlaceholderText: string;
-
-  /** Additional css classes to help with unique styling of the sidebar */
-  className?: string;
+/** Identifies which item is currently selected. */
+export type SelectedSidebarEntry = {
+  sectionId: string;
+  itemId: string;
 };
 
 /**
- * The SettingsSidebar component is a sidebar that displays a list of extension settings and project
- * settings. It can be used to navigate to different settings pages. Must be wrapped in a
- * SidebarProvider component otherwise produces errors.
+ * Props for {@link SettingsSidebar}. Two mutually-exclusive prop shapes are supported, and exactly
+ * one must be fully provided:
  *
- * @param props - {@link SettingsSidebarProps} The props for the component.
+ * - **Generalized (preferred):** provide `sections` together with `onSelectEntry` (and usually
+ *   `selectedEntry`). Renders an arbitrary, dynamic set of sections. When `sections` is provided,
+ *   the legacy props below are ignored.
+ * - **Legacy:** provide the full set of `extensionLabels`, `projectInfo`, `handleSelectSidebarItem`,
+ *   `selectedSidebarItem`, `extensionsSidebarGroupLabel`, `projectsSidebarGroupLabel`, and
+ *   `buttonPlaceholderText`.
+ *
+ * Every field is individually optional at the type level, so the contract is enforced at runtime:
+ * the component throws if neither complete shape is supplied. Prefer the generalized shape for new
+ * code.
  */
-export function SettingsSidebar({
+export type SettingsSidebarProps = {
+  /** Optional id for testing */
+  id?: string;
+  /** Additional css classes to help with unique styling of the sidebar */
+  className?: string;
+
+  // ---- Generalized API (preferred). When `sections` is provided, the legacy props below are
+  // ignored.
+  /** Sections to render in order. */
+  sections?: ReadonlyArray<SettingsSidebarSection>;
+  /** Currently selected entry (used with `sections`). */
+  selectedEntry?: SelectedSidebarEntry;
+  /** Called when the user clicks a menu item (used with `sections`). */
+  onSelectEntry?: (entry: SelectedSidebarEntry) => void;
+
+  // ---- Legacy API. Renders extension settings as menu items and project settings as a combo box.
+
+  /** Extension labels from contribution */
+  extensionLabels?: Record<string, string>;
+  /** Project names and ids */
+  projectInfo?: ProjectInfo[];
+  /** Handler for selecting a sidebar item */
+  handleSelectSidebarItem?: (key: string, projectId?: string) => void;
+  /** The current selected value in the sidebar */
+  selectedSidebarItem?: SelectedSettingsSidebarItem;
+  /** Label for the group of extensions setting groups */
+  extensionsSidebarGroupLabel?: string;
+  /** Label for the group of projects settings */
+  projectsSidebarGroupLabel?: string;
+  /** Placeholder text for the button */
+  buttonPlaceholderText?: string;
+};
+
+type GeneralizedSidebarProps = {
+  id?: string;
+  className?: string;
+  sections: ReadonlyArray<SettingsSidebarSection>;
+  selectedEntry: SelectedSidebarEntry | undefined;
+  onSelectEntry: (entry: SelectedSidebarEntry) => void;
+};
+
+function GeneralizedSidebar({
   id,
+  className,
+  sections,
+  selectedEntry,
+  onSelectEntry,
+}: GeneralizedSidebarProps) {
+  const isActive = useCallback(
+    (sectionId: string, itemId: string) =>
+      selectedEntry?.sectionId === sectionId && selectedEntry?.itemId === itemId,
+    [selectedEntry],
+  );
+
+  return (
+    <Sidebar
+      id={id}
+      collapsible="none"
+      variant="inset"
+      className={cn('tw:w-96 tw:gap-2', className)}
+    >
+      {/* Custom scrollable wrapper instead of `SidebarContent` so the browser-native scrollbar is
+          visible. `SidebarContent` bakes in `no-scrollbar`, which hides it. */}
+      <div
+        data-slot="sidebar-content"
+        data-sidebar="content"
+        className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col tw:gap-0 tw:overflow-y-auto"
+      >
+        {sections.map((section) => (
+          <SidebarGroup key={section.id}>
+            <SidebarGroupLabel className="tw:text-sm">{section.label}</SidebarGroupLabel>
+            {section.header && (
+              <SidebarGroupContent className="tw:pb-1">{section.header}</SidebarGroupContent>
+            )}
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {section.items.map((item) => (
+                  <SidebarMenuItem key={item.id}>
+                    <SidebarMenuButton
+                      onClick={
+                        item.disabled
+                          ? undefined
+                          : () => onSelectEntry({ sectionId: section.id, itemId: item.id })
+                      }
+                      isActive={isActive(section.id, item.id)}
+                      aria-disabled={item.disabled || undefined}
+                      className={cn({
+                        'tw:cursor-not-allowed tw:opacity-50': item.disabled,
+                      })}
+                    >
+                      <span
+                        className={cn('tw:pl-6', {
+                          'tw:text-muted-foreground tw:italic': item.isComingSoon && !item.disabled,
+                        })}
+                      >
+                        {item.label}
+                      </span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
+      </div>
+    </Sidebar>
+  );
+}
+
+type LegacySidebarProps = {
+  id?: string;
+  className?: string;
+  extensionLabels: Record<string, string>;
+  projectInfo: ProjectInfo[];
+  handleSelectSidebarItem: (key: string, projectId?: string) => void;
+  selectedSidebarItem: SelectedSettingsSidebarItem;
+  extensionsSidebarGroupLabel: string;
+  projectsSidebarGroupLabel: string;
+  buttonPlaceholderText: string;
+};
+
+function LegacySidebar({
+  id,
+  className,
   extensionLabels,
   projectInfo,
   handleSelectSidebarItem,
@@ -66,8 +197,7 @@ export function SettingsSidebar({
   extensionsSidebarGroupLabel,
   projectsSidebarGroupLabel,
   buttonPlaceholderText,
-  className,
-}: SettingsSidebarProps) {
+}: LegacySidebarProps) {
   const handleSelectItem = useCallback(
     (item: string, projectId?: string) => {
       handleSelectSidebarItem(item, projectId);
@@ -83,7 +213,7 @@ export function SettingsSidebar({
     [projectInfo],
   );
 
-  const getIsActive: (label: string) => boolean = useCallback(
+  const getIsActive = useCallback(
     (label: string) => !selectedSidebarItem.projectId && label === selectedSidebarItem.label,
     [selectedSidebarItem],
   );
@@ -141,6 +271,81 @@ export function SettingsSidebar({
         </SidebarGroup>
       </SidebarContent>
     </Sidebar>
+  );
+}
+
+/**
+ * The SettingsSidebar component is a sidebar that displays setting navigation entries. Must be
+ * wrapped in a SidebarProvider component otherwise produces errors.
+ *
+ * Two prop shapes are supported:
+ *
+ * - The generalized shape (`sections` + `selectedEntry` + `onSelectEntry`) accepts an arbitrary
+ *   ordered list of sections, each optionally with a header element (e.g., a combo box) above its
+ *   menu items.
+ * - The legacy shape (`extensionLabels` + `projectInfo` + ...) renders exactly two groups: extensions
+ *   as menu items and projects as a combo box. Existing consumers continue to work without
+ *   changes.
+ *
+ * New code should prefer the generalized shape.
+ */
+export function SettingsSidebar(props: SettingsSidebarProps) {
+  const {
+    id,
+    className,
+    sections,
+    selectedEntry,
+    onSelectEntry,
+    extensionLabels,
+    projectInfo,
+    handleSelectSidebarItem,
+    selectedSidebarItem,
+    extensionsSidebarGroupLabel,
+    projectsSidebarGroupLabel,
+    buttonPlaceholderText,
+  } = props;
+
+  if (sections) {
+    if (!onSelectEntry) {
+      throw new Error('SettingsSidebar: `onSelectEntry` is required when `sections` is provided.');
+    }
+    return (
+      <GeneralizedSidebar
+        id={id}
+        className={className}
+        sections={sections}
+        selectedEntry={selectedEntry}
+        onSelectEntry={onSelectEntry}
+      />
+    );
+  }
+
+  if (
+    !extensionLabels ||
+    !projectInfo ||
+    !handleSelectSidebarItem ||
+    !selectedSidebarItem ||
+    extensionsSidebarGroupLabel === undefined ||
+    projectsSidebarGroupLabel === undefined ||
+    buttonPlaceholderText === undefined
+  ) {
+    throw new Error(
+      'SettingsSidebar: pass either the generalized `sections` shape or all legacy props.',
+    );
+  }
+
+  return (
+    <LegacySidebar
+      id={id}
+      className={className}
+      extensionLabels={extensionLabels}
+      projectInfo={projectInfo}
+      handleSelectSidebarItem={handleSelectSidebarItem}
+      selectedSidebarItem={selectedSidebarItem}
+      extensionsSidebarGroupLabel={extensionsSidebarGroupLabel}
+      projectsSidebarGroupLabel={projectsSidebarGroupLabel}
+      buttonPlaceholderText={buttonPlaceholderText}
+    />
   );
 }
 
