@@ -1,19 +1,32 @@
 import { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
-import { useLocalizedStrings, useProjectSetting } from '@papi/frontend/react';
-import { SerializedVerseRef } from '@sillsdev/scripture';
+import { useLocalizedStrings, useProjectData, useProjectSetting } from '@papi/frontend/react';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { INVENTORY_STRING_KEYS, Scope } from 'platform-bible-react';
 import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import type { InventoryInputRange, ItemizedInventoryItem } from 'platform-scripture';
 import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
-import { CharacterInventory } from './checks/inventories/character-inventory.component';
-import { MarkerInventory } from './checks/inventories/marker-inventory.component';
-import { PunctuationInventory } from './checks/inventories/punctuation-inventory.component';
-import { RepeatedWordsInventory } from './checks/inventories/repeated-words-inventory.component';
+import {
+  CharacterInventory,
+  CHARACTER_INVENTORY_STRING_KEYS,
+} from './checks/inventories/character-inventory.component';
+import {
+  MarkerInventory,
+  MARKER_INVENTORY_STRING_KEYS,
+} from './checks/inventories/marker-inventory.component';
+import {
+  PunctuationInventory,
+  PUNCTUATION_INVENTORY_STRING_KEYS,
+} from './checks/inventories/punctuation-inventory.component';
+import {
+  RepeatedWordsInventory,
+  REPEATED_WORDS_INVENTORY_STRING_KEYS,
+} from './checks/inventories/repeated-words-inventory.component';
 import { useInventory } from './hooks/use-inventory';
 
 const VALID_ITEMS_DEFAULT = '';
 const INVALID_ITEMS_DEFAULT = '';
+const MARKER_NAMES_DEFAULT: string[] = [];
 
 /** Subset of CheckType enum from Paratext.Data.Checking */
 type CheckType = 'Character' | 'RepeatedWord' | 'Marker' | 'Punctuation';
@@ -29,28 +42,28 @@ type InventoryItemOccurrence = {
 /** Configuration mapping web view types to their corresponding components and check IDs */
 const INVENTORY_TYPE_CONFIG = {
   'platformScripture.characterInventory': {
-    component: CharacterInventory,
     checkId: 'Character' satisfies CheckType,
     validItemsSetting: 'platformScripture.validCharacters',
     invalidItemsSetting: 'platformScripture.invalidCharacters',
+    typeStringKeys: CHARACTER_INVENTORY_STRING_KEYS,
   },
   'platformScripture.repeatedWordsInventory': {
-    component: RepeatedWordsInventory,
     checkId: 'RepeatedWord' satisfies CheckType,
     validItemsSetting: 'platformScripture.repeatableWords',
     invalidItemsSetting: 'platformScripture.nonRepeatableWords',
+    typeStringKeys: REPEATED_WORDS_INVENTORY_STRING_KEYS,
   },
   'platformScripture.markersInventory': {
-    component: MarkerInventory,
     checkId: 'Marker' satisfies CheckType,
     validItemsSetting: 'platformScripture.validMarkers',
     invalidItemsSetting: 'platformScripture.invalidMarkers',
+    typeStringKeys: MARKER_INVENTORY_STRING_KEYS,
   },
   'platformScripture.punctuationInventory': {
-    component: PunctuationInventory,
     checkId: 'Punctuation' satisfies CheckType,
     validItemsSetting: 'platformScripture.validPunctuation',
     invalidItemsSetting: 'platformScripture.invalidPunctuation',
+    typeStringKeys: PUNCTUATION_INVENTORY_STRING_KEYS,
   },
 } as const;
 
@@ -202,21 +215,11 @@ global.webViewComponent = function InventoryWebView({
     };
   }, []);
 
-  const [localizedStrings] = useLocalizedStrings(
-    useMemo(() => {
-      return Array.from(INVENTORY_STRING_KEYS);
-    }, []),
-  );
   const [webViewType] = useWebViewState('webViewType', '');
   const [verseRef, setVerseRef] = useWebViewScrollGroupScrRef();
   const [scope, setScope] = useState<Scope>('chapter');
 
-  const {
-    component: InventoryComponent,
-    checkId,
-    validItemsSetting,
-    invalidItemsSetting,
-  } = useMemo(() => {
+  const { checkId, validItemsSetting, invalidItemsSetting, typeStringKeys } = useMemo(() => {
     // Validate and get inventory configuration
     if (!webViewType || !isValidInventoryWebViewType(webViewType)) {
       throw new Error(`"${webViewType}" is not a valid inventory type`);
@@ -224,11 +227,14 @@ global.webViewComponent = function InventoryWebView({
     return INVENTORY_TYPE_CONFIG[webViewType];
   }, [webViewType]);
 
-  const { inventoryInputRange, stableVerseRefForScope } = useInventoryInputRange(
-    verseRef,
-    scope,
-    projectId,
+  // Resolve the shared inventory strings plus the rendered type's table-header strings (lifted out
+  // of the per-type components so they no longer import `@papi`).
+  const [localizedStrings] = useLocalizedStrings(
+    useMemo(() => Array.from(INVENTORY_STRING_KEYS), []),
   );
+  const [typeStrings] = useLocalizedStrings(useMemo(() => [...typeStringKeys], [typeStringKeys]));
+
+  const { inventoryInputRange } = useInventoryInputRange(verseRef, scope, projectId);
 
   const {
     inventoryItems,
@@ -247,6 +253,21 @@ global.webViewComponent = function InventoryWebView({
       }
     };
   }, [cleanup]);
+
+  // Marker names for the current book (lifted out of MarkerInventory so it stays presentational).
+  // Only the marker inventory consumes these; the hook runs harmlessly for the other types.
+  const [markerNamesPossiblyError] = useProjectData(
+    'platformScripture.MarkerNames',
+    projectId ?? undefined,
+  ).MarkerNames(Canon.bookIdToNumber(verseRef.book), []);
+
+  const markerNames = useMemo(() => {
+    if (isPlatformError(markerNamesPossiblyError)) {
+      logger.warn(`Error getting marker names: ${getErrorMessage(markerNamesPossiblyError)}`);
+      return MARKER_NAMES_DEFAULT;
+    }
+    return markerNamesPossiblyError;
+  }, [markerNamesPossiblyError]);
 
   const [inventoryItemsWithOccurrences, setInventoryItemsWithOccurrences] = useState<{
     [itemKey: string]: InventoryItemOccurrence[];
@@ -367,21 +388,39 @@ global.webViewComponent = function InventoryWebView({
     [inventoryItems, inventoryItemsWithOccurrences, approvedItems, unapprovedItems],
   );
 
-  return (
-    <InventoryComponent
-      inventoryItems={enhancedInventoryItems}
-      verseRef={stableVerseRefForScope}
-      setVerseRef={setVerseRef}
-      localizedStrings={localizedStrings}
-      approvedItems={approvedItems}
-      onApprovedItemsChange={handleApprovedItemsChange}
-      unapprovedItems={unapprovedItems}
-      onUnapprovedItemsChange={handleUnapprovedItemsChange}
-      scope={scope}
-      onScopeChange={setScope}
-      projectId={projectId}
-      areInventoryItemsLoading={areInventoryItemsLoading}
-      onItemSelected={handleItemSelected}
-    />
-  );
+  // Props shared by every inventory type. The per-type table-header strings (and, for the marker
+  // inventory, the resolved marker names) are supplied alongside these per `webViewType`.
+  const sharedProps = {
+    inventoryItems: enhancedInventoryItems,
+    setVerseRef,
+    localizedStrings,
+    approvedItems,
+    onApprovedItemsChange: handleApprovedItemsChange,
+    unapprovedItems,
+    onUnapprovedItemsChange: handleUnapprovedItemsChange,
+    scope,
+    onScopeChange: setScope,
+    areInventoryItemsLoading,
+    onItemSelected: handleItemSelected,
+  };
+
+  switch (webViewType) {
+    case 'platformScripture.repeatedWordsInventory':
+      return (
+        <RepeatedWordsInventory {...sharedProps} repeatedWordsInventoryStrings={typeStrings} />
+      );
+    case 'platformScripture.markersInventory':
+      return (
+        <MarkerInventory
+          {...sharedProps}
+          markerInventoryStrings={typeStrings}
+          markerNames={markerNames}
+        />
+      );
+    case 'platformScripture.punctuationInventory':
+      return <PunctuationInventory {...sharedProps} punctuationInventoryStrings={typeStrings} />;
+    case 'platformScripture.characterInventory':
+    default:
+      return <CharacterInventory {...sharedProps} characterInventoryStrings={typeStrings} />;
+  }
 };
