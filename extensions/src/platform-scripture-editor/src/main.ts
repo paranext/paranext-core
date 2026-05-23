@@ -64,13 +64,13 @@ let selectionChangedEventEmitter: PlatformEventEmitter<SelectionChangeEvent> | u
  * new project. Subscribe via
  * `papi.network.getNetworkEvent('platformScriptureEditor.onWillSwitchProject')`.
  */
-export const PROJECT_SWITCH_WILL_START_EVENT = 'platformScriptureEditor.onWillSwitchProject';
+const PROJECT_SWITCH_WILL_START_EVENT = 'platformScriptureEditor.onWillSwitchProject';
 
 /**
  * Network event name emitted after the scripture editor web view open/replace call resolves.
  * Subscribe via `papi.network.getNetworkEvent('platformScriptureEditor.onDidSwitchProject')`.
  */
-export const PROJECT_SWITCH_DID_FINISH_EVENT = 'platformScriptureEditor.onDidSwitchProject';
+const PROJECT_SWITCH_DID_FINISH_EVENT = 'platformScriptureEditor.onDidSwitchProject';
 
 /**
  * Event emitter fired before a project switch. Created lazily on the first call to open() to avoid
@@ -231,6 +231,20 @@ async function open(
     // Emit before any async work so the overlay appears even if a later service call fails.
     // The catch block guarantees the matching did-finish event always fires to clear the overlay.
     projectSwitchWillStartEmitter.emit({});
+
+    // Defined before the try/catch so the catch block can call it.
+    // `catch` handles synchronous errors thrown before the first `return` (e.g. from
+    // resolveOpenEditorDispatch). The two `.finally()` calls handle promise rejections from
+    // openWebView. Because the promises are *returned* (not awaited), the outer `catch` never
+    // sees their rejections — so there is no double-emit risk between `catch` and `.finally()`.
+    const emitDidFinish = () => {
+      if (projectSwitchDidFinishEmitter) projectSwitchDidFinishEmitter.emit({});
+      else
+        logger.warn(
+          'projectSwitchDidFinishEmitter was disposed before the project switch completed — workspace-updating overlay may be stuck',
+        );
+    };
+
     try {
       // Decide where to route this open. The dispatch helper centralizes the simple-mode invariants
       // (one editor slot, no duplicate-(project, readonly) tabs) and the empty-editor probe; see
@@ -266,13 +280,7 @@ async function open(
             createNewIfNotFound: false,
             bringToFront: true,
           })
-          .finally(() => {
-            if (projectSwitchDidFinishEmitter) projectSwitchDidFinishEmitter.emit({});
-            else
-              logger.warn(
-                'projectSwitchDidFinishEmitter was disposed before the project switch completed — workspace-updating overlay may be stuck',
-              );
-          });
+          .finally(emitDidFinish);
       }
 
       const openWebViewOptions: PlatformScriptureEditorOptions = {
@@ -299,19 +307,9 @@ async function open(
             : undefined,
           openWebViewOptions,
         )
-        .finally(() => {
-          if (projectSwitchDidFinishEmitter) projectSwitchDidFinishEmitter.emit({});
-          else
-            logger.warn(
-              'projectSwitchDidFinishEmitter was disposed before the project switch completed — workspace-updating overlay may be stuck',
-            );
-        });
+        .finally(emitDidFinish);
     } catch (e) {
-      if (projectSwitchDidFinishEmitter) projectSwitchDidFinishEmitter.emit({});
-      else
-        logger.warn(
-          'projectSwitchDidFinishEmitter was disposed before the project switch completed — workspace-updating overlay may be stuck',
-        );
+      emitDidFinish();
       throw e;
     }
   }
