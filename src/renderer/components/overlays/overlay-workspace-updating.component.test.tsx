@@ -5,14 +5,15 @@ import {
   setWorkspaceUpdating,
   resetWorkspaceUpdating,
 } from '@renderer/services/workspace-updating-store';
-import { WorkspaceUpdatingOverlay } from './workspace-updating-overlay.component';
+import { WorkspaceUpdatingOverlay } from './overlay-workspace-updating.component';
 
 vi.mock('@renderer/hooks/papi-hooks', () => ({
-  useLocalizedStrings: vi.fn(() => [{ '%toolbar_workspace_updating%': 'Updating workspace...' }]),
+  useLocalizedStrings: vi.fn(() => [{ '%overlay_workspaceUpdating%': 'Updating workspace...' }]),
 }));
 
 vi.mock('platform-bible-react', () => ({
   Spinner: () => <div data-testid="spinner" />,
+  Z_INDEX_MODAL: 500,
 }));
 
 describe('WorkspaceUpdatingOverlay', () => {
