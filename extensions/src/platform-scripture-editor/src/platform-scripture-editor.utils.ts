@@ -24,7 +24,6 @@ import type { SharedProjectsInfo } from 'platform-scripture';
 import { MutableRefObject } from 'react';
 import { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { MarkerMenuItem } from 'platform-bible-react';
-import { logger } from '@papi/backend';
 
 export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 
@@ -703,7 +702,9 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
     try {
       const outcome = await openDefaultActiveProjectIfApplicable(papi);
       if (outcome != 'filled') {
-        logger.debug(`Default active project picker: unexpected outcome received: '${outcome}'`);
+        papi.logger.debug(
+          `Default active project picker: unexpected outcome received: '${outcome}'`,
+        );
       }
     } catch (e) {
       // `openDefaultActiveProjectIfApplicable` catches its own errors and returns 'failed'; this
