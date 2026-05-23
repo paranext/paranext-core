@@ -741,9 +741,7 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
     try {
       const outcome = await openDefaultActiveProjectIfApplicable(papi);
       if (outcome != 'filled') {
-        logger.debug(
-          `Default active project picker: received outcome other than 'filled': '${outcome}'`,
-        );
+        logger.debug(`Default active project picker: unexpected outcome received: '${outcome}'`);
       }
     } catch (e) {
       // `openDefaultActiveProjectIfApplicable` catches its own errors and returns 'failed'; this
