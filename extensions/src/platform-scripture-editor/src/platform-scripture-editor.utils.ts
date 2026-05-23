@@ -739,7 +739,7 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
     pickerState = 'running';
     try {
       const outcome = await openDefaultActiveProjectIfApplicable(papi);
-      if (outcome != 'filled') {
+      if (outcome !== 'filled') {
         papi.logger.debug(
           `Default active project picker: unexpected outcome received: '${outcome}'`,
         );
