@@ -252,8 +252,9 @@ declare module 'papi-shared-types' {
      * sends/receives connected translation projects or DBL-updates connected resources as needed.
      * Unknown project IDs are skipped. Deduplication is handled internally.
      *
-     * @param projectIds Ids of the projects to sync. If omitted, all shared projects already
-     *   present locally are synced.
+     * @param projectIds IDs of the projects to sync. If omitted, all shared projects already
+     *   present locally are synced. If provided, only projects already present locally are synced;
+     *   new projects (not yet received) and unknown IDs are skipped.
      * @throws `PlatformUnimplementedException` if not running in an application that implements
      *   this command (e.g., Paratext 10 Studio)
      */

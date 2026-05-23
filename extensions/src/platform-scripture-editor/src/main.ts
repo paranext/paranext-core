@@ -34,6 +34,7 @@ import {
   resolveOpenEditorDispatch,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   startDefaultProjectPicker,
+  syncOnProjectSwitch,
 } from './platform-scripture-editor.utils';
 import { MarkersViewNotifier } from './markers-view-notifier.model';
 
@@ -139,36 +140,6 @@ async function insertCommentAtSelection(webViewId: string | undefined): Promise<
   await webViewController.insertCommentAtSelection();
 }
 
-/**
- * Fire-and-forget helper that syncs the incoming project first, then the outgoing one. Each sync is
- * independently error-isolated so a failure in one doesn't block the other. Only called in simple
- * mode after a replace-tab project switch.
- */
-async function syncOnProjectSwitch(
-  incomingProjectId: string,
-  outgoingProjectId: string | undefined,
-): Promise<void> {
-  try {
-    await papi.commands.sendCommand('paratextBibleSendReceive.syncProjects', [incomingProjectId]);
-  } catch (e) {
-    logger.warn(
-      `Project-switch sync: incoming sync for ${incomingProjectId} failed: ${getErrorMessage(e)}`,
-    );
-  }
-
-  if (outgoingProjectId) {
-    try {
-      await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [
-        outgoingProjectId,
-      ]);
-    } catch (e) {
-      logger.warn(
-        `Project-switch sync: outgoing sync for ${outgoingProjectId} failed: ${getErrorMessage(e)}`,
-      );
-    }
-  }
-}
-
 /** Function to prompt for a project or use the one passed in and open it in the editor */
 async function open(
   isReadOnly: boolean,
@@ -261,11 +232,6 @@ async function open(
       isReadOnly: !projectForWebView.isEditable,
       options,
     };
-    const outgoingProjectId =
-      dispatch.kind === 'replace-tab'
-        ? allScriptureEditors.find((e) => e.id === dispatch.targetTabId)?.projectId
-        : undefined;
-
     const openedWebViewId = await papi.webViews.openWebView(
       SCRIPTURE_EDITOR_WEBVIEW_TYPE,
       dispatch.kind === 'replace-tab'
@@ -275,8 +241,11 @@ async function open(
     );
 
     if (interfaceMode === 'simple' && dispatch.kind === 'replace-tab') {
+      const outgoingProjectId = allScriptureEditors.find(
+        (e) => e.id === dispatch.targetTabId,
+      )?.projectId;
       // Fire-and-forget: new editor is already open. Sync incoming first, then outgoing.
-      syncOnProjectSwitch(projectForWebView.projectId, outgoingProjectId);
+      syncOnProjectSwitch(papi, projectForWebView.projectId, outgoingProjectId);
     }
 
     return openedWebViewId;
