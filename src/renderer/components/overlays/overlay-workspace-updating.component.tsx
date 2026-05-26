@@ -12,8 +12,8 @@ const WORKSPACE_UPDATING_KEY: LocalizeKey = '%overlay_workspaceUpdating%';
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [WORKSPACE_UPDATING_KEY];
 
-/** Z-index above all OverlayHost surfaces including modals (Z_INDEX_MODAL = 500) */
-const Z_INDEX_WORKSPACE_UPDATING = Z_INDEX_MODAL + 100;
+/** Z-index below modals so modal dialogs remain accessible during a project switch */
+const Z_INDEX_WORKSPACE_UPDATING = Z_INDEX_MODAL - 1;
 
 type Props = { label: string };
 
@@ -48,9 +48,10 @@ export function WorkspaceUpdatingOverlay() {
 
   if (!isUpdating) return undefined;
 
-  // Bypasses OverlayHost intentionally: this overlay must cover every other surface
-  // (command palette, modal dialogs, etc.) managed by OverlayHost. A future cleanup
-  // could extend the OverlayHost type system to include a loadingSpinner type.
+  // Bypasses OverlayHost intentionally: this overlay must cover the editor content area.
+  // Rendered below modals (Z_INDEX_MODAL - 1) so any modal that appears during the transition
+  // remains accessible. A future cleanup could extend the OverlayHost type system to include
+  // a loadingSpinner type.
   return createPortal(
     <WorkspaceUpdatingOverlayPresentational label={localizedStrings[WORKSPACE_UPDATING_KEY]} />,
     document.body,
