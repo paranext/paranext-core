@@ -1,11 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Dialog } from '@/components/shadcn-ui/dialog';
-import ProjectPickerDialog, {
+import ProjectPicker, {
   type ProjectItem,
-  type ProjectPickerDialogLocalizedStrings,
+  type ProjectPickerLocalizedStrings,
 } from './project-picker-dialog.component';
 
-const STRINGS: ProjectPickerDialogLocalizedStrings = {
+const STRINGS: ProjectPickerLocalizedStrings = {
   '%projectPicker_title%': 'Project Picker',
   '%projectPicker_section_recent%': 'Recent',
   '%projectPicker_section_all%': 'All projects',
@@ -44,9 +44,9 @@ const ESV: ProjectItem = {
   language: 'English',
 };
 
-const meta: Meta<typeof ProjectPickerDialog> = {
-  title: 'Advanced/ProjectPickerDialog',
-  component: ProjectPickerDialog,
+const meta: Meta<typeof ProjectPicker> = {
+  title: 'Advanced/ProjectPicker',
+  component: ProjectPicker,
   tags: ['autodocs', 'test'],
   decorators: [
     (Story) => (
@@ -62,13 +62,14 @@ const meta: Meta<typeof ProjectPickerDialog> = {
     recentProjects: [WEB, KJV],
     allProjects: [RVR, NLT, ESV],
     localizedStrings: STRINGS,
+    // Storybook story — console.log is the intended demo handler
     // eslint-disable-next-line no-console
     onSelect: (projectId) => console.log('Selected:', projectId),
   },
 };
 
 export default meta;
-type Story = StoryObj<typeof ProjectPickerDialog>;
+type Story = StoryObj<typeof ProjectPicker>;
 
 export const BothSections: Story = {};
 

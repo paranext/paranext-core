@@ -119,7 +119,7 @@ export function PlatformBibleToolbar() {
 
   const { currentProject, recentProjects, allProjects } = useProjectPickerData();
 
-  const showProjectPickerDialog = useDialogCallback(PROJECT_PICKER_DIALOG_TYPE, {}, () => {});
+  const showProjectPicker = useDialogCallback(PROJECT_PICKER_DIALOG_TYPE, {}, () => {});
 
   const projectPickerItems = recentProjects.length > 0 ? recentProjects : allProjects;
   const hasProjectPickerItems = projectPickerItems.length > 0;
@@ -480,7 +480,7 @@ export function PlatformBibleToolbar() {
               <button
                 type="button"
                 className="tw:w-full tw:cursor-pointer tw:px-2 tw:py-1.5 tw:text-left tw:text-sm tw:text-muted-foreground"
-                onClick={() => showProjectPickerDialog()}
+                onClick={() => showProjectPicker()}
               >
                 More projects...
               </button>

@@ -2,12 +2,12 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import { Dialog } from '@/components/shadcn-ui/dialog';
-import ProjectPickerDialog, {
+import ProjectPicker, {
   type ProjectItem,
-  type ProjectPickerDialogLocalizedStrings,
+  type ProjectPickerLocalizedStrings,
 } from './project-picker-dialog.component';
 
-const STRINGS: ProjectPickerDialogLocalizedStrings = {
+const STRINGS: ProjectPickerLocalizedStrings = {
   '%projectPicker_title%': 'Project Picker',
   '%projectPicker_section_recent%': 'Recent',
   '%projectPicker_section_all%': 'All projects',
@@ -34,11 +34,11 @@ const RVR: ProjectItem = {
   language: 'Spanish',
 };
 
-function renderDialog(overrides: Partial<Parameters<typeof ProjectPickerDialog>[0]> = {}) {
+function renderDialog(overrides: Partial<Parameters<typeof ProjectPicker>[0]> = {}) {
   const onSelect = vi.fn();
   render(
     <Dialog open>
-      <ProjectPickerDialog
+      <ProjectPicker
         currentProject={WEB}
         recentProjects={[WEB]}
         allProjects={[KJV, RVR]}
@@ -51,7 +51,7 @@ function renderDialog(overrides: Partial<Parameters<typeof ProjectPickerDialog>[
   return { onSelect };
 }
 
-describe('ProjectPickerDialog', () => {
+describe('ProjectPicker', () => {
   it('renders the dialog title', () => {
     renderDialog();
     expect(screen.getByText('Project Picker')).toBeInTheDocument();

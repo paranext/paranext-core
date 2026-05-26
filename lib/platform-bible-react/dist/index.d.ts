@@ -1014,32 +1014,42 @@ export interface MarkerMenuProps {
 }
 /** Marker menu component to render the list of markers and a few commands in the scripture editor */
 export declare function MarkerMenu({ localizedStrings, markerMenuItems, searchRef }: MarkerMenuProps): import("react/jsx-runtime").JSX.Element;
-export type ProjectOption = {
+export type ProjectItem = {
 	id: string;
-	name: string;
+	fullName: string;
+	shortName: string;
+	language?: string;
 };
+/** Localization string keys used by {@link ProjectPicker}. */
+export declare const PROJECT_PICKER_STRING_KEYS: readonly [
+	"%projectPicker_title%",
+	"%projectPicker_section_recent%",
+	"%projectPicker_section_all%",
+	"%projectPicker_search_placeholder%",
+	"%projectPicker_no_results%"
+];
 export type ProjectPickerLocalizedStrings = {
-	recentProjectsHeading?: string;
-	allProjectsHeading?: string;
-	loadingPlaceholder?: string;
-	selectPlaceholder?: string;
-	searchPlaceholder?: string;
-	noResultsMessage?: string;
+	[key in (typeof PROJECT_PICKER_STRING_KEYS)[number]]?: string;
 };
-export type ProjectPickerComboBoxProps = {
-	currentProject: ProjectOption | undefined;
-	recentProjects: ProjectOption[];
-	allProjects: ProjectOption[];
-	/** Callback invoked with the selected project's ID when the user picks a project */
-	onSelect: (projectId: string) => void;
+export type ProjectPickerProps = {
+	currentProject: ProjectItem | undefined;
+	/** Pre-ordered recent projects (most-recent first). Must NOT overlap with allProjects. */
+	recentProjects: ProjectItem[];
+	/** All projects excluding recentProjects. */
+	allProjects: ProjectItem[];
 	isLoading?: boolean;
+	/** Called with the selected project's id when the user picks a project. */
+	onSelect: (projectId: string) => void;
 	localizedStrings?: ProjectPickerLocalizedStrings;
-	/** Accessible label for the trigger button */
-	ariaLabel?: string;
-	className?: string;
 };
-/** Combo box for selecting a project from recent and all-projects lists */
-export declare function ProjectPickerComboBox({ currentProject, recentProjects, allProjects, onSelect, isLoading, localizedStrings, ariaLabel, className, }: ProjectPickerComboBoxProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Presentational dialog content for picking a project. Renders Recent and All Projects sections
+ * with text search. Does not include an outer Dialog/DialogContent wrapper.
+ *
+ * `recentProjects` and `allProjects` must be pre-separated (no overlap). The current project is
+ * pinned to the top of the Recent section if present there.
+ */
+export function ProjectPicker({ currentProject, recentProjects, allProjects, isLoading, onSelect, localizedStrings, }: ProjectPickerProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Callback function that is invoked when a user selects a menu item. Receives the full
  * `MenuItemContainingCommand` object as an argument.
