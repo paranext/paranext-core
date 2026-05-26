@@ -283,7 +283,7 @@
   "%overlay_dialog_title_dialog%": "Dialog",
   "%overlay_commandPalette_searchPlaceholder%": "Search...",
   "%overlay_commandPalette_noResults%": "No results found",
-  "%overlay_workspaceUpdating%": "Updating project view",
+  "%overlay_workspaceUpdating%": "Updating project view...",
   "%product_name%": "Platform.Bible",
   "%product_shortName%": "Platform",
   "%project_full_name_missing%": "*Name Missing*",
