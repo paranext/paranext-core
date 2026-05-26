@@ -36,7 +36,7 @@ import {
 } from './components/marker-settings-dialog.component';
 import {
   buildChecklistData,
-  ProjectNotFoundError,
+  isProjectNotFoundError,
   type ChecklistRequest,
   type ChecklistResult,
 } from './checklists/build-checklist-data';
@@ -363,7 +363,7 @@ global.webViewComponent = function ChecklistWebView({
         setError(undefined);
       } catch (err) {
         if (cancelled || !isMountedRef.current) return;
-        if (err instanceof ProjectNotFoundError) {
+        if (isProjectNotFoundError(err)) {
           logger.warn(
             `ChecklistWebView: project not found (${err.projectId}): ${getErrorMessage(err)}`,
           );

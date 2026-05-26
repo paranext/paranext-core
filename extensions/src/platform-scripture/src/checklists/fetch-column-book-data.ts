@@ -1,4 +1,5 @@
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
+import { Canon, type SerializedVerseRef } from '@sillsdev/scripture';
 
 /**
  * Minimal structural interface satisfied by the real `@papi/frontend` PAPI client at the call sites
@@ -15,7 +16,12 @@ export type PapiLike = {
   };
 };
 
-export type UsjBookPdpLike = { getBookUSJ(bookNum: number): Promise<Usj> };
+/**
+ * The platformScripture.USJ_Book PDP takes a SerializedVerseRef (not a bookNum) — see
+ * `platform-scripture.d.ts:262`. Existing consumers (e.g.
+ * `search-results-in-book.component.tsx:60-66`) pass `{book: bookId, chapterNum: 1, verseNum: 0}`.
+ */
+export type UsjBookPdpLike = { getBookUSJ(verseRef: SerializedVerseRef): Promise<Usj> };
 
 export type MarkerNamesPdpLike = {
   getHeadingMarkers(bookNum: number): Promise<readonly string[]>;
@@ -75,9 +81,15 @@ export async function fetchColumnBookData(
     papi.projectDataProviders.get('platform.base', projectId),
   ]);
 
+  // USJ_Book PDP expects a SerializedVerseRef; mirror existing consumer pattern (verse 0 = book intro).
+  const bookVerseRef: SerializedVerseRef = {
+    book: Canon.bookNumberToId(bookNum),
+    chapterNum: 1,
+    verseNum: 0,
+  };
   const [usj, headingMarkersArray, joinedTextLanguage, isEditableRaw, textDirectionRaw] =
     await Promise.all([
-      usjPdp.getBookUSJ(bookNum),
+      usjPdp.getBookUSJ(bookVerseRef),
       markerNamesPdp.getHeadingMarkers(bookNum),
       markerNamesPdp.getJoinedTextLanguage(bookNum),
       basePdp.getSetting('platform.isEditable'),

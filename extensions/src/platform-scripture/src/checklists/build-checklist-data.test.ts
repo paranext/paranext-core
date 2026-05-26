@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { buildChecklistData, ProjectNotFoundError } from './build-checklist-data';
+import { Canon } from '@sillsdev/scripture';
+import { buildChecklistData, isProjectNotFoundError } from './build-checklist-data';
 import type { PapiLike } from './fetch-column-book-data';
 import { SIMPLE_GENESIS_ONE_PARA, GENESIS_WITH_HEADING } from './test-fixtures/usj-fixtures';
 import type { ChecklistRequest } from './build-checklist-data';
@@ -32,12 +33,13 @@ function makePapiMock(opts: {
 
     if (type === 'platformScripture.USJ_Book')
       return {
-        getBookUSJ: vi
-          .fn()
-          .mockImplementation(
-            async (n: number) =>
-              proj.usjPerBook?.[n] ?? { type: 'USJ', version: '3.1', content: [] },
-          ),
+        getBookUSJ: vi.fn().mockImplementation(
+          // USJ_Book PDP takes SerializedVerseRef per platform-scripture.d.ts:262.
+          async (verseRef: { book: string }) => {
+            const n = Canon.bookIdToNumber(verseRef.book);
+            return proj.usjPerBook?.[n] ?? { type: 'USJ', version: '3.1', content: [] };
+          },
+        ),
       };
     if (type === 'platformScripture.MarkerNames')
       return {
@@ -383,9 +385,8 @@ describe('buildChecklistData', () => {
           MISSING: { missing: true },
         },
       });
-      await expect(
-        buildChecklistData(makeRequest({ comparativeTextIds: ['MISSING'] }), papi),
-      ).rejects.toBeInstanceOf(ProjectNotFoundError);
+      const promise = buildChecklistData(makeRequest({ comparativeTextIds: ['MISSING'] }), papi);
+      await expect(promise).rejects.toSatisfy(isProjectNotFoundError);
     });
   });
 

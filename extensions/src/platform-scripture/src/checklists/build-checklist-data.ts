@@ -74,16 +74,44 @@ export type ChecklistResult = {
  * removed or its GUID is malformed). The caller (`useDataProvider` in the web view) maps this to a
  * user-facing error toast.
  */
-export class ProjectNotFoundError extends Error {
-  readonly code = 'PROJECT_NOT_FOUND';
-  readonly projectId: string;
+/**
+ * Custom error shape. We avoid `extends Error` because SWC's down-compilation of
+ * class-extending-Error generates a polyfill that touches `Function.bind.apply(...)` — and the
+ * extension-host sandbox blocks the global `Function` constructor, which causes the entire
+ * extension to fail to activate with `ReferenceError: Function is not defined`. Instead we attach a
+ * sentinel `name` + `code` to a plain `Error` instance via the factory, and expose an
+ * `isProjectNotFoundError(err)` type guard for callers that need to discriminate.
+ */
+export type ProjectNotFoundErrorType = Error & {
+  name: 'ProjectNotFoundError';
+  code: 'PROJECT_NOT_FOUND';
+  projectId: string;
+};
 
-  constructor(projectId: string) {
-    super(`Project not found: ${projectId}`);
-    this.name = 'ProjectNotFoundError';
-    this.projectId = projectId;
-  }
+/** Create a project-not-found error without extending the native `Error` class (see above). */
+export function makeProjectNotFoundError(projectId: string): ProjectNotFoundErrorType {
+  const err = new Error(`Project not found: ${projectId}`);
+  // Attach the sentinel name + code so callers can discriminate via isProjectNotFoundError.
+  Object.assign(err, { name: 'ProjectNotFoundError', code: 'PROJECT_NOT_FOUND', projectId });
+  // eslint-disable-next-line no-type-assertion/no-type-assertion -- justified: discriminating on attached sentinel above.
+  return err as ProjectNotFoundErrorType;
 }
+
+/** Type guard — returns true when `err` is a `ProjectNotFoundError` produced by this module. */
+export function isProjectNotFoundError(err: unknown): err is ProjectNotFoundErrorType {
+  return (
+    err instanceof Error &&
+    'code' in err &&
+    (err as { code?: unknown }).code === 'PROJECT_NOT_FOUND'
+  );
+}
+
+/**
+ * @deprecated Use {@link makeProjectNotFoundError} / {@link isProjectNotFoundError} instead. Kept as
+ *   a no-op symbol export so consumers updating from prior drafts still compile until they migrate
+ *   to the factory + guard pattern.
+ */
+export const ProjectNotFoundError = makeProjectNotFoundError;
 
 /**
  * Top-level orchestrator — replaces backend `ChecklistService.BuildChecklistData`.
@@ -125,7 +153,7 @@ export async function buildChecklistData(
           fullName: typeof fullName === 'string' ? fullName : id,
         };
       } catch {
-        throw new ProjectNotFoundError(id);
+        throw makeProjectNotFoundError(id);
       }
     }),
   );
@@ -163,7 +191,13 @@ export async function buildChecklistData(
         markerFilter,
         data.headingMarkers,
       );
-      const processed = walkerParagraphs.map((p) =>
+      // Filter walker paragraphs to those whose verseRefStart falls within [startRef, endRef].
+      // The walker emits every paragraph in the book; the orchestrator restricts to the request's
+      // verseRange so single-book single-chapter requests don't pull in the rest of the book.
+      const inRangeParagraphs = walkerParagraphs.filter((p) =>
+        isVerseRefInRange(p.verseRefStart, startRef, endRef),
+      );
+      const processed = inRangeParagraphs.map((p) =>
         postProcessParagraph(p, { showVerseText: request.showVerseText }),
       );
       return groupParagraphsIntoCells(processed, data);
@@ -325,10 +359,36 @@ function defaultEndRef(): SerializedVerseRef {
  * the request starts at the canonical first verse.
  */
 function applyVal003(ref: SerializedVerseRef): SerializedVerseRef {
-  if (ref.book === 'GEN' && ref.chapterNum === 1 && ref.verseNum === 1) {
+  // VAL-003: any chapter-1-verse-1 start is coerced to verse 0 so a book's intro material
+  // (\ide, \rem, \toc1-3, \mt1, \ip, \io1, etc., all keyed to verseNum 0) is included. Generic
+  // across all books — baseline scenarios 01 (GEN) and 10 (MAT) both depend on this.
+  if (ref.chapterNum === 1 && ref.verseNum === 1) {
     return { ...ref, verseNum: 0 };
   }
   return ref;
+}
+
+/**
+ * Returns true when `ref` falls within `[startRef, endRef]` inclusive on the canonical (bookNum,
+ * chapterNum, verseNum) lexicographic ordering. Used to filter walker paragraphs to just those
+ * inside the request's `verseRange` so a single-chapter request doesn't pull in the rest of the
+ * book.
+ */
+function isVerseRefInRange(
+  ref: SerializedVerseRef,
+  startRef: SerializedVerseRef,
+  endRef: SerializedVerseRef,
+): boolean {
+  return compareVerseRef(ref, startRef) >= 0 && compareVerseRef(ref, endRef) <= 0;
+}
+
+/** Lexicographic compare on (bookNum, chapterNum, verseNum). */
+function compareVerseRef(a: SerializedVerseRef, b: SerializedVerseRef): number {
+  const aBookNum = Canon.bookIdToNumber(a.book);
+  const bBookNum = Canon.bookIdToNumber(b.book);
+  if (aBookNum !== bBookNum) return aBookNum - bBookNum;
+  if (a.chapterNum !== b.chapterNum) return a.chapterNum - b.chapterNum;
+  return a.verseNum - b.verseNum;
 }
 
 /**

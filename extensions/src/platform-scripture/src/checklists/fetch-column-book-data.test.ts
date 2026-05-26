@@ -113,7 +113,9 @@ describe('fetchColumnBookData', () => {
 
     await fetchColumnBookData(papi, 'PROJ-1', 40);
 
-    expect(usjMock).toHaveBeenCalledWith(40);
+    // USJ_Book PDP takes SerializedVerseRef per platform-scripture.d.ts:262 (existing
+    // consumer pattern in search-results-in-book.component.tsx uses {chapterNum:1, verseNum:0}).
+    expect(usjMock).toHaveBeenCalledWith({ book: 'MAT', chapterNum: 1, verseNum: 0 });
     expect(headingMock).toHaveBeenCalledWith(40);
     expect(languageMock).toHaveBeenCalledWith(40);
   });
