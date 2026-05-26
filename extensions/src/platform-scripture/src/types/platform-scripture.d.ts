@@ -1808,22 +1808,6 @@ declare module 'platform-scripture' {
   // Connection"). The web view acquires a typed proxy via
   // `papi.networkObjects.get<IChecklistService>('platformScripture.checklistService')`.
 
-  /** A 3-letter book code + chapter + verse, matching the platform's `SerializedVerseRef`. */
-  export type ChecklistScriptureVerseRef = {
-    book: string;
-    chapterNum: number;
-    verseNum: number;
-  };
-
-  /**
-   * Inclusive Scripture range used by {@link ChecklistRequest}. Mirrors the platform's
-   * `ScriptureRange`.
-   */
-  export type ChecklistScriptureRange = {
-    start: ChecklistScriptureVerseRef;
-    end: ChecklistScriptureVerseRef;
-  };
-
   /** Configuration for equivalent marker pairs and marker filter (data-contracts.md §2.2). */
   export type ChecklistMarkerSettings = {
     /** Space-separated marker pairs in "marker1/marker2" format. */
@@ -1845,7 +1829,8 @@ declare module 'platform-scripture' {
     projectId: string;
     comparativeTextIds: string[];
     markerSettings: ChecklistMarkerSettings;
-    verseRange: ChecklistScriptureRange | undefined;
+    /** Optional verse-range filter, as the platform's canonical {@link ScriptureRange}. */
+    verseRange: ScriptureRange | undefined;
     hideMatches: boolean;
     showVerseText: boolean;
   };

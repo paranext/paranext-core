@@ -554,9 +554,9 @@ internal static class ChecklistService
     //     row-building, so every cell we see already belongs to a row that
     //     exists. PT10 folds the "IncludeEditLink" flag into the per-cell
     //     iteration (every qualifying cell emits exactly one link).
-    //   - (2) maps to `!string.IsNullOrEmpty(cell.Reference)` — BuildCLCell
-    //     sets Reference to "" when `vref.IsDefault`, so an empty Reference
-    //     IS the PT10 signal that the cell has a default VerseRef.
+    //   - (2) maps to `cell.Reference is not null` — BuildCLCell leaves
+    //     Reference null when `vref.IsDefault`, so a null Reference IS the
+    //     PT10 signal that the cell has a default VerseRef.
     //   - (4) maps directly to `scrText.Settings.Editable`.
     //   - (5) is DEFERRED: paranext-core does not yet expose a chapter-level
     //     CanEdit(bookNum, chapterNum) API. See DEF-BE-001. Revisit when the
@@ -569,13 +569,12 @@ internal static class ChecklistService
     /// <summary>
     /// Emits an <see cref="EditLinkItem"/> for <paramref name="cell"/> when
     /// VAL-007 project-level conditions hold: the cell has a non-default
-    /// reference (non-empty <see cref="ChecklistCell.Reference"/>) AND
+    /// reference (non-null <see cref="ChecklistCell.Reference"/>) AND
     /// <c>scrText.Settings.Editable == true</c>. The link carries the
-    /// cell's BookNum/ChapterNum/VerseNum parsed from
-    /// <see cref="ChecklistCell.Reference"/> using the scrText's own
-    /// versification. Chapter-level permission (<c>CanEdit(bookNum,
-    /// chapterNum)</c>) is intentionally NOT checked — deferred per
-    /// DEF-BE-001.
+    /// cell's BookNum/ChapterNum/VerseNum read from the start of
+    /// <see cref="ChecklistCell.Reference"/>. Chapter-level permission
+    /// (<c>CanEdit(bookNum, chapterNum)</c>) is intentionally NOT checked —
+    /// deferred per DEF-BE-001.
     /// </summary>
     private static ChecklistCell ApplyEditLinkGating(ChecklistCell cell, ScrText scrText)
     {
@@ -583,9 +582,9 @@ internal static class ChecklistService
         if (!scrText.Settings.Editable)
             return cell;
 
-        // Gate (2): non-default VerseRef. BuildCLCell leaves Reference empty
+        // Gate (2): non-default VerseRef. BuildCLCell leaves Reference null
         // for default refs.
-        if (string.IsNullOrEmpty(cell.Reference))
+        if (cell.Reference is null)
             return cell;
 
         // Defensive: if a cell somehow has zero paragraphs, there's no place
@@ -599,17 +598,9 @@ internal static class ChecklistService
         // PT9 also gated on scrText.Permissions.CanEdit(bookNum, chapterNum).
         // paranext-core lacks that API today; revisit when it lands.
 
-        // Defensive: a malformed / non-parseable Reference string must not crash
-        // the pipeline. Mirrors the try/catch around GetJoinedText in BuildCLCell.
-        VerseRef vref;
-        try
-        {
-            vref = new VerseRef(cell.Reference, scrText.Settings.Versification);
-        }
-        catch (Exception)
-        {
-            return cell;
-        }
+        // The structured Reference already carries the start VerseRef — no string
+        // parsing (and so no parse-failure path) needed any more.
+        VerseRef vref = cell.Reference.Start;
         var editLink = new EditLinkItem(vref.BookNum, vref.ChapterNum, vref.VerseNum);
 
         ChecklistParagraph lastParagraph = cell.Paragraphs[^1];
@@ -912,9 +903,9 @@ internal static class ChecklistService
     //     concrete mutable List<ChecklistContentItem>).
     //   - Merge bookkeeping: PT9's CLCell carried its VerseRef internally
     //     so AddContentToCurrentCell could `cells[^1].VerseRef.CompareTo(...)`.
-    //     PT10's ChecklistCell record only exposes the `Reference` string
-    //     (no live VerseRef), so we maintain a parallel list of VerseRefs
-    //     during construction to drive the merge comparison.
+    //     PT10's ChecklistCell record exposes `Reference` as a structured
+    //     `ScriptureRange`, so we maintain a parallel list of VerseRefs during
+    //     construction to drive the merge comparison without unpacking it.
     /// <summary>
     /// Iterates <paramref name="paragraphs"/> (emitted by
     /// <see cref="GetTokensForBook"/>), filters by
@@ -1067,8 +1058,11 @@ internal static class ChecklistService
         }
 
         // Step 3: prep cell fields (PT9 :367, :239-264 from CLCell.VerseRef setter).
-        string reference = vref.IsDefault ? string.Empty : vref.ToString();
-        string displayedReference = vref.IsDefault ? string.Empty : vref.ToLocalizedString();
+        // PT9 stored Reference = verseRef.ToString() plus a separate locale-baked
+        // DisplayedReference = verseRef.ToLocalizedString(). PT10 carries one structured,
+        // bridge-capable ScriptureRange (null for a default verse); the displayed string is
+        // derived client-side from it, so no server-side localized presentation string.
+        ScriptureRange? reference = ScriptureRange.FromVerseRef(vref);
 
         string paragraphMarker = string.Empty;
         var items = new List<ChecklistContentItem>();
@@ -1126,7 +1120,6 @@ internal static class ChecklistService
         var cell = new ChecklistCell(
             Paragraphs: new List<ChecklistParagraph> { paragraph },
             Reference: reference,
-            DisplayedReference: displayedReference,
             Language: language,
             Error: null
         );

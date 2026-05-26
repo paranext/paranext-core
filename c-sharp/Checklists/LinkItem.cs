@@ -9,7 +9,9 @@ namespace Paranext.DataProvider.Checklists;
 // Maps to: EXT-010 (data models), data-contracts.md §3.5
 /// <summary>
 /// Reference link content item: a canonical scripture reference plus its display text.
-/// See data-contracts.md §3.5.
+/// See data-contracts.md §3.5. <c>Reference</c> is a bridge-capable
+/// <see cref="ScriptureRange"/> (the canonical platform scripture-reference type) — a
+/// cross-reference link always targets a real reference, so it is non-nullable.
 /// </summary>
 [method: JsonConstructor]
-public record LinkItem(string Reference, string DisplayText) : ChecklistContentItem;
+public record LinkItem(ScriptureRange Reference, string DisplayText) : ChecklistContentItem;

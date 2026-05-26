@@ -15,6 +15,7 @@ import {
 import {
   defaultScrRef,
   formatReplacementString,
+  formatScrRef,
   getErrorMessage,
   isPlatformError,
 } from 'platform-bible-utils';
@@ -23,8 +24,8 @@ import type {
   ChecklistComparativeTextRef,
   ChecklistRequest,
   ChecklistResultResponse,
-  ChecklistScriptureRange,
   IVersificationService,
+  ScriptureRange,
 } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChecklistTool, CHECKLIST_STRING_KEYS } from './components/checklist.component';
@@ -40,7 +41,6 @@ import {
 } from './components/marker-settings-dialog.component';
 import { useChecklistService } from './hooks/use-checklist';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
-import { parseScrRef } from './components/parse-scr-ref.utils';
 import { computeRangeFromScope } from './components/compute-range-from-scope.utils';
 import { CHECKLIST_OPEN_SETTINGS_EVENT } from './checklist.model';
 
@@ -97,7 +97,7 @@ function buildClipboardText(columnHeaders: string[], includedRows: ChecklistRow[
   const headerLine = ['', ...columnHeaders].join('\t');
   const bodyLines = includedRows.map((row) => {
     const cellStrings = row.cells.map((cell) => cellToText(cell));
-    return [row.firstRef ?? '', ...cellStrings].join('\t');
+    return [row.firstRef ? formatScrRef(row.firstRef.start) : '', ...cellStrings].join('\t');
   });
   return [headerLine, ...bodyLines].join('\n');
 }
@@ -187,7 +187,7 @@ global.webViewComponent = function ChecklistWebView({
     'checklistRangeEnd',
     defaultScrRef,
   );
-  const [verseRange, setVerseRange] = useWebViewState<ChecklistScriptureRange | undefined>(
+  const [verseRange, setVerseRange] = useWebViewState<ScriptureRange | undefined>(
     'checklistVerseRange',
     undefined,
   );
@@ -831,7 +831,7 @@ global.webViewComponent = function ChecklistWebView({
   // Auto-follow semantics: the displayed scripture reference tracks `liveScrRef` directly;
   // verseRange is derived from {scope, liveScrRef, rangeStart, rangeEnd} via the effect above.
   // `availableScopes` excludes `selectedBooks` and `selectedText` because the backend's
-  // `ChecklistScriptureRange` contract only models contiguous start/end ranges.
+  // `ScriptureRange` contract only models contiguous start/end ranges.
   // `getEndVerse` enables verse-grid selection in the BCV pickers used by `range` mode (Theme 6).
 
   const verseRangeSelectorNode = useMemo(
@@ -876,12 +876,7 @@ global.webViewComponent = function ChecklistWebView({
   // ─── Goto-link click handler (Q4: A scroll-group broadcast + C editor focus) ──
 
   const handleGotoLinkClick = useCallback(
-    (_row: ChecklistRow, refStr: string) => {
-      const verseRef = parseScrRef(refStr);
-      if (!verseRef) {
-        logger.debug(`ChecklistWebView: failed to parse scrRef: ${refStr}`);
-        return;
-      }
+    (_row: ChecklistRow, verseRef: SerializedVerseRef) => {
       setLiveScrRef(verseRef); // A: scroll-group broadcast
       // C: if an editor tab is open in the same project + same scroll group, raise it.
       // `projectId` is `string | undefined` from WebViewProps; without one we can't pick an
