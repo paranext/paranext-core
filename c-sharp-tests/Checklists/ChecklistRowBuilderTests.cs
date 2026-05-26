@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Paranext.DataProvider.Checklists;
+using Paranext.DataProvider.Scripture;
 using SIL.Scripture;
 
 namespace TestParanextDataProvider.Checklists;

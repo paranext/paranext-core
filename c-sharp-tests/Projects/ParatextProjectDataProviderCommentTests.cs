@@ -454,22 +454,21 @@ namespace TestParanextDataProvider.Projects
             {
                 ScriptureRanges =
                 [
-                    new()
-                    {
-                        Start = new VerseRef
+                    new CommentScriptureRange(
+                        new VerseRef
                         {
                             BookNum = 1,
                             ChapterNum = 1,
                             VerseNum = 1,
                         },
-                        End = new VerseRef
+                        new VerseRef
                         {
                             BookNum = 1,
                             ChapterNum = 1,
                             VerseNum = 1,
                         },
-                        Granularity = "verse",
-                    },
+                        "verse"
+                    ),
                 ],
             };
 
@@ -659,22 +658,21 @@ namespace TestParanextDataProvider.Projects
                 IsRead = true,
                 ScriptureRanges =
                 [
-                    new()
-                    {
-                        Start = new VerseRef
+                    new CommentScriptureRange(
+                        new VerseRef
                         {
                             BookNum = 1,
                             ChapterNum = 1,
                             VerseNum = 1,
                         },
-                        End = new VerseRef
+                        new VerseRef
                         {
                             BookNum = 1,
                             ChapterNum = 1,
                             VerseNum = 1,
                         },
-                        Granularity = "verse",
-                    },
+                        "verse"
+                    ),
                 ],
             };
 
