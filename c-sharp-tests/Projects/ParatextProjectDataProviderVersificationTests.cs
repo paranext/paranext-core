@@ -10,14 +10,19 @@ namespace TestParanextDataProvider.Projects
     /// projectInterface:
     ///
     /// <list type="bullet">
-    ///   <item><c>LookupFinalVerseNumber(bookNum, chapterNum)</c> — passthrough to
+    ///   <item><c>GetFinalVerseNumber(bookNum, chapterNum)</c> — passthrough to
     ///     <c>ScrText.Settings.Versification.GetLastVerse</c>.</item>
-    ///   <item><c>LookupFinalChapter(bookNum)</c> — passthrough to
+    ///   <item><c>GetFinalChapter(bookNum)</c> — passthrough to
     ///     <c>ScrText.Settings.Versification.GetLastChapter</c>.</item>
-    ///   <item><c>LookupFinalVerseNumbersInBook(bookNum)</c> — passthrough plus bookkeeping:
+    ///   <item><c>GetFinalVerseNumbersInBook(bookNum)</c> — passthrough plus bookkeeping:
     ///     returns <c>int[lastChapter + 1]</c> with index 0 a filler <c>0</c> and indices
     ///     <c>1..lastChapter</c> populated for ergonomic <c>result[chapterNum]</c> access.
     ///     The off-by-one boundary is the most worth testing.</item>
+    ///   <item><c>SetFinalVerseNumber</c> / <c>SetFinalChapter</c> /
+    ///     <c>SetFinalVerseNumbersInBook</c> — exist only to satisfy the canonical
+    ///     DataProvider <c>get*</c>/<c>set*</c> contract; all three throw
+    ///     <see cref="NotSupportedException"/>. The authoritative writer for versification is the
+    ///     <c>platformScripture.versification</c> project setting.</item>
     /// </list>
     ///
     /// <para>
@@ -66,7 +71,7 @@ namespace TestParanextDataProvider.Projects
         }
 
         // =====================================================================
-        // LookupFinalVerseNumbersInBook — bookkeeping logic (the part most
+        // GetFinalVerseNumbersInBook — bookkeeping logic (the part most
         // worth testing).
         // =====================================================================
 
@@ -76,13 +81,13 @@ namespace TestParanextDataProvider.Projects
                 + "must be lastChapter + 1 — index 0 reserved as a filler so consumers can "
                 + "index by 1-based chapter number directly."
         )]
-        public void LookupFinalVerseNumbersInBook_Genesis_ReturnsArrayOfLengthLastChapterPlusOne()
+        public void GetFinalVerseNumbersInBook_Genesis_ReturnsArrayOfLengthLastChapterPlusOne()
         {
             int expectedLastChapter = _scrText.Settings.Versification.GetLastChapter(
                 GenesisBookNum
             );
 
-            var result = _provider.LookupFinalVerseNumbersInBook(GenesisBookNum);
+            var result = _provider.GetFinalVerseNumbersInBook(GenesisBookNum);
 
             Assert.That(result, Is.Not.Null);
             Assert.That(
@@ -96,9 +101,9 @@ namespace TestParanextDataProvider.Projects
         [Description(
             "Index 0 of the returned array is unused — it must be the default int value (0)."
         )]
-        public void LookupFinalVerseNumbersInBook_Genesis_IndexZeroIsUnusedAndDefaults()
+        public void GetFinalVerseNumbersInBook_Genesis_IndexZeroIsUnusedAndDefaults()
         {
-            var result = _provider.LookupFinalVerseNumbersInBook(GenesisBookNum);
+            var result = _provider.GetFinalVerseNumbersInBook(GenesisBookNum);
 
             Assert.That(result[0], Is.EqualTo(0), "index 0 is unused — must be default(int)");
         }
@@ -108,11 +113,11 @@ namespace TestParanextDataProvider.Projects
             "Index 1 of the returned array is the last verse of chapter 1, matching the "
                 + "underlying versification's GetLastVerse(book, 1) directly."
         )]
-        public void LookupFinalVerseNumbersInBook_Genesis_IndexOneMatchesGetLastVerseOfChapterOne()
+        public void GetFinalVerseNumbersInBook_Genesis_IndexOneMatchesGetLastVerseOfChapterOne()
         {
             int expected = _scrText.Settings.Versification.GetLastVerse(GenesisBookNum, 1);
 
-            var result = _provider.LookupFinalVerseNumbersInBook(GenesisBookNum);
+            var result = _provider.GetFinalVerseNumbersInBook(GenesisBookNum);
 
             Assert.That(
                 result[1],
@@ -126,7 +131,7 @@ namespace TestParanextDataProvider.Projects
             "The last valid index of the returned array is the last verse of the last "
                 + "chapter, matching the underlying versification directly."
         )]
-        public void LookupFinalVerseNumbersInBook_Genesis_LastIndexMatchesGetLastVerseOfLastChapter()
+        public void GetFinalVerseNumbersInBook_Genesis_LastIndexMatchesGetLastVerseOfLastChapter()
         {
             int lastChapter = _scrText.Settings.Versification.GetLastChapter(GenesisBookNum);
             int expected = _scrText.Settings.Versification.GetLastVerse(
@@ -134,7 +139,7 @@ namespace TestParanextDataProvider.Projects
                 lastChapter
             );
 
-            var result = _provider.LookupFinalVerseNumbersInBook(GenesisBookNum);
+            var result = _provider.GetFinalVerseNumbersInBook(GenesisBookNum);
 
             Assert.That(
                 result[lastChapter],
@@ -149,12 +154,12 @@ namespace TestParanextDataProvider.Projects
                 + "underlying versification.GetLastVerse(book, n) — exhaustive parallel "
                 + "comparison covers every chapter, not just the boundary cases."
         )]
-        public void LookupFinalVerseNumbersInBook_Genesis_AllChaptersMatchVersificationLookup()
+        public void GetFinalVerseNumbersInBook_Genesis_AllChaptersMatchVersificationLookup()
         {
             var versification = _scrText.Settings.Versification;
             int lastChapter = versification.GetLastChapter(GenesisBookNum);
 
-            var result = _provider.LookupFinalVerseNumbersInBook(GenesisBookNum);
+            var result = _provider.GetFinalVerseNumbersInBook(GenesisBookNum);
 
             for (int chapter = 1; chapter <= lastChapter; chapter++)
             {
@@ -171,7 +176,7 @@ namespace TestParanextDataProvider.Projects
             "For a single-chapter book (Philemon), the returned array length must be 2 "
                 + "(index 0 filler, index 1 = last verse of chapter 1)."
         )]
-        public void LookupFinalVerseNumbersInBook_Philemon_ReturnsArrayOfLengthTwo()
+        public void GetFinalVerseNumbersInBook_Philemon_ReturnsArrayOfLengthTwo()
         {
             int lastChapter = _scrText.Settings.Versification.GetLastChapter(PhilemonBookNum);
             // Sanity check — the test's premise (Philemon has one chapter) must hold for
@@ -184,7 +189,7 @@ namespace TestParanextDataProvider.Projects
                 1
             );
 
-            var result = _provider.LookupFinalVerseNumbersInBook(PhilemonBookNum);
+            var result = _provider.GetFinalVerseNumbersInBook(PhilemonBookNum);
 
             Assert.That(result.Length, Is.EqualTo(2), "single-chapter book -> length 2");
             Assert.That(result[0], Is.EqualTo(0), "index 0 is filler");
@@ -196,7 +201,7 @@ namespace TestParanextDataProvider.Projects
         }
 
         // =====================================================================
-        // LookupFinalVerseNumber & LookupFinalChapter — passthrough wiring.
+        // GetFinalVerseNumber & GetFinalChapter — passthrough wiring.
         //
         // These methods delegate directly to libpalaso. The tests below are
         // sanity checks confirming the wiring (PDP -> project lookup ->
@@ -205,30 +210,70 @@ namespace TestParanextDataProvider.Projects
 
         [Test]
         [Description(
-            "LookupFinalVerseNumber returns the same value as the underlying "
+            "GetFinalVerseNumber returns the same value as the underlying "
                 + "versification.GetLastVerse — confirming the project lookup wiring."
         )]
-        public void LookupFinalVerseNumber_Genesis1_MatchesUnderlyingVersification()
+        public void GetFinalVerseNumber_Genesis1_MatchesUnderlyingVersification()
         {
             int expected = _scrText.Settings.Versification.GetLastVerse(GenesisBookNum, 1);
 
-            int actual = _provider.LookupFinalVerseNumber(GenesisBookNum, 1);
+            int actual = _provider.GetFinalVerseNumber(GenesisBookNum, 1);
 
             Assert.That(actual, Is.EqualTo(expected));
         }
 
         [Test]
         [Description(
-            "LookupFinalChapter returns the same value as the underlying "
+            "GetFinalChapter returns the same value as the underlying "
                 + "versification.GetLastChapter — confirming the project lookup wiring."
         )]
-        public void LookupFinalChapter_Genesis_MatchesUnderlyingVersification()
+        public void GetFinalChapter_Genesis_MatchesUnderlyingVersification()
         {
             int expected = _scrText.Settings.Versification.GetLastChapter(GenesisBookNum);
 
-            int actual = _provider.LookupFinalChapter(GenesisBookNum);
+            int actual = _provider.GetFinalChapter(GenesisBookNum);
 
             Assert.That(actual, Is.EqualTo(expected));
+        }
+
+        // =====================================================================
+        // Set* — read-only contract. The Set methods exist only to satisfy the
+        // canonical DataProvider get/set pairing; calling any of them must
+        // throw NotSupportedException. The authoritative writer for
+        // versification is the 'platformScripture.versification' project
+        // setting on ParatextProjectDataProvider's setSetting handler.
+        // =====================================================================
+
+        [Test]
+        [Description("SetFinalVerseNumber is read-only and must throw NotSupportedException.")]
+        public void SetFinalVerseNumber_AlwaysThrows()
+        {
+            Assert.That(
+                () => _provider.SetFinalVerseNumber(GenesisBookNum, 1, 99),
+                Throws.TypeOf<NotSupportedException>()
+            );
+        }
+
+        [Test]
+        [Description("SetFinalChapter is read-only and must throw NotSupportedException.")]
+        public void SetFinalChapter_AlwaysThrows()
+        {
+            Assert.That(
+                () => _provider.SetFinalChapter(GenesisBookNum, 99),
+                Throws.TypeOf<NotSupportedException>()
+            );
+        }
+
+        [Test]
+        [Description(
+            "SetFinalVerseNumbersInBook is read-only and must throw NotSupportedException."
+        )]
+        public void SetFinalVerseNumbersInBook_AlwaysThrows()
+        {
+            Assert.That(
+                () => _provider.SetFinalVerseNumbersInBook(GenesisBookNum, [0, 31]),
+                Throws.TypeOf<NotSupportedException>()
+            );
         }
     }
 }

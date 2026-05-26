@@ -442,7 +442,7 @@ global.webViewComponent = function ChecklistWebView({
   const fetchLastVersesInCurrentBook = useCallback(async (): Promise<number[] | undefined> => {
     if (!versificationPdp || currentBookNum <= 0) return undefined;
     try {
-      return await versificationPdp.lookupFinalVerseNumbersInBook(currentBookNum);
+      return await versificationPdp.getFinalVerseNumbersInBook(currentBookNum);
     } catch (err) {
       logger.debug(`ChecklistWebView: Versification PDP unavailable: ${getErrorMessage(err)}`);
       return undefined;

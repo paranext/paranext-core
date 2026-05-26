@@ -364,7 +364,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const fetchLastVersesInCurrentBook = useCallback(async (): Promise<number[] | undefined> => {
     if (!versificationPdp || currentBookNum <= 0) return undefined;
     try {
-      return await versificationPdp.lookupFinalVerseNumbersInBook(currentBookNum);
+      return await versificationPdp.getFinalVerseNumbersInBook(currentBookNum);
     } catch (err) {
       logger.debug(
         `Failed to fetch verse counts for book ${currentBookNum}: ${getErrorMessage(err)}`,
