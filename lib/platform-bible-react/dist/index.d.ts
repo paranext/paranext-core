@@ -1020,6 +1020,7 @@ export type ProjectItem = {
 	shortName: string;
 	language?: string;
 };
+/** Localization string keys used by {@link ProjectPickerDialog}. */
 export declare const PROJECT_PICKER_DIALOG_STRING_KEYS: readonly [
 	"%projectPicker_title%",
 	"%projectPicker_section_recent%",
@@ -1037,6 +1038,7 @@ export type ProjectPickerDialogProps = {
 	/** All projects excluding recentProjects. */
 	allProjects: ProjectItem[];
 	isLoading?: boolean;
+	/** Called with the selected project's id when the user picks a project. */
 	onSelect: (projectId: string) => void;
 	localizedStrings?: ProjectPickerDialogLocalizedStrings;
 };

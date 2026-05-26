@@ -62,6 +62,7 @@ const meta: Meta<typeof ProjectPickerDialog> = {
     recentProjects: [WEB, KJV],
     allProjects: [RVR, NLT, ESV],
     localizedStrings: STRINGS,
+    // Story callback - console.log is intentional for demonstration purposes
     // eslint-disable-next-line no-console
     onSelect: (projectId) => console.log('Selected:', projectId),
   },
