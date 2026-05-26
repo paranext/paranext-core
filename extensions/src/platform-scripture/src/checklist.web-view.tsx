@@ -1,6 +1,11 @@
 import { WebViewProps } from '@papi/core';
 import papi, { logger, network } from '@papi/frontend';
-import { useData, useLocalizedStrings, useProjectDataProvider } from '@papi/frontend/react';
+import {
+  useData,
+  useLocalizedStrings,
+  useProjectDataProvider,
+  useProjectSetting,
+} from '@papi/frontend/react';
 import {
   useEvent,
   ProjectSelector,
@@ -20,28 +25,37 @@ import {
   isPlatformError,
 } from 'platform-bible-utils';
 import { Canon, type SerializedVerseRef } from '@sillsdev/scripture';
-import type {
-  ChecklistComparativeTextRef,
-  ChecklistRequest,
-  ChecklistResultResponse,
-  ScriptureRange,
-} from 'platform-scripture';
+import type { ScriptureRange } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChecklistTool, CHECKLIST_STRING_KEYS } from './components/checklist.component';
-import type {
-  ChecklistCell,
-  ChecklistData,
-  ChecklistEmptyResultMessage,
-  ChecklistRow,
-} from './components/checklist.component';
+import type { ChecklistCell, ChecklistData, ChecklistRow } from './components/checklist.component';
 import {
   MarkerSettingsDialog,
   MARKER_SETTINGS_STRING_KEYS,
+  type MarkerSettingsValidate,
 } from './components/marker-settings-dialog.component';
-import { useChecklistService } from './hooks/use-checklist';
+import {
+  buildChecklistData,
+  ProjectNotFoundError,
+  type ChecklistRequest,
+  type ChecklistResult,
+} from './checklists/build-checklist-data';
+import {
+  parseMarkerSettings,
+  INVALID_MARKER_PAIR_ERROR_KEY,
+} from './checklists/parse-marker-settings';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import { computeRangeFromScope } from './components/compute-range-from-scope.utils';
 import { CHECKLIST_OPEN_SETTINGS_EVENT } from './checklist.model';
+
+/**
+ * Lightweight local persistence shape for a comparative-text selection. Previously imported as
+ * `ChecklistComparativeTextRef` from `platform-scripture`; that contract type was removed when the
+ * checklist NetworkObject was deleted (the web view runs its orchestration locally now). Kept as a
+ * plain `{ id: string }` so the existing `useWebViewState` schema for `checklistComparativeTexts`
+ * remains unchanged.
+ */
+type ComparativeTextRef = { id: string };
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -61,27 +75,21 @@ const MARKERS_CHECKLIST_WEB_VIEW_TYPE = 'platformScripture.markersChecklist';
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 /**
- * Narrow the discriminated-union `ChecklistResultResponse` success body to the `ChecklistData`
- * shape the presentational component consumes. The wire format uses `unknown[]` + `unknown` for the
- * rows + empty-result message (see `platform-scripture.d.ts` §Markers Checklist Types); both are
- * validated upstream by the backend, so we cast through `unknown` to the stricter component types
- * here. If the response shape ever drifts, TypeScript will flag the direct access sites below
- * (row/cell/emptyResultMessage destructuring) before this hidden cast blows up.
+ * Adapt the orchestrator's `ChecklistResult` (from `./checklists/build-checklist-data`) to the
+ * `ChecklistData` shape the presentational component consumes. The two type families are
+ * structurally aligned (same `cells`/`paragraphs`/`items` shapes); the orchestrator's row type
+ * carries an extra `score` field which the component ignores. The `emptyResultMessage.message`
+ * field is a `LocalizeKey | string` on the orchestrator side; either form is assignable to the
+ * component's `string` field at runtime (the React layer resolves localize keys when rendering).
  */
-function toChecklistData(body: Extract<ChecklistResultResponse, { success: true }>): ChecklistData {
+function toChecklistData(body: ChecklistResult): ChecklistData {
   return {
-    // The backend already emits the structural shape the component expects; we trust the contract
-    // and narrow via `unknown` so we don't have to re-validate every field at runtime. Any future
-    // drift will surface at the row/cell destructuring sites below.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    rows: body.rows as unknown as ChecklistRow[],
+    rows: body.rows,
     columnHeaders: body.columnHeaders,
     columnProjectIds: body.columnProjectIds,
     excludedCount: body.excludedCount,
     truncated: body.truncated,
-    // Same rationale as the rows cast — trust the data-contract.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    emptyResultMessage: body.emptyResultMessage as ChecklistEmptyResultMessage | undefined,
+    emptyResultMessage: body.emptyResultMessage,
   };
 }
 
@@ -154,11 +162,39 @@ global.webViewComponent = function ChecklistWebView({
   // (parity with checks-side-panel Tasks 13/14); omitted here until that UI is wired.
   const [liveScrRef, setLiveScrRef, scrollGroupId] = useWebViewScrollGroupScrRef();
 
-  const [equivalentMarkers, setEquivalentMarkers] = useWebViewState<string>(
-    'checklistEquivalentMarkers',
+  // Marker settings now persist as PROJECT settings (cross-web-view persistence on the same
+  // project — TJ C3a). Both keys default to '' to match the previous `useWebViewState` semantics.
+  // `useProjectSetting` may surface a `PlatformError` when the PDP isn't ready yet (e.g. during
+  // initial mount); we narrow to the empty default in that case.
+  const [equivalentMarkersPossiblyError, setEquivalentMarkers] = useProjectSetting(
+    projectId,
+    'platformScripture.checklistEquivalentMarkers',
     '',
   );
-  const [markerFilter, setMarkerFilter] = useWebViewState<string>('checklistMarkerFilter', '');
+  const equivalentMarkers = useMemo(() => {
+    if (isPlatformError(equivalentMarkersPossiblyError)) {
+      logger.warn(
+        `ChecklistWebView: error reading checklistEquivalentMarkers: ${getErrorMessage(equivalentMarkersPossiblyError)}`,
+      );
+      return '';
+    }
+    return equivalentMarkersPossiblyError;
+  }, [equivalentMarkersPossiblyError]);
+
+  const [markerFilterPossiblyError, setMarkerFilter] = useProjectSetting(
+    projectId,
+    'platformScripture.checklistMarkerFilter',
+    '',
+  );
+  const markerFilter = useMemo(() => {
+    if (isPlatformError(markerFilterPossiblyError)) {
+      logger.warn(
+        `ChecklistWebView: error reading checklistMarkerFilter: ${getErrorMessage(markerFilterPossiblyError)}`,
+      );
+      return '';
+    }
+    return markerFilterPossiblyError;
+  }, [markerFilterPossiblyError]);
   const [hideMatches, setHideMatches] = useWebViewState<boolean>('checklistHideMatches', false);
   const [showVerseText, setShowVerseText] = useWebViewState<boolean>(
     'checklistShowVerseText',
@@ -166,7 +202,7 @@ global.webViewComponent = function ChecklistWebView({
   );
   // Comparative-texts selection is driven by the real `ProjectSelector` (`mode: 'project-multi'`,
   // vendored from draft PR #2223).
-  const [comparativeTexts, setComparativeTexts] = useWebViewState<ChecklistComparativeTextRef[]>(
+  const [comparativeTexts, setComparativeTexts] = useWebViewState<ComparativeTextRef[]>(
     'checklistComparativeTexts',
     [],
   );
@@ -213,9 +249,12 @@ global.webViewComponent = function ChecklistWebView({
   const scopeSelectorStringKeys = useMemo(() => Array.from(SCOPE_SELECTOR_STRING_KEYS), []);
   const [scopeSelectorLocalizedStrings] = useLocalizedStrings(scopeSelectorStringKeys);
 
-  // ─── Service + editability ────────────────────────────────────────────────
-
-  const { service } = useChecklistService(projectId);
+  // ─── Editability ─────────────────────────────────────────────────────────
+  //
+  // The orchestrator (`buildChecklistData` in `./checklists/`) reads `platform.isEditable`
+  // internally per-(column, book) via the PDP and gates EditLinkItem placement on its own; there is
+  // no per-cell affordance keyed off a single project-level flag in this web view. The previous
+  // `useChecklistService` hook is gone (no more NetworkObject roundtrip) — see Phase 6 design notes.
 
   // ─── Local UI state (ephemeral) ──────────────────────────────────────────
 
@@ -294,7 +333,7 @@ global.webViewComponent = function ChecklistWebView({
   const [refreshCounter, setRefreshCounter] = useState<number>(0);
 
   useEffect(() => {
-    if (!service || !projectId) {
+    if (!projectId) {
       setData(undefined);
       setIsLoading(false);
       return () => {};
@@ -305,9 +344,9 @@ global.webViewComponent = function ChecklistWebView({
       comparativeTextIds: comparativeTexts.map((ref) => ref.id),
       markerSettings: { equivalentMarkers, markerFilter },
       verseRange,
-      // hideMatches/showVerseText are post-fetch filters; we pass them to the backend anyway so
-      // the `excludedCount` reflects what would be hidden if the filter were applied server-side,
-      // but we also filter client-side below for the visible-rows path.
+      // hideMatches/showVerseText are post-fetch filters; we pass them to the orchestrator so the
+      // `excludedCount` reflects what would be hidden if the filter were applied at build-time, but
+      // we also filter client-side below for the visible-rows path.
       hideMatches,
       showVerseText,
     };
@@ -316,23 +355,21 @@ global.webViewComponent = function ChecklistWebView({
     let cancelled = false;
     (async () => {
       try {
-        const response = await service.buildChecklistData(request);
+        // Orchestrator runs locally (no NetworkObject roundtrip). Errors surface via throw —
+        // `ProjectNotFoundError` for an unresolvable project id, generic `Error` otherwise.
+        const response = await buildChecklistData(request, papi);
         if (cancelled || !isMountedRef.current) return;
-        // `ChecklistResultResponse` is a TS-only discriminated union; the C# side never sends
-        // a `success` field — narrowing is on the presence of `rows` (success shape) vs `code`
-        // (ChecklistResultError shape). See data-contracts.md §3.1.
-        if ('rows' in response) {
-          // The `'rows' in response` narrowing already proves response is the success variant,
-          // so we can pass it through without further casting.
-          setData(toChecklistData(response));
-          setError(undefined);
-        } else {
-          setData(undefined);
-          setError(response.message);
-        }
+        setData(toChecklistData(response));
+        setError(undefined);
       } catch (err) {
         if (cancelled || !isMountedRef.current) return;
-        logger.warn(`ChecklistWebView: buildChecklistData failed: ${getErrorMessage(err)}`);
+        if (err instanceof ProjectNotFoundError) {
+          logger.warn(
+            `ChecklistWebView: project not found (${err.projectId}): ${getErrorMessage(err)}`,
+          );
+        } else {
+          logger.warn(`ChecklistWebView: buildChecklistData failed: ${getErrorMessage(err)}`);
+        }
         setData(undefined);
         setError(getErrorMessage(err));
       } finally {
@@ -343,7 +380,6 @@ global.webViewComponent = function ChecklistWebView({
       cancelled = true;
     };
   }, [
-    service,
     projectId,
     comparativeTexts,
     equivalentMarkers,
@@ -645,7 +681,7 @@ global.webViewComponent = function ChecklistWebView({
 
   const handleComparativeTextsChange = useCallback(
     (selection: { pairs: ProjectSelectorProjectPair[] }) => {
-      const nextRefs: ChecklistComparativeTextRef[] = selection.pairs.map((pair) => ({
+      const nextRefs: ComparativeTextRef[] = selection.pairs.map((pair) => ({
         id: pair.projectId,
       }));
       setComparativeTexts(nextRefs);
@@ -730,29 +766,42 @@ global.webViewComponent = function ChecklistWebView({
     }) => {
       // Collapse internal whitespace runs in the equivalent-markers string before persisting (the
       // dialog just trims now per Sebastian PR #2219 #3138226285 — validation/normalization
-      // concerns moved out of the presentational component). The backend stores the value
-      // verbatim; we keep the canonical wire format here so it matches what the backend's
-      // validateMarkerSettings parsing expects.
-      setEquivalentMarkers(nextEquivalent.replace(/\s+/g, ' '));
-      setMarkerFilter(nextFilter);
+      // concerns moved out of the presentational component). The persisted form is the canonical
+      // wire format that `parseMarkerSettings` expects. The `useProjectSetting` setters are
+      // `undefined` while the underlying PDP is still resolving — optional-chain to silently no-op
+      // in that brief window (matches the inventory.web-view pattern).
+      setEquivalentMarkers?.(nextEquivalent.replace(/\s+/g, ' '));
+      setMarkerFilter?.(nextFilter);
       setIsSettingsOpen(false);
     },
     [setEquivalentMarkers, setMarkerFilter],
   );
 
-  // Backend validation callback for the MarkerSettingsDialog. Calls the backend's
-  // `validateMarkerSettings` PAPI command via the network-object proxy. The dialog calls this
-  // (debounced) on every input change so the inline validation feedback reflects backend truth.
-  // If the service proxy isn't available yet (e.g. during initial mount), return a permissive
-  // valid result — the dialog will retry on the next input change once the proxy resolves.
-  const handleSettingsValidate = useCallback(
-    async (input: string) => {
-      if (!service) {
-        return { valid: true, parsedPairs: undefined, errorMessage: undefined };
+  // Validation callback for the MarkerSettingsDialog. Runs the pure-TS `parseMarkerSettings`
+  // (no PAPI roundtrip; addresses TJ C3b) and adapts its key-based result into the dialog's
+  // pre-localized `MarkerSettingsValidationResult` shape (consumer-inventory § 4, Case A). The
+  // English fallback mirrors PT9's `MarkerSettingsForm` error string and only renders when the
+  // localized strings haven't loaded yet.
+  const [markerSettingsResolvedStrings] = markerSettingsLocalizedStrings;
+  const handleSettingsValidate = useCallback<MarkerSettingsValidate>(
+    (equivalentMarkersInput: string) => {
+      const result = parseMarkerSettings(equivalentMarkersInput);
+      if (result.valid) {
+        return {
+          valid: true,
+          parsedPairs: result.parsedPairs,
+          errorMessage: undefined,
+        };
       }
-      return service.validateMarkerSettings(input);
+      return {
+        valid: false,
+        parsedPairs: undefined,
+        errorMessage:
+          markerSettingsResolvedStrings[INVALID_MARKER_PAIR_ERROR_KEY] ??
+          'Equivalent markers need to be entered in the form: p/q',
+      };
     },
-    [service],
+    [markerSettingsResolvedStrings],
   );
 
   const handleSettingsCancel = useCallback(() => {

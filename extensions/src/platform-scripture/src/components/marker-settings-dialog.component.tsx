@@ -14,7 +14,6 @@ import {
   TooltipTrigger,
 } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
-import type { MarkerSettingsValidationResult } from 'platform-scripture';
 import { HelpCircle } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
@@ -67,10 +66,32 @@ export type MarkerSettingsSubmitResult = {
 };
 
 /**
- * Validate-callback signature. The wiring layer wraps the backend
- * `IChecklistService.validateMarkerSettings(equivalentMarkers)` call (or, in stories, a simple
- * synchronous regex) and supplies the result. Returns the same `MarkerSettingsValidationResult`
- * shape as the backend so `errorMessage` can be displayed inline without re-localization.
+ * Parsed/validated equivalent-markers result, used by the Marker Settings Dialog. Previously lived
+ * on the public `platform-scripture` contract (mirrored the C# `MarkerSettingsValidationResult`
+ * DTO); the contract type was removed when the checklist NetworkObject was deleted, and the
+ * dialog's adapter shape now lives here next to its only consumer.
+ */
+export type MarkerSettingsValidationResult = {
+  /** True when the string is well-formed; false when `errorMessage` is set. */
+  valid: boolean;
+  /**
+   * Parsed pairs when `valid` is true; `undefined` otherwise. Each entry is one marker pair as `{
+   * marker1, marker2 }` (e.g. `{ marker1: 'p', marker2: 'q' }`).
+   */
+  parsedPairs: { marker1: string; marker2: string }[] | undefined;
+  /**
+   * Already-localized error message when `valid` is false; `undefined` otherwise. The wiring layer
+   * resolves any localize-key produced by the underlying parser into a display string before
+   * passing it here.
+   */
+  errorMessage: string | undefined;
+};
+
+/**
+ * Validate-callback signature. The wiring layer wraps a pure-TS marker-settings parser (or, in
+ * stories, a simple synchronous regex) and supplies the result. Returns the dialog's
+ * `MarkerSettingsValidationResult` so `errorMessage` can be displayed inline without further
+ * localization.
  */
 export type MarkerSettingsValidate = (
   equivalentMarkers: string,
