@@ -23,6 +23,10 @@ public sealed class ProjectSettingsNames
     public const string PB_IS_EDITABLE = "platform.isEditable";
     public const string PT_IS_EDITABLE = "Editable";
 
+    // platform.isPublished has no underlying Settings.xml key — it is computed from
+    // ScrText.IsResourceProject. Intentionally NOT added to s_platformBibleToParatextSettingsNames.
+    public const string PB_IS_PUBLISHED = "platform.isPublished";
+
     public const string PB_TEXT_DIRECTION = "platform.textDirection";
     public const string PT_TEXT_DIRECTION = "TextDirection";
 

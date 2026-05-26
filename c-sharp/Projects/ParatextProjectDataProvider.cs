@@ -1072,6 +1072,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (scrText.IsResourceProject && paratextSettingName == ProjectSettingsNames.PT_IS_EDITABLE)
             return false;
 
+        // platform.isPublished is computed from ScrText.IsResourceProject — there is no
+        // matching Paratext Settings.xml key. A "published" project here is one that PT9 called
+        // a "resource": packaged for reference use, fully read-only.
+        if (settingName == ProjectSettingsNames.PB_IS_PUBLISHED)
+            return scrText.IsResourceProject;
+
         // Text direction comes from the project's ldml file, not from Settings.xml
         if (paratextSettingName == ProjectSettingsNames.PT_TEXT_DIRECTION)
             return scrText.RightToLeft ? "rtl" : "ltr";
@@ -1180,6 +1186,13 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
         if (scrText.IsResourceProject)
             throw new Exception("Cannot change settings on resources");
+
+        // platform.isPublished is read-only — it reflects ScrText.IsResourceProject and is not
+        // backed by any writable Paratext setting.
+        if (settingName == ProjectSettingsNames.PB_IS_PUBLISHED)
+            throw new InvalidOperationException(
+                $"{ProjectSettingsNames.PB_IS_PUBLISHED} is a read-only computed setting."
+            );
 
         // If there is no Paratext setting for the name given, we'll create one lower down
         object? currentValue = null;

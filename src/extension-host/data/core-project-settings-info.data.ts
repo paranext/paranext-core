@@ -31,6 +31,11 @@ export const platformProjectSettings: ProjectSettingsContribution = {
       description: '%project_settings_platform_isEditable_description%',
       default: true,
     },
+    'platform.isPublished': {
+      label: '%project_settings_platform_isPublished_label%',
+      description: '%project_settings_platform_isPublished_description%',
+      default: false,
+    },
     'platform.textDirection': {
       label: '%project_settings_platform_textDirection_label%',
       description: '%project_settings_platform_textDirection_description%',
@@ -64,6 +69,10 @@ const isEditableValidator: ProjectSettingValidator<'platform.isEditable'> = asyn
   newValue: boolean,
 ) => typeof newValue === 'boolean';
 
+const isPublishedValidator: ProjectSettingValidator<'platform.isPublished'> = async (
+  newValue: boolean,
+) => typeof newValue === 'boolean';
+
 const textDirectionValidator: ProjectSettingValidator<'platform.textDirection'> = async (
   newValue: string | undefined,
 ) => {
@@ -77,5 +86,6 @@ export const coreProjectSettingsValidators: Partial<AllProjectSettingsValidators
   'platform.language': languageValidator,
   'platform.languageTag': languageTagValidator,
   'platform.isEditable': isEditableValidator,
+  'platform.isPublished': isPublishedValidator,
   'platform.textDirection': textDirectionValidator,
 };
