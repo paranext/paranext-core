@@ -1,3 +1,4 @@
+import { useData } from '@renderer/hooks/papi-hooks';
 import { useEvent, usePromise } from 'platform-bible-react';
 import { useCallback, useMemo, useState } from 'react';
 import { getNetworkEvent } from '@shared/services/network.service';
@@ -9,47 +10,59 @@ import {
   EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
   EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
 } from '@shared/services/web-view.service-model';
-import { getErrorMessage } from 'platform-bible-utils';
+import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
+import { type ProjectItem } from 'platform-bible-react';
 
 const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 
-type ProjectItem = { id: string; name: string };
-
-async function fetchProjectName(projectId: string): Promise<string> {
+async function fetchProjectDetails(
+  projectId: string,
+): Promise<{ fullName: string; shortName: string; language?: string }> {
   const pdp = await papiFrontendProjectDataProviderService.get(
     PROJECT_INTERFACE_PLATFORM_BASE,
     projectId,
   );
-  return pdp.getSetting('platform.name');
+  const [fullName, shortName, language] = await Promise.all([
+    pdp.getSetting('platform.fullName'),
+    pdp.getSetting('platform.name'),
+    pdp.getSetting('platform.language'),
+  ]);
+  return { fullName, shortName, language };
 }
 
 export type ProjectPickerData = {
   currentProject: ProjectItem | undefined;
   recentProjects: ProjectItem[];
+  /** All projects, with recentProjects already excluded. */
   allProjects: ProjectItem[];
   isLoading: boolean;
 };
 
 export function useProjectPickerData(): ProjectPickerData {
-  // Incrementing this triggers a refresh of both usePromise calls
+  // Incrementing this triggers a refresh of usePromise calls
   const [refreshCounter, setRefreshCounter] = useState(0);
   const refresh = useCallback(() => setRefreshCounter((n) => n + 1), []);
 
-  // Subscribe to web view updates to keep current project in sync
   const onDidUpdateWebView = useMemo(() => getNetworkEvent(EVENT_NAME_ON_DID_UPDATE_WEB_VIEW), []);
   useEvent(onDidUpdateWebView, refresh);
-
-  // Subscribe to web view closes to clear current project when editor is closed
   const onDidCloseWebView = useMemo(() => getNetworkEvent(EVENT_NAME_ON_DID_CLOSE_WEB_VIEW), []);
   useEvent(onDidCloseWebView, refresh);
-
-  // Subscribe to extension reloads to refresh the project list
   const onDidReloadExtensions = useMemo(
     () => getNetworkEvent('platform.onDidReloadExtensions'),
     [],
   );
   useEvent(onDidReloadExtensions, refresh);
+
+  // Recent project IDs from the service — reactive, updates when user opens projects
+  const [rawRecentIds, , isRecentIdsLoading] = useData(
+    'platformScripture.recentlyOpenedProjects',
+  ).RecentProjects(undefined, []);
+
+  const safeRecentIds = useMemo(
+    () => (isPlatformError(rawRecentIds) ? [] : (rawRecentIds ?? [])),
+    [rawRecentIds],
+  );
 
   const [currentProject, isCurrentProjectLoading] = usePromise<ProjectItem | undefined>(
     useCallback(async () => {
@@ -59,54 +72,81 @@ export function useProjectPickerData(): ProjectPickerData {
       );
       if (!editorDef?.projectId) return undefined;
       try {
-        const name = await fetchProjectName(editorDef.projectId);
-        return { id: editorDef.projectId, name };
+        const details = await fetchProjectDetails(editorDef.projectId);
+        return { id: editorDef.projectId, ...details };
       } catch (e) {
         logger.warn(
           `ProjectPicker: could not fetch name for project ${editorDef.projectId}: ${getErrorMessage(e)}`,
         );
-        return { id: editorDef.projectId, name: editorDef.projectId };
+        return {
+          id: editorDef.projectId,
+          fullName: editorDef.projectId,
+          shortName: editorDef.projectId,
+        };
       }
-      // refreshCounter must be in deps to trigger re-fetch on web view updates
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [refreshCounter]),
     undefined,
   );
 
-  const [allProjects, isAllProjectsLoading] = usePromise<ProjectItem[]>(
+  const [recentProjects, isRecentProjectsLoading] = usePromise<ProjectItem[]>(
+    useCallback(
+      async () =>
+        Promise.all(
+          safeRecentIds.map(async (id) => {
+            try {
+              const details = await fetchProjectDetails(id);
+              return { id, ...details };
+            } catch (e) {
+              logger.warn(
+                `ProjectPicker: could not fetch name for project ${id}: ${getErrorMessage(e)}`,
+              );
+              return { id, fullName: id, shortName: id };
+            }
+          }),
+        ),
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [safeRecentIds, refreshCounter],
+    ),
+    [],
+  );
+
+  const [allProjectsWithRecent, isAllProjectsLoading] = usePromise<ProjectItem[]>(
     useCallback(async () => {
       const metadata = await projectLookupService.getMetadataForAllProjects();
-      const projects = await Promise.all(
+      return Promise.all(
         metadata.map(async (m) => {
           try {
-            const name = await fetchProjectName(m.id);
-            return { id: m.id, name };
+            const details = await fetchProjectDetails(m.id);
+            return { id: m.id, ...details };
           } catch (e) {
             logger.warn(
               `ProjectPicker: could not fetch name for project ${m.id}: ${getErrorMessage(e)}`,
             );
-            return { id: m.id, name: m.id };
+            return { id: m.id, fullName: m.id, shortName: m.id };
           }
         }),
       );
-      return projects;
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [refreshCounter]),
     [],
   );
 
-  // NOTE: Once the real "recent projects" implementation is merged (S/R-based recency via
-  // `paratextBibleSendReceive.getSharedProjects`), replace `recentProjects` with that source and
-  // uncomment the deduplication below to avoid projects appearing in both sections.
-  // const recentProjectIds = new Set(recentProjects.map((p) => p.id));
-  // const dedupedAllProjects = allProjects.filter((p) => !recentProjectIds.has(p.id));
-  const recentProjects = allProjects; // stub: use all projects as recent until real source is ready
+  const recentIdSet = useMemo(() => new Set(safeRecentIds), [safeRecentIds]);
+  const allProjects = useMemo(
+    () => allProjectsWithRecent.filter((p) => !recentIdSet.has(p.id)),
+    [allProjectsWithRecent, recentIdSet],
+  );
 
   return {
     currentProject,
     recentProjects,
     allProjects,
-    isLoading: isCurrentProjectLoading || isAllProjectsLoading,
+    isLoading:
+      isCurrentProjectLoading ||
+      isRecentIdsLoading ||
+      isRecentProjectsLoading ||
+      isAllProjectsLoading,
   };
 }
 
