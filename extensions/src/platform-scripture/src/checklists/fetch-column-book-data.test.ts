@@ -32,7 +32,7 @@ function makePapi(
       return {
         getSetting: vi.fn().mockImplementation(async (key: string) => {
           if (key === 'platform.isEditable') return overrides.isEditable ?? true;
-          if (key === 'platformScripture.textDirection') return overrides.textDirection ?? 'ltr';
+          if (key === 'platform.textDirection') return overrides.textDirection ?? 'ltr';
           return undefined;
         }),
       };

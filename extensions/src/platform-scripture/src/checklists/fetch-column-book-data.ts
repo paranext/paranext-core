@@ -52,9 +52,9 @@ export type ColumnBookData = {
    */
   isEditable: boolean;
   /**
-   * `true` when `platformScripture.textDirection === 'rtl'`. The walker uses this to prefix RTL
-   * text runs at extraction time (mirrors C# `ChecklistService.cs:1088`); `fetchColumnBookData`
-   * simply surfaces the resolved flag.
+   * `true` when `platform.textDirection === 'rtl'`. The walker uses this to prefix RTL text runs at
+   * extraction time (mirrors C# `ChecklistService.cs:1088`); `fetchColumnBookData` simply surfaces
+   * the resolved flag.
    */
   rtl: boolean;
 };
@@ -81,7 +81,7 @@ export async function fetchColumnBookData(
       markerNamesPdp.getHeadingMarkers(bookNum),
       markerNamesPdp.getJoinedTextLanguage(bookNum),
       basePdp.getSetting('platform.isEditable'),
-      basePdp.getSetting('platformScripture.textDirection'),
+      basePdp.getSetting('platform.textDirection'),
     ]);
 
   return {

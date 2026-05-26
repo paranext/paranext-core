@@ -48,7 +48,7 @@ function makePapiMock(opts: {
       return {
         getSetting: vi.fn().mockImplementation(async (key: string) => {
           if (key === 'platform.isEditable') return proj.isEditable ?? false;
-          if (key === 'platformScripture.textDirection') return proj.textDirection ?? 'ltr';
+          if (key === 'platform.textDirection') return proj.textDirection ?? 'ltr';
           if (key === 'platformScripture.booksPresent')
             return proj.booksPresent ?? `1${'0'.repeat(122)}`;
           if (key === 'platform.name') return proj.name ?? projectId;
