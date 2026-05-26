@@ -35,6 +35,7 @@ import {
 } from './project-data-provider/platform-scripture-finder.pdpef.model';
 import { SCRIPTURE_FINDER_PROJECT_INTERFACES } from './project-data-provider/platform-scripture-finder-pdpe.model';
 import { resourceReferenceListValidator } from './resource-reference-list.utils';
+import { parseMarkerSettings } from './checklists/parse-marker-settings';
 
 const characterInventoryWebViewType = 'platformScripture.characterInventory';
 const repeatedWordsInventoryWebViewType = 'platformScripture.repeatedWordsInventory';
@@ -81,11 +82,14 @@ const punctuationValidator: ProjectSettingValidator<
 > = async (newValue) => typeof newValue === 'string';
 
 // Equivalent-markers validator: delegates to the pure-TS parseMarkerSettings.
-// Until Phase 3 lands, this is a stub that accepts any string; Phase 3 Task 3.1
-// will replace this with the real strict-parse check.
+// `parseMarkerSettings` enforces VAL-002 (strict pre-commit format check). The marker filter
+// uses a lenient validator below because the runtime parser silently skips malformed tokens.
 const checklistEquivalentMarkersValidator: ProjectSettingValidator<
   'platformScripture.checklistEquivalentMarkers'
-> = async (newValue) => typeof newValue === 'string';
+> = async (newValue) => {
+  if (typeof newValue !== 'string') return false;
+  return parseMarkerSettings(newValue).valid;
+};
 
 // Marker filter: plain string check; the runtime parser is tolerant.
 const checklistMarkerFilterValidator: ProjectSettingValidator<
