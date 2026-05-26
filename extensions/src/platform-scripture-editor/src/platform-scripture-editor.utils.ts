@@ -745,6 +745,11 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
  * Fire-and-forget helper that syncs the incoming project first, then the outgoing one. Each sync is
  * independently error-isolated so a failure in one doesn't block the other. Only called in simple
  * mode after a replace-tab project switch.
+ *
+ * Uses `paratextBibleSendReceive.syncProjects` for the incoming project because it also pulls
+ * connected resources and translation partners (deep sync). Uses the shallower
+ * `paratextBibleSendReceive.sendReceiveProjects` for the outgoing project because we only need to
+ * flush any local edits — a full deep sync is unnecessary on the way out.
  */
 export async function syncOnProjectSwitch(
   papi: typeof PapiBackend,
