@@ -50,6 +50,18 @@
         "default": "",
         "includeProjectInterfaces": ["Paratext", "Scripture"]
       },
+      "platformScripture.checklistEquivalentMarkers": {
+        "label": "%project_settings_platformScripture_checklistEquivalentMarkers_label%",
+        "description": "%project_settings_platformScripture_checklistEquivalentMarkers_description%",
+        "default": "",
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.checklistMarkerFilter": {
+        "label": "%project_settings_platformScripture_checklistMarkerFilter_label%",
+        "description": "%project_settings_platformScripture_checklistMarkerFilter_description%",
+        "default": "",
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
       "platformScripture.validPunctuation": {
         "label": "%project_settings_platformScripture_validPunctuation_label%",
         "description": "%project_settings_platformScripture_validPunctuation_description%",
