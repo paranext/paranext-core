@@ -1642,6 +1642,44 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     #endregion
 
+    #region Joined-text language (MarkerNames PDP — JoinedTextLanguage)
+
+    private const string JoinedTextLanguageReadOnlyMessage =
+        "JoinedTextLanguage is read-only on the platformScripture.MarkerNames projectInterface. "
+        + "Language is owned by the project's settings; use the standard setSetting API instead.";
+
+    /// <summary>
+    /// Returns the (possibly joined-text) language tag for the given book. For most projects this
+    /// equals the project-level language tag (from <c>scrText.Settings.LanguageID</c>); for sigla
+    /// projects that join multiple base-language texts per book, the per-book joined-text language
+    /// is returned via <c>scrText.GetJoinedText(bookNum).Settings.LanguageID.Id</c>.
+    /// Falls back to <c>scrText.Settings.LanguageID?.Id ?? ""</c> on any failure.
+    /// </summary>
+    public string GetJoinedTextLanguage(int bookNum)
+    {
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        try
+        {
+            var joined = scrText.GetJoinedText(bookNum);
+            var languageId = joined?.Settings?.LanguageID?.Id;
+            if (!string.IsNullOrEmpty(languageId))
+                return languageId;
+        }
+        catch
+        {
+            // GetJoinedText can throw for books with no joined-text config; fall through to fallback.
+        }
+        return scrText.Settings.LanguageID?.Id ?? string.Empty;
+    }
+
+    /// <summary>
+    /// Read-only — always throws. See <see cref="JoinedTextLanguageReadOnlyMessage"/>.
+    /// </summary>
+    public bool SetJoinedTextLanguage(int bookNum, string value) =>
+        throw new NotSupportedException(JoinedTextLanguageReadOnlyMessage);
+
+    #endregion
+
     #region Versification (platformScripture.Versification)
 
     // Read-only projectInterface. The three data types (FinalVerseNumber, FinalChapter,
