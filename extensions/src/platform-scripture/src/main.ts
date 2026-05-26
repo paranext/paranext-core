@@ -80,6 +80,18 @@ const punctuationValidator: ProjectSettingValidator<
   'platformScripture.validPunctuation' | 'platformScripture.invalidPunctuation'
 > = async (newValue) => typeof newValue === 'string';
 
+// Equivalent-markers validator: delegates to the pure-TS parseMarkerSettings.
+// Until Phase 3 lands, this is a stub that accepts any string; Phase 3 Task 3.1
+// will replace this with the real strict-parse check.
+const checklistEquivalentMarkersValidator: ProjectSettingValidator<
+  'platformScripture.checklistEquivalentMarkers'
+> = async (newValue) => typeof newValue === 'string';
+
+// Marker filter: plain string check; the runtime parser is tolerant.
+const checklistMarkerFilterValidator: ProjectSettingValidator<
+  'platformScripture.checklistMarkerFilter'
+> = async (newValue) => typeof newValue === 'string';
+
 // #endregion
 
 async function openPlatformCharactersInventory(
@@ -433,6 +445,14 @@ export async function activate(context: ExecutionActivationContext) {
     'platformScripture.invalidMarkers',
     markersValidator,
   );
+  const checklistEquivalentMarkersPromise = papi.projectSettings.registerValidator(
+    'platformScripture.checklistEquivalentMarkers',
+    checklistEquivalentMarkersValidator,
+  );
+  const checklistMarkerFilterPromise = papi.projectSettings.registerValidator(
+    'platformScripture.checklistMarkerFilter',
+    checklistMarkerFilterValidator,
+  );
   const openMarkersInventoryPromise = papi.commands.registerCommand(
     'platformScripture.openMarkersInventory',
     openPlatformMarkersInventory,
@@ -647,6 +667,8 @@ export async function activate(context: ExecutionActivationContext) {
     await repeatableWordsInventoryWebViewProviderPromise,
     await validMarkersPromise,
     await invalidMarkersPromise,
+    await checklistEquivalentMarkersPromise,
+    await checklistMarkerFilterPromise,
     await openMarkersInventoryPromise,
     await markersInventoryWebViewProviderPromise,
     await validPunctuationPromise,

@@ -2272,6 +2272,20 @@ declare module 'papi-shared-types' {
 
     'platformScripture.invalidMarkers': string;
 
+    /**
+     * Space-separated marker pairs in `marker1/marker2` format identifying markers that should be
+     * treated as equivalent when "Hide matches" is enabled in the Markers Checklist. Example: `p/q
+     * s/s1` declares two pairs. Phase 3 will introduce a strict parser; for now the validator only
+     * checks that the value is a string.
+     */
+    'platformScripture.checklistEquivalentMarkers': string;
+
+    /**
+     * Space-separated USFM marker names to include in the Markers Checklist (e.g. `p q m`). When
+     * empty, all paragraph markers in the project are included.
+     */
+    'platformScripture.checklistMarkerFilter': string;
+
     'platformScripture.validPunctuation': string;
 
     'platformScripture.invalidPunctuation': string;
