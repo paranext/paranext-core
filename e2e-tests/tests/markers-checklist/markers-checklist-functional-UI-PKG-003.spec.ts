@@ -507,4 +507,48 @@ test.describe('markers-checklist UI-PKG-003: Marker Settings Dialog', () => {
     await expect(frame.getByRole('alertdialog')).not.toBeVisible();
     await expect(frame.getByRole('dialog').first()).not.toBeVisible({ timeout: 5_000 });
   });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Category 11: Cross-web-view persistence (project-scoped settings)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Validates the new project-scoped persistence introduced by Change B (settings moved from
+  // useWebViewState to useProjectSetting). Closing the Markers Checklist tab and reopening a
+  // brand-new one on the same project should surface the previously-saved settings — they live
+  // on the project, not the per-web-view memento. See tj-review-design.md §R4.
+  test('marker settings persist across web views on the same project', async ({ mainPage }) => {
+    // 1. Open the project + the first Markers Checklist tab.
+    await waitForAppReady(mainPage);
+    await openProjectByName(mainPage, PROJECT_NAME);
+    await openMarkersChecklistTool(mainPage);
+
+    // 2. Open the dialog, commit known values, then close the dialog.
+    const firstDialog = await openMarkerSettingsDialog(mainPage);
+    const persistedEquivalent = 'p/q s/s1';
+    const persistedFilter = 'p q s';
+    await firstDialog.getByLabel(/Equivalent marker mappings/i).fill(persistedEquivalent);
+    await firstDialog
+      .getByLabel(/Markers to be displayed \(blank for all\)/i)
+      .fill(persistedFilter);
+    await firstDialog.getByRole('button', { name: /^OK$/ }).click();
+    await expect(firstDialog.getByRole('dialog').first()).not.toBeVisible({ timeout: 5_000 });
+
+    // 3. Close the Markers Checklist tab WITHOUT closing the project — only the per-web-view
+    //    state should be discarded; project-setting persistence must remain.
+    const checklistTab = mainPage.locator('.dock-tab', { hasText: CHECKLIST_TAB_TITLE_PATTERN });
+    await checklistTab.first().locator('.dock-tab-close-btn').dispatchEvent('click');
+    await expect(checklistTab).toHaveCount(0, { timeout: 5_000 });
+
+    // 4. Re-open a NEW Markers Checklist web view on the same project.
+    await openMarkersChecklistTool(mainPage);
+    const secondDialog = await openMarkerSettingsDialog(mainPage);
+
+    // 5. Previously-saved values appear in the new web view — proves project-setting persistence.
+    await expect(secondDialog.getByLabel(/Equivalent marker mappings/i)).toHaveValue(
+      persistedEquivalent,
+    );
+    await expect(secondDialog.getByLabel(/Markers to be displayed \(blank for all\)/i)).toHaveValue(
+      persistedFilter,
+    );
+  });
 });
