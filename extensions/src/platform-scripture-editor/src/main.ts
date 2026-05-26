@@ -269,6 +269,15 @@ async function open(
           Record<string, never>
         >(PROJECT_SWITCH_DID_FINISH_EVENT);
       projectSwitchWillStartEmitter.emit({});
+
+      const outgoing = allScriptureEditors.find((e) => e.id === dispatch.targetTabId);
+      // Skip outgoing S/R for read-only viewers — no local changes are possible.
+      // ENHANCE: also skip if the outgoing editor had no user edits during the session (would
+      // require tracking a dirty flag in the editor controller, which doesn't exist yet).
+      const outgoingProjectId = outgoing?.isReadOnly ? undefined : outgoing?.projectId;
+      // Fire-and-forget: runs concurrently with openWebView below.
+      // eslint-disable-next-line no-void
+      void syncOnProjectSwitch(papi, projectForWebView.projectId, outgoingProjectId);
     }
 
     const emitDidFinish = () => {
@@ -295,17 +304,6 @@ async function open(
         openWebViewOptions,
       )
       .finally(emitDidFinish);
-
-    if (needsOverlay) {
-      const outgoing = allScriptureEditors.find((e) => e.id === dispatch.targetTabId);
-      // Skip outgoing S/R for read-only viewers — no local changes are possible.
-      // ENHANCE: also skip if the outgoing editor had no user edits during the session (would
-      // require tracking a dirty flag in the editor controller, which doesn't exist yet).
-      const outgoingProjectId = outgoing?.isReadOnly ? undefined : outgoing?.projectId;
-      // Fire-and-forget: new editor is already open. Sync incoming first, then outgoing.
-      // eslint-disable-next-line no-void
-      void syncOnProjectSwitch(papi, projectForWebView.projectId, outgoingProjectId);
-    }
 
     return openedWebViewId;
   }
