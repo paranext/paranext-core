@@ -23,7 +23,14 @@ export const PLATFORM_BIBLE_STORYBOOK_THEME_STORAGE_KEY = 'platform-bible-storyb
  */
 export const PLATFORM_BIBLE_THEME_CHANNEL = 'platform-bible/storybook-theme-changed';
 
-/** Classes applied to the Storybook preview root for each legacy composite id (see `index.css`). */
+/**
+ * Classes applied to the Storybook preview root for each legacy composite id (see `index.css`).
+ *
+ * Class names are not uniform: bare `dark` for the Platform default, family-prefixed `paratext-*`,
+ * and theme-prefixed `theme-shadcn-neutral`. A uniform `theme-{family}` scheme with `.dark` as a
+ * modifier would require coordinated changes in `index.css`, `themes.data.json`, and the app's
+ * `theme.service-host.ts`. Deferred; tracked in PR #2180 review.
+ */
 const CLASS_MAP: Record<StorybookThemeId, readonly string[]> = {
   'shadcn-light': ['theme-shadcn-neutral'],
   'shadcn-dark': ['dark', 'theme-shadcn-neutral'],
@@ -33,6 +40,10 @@ const CLASS_MAP: Record<StorybookThemeId, readonly string[]> = {
   'paratext-dark': ['paratext-dark'],
 };
 
+/**
+ * Must be a superset of every class value in `CLASS_MAP`. Add new entries here whenever a new
+ * theme is added to CLASS_MAP, otherwise switching away will leave stale classes on `<html>`.
+ */
 const ALL_THEME_CLASSES = [
   'dark',
   'paratext-light',

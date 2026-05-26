@@ -1,6 +1,6 @@
 # Paratext / Platform.Bible branding in Storybook
 
-This guide explains how the **Storybook manager** (outer chrome: sidebar, toolbar, panels) and the **preview iframe** (Canvas and Docs) can be aligned with Paratext or internal branding. Preview appearance combines **Color scheme** (light / dark / system) and **Theme** (Shadcn Neutral, Platform, Paratext), applied via [manager.tsx](./manager.tsx) (toolbars + direct iframe DOM update), [theme-apply.ts](./theme-apply.ts), and [theme-decorator.ts](./theme-decorator.ts) — not `globals.theme`, so Docs scroll is preserved when switching themes. Customizing the manager shell (logos, `brandTitle`, light/dark chrome) is **optional** and does not affect story output.
+This guide explains how the **Storybook manager** (outer chrome: sidebar, toolbar, panels) and the **preview iframe** (Canvas and Docs) can be aligned with Paratext or internal branding. Preview rendering is driven by two independent toolbar controls: **Appearance** (light / dark / system) and **Theme** (Shadcn Neutral, Platform, Paratext), applied via [manager.tsx](./manager.tsx) (toolbars + direct iframe DOM update), [theme-apply.ts](./theme-apply.ts), and [theme-decorator.ts](./theme-decorator.ts) — not `globals.theme`, so Docs scroll is preserved when switching themes. Customizing the manager shell (logos, `brandTitle`, light/dark chrome) is **optional** and does not affect story output.
 
 ## Manager UI (`storybook/theming`)
 
@@ -40,7 +40,7 @@ The preview loads [../src/index.css](../src/index.css) from [preview.ts](./previ
 
 ## Toolbar themes vs manager theme
 
-- **Preview:** [theme-constants.ts](./theme-constants.ts) defines toolbar **families** and **color schemes**, plus legacy composite ids (`shadcn-light`, … `paratext-dark`) for overrides. [theme-apply.ts](./theme-apply.ts) maps those to classes on `document.documentElement` and to CSS variables in `index.css`. [manager.tsx](./manager.tsx) registers **Color scheme** and **Theme** tools; state persists under `platform-bible-storybook-theme` (JSON).
+- **Preview:** [theme-constants.ts](./theme-constants.ts) defines toolbar **theme families** and **appearance options**, plus legacy composite ids (`shadcn-light`, … `paratext-dark`) for overrides. [theme-apply.ts](./theme-apply.ts) maps those to classes on `document.documentElement` and to CSS variables in `index.css`. [manager.tsx](./manager.tsx) registers **Appearance** and **Theme** tools; state persists under `platform-bible-storybook-theme` (JSON).
 - **Manager:** `addons.setConfig({ theme })` only affects the Storybook **shell** around the iframe. It does not change story output. The shell does **not** automatically follow the preview toolbar theme unless you add custom logic (see above).
 
 ## Docs-only theming

@@ -1,4 +1,6 @@
-// Shared by manager.tsx and theme-apply.ts — add composite ids and toolbar lists here; update CLASS_MAP in theme-apply.ts when adding a palette.
+// Shared by manager.tsx and theme-apply.ts — add composite ids and toolbar lists here;
+// when adding a palette, update BOTH `CLASS_MAP` and `ALL_THEME_CLASSES` in theme-apply.ts
+// (the latter is used to strip stale classes when switching themes).
 export const STORYBOOK_THEME_IDS = [
   'shadcn-light',
   'shadcn-dark',

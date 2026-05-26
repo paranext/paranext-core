@@ -1,5 +1,6 @@
 import { Meta } from '@storybook/addon-docs/blocks';
 import { ThemeMatrixDemo } from './theme-matrix-demo';
+import { ExampleBlock } from '../../storybook/example-block.component';
 
 <Meta title="Guidelines/Theming" />
 
@@ -20,55 +21,55 @@ Token values for Storybook and the app live in
 For a live table of variables for the toolbar-selected theme, see
 [Guides / Theme Colors](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/guides-theme-colors--docs).
 
-Use the **Color scheme** (light, dark, or system) and **Theme** (Shadcn Neutral, Platform, or
-Paratext) controls in the Storybook toolbar to switch palettes. Selection is stored as
-`{ family, colorScheme }` (when **system** is chosen, light vs dark follows
-`prefers-color-scheme`). Classes on `document.documentElement` come from
+This Storybook has two independent axes:
+
+- **Appearance** — light, dark, or system (when **system** is chosen, light vs dark follows
+  `prefers-color-scheme`)
+- **Theme** — Shadcn Neutral, Platform, or Paratext (the color palette)
+
+Pick each from the Storybook toolbar. Selection is persisted under `localStorage` as
+`{ family, colorScheme }`. Classes on `document.documentElement` come from
 [index.css](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css).
-The effective row is always one of the six legacy composite ids below (also used for
-`parameters.themes.themeOverride` strings):
 
-- **shadcn-light** / **shadcn-dark** — Stock Shadcn Neutral (HSL, from the docs OKLCH scaffold)
-  in `.theme-shadcn-neutral`; Storybook preview only (not in `themes.data.json`).
-- **platform-light** / **platform-dark** — Platform.Bible default (Slate-based) light and dark;
-  matches the running app.
-- **paratext-light** / **paratext-dark** — Paratext palettes.
+The effective row is one of six composite ids (also used for `parameters.themes.themeOverride`):
 
-## Platform vs Shadcn Neutral vs Paratext
+|                | Light            | Dark             |
+| -------------- | ---------------- | ---------------- |
+| Shadcn Neutral | `shadcn-light`   | `shadcn-dark`    |
+| Platform       | `platform-light` | `platform-dark`  |
+| Paratext       | `paratext-light` | `paratext-dark`  |
+
+Shadcn Neutral is Storybook-only (not in `themes.data.json`); Platform and Paratext match the
+running app.
+
+## Themes
 
 CSS variables live in
-[index.css](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css):
-Platform light is `:root` / `.light`; Platform dark is `.dark`; stock Shadcn
-Neutral is `.theme-shadcn-neutral` (and `.dark.theme-shadcn-neutral`); Paratext is
-`.paratext-light` / `.paratext-dark`. The running app loads Platform and Paratext HSLs from
-[themes.data.json](https://github.com/paranext/paranext-core/blob/main/src/shared/data/themes.data.json)
-(default Platform family key and `paratext`); Shadcn Neutral is Storybook-only.
+[index.css](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css)
+(Platform and Paratext) and
+[.storybook/storybook-themes.css](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/.storybook/storybook-themes.css)
+(Shadcn Neutral, Storybook-only).
 
-**Platform** default (`:root` / `.dark`) is **Slate-based** (blue-gray neutrals) but **not
-identical** to the stock Shadcn Neutral preset under `.theme-shadcn-neutral` in `storybook-themes.css`.
-Use the toolbar's **Shadcn Neutral** options when you need the closest match to
+**Platform** — the product default (`:root` / `.dark`). Slate-based (blue-gray neutrals), close
+to stock Shadcn Neutral but **not identical**: differs on **popover**, **secondary / muted /
+accent** neutrals, and the full **sidebar-\*** block in both light and dark. The running app
+loads these tokens from
+[themes.data.json](https://github.com/paranext/paranext-core/blob/main/src/shared/data/themes.data.json).
+
+**Shadcn Neutral** — the stock shadcn preset (`.theme-shadcn-neutral` / `.dark.theme-shadcn-neutral`).
+Storybook-only — pick it when you need the closest match to
 [shadcn/ui docs](https://ui.shadcn.com/docs/theming#neutral) for development, UX review, or
-debugging. Pick **Shadcn Neutral** under Theme and set Color scheme to light or dark (or system).
+debugging. In dark mode, **border** / **input** use semi-transparent white (vs Platform's solid
+grays).
 
-**Light:** Platform differs from stock Neutral on **popover** (tinted vs pure white),
-**secondary / muted / accent** neutrals (Platform `210 50% 95%` vs Neutral `0 0% 96.1%`), and
-the full **sidebar-\*** token block (Platform stays Slate-aligned; Neutral follows the docs
-scaffold).
+**Paratext** — a separate palette ([Caffeine-inspired in tweakcn](https://tweakcn.com/themes/cmeukcpoj000204l45lxw5a74)),
+not vanilla Shadcn. Also loaded from `themes.data.json` in the running app.
 
-**Dark:** Platform uses solid **border** / **input** grays; stock Neutral uses semi-transparent
-white on dark. Sidebar styling also differs (including Neutral's violet **sidebar-primary** in
-the docs preset).
+## Try it
 
-**Paratext** is a separate palette (Caffeine-inspired in tweakcn), not vanilla Shadcn; it is not
-"mostly Slate."
-
-## Try it: change theme
-
-Shadcn-style theming is driven by CSS variables in
-[index.css](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css).
-In this Storybook, use the **Color scheme** and **Theme** toolbar controls (not a separate
-preview-app toggle) to switch palettes and confirm your story respects tokens—foreground,
-background, borders, and components that use the same variables should track the selection.
+Use the **Appearance** and **Theme** toolbar controls (not a separate preview-app toggle) to
+switch palettes and confirm your story respects tokens — foreground, background, borders, and
+components that use the same variables should track the selection.
 
 ## In the running application
 
@@ -83,37 +84,30 @@ selection is handled by the platform theme service, not Storybook.
 
 Manual colors on primitives do not follow the active theme.
 
-<table>
-  <tbody>
-    <tr>
-      <td>
-        Bad example<div className="tw:text-xs">manual styles, unable to be themed</div>
-      </td>
-      <td>
-        <input
-          value="this has manual colors"
-          aria-label="Bad example input with manual colors"
-          readOnly
-          className="tw:full tw:file:border-0 tw:col-span-2 tw:flex tw:h-8 tw:rounded-md tw:border tw:border-slate-300 tw:bg-white tw:px-3 tw:py-2 tw:text-sm tw:text-slate-900 tw:ring-offset-white tw:file:bg-transparent tw:file:text-sm tw:file:font-medium tw:placeholder:text-slate-400 tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-slate-400 tw:focus-visible:ring-offset-2 tw:disabled:cursor-not-allowed tw:disabled:opacity-50"
-        />
-      </td>
-    </tr>
-  </tbody>
-</table>
-
-```jsx
-<input
+<ExampleBlock
+  variant="dont"
+  preview={
+    <input
+      value="this has manual colors"
+      aria-label="Bad example input with manual colors"
+      readOnly
+      className="tw:file:border-0 tw:flex tw:h-8 tw:rounded-md tw:border tw:border-slate-300 tw:bg-white tw:px-3 tw:py-2 tw:text-sm tw:text-slate-900 tw:ring-offset-white tw:file:bg-transparent tw:file:text-sm tw:file:font-medium tw:placeholder:text-slate-400 tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-slate-400 tw:focus-visible:ring-offset-2 tw:disabled:cursor-not-allowed tw:disabled:opacity-50"
+    />
+  }
+  code={`<input
   value="this has manual colors"
   aria-label="Bad example input with manual colors"
   readOnly
-  className="tw:full tw:file:border-0 tw:col-span-2 tw:flex tw:h-8 tw:rounded-md tw:border
+  className="tw:file:border-0 tw:flex tw:h-8 tw:rounded-md tw:border
     tw:border-slate-300 tw:bg-white tw:px-3 tw:py-2 tw:text-sm tw:text-slate-900
     tw:ring-offset-white tw:file:bg-transparent tw:file:text-sm tw:file:font-medium
     tw:placeholder:text-slate-400 tw:focus-visible:outline-none tw:focus-visible:ring-2
     tw:focus-visible:ring-slate-400 tw:focus-visible:ring-offset-2
     tw:disabled:cursor-not-allowed tw:disabled:opacity-50"
-/>
-```
+/>`}
+>
+  Manual styles, unable to be themed.
+</ExampleBlock>
 
 ## Overwriting styles
 
