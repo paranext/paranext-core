@@ -5,7 +5,6 @@ import {
   ProjectPlanDialogHierarchical,
   type ProjectPlan,
 } from '@/components/advanced/project-plan-dialog';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 import {
   CUSTOM_PROJECT_PLAN,
   EMPTY_PROJECT_PLAN,
@@ -29,13 +28,6 @@ const meta: Meta<typeof ProjectPlanDialogHierarchical> = {
       },
     },
   },
-  decorators: [
-    (Story) => (
-      <ThemeProvider>
-        <Story />
-      </ThemeProvider>
-    ),
-  ],
 };
 
 export default meta;

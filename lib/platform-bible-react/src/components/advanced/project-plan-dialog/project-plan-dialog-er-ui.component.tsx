@@ -53,8 +53,9 @@ export function ProjectPlanDialogErUi({
     if (open) {
       setWorkingPlan(plan);
       setSelected(undefined);
+      setActiveTab(defaultTab);
     }
-  }, [open, plan]);
+  }, [open, plan, defaultTab]);
 
   const isDirty = useMemo(
     () => JSON.stringify(workingPlan) !== JSON.stringify(plan),

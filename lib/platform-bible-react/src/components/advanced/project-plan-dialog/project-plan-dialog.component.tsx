@@ -55,8 +55,9 @@ export function ProjectPlanDialog({
   useEffect(() => {
     if (open) {
       setWorkingPlan(plan);
+      setActiveTab(defaultTab);
     }
-  }, [open, plan]);
+  }, [open, plan, defaultTab]);
 
   const { stages } = workingPlan;
 
