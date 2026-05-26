@@ -3787,25 +3787,49 @@ declare module 'papi-shared-types' {
      */
     'platform.fullName': string;
     /**
-     * Whether the **Scripture text** on this project is currently editable.
+     * Whether or not the primary content of the project is currently editable. If this is `false`,
+     * ancillary data may still be editable. This is a project-wide "editable"; if this is `true`,
+     * that does not necessarily mean it is editable by the current user.
      *
-     * This is a coarse, project-level approximation of "the user can edit Scripture text here" and
-     * currently doubles as our user-permissions proxy for Scripture editing. It is expected to be
-     * replaced by real per-user permissions in the future.
+     * This setting is intended to be used as a central location to turn off all editing of the
+     * primary content of the project temporarily. For example, an administrator of a Scripture
+     * project may want to disable editing the Scripture text while allowing users to comment on the
+     * project for a period of review.
      *
-     * Reasons this may be `false` include (non-exhaustive):
+     * Each project may implement this differently. For Paratext Scripture projects, not editable
+     * means the following are not editable:
      *
-     * - The Paratext `Editable` setting in `Settings.xml` is `F`.
-     * - The project is a published resource (in which case
-     *   {@link ProjectSettingTypes['platform.isPublished'] | `platform.isPublished`} is also
-     *   `true`).
-     * - The current user's role does not permit editing Scripture text.
+     * - Scripture text
+     * - Inventory approval statuses
+     * - Biblical terms renderings
      *
-     * Use this setting when you need to gate **editing of Scripture text**. For deciding whether a
-     * project should be treated as a published reference / resource in the UI (icon, "Open Resource
-     * Viewer" dialog, etc.), or for gating editing of _non-Scripture_ data such as project
-     * comments, use {@link ProjectSettingTypes['platform.isPublished'] | `platform.isPublished`}
-     * instead.
+     * While most everything else on the project is still editable such as the following
+     * (non-exhaustive):
+     *
+     * - Project comments
+     * - Biblical terms renderings descriptions
+     * - Project settings
+     * - Project plan
+     * - User permissions
+     *
+     * Note: not all of these editable rules are necessarily enforced on an API level for Paratext
+     * Scripture projects; some rules may be enforced only in UI.
+     *
+     * This is a coarse, project-level approximation of "the user can edit the primary content of
+     * this project" and currently doubles as our user-permissions proxy for editing primary project
+     * data. In the future, using it to check for editing permissions will be replaced by
+     * fine-grained user permissions.
+     *
+     * Use this setting when you need to determine whether **a project's primary content may be
+     * edited**.
+     *
+     * For determining whether a project should be treated as a fully read-only published reference
+     * / resource, use {@link ProjectSettingTypes['platform.isPublished'] | `platform.isPublished`}.
+     * If the project is read-only or a published resource, this setting should be `false` and
+     * {@link ProjectSettingTypes['platform.isPublished'] | `platform.isPublished`} should be
+     * `true`.
+     *
+     * If `isPublished` is `true`, then `isEditable` should always be `false`.
      *
      * Defaults to `true`.
      */
@@ -3815,25 +3839,24 @@ declare module 'papi-shared-types' {
      *
      * A "published" project is one that has been packaged or delivered for use as a reference (e.g.
      * a Bible resource downloaded from DBL, a global-note-type resource). Nothing on a published
-     * project is writeable — not Scripture text, not project settings, not comments or notes.
-     * Published projects are what Paratext 9 called "resources".
+     * project is writeable — not the primary content or ancillary data.
      *
      * Use this setting when you need to:
      *
-     * - Distinguish "projects" from "resources" in UI (e.g. icon choice, separating Scripture editor
-     *   candidates from Resource Viewer candidates).
-     * - Decide whether ancillary data on a project (comments, notes, extension data, settings) may be
+     * - Determine whether a project has been packaged/delivered in a way that it is intended to be
+     *   used as a reference for consultation rather than a project that is actively being worked
+     *   on.
+     * - Determine whether ancillary data on a project (extension data, settings, etc.) may be
      *   modified. On a published project the answer is always "no"; on a non-published project it
      *   may still be "no" for other reasons but is at least not gated by publication.
      *
-     * Do **not** use this setting as the sole gate on editing Scripture text — that is what
-     * {@link ProjectSettingTypes['platform.isEditable'] | `platform.isEditable`} is for. A
-     * non-published project may still have non-editable Scripture text for other reasons.
+     * Do **not** use this setting as the sole gate on editing the primary content of a project —
+     * that is what {@link ProjectSettingTypes['platform.isEditable'] | `platform.isEditable`} is
+     * for. A non-published project may still have non-editable primary content for other reasons.
      *
-     * `isPublished === true` implies `isEditable === false`. The converse is **not** true.
+     * If `isPublished` is `true`, then `isEditable` should always be `false`.
      *
-     * This setting is read-only on Paratext projects (it is computed from the project type) and
-     * defaults to `false`.
+     * Defaults to `false`.
      */
     'platform.isPublished': boolean;
     /**

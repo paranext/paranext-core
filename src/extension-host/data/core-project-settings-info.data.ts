@@ -28,7 +28,11 @@ export const platformProjectSettings: ProjectSettingsContribution = {
     },
     'platform.isEditable': {
       label: '%project_settings_platform_isEditable_label%',
-      description: '%project_settings_platform_isEditable_description%',
+      // Use the `_2` key: the meaning of `platform.isEditable` was clarified to be about a
+      // project's primary content (not "is it a resource"), so the original description string is
+      // misleading. No metadata.json fallback is registered intentionally — translators should
+      // retranslate this string fresh rather than inheriting the older meaning.
+      description: '%project_settings_platform_isEditable_description_2%',
       default: true,
     },
     'platform.isPublished': {
