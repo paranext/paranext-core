@@ -1606,6 +1606,42 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     #endregion
 
+    #region Heading classification (MarkerNames PDP — HeadingMarkers)
+
+    private const string HeadingMarkersReadOnlyMessage =
+        "HeadingMarkers is read-only on the platformScripture.MarkerNames projectInterface. "
+        + "Heading classification is owned by the project's stylesheet (libpalaso ScrStylesheet) "
+        + "and cannot be written through this PDP.";
+
+    /// <summary>
+    /// Returns the heading-style paragraph markers from the project's stylesheet for the given book
+    /// — i.e. markers where <c>StyleType == scParagraphStyle</c> AND <c>TextType == scSection</c>.
+    /// Used by the TS-side checklist orchestrator for INV-009 heading classification.
+    /// </summary>
+    public string[] GetHeadingMarkers(int bookNum)
+    {
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        ScrStylesheet stylesheet =
+            scrText.ScrStylesheet(bookNum)
+            ?? throw new InvalidDataException($"ScrStylesheet for book number '{bookNum}' is null");
+        return stylesheet
+            .Tags.Where(t =>
+                t != null
+                && t.StyleType == ScrStyleType.scParagraphStyle
+                && t.TextType == ScrTextType.scSection
+            )
+            .Select(t => t.Marker)
+            .ToArray();
+    }
+
+    /// <summary>
+    /// Read-only — always throws. See <see cref="HeadingMarkersReadOnlyMessage"/>.
+    /// </summary>
+    public bool SetHeadingMarkers(int bookNum, string[] value) =>
+        throw new NotSupportedException(HeadingMarkersReadOnlyMessage);
+
+    #endregion
+
     #region Versification (platformScripture.Versification)
 
     // Read-only projectInterface. The three data types (FinalVerseNumber, FinalChapter,
