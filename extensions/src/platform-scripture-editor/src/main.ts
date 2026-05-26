@@ -241,11 +241,13 @@ async function open(
     );
 
     if (interfaceMode === 'simple' && dispatch.kind === 'replace-tab') {
-      const outgoingProjectId = allScriptureEditors.find(
-        (e) => e.id === dispatch.targetTabId,
-      )?.projectId;
+      const outgoing = allScriptureEditors.find((e) => e.id === dispatch.targetTabId);
+      // Skip outgoing S/R for read-only viewers — no local changes are possible.
+      // ENHANCE: also skip if the outgoing editor had no user edits during the session (would
+      // require tracking a dirty flag in the editor controller, which doesn't exist yet).
+      const outgoingProjectId = outgoing?.isReadOnly ? undefined : outgoing?.projectId;
       // Fire-and-forget: new editor is already open. Sync incoming first, then outgoing.
-      syncOnProjectSwitch(papi, projectForWebView.projectId, outgoingProjectId);
+      void syncOnProjectSwitch(papi, projectForWebView.projectId, outgoingProjectId);
     }
 
     return openedWebViewId;
