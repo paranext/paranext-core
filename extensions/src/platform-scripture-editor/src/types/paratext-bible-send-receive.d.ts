@@ -260,14 +260,6 @@ declare module 'papi-shared-types' {
      */
     'paratextBibleSendReceive.syncProjects': (projectIds?: string[]) => Promise<void>;
     /**
-     * Cancels an in-progress sync operation if one is running. The process will finish dealing with
-     * the current project/resource and then abort. It will not undo what has been done.
-     *
-     * @throws `PlatformUnimplementedException` if not running in an application that implements
-     *   this command (e.g., Paratext 10 Studio)
-     */
-    'paratextBibleSendReceive.cancelSync': () => Promise<void>;
-    /**
      * Accepts a project id, and returns a RevisionInfo[] of all revisions for the given project.
      *
      * @param projectId Id of project to retrieve revisions from
