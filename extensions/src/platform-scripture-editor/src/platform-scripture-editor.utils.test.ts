@@ -488,7 +488,9 @@ function createPickerMocks(): PickerMocks {
   });
 
   // Per-project Observer/editor role. Defaults to `true` (editable) so existing tests written
-  // before role partitioning continue to pass.
+  // before role partitioning continue to pass. The picker queries the narrow
+  // `platformScripture.scriptureEditPermissions` projectInterface; tests configure that PDP's
+  // `canUserEditScripture` method via `setCanUserEditScripture`.
   const canUserEditScriptureByProjectId = new Map<string, boolean>();
   const setCanUserEditScripture = (projectId: string, canEdit: boolean) => {
     canUserEditScriptureByProjectId.set(projectId, canEdit);
@@ -1096,7 +1098,7 @@ describe('openDefaultActiveProjectIfApplicable', () => {
     );
   });
 
-  // #region Task 8 — Single-project scenarios
+  // #region Single-project scenarios
 
   it('opens the only project when it is editable', async () => {
     const {
@@ -1231,9 +1233,9 @@ describe('openDefaultActiveProjectIfApplicable', () => {
     );
   });
 
-  // #endregion Task 8
+  // #endregion Single-project scenarios
 
-  // #region Task 9 — Multi-project scenarios
+  // #region Multi-project scenarios
 
   it('picks the newer-S/R editable project when both candidates are editable', async () => {
     const {
@@ -1463,9 +1465,9 @@ describe('openDefaultActiveProjectIfApplicable', () => {
     );
   });
 
-  // #endregion Task 9
+  // #endregion Multi-project scenarios
 
-  // #region Task 10 — Error / edge cases
+  // #region Error and edge cases
 
   it('treats a project whose canUserEditScripture rejects as Observer-only', async () => {
     const {
@@ -1585,7 +1587,63 @@ describe('openDefaultActiveProjectIfApplicable', () => {
     );
   });
 
-  // #endregion Task 10
+  it('treats a project whose PDP does not advertise scriptureEditPermissions as Observer-only', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      mockProjectDataProvidersGet,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          editable: {
+            id: 'editable',
+            name: 'Ed',
+            fullName: 'Editable',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-05-19T00:00:00Z',
+          },
+          undefinedPdp: {
+            id: 'undefinedPdp',
+            name: 'NoIface',
+            fullName: 'Project Without scriptureEditPermissions',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-05-20T00:00:00Z',
+          },
+        };
+      }
+      return undefined;
+    });
+    // Simulate a PDP that doesn't advertise `platformScripture.scriptureEditPermissions` by
+    // returning `undefined` from `projectDataProviders.get` for that id. The picker must treat
+    // this case as Observer-equivalent rather than crashing.
+    mockProjectDataProvidersGet.mockImplementation(
+      async (_interface: string, projectId: string) => {
+        if (projectId === 'undefinedPdp') return undefined;
+        return {
+          canUserEditScripture: async () => projectId === 'editable',
+        };
+      },
+    );
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'editable',
+    );
+  });
+
+  // #endregion Error and edge cases
 });
 
 // #endregion openDefaultActiveProjectIfApplicable

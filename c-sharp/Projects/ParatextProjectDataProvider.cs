@@ -1370,7 +1370,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// Determines if the current user can edit Scripture content in this project
     /// (i.e., has a role other than Observer or None).
     /// </summary>
-    /// <returns>True if the user has a non-Observer/non-None role, false otherwise or if permissions cannot be determined.</returns>
+    /// <returns>
+    /// True if the user has a non-Observer/non-None role, false otherwise or if permissions cannot
+    /// be determined.
+    /// </returns>
     public bool CanUserEditScripture()
     {
         try

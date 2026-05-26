@@ -581,12 +581,17 @@ export async function openDefaultActiveProjectIfApplicable(
 
   // Annotate each surviving candidate with the current user's role. Per-candidate PDP lookups or
   // method rejections are treated as Observer-equivalent — they fall to the `observerOnly` group
-  // and only matter if no editable candidate exists. Mirrors the C# method's "false on exception"
-  // semantics.
+  // and only matter if no editable candidate exists. A missing PDP (e.g., a project that doesn't
+  // advertise `platformScripture.scriptureEditPermissions`) is likewise Observer-equivalent.
+  // Mirrors the C# method's "false on exception" semantics.
   const annotated = await Promise.all(
     filtered.map(async (info) => {
       try {
-        const pdp = await papi.projectDataProviders.get('platform.base', info.id);
+        const pdp = await papi.projectDataProviders.get(
+          'platformScripture.scriptureEditPermissions',
+          info.id,
+        );
+        if (!pdp) return { info, canEdit: false };
         return { info, canEdit: await pdp.canUserEditScripture() };
       } catch {
         return { info, canEdit: false };

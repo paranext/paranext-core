@@ -835,6 +835,26 @@ declare module 'platform-scripture' {
 
   // #endregion User Text Connection Settings Types
 
+  // #region Scripture Edit Permissions Types
+
+  /** Provides permission checks for editing Scripture content (intentionally empty) */
+  export type ScriptureEditPermissionsProjectInterfaceDataTypes = {};
+
+  /** Provides permission checks for editing Scripture content on this project */
+  export type IScriptureEditPermissionsProjectDataProvider =
+    IProjectDataProvider<ScriptureEditPermissionsProjectInterfaceDataTypes> & {
+      /**
+       * Determines whether the current user can edit Scripture content on this project (i.e., has a
+       * role other than Observer or None).
+       *
+       * @returns `true` if the user can edit Scripture content, `false` if they are Observer-only
+       *   or if permissions cannot be determined.
+       */
+      canUserEditScripture(): Promise<boolean>;
+    };
+
+  // #endregion Scripture Edit Permissions Types
+
   // #region Marker Types
 
   /** Provides information about markers */
@@ -1833,6 +1853,7 @@ declare module 'papi-shared-types' {
     IFindInScriptureProjectDataProvider,
     IReplaceWithUsfmProjectDataProvider,
     ITextConnectionSettingsProjectDataProvider,
+    IScriptureEditPermissionsProjectDataProvider,
     ICheckAggregatorService,
     ICheckRunner,
     IInventoryDataProvider,
@@ -1858,6 +1879,7 @@ declare module 'papi-shared-types' {
     'platformScripture.findInScripture': IFindInScriptureProjectDataProvider;
     'platformScripture.replaceWithUsfm': IReplaceWithUsfmProjectDataProvider;
     'platformScripture.textConnectionSettings': ITextConnectionSettingsProjectDataProvider;
+    'platformScripture.scriptureEditPermissions': IScriptureEditPermissionsProjectDataProvider;
   }
 
   export interface DataProviders {

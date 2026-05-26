@@ -345,14 +345,6 @@ declare module 'papi-shared-types' {
     resetSetting: <ProjectSettingName extends ProjectSettingNames>(
       key: ProjectSettingName,
     ) => Promise<boolean>;
-    /**
-     * Determines whether the current user can edit Scripture content on this project (i.e., has a
-     * role other than Observer or None).
-     *
-     * @returns `true` if the user can edit Scripture content, `false` if they are Observer-only or
-     *   if permissions cannot be determined.
-     */
-    canUserEditScripture: () => Promise<boolean>;
   };
 
   /**

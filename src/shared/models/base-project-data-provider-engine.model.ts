@@ -102,11 +102,4 @@ export abstract class BaseProjectDataProviderEngine<
       ProjectSettingTypes[ProjectSettingNames]
     >;
   }
-> {
-  // canUserEditScripture doesn't use instance state but cannot be static because it implements
-  // the WithProjectDataProviderEngineSettingMethods interface
-  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-  canUserEditScripture(): Promise<boolean> {
-    return Promise.resolve(true);
-  }
-}
+> {}
