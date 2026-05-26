@@ -45,6 +45,16 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         ProjectDataType.COMMENT_THREADS,
     ];
 
+    // All data types exposed by the platformScripture.Versification projectInterface. Used to fan
+    // out a single "versification changed" notification across every consumer-visible data type
+    // when the underlying `platformScripture.versification` project setting is written.
+    public static readonly List<string> AllVersificationDataTypes =
+    [
+        ProjectDataType.FINAL_VERSE_NUMBER,
+        ProjectDataType.FINAL_CHAPTER,
+        ProjectDataType.FINAL_VERSE_NUMBERS_IN_BOOK,
+    ];
+
     private readonly LocalParatextProjects _paratextProjects;
 
     private readonly CommentManager _commentManager;
@@ -128,6 +138,13 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(("canUserEditScripture", CanUserEditScripture));
 
         retVal.Add(("getMarkerNames", GetMarkerNames));
+
+        retVal.Add(("getFinalVerseNumber", GetFinalVerseNumber));
+        retVal.Add(("setFinalVerseNumber", SetFinalVerseNumber));
+        retVal.Add(("getFinalChapter", GetFinalChapter));
+        retVal.Add(("setFinalChapter", SetFinalChapter));
+        retVal.Add(("getFinalVerseNumbersInBook", GetFinalVerseNumbersInBook));
+        retVal.Add(("setFinalVerseNumbersInBook", SetFinalVerseNumbersInBook));
 
         return retVal;
     }
@@ -1337,6 +1354,16 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             throw new Exception(errorMessage);
 
         SendDataUpdateEvent(ProjectDataType.SETTING, "project setting data update event");
+
+        // When the versification setting changes, the platformScripture.Versification
+        // projectInterface's derived values change too — notify subscribers on those data types so
+        // they refetch.
+        if (settingName == ProjectSettingsNames.PB_VERSIFICATION)
+            SendDataUpdateEvent(
+                AllVersificationDataTypes,
+                "versification setting changed - re-derive final-chapter/final-verse data"
+            );
+
         return true;
     }
 
@@ -1643,6 +1670,80 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             ?? throw new InvalidDataException($"ScrStylesheet for book number '{bookNum}' is null");
         return scrStylesheet.Tags.Where(tag => tag != null).Select(tag => tag.Name).ToArray();
     }
+
+    #endregion
+
+    #region Versification (platformScripture.Versification)
+
+    // Read-only projectInterface. The three data types (FinalVerseNumber, FinalChapter,
+    // FinalVerseNumbersInBook) all derive from the project's versification setting, which is the
+    // authoritative writer. The Set* methods below exist to satisfy the canonical DataProvider
+    // get/set contract; they always throw — callers must write the project setting instead. When
+    // the underlying setting changes, `SetProjectSetting` fans out update events to all three
+    // versification data types (see `AllVersificationDataTypes`) so subscribers re-fetch fresh
+    // values.
+
+    private const string VersificationReadOnlyMessage =
+        "Versification data is read-only on the platformScripture.Versification projectInterface. "
+        + "To change versification, set the 'platformScripture.versification' project setting on "
+        + "the project's ParatextProjectDataProvider (e.g. via `setSetting`).";
+
+    /// <summary>
+    /// Returns the final verse number in the specified book and chapter using the project's
+    /// versification. Each call reads <c>ScrText.Settings.Versification</c> fresh, so results
+    /// reflect any in-session changes to the project's versification setting.
+    /// </summary>
+    public int GetFinalVerseNumber(int bookNum, int chapterNum)
+    {
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        return scrText.Settings.Versification.GetLastVerse(bookNum, chapterNum);
+    }
+
+    /// <summary>
+    /// Read-only — always throws. Versification is owned by the
+    /// <c>platformScripture.versification</c> project setting; write that setting instead.
+    /// </summary>
+    public bool SetFinalVerseNumber(int bookNum, int chapterNum, int value) =>
+        throw new NotSupportedException(VersificationReadOnlyMessage);
+
+    /// <summary>
+    /// Returns the final chapter number in the specified book using the project's versification.
+    /// </summary>
+    public int GetFinalChapter(int bookNum)
+    {
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        return scrText.Settings.Versification.GetLastChapter(bookNum);
+    }
+
+    /// <summary>
+    /// Read-only — always throws. See <see cref="SetFinalVerseNumber"/>.
+    /// </summary>
+    public bool SetFinalChapter(int bookNum, int value) =>
+        throw new NotSupportedException(VersificationReadOnlyMessage);
+
+    /// <summary>
+    /// Returns the final verse number for each chapter in the specified book using the project's
+    /// versification. Index <c>n</c> is the last verse number in chapter <c>n</c> (1-based);
+    /// index 0 is a filler <c>0</c> so callers can use <c>result[chapterNum]</c> without
+    /// off-by-one. The returned array has length <c>lastChapter + 1</c>. Useful for pre-fetching
+    /// a whole book in one round trip.
+    /// </summary>
+    public int[] GetFinalVerseNumbersInBook(int bookNum)
+    {
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        var versification = scrText.Settings.Versification;
+        int lastChapter = versification.GetLastChapter(bookNum);
+        int[] result = new int[lastChapter + 1];
+        for (int chapter = 1; chapter <= lastChapter; chapter++)
+            result[chapter] = versification.GetLastVerse(bookNum, chapter);
+        return result;
+    }
+
+    /// <summary>
+    /// Read-only — always throws. See <see cref="SetFinalVerseNumber"/>.
+    /// </summary>
+    public bool SetFinalVerseNumbersInBook(int bookNum, int[] value) =>
+        throw new NotSupportedException(VersificationReadOnlyMessage);
 
     #endregion
 

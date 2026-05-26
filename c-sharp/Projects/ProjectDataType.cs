@@ -16,4 +16,9 @@ public static class ProjectDataType
     public const string VERSE_USFM = "VerseUSFM";
     public const string VERSE_USX = "VerseUSX";
     public const string VERSE_PLAIN_TEXT = "VersePlainText";
+
+    // platformScripture.Versification projectInterface
+    public const string FINAL_VERSE_NUMBER = "FinalVerseNumber";
+    public const string FINAL_CHAPTER = "FinalChapter";
+    public const string FINAL_VERSE_NUMBERS_IN_BOOK = "FinalVerseNumbersInBook";
 }

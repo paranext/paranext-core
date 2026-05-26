@@ -898,30 +898,123 @@ declare module 'platform-scripture' {
 
   // #region Versification Types
 
-  /**
-   * Read-only lookups for a project's versification — final chapter per book, final verse per
-   * chapter. Consumers (e.g. reference pickers) use these to constrain selection to valid
-   * references for a given project. This is a network object (not a project data provider):
-   * versification is fixed at project open and does not change at runtime, so there is no
-   * subscription semantics.
-   *
-   * Obtain via
-   * `papi.networkObjects.get<IVersificationService>('platformScripture.versificationService')`.
-   */
-  export type IVersificationService = {
-    /**
-     * Returns the final verse number in the specified book and chapter using the project's
-     * versification.
-     */
-    lookupFinalVerseNumber(projectId: string, bookNum: number, chapterNum: number): Promise<number>;
-    /** Returns the final chapter number in the specified book using the project's versification. */
-    lookupFinalChapter(projectId: string, bookNum: number): Promise<number>;
-    /**
-     * Returns an array where index `n` is the last verse number in chapter `n` (1-based). Index 0
-     * is unused. Useful for pre-fetching all verse counts for a book in a single round trip.
-     */
-    lookupFinalVerseNumbersInBook(projectId: string, bookNum: number): Promise<number[]>;
+  /** Selector for {@link VersificationProjectInterfaceDataTypes.FinalVerseNumber}. */
+  export type FinalVerseNumberSelector = {
+    /** 1-based book number. */
+    bookNum: number;
+    /** 1-based chapter number within {@link bookNum}. */
+    chapterNum: number;
   };
+
+  /**
+   * Data types the versification projectInterface exposes via its base {@link IProjectDataProvider}.
+   * All three are read-only — the underlying value is owned by the project's
+   * `'platformScripture.versification'` setting; `set*` is not supported and will throw if called.
+   * Consumers that need to react to versification changes can use the `subscribe*` methods, which
+   * emit when the underlying versification setting changes.
+   */
+  export type VersificationProjectInterfaceDataTypes = {
+    /** Final verse number in a given book + chapter, per the project's versification. */
+    FinalVerseNumber: DataProviderDataType<FinalVerseNumberSelector, number, never>;
+    /** Final chapter number in a given book, per the project's versification. */
+    FinalChapter: DataProviderDataType<number, number, never>;
+    /**
+     * Final verse number for every chapter in a book, returned as a 1-based-indexable array. Index
+     * 0 is a filler `0`; index `n` is the last verse of chapter `n`.
+     */
+    FinalVerseNumbersInBook: DataProviderDataType<number, number[], never>;
+  };
+
+  /**
+   * Project-scoped read-only versification lookups — final chapter per book, final verse per
+   * chapter. Consumers (e.g. reference pickers, range validators) use these to constrain selection
+   * to valid references for the project.
+   *
+   * Each call reads the project's _current_ versification fresh, so results reflect any in-session
+   * changes to the `'platformScripture.versification'` project setting. Consumers that cache
+   * results across calls should subscribe (via the `subscribe*` methods below, which emit when the
+   * underlying versification setting changes) and invalidate accordingly.
+   *
+   * All three data types are read-only — `set*` is unsupported and will throw if called. The
+   * authoritative writer is the project setting, not this projectInterface.
+   *
+   * Acquire via `papi.projectDataProviders.get('platformScripture.Versification', projectId)`
+   * (backend) or the `useProjectDataProvider('platformScripture.Versification', projectId)` React
+   * hook (frontend).
+   */
+  export type IVersificationProjectDataProvider =
+    IProjectDataProvider<VersificationProjectInterfaceDataTypes> & {
+      /**
+       * Returns the final verse number in the specified book and chapter using the project's
+       * versification.
+       */
+      getFinalVerseNumber(bookNum: number, chapterNum: number): Promise<number>;
+      /**
+       * Read-only — throws if called. The authoritative writer for versification data is the
+       * `'platformScripture.versification'` project setting; set it through the standard
+       * setting-write API on the same PDP instead.
+       */
+      setFinalVerseNumber(
+        newValue: never,
+      ): Promise<DataProviderUpdateInstructions<VersificationProjectInterfaceDataTypes>>;
+      /**
+       * Subscribe to changes in the final verse number for a given book + chapter. The callback
+       * fires when the project's versification setting changes.
+       */
+      subscribeFinalVerseNumber(
+        selector: FinalVerseNumberSelector,
+        callback: (finalVerseNumber: number | PlatformError) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+
+      /** Returns the final chapter number in the specified book using the project's versification. */
+      getFinalChapter(bookNum: number): Promise<number>;
+      /** Read-only — throws if called. See {@link setFinalVerseNumber} for the canonical writer. */
+      setFinalChapter(
+        newValue: never,
+      ): Promise<DataProviderUpdateInstructions<VersificationProjectInterfaceDataTypes>>;
+      /**
+       * Subscribe to changes in the final chapter number for a given book. The callback fires when
+       * the project's versification setting changes.
+       */
+      subscribeFinalChapter(
+        bookNum: number,
+        callback: (finalChapter: number | PlatformError) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+
+      /**
+       * Returns an array of final verse numbers for every chapter in a book, indexed 1-based for
+       * ergonomic `result[chapterNum]` access (no off-by-one). Index 0 is a filler `0` — it is not
+       * a valid chapter. The returned array has length `lastChapter + 1`.
+       *
+       * Useful for pre-fetching all verse counts for a book in a single round trip — preferable to
+       * `getFinalVerseNumber` in a loop when the caller needs many chapters of the same book.
+       *
+       * @example
+       *
+       * ```typescript
+       * const finalVerses = await pdp.getFinalVerseNumbersInBook(1); // Genesis
+       * finalVerses[1]; // → 31 (last verse of Genesis 1)
+       * finalVerses[50]; // → 26 (last verse of Genesis 50)
+       * finalVerses[0]; // → 0 (filler; chapter 0 does not exist)
+       * ```
+       */
+      getFinalVerseNumbersInBook(bookNum: number): Promise<number[]>;
+      /** Read-only — throws if called. See {@link setFinalVerseNumber} for the canonical writer. */
+      setFinalVerseNumbersInBook(
+        newValue: never,
+      ): Promise<DataProviderUpdateInstructions<VersificationProjectInterfaceDataTypes>>;
+      /**
+       * Subscribe to changes in the per-chapter final verse numbers for a book. The callback fires
+       * when the project's versification setting changes.
+       */
+      subscribeFinalVerseNumbersInBook(
+        bookNum: number,
+        callback: (finalVerseNumbers: number[] | PlatformError) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+    };
 
   // #endregion Versification Types
 
@@ -1968,6 +2061,7 @@ declare module 'papi-shared-types' {
     IUSJVerseProjectDataProvider,
     IPlainTextVerseProjectDataProvider,
     IMarkerNamesProjectDataProvider,
+    IVersificationProjectDataProvider,
     IFindInScriptureProjectDataProvider,
     IReplaceWithUsfmProjectDataProvider,
     ITextConnectionSettingsProjectDataProvider,
@@ -1994,6 +2088,7 @@ declare module 'papi-shared-types' {
     'platformScripture.USJ_Verse': IUSJVerseProjectDataProvider;
     'platformScripture.PlainText_Verse': IPlainTextVerseProjectDataProvider;
     'platformScripture.MarkerNames': IMarkerNamesProjectDataProvider;
+    'platformScripture.Versification': IVersificationProjectDataProvider;
     'platformScripture.findInScripture': IFindInScriptureProjectDataProvider;
     'platformScripture.replaceWithUsfm': IReplaceWithUsfmProjectDataProvider;
     'platformScripture.textConnectionSettings': ITextConnectionSettingsProjectDataProvider;
