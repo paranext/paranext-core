@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import type {
   ResourceReferenceList,
-  IUserTextConnectionSettingsProjectDataProvider,
+  ITextConnectionSettingsProjectDataProvider,
 } from 'platform-scripture';
 import { useProjectSetting, useProjectDataProvider } from '@papi/frontend/react';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list';
@@ -30,7 +30,7 @@ const emptyList = (dataVersion = '1.0.0'): ResourceReferenceList => ({
 function makeMockPdp(
   returnValue: ResourceReferenceList | undefined,
   subscribeMethod: 'subscribeUserModelTexts' | 'subscribeUserReferencedProjectsAndResources',
-): IUserTextConnectionSettingsProjectDataProvider {
+): ITextConnectionSettingsProjectDataProvider {
   const mockSubscribe = vi.fn(
     async (_selector: undefined, callback: (val: ResourceReferenceList | undefined) => void) => {
       if (returnValue !== undefined) {
@@ -44,7 +44,7 @@ function makeMockPdp(
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   return {
     [subscribeMethod]: mockSubscribe,
-  } as unknown as IUserTextConnectionSettingsProjectDataProvider;
+  } as unknown as ITextConnectionSettingsProjectDataProvider;
 }
 
 describe('useEffectiveResourceReferenceList', () => {
@@ -294,7 +294,7 @@ describe('useEffectiveResourceReferenceList', () => {
     );
 
     // Should fall back to project-level list, not return undefined
-    expect(result.current).toBeDefined();
+    expect(result.current[0]).toBeDefined();
     expect(result.current[0]?.items).toHaveLength(1);
     expect(result.current[0]?.items[0]).toMatchObject({ name: 'ESV', source: 'admin' });
   });

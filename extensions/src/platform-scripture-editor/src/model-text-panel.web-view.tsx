@@ -74,7 +74,7 @@ globalThis.webViewComponent = function ModelTextPanel({
     DEFAULT_LIST,
   );
 
-  const pdp = useProjectDataProvider('platformScripture.userTextConnectionSettings', projectId);
+  const pdp = useProjectDataProvider('platformScripture.textConnectionSettings', projectId);
 
   // --- DBL resource resolution ---
 
@@ -162,9 +162,10 @@ globalThis.webViewComponent = function ModelTextPanel({
         id: resource.dblEntryUid,
       };
 
-      const canUserWriteProjectSettings = await pdp?.canUserWriteProjectSettings();
+      const canUserWriteProjectTextConnectionSettings =
+        await pdp?.canUserWriteProjectTextConnectionSettings();
 
-      if (canUserWriteProjectSettings && setAdminModelTexts) {
+      if (canUserWriteProjectTextConnectionSettings && setAdminModelTexts) {
         if (isPlatformError(adminModelTextsSetting)) return;
         // ResourceReference union: .id is not on all members; cast is safe after checking .type
         const existingItems = adminModelTextsSetting.items.filter(

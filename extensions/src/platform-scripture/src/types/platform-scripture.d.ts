@@ -758,7 +758,7 @@ declare module 'platform-scripture' {
 
   // #endregion Replace Types
 
-  // #region User Text Connection Settings Types
+  // #region Text Connection Settings Types
 
   /** Provides user-specific text connection settings (model texts and referenced projects/resources) */
   export type UserTextConnectionSettingsProjectInterfaceDataTypes = {
@@ -773,7 +773,7 @@ declare module 'platform-scripture' {
   };
 
   /** Provides user-specific text connection settings (model texts and referenced projects/resources) */
-  export type IUserTextConnectionSettingsProjectDataProvider =
+  export type ITextConnectionSettingsProjectDataProvider =
     IProjectDataProvider<UserTextConnectionSettingsProjectInterfaceDataTypes> & {
       /** Gets the list of model texts for this project */
       getUserModelTexts(): Promise<ResourceReferenceList>;
@@ -829,8 +829,8 @@ declare module 'platform-scripture' {
         ) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
-      /** Determines whether the current user can write to project settings. */
-      canUserWriteProjectSettings(): Promise<boolean>;
+      /** Determines whether the current user can write to text connection project settings. */
+      canUserWriteProjectTextConnectionSettings(): Promise<boolean>;
     };
 
   // #endregion User Text Connection Settings Types
@@ -1832,7 +1832,7 @@ declare module 'papi-shared-types' {
     IMarkerNamesProjectDataProvider,
     IFindInScriptureProjectDataProvider,
     IReplaceWithUsfmProjectDataProvider,
-    IUserTextConnectionSettingsProjectDataProvider,
+    ITextConnectionSettingsProjectDataProvider,
     ICheckAggregatorService,
     ICheckRunner,
     IInventoryDataProvider,
@@ -1857,7 +1857,7 @@ declare module 'papi-shared-types' {
     'platformScripture.MarkerNames': IMarkerNamesProjectDataProvider;
     'platformScripture.findInScripture': IFindInScriptureProjectDataProvider;
     'platformScripture.replaceWithUsfm': IReplaceWithUsfmProjectDataProvider;
-    'platformScripture.userTextConnectionSettings': IUserTextConnectionSettingsProjectDataProvider;
+    'platformScripture.textConnectionSettings': ITextConnectionSettingsProjectDataProvider;
   }
 
   export interface DataProviders {

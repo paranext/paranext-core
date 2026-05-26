@@ -130,6 +130,12 @@ export type {
 export { default as ScopeSelector } from './components/advanced/scope-selector/scope-selector.component';
 export { SCOPE_SELECTOR_STRING_KEYS } from './components/advanced/scope-selector/scope-selector.component';
 export type { ScopeSelectorLocalizedStrings } from './components/advanced/scope-selector/scope-selector.component';
+export { SelectBooks } from './components/advanced/scope-selector/select-books.component';
+export { SelectBooksPicker } from './components/advanced/scope-selector/select-books-picker.component';
+export {
+  SELECT_BOOKS_STRING_KEYS,
+  type SelectBooksLocalizedStrings,
+} from './components/advanced/scope-selector/select-books.types';
 export {
   default as ScrollGroupSelector,
   type ScrollGroupSelectorProps,
