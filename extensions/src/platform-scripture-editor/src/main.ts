@@ -227,6 +227,16 @@ async function open(
       });
     }
 
+    if (interfaceMode === 'simple' && dispatch.kind === 'replace-tab') {
+      const outgoing = allScriptureEditors.find((e) => e.id === dispatch.targetTabId);
+      // Skip outgoing S/R for read-only viewers — no local changes are possible.
+      // ENHANCE: also skip if the outgoing editor had no user edits during the session (would
+      // require tracking a dirty flag in the editor controller, which doesn't exist yet).
+      const outgoingProjectId = outgoing?.isReadOnly ? undefined : outgoing?.projectId;
+      // Fire-and-forget: runs concurrently with `openWebView`.
+      syncOnProjectSwitch(papi, projectForWebView.projectId, outgoingProjectId);
+    }
+
     const openWebViewOptions: PlatformScriptureEditorOptions = {
       projectId: projectForWebView.projectId,
       isReadOnly: !projectForWebView.isEditable,
@@ -239,16 +249,6 @@ async function open(
         : undefined,
       openWebViewOptions,
     );
-
-    if (interfaceMode === 'simple' && dispatch.kind === 'replace-tab') {
-      const outgoing = allScriptureEditors.find((e) => e.id === dispatch.targetTabId);
-      // Skip outgoing S/R for read-only viewers — no local changes are possible.
-      // ENHANCE: also skip if the outgoing editor had no user edits during the session (would
-      // require tracking a dirty flag in the editor controller, which doesn't exist yet).
-      const outgoingProjectId = outgoing?.isReadOnly ? undefined : outgoing?.projectId;
-      // Fire-and-forget: new editor is already open. Sync incoming first, then outgoing.
-      void syncOnProjectSwitch(papi, projectForWebView.projectId, outgoingProjectId);
-    }
 
     return openedWebViewId;
   }
