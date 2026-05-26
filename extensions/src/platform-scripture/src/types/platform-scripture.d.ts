@@ -835,13 +835,31 @@ declare module 'platform-scripture' {
 
   // #region Marker Types
 
-  /** Provides information about markers */
+  /** Provides information about markers + heading classification + per-book language. */
   export type MarkerNamesProjectInterfaceDataTypes = {
     /** Gets an array of string that contain information about markers */
     MarkerNames: DataProviderDataType<number, string[], string[]>;
+    /**
+     * Heading-style paragraph markers per book. Drawn from libpalaso's `ScrStylesheet` — markers
+     * whose `StyleType == scParagraphStyle` AND `TextType == scSection`. Read-only — derived from
+     * the project's stylesheet; `set*` is not supported.
+     */
+    HeadingMarkers: DataProviderDataType<number, string[], never>;
+    /**
+     * The language tag of the (possibly joined) text for a book. Most projects return the
+     * project-level language tag for every book; sigla projects (those that join multiple
+     * base-language texts per book — see Glossary) return per-book language tags. Read-only.
+     */
+    JoinedTextLanguage: DataProviderDataType<number, string, never>;
   };
 
-  /** Provides a string array that contains information about the markers used in this project */
+  /**
+   * Provides marker info, heading classification, and per-book language for a project.
+   *
+   * All `set*` methods exist only to satisfy the canonical DataProvider contract; the underlying
+   * values are derived from the project's stylesheet and joined-text settings (libpalaso authority)
+   * and cannot be written through this PDP.
+   */
   export type IMarkerNamesProjectDataProvider =
     IProjectDataProvider<MarkerNamesProjectInterfaceDataTypes> & {
       /**
@@ -858,16 +876,47 @@ declare module 'platform-scripture' {
        * Subscribe to run a callback function when marker info changed
        *
        * @param bookNum Tells the provider what changes to listen for
-       * @param callback Function to run with the updated marker info for this selector. If there is
-       *   an error while retrieving the updated data, the function will run with a
-       *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this
-       *   value to check if it is an error.
+       * @param callback Function to run with the updated marker info for this selector.
        * @param options Various options to adjust how the subscriber emits updates
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeMarkerNames(
         bookNum: number,
         callback: (markerNames: string[] | undefined | PlatformError) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+      /**
+       * Returns the project's heading-style paragraph markers for the given book. Empty array means
+       * the stylesheet defines none.
+       */
+      getHeadingMarkers(bookNum: number): Promise<string[]>;
+      /**
+       * Read-only — throws if called. Heading classification is owned by the project's stylesheet
+       * (libpalaso `ScrStylesheet`); there is no setter.
+       */
+      setHeadingMarkers(
+        newValue: never,
+      ): Promise<DataProviderUpdateInstructions<MarkerNamesProjectInterfaceDataTypes>>;
+      /** Subscribe to heading-markers changes for the given book. */
+      subscribeHeadingMarkers(
+        bookNum: number,
+        callback: (headingMarkers: string[] | PlatformError) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+      /**
+       * Returns the (possibly joined-text) language tag for the given book. For most projects this
+       * equals the project-level language tag; for sigla projects (Glossary), this can vary
+       * per-book.
+       */
+      getJoinedTextLanguage(bookNum: number): Promise<string>;
+      /** Read-only — throws if called. */
+      setJoinedTextLanguage(
+        newValue: never,
+      ): Promise<DataProviderUpdateInstructions<MarkerNamesProjectInterfaceDataTypes>>;
+      /** Subscribe to joined-text-language changes for the given book. */
+      subscribeJoinedTextLanguage(
+        bookNum: number,
+        callback: (joinedTextLanguage: string | PlatformError) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
     };
