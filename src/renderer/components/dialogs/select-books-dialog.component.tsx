@@ -7,6 +7,11 @@ import { DIALOG_BASE } from './dialog-base.data';
 import { DialogDefinition, DialogTypes, SELECT_BOOKS_DIALOG_TYPE } from './dialog-definition.model';
 import './select-books-dialog.component.scss';
 
+/**
+ * @deprecated 2026-05-13. This dialog is no longer used by Platform.Bible and will be removed in a
+ *   later version. To let users select books, use the `SelectBooks` component from
+ *   `platform-bible-react` instead.
+ */
 function SelectBooksDialog({
   prompt,
   submitDialog,
@@ -52,6 +57,11 @@ function SelectBooksDialog({
 
 const localizeSelectBooksKey: LocalizeKey = `%selectBooks_title_selectBooks%`;
 
+/**
+ * @deprecated 2026-05-13. This dialog is no longer used by Platform.Bible and will be removed in a
+ *   later version. To let users select books, use the `SelectBooks` component from
+ *   `platform-bible-react` instead.
+ */
 export const SELECT_BOOKS_DIALOG: DialogDefinition<typeof SELECT_BOOKS_DIALOG_TYPE> = Object.freeze(
   {
     ...DIALOG_BASE,

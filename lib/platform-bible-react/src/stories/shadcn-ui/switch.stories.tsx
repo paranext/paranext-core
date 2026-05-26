@@ -3,19 +3,11 @@ import { fn } from 'storybook/test';
 import { Switch } from '@/components/shadcn-ui/switch';
 import { Label } from '@/components/shadcn-ui/label';
 import { useState } from 'react';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof Switch> = {
   title: 'Shadcn/Switch',
   component: Switch,
   tags: ['autodocs'],
-  decorators: [
-    (Story) => (
-      <ThemeProvider>
-        <Story />
-      </ThemeProvider>
-    ),
-  ],
   argTypes: {
     checked: { control: 'boolean' },
     disabled: { control: 'boolean' },

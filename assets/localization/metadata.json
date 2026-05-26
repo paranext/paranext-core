@@ -76,6 +76,12 @@
   "%scripture_section_ot_long%": {
     "fallbackKey": "%Paratext.Base.Filters.BookChooserControl.btnOT.Text%"
   },
+  "%selectBooks_title_selectBooks%": {
+    "deprecationInfo": {
+      "date": "2026-05-13",
+      "message": "The platform.selectBooks dialog is no longer used by Platform.Bible. This string remains for backward compatibility with extensions that may still invoke the dialog."
+    }
+  },
   "%settings_errorMessages_copiedError%": {
     "fallbackKey": "%webView_error_dump_copied_message%"
   },

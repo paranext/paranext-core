@@ -10,7 +10,6 @@ import {
   inventoryStatusColumn,
 } from '@/components/advanced/inventory/inventory-columns';
 import { InventoryTableData } from '@/components/advanced/inventory/inventory-utils';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 import { ColumnDef } from '@tanstack/react-table';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Scope } from '@/components/utils/scripture.util';
@@ -102,11 +101,9 @@ const meta: Meta<typeof Inventory> = {
   tags: ['autodocs'],
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className="tw:p-4">
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className="tw:p-4">
+        <Story />
+      </div>
     ),
   ],
 };

@@ -1,4 +1,3 @@
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 import { Canon } from '@sillsdev/scripture';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
@@ -13,7 +12,7 @@ const meta: Meta<typeof BookSelector> = {
     docs: {
       description: {
         component: `
-> **Deprecated** (Jul 18 2025) — This component is no longer supported or tested. Use of this component is discouraged and it may be removed in the future.
+> **Deprecated** (Jul 18 2025) — This component is no longer supported or tested and will be removed in a later version. To let users select books, use the \`SelectBooks\` component instead (or \`ScopeSelector\` to combine scope and book selection).
 
 A UI for selecting books and chapter ranges. The user can either use the current book (with a start/end chapter range) or choose multiple books from a picker.
         `,
@@ -22,11 +21,9 @@ A UI for selecting books and chapter ranges. The user can either use the current
   },
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className="tw:max-w-2xl tw:p-4">
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className="tw:max-w-2xl tw:p-4">
+        <Story />
+      </div>
     ),
   ],
   args: {

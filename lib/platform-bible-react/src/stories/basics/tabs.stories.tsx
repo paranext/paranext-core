@@ -7,19 +7,11 @@ import {
   VerticalTabsList,
   VerticalTabsTrigger,
 } from '@/components/basics/tabs-vertical';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof Tabs> = {
   title: 'Basics/Tabs',
   component: Tabs,
   tags: ['autodocs'],
-  decorators: [
-    (Story) => (
-      <ThemeProvider>
-        <Story />
-      </ThemeProvider>
-    ),
-  ],
   argTypes: {
     defaultValue: { control: 'text' },
     orientation: { control: 'select', options: ['horizontal', 'vertical'] },

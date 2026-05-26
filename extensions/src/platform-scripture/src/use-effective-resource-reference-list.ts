@@ -78,7 +78,7 @@ export function useEffectiveResourceReferenceList(
     DEFAULT_LIST,
   );
 
-  const userPdp = useProjectDataProvider('platformScripture.userTextConnectionSettings', projectId);
+  const userPdp = useProjectDataProvider('platformScripture.textConnectionSettings', projectId);
 
   const [userResourceReferenceList, setUserResourceReferenceList] = useState<
     ResourceReferenceList | undefined

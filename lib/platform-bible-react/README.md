@@ -13,6 +13,10 @@ TODO:
 - [ ] Decide if this package will be public, if not it will probably need an NPM organization setup to publish it to privately.
 - [ ] What NPM user login will we use to publish it (each developer or an app-wide user)?
 
+### Storybook
+
+`npm start` runs Storybook (port 6007). Contributor conventions and tooling: [.storybook/STORYBOOK.md](.storybook/STORYBOOK.md). Paratext / manager branding: [.storybook/BRANDING.md](.storybook/BRANDING.md).
+
 ### Building
 
 #### Setting up

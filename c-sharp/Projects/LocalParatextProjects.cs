@@ -44,7 +44,7 @@ internal class LocalParatextProjects
         ProjectInterfaces.USX_VERSE,
         ProjectInterfaces.PLAIN_TEXT_VERSE,
         ProjectInterfaces.MARKER_NAMES,
-        ProjectInterfaces.USER_TEXT_CONNECTION_SETTINGS,
+        ProjectInterfaces.TEXT_CONNECTION_SETTINGS,
     ];
 
     public LocalParatextProjects()

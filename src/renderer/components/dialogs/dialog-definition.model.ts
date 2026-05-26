@@ -10,7 +10,13 @@ export const ABOUT_DIALOG_TYPE = 'platform.aboutDialog';
 export const SELECT_PROJECT_DIALOG_TYPE = 'platform.selectProject';
 /** The tabType for the select multiple projects dialog in `select-multiple-projects.dialog.tsx` */
 export const SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE = 'platform.selectMultipleProjects';
-/** The tabType for the select books dialog in `select-books.dialog.tsx` */
+/**
+ * The tabType for the select books dialog in `select-books-dialog.component.tsx`
+ *
+ * @deprecated 2026-05-13. This dialog is no longer used by Platform.Bible and will be removed in a
+ *   later version. To let users select books, use the `SelectBooks` component from
+ *   `platform-bible-react` instead.
+ */
 export const SELECT_BOOKS_DIALOG_TYPE = 'platform.selectBooks';
 /** The dialogType for alert dialogs rendered via overlay */
 export const ALERT_DIALOG_TYPE = 'platform.alert';
@@ -30,7 +36,13 @@ export type SelectMultipleProjectsDialogOptions = ProjectDialogOptionsBase & {
   selectedProjectIds?: string[];
 };
 
-/** Options to provide when showing the Select Books dialog */
+/**
+ * Options to provide when showing the Select Books dialog
+ *
+ * @deprecated 2026-05-13. This dialog is no longer used by Platform.Bible and will be removed in a
+ *   later version. To let users select books, use the `SelectBooks` component from
+ *   `platform-bible-react` instead.
+ */
 export type SelectBooksDialogOptions = DialogOptions & {
   /** Books IDs that should start selected in the dialog */
   selectedBookIds?: string[];
@@ -76,6 +88,11 @@ export interface DialogTypes {
     SelectMultipleProjectsDialogOptions,
     string[]
   >;
+  /**
+   * @deprecated 2026-05-13. This dialog is no longer used by Platform.Bible and will be removed in
+   *   a later version. To let users select books, use the `SelectBooks` component from
+   *   `platform-bible-react` instead.
+   */
   [SELECT_BOOKS_DIALOG_TYPE]: DialogDataTypes<SelectBooksDialogOptions, string[]>;
   [ALERT_DIALOG_TYPE]: DialogDataTypes<AlertDialogOptions, true>;
   [CONFIRM_DIALOG_TYPE]: DialogDataTypes<ConfirmDialogOptions, boolean>;
