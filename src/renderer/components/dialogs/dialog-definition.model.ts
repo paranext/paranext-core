@@ -24,6 +24,8 @@ export const ALERT_DIALOG_TYPE = 'platform.alert';
 export const CONFIRM_DIALOG_TYPE = 'platform.confirm';
 /** The tabType for the resource picker dialog in `resource-picker.dialog.tsx` */
 export const RESOURCE_PICKER_DIALOG_TYPE = 'platform.resourcePicker';
+/** The tabType for the project picker dialog in `project-picker.dialog.tsx` */
+export const PROJECT_PICKER_DIALOG_TYPE = 'platform.projectPicker';
 
 type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
 
@@ -64,6 +66,9 @@ export type ResourcePickerDialogOptions = DialogOptions & {
   selectedResourceIds?: string[];
 };
 
+/** Options to provide when showing the Project Picker dialog (no extra options needed) */
+export type ProjectPickerDialogOptions = DialogOptions;
+
 /** Options to provide when showing a confirm dialog */
 export type ConfirmDialogOptions = DialogOptions & {
   /** The message body displayed in the dialog. Required for confirm dialogs. */
@@ -97,6 +102,7 @@ export interface DialogTypes {
   [ALERT_DIALOG_TYPE]: DialogDataTypes<AlertDialogOptions, true>;
   [CONFIRM_DIALOG_TYPE]: DialogDataTypes<ConfirmDialogOptions, boolean>;
   [RESOURCE_PICKER_DIALOG_TYPE]: DialogDataTypes<ResourcePickerDialogOptions, DblResourceData>;
+  [PROJECT_PICKER_DIALOG_TYPE]: DialogDataTypes<ProjectPickerDialogOptions, void>;
 }
 
 /** All dialog types that have DialogDefinition entries */
