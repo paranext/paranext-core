@@ -252,17 +252,14 @@ internal class ChecklistServiceEditLinkGatingTests : PapiTestBase
     public void BuildChecklistData_ProjectEditable_EditLinkItemsCarryCellVerseRef()
     {
         // Shape verification for TS-050: every EditLinkItem emitted must
-        // target the same book/chapter/verse as the cell it lives in. We
-        // compute the expected BookNum/ChapterNum/VerseNum by parsing the
-        // cell's Reference string back into a VerseRef — the orchestrator
-        // produced Reference via `vref.ToString()` (see ChecklistService.cs
-        // BuildCLCell), so VerseRef(reference, versification) round-trips
-        // cleanly.
+        // target the same book/chapter/verse as the cell it lives in. We read
+        // the expected BookNum/ChapterNum/VerseNum directly off the cell's
+        // structured Reference (a ScriptureRange — see ChecklistService.cs
+        // BuildCLCell).
         //
         // This is a behavior-not-implementation check: we don't pin HOW the
-        // gate derives the numbers (it could read the cell's VerseRef, its
-        // Reference string, or the paragraph's VerseRefStart); we only pin
-        // that whatever it derives agrees with the cell's own Reference.
+        // gate derives the numbers; we only pin that whatever it derives agrees
+        // with the cell's own Reference.
         var scrText = RegisterDummyProject(Gm001ExoUsfm);
         scrText.Settings.Editable = true;
 
@@ -279,14 +276,14 @@ internal class ChecklistServiceEditLinkGatingTests : PapiTestBase
         foreach (var row in result.Rows)
         foreach (var cell in row.Cells)
         {
-            // Extract the expected BookNum/ChapterNum/VerseNum from the cell's
-            // Reference. Empty reference = default verse -> skip (VAL-007
+            // Read the expected BookNum/ChapterNum/VerseNum from the cell's
+            // Reference. A null Reference = default verse -> skip (VAL-007
             // cell-shape predicate would itself block emission for a default
             // verse, so there's nothing to assert on such a cell).
-            if (string.IsNullOrEmpty(cell.Reference))
+            if (cell.Reference is null)
                 continue;
 
-            var expected = new VerseRef(cell.Reference, scrText.Settings.Versification);
+            VerseRef expected = cell.Reference.Start;
 
             var cellEditLinks = cell
                 .Paragraphs.SelectMany(p => p.Items)
@@ -301,17 +298,17 @@ internal class ChecklistServiceEditLinkGatingTests : PapiTestBase
                 Assert.That(
                     link.BookNum,
                     Is.EqualTo(expected.BookNum),
-                    $"EditLinkItem.BookNum must match cell reference {cell.Reference}"
+                    $"EditLinkItem.BookNum must match cell reference {expected}"
                 );
                 Assert.That(
                     link.ChapterNum,
                     Is.EqualTo(expected.ChapterNum),
-                    $"EditLinkItem.ChapterNum must match cell reference {cell.Reference}"
+                    $"EditLinkItem.ChapterNum must match cell reference {expected}"
                 );
                 Assert.That(
                     link.VerseNum,
                     Is.EqualTo(expected.VerseNum),
-                    $"EditLinkItem.VerseNum must match cell reference {cell.Reference}"
+                    $"EditLinkItem.VerseNum must match cell reference {expected}"
                 );
                 cellsChecked++;
             }

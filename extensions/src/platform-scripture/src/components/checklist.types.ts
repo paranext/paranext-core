@@ -1,5 +1,7 @@
+import type { SerializedVerseRef } from '@sillsdev/scripture';
 import type { ReactNode } from 'react';
 import type { Localized, LocalizedStringValue, MultiColumnMenu } from 'platform-bible-utils';
+import type { ScriptureRange } from 'platform-scripture';
 
 /**
  * Localization keys consumed by `ChecklistTool` and its Storybook stories.
@@ -83,7 +85,7 @@ export type ChecklistContentItem =
   | { type: 'text'; text: string; characterStyle?: string | undefined }
   | { type: 'verse'; verseNumber: string }
   | { type: 'editLink'; bookNum: number; chapterNum: number; verseNum: number }
-  | { type: 'link'; reference: string; displayText: string }
+  | { type: 'link'; reference: ScriptureRange; displayText: string }
   | { type: 'error'; message: string }
   | { type: 'message'; message: string };
 
@@ -98,10 +100,13 @@ export type ChecklistParagraph = {
 /** One cell in a row — mirrors `ChecklistCell` from `data-contracts.md` §3.3. */
 export type ChecklistCell = {
   paragraphs: ChecklistParagraph[];
-  /** Verse reference string (e.g. `GEN 1:1`). */
-  reference: string;
-  /** Displayed reference (may differ from `reference` for verse bridges). */
-  displayedReference: string;
+  /**
+   * Structured verse reference (bridge-capable — `{ start }` is a single verse, `{ start, end }` a
+   * verse bridge). `undefined` for an empty-placeholder cell (a column with no verse at this row).
+   * The display string is derived client-side via `formatScrRef` — there is no separate
+   * server-supplied displayed reference.
+   */
+  reference?: ScriptureRange | undefined;
   /** Language identifier for text direction (e.g. `en`, `he`, `ar`). */
   language: string;
   /** Cell-level error message (when present, overrides paragraph rendering). */
@@ -115,8 +120,11 @@ export type ChecklistRow = {
   isMatch: boolean;
   /** Whether this row should include an edit affordance (first-cell gate). */
   includeEditLink: boolean;
-  /** Earliest verse reference in this row, used for per-row aria-label on edit/goto links. */
-  firstRef: string | undefined;
+  /**
+   * Earliest verse reference in this row (a single verse), used for the reference column and
+   * per-row aria-label on edit/goto links. `undefined` when no cell carries a reference.
+   */
+  firstRef?: ScriptureRange | undefined;
 };
 
 /** Empty-result variant — mirrors `EmptyResultMessage` from `data-contracts.md` §3.8. */
@@ -278,14 +286,16 @@ export type ChecklistToolProps = {
   /**
    * Edit-link click handler. The component renders an inline ghost/link button (variant="link" with
    * `tw:text-muted-foreground`) on the primary column's row when this is provided AND the row's
-   * `includeEditLink` flag is true. Receives the row + the row's earliest verse ref.
+   * `includeEditLink` flag is true. Receives the row + the row's earliest verse ref (the start of
+   * `firstRef`, or the cell's reference when the row carries none).
    */
-  onEditLinkClick?: (row: ChecklistRow, verseRef: string) => void;
+  onEditLinkClick?: (row: ChecklistRow, verseRef: SerializedVerseRef) => void;
 
   /**
    * Goto-link click handler. When provided, the reference column renders the verse ref as a
    * `LinkedScrRefButton` (link-button + tooltip "Go to {ref}"). When absent, the reference column
-   * falls back to plain mono-text (read-only context).
+   * falls back to plain mono-text (read-only context). Receives the row + the start verse of the
+   * row's `firstRef`.
    */
-  onGotoLinkClick?: (row: ChecklistRow, verseRef: string) => void;
+  onGotoLinkClick?: (row: ChecklistRow, verseRef: SerializedVerseRef) => void;
 };

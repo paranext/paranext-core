@@ -36,6 +36,23 @@ internal class ChecklistDataModelTests
         _options = SerializationOptions.CreateSerializationOptions();
     }
 
+    /// <summary>Build a single-verse <see cref="ScriptureRange"/> from a string like "GEN 1:1".</summary>
+    private static ScriptureRange SingleRange(string reference) =>
+        new ScriptureRange(new VerseRef(reference), null);
+
+    /// <summary>
+    /// Assert a <see cref="ScriptureRange"/> round-tripped to the expected single verse
+    /// (checking the structured book/chapter/verse rather than relying on VerseRef equality).
+    /// </summary>
+    private static void AssertSingleRef(ScriptureRange? range, string book, int chapter, int verse)
+    {
+        Assert.That(range, Is.Not.Null);
+        Assert.That(range!.Start.Book, Is.EqualTo(book));
+        Assert.That(range.Start.ChapterNum, Is.EqualTo(chapter));
+        Assert.That(range.Start.VerseNum, Is.EqualTo(verse));
+        Assert.That(range.End, Is.Null, "single-verse range carries no End");
+    }
+
     // ---------------------------------------------------------------------
     // ChecklistRequest (§2.1)
     // ---------------------------------------------------------------------
@@ -232,8 +249,7 @@ internal class ChecklistDataModelTests
             {
                 new("p", new List<ChecklistContentItem> { new TextItem("\\p", null) }),
             },
-            Reference: "GEN 1:1",
-            DisplayedReference: "GEN 1:1",
+            Reference: SingleRange("GEN 1:1"),
             Language: "en",
             Error: null
         );
@@ -242,7 +258,7 @@ internal class ChecklistDataModelTests
             IsMatch: true,
             IncludeEditLink: false,
             Score: 1.0,
-            FirstRef: "GEN 1:1"
+            FirstRef: SingleRange("GEN 1:1")
         );
         var result = new ChecklistResult(
             Rows: new List<ChecklistRow> { row },
@@ -260,7 +276,7 @@ internal class ChecklistDataModelTests
         Assert.That(actual, Is.Not.Null);
         Assert.That(actual!.Rows, Has.Count.EqualTo(1));
         Assert.That(actual.Rows[0].Cells, Has.Count.EqualTo(1));
-        Assert.That(actual.Rows[0].FirstRef, Is.EqualTo("GEN 1:1"));
+        AssertSingleRef(actual.Rows[0].FirstRef, "GEN", 1, 1);
         Assert.That(actual.HelpText, Is.EqualTo("Markers checklist help"));
     }
 
@@ -306,7 +322,7 @@ internal class ChecklistDataModelTests
             IsMatch: false,
             IncludeEditLink: true,
             Score: 3.14,
-            FirstRef: "EXO 20:1"
+            FirstRef: SingleRange("EXO 20:1")
         );
 
         var json = JsonSerializer.Serialize(row, _options);
@@ -316,7 +332,7 @@ internal class ChecklistDataModelTests
         Assert.That(actual!.IsMatch, Is.False);
         Assert.That(actual.IncludeEditLink, Is.True);
         Assert.That(actual.Score, Is.EqualTo(3.14));
-        Assert.That(actual.FirstRef, Is.EqualTo("EXO 20:1"));
+        AssertSingleRef(actual.FirstRef, "EXO", 20, 1);
     }
 
     [Test]
@@ -356,8 +372,7 @@ internal class ChecklistDataModelTests
             {
                 new("p", new List<ChecklistContentItem> { new TextItem("\\p", null) }),
             },
-            Reference: "GEN 1:1",
-            DisplayedReference: "GEN 1:1",
+            Reference: SingleRange("GEN 1:1"),
             Language: "en",
             Error: null
         );
@@ -366,8 +381,7 @@ internal class ChecklistDataModelTests
         var actual = JsonSerializer.Deserialize<ChecklistCell>(json, _options);
 
         Assert.That(actual, Is.Not.Null);
-        Assert.That(actual!.Reference, Is.EqualTo("GEN 1:1"));
-        Assert.That(actual.DisplayedReference, Is.EqualTo("GEN 1:1"));
+        AssertSingleRef(actual!.Reference, "GEN", 1, 1);
         Assert.That(actual.Language, Is.EqualTo("en"));
         Assert.That(actual.Paragraphs, Has.Count.EqualTo(1));
         Assert.That(actual.Error, Is.Null);
@@ -380,11 +394,11 @@ internal class ChecklistDataModelTests
     public void ChecklistCell_EmptyParagraphs_RepresentsMissingVerse()
     {
         // Per §3.3 validation: "Paragraphs may be empty for columns where the verse
-        // does not exist (missing verse = empty cell, INV-001)"
+        // does not exist (missing verse = empty cell, INV-001)". An empty placeholder
+        // cell carries a null Reference (see ChecklistRowBuilder.EmptyCell).
         var cell = new ChecklistCell(
             Paragraphs: new List<ChecklistParagraph>(),
-            Reference: "GEN 99:99",
-            DisplayedReference: "GEN 99:99",
+            Reference: null,
             Language: "en",
             Error: null
         );
@@ -393,6 +407,7 @@ internal class ChecklistDataModelTests
         var actual = JsonSerializer.Deserialize<ChecklistCell>(json, _options);
 
         Assert.That(actual!.Paragraphs, Is.Empty);
+        Assert.That(actual.Reference, Is.Null);
     }
 
     [Test]
@@ -403,8 +418,7 @@ internal class ChecklistDataModelTests
     {
         var cell = new ChecklistCell(
             Paragraphs: new List<ChecklistParagraph>(),
-            Reference: "GEN 1:1",
-            DisplayedReference: "GEN 1:1",
+            Reference: SingleRange("GEN 1:1"),
             Language: "en",
             Error: "Unreadable verse"
         );
@@ -663,10 +677,15 @@ internal class ChecklistDataModelTests
         for (int i = 0; i < columnCount; i++)
         {
             cells.Add(
-                new ChecklistCell(new List<ChecklistParagraph>(), "GEN 1:1", "GEN 1:1", "en", null)
+                new ChecklistCell(
+                    new List<ChecklistParagraph>(),
+                    SingleRange("GEN 1:1"),
+                    "en",
+                    null
+                )
             );
         }
-        var row = new ChecklistRow(cells, true, false, 0, "GEN 1:1");
+        var row = new ChecklistRow(cells, true, false, 0, SingleRange("GEN 1:1"));
         var result = new ChecklistResult(
             Rows: new List<ChecklistRow> { row },
             ColumnHeaders: headers,
