@@ -62,11 +62,11 @@ globalThis.webViewComponent = function HomeWebView() {
     papi.commands.sendCommand('platformGetResources.openGetResources');
   }, []);
 
-  const openProject = (projectId: string, isEditable: boolean) =>
+  const openProject = (projectId: string, isPublished: boolean) =>
     papi.commands.sendCommand(
-      isEditable
-        ? 'platformScriptureEditor.openScriptureEditor'
-        : 'platformScriptureEditor.openResourceViewer',
+      isPublished
+        ? 'platformScriptureEditor.openResourceViewer'
+        : 'platformScriptureEditor.openScriptureEditor',
       projectId,
     );
 
@@ -235,7 +235,7 @@ globalThis.webViewComponent = function HomeWebView() {
           const pdp = await papi.projectDataProviders.get('platform.base', data.id);
           return {
             projectId: data.id,
-            isEditable: await pdp.getSetting('platform.isEditable'),
+            isPublished: await pdp.getSetting('platform.isPublished'),
             fullName: await pdp.getSetting('platform.fullName'),
             name: await pdp.getSetting('platform.name'),
             language: await pdp.getSetting('platform.language'),

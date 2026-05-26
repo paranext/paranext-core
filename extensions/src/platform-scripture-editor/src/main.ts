@@ -156,18 +156,22 @@ async function open(
         'platformGetResources.excludePdpFactoryIdsInHome',
       ),
     });
-    const projectsWithEditable = await Promise.all(
+    const projectsWithIsPublished = await Promise.all(
       projectMetadatas.map(async (projectMetadata) => {
         const pdp = await papi.projectDataProviders.get('platform.base', projectMetadata.id);
         return {
           projectId: projectMetadata.id,
-          isEditable: await pdp.getSetting('platform.isEditable'),
+          // Use platform.isPublished to classify project-kind (Scripture editor vs Resource
+          // viewer), not platform.isEditable which is specifically about Scripture-text edit
+          // permission. A non-published project may still be non-editable for other reasons,
+          // but it does not belong in the Resource Viewer dialog.
+          isPublished: await pdp.getSetting('platform.isPublished'),
         };
       }),
     );
 
-    const projectIdsMatchingReadonly = projectsWithEditable
-      .filter(({ isEditable }) => isEditable !== isReadOnly)
+    const projectIdsMatchingReadonly = projectsWithIsPublished
+      .filter(({ isPublished }) => isPublished === isReadOnly)
       .map(({ projectId: pId }) => pId);
 
     if (projectIdsMatchingReadonly.length > 0) {
@@ -178,16 +182,19 @@ async function open(
         prompt: isReadOnly
           ? '%platformScriptureEditor_dialog_openResourceViewer_prompt%'
           : '%platformScriptureEditor_dialog_openScriptureEditor_prompt%',
-        // Include projects whose editable matches readonly
+        // Include published projects when opening the Resource Viewer, non-published projects when
+        // opening the Scripture Editor.
         includeProjectIds: projectIdsMatchingReadonly,
       });
     } else {
       logger.warn(
-        `Open ${isReadOnly ? 'Resource Viewer' : 'Scripture Editor'} did not find any projects with matching isEditable! Would show a prompt or something if there were a dialog available to do so`,
+        `Open ${isReadOnly ? 'Resource Viewer' : 'Scripture Editor'} did not find any projects with matching isPublished! Would show a prompt or something if there were a dialog available to do so`,
       );
     }
   } else {
-    // Get whether the provided project is editable
+    // Get whether the provided project's Scripture text is editable. This drives the editor's
+    // read-only mode and is a Scripture-text edit decision, not a project-vs-resource
+    // classification — so it stays on platform.isEditable.
     const pdp = await papi.projectDataProviders.get('platform.base', projectForWebView.projectId);
     projectForWebView.isEditable = await pdp.getSetting('platform.isEditable');
   }
