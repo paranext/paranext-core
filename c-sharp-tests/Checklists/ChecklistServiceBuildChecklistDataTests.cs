@@ -8,7 +8,7 @@ using Paranext.DataProvider.Checklists.Markers;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
 using SIL.Scripture;
-using ScriptureRange = Paranext.DataProvider.Checklists.ScriptureRange;
+using ScriptureRange = Paranext.DataProvider.Scripture.ScriptureRange;
 
 namespace TestParanextDataProvider.Checklists;
 

@@ -157,7 +157,7 @@ internal class CommentThreadSelectorConverterTests
         Assert.That(selector.ScriptureRanges[0].Start.BookNum, Is.EqualTo(1));
         Assert.That(selector.ScriptureRanges[0].Start.ChapterNum, Is.EqualTo(1));
         Assert.That(selector.ScriptureRanges[0].Start.VerseNum, Is.EqualTo(1));
-        Assert.That(selector.ScriptureRanges[0].End.VerseNum, Is.EqualTo(31));
+        Assert.That(selector.ScriptureRanges[0].End!.Value.VerseNum, Is.EqualTo(31));
         Assert.That(selector.ScriptureRanges[0].Granularity, Is.EqualTo("verse"));
     }
 

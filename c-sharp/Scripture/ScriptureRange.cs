@@ -2,35 +2,32 @@ using System.Linq;
 using System.Text.Json.Serialization;
 using SIL.Scripture;
 
-namespace Paranext.DataProvider.Checklists;
+namespace Paranext.DataProvider.Scripture;
 
 // === NEW IN PT10 ===
-// Reason: PT9's `VerseRangeChooserForm` holds start/end VerseRefs in form state; the PT10
-// PAPI payload needs a serializable record. Originally colocated in `ChecklistRequest.cs`
-// (its sole consumer was `ChecklistRequest.VerseRange`, so the PNX004 one-type-per-file
-// exclusive-use exception applied). Promoted to its own file when the checklist *result*
-// records were retyped from bespoke reference strings to this canonical type — it is now a
-// shared Checklists-module type (`ChecklistCell.Reference`, `ChecklistRow.FirstRef`,
-// `LinkItem.Reference`, and `ChecklistRequest.VerseRange`), so plain one-type-per-file
-// (PNX004) applies and the exclusive-use exception no longer does.
-// Maps to: data-contracts.md §2.1 (VerseRange field) + §§3.2/3.3/3.5 (result references)
+// The canonical paranext-core scripture *range* type — a start verse plus an optional end
+// verse. `VerseRef` (SIL.Scripture) remains the canonical single *reference*; this record is
+// the canonical two-point range. It mirrors the TypeScript `ScriptureRange`
+// (`extensions/src/platform-scripture/src/types/platform-scripture.d.ts` —
+// `{ start: SerializedVerseRef; end?: SerializedVerseRef }`).
+//
+// Originally introduced for the markers checklist and promoted to this shared namespace so
+// the whole C# data provider shares one range type instead of three divergent ones
+// (Checklists, Checks `InputRange`, Comments). `Checks.InputRange` and
+// `Projects.CommentScriptureRange` derive from this record.
+// See working-docs/csharp-scripture-range-canonicalization-design.md.
 //
 // EXPLANATION:
 // `VerseRef` serializes to the canonical scripture-reference wire shape via the repo-wide
-// `VerseRefConverter` (registered in `JsonUtils/SerializationOptions.cs`). A `ScriptureRange`
-// is the single canonical structured scripture reference used throughout the Checklists
-// module — there is no bespoke per-feature reference string. The two static factories funnel
-// every producer (the cell builder in `ChecklistService` and the row builder in
-// `ChecklistRowBuilder`) through one conversion from `SIL.Scripture.VerseRef`.
+// `VerseRefConverter` (registered in `JsonUtils/SerializationOptions.cs`). The two static
+// factories are the one canonical conversion from a (possibly-bridged)
+// `SIL.Scripture.VerseRef` — used by the Checklists cell/row builders. Producers that
+// already hold explicit start/end points construct the record directly.
 /// <summary>
 /// A scripture verse range: a start verse plus an optional end verse. Bridge-capable —
-/// <c>{Start}</c> alone is a single verse; <c>{Start, End}</c> is a verse bridge. Used both
-/// as <see cref="ChecklistRequest.VerseRange"/> (the requested range) and as the structured
-/// reference on checklist result records (<see cref="ChecklistCell.Reference"/>,
-/// <see cref="ChecklistRow.FirstRef"/>, <see cref="LinkItem.Reference"/>). Serializes via the
-/// repo-wide <c>VerseRefConverter</c>. Not to be confused with the unrelated mutable
-/// <c>ScriptureRange</c> class in <c>c-sharp/Projects/CommentThreadSelector.cs</c> (different
-/// semantics — mutable, required <c>End</c>, carries a <c>Granularity</c> field).
+/// <c>{Start}</c> alone is a single verse; <c>{Start, End}</c> is a verse bridge or a
+/// multi-verse range. The canonical paranext-core scripture-range type; serializes via the
+/// repo-wide <c>VerseRefConverter</c>.
 /// </summary>
 [method: JsonConstructor]
 public record ScriptureRange(VerseRef Start, VerseRef? End)

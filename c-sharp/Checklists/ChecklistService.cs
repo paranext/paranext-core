@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using Paranext.DataProvider.Checklists.Markers;
 using Paranext.DataProvider.Projects;
+using Paranext.DataProvider.Scripture;
 using Paratext.Data;
 using PtxUtils;
 using SIL.Scripture;
