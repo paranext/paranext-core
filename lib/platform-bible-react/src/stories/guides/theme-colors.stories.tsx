@@ -21,10 +21,6 @@ const TOKEN_NAMES = [
   'card',
 ] as const;
 
-function colorVar(token: string) {
-  return `var(--${token})`;
-}
-
 function useRootCssVar(name: string) {
   const [value, setValue] = useState('');
 
@@ -64,9 +60,9 @@ function TokenSwatch({ token, foregroundToken }: { token: string; foregroundToke
   return (
     <Input
       style={{
-        backgroundColor: colorVar(token),
-        color: colorVar(foregroundToken),
-        borderColor: colorVar('border'),
+        backgroundColor: `var(--${token})`,
+        color: `var(--${foregroundToken})`,
+        borderColor: 'var(--border)',
       }}
       className="tw:border-2"
       value={`bg: ${rawBg} | fg: ${rawFg}`}
