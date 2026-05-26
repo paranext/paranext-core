@@ -34,6 +34,7 @@ import {
   resolveOpenEditorDispatch,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   startDefaultProjectPicker,
+  syncOnProjectSwitch,
 } from './platform-scripture-editor.utils';
 import { MarkersViewNotifier } from './markers-view-notifier.model';
 
@@ -139,7 +140,7 @@ async function insertCommentAtSelection(webViewId: string | undefined): Promise<
   await webViewController.insertCommentAtSelection();
 }
 
-/** Function to prompt for a project and open it in the editor */
+/** Function to prompt for a project or use the one passed in and open it in the editor */
 async function open(
   isReadOnly: boolean,
   projectId?: string,
@@ -226,18 +227,30 @@ async function open(
       });
     }
 
+    if (interfaceMode === 'simple' && dispatch.kind === 'replace-tab') {
+      const outgoing = allScriptureEditors.find((e) => e.id === dispatch.targetTabId);
+      // Skip outgoing S/R for read-only viewers — no local changes are possible.
+      // ENHANCE: also skip if the outgoing editor had no user edits during the session (would
+      // require tracking a dirty flag in the editor controller, which doesn't exist yet).
+      const outgoingProjectId = outgoing?.isReadOnly ? undefined : outgoing?.projectId;
+      // Fire-and-forget: runs concurrently with `openWebView`.
+      syncOnProjectSwitch(papi, projectForWebView.projectId, outgoingProjectId);
+    }
+
     const openWebViewOptions: PlatformScriptureEditorOptions = {
       projectId: projectForWebView.projectId,
       isReadOnly: !projectForWebView.isEditable,
       options,
     };
-    return papi.webViews.openWebView(
+    const openedWebViewId = await papi.webViews.openWebView(
       SCRIPTURE_EDITOR_WEBVIEW_TYPE,
       dispatch.kind === 'replace-tab'
         ? { type: 'replace-tab', targetTabId: dispatch.targetTabId }
         : undefined,
       openWebViewOptions,
     );
+
+    return openedWebViewId;
   }
   return undefined;
 }
