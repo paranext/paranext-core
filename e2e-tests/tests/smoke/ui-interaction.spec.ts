@@ -16,10 +16,15 @@ test.describe('UI Interaction', () => {
   test.beforeAll(async ({ electronApp }) => {
     // Maximize the window once so everything is visible and clickable for all tests
     // Wait for the first window to exist before maximizing
-    await electronApp.firstWindow({ timeout: 10_000 });
+    const page = await electronApp.firstWindow({ timeout: 10_000 });
     await electronApp.evaluate(({ BrowserWindow }) => {
       BrowserWindow.getAllWindows()[0].maximize();
     });
+
+    // Wait for the app to be fully ready (dock layout visible + dialog service registered)
+    // before calling the settings service data provider. Without this wait the PAPI request
+    // can arrive before the data provider has registered its methods, causing a timeout.
+    await waitForAppReady(page);
 
     // Force the interface language to English so menu-item text matchers
     // (e.g. /Help/i) are deterministic regardless of the developer's saved
