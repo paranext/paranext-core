@@ -21,4 +21,8 @@ public static class ProjectDataType
     public const string FINAL_VERSE_NUMBER = "FinalVerseNumber";
     public const string FINAL_CHAPTER = "FinalChapter";
     public const string FINAL_VERSE_NUMBERS_IN_BOOK = "FinalVerseNumbersInBook";
+
+    // platformScripture.MarkerNames projectInterface — Heading classification + per-book language
+    public const string HEADING_MARKERS = "HeadingMarkers";
+    public const string JOINED_TEXT_LANGUAGE = "JoinedTextLanguage";
 }
