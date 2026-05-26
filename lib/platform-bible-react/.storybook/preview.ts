@@ -40,7 +40,7 @@ const preview: Preview = {
     },
 
     /**
-     * Toolbar Color scheme + Theme: `.storybook/manager.tsx` + `.storybook/theme-decorator.ts` (not
+     * Toolbar Appearance + Theme: `.storybook/manager.tsx` + `.storybook/theme-decorator.ts` (not
      * `globals.theme`)
      */
     backgrounds: {

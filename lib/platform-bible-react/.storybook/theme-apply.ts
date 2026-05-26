@@ -29,7 +29,7 @@ export const PLATFORM_BIBLE_THEME_CHANNEL = 'platform-bible/storybook-theme-chan
  * Class names are not uniform: bare `dark` for the Platform default, family-prefixed `paratext-*`,
  * and theme-prefixed `theme-shadcn-neutral`. A uniform `theme-{family}` scheme with `.dark` as a
  * modifier would require coordinated changes in `index.css`, `themes.data.json`, and the app's
- * `theme.service-host.ts`. Deferred; tracked in PR #2180 review.
+ * `theme.service-host.ts`. Deferred.
  */
 const CLASS_MAP: Record<StorybookThemeId, readonly string[]> = {
   'shadcn-light': ['theme-shadcn-neutral'],
@@ -41,8 +41,8 @@ const CLASS_MAP: Record<StorybookThemeId, readonly string[]> = {
 };
 
 /**
- * Must be a superset of every class value in `CLASS_MAP`. Add new entries here whenever a new
- * theme is added to CLASS_MAP, otherwise switching away will leave stale classes on `<html>`.
+ * Must be a superset of every class value in `CLASS_MAP`. Add new entries here whenever a new theme
+ * is added to CLASS_MAP, otherwise switching away will leave stale classes on `<html>`.
  */
 const ALL_THEME_CLASSES = [
   'dark',

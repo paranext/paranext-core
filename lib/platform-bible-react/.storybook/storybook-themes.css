@@ -11,7 +11,7 @@
  *
  * Intentional format mismatch: this file uses `hsl(...)` while `index.css` uses `oklch(...)`.
  * Both are complete CSS color values consumed via bare `var(--token)`. Do NOT re-wrap them in
- * `hsl(var(--token))` — see PR #2327 for the bug that motivated removing legacy wrapping.
+ * `hsl(var(--token))` — re-wrapping a complete CSS color value produces invalid CSS.
  */
 .theme-shadcn-neutral {
   --background: hsl(0 0% 100%);

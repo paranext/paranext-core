@@ -84,6 +84,10 @@ function ColorSchemeTool() {
       <IconButton
         key={`${REGISTER_ID}/color-scheme`}
         title="Appearance"
+        // Pinned off: the previous `!!toolbarThemeState.colorScheme` was vacuously true (the field
+        // always has a value), which made the button look permanently pressed. Reflecting the
+        // dropdown's open/closed state would require lifting `WithTooltip`'s internal state — a
+        // follow-up if visual feedback on open is desired.
         active={false}
       >
         <SunIcon />
@@ -126,6 +130,7 @@ function ThemeFamilyTool() {
       <IconButton
         key={`${REGISTER_ID}/theme-family`}
         title="Theme"
+        // Pinned off: see the matching comment in `ColorSchemeTool` above.
         active={false}
       >
         <PaintBrushIcon />
