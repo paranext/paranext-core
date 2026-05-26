@@ -90,20 +90,19 @@ export type ProjectNotFoundErrorType = Error & {
 
 /** Create a project-not-found error without extending the native `Error` class (see above). */
 export function makeProjectNotFoundError(projectId: string): ProjectNotFoundErrorType {
-  const err = new Error(`Project not found: ${projectId}`);
-  // Attach the sentinel name + code so callers can discriminate via isProjectNotFoundError.
-  Object.assign(err, { name: 'ProjectNotFoundError', code: 'PROJECT_NOT_FOUND', projectId });
-  // eslint-disable-next-line no-type-assertion/no-type-assertion -- justified: discriminating on attached sentinel above.
-  return err as ProjectNotFoundErrorType;
+  // Build the error via Object.assign so the return type narrows naturally from the literal
+  // object shape — no `as` cast needed, satisfies no-type-assertion.
+  return Object.assign(new Error(`Project not found: ${projectId}`), {
+    name: 'ProjectNotFoundError' as const,
+    code: 'PROJECT_NOT_FOUND' as const,
+    projectId,
+  });
 }
 
 /** Type guard — returns true when `err` is a `ProjectNotFoundError` produced by this module. */
 export function isProjectNotFoundError(err: unknown): err is ProjectNotFoundErrorType {
-  return (
-    err instanceof Error &&
-    'code' in err &&
-    (err as { code?: unknown }).code === 'PROJECT_NOT_FOUND'
-  );
+  // `'code' in err` narrows the type to `{ code: unknown }` automatically (TS 4.9+).
+  return err instanceof Error && 'code' in err && err.code === 'PROJECT_NOT_FOUND';
 }
 
 /**
