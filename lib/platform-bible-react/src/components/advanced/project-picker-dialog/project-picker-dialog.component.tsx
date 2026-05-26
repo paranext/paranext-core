@@ -70,10 +70,7 @@ function ProjectSection({
               <TableCell className="tw:border-0">
                 <div className="tw:flex tw:items-center tw:gap-2">
                   {p.id === currentProjectId && (
-                    <CheckIcon
-                      className="tw:h-4 tw:w-4 tw:shrink-0"
-                      aria-label="current project"
-                    />
+                    <CheckIcon className="tw:h-4 tw:w-4 tw:shrink-0" aria-label="current project" />
                   )}
                   <span>
                     <span className="tw:font-medium">{p.fullName}</span>

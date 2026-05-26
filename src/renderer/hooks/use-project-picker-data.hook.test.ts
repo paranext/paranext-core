@@ -22,6 +22,12 @@ vi.mock('@shared/services/logger.service', () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
 
+vi.mock('@renderer/hooks/papi-hooks', () => ({
+  useData: vi.fn(() => ({
+    RecentProjects: vi.fn().mockReturnValue([[], vi.fn(), false]),
+  })),
+}));
+
 vi.mock('@renderer/services/papi-frontend.service', () => ({
   webViews: {
     getAllOpenWebViewDefinitions: vi.fn(async () => []),
@@ -38,7 +44,9 @@ vi.mock('@shared/services/project-data-provider.service', () => ({
   papiFrontendProjectDataProviderService: {
     get: vi.fn(async () => ({
       getSetting: vi.fn(async (key: string) => {
-        if (key === 'platform.name') return 'Mock Project';
+        if (key === 'platform.fullName') return 'Mock Full Name';
+        if (key === 'platform.name') return 'Mock';
+        if (key === 'platform.language') return 'English';
         return undefined;
       }),
     })),
@@ -55,7 +63,8 @@ async function importMocks() {
   const { papiFrontendProjectDataProviderService } = await import(
     '@shared/services/project-data-provider.service'
   );
-  return { webViews, projectLookupService, papiFrontendProjectDataProviderService };
+  const { useData } = await import('@renderer/hooks/papi-hooks');
+  return { webViews, projectLookupService, papiFrontendProjectDataProviderService, useData };
 }
 
 // --- Tests ---
@@ -86,7 +95,7 @@ describe('useProjectPickerData', () => {
 
     const { result } = renderHook(() => useProjectPickerData());
 
-    await waitFor(() => expect(result.current.currentProject?.name).toBe('Genesis Project'));
+    await waitFor(() => expect(result.current.currentProject?.fullName).toBe('Genesis Project'));
     expect(result.current.currentProject?.id).toBe('proj-abc');
   });
 
@@ -101,32 +110,66 @@ describe('useProjectPickerData', () => {
     vi.mocked(papiFrontendProjectDataProviderService.get).mockImplementation(
       async (_iface: string, projectId: string) =>
         ({
-          getSetting: vi.fn(async () => `Name for ${projectId}`),
+          getSetting: vi.fn(async (key: string) => {
+            if (key === 'platform.fullName') return `Full ${projectId}`;
+            if (key === 'platform.name') return `Short ${projectId}`;
+            if (key === 'platform.language') return 'English';
+            return undefined;
+          }),
         }) as never,
     );
 
     const { result } = renderHook(() => useProjectPickerData());
 
     await waitFor(() => expect(result.current.allProjects.length).toBe(2));
-    expect(result.current.allProjects[0]).toEqual({ id: 'p1', name: 'Name for p1' });
-    expect(result.current.allProjects[1]).toEqual({ id: 'p2', name: 'Name for p2' });
+    expect(result.current.allProjects[0]).toMatchObject({
+      id: 'p1',
+      fullName: 'Full p1',
+      shortName: 'Short p1',
+      language: 'English',
+    });
+    expect(result.current.allProjects[1]).toMatchObject({
+      id: 'p2',
+      fullName: 'Full p2',
+      shortName: 'Short p2',
+      language: 'English',
+    });
   });
 
-  it('recentProjects equals allProjects (stub — both use the same source)', async () => {
-    const { webViews, projectLookupService, papiFrontendProjectDataProviderService } =
+  it('recentProjects reflects recent project IDs from data provider', async () => {
+    const { webViews, projectLookupService, papiFrontendProjectDataProviderService, useData } =
       await importMocks();
-    vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([]);
-    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([
-      { id: 'p1', projectInterfaces: [], pdpFactoryInfo: {} },
-    ] as never);
-    vi.mocked(papiFrontendProjectDataProviderService.get).mockResolvedValue({
-      getSetting: vi.fn(async () => 'Project One'),
+    vi.mocked(useData).mockReturnValue({
+      RecentProjects: vi.fn().mockReturnValue([['proj-r1', 'proj-r2'], vi.fn(), false]),
     } as never);
+    vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([]);
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([]);
+    vi.mocked(papiFrontendProjectDataProviderService.get).mockImplementation(
+      async (_iface: string, projectId: string) =>
+        ({
+          getSetting: vi.fn(async (key: string) => {
+            if (key === 'platform.fullName') return `Full ${projectId}`;
+            if (key === 'platform.name') return `Short ${projectId}`;
+            if (key === 'platform.language') return 'English';
+            return undefined;
+          }),
+        }) as never,
+    );
 
     const { result } = renderHook(() => useProjectPickerData());
 
-    await waitFor(() => expect(result.current.allProjects.length).toBe(1));
-    expect(result.current.recentProjects).toEqual(result.current.allProjects);
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.recentProjects).toHaveLength(2);
+    expect(result.current.recentProjects[0]).toMatchObject({
+      id: 'proj-r1',
+      fullName: 'Full proj-r1',
+      shortName: 'Short proj-r1',
+    });
+    expect(result.current.recentProjects[1]).toMatchObject({
+      id: 'proj-r2',
+      fullName: 'Full proj-r2',
+      shortName: 'Short proj-r2',
+    });
   });
 
   it('refreshes currentProject when onDidUpdateWebView fires', async () => {
@@ -157,6 +200,6 @@ describe('useProjectPickerData', () => {
     expect(capturedCallback).toBeDefined();
     act(() => capturedCallback!());
 
-    await waitFor(() => expect(result.current.currentProject?.name).toBe('Updated Project'));
+    await waitFor(() => expect(result.current.currentProject?.fullName).toBe('Updated Project'));
   });
 });
