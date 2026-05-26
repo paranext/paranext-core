@@ -27,8 +27,8 @@ namespace Paranext.DataProvider.Checklists;
 //
 // Algorithmic phases (per invocation, in order):
 //   1. Initialize: build mutable shadow cells + cellRefMap + referenceMap +
-//      handledCells sets. Parse DisplayedReference (has bridge notation) via
-//      SIL.Scripture.VerseRef so AllVerses() can expand bridges.
+//      handledCells sets. Re-fuse each cell's structured ScriptureRange into a
+//      (possibly-bridge) SIL.Scripture.VerseRef so AllVerses() can expand bridges.
 //   2. Outer loop: for each column, walk cells in order.
 //      - GrabMatchingCellsFromColumns collects one cell per later column
 //        whose normalized verse refs overlap the current cell's.
@@ -47,10 +47,11 @@ namespace Paranext.DataProvider.Checklists;
 //     source cell that accumulates merged state, and project back to
 //     ChecklistCell records only at row-emission time.
 //   - PT9 reads versification from the first cell's live VerseRef. PT10's
-//     ChecklistCell has no VerseRef field. We default to ScrVers.English and
-//     trust the orchestrator (CAP-006) to pre-normalize per INV-007. This is
-//     sufficient for all 20 CAP-005 tests and for the target gm-011/012/013
-//     same-versification shapes.
+//     ChecklistCell carries its reference as a serialized ScriptureRange; the
+//     builder does not pin a project versification off it — it defaults to
+//     ScrVers.English and trusts the orchestrator (CAP-006) to pre-normalize per
+//     INV-007. This is sufficient for all 20 CAP-005 tests and for the target
+//     gm-011/012/013 same-versification shapes.
 
 /// <summary>
 /// Aligns cells from multiple columns into rows by verse reference. Markers
@@ -115,8 +116,12 @@ internal static class ChecklistRowBuilder
     private sealed class MutableCell
     {
         public List<ChecklistParagraph> Paragraphs { get; }
-        public string Reference { get; set; }
-        public string DisplayedReference { get; set; }
+
+        // StartVerseRef is the cell's reference as a (possibly-bridge) VerseRef — the
+        // canonical internal form the alignment math operates on (AllVerses() expansion).
+        // EndVerseRef is the last verse of the cell's range, extended in place when adjacent
+        // cells are merged. The emitted ChecklistCell.Reference (a structured ScriptureRange)
+        // is projected from these two at ToChecklistCell() time.
         public VerseRef StartVerseRef { get; set; }
         public VerseRef EndVerseRef { get; set; }
         public string Language { get; }
@@ -124,8 +129,6 @@ internal static class ChecklistRowBuilder
 
         public MutableCell(
             List<ChecklistParagraph> paragraphs,
-            string reference,
-            string displayedReference,
             VerseRef startVerseRef,
             VerseRef endVerseRef,
             string language,
@@ -133,8 +136,6 @@ internal static class ChecklistRowBuilder
         )
         {
             Paragraphs = paragraphs;
-            Reference = reference;
-            DisplayedReference = displayedReference;
             StartVerseRef = startVerseRef;
             EndVerseRef = endVerseRef;
             Language = language;
@@ -145,13 +146,15 @@ internal static class ChecklistRowBuilder
         /// Projects the current mutable state into an immutable
         /// <see cref="ChecklistCell"/> record for row emission. The returned
         /// cell's <c>Paragraphs</c> list is the same reference held by this
-        /// <see cref="MutableCell"/> — do not mutate after emission.
+        /// <see cref="MutableCell"/> — do not mutate after emission. <c>Reference</c> is
+        /// built from <see cref="StartVerseRef"/>/<see cref="EndVerseRef"/> as a structured
+        /// <see cref="ScriptureRange"/> (null when the cell has no verse — the empty
+        /// placeholder).
         /// </summary>
         public ChecklistCell ToChecklistCell() =>
             new ChecklistCell(
                 Paragraphs: Paragraphs,
-                Reference: Reference,
-                DisplayedReference: DisplayedReference,
+                Reference: ScriptureRange.FromBounds(StartVerseRef, EndVerseRef),
                 Language: Language,
                 Error: Error
             );
@@ -238,8 +241,8 @@ internal static class ChecklistRowBuilder
         //
         // EXPLANATION:
         // PT9 reads default _versification from the first cell's live VerseRef.
-        // PT10's ChecklistCell has no VerseRef field, so we default to
-        // ScrVers.English and rely on the orchestrator (CAP-006) to
+        // PT10's builder does not pin versification off the cell, so we default
+        // to ScrVers.English and rely on the orchestrator (CAP-006) to
         // pre-normalize per INV-007. We also pre-build the MutableCell shadow
         // so Merge operations don't need to touch the immutable records.
         private void Initialize()
@@ -256,8 +259,6 @@ internal static class ChecklistRowBuilder
                     mcol.Add(
                         new MutableCell(
                             paragraphs: new List<ChecklistParagraph>(cell.Paragraphs),
-                            reference: cell.Reference,
-                            displayedReference: cell.DisplayedReference,
                             startVerseRef: parsed.start,
                             endVerseRef: parsed.end,
                             language: cell.Language,
@@ -276,45 +277,32 @@ internal static class ChecklistRowBuilder
         }
 
         // === NEW IN PT10 ===
-        // Reason: ChecklistCell has no VerseRef field — PT9 read it directly
-        // off the cell. Parse from DisplayedReference (which carries the
-        // bridge notation like "EXO 20:2-5"); fall back to Reference if
-        // DisplayedReference is empty.
+        // Reason: ChecklistCell.Reference is a structured ScriptureRange (Start point +
+        // optional End point) — the bridge is carried as two endpoints, not as a
+        // bridge-notation string. The alignment math downstream calls
+        // StartVerseRef.AllVerses() to expand a cell's full verse coverage, so we re-fuse
+        // the range's endpoints into a single (possibly-bridge) VerseRef here.
         // Maps to: Infrastructure for BHV-109
         //
         // EXPLANATION:
-        // ChecklistCell.Reference holds the single START reference of the
-        // cell (e.g. "EXO 20:2"). ChecklistCell.DisplayedReference holds the
-        // full range including any bridge ("EXO 20:2-5"). We parse the
-        // displayed reference so AllVerses() can expand bridges correctly
-        // during alignment. Empty-placeholder cells (Reference == "") return
+        // For a single-verse cell the range is {Start}; `start` is that point and `end`
+        // equals it. For a bridge the range is {Start, End}; `start` is rebuilt as a bridge
+        // VerseRef "first-last" so AllVerses() expands it exactly as it did when the cell
+        // carried a "EXO 20:2-5" string. Cells with no reference (Reference == null) return
         // a default VerseRef pair — they contribute nothing to the ref maps.
         /// <summary>
-        /// Parses start and end <see cref="VerseRef"/> from a
-        /// <see cref="ChecklistCell"/>. Empty-reference cells return default
-        /// <see cref="VerseRef"/> values.
+        /// Derives the start and end <see cref="VerseRef"/> for a <see cref="ChecklistCell"/>
+        /// from its structured <see cref="ChecklistCell.Reference"/>. Cells with no
+        /// reference return default <see cref="VerseRef"/> values.
         /// </summary>
         private (VerseRef start, VerseRef end) ParseVerseRefs(ChecklistCell cell)
         {
-            if (
-                string.IsNullOrEmpty(cell.DisplayedReference)
-                && string.IsNullOrEmpty(cell.Reference)
-            )
+            if (cell.Reference is not { } range)
                 return (new VerseRef(), new VerseRef());
 
-            string refToParse = !string.IsNullOrEmpty(cell.DisplayedReference)
-                ? cell.DisplayedReference
-                : cell.Reference;
-
-            VerseRef start;
-            try
-            {
-                start = new VerseRef(refToParse, _versification);
-            }
-            catch
-            {
+            VerseRef start = ReconstructVerseRef(range);
+            if (start.IsDefault)
                 return (new VerseRef(), new VerseRef());
-            }
 
             // AllVerses expands bridges; .Last() gives the final verse of a bridge.
             VerseRef end;
@@ -328,6 +316,44 @@ internal static class ChecklistRowBuilder
             }
 
             return (start, end);
+        }
+
+        // === NEW IN PT10 ===
+        // Reason: a structured ScriptureRange carries a bridge as two endpoint points
+        // ({Start}, {End}); the alignment math needs a single VerseRef whose AllVerses()
+        // enumerates every verse the cell covers.
+        // Maps to: Infrastructure for BHV-109
+        //
+        // EXPLANATION:
+        // Fuses the range's Start/End back into one VerseRef, versified to the builder's
+        // _versification (mirroring the old `new VerseRef(string, _versification)` parse).
+        // When Start and End share a book+chapter and End is later, the verse component
+        // becomes the bridge form "first-last"; otherwise the cell is a single verse and
+        // Start's own verse component is used as-is. Input cells from GetCellsForBook are
+        // always single-chapter, so the cross-chapter fallback is purely defensive.
+        /// <summary>
+        /// Rebuilds a (possibly-bridge) <see cref="VerseRef"/> from a structured
+        /// <see cref="ScriptureRange"/> so bridge expansion (<c>AllVerses()</c>) works
+        /// during alignment. Returns a default <see cref="VerseRef"/> on malformed input.
+        /// </summary>
+        private VerseRef ReconstructVerseRef(ScriptureRange range)
+        {
+            VerseRef start = range.Start;
+            string verse =
+                range.End is { } end
+                && end.BookNum == start.BookNum
+                && end.ChapterNum == start.ChapterNum
+                && end.VerseNum > start.VerseNum
+                    ? $"{start.VerseNum}-{end.VerseNum}"
+                    : start.Verse;
+            try
+            {
+                return new VerseRef(start.Book, start.ChapterNum.ToString(), verse, _versification);
+            }
+            catch
+            {
+                return new VerseRef();
+            }
         }
 
         // === PORTED FROM PT9 ===
@@ -516,12 +542,12 @@ internal static class ChecklistRowBuilder
         //
         // EXPLANATION (PT10 adaptation):
         // PT9 mutates the source CLCell via MergeWithCell and writes a new
-        // Reference/DisplayedReference on it. Here we update the lead
-        // MutableCell's Paragraphs list and extend its DisplayedReference
-        // range. Reference stays at the lead cell's start ref (for binary
-        // search ordering). DisplayedReference is rebuilt as "{book chap}:
-        // {firstVerse}-{lastVerse}" from the lead cell's start and the
-        // merged range's end.
+        // Reference/DisplayedReference on it. Here we append the grabbed cells'
+        // paragraphs to the lead MutableCell and extend its EndVerseRef to the
+        // merged range's end. StartVerseRef stays at the lead cell's start (for
+        // binary-search ordering); ToChecklistCell() projects {StartVerseRef,
+        // EndVerseRef} into the emitted cell's ScriptureRange — so a merged cell
+        // carries the full merged range as its structured Reference.
         private void MergeGrabbedCells(int currentCol, List<int>[] cellsToMerge)
         {
             for (int col = currentCol; col < cellsToMerge.Length; col++)
@@ -546,34 +572,7 @@ internal static class ChecklistRowBuilder
                 }
 
                 lead.EndVerseRef = mergedEnd;
-                lead.DisplayedReference = BuildRangeDisplayedReference(
-                    lead.StartVerseRef,
-                    mergedEnd
-                );
             }
-        }
-
-        // === NEW IN PT10 ===
-        // Reason: PT9 uses ParatextData.ReferenceRange.LocalizedString for
-        // this; we avoid a ParatextData dependency and build a simple
-        // "{book} {chap}:{start}-{end}" form. Tests do not pin the exact
-        // format; CAP-006 may swap this for a localized form later.
-        // Maps to: Infrastructure for BHV-109
-        /// <summary>
-        /// Builds a displayed-reference string spanning a start and end verse
-        /// reference. When both refs share book+chapter, produces
-        /// <c>"EXO 20:2-5"</c>; otherwise falls back to the concatenated form
-        /// <c>"{start}-{end}"</c>.
-        /// </summary>
-        private static string BuildRangeDisplayedReference(VerseRef start, VerseRef end)
-        {
-            if (start.IsDefault && end.IsDefault)
-                return string.Empty;
-            if (end.IsDefault || start.Equals(end))
-                return start.ToString();
-            if (start.BookNum == end.BookNum && start.ChapterNum == end.ChapterNum)
-                return $"{start.Book} {start.ChapterNum}:{start.VerseNum}-{end.VerseNum}";
-            return $"{start}-{end}";
         }
 
         // === PORTED FROM PT9 ===
@@ -698,16 +697,18 @@ internal static class ChecklistRowBuilder
                 }
             }
 
-            string firstRef = earliestRef.HasValue ? earliestRef.Value.ToString() : string.Empty;
+            ScriptureRange? firstRef = earliestRef.HasValue
+                ? ScriptureRange.FromVerseRef(earliestRef.Value)
+                : null;
 
             // VAL-007 cond 2 (row-level signal): mark IncludeEditLink=true when
-            // the first cell of the row has a non-default VerseRef (mapped to a
-            // non-empty Reference per §3.3). TODO (VAL-007): downstream inline
-            // emission in ChecklistService.ApplyEditLinkGating currently runs
-            // per-cell and does not consult this row-level flag. Wire the flag
-            // into the emission gate (or promote the gate to row-level) once
-            // chapter-level CanEdit lands alongside DEF-BE-001.
-            bool includeEditLink = cells.Count > 0 && !string.IsNullOrEmpty(cells[0].Reference);
+            // the first cell of the row has a reference (a non-null Reference per
+            // §3.3). TODO (VAL-007): downstream inline emission in
+            // ChecklistService.ApplyEditLinkGating currently runs per-cell and does
+            // not consult this row-level flag. Wire the flag into the emission gate
+            // (or promote the gate to row-level) once chapter-level CanEdit lands
+            // alongside DEF-BE-001.
+            bool includeEditLink = cells.Count > 0 && cells[0].Reference is not null;
 
             var newRow = new ChecklistRow(
                 Cells: cells,
@@ -738,8 +739,7 @@ internal static class ChecklistRowBuilder
         private static ChecklistCell EmptyCell() =>
             new ChecklistCell(
                 Paragraphs: new List<ChecklistParagraph>(),
-                Reference: string.Empty,
-                DisplayedReference: string.Empty,
+                Reference: null,
                 Language: string.Empty,
                 Error: null
             );
@@ -755,19 +755,18 @@ internal static class ChecklistRowBuilder
         // row has the same FirstRef, the new row is inserted immediately
         // AFTER it (PT9 semantic).
         //
-        // PT9 compares VerseRefs via VerseRef.CompareTo. PT10's ChecklistRow
-        // stores FirstRef as a string; we parse both sides to VerseRef and
-        // use the semantic comparator so cross-book/chapter ordering stays
-        // correct.
+        // PT9 compares VerseRefs via VerseRef.CompareTo. PT10's ChecklistRow.FirstRef
+        // is a structured ScriptureRange; we take its Start VerseRef on both sides and
+        // use the semantic comparator so cross-book/chapter ordering stays correct.
         private int FindInsertionIndex(ChecklistRow newRow)
         {
             int start = 0;
             int end = _rows.Count;
-            VerseRef newRef = ParseFirstRef(newRow.FirstRef);
+            VerseRef newRef = FirstRefStartVerse(newRow.FirstRef);
             while (true)
             {
                 int indexToCheck = start + ((end - start) >> 1);
-                VerseRef checkRef = ParseFirstRef(_rows[indexToCheck].FirstRef);
+                VerseRef checkRef = FirstRefStartVerse(_rows[indexToCheck].FirstRef);
                 int compareValue = CompareVerseRefs(checkRef, newRef);
 
                 if (compareValue > 0)
@@ -784,23 +783,12 @@ internal static class ChecklistRowBuilder
         }
 
         // === NEW IN PT10 ===
-        // Reason: PT10 ChecklistRow stores FirstRef as a string (per
-        // data-contracts.md §3.2). We parse back to VerseRef for semantic
-        // comparison within FindInsertionIndex.
+        // Reason: PT10 ChecklistRow.FirstRef is a structured ScriptureRange (per
+        // data-contracts.md §3.2). FindInsertionIndex compares rows by their first
+        // verse, which is the range's Start point.
         // Maps to: Infrastructure for BHV-109
-        private VerseRef ParseFirstRef(string? firstRef)
-        {
-            if (string.IsNullOrEmpty(firstRef))
-                return new VerseRef();
-            try
-            {
-                return new VerseRef(firstRef, _versification);
-            }
-            catch
-            {
-                return new VerseRef();
-            }
-        }
+        private static VerseRef FirstRefStartVerse(ScriptureRange? firstRef) =>
+            firstRef?.Start ?? new VerseRef();
 
         // === NEW IN PT10 ===
         // Reason: VerseRef comparison operators throw when either side is

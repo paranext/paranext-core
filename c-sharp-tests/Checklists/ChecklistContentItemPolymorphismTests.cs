@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Text.Json;
 using Paranext.DataProvider.Checklists;
 using Paranext.DataProvider.JsonUtils;
+using SIL.Scripture;
 
 namespace TestParanextDataProvider.Checklists;
 
@@ -41,6 +42,23 @@ internal class ChecklistContentItemPolymorphismTests
     public void SetUp()
     {
         _options = SerializationOptions.CreateSerializationOptions();
+    }
+
+    /// <summary>Build a single-verse <see cref="ScriptureRange"/> from a string like "GEN 1:1".</summary>
+    private static ScriptureRange SingleRange(string reference) =>
+        new ScriptureRange(new VerseRef(reference), null);
+
+    /// <summary>
+    /// Assert a <see cref="ScriptureRange"/> is the expected single verse (checks the
+    /// structured book/chapter/verse rather than relying on VerseRef equality).
+    /// </summary>
+    private static void AssertSingleRef(ScriptureRange? range, string book, int chapter, int verse)
+    {
+        Assert.That(range, Is.Not.Null);
+        Assert.That(range!.Start.Book, Is.EqualTo(book));
+        Assert.That(range.Start.ChapterNum, Is.EqualTo(chapter));
+        Assert.That(range.Start.VerseNum, Is.EqualTo(verse));
+        Assert.That(range.End, Is.Null, "single-verse range carries no End");
     }
 
     // ---------------------------------------------------------------------
@@ -94,11 +112,11 @@ internal class ChecklistContentItemPolymorphismTests
     [Property("Contract", "ChecklistContentItem.LinkItem")]
     public void LinkItem_CanBeConstructedAndAssignedToBase()
     {
-        ChecklistContentItem item = new LinkItem("MAT 1:1", "Matthew 1:1");
+        ChecklistContentItem item = new LinkItem(SingleRange("MAT 1:1"), "Matthew 1:1");
 
         Assert.That(item, Is.TypeOf<LinkItem>());
         var link = (LinkItem)item;
-        Assert.That(link.Reference, Is.EqualTo("MAT 1:1"));
+        AssertSingleRef(link.Reference, "MAT", 1, 1);
         Assert.That(link.DisplayText, Is.EqualTo("Matthew 1:1"));
     }
 
@@ -186,14 +204,14 @@ internal class ChecklistContentItemPolymorphismTests
     [Property("Contract", "ChecklistContentItem.LinkItem")]
     public void LinkItem_SerializedAsBase_RoundTripsPreservingSubtypeAndFields()
     {
-        ChecklistContentItem item = new LinkItem("REV 22:21", "Rev 22:21");
+        ChecklistContentItem item = new LinkItem(SingleRange("REV 22:21"), "Rev 22:21");
 
         var json = JsonSerializer.Serialize(item, _options);
         var actual = JsonSerializer.Deserialize<ChecklistContentItem>(json, _options);
 
         Assert.That(actual, Is.TypeOf<LinkItem>());
         var link = (LinkItem)actual!;
-        Assert.That(link.Reference, Is.EqualTo("REV 22:21"));
+        AssertSingleRef(link.Reference, "REV", 22, 21);
         Assert.That(link.DisplayText, Is.EqualTo("Rev 22:21"));
     }
 
@@ -264,7 +282,7 @@ internal class ChecklistContentItemPolymorphismTests
             new TextItem("\\p", null),
             new VerseItem("1"),
             new EditLinkItem(1, 1, 1),
-            new LinkItem("GEN 1:1", "Gen 1:1"),
+            new LinkItem(SingleRange("GEN 1:1"), "Gen 1:1"),
             new ErrorItem("cell error"),
             new MessageItem("empty result"),
         };
@@ -296,7 +314,7 @@ internal class ChecklistContentItemPolymorphismTests
         Assert.That(link.BookNum, Is.EqualTo(1));
         Assert.That(link.ChapterNum, Is.EqualTo(1));
         Assert.That(link.VerseNum, Is.EqualTo(1));
-        Assert.That(((LinkItem)actual[3]).Reference, Is.EqualTo("GEN 1:1"));
+        AssertSingleRef(((LinkItem)actual[3]).Reference, "GEN", 1, 1);
         Assert.That(((LinkItem)actual[3]).DisplayText, Is.EqualTo("Gen 1:1"));
         Assert.That(((ErrorItem)actual[4]).Message, Is.EqualTo("cell error"));
         Assert.That(((MessageItem)actual[5]).Message, Is.EqualTo("empty result"));
@@ -372,8 +390,7 @@ internal class ChecklistContentItemPolymorphismTests
         );
         var cell = new ChecklistCell(
             Paragraphs: new List<ChecklistParagraph> { paragraph },
-            Reference: "EXO 20:1",
-            DisplayedReference: "EXO 20:1",
+            Reference: SingleRange("EXO 20:1"),
             Language: "en",
             Error: null
         );
@@ -382,7 +399,7 @@ internal class ChecklistContentItemPolymorphismTests
             IsMatch: true,
             IncludeEditLink: false,
             Score: 0,
-            FirstRef: "EXO 20:1"
+            FirstRef: SingleRange("EXO 20:1")
         );
         var result = new ChecklistResult(
             Rows: new List<ChecklistRow> { row },
@@ -404,7 +421,7 @@ internal class ChecklistContentItemPolymorphismTests
         Assert.That(actualRow.IsMatch, Is.True, "single-column => IsMatch=true (INV-002)");
         Assert.That(actualRow.Cells, Has.Count.EqualTo(1));
         var actualCell = actualRow.Cells[0];
-        Assert.That(actualCell.Reference, Is.EqualTo("EXO 20:1"));
+        AssertSingleRef(actualCell.Reference, "EXO", 20, 1);
         Assert.That(actualCell.Paragraphs, Has.Count.EqualTo(1));
         var actualPara = actualCell.Paragraphs[0];
         Assert.That(actualPara.Marker, Is.EqualTo("p"));

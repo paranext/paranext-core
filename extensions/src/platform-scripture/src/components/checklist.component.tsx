@@ -16,6 +16,8 @@ import {
 } from 'platform-bible-react';
 import { AlertTriangle, Book, BookOpen, Eye, EyeOff, Pencil, X } from 'lucide-react';
 import { useCallback, useMemo, useState, type CSSProperties } from 'react';
+import type { SerializedVerseRef } from '@sillsdev/scripture';
+import { formatScrRef } from 'platform-bible-utils';
 import type {
   ChecklistCell,
   ChecklistLocalizedStringKey,
@@ -201,6 +203,7 @@ function CellContent({ cell, showVerseText, dir, markerAriaTemplate }: CellConte
       </span>
     );
   }
+  const cellRefKey = cell.reference ? formatScrRef(cell.reference.start) : '';
   return (
     <div className="tw:flex tw:flex-col tw:gap-1" dir={dir}>
       {cell.paragraphs.map((paragraph, paragraphIndex) => (
@@ -209,7 +212,7 @@ function CellContent({ cell, showVerseText, dir, markerAriaTemplate }: CellConte
           // ordering index is part of the key. Paragraphs are an ordered, append-only list per the
           // backend response, so the index is stable across renders.
           // eslint-disable-next-line react/no-array-index-key
-          key={`${cell.reference}-para-${paragraphIndex}-${paragraph.marker}`}
+          key={`${cellRefKey}-para-${paragraphIndex}-${paragraph.marker}`}
           paragraph={paragraph}
           showVerseText={showVerseText}
           markerAriaTemplate={markerAriaTemplate}
@@ -359,22 +362,26 @@ export function ChecklistTool({
       // eslint-disable-next-line react/no-unstable-nested-components
       cell: ({ row: tableRow }) => {
         const rowData = tableRow.original;
-        const ref = rowData.firstRef ?? '';
+        const { firstRef } = rowData;
+        const refLabel = firstRef ? formatScrRef(firstRef.start) : '';
         // Sebastian PR #2219 #3137366113: "Make the scripture reference in the first column a
         // link button with the tooltip 'Go to {scrRef}' instead of the goto button". When a
         // goto callback is provided, render the ref as a `LinkedScrRefButton`; otherwise fall
         // back to plain text (read-only contexts).
-        if (ref && onGotoLinkClick) {
+        if (refLabel && firstRef && onGotoLinkClick) {
           return (
             <span data-testid="checklist-reference-cell">
               <LinkedScrRefButton
-                scrRef={ref}
-                onClick={() => onGotoLinkClick(rowData, ref)}
+                scrRef={refLabel}
+                onClick={() => onGotoLinkClick(rowData, firstRef.start)}
                 tooltipContent={getLocalizedString('%markersChecklist_goto_aria%').replace(
                   '{ref}',
-                  ref,
+                  refLabel,
                 )}
-                ariaLabel={getLocalizedString('%markersChecklist_goto_aria%').replace('{ref}', ref)}
+                ariaLabel={getLocalizedString('%markersChecklist_goto_aria%').replace(
+                  '{ref}',
+                  refLabel,
+                )}
                 testId="checklist-reference-link"
               />
             </span>
@@ -382,7 +389,7 @@ export function ChecklistTool({
         }
         return (
           <span className="tw:font-mono tw:text-sm" data-testid="checklist-reference-cell">
-            {ref}
+            {refLabel}
           </span>
         );
       },
@@ -737,16 +744,20 @@ type EditLinkProps = {
   row: ChecklistRow;
   cell: ChecklistCell;
   getLocalizedString: (key: ChecklistLocalizedStringKey) => string;
-  onEditLinkClick: (row: ChecklistRow, verseRef: string) => void;
+  onEditLinkClick: (row: ChecklistRow, verseRef: SerializedVerseRef) => void;
 };
 
 function EditLink({ row, cell, getLocalizedString, onEditLinkClick }: EditLinkProps) {
-  const firstRef = row.firstRef ?? cell.reference;
-  const editAria = getLocalizedString('%markersChecklist_edit_aria%').replace('{ref}', firstRef);
+  // Prefer the row's earliest verse; fall back to the primary cell's own reference.
+  const editRef = row.firstRef ?? cell.reference;
+  const editAria = getLocalizedString('%markersChecklist_edit_aria%').replace(
+    '{ref}',
+    editRef ? formatScrRef(editRef.start) : '',
+  );
 
   const handleEdit = useCallback(() => {
-    onEditLinkClick(row, firstRef);
-  }, [firstRef, onEditLinkClick, row]);
+    if (editRef) onEditLinkClick(row, editRef.start);
+  }, [editRef, onEditLinkClick, row]);
 
   return (
     <div className="tw:flex tw:flex-row tw:gap-2">
