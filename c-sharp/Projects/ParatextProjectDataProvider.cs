@@ -135,6 +135,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         );
 
         retVal.Add(("getMarkerNames", GetMarkerNames));
+        retVal.Add(("getHeadingMarkers", GetHeadingMarkers));
+        retVal.Add(("setHeadingMarkers", SetHeadingMarkers));
+        retVal.Add(("getJoinedTextLanguage", GetJoinedTextLanguage));
+        retVal.Add(("setJoinedTextLanguage", SetJoinedTextLanguage));
 
         retVal.Add(("getFinalVerseNumber", GetFinalVerseNumber));
         retVal.Add(("setFinalVerseNumber", SetFinalVerseNumber));
