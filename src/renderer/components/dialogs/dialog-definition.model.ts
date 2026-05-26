@@ -67,7 +67,7 @@ export type ResourcePickerDialogOptions = DialogOptions & {
 };
 
 /** Options to provide when showing the Project Picker dialog (no extra options needed) */
-export type ProjectPickerDialogOptions = DialogOptions;
+export type ProjectPickerOptions = DialogOptions;
 
 /** Options to provide when showing a confirm dialog */
 export type ConfirmDialogOptions = DialogOptions & {
@@ -102,7 +102,7 @@ export interface DialogTypes {
   [ALERT_DIALOG_TYPE]: DialogDataTypes<AlertDialogOptions, true>;
   [CONFIRM_DIALOG_TYPE]: DialogDataTypes<ConfirmDialogOptions, boolean>;
   [RESOURCE_PICKER_DIALOG_TYPE]: DialogDataTypes<ResourcePickerDialogOptions, DblResourceData>;
-  [PROJECT_PICKER_DIALOG_TYPE]: DialogDataTypes<ProjectPickerDialogOptions, void>;
+  [PROJECT_PICKER_DIALOG_TYPE]: DialogDataTypes<ProjectPickerOptions, void>;
 }
 
 /** All dialog types that have DialogDefinition entries */

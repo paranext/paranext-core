@@ -1,5 +1,5 @@
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { ProjectPickerDialog, PROJECT_PICKER_DIALOG_STRING_KEYS } from 'platform-bible-react';
+import { ProjectPicker, PROJECT_PICKER_STRING_KEYS } from 'platform-bible-react';
 import { DIALOG_BASE } from '@renderer/components/dialogs/dialog-base.data';
 import {
   DialogDefinition,
@@ -12,9 +12,9 @@ import { dataProviders } from '@renderer/services/papi-frontend.service';
 import { logger } from '@shared/services/logger.service';
 import { getErrorMessage } from 'platform-bible-utils';
 
-const STRING_KEYS = [...PROJECT_PICKER_DIALOG_STRING_KEYS];
+const STRING_KEYS = [...PROJECT_PICKER_STRING_KEYS];
 
-function ProjectPickerDialogWrapper({
+function ProjectPickerWrapper({
   submitDialog,
 }: DialogTypes[typeof PROJECT_PICKER_DIALOG_TYPE]['props']) {
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
@@ -36,7 +36,7 @@ function ProjectPickerDialogWrapper({
   };
 
   return (
-    <ProjectPickerDialog
+    <ProjectPicker
       currentProject={currentProject}
       recentProjects={recentProjects}
       allProjects={allProjects}
@@ -53,7 +53,7 @@ export const PROJECT_PICKER_DIALOG: DialogDefinition<typeof PROJECT_PICKER_DIALO
     tabType: PROJECT_PICKER_DIALOG_TYPE,
     defaultTitle: '%projectPicker_title%',
     initialSize: { width: 700, height: 550 },
-    Component: ProjectPickerDialogWrapper,
+    Component: ProjectPickerWrapper,
   });
 
 export default PROJECT_PICKER_DIALOG;

@@ -13,7 +13,8 @@ export type ProjectItem = {
   language?: string;
 };
 
-export const PROJECT_PICKER_DIALOG_STRING_KEYS = Object.freeze([
+/** Localization string keys used by {@link ProjectPicker}. */
+export const PROJECT_PICKER_STRING_KEYS = Object.freeze([
   '%projectPicker_title%',
   '%projectPicker_section_recent%',
   '%projectPicker_section_all%',
@@ -21,19 +22,20 @@ export const PROJECT_PICKER_DIALOG_STRING_KEYS = Object.freeze([
   '%projectPicker_no_results%',
 ] as const);
 
-export type ProjectPickerDialogLocalizedStrings = {
-  [key in (typeof PROJECT_PICKER_DIALOG_STRING_KEYS)[number]]?: string;
+export type ProjectPickerLocalizedStrings = {
+  [key in (typeof PROJECT_PICKER_STRING_KEYS)[number]]?: string;
 };
 
-export type ProjectPickerDialogProps = {
+export type ProjectPickerProps = {
   currentProject: ProjectItem | undefined;
   /** Pre-ordered recent projects (most-recent first). Must NOT overlap with allProjects. */
   recentProjects: ProjectItem[];
   /** All projects excluding recentProjects. */
   allProjects: ProjectItem[];
   isLoading?: boolean;
+  /** Called with the selected project's id when the user picks a project. */
   onSelect: (projectId: string) => void;
-  localizedStrings?: ProjectPickerDialogLocalizedStrings;
+  localizedStrings?: ProjectPickerLocalizedStrings;
 };
 
 function matchesSearch(project: ProjectItem, searchText: string): boolean {
@@ -70,10 +72,7 @@ function ProjectSection({
               <TableCell className="tw:border-0">
                 <div className="tw:flex tw:items-center tw:gap-2">
                   {p.id === currentProjectId && (
-                    <CheckIcon
-                      className="tw:h-4 tw:w-4 tw:shrink-0"
-                      aria-label="current project"
-                    />
+                    <CheckIcon className="tw:h-4 tw:w-4 tw:shrink-0" aria-label="current project" />
                   )}
                   <span>
                     <span className="tw:font-medium">{p.fullName}</span>
@@ -102,14 +101,14 @@ function ProjectSection({
  * `recentProjects` and `allProjects` must be pre-separated (no overlap). The current project is
  * pinned to the top of the Recent section if present there.
  */
-export default function ProjectPickerDialog({
+export default function ProjectPicker({
   currentProject,
   recentProjects,
   allProjects,
   isLoading,
   onSelect,
   localizedStrings = {},
-}: ProjectPickerDialogProps) {
+}: ProjectPickerProps) {
   const [searchText, setSearchText] = useState('');
 
   const filteredRecent = useMemo(
