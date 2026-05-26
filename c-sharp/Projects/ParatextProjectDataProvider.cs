@@ -968,7 +968,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     private IEnumerable<CommentThread> FilterByScriptureRanges(
         IEnumerable<CommentThread> threads,
-        List<ScriptureRange> scriptureRanges
+        List<CommentScriptureRange> scriptureRanges
     )
     {
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
@@ -980,29 +980,32 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         });
     }
 
-    private static bool MatchesScriptureRange(VerseRef verseRef, ScriptureRange range)
+    private static bool MatchesScriptureRange(VerseRef verseRef, CommentScriptureRange range)
     {
         // Match based on granularity
         string granularity = range.Granularity ?? "verse";
+
+        // End is optional on the canonical ScriptureRange; a null End is a single-verse range,
+        // so the start verse doubles as the end. (The converter always supplies a non-null End.)
+        VerseRef end = range.End ?? range.Start;
 
         switch (granularity.ToLowerInvariant())
         {
             case "book":
                 // Match if the comment is in any book within the range
-                return verseRef.BookNum >= range.Start.BookNum
-                    && verseRef.BookNum <= range.End.BookNum;
+                return verseRef.BookNum >= range.Start.BookNum && verseRef.BookNum <= end.BookNum;
 
             case "chapter":
                 // Match if the comment is in the same book and within the chapter range
                 if (verseRef.BookNum != range.Start.BookNum)
                     return false;
                 return verseRef.ChapterNum >= range.Start.ChapterNum
-                    && verseRef.ChapterNum <= range.End.ChapterNum;
+                    && verseRef.ChapterNum <= end.ChapterNum;
 
             case "verse":
             default:
                 // Match if the comment's verse is within the range
-                return verseRef.CompareTo(range.Start) >= 0 && verseRef.CompareTo(range.End) <= 0;
+                return verseRef.CompareTo(range.Start) >= 0 && verseRef.CompareTo(end) <= 0;
         }
     }
 
