@@ -10,6 +10,10 @@ export {
   ProjectPlanDialogChecksMerged,
   type ProjectPlanDialogChecksMergedProps,
 } from '@/components/advanced/project-plan-dialog/project-plan-dialog-checks-merged.component';
+export {
+  ProjectPlanDialogErUi,
+  type ProjectPlanDialogErUiProps,
+} from '@/components/advanced/project-plan-dialog/project-plan-dialog-er-ui.component';
 export type {
   BookCountsByDifficulty,
   CheckCatalogItem,

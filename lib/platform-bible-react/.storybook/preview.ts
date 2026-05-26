@@ -33,6 +33,7 @@ const preview: Preview = {
           'Advanced',
           [
             'Project Plan Dialog',
+            'Project Plan Dialog - Similar to ER UI',
             'Project Plan Dialog - Single Editable Hierarchy',
             'Project Plan Dialog - Checks merged',
             '*',
