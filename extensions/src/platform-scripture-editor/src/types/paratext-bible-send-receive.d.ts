@@ -247,6 +247,19 @@ declare module 'papi-shared-types' {
       webViewId: string,
     ) => Promise<ResultsData>;
     /**
+     * Syncs projects: sends/receives each project, then reads each project's connected resources
+     * and projects (one level deep — connections of connections are not included) and
+     * sends/receives connected translation projects or DBL-updates connected resources as needed.
+     * Unknown project IDs are skipped. Deduplication is handled internally.
+     *
+     * @param projectIds IDs of the projects to sync. If omitted, all shared projects already
+     *   present locally are synced. If provided, only projects already present locally are synced;
+     *   new projects (not yet received) and unknown IDs are skipped.
+     * @throws `PlatformUnimplementedException` if not running in an application that implements
+     *   this command (e.g., Paratext 10 Studio)
+     */
+    'paratextBibleSendReceive.syncProjects': (projectIds?: string[]) => Promise<void>;
+    /**
      * Accepts a project id, and returns a RevisionInfo[] of all revisions for the given project.
      *
      * @param projectId Id of project to retrieve revisions from
