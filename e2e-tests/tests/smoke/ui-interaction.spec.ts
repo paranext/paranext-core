@@ -12,6 +12,10 @@ test.describe('UI Interaction', () => {
   // append a `-data` suffix to the provider name, so the JSON-RPC method is
   // `object:<providerName>-data.set`.
   const SETTINGS_SET_METHOD = 'object:platform.settingsServiceDataProvider-data.set';
+  // The settings `set` handler internally awaits `waitForResyncContributions()`,
+  // which blocks until `extensionService.initialize()` finishes in the extension
+  // host. On slow CI that can exceed the default 10s PAPI request timeout.
+  const SLOW_CI_PAPI_TIMEOUT_MS = 90_000;
 
   test.beforeAll(async ({ electronApp }) => {
     // Maximize the window once so everything is visible and clickable for all tests
@@ -27,16 +31,11 @@ test.describe('UI Interaction', () => {
     // Fast-fail guard: on slow CI the settings data provider can register
     // after this beforeAll starts; this throws a clear error if it never does.
     await waitForPapiMethodRegistered(SETTINGS_SET_METHOD);
-    // The `set` handler internally awaits `waitForResyncContributions()`
-    // (via `get` → `getDefaultValueForKey`) — that doesn't resolve until the
-    // extension host finishes extensionService.initialize(). On slow CI that
-    // wait can exceed the default 10s sendPapiRequestOnce timeout, so give
-    // this call enough headroom to absorb it.
     await sendPapiRequestOnce(
       SETTINGS_SET_METHOD,
       ['platform.interfaceLanguage', ['en']],
       undefined,
-      90_000,
+      SLOW_CI_PAPI_TIMEOUT_MS,
     );
   });
 
