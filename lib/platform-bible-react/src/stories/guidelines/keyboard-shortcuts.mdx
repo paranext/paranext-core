@@ -6,10 +6,11 @@ import { Meta } from '@storybook/addon-docs/blocks';
 
 When displaying a keyboard shortcut in the UI, write it the way the user's operating system writes it. Each OS has its own established convention for naming and combining modifier and special keys, and users recognize their own platform's convention at a glance. Mixing conventions — or inventing a new one — makes shortcuts harder to scan and signals that the app isn't paying attention.
 
-The two conventions to know:
+The conventions to know:
 
 - **macOS** uses **symbols** for modifier and special keys, written together with no separator (e.g. `⇧⌘Z`). Modifier order is Control, Option, Shift, Command ([Apple HIG](https://developer.apple.com/design/human-interface-guidelines/keyboards)).
-- **Windows and Linux** use **words** joined with `+` (e.g. `Ctrl+Shift+Z`). Modifier order is Ctrl, Shift, Alt ([Windows](<https://learn.microsoft.com/en-us/previous-versions/windows/desktop/bb246452(v=vs.85)>) / [GNOME HIG](https://developer.gnome.org/hig/guidelines/keyboard.html)).
+- **Windows** uses **words** joined with `+` (e.g. `Ctrl+Shift+Z`). Modifier order is Ctrl, Shift, Alt ([Microsoft](https://support.microsoft.com/en-us/windows/keyboard-shortcuts-in-windows-dcc61a57-8ff0-cffe-9796-cb9706c75eec)).
+- **Linux** uses **words** joined with `+`. Modifier order varies by desktop environment; on GNOME and Ubuntu, the typical order is Ctrl, Alt, Shift ([Ubuntu](https://help.ubuntu.com/stable/ubuntu-help/shell-keyboard-shortcuts.html.en) / [GNOME HIG](https://developer.gnome.org/hig/guidelines/keyboard.html)).
 
 For rendering shortcuts in the UI (the `<kbd>` element, the `Kbd` component, parentheses vs. no parentheses), see [Design Principles → Keyboard shortcuts in tooltips](./design-principles.mdx).
 
@@ -38,7 +39,8 @@ For rendering shortcuts in the UI (the `<kbd>` element, the `Kbd` component, par
 ## Combining keys
 
 - **macOS:** concatenate the symbols with no separator and no spaces. Order: Control, Option, Shift, Command, then the key. Example: `⌃⌥⇧⌘T`.
-- **Windows / Linux:** join with `+` and no spaces. Order: Ctrl, Shift, Alt, then the key. Example: `Ctrl+Shift+T`.
+- **Windows:** join with `+` and no spaces. Order: Ctrl, Shift, Alt, then the key. Example: `Ctrl+Shift+T`.
+- **Linux:** join with `+` and no spaces. Order varies; GNOME typically uses Ctrl, Alt, Shift, then the key. Example: `Ctrl+Alt+Shift+R`.
 
 ## Detecting the platform
 
