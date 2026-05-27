@@ -429,6 +429,87 @@ describe('buildChecklistData', () => {
     });
   });
 
+  describe('verseRange resolution (ScriptureRange contract)', () => {
+    it('verseRange.end === undefined → single-verse range at verseRange.start (does NOT expand to project end)', async () => {
+      // Pre-fix: when `verseRange.end` was undefined we fell back to REV 22:21, expanding a
+      // single-verse request into a whole-project scan. ScriptureRange contract (per PT9's
+      // ChecklistService.ResolveVerseRange) says omitted end collapses to start.
+      //
+      // Fixture: GEN 1:1 (\p) + GEN 1:2 (\q1) — request {start: GEN 1:1, end: undefined} must yield
+      // only the GEN 1:1 row (not GEN 1:2). Pre-fix behavior expanded to REV 22:21 and would have
+      // pulled in the GEN 1:2 row as well.
+      const twoVerseUsj = {
+        type: 'USJ' as const,
+        version: '3.1',
+        content: [
+          { type: 'book', marker: 'id', code: 'GEN', content: ['Genesis'] },
+          { type: 'chapter', marker: 'c', number: '1', sid: 'GEN 1' },
+          {
+            type: 'para',
+            marker: 'p',
+            content: [{ type: 'verse', marker: 'v', number: '1', sid: 'GEN 1:1' }, 'verse 1'],
+          },
+          {
+            type: 'para',
+            marker: 'q1',
+            content: [{ type: 'verse', marker: 'v', number: '2', sid: 'GEN 1:2' }, 'verse 2'],
+          },
+        ],
+      };
+      const papi = makePapiMock({
+        projects: { 'PROJ-1': { usjPerBook: { 1: twoVerseUsj } } },
+      });
+      const result = await buildChecklistData(
+        makeRequest({
+          verseRange: { start: { book: 'GEN', chapterNum: 1, verseNum: 1 } },
+        }),
+        papi,
+      );
+      // Only GEN 1:1 — single-verse range.
+      expect(result.rows.length).toBe(1);
+      expect(result.rows[0].firstRef?.start).toEqual({
+        book: 'GEN',
+        chapterNum: 1,
+        verseNum: 1,
+      });
+    });
+
+    it('verseRange.end defined → uses both ends as-supplied', async () => {
+      const twoVerseUsj = {
+        type: 'USJ' as const,
+        version: '3.1',
+        content: [
+          { type: 'book', marker: 'id', code: 'GEN', content: ['Genesis'] },
+          { type: 'chapter', marker: 'c', number: '1', sid: 'GEN 1' },
+          {
+            type: 'para',
+            marker: 'p',
+            content: [{ type: 'verse', marker: 'v', number: '1', sid: 'GEN 1:1' }, 'verse 1'],
+          },
+          {
+            type: 'para',
+            marker: 'q1',
+            content: [{ type: 'verse', marker: 'v', number: '2', sid: 'GEN 1:2' }, 'verse 2'],
+          },
+        ],
+      };
+      const papi = makePapiMock({
+        projects: { 'PROJ-1': { usjPerBook: { 1: twoVerseUsj } } },
+      });
+      const result = await buildChecklistData(
+        makeRequest({
+          verseRange: {
+            start: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+            end: { book: 'GEN', chapterNum: 1, verseNum: 2 },
+          },
+        }),
+        papi,
+      );
+      // Both verses included.
+      expect(result.rows.length).toBe(2);
+    });
+  });
+
   describe('booksPresent intersection', () => {
     it('skips books absent from booksPresent setting', async () => {
       // booksPresent = '00...' (no books) → no rows iterated. Single-column + empty filter →

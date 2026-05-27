@@ -160,9 +160,24 @@ export async function buildChecklistData(
     }),
   );
 
-  // Step 1: effective verse range. Defaults: GEN 1:0 → REV 22:21 (intro verse 0 always included).
-  const startRef = applyVal003(request.verseRange?.start ?? defaultStartRef());
-  const endRef = request.verseRange?.end ?? defaultEndRef();
+  // Step 1: effective verse range. Per the `ScriptureRange` contract (mirrors PT9's
+  // `ChecklistService.ResolveVerseRange`):
+  //   - `verseRange === undefined` → entire project (GEN 1:0 → REV 22:21).
+  //   - `verseRange.start` defined, `verseRange.end` undefined → single-verse range AT `start`
+  //     (collapse `end` to `start`). Previously we fell back to REV 22:21 here, which expanded a
+  //     single-verse request into a whole-project scan.
+  //   - `verseRange.end` defined → use both ends as-is.
+  // VAL-003 (GEN 1:1 → GEN 1:0) is applied to the start so intro material is included; the end is
+  // left as-supplied so a single-verse request at GEN 1:1 still resolves to GEN 1:1 on the end.
+  let startRef: SerializedVerseRef;
+  let endRef: SerializedVerseRef;
+  if (request.verseRange === undefined) {
+    startRef = defaultStartRef();
+    endRef = defaultEndRef();
+  } else {
+    startRef = applyVal003(request.verseRange.start);
+    endRef = request.verseRange.end ?? request.verseRange.start;
+  }
 
   // Step 2: parse marker settings.
   const markerMappings = initializeMarkerMappings(request.markerSettings.equivalentMarkers);
