@@ -96,7 +96,7 @@ export function useProjectPickerData(): ProjectPickerData {
     useCallback(
       async () =>
         Promise.all(
-          safeRecentIds.map(async (id) => {
+          safeRecentIds.map(async (id: string): Promise<ProjectItem> => {
             try {
               const details = await fetchProjectDetails(id);
               return { id, ...details };
