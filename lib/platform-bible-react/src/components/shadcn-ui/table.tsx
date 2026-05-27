@@ -356,6 +356,10 @@ function TableRow({
       onFocus={handleFocus}
       className={cn(
         'tw:border-b tw:transition-colors tw:hover:bg-muted/50 tw:has-aria-expanded:bg-muted/50 tw:data-[state=selected]:bg-muted',
+        // CUSTOM: When the row is highlighted, override button hover to use a contrasting background
+        // so buttons remain visually distinct against the row's muted/muted-50 background color
+        'tw:hover:[&_[data-slot=button]:hover]:bg-muted-foreground/15',
+        'tw:data-[state=selected]:[&_[data-slot=button]:hover]:bg-muted-foreground/15',
         // CUSTOM: Add outline-hidden to remove duplicate browser outline and replace with a custom
         // focus ring so keyboard users see a visible, accessible focus indicator on focused rows
         'tw:outline-hidden',
