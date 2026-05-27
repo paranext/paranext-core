@@ -1,9 +1,18 @@
 // SMOKE TEST ONLY — uses papi.fixture for CI smoke testing.
 // Per-feature E2E tests MUST use cdp.fixture instead. See e2e-tests/tests/_example/.
 import { test, expect } from '../../fixtures/papi.fixture';
-import { sendPapiRequestOnce, waitForAppReady } from '../../fixtures/helpers';
+import {
+  sendPapiRequestOnce,
+  waitForAppReady,
+  waitForPapiMethodRegistered,
+} from '../../fixtures/helpers';
 
 test.describe('UI Interaction', () => {
+  // The settings service is exposed as a data-provider network object — data providers
+  // append a `-data` suffix to the provider name, so the JSON-RPC method is
+  // `object:<providerName>-data.set`.
+  const SETTINGS_SET_METHOD = 'object:platform.settingsServiceDataProvider-data.set';
+
   test.beforeAll(async ({ electronApp }) => {
     // Maximize the window once so everything is visible and clickable for all tests
     // Wait for the first window to exist before maximizing
@@ -14,14 +23,12 @@ test.describe('UI Interaction', () => {
 
     // Force the interface language to English so menu-item text matchers
     // (e.g. /Help/i) are deterministic regardless of the developer's saved
-    // platform.interfaceLanguage setting in dev-appdata. The settings service
-    // is exposed as a data-provider network object — data providers append a
-    // `-data` suffix to the provider name, so the JSON-RPC method is
-    // `object:<providerName>-data.set`.
-    await sendPapiRequestOnce('object:platform.settingsServiceDataProvider-data.set', [
-      'platform.interfaceLanguage',
-      ['en'],
-    ]);
+    // platform.interfaceLanguage setting in dev-appdata. Wait for the method
+    // to register on the PAPI network first — on slow CI the settings data
+    // provider can register after this beforeAll starts, and the 10s
+    // single-shot timeout in sendPapiRequestOnce isn't enough to absorb that.
+    await waitForPapiMethodRegistered(SETTINGS_SET_METHOD);
+    await sendPapiRequestOnce(SETTINGS_SET_METHOD, ['platform.interfaceLanguage', ['en']]);
   });
 
   test('should open the About dialog from the Help menu', async ({ mainPage }) => {
