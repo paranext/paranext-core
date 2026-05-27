@@ -32,7 +32,7 @@ internal class LocalParatextProjects
         "CountryStatuses.xml",
     ];
 
-    private static readonly List<string> s_paratextProjectInterfaces =
+    private static readonly List<string> s_paratextUnpublishedProjectInterfaces =
     [
         ProjectInterfaces.BASE,
         ProjectInterfaces.LEGACY_COMMENT,
@@ -46,6 +46,26 @@ internal class LocalParatextProjects
         ProjectInterfaces.MARKER_NAMES,
         ProjectInterfaces.TEXT_CONNECTION_SETTINGS,
         ProjectInterfaces.SCRIPTURE_EDIT_PERMISSIONS,
+    ];
+
+    // Published projects (ScrText.IsResourceProject == true, i.e. ResourceScrText and
+    // JoinedScrText) are read-only in PT9 — ResourceProjectFileManager.SetXml() throws
+    // AttemptedResourceWritingException — and cannot accept comment writes. They therefore do not
+    // advertise legacyCommentManager.comments; everything else still applies because published
+    // projects can still be read for scripture and resource-references.
+    private static readonly List<string> s_paratextPublishedProjectInterfaces =
+    [
+        ProjectInterfaces.BASE,
+        ProjectInterfaces.USFM_BOOK,
+        ProjectInterfaces.USFM_CHAPTER,
+        ProjectInterfaces.USFM_VERSE,
+        ProjectInterfaces.USX_BOOK,
+        ProjectInterfaces.USX_CHAPTER,
+        ProjectInterfaces.USX_VERSE,
+        ProjectInterfaces.PLAIN_TEXT_VERSE,
+        ProjectInterfaces.MARKER_NAMES,
+        ProjectInterfaces.USER_TEXT_CONNECTION_SETTINGS,
+        ProjectInterfaces.VERSIFICATION,
     ];
 
     public LocalParatextProjects()
@@ -116,9 +136,15 @@ internal class LocalParatextProjects
         return retVal;
     }
 
-    public static List<string> GetParatextProjectInterfaces()
+    public static List<string> GetParatextProjectInterfaces() =>
+        GetParatextProjectInterfaces(isPublished: false);
+
+    public static List<string> GetParatextProjectInterfaces(bool isPublished)
     {
-        return [.. s_paratextProjectInterfaces];
+        var source = isPublished
+            ? s_paratextPublishedProjectInterfaces
+            : s_paratextUnpublishedProjectInterfaces;
+        return [.. source];
     }
     #endregion
 
