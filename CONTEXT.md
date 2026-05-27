@@ -18,7 +18,7 @@ Ghost content shows **structure only** — translated text is stripped; structur
 
 ## Committed Content
 
-Project data that a translator has explicitly entered. A chapter (or unit) moves from ghost to committed as the translator fills in content. Ghost content in chapters with no committed data can be freely swapped by switching the model text.
+Project data that a translator has explicitly entered. The **chapter** is the atomic unit of commitment: if any project data exists for a chapter in the PDP, the entire chapter is treated as committed and ghost content is suppressed for it. Ghost content only appears in chapters with no existing project data.
 
 ## Model Text Panel
 
