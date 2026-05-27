@@ -69,6 +69,10 @@ public static class Program
 
             SettingsService.Initialize(papi);
             var paratextFactory = new ParatextProjectDataProviderFactory(papi, paratextProjects);
+            var paratextPublishedFactory = new ParatextPublishedProjectDataProviderFactory(
+                papi,
+                paratextProjects
+            );
             var paratextSendReceiveService = new ParatextProjectSendReceiveService(
                 papi,
                 paratextFactory,
@@ -80,6 +84,7 @@ public static class Program
             var paratextRegistrationService = new ParatextRegistrationService(papi);
             await Task.WhenAll(
                 paratextFactory.InitializeAsync(),
+                paratextPublishedFactory.InitializeAsync(),
                 inventoryDataProvider.RegisterDataProviderAsync(),
                 checkRunner.RegisterDataProviderAsync(),
                 dblResources.RegisterDataProviderAsync(),
