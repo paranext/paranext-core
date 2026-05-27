@@ -8,8 +8,8 @@ When displaying a keyboard shortcut in the UI, write it the way the user's opera
 
 The two conventions to know:
 
-- **macOS** uses **symbols** for modifier and special keys, written together with no separator (e.g. `⇧⌘Z`). Modifier order is Control, Option, Shift, Command.
-- **Windows and Linux** use **words** joined with `+` (e.g. `Ctrl+Shift+Z`). Modifier order is Ctrl, Alt, Shift.
+- **macOS** uses **symbols** for modifier and special keys, written together with no separator (e.g. `⇧⌘Z`). Modifier order is Control, Option, Shift, Command ([Apple HIG](https://developer.apple.com/design/human-interface-guidelines/keyboards)).
+- **Windows and Linux** use **words** joined with `+` (e.g. `Ctrl+Shift+Z`). Modifier order is Ctrl, Shift, Alt ([Windows](<https://learn.microsoft.com/en-us/previous-versions/windows/desktop/bb246452(v=vs.85)>) / [GNOME HIG](https://developer.gnome.org/hig/guidelines/keyboard.html)).
 
 For rendering shortcuts in the UI (the `<kbd>` element, the `Kbd` component, parentheses vs. no parentheses), see [Design Principles → Keyboard shortcuts in tooltips](./design-principles.mdx).
 
@@ -38,7 +38,7 @@ For rendering shortcuts in the UI (the `<kbd>` element, the `Kbd` component, par
 ## Combining keys
 
 - **macOS:** concatenate the symbols with no separator and no spaces. Order: Control, Option, Shift, Command, then the key. Example: `⌃⌥⇧⌘T`.
-- **Windows / Linux:** join with `+` and no spaces. Order: Ctrl, Alt, Shift, then the key. Example: `Ctrl+Shift+T`.
+- **Windows / Linux:** join with `+` and no spaces. Order: Ctrl, Shift, Alt, then the key. Example: `Ctrl+Shift+T`.
 
 ## Detecting the platform
 
