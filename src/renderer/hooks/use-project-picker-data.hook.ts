@@ -17,19 +17,51 @@ import { type ProjectItem } from 'platform-bible-react';
 
 const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 
+/**
+ * Resolves a BCP-47 language tag to its localized display name. Returns undefined when the language
+ * setting is unset (default placeholder value) or when the tag can't be resolved.
+ */
+function resolveLanguage(
+  language: string,
+  languageTag: string,
+): { tag: string; displayName: string } | undefined {
+  if (language.startsWith('%')) return undefined;
+  try {
+    const displayName = new Intl.DisplayNames([navigator.language ?? 'en'], {
+      type: 'language',
+    }).of(languageTag);
+    if (displayName) return { tag: languageTag, displayName };
+  } catch {
+    // fall through
+  }
+  return { tag: language, displayName: language };
+}
+
 async function fetchProjectDetails(
   projectId: string,
-): Promise<{ fullName: string; shortName: string; language?: string }> {
+): Promise<{
+  fullName: string;
+  shortName: string;
+  language?: string;
+  languageDisplayName?: string;
+}> {
   const pdp = await papiFrontendProjectDataProviderService.get(
     PROJECT_INTERFACE_PLATFORM_BASE,
     projectId,
   );
-  const [fullName, shortName, language] = await Promise.all([
+  const [fullName, shortName, language, languageTag] = await Promise.all([
     pdp.getSetting('platform.fullName'),
     pdp.getSetting('platform.name'),
     pdp.getSetting('platform.language'),
+    pdp.getSetting('platform.languageTag'),
   ]);
-  return { fullName, shortName, language };
+  const resolved = resolveLanguage(language, languageTag);
+  return {
+    fullName,
+    shortName,
+    language: resolved?.tag,
+    languageDisplayName: resolved?.displayName,
+  };
 }
 
 export type ProjectPickerData = {
