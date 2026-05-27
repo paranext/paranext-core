@@ -117,10 +117,44 @@ internal class LocalParatextProjects
 
     public IEnumerable<ProjectDetails> GetAllProjectDetails()
     {
+        var allScrTexts = GetVisibleScrTexts();
+        return allScrTexts.Select(scrText => scrText.GetProjectDetails());
+    }
+
+    /// <summary>
+    /// Available unpublished Paratext projects (regular, editable scripture projects).
+    /// Used by <see cref="ParatextProjectDataProviderFactory"/> to populate its project list.
+    /// </summary>
+    public IEnumerable<ProjectDetails> GetAvailableUnpublishedProjectDetails()
+    {
+        return GetVisibleScrTexts()
+            .Where(scrText => !scrText.IsResourceProject)
+            .Select(scrText => scrText.GetProjectDetails());
+    }
+
+    /// <summary>
+    /// Available published Paratext projects (read-only DBL / biblical resources — backed by
+    /// <c>ResourceScrText</c> or <c>JoinedScrText</c> in PT9). Used by
+    /// <see cref="ParatextPublishedProjectDataProviderFactory"/> to populate its project list.
+    /// </summary>
+    public IEnumerable<ProjectDetails> GetAvailablePublishedProjectDetails()
+    {
+        return GetVisibleScrTexts()
+            .Where(scrText => scrText.IsResourceProject)
+            .Select(scrText => scrText.GetProjectDetails());
+    }
+
+    /// <summary>
+    /// Returns the set of ScrTexts that should be visible to the user given current registration
+    /// state. When the user has no valid Paratext registration, published projects are filtered out
+    /// entirely (matching PT9 behavior).
+    /// </summary>
+    private static IEnumerable<ScrText> GetVisibleScrTexts()
+    {
         var allScrTexts = GetScrTexts();
         if (!RegistrationInfo.DefaultUser.IsValid)
             allScrTexts = allScrTexts.Where((scrText) => !scrText.IsResourceProject);
-        return allScrTexts.Select(scrText => scrText.GetProjectDetails());
+        return allScrTexts;
     }
 
     public ProjectDetails GetProjectDetails(string projectId)

@@ -120,4 +120,34 @@ public class LocalParatextProjectsTests
             Does.Contain(ProjectInterfaces.USFM_CHAPTER)
         );
     }
+
+    [Test]
+    public void GetAvailableUnpublishedProjectDetails_UnpublishedOnly_ReturnsAll()
+    {
+        CreateTempProject("NR1", CreateParatextProjectDetails("NR1", "First", "aaaa01"));
+        CreateTempProject("NR2", CreateParatextProjectDetails("NR2", "Second", "aaaa02"));
+        _localProjects.Initialize();
+
+        var unpublished = _localProjects.GetAvailableUnpublishedProjectDetails().ToList();
+
+        Assert.That(unpublished, Has.Count.EqualTo(2));
+        Assert.That(
+            unpublished.Select(d => d.Metadata.Id),
+            Is.EquivalentTo(new[] { "AAAA01", "AAAA02" })
+        );
+    }
+
+    [Test]
+    public void GetAvailablePublishedProjectDetails_NoPublished_ReturnsEmpty()
+    {
+        CreateTempProject("NR1", CreateParatextProjectDetails("NR1", "First", "aaaa01"));
+        _localProjects.Initialize();
+
+        var published = _localProjects.GetAvailablePublishedProjectDetails().ToList();
+
+        // DummyScrText / TestLocalParatextProjectsInTempDir produces unpublished ScrTexts
+        // (IsResourceProject defaults to false on the base ScrText class), so the published
+        // list is empty in this fixture. This documents the partition between the two helpers.
+        Assert.That(published, Is.Empty);
+    }
 }
