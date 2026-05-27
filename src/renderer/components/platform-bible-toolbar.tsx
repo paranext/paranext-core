@@ -119,7 +119,11 @@ export function PlatformBibleToolbar() {
 
   const { currentProject, recentProjects, allProjects } = useProjectPickerData();
 
-  const showProjectPickerDialog = useDialogCallback(PROJECT_PICKER_DIALOG_TYPE, {}, () => {});
+  const showProjectPickerDialog = useDialogCallback(
+    PROJECT_PICKER_DIALOG_TYPE,
+    { isModal: true },
+    () => {},
+  );
 
   const projectPickerItems = recentProjects.length > 0 ? recentProjects : allProjects;
   const hasProjectPickerItems = projectPickerItems.length > 0;
@@ -465,8 +469,14 @@ export function PlatformBibleToolbar() {
           }}
           disabled={!hasProjectPickerItems}
         >
-          <SelectTrigger className="tw:w-48">
-            <SelectValue placeholder={hasProjectPickerItems ? 'Select project' : 'No projects'} />
+          <SelectTrigger className="tw:max-w-64 tw:min-w-48">
+            <SelectValue placeholder={hasProjectPickerItems ? 'Select project' : 'No projects'}>
+              {currentProject && (
+                <span className="tw:min-w-0 tw:flex-1 tw:truncate">
+                  {currentProject.fullName} ({currentProject.shortName})
+                </span>
+              )}
+            </SelectValue>
           </SelectTrigger>
           {hasProjectPickerItems && (
             <SelectContent>
