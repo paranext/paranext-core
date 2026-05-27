@@ -32,7 +32,10 @@ internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
 
     protected override List<ProjectMetadata>? GetAvailableProjects(JsonElement _ignore)
     {
-        return _paratextProjects.GetAllProjectDetails().Select(pd => pd.Metadata).ToList();
+        return _paratextProjects
+            .GetAvailableUnpublishedProjectDetails()
+            .Select(pd => pd.Metadata)
+            .ToList();
     }
 
     public override string GetProjectDataProviderID(string projectID)
@@ -59,6 +62,18 @@ internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
             catch (KeyNotFoundException)
             {
                 throw new KeyNotFoundException("Unknown project ID: " + projectID);
+            }
+
+            // Published projects belong to ParatextPublishedProjectDataProviderFactory. Reject them
+            // here so callers don't end up with an unpublished PDP whose advertised interfaces lie
+            // about what the project can actually do. The truthful discriminator is the presence of
+            // legacyCommentManager.comments in the advertised interfaces - only unpublished
+            // Paratext projects advertise it.
+            if (!details.Metadata.ProjectInterfaces.Contains(ProjectInterfaces.LEGACY_COMMENT))
+            {
+                throw new KeyNotFoundException(
+                    $"Project {projectID} is published and cannot be served by this factory"
+                );
             }
 
             // Create a random 30 character string containing letters A-Z
