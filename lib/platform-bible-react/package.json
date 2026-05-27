@@ -41,6 +41,7 @@
     "build:basic": "npm run build:themes && tsc && cross-env NODE_ENV=production vite build && dts-bundle-generator --config ./dts-bundle-generator.config.cts",
     "build:docs": "typedoc",
     "build:storybook": "storybook build",
+    "chromatic": "chromatic --build-script-name build:storybook",
     "build": "npm run build:basic && npm run lint-fix && typedoc",
     "clean:storybook": "rimraf storybook-static",
     "watch": "tsc && vite build --watch",
