@@ -96,4 +96,28 @@ public class LocalParatextProjectsTests
 
         Assert.That(noArgs, Is.EqualTo(unpublished));
     }
+
+    [TestCase("ABC_4488", "PRJX", "abc7")]
+    public void Initialize_SingleUnpublishedProject_AdvertisesUnpublishedInterfaces(
+        string folder,
+        string name,
+        string id
+    )
+    {
+        CreateTempProject(folder, CreateParatextProjectDetails(folder, name, id));
+        _localProjects.Initialize();
+
+        var details = _localProjects.GetProjectDetails(id);
+
+        // Unpublished projects must advertise the full interface list including legacyCommentManager.comments
+        Assert.That(
+            details.Metadata.ProjectInterfaces,
+            Does.Contain(ProjectInterfaces.LEGACY_COMMENT),
+            "Unpublished Paratext project must advertise legacyCommentManager.comments"
+        );
+        Assert.That(
+            details.Metadata.ProjectInterfaces,
+            Does.Contain(ProjectInterfaces.USFM_CHAPTER)
+        );
+    }
 }
