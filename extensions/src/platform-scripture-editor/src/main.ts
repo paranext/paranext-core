@@ -276,8 +276,7 @@ async function open(
       // require tracking a dirty flag in the editor controller, which doesn't exist yet).
       const outgoingProjectId = outgoing?.isReadOnly ? undefined : outgoing?.projectId;
       // Fire-and-forget: runs concurrently with openWebView below.
-      // eslint-disable-next-line no-void
-      void syncOnProjectSwitch(papi, projectForWebView.projectId, outgoingProjectId);
+      syncOnProjectSwitch(papi, projectForWebView.projectId, outgoingProjectId);
     }
 
     const emitDidFinish = () => {
