@@ -667,34 +667,6 @@ describe('openDefaultActiveProjectIfApplicable', () => {
     expect(outcome).toBe('no-candidate');
   });
 
-  it("returns 'no-candidate' when all entries have empty lastSendReceiveDate", async () => {
-    const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions, mockSendCommand } =
-      createPickerMocks();
-    mockGetSetting.mockResolvedValue('simple');
-    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
-      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
-    );
-    mockSendCommand.mockImplementation(async (commandName: string) => {
-      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
-        return {
-          proj1: {
-            id: 'proj1',
-            name: 'P1',
-            fullName: 'Project 1',
-            language: 'en',
-            editedStatus: 'edited',
-            lastSendReceiveDate: '',
-          },
-        };
-      }
-      return undefined;
-    });
-
-    const outcome = await openDefaultActiveProjectIfApplicable(papi);
-
-    expect(outcome).toBe('no-candidate');
-  });
-
   it('picks the project with the highest lastSendReceiveDate and calls openScriptureEditor', async () => {
     const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions, mockSendCommand } =
       createPickerMocks();
@@ -1138,6 +1110,44 @@ describe('openDefaultActiveProjectIfApplicable', () => {
     );
   });
 
+  it("opens the only project when it has never been S/R'd", async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      setCanUserEditScripture,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          neverSynced: {
+            id: 'neverSynced',
+            name: 'Never',
+            fullName: 'Never Synced',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '',
+          },
+        };
+      }
+      return undefined;
+    });
+    setCanUserEditScripture('neverSynced', true);
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'neverSynced',
+    );
+  });
+
   it('opens the only project when it is Observer-only (lone-Observer fallback policy)', async () => {
     const {
       papi,
@@ -1197,17 +1207,6 @@ describe('openDefaultActiveProjectIfApplicable', () => {
         language: 'en',
         editedStatus: 'unregistered',
         lastSendReceiveDate: '2026-05-19T00:00:00Z',
-      },
-    },
-    {
-      label: 'no lastSendReceiveDate (never synced or manually copied)',
-      info: {
-        id: 'neverSynced',
-        name: 'Never',
-        fullName: 'Never Synced',
-        language: 'en',
-        editedStatus: 'edited',
-        lastSendReceiveDate: '',
       },
     },
   ])("returns 'no-candidate' when the only project is filtered out by $label", async ({ info }) => {
@@ -1281,6 +1280,53 @@ describe('openDefaultActiveProjectIfApplicable', () => {
     expect(mockSendCommand).toHaveBeenCalledWith(
       'platformScriptureEditor.openScriptureEditor',
       'newer',
+    );
+  });
+
+  it("picks the S/R'd editable project over a never-synced editable project", async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      setCanUserEditScripture,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          neverSynced: {
+            id: 'neverSynced',
+            name: 'Never',
+            fullName: 'Never Synced',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '',
+          },
+          synced: {
+            id: 'synced',
+            name: 'Synced',
+            fullName: 'Synced Editable',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-05-18T00:00:00Z',
+          },
+        };
+      }
+      return undefined;
+    });
+    setCanUserEditScripture('neverSynced', true);
+    setCanUserEditScripture('synced', true);
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'synced',
     );
   });
 

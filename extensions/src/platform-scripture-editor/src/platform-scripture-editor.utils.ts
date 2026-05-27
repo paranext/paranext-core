@@ -569,14 +569,13 @@ export async function openDefaultActiveProjectIfApplicable(
   }
 
   // Exclude `'new'` (not yet downloaded — can't be opened) and `'unregistered'` (limited/provisional
-  // license — surprising to auto-open as the default). `lastSendReceiveDate` is produced by .NET
-  // upstream and isn't format-guaranteed in the type, so parse to a timestamp before sorting rather
-  // than relying on lexicographic ISO ordering.
+  // license — surprising to auto-open as the default). Projects with no `lastSendReceiveDate` are
+  // kept as candidates — a Power-created project that has never been S/R'd, or one copied onto the
+  // machine manually, is still a valid project to auto-open. `sortByRecency` treats missing or
+  // unparseable dates as epoch (0), so any S/R'd project still wins; never-synced projects only
+  // become the top candidate when nothing else qualifies.
   const filtered = Object.values(sharedProjects).filter(
-    (info) =>
-      info.editedStatus !== 'new' &&
-      info.editedStatus !== 'unregistered' &&
-      info.lastSendReceiveDate,
+    (info) => info.editedStatus !== 'new' && info.editedStatus !== 'unregistered',
   );
 
   // Annotate each surviving candidate with the current user's role. Per-candidate PDP lookups or
@@ -599,11 +598,19 @@ export async function openDefaultActiveProjectIfApplicable(
     }),
   );
 
+  // `lastSendReceiveDate` is produced by .NET upstream and isn't format-guaranteed in the type, so
+  // parse to a timestamp rather than relying on lexicographic ISO ordering. Missing or unparseable
+  // dates are treated as epoch (0) so they sort to the end — any S/R'd project beats a
+  // never-synced one.
+  const toTimestamp = (date: string) => {
+    if (!date) return 0;
+    const t = new Date(date).getTime();
+    return Number.isNaN(t) ? 0 : t;
+  };
   const sortByRecency = (
     a: { info: { lastSendReceiveDate: string } },
     b: { info: { lastSendReceiveDate: string } },
-  ) =>
-    new Date(b.info.lastSendReceiveDate).getTime() - new Date(a.info.lastSendReceiveDate).getTime();
+  ) => toTimestamp(b.info.lastSendReceiveDate) - toTimestamp(a.info.lastSendReceiveDate);
 
   const editable = annotated.filter((a) => a.canEdit).sort(sortByRecency);
   const observerOnly = annotated.filter((a) => !a.canEdit).sort(sortByRecency);
