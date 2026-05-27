@@ -83,8 +83,12 @@ function ColorSchemeTool() {
     >
       <IconButton
         key={`${REGISTER_ID}/color-scheme`}
-        title="Color scheme"
-        active={!!toolbarThemeState.colorScheme}
+        title="Appearance"
+        // Pinned off: the previous `!!toolbarThemeState.colorScheme` was vacuously true (the field
+        // always has a value), which made the button look permanently pressed. Reflecting the
+        // dropdown's open/closed state would require lifting `WithTooltip`'s internal state — a
+        // follow-up if visual feedback on open is desired.
+        active={false}
       >
         <SunIcon />
         <IconButtonLabel>
@@ -126,7 +130,8 @@ function ThemeFamilyTool() {
       <IconButton
         key={`${REGISTER_ID}/theme-family`}
         title="Theme"
-        active={!!toolbarThemeState.family}
+        // Pinned off: see the matching comment in `ColorSchemeTool` above.
+        active={false}
       >
         <PaintBrushIcon />
         <IconButtonLabel>{STORYBOOK_THEME_FAMILY_LABELS[toolbarThemeState.family]}</IconButtonLabel>
@@ -140,7 +145,7 @@ const matchStoryDocs = ({ viewMode, tabId }: { viewMode?: string; tabId?: string
 
 addons.register(REGISTER_ID, () => {
   addons.add(`${REGISTER_ID}/color-scheme`, {
-    title: 'Color scheme',
+    title: 'Appearance',
     type: types.TOOL,
     match: matchStoryDocs,
     render: ColorSchemeTool,

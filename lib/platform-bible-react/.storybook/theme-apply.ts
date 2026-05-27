@@ -12,7 +12,7 @@ import {
 
 /**
  * `localStorage` value for the Storybook theme toolbar: a JSON string (`JSON.stringify({ family,
- * colorScheme })`). If the stored value is still a legacy plain-text composite id
+ * colorScheme })`). If the stored value is still a legacy plain-text composite ID
  * (`platform-light`, etc.), {@link readStoredStorybookThemeState} replaces it with JSON.
  */
 export const PLATFORM_BIBLE_STORYBOOK_THEME_STORAGE_KEY = 'platform-bible-storybook-theme';
@@ -23,7 +23,14 @@ export const PLATFORM_BIBLE_STORYBOOK_THEME_STORAGE_KEY = 'platform-bible-storyb
  */
 export const PLATFORM_BIBLE_THEME_CHANNEL = 'platform-bible/storybook-theme-changed';
 
-/** Classes applied to the Storybook preview root for each legacy composite id (see `index.css`). */
+/**
+ * Classes applied to the Storybook preview root for each legacy composite ID (see `index.css`).
+ *
+ * TODO: Class names are not uniform: bare `dark` for the Platform default, family-prefixed
+ * `paratext-*`, and theme-prefixed `theme-shadcn-neutral`. A uniform `theme-{family}` scheme with
+ * `.dark` as a modifier would require coordinated changes in `index.css`, `themes.data.json`, and
+ * the app's `theme.service-host.ts`. Deferred.
+ */
 const CLASS_MAP: Record<StorybookThemeId, readonly string[]> = {
   'shadcn-light': ['theme-shadcn-neutral'],
   'shadcn-dark': ['dark', 'theme-shadcn-neutral'],
@@ -33,6 +40,10 @@ const CLASS_MAP: Record<StorybookThemeId, readonly string[]> = {
   'paratext-dark': ['paratext-dark'],
 };
 
+/**
+ * Must be a superset of every class value in `CLASS_MAP`. Add new entries here whenever a new theme
+ * is added to CLASS_MAP, otherwise switching away will leave stale classes on `<html>`.
+ */
 const ALL_THEME_CLASSES = [
   'dark',
   'paratext-light',
@@ -45,7 +56,7 @@ function isStorybookThemeId(value: string | undefined): value is StorybookThemeI
 }
 
 /**
- * Maps a legacy composite id to `{ family, colorScheme }` (storage migration, `themeOverride`
+ * Maps a legacy composite ID to `{ family, colorScheme }` (storage migration, `themeOverride`
  * strings, {@link applyPlatformBibleThemeToElement}).
  */
 export function themeStateFromLegacyThemeId(themeId: StorybookThemeId): StorybookThemeState {
@@ -87,7 +98,7 @@ export function resolveEffectiveColorScheme(
   return w.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
-/** One of the six legacy ids used by CLASS_MAP and themeOverride strings. */
+/** One of the six legacy IDs used by CLASS_MAP and themeOverride strings. */
 export function compositeThemeIdFromFamilyAndEffective(
   family: StorybookThemeFamily,
   effective: 'light' | 'dark',
@@ -155,7 +166,7 @@ function parseThemeStateJson(raw: string | null): StorybookThemeState | null {
 }
 
 /**
- * Reads persisted toolbar state, upgrading a legacy plain-text composite id in storage to JSON when
+ * Reads persisted toolbar state, upgrading a legacy plain-text composite ID in storage to JSON when
  * needed.
  */
 export function readStoredStorybookThemeState(): StorybookThemeState {
@@ -186,7 +197,7 @@ export function persistStorybookThemeState(state: StorybookThemeState): void {
 }
 
 /**
- * Returns one of the six legacy composite ids for the effective appearance (resolves `system` via
+ * Returns one of the six legacy composite IDs for the effective appearance (resolves `system` via
  * `prefers-color-scheme`). Prefer {@link readStoredStorybookThemeState} when you need `system` as a
  * stored choice.
  */
@@ -198,7 +209,7 @@ export function readStoredStorybookThemeId(): StorybookThemeId {
   );
 }
 
-/** Persists a legacy composite id; prefer {@link persistStorybookThemeState}. */
+/** Persists a legacy composite ID; prefer {@link persistStorybookThemeState}. */
 export function persistStorybookTheme(themeId: StorybookThemeId): void {
   persistStorybookThemeState(themeStateFromLegacyThemeId(themeId));
 }

@@ -8,6 +8,10 @@
  * Stock Shadcn Neutral (HSL) — Storybook-only preview. Not applied in the running app.
  * Converted from OKLCH in https://ui.shadcn.com/docs/theming (neutral "Default Theme CSS").
  * Pair with `.dark` on the same element for dark mode: `.dark.theme-shadcn-neutral`.
+ *
+ * Intentional format mismatch: this file uses `hsl(...)` while `index.css` uses `oklch(...)`.
+ * Both are complete CSS color values consumed via bare `var(--token)`. Do NOT re-wrap them in
+ * `hsl(var(--token))` — re-wrapping a complete CSS color value produces invalid CSS.
  */
 .theme-shadcn-neutral {
   --background: hsl(0 0% 100%);
@@ -42,6 +46,13 @@
   --radius: 0.625rem;
 }
 
+/**
+ * These tokens use alpha-in-HSL syntax (e.g. `hsl(0 0% 100% / 0.1)` on --border, --input,
+ * --sidebar-border) to match the stock Shadcn Neutral docs preset. Tailwind opacity modifiers
+ * (e.g. `border-border/50`) would produce invalid `hsl(... / 0.1 / 0.5)` under this theme.
+ * Project-wide, tailwind.config.ts does not enable alpha modifiers on `border`/`input`, so the
+ * trap is latent; documented here to discourage future misuse.
+ */
 .dark.theme-shadcn-neutral {
   --background: hsl(0 0% 3.9%);
   --foreground: hsl(0 0% 98%);

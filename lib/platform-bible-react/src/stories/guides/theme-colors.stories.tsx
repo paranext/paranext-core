@@ -81,18 +81,18 @@ function ThemeColorDisplay() {
   return (
     <>
       <p>
-        Color variables reflect the toolbar state: <strong>Color scheme</strong> (light / dark /
+        Color variables reflect the toolbar state: <strong>Appearance</strong> (light / dark /
         system) and <strong>Theme</strong> (Shadcn Neutral, Platform, Paratext), persisted as{' '}
         <code>{'{ family, colorScheme }'}</code>. Token values are defined in{' '}
         <a
-          className="tw:text-blue-600 tw:hover:underline"
+          className="tw:text-primary tw:hover:underline"
           href="https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css"
         >
           index.css
         </a>
         . The running app mirrors Platform and Paratext palettes in{' '}
         <a
-          className="tw:text-blue-600 tw:hover:underline"
+          className="tw:text-primary tw:hover:underline"
           href="https://github.com/paranext/paranext-core/blob/main/src/shared/data/themes.data.json"
         >
           themes.data.json
@@ -203,7 +203,7 @@ export const Default: Story = {
     docs: {
       description: {
         story:
-          'Live CSS variables for the toolbar Color scheme + Theme selection (see Guides / Theming for architecture).',
+          'Live CSS variables for the toolbar Appearance + Theme selection (see Guidelines / Theming for architecture).',
       },
     },
   },
