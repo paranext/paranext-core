@@ -8,6 +8,7 @@ import { papiFrontendProjectDataProviderService } from '@shared/services/project
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import {
   EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
+  EVENT_NAME_ON_DID_OPEN_WEB_VIEW,
   EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
 } from '@shared/services/web-view.service-model';
 import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
@@ -44,6 +45,8 @@ export function useProjectPickerData(): ProjectPickerData {
   const [refreshCounter, setRefreshCounter] = useState(0);
   const refresh = useCallback(() => setRefreshCounter((n) => n + 1), []);
 
+  const onDidOpenWebView = useMemo(() => getNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW), []);
+  useEvent(onDidOpenWebView, refresh);
   const onDidUpdateWebView = useMemo(() => getNetworkEvent(EVENT_NAME_ON_DID_UPDATE_WEB_VIEW), []);
   useEvent(onDidUpdateWebView, refresh);
   const onDidCloseWebView = useMemo(() => getNetworkEvent(EVENT_NAME_ON_DID_CLOSE_WEB_VIEW), []);
