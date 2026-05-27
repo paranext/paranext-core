@@ -28,11 +28,7 @@ import { Canon, type SerializedVerseRef } from '@sillsdev/scripture';
 import type { ScriptureRange } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChecklistTool, CHECKLIST_STRING_KEYS } from './components/checklist.component';
-import type {
-  ChecklistCell,
-  ChecklistData,
-  ChecklistRow,
-} from './components/checklist.component';
+import type { ChecklistCell, ChecklistData, ChecklistRow } from './components/checklist.component';
 import {
   MarkerSettingsDialog,
   MARKER_SETTINGS_STRING_KEYS,
@@ -860,7 +856,7 @@ function ChecklistContent({
           openTabs={comparativeOpenTabs}
           selection={comparativeSelection}
           onChangeSelection={handleComparativeTextsChange}
-          buttonClassName="tw-h-8 tw-min-w-32 tw-font-normal"
+          buttonClassName="tw:h-8 tw:min-w-32 tw:font-normal"
           // UX-2 finding #6: show a placeholder when no comparatives are
           // selected. The tooltip on the trigger carries the full hint on hover.
           buttonPlaceholder={
@@ -1020,7 +1016,7 @@ function ChecklistContent({
           onChangeSelection={(next: { projectId: string }) =>
             updateWebViewDefinition({ projectId: next.projectId })
           }
-          buttonClassName="tw-h-8 tw-min-w-32 tw-font-normal"
+          buttonClassName="tw:h-8 tw:min-w-32 tw:font-normal"
           // UX-2 finding #5: drop the truncating "Select primary S..." placeholder.
           // When a project is selected the short name fills the trigger; when none
           // is selected the trigger stays empty and the aria-label / tooltip carries

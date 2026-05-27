@@ -90,10 +90,10 @@ function getMarkerIndentStyle(marker: string): CSSProperties {
 // primary-color background tint so users can quickly scan past them. The tint is applied to the
 // `<tr>` itself via DataTable's `getRowClassName` prop — this paints the bg behind every `<td>`
 // in the row, so the colored region truly fills each cell from edge to edge. (The earlier
-// per-cell approach with `-tw-m-4 tw-px-6 tw-py-6` only colored the content area, not the full
+// per-cell approach with `-tw-m-4 tw:px-6 tw:py-6` only colored the content area, not the full
 // cell rectangle — see commit 3b8b99b8c2.) The 30% opacity proved too loud; 20% reads as a hint
 // without competing with the content.
-const MATCH_ROW_BG_CLASS = 'tw-bg-primary/20';
+const MATCH_ROW_BG_CLASS = 'tw:bg-primary/20';
 
 // ---------- Small presentational sub-components ----------
 
@@ -118,15 +118,14 @@ type ParagraphRowProps = {
   gotoAriaTemplate: string;
   /**
    * Owning cell's anchor reference — provides the book + chapter context for wrapping individual
-   * verse-number items into goto links (UX-2 finding #16). When undefined, verse-number items
-   * fall back to the plain-superscript rendering (no goto button) regardless of
-   * `onGotoVerseClick`.
+   * verse-number items into goto links (UX-2 finding #16). When undefined, verse-number items fall
+   * back to the plain-superscript rendering (no goto button) regardless of `onGotoVerseClick`.
    */
   cellReference?: ScriptureRange | undefined;
   /**
    * Optional goto callback. When provided (and `cellReference` is defined), verse-number items
-   * render as click-to-navigate buttons. When absent (read-only contexts), verse numbers render
-   * as plain superscripts.
+   * render as click-to-navigate buttons. When absent (read-only contexts), verse numbers render as
+   * plain superscripts.
    */
   onGotoVerseClick?: (verseRef: SerializedVerseRef) => void;
 };
@@ -208,13 +207,13 @@ function ParagraphRow({
                 <button
                   key={itemKey}
                   type="button"
-                  className="tw-cursor-pointer tw-bg-transparent tw-p-0 tw-text-primary hover:tw-underline focus-visible:tw-outline focus-visible:tw-outline-2 focus-visible:tw-outline-ring"
+                  className="tw:cursor-pointer tw:bg-transparent tw:p-0 tw:text-primary tw:hover:underline tw:focus-visible:outline tw:focus-visible:outline-2 tw:focus-visible:outline-ring"
                   onClick={() => onGotoVerseClick(verseGotoRef)}
                   aria-label={gotoAriaTemplate.replace('{ref}', verseRefDisplay)}
                   title={gotoAriaTemplate.replace('{ref}', verseRefDisplay)}
                   data-testid="checklist-verse-goto"
                 >
-                  <sup className="tw-font-semibold">{item.verseNumber}</sup>
+                  <sup className="tw:font-semibold">{item.verseNumber}</sup>
                 </button>
               );
             }
@@ -298,7 +297,7 @@ function CellContent({
   // character-style rules defined in `checklist-usfm-styles.scss` (UX-2 finding #19). Without
   // it, the character-style rules don't match and items would render unstyled.
   return (
-    <div className="checklist-formatted-font tw-flex tw-flex-col tw-gap-1" dir={dir}>
+    <div className="checklist-formatted-font tw:flex tw:flex-col tw:gap-1" dir={dir}>
       {cell.paragraphs.map((paragraph, paragraphIndex) => (
         <ParagraphRow
           // Paragraph markers may repeat within a single cell (e.g. two consecutive `\p`s), so the
@@ -349,7 +348,7 @@ function ColumnHeaderWithTooltip({
            * table-fixed layout honors them.
            */}
           <div
-            className="tw-flex tw-w-full tw-cursor-default tw-items-center tw-justify-start tw-px-2 tw-py-1 tw-font-semibold hover:tw-bg-accent/50"
+            className="tw:flex tw:w-full tw:cursor-default tw:items-center tw:justify-start tw:px-2 tw:py-1 tw:font-semibold tw:hover:bg-accent/50"
             aria-label={ariaLabel}
             data-testid="checklist-column-header"
           >
@@ -456,7 +455,7 @@ export function ChecklistTool({
       // eslint-disable-next-line react/no-unstable-nested-components
       header: () => (
         <span
-          className="tw-block tw-px-2 tw-py-1 tw-font-semibold"
+          className="tw:block tw:px-2 tw:py-1 tw:font-semibold"
           data-testid="checklist-column-headers"
         >
           {/* The Ref column header is intentionally unlabeled in the spec — it's axis metadata
@@ -477,7 +476,7 @@ export function ChecklistTool({
         // (applied via DataTable's `getRowClassName` prop below — see `MATCH_ROW_BG_CLASS`).
         // The row-level bg paints behind every `<td>` in the row, so the colored region fills
         // each cell edge-to-edge. Cell content here keeps its default padding/typography.
-        const containerClass = 'tw-block tw-px-2 tw-py-2';
+        const containerClass = 'tw:block tw:px-2 tw:py-2';
         // Sebastian PR #2219 #3137366113: "Make the scripture reference in the first column a
         // link button with the tooltip 'Go to {scrRef}' instead of the goto button". When a
         // goto callback is provided, render the ref as a `LinkedScrRefButton`; otherwise fall
@@ -503,7 +502,7 @@ export function ChecklistTool({
         }
         return (
           <span
-            className={`tw-font-mono tw-text-sm ${containerClass}`.trim()}
+            className={`tw:font-mono tw:text-sm ${containerClass}`.trim()}
             data-testid="checklist-reference-cell"
           >
             {refLabel}
@@ -544,7 +543,7 @@ export function ChecklistTool({
             // (see `MATCH_ROW_BG_CLASS` and the `getRowClassName` prop on DataTable). The row-
             // level bg paints behind every `<td>`, so cell content keeps its default classes.
             return (
-              <div className="tw-flex tw-flex-col tw-gap-1 tw-px-2 tw-py-2">
+              <div className="tw:flex tw:flex-col tw:gap-1 tw:px-2 tw:py-2">
                 <CellContent
                   cell={cell}
                   showVerseText={showVerseText}
@@ -610,14 +609,14 @@ export function ChecklistTool({
 
   // ----- Render helpers -----
 
-  // TabToolbar's start/end area divs use `tw-items-start`, which top-aligns children — while the
-  // container itself uses `tw-items-center`. The hamburger (a direct container child) is therefore
+  // TabToolbar's start/end area divs use `tw:items-start`, which top-aligns children — while the
+  // container itself uses `tw:items-center`. The hamburger (a direct container child) is therefore
   // vertically centered against the 56px toolbar height, but our selectors / view-menu trigger
   // (children of the area divs) end up top-aligned, creating a visible misalignment. Wrapping each
-  // render in our own `tw-h-full tw-items-center` flex restores horizontal alignment across the
+  // render in our own `tw:h-full tw:items-center` flex restores horizontal alignment across the
   // hamburger + selectors + view-menu trigger without touching the shared TabToolbar component.
   const renderToolbarStart = () => (
-    <div className="tw-flex tw-h-full tw-flex-row tw-items-center tw-gap-1">
+    <div className="tw:flex tw:h-full tw:flex-row tw:items-center tw:gap-1">
       {primaryProjectSelector}
       {comparativeTextsSelector}
       {verseRangeSelector}
@@ -625,7 +624,7 @@ export function ChecklistTool({
   );
 
   const renderToolbarEnd = () => (
-    <div className="tw-flex tw-h-full tw-flex-row tw-items-center tw-gap-1">
+    <div className="tw:flex tw:h-full tw:flex-row tw:items-center tw:gap-1">
       {/*
        * UX-2 finding #8: View toggles now live behind a single eye-icon
        * DropdownMenu button. Two checkbox items: Hide matches (disabled when
@@ -642,11 +641,11 @@ export function ChecklistTool({
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="tw-h-8 tw-w-8 tw-p-0"
+                  className="tw:h-8 tw:w-8 tw:p-0"
                   aria-label={getLocalizedString('%markersChecklist_toolbar_view%')}
                   data-testid="checklist-view-menu-trigger"
                 >
-                  <Eye className="tw-h-4 tw-w-4" aria-hidden="true" />
+                  <Eye className="tw:h-4 tw:w-4" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
             </TooltipTrigger>
@@ -806,7 +805,7 @@ export function ChecklistTool({
        * chrome would host the hamburger; reversing now that the outer chrome
        * is hidden.)
        */}
-      <div className="tw-sticky tw-top-0 tw-z-10 tw-bg-background" data-testid="checklist-toolbar">
+      <div className="tw:sticky tw:top-0 tw:z-10 tw:bg-background" data-testid="checklist-toolbar">
         <TabToolbar
           onSelectProjectMenuItem={onSelectProjectMenuItem ?? (() => undefined)}
           onSelectViewInfoMenuItem={() => undefined}
@@ -819,17 +818,17 @@ export function ChecklistTool({
       {renderBanners()}
 
       {/*
-       * UX-2 finding #11: wrap the table section in `tw-relative tw-z-0` so the sticky
+       * UX-2 finding #11: wrap the table section in `tw:relative tw:z-0` so the sticky
        * <thead>'s internal z-20 (set by shadcn-ui Table with stickyHeader) lives inside
        * a new stacking context here and can never out-stack the toolbar above (which
-       * uses `tw-sticky tw-top-0 tw-z-10`). Without this wrapper the thead's z-20 wins
+       * uses `tw:sticky tw:top-0 tw:z-10`). Without this wrapper the thead's z-20 wins
        * over the toolbar's z-10 and the column headers scroll OVER the toolbar.
        *
        * UX-2 finding #10: enforce equal column widths via Tailwind arbitrary variants
        * applied to the inner <table>:
-       *   - `[&_table]:tw-table-fixed [&_table]:tw-w-full` — switch to fixed layout so
+       *   - `tw:[&_table]:table-fixed tw:[&_table]:w-full` — switch to fixed layout so
        *     columns honor explicit widths on <th> instead of widest-content auto-sizing.
-       *   - `[&_thead_th:first-child]:tw-w-24` — Ref column is a fixed 96px (`w-24`),
+       *   - `tw:[&_thead_th:first-child]:w-24` — Ref column is a fixed 96px (`w-24`),
        *     enough for "GEN 1:1" etc.
        * Under table-fixed, the remaining N project columns (all with implicit
        * `width: auto`) share the remaining horizontal space equally — the browser
@@ -839,7 +838,7 @@ export function ChecklistTool({
       <section
         aria-label={getLocalizedString('%markersChecklist_table_aria%')}
         aria-busy={isLoading}
-        className="tw-relative tw-z-0 tw-m-1 tw-flex-1 tw-overflow-auto tw-rounded-md tw-border [&_table]:tw-table-fixed [&_table]:tw-w-full [&_thead_th:first-child]:tw-w-24"
+        className="tw:relative tw:z-0 tw:m-1 tw:flex-1 tw:overflow-auto tw:rounded-md tw:border tw:[&_table]:table-fixed tw:[&_table]:w-full tw:[&_thead_th:first-child]:w-24"
         data-testid="checklist-data-table"
       >
         <DataTable

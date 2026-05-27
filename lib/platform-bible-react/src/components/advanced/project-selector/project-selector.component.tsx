@@ -778,7 +778,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
               />
             </div>
             {props.mode === 'project-multi' && (
-              <div className="tw-flex tw-justify-between tw-border-b tw-py-2 tw-pe-4 tw-ps-2">
+              <div className="tw:flex tw:justify-between tw:border-b tw:py-2 tw:pe-4 tw:ps-2">
                 {/* UX-2 finding #6 (markers-checklist): callers can opt out of the "Select all"
                     affordance via the `hideSelectAll` prop. When hidden, the row keeps a spacer
                     on the left so "Clear all" remains right-aligned. */}

@@ -782,13 +782,13 @@ export function ScopeSelector({
             </DropdownMenuTrigger>
             <DropdownMenuContent
               ref={setDropdownContentEl}
-              // `tw-min-w-[14rem]` (224px) keeps the dropdown above the
-              // `DROPDOWN_NARROW_THRESHOLD_PX` (200) — accounting for the inner `tw-p-1`
+              // `tw:min-w-[14rem]` (224px) keeps the dropdown above the
+              // `DROPDOWN_NARROW_THRESHOLD_PX` (200) — accounting for the inner `tw:p-1`
               // padding the content rect lands at ~216px, comfortably wider than 200. This
               // ensures dropdown items show their scrRef suffixes (e.g. "Chapter: MAT 5") even
               // when the trigger is sized down for a compact toolbar. Previously `12rem` (192px)
               // sat below the threshold, hiding the suffixes.
-              className="tw-w-[var(--radix-dropdown-menu-trigger-width)] tw-min-w-[14rem]"
+              className="tw:w-[var(--radix-dropdown-menu-trigger-width)] tw:min-w-[14rem]"
               align="start"
             >
               <PopoverPortalContainerProvider container={dropdownContentEl}>
@@ -801,7 +801,7 @@ export function ScopeSelector({
                     // data-[highlighted] styles trigger on Radix's hover/focus mapping
                     // (D5: pointer hover normally fires data-highlighted; this makes the
                     // tw:bg-accent highlight unambiguous).
-                    className="tw:relative tw:ps-8 data-[highlighted]:tw:bg-accent data-[highlighted]:tw:text-accent-foreground"
+                    className="tw:relative tw:ps-8 tw:data-[highlighted]:bg-accent tw:data-[highlighted]:text-accent-foreground"
                     onSelect={() => handleScopeChange(value)}
                     data-selected={scope === value ? 'true' : undefined}
                   >
@@ -822,7 +822,7 @@ export function ScopeSelector({
                     // label aligned with the items above.
                     className={cn(
                       'tw:relative tw:ps-8',
-                      'data-[highlighted]:tw:bg-accent data-[highlighted]:tw:text-accent-foreground',
+                      'tw:data-[highlighted]:bg-accent tw:data-[highlighted]:text-accent-foreground',
                     )}
                     onSelect={() => openDialogFallback('selectedBooks')}
                     data-selected={scope === 'selectedBooks' ? 'true' : undefined}
@@ -838,7 +838,7 @@ export function ScopeSelector({
                     ref={assignScopeItemRef('range')}
                     className={cn(
                       'tw:relative tw:ps-8',
-                      'data-[highlighted]:tw:bg-accent data-[highlighted]:tw:text-accent-foreground',
+                      'tw:data-[highlighted]:bg-accent tw:data-[highlighted]:text-accent-foreground',
                     )}
                     onSelect={() => openDialogFallback('range')}
                     data-selected={scope === 'range' ? 'true' : undefined}
