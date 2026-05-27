@@ -14,15 +14,17 @@ vi.mock('@papi/backend', () => ({
     // Provided so subclasses can call `this.notifyUpdate(...)` without crashing if a test ever
     // exercises that path. The current tests don't fire change events, but keeping the stub
     // matches the runtime contract.
+    // eslint-disable-next-line @typescript-eslint/class-methods-use-this -- mock stub; real BaseProjectDataProviderEngine.notifyUpdate uses `this`, but this stub body is intentionally empty because the tests do not fire notifyUpdate
     notifyUpdate() {}
   },
 }));
 
-// Imports must come after vi.mock so the mock is applied to the module under test.
-// eslint-disable-next-line import/first
+// vi.mock declarations above are hoisted, so the imports below must come after to ensure the
+// mock is applied to the module under test.
+/* eslint-disable import/first */
 import { LexicalReferenceProjectDataProviderEngine } from './lexical-reference-project-data-provider-engine.model';
-// eslint-disable-next-line import/first
 import type { LexicalReferenceTextManager } from './lexical-reference-text-manager.model';
+/* eslint-enable import/first */
 
 function createEngine() {
   // Minimal LexicalReferenceText — only `id` and `localizedInfoByBCP47Code` are read by the
