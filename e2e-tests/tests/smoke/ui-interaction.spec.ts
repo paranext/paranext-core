@@ -23,12 +23,21 @@ test.describe('UI Interaction', () => {
 
     // Force the interface language to English so menu-item text matchers
     // (e.g. /Help/i) are deterministic regardless of the developer's saved
-    // platform.interfaceLanguage setting in dev-appdata. Wait for the method
-    // to register on the PAPI network first — on slow CI the settings data
-    // provider can register after this beforeAll starts, and the 10s
-    // single-shot timeout in sendPapiRequestOnce isn't enough to absorb that.
+    // platform.interfaceLanguage setting in dev-appdata.
+    // Fast-fail guard: on slow CI the settings data provider can register
+    // after this beforeAll starts; this throws a clear error if it never does.
     await waitForPapiMethodRegistered(SETTINGS_SET_METHOD);
-    await sendPapiRequestOnce(SETTINGS_SET_METHOD, ['platform.interfaceLanguage', ['en']]);
+    // The `set` handler internally awaits `waitForResyncContributions()`
+    // (via `get` → `getDefaultValueForKey`) — that doesn't resolve until the
+    // extension host finishes extensionService.initialize(). On slow CI that
+    // wait can exceed the default 10s sendPapiRequestOnce timeout, so give
+    // this call enough headroom to absorb it.
+    await sendPapiRequestOnce(
+      SETTINGS_SET_METHOD,
+      ['platform.interfaceLanguage', ['en']],
+      undefined,
+      90_000,
+    );
   });
 
   test('should open the About dialog from the Help menu', async ({ mainPage }) => {
