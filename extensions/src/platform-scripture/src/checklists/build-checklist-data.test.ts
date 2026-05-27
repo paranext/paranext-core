@@ -305,8 +305,30 @@ describe('buildChecklistData', () => {
   });
 
   describe('empty-result message', () => {
-    it('emptyResultMessage variant=identical when markerFilter is empty (§ 7.2)', async () => {
-      // Use an empty USJ (no content) so no rows are produced — and markerFilter is empty.
+    it('emptyResultMessage variant=identical when markerFilter is empty AND comparatives are present (UX-2 #3 backend)', async () => {
+      // Use empty USJ on both columns so no rows are produced; empty filter + has comparatives →
+      // 'identical' variant per UX-2 #3 (port of WP1).
+      const papi = makePapiMock({
+        projects: {
+          'PROJ-1': { usjPerBook: { 1: { type: 'USJ', version: '3.1', content: [] } } },
+          'PROJ-2': { usjPerBook: { 1: { type: 'USJ', version: '3.1', content: [] } } },
+        },
+      });
+      const result = await buildChecklistData(
+        makeRequest({ comparativeTextIds: ['PROJ-2'] }),
+        papi,
+      );
+      expect(result.rows).toEqual([]);
+      expect(result.emptyResultMessage).toBeDefined();
+      expect(result.emptyResultMessage?.variant).toBe('identical');
+      expect(result.emptyResultMessage?.searchedMarkers).toBeUndefined();
+      expect(result.emptyResultMessage?.searchedBooks).toBeUndefined();
+    });
+
+    it('emptyResultMessage variant=noResults when markerFilter is empty AND there are NO comparatives (UX-2 #3 backend)', async () => {
+      // Single-column + empty filter + empty result → 'noResults' (not 'identical'). Pre-WP1 the
+      // identical-markers variant fired here, which surfaced "Comparative texts have identical
+      // markers." even though there were no comparatives to compare against — UX-2 #3 fixes this.
       const papi = makePapiMock({
         projects: {
           'PROJ-1': { usjPerBook: { 1: { type: 'USJ', version: '3.1', content: [] } } },
@@ -314,10 +336,11 @@ describe('buildChecklistData', () => {
       });
       const result = await buildChecklistData(makeRequest(), papi);
       expect(result.rows).toEqual([]);
-      expect(result.emptyResultMessage).toBeDefined();
-      expect(result.emptyResultMessage?.variant).toBe('identical');
-      expect(result.emptyResultMessage?.searchedMarkers).toBeUndefined();
-      expect(result.emptyResultMessage?.searchedBooks).toBeUndefined();
+      expect(result.emptyResultMessage?.variant).toBe('noResults');
+      expect(result.emptyResultMessage?.message).toBe('');
+      // markerFilter is empty → searchedMarkers is an empty array (no markers were searched).
+      expect(result.emptyResultMessage?.searchedMarkers).toEqual([]);
+      expect(result.emptyResultMessage?.searchedBooks).toEqual(['GEN']);
     });
 
     it('emptyResultMessage variant=noResults when markerFilter is non-empty', async () => {
@@ -408,7 +431,8 @@ describe('buildChecklistData', () => {
 
   describe('booksPresent intersection', () => {
     it('skips books absent from booksPresent setting', async () => {
-      // booksPresent = '00...' (no books) → no rows iterated.
+      // booksPresent = '00...' (no books) → no rows iterated. Single-column + empty filter →
+      // 'noResults' variant per UX-2 #3 (no comparatives, so 'identical markers' doesn't apply).
       const papi = makePapiMock({
         projects: {
           'PROJ-1': { usjPerBook: { 1: SIMPLE_GENESIS_ONE_PARA }, booksPresent: '0'.repeat(123) },
@@ -416,7 +440,7 @@ describe('buildChecklistData', () => {
       });
       const result = await buildChecklistData(makeRequest(), papi);
       expect(result.rows).toEqual([]);
-      expect(result.emptyResultMessage?.variant).toBe('identical');
+      expect(result.emptyResultMessage?.variant).toBe('noResults');
     });
   });
 });

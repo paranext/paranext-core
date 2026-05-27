@@ -129,8 +129,11 @@ export const ProjectNotFoundError = makeProjectNotFoundError;
  * 8. Max-rows cap (INV-012; truncate at 5000).
  * 9. EditLinkItem placement (BHV-114 / VAL-007 cond 4) — per editable cell with non-undefined
  *    reference, append `EditLinkItem` to the LAST paragraph's items.
- * 10. Empty-result-message variant detection (BHV-106 / INV-008; § 7.2 gate on `markerFilter.size ===
- *     0` ONLY).
+ * 10. Empty-result-message variant detection (BHV-106 / INV-008; UX-2 #3 backend revision: the
+ *     "identical markers" variant is now gated on BOTH `markerFilter.size === 0` AND
+ *     `comparativeTextIds.length > 0`. The empty-with-no-comparatives case falls through to the
+ *     `noResults` variant — there is no "identical markers" message to show when there are no
+ *     comparatives to be identical to.).
  */
 export async function buildChecklistData(
   request: ChecklistRequest,
@@ -256,7 +259,9 @@ export async function buildChecklistData(
 
   // Step 10: empty-result-message variant detection.
   const emptyResultMessage =
-    rows.length === 0 ? buildEmptyResultMessage(markerFilter, bookNumbers) : undefined;
+    rows.length === 0
+      ? buildEmptyResultMessage(markerFilter, bookNumbers, request.comparativeTextIds.length > 0)
+      : undefined;
 
   return {
     rows,
@@ -424,16 +429,22 @@ function parseMarkerFilter(input: string): ReadonlySet<string> {
 }
 
 /**
- * § 7.2: gate the `identical` variant on `markerFilter.size === 0` ONLY (no comparativeCount gate).
- * When the filter is empty, the empty result means "no differences found" → identical markers. When
- * the filter is non-empty, the empty result means "no paragraphs matched the filter" → noResults,
- * carrying searchedMarkers + searchedBooks for the localized template substitution.
+ * UX-2 #3 backend (port of WP1's C# revision): gate the `identical` variant on BOTH
+ * `markerFilter.size === 0` AND `hasComparativeTexts === true`. When the filter is empty AND there
+ * is at least one comparative column, the empty result means "no differences found" → identical
+ * markers. When the filter is non-empty, the empty result means "no paragraphs matched the filter"
+ * → noResults, carrying searchedMarkers + searchedBooks for the localized template substitution.
+ * When the filter is empty but there are NO comparatives, "identical markers" makes no sense (there
+ * is nothing to be identical to), so we fall through to `noResults` as well — the UI's
+ * `checklist.component.tsx` then resolves a generic "no markers found" message rather than the
+ * misleading "Comparative texts have identical markers." string.
  */
 function buildEmptyResultMessage(
   markerFilter: ReadonlySet<string>,
   bookNumbers: readonly number[],
+  hasComparativeTexts: boolean,
 ): ChecklistEmptyResultMessage {
-  if (markerFilter.size === 0) {
+  if (markerFilter.size === 0 && hasComparativeTexts) {
     return {
       variant: 'identical',
       message: IDENTICAL_MARKERS_MESSAGE_KEY,
