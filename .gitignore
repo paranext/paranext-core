@@ -60,7 +60,10 @@ e2e-tests/test-results/
 e2e-tests/.dev-server.pid
 
 # claude
-.claude
+.claude/todos/
+.claude/projects/
+.claude/statsig/
+.claude/cache/
 .claude.backup/
 .context
 c-sharp/CLAUDE.md
