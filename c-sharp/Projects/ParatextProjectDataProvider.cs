@@ -93,18 +93,25 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         retVal.Add(("getVersePlainText", GetVersePlainText));
 
-        retVal.Add(("getCommentThreads", GetCommentThreads));
-        retVal.Add(("createComment", CreateComment));
-        retVal.Add(("addCommentToThread", AddCommentToThread));
-        retVal.Add(("deleteComment", DeleteComment));
-        retVal.Add(("updateComment", UpdateComment));
-        retVal.Add(("setIsCommentThreadRead", SetIsCommentThreadRead));
-        retVal.Add(("findAssignableUsers", FindAssignableUsers));
-        retVal.Add(("canUserCreateComments", CanUserCreateComments));
-        retVal.Add(("canUserAddCommentToThread", CanUserAddCommentToThread));
-        retVal.Add(("canUserAssignThread", CanUserAssignThread));
-        retVal.Add(("canUserResolveThread", CanUserResolveThread));
-        retVal.Add(("canUserEditOrDeleteComment", CanUserEditOrDeleteComment));
+        // Comment methods are only registered when this PDP advertises legacyCommentManager.comments.
+        // Published PDPs do not advertise that interface (published projects are read-only and PT9
+        // throws AttemptedResourceWritingException on any write to a published project), so they
+        // skip registration entirely instead of relying solely on per-method runtime guards.
+        if (ProjectDetails.Metadata.ProjectInterfaces.Contains(ProjectInterfaces.LEGACY_COMMENT))
+        {
+            retVal.Add(("getCommentThreads", GetCommentThreads));
+            retVal.Add(("createComment", CreateComment));
+            retVal.Add(("addCommentToThread", AddCommentToThread));
+            retVal.Add(("deleteComment", DeleteComment));
+            retVal.Add(("updateComment", UpdateComment));
+            retVal.Add(("setIsCommentThreadRead", SetIsCommentThreadRead));
+            retVal.Add(("findAssignableUsers", FindAssignableUsers));
+            retVal.Add(("canUserCreateComments", CanUserCreateComments));
+            retVal.Add(("canUserAddCommentToThread", CanUserAddCommentToThread));
+            retVal.Add(("canUserAssignThread", CanUserAssignThread));
+            retVal.Add(("canUserResolveThread", CanUserResolveThread));
+            retVal.Add(("canUserEditOrDeleteComment", CanUserEditOrDeleteComment));
+        }
 
         retVal.Add(("getSetting", GetProjectSetting));
         retVal.Add(("setSetting", SetProjectSetting));
