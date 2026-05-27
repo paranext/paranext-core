@@ -126,6 +126,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(
             ("canUserWriteProjectTextConnectionSettings", CanUserWriteProjectTextConnectionSettings)
         );
+        retVal.Add(("canUserEditScripture", CanUserEditScripture));
 
         retVal.Add(("getMarkerNames", GetMarkerNames));
 
@@ -1358,6 +1359,27 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         {
             ScrText scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
             return scrText.Permissions.AmAdministrator;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Determines if the current user can edit Scripture content in this project
+    /// (i.e., has a role other than Observer or None).
+    /// </summary>
+    /// <returns>
+    /// True if the user has a non-Observer/non-None role, false otherwise or if permissions cannot
+    /// be determined.
+    /// </returns>
+    public bool CanUserEditScripture()
+    {
+        try
+        {
+            ScrText scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+            return scrText.Permissions.HaveRoleNotObserver;
         }
         catch
         {

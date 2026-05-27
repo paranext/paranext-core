@@ -518,9 +518,11 @@ export type DefaultProjectPickerOutcome =
 
 /**
  * Attempt to fill the empty Scripture Editor in the simple layout with the most-recently-active
- * shared project. Candidates come from `paratextBibleSendReceive.getSharedProjects`, which already
- * excludes Observer-only projects for internet S/R (note: local-repository S/R does not filter by
- * role, so an Observer-permission project may slip through in that path).
+ * shared project. Candidates come from `paratextBibleSendReceive.getSharedProjects` (internet S/R
+ * excludes Observer-only projects upstream; local-repository S/R does not). The picker partitions
+ * remaining candidates by `canUserEditScripture` and prefers editable projects, falling back to the
+ * most-recently-S/R'd Observer-only project so an Observer-only user is not stranded with an empty
+ * editor (Observer projects are otherwise reachable via the project switcher).
  *
  * Idempotent: each invocation re-reads the dock and the shared-projects list. The driver in
  * {@link startDefaultProjectPicker} is responsible for re-invoking on events that change those
@@ -567,24 +569,60 @@ export async function openDefaultActiveProjectIfApplicable(
   }
 
   // Exclude `'new'` (not yet downloaded — can't be opened) and `'unregistered'` (limited/provisional
-  // license — surprising to auto-open as the default). `lastSendReceiveDate` is produced by .NET
-  // upstream and isn't format-guaranteed in the type, so parse to a timestamp before sorting rather
-  // than relying on lexicographic ISO ordering.
-  const candidates = Object.values(sharedProjects)
-    .filter(
-      (info) =>
-        info.editedStatus !== 'new' &&
-        info.editedStatus !== 'unregistered' &&
-        info.lastSendReceiveDate,
-    )
-    .sort(
-      (a, b) =>
-        new Date(b.lastSendReceiveDate).getTime() - new Date(a.lastSendReceiveDate).getTime(),
-    );
+  // license — surprising to auto-open as the default). Projects with no `lastSendReceiveDate` are
+  // kept as candidates — a Power-created project that has never been S/R'd, or one copied onto the
+  // machine manually, is still a valid project to auto-open. `sortByRecency` treats missing or
+  // unparseable dates as epoch (0), so any S/R'd project still wins; never-synced projects only
+  // become the top candidate when nothing else qualifies.
+  const filtered = Object.values(sharedProjects).filter(
+    (info) => info.editedStatus !== 'new' && info.editedStatus !== 'unregistered',
+  );
 
-  if (candidates.length === 0) return 'no-candidate';
+  // Annotate each surviving candidate with the current user's role. Per-candidate PDP lookups or
+  // method rejections are treated as Observer-equivalent — they fall to the `observerOnly` group
+  // and only matter if no editable candidate exists. A missing PDP (e.g., a project that doesn't
+  // advertise `platformScripture.scriptureEditPermissions`) is likewise Observer-equivalent.
+  // Mirrors the C# method's "false on exception" semantics.
+  const annotated = await Promise.all(
+    filtered.map(async (info) => {
+      try {
+        const pdp = await papi.projectDataProviders.get(
+          'platformScripture.scriptureEditPermissions',
+          info.id,
+        );
+        if (!pdp) return { info, canEdit: false };
+        return { info, canEdit: await pdp.canUserEditScripture() };
+      } catch {
+        return { info, canEdit: false };
+      }
+    }),
+  );
 
-  const top = candidates[0];
+  // `lastSendReceiveDate` is produced by .NET upstream and isn't format-guaranteed in the type, so
+  // parse to a timestamp rather than relying on lexicographic ISO ordering. Missing or unparseable
+  // dates are treated as epoch (0) so they sort to the end — any S/R'd project beats a
+  // never-synced one.
+  const toTimestamp = (date: string) => {
+    if (!date) return 0;
+    const t = new Date(date).getTime();
+    return Number.isNaN(t) ? 0 : t;
+  };
+  const sortByRecency = (
+    a: { info: { lastSendReceiveDate: string } },
+    b: { info: { lastSendReceiveDate: string } },
+  ) => toTimestamp(b.info.lastSendReceiveDate) - toTimestamp(a.info.lastSendReceiveDate);
+
+  const editable = annotated.filter((a) => a.canEdit).sort(sortByRecency);
+  const observerOnly = annotated.filter((a) => !a.canEdit).sort(sortByRecency);
+
+  // Prefer the most-recently-S/R'd editable project. When the user has only Observer-only projects,
+  // still open the most-recently-S/R'd one — Observer projects are otherwise reachable via the
+  // project switcher, so we shouldn't strand an Observer-only user with an empty editor.
+  const topCandidate = editable[0] ?? observerOnly[0];
+
+  if (!topCandidate) return 'no-candidate';
+
+  const top = topCandidate.info;
   let hasFailed = false;
   let openedScriptureEditor = false;
   papi.logger.info(`Default active project picker: opening project=${top.id}`);
