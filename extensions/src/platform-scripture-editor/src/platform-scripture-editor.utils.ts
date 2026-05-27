@@ -738,3 +738,38 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
 }
 
 // #endregion Default Active Project Picker
+
+// #region Project-Switch Sync
+
+/**
+ * Fire-and-forget helper that syncs the incoming project first, then the outgoing one. Each sync is
+ * independently error-isolated so a failure in one doesn't block the other. Only called in simple
+ * mode after a replace-tab project switch.
+ */
+export async function syncOnProjectSwitch(
+  papi: typeof PapiBackend,
+  incomingProjectId: string,
+  outgoingProjectId: string | undefined,
+): Promise<void> {
+  try {
+    await papi.commands.sendCommand('paratextBibleSendReceive.syncProjects', [incomingProjectId]);
+  } catch (e) {
+    papi.logger.warn(
+      `Project-switch sync: incoming sync for ${incomingProjectId} failed: ${getErrorMessage(e)}`,
+    );
+  }
+
+  if (outgoingProjectId) {
+    try {
+      await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [
+        outgoingProjectId,
+      ]);
+    } catch (e) {
+      papi.logger.warn(
+        `Project-switch sync: outgoing sync for ${outgoingProjectId} failed: ${getErrorMessage(e)}`,
+      );
+    }
+  }
+}
+
+// #endregion Project-Switch Sync
