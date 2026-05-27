@@ -4,17 +4,13 @@ import type { ChecklistContentItem, WalkerParagraph } from './checklist.types';
 
 /**
  * Tests ported from `c-sharp-tests/Checklists/Markers/MarkersDataSourceTests.cs` —
- * `PostProcessParagraph` section (TS-009, TS-010, TS-067). The C# `PostProcessParagraph`
- * (`c-sharp/Checklists/Markers/MarkersDataSource.cs:67-79`) takes a `ChecklistParagraph` and a
- * `showVerseText` flag; the TS version additionally takes per-cell `language` and `rtl` (the
- * upstream walker applies the RTL prefix to text items it emits, but this module is exercised in
- * the orchestrator boundary where the RTL flag is threaded explicitly).
+ * `PostProcessParagraph` section (TS-009, TS-010, TS-067). After UX-2 #13 / WP1, the C#
+ * `PostProcessParagraph` no longer prepends a synthetic `\marker` TextItem at items[0]: the UI
+ * renders the marker from `paragraph.marker` separately (see `checklist.component.tsx`
+ * `renderParagraphLine`). These tests assert the revised post-WP1 contract.
  *
  * RTL behavior: per `c-sharp/Checklists/ChecklistService.cs:1088`, RTL prefix is applied to
- * ORIGINAL text items only by the walker, NOT to the synthetic `\marker` label added by
- * `PostProcessParagraph`. This module follows the same contract: text items in the input have
- * already been RTL-prefixed by the walker; PostProcessParagraph does NOT re-prefix them and does
- * NOT prefix the synthetic `\marker` label.
+ * ORIGINAL text items only by the walker. `postProcessParagraph` does NOT re-prefix them.
  */
 
 function makeParagraph(marker: string, items: ChecklistContentItem[]): WalkerParagraph {
@@ -27,40 +23,40 @@ function makeParagraph(marker: string, items: ChecklistContentItem[]): WalkerPar
 }
 
 describe('postProcessParagraph', () => {
-  describe('INV-004 — prepend \\marker text item at index 0', () => {
-    it('TS-009: showVerseText=false clears items and inserts marker-only', () => {
-      // C# TS-009: input items = [TextItem("verse text here"), TextItem("more text")]; with
-      // showVerseText=false, the result must be a single TextItem("\\p").
+  describe('items pass-through (post-UX-2 #13 / WP1)', () => {
+    it('TS-009: showVerseText=false returns an empty items list', () => {
+      // C# TS-009 pre-WP1 expected a single TextItem("\\p") here. Post-WP1: empty list.
+      // The UI renders the `\p` label from paragraph.marker; the synthetic TextItem was a
+      // duplicate.
       const input = makeParagraph('p', [
         { type: 'text', text: 'verse text here', characterStyle: undefined },
         { type: 'text', text: 'more text', characterStyle: undefined },
       ]);
       const result = postProcessParagraph(input, { showVerseText: false });
       expect(result.marker).toBe('p');
-      expect(result.items).toEqual([{ type: 'text', text: '\\p', characterStyle: undefined }]);
+      expect(result.items).toEqual([]);
     });
 
-    it('TS-010: showVerseText=true prepends marker before original items', () => {
-      // C# TS-010: input items = [TextItem("indented "), TextItem("poetry")]; with
-      // showVerseText=true, result must be [TextItem("\\q2"), TextItem("indented "), TextItem("poetry")].
+    it('TS-010: showVerseText=true passes walker items through unchanged', () => {
+      // C# TS-010 pre-WP1 expected `[TextItem("\\q2"), ...walkerItems]`. Post-WP1: just the
+      // walker items, in order, with no synthetic marker label.
       const input = makeParagraph('q2', [
         { type: 'text', text: 'indented ', characterStyle: undefined },
         { type: 'text', text: 'poetry', characterStyle: undefined },
       ]);
       const result = postProcessParagraph(input, { showVerseText: true });
       expect(result.items).toEqual([
-        { type: 'text', text: '\\q2', characterStyle: undefined },
         { type: 'text', text: 'indented ', characterStyle: undefined },
         { type: 'text', text: 'poetry', characterStyle: undefined },
       ]);
     });
 
-    it('TS-067: q1 marker with showVerseText=false displays exactly "\\q1"', () => {
+    it('TS-067: q1 marker with showVerseText=false returns empty items', () => {
       const input = makeParagraph('q1', [
         { type: 'text', text: 'some content', characterStyle: undefined },
       ]);
       const result = postProcessParagraph(input, { showVerseText: false });
-      expect(result.items).toEqual([{ type: 'text', text: '\\q1', characterStyle: undefined }]);
+      expect(result.items).toEqual([]);
     });
   });
 
@@ -72,45 +68,36 @@ describe('postProcessParagraph', () => {
       ]);
       const result = postProcessParagraph(input, { showVerseText: true });
       expect(result.items).toEqual([
-        { type: 'text', text: '\\p', characterStyle: undefined },
         { type: 'verse', verseNumber: '1' },
         { type: 'text', text: 'In the beginning', characterStyle: undefined },
       ]);
     });
 
-    it('drops VerseItem (and all non-marker items) when showVerseText=false', () => {
+    it('drops all items (including VerseItem) when showVerseText=false', () => {
       const input = makeParagraph('p', [
         { type: 'verse', verseNumber: '1' },
         { type: 'text', text: 'In the beginning', characterStyle: undefined },
       ]);
       const result = postProcessParagraph(input, { showVerseText: false });
-      expect(result.items).toEqual([{ type: 'text', text: '\\p', characterStyle: undefined }]);
+      expect(result.items).toEqual([]);
     });
   });
 
-  describe('RTL handling — synthetic marker label is NOT RTL-prefixed', () => {
-    it('does NOT add the RTL prefix to the synthetic "\\p" label', () => {
-      // Per c-sharp/Checklists/ChecklistService.cs:1088, the walker applies RTL prefix to original
-      // text items at extraction time. PostProcessParagraph does NOT touch the items' RTL status
-      // and does NOT prefix the synthetic \marker label. (C# MarkersDataSource.PostProcessParagraph
-      // at MarkersDataSource.cs:67-79 inserts `new TextItem("\\" + paragraph.Marker, null)` with no
-      // RTL handling.)
+  describe('RTL handling — walker-supplied RTL text passes through unchanged', () => {
+    it('preserves the RTL prefix the walker emitted on the original text item', () => {
+      // Per c-sharp/Checklists/ChecklistService.cs:1088, the walker applies the RTL prefix to
+      // original text items at extraction time. postProcessParagraph does NOT touch the items.
       const rtlTextFromWalker = `${RTL_MARKER}שלום`;
       const input = makeParagraph('p', [
         { type: 'text', text: rtlTextFromWalker, characterStyle: undefined },
       ]);
       const result = postProcessParagraph(input, { showVerseText: true });
 
-      // Synthetic marker label is not RTL-prefixed.
-      expect(result.items[0]).toEqual({ type: 'text', text: '\\p', characterStyle: undefined });
-
-      // Original text item passes through unchanged (RTL prefix is preserved as-emitted by the
-      // walker).
-      expect(result.items[1]).toEqual({
-        type: 'text',
-        text: rtlTextFromWalker,
-        characterStyle: undefined,
-      });
+      // No synthetic marker label is inserted; the walker's text item passes through unchanged
+      // with the RTL prefix preserved.
+      expect(result.items).toEqual([
+        { type: 'text', text: rtlTextFromWalker, characterStyle: undefined },
+      ]);
     });
   });
 
