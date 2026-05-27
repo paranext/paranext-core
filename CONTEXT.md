@@ -20,6 +20,8 @@ Ghost content shows **structure only** — translated text is stripped; structur
 
 Project data that a translator has explicitly entered. The **chapter** is the atomic unit of commitment: if any project data exists for a chapter in the PDP, the entire chapter is treated as committed and ghost content is suppressed for it. Ghost content only appears in chapters with no existing project data.
 
+**Adoption:** When a translator first types into a ghost chapter, the ghost structure (paranodes, verse slot positions, heading slots) is promoted to become the initial real project data for that chapter. The translator then edits within that committed scaffold. Ghost content is never written to the PDP directly — adoption is the only path from ghost to committed.
+
 ## Model Text Panel
 
 An existing separate, synchronized, read-only panel that displays the current chapter of the model text alongside the translation editor. Serves the **reading reference** role. Distinct from ghost content.
