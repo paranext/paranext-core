@@ -834,11 +834,21 @@ export function ChecklistTool({
        * `width: auto`) share the remaining horizontal space equally — the browser
        * distributes whatever is left after the fixed column. Inline widths on inner
        * divs would have no effect here; widths must live on the <th>.
+       *
+       * Wrap behaviour:
+       *   - `tw:[&_td]:whitespace-normal` overrides shadcn `TableCell`'s stock
+       *     `tw:whitespace-nowrap` for body cells, so verse text wraps at word
+       *     boundaries inside its column instead of overflowing into the next.
+       *     <th> headers keep nowrap so column names like "TPTS" don't break.
+       *   - `tw:[&_td]:align-top` keeps body content top-aligned when neighbouring
+       *     cells have different heights (a paragraph cell with 10 wrapped lines
+       *     next to a short-marker cell otherwise vertical-centers, which reads
+       *     poorly).
        */}
       <section
         aria-label={getLocalizedString('%markersChecklist_table_aria%')}
         aria-busy={isLoading}
-        className="tw:relative tw:z-0 tw:m-1 tw:flex-1 tw:overflow-auto tw:rounded-md tw:border tw:[&_table]:table-fixed tw:[&_table]:w-full tw:[&_thead_th:first-child]:w-24"
+        className="tw:relative tw:z-0 tw:m-1 tw:flex-1 tw:overflow-auto tw:rounded-md tw:border tw:[&_table]:table-fixed tw:[&_table]:w-full tw:[&_thead_th:first-child]:w-24 tw:[&_td]:whitespace-normal tw:[&_td]:align-top"
         data-testid="checklist-data-table"
       >
         <DataTable
