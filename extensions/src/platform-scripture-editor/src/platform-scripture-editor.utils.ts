@@ -484,6 +484,44 @@ export function resolveOpenEditorDispatch(
 
 // #endregion Open Editor Dispatch
 
+// #region Open Project Filter
+
+/**
+ * Filter a list of projects (paired with their `platform.isPublished` value) to those that belong
+ * in the project-selection dialog for a given open mode.
+ *
+ * Used by the `open()` flow in `main.ts` when no `projectId` is supplied and we need to populate
+ * the Scripture Editor / Resource Viewer project picker. The rule is:
+ *
+ * - Resource Viewer (`isReadOnly === true`) → include projects where `isPublished === true`. The
+ *   Resource Viewer lists published references / resources.
+ * - Scripture Editor (`isReadOnly === false`) → include projects where `isPublished === false`. The
+ *   Scripture Editor lists translation projects.
+ *
+ * Note this is a project-kind classification (driven by `platform.isPublished`), not a
+ * Scripture-text edit decision (`platform.isEditable`) — a non-published project may still be
+ * non-editable for other reasons, but it does not belong in the Resource Viewer dialog.
+ *
+ * Pure function — does not touch PAPI. The caller is responsible for fetching each project's
+ * `platform.isPublished` setting beforehand.
+ *
+ * @param projectsWithIsPublished List of projects, each with their `platform.isPublished` setting
+ *   value already fetched.
+ * @param isReadOnly Whether the caller wants the Resource Viewer (`true`) or Scripture Editor
+ *   (`false`).
+ * @returns Project IDs that match the requested open mode, in the original input order.
+ */
+export function selectProjectIdsForOpenMode(
+  projectsWithIsPublished: ReadonlyArray<{ projectId: string; isPublished: boolean }>,
+  isReadOnly: boolean,
+): string[] {
+  return projectsWithIsPublished
+    .filter(({ isPublished }) => isPublished === isReadOnly)
+    .map(({ projectId }) => projectId);
+}
+
+// #endregion Open Project Filter
+
 // #region Default Active Project Picker
 
 /**

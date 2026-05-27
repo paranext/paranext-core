@@ -33,6 +33,7 @@ import {
   openCommentListAndSelectThread,
   resolveOpenEditorDispatch,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+  selectProjectIdsForOpenMode,
   startDefaultProjectPicker,
   syncOnProjectSwitch,
 } from './platform-scripture-editor.utils';
@@ -170,9 +171,10 @@ async function open(
       }),
     );
 
-    const projectIdsMatchingReadonly = projectsWithIsPublished
-      .filter(({ isPublished }) => isPublished === isReadOnly)
-      .map(({ projectId: pId }) => pId);
+    const projectIdsMatchingReadonly = selectProjectIdsForOpenMode(
+      projectsWithIsPublished,
+      isReadOnly,
+    );
 
     if (projectIdsMatchingReadonly.length > 0) {
       projectForWebView.projectId = await papi.dialogs.selectProject({
