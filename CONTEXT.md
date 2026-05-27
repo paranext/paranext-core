@@ -14,7 +14,7 @@ These roles may be served by the same resource or by different resources.
 
 Structural scaffolding from the model text rendered **inside the translation editor** as fill-in-the-blank placeholders. Ghost content is display-only: it is not project data and has not been committed. When a translator enters content into a ghost slot, that content becomes project data and the ghost is replaced.
 
-Ghost content shows **structure only** — the model text's content (translated text) is stripped; only the structural elements remain.
+Ghost content shows **structure only** — translated text is stripped; structural elements remain. At minimum, block-level elements (**paranodes**) are preserved; some inline elements (**charnodes**) may be preserved (TBD). Heading text is stripped (it must be translated), but the heading slot position is preserved. The exact structure definition is decided separately and does not affect the ghost content architecture.
 
 ## Committed Content
 
