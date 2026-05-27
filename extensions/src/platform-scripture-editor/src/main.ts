@@ -1,4 +1,4 @@
-﻿import papi, { logger, WebViewFactory } from '@papi/backend';
+import papi, { logger, WebViewFactory } from '@papi/backend';
 import type {
   ExecutionActivationContext,
   IWebViewProvider,
