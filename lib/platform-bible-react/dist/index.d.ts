@@ -1018,13 +1018,16 @@ export type ProjectItem = {
 	id: string;
 	fullName: string;
 	shortName: string;
+	/** Short BCP-47 language tag displayed in the language column (e.g. "en", "en-US"). */
 	language?: string;
+	/** Full localized language name shown as a tooltip over {@link language} (e.g. "English"). */
+	languageDisplayName?: string;
 };
 /** Localization string keys used by {@link ProjectPicker}. */
 export declare const PROJECT_PICKER_STRING_KEYS: readonly [
 	"%projectPicker_title%",
 	"%projectPicker_section_recent%",
-	"%projectPicker_section_all%",
+	"%projectPicker_section_projects%",
 	"%projectPicker_search_placeholder%",
 	"%projectPicker_no_results%"
 ];

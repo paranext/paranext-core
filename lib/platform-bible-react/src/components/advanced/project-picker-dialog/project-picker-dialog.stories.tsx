@@ -8,7 +8,7 @@ import ProjectPicker, {
 const STRINGS: ProjectPickerLocalizedStrings = {
   '%projectPicker_title%': 'Project Picker',
   '%projectPicker_section_recent%': 'Recent',
-  '%projectPicker_section_all%': 'All projects',
+  '%projectPicker_section_projects%': 'Your projects',
   '%projectPicker_search_placeholder%': 'Search projects...',
   '%projectPicker_no_results%': 'No projects found',
 };

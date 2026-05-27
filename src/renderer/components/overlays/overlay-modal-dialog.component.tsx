@@ -41,6 +41,14 @@ export function OverlayModalDialog({ overlay }: OverlayModalShellProps) {
     [overlay],
   );
 
+  const initialSize =
+    overlay.props.initialSize &&
+    typeof overlay.props.initialSize === 'object' &&
+    'width' in overlay.props.initialSize &&
+    'height' in overlay.props.initialSize
+      ? (overlay.props.initialSize as { width: number; height: number })
+      : undefined;
+
   return (
     <Dialog open onOpenChange={handleOpenChange}>
       <DialogContent
@@ -49,6 +57,11 @@ export function OverlayModalDialog({ overlay }: OverlayModalShellProps) {
         role={typeof overlay.props.role === 'string' ? overlay.props.role : 'dialog'}
         aria-modal="true"
         className="tw:flex tw:max-h-[85vh] tw:min-h-0 tw:flex-col tw:overflow-hidden"
+        style={
+          initialSize
+            ? { maxWidth: initialSize.width, maxHeight: `min(${initialSize.height}px, 85vh)` }
+            : undefined
+        }
       >
         {/* Radix requires DialogTitle and DialogDescription inside DialogContent for
             accessibility. The inner dialog component may render its own visible versions;
