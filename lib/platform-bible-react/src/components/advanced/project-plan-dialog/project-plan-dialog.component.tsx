@@ -70,6 +70,9 @@ export function ProjectPlanDialog({
     [workingPlan, plan],
   );
 
+  const basePlanName =
+    orgProvidedPlans.find((p) => p.id === workingPlan.basePlanRef)?.name ?? workingPlan.name;
+
   const handleOrgPlanReplace = (selected: OrgProvidedPlan) => {
     setWorkingPlan({
       ...workingPlan,
@@ -152,6 +155,7 @@ export function ProjectPlanDialog({
               onStagesChange={updateStages}
               onStageChange={handleStageChange}
               onTaskChange={handleTaskChange}
+              basePlanName={basePlanName}
             />
           </TabsContent>
 

@@ -1,4 +1,5 @@
-import { useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useRef, type ReactNode } from 'react';
+import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { cn } from '@/utils/shadcn-ui/utils';
 import {
   DEFAULT_LANG,
@@ -26,6 +27,10 @@ interface ErUiStagesTasksListProps {
   stages: PlanStage[];
   selected: ErUiSelection | undefined;
   onToggle: (next: ErUiSelection | undefined) => void;
+  onMoveStage: (stageIndex: number, dir: -1 | 1) => void;
+  onMoveTask: (stageIndex: number, taskIndex: number, dir: -1 | 1) => void;
+  onDeleteStage: (stageId: string) => void;
+  onDeleteTask: (stageId: string, taskId: string) => void;
   /** When true, rows truncate to a single line so the list fits a narrow sidebar. */
   compact?: boolean;
 }
@@ -34,6 +39,10 @@ export function ErUiStagesTasksList({
   stages,
   selected,
   onToggle,
+  onMoveStage,
+  onMoveTask,
+  onDeleteStage,
+  onDeleteTask,
   compact = false,
 }: ErUiStagesTasksListProps) {
   // React's ref typing requires `null` as the initial value, not `undefined`.
@@ -55,7 +64,7 @@ export function ErUiStagesTasksList({
 
   return (
     <ul ref={listRef} className="tw:divide-y tw:divide-border tw:rounded tw:border">
-      {stages.map((stage) => {
+      {stages.map((stage, stageIndex) => {
         const stageActive = isStageSelected(selected, stage.id);
         return (
           <li key={stage.id}>
@@ -68,8 +77,26 @@ export function ErUiStagesTasksList({
                 `${stage.tasks.length} task${stage.tasks.length === 1 ? '' : 's'}`
               }
               compact={compact}
-            />
-            {stage.tasks.map((task) => {
+            >
+              <RowAction
+                label="Move stage up"
+                onClick={() => onMoveStage(stageIndex, -1)}
+                disabled={stageIndex === 0}
+              >
+                <ChevronUp className="tw:h-4 tw:w-4" />
+              </RowAction>
+              <RowAction
+                label="Move stage down"
+                onClick={() => onMoveStage(stageIndex, 1)}
+                disabled={stageIndex === stages.length - 1}
+              >
+                <ChevronDown className="tw:h-4 tw:w-4" />
+              </RowAction>
+              <RowAction label="Delete stage" onClick={() => onDeleteStage(stage.id)}>
+                <Trash2 className="tw:h-4 tw:w-4" />
+              </RowAction>
+            </Row>
+            {stage.tasks.map((task, taskIndex) => {
               const taskActive = isTaskSelected(selected, stage.id, task.id);
               return (
                 <Row
@@ -87,7 +114,27 @@ export function ErUiStagesTasksList({
                     markCompleteLabel(task.markComplete)
                   }
                   compact={compact}
-                />
+                >
+                  <RowAction
+                    label="Move task up"
+                    onClick={() => onMoveTask(stageIndex, taskIndex, -1)}
+                    disabled={stageIndex === 0 && taskIndex === 0}
+                  >
+                    <ChevronUp className="tw:h-4 tw:w-4" />
+                  </RowAction>
+                  <RowAction
+                    label="Move task down"
+                    onClick={() => onMoveTask(stageIndex, taskIndex, 1)}
+                    disabled={
+                      stageIndex === stages.length - 1 && taskIndex === stage.tasks.length - 1
+                    }
+                  >
+                    <ChevronDown className="tw:h-4 tw:w-4" />
+                  </RowAction>
+                  <RowAction label="Delete task" onClick={() => onDeleteTask(stage.id, task.id)}>
+                    <Trash2 className="tw:h-4 tw:w-4" />
+                  </RowAction>
+                </Row>
               );
             })}
           </li>
@@ -110,33 +157,68 @@ interface RowProps {
   indented?: boolean;
   compact: boolean;
   onClick: () => void;
+  children?: ReactNode;
 }
 
-function Row({ primary, secondary, active, indented, compact, onClick }: RowProps) {
+function Row({ primary, secondary, active, indented, compact, onClick, children }: RowProps) {
+  return (
+    <div
+      className={cn(
+        'tw:group tw:flex tw:items-center tw:gap-2 tw:pe-2 tw:hover:bg-[#ECF2F9] tw:focus-within:bg-[#ECF2F9]',
+        active && 'tw:bg-[#ECF2F9]',
+      )}
+    >
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={active}
+        className={cn(
+          'tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:gap-0.5 tw:px-4 tw:py-3 tw:text-start tw:focus-visible:outline-none',
+          indented && 'tw:ps-10',
+        )}
+      >
+        <span
+          className={cn('tw:text-sm tw:font-semibold tw:text-foreground', compact && 'tw:truncate')}
+        >
+          {primary}
+        </span>
+        <span
+          className={cn(
+            'tw:text-xs tw:text-muted-foreground',
+            compact ? 'tw:truncate' : 'tw:line-clamp-2',
+          )}
+        >
+          {secondary}
+        </span>
+      </button>
+      <div className="tw:flex tw:shrink-0 tw:items-center tw:gap-1 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+interface RowActionProps {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  children: ReactNode;
+}
+
+function RowAction({ label, onClick, disabled, children }: RowActionProps) {
   return (
     <button
       type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        'tw:flex tw:w-full tw:flex-col tw:gap-0.5 tw:px-4 tw:py-3 tw:text-start tw:hover:bg-[#ECF2F9] tw:focus-visible:bg-[#ECF2F9] tw:focus-visible:outline-none',
-        active && 'tw:bg-[#ECF2F9]',
-        indented && 'tw:ps-10',
-      )}
+      aria-label={label}
+      title={label}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      disabled={disabled}
+      className="tw:rounded tw:p-1 tw:hover:bg-accent disabled:tw:opacity-30"
     >
-      <span
-        className={cn('tw:text-sm tw:font-semibold tw:text-foreground', compact && 'tw:truncate')}
-      >
-        {primary}
-      </span>
-      <span
-        className={cn(
-          'tw:text-xs tw:text-muted-foreground',
-          compact ? 'tw:truncate' : 'tw:line-clamp-2',
-        )}
-      >
-        {secondary}
-      </span>
+      {children}
     </button>
   );
 }

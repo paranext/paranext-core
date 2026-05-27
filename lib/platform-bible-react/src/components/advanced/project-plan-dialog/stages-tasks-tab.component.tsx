@@ -14,6 +14,7 @@ interface StagesTasksTabProps {
   onStagesChange: (updater: (prev: PlanStage[]) => PlanStage[]) => void;
   onStageChange: (next: PlanStage) => void;
   onTaskChange: (next: PlanTask) => void;
+  basePlanName: string;
 }
 
 export function StagesTasksTab({
@@ -23,6 +24,7 @@ export function StagesTasksTab({
   onStagesChange,
   onStageChange,
   onTaskChange,
+  basePlanName,
 }: StagesTasksTabProps) {
   const { selectedStage, selectedTask } = useMemo(() => {
     const stage = stages.find((s) => s.id === selection.stageId);
@@ -103,6 +105,7 @@ export function StagesTasksTab({
           selection={selection}
           onSelectionChange={onSelectionChange}
           onStagesChange={onStagesChange}
+          basePlanName={basePlanName}
         />
       </div>
       <div className="tw:overflow-auto">

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/shadcn-ui/button';
 import { cn } from '@/utils/shadcn-ui/utils';
@@ -6,6 +6,7 @@ import {
   DEFAULT_LANG,
   getLocalized,
 } from '@/components/advanced/project-plan-dialog/localized.utils';
+import { MoveTaskConfirmDialog } from '@/components/advanced/project-plan-dialog/move-task-confirm-dialog.component';
 import type {
   PlanStage,
   PlanTask,
@@ -17,6 +18,7 @@ interface StagesTasksListProps {
   selection: Selection;
   onSelectionChange: (next: Selection) => void;
   onStagesChange: (updater: (prev: PlanStage[]) => PlanStage[]) => void;
+  basePlanName: string;
 }
 
 const newId = () => `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -51,7 +53,12 @@ export function StagesTasksList({
   selection,
   onSelectionChange,
   onStagesChange,
+  basePlanName,
 }: StagesTasksListProps) {
+  const [pendingMove, setPendingMove] = useState<
+    { stageIndex: number; taskIndex: number; dir: -1 | 1 } | undefined
+  >(undefined);
+
   const addStage = () => {
     const stage = makeStage();
     onStagesChange((prev) => [...prev, stage]);
@@ -73,11 +80,37 @@ export function StagesTasksList({
   };
 
   const moveTask = (stageIndex: number, taskIndex: number, dir: -1 | 1) => {
+    const stage = stages[stageIndex];
+    const crossesStage =
+      (dir === -1 && taskIndex === 0) || (dir === 1 && taskIndex === stage.tasks.length - 1);
+    if (crossesStage) {
+      // Defer the move until the user confirms losing recorded progress.
+      setPendingMove({ stageIndex, taskIndex, dir });
+      return;
+    }
     onStagesChange((prev) =>
       prev.map((s, i) =>
         i === stageIndex ? { ...s, tasks: moveItem(s.tasks, taskIndex, taskIndex + dir) } : s,
       ),
     );
+  };
+
+  const executePendingMove = () => {
+    if (pendingMove === undefined) return;
+    const { stageIndex, taskIndex, dir } = pendingMove;
+    const toStageIndex = stageIndex + dir;
+    const movedTaskId = stages[stageIndex]?.tasks[taskIndex]?.id;
+    const toStageId = stages[toStageIndex]?.id;
+    onStagesChange((prev) => {
+      const next = prev.map((s) => ({ ...s, tasks: [...s.tasks] }));
+      const [task] = next[stageIndex].tasks.splice(taskIndex, 1);
+      // Moving up lands at the end of the previous stage; moving down lands at the start of the next.
+      if (dir === -1) next[toStageIndex].tasks.push(task);
+      else next[toStageIndex].tasks.unshift(task);
+      return next;
+    });
+    if (movedTaskId !== undefined && toStageId !== undefined)
+      onSelectionChange({ stageId: toStageId, taskId: movedTaskId });
   };
 
   const removeStage = (id: string) => {
@@ -157,14 +190,17 @@ export function StagesTasksList({
                           <RowAction
                             label="Move task up"
                             onClick={() => moveTask(stageIndex, taskIndex, -1)}
-                            disabled={taskIndex === 0}
+                            disabled={stageIndex === 0 && taskIndex === 0}
                           >
                             <ChevronUp className="tw:h-4 tw:w-4" />
                           </RowAction>
                           <RowAction
                             label="Move task down"
                             onClick={() => moveTask(stageIndex, taskIndex, 1)}
-                            disabled={taskIndex === stage.tasks.length - 1}
+                            disabled={
+                              stageIndex === stages.length - 1 &&
+                              taskIndex === stage.tasks.length - 1
+                            }
                           >
                             <ChevronDown className="tw:h-4 tw:w-4" />
                           </RowAction>
@@ -184,6 +220,15 @@ export function StagesTasksList({
           })}
         </ul>
       )}
+
+      <MoveTaskConfirmDialog
+        open={pendingMove !== undefined}
+        onOpenChange={(next) => {
+          if (!next) setPendingMove(undefined);
+        }}
+        basePlanName={basePlanName}
+        onConfirm={executePendingMove}
+      />
     </div>
   );
 }
