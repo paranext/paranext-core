@@ -56,4 +56,44 @@ public class LocalParatextProjectsTests
     {
         return new ProjectDetails(name, new ProjectMetadata(id, ["paratext"]), folder);
     }
+
+    [Test]
+    public void GetParatextProjectInterfaces_Unpublished_IncludesLegacyComment()
+    {
+        var interfaces = LocalParatextProjects.GetParatextProjectInterfaces(isPublished: false);
+
+        Assert.That(interfaces, Does.Contain(ProjectInterfaces.LEGACY_COMMENT));
+        Assert.That(interfaces, Does.Contain(ProjectInterfaces.BASE));
+        Assert.That(interfaces, Does.Contain(ProjectInterfaces.USFM_BOOK));
+        Assert.That(interfaces, Does.Contain(ProjectInterfaces.VERSIFICATION));
+    }
+
+    [Test]
+    public void GetParatextProjectInterfaces_Published_ExcludesLegacyCommentButKeepsScripture()
+    {
+        var interfaces = LocalParatextProjects.GetParatextProjectInterfaces(isPublished: true);
+
+        Assert.That(interfaces, Does.Not.Contain(ProjectInterfaces.LEGACY_COMMENT));
+        Assert.That(interfaces, Does.Contain(ProjectInterfaces.BASE));
+        Assert.That(interfaces, Does.Contain(ProjectInterfaces.USFM_BOOK));
+        Assert.That(interfaces, Does.Contain(ProjectInterfaces.USFM_CHAPTER));
+        Assert.That(interfaces, Does.Contain(ProjectInterfaces.USFM_VERSE));
+        Assert.That(interfaces, Does.Contain(ProjectInterfaces.USX_BOOK));
+        Assert.That(interfaces, Does.Contain(ProjectInterfaces.USX_CHAPTER));
+        Assert.That(interfaces, Does.Contain(ProjectInterfaces.USX_VERSE));
+        Assert.That(interfaces, Does.Contain(ProjectInterfaces.PLAIN_TEXT_VERSE));
+        Assert.That(interfaces, Does.Contain(ProjectInterfaces.MARKER_NAMES));
+        Assert.That(interfaces, Does.Contain(ProjectInterfaces.USER_TEXT_CONNECTION_SETTINGS));
+        Assert.That(interfaces, Does.Contain(ProjectInterfaces.VERSIFICATION));
+    }
+
+    [Test]
+    public void GetParatextProjectInterfaces_NoArgs_MatchesUnpublished()
+    {
+        // Backward-compat: the no-arg overload must continue to return the full (unpublished) list
+        var noArgs = LocalParatextProjects.GetParatextProjectInterfaces();
+        var unpublished = LocalParatextProjects.GetParatextProjectInterfaces(isPublished: false);
+
+        Assert.That(noArgs, Is.EqualTo(unpublished));
+    }
 }
