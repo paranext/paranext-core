@@ -9,6 +9,7 @@ import {
   type OpenEditorDispatch,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   startDefaultProjectPicker,
+  syncOnProjectSwitch,
 } from './platform-scripture-editor.utils';
 
 // Sample USJ chapter data for Genesis chapter 1 with multiple verses
@@ -2016,3 +2017,85 @@ describe('startDefaultProjectPicker', () => {
 });
 
 // #endregion startDefaultProjectPicker
+
+// #region syncOnProjectSwitch
+
+function createSyncMockPapi() {
+  const mockSendCommand = vi.fn().mockResolvedValue(undefined);
+  const mockWarn = vi.fn();
+  // Constructing a minimal mock for PapiBackend to test syncOnProjectSwitch in isolation
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const papi = {
+    commands: { sendCommand: mockSendCommand },
+    logger: { warn: mockWarn },
+  } as unknown as typeof PapiBackend;
+  return { papi, mockSendCommand, mockWarn };
+}
+
+describe('syncOnProjectSwitch', () => {
+  it('calls syncProjects with the incoming project ID', async () => {
+    const { papi, mockSendCommand } = createSyncMockPapi();
+
+    await syncOnProjectSwitch(papi, 'incoming-id', undefined);
+
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
+      'incoming-id',
+    ]);
+  });
+
+  it('calls sendReceiveProjects with the outgoing project ID after syncProjects', async () => {
+    const { papi, mockSendCommand } = createSyncMockPapi();
+    const callOrder: string[] = [];
+    mockSendCommand.mockImplementation(async (command: string) => {
+      callOrder.push(command);
+    });
+
+    await syncOnProjectSwitch(papi, 'incoming-id', 'outgoing-id');
+
+    expect(callOrder).toEqual([
+      'paratextBibleSendReceive.syncProjects',
+      'paratextBibleSendReceive.sendReceiveProjects',
+    ]);
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
+      'outgoing-id',
+    ]);
+  });
+
+  it('skips sendReceiveProjects when outgoingProjectId is undefined', async () => {
+    const { papi, mockSendCommand } = createSyncMockPapi();
+
+    await syncOnProjectSwitch(papi, 'incoming-id', undefined);
+
+    expect(mockSendCommand).toHaveBeenCalledTimes(1);
+    expect(mockSendCommand).not.toHaveBeenCalledWith(
+      'paratextBibleSendReceive.sendReceiveProjects',
+      expect.anything(),
+    );
+  });
+
+  it('still calls sendReceiveProjects when syncProjects throws', async () => {
+    const { papi, mockSendCommand, mockWarn } = createSyncMockPapi();
+    mockSendCommand.mockImplementation(async (command: string) => {
+      if (command === 'paratextBibleSendReceive.syncProjects') throw new Error('sync failed');
+    });
+
+    await syncOnProjectSwitch(papi, 'incoming-id', 'outgoing-id');
+
+    expect(mockWarn).toHaveBeenCalled();
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
+      'outgoing-id',
+    ]);
+  });
+
+  it('warns and resolves when sendReceiveProjects throws', async () => {
+    const { papi, mockSendCommand, mockWarn } = createSyncMockPapi();
+    mockSendCommand.mockImplementation(async (command: string) => {
+      if (command === 'paratextBibleSendReceive.sendReceiveProjects') throw new Error('s/r failed');
+    });
+
+    await expect(syncOnProjectSwitch(papi, 'incoming-id', 'outgoing-id')).resolves.toBeUndefined();
+    expect(mockWarn).toHaveBeenCalled();
+  });
+});
+
+// #endregion syncOnProjectSwitch

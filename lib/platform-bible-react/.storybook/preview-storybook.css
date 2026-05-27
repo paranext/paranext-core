@@ -20,23 +20,23 @@ body {
 #storybook-root:not([hidden]) {
   box-sizing: border-box;
   min-height: 100vh;
-  background-color: hsl(var(--background));
-  color: hsl(var(--foreground));
+  background-color: var(--background);
+  color: var(--foreground);
 }
 
 /* Docs tab: MDX page (headings, description, args tables) — distinct from embedded preview */
 #storybook-docs:not([hidden]) {
   box-sizing: border-box;
   min-height: 100vh;
-  background-color: hsl(var(--muted));
-  color: hsl(var(--foreground));
+  background-color: var(--muted);
+  color: var(--foreground);
 }
 
 /* Loading states */
 .sb-preparing-story,
 .sb-preparing-docs {
-  background-color: hsl(var(--background));
-  color: hsl(var(--foreground));
+  background-color: var(--background);
+  color: var(--foreground);
 }
 
 /*
@@ -44,10 +44,10 @@ body {
  * Storybook’s block chrome uses its own theme background; !important aligns with our tokens.
  */
 .sbdocs.sbdocs-preview {
-  background-color: hsl(var(--background)) !important;
-  color: hsl(var(--foreground)) !important;
+  background-color: var(--background) !important;
+  color: var(--foreground) !important;
 }
 
 .docs-story {
-  background-color: hsl(var(--background));
+  background-color: var(--background);
 }
