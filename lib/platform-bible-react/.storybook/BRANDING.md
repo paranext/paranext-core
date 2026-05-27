@@ -40,7 +40,7 @@ The preview loads [../src/index.css](../src/index.css) from [preview.ts](./previ
 
 ## Toolbar themes vs manager theme
 
-- **Preview:** [theme-constants.ts](./theme-constants.ts) defines toolbar **theme families** and **appearance options**, plus legacy composite ids (`shadcn-light`, … `paratext-dark`) for overrides. [theme-apply.ts](./theme-apply.ts) maps those to classes on `document.documentElement` and to CSS variables in `index.css`. [manager.tsx](./manager.tsx) registers **Appearance** and **Theme** tools; state persists under `platform-bible-storybook-theme` (JSON).
+- **Preview:** [theme-constants.ts](./theme-constants.ts) defines toolbar **theme families** and **appearance options**, plus legacy composite IDs (`shadcn-light`, … `paratext-dark`) for overrides. [theme-apply.ts](./theme-apply.ts) maps those to classes on `document.documentElement` and to CSS variables in `index.css`. [manager.tsx](./manager.tsx) registers **Appearance** and **Theme** tools; state persists under `platform-bible-storybook-theme` (JSON).
 - **Manager:** `addons.setConfig({ theme })` only affects the Storybook **shell** around the iframe. It does not change story output. The shell does **not** automatically follow the preview toolbar theme unless you add custom logic (see above).
 
 ## Docs-only theming

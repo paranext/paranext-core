@@ -31,7 +31,7 @@ Pick each from the Storybook toolbar. Selection is persisted under `localStorage
 `{ family, colorScheme }`. Classes on `document.documentElement` come from
 [index.css](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css).
 
-The effective row is one of six composite ids (also used for `parameters.themes.themeOverride`):
+The effective row is one of six composite IDs (also used for `parameters.themes.themeOverride`):
 
 | Theme          | Light            | Dark             |
 | -------------- | ---------------- | ---------------- |
@@ -123,7 +123,7 @@ For example, use `className="tw:bg-muted"` on a header-like surface and
 ## Per-story theme override
 
 To lock a story to one palette (for example to show a dark-mode edge case), set a **legacy
-composite id** such as `parameters: { themes: { themeOverride: 'paratext-dark' } }` on the story
+composite ID** such as `parameters: { themes: { themeOverride: 'paratext-dark' } }` on the story
 or meta. You can also pass `themeOverride: { family: 'paratext', colorScheme: 'system' }` for
 system light/dark. The preview decorator reads this in `.storybook/theme-decorator.ts` (toolbar
 changes use `localStorage` and a channel event instead of `globals.theme`).
@@ -133,7 +133,7 @@ changes use `localStorage` and a channel event instead of `globals.theme`).
 1. Add a CSS class in `index.css` with `--background`, `--foreground`, and the other variables
    (see existing blocks).
 2. Update `themes.data.json` in paranext-core if the app should expose the theme.
-3. Register the composite id in `.storybook/theme-constants.ts` (`STORYBOOK_THEME_IDS` and
+3. Register the composite ID in `.storybook/theme-constants.ts` (`STORYBOOK_THEME_IDS` and
    `STORYBOOK_THEME_LABELS`), map classes in `.storybook/theme-apply.ts` (`CLASS_MAP`,
    `compositeThemeIdFromFamilyAndEffective`, `themeStateFromLegacyThemeId`, and
    `ALL_THEME_CLASSES`). Toolbar family and color-scheme options live in
