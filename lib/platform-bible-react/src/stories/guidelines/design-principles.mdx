@@ -86,11 +86,11 @@ Labels should communicate what will happen — even if the user skips the surrou
 | Preferred  | Discard | Comment |
 
 <ExampleBlockGroup>
-  <ExampleBlock variant="dont" preview={<div style={{display: 'flex', gap: '8px'}}><Button variant="secondary">Cancel</Button><Button>OK</Button></div>}>
+  <ExampleBlock variant="avoid" preview={<div style={{display: 'flex', gap: '8px'}}><Button variant="secondary">Cancel</Button><Button>OK</Button></div>}>
     Neither label explains what will happen — users dismiss without reading.
   </ExampleBlock>
 
-  <ExampleBlock variant="do" preview={<div style={{display: 'flex', gap: '8px'}}><Button variant="secondary">Discard</Button><Button>Comment</Button></div>}>
+  <ExampleBlock variant="prefer" preview={<div style={{display: 'flex', gap: '8px'}}><Button variant="secondary">Discard</Button><Button>Comment</Button></div>}>
     Both actions are self-evident — the choice is clear without reading surrounding text.
   </ExampleBlock>
 </ExampleBlockGroup>
@@ -111,7 +111,7 @@ Tooltips are required for every icon button and any control without a visible la
 
 <ExampleBlockGroup>
   <ExampleBlock
-    variant="dont"
+    variant="avoid"
     previewClassName="tw:pb-8"
     preview={
 <Button variant="outline" size="icon" aria-label="Save" >
@@ -124,7 +124,7 @@ Tooltips are required for every icon button and any control without a visible la
 
   <ExampleBlock
     title="Avoid redundant tooltips"
-    variant="dont"
+    variant="avoid"
     previewClassName="tw:pb-8"
     preview={
 <TooltipProvider>
@@ -145,7 +145,7 @@ Keep tooltip text short enough to scan at a glance. A tooltip is a hint, not an 
 
 <ExampleBlockGroup>
   <ExampleBlock
-    variant="dont"
+    variant="avoid"
     previewClassName="tw:pb-16"
     preview={
 <TooltipProvider>
@@ -164,7 +164,7 @@ Keep tooltip text short enough to scan at a glance. A tooltip is a hint, not an 
   </ExampleBlock>
 
   <ExampleBlock
-    variant="do"
+    variant="prefer"
     previewClassName="tw:pb-16"
     preview={
 <TooltipProvider>
@@ -189,7 +189,7 @@ Render keyboard shortcut hints using the HTML `<kbd>` element, not plain text in
 
 <ExampleBlockGroup>
   <ExampleBlock
-    variant="do"
+    variant="prefer"
     preview={<span>Undo <kbd className="tw:rounded tw:border tw:border-border tw:bg-muted tw:px-1 tw:py-0.5 tw:text-xs tw:font-mono">
 ⌘Z
 </kbd></span>}
@@ -198,17 +198,17 @@ Render keyboard shortcut hints using the HTML `<kbd>` element, not plain text in
     The <code>kbd</code> element provides visual distinction without extra punctuation.
   </ExampleBlock>
 
-  <ExampleBlock variant="dont" preview={<span>Undo (⌘Z)</span>} code="Undo (⌘Z)">
+  <ExampleBlock variant="avoid" preview={<span>Undo (⌘Z)</span>} code="Undo (⌘Z)">
     Parentheses blend into prose and don't signal "keyboard shortcut" to the reader.
   </ExampleBlock>
 </ExampleBlockGroup>
 
-Use the shared `Kbd` component from `platform-bible-react` instead of styling `<kbd>` inline:
+Caveat: The shared `Kbd` component doesn't exist yet and won't until after we upgrade shadcn/ui, so style `<kbd>` inline:
 
 ```tsx
-import { Kbd } from 'platform-bible-react';
-
-<Kbd>⌘Z</Kbd>
+<kbd className="tw:rounded tw:border tw:border-border tw:bg-muted tw:px-1 tw:py-0.5 tw:text-xs tw:font-mono">
+  ⌘Z
+</kbd>
 ```
 
 ---
