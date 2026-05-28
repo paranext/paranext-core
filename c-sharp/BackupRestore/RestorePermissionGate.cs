@@ -1,4 +1,3 @@
-using System;
 using Paratext.Data;
 
 namespace Paranext.DataProvider.BackupRestore;
@@ -100,6 +99,6 @@ internal static class RestorePermissionGate
     /// </returns>
     public static bool CheckAdminGate(ScrText existingProject)
     {
-        throw new NotImplementedException("RestorePermissionGate.CheckAdminGate is RED-state.");
+        return existingProject.Permissions?.WarnIfNotAdministrator() ?? false;
     }
 }
