@@ -629,11 +629,17 @@ namespace TestParanextDataProvider.BackupRestore
             // Act — clear the override
             UsbDeviceEnumerator.EnumerationOverride = null;
 
-            // Assert — Enumerate now invokes the platform branch (stub throws).
+            // Assert — Enumerate now invokes the real platform branch and
+            // returns a non-null IReadOnlyList (possibly empty on a host with
+            // no removable drives attached). Under the RED stub this threw
+            // NotImplementedException; the GREEN platform branch returns a
+            // list, which is the intent documented in the [Description].
+            IReadOnlyList<StorageDevice> second = UsbDeviceEnumerator.Enumerate();
             Assert.That(
-                () => UsbDeviceEnumerator.Enumerate(),
-                Throws.TypeOf<NotImplementedException>(),
-                "After clearing the override, Enumerate() must invoke the real platform branch."
+                second,
+                Is.Not.Null,
+                "After clearing the override, Enumerate() must invoke the real platform branch "
+                    + "and return a non-null IReadOnlyList<StorageDevice>."
             );
         }
 

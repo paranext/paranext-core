@@ -1,4 +1,8 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Runtime.InteropServices;
 
 namespace Paranext.DataProvider.BackupRestore;
 
@@ -93,7 +97,73 @@ internal static class UsbDeviceEnumerator
     /// </remarks>
     public static IReadOnlyList<StorageDevice> Enumerate()
     {
-        throw new System.NotImplementedException("CAP-006 GREEN-phase implementation pending");
+        // Unit-test seam — when set, bypass all platform branches and return the
+        // override verbatim. Production code never sets this; only c-sharp-tests
+        // does (via [assembly: InternalsVisibleTo("c-sharp-tests")] at
+        // c-sharp/AssemblyInfo.cs:3).
+        IReadOnlyList<StorageDevice>? overrideList = EnumerationOverride;
+        if (overrideList is not null)
+            return overrideList;
+
+        // EXPLANATION:
+        // First-cut platform implementation (per strategic-plan §CAP-006 +
+        // ALIGNMENT-003): use DriveInfo.GetDrives() filtered by
+        // DriveType.Removable across Windows / Linux / macOS. PT9's WMI
+        // (Windows InterfaceType='USB' enrichment) and UDisks2 (Linux D-Bus)
+        // enrichments are deferred — the BCL gives us a working baseline that
+        // matches the PT9 IsRemovable + size > 5MB gate.
+        //
+        // Per-drive try/catch mimics PT9's ErrorUtils.IgnoreErrors at
+        // PathUtils.cs:210 — a single broken drive (e.g., a removed mid-scan
+        // card reader) must not abort the whole enumeration.
+        var collected = new List<StorageDevice>();
+        DriveInfo[] drives;
+        try
+        {
+            drives = DriveInfo.GetDrives();
+        }
+        catch
+        {
+            // If the OS itself refuses to enumerate drives (rare; e.g., macOS
+            // sandbox without disk access), the contract is still "return a
+            // list, possibly empty" — never throw.
+            return Array.Empty<StorageDevice>();
+        }
+
+        foreach (DriveInfo drive in drives)
+        {
+            try
+            {
+                if (!drive.IsReady)
+                    continue;
+                if (drive.DriveType != DriveType.Removable)
+                    continue;
+
+                collected.Add(
+                    new StorageDevice
+                    {
+                        RootPath = drive.Name,
+                        Label = drive.VolumeLabel ?? string.Empty,
+                        IsRemovable = true,
+                        TotalSizeBytes = drive.TotalSize,
+                    }
+                );
+            }
+            catch
+            {
+                // Match PT9 PathUtils.cs:210 — "Will assume no USB drive
+                // available on errors". Skip this drive and continue.
+            }
+        }
+
+        IReadOnlyList<StorageDevice> filtered = ApplyCommonFilter(collected);
+
+        // INV-C04 is Linux-only per PT9 PathUtils.cs:320 (the marker check
+        // lives inside the __MonoCS__ block).
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            filtered = ApplyLinuxMarkerFilter(filtered);
+
+        return filtered;
     }
 
     // === PORTED FROM PT9 ===
@@ -112,7 +182,9 @@ internal static class UsbDeviceEnumerator
     /// </remarks>
     internal static IReadOnlyList<StorageDevice> ApplyCommonFilter(IEnumerable<StorageDevice> raw)
     {
-        throw new System.NotImplementedException("CAP-006 GREEN-phase implementation pending");
+        // INV-C03 — PT9 PathUtils.cs:212 literal: TotalSize > 5_000_000
+        // (strict greater-than). 5,000,000 bytes exactly is EXCLUDED.
+        return raw.Where(d => d.IsRemovable && d.TotalSizeBytes > 5_000_000).ToList();
     }
 
     // === PORTED FROM PT9 ===
@@ -134,6 +206,9 @@ internal static class UsbDeviceEnumerator
         IEnumerable<StorageDevice> raw
     )
     {
-        throw new System.NotImplementedException("CAP-006 GREEN-phase implementation pending");
+        // INV-C04 — PT9 PathUtils.cs:320 byte-for-byte:
+        //   File.Exists(Path.Combine(mountPoint, ".paratext-hidden"))
+        // Opt-OUT semantics: absent marker means the drive is kept.
+        return raw.Where(d => !File.Exists(Path.Combine(d.RootPath, ".paratext-hidden"))).ToList();
     }
 }
