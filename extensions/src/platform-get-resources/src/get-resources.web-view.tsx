@@ -1,6 +1,6 @@
 import { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
-import { useData, useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
+import { useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
 import {
   BookOpen,
   ChevronDown,
@@ -34,13 +34,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  usePromise,
 } from 'platform-bible-react';
-import {
-  DblResourceData,
-  getErrorMessage,
-  isPlatformError,
-  LocalizeKey,
-} from 'platform-bible-utils';
+import { DblResourceData, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const GET_RESOURCES_STRING_KEYS: LocalizeKey[] = [
@@ -205,9 +201,18 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const installResource = dblResourcesProvider?.installDblResource;
   const uninstallResource = dblResourcesProvider?.uninstallDblResource;
 
-  const [resources, , isLoadingResources] = useData(
-    'platformGetResources.dblResourcesProvider',
-  ).DblResources(undefined, []);
+  const [fetchResources, setFetchResources] = useState(true);
+  const [resources, isLoadingResources] = usePromise(
+    useCallback(async () => {
+      if (fetchResources) {
+        setFetchResources(false);
+        return papi.commands.sendCommand('platformGetResources.getCachedResources');
+      }
+
+      return Promise.resolve(undefined);
+    }, [fetchResources]),
+    undefined,
+  );
 
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
 
@@ -231,7 +236,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
       setIsInitialized(true);
       return;
     }
-    if (!isPlatformError(resources) && resources.length > 0 && selectedLanguages.length === 0) {
+    if (resources && resources.length > 0 && selectedLanguages.length === 0) {
       setSelectedLanguages(
         Array.from(
           new Set(
@@ -259,9 +264,11 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
 
       const actionFunction = action === 'install' ? installResource : uninstallResource;
 
-      actionFunction(dblEntryUid).catch((error) => {
-        logger.debug(getErrorMessage(error));
-      });
+      actionFunction(dblEntryUid)
+        .then(() => setFetchResources(true))
+        .catch((error) => {
+          logger.debug(getErrorMessage(error));
+        });
     },
     [installResource, uninstallResource],
   );
@@ -270,7 +277,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   useEffect(() => {
     setInstallInfo((currentInstallInfo) =>
       currentInstallInfo.filter((info) => {
-        if (isPlatformError(resources)) return true;
+        if (!resources) return true;
 
         const resource = resources.find((res) => res.dblEntryUid === info.dblEntryUid);
         if (!resource) return true;
@@ -286,7 +293,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const [textFilter, setTextFilter] = useState<string>('');
 
   const textFilteredResources = useMemo(() => {
-    if (isPlatformError(resources)) return [];
+    if (!resources) return [];
     return resources.filter((resource) => {
       const filter = textFilter.toLowerCase();
       return (
@@ -299,7 +306,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
 
   const typeOptions: MultiSelectComboBoxEntry[] = useMemo(() => {
     const getTypeCount = (type: string): string => {
-      if (isPlatformError(resources)) return '0';
+      if (!resources) return '0';
       return (resources.filter((resource) => resource.type === type).length ?? 0).toString();
     };
 
@@ -435,10 +442,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
               />
 
               <Filter
-                entries={getLanguageOptions(
-                  isPlatformError(resources) ? emptyArray : resources,
-                  selectedLanguages,
-                )}
+                entries={getLanguageOptions(resources ?? emptyArray, selectedLanguages)}
                 selected={selectedLanguages}
                 onChange={setSelectedLanguages}
                 placeholder={languagesText}
@@ -459,7 +463,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
             // Can't use if-else here because of how the return statement is structured
             /* eslint-disable no-nested-ternary */
             <div>
-              {isPlatformError(resources) ? (
+              {resources === undefined && !isLoadingResources ? (
                 <div className="tw:m-4 tw:flex tw:justify-center">
                   <Label>{noResultsErrorText}</Label>
                 </div>
