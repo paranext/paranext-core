@@ -128,28 +128,21 @@ internal static class BackupLogService
         string filename
     )
     {
-        // PT9 DateStr formula (Backup.cs:41-44): ISO-8601 round-trip ("o") -> first
-        // 16 chars (YYYY-MM-DDTHH:MM) -> swap T for @. Drops seconds/ms.
-        string dateStr = now.ToString("o", CultureInfo.InvariantCulture)
-            .Substring(0, 16)
-            .Replace("T", "@");
+        // PT9 DateStr formula (Backup.cs:41-44). The format string uses only literal
+        // separators ('-', '@', ':') and two-digit numeric specifiers, so the result is
+        // bit-identical to PT9's `ToString("o").Substring(0, 16).Replace("T", "@")` while
+        // avoiding the brittle 16-char slice. Matches the form used by the sibling
+        // BackupDescriptionFormatter (CAP-015) which documents this equivalence inline.
+        string dateStr = now.ToString("yyyy-MM-dd@HH:mm", CultureInfo.InvariantCulture);
 
+        // PT9 byte-shape (Backup.cs:174-178): five `\r\n`-terminated lines + one
+        // trailing `\r\n` blank line that separates entries.
         string entry =
-            "BACKUP: "
-            + dateStr
-            + "\r\n"
-            + "\tBackup Description: "
-            + description
-            + "\r\n"
-            + "\tBackup Project: "
-            + projectName
-            + "\r\n"
-            + "\tBooks: "
-            + booksDescription
-            + "\r\n"
-            + "\tFilename: "
-            + filename
-            + "\r\n"
+            $"BACKUP: {dateStr}\r\n"
+            + $"\tBackup Description: {description}\r\n"
+            + $"\tBackup Project: {projectName}\r\n"
+            + $"\tBooks: {booksDescription}\r\n"
+            + $"\tFilename: {filename}\r\n"
             + "\r\n";
 
         // Route through GetLogFilePath() so INV-C14 (writer and reader share the same
