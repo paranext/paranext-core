@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Paranext.DataProvider.Projects;
@@ -88,6 +89,21 @@ internal sealed partial class BackupRestoreDataProvider
         CancellationToken cancellationToken = default
     )
     {
+        // The wire boundary is async-shaped but the orchestrator (CAP-022) and our
+        // guard chain are synchronous. Keep this entry point as a one-line wrapper
+        // and let `ExecuteCreateBackup` carry the guard-chain logic so each guard
+        // can be a plain `return new BackupResult.Error(...)` instead of a verbose
+        // `Task.FromResult<BackupResult>(new BackupResult.Error(...))` block.
+        return Task.FromResult(ExecuteCreateBackup(request));
+    }
+
+    /// <summary>
+    /// Synchronous guard chain + orchestrator delegate for
+    /// <see cref="CreateBackupAsync"/>. Extracted purely for readability — wraps
+    /// at the call site exactly once.
+    /// </summary>
+    private static BackupResult ExecuteCreateBackup(BackupRequest request)
+    {
         // EXPLANATION:
         // Guard chain mirrors the data-contracts.md §4.1 error-matrix precedence:
         //   (1) project resolution    → InvalidProject
@@ -116,18 +132,17 @@ internal sealed partial class BackupRestoreDataProvider
         }
         catch (Exception ex) when (ex is ProjectNotFoundException or ArgumentException)
         {
-            return Task.FromResult<BackupResult>(
-                new BackupResult.Error(BackupErrorCode.InvalidProject, "%backup_invalidProject%")
+            return new BackupResult.Error(
+                BackupErrorCode.InvalidProject,
+                "%backup_invalidProject%"
             );
         }
         catch (RegistrationRequiredException)
         {
-            return Task.FromResult<BackupResult>(
-                new BackupResult.Error(
-                    BackupErrorCode.ResourceNotBackupable,
-                    "%backup_resourceProjectNotBackupable%",
-                    ErrorField: "projectId"
-                )
+            return new BackupResult.Error(
+                BackupErrorCode.ResourceNotBackupable,
+                "%backup_resourceProjectNotBackupable%",
+                ErrorField: "projectId"
             );
         }
 
@@ -138,24 +153,20 @@ internal sealed partial class BackupRestoreDataProvider
         // throwing — this gate catches that path.
         if (scrText.IsProtectedText)
         {
-            return Task.FromResult<BackupResult>(
-                new BackupResult.Error(
-                    BackupErrorCode.ResourceNotBackupable,
-                    "%backup_resourceProjectNotBackupable%",
-                    ErrorField: "projectId"
-                )
+            return new BackupResult.Error(
+                BackupErrorCode.ResourceNotBackupable,
+                "%backup_resourceProjectNotBackupable%",
+                ErrorField: "projectId"
             );
         }
 
         // (3) userName non-empty (VAL-B02).
         if (string.IsNullOrEmpty(request.UserName))
         {
-            return Task.FromResult<BackupResult>(
-                new BackupResult.Error(
-                    BackupErrorCode.UserNameRequired,
-                    "%backup_userNameRequired%",
-                    ErrorField: "userName"
-                )
+            return new BackupResult.Error(
+                BackupErrorCode.UserNameRequired,
+                "%backup_userNameRequired%",
+                ErrorField: "userName"
             );
         }
 
@@ -166,36 +177,15 @@ internal sealed partial class BackupRestoreDataProvider
         // data-contracts.md §2.1, NOT an error.
         if (request.SelectedBookIds is { Count: 0 } && !IsNoteType(scrText))
         {
-            return Task.FromResult<BackupResult>(
-                new BackupResult.Error(
-                    BackupErrorCode.NoBooksSelected,
-                    "%backup_atLeastOneBookRequired%"
-                )
+            return new BackupResult.Error(
+                BackupErrorCode.NoBooksSelected,
+                "%backup_atLeastOneBookRequired%"
             );
         }
 
-        // (5) Build the BookSet. Null → project's full BooksPresentSet (the
-        // documented default). Otherwise convert each id via Canon.BookIdToNumber
-        // — returning 0 for an unknown code, which we silently skip (per Test
-        // Writer handoff note: wire layer doesn't surface "unknown book id" as
-        // an error because the UI populates this list from the project's own
-        // books). Mirrors ImportBooksOrchestrator's "abort-on-invalid-code"
-        // family of helpers, but with skip semantics.
-        BookSet selectedBooks;
-        if (request.SelectedBookIds is null)
-        {
-            selectedBooks = scrText.BooksPresentSet;
-        }
-        else
-        {
-            selectedBooks = new BookSet();
-            foreach (string bookId in request.SelectedBookIds)
-            {
-                int bookNum = Canon.BookIdToNumber(bookId);
-                if (bookNum > 0)
-                    selectedBooks.Add(bookNum);
-            }
-        }
+        // (5) Build the BookSet (null → project's full BooksPresentSet; otherwise
+        // convert + skip-unknown). See BuildBookSet for the skip-unknown rationale.
+        BookSet selectedBooks = BuildBookSet(scrText, request.SelectedBookIds);
 
         // (6) Delegate to the orchestrator (CAP-022 GREEN). The orchestrator owns
         // PersistChanges, file-spec validation, the overwrite gate, ZIP write, and
@@ -203,7 +193,7 @@ internal sealed partial class BackupRestoreDataProvider
         // not surface the PT9-internal transliteration branch — BHV-100's
         // transliteration branch is not reachable from the wire surface per
         // data-contracts.md.
-        BackupResult result = BackupOrchestrator.ExecuteBackup(
+        return BackupOrchestrator.ExecuteBackup(
             scrText,
             request.DestinationPath,
             selectedBooks,
@@ -212,8 +202,32 @@ internal sealed partial class BackupRestoreDataProvider
             includeEncodingInfo: false,
             request.ConfirmOverwrite
         );
+    }
 
-        return Task.FromResult(result);
+    /// <summary>
+    /// Step (5) of <see cref="ExecuteCreateBackup"/>: convert the wire-layer
+    /// <paramref name="selectedBookIds"/> into a <see cref="BookSet"/>.
+    /// </summary>
+    /// <remarks>
+    /// Null → the project's full <c>BooksPresentSet</c> (documented default per
+    /// data-contracts.md §2.1). Non-null → iterate each id through
+    /// <see cref="Canon.BookIdToNumber"/> and skip unknown codes (per Test Writer
+    /// handoff: the wire layer doesn't surface "unknown book id" as an error
+    /// because the UI populates this list from the project's own books).
+    /// </remarks>
+    private static BookSet BuildBookSet(ScrText scrText, IReadOnlyList<string>? selectedBookIds)
+    {
+        if (selectedBookIds is null)
+            return scrText.BooksPresentSet;
+
+        BookSet bookSet = new();
+        foreach (string bookId in selectedBookIds)
+        {
+            int bookNum = Canon.BookIdToNumber(bookId);
+            if (bookNum > 0)
+                bookSet.Add(bookNum);
+        }
+        return bookSet;
     }
 
     // === PORTED FROM PT9 ===
