@@ -10,6 +10,7 @@ namespace Paranext.DataProvider.BackupRestore;
 //   (`RestoreDestinationProjects` per data-contracts.md §5.2).
 // Maps to: data-contracts.md §3.11 (element type) + §5.2 (subscription)
 // Source:  c-sharp/BackupRestore/RestoreDestinationProject.cs (record)
+//          c-sharp/BackupRestore/SubscribableSnapshotService.cs (base — common machinery)
 //          .context/features/project-backup-and-restore/implementation/strategic-plan-backend.md §CAP-021
 //          .context/features/project-backup-and-restore/implementation/backend-alignment.md (line 105)
 // Behaviors: BHV-651 (Main-menu Restore entry — consumes this list via RestoreForm)
@@ -18,9 +19,9 @@ namespace Paranext.DataProvider.BackupRestore;
 /// <summary>
 /// Internal collaborator of the future <c>BackupRestoreDataProvider</c>. Maintains a snapshot of
 /// projects eligible as a restore overlay destination and an in-process subscriber set so callers
-/// can react to changes. Notifies subscribers — both the in-process delegates AND the network via
-/// <see cref="PapiClient.SendEventAsync"/> — whenever <see cref="NotifyProjectsChanged"/> is called
-/// and the recomputed snapshot differs from the previous one.
+/// can react to changes. The lock + subscriber-set + wire-event machinery lives in
+/// <see cref="SubscribableSnapshotService{TItem}"/>; this class supplies only the per-record
+/// projection (<see cref="BuildSnapshot"/>) and per-record equality (<see cref="AreEquivalent"/>).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -42,125 +43,29 @@ namespace Paranext.DataProvider.BackupRestore;
 /// <para>
 /// <b>Event emission shape</b>: the service emits
 /// <c>PapiClient.SendEventAsync(updateEventType, [dataTypeName])</c> where
-/// <c>updateEventType</c> defaults to <c>"platformBackupRestore.backupRestore-data:onDidUpdate"</c>
-/// and <c>dataTypeName</c> is <c>"RestoreDestinationProjects"</c>.
+/// <c>updateEventType</c> defaults to
+/// <see cref="SubscribableSnapshotService{TItem}.DefaultUpdateEventType"/> and
+/// <c>dataTypeName</c> is <see cref="DataTypeName"/> (<c>"RestoreDestinationProjects"</c>).
 /// </para>
 /// </remarks>
 internal sealed class RestoreDestinationProjectsService
+    : SubscribableSnapshotService<RestoreDestinationProject>
 {
-    public const string DefaultUpdateEventType =
-        "platformBackupRestore.backupRestore-data:onDidUpdate";
+    /// <summary>
+    /// The data-type name announced on the wire event payload. Public so callers (and tests)
+    /// can reference the literal string symbolically rather than by repeating the string
+    /// constant.
+    /// </summary>
     public const string DataTypeName = "RestoreDestinationProjects";
-
-    private readonly PapiClient _papiClient;
-    private readonly LocalParatextProjects _paratextProjects;
-    private readonly string _updateEventType;
-
-    private readonly object _lock = new();
-    private List<RestoreDestinationProject> _cachedSnapshot = [];
-    private readonly List<Action<IReadOnlyList<RestoreDestinationProject>>> _subscribers = [];
 
     public RestoreDestinationProjectsService(
         PapiClient papiClient,
         LocalParatextProjects paratextProjects,
         string updateEventType = DefaultUpdateEventType
     )
-    {
-        _papiClient = papiClient;
-        _paratextProjects = paratextProjects;
-        _updateEventType = updateEventType;
-    }
+        : base(papiClient, paratextProjects, updateEventType) { }
 
-    /// <summary>
-    /// Returns the current snapshot of projects eligible as a restore overlay destination. Each
-    /// entry's <see cref="RestoreDestinationProject.CurrentUserIsAdmin"/> reflects the current
-    /// user's permission at the time of the last <see cref="NotifyProjectsChanged"/> call.
-    /// </summary>
-    public IReadOnlyList<RestoreDestinationProject> GetSnapshot()
-    {
-        lock (_lock)
-        {
-            return _cachedSnapshot.ToList().AsReadOnly();
-        }
-    }
-
-    /// <summary>
-    /// Subscribes <paramref name="handler"/> to receive the new snapshot whenever
-    /// <see cref="NotifyProjectsChanged"/> detects a change. Same idempotence + disposal semantics
-    /// as <see cref="BackupableProjectsService.Subscribe"/>.
-    /// </summary>
-    public IDisposable Subscribe(Action<IReadOnlyList<RestoreDestinationProject>> handler)
-    {
-        lock (_lock)
-        {
-            if (!_subscribers.Contains(handler))
-                _subscribers.Add(handler);
-        }
-        return new Subscription(this, handler);
-    }
-
-    /// <summary>
-    /// Rescans <see cref="LocalParatextProjects"/>, recomputes the projected snapshot (including
-    /// <see cref="RestoreDestinationProject.CurrentUserIsAdmin"/>), and (only if the snapshot
-    /// actually changed) updates the cache, fires <see cref="PapiClient.SendEventAsync"/>, and
-    /// invokes every currently-subscribed handler.
-    /// </summary>
-    public void NotifyProjectsChanged()
-    {
-        List<RestoreDestinationProject> newSnapshot = BuildSnapshot();
-
-        List<Action<IReadOnlyList<RestoreDestinationProject>>> handlersToNotify;
-        IReadOnlyList<RestoreDestinationProject> snapshotForHandlers;
-        lock (_lock)
-        {
-            // Snapshot-equality short-circuit per strategic-plan §CAP-021. Record default
-            // equality is value-based for all scalar fields here (no collection fields on
-            // RestoreDestinationProject), so the standard record `==` is sufficient — we still
-            // wrap it in a per-element helper for parity with BackupableProjectsService and to
-            // future-proof against schema additions.
-            if (AreEquivalent(_cachedSnapshot, newSnapshot))
-                return;
-
-            _cachedSnapshot = newSnapshot;
-            snapshotForHandlers = newSnapshot.AsReadOnly();
-            handlersToNotify = [.. _subscribers];
-        }
-
-        _papiClient
-            .SendEventAsync(_updateEventType, new List<string> { DataTypeName })
-            .GetAwaiter()
-            .GetResult();
-
-        foreach (Action<IReadOnlyList<RestoreDestinationProject>> handler in handlersToNotify)
-            handler(snapshotForHandlers);
-    }
-
-    // EXPLANATION:
-    // Snapshot-equality helper. RestoreDestinationProject has no collection fields, so default
-    // record equality would actually work — but we keep the explicit per-field comparison for
-    // parity with BackupableProjectsService.AreEquivalent and so future schema additions don't
-    // silently change the no-change semantics.
-    private static bool AreEquivalent(
-        IReadOnlyList<RestoreDestinationProject> a,
-        IReadOnlyList<RestoreDestinationProject> b
-    )
-    {
-        if (a.Count != b.Count)
-            return false;
-        for (int i = 0; i < a.Count; i++)
-        {
-            RestoreDestinationProject x = a[i];
-            RestoreDestinationProject y = b[i];
-            if (
-                x.Id != y.Id
-                || x.ShortName != y.ShortName
-                || x.FullName != y.FullName
-                || x.CurrentUserIsAdmin != y.CurrentUserIsAdmin
-            )
-                return false;
-        }
-        return true;
-    }
+    protected override string WireDataTypeName => DataTypeName;
 
     // EXPLANATION:
     // Rescans LocalParatextProjects.GetAllProjectDetails(), resolves each id to its ScrText,
@@ -173,7 +78,7 @@ internal sealed class RestoreDestinationProjectsService
     //   * CurrentUserIsAdmin -- scrText.Permissions?.AmAdministrator ?? false (INV-B05;
     //                           mirrors RestorePermissionGate's defensive null-permissions
     //                           handling -- CAP-019).
-    private List<RestoreDestinationProject> BuildSnapshot()
+    protected override List<RestoreDestinationProject> BuildSnapshot()
     {
         var result = new List<RestoreDestinationProject>();
         foreach (ProjectDetails details in _paratextProjects.GetAllProjectDetails())
@@ -201,16 +106,31 @@ internal sealed class RestoreDestinationProjectsService
         return result;
     }
 
-    private static string SafeFullName(ScrText scrText)
+    // EXPLANATION:
+    // Snapshot-equality helper. RestoreDestinationProject has no collection fields, so default
+    // record equality would actually work — but we keep the explicit per-field comparison for
+    // parity with BackupableProjectsService.AreEquivalent and so future schema additions don't
+    // silently change the no-change semantics.
+    protected override bool AreEquivalent(
+        IReadOnlyList<RestoreDestinationProject> a,
+        IReadOnlyList<RestoreDestinationProject> b
+    )
     {
-        try
+        if (a.Count != b.Count)
+            return false;
+        for (int i = 0; i < a.Count; i++)
         {
-            return scrText.FullName ?? string.Empty;
+            RestoreDestinationProject x = a[i];
+            RestoreDestinationProject y = b[i];
+            if (
+                x.Id != y.Id
+                || x.ShortName != y.ShortName
+                || x.FullName != y.FullName
+                || x.CurrentUserIsAdmin != y.CurrentUserIsAdmin
+            )
+                return false;
         }
-        catch
-        {
-            return string.Empty;
-        }
+        return true;
     }
 
     // INV-B05: defensive read of scrText.Permissions.AmAdministrator. Returns false when
@@ -225,38 +145,6 @@ internal sealed class RestoreDestinationProjectsService
         catch
         {
             return false;
-        }
-    }
-
-    private void Unsubscribe(Action<IReadOnlyList<RestoreDestinationProject>> handler)
-    {
-        lock (_lock)
-        {
-            _subscribers.Remove(handler);
-        }
-    }
-
-    private sealed class Subscription : IDisposable
-    {
-        private readonly RestoreDestinationProjectsService _owner;
-        private readonly Action<IReadOnlyList<RestoreDestinationProject>> _handler;
-        private bool _disposed;
-
-        public Subscription(
-            RestoreDestinationProjectsService owner,
-            Action<IReadOnlyList<RestoreDestinationProject>> handler
-        )
-        {
-            _owner = owner;
-            _handler = handler;
-        }
-
-        public void Dispose()
-        {
-            if (_disposed)
-                return;
-            _disposed = true;
-            _owner.Unsubscribe(_handler);
         }
     }
 }
