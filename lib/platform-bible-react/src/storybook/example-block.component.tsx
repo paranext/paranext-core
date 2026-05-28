@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { ThumbsUp, ThumbsDown, Lightbulb, ChevronDown } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Info, ChevronDown } from 'lucide-react';
 import { cn } from '@/utils/shadcn-ui/utils';
 
-type Variant = 'do' | 'dont' | 'neutral';
+type Variant = 'prefer' | 'avoid' | 'neutral';
 
 type ExampleBlockProps = {
   variant?: Variant;
-  /** Overrides the default label ("Best Practice" / "Anti-pattern" / "Tip") */
+  /** Overrides the default label ("Prefer" / "Avoid" / "Example") */
   title?: string;
   /** Body content of the block — typically a sentence or two explaining what the example illustrates */
   children?: React.ReactNode;
@@ -23,25 +23,25 @@ type ExampleBlockProps = {
 };
 
 const variantConfig = {
-  do: {
+  prefer: {
     Icon: ThumbsUp,
-    label: 'Best Practice',
+    label: 'Prefer',
     accentClass: 'tw:bg-teal-500',
     bgClass: 'tw:bg-teal-500/5',
     textClass: 'tw:text-teal-600 tw:dark:text-teal-400',
     iconBgClass: 'tw:bg-teal-500/15',
   },
-  dont: {
+  avoid: {
     Icon: ThumbsDown,
-    label: 'Anti-pattern',
+    label: 'Avoid',
     accentClass: 'tw:bg-rose-500',
     bgClass: 'tw:bg-rose-500/5',
     textClass: 'tw:text-rose-600 tw:dark:text-rose-400',
     iconBgClass: 'tw:bg-rose-500/15',
   },
   neutral: {
-    Icon: Lightbulb,
-    label: 'Tip',
+    Icon: Info,
+    label: 'Example',
     accentClass: 'tw:bg-sky-500',
     bgClass: 'tw:bg-sky-500/5',
     textClass: 'tw:text-sky-600 tw:dark:text-sky-400',
@@ -50,11 +50,11 @@ const variantConfig = {
 };
 
 /**
- * Color-coded documentation block for Do / Don't / Tip examples in Storybook.
+ * Color-coded documentation block for prefer / avoid / neutral examples in Storybook.
  *
- * - `variant="do"` — teal, thumbs-up, "Best Practice"
- * - `variant="dont"` — rose, thumbs-down, "Anti-pattern"
- * - `variant="neutral"` (default) — sky, lightbulb, "Tip"
+ * - `variant="prefer"` — teal, thumbs-up, "Prefer"
+ * - `variant="avoid"` — rose, thumbs-down, "Avoid"
+ * - `variant="neutral"` (default) — sky, info icon, "Example"
  *
  * Pass a live component to `preview` to render it in a framed stage. Pass source code to `code` —
  * single-line displays inline, multiline collapses and expands on click. The preview and code share
@@ -178,7 +178,7 @@ type ExampleBlockGroupProps = {
 
 /**
  * Lays out two `ExampleBlock`s side by side on medium+ screens, stacked on mobile. Typically used
- * to show a Do and Don't example together.
+ * to show a Prefer and Avoid example together.
  */
 export function ExampleBlockGroup({ children, className }: ExampleBlockGroupProps) {
   return (
