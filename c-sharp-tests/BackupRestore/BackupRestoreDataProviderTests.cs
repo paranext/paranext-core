@@ -91,6 +91,8 @@ namespace TestParanextDataProvider.BackupRestore
             BackupOrchestrator.PersistChangesOverride = null;
             // CAP-003 — reset the openRestoreSession test seam.
             BackupRestoreDataProvider.RestorerFactoryOverride = null;
+            // CAP-009 — reset the getRestoreDestinationProjects test seam.
+            BackupRestoreDataProvider.RestoreDestinationProjectsServiceOverride = null;
             try
             {
                 if (Directory.Exists(_testTempDir))
