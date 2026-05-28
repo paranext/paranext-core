@@ -9,7 +9,7 @@ const meta: Meta<typeof WorkspaceUpdatingOverlayPresentational> = {
     docs: {
       description: {
         component:
-          'A full-screen blocking overlay that appears while the active project is switching. Covers all other surfaces including modals.',
+          'A full-screen blocking overlay that appears while the active project is switching. Covers all surfaces except modals, which remain accessible during the transition.',
       },
     },
   },

@@ -8,6 +8,12 @@
  * resolves (e.g. the extension deactivates mid-switch and the did-finish event is never emitted).
  */
 
+/**
+ * Heuristic upper bound; if a switch never resolves (e.g. extension deactivates mid-switch),
+ * auto-clear after this long.
+ */
+const SWITCH_SAFETY_TIMEOUT_MS = 30_000;
+
 let switchCount = 0;
 let safetyTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -27,7 +33,7 @@ export function setWorkspaceUpdating(value: boolean): void {
       switchCount = 0;
       safetyTimer = undefined;
       notifyListeners();
-    }, 30_000);
+    }, SWITCH_SAFETY_TIMEOUT_MS);
   } else {
     switchCount = Math.max(0, switchCount - 1);
     if (switchCount === 0) {
