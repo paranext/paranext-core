@@ -32,6 +32,23 @@ internal static class BackupFilenameService
         '|',
     };
 
+    // Union of OS-forbidden chars stripped from project FullNames before they
+    // become part of a backup filename. Built once at class-init from three
+    // sources (REVIEW-FLAG-4):
+    //   a) Path.GetInvalidPathChars()      — host BCL set
+    //   b) Path.GetInvalidFileNameChars()  — host BCL set
+    //   c) WindowsReservedFilenameChars    — hard-coded so output is
+    //      cross-platform-identical (on POSIX hosts (b) returns only
+    //      {'\0','/'} which would let Windows-reserved chars leak through).
+    // The contents are invariant for the lifetime of the process, so the set
+    // is a static readonly field rather than a per-call allocation.
+    private static readonly HashSet<char> ForbiddenFilenameChars =
+        new(
+            Path.GetInvalidPathChars()
+                .Concat(Path.GetInvalidFileNameChars())
+                .Concat(WindowsReservedFilenameChars)
+        );
+
     // === PORTED FROM PT9 ===
     // Source: Paratext/BackupRestore/BackupForm.cs:134-140
     // Method: BackupForm.DefaultBackupFileName()
@@ -73,29 +90,18 @@ internal static class BackupFilenameService
     public static string ComputeDefaultBackupFileName(string projectFullName, DateTime date)
     {
         // EXPLANATION:
-        // 1. Build the union of OS-forbidden chars (REVIEW-FLAG-4). We merge:
-        //      a) Path.GetInvalidPathChars() — host BCL set
-        //      b) Path.GetInvalidFileNameChars() — host BCL set
-        //      c) WindowsReservedFilenameChars — hard-coded so output is
-        //         cross-platform-identical (on POSIX hosts (b) returns only
-        //         {'\0','/'} which would let Windows-reserved chars leak
-        //         through).
-        // 2. Filter projectFullName through it, preserving order and whitespace.
-        // 3. Format date as invariant yyyy-MM-dd (drops the time component).
-        // 4. Concatenate with a single space separator and the literal ".zip"
+        // 1. Filter projectFullName through the static ForbiddenFilenameChars
+        //    set (REVIEW-FLAG-4 — see the field declaration for the union's
+        //    composition). Preserves order and whitespace.
+        // 2. Format date as invariant yyyy-MM-dd (drops the time component).
+        // 3. Concatenate with a single space separator and the literal ".zip"
         //    suffix. INV-A01 (filename ends in ".zip") is satisfied here for
         //    callers that use this default; callers that bypass this method get
         //    the same guarantee enforced downstream in Backup.BackupScrText.
-        var forbidden = new HashSet<char>(
-            Path.GetInvalidPathChars()
-                .Concat(Path.GetInvalidFileNameChars())
-                .Concat(WindowsReservedFilenameChars)
-        );
-
         var sanitized = new StringBuilder(projectFullName.Length);
         foreach (char c in projectFullName)
         {
-            if (!forbidden.Contains(c))
+            if (!ForbiddenFilenameChars.Contains(c))
                 sanitized.Append(c);
         }
 
