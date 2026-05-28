@@ -171,22 +171,20 @@ internal static class SharedProjectFilterService
     }
 
     // EXPLANATION:
-    // Removal set (3 names) — detection set PLUS legacyProjectUserFieldsFileName. Per PT9
-    // RestoreForm.cs:386-388. Asymmetry is intentional and locked by tests.
+    // Removal set = detection set ∪ {legacyProjectUserFieldsFileName} — per PT9
+    // RestoreForm.cs:386-388. The set asymmetry is intentional and locked by tests:
+    // the 3rd name (legacyProjectUserFieldsFileName) is in the removal set but NOT
+    // the detection set, so a backup containing only ProjectUserFields.xml is treated
+    // as "no shared markers" (HasSharedFiles=false) and restored as-is.
+    // Delegating to IsDetectionFile expresses this relationship directly in code.
     private static bool IsRemovalFile(RestoreFileInfo fileInfo)
     {
+        if (IsDetectionFile(fileInfo))
+            return true;
+
         string? fileName = fileInfo.SourceFile?.FileName;
-        if (fileName == null)
-            return false;
-        return fileName.Equals(
-                ProjectPermissionManager.fileName,
-                StringComparison.OrdinalIgnoreCase
-            )
-            || fileName.Equals(
-                ProjectPermissionManager.legacyProjectUsersFileName,
-                StringComparison.OrdinalIgnoreCase
-            )
-            || fileName.Equals(
+        return fileName != null
+            && fileName.Equals(
                 ProjectPermissionManager.legacyProjectUserFieldsFileName,
                 StringComparison.OrdinalIgnoreCase
             );
