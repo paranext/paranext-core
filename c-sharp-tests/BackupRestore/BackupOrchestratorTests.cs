@@ -61,12 +61,25 @@ namespace TestParanextDataProvider.BackupRestore
 
             _logFilePath = Path.Combine(_testTempDir, "Backup.txt");
             BackupLogService.LogFilePathOverride = _logFilePath;
+
+            // PersistChanges seam (see implementer-CAP-022.md §"PersistChanges
+            // Test Seam"). The orchestrator routes its PersistChanges check
+            // through `BackupOrchestrator.PersistChangesOverride` when set —
+            // mirroring the LogFilePathOverride pattern. Default for the
+            // fixture: every ScrText subclass that is NOT
+            // `PersistChangesFalseScrText` reports persisted=true; the
+            // sentinel subclass reports false to drive TS-004 without needing
+            // a virtual SDK override that ScrText.PersistChanges does not
+            // expose.
+            BackupOrchestrator.PersistChangesOverride = scrText =>
+                scrText is not PersistChangesFalseScrText;
         }
 
         [TearDown]
         public void TearDown()
         {
             BackupLogService.LogFilePathOverride = null;
+            BackupOrchestrator.PersistChangesOverride = null;
             try
             {
                 if (Directory.Exists(_testTempDir))
@@ -687,6 +700,10 @@ namespace TestParanextDataProvider.BackupRestore
                 : base(MakeDetails(projectPath, nameStem))
             {
                 _projectPath = projectPath;
+                // PT9 BookFileName uses `FileNamePrePart + GetFileNameBookPart(bookNum) + FileNamePostPart`
+                // (ProjectSettings.cs:2083). Set the postpart so the test SFM
+                // file (e.g. `01GEN.SFM`) classifies as the Books type.
+                ConfigureBookFilenameConvention(this, postPart: ".SFM");
             }
 
             public override bool IsResourceProject => true;
@@ -714,6 +731,14 @@ namespace TestParanextDataProvider.BackupRestore
                 : base(MakeDetails(projectPath, nameStem))
             {
                 _projectPath = projectPath;
+                // PT9 ProjectFileClassifier.Get → settings.GetBookNumberFromFilename
+                // → BookFileName(bookNum) = FileNamePrePart + bookPart + FileNamePostPart.
+                // Default FileNameForm gives bookPart="01GEN" for book 1. The test
+                // fixture creates files named like "01GEN<nameStem>.SFM" so set
+                // FileNamePostPart accordingly. That makes the classifier resolve
+                // those files to bookNum=1 and FileType=Books, which is what the
+                // orchestrator's per-book filter (selectedBooks.IsSelected) requires.
+                ConfigureBookFilenameConvention(this, postPart: nameStem + ".SFM");
             }
 
             public override string Directory => _projectPath;
@@ -723,6 +748,22 @@ namespace TestParanextDataProvider.BackupRestore
                 var id = HexId.CreateNew().ToString();
                 return new ProjectDetails(nameStem, new ProjectMetadata(id, []), projectPath);
             }
+        }
+
+        /// <summary>
+        /// Helper — set the Paratext file-naming convention on the given ScrText so
+        /// that <c>BookFileName(bookNum)</c> resolves to <c>"01GEN" + postPart</c>
+        /// for book 1 (and analogously for other books). The fixture configures
+        /// this so the per-file classifier can map test SFM files to book numbers.
+        /// </summary>
+        private static void ConfigureBookFilenameConvention(ScrText scrText, string postPart)
+        {
+            // Empty FileNameForm + empty FileNamePrePart + the requested postPart gives
+            // bookPart = BookFileNameDigits(bookNum) + Canon.BookNumberToId(bookNum)
+            //          = "01" + "GEN" = "01GEN" for book 1.
+            scrText.Settings.FileNamePrePart = string.Empty;
+            scrText.Settings.FileNameForm = string.Empty;
+            scrText.Settings.FileNamePostPart = postPart;
         }
     }
 }

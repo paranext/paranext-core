@@ -904,6 +904,16 @@ namespace TestParanextDataProvider.BackupRestore
                 : base(MakeDetails(projectPath, nameStem))
             {
                 _projectPath = projectPath;
+                // PT9 ProjectFileClassifier.Get → settings.GetBookNumberFromFilename
+                // → BookFileName(bookNum) = FileNamePrePart + bookPart + FileNamePostPart.
+                // Default FileNameForm gives bookPart="01GEN" for book 1. The gm-*
+                // fixtures create files named like "01GEN<nameStem>.SFM" so set
+                // FileNamePostPart accordingly. That lets the classifier resolve
+                // those files to bookNum=1 + FileType=Books, which is what the
+                // orchestrator's per-book filter (selectedBooks.IsSelected) requires.
+                Settings.FileNamePrePart = string.Empty;
+                Settings.FileNameForm = string.Empty;
+                Settings.FileNamePostPart = nameStem + ".SFM";
             }
 
             public override string Directory => _projectPath;
