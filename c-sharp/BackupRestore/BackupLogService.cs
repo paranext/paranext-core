@@ -1,5 +1,7 @@
 using System;
+using System.Globalization;
 using System.IO;
+using System.Text;
 using Paratext.Data;
 
 namespace Paranext.DataProvider.BackupRestore;
@@ -83,6 +85,17 @@ internal static class BackupLogService
     /// </summary>
     internal static string? LogFilePathOverride { get; set; }
 
+    // UTF-8 without a byte-order mark. `Encoding.UTF8` has a non-empty preamble that
+    // `File.AppendAllText` writes when the target file does not yet exist, which would
+    // break PT9 byte parity for the first backup ever on a host (and for the gm-011/012
+    // golden-master pipeline). Using a BOM-less UTF8Encoding guarantees the file starts
+    // with the ASCII 'B' of "BACKUP:" on every host. PT9 produces a BOM on a fresh file
+    // too (same .NET API), but PT10's spec-003 acceptance test requires no BOM, so we
+    // diverge here intentionally — see strategic-plan §CAP-023 and red-state.md.
+    private static readonly Encoding Utf8NoBom = new UTF8Encoding(
+        encoderShouldEmitUTF8Identifier: false
+    );
+
     // === PORTED FROM PT9 ===
     // Source: Paratext/BackupRestore/Backup.cs:171-181
     /// <summary>
@@ -115,15 +128,34 @@ internal static class BackupLogService
         string filename
     )
     {
-        // EXPLANATION:
-        // RED-phase stub. The GREEN-phase implementation must:
-        //   1. Compute DateStr = now.ToString("o").Substring(0,16).Replace("T","@").
-        //   2. Concatenate the 5-line entry with "\r\n" separators and a trailing "\r\n\r\n".
-        //   3. Resolve the log file path via GetLogFilePath() (so INV-C14 holds by
-        //      construction — writer and reader share the same path resolver).
-        //   4. Call File.AppendAllText(path, entry, Encoding.UTF8) — this both creates
-        //      the file if absent and appends if present.
-        throw new NotImplementedException("CAP-023 GREEN-phase implementation pending");
+        // PT9 DateStr formula (Backup.cs:41-44): ISO-8601 round-trip ("o") -> first
+        // 16 chars (YYYY-MM-DDTHH:MM) -> swap T for @. Drops seconds/ms.
+        string dateStr = now.ToString("o", CultureInfo.InvariantCulture)
+            .Substring(0, 16)
+            .Replace("T", "@");
+
+        string entry =
+            "BACKUP: "
+            + dateStr
+            + "\r\n"
+            + "\tBackup Description: "
+            + description
+            + "\r\n"
+            + "\tBackup Project: "
+            + projectName
+            + "\r\n"
+            + "\tBooks: "
+            + booksDescription
+            + "\r\n"
+            + "\tFilename: "
+            + filename
+            + "\r\n"
+            + "\r\n";
+
+        // Route through GetLogFilePath() so INV-C14 (writer and reader share the same
+        // path) holds by construction. File.AppendAllText creates the file if absent;
+        // `Utf8NoBom` ensures no preamble is written on fresh-file creation.
+        File.AppendAllText(GetLogFilePath(), entry, Utf8NoBom);
     }
 
     // === PORTED FROM PT9 ===
@@ -138,13 +170,7 @@ internal static class BackupLogService
     /// </returns>
     public static string GetLogFilePath()
     {
-        // EXPLANATION:
-        // RED-phase stub. The GREEN-phase implementation must:
-        //   1. If LogFilePathOverride is non-null, return it (unit-test seam).
-        //   2. Otherwise return Path.Combine(ScrTextCollection.SettingsDirectory, "Backup.txt").
-        //   3. NEVER touch the file system (no Directory.Exists, no File.Exists).
-        //      Existence checking is the caller's concern — DT-003 surfaces it via the
-        //      Exists flag in BackupLogInfo.
-        throw new NotImplementedException("CAP-023 GREEN-phase implementation pending");
+        return LogFilePathOverride
+            ?? Path.Combine(ScrTextCollection.SettingsDirectory, "Backup.txt");
     }
 }
