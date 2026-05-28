@@ -8,7 +8,32 @@
       "%book_chooser_canon_group_ot%": "Old Testament",
       "%book_chooser_canon_group_nt%": "New Testament",
       "%book_chooser_canon_group_dc%": "Deuterocanon",
-      "%book_chooser_canon_group_extra%": "Extra"
+      "%book_chooser_canon_group_extra%": "Extra",
+      "%backup_form_title%": "Backup project to file",
+      "%backup_form_project_label%": "Project:",
+      "%backup_form_destination_label%": "Destination:",
+      "%backup_form_browse%": "Browse…",
+      "%backup_form_user_name_label%": "User name:",
+      "%backup_form_user_comment_placeholder%": "Add a comment about this backup…",
+      "%backup_form_description_group_label%": "Description",
+      "%backup_form_description%": "Description",
+      "%backup_form_books_label%": "Books:",
+      "%backup_form_choose_books%": "Choose…",
+      "%backup_form_book_chooser_caption%": "Books to Backup",
+      "%backup_form_book_chooser_help_text%": "Choose the books which will be backed up.",
+      "%backup_form_include_figures_label%": "Include figures",
+      "%backup_form_submit%": "OK",
+      "%backup_form_cancel%": "Cancel",
+      "%backup_form_error_title%": "Backup Error",
+      "%backup_form_error_ok%": "OK",
+      "%backup_form_error_invalid_path%": "The destination path is not valid.",
+      "%backup_form_error_resource_project%": "Resource projects cannot be backed up.",
+      "%backup_form_error_user_name_required%": "User name is required.",
+      "%backup_form_overwrite_title%": "Confirm Overwrite",
+      "%backup_form_overwrite_message%": "A backup file already exists at this location. Overwrite it?",
+      "%backup_form_overwrite_confirm%": "Overwrite",
+      "%backup_form_progress_title%": "Backing up",
+      "%backup_form_progress_message%": "Backup in progress…"
     }
   }
 }
