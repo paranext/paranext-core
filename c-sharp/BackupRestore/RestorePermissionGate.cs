@@ -97,8 +97,6 @@ internal static class RestorePermissionGate
     /// <c>false</c> otherwise. Also returns <c>false</c> when <c>existingProject.Permissions</c>
     /// is <c>null</c> (defensive — PT9 has no explicit null-check; PT10 prefers gate-closed-on-null).
     /// </returns>
-    public static bool CheckAdminGate(ScrText existingProject)
-    {
-        return existingProject.Permissions?.WarnIfNotAdministrator() ?? false;
-    }
+    public static bool CheckAdminGate(ScrText existingProject) =>
+        existingProject.Permissions?.WarnIfNotAdministrator() ?? false;
 }
