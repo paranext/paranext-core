@@ -2,10 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Text.Json;
 using Paranext.DataProvider.BackupRestore;
+using Paranext.DataProvider.Projects;
 using Paratext.Data;
+using PtxUtils;
 using SIL.Scripture;
 
 namespace TestParanextDataProvider.BackupRestore
@@ -487,6 +490,429 @@ namespace TestParanextDataProvider.BackupRestore
                 "gm-031: PT10 RightSourceToken is the session-scoped opaque handle "
                     + "tok-dst-{sessionId}-{fileId} (per strategic-plan §CAP-020 line 502)"
             );
+        }
+
+        // -----------------------------------------------------------------
+        // gm-011 — Backup ZIP whitelist (CAP-022 / BHV-101 / TS-009).
+        //
+        // The golden master captures the entry set of a backup of a canonical
+        // reference project with the Figures flag. PT9 capture environment
+        // included Notes_Rolf Heij.xml + ProjectUpdates.xml which are tied to
+        // the capture host's user environment — those entries are environment-
+        // dependent. PT10 tests pin the INVARIANT shape (sorted entry set
+        // includes the SFM + Settings.xml) and assert classification contract
+        // rather than literal byte-parity.
+        //
+        // The fixture creates a real temp project directory with files on disk,
+        // invokes BackupOrchestrator.ExecuteBackup, opens the resulting ZIP,
+        // and asserts the entry set contains the expected files (whitelist).
+        // -----------------------------------------------------------------
+
+        [Test]
+        [Category("GoldenMaster")]
+        [Property("CapabilityId", "CAP-022")]
+        [Property("BehaviorId", "BHV-101")]
+        [Property("InvariantId", "INV-A03")]
+        [Property("ScenarioId", "TS-009")]
+        public void ExecuteBackup_FullBackup_ZipEntriesMatchGm011Whitelist()
+        {
+            // Arrange — load the golden master (for the captured contract reference)
+            var gmDir = LocateGoldenMasterDir("gm-011-backup-zip-whitelist");
+            var expected = System.Text.Json.JsonDocument.Parse(
+                File.ReadAllText(Path.Combine(gmDir, "expected-output.json"))
+            );
+
+            var expectedEntries = expected
+                .RootElement.GetProperty("output")
+                .GetProperty("entries")
+                .EnumerateArray()
+                .Select(e => e.GetString()!)
+                .ToList();
+
+            // The gm-011 captured set includes "01GENGmRefProj.SFM" + "Settings.xml"
+            // (these are universal — independent of capture environment) plus
+            // "Notes_Rolf Heij.xml" + "ProjectUpdates.xml" (environment-specific).
+            // We assert: SFM + Settings.xml are present (universal whitelist contract).
+            Assert.That(
+                expectedEntries,
+                Contains.Item("01GENGmRefProj.SFM"),
+                "gm-011 captured contract includes the GEN SFM file"
+            );
+            Assert.That(
+                expectedEntries,
+                Contains.Item("Settings.xml"),
+                "gm-011 captured contract includes Settings.xml"
+            );
+
+            // Build a temp project directory mirroring the gm-011 preconditions.
+            string tempRoot = Path.Combine(
+                Path.GetTempPath(),
+                "paranext-cap-022-gm011",
+                Guid.NewGuid().ToString("N")
+            );
+            string projectDir = Path.Combine(tempRoot, "GmRefProj");
+            Directory.CreateDirectory(projectDir);
+            try
+            {
+                File.WriteAllText(
+                    Path.Combine(projectDir, "Settings.xml"),
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?><ScriptureText/>"
+                );
+                File.WriteAllText(
+                    Path.Combine(projectDir, "01GENGmRefProj.SFM"),
+                    "\\id GEN gm-011 reference project\n\\c 1\n\\v 1 In the beginning.\n"
+                );
+
+                // Use BackupLogService override so the test doesn't touch
+                // ScrTextCollection.SettingsDirectory
+                string logPath = Path.Combine(tempRoot, "Backup.txt");
+                BackupLogService.LogFilePathOverride = logPath;
+
+                ScrText scrText = new GmRefScrText(projectDir, "GmRefProj");
+                var destFileSpec = Path.Combine(tempRoot, "gm011-backup.zip");
+
+                var bookSet = new BookSet();
+                for (int i = 1; i <= 66; i++)
+                    bookSet.Add(i);
+
+                // Act
+                var result = BackupOrchestrator.ExecuteBackup(
+                    scrText,
+                    destFileSpec,
+                    bookSet,
+                    IncludeFiguresFlags.Figures,
+                    "gm-011 test",
+                    includeEncodingInfo: false,
+                    confirmOverwrite: false
+                );
+
+                // Assert
+                Assert.That(
+                    result,
+                    Is.InstanceOf<BackupResult.Success>(),
+                    "gm-011: backup of canonical reference project produces Success envelope"
+                );
+
+                var entryNames = GetZipEntryNamesSorted(destFileSpec);
+
+                Assert.That(
+                    entryNames,
+                    Contains.Item("01GENGmRefProj.SFM"),
+                    "gm-011 whitelist: SFM book file is in the ZIP"
+                );
+                Assert.That(
+                    entryNames,
+                    Contains.Item("Settings.xml"),
+                    "gm-011 whitelist: Settings.xml is in the ZIP"
+                );
+            }
+            finally
+            {
+                BackupLogService.LogFilePathOverride = null;
+                if (Directory.Exists(tempRoot))
+                {
+                    try
+                    {
+                        Directory.Delete(tempRoot, recursive: true);
+                    }
+                    catch
+                    {
+                        /* best-effort */
+                    }
+                }
+            }
+        }
+
+        // -----------------------------------------------------------------
+        // gm-012 — Backup ZIP excludes unselected books (CAP-022 / TS-010 / INV-A05).
+        // -----------------------------------------------------------------
+
+        [Test]
+        [Category("GoldenMaster")]
+        [Property("CapabilityId", "CAP-022")]
+        [Property("BehaviorId", "BHV-101")]
+        [Property("InvariantId", "INV-A05")]
+        [Property("ScenarioId", "TS-010")]
+        public void ExecuteBackup_PartialBookSet_ExcludesUnselectedBooks_Gm012()
+        {
+            var gmDir = LocateGoldenMasterDir("gm-012-backup-zip-excludes-unselected-books");
+            var expected = System.Text.Json.JsonDocument.Parse(
+                File.ReadAllText(Path.Combine(gmDir, "expected-output.json"))
+            );
+
+            var expectedEntries = expected
+                .RootElement.GetProperty("output")
+                .GetProperty("entries")
+                .EnumerateArray()
+                .Select(e => e.GetString()!)
+                .ToList();
+
+            // gm-012 captured contract: with BookSet=GEN, the ZIP contains
+            // 01GEN*.SFM but NOT 02EXO* or 03LEV*.
+            Assert.That(
+                expectedEntries,
+                Contains.Item("01GENGmPartialProj.SFM"),
+                "gm-012 contract: selected GEN book is in the ZIP"
+            );
+            Assert.That(
+                expectedEntries.Any(e => e.Contains("EXO")),
+                Is.False,
+                "gm-012 contract: unselected EXO is excluded"
+            );
+            Assert.That(
+                expectedEntries.Any(e => e.Contains("LEV")),
+                Is.False,
+                "gm-012 contract: unselected LEV is excluded"
+            );
+
+            string tempRoot = Path.Combine(
+                Path.GetTempPath(),
+                "paranext-cap-022-gm012",
+                Guid.NewGuid().ToString("N")
+            );
+            string projectDir = Path.Combine(tempRoot, "GmPartialProj");
+            Directory.CreateDirectory(projectDir);
+            try
+            {
+                File.WriteAllText(
+                    Path.Combine(projectDir, "Settings.xml"),
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?><ScriptureText/>"
+                );
+                File.WriteAllText(
+                    Path.Combine(projectDir, "01GENGmPartialProj.SFM"),
+                    "\\id GEN\n\\c 1\n\\v 1 GEN.\n"
+                );
+                File.WriteAllText(
+                    Path.Combine(projectDir, "02EXOGmPartialProj.SFM"),
+                    "\\id EXO\n\\c 1\n\\v 1 EXO.\n"
+                );
+                File.WriteAllText(
+                    Path.Combine(projectDir, "03LEVGmPartialProj.SFM"),
+                    "\\id LEV\n\\c 1\n\\v 1 LEV.\n"
+                );
+
+                string logPath = Path.Combine(tempRoot, "Backup.txt");
+                BackupLogService.LogFilePathOverride = logPath;
+
+                ScrText scrText = new GmRefScrText(projectDir, "GmPartialProj");
+                var destFileSpec = Path.Combine(tempRoot, "gm012-partial.zip");
+
+                // BookSet with only GEN (book #1)
+                var bookSet = new BookSet();
+                bookSet.Add(1);
+
+                var result = BackupOrchestrator.ExecuteBackup(
+                    scrText,
+                    destFileSpec,
+                    bookSet,
+                    IncludeFiguresFlags.Figures,
+                    "gm-012 partial backup",
+                    includeEncodingInfo: false,
+                    confirmOverwrite: false
+                );
+
+                Assert.That(result, Is.InstanceOf<BackupResult.Success>());
+                var entryNames = GetZipEntryNamesSorted(destFileSpec);
+
+                Assert.That(
+                    entryNames,
+                    Contains.Item("01GENGmPartialProj.SFM"),
+                    "gm-012: GEN (selected) is in the ZIP"
+                );
+                Assert.That(
+                    entryNames.Any(n => n.Contains("EXO", StringComparison.OrdinalIgnoreCase)),
+                    Is.False,
+                    "INV-A05: EXO (unselected) is excluded"
+                );
+                Assert.That(
+                    entryNames.Any(n => n.Contains("LEV", StringComparison.OrdinalIgnoreCase)),
+                    Is.False,
+                    "INV-A05: LEV (unselected) is excluded"
+                );
+            }
+            finally
+            {
+                BackupLogService.LogFilePathOverride = null;
+                if (Directory.Exists(tempRoot))
+                {
+                    try
+                    {
+                        Directory.Delete(tempRoot, recursive: true);
+                    }
+                    catch
+                    {
+                        /* best-effort */
+                    }
+                }
+            }
+        }
+
+        // -----------------------------------------------------------------
+        // gm-013 — Backup ZIP figures-flag matrix (CAP-022 / TS-011 / INV-A06).
+        //
+        // Three runs with flags=[None, Figures, Figures|LocalFigures] on a
+        // project that has a figures/ subfolder. Captures inclusion semantics:
+        //   None → figures/ excluded
+        //   Figures → figures/ included
+        //   Figures|LocalFigures → figures/ + local/figures/ included
+        // -----------------------------------------------------------------
+
+        [Test]
+        [Category("GoldenMaster")]
+        [Property("CapabilityId", "CAP-022")]
+        [Property("BehaviorId", "BHV-101")]
+        [Property("InvariantId", "INV-A06")]
+        [Property("ScenarioId", "TS-011")]
+        public void ExecuteBackup_FiguresFlagMatrix_MatchesGm013Contract()
+        {
+            var gmDir = LocateGoldenMasterDir("gm-013-backup-zip-figures-flag-matrix");
+            var expected = System.Text.Json.JsonDocument.Parse(
+                File.ReadAllText(Path.Combine(gmDir, "expected-output.json"))
+            );
+
+            // The gm-013 captured matrix lives at output.perFlag — array of
+            // { flag, entryCount, entries }. We verify the FLAG SEMANTICS contract
+            // (figures presence/absence) rather than literal entryCount byte-parity
+            // (capture environment had extras like Notes_Rolf Heij.xml).
+            var perFlag = expected
+                .RootElement.GetProperty("output")
+                .GetProperty("perFlag")
+                .EnumerateArray()
+                .ToList();
+
+            Assert.That(perFlag, Has.Count.EqualTo(3), "gm-013 captures 3 flag combinations");
+
+            string tempRoot = Path.Combine(
+                Path.GetTempPath(),
+                "paranext-cap-022-gm013",
+                Guid.NewGuid().ToString("N")
+            );
+            string projectDir = Path.Combine(tempRoot, "GmFigProj");
+            Directory.CreateDirectory(projectDir);
+            try
+            {
+                File.WriteAllText(
+                    Path.Combine(projectDir, "Settings.xml"),
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?><ScriptureText/>"
+                );
+                File.WriteAllText(
+                    Path.Combine(projectDir, "01GENGmFigProj.SFM"),
+                    "\\id GEN gm-013\n\\c 1\n\\v 1 \\fig stub|src=\"test.jpg\"\\fig*\n"
+                );
+                Directory.CreateDirectory(Path.Combine(projectDir, "figures"));
+                File.WriteAllBytes(
+                    Path.Combine(projectDir, "figures", "test.jpg"),
+                    new byte[] { 0xFF, 0xD8, 0xFF }
+                );
+
+                string logPath = Path.Combine(tempRoot, "Backup.txt");
+                BackupLogService.LogFilePathOverride = logPath;
+
+                ScrText scrText = new GmRefScrText(projectDir, "GmFigProj");
+
+                var bookSet = new BookSet();
+                for (int i = 1; i <= 66; i++)
+                    bookSet.Add(i);
+
+                // Run 1: flag=None → figures excluded
+                var destNone = Path.Combine(tempRoot, "gm013-figures-None.zip");
+                BackupOrchestrator.ExecuteBackup(
+                    scrText,
+                    destNone,
+                    bookSet,
+                    IncludeFiguresFlags.None,
+                    "gm-013 None",
+                    includeEncodingInfo: false,
+                    confirmOverwrite: false
+                );
+                var entriesNone = GetZipEntryNamesSorted(destNone);
+                Assert.That(
+                    entriesNone.Any(n => n.Contains("figures", StringComparison.OrdinalIgnoreCase)),
+                    Is.False,
+                    "INV-A06: flag=None excludes figures/"
+                );
+
+                // Run 2: flag=Figures → figures/ included
+                var destFigures = Path.Combine(tempRoot, "gm013-figures-Figures.zip");
+                BackupOrchestrator.ExecuteBackup(
+                    scrText,
+                    destFigures,
+                    bookSet,
+                    IncludeFiguresFlags.Figures,
+                    "gm-013 Figures",
+                    includeEncodingInfo: false,
+                    confirmOverwrite: false
+                );
+                var entriesFigures = GetZipEntryNamesSorted(destFigures);
+                Assert.That(
+                    entriesFigures.Any(n =>
+                        n.Contains("test.jpg", StringComparison.OrdinalIgnoreCase)
+                    ),
+                    Is.True,
+                    "INV-A06: flag=Figures includes figures/test.jpg"
+                );
+
+                // Run 3: flag=Figures|LocalFigures → figures/ included
+                var destAll = Path.Combine(tempRoot, "gm013-figures-FiguresLocalFigures.zip");
+                BackupOrchestrator.ExecuteBackup(
+                    scrText,
+                    destAll,
+                    bookSet,
+                    IncludeFiguresFlags.Figures | IncludeFiguresFlags.LocalFigures,
+                    "gm-013 Figures|LocalFigures",
+                    includeEncodingInfo: false,
+                    confirmOverwrite: false
+                );
+                var entriesAll = GetZipEntryNamesSorted(destAll);
+                Assert.That(
+                    entriesAll.Any(n => n.Contains("test.jpg", StringComparison.OrdinalIgnoreCase)),
+                    Is.True,
+                    "INV-A06: flag=Figures|LocalFigures includes figures/test.jpg"
+                );
+            }
+            finally
+            {
+                BackupLogService.LogFilePathOverride = null;
+                if (Directory.Exists(tempRoot))
+                {
+                    try
+                    {
+                        Directory.Delete(tempRoot, recursive: true);
+                    }
+                    catch
+                    {
+                        /* best-effort */
+                    }
+                }
+            }
+        }
+
+        // ZIP-entry-names helper for the gm-011/012/013 fixtures
+        private static List<string> GetZipEntryNamesSorted(string zipPath)
+        {
+            using var stream = File.OpenRead(zipPath);
+            using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+            return archive.Entries.Select(e => e.FullName).OrderBy(n => n).ToList();
+        }
+
+        // ScrText subclass with a real on-disk directory (gm-011/012/013 use this).
+        private sealed class GmRefScrText : DummyScrText
+        {
+            private readonly string _projectPath;
+
+            public GmRefScrText(string projectPath, string nameStem)
+                : base(MakeDetails(projectPath, nameStem))
+            {
+                _projectPath = projectPath;
+            }
+
+            public override string Directory => _projectPath;
+
+            private static ProjectDetails MakeDetails(string projectPath, string nameStem)
+            {
+                var id = HexId.CreateNew().ToString();
+                return new ProjectDetails(nameStem, new ProjectMetadata(id, []), projectPath);
+            }
         }
 
         // -----------------------------------------------------------------
