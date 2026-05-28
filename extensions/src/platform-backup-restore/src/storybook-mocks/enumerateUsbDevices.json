@@ -1,0 +1,20 @@
+[
+  {
+    "isRemovable": true,
+    "label": "Sample label",
+    "rootPath": "/sample/path",
+    "totalSizeBytes": 3.14
+  },
+  {
+    "isRemovable": true,
+    "label": "Sample label",
+    "rootPath": "/sample/path",
+    "totalSizeBytes": 3.14
+  },
+  {
+    "isRemovable": true,
+    "label": "Sample label",
+    "rootPath": "/sample/path",
+    "totalSizeBytes": 3.14
+  }
+]

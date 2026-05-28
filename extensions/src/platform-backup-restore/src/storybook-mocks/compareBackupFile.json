@@ -1,0 +1,13 @@
+{
+  "config": {
+    "displayOptions": "showToolbar",
+    "initialBookId": "GEN",
+    "initialChapter": 1,
+    "initialVerse": 3.14,
+    "leftLabelKey": "Sample leftLabelKey",
+    "leftSourceToken": "Sample leftSourceToken",
+    "rightLabelKey": "Sample rightLabelKey",
+    "rightSourceToken": "Sample rightSourceToken"
+  },
+  "status": null
+}
