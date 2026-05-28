@@ -1,6 +1,6 @@
-using System.Collections.Concurrent;
 using System.Text.Json;
 using Paranext.DataProvider.Services;
+using Paratext.Data;
 
 namespace Paranext.DataProvider.Projects;
 
@@ -30,15 +30,17 @@ namespace Paranext.DataProvider.Projects;
 /// <list type="bullet">
 ///   <item><strong>Study Bible Additions (<c>IsStudyBibleAdditions</c>):</strong> can host real
 ///     comments. PT9's <c>ParatextDataExtensions.CanAddNotes</c> takes an <c>allowInSba</c>
-///     escape parameter, used by <c>WordListForm.cs</c> (lines 950, 2205) to create spelling
-///     notes that flow through the normal <c>CommentManager</c> infrastructure. Stays on the
-///     regular factory; the runtime guard at <c>ParatextProjectDataProvider.cs</c> line 654
-///     remains load-bearing for the general-creation path.</item>
+///     escape parameter, used by <c>WordListForm</c> to create spelling notes that flow through
+///     the normal <c>CommentManager</c> infrastructure. Stays on the regular factory; the
+///     <c>IsStudyBibleAdditions</c> guard in
+///     <see cref="ParatextProjectDataProvider"/>.<c>VerifyUserCanCreateComments</c> remains
+///     load-bearing for the general-creation path.</item>
 ///   <item><strong><c>ProjectType.TransliterationWithEncoder</c>:</strong> has no escape hatch in
 ///     PT9's <c>CanAddNotes</c>, but we lack certainty about read-only scenarios (a project
 ///     converted to this type from another could still hold existing threads someone needs to
-///     read). Stays on the regular factory; the runtime guard at
-///     <c>ParatextProjectDataProvider.cs</c> line 660 remains load-bearing for creation.</item>
+///     read). Stays on the regular factory; the <c>TransliterationWithEncoder</c> guard in
+///     <see cref="ParatextProjectDataProvider"/>.<c>VerifyUserCanCreateComments</c> remains
+///     load-bearing for creation.</item>
 ///   <item><strong>Note-only project types</strong> (<c>ConsultantNotes</c>,
 ///     <c>GlobalConsultantNotes</c>, <c>GlobalAnthropologyNotes</c>): filtered out before any
 ///     factory sees them by <c>ScrTextCollection.ScrTexts(IncludeProjects.ScriptureOnly)</c>.
@@ -53,32 +55,20 @@ namespace Paranext.DataProvider.Projects;
 /// factory exists to fix.
 /// </para>
 /// </summary>
-internal class ParatextPublishedProjectDataProviderFactory : ProjectDataProviderFactory
+internal class ParatextPublishedProjectDataProviderFactory : ParatextProjectDataProviderFactoryBase
 {
     internal const string PDPF_NAME = "ParatextPublished";
-    private readonly LocalParatextProjects _paratextProjects;
-    private readonly ConcurrentDictionary<string, ParatextProjectDataProvider> _pdpMap = new();
-    private readonly object _creationLock = new();
-    private readonly Random _random = new((int)DateTime.Now.Ticks);
 
     public ParatextPublishedProjectDataProviderFactory(
         PapiClient papiClient,
         LocalParatextProjects paratextProjects
     )
         : base(
+            papiClient,
+            paratextProjects,
             LocalParatextProjects.GetParatextProjectInterfaces(isPublished: true),
-            PDPF_NAME,
-            papiClient
-        )
-    {
-        _paratextProjects = paratextProjects;
-    }
-
-    protected override Task StartFactoryAsync()
-    {
-        _paratextProjects.Initialize();
-        return Task.CompletedTask;
-    }
+            PDPF_NAME
+        ) { }
 
     protected override List<ProjectMetadata>? GetAvailableProjects(JsonElement _ignore)
     {
@@ -88,73 +78,28 @@ internal class ParatextPublishedProjectDataProviderFactory : ProjectDataProvider
             .ToList();
     }
 
-    public override string GetProjectDataProviderID(string projectID)
+    // Unpublished projects (ScrText.IsResourceProject == false) belong to
+    // ParatextProjectDataProviderFactory. Reject them here so they don't accidentally get served by
+    // the published factory. Using IsResourceProject directly - rather than an inverse check on
+    // advertised interfaces - keeps this factory's contract honest as the class doc-comment
+    // describes: this factory is for ResourceScrText/JoinedScrText projects only, and any future
+    // restricted-interface project type that is not a resource project should fall through to its
+    // own dedicated factory rather than slipping into this one.
+    protected override bool ShouldServeProject(ScrText scrText)
     {
-        projectID = projectID.ToUpperInvariant();
-
-        if (_pdpMap.TryGetValue(projectID, out var existingPdp))
-            return existingPdp.DataProviderName;
-
-        lock (_creationLock)
-        {
-            if (_pdpMap.TryGetValue(projectID, out var existingPdpInLock))
-                return existingPdpInLock.DataProviderName;
-
-            ProjectDetails details;
-            try
-            {
-                details = _paratextProjects.GetProjectDetails(projectID);
-            }
-            catch (KeyNotFoundException)
-            {
-                throw new KeyNotFoundException("Unknown project ID: " + projectID);
-            }
-
-            // Unpublished projects belong to ParatextProjectDataProviderFactory. Reject them here
-            // (identified by the presence of legacyCommentManager.comments in their advertised
-            // interfaces) so they don't accidentally get served by the published factory.
-            if (details.Metadata.ProjectInterfaces.Contains(ProjectInterfaces.LEGACY_COMMENT))
-            {
-                throw new KeyNotFoundException(
-                    $"Project {projectID} is not published and cannot be served by this factory"
-                );
-            }
-
-            var name = new string(
-                Enumerable.Range(0, 30).Select(_ => (char)_random.Next(65, 90)).ToArray()
-            );
-
-            var newPdp = new ParatextProjectDataProvider(
-                name,
-                PapiClient,
-                details,
-                _paratextProjects
-            );
-            if (!_pdpMap.TryAdd(projectID, newPdp))
-                throw new InvalidOperationException("Internal error adding project data provider");
-
-            ThreadingUtils.RunTask(
-                newPdp.RegisterDataProviderAsync(),
-                $"Register published PDP {newPdp.DataProviderName} for project {details.Name}",
-                ThreadingUtils.DefaultTimeout
-            );
-            return newPdp.DataProviderName;
-        }
+        return scrText.IsResourceProject;
     }
 
-    /// <summary>
-    /// Get an existing PDP if it exists for a project id. Symmetrical with
-    /// <see cref="ParatextProjectDataProviderFactory.GetExistingProjectDataProvider"/> so the
-    /// unpublished-side callers (ManageBooksService, ParatextProjectSendReceiveService) have a
-    /// parallel hook if they ever need one - but published projects don't currently flow through
-    /// send/receive or manage-books, so no caller change is required.
-    /// </summary>
-    public ParatextProjectDataProvider? GetExistingProjectDataProvider(string projectID)
+    protected override string GetCrossFactoryRejectionMessage(string projectID)
     {
-        projectID = projectID.ToUpperInvariant();
+        return $"Project {projectID} is not published and cannot be served by this factory";
+    }
 
-        if (_pdpMap.TryGetValue(projectID, out var existingPdp))
-            return existingPdp;
-        return null;
+    protected override string GetRegistrationTaskDescription(
+        ParatextProjectDataProvider pdp,
+        ProjectDetails details
+    )
+    {
+        return $"Register published PDP {pdp.DataProviderName} for project {details.Name}";
     }
 }

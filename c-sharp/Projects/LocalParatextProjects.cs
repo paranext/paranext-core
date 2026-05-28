@@ -1,4 +1,3 @@
-using System.Xml;
 using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Users;
 using Paratext.Data;
@@ -115,10 +114,15 @@ internal class LocalParatextProjects
         }
     }
 
+    /// <summary>
+    /// All available Paratext projects (the union of <see cref="GetAvailableUnpublishedProjectDetails"/>
+    /// and <see cref="GetAvailablePublishedProjectDetails"/>). Defined in terms of the partition
+    /// helpers so future filtering added to either partition automatically applies here too.
+    /// </summary>
     public IEnumerable<ProjectDetails> GetAllProjectDetails()
     {
-        var allScrTexts = GetVisibleScrTexts();
-        return allScrTexts.Select(scrText => scrText.GetProjectDetails());
+        return GetAvailableUnpublishedProjectDetails()
+            .Concat(GetAvailablePublishedProjectDetails());
     }
 
     /// <summary>
@@ -170,9 +174,6 @@ internal class LocalParatextProjects
         return retVal;
     }
 
-    public static List<string> GetParatextProjectInterfaces() =>
-        GetParatextProjectInterfaces(isPublished: false);
-
     public static List<string> GetParatextProjectInterfaces(bool isPublished)
     {
         var source = isPublished
@@ -219,47 +220,6 @@ internal class LocalParatextProjects
             ProjectPath = projectPath,
         };
         ScrTextCollection.Add(new ScrText(projectName, RegistrationInfo.DefaultUser));
-    }
-
-    private static ProjectDetails? LoadProjectDetails(
-        string projectHomeDir,
-        out string errorMessage
-    )
-    {
-        string settingsFilePath = Path.Combine(projectHomeDir, PROJECT_SETTINGS_FILE);
-        if (!File.Exists(settingsFilePath))
-        {
-            errorMessage = $"Ignoring project without Settings.xml file: {projectHomeDir}";
-            return null;
-        }
-
-        var settings = new XmlDocument();
-        settings.Load(settingsFilePath);
-
-        // ScrText always prioritizes the folder name over the Name setting as the "name" even when
-        // accessing scrText.Settings.Name. So we're copying Paratext's functionality here and using
-        // the folder name instead of Settings.Name.
-        // https://github.com/ubsicap/Paratext/blob/aaadecd828a9b02e6f55d18e4c5dda8703ce2429/ParatextData/ScrText.cs#L258
-        // Removing extension twice because file may be in form name.id.ext to match Paratext
-        // https://github.com/ubsicap/Paratext/blob/aaadecd828a9b02e6f55d18e4c5dda8703ce2429/ParatextData/ScrTextCollection.cs#L1661
-        var shortName = Path.GetFileNameWithoutExtension(
-            Path.GetFileNameWithoutExtension(projectHomeDir)
-        );
-
-        var idNode = settings.SelectSingleNode("/ScriptureText/Guid");
-        if (idNode == null)
-        {
-            errorMessage = $"Could not find Guid in Settings.xml of {projectHomeDir}";
-            return null;
-        }
-        var id = idNode.InnerText;
-
-        var metadata = new ProjectMetadata(id, GetParatextProjectInterfaces());
-
-        var details = new ProjectDetails(shortName, metadata, projectHomeDir);
-
-        errorMessage = "";
-        return details;
     }
 
     private void SetUpProjectRootFolder()
