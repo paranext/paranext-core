@@ -587,6 +587,8 @@ export function EnhancedResourceWebView({
   }
 
   const showShellEmpty = usj === undefined && !scripturePaneError;
+  if (showShellEmpty)
+    console.warn('[ER] tab bar hidden — usj:', usj, 'scripturePaneError:', scripturePaneError);
 
   return (
     <div className={cn('tw-flex tw-h-[100dvh] tw-flex-col tw-bg-background')}>
@@ -1284,6 +1286,14 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
           `Enhanced Resources: failed to load chapter ${scrRef.book} ${scrRef.chapterNum}: ${
             err instanceof Error ? err.message : String(err)
           }`,
+        );
+        console.warn(
+          '[ER] chapter load failed — tab bar will disappear. book:',
+          scrRef.book,
+          'chapter:',
+          scrRef.chapterNum,
+          'error:',
+          err,
         );
         setUsj(undefined);
         setAnnotations([]);
