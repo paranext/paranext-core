@@ -49,12 +49,16 @@ internal static class BackupFlagsMapper
     /// </returns>
     public static IncludeFiguresFlags MapFromCheckbox(bool includeFullSizeFigures)
     {
-        // RED-STATE STUB — body lands in the tdd-implementer GREEN step for CAP-016.
-        // Do NOT remove the throw without implementing the mapping; the test suite
-        // expects this method to throw NotImplementedException until GREEN.
-        throw new NotImplementedException(
-            "BackupFlagsMapper.MapFromCheckbox is RED-state. "
-                + "Implementation lands in the tdd-implementer GREEN step for CAP-016."
-        );
+        // PT9 equivalent (BackupForm.cs:204-208) — the ternary passed as the 5th
+        // argument to Backup.BackupScrText:
+        //   chkIncludeFullSizeFigures.Checked
+        //     ? Backup.IncludeFiguresFlags.LocalFigures | Backup.IncludeFiguresFlags.Figures
+        //     : Backup.IncludeFiguresFlags.Figures
+        // Bitwise OR is commutative, so PT9's `LocalFigures | Figures` is equivalent
+        // to PT10's `Figures | LocalFigures` — we use PT10's enum declaration order
+        // (Figures first, then LocalFigures).
+        return includeFullSizeFigures
+            ? IncludeFiguresFlags.Figures | IncludeFiguresFlags.LocalFigures
+            : IncludeFiguresFlags.Figures;
     }
 }
