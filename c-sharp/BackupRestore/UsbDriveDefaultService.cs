@@ -1,4 +1,4 @@
-using System;
+using System.Collections.Generic;
 
 namespace Paranext.DataProvider.BackupRestore;
 
@@ -77,19 +77,15 @@ internal static class UsbDriveDefaultService
     /// </returns>
     public static string? GetDefaultBackupFolder()
     {
-        // EXPLANATION (RED-state stub):
-        // Implementation lands in the tdd-implementer GREEN step for CAP-013.
-        // Intended GREEN body (per backend-alignment.md §EXT-101 + strategic
-        // plan §CAP-013 Success Criteria — must not double-enumerate):
-        //
-        //     IReadOnlyList<StorageDevice> devices = UsbDeviceEnumerator.Enumerate();
-        //     return devices.Count == 1 ? devices[0].RootPath : null;
-        //
-        // The "exactly 1" predicate matches PT9's `usbDrives.Count == 1`
-        // literal (BackupForm.cs:60).
-        throw new NotImplementedException(
-            "UsbDriveDefaultService.GetDefaultBackupFolder is RED-state. "
-                + "Implementation lands in the tdd-implementer GREEN step for CAP-013."
-        );
+        // EXPLANATION:
+        // Snapshot Enumerate() to a local so the "exactly 1" predicate and the
+        // RootPath read both go through the SAME list — never invoke Enumerate()
+        // twice. Strategic-plan §CAP-013 Success Criterion pins this:
+        // "the heuristic does not double-enumerate". The "Count == 1" predicate
+        // matches PT9's `usbDrives.Count == 1` literal (BackupForm.cs:60).
+        // No try/catch — UsbDeviceEnumerator.Enumerate is contractually
+        // never-throwing (returns an empty list on OS-level failure).
+        IReadOnlyList<StorageDevice> devices = UsbDeviceEnumerator.Enumerate();
+        return devices.Count == 1 ? devices[0].RootPath : null;
     }
 }
