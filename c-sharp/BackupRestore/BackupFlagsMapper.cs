@@ -1,5 +1,3 @@
-using System;
-
 namespace Paranext.DataProvider.BackupRestore;
 
 /// <summary>
@@ -49,6 +47,7 @@ internal static class BackupFlagsMapper
     /// </returns>
     public static IncludeFiguresFlags MapFromCheckbox(bool includeFullSizeFigures)
     {
+        // EXPLANATION:
         // PT9 equivalent (BackupForm.cs:204-208) — the ternary passed as the 5th
         // argument to Backup.BackupScrText:
         //   chkIncludeFullSizeFigures.Checked
