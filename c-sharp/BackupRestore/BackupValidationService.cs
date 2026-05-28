@@ -87,7 +87,27 @@ internal static class BackupValidationService
         string destFileSpec
     )
     {
-        throw new System.NotImplementedException();
+        // EXPLANATION:
+        // PT9's three independent `if/return false` blocks become three short-circuit
+        // checks here. Order matters: rule 1 (resource project) wins over rule 2
+        // (empty userName) wins over rule 3 (invalid path), matching the precedence
+        // implied by PT9's `return false;` after each ErrorProvider.SetError call.
+        // Test cases 2 + 4 + the first-failure tests pin this ordering.
+        if (isProtectedText)
+            return new BackupValidationResult(
+                false,
+                "%backup_resourceProjectNotBackupable%",
+                "projectId"
+            );
+
+        if (string.IsNullOrEmpty(userName))
+            return new BackupValidationResult(false, "%backup_userNameRequired%", "userName");
+
+        if (!IsFileSpecValid(destFileSpec))
+            return new BackupValidationResult(false, "%backup_invalidDestPath%", "destinationPath");
+
+        // All-pass sentinel: IsValid=true, both error fields empty strings (not null).
+        return new BackupValidationResult(true, "", "");
     }
 
     // === PORTED FROM PT9 ===
@@ -140,6 +160,54 @@ internal static class BackupValidationService
         string destFileSpec
     )
     {
-        throw new System.NotImplementedException();
+        // Composite gate (PT9 BackupForm.cs:112-114):
+        //   cmdOK.Enabled = ValidateData()
+        //                && (selectedBooks.Count > 0 || isNoteType)     // INV-B03 Notes-bypass
+        //                && txtTo.Text != "";                            // VAL-B04 gate-only
+        return result.IsValid
+            && (selectedBookCount > 0 || isNoteType)
+            && !string.IsNullOrEmpty(destFileSpec);
+    }
+
+    // === NEW IN PT10 ===
+    // Reason: PT9 used FileUtils.FileSpecIsValid (a Windows-targeted character validator
+    // that ships with the WinForms-era Paratext codebase). That helper is not present in
+    // paranext-core. This is a minimal port preserving PT9's intent: reject paths
+    // containing characters that are illegal on the Windows file system. We hard-code
+    // the Windows invalid-char set rather than calling Path.GetInvalidPathChars(), since
+    // the latter is platform-dependent (macOS returns only '\0' and '/', which would
+    // accept Windows-invalid strings like "<illegal:chars>" — diverging from PT9's
+    // Windows-only behaviour). PT9 was Windows-only, so its validator effectively used
+    // the Windows set on every install; we replicate that here regardless of host OS.
+    // Maps to: EXT-102 (rule 3 — `!FileUtils.FileSpecIsValid(txtTo.Text)`)
+    /// <summary>
+    /// Returns whether <paramref name="fileSpec"/> contains only characters that are
+    /// legal in a Windows path. A minimal port of PT9's <c>FileUtils.FileSpecIsValid</c>
+    /// preserving its Windows-set semantics on every host OS.
+    /// </summary>
+    /// <remarks>
+    /// Empty strings are treated as valid here — the empty-dest case is handled
+    /// separately by <see cref="IsOkGateOpen"/>'s non-empty check (VAL-B04 is a
+    /// gate-only failure, not a <see cref="ValidateData"/> error). Null is treated
+    /// as invalid (defensive — PT9's <c>txtTo.Text</c> can never be null but the
+    /// PT10 contract doesn't enforce that).
+    /// </remarks>
+    private static bool IsFileSpecValid(string fileSpec)
+    {
+        if (fileSpec == null)
+            return false;
+
+        // Windows invalid path chars (the union used by Path.GetInvalidPathChars()
+        // on Windows): < > : " | ? * and control chars \0..\x1F.
+        // Hard-coded so the check is consistent across host OS (PT9 parity).
+        foreach (char c in fileSpec)
+        {
+            if (c < 32)
+                return false;
+            if (c == '<' || c == '>' || c == ':' || c == '"' || c == '|' || c == '?' || c == '*')
+                return false;
+        }
+
+        return true;
     }
 }
