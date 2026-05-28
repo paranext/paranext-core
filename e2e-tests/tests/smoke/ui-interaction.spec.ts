@@ -15,7 +15,7 @@ test.describe('UI Interaction', () => {
   // The settings `set` handler internally awaits `waitForResyncContributions()`,
   // which blocks until `extensionService.initialize()` finishes in the extension
   // host. On slow CI that can exceed the default 10s PAPI request timeout.
-  const SLOW_CI_PAPI_TIMEOUT_MS = 90_000;
+  const SLOW_CI_PAPI_TIMEOUT_MS = 30_000;
 
   test.beforeAll(async ({ electronApp }) => {
     // Maximize the window once so everything is visible and clickable for all tests
