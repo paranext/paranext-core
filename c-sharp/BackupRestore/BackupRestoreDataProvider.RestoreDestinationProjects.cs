@@ -59,10 +59,10 @@ internal sealed partial class BackupRestoreDataProvider
     /// MUST NOT touch this.
     /// </summary>
     /// <remarks>
-    /// When <c>null</c>, the GREEN-state implementer SHOULD wire the default to a
-    /// per-instance service injected via the facade's constructor (CAP-001 BE-7).
-    /// CAP-009 RED-state ships only the test seam — production wiring is GREEN-state
-    /// work.
+    /// Today this seam is the ONLY injection mechanism for the underlying
+    /// <see cref="RestoreDestinationProjectsService"/>. CAP-001 BE-7 owns the
+    /// production wiring — it will inject a per-instance service via the facade's
+    /// constructor and remove the need for this seam outside tests.
     /// </remarks>
     internal static RestoreDestinationProjectsService? RestoreDestinationProjectsServiceOverride { get; set; }
 
