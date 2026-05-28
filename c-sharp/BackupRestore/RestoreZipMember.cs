@@ -18,6 +18,10 @@ namespace Paranext.DataProvider.BackupRestore;
 //     for the BHV-322 Hide-Same-Files filter (REVIEW-FLAG-7 — the filter uses raw CRC
 //     equality, NOT `ComparisonResult == FilesAreSame`). The UI layer reads `CRC` directly
 //     off the row's underlying source/destination file when applying the filter.
+//     CAP-020 (EXT-204 CompareToBackupBridgeService) extends this with `BookNum` — the
+//     ParatextData book number needed to derive the `InitialBookId` field of
+//     `FileCompareConfig` (PT9 parity: `RestoreForm.cs:681` builds the comparison verse-ref
+//     via `new VerseRef(sdfi.SourceFile.BookNum, 1, 0, ...)`).
 //   * PT9 declared `FileName` as a public field; PT10 uses an auto-property to satisfy
 //     Roslyn analyzers.
 /// <summary>
@@ -51,4 +55,16 @@ public sealed class RestoreZipMember
     /// <c>sourceCrc: number</c>).
     /// </summary>
     public uint CRC { get; set; }
+
+    /// <summary>
+    /// The ParatextData book number for this ZIP entry (1 = GEN, 40 = MAT, etc.), or
+    /// <c>0</c> for non-book entries (settings, ldml, custom styles, etc.).
+    /// PT9 parity: <c>RestoreZipMember.BookNum</c> (PT9 RestoreZipMember.cs:94-97)
+    /// returns <c>classifier.BookNum</c> via <c>ProjectFileClassifier</c>. PT10 stores it
+    /// as a settable property so callers (the M-002 file-plan builder; test fixtures) can
+    /// populate it when classifying ZIP entries.
+    /// Used by CAP-020 (EXT-204 <see cref="CompareToBackupBridgeService"/>) to derive
+    /// <c>FileCompareConfig.InitialBookId</c> via <c>SIL.Scripture.Canon.BookNumberToId</c>.
+    /// </summary>
+    public int BookNum { get; set; }
 }

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text.Json;
 using Paranext.DataProvider.BackupRestore;
 using Paratext.Data;
+using SIL.Scripture;
 
 namespace TestParanextDataProvider.BackupRestore
 {
@@ -314,6 +315,177 @@ namespace TestParanextDataProvider.BackupRestore
                 receivedKey,
                 Is.EqualTo(expectedAlertKey),
                 $"gm-010: callback must receive the alert key '{expectedAlertKey}'"
+            );
+        }
+
+        // -----------------------------------------------------------------
+        // gm-031 — FN-001 CompareFiles bridge (CAP-020 / EXT-204).
+        //
+        // The golden master was captured against PT9's
+        //   DiffToolConfigurationInfo.ForGetPutTexts(scrText, "File from Zip",
+        //     sourceMember, null, "File in Project", destMember, null,
+        //     new VerseRef("GEN 1:1", ...), DiffToolDisplayOptions.ShowToolbar)
+        // factory call. PT10's CompareToBackupBridgeService.BuildCompareConfig produces a
+        // different shape (FileCompareConfig — see the // === PORTED FROM PT9 === block in
+        // CompareToBackupBridgeService.cs and FileCompareConfig.cs).
+        //
+        // The captured fields and their PT10 mapping (per implementation/plans/test-writer-CAP-020.md):
+        //   paneCaption1 "File from Zip"  → LeftLabelKey  = "%restoreForm_fileFromZip%"
+        //   paneCaption2 "File in Project"→ RightLabelKey = "%restoreForm_fileInProject%"
+        //   displayOptions "ShowToolbar"  → DisplayOptions = DiffToolDisplayOptions.ShowToolbar
+        //   sourceBookNum 1               → InitialBookId = "GEN" (Canon.BookNumberToId(1))
+        //   verseRef "GEN 1:1"            → (InitialChapter=1, InitialVerse=0 — PT9 source
+        //                                   constructs `new VerseRef(BookNum, 1, 0, ...)` at
+        //                                   RestoreForm.cs:681; the captured "GEN 1:1" is
+        //                                   the PT9 VerseRef.ToString() normalised render)
+        //   textPutter1IsNull / textPutter2IsNull → STRUCTURALLY enforced by FileCompareConfig
+        //                                          having no putter fields (INV-C01); not
+        //                                          asserted as a runtime field here
+        //   scrText1EqualsScrText2 → PT9 quirk (INV-C02). PT10 does NOT replicate; the
+        //                            FileCompareConfig record carries no ScrText fields.
+        // -----------------------------------------------------------------
+
+        [Test]
+        [Category("GoldenMaster")]
+        [Property("CapabilityId", "CAP-020")]
+        [Property("ExtractionId", "EXT-204")]
+        [Property("BehaviorId", "BHV-500")]
+        [Property("InvariantId", "INV-C01")]
+        [Property("ScenarioId", "TS-097")]
+        public void BuildCompareConfig_FromGm031_MatchesGoldenMaster()
+        {
+            // Arrange — load the golden master
+            var gmDir = LocateGoldenMasterDir("gm-031-fn001-comparefiles-bridge");
+            var input = JsonDocument.Parse(File.ReadAllText(Path.Combine(gmDir, "input.json")));
+            var expected = JsonDocument.Parse(
+                File.ReadAllText(Path.Combine(gmDir, "expected-output.json"))
+            );
+
+            // Pull the captured fields from expected-output.json's `output` block
+            var output = expected.RootElement.GetProperty("output");
+            string capturedPaneCaption1 = output.GetProperty("paneCaption1").GetString()!;
+            string capturedPaneCaption2 = output.GetProperty("paneCaption2").GetString()!;
+            string capturedDisplayOptions = output.GetProperty("displayOptions").GetString()!;
+            int capturedSourceBookNum = output.GetProperty("sourceBookNum").GetInt32();
+            string capturedSourceZipMember = output.GetProperty("sourceZipMember").GetString()!;
+            bool capturedPutter1Null = output.GetProperty("textPutter1IsNull").GetBoolean();
+            bool capturedPutter2Null = output.GetProperty("textPutter2IsNull").GetBoolean();
+
+            // Pull the input filename from input.json (parameters.zipMemberFileName.value)
+            string inputZipMemberFileName = input
+                .RootElement.GetProperty("parameters")
+                .GetProperty("zipMemberFileName")
+                .GetProperty("value")
+                .GetString()!;
+
+            // Sanity-check the captured PT9 shape before mapping
+            Assert.That(
+                capturedPaneCaption1,
+                Is.EqualTo("File from Zip"),
+                "gm-031 captures the PT9 English-default left pane caption (RestoreForm_25)"
+            );
+            Assert.That(
+                capturedPaneCaption2,
+                Is.EqualTo("File in Project"),
+                "gm-031 captures the PT9 English-default right pane caption (RestoreForm_26)"
+            );
+            Assert.That(
+                capturedDisplayOptions,
+                Is.EqualTo("ShowToolbar"),
+                "gm-031 captures DiffToolDisplayOptions.ShowToolbar for the B/R flow (BHV-502)"
+            );
+            Assert.That(
+                capturedSourceBookNum,
+                Is.EqualTo(1),
+                "gm-031 captures the GEN book (book number 1)"
+            );
+            Assert.That(
+                capturedSourceZipMember,
+                Is.EqualTo(inputZipMemberFileName),
+                "gm-031 source zip member matches the input parameters.zipMemberFileName.value"
+            );
+            Assert.That(
+                capturedPutter1Null && capturedPutter2Null,
+                Is.True,
+                "gm-031 captures null IPutters on BOTH panes (INV-C01 — all 5 PT9 callers "
+                    + "pass null putters)"
+            );
+
+            // Arrange — build the PT10 inputs that mirror the captured gm-031 fixture
+            string sessionId = "gm-031-session";
+            var selectedRow = new RestoreFileInfo
+            {
+                SourceFile = new RestoreZipMember
+                {
+                    FileName = inputZipMemberFileName,
+                    BookNum = capturedSourceBookNum,
+                },
+                DestinationFile = new RestoreZipMember
+                {
+                    FileName = inputZipMemberFileName,
+                    BookNum = capturedSourceBookNum,
+                },
+                ComparisonResult = PtwFileComparisonStates.SourceIsNewer,
+            };
+            ScrText destination = new DummyScrText();
+            ScrVers sourceVersification = ScrVers.English;
+
+            // Act
+            FileCompareConfig config = CompareToBackupBridgeService.BuildCompareConfig(
+                selectedRow,
+                destination,
+                sourceVersification,
+                sessionId
+            );
+
+            // Assert — captured PT9 fields map to PT10 record fields
+            Assert.That(
+                config.LeftLabelKey,
+                Is.EqualTo("%restoreForm_fileFromZip%"),
+                "gm-031: PT9 paneCaption1 \"File from Zip\" → PT10 LeftLabelKey "
+                    + "%restoreForm_fileFromZip% (RestoreForm_25 localize key)"
+            );
+            Assert.That(
+                config.RightLabelKey,
+                Is.EqualTo("%restoreForm_fileInProject%"),
+                "gm-031: PT9 paneCaption2 \"File in Project\" → PT10 RightLabelKey "
+                    + "%restoreForm_fileInProject% (RestoreForm_26 localize key)"
+            );
+            Assert.That(
+                config.DisplayOptions,
+                Is.EqualTo(DiffToolDisplayOptions.ShowToolbar),
+                "gm-031: PT9 displayOptions \"ShowToolbar\" → PT10 DiffToolDisplayOptions.ShowToolbar"
+            );
+            Assert.That(
+                config.InitialBookId,
+                Is.EqualTo("GEN"),
+                $"gm-031: PT9 sourceBookNum {capturedSourceBookNum} → PT10 InitialBookId "
+                    + "\"GEN\" via Canon.BookNumberToId"
+            );
+            Assert.That(
+                config.InitialChapter,
+                Is.EqualTo(1),
+                "gm-031: PT9 source `new VerseRef(BookNum, 1, 0, ...)` constructor parity → "
+                    + "PT10 InitialChapter 1"
+            );
+            Assert.That(
+                config.InitialVerse,
+                Is.EqualTo(0),
+                "gm-031: PT9 source `new VerseRef(BookNum, 1, 0, ...)` constructor parity → "
+                    + "PT10 InitialVerse 0 (the captured \"GEN 1:1\" is the VerseRef.ToString() "
+                    + "render of (GEN, 1, 0); the structural truth is chapter=1 verse=0)"
+            );
+            Assert.That(
+                config.LeftSourceToken,
+                Is.EqualTo($"tok-src-{sessionId}-{inputZipMemberFileName}"),
+                "gm-031: PT10 LeftSourceToken is the session-scoped opaque handle "
+                    + "tok-src-{sessionId}-{fileId} (per strategic-plan §CAP-020 line 502)"
+            );
+            Assert.That(
+                config.RightSourceToken,
+                Is.EqualTo($"tok-dst-{sessionId}-{inputZipMemberFileName}"),
+                "gm-031: PT10 RightSourceToken is the session-scoped opaque handle "
+                    + "tok-dst-{sessionId}-{fileId} (per strategic-plan §CAP-020 line 502)"
             );
         }
 
