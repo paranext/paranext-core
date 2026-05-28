@@ -38,6 +38,13 @@ namespace Paranext.DataProvider.BackupRestore;
 /// </remarks>
 internal static class BackupValidationService
 {
+    // Windows invalid path characters used by IsFileSpecValid — the union returned by
+    // Path.GetInvalidPathChars() on Windows, minus the C0 control-char range (\0..\x1F),
+    // which IsFileSpecValid checks separately as a range. Hard-coded so the file-spec
+    // validator is consistent across host OS (PT9 was Windows-only; macOS / Linux's
+    // Path.GetInvalidPathChars() returns only {'\0', '/'} and would otherwise diverge).
+    private static readonly char[] WindowsInvalidPathChars = { '<', '>', ':', '"', '|', '?', '*' };
+
     // === PORTED FROM PT9 ===
     // Source: Paratext/BackupRestore/BackupForm.cs:220-249 (ValidateData)
     // Maps to: EXT-102 / BHV-308 / INV-B01 / INV-B02 / INV-B04 / VAL-B01 / VAL-B02 / VAL-B03
@@ -197,14 +204,17 @@ internal static class BackupValidationService
         if (fileSpec == null)
             return false;
 
-        // Windows invalid path chars (the union used by Path.GetInvalidPathChars()
-        // on Windows): < > : " | ? * and control chars \0..\x1F.
-        // Hard-coded so the check is consistent across host OS (PT9 parity).
+        // EXPLANATION:
+        // Two-part rejection: (a) any C0 control char (\0..\x1F) — a contiguous range,
+        // so a single comparison is more compact than enumerating 32 chars in a set; and
+        // (b) any character in WindowsInvalidPathChars — the fixed Windows path-illegal
+        // set declared at the top of the class. Empty strings pass here — the empty-dest
+        // case is gate-only and handled by IsOkGateOpen (VAL-B04).
         foreach (char c in fileSpec)
         {
             if (c < 32)
                 return false;
-            if (c == '<' || c == '>' || c == ':' || c == '"' || c == '|' || c == '?' || c == '*')
+            if (Array.IndexOf(WindowsInvalidPathChars, c) >= 0)
                 return false;
         }
 
