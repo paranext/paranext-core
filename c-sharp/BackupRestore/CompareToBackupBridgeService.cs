@@ -153,44 +153,20 @@ internal static class CompareToBackupBridgeService
     )
     {
         // EXPLANATION:
-        // Pure record-construction over the inputs — no branches. Field-by-field rationale:
+        // Pure record-construction over the inputs — no branches. The file-header block
+        // above documents PT9 parity, BHV/INV/TS labels, and the token-format spec; the
+        // notes below cover only the body-specific executable choices.
         //
-        //   LeftLabelKey / RightLabelKey: Constant localize keys. PT9 calls
-        //     `Localizer.Str("RestoreForm_25", "File from Zip")` / `RestoreForm_26` at the
-        //     RestoreForm.cs:683-685 call site; PT10 returns the localize key and the React
-        //     renderer resolves it via the localization service (Localization-Guide.md).
+        // The two locals factor a single null-safe dereference of `selectedRow.SourceFile`
+        // — TS-087 defensive (the type allows null even though only non-DestDoesNotExist
+        // rows reach this method in production per BHV-320). The `?? 0` and `?? ""`
+        // defaults are both harmless: `Canon.BookNumberToId(0)` returns "" (non-book ZIP
+        // entries like settings.xml), and an empty-string filename yields a still-unique
+        // session-scoped token of the form `tok-src-{sessionId}-`.
         //
-        //   InitialBookId: `Canon.BookNumberToId(sourceBookNum)` maps the PT9 book number
-        //     (1..66) to the canonical 3-letter ID. PT9 parity: RestoreForm.cs:681 builds
-        //     the comparison verse-ref from `sdfi.SourceFile.BookNum`. Null-safe access on
-        //     SourceFile (TS-087 defensive — when DestinationFile is null we still have a
-        //     valid SourceFile in practice, but the type allows null so we guard); BookNum=0
-        //     maps to "" via Canon (non-book entries like settings.xml).
-        //
-        //   InitialChapter / InitialVerse: Hard-coded (1, 0) per PT9 parity at
-        //     RestoreForm.cs:681 — `new VerseRef(BookNum, 1, 0, restorer.SourceSettings.Versification)`.
-        //     The PT9 VerseRef.ToString() of (book, 1, 0) renders as "GEN 1:0" (or normalised
-        //     to "GEN 1:1" in some captures); PT10 keeps the constructor-shape (1, 0) for
-        //     byte parity with the PT9 call site.
-        //
-        //   LeftSourceToken / RightSourceToken: Both key off `SourceFile.FileName` (NOT
-        //     DestinationFile.FileName) — TS-087 defensive test requires the right-token to
-        //     remain computable when DestinationFile is null. Strategic-plan §CAP-020 line
-        //     502 pins the format `tok-src-{sessionId}-{fileId}` / `tok-dst-{sessionId}-{fileId}`;
-        //     the consumer DifferencesToolView component passes these back to a future
-        //     `getCompareSourceContent` command (M-011) which uses the session registry to
-        //     resolve them. The token-format is internal to the backend — opaque to the wire.
-        //
-        //   DisplayOptions: Hard-coded `ShowToolbar`. PT9 parity: RestoreForm.cs:692 passes
-        //     `DiffToolDisplayOptions.ShowToolbar` (BHV-502). The B/R flow always uses this;
-        //     the other enum value (ShowToolbarAndUncommon) is reserved for future
-        //     non-B/R callers (Manage Books).
-        //
-        //   `destination` + `sourceVersification` parameters are RESERVED HOOKS per
-        //     strategic-plan-backend.md §CAP-020 and INV-C02. The production body MUST NOT
-        //     read them — INV-C02's differential test verifies two calls with different
-        //     destinations produce record-equal configs. They stay in the signature because
-        //     future capabilities may wire them in (e.g., versification defaulting at M-004).
+        // BOTH tokens key off `SourceFile.FileName` (NOT `DestinationFile.FileName`) —
+        // TS-087 requires the right-token to remain computable when DestinationFile is
+        // null. The gm-031 golden master also pins this source-side keying.
         int sourceBookNum = selectedRow.SourceFile?.BookNum ?? 0;
         string sourceFileName = selectedRow.SourceFile?.FileName ?? string.Empty;
 
