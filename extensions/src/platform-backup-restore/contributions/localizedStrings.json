@@ -33,7 +33,31 @@
       "%backup_form_overwrite_message%": "A backup file already exists at this location. Overwrite it?",
       "%backup_form_overwrite_confirm%": "Overwrite",
       "%backup_form_progress_title%": "Backing up",
-      "%backup_form_progress_message%": "Backup in progress…"
+      "%backup_form_progress_message%": "Backup in progress…",
+      "%restore_file_list_column_files_in_backup%": "Files In Backup",
+      "%restore_file_list_column_files_on_disk%": "Files On Hard Disk",
+      "%restore_file_list_aria_label%": "Backup file list",
+      "%restore_file_list_select_all_button%": "Select All Files",
+      "%restore_file_list_deselect_all_button%": "Deselect All Files",
+      "%restore_file_list_view_differences_button%": "View Differences",
+      "%restore_file_list_context_menu_view_differences%": "View differences between files",
+      "%restore_file_list_context_menu_cannot_compare%": "Cannot compare files",
+      "%restore_file_list_status_group_new%": "New (not on disk)",
+      "%restore_file_list_status_group_newer%": "Newer in backup",
+      "%restore_file_list_status_group_older%": "Older in backup",
+      "%restore_file_list_status_group_same%": "Same in both",
+      "%restore_file_list_status_group_undetermined%": "Undetermined",
+      "%restore_file_list_downgrade_confirm_title%": "Overwrite Warning!",
+      "%restore_file_list_downgrade_confirm_body%": "The file you want to restore has a lower version number than the file on the hard disk. Are you sure you want to restore this file?",
+      "%restore_file_list_downgrade_confirm_yes%": "Yes",
+      "%restore_file_list_downgrade_confirm_no%": "No",
+      "%RestoreForm_18%": "The file in backup does not exist on the hard disk",
+      "%RestoreForm_19%": "These two files are identical",
+      "%RestoreForm_20%": "These two files have same version number",
+      "%RestoreForm_21%": "The file in the backup has a newer version number than the file on hard disk",
+      "%RestoreForm_22%": "The file in backup has an older version number than the file on hard disk",
+      "%RestoreForm_23%": "The file in the backup is newer than the file on hard disk",
+      "%RestoreForm_24%": "The file in backup is older than the file on hard disk"
     }
   }
 }
