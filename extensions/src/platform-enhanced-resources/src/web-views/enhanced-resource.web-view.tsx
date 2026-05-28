@@ -680,11 +680,11 @@ export function EnhancedResourceWebView({
                 hasMatches={hasMatches}
                 localizedStringsWithLoadingState={childStrings}
               />
-              <Tabs value={activeTab} className="tw-flex tw-h-full tw-flex-col">
+              <Tabs value={activeTab} className="tw-flex tw-flex-1 tw-flex-col tw-min-h-0">
                 <TabsContent
                   value="dictionary"
                   data-testid="er-dictionary-tab-panel"
-                  className="tw-flex tw-flex-1 tw-flex-col data-[state=inactive]:tw-hidden"
+                  className="tw-flex tw-flex-1 tw-flex-col tw-overflow-y-auto data-[state=inactive]:tw-hidden"
                 >
                   <DictionaryTab
                     items={dictionaryItems}
@@ -715,7 +715,7 @@ export function EnhancedResourceWebView({
                 <TabsContent
                   value="encyclopedia"
                   data-testid="er-encyclopedia-tab-panel"
-                  className="tw-flex tw-flex-1 tw-flex-col data-[state=inactive]:tw-hidden"
+                  className="tw-flex tw-flex-1 tw-flex-col tw-overflow-y-auto data-[state=inactive]:tw-hidden"
                 >
                   <EncyclopediaTab
                     items={encyclopediaItems}
@@ -736,7 +736,7 @@ export function EnhancedResourceWebView({
                 <TabsContent
                   value="media"
                   data-testid="er-media-tab-panel"
-                  className="tw-flex tw-flex-1 tw-flex-col data-[state=inactive]:tw-hidden"
+                  className="tw-flex tw-flex-1 tw-flex-col tw-overflow-y-auto data-[state=inactive]:tw-hidden"
                 >
                   <MediaImagesTab
                     items={mediaImagesItems}
@@ -753,7 +753,7 @@ export function EnhancedResourceWebView({
                 <TabsContent
                   value="maps"
                   data-testid="er-maps-tab-panel"
-                  className="tw-flex tw-flex-1 tw-flex-col data-[state=inactive]:tw-hidden"
+                  className="tw-flex tw-flex-1 tw-flex-col tw-overflow-y-auto data-[state=inactive]:tw-hidden"
                 >
                   <MediaMapsTab
                     items={mediaMapsItems}
