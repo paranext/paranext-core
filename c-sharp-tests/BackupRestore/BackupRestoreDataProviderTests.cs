@@ -54,7 +54,7 @@ namespace TestParanextDataProvider.BackupRestore
     /// </summary>
     [TestFixture]
     [ExcludeFromCodeCoverage]
-    internal class BackupRestoreDataProviderTests : PapiTestBase
+    internal partial class BackupRestoreDataProviderTests : PapiTestBase
     {
         private string _testTempDir = string.Empty;
         private string _logFilePath = string.Empty;
@@ -89,6 +89,8 @@ namespace TestParanextDataProvider.BackupRestore
         {
             BackupLogService.LogFilePathOverride = null;
             BackupOrchestrator.PersistChangesOverride = null;
+            // CAP-003 — reset the openRestoreSession test seam.
+            BackupRestoreDataProvider.RestorerFactoryOverride = null;
             try
             {
                 if (Directory.Exists(_testTempDir))
