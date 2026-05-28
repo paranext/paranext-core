@@ -46,9 +46,18 @@ internal static class BackupDescriptionFormatter
     /// <returns>The composed description string.</returns>
     public static string ComputeDescription(DateTime now, string userName, string userComment)
     {
-        throw new NotImplementedException(
-            "BackupDescriptionFormatter.ComputeDescription is RED-state. "
-                + "Implementation lands in the tdd-implementer GREEN step for CAP-015."
-        );
+        // PT9 equivalent: DateTime.Now.ToString("o").Substring(0, 16).Replace("T", "@")
+        //   + ", " + userName + " - " + userComment.
+        // The format string "yyyy-MM-dd@HH:mm" uses ONLY literal separators ('-', '@', ':')
+        // and two-digit numeric specifiers, so the result is culture-invariant without
+        // needing CultureInfo.InvariantCulture. The "HH:mm" pair has no seconds/ms
+        // specifier, so sub-minute precision is dropped automatically — matching PT9's
+        // Substring(0, 16) truncation. No .ToLocalTime() / .ToUniversalTime() call: the
+        // formatter must be DateTime.Kind-invariant (PT9 parity — would otherwise shift
+        // the displayed hours on machines with non-UTC timezones). User fields are
+        // emitted verbatim — no trimming, no comma escaping — per PT9 parity
+        // (strategic-plan §CAP-015 edge-case bullet).
+        string dateStr = now.ToString("yyyy-MM-dd@HH:mm");
+        return $"{dateStr}, {userName} - {userComment}";
     }
 }
