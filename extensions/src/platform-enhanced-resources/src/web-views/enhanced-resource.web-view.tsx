@@ -1358,6 +1358,13 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     [scope, scrRefBook, scrRefChapterNum, scrRefVerseNum],
   );
 
+  // Look up the annotation for the currently filtered token so effects can
+  // populate lemma and targetLinks in the WordFilterInputDto.
+  const filteredAnnotation = useMemo(
+    () => annotations.find((a) => a.annotationId === filteredTokenId),
+    [annotations, filteredTokenId],
+  );
+
   // The current verseNum is still needed when constructing the load input
   // (every backend method takes a `currentReference`). Read it through a ref
   // inside each effect so the effect's dep array stays clean.
@@ -1384,11 +1391,11 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     const filter: WordFilterInputDto | undefined = filteredTokenId
       ? {
           tokenId: filteredTokenId,
-          lemma: '',
-          source: '',
-          translit: filteredTokenId, // best-effort until we wire a token→lemma resolver
+          lemma: filteredAnnotation?.metadata.lexicalLinks?.[0]?.split(':')?.[1] ?? '',
+          source: filteredTokenSurface ?? '',
+          translit: '',
           senses: '',
-          targetLinks: '',
+          targetLinks: filteredAnnotation?.metadata.targetLinks?.join(';') ?? '',
           clickOrigin: 'ScripturePane',
         }
       : undefined;
@@ -1584,11 +1591,11 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     const filter: WordFilterInputDto | undefined = filteredTokenId
       ? {
           tokenId: filteredTokenId,
-          lemma: '',
-          source: '',
-          translit: filteredTokenId,
+          lemma: filteredAnnotation?.metadata.lexicalLinks?.[0]?.split(':')?.[1] ?? '',
+          source: filteredTokenSurface ?? '',
+          translit: '',
           senses: '',
-          targetLinks: '',
+          targetLinks: filteredAnnotation?.metadata.targetLinks?.join(';') ?? '',
           clickOrigin: 'ScripturePane',
         }
       : undefined;
@@ -1604,6 +1611,8 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       userLanguage: glossLanguage,
       resourceId,
     };
+
+    console.log('[ER] encyclopedia filter:', JSON.stringify(filter));
 
     if (!erProxy) {
       setEncyclopediaItems([]);
@@ -2108,11 +2117,11 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     const filter: WordFilterInputDto | undefined = filteredTokenId
       ? {
           tokenId: filteredTokenId,
-          lemma: '',
-          source: '',
-          translit: filteredTokenId,
+          lemma: filteredAnnotation?.metadata.lexicalLinks?.[0]?.split(':')?.[1] ?? '',
+          source: filteredTokenSurface ?? '',
+          translit: '',
           senses: '',
-          targetLinks: '',
+          targetLinks: filteredAnnotation?.metadata.targetLinks?.join(';') ?? '',
           clickOrigin: 'ScripturePane',
         }
       : undefined;
@@ -2197,11 +2206,11 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     const filter: WordFilterInputDto | undefined = filteredTokenId
       ? {
           tokenId: filteredTokenId,
-          lemma: '',
-          source: '',
-          translit: filteredTokenId,
+          lemma: filteredAnnotation?.metadata.lexicalLinks?.[0]?.split(':')?.[1] ?? '',
+          source: filteredTokenSurface ?? '',
+          translit: '',
           senses: '',
-          targetLinks: '',
+          targetLinks: filteredAnnotation?.metadata.targetLinks?.join(';') ?? '',
           clickOrigin: 'ScripturePane',
         }
       : undefined;

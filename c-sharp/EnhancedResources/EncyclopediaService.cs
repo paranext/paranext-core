@@ -49,7 +49,7 @@ internal sealed partial class EncyclopediaService(
             CurrentRef: input.CurrentReference,
             Scope: input.Scope,
             LinkType: MarbleLinkType.Thematic,
-            FilterText: input.Filter?.Lemma ?? "",
+            FilterText: "",
             FilterSenses: input.Filter?.Senses ?? "",
             FilterClickOrigin: input.Filter?.ClickOrigin ?? FilterClickOrigin.ScripturePane,
             ResourceId: input.ResourceId
