@@ -36,6 +36,7 @@
   },
   "dependencies": {
     "@sillsdev/scripture": "^2.0.5",
+    "diff": "^8.0.4",
     "platform-bible-utils": "file:../../../lib/platform-bible-utils"
   },
   "devDependencies": {

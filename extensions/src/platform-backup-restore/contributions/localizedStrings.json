@@ -57,7 +57,15 @@
       "%RestoreForm_21%": "The file in the backup has a newer version number than the file on hard disk",
       "%RestoreForm_22%": "The file in backup has an older version number than the file on hard disk",
       "%RestoreForm_23%": "The file in the backup is newer than the file on hard disk",
-      "%RestoreForm_24%": "The file in backup is older than the file on hard disk"
+      "%RestoreForm_24%": "The file in backup is older than the file on hard disk",
+      "%differences_tool_view_empty_pane%": "(empty)",
+      "%differences_tool_view_loading_pane%": "Loading…",
+      "%differences_tool_view_fetch_error%": "Could not load the text for this pane.",
+      "%differences_tool_view_mismatched_ref_error%": "Left and right panes are pointing at different references; differences cannot be computed.",
+      "%differences_tool_view_left_pane_aria_label%": "Left pane",
+      "%differences_tool_view_right_pane_aria_label%": "Right pane",
+      "%differences_tool_view_added_segment_aria_label%": "Added text",
+      "%differences_tool_view_removed_segment_aria_label%": "Removed text"
     }
   }
 }
