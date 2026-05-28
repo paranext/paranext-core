@@ -1,4 +1,5 @@
 using Paranext.DataProvider.Projects;
+using Paratext.Data;
 
 namespace Paranext.DataProvider.BackupRestore;
 
@@ -47,18 +48,17 @@ namespace Paranext.DataProvider.BackupRestore;
 /// </remarks>
 internal sealed class RestoreDestinationProjectsService
 {
-    // === STUB ===
-    // RED-phase placeholder. CAP-021 Implementer fills in:
-    //   * `RestoreDestinationProjectsService` ctor stores PapiClient + LocalParatextProjects + event/dataType names
-    //   * `GetSnapshot()` returns the cached snapshot
-    //   * `Subscribe(handler)` adds to a thread-safe subscriber set; returns an IDisposable that removes
-    //   * `NotifyProjectsChanged()` rescans ParatextProjects, populates CurrentUserIsAdmin from
-    //     Permissions.AmAdministrator, compares to cached snapshot, and on real change: caches +
-    //     fires PapiClient.SendEventAsync + invokes every handler.
-
     public const string DefaultUpdateEventType =
         "platformBackupRestore.backupRestore-data:onDidUpdate";
     public const string DataTypeName = "RestoreDestinationProjects";
+
+    private readonly PapiClient _papiClient;
+    private readonly LocalParatextProjects _paratextProjects;
+    private readonly string _updateEventType;
+
+    private readonly object _lock = new();
+    private List<RestoreDestinationProject> _cachedSnapshot = [];
+    private readonly List<Action<IReadOnlyList<RestoreDestinationProject>>> _subscribers = [];
 
     public RestoreDestinationProjectsService(
         PapiClient papiClient,
@@ -66,9 +66,9 @@ internal sealed class RestoreDestinationProjectsService
         string updateEventType = DefaultUpdateEventType
     )
     {
-        _ = papiClient;
-        _ = paratextProjects;
-        _ = updateEventType;
+        _papiClient = papiClient;
+        _paratextProjects = paratextProjects;
+        _updateEventType = updateEventType;
     }
 
     /// <summary>
@@ -76,16 +76,28 @@ internal sealed class RestoreDestinationProjectsService
     /// entry's <see cref="RestoreDestinationProject.CurrentUserIsAdmin"/> reflects the current
     /// user's permission at the time of the last <see cref="NotifyProjectsChanged"/> call.
     /// </summary>
-    public IReadOnlyList<RestoreDestinationProject> GetSnapshot() =>
-        throw new NotImplementedException("CAP-021 GREEN-phase implementation pending");
+    public IReadOnlyList<RestoreDestinationProject> GetSnapshot()
+    {
+        lock (_lock)
+        {
+            return _cachedSnapshot.ToList().AsReadOnly();
+        }
+    }
 
     /// <summary>
     /// Subscribes <paramref name="handler"/> to receive the new snapshot whenever
     /// <see cref="NotifyProjectsChanged"/> detects a change. Same idempotence + disposal semantics
     /// as <see cref="BackupableProjectsService.Subscribe"/>.
     /// </summary>
-    public IDisposable Subscribe(Action<IReadOnlyList<RestoreDestinationProject>> handler) =>
-        throw new NotImplementedException("CAP-021 GREEN-phase implementation pending");
+    public IDisposable Subscribe(Action<IReadOnlyList<RestoreDestinationProject>> handler)
+    {
+        lock (_lock)
+        {
+            if (!_subscribers.Contains(handler))
+                _subscribers.Add(handler);
+        }
+        return new Subscription(this, handler);
+    }
 
     /// <summary>
     /// Rescans <see cref="LocalParatextProjects"/>, recomputes the projected snapshot (including
@@ -93,6 +105,158 @@ internal sealed class RestoreDestinationProjectsService
     /// actually changed) updates the cache, fires <see cref="PapiClient.SendEventAsync"/>, and
     /// invokes every currently-subscribed handler.
     /// </summary>
-    public void NotifyProjectsChanged() =>
-        throw new NotImplementedException("CAP-021 GREEN-phase implementation pending");
+    public void NotifyProjectsChanged()
+    {
+        List<RestoreDestinationProject> newSnapshot = BuildSnapshot();
+
+        List<Action<IReadOnlyList<RestoreDestinationProject>>> handlersToNotify;
+        IReadOnlyList<RestoreDestinationProject> snapshotForHandlers;
+        lock (_lock)
+        {
+            // Snapshot-equality short-circuit per strategic-plan §CAP-021. Record default
+            // equality is value-based for all scalar fields here (no collection fields on
+            // RestoreDestinationProject), so the standard record `==` is sufficient — we still
+            // wrap it in a per-element helper for parity with BackupableProjectsService and to
+            // future-proof against schema additions.
+            if (AreEquivalent(_cachedSnapshot, newSnapshot))
+                return;
+
+            _cachedSnapshot = newSnapshot;
+            snapshotForHandlers = newSnapshot.AsReadOnly();
+            handlersToNotify = [.. _subscribers];
+        }
+
+        _papiClient
+            .SendEventAsync(_updateEventType, new List<string> { DataTypeName })
+            .GetAwaiter()
+            .GetResult();
+
+        foreach (Action<IReadOnlyList<RestoreDestinationProject>> handler in handlersToNotify)
+            handler(snapshotForHandlers);
+    }
+
+    // EXPLANATION:
+    // Snapshot-equality helper. RestoreDestinationProject has no collection fields, so default
+    // record equality would actually work — but we keep the explicit per-field comparison for
+    // parity with BackupableProjectsService.AreEquivalent and so future schema additions don't
+    // silently change the no-change semantics.
+    private static bool AreEquivalent(
+        IReadOnlyList<RestoreDestinationProject> a,
+        IReadOnlyList<RestoreDestinationProject> b
+    )
+    {
+        if (a.Count != b.Count)
+            return false;
+        for (int i = 0; i < a.Count; i++)
+        {
+            RestoreDestinationProject x = a[i];
+            RestoreDestinationProject y = b[i];
+            if (
+                x.Id != y.Id
+                || x.ShortName != y.ShortName
+                || x.FullName != y.FullName
+                || x.CurrentUserIsAdmin != y.CurrentUserIsAdmin
+            )
+                return false;
+        }
+        return true;
+    }
+
+    // EXPLANATION:
+    // Rescans LocalParatextProjects.GetAllProjectDetails(), resolves each id to its ScrText,
+    // and projects it to the RestoreDestinationProject record. No INV-B01 filter (resource
+    // projects CAN be restore destinations — the destination filter is admin-permission, not
+    // resource-protected). Field sources match shared-types.md §3.11:
+    //   * Id                 -- ProjectDetails.Metadata.Id (PT10 HexId-form id)
+    //   * ShortName          -- scrText.Name
+    //   * FullName           -- scrText.FullName
+    //   * CurrentUserIsAdmin -- scrText.Permissions?.AmAdministrator ?? false (INV-B05;
+    //                           mirrors RestorePermissionGate's defensive null-permissions
+    //                           handling -- CAP-019).
+    private List<RestoreDestinationProject> BuildSnapshot()
+    {
+        var result = new List<RestoreDestinationProject>();
+        foreach (ProjectDetails details in _paratextProjects.GetAllProjectDetails())
+        {
+            ScrText scrText;
+            try
+            {
+                scrText = LocalParatextProjects.GetParatextProject(details.Metadata.Id);
+            }
+            catch
+            {
+                continue;
+            }
+
+            result.Add(
+                new RestoreDestinationProject
+                {
+                    Id = details.Metadata.Id,
+                    ShortName = scrText.Name,
+                    FullName = SafeFullName(scrText),
+                    CurrentUserIsAdmin = IsAdministrator(scrText),
+                }
+            );
+        }
+        return result;
+    }
+
+    private static string SafeFullName(ScrText scrText)
+    {
+        try
+        {
+            return scrText.FullName ?? string.Empty;
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    // INV-B05: defensive read of scrText.Permissions.AmAdministrator. Returns false when
+    // Permissions is null (matching CAP-019 RestorePermissionGate's gate-closed-on-null
+    // policy) so the UI never shows an admin-checked entry for a project without permissions.
+    private static bool IsAdministrator(ScrText scrText)
+    {
+        try
+        {
+            return scrText.Permissions?.AmAdministrator ?? false;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void Unsubscribe(Action<IReadOnlyList<RestoreDestinationProject>> handler)
+    {
+        lock (_lock)
+        {
+            _subscribers.Remove(handler);
+        }
+    }
+
+    private sealed class Subscription : IDisposable
+    {
+        private readonly RestoreDestinationProjectsService _owner;
+        private readonly Action<IReadOnlyList<RestoreDestinationProject>> _handler;
+        private bool _disposed;
+
+        public Subscription(
+            RestoreDestinationProjectsService owner,
+            Action<IReadOnlyList<RestoreDestinationProject>> handler
+        )
+        {
+            _owner = owner;
+            _handler = handler;
+        }
+
+        public void Dispose()
+        {
+            if (_disposed)
+                return;
+            _disposed = true;
+            _owner.Unsubscribe(_handler);
+        }
+    }
 }
