@@ -65,7 +65,7 @@ public class LocalParatextProjectsTests
         Assert.That(interfaces, Does.Contain(ProjectInterfaces.LEGACY_COMMENT));
         Assert.That(interfaces, Does.Contain(ProjectInterfaces.BASE));
         Assert.That(interfaces, Does.Contain(ProjectInterfaces.USFM_BOOK));
-        Assert.That(interfaces, Does.Contain(ProjectInterfaces.VERSIFICATION));
+        Assert.That(interfaces, Does.Contain(ProjectInterfaces.SCRIPTURE_EDIT_PERMISSIONS));
     }
 
     [Test]
@@ -83,8 +83,8 @@ public class LocalParatextProjectsTests
         Assert.That(interfaces, Does.Contain(ProjectInterfaces.USX_VERSE));
         Assert.That(interfaces, Does.Contain(ProjectInterfaces.PLAIN_TEXT_VERSE));
         Assert.That(interfaces, Does.Contain(ProjectInterfaces.MARKER_NAMES));
-        Assert.That(interfaces, Does.Contain(ProjectInterfaces.USER_TEXT_CONNECTION_SETTINGS));
-        Assert.That(interfaces, Does.Contain(ProjectInterfaces.VERSIFICATION));
+        Assert.That(interfaces, Does.Contain(ProjectInterfaces.TEXT_CONNECTION_SETTINGS));
+        Assert.That(interfaces, Does.Contain(ProjectInterfaces.SCRIPTURE_EDIT_PERMISSIONS));
     }
 
     [TestCase("ABC_4488", "PRJX", "abc7")]

@@ -31,10 +31,16 @@ internal class LocalParatextProjects
         "CountryStatuses.xml",
     ];
 
-    private static readonly List<string> s_paratextUnpublishedProjectInterfaces =
+    // Published projects (ScrText.IsResourceProject == true, i.e. ResourceScrText and
+    // JoinedScrText) are read-only in PT9 — ResourceProjectFileManager.SetXml() throws
+    // AttemptedResourceWritingException — and cannot accept comment writes. They therefore do not
+    // advertise legacyCommentManager.comments; everything else still applies because published
+    // projects can still be read for scripture and resource-references. The unpublished list is
+    // defined as the published list plus the comment interface so the two stay in sync by
+    // construction.
+    private static readonly List<string> s_paratextPublishedProjectInterfaces =
     [
         ProjectInterfaces.BASE,
-        ProjectInterfaces.LEGACY_COMMENT,
         ProjectInterfaces.USFM_BOOK,
         ProjectInterfaces.USFM_CHAPTER,
         ProjectInterfaces.USFM_VERSE,
@@ -47,24 +53,10 @@ internal class LocalParatextProjects
         ProjectInterfaces.SCRIPTURE_EDIT_PERMISSIONS,
     ];
 
-    // Published projects (ScrText.IsResourceProject == true, i.e. ResourceScrText and
-    // JoinedScrText) are read-only in PT9 — ResourceProjectFileManager.SetXml() throws
-    // AttemptedResourceWritingException — and cannot accept comment writes. They therefore do not
-    // advertise legacyCommentManager.comments; everything else still applies because published
-    // projects can still be read for scripture and resource-references.
-    private static readonly List<string> s_paratextPublishedProjectInterfaces =
+    private static readonly List<string> s_paratextUnpublishedProjectInterfaces =
     [
-        ProjectInterfaces.BASE,
-        ProjectInterfaces.USFM_BOOK,
-        ProjectInterfaces.USFM_CHAPTER,
-        ProjectInterfaces.USFM_VERSE,
-        ProjectInterfaces.USX_BOOK,
-        ProjectInterfaces.USX_CHAPTER,
-        ProjectInterfaces.USX_VERSE,
-        ProjectInterfaces.PLAIN_TEXT_VERSE,
-        ProjectInterfaces.MARKER_NAMES,
-        ProjectInterfaces.USER_TEXT_CONNECTION_SETTINGS,
-        ProjectInterfaces.VERSIFICATION,
+        .. s_paratextPublishedProjectInterfaces,
+        ProjectInterfaces.LEGACY_COMMENT,
     ];
 
     public LocalParatextProjects()
