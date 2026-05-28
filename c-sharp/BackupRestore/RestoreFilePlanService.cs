@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using Paratext.Data;
 
 namespace Paranext.DataProvider.BackupRestore;
 
@@ -37,21 +39,16 @@ namespace Paranext.DataProvider.BackupRestore;
 // skip the intermediate step entirely.
 
 /// <summary>
-/// Builds the per-file restore plan + gates the user's checkbox-toggle interactions on the
-/// RestoreForm file list. EXT-200 extraction (Worker pattern). RED-state stub — the actual
-/// implementation is owned by the implementer agent per the CAP-017 strategic plan.
+/// Builds the per-file restore plan and gates the user's checkbox-toggle interactions for the
+/// RestoreForm file list. EXT-200 extraction (Worker pattern). Pure-decision-table logic — no
+/// I/O, no state.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>RED-state stub</b>: Both <see cref="Build"/> and <see cref="OkToToggleOn"/> currently
-/// throw <see cref="NotImplementedException"/>. The implementer's job is to fill in the body
-/// such that the CAP-017 tests pass.
-/// </para>
-/// <para>
-/// <b>REVIEW-FLAG-2 anchor</b>: The implementer MUST source
-/// <see cref="RestoreFilePlanRow.ShouldRestore"/> from
+/// <b>REVIEW-FLAG-2 anchor</b>: <see cref="RestoreFilePlanRow.ShouldRestore"/> is sourced from
 /// <see cref="RestoreFileInfo.IsNormallyRestored"/> — NOT from PT9's per-state
-/// <c>RestoreThisFile</c> defaults in the tooltip switch (RestoreForm.cs:623-668).
+/// <c>RestoreThisFile</c> defaults in the tooltip switch (RestoreForm.cs:623-668). PT9 itself
+/// overrides those defaults at RestoreForm.cs:669; PT10 skips the intermediate step entirely.
 /// </para>
 /// </remarks>
 internal sealed class RestoreFilePlanService
@@ -66,10 +63,83 @@ internal sealed class RestoreFilePlanService
     /// <c>RestoreFileInfo.CompareTo</c> (identical files sort after modified files —
     /// INV-A10); the caller of <c>Build</c> is responsible for that ordering.</param>
     /// <returns>One <see cref="RestoreFilePlanRow"/> per input file, in input order.</returns>
-    public List<RestoreFilePlanRow> Build(IEnumerable<RestoreFileInfo> allFiles) =>
-        throw new NotImplementedException(
-            "RED-state stub — implementer (CAP-017) fills in the 9-state matrix + IsNormallyRestored auto-tick."
+    public List<RestoreFilePlanRow> Build(IEnumerable<RestoreFileInfo> allFiles)
+    {
+        return allFiles.Select(BuildRow).ToList();
+    }
+
+    private static RestoreFilePlanRow BuildRow(RestoreFileInfo file)
+    {
+        var (col1Style, col2Style) = MapColumnStyles(file.ComparisonResult);
+        return new RestoreFilePlanRow(
+            FileName: file.SourceFile?.FileName ?? string.Empty,
+            // REVIEW-FLAG-2: source of truth is IsNormallyRestored, NOT per-state tooltip-switch
+            // defaults (PT9 RestoreForm.cs:669 overrides those defaults with IsNormallyRestored
+            // anyway; PT10 skips the intermediate step).
+            ShouldRestore: file.IsNormallyRestored,
+            State: file.ComparisonResult,
+            Col1Style: col1Style,
+            Col2Style: col2Style,
+            TooltipKey: MapTooltipKey(file.ComparisonResult)
         );
+    }
+
+    // EXPLANATION:
+    // Per-state column styling for the dgvFiles grid (PT9 RestoreForm.cs:579-616
+    // SetRestorableItemAppearance). The three legal style strings are:
+    //   "bold"    — Style.Font = boldFont
+    //   "regular" — Style.Font = regularFont (or default — both render the same way)
+    //   "grayed"  — Style.ForeColor = SystemColors.GrayText
+    // PT9 mixes Font (bold/regular) and ForeColor (grayed) — the PT10 contract collapses these
+    // into a single per-column style string because the React UI maps each value to a Tailwind
+    // CSS class (extraction-plan.md §EXT-200 line 344-346).
+    //
+    // `SourceDoesNotExist` has NO `case` in the PT9 switch — falls through to the default
+    // (regular/regular). Test-writer plan Resolved Ambiguity §3 documents the audit trail;
+    // extraction-plan.md line 327 ("col2Bold = true") is a comment-level error in that artifact.
+    private static (string Col1Style, string Col2Style) MapColumnStyles(
+        PtwFileComparisonStates state
+    )
+    {
+        return state switch
+        {
+            PtwFileComparisonStates.FilesAreSame => ("grayed", "grayed"),
+            PtwFileComparisonStates.DestDoesNotExist => ("bold", "grayed"),
+            PtwFileComparisonStates.Undetermined => ("regular", "regular"),
+            PtwFileComparisonStates.SourceIsNewer => ("bold", "regular"),
+            PtwFileComparisonStates.SourceIsOlder => ("regular", "bold"),
+            PtwFileComparisonStates.FilesAreSameVersion => ("grayed", "grayed"),
+            PtwFileComparisonStates.SourceIsHigherVersion => ("bold", "regular"),
+            PtwFileComparisonStates.DestIsHigherVersion => ("grayed", "bold"),
+            // Default covers SourceDoesNotExist + any future enum additions: both columns
+            // retain default font (regular) and default color (no GrayText override).
+            _ => ("regular", "regular"),
+        };
+    }
+
+    // EXPLANATION:
+    // Per-state tooltip Localize key (PT9 RestoreForm.cs:623-666
+    // DetermineRestoreEligibilityZip). Keys are passed verbatim to the React-side localize hook
+    // (the wire layer does NOT resolve them server-side here — the data provider returns the
+    // key, and the React consumer looks up the user-visible string).
+    //
+    // `Undetermined` and `SourceDoesNotExist` have no PT9 tooltip — emit empty string.
+    private static string MapTooltipKey(PtwFileComparisonStates state)
+    {
+        return state switch
+        {
+            PtwFileComparisonStates.DestDoesNotExist => "RestoreForm_18",
+            PtwFileComparisonStates.FilesAreSame => "RestoreForm_19",
+            PtwFileComparisonStates.FilesAreSameVersion => "RestoreForm_20",
+            PtwFileComparisonStates.SourceIsHigherVersion => "RestoreForm_21",
+            PtwFileComparisonStates.DestIsHigherVersion => "RestoreForm_22",
+            PtwFileComparisonStates.SourceIsNewer => "RestoreForm_23",
+            PtwFileComparisonStates.SourceIsOlder => "RestoreForm_24",
+            // Undetermined (PT9 RestoreForm.cs:665 sets "") and SourceDoesNotExist (no PT9
+            // case) both have no tooltip.
+            _ => string.Empty,
+        };
+    }
 
     /// <summary>
     /// Checks whether a user's attempt to tick a row's checkbox should be allowed. For 8 of
@@ -85,8 +155,15 @@ internal sealed class RestoreFilePlanService
     /// MUST NOT be invoked when the state does NOT require confirmation.</param>
     /// <returns><c>true</c> if the toggle-on is allowed; <c>false</c> if the user declined the
     /// downgrade prompt.</returns>
-    public bool OkToToggleOn(RestoreFileInfo file, Func<string, bool> downgradeConfirmCallback) =>
-        throw new NotImplementedException(
-            "RED-state stub — implementer (CAP-017) fills in the DestIsHigherVersion downgrade gate."
-        );
+    public bool OkToToggleOn(RestoreFileInfo file, Func<string, bool> downgradeConfirmCallback)
+    {
+        // PT9 parity (RestoreForm.cs:765-774): the prompt is gated on exactly one state.
+        // For the other 8 states, toggling on is always allowed without confirmation.
+        if (file.ComparisonResult != PtwFileComparisonStates.DestIsHigherVersion)
+            return true;
+
+        // VAL-B07: DestIsHigherVersion = "downgrade" — require user confirmation. The callback
+        // receives the localize key "RestoreForm_33" (PT9 line 770) and returns Yes/No.
+        return downgradeConfirmCallback("RestoreForm_33");
+    }
 }
