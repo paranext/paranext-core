@@ -96,10 +96,47 @@ internal sealed partial class BackupRestoreDataProvider
     )
     {
         _ = cancellationToken;
-        // RED-state stub — Implementer agent (CAP-009 GREEN) replaces this body with
-        // the guard chain + RestoreDestinationProjectsService.GetSnapshot read.
-        throw new NotImplementedException(
-            "CAP-009 GetRestoreDestinationProjectsAsync is not yet implemented — RED state."
-        );
+
+        // EXPLANATION:
+        // Guard chain mirrors the data-contracts.md §5.2 / FN-010 cascade preservation:
+        //   (1) `OnlyAllowNewProjects == true` → throw ArgumentException("INVALID_SESSION").
+        //       The field is preserved in the request schema for re-add traceability per
+        //       scope-cascade-pattern.md; the only-new-projects code path is unreachable
+        //       post-FN-010 (no cmdNewProject sub-flow in PT10). The literal "INVALID_SESSION"
+        //       is the wire-stable error message — the JSON-RPC dispatcher converts the
+        //       thrown exception into a JSON-RPC error response.
+        //   (2) Read the snapshot from CAP-021's RestoreDestinationProjectsService via the
+        //       test seam. CAP-001 BE-7 will land the production injection mechanism
+        //       (constructor-injected default) — until then, only the test seam is wired.
+        //   (3) Return a fresh `List<RestoreDestinationProject>` (defensive copy). The
+        //       underlying `GetSnapshot()` already returns an immutable copy, but wrapping
+        //       it in a fresh mutable List ensures caller `Clear`/`Add`/`Remove` cannot
+        //       affect the service's cached snapshot AND honors the wire-method's declared
+        //       `List<T>` return shape.
+        //
+        // E-002 emission is NOT done here. CAP-021's RestoreDestinationProjectsService.
+        // NotifyProjectsChanged owns event emission via its inherited
+        // SubscribableSnapshotService. Admin-permission flips fire E-002 through that
+        // machinery; this wire method only READS the post-flip snapshot.
+
+        if (request.OnlyAllowNewProjects)
+        {
+            throw new ArgumentException("INVALID_SESSION", nameof(request));
+        }
+
+        // The test seam is the only injection mechanism in CAP-009 GREEN. CAP-001 BE-7
+        // will add a constructor-injected default for production. Until then, callers
+        // outside tests will hit a NullReferenceException — by design — because the
+        // production wiring is not yet in place.
+        RestoreDestinationProjectsService service =
+            RestoreDestinationProjectsServiceOverride
+            ?? throw new InvalidOperationException(
+                "RestoreDestinationProjectsService is not wired. "
+                    + "Tests must set RestoreDestinationProjectsServiceOverride; "
+                    + "production wiring is CAP-001 BE-7 work."
+            );
+
+        IReadOnlyList<RestoreDestinationProject> snapshot = service.GetSnapshot();
+        return Task.FromResult(new List<RestoreDestinationProject>(snapshot));
     }
 }
