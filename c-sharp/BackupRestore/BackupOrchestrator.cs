@@ -94,6 +94,17 @@ internal static class BackupOrchestrator
     internal static Func<ScrText, bool>? PersistChangesOverride { get; set; }
 
     // === PORTED FROM PT9 ===
+    // Source: Paratext/BackupRestore/Backup.cs:68-70 (PersistChanges gate)
+    /// <summary>
+    /// Runs the PT9 PersistChanges gate, routed through
+    /// <see cref="PersistChangesOverride"/> when set (unit tests only) and otherwise
+    /// calling <see cref="ScrText.PersistChanges()"/> directly. Returns whether the
+    /// pipeline may proceed.
+    /// </summary>
+    private static bool PersistChangesPasses(ScrText scrText) =>
+        PersistChangesOverride?.Invoke(scrText) ?? scrText.PersistChanges();
+
+    // === PORTED FROM PT9 ===
     // Source: Paratext/BackupRestore/Backup.cs:64-97 (BackupScrText)
     // Maps to: CAP-022 / M-001 / data-contracts.md §4.1
     /// <summary>
@@ -160,10 +171,7 @@ internal static class BackupOrchestrator
         // Step 1 — PersistChanges gate (Backup.cs:68-70).
         // PT9 silently `return`s on false. PT10 returns Error envelope (TS-004
         // — data-contracts.md §4.1).
-        bool persisted = PersistChangesOverride is not null
-            ? PersistChangesOverride(scrText)
-            : scrText.PersistChanges();
-        if (!persisted)
+        if (!PersistChangesPasses(scrText))
         {
             return new BackupResult.Error(
                 BackupErrorCode.PersistChangesFailed,
@@ -182,11 +190,10 @@ internal static class BackupOrchestrator
         var validation = BackupValidationService.ValidateData(false, ".", destFileSpec);
         if (!validation.IsValid)
         {
-            return new BackupResult.Error(
+            return CreateDestPathError(
                 BackupErrorCode.InvalidDestPath,
                 validation.ErrorKey,
-                "destinationPath",
-                new[] { destFileSpec }
+                destFileSpec
             );
         }
 
@@ -194,11 +201,10 @@ internal static class BackupOrchestrator
         string destFolder = Path.GetDirectoryName(destFileSpec) ?? string.Empty;
         if (!IsFolderWritable(destFolder))
         {
-            return new BackupResult.Error(
+            return CreateDestPathError(
                 BackupErrorCode.DestFolderNotWritable,
                 "%backup_destFolderNotWritable%",
-                "destinationPath",
-                new[] { destFolder }
+                destFolder
             );
         }
 
@@ -215,11 +221,10 @@ internal static class BackupOrchestrator
             }
             catch (IOException)
             {
-                return new BackupResult.Error(
+                return CreateDestPathError(
                     BackupErrorCode.IoError,
                     "%backup_ioError%",
-                    "destinationPath",
-                    new[] { destFileSpec }
+                    destFileSpec
                 );
             }
         }
@@ -253,24 +258,33 @@ internal static class BackupOrchestrator
             long fileSize = new FileInfo(destFileSpec).Length;
             return new BackupResult.Success(destFileSpec, fileSize, foundFile);
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return new BackupResult.Error(
-                BackupErrorCode.IoError,
-                "%backup_ioError%",
-                "destinationPath",
-                new[] { destFileSpec }
-            );
+            // Both exception types map to the same Error(IoError) envelope — combining
+            // them here removes the duplication while preserving the original behaviour
+            // (any other exception still propagates).
+            return CreateDestPathError(BackupErrorCode.IoError, "%backup_ioError%", destFileSpec);
         }
-        catch (UnauthorizedAccessException)
-        {
-            return new BackupResult.Error(
-                BackupErrorCode.IoError,
-                "%backup_ioError%",
-                "destinationPath",
-                new[] { destFileSpec }
-            );
-        }
+    }
+
+    // === NEW IN PT10 ===
+    // Reason: DRY helper for the recurring `BackupResult.Error` shape used by
+    // steps 3, 4, the overwrite-gate File.Delete catch, and the steps 6-9
+    // wrap-up catch. All five sites share the same field ("destinationPath")
+    // and single-element payload contract — extracting keeps `ExecuteBackup`
+    // readable and ensures the envelope shape stays consistent.
+    /// <summary>
+    /// Builds a <see cref="BackupResult.Error"/> with the canonical
+    /// <c>destinationPath</c> field and a single-element payload. Internal DRY helper —
+    /// see CAP-022 data-contracts.md §4.1 for the envelope shape.
+    /// </summary>
+    private static BackupResult.Error CreateDestPathError(
+        BackupErrorCode code,
+        string messageKey,
+        string path
+    )
+    {
+        return new BackupResult.Error(code, messageKey, "destinationPath", new[] { path });
     }
 
     // === PORTED FROM PT9 ===
@@ -316,21 +330,39 @@ internal static class BackupOrchestrator
             // for TransliterationWithEncoder projects when the caller asked for
             // it. The PT10 happy-path test does not exercise this branch;
             // included for PT9 parity.
-            if (
-                includeEncodingInfo
-                && IsTransliterationWithEncoder(scrText)
-                && TryGetEncodingConverterFile(scrText, out string converterFile)
-                && File.Exists(converterFile)
-            )
-            {
-                string entryName = Path.GetFileName(converterFile);
-                if (archive.GetEntry(entryName) == null)
-                {
-                    archive.CreateEntryFromFile(converterFile, entryName, CompressionLevel.Optimal);
-                }
-            }
+            AddEncodingConverterFileIfRequested(archive, scrText, includeEncodingInfo);
         }
         return foundFile;
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: Paratext/BackupRestore/Backup.cs:84-90 (encoding-converter branch
+    // inside BackupScrText). Pure no-op when any guard fails.
+    /// <summary>
+    /// Adds the encoding-converter file to <paramref name="archive"/> when the project
+    /// is a <c>TransliterationWithEncoder</c>, the caller opted in, the resolver
+    /// returned a real path, and the entry is not already in the archive. Best-effort:
+    /// any failing guard silently skips this step (PT9 parity).
+    /// </summary>
+    private static void AddEncodingConverterFileIfRequested(
+        ZipArchive archive,
+        ScrText scrText,
+        bool includeEncodingInfo
+    )
+    {
+        if (
+            !includeEncodingInfo
+            || !IsTransliterationWithEncoder(scrText)
+            || !TryGetEncodingConverterFile(scrText, out string converterFile)
+            || !File.Exists(converterFile)
+        )
+            return;
+
+        string entryName = Path.GetFileName(converterFile);
+        if (archive.GetEntry(entryName) == null)
+        {
+            archive.CreateEntryFromFile(converterFile, entryName, CompressionLevel.Optimal);
+        }
     }
 
     // === PORTED FROM PT9 ===
@@ -396,27 +428,13 @@ internal static class BackupOrchestrator
                     || selectedBooks.IsSelected(fileClassifier.BookNum)
                 );
 
-            // (e) Figures-flag override (Backup.cs:119-126 / INV-A06). The
-            // None bit is exclusionary; the Figures and LocalFigures bits are
-            // inclusionary (and override prior exclusion if both are set).
-            if (
-                figuresFlags.HasFlag(IncludeFiguresFlags.None)
-                && fileClassifier.FileType == ProjectFileType.Figures
-            )
-                includeFile = false;
-            if (
-                (
-                    figuresFlags.HasFlag(IncludeFiguresFlags.Figures)
-                    && fileClassifier.FileType == ProjectFileType.Figures
-                )
-                || (
-                    figuresFlags.HasFlag(IncludeFiguresFlags.LocalFigures)
-                    && PathContainsLocalFiguresDirectory(lowerRelFilePath)
-                )
-            )
-            {
-                includeFile = true;
-            }
+            // (e) Figures-flag override — see ApplyFiguresFlagOverride.
+            includeFile = ApplyFiguresFlagOverride(
+                includeFile,
+                figuresFlags,
+                fileClassifier,
+                lowerRelFilePath
+            );
 
             if (includeFile)
             {
@@ -427,6 +445,44 @@ internal static class BackupOrchestrator
             }
         }
         return foundFile;
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: Paratext/BackupRestore/Backup.cs:119-126 (figures-flag branch inside AddProjectFiles)
+    /// <summary>
+    /// Applies the figures-flag inclusion override to <paramref name="currentInclude"/>.
+    /// The <see cref="IncludeFiguresFlags.None"/> bit is exclusionary (forces a
+    /// <c>Figures</c>-classified file out); the <see cref="IncludeFiguresFlags.Figures"/>
+    /// and <see cref="IncludeFiguresFlags.LocalFigures"/> bits are inclusionary (override
+    /// a prior exclusion). Mirrors PT9's branch byte-for-byte — INV-A06.
+    /// </summary>
+    private static bool ApplyFiguresFlagOverride(
+        bool currentInclude,
+        IncludeFiguresFlags figuresFlags,
+        ProjectFileClassifier classifier,
+        string lowerRelFilePath
+    )
+    {
+        bool include = currentInclude;
+        if (
+            figuresFlags.HasFlag(IncludeFiguresFlags.None)
+            && classifier.FileType == ProjectFileType.Figures
+        )
+            include = false;
+        if (
+            (
+                figuresFlags.HasFlag(IncludeFiguresFlags.Figures)
+                && classifier.FileType == ProjectFileType.Figures
+            )
+            || (
+                figuresFlags.HasFlag(IncludeFiguresFlags.LocalFigures)
+                && PathContainsLocalFiguresDirectory(lowerRelFilePath)
+            )
+        )
+        {
+            include = true;
+        }
+        return include;
     }
 
     // === PORTED FROM PT9 ===
