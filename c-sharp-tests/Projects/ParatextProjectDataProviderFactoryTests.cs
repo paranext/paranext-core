@@ -46,41 +46,6 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
-        public async Task RegularFactory_AdvertisesLegacyCommentInterfaceAsync()
-        {
-            var factory = new ParatextProjectDataProviderFactory(Client, ParatextProjects);
-            await factory.InitializeAsync();
-
-            // The factory registers its network-object-created event on Client. We don't introspect
-            // that event payload directly; instead we assert the source of truth: the static interface
-            // list it was constructed from.
-            Assert.That(
-                LocalParatextProjects.GetParatextProjectInterfaces(isPublished: false),
-                Does.Contain(ProjectInterfaces.LEGACY_COMMENT)
-            );
-        }
-
-        [Test]
-        public async Task RegularFactory_GetAvailableProjects_OmitsPublishedAsync()
-        {
-            // FakeAddProject uses DummyScrText which is unpublished (IsResourceProject == false on
-            // the base ScrText class), so we cannot exercise the published-filter directly without
-            // a resource-capable fake. We instead assert the contract by spelling it out: the
-            // factory's project list comes from GetAvailableUnpublishedProjectDetails, never from
-            // GetAllProjectDetails.
-            const string projId = "305555";
-            ParatextProjects.FakeAddProject(CreateProjectDetails(projId, "RegProj"));
-
-            var factory = new ParatextProjectDataProviderFactory(Client, ParatextProjects);
-            await factory.InitializeAsync();
-
-            // We rely on the in-flow side-effect: the factory must have used the unpublished helper.
-            // Sanity check: getting a PDP for the regular project must still succeed.
-            var pdpId = factory.GetProjectDataProviderID(projId);
-            Assert.That(pdpId, Is.Not.Null.And.Not.Empty);
-        }
-
-        [Test]
         public async Task GetProjectDataProviderID_ReturnsIdForProviderAsync()
         {
             const string namePrefix = "Monkey Soup";

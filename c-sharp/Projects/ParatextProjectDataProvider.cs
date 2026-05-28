@@ -58,7 +58,11 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     private readonly LocalParatextProjects _paratextProjects;
 
-    private readonly CommentManager _commentManager;
+    // Lazy because published PDPs do not register the comment wire methods (see GetFunctions),
+    // so for those PDPs the comment manager is never accessed - and CommentManager.Get loads
+    // comment XML on first access for unpublished projects, work we don't want to pay for on
+    // every published PDP creation.
+    private readonly Lazy<CommentManager> _commentManager;
 
     private UserProjectSettings? _userProjectSettings;
     private string? _cachedUserId;
@@ -76,8 +80,11 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         : base(name, papiClient, projectDetails)
     {
         _paratextProjects = paratextProjects;
-        _commentManager = CommentManager.Get(
-            LocalParatextProjects.GetParatextProject(projectDetails.Metadata.Id)
+        _commentManager = new Lazy<CommentManager>(
+            () =>
+                CommentManager.Get(
+                    LocalParatextProjects.GetParatextProject(projectDetails.Metadata.Id)
+                )
         );
     }
 
@@ -345,7 +352,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     public List<PlatformCommentThreadWrapper> GetCommentThreads(CommentThreadSelector selector)
     {
         // Get all threads (activeOnly=false to include threads with deleted comments)
-        List<CommentThread> allThreads = _commentManager.FindThreads(activeOnly: false);
+        List<CommentThread> allThreads = _commentManager.Value.FindThreads(activeOnly: false);
 
         // If no selector provided, apply defaults (exclude BT/spelling, deduplicate)
         selector ??= new CommentThreadSelector();
@@ -426,9 +433,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         VerifyUserCanEditOrDeleteComment(commentId);
 
         // Remove the comment using CommentManager
-        _commentManager.RemoveComment(commentToDelete);
+        _commentManager.Value.RemoveComment(commentToDelete);
 
-        _commentManager.SaveUser(commentToDelete.User, false);
+        _commentManager.Value.SaveUser(commentToDelete.User, false);
 
         SendDataUpdateEvent(AllCommentDataTypes, "comment deleted event");
         return true;
@@ -555,9 +562,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (string.IsNullOrEmpty(newComment.Language))
             newComment.Language = scrText.Language.Id;
 
-        _commentManager.AddComment(newComment);
-        _commentManager.SaveUser(newComment.User, false);
-        ThreadStatus.MarkThreadRead(_commentManager.FindThread(newComment.Thread));
+        _commentManager.Value.AddComment(newComment);
+        _commentManager.Value.SaveUser(newComment.User, false);
+        ThreadStatus.MarkThreadRead(_commentManager.Value.FindThread(newComment.Thread));
 
         SendDataUpdateEvent(AllCommentDataTypes, "comment created event");
 
@@ -587,7 +594,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 "At least one of Contents, Status, or AssignedUser must be provided for AddCommentToThread"
             );
 
-        CommentThread? existingThread = _commentManager.FindThread(comment.Thread);
+        CommentThread? existingThread = _commentManager.Value.FindThread(comment.Thread);
         if (existingThread == null)
             throw new InvalidDataException($"Thread with id {comment.Thread} does not exist");
 
@@ -633,8 +640,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             newComment.Status = NoteStatus.Todo;
         }
 
-        _commentManager.AddComment(newComment);
-        _commentManager.SaveUser(newComment.User, false);
+        _commentManager.Value.AddComment(newComment);
+        _commentManager.Value.SaveUser(newComment.User, false);
         ThreadStatus.MarkThreadRead(existingThread);
 
         SendDataUpdateEvent(AllCommentDataTypes, "comment added to thread event");
@@ -713,7 +720,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // Reset the status field to Unspecified when a comment is edited
         commentToUpdate.Status = NoteStatus.Unspecified;
 
-        _commentManager.SaveUser(commentToUpdate.User, false);
+        _commentManager.Value.SaveUser(commentToUpdate.User, false);
 
         SendDataUpdateEvent(AllCommentDataTypes, "comment updated");
 
@@ -722,7 +729,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public void SetIsCommentThreadRead(string threadId, bool markRead)
     {
-        CommentThread? thread = _commentManager.FindThread(threadId);
+        CommentThread? thread = _commentManager.Value.FindThread(threadId);
         if (thread == null)
             throw new ArgumentException($"Thread with ID '{threadId}' not found", nameof(threadId));
 
@@ -855,7 +862,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 $"User '{scrText.User.Name}' does not have permission to assign this thread."
             );
 
-        CommentThread? thread = _commentManager.FindThread(threadId);
+        CommentThread? thread = _commentManager.Value.FindThread(threadId);
         if (thread == null)
             throw new InvalidOperationException($"Thread with id {threadId} does not exist.");
 
@@ -907,7 +914,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 "Resource projects with global note types are read-only."
             );
 
-        CommentThread? thread = _commentManager.FindThread(threadId);
+        CommentThread? thread = _commentManager.Value.FindThread(threadId);
         if (thread == null)
             throw new InvalidOperationException($"Thread with id {threadId} does not exist.");
 
@@ -1015,7 +1022,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     private (Comment?, CommentThread?) FindCommentByIdWithThread(string commentId)
     {
         // Get all threads (activeOnly=false to include deleted comments)
-        List<CommentThread> allThreads = _commentManager.FindThreads(activeOnly: false);
+        List<CommentThread> allThreads = _commentManager.Value.FindThreads(activeOnly: false);
 
         // Search through all threads to find the comment with matching ID
         foreach (var thread in allThreads)

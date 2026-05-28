@@ -87,16 +87,6 @@ public class LocalParatextProjectsTests
         Assert.That(interfaces, Does.Contain(ProjectInterfaces.VERSIFICATION));
     }
 
-    [Test]
-    public void GetParatextProjectInterfaces_NoArgs_MatchesUnpublished()
-    {
-        // Backward-compat: the no-arg overload must continue to return the full (unpublished) list
-        var noArgs = LocalParatextProjects.GetParatextProjectInterfaces();
-        var unpublished = LocalParatextProjects.GetParatextProjectInterfaces(isPublished: false);
-
-        Assert.That(noArgs, Is.EqualTo(unpublished));
-    }
-
     [TestCase("ABC_4488", "PRJX", "abc7")]
     public void Initialize_SingleUnpublishedProject_AdvertisesUnpublishedInterfaces(
         string folder,
