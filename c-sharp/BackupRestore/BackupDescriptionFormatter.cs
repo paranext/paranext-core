@@ -46,6 +46,7 @@ internal static class BackupDescriptionFormatter
     /// <returns>The composed description string.</returns>
     public static string ComputeDescription(DateTime now, string userName, string userComment)
     {
+        // EXPLANATION:
         // PT9 equivalent: DateTime.Now.ToString("o").Substring(0, 16).Replace("T", "@")
         //   + ", " + userName + " - " + userComment.
         // The format string "yyyy-MM-dd@HH:mm" uses ONLY literal separators ('-', '@', ':')
