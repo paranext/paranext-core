@@ -128,11 +128,18 @@ namespace TestParanextDataProvider.BackupRestore
             Assert.That(actual, Does.EndWith(" 2026-05-11.zip"));
             // The sanitized FullName portion has every invalid char from BOTH sets removed.
             string sanitizedPortion = actual.Substring(0, actual.Length - " 2026-05-11.zip".Length);
+            // Use Has.No.Member(char) (treats the string as IEnumerable<char> with
+            // ordinal char comparison) rather than Does.Not.Contain(invalid.ToString())
+            // which routes through a culture-sensitive substring constraint. Under
+            // ICU collation (default on macOS/Linux) U+0000 is an "ignorable"
+            // character, so a culture-sensitive substring search reports it as
+            // present in every non-empty string — a false positive unrelated to
+            // the contract under test.
             foreach (char invalid in Path.GetInvalidPathChars())
             {
                 Assert.That(
                     sanitizedPortion,
-                    Does.Not.Contain(invalid.ToString()),
+                    Has.No.Member(invalid),
                     $"sanitized portion still contains Path.GetInvalidPathChars char U+{(int)invalid:X4}"
                 );
             }
@@ -140,7 +147,7 @@ namespace TestParanextDataProvider.BackupRestore
             {
                 Assert.That(
                     sanitizedPortion,
-                    Does.Not.Contain(invalid.ToString()),
+                    Has.No.Member(invalid),
                     $"sanitized portion still contains Path.GetInvalidFileNameChars char U+{(int)invalid:X4}"
                 );
             }
