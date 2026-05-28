@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Concurrent;
+using System.Security.Cryptography;
 
 namespace Paranext.DataProvider.BackupRestore;
 
@@ -58,6 +60,9 @@ namespace Paranext.DataProvider.BackupRestore;
 /// </remarks>
 internal sealed class RestoreSessionRegistry
 {
+    private readonly ConcurrentDictionary<string, RestoreSession> _sessions =
+        new(StringComparer.Ordinal);
+
     /// <summary>
     /// Mint a new 12-char hex session id, create a fresh
     /// <see cref="RestoreSession"/> wrapping <paramref name="restorer"/> +
@@ -73,19 +78,19 @@ internal sealed class RestoreSessionRegistry
     /// <returns>The new session's 12-char hex id.</returns>
     public string Open(IDisposable restorer, RestorerMetadata metadata)
     {
-        // STUB: CAP-003 RED state. Implementer will:
-        //   1. Generate a 12-char hex sessionId via
-        //      Convert.ToHexString(RandomNumberGenerator.GetBytes(6))
-        //      .ToLowerInvariant().
-        //   2. new RestoreSession(sessionId, restorer, metadata)
-        //   3. _sessions.TryAdd(sessionId, session) — retry on the
-        //      extraordinarily-rare id collision.
-        //   4. return sessionId
-        _ = restorer;
-        _ = metadata;
-        throw new NotImplementedException(
-            "RestoreSessionRegistry.Open not implemented yet — CAP-003 GREEN."
-        );
+        // EXPLANATION:
+        // Mint a 12-char lowercase hex sessionId from 6 bytes (48 bits) of
+        // crypto random. 2^48 = ~281 trillion possible values — a collision
+        // even at thousands of concurrent open sessions has negligible
+        // probability. The retry loop below handles the extraordinarily-rare
+        // collision deterministically (TryAdd returns false; we mint again).
+        while (true)
+        {
+            string sessionId = MintSessionId();
+            var session = new RestoreSession(sessionId, restorer, metadata);
+            if (_sessions.TryAdd(sessionId, session))
+                return sessionId;
+        }
     }
 
     /// <summary>
@@ -97,12 +102,7 @@ internal sealed class RestoreSessionRegistry
     /// <see cref="Open"/>.</param>
     public RestoreSession? Get(string sessionId)
     {
-        // STUB: CAP-003 RED state. Implementer will TryGetValue against the
-        // backing ConcurrentDictionary.
-        _ = sessionId;
-        throw new NotImplementedException(
-            "RestoreSessionRegistry.Get not implemented yet — CAP-003 GREEN."
-        );
+        return _sessions.TryGetValue(sessionId, out RestoreSession? session) ? session : null;
     }
 
     /// <summary>
@@ -112,27 +112,47 @@ internal sealed class RestoreSessionRegistry
     /// IDEMPOTENT-CLOSE).
     /// </summary>
     /// <remarks>
-    /// INV-REGISTRY-DISPOSE-SAFETY: implementer TryRemoves the entry FIRST
+    /// INV-REGISTRY-DISPOSE-SAFETY: TryRemoves the entry FIRST
     /// (so an exception from Dispose can't leak the dict entry), THEN calls
     /// <c>session.Dispose()</c> inside a try/catch — Dispose failures are
-    /// best-effort (logged at most).
+    /// best-effort.
     /// </remarks>
     /// <param name="sessionId">The session id to close.</param>
     public bool Close(string sessionId)
     {
-        // STUB: CAP-003 RED state. Implementer will TryRemove THEN Dispose
-        // (so an exception from Dispose can't leak the dict entry).
-        _ = sessionId;
-        throw new NotImplementedException(
-            "RestoreSessionRegistry.Close not implemented yet — CAP-003 GREEN."
-        );
+        // EXPLANATION:
+        // Order matters: TryRemove FIRST (the dict entry is gone the moment
+        // TryRemove returns true) THEN Dispose inside try/catch. If we called
+        // Dispose first and Dispose threw, the dict entry would be leaked.
+        // INV-REGISTRY-DISPOSE-SAFETY (RestoreSessionRegistryTests
+        // .Open_DisposeFailure_DoesNotLeakDictEntry) pins this ordering.
+        if (!_sessions.TryRemove(sessionId, out RestoreSession? session))
+            return false;
+
+        try
+        {
+            session.Dispose();
+        }
+        catch
+        {
+            // Best-effort — Dispose failures must not propagate; the dict
+            // entry is already removed at this point so there's no leak.
+        }
+        return true;
     }
 
     /// <summary>
     /// Number of currently-registered sessions. For tests and instrumentation.
     /// </summary>
-    public int Count =>
-        throw new NotImplementedException(
-            "RestoreSessionRegistry.Count not implemented yet — CAP-003 GREEN."
-        );
+    public int Count => _sessions.Count;
+
+    /// <summary>
+    /// Mint a fresh 12-char lowercase hex session id from 6 bytes of
+    /// cryptographic randomness. Format pinned by
+    /// <c>RestoreSessionRegistryTests.SessionId_Format_Is12CharLowercaseHex</c>.
+    /// </summary>
+    private static string MintSessionId()
+    {
+        return Convert.ToHexString(RandomNumberGenerator.GetBytes(6)).ToLowerInvariant();
+    }
 }

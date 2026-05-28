@@ -53,10 +53,7 @@ namespace Paranext.DataProvider.BackupRestore;
 internal sealed class RestoreSession : IDisposable
 {
     private readonly IDisposable _restorer;
-
-    // STUB: CAP-003 GREEN implementer will add `private bool _disposed;` to
-    // guard idempotent Dispose semantics. Omitted from RED-state to keep the
-    // stub free of CS0649 "field never assigned" warnings.
+    private bool _disposed;
 
     /// <summary>
     /// Constructs a new session. Called only by
@@ -70,16 +67,9 @@ internal sealed class RestoreSession : IDisposable
     /// (BHV-104).</param>
     public RestoreSession(string sessionId, IDisposable restorer, RestorerMetadata metadata)
     {
-        // STUB: CAP-003 RED state — implementer will store fields and
-        // implement Dispose to forward to _restorer.Dispose() with the
-        // dispose-failure-doesn't-leak invariant pinned by
-        // RestoreSessionRegistryTests.Open_DisposeFailure_DoesNotLeakDictEntry.
-        _restorer = restorer; // silence unused-field warning
         SessionId = sessionId;
+        _restorer = restorer;
         Metadata = metadata;
-        throw new System.NotImplementedException(
-            "RestoreSession ctor not implemented yet — CAP-003 GREEN."
-        );
     }
 
     /// <summary>
@@ -110,11 +100,14 @@ internal sealed class RestoreSession : IDisposable
     /// </summary>
     public void Dispose()
     {
-        // STUB: CAP-003 RED state. Implementer will guard against double-
-        // dispose and wrap _restorer.Dispose() in try/catch to honor the
-        // dispose-failure-doesn't-leak invariant.
-        throw new System.NotImplementedException(
-            "RestoreSession.Dispose not implemented yet — CAP-003 GREEN."
-        );
+        // Idempotent — guard against double-dispose so a defensive caller (or a
+        // racing Close + finalizer) cannot trigger _restorer.Dispose() twice.
+        // INV-REGISTRY-IDEMPOTENT-CLOSE is enforced primarily by the registry
+        // (TryRemove returns false on the second Close), but this guard makes
+        // RestoreSession safe to call Dispose on directly too.
+        if (_disposed)
+            return;
+        _disposed = true;
+        _restorer.Dispose();
     }
 }

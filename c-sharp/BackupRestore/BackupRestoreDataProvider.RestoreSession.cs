@@ -1,6 +1,8 @@
 using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using ICSharpCode.SharpZipLib.Zip;
 
 namespace Paranext.DataProvider.BackupRestore;
 
@@ -87,30 +89,91 @@ internal sealed partial class BackupRestoreDataProvider
         CancellationToken cancellationToken = default
     )
     {
-        _ = request;
         _ = cancellationToken;
-        // STUB: CAP-003 RED state. Implementer will:
-        //   1. Guard zipPath non-empty AND File.Exists(zipPath) → Error
-        //      (MissingBackupFile, "%restore_missingBackupFile%", [zipPath])
-        //   2. Resolve factory = RestorerFactoryOverride ?? DefaultRestorerFactory
-        //   3. try {
-        //          handle = factory(absoluteZipPath);
-        //          metadata = handle.BuildMetadata(...);
-        //          sessionId = SessionRegistry.Open(handle, metadata);
-        //          return Success(sessionId, metadata);
-        //      }
-        //      catch (ZipException) {
-        //          return Error(InvalidBackupFile, "%restore_invalidBackupFile%");
-        //      }
-        //      catch (FileNotFoundException) {
-        //          return Error(MissingBackupFile, "%restore_missingBackupFile%");
-        //      }
-        //      catch (IOException) {
-        //          return Error(IoError, "%restore_ioError%");
-        //      }
-        //   4. return Task.FromResult(result)
-        throw new NotImplementedException(
-            "OpenRestoreSessionAsync not implemented yet — CAP-003 GREEN."
-        );
+        return Task.FromResult(ExecuteOpenRestoreSession(request));
+    }
+
+    /// <summary>
+    /// Synchronous guard chain + factory invocation for
+    /// <see cref="OpenRestoreSessionAsync"/>. Mirrors the
+    /// <see cref="CreateBackupAsync"/> / <c>ExecuteCreateBackup</c> pattern
+    /// (CAP-002) — wraps once at the entry point so the body can stay
+    /// readable.
+    /// </summary>
+    private RestoreSessionResult ExecuteOpenRestoreSession(OpenRestoreSessionRequest request)
+    {
+        // EXPLANATION:
+        // Guard chain mirrors the data-contracts.md §4.2 error matrix:
+        //   (1) zipPath non-empty AND File.Exists → otherwise MissingBackupFile
+        //       (TS-017; the precondition fires before invoking the factory so
+        //       we don't even attempt to open a non-existent file).
+        //   (2) Resolve factory = RestorerFactoryOverride ?? DefaultRestorerHandle.
+        //   (3) Invoke factory inside try/catch with exception classification:
+        //       - FileNotFoundException → MissingBackupFile (defensive — covers
+        //         the race where the file was deleted between (1) and (3)).
+        //       - ZipException          → InvalidBackupFile (TS-016, gm-014,
+        //         gm-025 wire-side).
+        //       - IOException (other)   → IoError.
+        //   (4) On factory success: BuildMetadata → SessionRegistry.Open → return
+        //       Success(sessionId, metadata).
+
+        // (1) zipPath non-empty AND File.Exists precondition (TS-017).
+        if (string.IsNullOrEmpty(request.ZipPath) || !File.Exists(request.ZipPath))
+        {
+            return new RestoreSessionResult.Error(
+                RestoreSessionErrorCode.MissingBackupFile,
+                "%restore_missingBackupFile%",
+                new[] { request.ZipPath }
+            );
+        }
+
+        // (2) Resolve factory — test seam takes precedence.
+        Func<string, IRestorerHandle> factory =
+            RestorerFactoryOverride ?? (path => new DefaultRestorerHandle(path));
+
+        // (3) + (4) Factory invocation with error classification.
+        IRestorerHandle handle;
+        try
+        {
+            handle = factory(request.ZipPath);
+        }
+        catch (ZipException)
+        {
+            // gm-014: SharpZipLib reports a corrupt/non-ZIP file by throwing
+            // ZipException during ctor or central-directory read. The wire-
+            // stable code is InvalidBackupFile per data-contracts.md §4.2.
+            return new RestoreSessionResult.Error(
+                RestoreSessionErrorCode.InvalidBackupFile,
+                "%restore_invalidBackupFile%",
+                new[] { request.ZipPath }
+            );
+        }
+        catch (FileNotFoundException)
+        {
+            // Defensive — the File.Exists precondition above caught the
+            // common case; this catch only fires on the race where the file
+            // is removed between the precondition and the factory call.
+            return new RestoreSessionResult.Error(
+                RestoreSessionErrorCode.MissingBackupFile,
+                "%restore_missingBackupFile%",
+                new[] { request.ZipPath }
+            );
+        }
+        catch (IOException)
+        {
+            // Generic IO failure (network drive disconnect, permission denied,
+            // out-of-disk). Per data-contracts.md §4.2 error matrix this maps
+            // to IoError. MUST come AFTER the more specific catches above.
+            return new RestoreSessionResult.Error(
+                RestoreSessionErrorCode.IoError,
+                "%restore_ioError%",
+                new[] { request.ZipPath }
+            );
+        }
+
+        // (4) Factory succeeded — project metadata, register session, return Success.
+        RestorerMetadata metadata = handle.BuildMetadata(request.PreferredDestinationProjectId);
+        string sessionId = SessionRegistry.Open(handle, metadata);
+        return new RestoreSessionResult.Success(sessionId, metadata);
     }
 }
