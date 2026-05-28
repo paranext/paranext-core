@@ -1,6 +1,14 @@
 {
   "metadata": {},
   "localizedStrings": {
-    "en": {}
+    "en": {
+      "%book_chooser_submit%": "OK",
+      "%book_chooser_cancel%": "Cancel",
+      "%book_chooser_grid_aria_label%": "Choose books",
+      "%book_chooser_canon_group_ot%": "Old Testament",
+      "%book_chooser_canon_group_nt%": "New Testament",
+      "%book_chooser_canon_group_dc%": "Deuterocanon",
+      "%book_chooser_canon_group_extra%": "Extra"
+    }
   }
 }
