@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using Paratext.Data.Users;
 
 namespace Paranext.DataProvider.BackupRestore;
 
@@ -128,20 +130,65 @@ internal static class SharedProjectFilterService
     )
     {
         // EXPLANATION:
-        // RED-state stub. The GREEN implementation (CAP-018 Implementer phase) will:
-        //   1. Scan `fileList` for any item whose SourceFile.FileName matches either
-        //      ProjectPermissionManager.fileName or .legacyProjectUsersFileName
-        //      (StringComparison.OrdinalIgnoreCase). Set `hasSharedFiles` accordingly.
-        //   2. If `hasSharedFiles` is false, return immediately with the input list
-        //      unchanged and `HasSharedFiles=false`. The callback is NOT invoked.
-        //   3. If `hasSharedFiles` is true, invoke `userConfirmsContinue()` exactly once.
-        //      If it returned false, return with `HasSharedFiles=true` and the input list
-        //      unchanged. The caller is responsible for aborting the restore.
-        //   4. If it returned true, remove from `fileList` every item whose
-        //      SourceFile.FileName matches any of the 3-file removal set (the 2 detection
-        //      names PLUS ProjectPermissionManager.legacyProjectUserFieldsFileName), and
-        //      return with `HasSharedFiles=true` and the now-trimmed list.
-        // See the // === PORTED FROM PT9 === block above for the canonical PT9 source.
-        throw new NotImplementedException("SharedProjectFilterService.Filter is RED-state.");
+        // Three branches, gated by detection:
+        //   1. No detection-set match → HasSharedFiles=false, list unchanged, callback NOT invoked.
+        //   2. Detection-set match + callback returns false → HasSharedFiles=true, list unchanged
+        //      (caller aborts).
+        //   3. Detection-set match + callback returns true → HasSharedFiles=true, list mutated by
+        //      RemoveAll over the 3-name removal set.
+        //
+        // PT9 parity: input list is mutated in place via List.RemoveAll. The IList<> parameter is
+        // cast to List<> to preserve mutation; a non-List caller gets a defensive copy (untested
+        // path — all tests pass List<RestoreFileInfo>).
+        var list = fileList as List<RestoreFileInfo> ?? new List<RestoreFileInfo>(fileList);
+
+        if (!list.Any(IsDetectionFile))
+            return new SharedProjectFilterResult(false, list);
+
+        if (!userConfirmsContinue())
+            return new SharedProjectFilterResult(true, list);
+
+        list.RemoveAll(IsRemovalFile);
+        return new SharedProjectFilterResult(true, list);
+    }
+
+    // EXPLANATION:
+    // Detection set (2 names) — governs HasSharedFiles. Per PT9 RestoreForm.cs:367-368, the
+    // detection check is the gate for the entire warning + removal branch.
+    private static bool IsDetectionFile(RestoreFileInfo fileInfo)
+    {
+        string? fileName = fileInfo.SourceFile?.FileName;
+        if (fileName == null)
+            return false;
+        return fileName.Equals(
+                ProjectPermissionManager.fileName,
+                StringComparison.OrdinalIgnoreCase
+            )
+            || fileName.Equals(
+                ProjectPermissionManager.legacyProjectUsersFileName,
+                StringComparison.OrdinalIgnoreCase
+            );
+    }
+
+    // EXPLANATION:
+    // Removal set (3 names) — detection set PLUS legacyProjectUserFieldsFileName. Per PT9
+    // RestoreForm.cs:386-388. Asymmetry is intentional and locked by tests.
+    private static bool IsRemovalFile(RestoreFileInfo fileInfo)
+    {
+        string? fileName = fileInfo.SourceFile?.FileName;
+        if (fileName == null)
+            return false;
+        return fileName.Equals(
+                ProjectPermissionManager.fileName,
+                StringComparison.OrdinalIgnoreCase
+            )
+            || fileName.Equals(
+                ProjectPermissionManager.legacyProjectUsersFileName,
+                StringComparison.OrdinalIgnoreCase
+            )
+            || fileName.Equals(
+                ProjectPermissionManager.legacyProjectUserFieldsFileName,
+                StringComparison.OrdinalIgnoreCase
+            );
     }
 }
