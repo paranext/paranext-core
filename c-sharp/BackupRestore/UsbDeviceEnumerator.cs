@@ -105,57 +105,8 @@ internal static class UsbDeviceEnumerator
         if (overrideList is not null)
             return overrideList;
 
-        // EXPLANATION:
-        // First-cut platform implementation (per strategic-plan §CAP-006 +
-        // ALIGNMENT-003): use DriveInfo.GetDrives() filtered by
-        // DriveType.Removable across Windows / Linux / macOS. PT9's WMI
-        // (Windows InterfaceType='USB' enrichment) and UDisks2 (Linux D-Bus)
-        // enrichments are deferred — the BCL gives us a working baseline that
-        // matches the PT9 IsRemovable + size > 5MB gate.
-        //
-        // Per-drive try/catch mimics PT9's ErrorUtils.IgnoreErrors at
-        // PathUtils.cs:210 — a single broken drive (e.g., a removed mid-scan
-        // card reader) must not abort the whole enumeration.
-        var collected = new List<StorageDevice>();
-        DriveInfo[] drives;
-        try
-        {
-            drives = DriveInfo.GetDrives();
-        }
-        catch
-        {
-            // If the OS itself refuses to enumerate drives (rare; e.g., macOS
-            // sandbox without disk access), the contract is still "return a
-            // list, possibly empty" — never throw.
-            return Array.Empty<StorageDevice>();
-        }
-
-        foreach (DriveInfo drive in drives)
-        {
-            try
-            {
-                if (!drive.IsReady)
-                    continue;
-                if (drive.DriveType != DriveType.Removable)
-                    continue;
-
-                collected.Add(
-                    new StorageDevice
-                    {
-                        RootPath = drive.Name,
-                        Label = drive.VolumeLabel ?? string.Empty,
-                        IsRemovable = true,
-                        TotalSizeBytes = drive.TotalSize,
-                    }
-                );
-            }
-            catch
-            {
-                // Match PT9 PathUtils.cs:210 — "Will assume no USB drive
-                // available on errors". Skip this drive and continue.
-            }
-        }
-
+        // Three-stage pipeline: collect → INV-C03 → (Linux only) INV-C04.
+        List<StorageDevice> collected = CollectAttachedRemovableDrives();
         IReadOnlyList<StorageDevice> filtered = ApplyCommonFilter(collected);
 
         // INV-C04 is Linux-only per PT9 PathUtils.cs:320 (the marker check
@@ -164,6 +115,93 @@ internal static class UsbDeviceEnumerator
             filtered = ApplyLinuxMarkerFilter(filtered);
 
         return filtered;
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: PtxUtils/PathUtils.cs:194-200 (entry dispatch),
+    //         PtxUtils/PathUtils.cs:210 (ErrorUtils.IgnoreErrors-per-drive).
+    /// <summary>
+    /// Collects every attached drive that the BCL surfaces as a ready
+    /// <see cref="DriveType.Removable"/> device, mapped to the PT10 wire
+    /// shape. The result is "pre-filter" — <see cref="ApplyCommonFilter"/>
+    /// (and on Linux, <see cref="ApplyLinuxMarkerFilter"/>) still need to run
+    /// over it before it can be returned to a caller.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// First-cut platform implementation (per strategic-plan §CAP-006 +
+    /// ALIGNMENT-003): use <see cref="DriveInfo.GetDrives"/> filtered by
+    /// <see cref="DriveType.Removable"/> across Windows / Linux / macOS.
+    /// PT9's WMI (Windows <c>InterfaceType='USB'</c> enrichment) and UDisks2
+    /// (Linux D-Bus) enrichments are deferred — the BCL gives us a working
+    /// baseline that matches the PT9 IsRemovable + size &gt; 5MB gate.
+    /// </para>
+    /// <para>
+    /// If the OS itself refuses to enumerate drives (rare; e.g., macOS
+    /// sandbox without disk access), the contract is still "return a list,
+    /// possibly empty" — never throw.
+    /// </para>
+    /// </remarks>
+    private static List<StorageDevice> CollectAttachedRemovableDrives()
+    {
+        DriveInfo[] drives;
+        try
+        {
+            drives = DriveInfo.GetDrives();
+        }
+        catch
+        {
+            // OS-level failure → empty list, per the never-throw contract.
+            return new List<StorageDevice>();
+        }
+
+        var collected = new List<StorageDevice>(drives.Length);
+        foreach (DriveInfo drive in drives)
+        {
+            StorageDevice? mapped = TryMapDriveToStorageDevice(drive);
+            if (mapped is not null)
+                collected.Add(mapped);
+        }
+        return collected;
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: PtxUtils/PathUtils.cs:210 (ErrorUtils.IgnoreErrors-per-drive).
+    /// <summary>
+    /// Maps one <see cref="DriveInfo"/> to a <see cref="StorageDevice"/>, or
+    /// returns <see langword="null"/> if the drive is not eligible
+    /// (not ready / not <see cref="DriveType.Removable"/>) or the BCL throws
+    /// while reading it.
+    /// </summary>
+    /// <remarks>
+    /// Mirrors PT9's <c>ErrorUtils.IgnoreErrors</c> per-drive semantics — a
+    /// single broken drive (e.g., a removed mid-scan card reader) must not
+    /// abort the whole enumeration. The caller treats <see langword="null"/>
+    /// as "skip this drive".
+    /// </remarks>
+    private static StorageDevice? TryMapDriveToStorageDevice(DriveInfo drive)
+    {
+        try
+        {
+            if (!drive.IsReady)
+                return null;
+            if (drive.DriveType != DriveType.Removable)
+                return null;
+
+            return new StorageDevice
+            {
+                RootPath = drive.Name,
+                Label = drive.VolumeLabel ?? string.Empty,
+                IsRemovable = true,
+                TotalSizeBytes = drive.TotalSize,
+            };
+        }
+        catch
+        {
+            // Match PT9 PathUtils.cs:210 — "Will assume no USB drive
+            // available on errors". Skip this drive and continue.
+            return null;
+        }
     }
 
     // === PORTED FROM PT9 ===
