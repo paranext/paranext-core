@@ -64,6 +64,13 @@ internal sealed partial class BackupRestoreDataProvider
     /// </remarks>
     internal static Func<string, IRestorerHandle>? RestorerFactoryOverride { get; set; }
 
+    // Cached production factory delegate — lifted to a static readonly field so
+    // the per-call lambda allocation is paid once (at class init) rather than on
+    // every OpenRestoreSession invocation. Mirrors the
+    // BackupOrchestrator.PersistChangesOverride / default-delegate pattern.
+    private static readonly Func<string, IRestorerHandle> DefaultRestorerFactory =
+        path => new DefaultRestorerHandle(path);
+
     /// <summary>
     /// Wire entry point for M-002 openRestoreSession (data-contracts.md §4.2).
     /// Constructs a <see cref="IRestorerHandle"/> over the backup ZIP at
@@ -120,16 +127,15 @@ internal sealed partial class BackupRestoreDataProvider
         // (1) zipPath non-empty AND File.Exists precondition (TS-017).
         if (string.IsNullOrEmpty(request.ZipPath) || !File.Exists(request.ZipPath))
         {
-            return new RestoreSessionResult.Error(
+            return OpenError(
                 RestoreSessionErrorCode.MissingBackupFile,
                 "%restore_missingBackupFile%",
-                new[] { request.ZipPath }
+                request.ZipPath
             );
         }
 
         // (2) Resolve factory — test seam takes precedence.
-        Func<string, IRestorerHandle> factory =
-            RestorerFactoryOverride ?? (path => new DefaultRestorerHandle(path));
+        Func<string, IRestorerHandle> factory = RestorerFactoryOverride ?? DefaultRestorerFactory;
 
         // (3) + (4) Factory invocation with error classification.
         IRestorerHandle handle;
@@ -142,10 +148,10 @@ internal sealed partial class BackupRestoreDataProvider
             // gm-014: SharpZipLib reports a corrupt/non-ZIP file by throwing
             // ZipException during ctor or central-directory read. The wire-
             // stable code is InvalidBackupFile per data-contracts.md §4.2.
-            return new RestoreSessionResult.Error(
+            return OpenError(
                 RestoreSessionErrorCode.InvalidBackupFile,
                 "%restore_invalidBackupFile%",
-                new[] { request.ZipPath }
+                request.ZipPath
             );
         }
         catch (FileNotFoundException)
@@ -153,10 +159,10 @@ internal sealed partial class BackupRestoreDataProvider
             // Defensive — the File.Exists precondition above caught the
             // common case; this catch only fires on the race where the file
             // is removed between the precondition and the factory call.
-            return new RestoreSessionResult.Error(
+            return OpenError(
                 RestoreSessionErrorCode.MissingBackupFile,
                 "%restore_missingBackupFile%",
-                new[] { request.ZipPath }
+                request.ZipPath
             );
         }
         catch (IOException)
@@ -164,16 +170,28 @@ internal sealed partial class BackupRestoreDataProvider
             // Generic IO failure (network drive disconnect, permission denied,
             // out-of-disk). Per data-contracts.md §4.2 error matrix this maps
             // to IoError. MUST come AFTER the more specific catches above.
-            return new RestoreSessionResult.Error(
-                RestoreSessionErrorCode.IoError,
-                "%restore_ioError%",
-                new[] { request.ZipPath }
-            );
+            return OpenError(RestoreSessionErrorCode.IoError, "%restore_ioError%", request.ZipPath);
         }
 
         // (4) Factory succeeded — project metadata, register session, return Success.
         RestorerMetadata metadata = handle.BuildMetadata(request.PreferredDestinationProjectId);
         string sessionId = SessionRegistry.Open(handle, metadata);
         return new RestoreSessionResult.Success(sessionId, metadata);
+    }
+
+    /// <summary>
+    /// Build a <see cref="RestoreSessionResult.Error"/> envelope for an
+    /// <see cref="OpenRestoreSessionAsync"/> failure. Centralizes the wire-stable
+    /// shape (data-contracts.md §4.2) so the four error sites in
+    /// <see cref="ExecuteOpenRestoreSession"/> stay uniform: missing-file guard,
+    /// FileNotFound catch, ZipException catch, IOException catch.
+    /// </summary>
+    private static RestoreSessionResult.Error OpenError(
+        RestoreSessionErrorCode code,
+        string localizationKey,
+        string zipPath
+    )
+    {
+        return new RestoreSessionResult.Error(code, localizationKey, new[] { zipPath });
     }
 }
