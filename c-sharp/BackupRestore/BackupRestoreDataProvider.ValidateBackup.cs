@@ -117,6 +117,7 @@ internal sealed partial class BackupRestoreDataProvider
         CancellationToken cancellationToken = default
     )
     {
+        // Reserved for future asynchronicity — validation is two pure function calls.
         _ = cancellationToken;
 
         // Step 1 — first-failing-rule chain (CAP-014 / EXT-102).
