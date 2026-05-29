@@ -6,6 +6,7 @@ import {
   TableContents,
 } from '@/components/advanced/data-table/data-table.component';
 import { OccurrencesTable } from '@/components/advanced/inventory/occurrences-table.component';
+import { Button } from '@/components/shadcn-ui/button';
 import { Checkbox } from '@/components/shadcn-ui/checkbox';
 import { Input } from '@/components/shadcn-ui/input';
 import { Label } from '@/components/shadcn-ui/label';
@@ -23,14 +24,21 @@ import {
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
 import { Scope } from '@/components/utils/scripture.util';
+import { readDirection } from '@/utils/dir-helper.util';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { deepEqual, isString, LocalizedStringValue } from 'platform-bible-utils';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { inventoryAdditionalItemColumn } from './inventory-columns';
 import {
+  FilterHistoryEntry,
+  FilterHistoryState,
   getStatusForItem,
+  goBackFilterHistory,
+  goForwardFilterHistory,
   InventoryItemOccurrence,
   InventoryTableData,
+  pushFilterHistory,
   Status,
 } from './inventory-utils';
 
@@ -95,6 +103,8 @@ export const INVENTORY_STRING_KEYS = Object.freeze([
   '%webView_inventory_occurrences_table_header_reference%',
   '%webView_inventory_occurrences_table_header_occurrence%',
   '%webView_inventory_no_results%',
+  '%webView_inventory_previousFilter%',
+  '%webView_inventory_nextFilter%',
 ] as const);
 
 export type InventoryLocalizedStrings = {
@@ -255,11 +265,20 @@ export function Inventory({
     '%webView_inventory_show_additional_items%',
   );
   const noResultsText = localizeString(localizedStrings, '%webView_inventory_no_results%');
+  const previousFilterText = localizeString(localizedStrings, '%webView_inventory_previousFilter%');
+  const nextFilterText = localizeString(localizedStrings, '%webView_inventory_nextFilter%');
 
   const [showAdditionalItems, setShowAdditionalItems] = useState<boolean>(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [textFilter, setTextFilter] = useState<string>('');
   const [selectedItem, setSelectedItem] = useState<string[]>([]);
+  // Per-instance back/forward history for the status + scope filters. The text filter is
+  // deliberately excluded. This state is intentionally NOT persisted (no useWebViewState), so it
+  // resets when the inventory is reopened.
+  const [filterHistory, setFilterHistory] = useState<FilterHistoryState>({
+    backStack: [],
+    forwardStack: [],
+  });
 
   const tableData: InventoryTableData[] = useMemo(() => {
     const safeInventoryItems = inventoryItems ?? [];
@@ -347,8 +366,30 @@ export function Inventory({
     }
   };
 
+  // Snapshot of the currently-applied history-tracked filters (status + scope). Used both to record
+  // history before a user change and to push the current state onto the opposite stack on traversal.
+  const currentFilterEntry: FilterHistoryEntry = { statusFilter, scope };
+
+  // Applies a filter snapshot returned by a back/forward traversal to the live filters. Does NOT
+  // record history (traversal must not re-record, or the stacks would grow without bound).
+  const applyFilterEntry = (entry: FilterHistoryEntry) => {
+    if (
+      entry.statusFilter === 'all' ||
+      entry.statusFilter === 'approved' ||
+      entry.statusFilter === 'unapproved' ||
+      entry.statusFilter === 'unknown'
+    ) {
+      setStatusFilter(entry.statusFilter);
+    }
+    if (entry.scope === 'book' || entry.scope === 'chapter' || entry.scope === 'verse') {
+      onScopeChange(entry.scope);
+    }
+  };
+
   const handleScopeChange = (value: string) => {
     if (value === 'book' || value === 'chapter' || value === 'verse') {
+      // Record the pre-change filters before applying the user's choice.
+      setFilterHistory((history) => pushFilterHistory(history, currentFilterEntry));
       onScopeChange(value);
     } else {
       throw new Error(`Invalid scope value: ${value}`);
@@ -357,11 +398,32 @@ export function Inventory({
 
   const handleStatusFilterChange = (value: string) => {
     if (value === 'all' || value === 'approved' || value === 'unapproved' || value === 'unknown') {
+      // Record the pre-change filters before applying the user's choice.
+      setFilterHistory((history) => pushFilterHistory(history, currentFilterEntry));
       setStatusFilter(value);
     } else {
       throw new Error(`Invalid status filter value: ${value}`);
     }
   };
+
+  const handleGoBack = () => {
+    const { state, applied } = goBackFilterHistory(filterHistory, currentFilterEntry);
+    setFilterHistory(state);
+    if (applied) applyFilterEntry(applied);
+  };
+
+  const handleGoForward = () => {
+    const { state, applied } = goForwardFilterHistory(filterHistory, currentFilterEntry);
+    setFilterHistory(state);
+    if (applied) applyFilterEntry(applied);
+  };
+
+  const canGoBack = filterHistory.backStack.length > 0;
+  const canGoForward = filterHistory.forwardStack.length > 0;
+  const direction = readDirection();
+  // In RTL, "back" (previous) points right and "forward" (next) points left — mirror the chevrons.
+  const BackIcon = direction === 'ltr' ? ChevronLeft : ChevronRight;
+  const ForwardIcon = direction === 'ltr' ? ChevronRight : ChevronLeft;
 
   const occurrenceData: InventoryItemOccurrence[] = useMemo(() => {
     if (reducedTableData.length === 0 || selectedItem.length === 0) return [];
@@ -383,10 +445,27 @@ export function Inventory({
             so the checkbox label can truncate before the scrollbar appears */}
         {/* eslint-disable-next-line react/forbid-dom-props */}
         <div className="tw:flex tw:items-stretch" style={{ contain: 'inline-size' }}>
-          <Select
-            onValueChange={(value) => handleStatusFilterChange(value)}
-            defaultValue={statusFilter}
+          <Button
+            variant="outline"
+            size="icon"
+            className="tw:m-1 tw:shrink-0"
+            aria-label={previousFilterText}
+            disabled={!canGoBack}
+            onClick={handleGoBack}
           >
+            <BackIcon className="tw:h-4 tw:w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="tw:m-1 tw:shrink-0"
+            aria-label={nextFilterText}
+            disabled={!canGoForward}
+            onClick={handleGoForward}
+          >
+            <ForwardIcon className="tw:h-4 tw:w-4" />
+          </Button>
+          <Select onValueChange={(value) => handleStatusFilterChange(value)} value={statusFilter}>
             <SelectTrigger className="tw:m-1 tw:w-auto tw:flex-1">
               <SelectValue placeholder="Select filter" />
             </SelectTrigger>
@@ -397,7 +476,7 @@ export function Inventory({
               <SelectItem value="unknown">{unknownItemsText}</SelectItem>
             </SelectContent>
           </Select>
-          <Select onValueChange={(value) => handleScopeChange(value)} defaultValue={scope}>
+          <Select onValueChange={(value) => handleScopeChange(value)} value={scope}>
             <SelectTrigger className="tw:m-1 tw:w-auto tw:flex-1">
               <SelectValue placeholder="Select scope" />
             </SelectTrigger>

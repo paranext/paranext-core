@@ -1,4 +1,13 @@
-import { getNumberFromUSFM, getLinesFromUSFM, getBookIdFromUSFM } from './inventory-utils';
+import {
+  getNumberFromUSFM,
+  getLinesFromUSFM,
+  getBookIdFromUSFM,
+  pushFilterHistory,
+  goBackFilterHistory,
+  goForwardFilterHistory,
+  FilterHistoryEntry,
+  FilterHistoryState,
+} from './inventory-utils';
 
 test('Get lines from USFM string', async () => {
   const input: string = `Input text line 1\nThis is line 2\\v This is line 3\\c This is line 4\\id This is line 5\nThis is line 6
@@ -89,3 +98,101 @@ test('Try to get book number for random (non-USFM) string', async () => {
   const id: string = getBookIdFromUSFM(input);
   expect(id).toEqual('');
 });
+
+/* #region Filter back/forward history state machine */
+
+const emptyHistory: FilterHistoryState = { backStack: [], forwardStack: [] };
+const allBook: FilterHistoryEntry = { statusFilter: 'all', scope: 'book' };
+const approvedBook: FilterHistoryEntry = { statusFilter: 'approved', scope: 'book' };
+const approvedChapter: FilterHistoryEntry = { statusFilter: 'approved', scope: 'chapter' };
+
+// Invariant (i): a user-initiated filter change pushes the prior state onto the back stack and
+// clears the forward stack.
+test('Filter history: user filter change pushes prior state and clears forward stack', () => {
+  // Start with something already on the forward stack (as if the user had gone back).
+  const history: FilterHistoryState = { backStack: [allBook], forwardStack: [approvedChapter] };
+
+  const next = pushFilterHistory(history, approvedBook);
+
+  expect(next.backStack).toEqual([allBook, approvedBook]);
+  // forward stack must be cleared by a fresh user choice
+  expect(next.forwardStack).toEqual([]);
+});
+
+// Invariant (ii): goBack pops the back stack, pushes the current state onto the forward stack, and
+// applies the popped state.
+test('Filter history: goBack pops backStack, pushes current to forwardStack, applies popped', () => {
+  const history: FilterHistoryState = { backStack: [allBook, approvedBook], forwardStack: [] };
+
+  const result = goBackFilterHistory(history, approvedChapter);
+
+  expect(result.applied).toEqual(approvedBook); // most recent back entry is applied
+  expect(result.state.backStack).toEqual([allBook]); // popped off the back stack
+  expect(result.state.forwardStack).toEqual([approvedChapter]); // current pushed to forward
+});
+
+test('Filter history: goBack on empty backStack is a no-op with nothing to apply', () => {
+  const result = goBackFilterHistory(emptyHistory, allBook);
+
+  expect(result.applied).toBeUndefined();
+  expect(result.state).toEqual(emptyHistory);
+});
+
+// Invariant (iii): goForward pops the forward stack, pushes the current state onto the back stack,
+// and applies the popped state.
+test('Filter history: goForward pops forwardStack, pushes current to backStack, applies popped', () => {
+  const history: FilterHistoryState = { backStack: [allBook], forwardStack: [approvedChapter] };
+
+  const result = goForwardFilterHistory(history, approvedBook);
+
+  expect(result.applied).toEqual(approvedChapter); // most recent forward entry is applied
+  expect(result.state.forwardStack).toEqual([]); // popped off the forward stack
+  expect(result.state.backStack).toEqual([allBook, approvedBook]); // current pushed to back
+});
+
+test('Filter history: goForward on empty forwardStack is a no-op with nothing to apply', () => {
+  const result = goForwardFilterHistory(emptyHistory, allBook);
+
+  expect(result.applied).toBeUndefined();
+  expect(result.state).toEqual(emptyHistory);
+});
+
+// Invariant (iv): button-disabled state is derivable from stack emptiness. On mount both stacks are
+// empty, so both buttons are disabled.
+test('Filter history: button disabled iff its stack is empty', () => {
+  expect(emptyHistory.backStack.length === 0).toBe(true); // back disabled on mount
+  expect(emptyHistory.forwardStack.length === 0).toBe(true); // forward disabled on mount
+
+  const afterChange = pushFilterHistory(emptyHistory, allBook);
+  expect(afterChange.backStack.length === 0).toBe(false); // back now enabled
+  expect(afterChange.forwardStack.length === 0).toBe(true); // forward still disabled
+
+  const afterBack = goBackFilterHistory(afterChange, approvedBook);
+  expect(afterBack.state.backStack.length === 0).toBe(true); // back disabled again
+  expect(afterBack.state.forwardStack.length === 0).toBe(false); // forward now enabled
+});
+
+// Traversal must NOT re-record history: a back-then-forward round trip returns to the original
+// stacks and does not grow them (no infinite loop / no duplicate entries).
+test('Filter history: back-then-forward round trip does not re-record history', () => {
+  // User makes one change: backStack=[allBook], current=approvedBook, forwardStack=[]
+  const afterChange = pushFilterHistory(emptyHistory, allBook);
+  expect(afterChange.backStack).toEqual([allBook]);
+
+  // Go back: current (approvedBook) moves to forward, allBook is applied.
+  const back = goBackFilterHistory(afterChange, approvedBook);
+  expect(back.applied).toEqual(allBook);
+  expect(back.state.backStack).toEqual([]);
+  expect(back.state.forwardStack).toEqual([approvedBook]);
+
+  // Go forward again: current is now allBook (the applied snapshot); approvedBook is re-applied.
+  const forward = goForwardFilterHistory(back.state, allBook);
+  expect(forward.applied).toEqual(approvedBook);
+
+  // We must be back to exactly the post-change state — stacks did not grow.
+  expect(forward.state).toEqual(afterChange);
+  expect(forward.state.backStack.length).toBe(1);
+  expect(forward.state.forwardStack.length).toBe(0);
+});
+
+/* #endregion */
