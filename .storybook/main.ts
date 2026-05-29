@@ -130,6 +130,13 @@ const config: StorybookConfig = {
         ...webpackConfig.resolve.alias,
         '@': join(__dirname, '../lib/platform-bible-react/src'),
         'platform-bible-react': join(__dirname, '../lib/platform-bible-react/src/index.ts'),
+        // `@papi/frontend/react` is a webpack external in the extension build and is provided by
+        // the extension host at runtime; it is not bundled and not resolvable in Storybook's
+        // renderer-derived webpack config. Alias it to a vitest-free Storybook stub so bundled
+        // extension components that import header-label hooks (e.g. the inventory wrappers'
+        // `useLocalizedStrings`) build and render in Storybook. Mirrors the vitest alias in
+        // `extensions/vitest.config.ts`.
+        '@papi/frontend/react': join(__dirname, 'papi-frontend-react.mock.ts'),
       };
     }
 
