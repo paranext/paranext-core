@@ -62,6 +62,18 @@
         "default": "",
         "includeProjectInterfaces": ["Paratext", "Scripture"]
       },
+      "platformScripture.validMixedCapitalization": {
+        "label": "%project_settings_platformScripture_validMixedCapitalization_label%",
+        "description": "%project_settings_platformScripture_validMixedCapitalization_description%",
+        "default": "",
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.invalidMixedCapitalization": {
+        "label": "%project_settings_platformScripture_invalidMixedCapitalization_label%",
+        "description": "%project_settings_platformScripture_invalidMixedCapitalization_description%",
+        "default": "",
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
       "platformScripture.baseCharacterClassRegex": {
         "label": "%project_settings_platformScripture_baseCharacterClassRegex_label%",
         "isHidden": true,

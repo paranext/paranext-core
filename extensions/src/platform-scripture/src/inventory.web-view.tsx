@@ -28,8 +28,14 @@ const VALID_ITEMS_DEFAULT = '';
 const INVALID_ITEMS_DEFAULT = '';
 const MARKER_NAMES_DEFAULT: string[] = [];
 
-/** Subset of CheckType enum from Paratext.Data.Checking */
-type CheckType = 'Character' | 'RepeatedWord' | 'Marker' | 'Punctuation';
+/**
+ * Subset of CheckType enum from Paratext.Data.Checking.
+ *
+ * Note: `'MixexCapitalization'` preserves the PT9 `CheckType.InternalValue` misspelling verbatim;
+ * it is the on-wire identity that round-trips with PT9-touched projects and must not be
+ * "corrected".
+ */
+type CheckType = 'Character' | 'RepeatedWord' | 'Marker' | 'Punctuation' | 'MixexCapitalization';
 
 /** Represents an occurrence item for display in the occurrences table */
 type InventoryItemOccurrence = {
@@ -64,6 +70,12 @@ const INVENTORY_TYPE_CONFIG = {
     validItemsSetting: 'platformScripture.validPunctuation',
     invalidItemsSetting: 'platformScripture.invalidPunctuation',
     typeStringKeys: PUNCTUATION_INVENTORY_STRING_KEYS,
+  },
+  'platformScripture.mixedCapitalizationInventory': {
+    component: CharacterInventory,
+    checkId: 'MixexCapitalization' satisfies CheckType,
+    validItemsSetting: 'platformScripture.validMixedCapitalization',
+    invalidItemsSetting: 'platformScripture.invalidMixedCapitalization',
   },
 } as const;
 
