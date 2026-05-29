@@ -103,58 +103,156 @@ internal sealed partial class BackupRestoreDataProvider(
     private readonly LocalParatextProjects _paratextProjects = paratextProjects;
 
     /// <summary>
-    /// CAP-001 RED-state skeleton: returns an empty function-tuple list so the
-    /// <see cref="BackupRestoreDataProviderRegistrationTests"/> registration
-    /// assertions FAIL until CAP-001 GREEN supplies the 11-entry registration
-    /// (8 imperative methods + 3 data-type get handlers).
+    /// Registers the 12 wire entries this DataProvider exposes (9 imperative methods +
+    /// 3 data-type get handlers). The base class projects each tuple into a
+    /// <c>object:platformBackupRestore.backupRestore-data.{functionName}</c> request
+    /// handler. The 5 still-pending entries (CAP-006/008/010/024 + DT-003) are registered
+    /// as <see cref="NotImplementedException"/>-throwing lambdas whose messages name the
+    /// owning capability so the future implementer can grep to find the slot.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// GREEN-state implementer fills this with the canonical registration shape per
+    /// Registration list matches <c>data-contracts.md §4.0</c> and
     /// <c>backend-alignment.md §JSON-RPC Wire Contract</c> (lines 371-389):
     /// </para>
     /// <list type="number">
-    ///   <item>createBackup (M-001, CAP-002 — exists)</item>
-    ///   <item>openRestoreSession (M-002, CAP-003 — exists)</item>
-    ///   <item>performRestore (M-003, CAP-004 — exists)</item>
-    ///   <item>compareBackupFile (M-004, CAP-005 — exists)</item>
-    ///   <item>enumerateUsbDevices (M-005, CAP-006 — service exists; wire fragment pending;
-    ///         register as NotImplementedException-throwing lambda whose message names CAP-006)</item>
-    ///   <item>revealBackupLog (M-006, CAP-007 — exists)</item>
-    ///   <item>isDestinationPathWritable (M-009, CAP-010 — pending; stub lambda)</item>
-    ///   <item>closeRestoreSession (M-010, CAP-011 — exists)</item>
-    ///   <item>getCompareSourceContent (M-011, CAP-024 — pending; stub lambda)</item>
-    ///   <item>getBackupableProjects (DT-001 get, CAP-008 — pending; stub lambda)</item>
-    ///   <item>getRestoreDestinationProjects (DT-002 get, CAP-009 — exists)</item>
-    ///   <item>getBackupLogInfo (DT-003 get, DEC-333 — pending; stub lambda)</item>
+    ///   <item>createBackup (M-001, CAP-002 — implemented)</item>
+    ///   <item>openRestoreSession (M-002, CAP-003 — implemented)</item>
+    ///   <item>performRestore (M-003, CAP-004 — implemented)</item>
+    ///   <item>compareBackupFile (M-004, CAP-005 — implemented)</item>
+    ///   <item>enumerateUsbDevices (M-005, CAP-006 — pending; stub)</item>
+    ///   <item>revealBackupLog (M-006, CAP-007 — implemented)</item>
+    ///   <item>isDestinationPathWritable (M-009, CAP-010 — pending; stub)</item>
+    ///   <item>closeRestoreSession (M-010, CAP-011 — implemented)</item>
+    ///   <item>getCompareSourceContent (M-011, CAP-024 — pending; stub)</item>
+    ///   <item>getBackupableProjects (DT-001 get, CAP-008 — pending; stub)</item>
+    ///   <item>getRestoreDestinationProjects (DT-002 get, CAP-009 — implemented)</item>
+    ///   <item>getBackupLogInfo (DT-003 get, DEC-333 — pending; stub)</item>
     /// </list>
     /// <para>
     /// Lambda wrapper convention: each implemented method takes an optional
-    /// <see cref="CancellationToken"/> second parameter, so the delegate-creation MUST be a
-    /// lambda — <c>request =&gt; MyMethodAsync(request)</c> — rather than a method-group
-    /// conversion (which won't bind across the optional param).
+    /// <see cref="CancellationToken"/> second parameter, so the delegate creation uses an
+    /// explicit lambda — <c>request =&gt; MyMethodAsync(request)</c> — rather than a
+    /// method-group conversion (which won't bind across the optional param).
     /// </para>
     /// <para>
-    /// Still-pending wire entries (CAP-006/008/010/024 + DT-003) should be registered as
-    /// inline <see cref="NotImplementedException"/>-throwing lambdas; the exception message
-    /// must name the owning capability ID so a grep finds the slot when the owning
-    /// capability's partial fragment lands. The
-    /// <c>GetBackupLogInfo_DispatchedViaPapi_ThrowsNotImplementedWithCapabilityHint</c>
-    /// test pins this convention for the DT-003 slot.
+    /// Stub-lambda parameter type is <c>object?</c> rather than <see cref="JsonElement"/>
+    /// because <c>JsonElement</c> is a non-nullable struct and the registration tests
+    /// dispatch with a <c>null</c> positional arg — <see cref="Delegate.DynamicInvoke"/>
+    /// cannot convert <c>null</c> to a value type. <c>object?</c> is the permissive form
+    /// that accepts both <c>null</c> and any concrete JSON-deserialized request.
     /// </para>
     /// <para>
     /// Order is not load-bearing — the base class sorts function names before emitting the
-    /// <c>object:onDidCreateNetworkObject</c> event (see
-    /// <c>NetworkObjects/DataProvider.cs:50-58</c>) and PAPI dispatches by name lookup. The
-    /// list above follows the data-contracts.md §4.0 table order for readability.
+    /// <c>object:onDidCreateNetworkObject</c> event and PAPI dispatches by name lookup.
+    /// The list below follows the <c>data-contracts.md §4.0</c> table order for readability.
     /// </para>
     /// </remarks>
     protected override List<(string functionName, Delegate function)> GetFunctions()
     {
-        // CAP-001 RED-state: empty registration so the registration-content tests FAIL
-        // until CAP-001 GREEN supplies the 11 wire entries. See the XML doc above for
-        // the canonical registration shape the GREEN implementer fills in.
-        return [];
+        return
+        [
+            // ---- Imperative methods (9 — DEC-333 keeps revealBackupLog alongside the
+            //      new DT-003 BackupLogInfo data type, so the imperative count is 8 from
+            //      the post-DEC-333 contract + 1 legacy revealBackupLog = 9 today) ------
+            (
+                "createBackup",
+                new Func<BackupRequest, Task<BackupResult>>(request => CreateBackupAsync(request))
+            ),
+            (
+                "openRestoreSession",
+                new Func<OpenRestoreSessionRequest, Task<RestoreSessionResult>>(request =>
+                    OpenRestoreSessionAsync(request)
+                )
+            ),
+            (
+                "performRestore",
+                new Func<RestoreRequest, Task<RestoreOperationResult>>(request =>
+                    PerformRestoreAsync(request)
+                )
+            ),
+            (
+                "compareBackupFile",
+                new Func<CompareBackupFileRequest, Task<CompareBackupFileResult>>(request =>
+                    CompareBackupFileAsync(request)
+                )
+            ),
+            (
+                "enumerateUsbDevices",
+                // CAP-006 PENDING: replace this stub when the M-005 partial fragment
+                // (EnumerateUsbDevicesAsync) lands. The UsbDeviceEnumerator service is
+                // already GREEN but the wire-facade partial fragment is not.
+                new Func<object?, Task>(_ =>
+                    throw new NotImplementedException(
+                        "CAP-006 pending — enumerateUsbDevices wire fragment not yet landed"
+                    )
+                )
+            ),
+            (
+                "revealBackupLog",
+                new Func<RevealBackupLogRequest, Task<RevealBackupLogResult>>(request =>
+                    RevealBackupLogAsync(request)
+                )
+            ),
+            (
+                "isDestinationPathWritable",
+                // CAP-010 PENDING: replace this stub when M-009 lands (see DEC-334 — this
+                // method supersedes the former M-007 validateBackup).
+                new Func<object?, Task>(_ =>
+                    throw new NotImplementedException(
+                        "CAP-010 pending — isDestinationPathWritable wire fragment not yet landed"
+                    )
+                )
+            ),
+            (
+                "closeRestoreSession",
+                new Func<CloseRestoreSessionRequest, Task<CloseRestoreSessionResult>>(request =>
+                    CloseRestoreSessionAsync(request)
+                )
+            ),
+            (
+                "getCompareSourceContent",
+                // CAP-024 PENDING: replace this stub when M-011 lands.
+                new Func<object?, Task>(_ =>
+                    throw new NotImplementedException(
+                        "CAP-024 pending — getCompareSourceContent wire fragment not yet landed"
+                    )
+                )
+            ),
+            // ---- Subscribable data type get handlers (3) -----------------------------
+            (
+                "getBackupableProjects",
+                // CAP-008 PENDING: replace this stub when the DT-001 BackupableProjects
+                // get-handler lands. The BackupableProjectsService is GREEN (CAP-021)
+                // but the wire-facade `Get<DataType>` handler is not yet wired.
+                new Func<object?, Task>(_ =>
+                    throw new NotImplementedException(
+                        "CAP-008 pending — getBackupableProjects (DT-001) wire fragment not yet landed"
+                    )
+                )
+            ),
+            (
+                "getRestoreDestinationProjects",
+                new Func<
+                    GetRestoreDestinationProjectsRequest,
+                    Task<List<RestoreDestinationProject>>
+                >(request => GetRestoreDestinationProjectsAsync(request))
+            ),
+            (
+                "getBackupLogInfo",
+                // DT-003 / DEC-333 PENDING: replace this stub when the BackupLogInfo
+                // subscribable data type get-handler lands (capability owned by BE-7
+                // alongside CAP-001). The hint contains both "DT-003" AND "BackupLogInfo"
+                // so the canary test (GetBackupLogInfo_DispatchedViaPapi_*) finds either
+                // grep anchor; future implementers should likewise grep for "DT-003" to
+                // locate this slot.
+                new Func<object?, Task>(_ =>
+                    throw new NotImplementedException(
+                        "DT-003 pending — BackupLogInfo (getBackupLogInfo) wire fragment not yet landed; see DEC-333"
+                    )
+                )
+            ),
+        ];
     }
 
     /// <summary>
