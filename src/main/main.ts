@@ -27,6 +27,7 @@ import { extensionAssetProtocolService } from '@main/services/extension-asset-pr
 import { extensionHostService } from '@main/services/extension-host.service';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
+import { performShutdownTasks } from '@main/shutdown-tasks';
 import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
 import {
   CommandLineArgs,
@@ -41,7 +42,7 @@ import {
   MAX_ZOOM_FACTOR,
   MIN_ZOOM_FACTOR,
 } from '@shared/data/platform.data';
-import { CATEGORY_COMMAND, GET_METHODS } from '@shared/data/rpc.model';
+import { GET_METHODS } from '@shared/data/rpc.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import * as commandService from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
@@ -50,16 +51,11 @@ import { networkObjectService } from '@shared/services/network-object.service';
 import * as networkService from '@shared/services/network.service';
 import { get } from '@shared/services/project-data-provider.service';
 import { settingsService } from '@shared/services/settings.service';
-import {
-  NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
-  WebViewServiceType,
-} from '@shared/services/web-view.service-model';
 import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
-import { serializeRequestType, SerializedRequestType } from '@shared/utils/util';
+import { SerializedRequestType } from '@shared/utils/util';
 import windowStateKeeper from 'electron-window-state';
 import { CommandNames } from 'papi-shared-types';
 import {
-  AsyncVariable,
   getErrorMessage,
   isPlatformError,
   serialize,
@@ -150,7 +146,6 @@ if (!isFirstInstance) {
 // #endregion
 
 const PROCESS_CLOSE_TIME_OUT_MS = 2000;
-const SHUTDOWN_SYNC_TIME_OUT_MS = 10 * 60 * 1000; // 10 minutes
 
 /** Height of the custom title bar buttons on Windows */
 const TITLE_BAR_BUTTON_HEIGHT = 47;
@@ -529,66 +524,6 @@ async function main() {
           logger.info(`Failed to build the macOS menubar ${error}`);
         }
       })();
-    }
-
-    // Runs cleanup tasks (e.g., syncing projects) when the user closes the main window.
-    async function performShutdownTasks(): Promise<void> {
-      // Power mode: close immediately — no automatic S/R on shutdown.
-      const interfaceMode = await settingsService.get('platform.interfaceMode');
-      if (interfaceMode !== 'simple') return;
-
-      // Simple mode: cancel any in-progress sync first (e.g. a first-sync on startup), then S/R
-      // the active project. All errors are swallowed — extension may not be installed or may fail.
-      // Shutdown must never be permanently blocked.
-      // ENHANCE: cancelSync only cancels a full syncProjects, not a sendReceiveProjects (PT-3989).
-      try {
-        await networkService.requestNoRetry(
-          serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.cancelSync'),
-        );
-      } catch {
-        /* no sync in progress, or extension unavailable */
-      }
-
-      // S/R only the currently open writable Scripture Editor's project.
-      // If only a read-only Resource Viewer is open (no local changes possible), skip S/R.
-      let projectId: string | undefined;
-      try {
-        const webViewService = await networkObjectService.get<WebViewServiceType>(
-          NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
-        );
-        const openDefs = await webViewService?.getAllOpenWebViewDefinitions();
-        const activeEditor = openDefs?.find(
-          (def) => def.webViewType === 'platformScriptureEditor.react' && !def.state?.isReadOnly,
-        );
-        projectId = activeEditor?.projectId;
-      } catch {
-        /* WebView service unavailable */
-      }
-
-      if (!projectId) return;
-
-      logger.info('Syncing project on shutdown...');
-
-      const syncProjectId = projectId;
-      const syncComplete = new AsyncVariable<void>('shutdown sync', SHUTDOWN_SYNC_TIME_OUT_MS);
-      (async () => {
-        try {
-          await networkService.requestNoRetry(
-            serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.sendReceiveProjects'),
-            [syncProjectId],
-          );
-          if (!syncComplete.hasTimedOut) syncComplete.resolveToValue(undefined);
-        } catch {
-          // sync failed — settle anyway
-          if (!syncComplete.hasTimedOut) syncComplete.resolveToValue(undefined);
-        }
-      })();
-      try {
-        await syncComplete.promise;
-        logger.info('Sync on shutdown complete');
-      } catch {
-        /* timed out */
-      }
     }
 
     // The reason this code is here and not in the `app.on('will-quit')` code is that the
