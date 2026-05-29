@@ -169,7 +169,8 @@ internal static class MarbleImageIndexLoader
             var path = (string?)image.Element("Path") ?? string.Empty;
             var fileName = (string?)image.Element("FileName") ?? string.Empty;
             var caption =
-                (string?)image.Element("Caption") ?? Path.GetFileNameWithoutExtension(fileName);
+                (string?)image.Element("Caption")
+                ?? HumanizeFileName(Path.GetFileNameWithoutExtension(fileName));
             var languageCode = (string?)image.Element("LanguageCode") ?? "en";
 
             // Extract every <References>/<Reference> string. A single image can carry
@@ -316,5 +317,22 @@ internal static class MarbleImageIndexLoader
             }
         }
         return endRef;
+    }
+
+    // Mirrors PT9's filename-to-title fallback: strips the collection prefix
+    // (e.g. "ATL-0806_"), replaces underscores with spaces, and title-cases.
+    private static string HumanizeFileName(string name)
+    {
+        // Strip leading "LETTERS-DIGITS_" prefix (e.g. "ATL-0806_")
+        var underscoreIdx = name.IndexOf('_');
+        if (underscoreIdx > 0)
+        {
+            var prefix = name[..underscoreIdx];
+            var dashIdx = prefix.IndexOf('-');
+            if (dashIdx > 0 && prefix[(dashIdx + 1)..].All(char.IsDigit))
+                name = name[(underscoreIdx + 1)..];
+        }
+        var spaced = name.Replace('_', ' ');
+        return CultureInfo.InvariantCulture.TextInfo.ToTitleCase(spaced);
     }
 }
