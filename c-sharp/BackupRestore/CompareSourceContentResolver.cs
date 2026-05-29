@@ -126,35 +126,17 @@ internal static class CompareSourceContentResolver
         //   blank pane; NOT an error).
 
         // (A) Token parse + sessionId match.
-        //     Layout (CAP-020): "tok-src-" (8) + sessionId (12) + "-" (1) + fileName (n)
-        //     OR                "tok-dst-" (8) + sessionId (12) + "-" (1) + fileName (n)
-        //     Minimum length therefore = 8 + 12 + 1 = 21 (fileName may be empty).
-        const string SRC_PREFIX = "tok-src-";
-        const string DST_PREFIX = "tok-dst-";
-        const int PREFIX_LEN = 8; // both prefixes have the same length
-        const int SESSION_ID_LEN = 12;
-        const int MIN_TOKEN_LEN = PREFIX_LEN + SESSION_ID_LEN + 1; // +1 for the separator
-
-        bool isSrc = sourceToken.StartsWith(SRC_PREFIX, System.StringComparison.Ordinal);
-        bool isDst = !isSrc && sourceToken.StartsWith(DST_PREFIX, System.StringComparison.Ordinal);
-        if (!isSrc && !isDst)
+        if (
+            !TryParseToken(
+                sourceToken,
+                session.SessionId,
+                out bool isSourceSide,
+                out string fileName
+            )
+        )
         {
             return InvalidTokenError();
         }
-        if (sourceToken.Length < MIN_TOKEN_LEN)
-        {
-            return InvalidTokenError();
-        }
-        if (sourceToken[PREFIX_LEN + SESSION_ID_LEN] != '-')
-        {
-            return InvalidTokenError();
-        }
-        string sessionPortion = sourceToken.Substring(PREFIX_LEN, SESSION_ID_LEN);
-        if (!string.Equals(sessionPortion, session.SessionId, System.StringComparison.Ordinal))
-        {
-            return InvalidTokenError();
-        }
-        string fileName = sourceToken.Substring(PREFIX_LEN + SESSION_ID_LEN + 1);
 
         // (B) verseRef gate — short-circuits BEFORE any read.
         if (verseRef.BookNum == 0)
@@ -166,7 +148,7 @@ internal static class CompareSourceContentResolver
         }
 
         // (C) Branch by side.
-        if (isSrc)
+        if (isSourceSide)
         {
             var handle = (IRestorerHandle)session.Restorer;
             try
@@ -197,9 +179,77 @@ internal static class CompareSourceContentResolver
     }
 
     /// <summary>
+    /// Parse <paramref name="sourceToken"/> against the strict positional
+    /// grammar minted by <see cref="CompareToBackupBridgeService"/> (CAP-020):
+    /// <c>"tok-src-" | "tok-dst-"</c> (8) + sessionId (12) + <c>'-'</c> (1) +
+    /// fileName (n; may be empty). Any deviation — wrong prefix, length below
+    /// the 21-char minimum, missing separator, or a sessionId portion that
+    /// doesn't ordinal-equal <paramref name="expectedSessionId"/> — returns
+    /// <c>false</c> with default <c>out</c> values.
+    /// </summary>
+    /// <param name="sourceToken">Opaque token from the wire request.</param>
+    /// <param name="expectedSessionId">The live
+    /// <see cref="RestoreSession.SessionId"/> — the parser rejects any token
+    /// whose sessionId portion doesn't match (returns INVALID_TOKEN per §4.7,
+    /// not INVALID_SESSION, because the wire layer has already validated the
+    /// request's <c>sessionId</c>).</param>
+    /// <param name="isSourceSide"><c>true</c> for <c>tok-src-*</c> (backup
+    /// side, reads via <see cref="IRestorerHandle.ReadFileText"/>);
+    /// <c>false</c> for <c>tok-dst-*</c> (destination side, reads via
+    /// <see cref="ScrText.GetText(VerseRef, bool, bool)"/>).</param>
+    /// <param name="fileName">The filename portion of the token (substring
+    /// after the separator). May be empty per the CAP-020 emit format.</param>
+    /// <returns><c>true</c> if the token is fully validated; <c>false</c>
+    /// otherwise (caller should return
+    /// <see cref="GetCompareSourceContentErrorCode.InvalidToken"/>).</returns>
+    private static bool TryParseToken(
+        string sourceToken,
+        string expectedSessionId,
+        out bool isSourceSide,
+        out string fileName
+    )
+    {
+        // Layout (CAP-020): "tok-src-" (8) + sessionId (12) + "-" (1) + fileName (n)
+        // OR                "tok-dst-" (8) + sessionId (12) + "-" (1) + fileName (n)
+        // Minimum length therefore = 8 + 12 + 1 = 21 (fileName may be empty).
+        const string SRC_PREFIX = "tok-src-";
+        const string DST_PREFIX = "tok-dst-";
+        const int PREFIX_LEN = 8; // both prefixes have the same length
+        const int SESSION_ID_LEN = 12;
+        const int MIN_TOKEN_LEN = PREFIX_LEN + SESSION_ID_LEN + 1; // +1 for the separator
+
+        isSourceSide = false;
+        fileName = string.Empty;
+
+        bool isSrc = sourceToken.StartsWith(SRC_PREFIX, System.StringComparison.Ordinal);
+        bool isDst = !isSrc && sourceToken.StartsWith(DST_PREFIX, System.StringComparison.Ordinal);
+        if (!isSrc && !isDst)
+        {
+            return false;
+        }
+        if (sourceToken.Length < MIN_TOKEN_LEN)
+        {
+            return false;
+        }
+        if (sourceToken[PREFIX_LEN + SESSION_ID_LEN] != '-')
+        {
+            return false;
+        }
+        string sessionPortion = sourceToken.Substring(PREFIX_LEN, SESSION_ID_LEN);
+        if (!string.Equals(sessionPortion, expectedSessionId, System.StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        isSourceSide = isSrc;
+        fileName = sourceToken.Substring(PREFIX_LEN + SESSION_ID_LEN + 1);
+        return true;
+    }
+
+    /// <summary>
     /// Build the canonical INVALID_TOKEN error envelope. Centralizes the
-    /// localize key so the four token-parser bail-outs above stay uniform with
-    /// the §4.7 error matrix.
+    /// localize key so the four token-parser bail-outs in
+    /// <see cref="TryParseToken"/> stay uniform with the §4.7 error matrix.
     /// </summary>
     private static GetCompareSourceContentResult.Error InvalidTokenError() =>
         new(GetCompareSourceContentErrorCode.InvalidToken, "%compare_invalidSourceToken%");
