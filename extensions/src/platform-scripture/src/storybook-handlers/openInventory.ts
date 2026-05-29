@@ -9,23 +9,18 @@
  * this file directly — it is regenerated every time the script runs.
  */
 
-type Args = unknown[];
-
 const openInventorySample = 'Sample openInventory';
 
-export async function defaultOpenInventoryHandler(..._args: Args): Promise<unknown> {
+export async function defaultOpenInventoryHandler(): Promise<unknown> {
   return openInventorySample;
 }
 
-export async function emptyOpenInventoryHandler(..._args: Args): Promise<unknown> {
-  return null;
+export async function emptyOpenInventoryHandler(): Promise<unknown> {
+  return undefined;
 }
 
-export async function InternalFailureSurfacedThroughOpenInventoryHandler(
-  ..._args: Args
-): Promise<never> {
-  throw {
-    code: -32000,
-    message: 'Internal failure surfaced through the normal command-error channel (INTERNAL_ERROR)',
-  };
+export async function InternalFailureSurfacedThroughOpenInventoryHandler(): Promise<never> {
+  throw new Error(
+    '[-32000] Internal failure surfaced through the normal command-error channel (INTERNAL_ERROR)',
+  );
 }
