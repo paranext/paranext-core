@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace Paranext.DataProvider.BackupRestore;
 
@@ -27,7 +28,14 @@ namespace Paranext.DataProvider.BackupRestore;
 /// <summary>
 /// Return envelope for <see cref="BackupOrchestrator.ExecuteBackup"/>. One of
 /// <see cref="Success"/>, <see cref="OverwriteRequired"/>, or <see cref="Error"/>.
+/// Serializes/deserializes via the <c>status</c> discriminator wired by the
+/// <c>[JsonPolymorphic]</c> / <c>[JsonDerivedType]</c> attributes below, matching the
+/// TypeScript discriminated union in data-contracts.md §3.1.
 /// </summary>
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "status")]
+[JsonDerivedType(typeof(Success), "success")]
+[JsonDerivedType(typeof(OverwriteRequired), "overwrite-required")]
+[JsonDerivedType(typeof(Error), "error")]
 public abstract record BackupResult
 {
     /// <summary>

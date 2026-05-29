@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace Paranext.DataProvider.BackupRestore;
 
@@ -38,7 +39,13 @@ namespace Paranext.DataProvider.BackupRestore;
 /// <see cref="BackupRestoreDataProvider.OpenRestoreSessionAsync"/>. One of
 /// <see cref="Success"/> (session registered, metadata included) or
 /// <see cref="Error"/> (no session created).
+/// Serializes/deserializes via the <c>status</c> discriminator wired by the
+/// <c>[JsonPolymorphic]</c> / <c>[JsonDerivedType]</c> attributes below, matching the
+/// TypeScript discriminated union in data-contracts.md §3.2.
 /// </summary>
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "status")]
+[JsonDerivedType(typeof(Success), "success")]
+[JsonDerivedType(typeof(Error), "error")]
 internal abstract record RestoreSessionResult
 {
     /// <summary>

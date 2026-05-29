@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Paranext.DataProvider.BackupRestore;
 
 // === NEW IN PT10 ===
@@ -25,7 +27,14 @@ namespace Paranext.DataProvider.BackupRestore;
 /// <see cref="BackupRestoreDataProvider.CloseRestoreSessionAsync"/>. Exactly
 /// one case — <see cref="Success"/> — because M-010 is idempotent and has no
 /// error path per data-contracts.md §4.10.
+/// Serializes/deserializes via the <c>status</c> discriminator wired by the
+/// <c>[JsonPolymorphic]</c> / <c>[JsonDerivedType]</c> attributes below; without
+/// them System.Text.Json would emit a bare <c>{}</c> envelope (DELTA-005). The
+/// single-variant union keeps room for future cases (e.g. a TTL/auto-close
+/// outcome) without breaking the wire shape today.
 /// </summary>
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "status")]
+[JsonDerivedType(typeof(Success), "success")]
 internal abstract record CloseRestoreSessionResult
 {
     /// <summary>

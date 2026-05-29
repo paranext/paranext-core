@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Paranext.DataProvider.BackupRestore;
 
 // === NEW IN PT10 ===
@@ -33,7 +35,13 @@ namespace Paranext.DataProvider.BackupRestore;
 /// <see cref="BackupRestoreDataProvider.CompareBackupFileAsync"/>.
 /// Discriminated union of two cases — see <see cref="Success"/> and
 /// <see cref="Error"/>.
+/// Serializes/deserializes via the <c>status</c> discriminator wired by the
+/// <c>[JsonPolymorphic]</c> / <c>[JsonDerivedType]</c> attributes below, matching the
+/// TypeScript discriminated union in data-contracts.md §3.8.
 /// </summary>
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "status")]
+[JsonDerivedType(typeof(Success), "success")]
+[JsonDerivedType(typeof(Error), "error")]
 internal abstract record CompareBackupFileResult
 {
     /// <summary>
