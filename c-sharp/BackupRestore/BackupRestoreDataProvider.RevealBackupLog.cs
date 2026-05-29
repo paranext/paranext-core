@@ -1,4 +1,4 @@
-using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -117,13 +117,33 @@ internal sealed partial class BackupRestoreDataProvider
         CancellationToken cancellationToken = default
     )
     {
-        // CAP-007 RED stub — implemented by the TDD Implementer (Outside-In
-        // GREEN phase). The Test Writer leaves a deliberately failing body so
-        // the test fixture compiles and every CAP-007 test fails at runtime
-        // (RED state evidence). Parameters consumed to silence CA1801 / IDE
-        // warnings until GREEN replaces the body.
+        // Parameters are part of the wire contract but not consumed by the
+        // body: `request` is the parameterless envelope (CAP-007 §contract);
+        // `cancellationToken` is reserved for future asynchronicity. Suppress
+        // unused-parameter analyzers.
         _ = request;
         _ = cancellationToken;
-        throw new NotImplementedException("CAP-007 RED");
+
+        // (1) Resolve the canonical Backup.txt path via the SAME resolver the
+        //     writer uses (CAP-023). Routing through `BackupLogService.GetLogFilePath()`
+        //     — rather than a parallel inline derivation — makes INV-C14
+        //     (writer + reader share the path) hold by construction.
+        string logFilePath = BackupLogService.GetLogFilePath();
+
+        // (2) Probe File.Exists live (no caching) so the TS host can observe
+        //     first-backup transitions on a re-poll. .NET's File.Exists returns
+        //     false on any I/O error, so no try/catch is required at this layer.
+        bool logFileExists = File.Exists(logFilePath);
+
+        // (3) Envelope `Revealed` is HARD-CODED false — the C# process never
+        //     invokes shell.showItemInFolder (DEC-315). The TS host flips it
+        //     client-side after a successful OS reveal.
+        return Task.FromResult(
+            new RevealBackupLogResult(
+                Revealed: false,
+                LogFileExists: logFileExists,
+                LogFilePath: logFilePath
+            )
+        );
     }
 }
