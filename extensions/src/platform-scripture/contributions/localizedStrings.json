@@ -483,6 +483,7 @@
       "%webView_inventory_table_header_context%": "Context",
       "%webView_inventory_table_header_count%": "Count",
       "%webView_inventory_table_header_marker%": "Marker",
+      "%webView_inventory_table_header_mixed_capitalization%": "Mixed Capitalization Word",
       "%webView_inventory_table_header_preceding_marker%": "Preceding Marker",
       "%webView_inventory_table_header_punctuation%": "Punctuation",
       "%webView_inventory_table_header_repeated_words%": "Repeated Word",
