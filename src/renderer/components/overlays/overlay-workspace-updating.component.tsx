@@ -23,7 +23,11 @@ export function WorkspaceUpdatingOverlayPresentational({ label }: Props) {
       <div
         role="status"
         className="tw:fixed tw:inset-0 tw:flex tw:flex-col tw:items-center tw:justify-center tw:gap-3 tw:bg-background"
-        style={{ zIndex: Z_INDEX_WORKSPACE_UPDATING }}
+        // For some reason, applying tw:top-12 tw:right-2 tw:bottom-2 tw:left-2 instead of tw:inset-0 did not work.
+        // The top value of 48px corresponds to the height (tw:h-12) of the toolbar, and the other insets allow for window borders.
+        // Originally, I used 8px insets to match the window border size, but currently some content can drift into the border area,
+        // making the border look dirty, so I am now using 2px borders, but maybe we can things up and revisit this.
+        style={{ zIndex: Z_INDEX_WORKSPACE_UPDATING, top: 48, right: 2, bottom: 2, left: 2 }}
       >
         <Spinner />
         <p className="tw:text-sm tw:font-medium">{label}</p>
