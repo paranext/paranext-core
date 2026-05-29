@@ -1,4 +1,6 @@
 import type { DblResourceReference, ResourceReferenceList } from 'platform-scripture';
+// @ts-ignore: platform-scripture/src is not a published module entry-point; accessible via typeRoots symlink at dev time
+import { isDblResourceReference } from 'platform-scripture/src/resource-reference-list.utils';
 import { DblResourceData, isPlatformError, PlatformError } from 'platform-bible-utils';
 
 export const CURRENT_DATA_VERSION = '1.0.0';
@@ -8,7 +10,7 @@ export const DEFAULT_RESOURCE_REFERENCE_LIST: ResourceReferenceList = {
 };
 
 /**
- * Adds a DBL resource to the project's resource list.
+ * Adds a DBL resource to the project's text connections.
  *
  * Uses the admin setting path if the user has write access, or the raw user list otherwise. Calls
  * `onSelect` after a successful write.
@@ -16,24 +18,24 @@ export const DEFAULT_RESOURCE_REFERENCE_LIST: ResourceReferenceList = {
  * The non-admin path reads the raw user list directly rather than filtering the effective list by
  * source. Filtering by source would silently drop user items that also appear in the admin list
  * (tagged 'admin'), causing data loss if the admin later removes their copy.
+ *
+ * @param resource The DBL resource to select and to update the project's resource list
+ * @param adminTextConnections The admin's selected text connections
+ * @param setAdminTextConnections Function to update the admin's text connections if the current
+ *   user can update them
+ * @param canUserWriteProjectSettings Whether the user is able to write to the global text
+ *   connection project settings
+ * @param getUserTextConnections Function to retrieve the local user's text connections
+ * @param setUserTextConnections Function to set the local user's text connections
  */
-export async function selectDblResource(
+export async function selectTextConnection(
   resource: DblResourceData,
-  {
-    adminSetting,
-    setAdminSetting,
-    canUserWriteProjectSettings,
-    getUserList,
-    setUserList,
-    onSelect,
-  }: {
-    adminSetting: ResourceReferenceList | PlatformError | undefined;
-    setAdminSetting: ((value: ResourceReferenceList) => void) | undefined;
-    canUserWriteProjectSettings: (() => Promise<boolean>) | undefined;
-    getUserList: (() => Promise<ResourceReferenceList | undefined>) | undefined;
-    setUserList: ((list: ResourceReferenceList) => Promise<unknown>) | undefined;
-    onSelect?: (dblEntryUid: string) => void;
-  },
+  adminTextConnections: ResourceReferenceList | PlatformError | undefined,
+  setAdminTextConnections: ((value: ResourceReferenceList) => void) | undefined,
+  canUserWriteProjectSettings: (() => Promise<boolean>) | undefined,
+  getUserTextConnections: (() => Promise<ResourceReferenceList | undefined>) | undefined,
+  setUserTextConnections: ((list: ResourceReferenceList) => Promise<unknown>) | undefined,
+  onSelect?: (dblEntryUid: string) => void,
 ): Promise<void> {
   const newRef: DblResourceReference = {
     type: 'dblResource',
@@ -43,33 +45,27 @@ export async function selectDblResource(
 
   const canWrite = await canUserWriteProjectSettings?.();
 
-  if (canWrite && setAdminSetting) {
-    if (isPlatformError(adminSetting) || adminSetting === undefined) return;
+  if (canWrite && setAdminTextConnections) {
+    if (isPlatformError(adminTextConnections) || adminTextConnections === undefined) return;
     // Use the exact current admin setting as the base so the write is a precise update —
     // deduplicate the incoming resource and prepend it, preserving all other admin items.
-    const existingItems = adminSetting.items.filter((item) => {
-      if (item.type !== 'dblResource') return true;
-      // DblResourceReference.id exists after .type check; ResourceReference union requires cast
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      return (item as DblResourceReference).id !== resource.dblEntryUid;
-    });
-    setAdminSetting({
-      dataVersion: adminSetting.dataVersion,
+    const existingItems = adminTextConnections.items.filter(
+      (item) => !isDblResourceReference(item) || item.id !== resource.dblEntryUid,
+    );
+    setAdminTextConnections({
+      dataVersion: adminTextConnections.dataVersion,
       items: [newRef, ...existingItems],
     });
   } else {
-    const rawUserList = await getUserList?.();
+    const rawUserList = await getUserTextConnections?.();
     const rawUserItems = rawUserList?.items ?? [];
-    await setUserList?.({
+    await setUserTextConnections?.({
       dataVersion: rawUserList?.dataVersion ?? DEFAULT_RESOURCE_REFERENCE_LIST.dataVersion,
       items: [
         newRef,
-        ...rawUserItems.filter((item) => {
-          if (item.type !== 'dblResource') return true;
-          // DblResourceReference.id exists after .type check; ResourceReference union requires cast
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          return (item as DblResourceReference).id !== resource.dblEntryUid;
-        }),
+        ...rawUserItems.filter(
+          (item) => !isDblResourceReference(item) || item.id !== resource.dblEntryUid,
+        ),
       ],
     });
   }

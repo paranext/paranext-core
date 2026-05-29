@@ -1,7 +1,7 @@
 import { newPlatformError } from 'platform-bible-utils';
 import type { ResourceReferenceList } from 'platform-scripture';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { DEFAULT_RESOURCE_REFERENCE_LIST, selectDblResource } from './select-dbl-resource';
+import { DEFAULT_RESOURCE_REFERENCE_LIST, selectTextConnection } from './select-dbl-resource';
 
 const RESOURCE_A = {
   dblEntryUid: 'uid-a',
@@ -56,12 +56,12 @@ describe('selectDblResource', () => {
     });
 
     it('prepends the new resource to the admin list', async () => {
-      await selectDblResource(RESOURCE_A, {
-        adminSetting: makeAdminList(['uid-existing']),
-        setAdminSetting,
+      await selectTextConnection(RESOURCE_A, {
+        adminResourceList: makeAdminList(['uid-existing']),
+        setAdminResourceList: setAdminSetting,
         canUserWriteProjectSettings: vi.fn().mockResolvedValue(true),
-        getUserList,
-        setUserList,
+        getUserResourceList: getUserList,
+        setUserResourceList: setUserList,
         onSelect,
       });
 
@@ -75,12 +75,12 @@ describe('selectDblResource', () => {
     });
 
     it('deduplicates: removes existing entry with the same id before prepending', async () => {
-      await selectDblResource(RESOURCE_A, {
-        adminSetting: makeAdminList(['uid-a', 'uid-other']),
-        setAdminSetting,
+      await selectTextConnection(RESOURCE_A, {
+        adminResourceList: makeAdminList(['uid-a', 'uid-other']),
+        setAdminResourceList: setAdminSetting,
         canUserWriteProjectSettings: vi.fn().mockResolvedValue(true),
-        getUserList,
-        setUserList,
+        getUserResourceList: getUserList,
+        setUserResourceList: setUserList,
         onSelect,
       });
 
@@ -104,12 +104,12 @@ describe('selectDblResource', () => {
           { type: 'project' as never, name: 'some-project' },
         ],
       };
-      await selectDblResource(RESOURCE_A, {
-        adminSetting,
-        setAdminSetting,
+      await selectTextConnection(RESOURCE_A, {
+        adminResourceList: adminSetting,
+        setAdminResourceList: setAdminSetting,
         canUserWriteProjectSettings: vi.fn().mockResolvedValue(true),
-        getUserList,
-        setUserList,
+        getUserResourceList: getUserList,
+        setUserResourceList: setUserList,
         onSelect,
       });
 
@@ -121,12 +121,12 @@ describe('selectDblResource', () => {
     });
 
     it('calls onSelect with the dblEntryUid after writing', async () => {
-      await selectDblResource(RESOURCE_A, {
-        adminSetting: makeAdminList([]),
-        setAdminSetting,
+      await selectTextConnection(RESOURCE_A, {
+        adminResourceList: makeAdminList([]),
+        setAdminResourceList: setAdminSetting,
         canUserWriteProjectSettings: vi.fn().mockResolvedValue(true),
-        getUserList,
-        setUserList,
+        getUserResourceList: getUserList,
+        setUserResourceList: setUserList,
         onSelect,
       });
 
@@ -134,12 +134,12 @@ describe('selectDblResource', () => {
     });
 
     it('does not call getUserList or setUserList', async () => {
-      await selectDblResource(RESOURCE_A, {
-        adminSetting: makeAdminList([]),
-        setAdminSetting,
+      await selectTextConnection(RESOURCE_A, {
+        adminResourceList: makeAdminList([]),
+        setAdminResourceList: setAdminSetting,
         canUserWriteProjectSettings: vi.fn().mockResolvedValue(true),
-        getUserList,
-        setUserList,
+        getUserResourceList: getUserList,
+        setUserResourceList: setUserList,
         onSelect,
       });
 
@@ -148,12 +148,12 @@ describe('selectDblResource', () => {
     });
 
     it('returns early without writing when adminSetting is a PlatformError', async () => {
-      await selectDblResource(RESOURCE_A, {
-        adminSetting: newPlatformError(new Error('setting error')),
-        setAdminSetting,
+      await selectTextConnection(RESOURCE_A, {
+        adminResourceList: newPlatformError(new Error('setting error')),
+        setAdminResourceList: setAdminSetting,
         canUserWriteProjectSettings: vi.fn().mockResolvedValue(true),
-        getUserList,
-        setUserList,
+        getUserResourceList: getUserList,
+        setUserResourceList: setUserList,
         onSelect,
       });
 
@@ -162,12 +162,12 @@ describe('selectDblResource', () => {
     });
 
     it('returns early without writing when adminSetting is undefined', async () => {
-      await selectDblResource(RESOURCE_A, {
-        adminSetting: undefined,
-        setAdminSetting,
+      await selectTextConnection(RESOURCE_A, {
+        adminResourceList: undefined,
+        setAdminResourceList: setAdminSetting,
         canUserWriteProjectSettings: vi.fn().mockResolvedValue(true),
-        getUserList,
-        setUserList,
+        getUserResourceList: getUserList,
+        setUserResourceList: setUserList,
         onSelect,
       });
 
@@ -189,12 +189,12 @@ describe('selectDblResource', () => {
 
     it('prepends the new resource to the user list', async () => {
       const getUserList = vi.fn().mockResolvedValue(makeUserList(['uid-existing']));
-      await selectDblResource(RESOURCE_B, {
-        adminSetting: makeAdminList([]),
-        setAdminSetting,
+      await selectTextConnection(RESOURCE_B, {
+        adminResourceList: makeAdminList([]),
+        setAdminResourceList: setAdminSetting,
         canUserWriteProjectSettings: vi.fn().mockResolvedValue(false),
-        getUserList,
-        setUserList,
+        getUserResourceList: getUserList,
+        setUserResourceList: setUserList,
         onSelect,
       });
 
@@ -209,12 +209,12 @@ describe('selectDblResource', () => {
 
     it('deduplicates: removes existing user entry with the same id before prepending', async () => {
       const getUserList = vi.fn().mockResolvedValue(makeUserList(['uid-b', 'uid-other']));
-      await selectDblResource(RESOURCE_B, {
-        adminSetting: makeAdminList([]),
-        setAdminSetting,
+      await selectTextConnection(RESOURCE_B, {
+        adminResourceList: makeAdminList([]),
+        setAdminResourceList: setAdminSetting,
         canUserWriteProjectSettings: vi.fn().mockResolvedValue(false),
-        getUserList,
-        setUserList,
+        getUserResourceList: getUserList,
+        setUserResourceList: setUserList,
         onSelect,
       });
 
@@ -229,12 +229,12 @@ describe('selectDblResource', () => {
 
     it('uses DEFAULT_RESOURCE_REFERENCE_LIST.dataVersion when getUserList returns undefined', async () => {
       const getUserList = vi.fn().mockResolvedValue(undefined);
-      await selectDblResource(RESOURCE_A, {
-        adminSetting: makeAdminList([]),
-        setAdminSetting,
+      await selectTextConnection(RESOURCE_A, {
+        adminResourceList: makeAdminList([]),
+        setAdminResourceList: setAdminSetting,
         canUserWriteProjectSettings: vi.fn().mockResolvedValue(false),
-        getUserList,
-        setUserList,
+        getUserResourceList: getUserList,
+        setUserResourceList: setUserList,
         onSelect,
       });
 
@@ -246,12 +246,12 @@ describe('selectDblResource', () => {
 
     it('calls onSelect with the dblEntryUid after writing', async () => {
       const getUserList = vi.fn().mockResolvedValue(makeUserList([]));
-      await selectDblResource(RESOURCE_A, {
-        adminSetting: makeAdminList([]),
-        setAdminSetting,
+      await selectTextConnection(RESOURCE_A, {
+        adminResourceList: makeAdminList([]),
+        setAdminResourceList: setAdminSetting,
         canUserWriteProjectSettings: vi.fn().mockResolvedValue(false),
-        getUserList,
-        setUserList,
+        getUserResourceList: getUserList,
+        setUserResourceList: setUserList,
         onSelect,
       });
 
@@ -260,12 +260,12 @@ describe('selectDblResource', () => {
 
     it('does not call setAdminSetting', async () => {
       const getUserList = vi.fn().mockResolvedValue(makeUserList([]));
-      await selectDblResource(RESOURCE_A, {
-        adminSetting: makeAdminList([]),
-        setAdminSetting,
+      await selectTextConnection(RESOURCE_A, {
+        adminResourceList: makeAdminList([]),
+        setAdminResourceList: setAdminSetting,
         canUserWriteProjectSettings: vi.fn().mockResolvedValue(false),
-        getUserList,
-        setUserList,
+        getUserResourceList: getUserList,
+        setUserResourceList: setUserList,
         onSelect,
       });
 
@@ -274,12 +274,12 @@ describe('selectDblResource', () => {
 
     it('falls through to user path when setAdminSetting is undefined even if canWrite is true', async () => {
       const getUserList = vi.fn().mockResolvedValue(makeUserList([]));
-      await selectDblResource(RESOURCE_A, {
-        adminSetting: makeAdminList([]),
-        setAdminSetting: undefined,
+      await selectTextConnection(RESOURCE_A, {
+        adminResourceList: makeAdminList([]),
+        setAdminResourceList: undefined,
         canUserWriteProjectSettings: vi.fn().mockResolvedValue(true),
-        getUserList,
-        setUserList,
+        getUserResourceList: getUserList,
+        setUserResourceList: setUserList,
         onSelect,
       });
 
@@ -289,12 +289,12 @@ describe('selectDblResource', () => {
 
     it('takes the user path when canUserWriteProjectSettings is undefined', async () => {
       const getUserList = vi.fn().mockResolvedValue(makeUserList([]));
-      await selectDblResource(RESOURCE_A, {
-        adminSetting: makeAdminList([]),
-        setAdminSetting,
+      await selectTextConnection(RESOURCE_A, {
+        adminResourceList: makeAdminList([]),
+        setAdminResourceList: setAdminSetting,
         canUserWriteProjectSettings: undefined,
-        getUserList,
-        setUserList,
+        getUserResourceList: getUserList,
+        setUserResourceList: setUserList,
         onSelect,
       });
 
@@ -307,12 +307,12 @@ describe('selectDblResource', () => {
     it('does not throw when onSelect is not provided', async () => {
       const setUserList = vi.fn().mockResolvedValue(undefined);
       await expect(
-        selectDblResource(RESOURCE_A, {
-          adminSetting: makeAdminList([]),
-          setAdminSetting: undefined,
+        selectTextConnection(RESOURCE_A, {
+          adminResourceList: makeAdminList([]),
+          setAdminResourceList: undefined,
           canUserWriteProjectSettings: vi.fn().mockResolvedValue(false),
-          getUserList: vi.fn().mockResolvedValue(makeUserList([])),
-          setUserList,
+          getUserResourceList: vi.fn().mockResolvedValue(makeUserList([])),
+          setUserResourceList: setUserList,
         }),
       ).resolves.toBeUndefined();
     });

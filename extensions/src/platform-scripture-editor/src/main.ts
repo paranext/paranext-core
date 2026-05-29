@@ -11,6 +11,7 @@ import {
   deepEqual,
   getErrorMessage,
   PlatformEventEmitter,
+  ResourceType,
   serialize,
 } from 'platform-bible-utils';
 import {
@@ -89,6 +90,10 @@ let projectSwitchWillStartEmitter: PlatformEventEmitter<Record<string, never>> |
 let projectSwitchDidFinishEmitter: PlatformEventEmitter<Record<string, never>> | undefined;
 
 // #endregion Project Switch Events
+
+interface ResourceViewerOptions extends OpenWebViewOptions {
+  projectId?: string;
+}
 
 interface PlatformScriptureEditorOptions extends OpenWebViewOptions {
   projectId: string | undefined;
@@ -819,7 +824,7 @@ let modelTextPendingProjectId: string | undefined;
 const modelTextPanelWebViewProvider: IWebViewProvider = {
   async getWebView(
     savedWebView: SavedWebViewDefinition,
-    openWebViewOptions: OpenWebViewOptions & { projectId?: string },
+    openWebViewOptions: ResourceViewerOptions,
   ): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== MODEL_TEXT_PANEL_WEBVIEW_TYPE)
       throw new Error(
@@ -862,11 +867,13 @@ function createResourceTextPanelProvider(
   return {
     async getWebView(
       savedWebView: SavedWebViewDefinition,
-      openWebViewOptions: OpenWebViewOptions & { projectId?: string },
+      openWebViewOptions: ResourceViewerOptions,
     ): Promise<WebViewDefinition | undefined> {
       if (savedWebView.webViewType !== webViewType)
         throw new Error(
-          `${webViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
+          `${webViewType} provider received request to provide a ${
+            savedWebView.webViewType
+          } web view`,
         );
       // Priority: pending (reload path) > options (new-panel path) > saved (existing panel reload)
       const projectId = resourceTextPanelPendingProjectIds.has(webViewType)
@@ -901,7 +908,7 @@ const commentariesPanelWebViewProvider: IWebViewProvider = createResourceTextPan
 );
 
 async function openResourceText(
-  resourceType: 'ScriptureResource' | 'CommentaryResource',
+  resourceType: Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
   projectId?: string,
 ): Promise<string | undefined> {
   const webViewType =
@@ -917,7 +924,7 @@ async function openResourceText(
     return papi.webViews.reloadWebView(webViewType, existingPanel.id, { bringToFront: true });
   }
 
-  const openOptions: OpenWebViewOptions & { projectId?: string } = { projectId };
+  const openOptions: ResourceViewerOptions = { projectId };
   return papi.webViews.openWebView(webViewType, { type: 'tab' }, openOptions);
 }
 
@@ -1186,7 +1193,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
         });
       }
 
-      const openOptions: OpenWebViewOptions & { projectId?: string } = { projectId };
+      const openOptions: ResourceViewerOptions = { projectId };
       return papi.webViews.openWebView(MODEL_TEXT_PANEL_WEBVIEW_TYPE, { type: 'tab' }, openOptions);
     },
     {

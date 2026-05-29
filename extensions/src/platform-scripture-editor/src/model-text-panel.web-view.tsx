@@ -27,7 +27,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 // @ts-ignore: platform-scripture/src is not a published module entry-point; accessible via typeRoots symlink at dev time
 import { useEffectiveResourceReferenceList } from 'platform-scripture/src/use-effective-resource-reference-list';
 import type { DblResourceReference, EffectiveResourceReference } from 'platform-scripture';
-import { DEFAULT_RESOURCE_REFERENCE_LIST, selectDblResource } from './select-dbl-resource';
+import { DEFAULT_RESOURCE_REFERENCE_LIST, selectTextConnection } from './select-dbl-resource';
+import { isDblResourceReference } from 'platform-scripture/src/resource-reference-list.utils';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
@@ -62,13 +63,16 @@ globalThis.webViewComponent = function ModelTextPanel({
     'platformScripture.modelTexts',
   );
 
-  const [adminModelTextsSetting, setAdminModelTexts] = useProjectSetting(
+  const [adminModelTexts, setAdminModelTexts] = useProjectSetting(
     projectId,
     'platformScripture.modelTexts',
     DEFAULT_RESOURCE_REFERENCE_LIST,
   );
 
-  const pdp = useProjectDataProvider('platformScripture.textConnectionSettings', projectId);
+  const textConnectionsProvider = useProjectDataProvider(
+    'platformScripture.textConnectionSettings',
+    projectId,
+  );
 
   // --- DBL resource resolution ---
 
@@ -93,10 +97,8 @@ globalThis.webViewComponent = function ModelTextPanel({
   const effectiveModelText = effectiveModelTexts?.items[0];
   // EffectiveResourceReference is a discriminated union; checking `.type` narrows to DblResourceReference
   let dblRef: (EffectiveResourceReference & DblResourceReference) | undefined;
-  if (effectiveModelText?.type === 'dblResource') {
-    // EffectiveResourceReference union check doesn't satisfy TS discriminated union refinement
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    dblRef = effectiveModelText as EffectiveResourceReference & DblResourceReference;
+  if (isDblResourceReference(effectiveModelText)) {
+    dblRef = effectiveModelText;
   }
   const match = dblRef ? dblResources.find((r) => r.dblEntryUid === dblRef.id) : undefined;
 
@@ -152,9 +154,7 @@ globalThis.webViewComponent = function ModelTextPanel({
 
   const currentModelTextIds = useMemo(() => {
     const items = effectiveModelTexts?.items ?? [];
-    const dblItems = items.filter(
-      (r): r is EffectiveResourceReference & DblResourceReference => r.type === 'dblResource',
-    );
+    const dblItems = items.filter((r) => isDblResourceReference(r));
     const adminDblItems = dblItems.filter((r) => r.source === 'admin');
     const relevantItems =
       adminDblItems.length > 0 ? adminDblItems : dblItems.filter((r) => r.source === 'user');
@@ -163,16 +163,19 @@ globalThis.webViewComponent = function ModelTextPanel({
 
   const handleResourceSelect = useCallback(
     (resource: DblResourceData) =>
-      selectDblResource(resource, {
-        adminSetting: adminModelTextsSetting,
-        setAdminSetting: setAdminModelTexts,
-        canUserWriteProjectSettings: pdp
-          ? () => pdp.canUserWriteProjectTextConnectionSettings()
+      selectTextConnection(
+        resource,
+        adminModelTexts,
+        setAdminModelTexts,
+        textConnectionsProvider
+          ? () => textConnectionsProvider.canUserWriteProjectTextConnectionSettings()
           : undefined,
-        getUserList: pdp ? () => pdp.getUserModelTexts() : undefined,
-        setUserList: pdp ? (list) => pdp.setUserModelTexts(list) : undefined,
-      }),
-    [adminModelTextsSetting, setAdminModelTexts, pdp],
+        textConnectionsProvider ? () => textConnectionsProvider.getUserModelTexts() : undefined,
+        textConnectionsProvider
+          ? (list) => textConnectionsProvider.setUserModelTexts(list)
+          : undefined,
+      ),
+    [adminModelTexts, setAdminModelTexts, textConnectionsProvider],
   );
 
   const showResourcePicker = useDialogCallback(

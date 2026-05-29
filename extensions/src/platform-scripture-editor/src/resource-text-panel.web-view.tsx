@@ -3,9 +3,8 @@ import {
   EditorOptions,
   EditorRef,
   getDefaultViewOptions,
-  UsjNodeOptions,
 } from '@eten-tech-foundation/platform-editor';
-import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
+import { EMPTY_USJ, Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import type { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
 import {
@@ -38,20 +37,14 @@ import { ChevronDown } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 // @ts-ignore: platform-scripture/src is not a published module entry-point; accessible via typeRoots symlink at dev time
 import { useEffectiveResourceReferenceList } from 'platform-scripture/src/use-effective-resource-reference-list';
-import type {
-  DblResourceReference,
-  EffectiveResourceReference,
-  ProjectReference,
-} from 'platform-scripture';
-import { DEFAULT_RESOURCE_REFERENCE_LIST, selectDblResource } from './select-dbl-resource';
+import type { DblResourceReference, EffectiveResourceReference } from 'platform-scripture';
+import { DEFAULT_RESOURCE_REFERENCE_LIST, selectTextConnection } from './select-dbl-resource';
+import {
+  isDblResourceReference,
+  isProjectReference,
+} from 'platform-scripture/src/resource-reference-list.utils';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
-
-const defaultUsj: Usj = {
-  type: USJ_TYPE,
-  version: USJ_VERSION,
-  content: [],
-};
 
 const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
   '%webView_resourcePanel_noProject%',
@@ -65,10 +58,8 @@ const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
 
 /** Returns the `id` field for reference types that have one, or `undefined` for others. */
 function getRefId(ref: EffectiveResourceReference): string | undefined {
-  if (ref.type === 'dblResource' || ref.type === 'project') {
-    // Both DblResourceReference and ProjectReference have `id`; cast is safe after type check
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    return (ref as DblResourceReference | ProjectReference).id;
+  if (isDblResourceReference(ref) || isProjectReference(ref)) {
+    return ref.id;
   }
   return undefined;
 }
@@ -79,20 +70,71 @@ function getRefId(ref: EffectiveResourceReference): string | undefined {
  * Returns `ref.name` for project references.
  */
 function getRefLabel(ref: EffectiveResourceReference, dblResourcesList: DblResourceData[]): string {
-  if (ref.type === 'dblResource') {
-    // EffectiveResourceReference union check doesn't satisfy TS discriminated union refinement
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const dblRef = ref as EffectiveResourceReference & DblResourceReference;
-    const dblData = dblResourcesList.find((r) => r.dblEntryUid === dblRef.id);
+  if (isDblResourceReference(ref)) {
+    const dblData = dblResourcesList.find((r) => r.dblEntryUid === ref.id);
     if (dblData) return `${dblData.fullName} (${dblData.displayName})`;
-    return dblRef.name;
+    return ref.name;
   }
-  if (ref.type === 'project') {
-    // ProjectReference.name exists after .type check; EffectiveResourceReference union requires cast
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    return (ref as EffectiveResourceReference & ProjectReference).name;
+  if (isProjectReference(ref)) {
+    return ref.name;
   }
   return '';
+}
+
+type ResourceSelectorDropdownProps = {
+  filteredResources: EffectiveResourceReference[];
+  selectedRef: EffectiveResourceReference | undefined;
+  dblResources: DblResourceData[];
+  onSelectResource: (id: string) => void;
+  onShowResourcePicker: () => void;
+  downloadResourcesLabel: string;
+};
+
+function ResourceSelectorDropdown({
+  filteredResources,
+  selectedRef,
+  dblResources,
+  onSelectResource,
+  onShowResourcePicker,
+  downloadResourcesLabel,
+}: ResourceSelectorDropdownProps) {
+  return (
+    <div className="tw:px-2 tw:py-1">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            className="tw:h-8 tw:w-full tw:justify-between tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap"
+          >
+            <span className="tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
+              {selectedRef ? getRefLabel(selectedRef, dblResources) : ''}
+            </span>
+            <ChevronDown className="tw:ml-1 tw:h-4 tw:w-4 tw:shrink-0" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="tw:w-72">
+          {filteredResources.map((ref) => {
+            const refId = getRefId(ref);
+            return (
+              <DropdownMenuCheckboxItem
+                key={refId}
+                checked={refId === (selectedRef ? getRefId(selectedRef) : undefined)}
+                onCheckedChange={() => {
+                  if (refId) onSelectResource(refId);
+                }}
+              >
+                {getRefLabel(ref, dblResources)}
+              </DropdownMenuCheckboxItem>
+            );
+          })}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => onShowResourcePicker()}>
+            {downloadResourcesLabel}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
 }
 
 globalThis.webViewComponent = function ResourceTextPanel({
@@ -100,7 +142,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
   useWebViewState,
   useWebViewScrollGroupScrRef,
 }: WebViewProps) {
-  const [localizedStrings] = useLocalizedStrings(useMemo(() => RESOURCE_PANEL_STRING_KEYS, []));
+  const [localizedStrings] = useLocalizedStrings(RESOURCE_PANEL_STRING_KEYS);
 
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
 
@@ -113,7 +155,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
     undefined,
   );
 
-  // --- Data sources ---
+  // #region Data sources
 
   // useEffectiveResourceReferenceList is imported via @ts-ignore path; cast needed for type safety
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -122,13 +164,16 @@ globalThis.webViewComponent = function ResourceTextPanel({
     'platformScripture.referencedProjectsAndResources',
   ) as [{ items: EffectiveResourceReference[] } | undefined, boolean];
 
-  const [adminResourcesSetting, setAdminResources] = useProjectSetting(
+  const [adminResourceList, setAdminResourceList] = useProjectSetting(
     projectId,
     'platformScripture.referencedProjectsAndResources',
     DEFAULT_RESOURCE_REFERENCE_LIST,
   );
 
-  const pdp = useProjectDataProvider('platformScripture.textConnectionSettings', projectId);
+  const textConnectionsProvider = useProjectDataProvider(
+    'platformScripture.textConnectionSettings',
+    projectId,
+  );
 
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
   const [resourcesPossiblyError] = useData(
@@ -140,18 +185,17 @@ globalThis.webViewComponent = function ResourceTextPanel({
     [resourcesPossiblyError],
   );
 
-  // --- Filter list based on resourceType ---
+  // #endregion
+
+  // #region Filter list based on resourceType
 
   const filteredResources = useMemo((): EffectiveResourceReference[] => {
     if (!effectiveResources) return [];
     return effectiveResources.items.filter((ref) => {
-      if (ref.type === 'dblResource') {
-        // EffectiveResourceReference union check doesn't satisfy TS discriminated union refinement
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        const dblRef = ref as EffectiveResourceReference & DblResourceReference;
-        return dblResources.find((r) => r.dblEntryUid === dblRef.id)?.type === resourceType;
+      if (isDblResourceReference(ref)) {
+        return dblResources.find((r) => r.dblEntryUid === ref.id)?.type === resourceType;
       }
-      if (ref.type === 'project') {
+      if (isProjectReference(ref)) {
         // ProjectReferences only appear in the Bible Texts tab
         return resourceType === 'ScriptureResource';
       }
@@ -159,7 +203,9 @@ globalThis.webViewComponent = function ResourceTextPanel({
     });
   }, [effectiveResources, dblResources, resourceType]);
 
-  // --- Selection management ---
+  // #endregion
+
+  // #region Selection management
 
   // Auto-correct selectedResourceId when the selected item leaves the filtered list
   useEffect(() => {
@@ -171,24 +217,16 @@ globalThis.webViewComponent = function ResourceTextPanel({
   const selectedRef =
     filteredResources.find((r) => getRefId(r) === selectedResourceId) ?? filteredResources[0];
 
-  // --- Resolve the selected resource to a project ID for USJ rendering ---
-
   let resourceProjectId: string | undefined;
   let isInstalling = false;
   let dblMatch: (typeof dblResources)[number] | undefined;
 
-  if (selectedRef?.type === 'dblResource') {
-    // EffectiveResourceReference union check doesn't satisfy TS discriminated union refinement
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const dblRef = selectedRef as EffectiveResourceReference & DblResourceReference;
-    dblMatch = dblResources.find((r) => r.dblEntryUid === dblRef.id);
+  if (isDblResourceReference(selectedRef)) {
+    dblMatch = dblResources.find((r) => r.dblEntryUid === selectedRef.id);
     isInstalling = dblMatch !== undefined && !dblMatch.installed;
     resourceProjectId = dblMatch?.installed ? dblMatch.projectId : undefined;
-  } else if (selectedRef?.type === 'project') {
-    // ProjectReferences resolve directly; no installation check needed
-    // ProjectReference.id exists after .type check; EffectiveResourceReference union requires cast
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    resourceProjectId = (selectedRef as EffectiveResourceReference & ProjectReference).id;
+  } else if (isProjectReference(selectedRef)) {
+    resourceProjectId = selectedRef.id;
   }
 
   // Auto-install when the selected DblResource exists but isn't installed
@@ -203,7 +241,9 @@ globalThis.webViewComponent = function ResourceTextPanel({
     }
   }, [isInstalling, dblResourcesProvider, matchDblEntryUid]);
 
-  // --- USJ from the resolved resource project ---
+  // #endregion
+
+  // #region USJ Fetch
 
   const [usjPossiblyError] = useProjectData(
     'platformScripture.USJ_Chapter',
@@ -218,12 +258,14 @@ globalThis.webViewComponent = function ResourceTextPanel({
       }),
       [scrRef.book, scrRef.chapterNum, scrRef.versificationStr],
     ),
-    defaultUsj,
+    EMPTY_USJ,
   );
 
   const usjFromPdp = !isPlatformError(usjPossiblyError) ? usjPossiblyError : undefined;
 
-  // --- Text direction from the resource project ---
+  // #endregion
+
+  // #region Text direction
 
   const [textDirectionPossiblyError] = useProjectSetting(
     resourceProjectId,
@@ -231,11 +273,16 @@ globalThis.webViewComponent = function ResourceTextPanel({
     DEFAULT_TEXT_DIRECTION,
   );
   const textDirection = useMemo(() => {
-    if (isPlatformError(textDirectionPossiblyError)) return DEFAULT_TEXT_DIRECTION;
+    if (isPlatformError(textDirectionPossiblyError)) {
+      logger.warn(`Error getting is right to left: ${getErrorMessage(textDirectionPossiblyError)}`);
+      return DEFAULT_TEXT_DIRECTION;
+    }
     return textDirectionPossiblyError || DEFAULT_TEXT_DIRECTION;
   }, [textDirectionPossiblyError]);
 
-  // --- Resource picker dialog ---
+  // #endregion
+
+  // #region Resource picker dialog
 
   // Only DblResourceReference IDs are passed to the Resource Picker as pre-selected
   const currentFilteredDblIds = useMemo(() => {
@@ -248,17 +295,22 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   const handleResourceSelect = useCallback(
     (resource: DblResourceData) =>
-      selectDblResource(resource, {
-        adminSetting: adminResourcesSetting,
-        setAdminSetting: setAdminResources,
-        canUserWriteProjectSettings: pdp
-          ? () => pdp.canUserWriteProjectTextConnectionSettings()
+      selectTextConnection(
+        resource,
+        adminResourceList,
+        setAdminResourceList,
+        textConnectionsProvider
+          ? () => textConnectionsProvider.canUserWriteProjectTextConnectionSettings()
           : undefined,
-        getUserList: pdp ? () => pdp.getUserReferencedProjectsAndResources() : undefined,
-        setUserList: pdp ? (list) => pdp.setUserReferencedProjectsAndResources(list) : undefined,
-        onSelect: setSelectedResourceId,
-      }),
-    [adminResourcesSetting, setAdminResources, pdp, setSelectedResourceId],
+        textConnectionsProvider
+          ? () => textConnectionsProvider.getUserReferencedProjectsAndResources()
+          : undefined,
+        textConnectionsProvider
+          ? (list) => textConnectionsProvider.setUserReferencedProjectsAndResources(list)
+          : undefined,
+        setSelectedResourceId,
+      ),
+    [adminResourceList, setAdminResourceList, textConnectionsProvider, setSelectedResourceId],
   );
 
   const showResourcePicker = useDialogCallback(
@@ -278,7 +330,9 @@ globalThis.webViewComponent = function ResourceTextPanel({
     ),
   );
 
-  // --- Editor ---
+  // #endregion
+
+  // #region Editor
 
   // EditorRef requires null initial value per React ref convention
   // eslint-disable-next-line no-null/no-null
@@ -287,10 +341,6 @@ globalThis.webViewComponent = function ResourceTextPanel({
     () => ({
       isReadonly: true,
       hasSpellCheck: false,
-      // UsjNodeOptions is a complex type; empty-object initializer requires assertion
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      nodes: {} as UsjNodeOptions,
-      textDirection,
       view: getDefaultViewOptions(),
     }),
     [textDirection],
@@ -300,7 +350,9 @@ globalThis.webViewComponent = function ResourceTextPanel({
     if (usjFromPdp) editorRef.current?.setUsj(usjFromPdp);
   }, [usjFromPdp]);
 
-  // --- Render helpers ---
+  // #endregion
+
+  // #region Render
 
   const emptyStatePromptKey =
     resourceType === 'ScriptureResource'
@@ -311,8 +363,6 @@ globalThis.webViewComponent = function ResourceTextPanel({
     resourceType === 'ScriptureResource'
       ? '%webView_resourcePanel_bibleTexts_pick%'
       : '%webView_resourcePanel_commentaries_pick%';
-
-  // --- Render ---
 
   if (!projectId) {
     return (
@@ -362,42 +412,14 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // Active state: resource is installed and USJ is available
   return (
     <div className="tw:flex tw:h-screen tw:flex-col">
-      {/* Resource selector dropdown */}
-      <div className="tw:px-2 tw:py-1">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              className="tw:h-8 tw:w-full tw:justify-between tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap"
-            >
-              <span className="tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
-                {selectedRef ? getRefLabel(selectedRef, dblResources) : ''}
-              </span>
-              <ChevronDown className="tw:ml-1 tw:h-4 tw:w-4 tw:shrink-0" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="tw:w-72">
-            {filteredResources.map((ref) => {
-              const refId = getRefId(ref);
-              return (
-                <DropdownMenuCheckboxItem
-                  key={refId}
-                  checked={refId === (selectedRef ? getRefId(selectedRef) : undefined)}
-                  onCheckedChange={() => {
-                    if (refId) setSelectedResourceId(refId);
-                  }}
-                >
-                  {getRefLabel(ref, dblResources)}
-                </DropdownMenuCheckboxItem>
-              );
-            })}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => showResourcePicker()}>
-              {localizedStrings['%webView_resourcePanel_downloadResources%']}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+      <ResourceSelectorDropdown
+        filteredResources={filteredResources}
+        selectedRef={selectedRef}
+        dblResources={dblResources}
+        onSelectResource={setSelectedResourceId}
+        onShowResourcePicker={showResourcePicker}
+        downloadResourcesLabel={localizedStrings['%webView_resourcePanel_downloadResources%']}
+      />
 
       {/* Scripture content */}
       <div className="tw:flex-1 tw:overflow-auto" dir={options.textDirection}>
@@ -411,4 +433,6 @@ globalThis.webViewComponent = function ResourceTextPanel({
       </div>
     </div>
   );
+
+  // #endregion
 };
