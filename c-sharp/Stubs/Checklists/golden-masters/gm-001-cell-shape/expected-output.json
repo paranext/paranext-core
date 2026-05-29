@@ -1,0 +1,107 @@
+{
+  "scenario": "gm-001-cell-shape",
+  "capturedFrom": "gm-capture-harness",
+  "captureDate": "2026-05-11T11:50:54Z",
+  "contentType": "inline-json",
+  "output": {
+    "rowCount": 3,
+    "excludedCount": 0,
+    "rows": [
+      {
+        "index": 0,
+        "isMatch": true,
+        "cells": [
+          {
+            "reference": "EXO 20:1",
+            "scrTextName": "_GM_CAPTURE_TEMP_TestPunct",
+            "punctuationSequence": ".!",
+            "paragraphs": [
+              {
+                "items": [
+                  {
+                    "type": "CLVerse",
+                    "scrTextName": "_GM_CAPTURE_TEMP_TestPunct",
+                    "book": "EXO",
+                    "chapter": "20",
+                    "verse": "1",
+                    "showInDisplay": false
+                  },
+                  {
+                    "type": "CLText",
+                    "marker": "",
+                    "text": "one. another! "
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "index": 1,
+        "isMatch": true,
+        "cells": [
+          {
+            "reference": "EXO 20:2",
+            "scrTextName": "_GM_CAPTURE_TEMP_TestPunct",
+            "punctuationSequence": "?",
+            "paragraphs": [
+              {
+                "items": [
+                  {
+                    "type": "CLVerse",
+                    "scrTextName": "_GM_CAPTURE_TEMP_TestPunct",
+                    "book": "EXO",
+                    "chapter": "20",
+                    "verse": "2",
+                    "showInDisplay": false
+                  },
+                  {
+                    "type": "CLText",
+                    "marker": "",
+                    "text": "two? "
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "index": 2,
+        "isMatch": true,
+        "cells": [
+          {
+            "reference": "EXO 20:3",
+            "scrTextName": "_GM_CAPTURE_TEMP_TestPunct",
+            "punctuationSequence": "!",
+            "paragraphs": [
+              {
+                "items": [
+                  {
+                    "type": "CLVerse",
+                    "scrTextName": "_GM_CAPTURE_TEMP_TestPunct",
+                    "book": "EXO",
+                    "chapter": "20",
+                    "verse": "3",
+                    "showInDisplay": false
+                  },
+                  {
+                    "type": "CLText",
+                    "marker": "",
+                    "text": "three! "
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "sideEffects": {
+    "filesOnDisk": [],
+    "registryChanges": false,
+    "networkCalls": false
+  }
+}

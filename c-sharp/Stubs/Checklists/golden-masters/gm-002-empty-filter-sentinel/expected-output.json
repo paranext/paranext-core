@@ -1,0 +1,77 @@
+{
+  "scenario": "gm-002-empty-filter-sentinel",
+  "capturedFrom": "gm-capture-harness",
+  "captureDate": "2026-05-11T11:50:57Z",
+  "contentType": "inline-json",
+  "output": {
+    "rowCount": 2,
+    "excludedCount": 0,
+    "rows": [
+      {
+        "index": 0,
+        "isMatch": true,
+        "cells": [
+          {
+            "reference": "GEN 1:1",
+            "scrTextName": "_GM_CAPTURE_TEMP_TestPunct",
+            "punctuationSequence": ".!",
+            "paragraphs": [
+              {
+                "items": [
+                  {
+                    "type": "CLVerse",
+                    "scrTextName": "_GM_CAPTURE_TEMP_TestPunct",
+                    "book": "GEN",
+                    "chapter": "1",
+                    "verse": "1",
+                    "showInDisplay": false
+                  },
+                  {
+                    "type": "CLText",
+                    "marker": "",
+                    "text": "one. another! "
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "index": 1,
+        "isMatch": true,
+        "cells": [
+          {
+            "reference": "GEN 1:2",
+            "scrTextName": "_GM_CAPTURE_TEMP_TestPunct",
+            "punctuationSequence": "?",
+            "paragraphs": [
+              {
+                "items": [
+                  {
+                    "type": "CLVerse",
+                    "scrTextName": "_GM_CAPTURE_TEMP_TestPunct",
+                    "book": "GEN",
+                    "chapter": "1",
+                    "verse": "2",
+                    "showInDisplay": false
+                  },
+                  {
+                    "type": "CLText",
+                    "marker": "",
+                    "text": "two? "
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "sideEffects": {
+    "filesOnDisk": [],
+    "registryChanges": false,
+    "networkCalls": false
+  }
+}

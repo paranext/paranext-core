@@ -1,0 +1,40 @@
+{
+  "scenario": "gm-002",
+  "description": "Empty filter sentinel (TS-039, BHV-504, INV-B-01): empty string '' means 'include all qualifying punctuation' — NOT 'include none'. Critical sentinel — PT10 must NOT invert this.",
+  "relatedScenarios": ["TS-039"],
+  "method": {
+    "callable": "CLDataSource.BuildRows",
+    "class": "Paratext.Checklists.CLDataSource",
+    "assembly": "Paratext.exe",
+    "access": "public",
+    "static": true,
+    "description": "BuildRows with empty filter — every IsPunctuation char qualifies."
+  },
+  "parameters": {
+    "checklistType": { "type": "ChecklistType", "value": "Punctuation" },
+    "scrTextNames": { "type": "string[]", "value": ["TestPunct"] },
+    "books": { "type": "object", "value": { "GEN": { "0": "\\id GEN \\c 1 \\p \\v 1 one. another! \\v 2 two? \\v 3 three" } } },
+    "firstVerseRef": { "type": "VerseRef", "value": "GEN 1:1", "versification": "English" },
+    "lastVerseRef": { "type": "VerseRef", "value": "GEN 1:10", "versification": "English" },
+    "initializationValueMap": { "type": "Dictionary<string,string>", "value": { "punctuationFilter": "" } },
+    "showReferencedVerseText": { "type": "bool", "value": true },
+    "hideMatches": { "type": "bool", "value": false }
+  },
+  "preconditions": {
+    "description": "Test ScrText loaded with GEN 1:1-3 punctuation content. BuildRows must produce 2 rows (v3 omitted, no punctuation).",
+    "requires": {
+      "paratextData": true,
+      "marbleDataAccess": false,
+      "biblicalTerms": false,
+      "tempProject": {
+        "name": "TestPunct",
+        "versification": "English",
+        "usfmFiles": {
+          "GEN": "\\id GEN \\c 1 \\p \\v 1 one. another! \\v 2 two? \\v 3 three"
+        }
+      }
+    }
+  },
+  "derivedFrom": "Adapted from CLDataSourceUsfmTests.cs:744-761 (NoFilter test) — uses GEN to disambiguate from gm-001",
+  "verified": true
+}

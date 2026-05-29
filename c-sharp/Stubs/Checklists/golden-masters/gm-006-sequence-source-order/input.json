@@ -1,0 +1,76 @@
+{
+  "scenario": "gm-006",
+  "description": "PunctuationSequence preserves source order (TS-044, BHV-506, INV-B-05). NOT sorted — '. , !' ≠ '! , .'.",
+  "relatedScenarios": [
+    "TS-044"
+  ],
+  "method": {
+    "callable": "CLDataSource.BuildRows",
+    "class": "Paratext.Checklists.CLDataSource",
+    "assembly": "Paratext.exe",
+    "access": "public",
+    "static": true,
+    "description": "BuildRows produces PunctuationSequence in source order."
+  },
+  "parameters": {
+    "scrTextNames": {
+      "type": "string[]",
+      "value": [
+        "TestPunct"
+      ]
+    },
+    "books": {
+      "type": "object",
+      "value": {
+        "GEN": {
+          "0": "\\id GEN \\c 1 \\p \\v 1 A. B, C!"
+        }
+      }
+    },
+    "checklistType": {
+      "type": "ChecklistType",
+      "value": "Punctuation"
+    },
+    "firstVerseRef": {
+      "type": "VerseRef",
+      "value": "GEN 1:1",
+      "versification": "English"
+    },
+    "lastVerseRef": {
+      "type": "VerseRef",
+      "value": "GEN 1:10",
+      "versification": "English"
+    },
+    "initializationValueMap": {
+      "type": "Dictionary<string,string>",
+      "value": {
+        "punctuationFilter": ""
+      }
+    },
+    "showReferencedVerseText": {
+      "type": "bool",
+      "value": true
+    },
+    "hideMatches": {
+      "type": "bool",
+      "value": false
+    }
+  },
+  "preconditions": {
+    "description": "See gm-XXX/notes.md",
+    "requires": {
+      "paratextData": true,
+      "marbleDataAccess": false,
+      "biblicalTerms": false,
+      "tempProject": {
+        "name": "TestPunct",
+        "versification": "English",
+        "usfmFiles": {
+          "GEN": "\\id GEN \\c 1 \\p \\v 1 A. B, C!"
+        }
+      }
+    }
+  },
+  "derivedFrom": "Constructed to test INV-B-05 (no PT9 test covers ordering directly)",
+  "verified": true
+}

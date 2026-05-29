@@ -1,0 +1,47 @@
+{
+  "scenario": "gm-006-sequence-source-order",
+  "capturedFrom": "gm-capture-harness",
+  "captureDate": "2026-05-11T11:51:10Z",
+  "contentType": "inline-json",
+  "output": {
+    "rowCount": 1,
+    "excludedCount": 0,
+    "rows": [
+      {
+        "index": 0,
+        "isMatch": true,
+        "cells": [
+          {
+            "reference": "GEN 1:1",
+            "scrTextName": "_GM_CAPTURE_TEMP_TestPunct",
+            "punctuationSequence": ".,!",
+            "paragraphs": [
+              {
+                "items": [
+                  {
+                    "type": "CLVerse",
+                    "scrTextName": "_GM_CAPTURE_TEMP_TestPunct",
+                    "book": "GEN",
+                    "chapter": "1",
+                    "verse": "1",
+                    "showInDisplay": false
+                  },
+                  {
+                    "type": "CLText",
+                    "marker": "",
+                    "text": "A. B, C! "
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "sideEffects": {
+    "filesOnDisk": [],
+    "registryChanges": false,
+    "networkCalls": false
+  }
+}

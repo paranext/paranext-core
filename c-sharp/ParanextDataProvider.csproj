@@ -108,6 +108,15 @@
     <Delete Files="$(PublishDir)libcoreclrtraceptprovider.so" />
   </Target>
 
+  <!--
+    Golden-master fixtures backing the checklist data-logic stub (Stubs/Checklists/CLDataSource).
+    Embedded so the stub can replay them at runtime regardless of the working directory.
+    Remove when ParatextChecks ships the relocated checklist data logic.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="Stubs\Checklists\golden-masters\**\*.json" />
+  </ItemGroup>
+
   <ItemGroup>
     <Content Include="assets\**\*.*">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
