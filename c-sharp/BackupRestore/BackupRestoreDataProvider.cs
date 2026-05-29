@@ -67,8 +67,8 @@ namespace Paranext.DataProvider.BackupRestore;
 /// </para>
 /// <para>
 /// Still-pending methods (CAP-006 enumerateUsbDevices, CAP-008 getBackupableProjects,
-/// CAP-010 isDestinationPathWritable, CAP-024 getCompareSourceContent, and the DT-003
-/// getBackupLogInfo data-type handler) are registered today as inline
+/// CAP-024 getCompareSourceContent, and the DT-003 getBackupLogInfo data-type handler)
+/// are registered today as inline
 /// <see cref="NotImplementedException"/>-throwing lambdas — this keeps the
 /// CAP-001 wire-registration assertion meaningful (the slot is reserved at GREEN time)
 /// while leaving an obvious "replace this lambda with the real method" canary for the
@@ -137,7 +137,7 @@ internal sealed partial class BackupRestoreDataProvider(
     /// Registers the 12 wire entries this DataProvider exposes (9 imperative methods +
     /// 3 data-type get handlers). The base class projects each tuple into a
     /// <c>object:platformBackupRestore.backupRestore-data.{functionName}</c> request
-    /// handler. The 5 still-pending entries (CAP-006/008/010/024 + DT-003) are registered
+    /// handler. The 4 still-pending entries (CAP-006/008/024 + DT-003) are registered
     /// via <see cref="PendingStub"/> — each call site documents the owning capability so
     /// the future implementer can grep to find the slot.
     /// </summary>
@@ -153,7 +153,7 @@ internal sealed partial class BackupRestoreDataProvider(
     ///   <item>compareBackupFile (M-004, CAP-005 — implemented)</item>
     ///   <item>enumerateUsbDevices (M-005, CAP-006 — pending; stub)</item>
     ///   <item>revealBackupLog (M-006, CAP-007 — implemented)</item>
-    ///   <item>isDestinationPathWritable (M-009, CAP-010 — pending; stub)</item>
+    ///   <item>validateBackup (M-009, CAP-010 — implemented; wraps CAP-014's pure rule chains into the {canSubmit, errors:{…}} wire shape per strategic-plan-backend.md §CAP-010)</item>
     ///   <item>closeRestoreSession (M-010, CAP-011 — implemented)</item>
     ///   <item>getCompareSourceContent (M-011, CAP-024 — pending; stub)</item>
     ///   <item>getBackupableProjects (DT-001 get, CAP-008 — pending; stub)</item>
@@ -221,11 +221,17 @@ internal sealed partial class BackupRestoreDataProvider(
                     RevealBackupLogAsync(request)
                 )
             ),
-            // CAP-010 PENDING: replace this stub when M-009 lands (see DEC-334 — this
-            // method supersedes the former M-007 validateBackup).
-            PendingStub(
-                "isDestinationPathWritable",
-                "CAP-010 pending — isDestinationPathWritable wire fragment not yet landed"
+            // CAP-010 IMPLEMENTED: M-009 validateBackup wire delegate. Per
+            // strategic-plan-backend.md §CAP-010 (and the user's Test Writer task
+            // spec), the wire-stable name is `validateBackup` — wrapping CAP-014's
+            // pure rule chains in the {canSubmit, errors:{…}} response shape. This
+            // replaces the post-round-4 `isDestinationPathWritable` PendingStub
+            // because the strategic plan's CAP-010 contract is the active one.
+            (
+                "validateBackup",
+                new Func<ValidateBackupRequest, Task<ValidateBackupResponse>>(request =>
+                    ValidateBackupAsync(request)
+                )
             ),
             (
                 "closeRestoreSession",

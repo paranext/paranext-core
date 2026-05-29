@@ -89,7 +89,7 @@ namespace TestParanextDataProvider.BackupRestore
             "compareBackupFile", // M-004 (CAP-005 — implemented)
             "enumerateUsbDevices", // M-005 (CAP-006 — pending; registered as throw-stub lambda)
             "revealBackupLog", // M-006 (CAP-007 — implemented; per DEC-333 this is being moved to DT-003 BackupLogInfo, but the imperative entry stays per strategic-plan §CAP-007 and backend-alignment.md JSON-RPC Wire Contract line 347 — the imperative entry's body still works)
-            "isDestinationPathWritable", // M-009 (CAP-010 — pending; registered as throw-stub lambda — per DEC-334 replaces former validateBackup)
+            "validateBackup", // M-009 (CAP-010 — implemented; wraps CAP-014's pure rule chains into the {canSubmit, errors:{…}} wire shape per strategic-plan-backend.md §CAP-010 — the user's Test Writer task spec carries the pre-round-4 wire name forward over the post-round-4 isDestinationPathWritable rename)
             "closeRestoreSession", // M-010 (CAP-011 — implemented)
             "getCompareSourceContent", // M-011 (CAP-024 — pending; registered as throw-stub lambda)
             // ---- Subscribable data type get handlers (3) -------------------
