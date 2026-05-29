@@ -22,8 +22,8 @@ interface WebViewEventLike {
  * Subscribe to webView open/update/close events and yield project-bound tabs (entries with a
  * `projectId`). Optional `filter` narrows by webViewType — useful for "editor tabs only" queries.
  *
- * Replaces the inline subscription pattern duplicated in `checks-side-panel.web-view.tsx` and
- * `checklist.web-view.tsx`.
+ * Replaces the inline subscription pattern previously duplicated across project-bound web views
+ * (e.g. `checks-side-panel.web-view.tsx`).
  *
  * Notes on normalization (handle pre-existing PAPI quirks so consumers see consistent data):
  *

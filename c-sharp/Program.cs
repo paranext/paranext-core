@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using Paranext.DataProvider.Checklists;
 using Paranext.DataProvider.Checks;
 using Paranext.DataProvider.ManageBooks;
 using Paranext.DataProvider.NetworkObjects;
@@ -89,7 +88,6 @@ public static class Program
             var checkRunner = new CheckRunner(papi, inventoryDataProvider);
             var dblResources = new DblResourcesDataProvider(papi);
             var paratextRegistrationService = new ParatextRegistrationService(papi);
-            var checklistNetworkObject = new ChecklistNetworkObject(papi);
             var manageBooksService = new ManageBooksService(
                 papi,
                 paratextProjects,
@@ -102,7 +100,6 @@ public static class Program
                 dblResources.RegisterDataProviderAsync(),
                 paratextRegistrationService.InitializeAsync(),
                 paratextSendReceiveService.InitializeAsync(),
-                checklistNetworkObject.InitializeAsync(),
                 manageBooksService.RegisterNetworkObjectAsync()
             );
 

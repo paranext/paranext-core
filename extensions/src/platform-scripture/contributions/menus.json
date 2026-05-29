@@ -40,41 +40,6 @@
     "platformScripture.repeatedWordsInventory": {},
     "platformScripture.punctuationInventory": {},
     "platformScripture.markersInventory": {},
-    "platformScripture.markersChecklist": {
-      "includeDefaults": true,
-      "topMenu": {
-        "columns": {
-          "platformScripture.markersChecklistView": {
-            "label": "%webView_platformScripture_markersChecklist_viewColumn%",
-            "order": 2
-          }
-        },
-        "groups": {
-          "platformScripture.markersChecklistExport": {
-            "column": "platformScripture.markersChecklistView",
-            "order": 1
-          }
-        },
-        "items": [
-          {
-            "label": "%markersChecklist_menu_copy%",
-            "group": "platformScripture.markersChecklistExport",
-            "order": 1,
-            "command": "platformScripture.copyMarkersChecklist"
-          },
-          {
-            "label": "%markersChecklist_menu_settings%",
-            "group": "platformScripture.markersChecklistExport",
-            "order": 2,
-            "command": "platformScripture.openMarkersChecklistSettings"
-          }
-        ]
-      },
-      "contextMenu": {
-        "groups": {},
-        "items": []
-      }
-    },
     "platformScripture.manageBooks": {}
   }
 }

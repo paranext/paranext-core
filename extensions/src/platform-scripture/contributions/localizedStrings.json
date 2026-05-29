@@ -490,44 +490,6 @@
       "%webview_checksSidePanel_checkTypeFilter_deselectAll%": "Deselect all",
       "%webview_checksSidePanel_checkTypeFilter_selectAll%": "Select all",
       "%webview_checksSidePanel_checkTypeFilter_setUp%": "Set up",
-      "%markersChecklist_errorInvalidMarkerPair%": "Equivalent markers need to be entered in the form: p/q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "Comparative texts have identical markers.",
-      "%markersChecklist_settings_title%": "Marker Settings",
-      "%markersChecklist_settings_description%": "Configure the equivalent markers and marker filter used when building the checklist.",
-      "%markersChecklist_settings_equivalentMarkersLabel%": "Equivalent marker mappings",
-      "%markersChecklist_settings_equivalentMarkersHelp%": "If you consider certain markers to be equivalent when you hide matches, enter each pair of equivalent markers separated by the / character. Separate pairs with a space.\nFor example, the mapping q/q1 means that you consider \\q in first text equivalent to \\q1 in the second (comparative) text.",
-      "%markersChecklist_settings_markerFilterLabel%": "Markers to be displayed (blank for all)",
-      "%markersChecklist_settings_markerFilterHelp%": "To display only certain markers, enter them without the backslash, separated by a space.\nFor example: To display only markers for poetic lines, enter:\nq q1 q2",
-      "%markersChecklist_settings_ok%": "Save",
-      "%markersChecklist_settings_cancel%": "Cancel",
-      "%markersChecklist_settings_helpIconAriaLabel%": "Help",
-      "%markersChecklist_toolbar_primaryProject%": "Select primary Scripture text",
-      "%markersChecklist_toolbar_comparativeTexts%": "Select comparative texts",
-      "%markersChecklist_toolbar_verseRange%": "Select verse range",
-      "%markersChecklist_toolbar_copy%": "Copy",
-      "%markersChecklist_toolbar_view%": "View",
-      "%markersChecklist_toolbar_hideMatches%": "Hide Matches",
-      "%markersChecklist_toolbar_showVerseText%": "Show Verse Text",
-      "%markersChecklist_toolbar_aria%": "Markers Checklist toolbar",
-      "%markersChecklist_matches_omitted%": "{count} Matches Omitted",
-      "%markersChecklist_table_aria%": "Markers checklist",
-      "%markersChecklist_noResults%": "No markers found.",
-      "%markersChecklist_helptext%": "Use the toolbar to change the primary project, pick comparative texts, or narrow the verse range.",
-      "%markersChecklist_errorTitle%": "Couldn't load checklist",
-      "%markersChecklist_errorRetry%": "Retry",
-      "%markersChecklist_alert_dismiss%": "Dismiss",
-      "%markersChecklist_columnHeader_referenceAria%": "Reference",
-      "%markersChecklist_edit%": "edit",
-      "%markersChecklist_edit_aria%": "Edit {ref}",
-      "%markersChecklist_goto_aria%": "Go to {ref}",
-      "%markersChecklist_columnHeader_aria%": "Project: {name}",
-      "%markersChecklist_marker_aria%": "Marker {marker}",
-      "%markersChecklist_windowTitle%": "Markers Checklist - {projectName}",
-      "%markersChecklist_menu_openTool%": "Markers Checklist…",
-      "%markersChecklist_menu_copy%": "Copy",
-      "%markersChecklist_menu_settings%": "Settings",
-      "%webView_platformScripture_markersChecklist_viewColumn%": "View",
-      "%webView_platformScripture_markersChecklist_settings%": "Settings",
       "%manageBooks_openMenuItem%": "Manage books…",
       "%manageBooks_sidebar_projectPlaceholder%": "Select project"
     },
@@ -724,8 +686,6 @@
       "%webview_checksSidePanel_checkTypeFilter_deselectAll%": "Anular la selección de todos",
       "%webview_checksSidePanel_checkTypeFilter_selectAll%": "Seleccionar todos",
       "%webview_checksSidePanel_checkTypeFilter_setUp%": "Configuración",
-      "%markersChecklist_errorInvalidMarkerPair%": "Marcadores equivalentes deben ser entrados en la forma: p/q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "Textos comparativos tienen marcadores idénticos.",
       "%manageBooks_openMenuItem%": "Administrar libros…",
       "%manageBooks_view_disabledStub_notYetAvailable%": "Aún no disponible — próximamente",
       "%manageBooks_grid_canonGroup_DC%": "Deuterocanónicos",
@@ -748,9 +708,7 @@
       "%manageBooks_sidebar_projectPlaceholder%": "Seleccionar proyecto"
     },
     "am": {
-      "%manageBooks_error_adminRequired%": "ይህ ለአስተዳዳሪዎች ብቻ የሚገኘው ነው።",
-      "%markersChecklist_errorInvalidMarkerPair%": "በቅጹ ውስጥ ተመጣጣኝ ምልክት ማድረጊያዎችን ማስገባት ያስፈልጋል፡p/q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "የንጽጽር ጽሑፎች ተመሳሳይ ምልክቶች አሏቸው።"
+      "%manageBooks_error_adminRequired%": "ይህ ለአስተዳዳሪዎች ብቻ የሚገኘው ነው።"
     },
     "ar": {
       "%manageBooks_copy_tooltip_destDoesNotExist%": "الكتاب غير موجود في مشروع \"إلى\"",
@@ -761,9 +719,7 @@
       "%manageBooks_create_errorSelectModelText%": "الرجاء تحديد نص نموذجي",
       "%manageBooks_create_errorUnableToCreateNotInModel%": "غير قادر على إنشاء كتاب (كتابات) لأن هذه الكتب ليست في المشروع النموذجي {0}.",
       "%manageBooks_create_errorVersificationMismatch%": "يستخدم {0} نظم الآيات {1}.\nيستخدم النمط {2} نظم الآيات {3}.\n\nيمكن أن يؤدي هذا إلى تناقضات غير متوقعة في ترقيم الفصل/ لآية.\nيجب عليك إما إنشاء الكتاب (الكتب) بناءً على مشروع نموذج مختلف أو استخدام نظم مختلف للآيات لـ {0}.\n\nهل تريد إنشاء كتاب (كتب) بناءً على النظم {2}؟",
-      "%manageBooks_import_errorOverlappingFiles%": "هناك ملفان يحتويان على معلومات بخصوص نفس الكتاب. لا يمكن تحديد الاثنين معا.",
-      "%markersChecklist_errorInvalidMarkerPair%": "يجب إدخال العلامات المكافئة حسب النموذج: p / q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "النصوص المقارنة لها علامات متطابقة."
+      "%manageBooks_import_errorOverlappingFiles%": "هناك ملفان يحتويان على معلومات بخصوص نفس الكتاب. لا يمكن تحديد الاثنين معا."
     },
     "az": {
       "%manageBooks_copy_tooltip_destDoesNotExist%": "Kitab \"Təyinat\" layihədə yoxdur",
@@ -774,19 +730,13 @@
       "%manageBooks_create_errorSelectModelText%": "Xahiş edirik, model mətni seçin",
       "%manageBooks_create_errorUnableToCreateNotInModel%": "Kitab(lar)ı yarada bilmir, çünki kitab(lar) {0} model layihədə yoxdur.",
       "%manageBooks_create_errorVersificationMismatch%": "{0} {1} mətni ayələrə ayırma tərzindən istifadə edir.\n{2}-ci model {3} ayələrə ayırma tərzindən istifadə edir.\n\nBu, fəsil/ayə nömrələrində gözlənilməz ziddiyyətlərə səbəb ola bilər.\nSiz ya fərqli bir model layihə əsasında kitab(lar) yaratmalısınız, ya da {0} üçün başqa ayırma tərzindən istifadə etməlisiniz.\n\n {2} ayələrə ayırma tərzinə əsasən kitab(lar) yaratmaq istəyirsiniz?",
-      "%manageBooks_import_errorOverlappingFiles%": "İki fayl eyni kitab üçün məlumatı özündə əks etdirir. Hər ikisi seçilə bilməz.",
-      "%markersChecklist_errorInvalidMarkerPair%": "Əvəz edə bilən işarələr p/q formasında daxil edilməlidir",
-      "%markersChecklist_emptyResult_identicalMarkers%": "Müqayisəli mətnlər eyni işarələrə malikdir."
+      "%manageBooks_import_errorOverlappingFiles%": "İki fayl eyni kitab üçün məlumatı özündə əks etdirir. Hər ikisi seçilə bilməz."
     },
     "de": {
-      "%manageBooks_error_adminRequired%": "Nur für Administratoren verfügbar.",
-      "%markersChecklist_errorInvalidMarkerPair%": "Äquivalente Auszeichnungen müssen in folgender Form eingegeben werden: p/q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "Zu vergleichende Texte haben identische Auszeichnungen."
+      "%manageBooks_error_adminRequired%": "Nur für Administratoren verfügbar."
     },
     "fa": {
-      "%manageBooks_error_adminRequired%": "این فقط برای مدیران در دسترس است.",
-      "%markersChecklist_errorInvalidMarkerPair%": "نشانگرهای معادل باید در فرم وارد شوند: p / q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "متون تطبیقی ​​نشانگرهای یکسانی دارند."
+      "%manageBooks_error_adminRequired%": "این فقط برای مدیران در دسترس است."
     },
     "fr": {
       "%manageBooks_copy_tooltip_destDoesNotExist%": "Le livre n'existe pas dans le projet de destination",
@@ -797,24 +747,16 @@
       "%manageBooks_create_errorSelectModelText%": "Veuillez sélectionner un texte modèle",
       "%manageBooks_create_errorUnableToCreateNotInModel%": "Impossible de créer de livre(s) parce que ce(s) livre(s) n'existe(nt) pas dans le projet modèle {0}.",
       "%manageBooks_create_errorVersificationMismatch%": "{0} utilise la versification {1}.\nLe modèle {2} utilise la versification {3}.\n\nCela peut avoir pour conséquences des incohérences inattendues dans la numérotation des chapitres/versets.\nVous devriez envisager soit de créer le(s) livre(s) basé(s) sur un modèle de projet différent ou d'utiliser une versification différente pour {0}.\n\nCréer le(s) livre(s) basé(s) sur la versification {2} ?",
-      "%manageBooks_import_errorOverlappingFiles%": "Deux fichiers contiennent des informations pour le même livre. Ils ne peuvent pas être sélectionnés tous les deux.",
-      "%markersChecklist_errorInvalidMarkerPair%": "Les marqueurs équivalents doivent être entrés sous la forme : p/q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "Les textes comparatifs ont des marqueurs identiques."
+      "%manageBooks_import_errorOverlappingFiles%": "Deux fichiers contiennent des informations pour le même livre. Ils ne peuvent pas être sélectionnés tous les deux."
     },
     "gu": {
-      "%manageBooks_error_adminRequired%": "આ ફક્ત સંચાલકો માટે જ ઉપલબ્ધ છે.",
-      "%markersChecklist_errorInvalidMarkerPair%": "સમકક્ષ માર્કર્સ ફોર્મમાં એન્ટર કરવા આવશ્યક છે: p/q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "તુલનાત્મક લખાણોમાં એકસમાન માર્કર્સ છે."
+      "%manageBooks_error_adminRequired%": "આ ફક્ત સંચાલકો માટે જ ઉપલબ્ધ છે."
     },
     "ha": {
-      "%manageBooks_error_adminRequired%": "Wannan na a wadace ne kaɗai ga mai gudanarwa.",
-      "%markersChecklist_errorInvalidMarkerPair%": "Irin alamomin da ke buƙatar a shigar da su a irin: p/q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "Nassoshin kwatanci suna da alamomi iri ɗaya."
+      "%manageBooks_error_adminRequired%": "Wannan na a wadace ne kaɗai ga mai gudanarwa."
     },
     "hi": {
-      "%manageBooks_error_adminRequired%": "यह केवल प्रशासकों के लिए उपलब्ध है।",
-      "%markersChecklist_errorInvalidMarkerPair%": "समतुल्य मार्कर्स को फॉर्म में दर्ज करने की आवश्यकता है: p/q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "तुलनात्मक पाठों में समान मार्कर होते हैं।"
+      "%manageBooks_error_adminRequired%": "यह केवल प्रशासकों के लिए उपलब्ध है।"
     },
     "id": {
       "%manageBooks_copy_tooltip_destDoesNotExist%": "Kitab ini tidak ada dalam Proyek \"Ke\"",
@@ -825,54 +767,34 @@
       "%manageBooks_create_errorSelectModelText%": "Pilih teks model",
       "%manageBooks_create_errorUnableToCreateNotInModel%": "Tidak dapat membuat kitab-kitab yang dimaksud, karena kitab-kitab tersebut  tidak ada dalam proyek model {0}",
       "%manageBooks_create_errorVersificationMismatch%": "{0} menggunakan penomoran ayat {1}.\nModel {2} menggunakan penomoran ayat {3}.\n\nIni dapat mengakibatkan kesalahan yang tak terduga dalam nomor pasal/ayat.\nPertimbangkan apakah Anda harus membuat kitab berdasar pada model yang berbeda atau menggunakan penomoran ayat berbeda untuk {0}.\n\nBuat kitab berdasarkan penomoran ayat {2}?",
-      "%manageBooks_import_errorOverlappingFiles%": "Dua file punya identitas kitab yang sama. Tidak boleh pilih dua-duanya.",
-      "%markersChecklist_errorInvalidMarkerPair%": "Markah sejajar harus dimasukkan di dalam format: p/q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "Teks pembanding memiliki markah-markah yang persis sama."
+      "%manageBooks_import_errorOverlappingFiles%": "Dua file punya identitas kitab yang sama. Tidak boleh pilih dua-duanya."
     },
     "ig": {
-      "%manageBooks_error_adminRequired%": "Nke a dị nanị maka ndị nchịkọta ọrụ.",
-      "%markersChecklist_errorInvalidMarkerPair%": "Ọ dị mkpa itinye akara ndi ha na ibe ha na fọm: p/q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "Edemede nke ntụnyere nwere akara oyiri ibe."
+      "%manageBooks_error_adminRequired%": "Nke a dị nanị maka ndị nchịkọta ọrụ."
     },
     "km": {
-      "%manageBooks_error_adminRequired%": "មានតែ​អ្នក​អភិបាល​ប៉ុណ្ណោះ​ដែល​អាច​ប្រើ​វា​បាន។",
-      "%markersChecklist_errorInvalidMarkerPair%": "សញ្ញាសម្គាល់ប្រហាក់ប្រហែលតម្រូវឱ្យដាក់ក្នុងទម្រង់៖ p/q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "អត្ថបទប្រៀបធៀបមានសញ្ញាដូចគ្នាបេះបិទ។"
+      "%manageBooks_error_adminRequired%": "មានតែ​អ្នក​អភិបាល​ប៉ុណ្ណោះ​ដែល​អាច​ប្រើ​វា​បាន។"
     },
     "ln": {
-      "%manageBooks_error_adminRequired%": "Oyo ebongisami bobele na ntina na bakonzi.",
-      "%markersChecklist_errorInvalidMarkerPair%": "Bilembo ya kokokana bisengeli kokotisama na kati ya formilere: p/q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "Bokomisi yakokanisama ezali na makomi moko."
+      "%manageBooks_error_adminRequired%": "Oyo ebongisami bobele na ntina na bakonzi."
     },
     "ml": {
-      "%manageBooks_error_adminRequired%": "ഇത് കാര്യനിര്‍വാഹകര്‍ക്ക് മാത്രം ലഭ്യമാണ്.",
-      "%markersChecklist_errorInvalidMarkerPair%": "തത്തുല്യമായ മാർക്കറുകൾ ഫോമിൽ നൽകേണ്ടതുണ്ട്: p/q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "താരതമ്യ വാചകങ്ങള്‍ക്ക് സമാനമായ മാർക്കറുകൾ ഉണ്ട്."
+      "%manageBooks_error_adminRequired%": "ഇത് കാര്യനിര്‍വാഹകര്‍ക്ക് മാത്രം ലഭ്യമാണ്."
     },
     "ne": {
-      "%manageBooks_error_adminRequired%": "यो चाहिँ व्‍यवस्‍थापकहरूलाई मात्रै उपलब्‍ध छ ।",
-      "%markersChecklist_errorInvalidMarkerPair%": "समान मार्करहरूलाई यस किसिमले प्रविष्‍ट गरिनु पर्छः पी/क्‍यू",
-      "%markersChecklist_emptyResult_identicalMarkers%": "तुलनात्‍मक टेक्‍स्‍टहरूमा उस्‍तै मार्करहरू छन् ।"
+      "%manageBooks_error_adminRequired%": "यो चाहिँ व्‍यवस्‍थापकहरूलाई मात्रै उपलब्‍ध छ ।"
     },
     "om": {
-      "%manageBooks_error_adminRequired%": "Kun Hogganaaf qofaa argama.",
-      "%markersChecklist_errorInvalidMarkerPair%": "Unka: p/q keessatti mallateessituu madaalawaatu galuu qaba",
-      "%markersChecklist_emptyResult_identicalMarkers%": "Barruun wal madaalsisu mallattoo walfakaatoo qabu."
+      "%manageBooks_error_adminRequired%": "Kun Hogganaaf qofaa argama."
     },
     "or": {
-      "%manageBooks_error_adminRequired%": "ଏହା କେବଳ ପ୍ରଶାସକମାନଙ୍କ ନିମନ୍ତେ ଉପଲବ୍ଧ ଅଟେ I",
-      "%markersChecklist_errorInvalidMarkerPair%": "ଅନୁରୂପ ଚିହ୍ନପ୍ରଦାନକାରୀଗୁଡ଼ିକର ଫର୍ମରେ ପ୍ରବେଶ କରାଯିବା ଆବଶ୍ୟକ: p/q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "ତୁଳନାତ୍ମକ ପାଠ୍ୟଗୁଡ଼ିକରେ ସମରୂପ ବା ଅଭିନ୍ନ ଚିହ୍ନପ୍ରଦାନକାରୀଗୁଡ଼ିକ ରହିଛି I"
+      "%manageBooks_error_adminRequired%": "ଏହା କେବଳ ପ୍ରଶାସକମାନଙ୍କ ନିମନ୍ତେ ଉପଲବ୍ଧ ଅଟେ I"
     },
     "pt": {
-      "%manageBooks_error_adminRequired%": "Esta opção só está disponível para administradores.",
-      "%markersChecklist_errorInvalidMarkerPair%": "Marcadores equivalentes precisam ser inseridos no formato: p/q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "Textos comparativos que possuem marcadores idênticos."
+      "%manageBooks_error_adminRequired%": "Esta opção só está disponível para administradores."
     },
     "pt-BR": {
-      "%manageBooks_error_adminRequired%": "Esta opção só está disponível para administradores.",
-      "%markersChecklist_errorInvalidMarkerPair%": "Marcadores equivalentes precisam ser inseridos no formato: p/q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "Textos comparativos possuem marcadores idênticos."
+      "%manageBooks_error_adminRequired%": "Esta opção só está disponível para administradores."
     },
     "ro": {
       "%manageBooks_copy_tooltip_destDoesNotExist%": "Cartea nu există în proiectul \"Către\"",
@@ -883,64 +805,40 @@
       "%manageBooks_create_errorSelectModelText%": "Vă rugăm să selectați textul model",
       "%manageBooks_create_errorUnableToCreateNotInModel%": "Nu se poate crea carte(cărți) deoarece această(e) carte(cărți) nu se află în proiectul model {0}.",
       "%manageBooks_create_errorVersificationMismatch%": "{0} folosește versificarea {1}.\nModelul {2} folosește versificarea {3}.\n\nAcest lucru poate duce la inconsecvențe neașteptate în numerele capitolelor/versetelor.\nLuați în considerare dacă ar trebui fie să creați cartea (cărțile) pe baza unui proiect de model diferit, fie să folosiți o altă versificare pentru {0}.\n\nDoriți să creați cartea (cărțile) pe baza versificării {2}?",
-      "%manageBooks_import_errorOverlappingFiles%": "Două fișiere conțin informații pentru aceeași carte. Nu pot fi selectate amândouă.",
-      "%markersChecklist_errorInvalidMarkerPair%": "Markerii echivalenți trebuie să fie introduși sub forma: p/q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "Textele comparative au markere identice."
+      "%manageBooks_import_errorOverlappingFiles%": "Două fișiere conțin informații pentru aceeași carte. Nu pot fi selectate amândouă."
     },
     "ru": {
-      "%manageBooks_error_adminRequired%": "Доступно только администраторам.",
-      "%markersChecklist_errorInvalidMarkerPair%": "Требуются эквивалентные маркеры вида: p/q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "Сравниваемые тексты содержат идентичные маркеры."
+      "%manageBooks_error_adminRequired%": "Доступно только администраторам."
     },
     "sw": {
-      "%manageBooks_error_adminRequired%": "Hii inapatikana kwa wasimamizi pekee.",
-      "%markersChecklist_errorInvalidMarkerPair%": "Alama sawa zinahitaji kuingizwa katika fomu: p/q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "Maandishi ya kulinganishwa yana alama zinazofanana."
+      "%manageBooks_error_adminRequired%": "Hii inapatikana kwa wasimamizi pekee."
     },
     "ta": {
-      "%manageBooks_error_adminRequired%": "இது நிர்வாகிகளுக்கு மட்டுமே கிடைக்கும்.",
-      "%markersChecklist_errorInvalidMarkerPair%": "சமமான குறிப்பான்கள் படிவத்தில் உள்ளிடப்பட வேண்டும்: p/q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "ஒப்பீட்டு நூல்கள் ஒரே மாதிரியான குறிப்பான்களைக் கொண்டுள்ளன."
+      "%manageBooks_error_adminRequired%": "இது நிர்வாகிகளுக்கு மட்டுமே கிடைக்கும்."
     },
     "te": {
-      "%manageBooks_error_adminRequired%": "ఇది నిర్వాహకులకు మాత్రమే అందుబాటులో ఉంటుంది.",
-      "%markersChecklist_errorInvalidMarkerPair%": "సమానార్ధం ఉన్న మార్కర్లను ఫారం: p/q లో ఎంటర్ చెయ్యాలి",
-      "%markersChecklist_emptyResult_identicalMarkers%": "పోల్చదగిన వాచకాల్లో ఒకే రకమైన మార్కర్లు ఉన్నాయి."
+      "%manageBooks_error_adminRequired%": "ఇది నిర్వాహకులకు మాత్రమే అందుబాటులో ఉంటుంది."
     },
     "tpi": {
-      "%manageBooks_error_adminRequired%": "Dispela em i stap tasol long ol administreta tasol.",
-      "%markersChecklist_errorInvalidMarkerPair%": "Ol wankain maka ol i mas putim igo insait long dispela fom: p/q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "Kopereitiv teks igat ol maka i wankain."
+      "%manageBooks_error_adminRequired%": "Dispela em i stap tasol long ol administreta tasol."
     },
     "tr": {
-      "%manageBooks_error_adminRequired%": "Bu, sadece yöneticilerin kullanımına açıktır.",
-      "%markersChecklist_errorInvalidMarkerPair%": "Eşdeğer format işaretlerinin şu formda girilmesi gerekir: p/q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "Karşılaştırmalı metinler aynı format işaretlerine sahiptir."
+      "%manageBooks_error_adminRequired%": "Bu, sadece yöneticilerin kullanımına açıktır."
     },
     "twi": {
-      "%manageBooks_error_adminRequired%": "Yei wɔ hɔ ma dwumadie ho ntotoeɛfoɔ nko ara.",
-      "%markersChecklist_errorInvalidMarkerPair%": "Ɛsɛ sɛ wotwerɛ ahyɛnsodeɛ a ɛyɛ pɛ wɔ nhyehyɛɛ: p/q mu",
-      "%markersChecklist_emptyResult_identicalMarkers%": "Ntotoho akenkansɛm wɔ ahyɛnsodeɛ a ɛsesɛ."
+      "%manageBooks_error_adminRequired%": "Yei wɔ hɔ ma dwumadie ho ntotoeɛfoɔ nko ara."
     },
     "vi": {
-      "%manageBooks_error_adminRequired%": "Điều này chỉ dành cho quản trị viên.",
-      "%markersChecklist_errorInvalidMarkerPair%": "Cần điền những đánh dấu tương xứng vào trong hình thái: p/q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "Các văn bản so sánh có những điểm đánh dấu giống hệt nhau."
+      "%manageBooks_error_adminRequired%": "Điều này chỉ dành cho quản trị viên."
     },
     "yo": {
-      "%manageBooks_error_adminRequired%": "Èyi wà fún àwọn alámójútó nìkan.",
-      "%markersChecklist_errorInvalidMarkerPair%": "A gbọdọ̀ tẹ àwọn àmì tó ṣe déédé ní ẹ̀yà: p/q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "Àwọn àkọsílẹ̀ ní àwọn ìsàmì tó jọra."
+      "%manageBooks_error_adminRequired%": "Èyi wà fún àwọn alámójútó nìkan."
     },
     "zh-Hans": {
-      "%manageBooks_error_adminRequired%": "只供管理员使用。",
-      "%markersChecklist_errorInvalidMarkerPair%": "等同的格式码必须用以下形式来输入：p／q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "两个比较文本有完全相同的格式码。"
+      "%manageBooks_error_adminRequired%": "只供管理员使用。"
     },
     "zh-Hant": {
-      "%manageBooks_error_adminRequired%": "只供管理員使用。",
-      "%markersChecklist_errorInvalidMarkerPair%": "等同的格式碼必須用以下形式來輸入：p／q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "兩個比較文本有完全相同的格式碼。"
+      "%manageBooks_error_adminRequired%": "只供管理員使用。"
     }
   }
 }
