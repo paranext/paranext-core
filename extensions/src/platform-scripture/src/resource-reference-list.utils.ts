@@ -1,5 +1,5 @@
 import type { ProjectSettingValidator } from '@papi/core';
-import type { DblResourceReference, ProjectReference, ResourceReference } from 'platform-scripture';
+import type { DblResourceReference, ProjectReference } from 'platform-scripture';
 
 /**
  * Checks if a {@link ResourceReference} is a {@link DblResourceReference}.
