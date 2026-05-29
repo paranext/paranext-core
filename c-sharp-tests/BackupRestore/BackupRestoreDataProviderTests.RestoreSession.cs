@@ -484,6 +484,22 @@ namespace TestParanextDataProvider.BackupRestore
                 _metadata;
 
             public void Dispose() => _disposeCount++;
+
+            // CAP-004 added PerformOverlayRestore to IRestorerHandle. CAP-003's tests
+            // never invoke it; this stub keeps the interface satisfied. CAP-004's tests
+            // use a dedicated CAP004_FakeRestorerHandle (declared in the CAP-004 test
+            // fragment) which IS exercised through PerformOverlayRestore.
+            public RestoreOverlayOutcome PerformOverlayRestore(
+                Paratext.Data.ScrText destination,
+                RestoreOverlayRequest request
+            )
+            {
+                _ = destination;
+                _ = request;
+                throw new System.NotSupportedException(
+                    "CAP-003 FakeRestorerHandle does not implement PerformOverlayRestore — use CAP004_FakeRestorerHandle in CAP-004 tests."
+                );
+            }
         }
     }
 }

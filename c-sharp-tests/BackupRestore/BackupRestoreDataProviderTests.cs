@@ -93,6 +93,10 @@ namespace TestParanextDataProvider.BackupRestore
             BackupRestoreDataProvider.RestorerFactoryOverride = null;
             // CAP-009 — reset the getRestoreDestinationProjects test seam.
             BackupRestoreDataProvider.RestoreDestinationProjectsServiceOverride = null;
+            // CAP-004 — reset the performRestore test seams.
+            BackupRestoreDataProvider.SendFullProjectUpdateEventOverride = null;
+            BackupRestoreDataProvider.PersistCurrentChangesOverride = null;
+            RestoreOrchestrator.WriteLockObtainerOverride = null;
             try
             {
                 if (Directory.Exists(_testTempDir))

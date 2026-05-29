@@ -1,4 +1,5 @@
 using System;
+using Paratext.Data;
 
 namespace Paranext.DataProvider.BackupRestore;
 
@@ -71,4 +72,31 @@ internal interface IRestorerHandle : IDisposable
     /// project (or none if the backup is legacy-format).</param>
     /// <returns>An immutable per-session view of the ZIP contents.</returns>
     RestorerMetadata BuildMetadata(string? preferredDestinationProjectId);
+
+    /// <summary>
+    /// Execute the overlay-restore body for <paramref name="destination"/>:
+    /// extract <paramref name="request"/>'s <c>SelectedFileIds</c> from the
+    /// open ZIP and copy them onto the destination project, honoring the
+    /// PTX-20538 legacy-skip-list augmentation
+    /// (<see cref="RestoreOverlayRequest.IsLegacyBackup"/>) for the
+    /// Settings.xml copy and persisting the destination ScrText. Called by
+    /// <see cref="RestoreOrchestrator.ExecuteOverlay"/> AFTER the orchestrator
+    /// has obtained the project write-lock (INV-A18) and BEFORE the lock is
+    /// released — so this method must not itself acquire the project lock.
+    /// </summary>
+    /// <param name="destination">The resolved destination <see cref="ScrText"/>
+    /// the orchestrator obtained via <c>LocalParatextProjects.GetParatextProject</c>.</param>
+    /// <param name="request">Per-call overlay payload — see
+    /// <see cref="RestoreOverlayRequest"/>.</param>
+    /// <returns>
+    /// <see cref="RestoreOverlayOutcome.Success"/> on successful overlay.
+    /// Failures are signalled via thrown exceptions per DEC-CAP-004-F:
+    /// <see cref="MigrationFailedException"/> for BHV-509 migration failure;
+    /// <see cref="Paratext.Data.Repository.LockNotObtainedException"/> if a
+    /// follow-up lock acquisition (post-overlay) fails. Any other unhandled
+    /// exception propagates as <see cref="System.IO.IOException"/>-classed
+    /// failure that the orchestrator maps to
+    /// <see cref="RestoreOperationErrorCode.IoError"/>.
+    /// </returns>
+    RestoreOverlayOutcome PerformOverlayRestore(ScrText destination, RestoreOverlayRequest request);
 }

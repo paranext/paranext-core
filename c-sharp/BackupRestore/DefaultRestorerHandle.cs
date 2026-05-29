@@ -1,5 +1,6 @@
 using System;
 using ICSharpCode.SharpZipLib.Zip;
+using Paratext.Data;
 
 namespace Paranext.DataProvider.BackupRestore;
 
@@ -98,5 +99,26 @@ internal sealed class DefaultRestorerHandle : IRestorerHandle
             return;
         _disposed = true;
         _zipFile.Close();
+    }
+
+    /// <summary>
+    /// CAP-004 RED-state stub. The full PT9 <c>Restorer.PerformRestore</c>
+    /// port lives here in GREEN; for now the default factory throws so the
+    /// CAP-004 wire-layer unit tests (which use <c>FakeRestorerHandle</c>
+    /// injected via <c>BackupRestoreDataProvider.RestorerFactoryOverride</c>)
+    /// cover the contract without depending on the real port.
+    /// </summary>
+    public RestoreOverlayOutcome PerformOverlayRestore(
+        ScrText destination,
+        RestoreOverlayRequest request
+    )
+    {
+        _ = destination;
+        _ = request;
+        throw new NotImplementedException(
+            "DefaultRestorerHandle.PerformOverlayRestore not implemented yet — CAP-004 GREEN."
+                + " Port PT9 Restorer.PerformRestore (Restorer.cs:144-199) here, honoring"
+                + " INV-A13 (legacy-skip-list augmentation) when request.IsLegacyBackup."
+        );
     }
 }

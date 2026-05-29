@@ -403,6 +403,20 @@ namespace TestParanextDataProvider.BackupRestore
                     "CAP-011 test: simulated Restorer.Dispose() failure to exercise INV-REGISTRY-DISPOSE-SAFETY"
                 );
             }
+
+            // CAP-004 added PerformOverlayRestore to IRestorerHandle. CAP-011's tests
+            // never invoke it on this fake.
+            public RestoreOverlayOutcome PerformOverlayRestore(
+                Paratext.Data.ScrText destination,
+                RestoreOverlayRequest request
+            )
+            {
+                _ = destination;
+                _ = request;
+                throw new System.NotSupportedException(
+                    "CAP-011 ThrowingFakeRestorerHandle does not implement PerformOverlayRestore."
+                );
+            }
         }
     }
 }

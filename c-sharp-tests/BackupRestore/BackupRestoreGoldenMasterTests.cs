@@ -8,6 +8,7 @@ using System.Text.Json;
 using Paranext.DataProvider.BackupRestore;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
+using Paratext.Data.Users;
 using PtxUtils;
 using SIL.Scripture;
 
@@ -926,6 +927,241 @@ namespace TestParanextDataProvider.BackupRestore
         }
 
         // -----------------------------------------------------------------
+        // gm-016 — PerformRestore overlay onto existing project (TS-019).
+        //
+        // Golden master captures: overlayPerformed=true; performRestoreReturned=true;
+        // a non-zero number of files marked for restore. PT9's Restorer.PerformRestore
+        // is a black box at the wire level — our test verifies the wire contract
+        // (Success envelope + Theme-6 fire) and that the handle's PerformOverlayRestore
+        // was invoked with the SelectedFileIds the golden master implies.
+        //
+        // The byte-for-byte file content match (gm-016's contentBeforeRestore /
+        // contentAfterRestore) is the responsibility of the GREEN-state real
+        // DefaultRestorerHandle port — at RED state we pin the call-shape contract.
+        // -----------------------------------------------------------------
+
+        [Test]
+        [Category("GoldenMaster")]
+        [Property("CapabilityId", "CAP-004")]
+        [Property("BehaviorId", "BHV-105")]
+        [Property("ScenarioId", "TS-019")]
+        [Property("GoldenMaster", "gm-016")]
+        public void PerformRestore_OverlaySuccess_MatchesGoldenMaster_gm016()
+        {
+            // Arrange — load the gm-016 expected output
+            var gmDir = LocateGoldenMasterDir("gm-016-performrestore-overlay");
+            var expected = JsonDocument.Parse(
+                File.ReadAllText(Path.Combine(gmDir, "expected-output.json"))
+            );
+            var output = expected.RootElement.GetProperty("output");
+
+            bool gmOverlayPerformed = output.GetProperty("overlayPerformed").GetBoolean();
+            bool gmPerformRestoreReturned = output
+                .GetProperty("performRestoreReturned")
+                .GetBoolean();
+            int gmMarkedForRestore = output.GetProperty("markedForRestore").GetInt32();
+
+            Assert.That(
+                gmOverlayPerformed,
+                Is.True,
+                "gm-016 captures: overlayPerformed=true (overlay branch)"
+            );
+            Assert.That(
+                gmPerformRestoreReturned,
+                Is.True,
+                "gm-016 captures: performRestoreReturned=true (success path)"
+            );
+            Assert.That(
+                gmMarkedForRestore,
+                Is.GreaterThan(0),
+                "gm-016 captures: markedForRestore > 0 (at least one file selected)"
+            );
+
+            // Drive the CAP-004 wire path via the dataset above. Verifying byte-for-byte
+            // content parity is the GREEN-state implementer's job; here we pin that the
+            // wire envelope satisfies the gm-016 binary contract.
+            var fixture = new GoldenMasterCAP004Fixture();
+            using (fixture)
+            {
+                fixture.SeedSession(isLegacyBackup: false, sharedProjectMarkers: false);
+                fixture.RegisterAdminDestination();
+
+                RestoreOperationResult result = fixture.PerformRestore(
+                    selectedFileIds: Enumerable
+                        .Range(0, gmMarkedForRestore)
+                        .Select(i => $"F-{i:D2}")
+                        .ToArray()
+                );
+
+                // gm-016 contract: overlay completes, performRestoreReturned=true ≡ Success
+                Assert.That(
+                    result,
+                    Is.InstanceOf<RestoreOperationResult.Success>(),
+                    "gm-016 wire-level: performRestoreReturned=true maps to Success envelope"
+                );
+
+                // gm-016 contract: overlayPerformed=true ≡ handle.PerformOverlayRestore invoked
+                Assert.That(
+                    fixture.LastOverlayInvocations,
+                    Is.EqualTo(1),
+                    "gm-016: overlayPerformed=true means the handle's overlay body ran exactly once"
+                );
+
+                // gm-016 contract: markedForRestore files plumbed through
+                Assert.That(
+                    fixture.LastOverlayRequest!.SelectedFileIds,
+                    Has.Count.EqualTo(gmMarkedForRestore),
+                    $"gm-016: {gmMarkedForRestore} files plumbed through to the handle"
+                );
+
+                // gm-016 contract: Theme-6 fires exactly once after success
+                Assert.That(
+                    fixture.FullProjectUpdateFires,
+                    Has.Count.EqualTo(1),
+                    "gm-016: Theme-6 SendFullProjectUpdateEvent fires exactly once post-overlay"
+                );
+            }
+        }
+
+        // -----------------------------------------------------------------
+        // gm-017 — PTX-20538 CN preservation (TS-020 / INV-A13).
+        //
+        // Golden master captures: IsLegacyProjectBackup=true triggers the
+        // legacy skip-list augmentation; destination's TranslationInfo preserved.
+        // Wire-level test: the orchestrator must plumb IsLegacyBackup=true into
+        // the handle's PerformOverlayRestore so the handle's implementation knows
+        // to augment its skip list. The byte-level content preservation is the
+        // GREEN-state implementer's port of PT9 Restorer.cs:149-157.
+        // -----------------------------------------------------------------
+
+        [Test]
+        [Category("GoldenMaster")]
+        [Property("CapabilityId", "CAP-004")]
+        [Property("BehaviorId", "BHV-105")]
+        [Property("ScenarioId", "TS-020")]
+        [Property("InvariantId", "INV-A13")]
+        [Property("GoldenMaster", "gm-017")]
+        public void PerformRestore_OverlayLegacyCN_MatchesGoldenMaster_gm017()
+        {
+            // Arrange — load gm-017 contract
+            var gmDir = LocateGoldenMasterDir("gm-017-performrestore-ptx-20538-cn-preservation");
+            var expected = JsonDocument.Parse(
+                File.ReadAllText(Path.Combine(gmDir, "expected-output.json"))
+            );
+            var contract = expected.RootElement.GetProperty("output").GetProperty("contract");
+            var trigger = contract.GetProperty("trigger").GetString()!;
+            Assert.That(
+                trigger,
+                Does.Contain("IsLegacyProjectBackup is true"),
+                "gm-017 captures: trigger condition is IsLegacyProjectBackup=true"
+            );
+
+            var fixture = new GoldenMasterCAP004Fixture();
+            using (fixture)
+            {
+                fixture.SeedSession(isLegacyBackup: true, sharedProjectMarkers: false);
+                fixture.RegisterAdminDestination();
+
+                RestoreOperationResult result = fixture.PerformRestore(
+                    selectedFileIds: new[] { "F-GEN" }
+                );
+
+                Assert.That(
+                    result,
+                    Is.InstanceOf<RestoreOperationResult.Success>(),
+                    "gm-017: legacy backup overlay returns Success"
+                );
+
+                Assert.That(
+                    fixture.LastOverlayRequest!.IsLegacyBackup,
+                    Is.True,
+                    "gm-017 / INV-A13 / PTX-20538: legacy flag plumbed to the handle "
+                        + "so the handle augments its fields-to-skip with "
+                        + "Setting.Language + Setting.LanguageIsoCode + Setting.TranslationInfo"
+                );
+            }
+        }
+
+        // -----------------------------------------------------------------
+        // gm-029 — cmdOK ProgressUtils 4-step overlay branch (TS-094 / BHV-326).
+        //
+        // Golden master captures the PT9 4-step overlay pipeline:
+        //   (1) vText.AlwaysCommit("Before restoring books.")  [UI/LB-UI-EXT-206]
+        //   (2) restorer.PerformRestore()                       [LB-PD-06]
+        //   (3) vText.AlwaysCommit("After restoring books.")    [UI/LB-UI-EXT-206]
+        //   (4) ProjectFileUpdateManager — overlay branch skips
+        //
+        // Per backend-alignment.md §EXT-206 the pre/post commits are OUT_OF_SCOPE
+        // for FN-010-narrowed PT10. The wire-level analog of step (2) +
+        // step (4)'s overlay-skip is: PerformRestore invoked exactly once;
+        // Theme-6 fires exactly once after success. The gm-029 anchor at the wire
+        // level is therefore the PerformOverlayRestore-invoked-once contract.
+        // -----------------------------------------------------------------
+
+        [Test]
+        [Category("GoldenMaster")]
+        [Property("CapabilityId", "CAP-004")]
+        [Property("BehaviorId", "BHV-326")]
+        [Property("ScenarioId", "TS-094")]
+        [Property("GoldenMaster", "gm-029")]
+        public void PerformRestore_OverlayProgress_MatchesGoldenMaster_gm029()
+        {
+            // Arrange — load gm-029 contract
+            var gmDir = LocateGoldenMasterDir("gm-029-cmdok-progressutils-4-steps");
+            var expected = JsonDocument.Parse(
+                File.ReadAllText(Path.Combine(gmDir, "expected-output.json"))
+            );
+            string gmBranch = expected
+                .RootElement.GetProperty("output")
+                .GetProperty("branch")
+                .GetString()!;
+            int gmStepCount = expected
+                .RootElement.GetProperty("output")
+                .GetProperty("stepCount")
+                .GetInt32();
+
+            Assert.That(gmBranch, Is.EqualTo("overlay"), "gm-029: branch=overlay");
+            Assert.That(
+                gmStepCount,
+                Is.EqualTo(4),
+                "gm-029: 4-step ProgressUtils pipeline (steps 1,3,4 UI-side; step 2 is wire-side)"
+            );
+
+            var fixture = new GoldenMasterCAP004Fixture();
+            using (fixture)
+            {
+                fixture.SeedSession(isLegacyBackup: false, sharedProjectMarkers: false);
+                fixture.RegisterAdminDestination();
+
+                RestoreOperationResult result = fixture.PerformRestore(
+                    selectedFileIds: new[] { "F-GEN" }
+                );
+
+                Assert.That(
+                    result,
+                    Is.InstanceOf<RestoreOperationResult.Success>(),
+                    "gm-029: overlay branch happy path returns Success"
+                );
+
+                // Wire-side analog of gm-029 step (2): PerformRestore invoked exactly once
+                Assert.That(
+                    fixture.LastOverlayInvocations,
+                    Is.EqualTo(1),
+                    "gm-029 step (2): handle.PerformOverlayRestore invoked exactly once on overlay branch"
+                );
+
+                // Wire-side analog of gm-029 step (4) skip: Theme-6 fires once
+                // (analogous to PT9's overlay-branch progress increment without
+                // ProjectFileUpdateManager.PerformUpdates running)
+                Assert.That(
+                    fixture.FullProjectUpdateFires,
+                    Has.Count.EqualTo(1),
+                    "gm-029: Theme-6 fires exactly once post-overlay (LB-UI-EXT-206 hoisted to wire layer)"
+                );
+            }
+        }
+
+        // -----------------------------------------------------------------
         // Helper — probe upward from AppContext.BaseDirectory to find the golden-masters folder.
         //
         // Walks from <repo>/c-sharp-tests/bin/Debug/net8.0/ upward until it finds
@@ -947,6 +1183,185 @@ namespace TestParanextDataProvider.BackupRestore
                 $"Golden master '{gmName}' not found by walking up from '{AppContext.BaseDirectory}'. "
                     + $"Expected at '<repo>/{relPath}/{gmName}'."
             );
+        }
+
+        // -----------------------------------------------------------------
+        // CAP-004 — GoldenMasterCAP004Fixture
+        //
+        // Drives the wire-layer PerformRestoreAsync against a fake handle that
+        // records overlay invocations. Used by gm-016 / gm-017 / gm-029 tests
+        // to assert the wire envelope + plumbed-flags contract without needing
+        // a real PT9 Restorer port. The byte-for-byte content match (gm-016)
+        // is the GREEN-state implementer's job — see CAP-004 plan §"Risks".
+        // -----------------------------------------------------------------
+
+        private sealed class GoldenMasterCAP004Fixture : IDisposable
+        {
+            private readonly string _tempDir;
+            private readonly BackupRestoreDataProvider _provider;
+            private readonly DummyLocalParatextProjects _localProjects;
+            private string? _sessionId;
+            private GoldenMasterCAP004FakeHandle? _handle;
+            private ScrText? _destination;
+            private readonly List<string> _fullProjectUpdateFires = new();
+
+            public GoldenMasterCAP004Fixture()
+            {
+                _tempDir = Path.Combine(
+                    Path.GetTempPath(),
+                    "paranext-cap-004-gm",
+                    Guid.NewGuid().ToString("N")
+                );
+                Directory.CreateDirectory(_tempDir);
+                _provider = new BackupRestoreDataProvider();
+                _localProjects = new DummyLocalParatextProjects();
+                BackupRestoreDataProvider.SendFullProjectUpdateEventOverride = pid =>
+                    _fullProjectUpdateFires.Add(pid);
+                RestoreOrchestrator.WriteLockObtainerOverride = _ => new GMNoOpDisposable();
+            }
+
+            public IReadOnlyList<string> FullProjectUpdateFires => _fullProjectUpdateFires;
+            public int LastOverlayInvocations => _handle?.OverlayInvocations ?? 0;
+            public RestoreOverlayRequest? LastOverlayRequest => _handle?.LastOverlayRequest;
+
+            public void SeedSession(bool isLegacyBackup, bool sharedProjectMarkers)
+            {
+                string zipPath = Path.Combine(_tempDir, "gm.zip");
+                using (var fs = File.Create(zipPath))
+                using (
+                    var archive = new System.IO.Compression.ZipArchive(
+                        fs,
+                        System.IO.Compression.ZipArchiveMode.Create
+                    )
+                )
+                {
+                    var entry = archive.CreateEntry("placeholder.txt");
+                    using var sw = new StreamWriter(entry.Open());
+                    sw.Write("x");
+                }
+
+                var metadata = new RestorerMetadata
+                {
+                    FilePath = zipPath,
+                    ProjectName = "GMTest",
+                    IsLegacyBackup = isLegacyBackup,
+                    SharedProjectMarkers = sharedProjectMarkers,
+                    AllFiles = Array.Empty<RestoreFileEntry>(),
+                };
+                _handle = new GoldenMasterCAP004FakeHandle(metadata);
+                BackupRestoreDataProvider.RestorerFactoryOverride = _ => _handle;
+
+                var openTask = _provider.OpenRestoreSessionAsync(
+                    new OpenRestoreSessionRequest { ZipPath = zipPath }
+                );
+                openTask.Wait();
+                _sessionId = ((RestoreSessionResult.Success)openTask.Result).SessionId;
+            }
+
+            public void RegisterAdminDestination()
+            {
+                _destination = new GoldenMasterCAP004ScrText(
+                    new GoldenMasterCAP004PermissionManager(isAdmin: true)
+                );
+                ScrTextCollection.Add(_destination, true);
+            }
+
+            public RestoreOperationResult PerformRestore(IReadOnlyList<string> selectedFileIds)
+            {
+                if (_sessionId == null || _destination == null)
+                    throw new InvalidOperationException(
+                        "Call SeedSession + RegisterAdminDestination before PerformRestore"
+                    );
+
+                var task = _provider.PerformRestoreAsync(
+                    new RestoreRequest
+                    {
+                        SessionId = _sessionId,
+                        DestinationProjectId = _destination.Guid.ToString(),
+                        SelectedFileIds = selectedFileIds,
+                    }
+                );
+                task.Wait();
+                return task.Result;
+            }
+
+            public void Dispose()
+            {
+                BackupRestoreDataProvider.RestorerFactoryOverride = null;
+                BackupRestoreDataProvider.SendFullProjectUpdateEventOverride = null;
+                BackupRestoreDataProvider.PersistCurrentChangesOverride = null;
+                RestoreOrchestrator.WriteLockObtainerOverride = null;
+                if (_destination != null)
+                    ScrTextCollection.Remove(_destination, false);
+                try
+                {
+                    if (Directory.Exists(_tempDir))
+                        Directory.Delete(_tempDir, recursive: true);
+                }
+                catch
+                {
+                    // Best-effort cleanup.
+                }
+                _ = _localProjects;
+            }
+
+            private sealed class GoldenMasterCAP004FakeHandle : IRestorerHandle
+            {
+                private readonly RestorerMetadata _metadata;
+                public int OverlayInvocations { get; private set; }
+                public RestoreOverlayRequest? LastOverlayRequest { get; private set; }
+
+                public GoldenMasterCAP004FakeHandle(RestorerMetadata metadata)
+                {
+                    _metadata = metadata;
+                }
+
+                public RestorerMetadata BuildMetadata(string? preferredDestinationProjectId) =>
+                    _metadata;
+
+                public RestoreOverlayOutcome PerformOverlayRestore(
+                    ScrText destination,
+                    RestoreOverlayRequest request
+                )
+                {
+                    OverlayInvocations++;
+                    LastOverlayRequest = request;
+                    return RestoreOverlayOutcome.Success;
+                }
+
+                public void Dispose() { }
+            }
+
+            private sealed class GoldenMasterCAP004PermissionManager : PermissionManager
+            {
+                private readonly bool _isAdmin;
+
+                public GoldenMasterCAP004PermissionManager(bool isAdmin)
+                    : base()
+                {
+                    _isAdmin = isAdmin;
+                }
+
+                public override bool AmAdministrator => _isAdmin;
+            }
+
+            private sealed class GoldenMasterCAP004ScrText : DummyScrText
+            {
+                private readonly PermissionManager _permissions;
+
+                public GoldenMasterCAP004ScrText(PermissionManager permissions)
+                    : base()
+                {
+                    _permissions = permissions;
+                }
+
+                public override PermissionManager Permissions => _permissions;
+            }
+
+            private sealed class GMNoOpDisposable : IDisposable
+            {
+                public void Dispose() { }
+            }
         }
     }
 }
