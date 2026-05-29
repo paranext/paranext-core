@@ -1,4 +1,4 @@
-import papi, { logger } from '@papi/frontend';
+import papi, { logger } from '@papi/backend';
 import { GetWebViewOptions } from '@papi/core';
 
 /** Options passed when opening the Mixed Capitalization inventory web view. */

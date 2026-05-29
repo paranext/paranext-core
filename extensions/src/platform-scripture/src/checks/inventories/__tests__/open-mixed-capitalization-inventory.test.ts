@@ -22,12 +22,13 @@
  * - Spec-012 / INV-A03: on-wire CheckType identity is the PT9 typo `'MixexCapitalization'`, preserved
  *   verbatim.
  *
- * Only the external PAPI boundary (`@papi/frontend`) is mocked — no internal collaborators are
- * mocked (Testing Trophy).
+ * Only the external PAPI boundary (`@papi/backend`) is mocked — no internal collaborators are
+ * mocked (Testing Trophy). The seam runs in the extension host, so it imports `@papi/backend`
+ * (matching `main.ts` and the sibling host-logic services); the mock targets that package.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// --- External boundary mock: @papi/frontend webViews service ---------------------------------
+// --- External boundary mock: @papi/backend webViews service ----------------------------------
 
 interface WebViewDefinitionLike {
   id: string;
@@ -51,7 +52,7 @@ const mockReloadWebView =
     (webViewType: string, webViewId: string, options: unknown) => Promise<string | undefined>
   >();
 
-vi.mock('@papi/frontend', () => ({
+vi.mock('@papi/backend', () => ({
   default: {
     webViews: {
       getOpenWebViewDefinition: (webViewId: string) => mockGetOpenWebViewDefinition(webViewId),
