@@ -239,12 +239,14 @@ internal sealed partial class BackupRestoreDataProvider(
                 "CAP-024 pending — getCompareSourceContent wire fragment not yet landed"
             ),
             // ---- Subscribable data type get handlers (3) -----------------------------
-            // CAP-008 PENDING: replace this stub when the DT-001 BackupableProjects
-            // get-handler lands. The BackupableProjectsService is GREEN (CAP-021)
-            // but the wire-facade `Get<DataType>` handler is not yet wired.
-            PendingStub(
+            // CAP-008 GREEN: M-007 getBackupableProjects (DT-001) wires through
+            // BackupRestoreDataProvider.BackupableProjects.cs. The underlying
+            // BackupableProjectsService (CAP-021) owns snapshot + subscriber-set logic.
+            (
                 "getBackupableProjects",
-                "CAP-008 pending — getBackupableProjects (DT-001) wire fragment not yet landed"
+                new Func<GetBackupableProjectsRequest, Task<List<BackupableProject>>>(request =>
+                    GetBackupableProjectsAsync(request)
+                )
             ),
             (
                 "getRestoreDestinationProjects",

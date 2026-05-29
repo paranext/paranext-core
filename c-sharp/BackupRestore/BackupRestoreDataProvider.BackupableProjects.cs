@@ -93,12 +93,45 @@ internal sealed partial class BackupRestoreDataProvider
         _ = request;
         _ = cancellationToken;
 
-        // RED state — implementation lands in CAP-008 GREEN. Message names the
-        // owning capability so a future grep finds the slot. Mirrors CAP-009's
-        // RED-state shape (`GetRestoreDestinationProjectsAsync` had the same
-        // pattern before its GREEN landing).
-        throw new NotImplementedException(
-            "CAP-008 GetBackupableProjectsAsync is not yet implemented — RED state."
-        );
+        // EXPLANATION:
+        // CAP-008 GREEN body — mirrors CAP-009's GetRestoreDestinationProjectsAsync
+        // (BackupRestoreDataProvider.RestoreDestinationProjects.cs:93-141) minus the
+        // OnlyAllowNewProjects guard (DT-001's selector is `undefined` per
+        // data-contracts.md §5.1, so the request record is parameterless).
+        //   (1) Read the snapshot from CAP-021's BackupableProjectsService via the
+        //       test seam. CAP-001 BE-7 will land the production injection mechanism
+        //       (constructor-injected default) — until then, only the test seam is wired.
+        //   (2) Return a fresh `List<BackupableProject>` (defensive copy). The
+        //       underlying `GetSnapshot()` already returns an immutable copy, but
+        //       wrapping it in a fresh mutable List ensures caller
+        //       `Clear`/`Add`/`Remove` cannot affect the service's cached snapshot
+        //       AND honors the wire-method's declared `List<T>` return shape.
+        //
+        // Per TS-107: when the project source is empty, return an empty list — never
+        // throw. The wire surface is "the snapshot is always the full list, which may
+        // be empty" per §5.1; no guard is needed because `GetSnapshot()` already
+        // returns an empty list when the upstream source is empty.
+        //
+        // E-001 emission is NOT done here. CAP-021's BackupableProjectsService.
+        // NotifyProjectsChanged owns event emission via its inherited
+        // SubscribableSnapshotService. §5.1 trigger conditions (project added/
+        // removed/renamed; IsProtectedText flip; HasFiguresFolder flip; IsNoteType
+        // change) fire E-001 through that machinery; this wire method only READS
+        // the post-change snapshot.
+
+        // The test seam is the only injection mechanism in CAP-008 GREEN. CAP-001 BE-7
+        // will add a constructor-injected default for production. Until then, callers
+        // outside tests will hit an InvalidOperationException — by design — because
+        // the production wiring is not yet in place.
+        BackupableProjectsService service =
+            BackupableProjectsServiceOverride
+            ?? throw new InvalidOperationException(
+                "BackupableProjectsService is not wired. "
+                    + "Tests must set BackupableProjectsServiceOverride; "
+                    + "production wiring is CAP-001 BE-7 work."
+            );
+
+        IReadOnlyList<BackupableProject> snapshot = service.GetSnapshot();
+        return Task.FromResult(new List<BackupableProject>(snapshot));
     }
 }
