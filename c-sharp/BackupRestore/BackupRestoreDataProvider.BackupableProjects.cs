@@ -16,9 +16,10 @@ namespace Paranext.DataProvider.BackupRestore;
 // file) to avoid edit-collision with parallel agents.
 //
 // Wire-layer responsibilities (per data-contracts.md §5.1 + CAP-008 strategic plan):
-//   (1) Read the snapshot from the BackupableProjectsServiceOverride (test seam)
-//       or — when CAP-008 GREEN lands the default-injection mechanism — a
-//       per-instance service.
+//   (1) Read the snapshot from CAP-021's BackupableProjectsService. Today the
+//       service is provided via the BackupableProjectsServiceOverride test seam;
+//       CAP-001 BE-7 will land the production wiring (constructor-injected
+//       per-instance service) and remove the need for the seam outside tests.
 //   (2) Return a fresh List<BackupableProject> (defensive copy so callers cannot
 //       mutate the cached internal snapshot).
 //
@@ -32,12 +33,13 @@ namespace Paranext.DataProvider.BackupRestore;
 //   list.
 //
 // Test seam — BackupableProjectsServiceOverride:
-//   PT10 GREEN-state will inject the service via the eventual constructor on
-//   the facade. CAP-008 RED-state uses a static-property test seam (mirrors
-//   CAP-009's `RestoreDestinationProjectsServiceOverride` precedent) so unit
-//   tests can plug in a service built against the PapiTestBase's
-//   `DummyPapiClient` + `DummyLocalParatextProjects`. Production code MUST NOT
-//   touch this.
+//   Today this static-property seam is the ONLY injection mechanism for the
+//   underlying BackupableProjectsService — unit tests plug in a service built
+//   against the PapiTestBase's `DummyPapiClient` + `DummyLocalParatextProjects`.
+//   CAP-001 BE-7 owns the production wiring: it will inject a per-instance
+//   service via the facade's constructor and remove the need for this seam
+//   outside tests. Mirrors CAP-009's `RestoreDestinationProjectsServiceOverride`
+//   precedent. Production code MUST NOT touch this.
 //
 // Maps to: data-contracts.md §3.10 (BackupableProject element shape);
 //   data-contracts.md §5.1 (DT-001 selector + trigger conditions);
