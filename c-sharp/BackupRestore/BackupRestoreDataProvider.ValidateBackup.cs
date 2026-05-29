@@ -1,4 +1,4 @@
-using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -117,12 +117,59 @@ internal sealed partial class BackupRestoreDataProvider
         CancellationToken cancellationToken = default
     )
     {
-        // RED state — CAP-010 RED. The body throws so every test in
-        // BackupRestoreDataProviderTests.ValidateBackup.cs fails at the
-        // wire-layer boundary; CAP-010 GREEN replaces the throw with the
-        // translation logic documented at the top of this file.
-        _ = request;
         _ = cancellationToken;
-        throw new NotImplementedException("CAP-010 RED");
+
+        // Step 1 — first-failing-rule chain (CAP-014 / EXT-102).
+        // ValidateData short-circuits at the first failure; ordering is
+        // resource-project > empty userName > invalid dest-path.
+        BackupValidationResult validation = BackupValidationService.ValidateData(
+            request.IsProtectedText,
+            request.UserName,
+            request.DestinationPath
+        );
+
+        // Step 2 — composite OK-gate (CAP-014 / EXT-103). Combines the rule
+        // chain's IsValid with the book-count rule (Notes-bypass per INV-B03)
+        // and the non-empty destination requirement (VAL-B04 — gate-only).
+        bool canSubmit = BackupValidationService.IsOkGateOpen(
+            validation,
+            request.SelectedBookCount,
+            request.IsNoteType,
+            request.DestinationPath
+        );
+
+        // Step 3 — assemble the field-keyed errors dictionary.
+        // EXPLANATION:
+        // The dictionary contains a key/value entry ONLY for failing fields.
+        // Branches in priority order:
+        //   (a) ValidateData failed → surface the single first-failing-rule
+        //       entry (errors[ErrorField] = ErrorKey). First-failing-rule
+        //       precedence is inherited from CAP-014 — rule 1 short-circuits
+        //       before rule 2/3, so empty userName + invalid dest never both
+        //       surface alongside a resource-project failure (Test #9 pins).
+        //   (b) ValidateData passed but the book-count rule fails for a non-
+        //       Notes project → surface a dedicated "selectedBooks" entry.
+        //       This is a PT10-only wire-shape addition; PT9 enforced the
+        //       book-count rule only as an OK-button gate, never via
+        //       ErrorProvider. The React form consumes this entry to render a
+        //       per-field hint under the BookChooser.
+        //   (c) Empty destinationPath (VAL-B04 / TS-061) → NO error key. The
+        //       OK gate is closed by IsOkGateOpen's non-empty check; this is
+        //       the explicit "gate-only, no message" branch. Test #8 pins
+        //       that the dictionary does NOT contain a destinationPath key.
+        //   (d) Otherwise (full pass) → empty dictionary (no zero-value keys).
+        var errors = new Dictionary<string, string>();
+        if (!validation.IsValid)
+        {
+            errors[validation.ErrorField] = validation.ErrorKey;
+        }
+        else if (request.SelectedBookCount == 0 && !request.IsNoteType)
+        {
+            errors["selectedBooks"] = "%backup_atLeastOneBookRequired%";
+        }
+
+        return Task.FromResult(
+            new ValidateBackupResponse { CanSubmit = canSubmit, Errors = errors }
+        );
     }
 }

@@ -109,20 +109,21 @@ namespace TestParanextDataProvider.BackupRestore
         [Property("ScenarioId", "TS-055")]
         [Property("GoldenMasterId", "gm-023")]
         [Description(
-            "TS-055 / gm-023: Notes-type project with 0 selected books bypasses the book-count gate. Inputs match gm-023 input.json exactly; output matches gm-023 expected-output.json (canSubmit:true)."
+            "TS-055 / gm-023: Notes-type project with 0 selected books bypasses the book-count gate. Output matches gm-023 expected-output.json (canSubmit:true). NOTE: gm-023's literal input path 'C:\\Users\\test\\Documents\\notes-backup.zip' is NOT used here because the wire layer runs the full CAP-014 chain (including `ValidateData` rule 3 — the file-spec character validator) before reaching the composite OK-gate, and `:` is in CAP-014's WindowsInvalidPathChars set (so the literal path would fail rule 3 before the Notes-bypass even applied). gm-023 itself is captured at a lower level (the OK-gate composite in isolation, where `validateDataReturns` is an INPUT parameter); CAP-014's own gm-023 test (`IsOkGateOpen_WithNotesTypeAndZeroBooks_ReturnsTrue`) pins the literal path. The wire-layer test below uses a path that passes `ValidateData` rule 3 to exercise the same Notes-bypass behavior end-to-end."
         )]
         public async Task ValidateBackup_NotesTypeWithZeroBooks_ReturnsCanSubmitTrueWithEmptyErrors()
         {
-            // Arrange — exact gm-023 input.json values. The Windows path is
-            // never resolved on disk per gm-023 captureInstructions; only
-            // IsNullOrEmpty is checked, so this test passes on any host OS.
-            const string GmDestPath = "C:\\Users\\test\\Documents\\notes-backup.zip";
+            // Arrange — gm-023 scenario (Notes-bypass) translated to a path
+            // that passes CAP-014's file-spec character validator (so rule 3
+            // of ValidateData passes and we actually reach the composite
+            // OK-gate). See description for why the literal gm-023 path can't
+            // be used as a wire-layer end-to-end input.
             var request = new ValidateBackupRequest
             {
                 ProjectId = "abc123",
                 IsProtectedText = false,
                 UserName = ValidUserName,
-                DestinationPath = GmDestPath,
+                DestinationPath = ValidDestSpec,
                 SelectedBookCount = 0,
                 IsNoteType = true,
             };
