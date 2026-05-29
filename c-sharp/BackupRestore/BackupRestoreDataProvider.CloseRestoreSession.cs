@@ -1,4 +1,3 @@
-using System;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -35,10 +34,11 @@ namespace Paranext.DataProvider.BackupRestore;
 //     pins the symmetry: every UI cancel surface MUST emit a
 //     closeRestoreSession call.
 //
-// RED-state stub (CAP-011 test writer phase):
-//   * Body throws NotImplementedException("CAP-011 RED") so every test in
-//     BackupRestoreDataProviderTests.CloseRestoreSession.cs fails. The
-//     implementer fills in the one-line delegation in CAP-011 GREEN.
+// Implementation (CAP-011 GREEN):
+//   * Body delegates to SessionRegistry.Close(sessionId) and always returns
+//     CloseRestoreSessionResult.Success. The boolean return from Close is
+//     discarded — both true (closed) and false (unknown) map to Success per
+//     §4.10's "Error conditions: None — idempotent".
 //
 // Maps to: data-contracts.md §4.10 (M-010 closeRestoreSession);
 //   strategic-plan-backend.md §CAP-011.
@@ -95,13 +95,17 @@ internal sealed partial class BackupRestoreDataProvider
         CancellationToken cancellationToken = default
     )
     {
-        _ = request;
+        // Reserved for future asynchronicity — close is synchronous and short.
         _ = cancellationToken;
-        // CAP-011 RED-state — TDD test writer phase. The implementer replaces
-        // this body with a one-line delegation to SessionRegistry.Close in
-        // CAP-011 GREEN. Until then, every test in
-        // BackupRestoreDataProviderTests.CloseRestoreSession.cs fails with
-        // this exception, which is the expected RED-state signature.
-        throw new NotImplementedException("CAP-011 RED");
+
+        // Delegate to the session registry. The boolean return (true = closed
+        // an existing session; false = unknown session id) is intentionally
+        // ignored — per data-contracts.md §4.10 both cases map to the same
+        // Success envelope. CAP-003's INV-REGISTRY-DISPOSE-SAFETY guarantees
+        // that the registry TryRemoves the entry FIRST and catches any
+        // Dispose-exception thrown by the underlying Restorer, so the wire
+        // layer never sees the exception itself.
+        SessionRegistry.Close(request.SessionId);
+        return Task.FromResult<CloseRestoreSessionResult>(new CloseRestoreSessionResult.Success());
     }
 }
