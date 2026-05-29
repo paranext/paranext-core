@@ -69,12 +69,16 @@ internal sealed partial class EncyclopediaService(
         }
 
         var items = new List<EncyclopediaDisplayItem>();
+        var seenLemmas = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var token in scopedTokens)
         {
             var firstLexicalLink = token.LexicalLinks?.FirstOrDefault();
             if (string.IsNullOrEmpty(firstLexicalLink))
                 continue;
             var (lemma, _, _, dictionary) = ParseLexLinkEntry(firstLexicalLink);
+
+            if (!seenLemmas.Add(lemma))
+                continue;
 
             var thematicIds = token.ThematicLinks ?? [];
             if (thematicIds.Count == 0)
