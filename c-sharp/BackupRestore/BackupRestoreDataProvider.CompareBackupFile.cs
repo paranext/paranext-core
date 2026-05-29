@@ -118,10 +118,7 @@ internal sealed partial class BackupRestoreDataProvider
         RestoreSession? session = SessionRegistry.Get(request.SessionId);
         if (session == null)
         {
-            return new CompareBackupFileResult.Error(
-                CompareBackupFileErrorCode.InvalidSession,
-                "%restore_invalidSession%"
-            );
+            return Error(CompareBackupFileErrorCode.InvalidSession, "%restore_invalidSession%");
         }
 
         // (2) File lookup
@@ -130,10 +127,7 @@ internal sealed partial class BackupRestoreDataProvider
         );
         if (entry == null)
         {
-            return new CompareBackupFileResult.Error(
-                CompareBackupFileErrorCode.FileNotFound,
-                "%restore_fileNotFoundInBackup%"
-            );
+            return Error(CompareBackupFileErrorCode.FileNotFound, "%restore_fileNotFoundInBackup%");
         }
 
         // (3) CANNOT_COMPARE gate (BHV-320 + TS-087)
@@ -142,10 +136,7 @@ internal sealed partial class BackupRestoreDataProvider
             || !entry.CanViewDifferences
         )
         {
-            return new CompareBackupFileResult.Error(
-                CompareBackupFileErrorCode.CannotCompare,
-                "%restore_cannotCompareFiles%"
-            );
+            return Error(CompareBackupFileErrorCode.CannotCompare, "%restore_cannotCompareFiles%");
         }
 
         // (4) Project the wire-side RestoreFileEntry → internal RestoreFileInfo.
@@ -178,6 +169,25 @@ internal sealed partial class BackupRestoreDataProvider
         );
 
         return new CompareBackupFileResult.Success(config);
+    }
+
+    /// <summary>
+    /// Build a <see cref="CompareBackupFileResult.Error"/> envelope for an
+    /// <see cref="ExecuteCompareBackupFile"/> failure. Centralizes the
+    /// wire-stable shape (data-contracts.md §3.8) so the three error sites in
+    /// the 5-step wire chain (steps 1, 2, 3 — InvalidSession / FileNotFound /
+    /// CannotCompare) stay uniform. Mirrors the <c>Error</c> helper in
+    /// <see cref="BackupRestoreDataProvider"/>'s sibling
+    /// <c>BackupRestoreDataProvider.PerformRestore.cs</c> partial fragment
+    /// (CAP-004) and the <c>OpenError</c> helper in
+    /// <c>BackupRestoreDataProvider.RestoreSession.cs</c> (CAP-003).
+    /// </summary>
+    private static CompareBackupFileResult.Error Error(
+        CompareBackupFileErrorCode code,
+        string localizationKey
+    )
+    {
+        return new CompareBackupFileResult.Error(code, localizationKey);
     }
 
     /// <summary>
