@@ -1,4 +1,8 @@
 import { vi } from 'vitest';
+import { settingsService } from '@shared/services/settings.service';
+import * as networkService from '@shared/services/network.service';
+import { networkObjectService } from '@shared/services/network-object.service';
+import { performShutdownTasks } from './shutdown-tasks';
 
 vi.mock('@shared/services/settings.service', () => ({
   settingsService: { get: vi.fn() },
@@ -15,11 +19,6 @@ vi.mock('@shared/services/network-object.service', () => ({
 vi.mock('@shared/services/logger.service', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
-
-import { settingsService } from '@shared/services/settings.service';
-import * as networkService from '@shared/services/network.service';
-import { networkObjectService } from '@shared/services/network-object.service';
-import { performShutdownTasks } from './shutdown-tasks';
 
 const mockSettingsGet = vi.mocked(settingsService.get);
 const mockRequestNoRetry = vi.mocked(networkService.requestNoRetry);
