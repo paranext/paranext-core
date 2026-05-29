@@ -59,6 +59,9 @@ let selectionChangedEventEmitter: PlatformEventEmitter<SelectionChangeEvent> | u
 
 // #region Project Switch Events
 
+// String values must match PROJECT_SWITCH_WILL_START_EVENT / PROJECT_SWITCH_DID_FINISH_EVENT in
+// src/renderer/services/workspace-updating-service.ts
+
 /**
  * Network event name emitted just before a scripture editor web view is opened or replaced with a
  * new project. Subscribe via
@@ -71,8 +74,6 @@ const PROJECT_SWITCH_WILL_START_EVENT = 'platformScriptureEditor.onWillSwitchPro
  * Subscribe via `papi.network.getNetworkEvent('platformScriptureEditor.onDidSwitchProject')`.
  */
 const PROJECT_SWITCH_DID_FINISH_EVENT = 'platformScriptureEditor.onDidSwitchProject';
-// Must match WILL_SWITCH_PROJECT_EVENT / DID_SWITCH_PROJECT_EVENT in
-// src/renderer/services/workspace-updating-service.ts
 
 /**
  * Event emitter fired before a project switch. Created lazily on the first call to open() to avoid
