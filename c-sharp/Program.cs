@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Paranext.DataProvider.BackupRestore;
 using Paranext.DataProvider.Checklists;
 using Paranext.DataProvider.Checks;
 using Paranext.DataProvider.ManageBooks;
@@ -95,6 +96,11 @@ public static class Program
                 paratextProjects,
                 paratextFactory
             );
+            // CAP-001 (project-backup-and-restore): single DataProvider wire facade
+            // `platformBackupRestore.backupRestore` hosting 8 imperative methods + 3
+            // subscribable data types. See strategic-plan-backend.md §CAP-001 and
+            // backend-alignment.md §JSON-RPC Wire Contract for the full registration shape.
+            var backupRestoreDataProvider = new BackupRestoreDataProvider(papi, paratextProjects);
             await Task.WhenAll(
                 paratextFactory.InitializeAsync(),
                 inventoryDataProvider.RegisterDataProviderAsync(),
@@ -103,7 +109,8 @@ public static class Program
                 paratextRegistrationService.InitializeAsync(),
                 paratextSendReceiveService.InitializeAsync(),
                 checklistNetworkObject.InitializeAsync(),
-                manageBooksService.RegisterNetworkObjectAsync()
+                manageBooksService.RegisterNetworkObjectAsync(),
+                backupRestoreDataProvider.RegisterDataProviderAsync()
             );
 
             // Things that only run in our "noisy dev mode" go here

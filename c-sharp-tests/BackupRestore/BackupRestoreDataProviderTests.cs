@@ -80,7 +80,13 @@ namespace TestParanextDataProvider.BackupRestore
             // PersistChanges branch; CAP-022 owns that path (TS-004).
             BackupOrchestrator.PersistChangesOverride = _ => true;
 
-            _provider = new BackupRestoreDataProvider();
+            // CAP-001 GREEN landed the primary ctor `(PapiClient, LocalParatextProjects)` on
+            // the BackupRestoreDataProvider facade. CAP-002's test fixture passes the
+            // PapiTestBase's `Client` + `ParatextProjects` so the facade has its baseline
+            // dependencies. The CAP-002 wire-layer tests do not exercise the
+            // DataProvider-base machinery (registration / subscriber events) — those are
+            // covered by `BackupRestoreDataProviderRegistrationTests` (CAP-001).
+            _provider = new BackupRestoreDataProvider(Client, ParatextProjects);
 
             return Task.CompletedTask;
         }

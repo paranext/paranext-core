@@ -1213,8 +1213,14 @@ namespace TestParanextDataProvider.BackupRestore
                     Guid.NewGuid().ToString("N")
                 );
                 Directory.CreateDirectory(_tempDir);
-                _provider = new BackupRestoreDataProvider();
+                // CAP-001 GREEN added the primary ctor (PapiClient, LocalParatextProjects).
+                // The golden-master fixture's restore-flow assertions only exercise the
+                // wire-layer M-002/M-003 methods (which don't depend on the PapiClient
+                // beyond the base-class field), so a DummyPapiClient + DummyLocalParatextProjects
+                // are sufficient. The local _localProjects is kept for the existing
+                // session-seeding flow (line 1276+).
                 _localProjects = new DummyLocalParatextProjects();
+                _provider = new BackupRestoreDataProvider(new DummyPapiClient(), _localProjects);
                 BackupRestoreDataProvider.SendFullProjectUpdateEventOverride = pid =>
                     _fullProjectUpdateFires.Add(pid);
                 RestoreOrchestrator.WriteLockObtainerOverride = _ => new GMNoOpDisposable();

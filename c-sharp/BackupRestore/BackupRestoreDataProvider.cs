@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.Projects;
 using Paranext.DataProvider.Users;
 using Paratext.Data;
@@ -20,23 +22,25 @@ namespace Paranext.DataProvider.BackupRestore;
 //   the JSON-RPC boundary through this DataProvider.
 //
 // Class organization (split across CAP-001 / CAP-002 / CAP-003 etc.):
-//   * This file (CAP-002) — declares the class as `partial` and lands the FIRST method
-//     (`CreateBackupAsync` / M-001).
-//   * CAP-001 (BE-7) — will land a sibling `BackupRestoreDataProvider.Facade.cs` (or
-//     similar) supplying the `: NetworkObjects.DataProvider(...)` base, the `GetFunctions()`
-//     override, and the ctor accepting `PapiClient` + `LocalParatextProjects` + collaborator
-//     services.
-//   * CAP-003..CAP-011 — each lands its M-### method here as additional `partial` fragments.
-//   * CAP-007/008/009 (DT-001..DT-003) — each lands its `Get<DataTypeName>` handler likewise.
+//   * This file (CAP-002 + CAP-001 facade scaffolding) — declares the class as
+//     `partial sealed class : NetworkObjects.DataProvider`, supplies the primary
+//     constructor `(PapiClient, LocalParatextProjects)`, the `GetFunctions()`
+//     registration, the `StartDataProviderAsync()` lifecycle hook, AND lands the
+//     CAP-002 M-001 `CreateBackupAsync` method.
+//   * CAP-003..CAP-011 + CAP-024 — each lands its M-### method here as additional
+//     `partial` fragments.
+//   * CAP-008 / CAP-009 / DT-003 — each lands its `Get<DataTypeName>` handler likewise.
 //
-// The class is declared `internal sealed partial class` (not yet inheriting
-// `NetworkObjects.DataProvider`) so CAP-002 can land + test the M-001 wire method without
-// taking on the full DataProvider scaffolding. CAP-001 in BE-7 supplies the base class +
-// ctor signature. Until CAP-001 lands, callers (and tests) instantiate the class via its
-// parameterless ctor.
+// CAP-001 facade scaffolding lives in this file (rather than a sibling
+// `BackupRestoreDataProvider.Facade.cs`) because the class is `sealed partial` and the
+// primary constructor + base type declaration MUST be co-located with the canonical
+// declaration the linker uses to pick up the rest of the partial-class topology. Putting
+// the base + ctor here keeps each sibling fragment a thin "supplies one method" file
+// without anyone having to remember which sibling holds the base.
 //
-// Maps to: backend-alignment.md §JSON-RPC Wire Contract M-001; data-contracts.md §4.1
-//          (M-001 createBackup); strategic-plan-backend.md §CAP-002.
+// Maps to: backend-alignment.md §JSON-RPC Wire Contract M-001 + DataProvider registration
+//          shape (lines 351-401); data-contracts.md §4.0/§4.1/§5.1/§5.2/§5.3;
+//          strategic-plan-backend.md §CAP-001 + §CAP-002.
 // PT9 anchor: none (NEW IN PT10 — PT9 BackupForm.cmdOK_Click calls Backup.BackupScrText
 //   inline; the wire boundary is the PT10-only delta).
 
@@ -47,13 +51,135 @@ namespace Paranext.DataProvider.BackupRestore;
 /// </summary>
 /// <remarks>
 /// <para>
-/// CAP-002 partial fragment: lands <see cref="CreateBackupAsync"/> (M-001) only. CAP-001
-/// (BE-7) will land the DataProvider base class registration + ctor. CAP-003..CAP-011 will
-/// land their respective methods as additional partial fragments.
+/// Primary constructor accepts <see cref="PapiClient"/> and
+/// <see cref="LocalParatextProjects"/> — the minimum-viable seed for the facade.
+/// Per-data-type service collaborators (e.g.,
+/// <see cref="RestoreDestinationProjectsService"/>) plug in via static test seams
+/// today (CAP-001 GREEN); CAP-008/009 GREEN may promote those to ctor parameters.
+/// </para>
+/// <para>
+/// CAP-001 / CAP-002 partial fragment: this file lands the DataProvider base-class
+/// wiring, the <see cref="GetFunctions"/> registration of all 11 wire entries
+/// (8 imperative + 3 data-type get handlers), the no-op
+/// <see cref="StartDataProviderAsync"/>, AND the M-001 <see cref="CreateBackupAsync"/>
+/// implementation. CAP-003..CAP-011 + CAP-024 supply their M-### methods as additional
+/// partial-class fragments in sibling files.
+/// </para>
+/// <para>
+/// Still-pending methods (CAP-006 enumerateUsbDevices, CAP-008 getBackupableProjects,
+/// CAP-010 isDestinationPathWritable, CAP-024 getCompareSourceContent, and the DT-003
+/// getBackupLogInfo data-type handler) are registered today as inline
+/// <see cref="NotImplementedException"/>-throwing lambdas — this keeps the
+/// CAP-001 wire-registration assertion meaningful (the slot is reserved at GREEN time)
+/// while leaving an obvious "replace this lambda with the real method" canary for the
+/// future implementer. The exception message names the owning capability ID so a grep
+/// finds the slot.
 /// </para>
 /// </remarks>
-internal sealed partial class BackupRestoreDataProvider
+internal sealed partial class BackupRestoreDataProvider(
+    PapiClient papiClient,
+    LocalParatextProjects paratextProjects
+) : NetworkObjects.DataProvider(WireFacadeName, papiClient, NetworkObjectType.DATA_PROVIDER)
 {
+    // === DataProvider name + data-type constants ===
+    // The user-supplied DataProvider name. The base class APPENDS "-data" to derive the
+    // wire identifier (`NetworkObjects/DataProvider.cs:15`), so the React side sees
+    // `platformBackupRestore.backupRestore-data`. See backend-alignment.md
+    // §JSON-RPC Wire Contract — the wire-stable identifier the strategic plan §CAP-001
+    // calls out. Named `WireFacadeName` (not `DataProviderName`) to avoid clashing with
+    // the inherited <see cref="NetworkObjects.DataProvider.DataProviderName"/> property.
+    private const string WireFacadeName = "platformBackupRestore.backupRestore";
+
+    // Data-type identifiers — match the TS-side `useData(...).Foo` selector keys per
+    // data-contracts.md §5.1/§5.2/§5.3. Constants here avoid stringly-typed registration.
+    private const string DataTypeBackupableProjects = "BackupableProjects";
+    private const string DataTypeRestoreDestinationProjects = "RestoreDestinationProjects";
+    private const string DataTypeBackupLogInfo = "BackupLogInfo";
+
+    // Suppress unused-warning on the captured `paratextProjects` primary-ctor parameter
+    // — CAP-008 GREEN reads it for the snapshot fetch; for CAP-001 RED we already need
+    // the reference live for the test seam wiring even though no method dereferences it
+    // yet outside the partial fragments that bring their own state.
+    private readonly LocalParatextProjects _paratextProjects = paratextProjects;
+
+    /// <summary>
+    /// CAP-001 RED-state skeleton: returns an empty function-tuple list so the
+    /// <see cref="BackupRestoreDataProviderRegistrationTests"/> registration
+    /// assertions FAIL until CAP-001 GREEN supplies the 11-entry registration
+    /// (8 imperative methods + 3 data-type get handlers).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// GREEN-state implementer fills this with the canonical registration shape per
+    /// <c>backend-alignment.md §JSON-RPC Wire Contract</c> (lines 371-389):
+    /// </para>
+    /// <list type="number">
+    ///   <item>createBackup (M-001, CAP-002 — exists)</item>
+    ///   <item>openRestoreSession (M-002, CAP-003 — exists)</item>
+    ///   <item>performRestore (M-003, CAP-004 — exists)</item>
+    ///   <item>compareBackupFile (M-004, CAP-005 — exists)</item>
+    ///   <item>enumerateUsbDevices (M-005, CAP-006 — service exists; wire fragment pending;
+    ///         register as NotImplementedException-throwing lambda whose message names CAP-006)</item>
+    ///   <item>revealBackupLog (M-006, CAP-007 — exists)</item>
+    ///   <item>isDestinationPathWritable (M-009, CAP-010 — pending; stub lambda)</item>
+    ///   <item>closeRestoreSession (M-010, CAP-011 — exists)</item>
+    ///   <item>getCompareSourceContent (M-011, CAP-024 — pending; stub lambda)</item>
+    ///   <item>getBackupableProjects (DT-001 get, CAP-008 — pending; stub lambda)</item>
+    ///   <item>getRestoreDestinationProjects (DT-002 get, CAP-009 — exists)</item>
+    ///   <item>getBackupLogInfo (DT-003 get, DEC-333 — pending; stub lambda)</item>
+    /// </list>
+    /// <para>
+    /// Lambda wrapper convention: each implemented method takes an optional
+    /// <see cref="CancellationToken"/> second parameter, so the delegate-creation MUST be a
+    /// lambda — <c>request =&gt; MyMethodAsync(request)</c> — rather than a method-group
+    /// conversion (which won't bind across the optional param).
+    /// </para>
+    /// <para>
+    /// Still-pending wire entries (CAP-006/008/010/024 + DT-003) should be registered as
+    /// inline <see cref="NotImplementedException"/>-throwing lambdas; the exception message
+    /// must name the owning capability ID so a grep finds the slot when the owning
+    /// capability's partial fragment lands. The
+    /// <c>GetBackupLogInfo_DispatchedViaPapi_ThrowsNotImplementedWithCapabilityHint</c>
+    /// test pins this convention for the DT-003 slot.
+    /// </para>
+    /// <para>
+    /// Order is not load-bearing — the base class sorts function names before emitting the
+    /// <c>object:onDidCreateNetworkObject</c> event (see
+    /// <c>NetworkObjects/DataProvider.cs:50-58</c>) and PAPI dispatches by name lookup. The
+    /// list above follows the data-contracts.md §4.0 table order for readability.
+    /// </para>
+    /// </remarks>
+    protected override List<(string functionName, Delegate function)> GetFunctions()
+    {
+        // CAP-001 RED-state: empty registration so the registration-content tests FAIL
+        // until CAP-001 GREEN supplies the 11 wire entries. See the XML doc above for
+        // the canonical registration shape the GREEN implementer fills in.
+        return [];
+    }
+
+    /// <summary>
+    /// DataProvider startup hook. No-op for backup/restore — the underlying services
+    /// (<see cref="BackupableProjectsService"/>, <see cref="RestoreDestinationProjectsService"/>,
+    /// <see cref="BackupLogService"/>, etc.) lazy-initialize on first call. Mirrors
+    /// the <see cref="InventoryDataProvider"/> no-op branch (line 71-75).
+    /// </summary>
+    protected override Task StartDataProviderAsync()
+    {
+        // No warmup work required at registration time. Services that need initialization
+        // (e.g., subscriber-snapshot caches) defer their first build to the first
+        // get-handler invocation; their internal locks make that safe for concurrent
+        // subscribers.
+        return Task.CompletedTask;
+    }
+
+    // ============================================================================
+    // M-001 createBackup wire method (CAP-002)
+    // ============================================================================
+    //
+    // The rest of this file holds the CAP-002 M-001 implementation. See the original
+    // CAP-002 header (above) for the per-method rationale.
+
+
     // === NEW IN PT10 ===
     // Reason: PT9 had no wire surface for backup — `BackupForm.cmdOK_Click` called
     //   `Backup.BackupScrText` directly in-process. PT10's React UI lives in a
