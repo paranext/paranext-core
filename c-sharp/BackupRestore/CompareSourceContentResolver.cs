@@ -1,3 +1,4 @@
+using System.IO;
 using Paratext.Data;
 using SIL.Scripture;
 
@@ -107,14 +108,107 @@ internal static class CompareSourceContentResolver
         bool singleChapter
     )
     {
-        _ = session;
-        _ = destinationProject;
-        _ = sourceToken;
-        _ = verseRef;
-        _ = singleChapter;
-        throw new System.NotImplementedException(
-            "CompareSourceContentResolver.Resolve not implemented yet — CAP-024 RED."
-                + " See test-writer-CAP-024.md for the parse + dispatch algorithm."
-        );
+        // EXPLANATION:
+        // 3-step dispatch:
+        //   (A) Parse + validate sourceToken (strict positional grammar from
+        //       CAP-020). Anything other than
+        //       "tok-(src|dst)-{12hex}-{fileName}" whose 12-hex equals
+        //       session.SessionId → INVALID_TOKEN.
+        //   (B) verseRef.BookNum == 0 → INVALID_VERSE_REF. Short-circuits before
+        //       any read so an unknown book never triggers a useless I/O call.
+        //   (C) Branch on prefix:
+        //         tok-src-* → session.Restorer (IRestorerHandle).ReadFileText
+        //         tok-dst-* → destinationProject?.GetText(_, _, doMapIn: false)
+        //       Both paths catch IOException → IO_ERROR. tok-dst-* with a null
+        //       destinationProject is also IO_ERROR (wire layer could not
+        //       resolve a destination).
+        //   Empty text from either side → Success("") per §4.7 (caller renders
+        //   blank pane; NOT an error).
+
+        // (A) Token parse + sessionId match.
+        //     Layout (CAP-020): "tok-src-" (8) + sessionId (12) + "-" (1) + fileName (n)
+        //     OR                "tok-dst-" (8) + sessionId (12) + "-" (1) + fileName (n)
+        //     Minimum length therefore = 8 + 12 + 1 = 21 (fileName may be empty).
+        const string SRC_PREFIX = "tok-src-";
+        const string DST_PREFIX = "tok-dst-";
+        const int PREFIX_LEN = 8; // both prefixes have the same length
+        const int SESSION_ID_LEN = 12;
+        const int MIN_TOKEN_LEN = PREFIX_LEN + SESSION_ID_LEN + 1; // +1 for the separator
+
+        bool isSrc = sourceToken.StartsWith(SRC_PREFIX, System.StringComparison.Ordinal);
+        bool isDst = !isSrc && sourceToken.StartsWith(DST_PREFIX, System.StringComparison.Ordinal);
+        if (!isSrc && !isDst)
+        {
+            return InvalidTokenError();
+        }
+        if (sourceToken.Length < MIN_TOKEN_LEN)
+        {
+            return InvalidTokenError();
+        }
+        if (sourceToken[PREFIX_LEN + SESSION_ID_LEN] != '-')
+        {
+            return InvalidTokenError();
+        }
+        string sessionPortion = sourceToken.Substring(PREFIX_LEN, SESSION_ID_LEN);
+        if (!string.Equals(sessionPortion, session.SessionId, System.StringComparison.Ordinal))
+        {
+            return InvalidTokenError();
+        }
+        string fileName = sourceToken.Substring(PREFIX_LEN + SESSION_ID_LEN + 1);
+
+        // (B) verseRef gate — short-circuits BEFORE any read.
+        if (verseRef.BookNum == 0)
+        {
+            return new GetCompareSourceContentResult.Error(
+                GetCompareSourceContentErrorCode.InvalidVerseRef,
+                "%compare_invalidVerseRef%"
+            );
+        }
+
+        // (C) Branch by side.
+        if (isSrc)
+        {
+            var handle = (IRestorerHandle)session.Restorer;
+            try
+            {
+                string text = handle.ReadFileText(fileName, verseRef, singleChapter);
+                return new GetCompareSourceContentResult.Success(text);
+            }
+            catch (IOException)
+            {
+                return IoErrorEnvelope();
+            }
+        }
+
+        // tok-dst-* branch
+        if (destinationProject is null)
+        {
+            return IoErrorEnvelope();
+        }
+        try
+        {
+            string text = destinationProject.GetText(verseRef, singleChapter, doMapIn: false);
+            return new GetCompareSourceContentResult.Success(text);
+        }
+        catch (IOException)
+        {
+            return IoErrorEnvelope();
+        }
     }
+
+    /// <summary>
+    /// Build the canonical INVALID_TOKEN error envelope. Centralizes the
+    /// localize key so the four token-parser bail-outs above stay uniform with
+    /// the §4.7 error matrix.
+    /// </summary>
+    private static GetCompareSourceContentResult.Error InvalidTokenError() =>
+        new(GetCompareSourceContentErrorCode.InvalidToken, "%compare_invalidSourceToken%");
+
+    /// <summary>
+    /// Build the canonical IO_ERROR envelope. Centralizes the localize key so
+    /// the three IO_ERROR sites (backup IOException, destination null,
+    /// destination IOException) stay uniform with the §4.7 error matrix.
+    /// </summary>
+    private static GetCompareSourceContentResult.Error IoErrorEnvelope() =>
+        new(GetCompareSourceContentErrorCode.IoError, "%compare_sourceIoError%");
 }

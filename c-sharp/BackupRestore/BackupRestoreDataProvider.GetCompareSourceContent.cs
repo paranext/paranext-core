@@ -1,7 +1,10 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Paranext.DataProvider.Projects;
+using Paranext.DataProvider.Users;
 using Paratext.Data;
+using Paratext.Data.Repository;
 
 namespace Paranext.DataProvider.BackupRestore;
 
@@ -115,13 +118,87 @@ internal sealed partial class BackupRestoreDataProvider
         GetCompareSourceContentRequest request
     )
     {
-        _ = request;
-        throw new NotImplementedException(
-            "CAP-024 RED — BackupRestoreDataProvider.ExecuteGetCompareSourceContent"
-                + " not yet implemented. Implementer (CAP-024 GREEN) lands the"
-                + " 4-step wire-layer chain: (1) session lookup, (2) destination"
-                + " lookup, (3) delegate to CompareSourceContentResolver.Resolve,"
-                + " (4) return result."
+        // EXPLANATION:
+        // 3-step wire-layer chain per data-contracts.md §4.7:
+        //   (1) Session lookup — null → INVALID_SESSION envelope.
+        //   (2) Destination lookup — for tok-dst-* tokens the resolver needs a
+        //       ScrText. Use DestinationProjectLookupOverride first (tests);
+        //       otherwise call LocalParatextProjects.GetParatextProject with the
+        //       backup's ProjectGuid (production). Narrow catch on the same
+        //       three exception types CAP-002 catches (ProjectNotFoundException
+        //       / ArgumentException / RegistrationRequiredException) — failure
+        //       returns null; the resolver then maps tok-dst-* + null
+        //       destination to IO_ERROR. For tok-src-* tokens the destination
+        //       lookup is wasted work but harmless; keeping the control flow
+        //       linear is the right tradeoff (we'd otherwise need to parse the
+        //       token here and again inside the resolver).
+        //   (3) Delegate to CompareSourceContentResolver.Resolve and return its
+        //       envelope unmodified.
+
+        // (1) Session lookup.
+        RestoreSession? session = SessionRegistry.Get(request.SessionId);
+        if (session == null)
+        {
+            return new GetCompareSourceContentResult.Error(
+                GetCompareSourceContentErrorCode.InvalidSession,
+                "%restore_invalidSession%"
+            );
+        }
+
+        // (2) Destination ScrText lookup. The resolver tolerates null
+        //     (returns IO_ERROR for tok-dst-* + null destination).
+        ScrText? destination = ResolveDestinationProject(session.Metadata.ProjectGuid);
+
+        // (3) Delegate.
+        return CompareSourceContentResolver.Resolve(
+            session,
+            destinationProject: destination,
+            sourceToken: request.SourceToken,
+            verseRef: request.VerseRef,
+            singleChapter: request.SingleChapter
         );
+    }
+
+    /// <summary>
+    /// Resolve the destination <see cref="ScrText"/> for the current restore
+    /// session. Honors the <see cref="DestinationProjectLookupOverride"/> test
+    /// seam first; otherwise calls
+    /// <see cref="LocalParatextProjects.GetParatextProject(string)"/> with the
+    /// backup's <c>ProjectGuid</c>. Catches the same lookup exceptions
+    /// <see cref="ExecuteCreateBackup"/> handles (CAP-002 wire pattern) and
+    /// returns <c>null</c> on any failure — the resolver maps null to IO_ERROR
+    /// for <c>tok-dst-*</c> tokens.
+    /// </summary>
+    /// <param name="projectGuid">The backup's project GUID
+    /// (<see cref="RestorerMetadata.ProjectGuid"/>). May be <c>null</c> when
+    /// the backup carries no project id (legacy / corrupt manifest).</param>
+    /// <returns>The destination <see cref="ScrText"/>, or <c>null</c> when the
+    /// override or lookup returns null / throws.</returns>
+    private static ScrText? ResolveDestinationProject(string? projectGuid)
+    {
+        Func<string?, ScrText?>? overrideFn = DestinationProjectLookupOverride;
+        if (overrideFn != null)
+        {
+            return overrideFn(projectGuid);
+        }
+
+        if (projectGuid == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return LocalParatextProjects.GetParatextProject(projectGuid);
+        }
+        catch (Exception ex)
+            when (ex
+                    is ProjectNotFoundException
+                        or ArgumentException
+                        or RegistrationRequiredException
+            )
+        {
+            return null;
+        }
     }
 }
