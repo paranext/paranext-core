@@ -108,7 +108,7 @@ internal static class RestoreOrchestrator
         IDisposable? lockHandle = obtainer(destination);
         if (lockHandle == null)
         {
-            return new RestoreOperationResult.Error(
+            return OverlayError(
                 RestoreOperationErrorCode.LockNotObtained,
                 "%restore_lockNotObtained%"
             );
@@ -130,14 +130,14 @@ internal static class RestoreOrchestrator
         }
         catch (LockNotObtainedException)
         {
-            return new RestoreOperationResult.Error(
+            return OverlayError(
                 RestoreOperationErrorCode.LockNotObtained,
                 "%restore_lockNotObtained%"
             );
         }
         catch (MigrationFailedException)
         {
-            return new RestoreOperationResult.Error(
+            return OverlayError(
                 RestoreOperationErrorCode.MigrationFailed,
                 "%restore_migrationFailed%"
             );
@@ -146,6 +146,24 @@ internal static class RestoreOrchestrator
         {
             lockHandle.Dispose();
         }
+    }
+
+    /// <summary>
+    /// Build a <see cref="RestoreOperationResult.Error"/> envelope for an
+    /// <see cref="ExecuteOverlay"/> failure. Centralizes the wire-stable shape
+    /// (data-contracts.md §3.7) so the three error sites — null-obtainer
+    /// guard, <see cref="LockNotObtainedException"/> catch, and
+    /// <see cref="MigrationFailedException"/> catch — stay uniform. Mirrors
+    /// the sibling <c>Error</c> helper in
+    /// <see cref="BackupRestoreDataProvider"/>'s
+    /// <c>BackupRestoreDataProvider.PerformRestore.cs</c> partial fragment.
+    /// </summary>
+    private static RestoreOperationResult.Error OverlayError(
+        RestoreOperationErrorCode code,
+        string localizationKey
+    )
+    {
+        return new RestoreOperationResult.Error(code, localizationKey);
     }
 
     // === PORTED FROM PT9 ===

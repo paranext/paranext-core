@@ -137,10 +137,7 @@ internal sealed partial class BackupRestoreDataProvider
         RestoreSession? session = SessionRegistry.Get(request.SessionId);
         if (session == null)
         {
-            return new RestoreOperationResult.Error(
-                RestoreOperationErrorCode.InvalidSession,
-                "%restore_invalidSession%"
-            );
+            return Error(RestoreOperationErrorCode.InvalidSession, "%restore_invalidSession%");
         }
 
         // (2) Destination resolution — empty short-circuit + GetParatextProject
@@ -148,7 +145,7 @@ internal sealed partial class BackupRestoreDataProvider
         //     member; DestinationNotWritable is the closest semantic match.
         if (string.IsNullOrEmpty(request.DestinationProjectId))
         {
-            return new RestoreOperationResult.Error(
+            return Error(
                 RestoreOperationErrorCode.DestinationNotWritable,
                 "%restore_destinationNotWritable%"
             );
@@ -161,7 +158,7 @@ internal sealed partial class BackupRestoreDataProvider
         }
         catch (Exception)
         {
-            return new RestoreOperationResult.Error(
+            return Error(
                 RestoreOperationErrorCode.DestinationNotWritable,
                 "%restore_destinationNotWritable%"
             );
@@ -170,10 +167,7 @@ internal sealed partial class BackupRestoreDataProvider
         // (3) Admin gate — CAP-019 RestorePermissionGate
         if (!RestorePermissionGate.CheckAdminGate(destination))
         {
-            return new RestoreOperationResult.Error(
-                RestoreOperationErrorCode.PermissionDenied,
-                "%restore_adminRequired%"
-            );
+            return Error(RestoreOperationErrorCode.PermissionDenied, "%restore_adminRequired%");
         }
 
         // (4) Persist-current-changes gate (BHV-317 / TS-072). Default
@@ -182,7 +176,7 @@ internal sealed partial class BackupRestoreDataProvider
         bool persistClean = PersistCurrentChangesOverride?.Invoke(destination) ?? true;
         if (!persistClean && !request.AcknowledgedPersistCurrentChanges)
         {
-            return new RestoreOperationResult.ConfirmationRequired(
+            return Confirmation(
                 ConfirmationKind.PersistCurrentChanges,
                 "%restoreForm_persistCurrentChanges%"
             );
@@ -192,7 +186,7 @@ internal sealed partial class BackupRestoreDataProvider
         //     session metadata AND caller did NOT acknowledge → confirmation.
         if (session.Metadata.SharedProjectMarkers && !request.AcknowledgedSharedProjectWarning)
         {
-            return new RestoreOperationResult.ConfirmationRequired(
+            return Confirmation(
                 ConfirmationKind.SharedProjectWarning,
                 "%restoreForm_sharedProjectWarning%"
             );
@@ -209,7 +203,7 @@ internal sealed partial class BackupRestoreDataProvider
         );
         if (missingDowngradeIds.Count > 0)
         {
-            return new RestoreOperationResult.ConfirmationRequired(
+            return Confirmation(
                 ConfirmationKind.DowngradeFiles,
                 "%restoreForm_downgradeFileWarning%",
                 missingDowngradeIds
@@ -246,6 +240,50 @@ internal sealed partial class BackupRestoreDataProvider
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Build an <see cref="RestoreOperationResult.Error"/> envelope for a
+    /// <see cref="ExecutePerformRestore"/> failure. Centralizes the wire-stable
+    /// shape (data-contracts.md §3.7) so the four error sites in the guard
+    /// chain (steps 1, 2a, 2b, 3) stay uniform. Mirrors the
+    /// <c>OpenError</c> helper in
+    /// <see cref="BackupRestoreDataProvider"/>'s sibling
+    /// <c>BackupRestoreDataProvider.RestoreSession.cs</c> partial fragment
+    /// (CAP-003 refactor precedent).
+    /// </summary>
+    private static RestoreOperationResult.Error Error(
+        RestoreOperationErrorCode code,
+        string localizationKey
+    )
+    {
+        return new RestoreOperationResult.Error(code, localizationKey);
+    }
+
+    /// <summary>
+    /// Build a <see cref="RestoreOperationResult.ConfirmationRequired"/>
+    /// envelope for a <see cref="ExecutePerformRestore"/> confirmation gate.
+    /// Centralizes the wire-stable shape (data-contracts.md §3.7) so the three
+    /// confirmation sites in the guard chain (steps 4, 5, 6) stay uniform.
+    /// </summary>
+    /// <param name="kind">Which acknowledgement is required.</param>
+    /// <param name="localizationKey"><c>%restoreForm_*%</c> dialog-message
+    /// localize key.</param>
+    /// <param name="missingDowngradeFileIds">File ids needing explicit
+    /// downgrade acknowledgement; non-null only when <paramref name="kind"/>
+    /// is <see cref="ConfirmationKind.DowngradeFiles"/>. Defaults to
+    /// <c>null</c> for the persist / shared-project sites.</param>
+    private static RestoreOperationResult.ConfirmationRequired Confirmation(
+        ConfirmationKind kind,
+        string localizationKey,
+        IReadOnlyList<string>? missingDowngradeFileIds = null
+    )
+    {
+        return new RestoreOperationResult.ConfirmationRequired(
+            kind,
+            localizationKey,
+            missingDowngradeFileIds
+        );
     }
 
     /// <summary>
