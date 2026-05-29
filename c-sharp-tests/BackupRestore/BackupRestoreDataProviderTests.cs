@@ -105,6 +105,8 @@ namespace TestParanextDataProvider.BackupRestore
             BackupRestoreDataProvider.SendFullProjectUpdateEventOverride = null;
             BackupRestoreDataProvider.PersistCurrentChangesOverride = null;
             RestoreOrchestrator.WriteLockObtainerOverride = null;
+            // CAP-024 — reset the destination-project lookup seam used by M-011.
+            BackupRestoreDataProvider.DestinationProjectLookupOverride = null;
             try
             {
                 if (Directory.Exists(_testTempDir))

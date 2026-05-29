@@ -91,7 +91,7 @@ namespace TestParanextDataProvider.BackupRestore
             "revealBackupLog", // M-006 (CAP-007 — implemented; per DEC-333 this is being moved to DT-003 BackupLogInfo, but the imperative entry stays per strategic-plan §CAP-007 and backend-alignment.md JSON-RPC Wire Contract line 347 — the imperative entry's body still works)
             "validateBackup", // M-009 (CAP-010 — implemented; wraps CAP-014's pure rule chains into the {canSubmit, errors:{…}} wire shape per strategic-plan-backend.md §CAP-010 — the user's Test Writer task spec carries the pre-round-4 wire name forward over the post-round-4 isDestinationPathWritable rename)
             "closeRestoreSession", // M-010 (CAP-011 — implemented)
-            "getCompareSourceContent", // M-011 (CAP-024 — pending; registered as throw-stub lambda)
+            "getCompareSourceContent", // M-011 (CAP-024 RED — partial fragment registered with real Func<GetCompareSourceContentRequest, Task<GetCompareSourceContentResult>> delegate shape; body throws NotImplementedException until GREEN)
             // ---- Subscribable data type get handlers (3) -------------------
             "getBackupableProjects", // DT-001 (CAP-008 — pending; registered as throw-stub lambda)
             "getRestoreDestinationProjects", // DT-002 (CAP-009 — implemented)
@@ -132,6 +132,7 @@ namespace TestParanextDataProvider.BackupRestore
             BackupRestoreDataProvider.SendFullProjectUpdateEventOverride = null;
             BackupRestoreDataProvider.PersistCurrentChangesOverride = null;
             RestoreOrchestrator.WriteLockObtainerOverride = null;
+            BackupRestoreDataProvider.DestinationProjectLookupOverride = null;
             base.TestTearDown();
         }
 

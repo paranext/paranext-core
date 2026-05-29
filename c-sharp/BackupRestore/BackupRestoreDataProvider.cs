@@ -155,7 +155,9 @@ internal sealed partial class BackupRestoreDataProvider(
     ///   <item>revealBackupLog (M-006, CAP-007 — implemented)</item>
     ///   <item>validateBackup (M-009, CAP-010 — implemented; wraps CAP-014's pure rule chains into the {canSubmit, errors:{…}} wire shape per strategic-plan-backend.md §CAP-010)</item>
     ///   <item>closeRestoreSession (M-010, CAP-011 — implemented)</item>
-    ///   <item>getCompareSourceContent (M-011, CAP-024 — pending; stub)</item>
+    ///   <item>getCompareSourceContent (M-011, CAP-024 — implemented as RED-state
+    ///         stub: partial fragment lands; body throws
+    ///         NotImplementedException until CAP-024 GREEN)</item>
     ///   <item>getBackupableProjects (DT-001 get, CAP-008 — pending; stub)</item>
     ///   <item>getRestoreDestinationProjects (DT-002 get, CAP-009 — implemented)</item>
     ///   <item>getBackupLogInfo (DT-003 get, DEC-333 — pending; stub)</item>
@@ -239,10 +241,18 @@ internal sealed partial class BackupRestoreDataProvider(
                     CloseRestoreSessionAsync(request)
                 )
             ),
-            // CAP-024 PENDING: replace this stub when M-011 lands.
-            PendingStub(
+            // CAP-024 RED: M-011 getCompareSourceContent partial fragment lands in
+            //   BackupRestoreDataProvider.GetCompareSourceContent.cs (the body throws
+            //   NotImplementedException("CAP-024 RED") at RED-state; the implementer
+            //   replaces that body with the 4-step wire-layer chain at GREEN-state).
+            //   Registration is wired here so the CAP-001 registration assertion
+            //   (BackupRestoreDataProviderRegistrationTests) sees the real delegate
+            //   shape rather than the PendingStub object?-typed lambda.
+            (
                 "getCompareSourceContent",
-                "CAP-024 pending — getCompareSourceContent wire fragment not yet landed"
+                new Func<GetCompareSourceContentRequest, Task<GetCompareSourceContentResult>>(
+                    request => GetCompareSourceContentAsync(request)
+                )
             ),
             // ---- Subscribable data type get handlers (3) -----------------------------
             // CAP-008 GREEN: M-007 getBackupableProjects (DT-001) wires through

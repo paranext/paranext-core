@@ -450,6 +450,22 @@ namespace TestParanextDataProvider.BackupRestore
             }
 
             public void Dispose() { }
+
+            // CAP-024 added ReadFileText to IRestorerHandle. RestoreOrchestrator tests
+            // never invoke it on this fake.
+            public string ReadFileText(
+                string fileName,
+                SIL.Scripture.VerseRef verseRef,
+                bool singleChapter
+            )
+            {
+                _ = fileName;
+                _ = verseRef;
+                _ = singleChapter;
+                throw new System.NotSupportedException(
+                    "OrchestratorFakeHandle does not implement ReadFileText."
+                );
+            }
         }
 
         /// <summary>

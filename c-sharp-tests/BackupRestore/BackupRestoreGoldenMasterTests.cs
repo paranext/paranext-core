@@ -1336,6 +1336,22 @@ namespace TestParanextDataProvider.BackupRestore
                 }
 
                 public void Dispose() { }
+
+                // CAP-024 added ReadFileText to IRestorerHandle. The golden-master
+                // tests never invoke it on this fake.
+                public string ReadFileText(
+                    string fileName,
+                    SIL.Scripture.VerseRef verseRef,
+                    bool singleChapter
+                )
+                {
+                    _ = fileName;
+                    _ = verseRef;
+                    _ = singleChapter;
+                    throw new System.NotSupportedException(
+                        "GoldenMasterCAP004FakeHandle does not implement ReadFileText."
+                    );
+                }
             }
 
             private sealed class GoldenMasterCAP004PermissionManager : PermissionManager

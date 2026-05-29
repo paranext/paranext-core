@@ -1,5 +1,6 @@
 using System;
 using Paratext.Data;
+using SIL.Scripture;
 
 namespace Paranext.DataProvider.BackupRestore;
 
@@ -99,4 +100,40 @@ internal interface IRestorerHandle : IDisposable
     /// <see cref="RestoreOperationErrorCode.IoError"/>.
     /// </returns>
     RestoreOverlayOutcome PerformOverlayRestore(ScrText destination, RestoreOverlayRequest request);
+
+    /// <summary>
+    /// Read the text of one chapter (when <paramref name="singleChapter"/> is
+    /// <c>true</c>) or the whole book (when <c>false</c>) from the backup ZIP
+    /// entry identified by <paramref name="fileName"/>. NEW IN PT10 — added
+    /// for M-011 <c>getCompareSourceContent</c> (CAP-024); mirrors PT9's
+    /// <c>IGetText.GetText(VerseRef vref, bool singleChapter, bool doMapIn)</c>
+    /// at <c>Paratext/ParatextData/IGetText.cs:10</c>.
+    /// </summary>
+    /// <param name="fileName">
+    /// The unique stable id of the ZIP entry (the same string CAP-020 embeds
+    /// in the <c>tok-src-{sessionId}-{fileName}</c> token format).
+    /// </param>
+    /// <param name="verseRef">
+    /// The verse reference identifying which chapter (when
+    /// <paramref name="singleChapter"/> is <c>true</c>) or which book (when
+    /// <c>false</c>) to extract.
+    /// </param>
+    /// <param name="singleChapter">
+    /// <c>true</c> → return the chapter; <c>false</c> → return the whole book.
+    /// Mirrors PT9 <c>IGetText.GetText</c>'s <c>singleChapter</c> parameter.
+    /// </param>
+    /// <returns>
+    /// The raw USFM text for the requested granularity. Empty string is a
+    /// VALID return value when the requested chapter / book is not present in
+    /// the source — callers (CAP-024 wire layer) project this to
+    /// <c>Success("")</c> per data-contracts.md §4.7 ("Empty string is a
+    /// valid result for an absent chapter — the caller renders it as a blank
+    /// pane rather than an error").
+    /// </returns>
+    /// <remarks>
+    /// Throws <see cref="System.IO.IOException"/> on underlying ZIP read
+    /// failure (corrupt entry, disk fault) — the wire layer maps this to
+    /// <see cref="GetCompareSourceContentErrorCode.IoError"/>.
+    /// </remarks>
+    string ReadFileText(string fileName, VerseRef verseRef, bool singleChapter);
 }

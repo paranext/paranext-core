@@ -1,6 +1,7 @@
 using System;
 using ICSharpCode.SharpZipLib.Zip;
 using Paratext.Data;
+using SIL.Scripture;
 
 namespace Paranext.DataProvider.BackupRestore;
 
@@ -119,6 +120,26 @@ internal sealed class DefaultRestorerHandle : IRestorerHandle
             "DefaultRestorerHandle.PerformOverlayRestore not implemented yet — CAP-004 GREEN."
                 + " Port PT9 Restorer.PerformRestore (Restorer.cs:144-199) here, honoring"
                 + " INV-A13 (legacy-skip-list augmentation) when request.IsLegacyBackup."
+        );
+    }
+
+    /// <summary>
+    /// CAP-024 stub. The full PT9 IGetText port lives here in a future GREEN;
+    /// for now the default factory throws so the CAP-024 wire-layer / resolver
+    /// tests (which use a test-seam <see cref="IRestorerHandle"/> injected via
+    /// <see cref="BackupRestoreDataProvider.RestorerFactoryOverride"/>)
+    /// cover the contract without depending on the real port. Mirrors the
+    /// CAP-004 RED-state pattern for <see cref="PerformOverlayRestore"/>.
+    /// </summary>
+    public string ReadFileText(string fileName, VerseRef verseRef, bool singleChapter)
+    {
+        _ = fileName;
+        _ = verseRef;
+        _ = singleChapter;
+        throw new NotImplementedException(
+            "DefaultRestorerHandle.ReadFileText not implemented yet — CAP-024 RED."
+                + " Port PT9 IGetText.GetText-equivalent over SharpZipLib's ZipFile here"
+                + " (extract entry stream, parse USFM, return chapter or whole-book text)."
         );
     }
 }

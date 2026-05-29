@@ -417,6 +417,22 @@ namespace TestParanextDataProvider.BackupRestore
                     "CAP-011 ThrowingFakeRestorerHandle does not implement PerformOverlayRestore."
                 );
             }
+
+            // CAP-024 added ReadFileText to IRestorerHandle. CAP-011's tests never
+            // invoke it on this fake.
+            public string ReadFileText(
+                string fileName,
+                SIL.Scripture.VerseRef verseRef,
+                bool singleChapter
+            )
+            {
+                _ = fileName;
+                _ = verseRef;
+                _ = singleChapter;
+                throw new System.NotSupportedException(
+                    "CAP-011 ThrowingFakeRestorerHandle does not implement ReadFileText."
+                );
+            }
         }
     }
 }

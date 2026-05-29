@@ -1157,6 +1157,22 @@ namespace TestParanextDataProvider.BackupRestore
                     return;
                 _disposed = true;
             }
+
+            // CAP-024 added ReadFileText to IRestorerHandle. CAP-004 tests never
+            // invoke it on this fake.
+            public string ReadFileText(
+                string fileName,
+                SIL.Scripture.VerseRef verseRef,
+                bool singleChapter
+            )
+            {
+                _ = fileName;
+                _ = verseRef;
+                _ = singleChapter;
+                throw new System.NotSupportedException(
+                    "CAP-004 CAP004_FakeRestorerHandle does not implement ReadFileText — use CAP024_FakeRestorerHandle in CAP-024 tests."
+                );
+            }
         }
 
         /// <summary>
