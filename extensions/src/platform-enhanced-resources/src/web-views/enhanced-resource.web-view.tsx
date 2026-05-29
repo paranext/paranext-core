@@ -2528,8 +2528,18 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       // Word click — set both filter id and surface for downstream display.
       setFilteredTokenId(tokenId);
       setFilteredTokenSurface(textContent);
+      if (annotation.metadata.verseNum && annotation.metadata.verseNum !== scrRef.verseNum)
+        setScrRef({ ...scrRef, verseNum: annotation.metadata.verseNum });
     },
-    [annotations, usj, setFilteredTokenId, setFilteredTokenSurface, setSelectedFootnote],
+    [
+      annotations,
+      usj,
+      setFilteredTokenId,
+      setFilteredTokenSurface,
+      setSelectedFootnote,
+      scrRef,
+      setScrRef,
+    ],
   );
 
   // FN-020 / BHV-308: context-menu placeholder. The real context-menu wiring
