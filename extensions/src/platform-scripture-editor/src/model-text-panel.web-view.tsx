@@ -7,9 +7,8 @@ import {
 } from '@eten-tech-foundation/platform-editor';
 import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import type { WebViewProps } from '@papi/core';
-import { logger } from '@papi/frontend';
+import papi, { logger } from '@papi/frontend';
 import {
-  useData,
   useDataProvider,
   useDialogCallback,
   useLocalizedStrings,
@@ -17,14 +16,14 @@ import {
   useProjectDataProvider,
   useProjectSetting,
 } from '@papi/frontend/react';
-import { Button, Spinner } from 'platform-bible-react';
+import { Button, Spinner, usePromise } from 'platform-bible-react';
 import {
   DblResourceData,
   getErrorMessage,
   isPlatformError,
   LocalizeKey,
 } from 'platform-bible-utils';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 // @ts-ignore: platform-scripture/src is not a published module entry-point; accessible via typeRoots symlink at dev time
 import { useEffectiveResourceReferenceList } from 'platform-scripture/src/use-effective-resource-reference-list';
 import type {
@@ -78,11 +77,23 @@ globalThis.webViewComponent = function ModelTextPanel({
 
   // --- DBL resource resolution ---
 
+  const [fetchResources, setFetchResources] = useState(true);
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
-  const [resourcesPossiblyError] = useData(
-    'platformGetResources.dblResourcesProvider',
-  ).DblResources(undefined, []);
-  const dblResources = isPlatformError(resourcesPossiblyError) ? [] : resourcesPossiblyError;
+  const [resourcesPossiblyUndefined, isLoadingResources] = usePromise(
+    useCallback(async () => {
+      if (fetchResources) {
+        const cachedResources = await papi.commands.sendCommand(
+          'platformGetResources.getCachedResources',
+        );
+        setFetchResources(false);
+        return cachedResources;
+      }
+
+      return Promise.resolve(undefined);
+    }, [fetchResources]),
+    undefined,
+  );
+  const dblResources = resourcesPossiblyUndefined ?? [];
 
   const effectiveModelText = effectiveModelTexts?.items[0];
   // EffectiveResourceReference is a discriminated union; checking `.type` narrows to DblResourceReference
@@ -98,14 +109,15 @@ globalThis.webViewComponent = function ModelTextPanel({
   const isInstalling = dblRef !== undefined && match !== undefined && !match.installed;
   const matchDblEntryUid = match?.dblEntryUid;
   useEffect(() => {
-    if (isInstalling && dblResourcesProvider && matchDblEntryUid !== undefined) {
+    if (!fetchResources && isInstalling && dblResourcesProvider && matchDblEntryUid !== undefined) {
+      setFetchResources(true);
       dblResourcesProvider
         .installDblResource(matchDblEntryUid)
         .catch((e: unknown) =>
           logger.error(`Model text auto-install failed: ${getErrorMessage(e)}`),
         );
     }
-  }, [isInstalling, dblResourcesProvider, matchDblEntryUid]);
+  }, [isInstalling, fetchResources, dblResourcesProvider, matchDblEntryUid]);
 
   const resourceProjectId = match?.installed ? match.projectId : undefined;
 
@@ -288,7 +300,7 @@ globalThis.webViewComponent = function ModelTextPanel({
   }
 
   // Loading state: USJ not yet fetched (usjPossiblyError is undefined while the subscription is initializing)
-  if (!resourceProjectId || usjPossiblyError === undefined) {
+  if (isLoadingResources || !resourceProjectId || usjPossiblyError === undefined) {
     return (
       <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
         <Spinner />
