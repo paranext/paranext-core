@@ -29,6 +29,8 @@ const localizedStrings = {
   '%webView_inventory_scope_currentBook%': 'Current book',
   '%webView_inventory_scope_chapter%': 'Current chapter',
   '%webView_inventory_scope_verse%': 'Current verse',
+  '%webView_inventory_previousFilter%': 'Previous filter',
+  '%webView_inventory_nextFilter%': 'Next filter',
 };
 
 const sampleInventoryItems: InventorySummaryItem[] = [
@@ -146,6 +148,48 @@ export const Default: Story = {
       description: {
         story:
           'A complete inventory component for reviewing and managing translation checking items.',
+      },
+    },
+  },
+};
+
+export const FilterHistory: Story = {
+  render: () => {
+    const [approvedItems, setApprovedItems] = useState<string[]>(['the the']);
+    const [unapprovedItems, setUnapprovedItems] = useState<string[]>(['and and', 'word  word']);
+    // Hold scope in story state so back/forward scope traversal is visible: the Inventory drives
+    // scope through onScopeChange + the scope prop, so the decorator owns the live value.
+    const [scope, setScope] = useState<Scope>(defaultScope);
+
+    return (
+      <Inventory
+        inventoryItems={sampleInventoryItems}
+        setVerseRef={(ref: SerializedVerseRef) => console.log('Set verse ref:', ref)}
+        localizedStrings={localizedStrings}
+        approvedItems={approvedItems}
+        unapprovedItems={unapprovedItems}
+        scope={scope}
+        onScopeChange={(newScope: Scope) => setScope(newScope)}
+        columns={createColumns(
+          'Item',
+          'Count',
+          'Status',
+          approvedItems,
+          setApprovedItems,
+          unapprovedItems,
+          setUnapprovedItems,
+        )}
+      />
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Demonstrates the filter back/forward toolbar. Change the status filter or scope a few ' +
+          'times, then use the left/right chevron buttons to step backward and forward through the ' +
+          'filter history. The text filter is intentionally excluded from history. Both buttons are ' +
+          'disabled when their respective history stack is empty (e.g. on first render).',
       },
     },
   },
