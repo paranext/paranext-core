@@ -103,12 +103,43 @@ internal sealed partial class BackupRestoreDataProvider(
     private readonly LocalParatextProjects _paratextProjects = paratextProjects;
 
     /// <summary>
+    /// Builds a stub <see cref="GetFunctions"/> entry for a wire method whose owning
+    /// capability has not yet landed. The returned delegate accepts <c>object?</c>
+    /// (the most permissive parameter type — see <see cref="GetFunctions"/> remarks for
+    /// why <c>JsonElement</c> won't do here) and throws a
+    /// <see cref="NotImplementedException"/> carrying <paramref name="capabilityHint"/>.
+    /// </summary>
+    /// <param name="functionName">The wire-method name (e.g., <c>"enumerateUsbDevices"</c>).</param>
+    /// <param name="capabilityHint">
+    /// The grep anchor a future implementer uses to find this slot. Callers MUST include
+    /// the owning <c>CAP-###</c> or <c>DT-###</c> identifier in this string so a
+    /// repo-wide grep lands on the slot. Example: <c>"CAP-006 pending — enumerateUsbDevices
+    /// wire fragment not yet landed"</c>.
+    /// </param>
+    /// <remarks>
+    /// The lambda body is intentionally a direct synchronous throw rather than
+    /// <c>Task.FromException</c>: the registration canary test (e.g.,
+    /// <c>GetBackupLogInfo_DispatchedViaPapi_ThrowsNotImplementedWithCapabilityHint</c>)
+    /// unwraps <see cref="System.Reflection.TargetInvocationException.InnerException"/>
+    /// chains looking for the <see cref="NotImplementedException"/>. Direct-throw inside
+    /// the lambda preserves that path; wrapping in <c>Task.FromException</c> would change it.
+    /// </remarks>
+    private static (string functionName, Delegate function) PendingStub(
+        string functionName,
+        string capabilityHint
+    ) =>
+        (
+            functionName,
+            new Func<object?, Task>(_ => throw new NotImplementedException(capabilityHint))
+        );
+
+    /// <summary>
     /// Registers the 12 wire entries this DataProvider exposes (9 imperative methods +
     /// 3 data-type get handlers). The base class projects each tuple into a
     /// <c>object:platformBackupRestore.backupRestore-data.{functionName}</c> request
     /// handler. The 5 still-pending entries (CAP-006/008/010/024 + DT-003) are registered
-    /// as <see cref="NotImplementedException"/>-throwing lambdas whose messages name the
-    /// owning capability so the future implementer can grep to find the slot.
+    /// via <see cref="PendingStub"/> — each call site documents the owning capability so
+    /// the future implementer can grep to find the slot.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -177,16 +208,12 @@ internal sealed partial class BackupRestoreDataProvider(
                     CompareBackupFileAsync(request)
                 )
             ),
-            (
+            // CAP-006 PENDING: replace this stub when the M-005 partial fragment
+            // (EnumerateUsbDevicesAsync) lands. The UsbDeviceEnumerator service is
+            // already GREEN but the wire-facade partial fragment is not.
+            PendingStub(
                 "enumerateUsbDevices",
-                // CAP-006 PENDING: replace this stub when the M-005 partial fragment
-                // (EnumerateUsbDevicesAsync) lands. The UsbDeviceEnumerator service is
-                // already GREEN but the wire-facade partial fragment is not.
-                new Func<object?, Task>(_ =>
-                    throw new NotImplementedException(
-                        "CAP-006 pending — enumerateUsbDevices wire fragment not yet landed"
-                    )
-                )
+                "CAP-006 pending — enumerateUsbDevices wire fragment not yet landed"
             ),
             (
                 "revealBackupLog",
@@ -194,15 +221,11 @@ internal sealed partial class BackupRestoreDataProvider(
                     RevealBackupLogAsync(request)
                 )
             ),
-            (
+            // CAP-010 PENDING: replace this stub when M-009 lands (see DEC-334 — this
+            // method supersedes the former M-007 validateBackup).
+            PendingStub(
                 "isDestinationPathWritable",
-                // CAP-010 PENDING: replace this stub when M-009 lands (see DEC-334 — this
-                // method supersedes the former M-007 validateBackup).
-                new Func<object?, Task>(_ =>
-                    throw new NotImplementedException(
-                        "CAP-010 pending — isDestinationPathWritable wire fragment not yet landed"
-                    )
-                )
+                "CAP-010 pending — isDestinationPathWritable wire fragment not yet landed"
             ),
             (
                 "closeRestoreSession",
@@ -210,26 +233,18 @@ internal sealed partial class BackupRestoreDataProvider(
                     CloseRestoreSessionAsync(request)
                 )
             ),
-            (
+            // CAP-024 PENDING: replace this stub when M-011 lands.
+            PendingStub(
                 "getCompareSourceContent",
-                // CAP-024 PENDING: replace this stub when M-011 lands.
-                new Func<object?, Task>(_ =>
-                    throw new NotImplementedException(
-                        "CAP-024 pending — getCompareSourceContent wire fragment not yet landed"
-                    )
-                )
+                "CAP-024 pending — getCompareSourceContent wire fragment not yet landed"
             ),
             // ---- Subscribable data type get handlers (3) -----------------------------
-            (
+            // CAP-008 PENDING: replace this stub when the DT-001 BackupableProjects
+            // get-handler lands. The BackupableProjectsService is GREEN (CAP-021)
+            // but the wire-facade `Get<DataType>` handler is not yet wired.
+            PendingStub(
                 "getBackupableProjects",
-                // CAP-008 PENDING: replace this stub when the DT-001 BackupableProjects
-                // get-handler lands. The BackupableProjectsService is GREEN (CAP-021)
-                // but the wire-facade `Get<DataType>` handler is not yet wired.
-                new Func<object?, Task>(_ =>
-                    throw new NotImplementedException(
-                        "CAP-008 pending — getBackupableProjects (DT-001) wire fragment not yet landed"
-                    )
-                )
+                "CAP-008 pending — getBackupableProjects (DT-001) wire fragment not yet landed"
             ),
             (
                 "getRestoreDestinationProjects",
@@ -238,19 +253,15 @@ internal sealed partial class BackupRestoreDataProvider(
                     Task<List<RestoreDestinationProject>>
                 >(request => GetRestoreDestinationProjectsAsync(request))
             ),
-            (
+            // DT-003 / DEC-333 PENDING: replace this stub when the BackupLogInfo
+            // subscribable data type get-handler lands (capability owned by BE-7
+            // alongside CAP-001). The hint contains both "DT-003" AND "BackupLogInfo"
+            // so the canary test (GetBackupLogInfo_DispatchedViaPapi_*) finds either
+            // grep anchor; future implementers should likewise grep for "DT-003" to
+            // locate this slot.
+            PendingStub(
                 "getBackupLogInfo",
-                // DT-003 / DEC-333 PENDING: replace this stub when the BackupLogInfo
-                // subscribable data type get-handler lands (capability owned by BE-7
-                // alongside CAP-001). The hint contains both "DT-003" AND "BackupLogInfo"
-                // so the canary test (GetBackupLogInfo_DispatchedViaPapi_*) finds either
-                // grep anchor; future implementers should likewise grep for "DT-003" to
-                // locate this slot.
-                new Func<object?, Task>(_ =>
-                    throw new NotImplementedException(
-                        "DT-003 pending — BackupLogInfo (getBackupLogInfo) wire fragment not yet landed; see DEC-333"
-                    )
-                )
+                "DT-003 pending — BackupLogInfo (getBackupLogInfo) wire fragment not yet landed; see DEC-333"
             ),
         ];
     }
