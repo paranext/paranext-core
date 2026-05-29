@@ -20,6 +20,10 @@ import {
 import { checkHostingService } from './checks/extension-host-check-runner.service';
 import { InventoryWebViewOptions, InventoryWebViewProvider } from './inventory.web-view-provider';
 import {
+  mixedCapitalizationInventoryWebViewType,
+  openMixedCapitalizationInventory,
+} from './checks/inventories/open-mixed-capitalization-inventory';
+import {
   MANAGE_BOOKS_WEB_VIEW_TYPE,
   ManageBooksWebViewOptions,
   ManageBooksWebViewProvider,
@@ -78,6 +82,11 @@ const markersValidator: ProjectSettingValidator<
 // A marker can be any string value
 const punctuationValidator: ProjectSettingValidator<
   'platformScripture.validPunctuation' | 'platformScripture.invalidPunctuation'
+> = async (newValue) => typeof newValue === 'string';
+
+// A mixed-capitalization item can be any string value
+const mixedCapitalizationValidator: ProjectSettingValidator<
+  'platformScripture.validMixedCapitalization' | 'platformScripture.invalidMixedCapitalization'
 > = async (newValue) => typeof newValue === 'string';
 
 // #endregion
@@ -343,6 +352,10 @@ export async function activate(context: ExecutionActivationContext) {
     '%webView_punctuationInventory_title%',
     punctuationInventoryWebViewType,
   );
+  const mixedCapitalizationInventoryWebViewProvider = new InventoryWebViewProvider(
+    '%webView_mixedCapitalizationInventory_title%',
+    mixedCapitalizationInventoryWebViewType,
+  );
   const checksSidePanelWebViewProvider = new ChecksSidePanelWebViewProvider();
   const findWebViewProvider = new FindWebViewProvider();
   const markersChecklistWebViewProvider = new ChecklistWebViewProvider();
@@ -483,6 +496,41 @@ export async function activate(context: ExecutionActivationContext) {
     punctuationInventoryWebViewType,
     punctuationInventoryWebViewProvider,
   );
+  const validMixedCapitalizationPromise = papi.projectSettings.registerValidator(
+    'platformScripture.validMixedCapitalization',
+    mixedCapitalizationValidator,
+  );
+  const invalidMixedCapitalizationPromise = papi.projectSettings.registerValidator(
+    'platformScripture.invalidMixedCapitalization',
+    mixedCapitalizationValidator,
+  );
+  const openMixedCapitalizationInventoryPromise = papi.commands.registerCommand(
+    'platformScripture.openMixedCapitalizationInventory',
+    openMixedCapitalizationInventory,
+    {
+      method: {
+        summary: 'Open the mixed capitalization inventory',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the web view tied to the project that the inventory is for',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the opened mixed capitalization inventory web view',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+  const mixedCapitalizationInventoryWebViewProviderPromise =
+    papi.webViewProviders.registerWebViewProvider(
+      mixedCapitalizationInventoryWebViewType,
+      mixedCapitalizationInventoryWebViewProvider,
+    );
   const showChecksSidePanelPromise = papi.commands.registerCommand(
     'platformScripture.openChecksSidePanel',
     openChecksSidePanel,
@@ -655,6 +703,10 @@ export async function activate(context: ExecutionActivationContext) {
     await referencedProjectsAndResourcesPromise,
     await openPunctuationInventoryPromise,
     await punctuationInventoryWebViewProviderPromise,
+    await validMixedCapitalizationPromise,
+    await invalidMixedCapitalizationPromise,
+    await openMixedCapitalizationInventoryPromise,
+    await mixedCapitalizationInventoryWebViewProviderPromise,
     await showChecksSidePanelPromise,
     await showChecksSidePanelWebViewProviderPromise,
     await openMarkersChecklistPromise,

@@ -2077,6 +2077,15 @@ declare module 'papi-shared-types' {
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
 
+    /**
+     * Open the Mixed Capitalization inventory for a project. The single optional argument is the
+     * calling editor's `webViewId`, from which the project context is inherited. Reuses an already
+     * open inventory window for the project rather than duplicating it.
+     */
+    'platformScripture.openMixedCapitalizationInventory': (
+      webViewId?: string | undefined,
+    ) => Promise<string | undefined>;
+
     'platformScripture.openChecksSidePanel': (
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
@@ -2158,6 +2167,18 @@ declare module 'papi-shared-types' {
     'platformScripture.validPunctuation': string;
 
     'platformScripture.invalidPunctuation': string;
+
+    /**
+     * Space-separated list of approved (valid) Mixed Capitalization items. The setting key is
+     * spelled correctly; only the on-wire `CheckType` carries the historical PT9 typo.
+     */
+    'platformScripture.validMixedCapitalization': string;
+
+    /**
+     * Space-separated list of unapproved (invalid) Mixed Capitalization items. The setting key is
+     * spelled correctly; only the on-wire `CheckType` carries the historical PT9 typo.
+     */
+    'platformScripture.invalidMixedCapitalization': string;
 
     /**
      * Content of the `[]` character class for base (word-forming) characters, derived from Paratext
