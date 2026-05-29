@@ -632,7 +632,7 @@ export async function openDefaultActiveProjectIfApplicable(
     );
   } catch (e) {
     papi.logger.warn(
-      `Default active project picker: openModelText for ${top.id} failed: ${getErrorMessage(e)}`,
+      `Default active project picker: openResourceText (ScriptureResource) for ${top.id} failed: ${getErrorMessage(e)}`,
     );
     hasFailed = true;
   }
@@ -645,7 +645,7 @@ export async function openDefaultActiveProjectIfApplicable(
     );
   } catch (e) {
     papi.logger.warn(
-      `Default active project picker: openModelText for ${top.id} failed: ${getErrorMessage(e)}`,
+      `Default active project picker: openResourceText (CommentaryResource) for ${top.id} failed: ${getErrorMessage(e)}`,
     );
     hasFailed = true;
   }
