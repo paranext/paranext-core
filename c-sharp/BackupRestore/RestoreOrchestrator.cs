@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using Paratext.Data;
 using Paratext.Data.Repository;
 
@@ -90,11 +89,121 @@ internal static class RestoreOrchestrator
         RestoreOverlayRequest overlayRequest
     )
     {
-        _ = destination;
-        _ = session;
-        _ = overlayRequest;
-        throw new NotImplementedException(
-            "RestoreOrchestrator.ExecuteOverlay not implemented yet — CAP-004 GREEN."
+        // EXPLANATION:
+        // (1) Resolve the obtainer — test seam takes precedence over the real
+        //     WriteLockManager. The seam returns IDisposable?; the production
+        //     adapter wraps WriteLock so Dispose() forwards to Release().
+        // (2) Null obtainer result = lock contention (TS-022 / INV-A18); the
+        //     handle MUST NOT be invoked.
+        // (3) Lock acquired → invoke handle inside try; release in finally so
+        //     the lock is released on every exit path.
+        // (4) Exception classification mirrors data-contracts.md §3.7:
+        //       LockNotObtainedException  → Error(LockNotObtained)
+        //       MigrationFailedException  → Error(MigrationFailed)
+        //       any other exception       → rethrow (per DEC-CAP-004-IMPL-B —
+        //         tests only pin the lock-release invariant on unexpected
+        //         throws).
+        Func<ScrText, IDisposable?> obtainer = WriteLockObtainerOverride ?? DefaultObtainer;
+
+        IDisposable? lockHandle = obtainer(destination);
+        if (lockHandle == null)
+        {
+            return new RestoreOperationResult.Error(
+                RestoreOperationErrorCode.LockNotObtained,
+                "%restore_lockNotObtained%"
+            );
+        }
+
+        try
+        {
+            // The session's IDisposable Restorer IS the IRestorerHandle in
+            // production — CAP-003's factory returns DefaultRestorerHandle,
+            // which implements IRestorerHandle. We cast through the interface
+            // here so the orchestrator only depends on the interface, never
+            // on the concrete handle type.
+            IRestorerHandle handle = (IRestorerHandle)session.Restorer;
+            handle.PerformOverlayRestore(destination, overlayRequest);
+            return new RestoreOperationResult.Success(
+                destination.Guid.ToString(),
+                IsNoteType(destination)
+            );
+        }
+        catch (LockNotObtainedException)
+        {
+            return new RestoreOperationResult.Error(
+                RestoreOperationErrorCode.LockNotObtained,
+                "%restore_lockNotObtained%"
+            );
+        }
+        catch (MigrationFailedException)
+        {
+            return new RestoreOperationResult.Error(
+                RestoreOperationErrorCode.MigrationFailed,
+                "%restore_migrationFailed%"
+            );
+        }
+        finally
+        {
+            lockHandle.Dispose();
+        }
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: Paratext/BackupRestore/Restorer.cs:160
+    // Method: WriteLockManager.Default.ObtainLock(WriteScope.EntireProject(ScrTextDestination))
+    // Maps to: INV-A18 / TS-022 / BHV-105
+    //
+    // EXPLANATION:
+    // `Paratext.Data.WriteLock` is a non-disposable interface (Release() only).
+    // The orchestrator's lock-handle seam is `IDisposable?` so tests can hand
+    // back any IDisposable; in production we wrap WriteLock so Dispose() →
+    // Release() (Paratext semantics: Release returns the lock without firing
+    // change notifications — Notify happens elsewhere via PdpFactory in
+    // CAP-001 BE-7, so plain Release here is correct).
+    private static readonly Func<ScrText, IDisposable?> DefaultObtainer = static dest =>
+    {
+        WriteLock? writeLock = WriteLockManager.Default.ObtainLock(
+            WriteScope.EntireProject(dest),
+            "Restore"
         );
+        return writeLock == null ? null : new WriteLockDisposable(writeLock);
+    };
+
+    /// <summary>
+    /// Wraps a <see cref="WriteLock"/> as an <see cref="IDisposable"/> so it
+    /// can be released via <c>using</c> / <c>finally</c>-Dispose semantics.
+    /// </summary>
+    private sealed class WriteLockDisposable : IDisposable
+    {
+        private readonly WriteLock _writeLock;
+        private bool _disposed;
+
+        public WriteLockDisposable(WriteLock writeLock)
+        {
+            _writeLock = writeLock;
+        }
+
+        public void Dispose()
+        {
+            if (_disposed)
+                return;
+            _disposed = true;
+            _writeLock.Release();
+        }
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: Paratext/CommentThread.cs:261 (TranslationInfo.Type.IsNoteType())
+    // Maps to: BHV-105 / BHV-653 (UI dispatch hint)
+    private static bool IsNoteType(ScrText scrText)
+    {
+        try
+        {
+            return scrText.Settings?.TranslationInfo?.Type.IsNoteType() ?? false;
+        }
+        catch
+        {
+            return false;
+        }
     }
 }
