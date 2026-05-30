@@ -1,15 +1,15 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
-import { OverlayCommandPalettePresentational } from './overlay-command-palette.component';
+import { OverlayComboBoxPresentational } from './overlay-combo-box.component';
 
-const meta: Meta<typeof OverlayCommandPalettePresentational> = {
-  title: 'Advanced/OverlayCommandPalette',
-  component: OverlayCommandPalettePresentational,
+const meta: Meta<typeof OverlayComboBoxPresentational> = {
+  title: 'Advanced/OverlayComboBox',
+  component: OverlayComboBoxPresentational,
   tags: ['autodocs'],
   parameters: {
     docs: {
       description: {
         component:
-          'A searchable command palette overlay. Displays a filterable list of items with optional descriptions, badges, icons, and grouping.',
+          'A searchable combo box overlay. Displays a filterable list of items with optional descriptions, badges, icons, and grouping.',
       },
     },
   },
@@ -21,7 +21,7 @@ const meta: Meta<typeof OverlayCommandPalettePresentational> = {
 };
 
 export default meta;
-type Story = StoryObj<typeof OverlayCommandPalettePresentational>;
+type Story = StoryObj<typeof OverlayComboBoxPresentational>;
 
 export const BasicItems: Story = {
   args: {

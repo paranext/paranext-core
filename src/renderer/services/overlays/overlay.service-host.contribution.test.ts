@@ -36,7 +36,7 @@ vi.mock('@shared/services/logger.service', () => ({
 
 // Mock validation (no-op)
 vi.mock('./overlay-validation', () => ({
-  validateCommandPaletteRequest: vi.fn(),
+  validateComboBoxRequest: vi.fn(),
   validateContextMenuItems: vi.fn(),
   validateModalDialogOptions: vi.fn(),
   validatePopoverRequest: vi.fn(),

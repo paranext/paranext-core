@@ -1,8 +1,8 @@
 import { vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { OverlayCommandPalettePresentational } from './overlay-command-palette.component';
-import { CommandPaletteItem } from '../../services/overlays/overlay.service-model';
+import { OverlayComboBoxPresentational } from './overlay-combo-box.component';
+import { ComboBoxItem } from '../../services/overlays/overlay.service-model';
 
 beforeAll(() => {
   // Radix Popover uses ResizeObserver internally; jsdom doesn't provide it, so we stub a no-op
@@ -22,8 +22,8 @@ beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
 });
 
-describe('OverlayCommandPalettePresentational', () => {
-  const sampleItems: CommandPaletteItem[] = [
+describe('OverlayComboBoxPresentational', () => {
+  const sampleItems: ComboBoxItem[] = [
     { id: 'open', label: 'Open File' },
     { id: 'save', label: 'Save File' },
     { id: 'close', label: 'Close Tab' },
@@ -35,7 +35,7 @@ describe('OverlayCommandPalettePresentational', () => {
       const onDismiss = vi.fn();
 
       render(
-        <OverlayCommandPalettePresentational
+        <OverlayComboBoxPresentational
           items={sampleItems}
           onSelect={onSelect}
           onDismiss={onDismiss}
@@ -53,7 +53,7 @@ describe('OverlayCommandPalettePresentational', () => {
       const onDismiss = vi.fn();
 
       render(
-        <OverlayCommandPalettePresentational
+        <OverlayComboBoxPresentational
           items={sampleItems}
           onSelect={onSelect}
           onDismiss={onDismiss}
@@ -71,14 +71,14 @@ describe('OverlayCommandPalettePresentational', () => {
       const onDismiss = vi.fn();
 
       render(
-        <OverlayCommandPalettePresentational
+        <OverlayComboBoxPresentational
           items={sampleItems}
           onSelect={onSelect}
           onDismiss={onDismiss}
         />,
       );
 
-      const backdrop = document.querySelector('[data-overlay-command-palette-backdrop]');
+      const backdrop = document.querySelector('[data-overlay-combo-box-backdrop]');
       expect(backdrop).toBeInTheDocument();
       // querySelector returns Element | null; the expect above guards null, but TS can't narrow it
       // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -90,7 +90,7 @@ describe('OverlayCommandPalettePresentational', () => {
 
     it('should display custom noResultsText', () => {
       render(
-        <OverlayCommandPalettePresentational
+        <OverlayComboBoxPresentational
           items={[]}
           noResultsText="Nothing here"
           onSelect={vi.fn()}
@@ -103,7 +103,7 @@ describe('OverlayCommandPalettePresentational', () => {
 
     it('should display custom placeholder text', () => {
       render(
-        <OverlayCommandPalettePresentational
+        <OverlayComboBoxPresentational
           items={sampleItems}
           placeholder="Type a command..."
           onSelect={vi.fn()}
@@ -116,16 +116,12 @@ describe('OverlayCommandPalettePresentational', () => {
 
     it('should not call onSelect when a disabled item is clicked', () => {
       const onSelect = vi.fn();
-      const items: CommandPaletteItem[] = [
+      const items: ComboBoxItem[] = [
         { id: 'disabled-item', label: 'Cannot Click', disabled: true },
       ];
 
       render(
-        <OverlayCommandPalettePresentational
-          items={items}
-          onSelect={onSelect}
-          onDismiss={vi.fn()}
-        />,
+        <OverlayComboBoxPresentational items={items} onSelect={onSelect} onDismiss={vi.fn()} />,
       );
 
       fireEvent.click(screen.getByText('Cannot Click'));
@@ -140,7 +136,7 @@ describe('OverlayCommandPalettePresentational', () => {
       const onDismiss = vi.fn();
 
       render(
-        <OverlayCommandPalettePresentational
+        <OverlayComboBoxPresentational
           items={sampleItems}
           position={{ x: 100, y: 200 }}
           onSelect={onSelect}
@@ -158,7 +154,7 @@ describe('OverlayCommandPalettePresentational', () => {
   describe('search filtering', () => {
     it('should filter visible items when typing in the search input', () => {
       render(
-        <OverlayCommandPalettePresentational
+        <OverlayComboBoxPresentational
           items={sampleItems}
           onSelect={vi.fn()}
           onDismiss={vi.fn()}
@@ -180,7 +176,7 @@ describe('OverlayCommandPalettePresentational', () => {
 
     it('should show noResultsText when search matches nothing', () => {
       render(
-        <OverlayCommandPalettePresentational
+        <OverlayComboBoxPresentational
           items={sampleItems}
           noResultsText="Nothing found"
           onSelect={vi.fn()}
@@ -199,7 +195,7 @@ describe('OverlayCommandPalettePresentational', () => {
       const onSelect = vi.fn();
 
       render(
-        <OverlayCommandPalettePresentational
+        <OverlayComboBoxPresentational
           items={sampleItems}
           onSelect={onSelect}
           onDismiss={vi.fn()}
@@ -216,7 +212,7 @@ describe('OverlayCommandPalettePresentational', () => {
       const onSelect = vi.fn();
 
       render(
-        <OverlayCommandPalettePresentational
+        <OverlayComboBoxPresentational
           items={sampleItems}
           onSelect={onSelect}
           onDismiss={vi.fn()}
@@ -233,14 +229,14 @@ describe('OverlayCommandPalettePresentational', () => {
 
   describe('grouped items', () => {
     it('should render group headings when items have group keys', () => {
-      const groupedItems: CommandPaletteItem[] = [
+      const groupedItems: ComboBoxItem[] = [
         { id: 'open', label: 'Open File', group: 'File' },
         { id: 'save', label: 'Save File', group: 'File' },
         { id: 'find', label: 'Find', group: 'Edit' },
       ];
 
       render(
-        <OverlayCommandPalettePresentational
+        <OverlayComboBoxPresentational
           items={groupedItems}
           onSelect={vi.fn()}
           onDismiss={vi.fn()}

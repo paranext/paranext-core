@@ -536,9 +536,9 @@ globalThis.webViewComponent = function HelloRock3({
     dismissPersonPopover();
   }, [dismissPersonPopover]);
 
-  // Command palette demo handler
-  const handleCommandPalette = useCallback(async () => {
-    const result = await papi.overlays.showCommandPalette(
+  // Combo box demo handler
+  const handleComboBox = useCallback(async () => {
+    const result = await papi.overlays.showComboBox(
       {
         items: [
           { id: 'p', label: 'Paragraph (p)', description: 'Normal paragraph', group: 'Paragraphs' },
@@ -573,7 +573,7 @@ globalThis.webViewComponent = function HelloRock3({
       },
       globalThis.webViewId,
     );
-    logger.debug(`Command palette selected: ${result ?? 'dismissed'}`);
+    logger.debug(`Combo box selected: ${result ?? 'dismissed'}`);
   }, []);
 
   // #endregion
@@ -642,10 +642,10 @@ globalThis.webViewComponent = function HelloRock3({
           </Button>
         </div>
       )}
-      {/* Overlay service demo: command palette */}
+      {/* Overlay service demo: combo box */}
       <div>
-        <Button data-testid="command-palette-trigger" onClick={handleCommandPalette}>
-          Show Command Palette
+        <Button data-testid="combo-box-trigger" onClick={handleComboBox}>
+          Show Quick Pick
         </Button>
       </div>
       {/* Overlay service demo: hover to show person details popover */}
