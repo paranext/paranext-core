@@ -366,6 +366,7 @@ export function ProjectPlanDialogErUi({
                     onTaskChange={handleTaskChange}
                     onBack={() => setSelected(undefined)}
                     displayLang={displayLang}
+                    availableLangs={availableLangs}
                   />
                 </div>
               )}

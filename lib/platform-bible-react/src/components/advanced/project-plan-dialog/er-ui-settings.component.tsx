@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { ArrowLeft, Languages } from 'lucide-react';
+import { Button } from '@/components/shadcn-ui/button';
 import { Input } from '@/components/shadcn-ui/input';
 import { Label } from '@/components/shadcn-ui/label';
 import {
@@ -10,6 +11,7 @@ import {
   SelectValue,
 } from '@/components/shadcn-ui/select';
 import { Textarea } from '@/components/shadcn-ui/textarea';
+import { LocalizeDialog } from '@/components/advanced/project-plan-dialog/localize-dialog.component';
 import {
   DEFAULT_LANG,
   getLocalized,
@@ -57,6 +59,8 @@ interface ErUiSettingsProps {
   onBack: () => void;
   /** Language for the heading/subheading display; falls back to English. */
   displayLang: LangCode;
+  /** Languages shown in both Source and Target pickers of the Translate dialog. */
+  availableLangs: LangCode[];
 }
 
 export function ErUiSettings({
@@ -66,6 +70,7 @@ export function ErUiSettings({
   onTaskChange,
   onBack,
   displayLang,
+  availableLangs,
 }: ErUiSettingsProps) {
   const isTask = task !== undefined;
   const heading = isTask
@@ -74,6 +79,26 @@ export function ErUiSettings({
   const subheading = isTask
     ? `In stage: ${getLocalized(stage.names, displayLang, DEFAULT_LANG)}`
     : 'Stage';
+
+  const [translateOpen, setTranslateOpen] = useState(false);
+  const nameMap = isTask && task ? task.names : stage.names;
+  const descriptionMap = isTask && task ? task.descriptions : stage.descriptions;
+
+  const handleSaveTranslation = (targetLang: LangCode, name: string, description: string) => {
+    if (isTask && task) {
+      onTaskChange({
+        ...task,
+        names: { ...task.names, [targetLang]: name },
+        descriptions: { ...task.descriptions, [targetLang]: description },
+      });
+    } else {
+      onStageChange({
+        ...stage,
+        names: { ...stage.names, [targetLang]: name },
+        descriptions: { ...stage.descriptions, [targetLang]: description },
+      });
+    }
+  };
 
   return (
     <div className="tw:flex tw:flex-col tw:gap-5">
@@ -90,7 +115,18 @@ export function ErUiSettings({
         <span className="tw:text-xs tw:font-medium tw:uppercase tw:tracking-wide tw:text-muted-foreground">
           {subheading}
         </span>
-        <h2 className="tw:text-2xl tw:font-semibold tw:text-foreground">{heading}</h2>
+        <div className="tw:flex tw:items-center tw:justify-between tw:gap-3">
+          <h2 className="tw:text-2xl tw:font-semibold tw:text-foreground">{heading}</h2>
+          <Button
+            variant="outline"
+            size="sm"
+            className="tw:h-9 tw:gap-1.5"
+            onClick={() => setTranslateOpen(true)}
+          >
+            <Languages className="tw:h-4 tw:w-4" />
+            Translate
+          </Button>
+        </div>
       </div>
 
       {isTask && task ? (
@@ -98,6 +134,16 @@ export function ErUiSettings({
       ) : (
         <StageFields stage={stage} onChange={onStageChange} displayLang={displayLang} />
       )}
+
+      <LocalizeDialog
+        open={translateOpen}
+        onOpenChange={setTranslateOpen}
+        availableLangs={availableLangs}
+        defaultSourceLang={displayLang}
+        nameMap={nameMap}
+        descriptionMap={descriptionMap}
+        onSave={handleSaveTranslation}
+      />
     </div>
   );
 }
