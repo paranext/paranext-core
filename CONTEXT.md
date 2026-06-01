@@ -38,6 +38,6 @@ This is the same mechanism as Gmail's "undo send": the default outcome is commit
 
 **Multiple in-flight grace periods:** Multiple chapters can be in pending-adoption state simultaneously. Each has its own independent timer and undo notice. Typing in Genesis 2 before Genesis 1's timer expires does not affect Genesis 1's timer.
 
-## Model Text Panel
+## Structural Model Text
 
-An existing separate, synchronized, read-only panel that displays the current chapter of the model text alongside the translation editor. Serves the **reading reference** role. Distinct from ghost content.
+The model text resource used as the source of ghost content (paragraph structure, markers, versification). Today this is always `platformScripture.modelTexts items[0]` — the same resource shown in the Model Text Panel (reading reference role). The two roles may be separated in a future setting, so ghost content code must route through a named abstraction rather than hardcoding `items[0]` directly.
