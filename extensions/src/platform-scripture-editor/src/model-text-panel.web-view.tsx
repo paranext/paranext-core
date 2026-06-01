@@ -19,6 +19,7 @@ import {
 import { Button, Spinner, usePromise } from 'platform-bible-react';
 import {
   DblResourceData,
+  formatReplacementString,
   getErrorMessage,
   isPlatformError,
   LocalizeKey,
@@ -42,12 +43,15 @@ const MODEL_TEXT_PANEL_STRING_KEYS: LocalizeKey[] = [
   '%webView_modelTextPanel_installing%',
   '%webView_modelTextPanel_noProject%',
   '%webView_modelTextPanel_pickModelText%',
+  '%webView_modelTextPanel_title%',
+  '%webView_modelTextPanel_title_withResource%',
   '%webView_modelTextPanel_unknownResource%',
   '%webView_modelTextPanel_emptyState_prompt%',
 ];
 
 globalThis.webViewComponent = function ModelTextPanel({
   projectId,
+  updateWebViewDefinition,
   useWebViewScrollGroupScrRef,
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => MODEL_TEXT_PANEL_STRING_KEYS, []));
@@ -117,6 +121,22 @@ globalThis.webViewComponent = function ModelTextPanel({
   }, [isInstalling, fetchResources, dblResourcesProvider, matchDblEntryUid]);
 
   const resourceProjectId = match?.installed ? match.projectId : undefined;
+
+  // --- Dynamic title: "Model text: {displayName}" when a resource is loaded ---
+
+  const modelTextSmallName = match?.installed ? match.displayName : undefined;
+  useEffect(() => {
+    const baseTitle = localizedStrings['%webView_modelTextPanel_title%'];
+    if (!baseTitle) return;
+    if (modelTextSmallName) {
+      const fmt = localizedStrings['%webView_modelTextPanel_title_withResource%'];
+      updateWebViewDefinition({
+        title: formatReplacementString(fmt, { textName: modelTextSmallName }),
+      });
+    } else {
+      updateWebViewDefinition({ title: baseTitle });
+    }
+  }, [modelTextSmallName, localizedStrings, updateWebViewDefinition]);
 
   // --- USJ from the resolved resource project ---
 
