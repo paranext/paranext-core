@@ -28,7 +28,11 @@ Project data that a translator has entered that crosses the **meaningful content
 
 ## Meaningful Content Threshold
 
-The point at which a chapter transitions from ghost to committed. Not yet precisely defined — "first keystroke" was proposed but the intent is something higher: content that represents real translation work, not an accidental or trivial edit. Needs to be resolved.
+The point at which a chapter transitions from ghost to committed. Triggered by any non-whitespace text entry in a verse slot (Option A), but with a **grace period** before the PDP write actually occurs.
+
+**Grace period (Undo Adoption):** When a translator first enters text into a ghost chapter, a countdown timer begins (initially 60 seconds — a magic number subject to tuning). The content exists in the editor's local state but is NOT yet written to the PDP. A dismissible notice lets the translator undo — discarding the local edits and reverting the chapter to ghost. If the timer expires without an undo, adoption completes: the ghost structure plus the translator's edits are written to the PDP and the chapter is committed.
+
+This is the same mechanism as Gmail's "undo send": the default outcome is commitment; the user must act within the window to prevent it.
 
 ## Model Text Panel
 
