@@ -6,10 +6,10 @@ import {
   convertScriptureRangeToEditorRange,
   openDefaultActiveProjectIfApplicable,
   resolveOpenEditorDispatch,
+  syncOnProjectSwitch,
   type OpenEditorDispatch,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   startDefaultProjectPicker,
-  syncOnProjectSwitch,
 } from './platform-scripture-editor.utils';
 
 // Sample USJ chapter data for Genesis chapter 1 with multiple verses
@@ -2023,7 +2023,7 @@ describe('startDefaultProjectPicker', () => {
 function createSyncMockPapi() {
   const mockSendCommand = vi.fn().mockResolvedValue(undefined);
   const mockWarn = vi.fn();
-  // Constructing a minimal mock for PapiBackend to test syncOnProjectSwitch in isolation
+  // Must cast since the mock only includes the papi properties used by syncOnProjectSwitch.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const papi = {
     commands: { sendCommand: mockSendCommand },
@@ -2036,37 +2036,43 @@ describe('syncOnProjectSwitch', () => {
   it('calls syncProjects with the incoming project ID', async () => {
     const { papi, mockSendCommand } = createSyncMockPapi();
 
-    await syncOnProjectSwitch(papi, 'incoming-id', undefined);
+    await syncOnProjectSwitch(papi, 'proj-incoming', undefined);
 
     expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
-      'incoming-id',
+      'proj-incoming',
     ]);
   });
 
-  it('calls sendReceiveProjects with the outgoing project ID after syncProjects', async () => {
+  it('calls sendReceiveProjects with the outgoing project ID when provided', async () => {
+    const { papi, mockSendCommand } = createSyncMockPapi();
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
+      'proj-outgoing',
+    ]);
+  });
+
+  it('calls syncProjects before sendReceiveProjects', async () => {
     const { papi, mockSendCommand } = createSyncMockPapi();
     const callOrder: string[] = [];
-    mockSendCommand.mockImplementation(async (command: string) => {
-      callOrder.push(command);
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      callOrder.push(commandName);
     });
 
-    await syncOnProjectSwitch(papi, 'incoming-id', 'outgoing-id');
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
 
     expect(callOrder).toEqual([
       'paratextBibleSendReceive.syncProjects',
       'paratextBibleSendReceive.sendReceiveProjects',
     ]);
-    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
-      'outgoing-id',
-    ]);
   });
 
-  it('skips sendReceiveProjects when outgoingProjectId is undefined', async () => {
+  it('does not call sendReceiveProjects when outgoingProjectId is undefined', async () => {
     const { papi, mockSendCommand } = createSyncMockPapi();
 
-    await syncOnProjectSwitch(papi, 'incoming-id', undefined);
+    await syncOnProjectSwitch(papi, 'proj-incoming', undefined);
 
-    expect(mockSendCommand).toHaveBeenCalledTimes(1);
     expect(mockSendCommand).not.toHaveBeenCalledWith(
       'paratextBibleSendReceive.sendReceiveProjects',
       expect.anything(),
@@ -2074,27 +2080,48 @@ describe('syncOnProjectSwitch', () => {
   });
 
   it('still calls sendReceiveProjects when syncProjects throws', async () => {
-    const { papi, mockSendCommand, mockWarn } = createSyncMockPapi();
-    mockSendCommand.mockImplementation(async (command: string) => {
-      if (command === 'paratextBibleSendReceive.syncProjects') throw new Error('sync failed');
+    const { papi, mockSendCommand } = createSyncMockPapi();
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.syncProjects') throw new Error('sync failed');
     });
 
-    await syncOnProjectSwitch(papi, 'incoming-id', 'outgoing-id');
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
 
-    expect(mockWarn).toHaveBeenCalled();
     expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
-      'outgoing-id',
+      'proj-outgoing',
     ]);
   });
 
-  it('warns and resolves when sendReceiveProjects throws', async () => {
+  it('resolves without throwing when both syncs fail', async () => {
+    const { papi, mockSendCommand } = createSyncMockPapi();
+    mockSendCommand.mockRejectedValue(new Error('network error'));
+
+    await expect(
+      syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing'),
+    ).resolves.toBeUndefined();
+  });
+
+  it('logs a warning when the incoming sync fails', async () => {
     const { papi, mockSendCommand, mockWarn } = createSyncMockPapi();
-    mockSendCommand.mockImplementation(async (command: string) => {
-      if (command === 'paratextBibleSendReceive.sendReceiveProjects') throw new Error('s/r failed');
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.syncProjects') throw new Error('sync failed');
     });
 
-    await expect(syncOnProjectSwitch(papi, 'incoming-id', 'outgoing-id')).resolves.toBeUndefined();
-    expect(mockWarn).toHaveBeenCalled();
+    await syncOnProjectSwitch(papi, 'proj-incoming', undefined);
+
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-incoming'));
+  });
+
+  it('logs a warning when the outgoing sync fails', async () => {
+    const { papi, mockSendCommand, mockWarn } = createSyncMockPapi();
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.sendReceiveProjects')
+        throw new Error('S/R failed');
+    });
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-outgoing'));
   });
 });
 

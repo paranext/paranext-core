@@ -57,6 +57,35 @@ let selectionChangedEventEmitter: PlatformEventEmitter<SelectionChangeEvent> | u
 
 // #endregion Editor Selection Tracking
 
+// #region Project Switch Events
+
+// String values must match PROJECT_SWITCH_WILL_START_EVENT / PROJECT_SWITCH_DID_FINISH_EVENT in
+// src/renderer/services/workspace-updating-service.ts
+
+/**
+ * Network event name emitted just before a scripture editor web view is opened or replaced with a
+ * new project. Subscribe via
+ * `papi.network.getNetworkEvent('platformScriptureEditor.onWillSwitchProject')`.
+ */
+const PROJECT_SWITCH_WILL_START_EVENT = 'platformScriptureEditor.onWillSwitchProject';
+
+/**
+ * Network event name emitted after the scripture editor web view open/replace call resolves.
+ * Subscribe via `papi.network.getNetworkEvent('platformScriptureEditor.onDidSwitchProject')`.
+ */
+const PROJECT_SWITCH_DID_FINISH_EVENT = 'platformScriptureEditor.onDidSwitchProject';
+
+/**
+ * Event emitter fired before a project switch. Created lazily on the first call to open() to avoid
+ * network initialization races during extension activation.
+ */
+let projectSwitchWillStartEmitter: PlatformEventEmitter<Record<string, never>> | undefined;
+
+/** Event emitter fired after a project switch completes. Created lazily on the first call to open(). */
+let projectSwitchDidFinishEmitter: PlatformEventEmitter<Record<string, never>> | undefined;
+
+// #endregion Project Switch Events
+
 interface PlatformScriptureEditorOptions extends OpenWebViewOptions {
   projectId: string | undefined;
   isReadOnly: boolean;
@@ -218,7 +247,8 @@ async function open(
     );
 
     // Focus path: the requested project is already open. Bring the existing tab to the front
-    // without tearing down the editor or re-running its WebView provider.
+    // without tearing down the editor or re-running its WebView provider. No project swap
+    // occurs, so neither the transition overlay nor a sync is needed.
     if (dispatch.kind === 'focus-existing') {
       return papi.webViews.openWebView(SCRIPTURE_EDITOR_WEBVIEW_TYPE, undefined, {
         existingId: dispatch.existingId,
@@ -227,28 +257,55 @@ async function open(
       });
     }
 
-    if (interfaceMode === 'simple' && dispatch.kind === 'replace-tab') {
+    // The transition overlay and project-switch sync only apply in simple mode when the tab
+    // content is actually being replaced (not on new-tab opens or focus-existing navigations).
+    const needsOverlay = interfaceMode === 'simple' && dispatch.kind === 'replace-tab';
+
+    if (needsOverlay) {
+      // Create emitters lazily on first use, after full activation, to avoid network init races.
+      if (!projectSwitchWillStartEmitter)
+        projectSwitchWillStartEmitter = papi.network.createNetworkEventEmitter<
+          Record<string, never>
+        >(PROJECT_SWITCH_WILL_START_EVENT);
+      if (!projectSwitchDidFinishEmitter)
+        projectSwitchDidFinishEmitter = papi.network.createNetworkEventEmitter<
+          Record<string, never>
+        >(PROJECT_SWITCH_DID_FINISH_EVENT);
+      projectSwitchWillStartEmitter.emit({});
+
       const outgoing = allScriptureEditors.find((e) => e.id === dispatch.targetTabId);
       // Skip outgoing S/R for read-only viewers — no local changes are possible.
       // ENHANCE: also skip if the outgoing editor had no user edits during the session (would
       // require tracking a dirty flag in the editor controller, which doesn't exist yet).
       const outgoingProjectId = outgoing?.isReadOnly ? undefined : outgoing?.projectId;
-      // Fire-and-forget: runs concurrently with `openWebView`.
+      // Fire-and-forget: runs concurrently with openWebView below.
       syncOnProjectSwitch(papi, projectForWebView.projectId, outgoingProjectId);
     }
+
+    const emitDidFinish = () => {
+      if (!needsOverlay) return;
+      if (projectSwitchDidFinishEmitter) projectSwitchDidFinishEmitter.emit({});
+      else
+        logger.warn(
+          'projectSwitchDidFinishEmitter was disposed before the project switch completed — workspace-updating overlay may be stuck',
+        );
+    };
 
     const openWebViewOptions: PlatformScriptureEditorOptions = {
       projectId: projectForWebView.projectId,
       isReadOnly: !projectForWebView.isEditable,
       options,
     };
-    const openedWebViewId = await papi.webViews.openWebView(
-      SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-      dispatch.kind === 'replace-tab'
-        ? { type: 'replace-tab', targetTabId: dispatch.targetTabId }
-        : undefined,
-      openWebViewOptions,
-    );
+
+    const openedWebViewId = await papi.webViews
+      .openWebView(
+        SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+        dispatch.kind === 'replace-tab'
+          ? { type: 'replace-tab', targetTabId: dispatch.targetTabId }
+          : undefined,
+        openWebViewOptions,
+      )
+      .finally(emitDidFinish);
 
     return openedWebViewId;
   }
@@ -1057,6 +1114,15 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await modelTextPanelWebViewProviderPromise,
     await openModelTextPanelPromise,
     selectionChangedEventEmitter,
+    {
+      dispose: async () => {
+        projectSwitchWillStartEmitter?.dispose();
+        projectSwitchWillStartEmitter = undefined;
+        projectSwitchDidFinishEmitter?.dispose();
+        projectSwitchDidFinishEmitter = undefined;
+        return true;
+      },
+    },
     unsubFromDefaultProjectPicker,
     ...markerNotifierUnsubscribers,
   );

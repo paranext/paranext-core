@@ -249,6 +249,7 @@ export function PlatformBibleToolbar() {
       }}
       onSelectMenuItem={handleMenuCommand}
       className={cn(
+        // If the toolbar height changes, the top inset for the workspace updating overlay will need to be updated too.
         'tw:h-12 tw:bg-transparent',
         getToolbarOSReservedSpaceClassName(osPlatformToReserveSpaceFor),
       )}
