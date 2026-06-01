@@ -99,4 +99,33 @@ describe('performShutdownTasks', () => {
       expect.anything(),
     );
   });
+
+  it('proceeds with S/R (simple-mode fallback) when settings service throws', async () => {
+    mockSettingsGet.mockRejectedValue(new Error('settings unavailable'));
+    mockNetworkObjectGet.mockResolvedValue(
+      makeWebViewService([
+        {
+          webViewType: 'platformScriptureEditor.react',
+          state: { isReadOnly: false },
+          projectId: 'fallback-project',
+        },
+      ]),
+    );
+    await performShutdownTasks();
+    expect(mockRequestNoRetry).toHaveBeenCalledWith(expect.stringContaining('cancelSync'));
+    expect(mockRequestNoRetry).toHaveBeenCalledWith(
+      expect.stringContaining('sendReceiveProjects'),
+      ['fallback-project'],
+    );
+  });
+
+  it('swallows unexpected errors and does not throw', async () => {
+    mockSettingsGet.mockResolvedValue('simple');
+    mockNetworkObjectGet.mockResolvedValue(makeWebViewService([]));
+    // Force an unexpected throw deep inside by making cancelSync throw a non-Error value
+    mockRequestNoRetry.mockImplementation(() => {
+      throw 'unexpected non-error throw';
+    });
+    await expect(performShutdownTasks()).resolves.toBeUndefined();
+  });
 });

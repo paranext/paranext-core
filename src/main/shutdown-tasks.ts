@@ -25,9 +25,23 @@ const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
  * In Power mode (or any non-Simple mode): returns immediately with no automatic S/R.
  */
 export async function performShutdownTasks(): Promise<void> {
+  try {
+    await performShutdownTasksInternal();
+  } catch (e) {
+    logger.error('Unexpected error during shutdown tasks:', e);
+  }
+}
+
+async function performShutdownTasksInternal(): Promise<void> {
   // Power mode: close immediately — no automatic S/R on shutdown.
-  const interfaceMode = await settingsService.get('platform.interfaceMode');
-  if (interfaceMode !== 'simple') return;
+  // If the setting can't be read, default to simple mode to avoid skipping S/R and risking data loss.
+  let interfaceMode: string | undefined;
+  try {
+    interfaceMode = await settingsService.get('platform.interfaceMode');
+  } catch {
+    /* settings service unavailable — treat as simple mode to avoid data loss */
+  }
+  if (interfaceMode !== undefined && interfaceMode !== 'simple') return;
 
   // Simple mode: cancel any in-progress sync first (e.g. a first-sync on startup), then S/R
   // the active project.
