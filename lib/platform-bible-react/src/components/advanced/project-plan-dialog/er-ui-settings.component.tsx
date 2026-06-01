@@ -94,9 +94,9 @@ export function ErUiSettings({
       </div>
 
       {isTask && task ? (
-        <TaskFields task={task} onChange={onTaskChange} />
+        <TaskFields task={task} onChange={onTaskChange} displayLang={displayLang} />
       ) : (
-        <StageFields stage={stage} onChange={onStageChange} />
+        <StageFields stage={stage} onChange={onStageChange} displayLang={displayLang} />
       )}
     </div>
   );
@@ -105,28 +105,30 @@ export function ErUiSettings({
 function StageFields({
   stage,
   onChange,
+  displayLang,
 }: {
   stage: PlanStage;
   onChange: (next: PlanStage) => void;
+  displayLang: LangCode;
 }) {
   return (
     <div className="tw:flex tw:flex-col tw:gap-4">
       <Field label="Name">
         <Input
-          value={getLocalized(stage.names, DEFAULT_LANG)}
+          value={getLocalized(stage.names, displayLang, DEFAULT_LANG)}
           onChange={(e) =>
-            onChange({ ...stage, names: { ...stage.names, [DEFAULT_LANG]: e.target.value } })
+            onChange({ ...stage, names: { ...stage.names, [displayLang]: e.target.value } })
           }
         />
       </Field>
       <Field label="Description">
         <Textarea
           rows={4}
-          value={getLocalized(stage.descriptions, DEFAULT_LANG)}
+          value={getLocalized(stage.descriptions, displayLang, DEFAULT_LANG)}
           onChange={(e) =>
             onChange({
               ...stage,
-              descriptions: { ...stage.descriptions, [DEFAULT_LANG]: e.target.value },
+              descriptions: { ...stage.descriptions, [displayLang]: e.target.value },
             })
           }
         />
@@ -135,25 +137,33 @@ function StageFields({
   );
 }
 
-function TaskFields({ task, onChange }: { task: PlanTask; onChange: (next: PlanTask) => void }) {
+function TaskFields({
+  task,
+  onChange,
+  displayLang,
+}: {
+  task: PlanTask;
+  onChange: (next: PlanTask) => void;
+  displayLang: LangCode;
+}) {
   return (
     <div className="tw:flex tw:flex-col tw:gap-4">
       <Field label="Name">
         <Input
-          value={getLocalized(task.names, DEFAULT_LANG)}
+          value={getLocalized(task.names, displayLang, DEFAULT_LANG)}
           onChange={(e) =>
-            onChange({ ...task, names: { ...task.names, [DEFAULT_LANG]: e.target.value } })
+            onChange({ ...task, names: { ...task.names, [displayLang]: e.target.value } })
           }
         />
       </Field>
       <Field label="Description">
         <Textarea
           rows={4}
-          value={getLocalized(task.descriptions, DEFAULT_LANG)}
+          value={getLocalized(task.descriptions, displayLang, DEFAULT_LANG)}
           onChange={(e) =>
             onChange({
               ...task,
-              descriptions: { ...task.descriptions, [DEFAULT_LANG]: e.target.value },
+              descriptions: { ...task.descriptions, [displayLang]: e.target.value },
             })
           }
         />
