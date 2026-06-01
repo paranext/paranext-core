@@ -913,9 +913,17 @@ export function RestoreForm({
         <DialogDescription>{t('%restoreForm_description%')}</DialogDescription>
       </DialogHeader>
 
-      {/* Form body — tab order follows source order top-to-bottom (A11Y, INV-FLAG-2). */}
+      {/*
+        Form body — tab order follows source order top-to-bottom (A11Y, INV-FLAG-2).
+
+        Scroll boundary: the form takes the remaining vertical space inside DialogContent
+        (`tw:flex-1 tw:min-h-0`) and scrolls its overflow (`tw:overflow-y-auto`). Without
+        these classes, content below `<RestoreFileList>` (the Backup Description fieldset)
+        renders outside the dialog frame when the file list is tall. See PR #305
+        improvement plan Track D / D19+D21 for the canonical pattern + auto-fix.
+      */}
       <form
-        className="tw:flex tw:flex-col tw:gap-3"
+        className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col tw:gap-3 tw:overflow-y-auto"
         aria-label={t('%restoreForm_title%')}
         onSubmit={(e) => {
           e.preventDefault();
