@@ -36,6 +36,8 @@ This is the same mechanism as Gmail's "undo send": the default outcome is commit
 
 **Navigation during grace period:** If the translator navigates away before the timer expires, the countdown continues in the background. The undo notice persists in a global notification area and remains actionable until the timer expires. The chapter is committed (PDP write occurs) when the timer runs out, regardless of where the translator is.
 
+**Multiple in-flight grace periods:** Multiple chapters can be in pending-adoption state simultaneously. Each has its own independent timer and undo notice. Typing in Genesis 2 before Genesis 1's timer expires does not affect Genesis 1's timer.
+
 ## Model Text Panel
 
 An existing separate, synchronized, read-only panel that displays the current chapter of the model text alongside the translation editor. Serves the **reading reference** role. Distinct from ghost content.
