@@ -104,13 +104,6 @@ export {
   default as MultiSelectComboBox,
   type MultiSelectComboBoxEntry,
 } from './components/advanced/multi-select-combo-box.component';
-export {
-  default as ProjectPicker,
-  type ProjectItem,
-  type ProjectPickerProps,
-  type ProjectPickerLocalizedStrings,
-  PROJECT_PICKER_STRING_KEYS,
-} from './components/advanced/project-picker-dialog/project-picker-dialog.component';
 export type { SelectMenuItemHandler } from './components/advanced/menus/platform-menubar.component';
 export {
   default as ResourcePickerDialog,

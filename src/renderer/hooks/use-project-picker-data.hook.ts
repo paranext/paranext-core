@@ -13,7 +13,7 @@ import {
 } from '@shared/services/web-view.service-model';
 import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
-import { type ProjectItem } from 'platform-bible-react';
+import { type ProjectItem } from '@renderer/components/projects/project-picker.component';
 
 const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 
@@ -37,9 +37,7 @@ function resolveLanguage(
   return { tag: language, displayName: language };
 }
 
-async function fetchProjectDetails(
-  projectId: string,
-): Promise<{
+async function fetchProjectDetails(projectId: string): Promise<{
   fullName: string;
   shortName: string;
   language?: string;
@@ -149,19 +147,38 @@ export function useProjectPickerData(): ProjectPickerData {
   const [allProjectsWithRecent, isAllProjectsLoading] = usePromise<ProjectItem[]>(
     useCallback(async () => {
       const metadata = await projectLookupService.getMetadataForAllProjects();
-      return Promise.all(
+      const settled = await Promise.all(
         metadata.map(async (m) => {
           try {
-            const details = await fetchProjectDetails(m.id);
-            return { id: m.id, ...details };
+            const pdp = await papiFrontendProjectDataProviderService.get(
+              PROJECT_INTERFACE_PLATFORM_BASE,
+              m.id,
+            );
+            const [fullName, shortName, language, languageTag, isEditable] = await Promise.all([
+              pdp.getSetting('platform.fullName'),
+              pdp.getSetting('platform.name'),
+              pdp.getSetting('platform.language'),
+              pdp.getSetting('platform.languageTag'),
+              pdp.getSetting('platform.isEditable'),
+            ]);
+            if (!isEditable) return undefined;
+            const resolved = resolveLanguage(language, languageTag);
+            return {
+              id: m.id,
+              fullName,
+              shortName,
+              language: resolved?.tag,
+              languageDisplayName: resolved?.displayName,
+            };
           } catch (e) {
             logger.warn(
-              `ProjectPicker: could not fetch name for project ${m.id}: ${getErrorMessage(e)}`,
+              `ProjectPicker: could not fetch details for project ${m.id}: ${getErrorMessage(e)}`,
             );
-            return { id: m.id, fullName: m.id, shortName: m.id };
+            return undefined;
           }
         }),
       );
+      return settled.filter((p) => p !== undefined) as ProjectItem[];
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [refreshCounter]),
     [],
@@ -169,7 +186,10 @@ export function useProjectPickerData(): ProjectPickerData {
 
   const recentIdSet = useMemo(() => new Set(safeRecentIds), [safeRecentIds]);
   const allProjects = useMemo(
-    () => allProjectsWithRecent.filter((p) => !recentIdSet.has(p.id)),
+    () =>
+      allProjectsWithRecent
+        .filter((p) => !recentIdSet.has(p.id))
+        .sort((a, b) => a.fullName.localeCompare(b.fullName)),
     [allProjectsWithRecent, recentIdSet],
   );
 

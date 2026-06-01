@@ -121,10 +121,19 @@ export function PlatformBibleToolbar() {
 
   const showProjectPicker = useDialogCallback(
     PROJECT_PICKER_DIALOG_TYPE,
-    {
-      isModal: true,
+    { isModal: true },
+    async (projectId) => {
+      if (!projectId) return;
+      try {
+        // This command comes from an extension and is not typed in CommandHandlers.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+        await (sendCommand as any)('platformScriptureEditor.openScriptureEditor', projectId);
+        const svc = await dataProviders.get('platformScripture.recentlyOpenedProjects');
+        await svc?.recordProjectOpened(projectId);
+      } catch (e) {
+        logger.warn(`ProjectPicker: error opening project ${projectId}: ${getErrorMessage(e)}`);
+      }
     },
-    () => {},
   );
 
   const projectPickerItems = recentProjects.length > 0 ? recentProjects : allProjects;

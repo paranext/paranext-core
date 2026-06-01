@@ -1,14 +1,15 @@
-import { DialogHeader, DialogTitle } from '@/components/shadcn-ui/dialog';
-import { Z_INDEX_MODAL } from '@/components/z-index';
-import { Label } from '@/components/shadcn-ui/label';
 import {
+  DialogHeader,
+  DialogTitle,
+  Label,
+  SearchBar,
+  Spinner,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@/components/shadcn-ui/tooltip';
-import { SearchBar } from '@/components/basics/search-bar.component';
-import { Spinner } from '@/components/basics/spinner.component';
+  Z_INDEX_MODAL,
+} from 'platform-bible-react';
 import { CheckIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
@@ -76,8 +77,8 @@ function ProjectSection({
   return (
     <>
       {/* Section label — starts at the full-name column; first section has no top padding */}
-      <div className="tw:col-start-2 tw:col-span-2 tw:pb-1 tw:pt-3 tw:first:pt-0">
-        <Label className="tw:text-xs tw:uppercase tw:tracking-wider tw:text-muted-foreground">
+      <div className="tw:col-span-2 tw:col-start-2 tw:pt-3 tw:pb-1 tw:first:pt-0">
+        <Label className="tw:text-xs tw:tracking-wider tw:text-muted-foreground tw:uppercase">
           {label}
         </Label>
       </div>
@@ -87,7 +88,7 @@ function ProjectSection({
           role="option"
           aria-selected={p.id === currentProjectId}
           tabIndex={0}
-          className="tw:col-span-3 tw:grid tw:cursor-pointer tw:grid-cols-subgrid tw:items-center tw:rounded tw:px-1 tw:py-1.5 tw:hover:bg-accent tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
+          className="tw:col-span-3 tw:grid tw:cursor-pointer tw:grid-cols-subgrid tw:items-center tw:rounded tw:px-1 tw:py-1.5 tw:hover:bg-accent tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:outline-none"
           onClick={() => onSelect(p.id)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
