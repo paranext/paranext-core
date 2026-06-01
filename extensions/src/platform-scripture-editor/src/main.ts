@@ -862,7 +862,7 @@ const resourceTextPanelPendingProjectIds = new Map<string, string | undefined>()
 function createResourceTextPanelProvider(
   webViewType: string,
   title: string,
-  resourceType: 'ScriptureResource' | 'CommentaryResource',
+  resourceType: Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
 ): IWebViewProvider {
   return {
     async getWebView(
