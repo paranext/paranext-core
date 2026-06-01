@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { Dialog } from '@/components/shadcn-ui/dialog';
+import { Dialog } from 'platform-bible-react';
 import ProjectPicker, {
   type ProjectItem,
   type ProjectPickerLocalizedStrings,
-} from './project-picker-dialog.component';
+} from './project-picker.component';
 
 const STRINGS: ProjectPickerLocalizedStrings = {
   '%projectPicker_title%': 'Project Picker',

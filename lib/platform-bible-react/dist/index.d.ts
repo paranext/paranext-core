@@ -1014,45 +1014,6 @@ export interface MarkerMenuProps {
 }
 /** Marker menu component to render the list of markers and a few commands in the scripture editor */
 export declare function MarkerMenu({ localizedStrings, markerMenuItems, searchRef }: MarkerMenuProps): import("react/jsx-runtime").JSX.Element;
-export type ProjectItem = {
-	id: string;
-	fullName: string;
-	shortName: string;
-	/** Short BCP-47 language tag displayed in the language column (e.g. "en", "en-US"). */
-	language?: string;
-	/** Full localized language name shown as a tooltip over {@link language} (e.g. "English"). */
-	languageDisplayName?: string;
-};
-/** Localization string keys used by {@link ProjectPicker}. */
-export declare const PROJECT_PICKER_STRING_KEYS: readonly [
-	"%projectPicker_title%",
-	"%projectPicker_section_recent%",
-	"%projectPicker_section_projects%",
-	"%projectPicker_search_placeholder%",
-	"%projectPicker_no_results%"
-];
-export type ProjectPickerLocalizedStrings = {
-	[key in (typeof PROJECT_PICKER_STRING_KEYS)[number]]?: string;
-};
-export type ProjectPickerProps = {
-	currentProject: ProjectItem | undefined;
-	/** Pre-ordered recent projects (most-recent first). Must NOT overlap with allProjects. */
-	recentProjects: ProjectItem[];
-	/** All projects excluding recentProjects. */
-	allProjects: ProjectItem[];
-	isLoading?: boolean;
-	/** Called with the selected project's id when the user picks a project. */
-	onSelect: (projectId: string) => void;
-	localizedStrings?: ProjectPickerLocalizedStrings;
-};
-/**
- * Presentational dialog content for picking a project. Renders Recent and All Projects sections
- * with text search. Does not include an outer Dialog/DialogContent wrapper.
- *
- * `recentProjects` and `allProjects` must be pre-separated (no overlap). The current project is
- * pinned to the top of the Recent section if present there.
- */
-export function ProjectPicker({ currentProject, recentProjects, allProjects, isLoading, onSelect, localizedStrings, }: ProjectPickerProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Callback function that is invoked when a user selects a menu item. Receives the full
  * `MenuItemContainingCommand` object as an argument.
