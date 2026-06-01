@@ -1014,6 +1014,32 @@ export interface MarkerMenuProps {
 }
 /** Marker menu component to render the list of markers and a few commands in the scripture editor */
 export declare function MarkerMenu({ localizedStrings, markerMenuItems, searchRef }: MarkerMenuProps): import("react/jsx-runtime").JSX.Element;
+export type ProjectOption = {
+	id: string;
+	name: string;
+};
+export type ProjectPickerLocalizedStrings = {
+	recentProjectsHeading?: string;
+	allProjectsHeading?: string;
+	loadingPlaceholder?: string;
+	selectPlaceholder?: string;
+	searchPlaceholder?: string;
+	noResultsMessage?: string;
+};
+export type ProjectPickerComboBoxProps = {
+	currentProject: ProjectOption | undefined;
+	recentProjects: ProjectOption[];
+	allProjects: ProjectOption[];
+	/** Callback invoked with the selected project's ID when the user picks a project */
+	onSelect: (projectId: string) => void;
+	isLoading?: boolean;
+	localizedStrings?: ProjectPickerLocalizedStrings;
+	/** Accessible label for the trigger button */
+	ariaLabel?: string;
+	className?: string;
+};
+/** Combo box for selecting a project from recent and all-projects lists */
+export declare function ProjectPickerComboBox({ currentProject, recentProjects, allProjects, onSelect, isLoading, localizedStrings, ariaLabel, className, }: ProjectPickerComboBoxProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Callback function that is invoked when a user selects a menu item. Receives the full
  * `MenuItemContainingCommand` object as an argument.
