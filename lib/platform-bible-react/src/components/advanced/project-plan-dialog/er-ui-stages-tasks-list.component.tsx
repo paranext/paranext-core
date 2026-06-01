@@ -1,5 +1,11 @@
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
 import { cn } from '@/utils/shadcn-ui/utils';
 import {
   DEFAULT_LANG,
@@ -63,84 +69,88 @@ export function ErUiStagesTasksList({
   }
 
   return (
-    <ul ref={listRef} className="tw:divide-y tw:divide-border tw:rounded tw:border">
-      {stages.map((stage, stageIndex) => {
-        const stageActive = isStageSelected(selected, stage.id);
-        return (
-          <li key={stage.id}>
-            <Row
-              active={stageActive}
-              onClick={() => onToggle(stageActive ? undefined : { kind: 'stage', id: stage.id })}
-              primary={getLocalized(stage.names, DEFAULT_LANG) || '(unnamed stage)'}
-              secondary={
-                getLocalized(stage.descriptions, DEFAULT_LANG) ||
-                `${stage.tasks.length} task${stage.tasks.length === 1 ? '' : 's'}`
-              }
-              compact={compact}
-            >
-              <RowAction
-                label="Move stage up"
-                onClick={() => onMoveStage(stageIndex, -1)}
-                disabled={stageIndex === 0}
+    <TooltipProvider>
+      <ul ref={listRef} className="tw:divide-y tw:divide-border tw:rounded tw:border">
+        {stages.map((stage, stageIndex) => {
+          const stageActive = isStageSelected(selected, stage.id);
+          return (
+            <li key={stage.id}>
+              <Row
+                active={stageActive}
+                onClick={() => onToggle(stageActive ? undefined : { kind: 'stage', id: stage.id })}
+                primary={`Stage ${stageIndex + 1}: ${getLocalized(stage.names, DEFAULT_LANG) || '(unnamed stage)'}`}
+                secondary={
+                  getLocalized(stage.descriptions, DEFAULT_LANG) ||
+                  `${stage.tasks.length} task${stage.tasks.length === 1 ? '' : 's'}`
+                }
+                compact={compact}
               >
-                <ChevronUp className="tw:h-4 tw:w-4" />
-              </RowAction>
-              <RowAction
-                label="Move stage down"
-                onClick={() => onMoveStage(stageIndex, 1)}
-                disabled={stageIndex === stages.length - 1}
-              >
-                <ChevronDown className="tw:h-4 tw:w-4" />
-              </RowAction>
-              <RowAction label="Delete stage" onClick={() => onDeleteStage(stage.id)}>
-                <Trash2 className="tw:h-4 tw:w-4" />
-              </RowAction>
-            </Row>
-            {stage.tasks.map((task, taskIndex) => {
-              const taskActive = isTaskSelected(selected, stage.id, task.id);
-              return (
-                <Row
-                  key={task.id}
-                  active={taskActive}
-                  indented
-                  onClick={() =>
-                    onToggle(
-                      taskActive ? undefined : { kind: 'task', stageId: stage.id, taskId: task.id },
-                    )
-                  }
-                  primary={getLocalized(task.names, DEFAULT_LANG) || '(unnamed task)'}
-                  secondary={
-                    getLocalized(task.descriptions, DEFAULT_LANG) ||
-                    markCompleteLabel(task.markComplete)
-                  }
-                  compact={compact}
+                <RowAction
+                  label="Move stage up"
+                  onClick={() => onMoveStage(stageIndex, -1)}
+                  disabled={stageIndex === 0}
                 >
-                  <RowAction
-                    label="Move task up"
-                    onClick={() => onMoveTask(stageIndex, taskIndex, -1)}
-                    disabled={stageIndex === 0 && taskIndex === 0}
-                  >
-                    <ChevronUp className="tw:h-4 tw:w-4" />
-                  </RowAction>
-                  <RowAction
-                    label="Move task down"
-                    onClick={() => onMoveTask(stageIndex, taskIndex, 1)}
-                    disabled={
-                      stageIndex === stages.length - 1 && taskIndex === stage.tasks.length - 1
+                  <ChevronUp className="tw:h-4 tw:w-4" />
+                </RowAction>
+                <RowAction
+                  label="Move stage down"
+                  onClick={() => onMoveStage(stageIndex, 1)}
+                  disabled={stageIndex === stages.length - 1}
+                >
+                  <ChevronDown className="tw:h-4 tw:w-4" />
+                </RowAction>
+                <RowAction label="Delete stage" onClick={() => onDeleteStage(stage.id)}>
+                  <Trash2 className="tw:h-4 tw:w-4" />
+                </RowAction>
+              </Row>
+              {stage.tasks.map((task, taskIndex) => {
+                const taskActive = isTaskSelected(selected, stage.id, task.id);
+                return (
+                  <Row
+                    key={task.id}
+                    active={taskActive}
+                    indented
+                    onClick={() =>
+                      onToggle(
+                        taskActive
+                          ? undefined
+                          : { kind: 'task', stageId: stage.id, taskId: task.id },
+                      )
                     }
+                    primary={getLocalized(task.names, DEFAULT_LANG) || '(unnamed task)'}
+                    secondary={
+                      getLocalized(task.descriptions, DEFAULT_LANG) ||
+                      markCompleteLabel(task.markComplete)
+                    }
+                    compact={compact}
                   >
-                    <ChevronDown className="tw:h-4 tw:w-4" />
-                  </RowAction>
-                  <RowAction label="Delete task" onClick={() => onDeleteTask(stage.id, task.id)}>
-                    <Trash2 className="tw:h-4 tw:w-4" />
-                  </RowAction>
-                </Row>
-              );
-            })}
-          </li>
-        );
-      })}
-    </ul>
+                    <RowAction
+                      label="Move task up"
+                      onClick={() => onMoveTask(stageIndex, taskIndex, -1)}
+                      disabled={stageIndex === 0 && taskIndex === 0}
+                    >
+                      <ChevronUp className="tw:h-4 tw:w-4" />
+                    </RowAction>
+                    <RowAction
+                      label="Move task down"
+                      onClick={() => onMoveTask(stageIndex, taskIndex, 1)}
+                      disabled={
+                        stageIndex === stages.length - 1 && taskIndex === stage.tasks.length - 1
+                      }
+                    >
+                      <ChevronDown className="tw:h-4 tw:w-4" />
+                    </RowAction>
+                    <RowAction label="Delete task" onClick={() => onDeleteTask(stage.id, task.id)}>
+                      <Trash2 className="tw:h-4 tw:w-4" />
+                    </RowAction>
+                  </Row>
+                );
+              })}
+            </li>
+          );
+        })}
+      </ul>
+    </TooltipProvider>
   );
 }
 
@@ -207,19 +217,25 @@ interface RowActionProps {
 
 function RowAction({ label, onClick, disabled, children }: RowActionProps) {
   return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
-      disabled={disabled}
-      className="tw:rounded tw:p-1 tw:hover:bg-accent disabled:tw:opacity-30"
-    >
-      {children}
-    </button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          aria-label={label}
+          onClick={(e) => {
+            e.stopPropagation();
+            onClick();
+          }}
+          disabled={disabled}
+          className="tw:rounded tw:p-1 tw:hover:bg-accent tw:disabled:opacity-50"
+        >
+          {children}
+        </button>
+      </TooltipTrigger>
+      {/* The default tooltip z-index (Z_INDEX_ABOVE_DOCK = 250) is below the full-screen plan
+          dialog (Z_INDEX_MODAL = 500), so override to sit above it. */}
+      <TooltipContent style={{ zIndex: 650 }}>{label}</TooltipContent>
+    </Tooltip>
   );
 }
 
