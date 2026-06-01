@@ -30,6 +30,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  TooltipProvider,
 } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
 import {
@@ -221,55 +222,57 @@ export function BookChooser({
   );
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) handleCancel();
-      }}
-    >
-      <DialogContent
-        className="tw:flex tw:max-h-[80vh] tw:max-w-2xl tw:flex-col tw:gap-3"
-        data-testid="book-chooser-modal"
+    <TooltipProvider delayDuration={200}>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (!next) handleCancel();
+        }}
       >
-        <DialogHeader>
-          <DialogTitle data-testid="book-chooser-caption">{caption}</DialogTitle>
-          <DialogDescription data-testid="book-chooser-help-text">{helpText}</DialogDescription>
-        </DialogHeader>
-
-        <div
-          className="tw:min-h-0 tw:flex-1 tw:overflow-y-auto tw:py-2"
-          data-testid="book-chooser-grid"
+        <DialogContent
+          className="tw:flex tw:max-h-[80vh] tw:max-w-2xl tw:flex-col tw:gap-3"
+          data-testid="book-chooser-modal"
         >
-          <BookGridSelector
-            items={items}
-            selected={workingSelection}
-            onToggle={handleToggle}
-            onRangeToggle={handleRangeToggle}
-            groupBy="canon"
-            ariaLabel={t('%book_chooser_grid_aria_label%')}
-            ariaMultiselectable
-            localizedStrings={bookGridLocalized}
-          />
-        </div>
+          <DialogHeader>
+            <DialogTitle data-testid="book-chooser-caption">{caption}</DialogTitle>
+            <DialogDescription data-testid="book-chooser-help-text">{helpText}</DialogDescription>
+          </DialogHeader>
 
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={handleCancel}
-            aria-label={t('%book_chooser_cancel%')}
-            data-testid="book-chooser-cancel"
+          <div
+            className="tw:min-h-0 tw:flex-1 tw:overflow-y-auto tw:py-2"
+            data-testid="book-chooser-grid"
           >
-            {t('%book_chooser_cancel%')}
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            aria-label={t('%book_chooser_submit%')}
-            data-testid="book-chooser-submit"
-          >
-            {t('%book_chooser_submit%')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            <BookGridSelector
+              items={items}
+              selected={workingSelection}
+              onToggle={handleToggle}
+              onRangeToggle={handleRangeToggle}
+              groupBy="canon"
+              ariaLabel={t('%book_chooser_grid_aria_label%')}
+              ariaMultiselectable
+              localizedStrings={bookGridLocalized}
+            />
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={handleCancel}
+              aria-label={t('%book_chooser_cancel%')}
+              data-testid="book-chooser-cancel"
+            >
+              {t('%book_chooser_cancel%')}
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              aria-label={t('%book_chooser_submit%')}
+              data-testid="book-chooser-submit"
+            >
+              {t('%book_chooser_submit%')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </TooltipProvider>
   );
 }

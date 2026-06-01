@@ -47,6 +47,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  TooltipProvider,
 } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
 import {
@@ -459,108 +460,112 @@ export function RestoreFileList({
   }, [contextMenuEnabled, onViewDifferences, selectedEntry]);
 
   return (
-    <div
-      className="pr-twp tw:flex tw:min-h-0 tw:flex-1 tw:flex-col tw:gap-2"
-      data-testid="restore-file-list"
-    >
-      <ContextMenu>
-        <ContextMenuTrigger asChild>
-          <div className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col">
-            <div
-              className="tw:flex tw:items-center tw:gap-4 tw:px-2 tw:py-1 tw:text-xs tw:font-semibold tw:text-muted-foreground"
-              data-testid="restore-file-list-column-headers"
-            >
-              <span className="tw:flex-1">{t('%restore_file_list_column_files_in_backup%')}</span>
-              <span className="tw:flex-1">{t('%restore_file_list_column_files_on_disk%')}</span>
-            </div>
-            <BookGridSelector
-              items={gridItems}
-              selected={selectedFileIds}
-              onToggle={handleGridToggle}
-              groupBy={groupBy}
-              ariaLabel={t('%restore_file_list_aria_label%')}
-              ariaMultiselectable
-              primaryDateLabel={t('%restore_file_list_column_files_in_backup%')}
-              secondaryDateLabel={t('%restore_file_list_column_files_on_disk%')}
-              getRowAriaLabel={getRowAriaLabel}
-              interactive
-            />
-          </div>
-        </ContextMenuTrigger>
-        <ContextMenuContent data-testid="restore-file-list-context-menu">
-          <ContextMenuItem
-            disabled={!contextMenuEnabled}
-            onSelect={handleContextMenuViewDifferences}
-            data-testid="restore-file-list-context-menu-view-differences"
-          >
-            {contextMenuEnabled
-              ? t('%restore_file_list_context_menu_view_differences%')
-              : t('%restore_file_list_context_menu_cannot_compare%')}
-          </ContextMenuItem>
-        </ContextMenuContent>
-      </ContextMenu>
-
+    <TooltipProvider delayDuration={200}>
       <div
-        className="tw:flex tw:flex-wrap tw:items-center tw:gap-2 tw:pt-1"
-        data-testid="restore-file-list-actions"
+        className="pr-twp tw:flex tw:min-h-0 tw:flex-1 tw:flex-col tw:gap-2"
+        data-testid="restore-file-list"
       >
-        <Button
-          variant="outline"
-          onClick={handleBulkSelectAll}
-          aria-label={t('%restore_file_list_select_all_button%')}
-          data-testid="select-all-files-button"
-        >
-          {t('%restore_file_list_select_all_button%')}
-        </Button>
-        <Button
-          variant="outline"
-          onClick={handleBulkDeselectAll}
-          aria-label={t('%restore_file_list_deselect_all_button%')}
-          data-testid="deselect-all-files-button"
-        >
-          {t('%restore_file_list_deselect_all_button%')}
-        </Button>
-        <Button
-          variant="outline"
-          onClick={handleViewDifferencesClick}
-          disabled={!viewDiffsEligible}
-          aria-label={t('%restore_file_list_view_differences_button%')}
-          data-testid="view-differences-button"
-        >
-          {t('%restore_file_list_view_differences_button%')}
-        </Button>
-      </div>
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <div className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col">
+              <div
+                className="tw:flex tw:items-center tw:gap-4 tw:px-2 tw:py-1 tw:text-xs tw:font-semibold tw:text-muted-foreground"
+                data-testid="restore-file-list-column-headers"
+              >
+                <span className="tw:flex-1">{t('%restore_file_list_column_files_in_backup%')}</span>
+                <span className="tw:flex-1">{t('%restore_file_list_column_files_on_disk%')}</span>
+              </div>
+              <BookGridSelector
+                items={gridItems}
+                selected={selectedFileIds}
+                onToggle={handleGridToggle}
+                groupBy={groupBy}
+                ariaLabel={t('%restore_file_list_aria_label%')}
+                ariaMultiselectable
+                primaryDateLabel={t('%restore_file_list_column_files_in_backup%')}
+                secondaryDateLabel={t('%restore_file_list_column_files_on_disk%')}
+                getRowAriaLabel={getRowAriaLabel}
+                interactive
+              />
+            </div>
+          </ContextMenuTrigger>
+          <ContextMenuContent data-testid="restore-file-list-context-menu">
+            <ContextMenuItem
+              disabled={!contextMenuEnabled}
+              onSelect={handleContextMenuViewDifferences}
+              data-testid="restore-file-list-context-menu-view-differences"
+            >
+              {contextMenuEnabled
+                ? t('%restore_file_list_context_menu_view_differences%')
+                : t('%restore_file_list_context_menu_cannot_compare%')}
+            </ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
 
-      <Dialog
-        open={pendingDowngradeId !== undefined}
-        onOpenChange={(next) => {
-          if (!next) handleDowngradeNo();
-        }}
-      >
-        <DialogContent className="tw:max-w-md" data-testid="restore-file-list-downgrade-confirm">
-          <DialogHeader>
-            <DialogTitle>{t('%restore_file_list_downgrade_confirm_title%')}</DialogTitle>
-            <DialogDescription>{t('%restore_file_list_downgrade_confirm_body%')}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={handleDowngradeNo}
-              aria-label={t('%restore_file_list_downgrade_confirm_no%')}
-              data-testid="restore-file-list-downgrade-no"
-            >
-              {t('%restore_file_list_downgrade_confirm_no%')}
-            </Button>
-            <Button
-              onClick={handleDowngradeYes}
-              aria-label={t('%restore_file_list_downgrade_confirm_yes%')}
-              data-testid="restore-file-list-downgrade-yes"
-            >
-              {t('%restore_file_list_downgrade_confirm_yes%')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+        <div
+          className="tw:flex tw:flex-wrap tw:items-center tw:gap-2 tw:pt-1"
+          data-testid="restore-file-list-actions"
+        >
+          <Button
+            variant="outline"
+            onClick={handleBulkSelectAll}
+            aria-label={t('%restore_file_list_select_all_button%')}
+            data-testid="select-all-files-button"
+          >
+            {t('%restore_file_list_select_all_button%')}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleBulkDeselectAll}
+            aria-label={t('%restore_file_list_deselect_all_button%')}
+            data-testid="deselect-all-files-button"
+          >
+            {t('%restore_file_list_deselect_all_button%')}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleViewDifferencesClick}
+            disabled={!viewDiffsEligible}
+            aria-label={t('%restore_file_list_view_differences_button%')}
+            data-testid="view-differences-button"
+          >
+            {t('%restore_file_list_view_differences_button%')}
+          </Button>
+        </div>
+
+        <Dialog
+          open={pendingDowngradeId !== undefined}
+          onOpenChange={(next) => {
+            if (!next) handleDowngradeNo();
+          }}
+        >
+          <DialogContent className="tw:max-w-md" data-testid="restore-file-list-downgrade-confirm">
+            <DialogHeader>
+              <DialogTitle>{t('%restore_file_list_downgrade_confirm_title%')}</DialogTitle>
+              <DialogDescription>
+                {t('%restore_file_list_downgrade_confirm_body%')}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={handleDowngradeNo}
+                aria-label={t('%restore_file_list_downgrade_confirm_no%')}
+                data-testid="restore-file-list-downgrade-no"
+              >
+                {t('%restore_file_list_downgrade_confirm_no%')}
+              </Button>
+              <Button
+                onClick={handleDowngradeYes}
+                aria-label={t('%restore_file_list_downgrade_confirm_yes%')}
+                data-testid="restore-file-list-downgrade-yes"
+              >
+                {t('%restore_file_list_downgrade_confirm_yes%')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </TooltipProvider>
   );
 }

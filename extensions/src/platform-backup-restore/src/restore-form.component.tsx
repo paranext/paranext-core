@@ -1070,308 +1070,310 @@ export function RestoreForm({
   const progressMessage = t(PROGRESS_MESSAGE_KEY_BY_STEP[progressStep]);
 
   return (
-    <div className="pr-twp tw:contents">
-      <Dialog
-        open={open}
-        onOpenChange={(next) => {
-          // Don't allow Escape / outside-click to close while submitting (BHV-326).
-          if (!next && !isSubmitting && pickerStage !== 'submitting') handleCancelButton();
-        }}
-      >
-        {pickerStage === 'loading-zip' && renderLoadingZip()}
-        {pickerStage === 'main' && renderMain()}
-        {pickerStage === 'browsing' && (
-          <DialogContent
-            className="tw:flex tw:max-w-md tw:flex-col tw:gap-3"
-            data-testid="restore-form-picker-placeholder"
-          >
-            <DialogHeader>
-              <DialogTitle>{t('%restoreForm_title%')}</DialogTitle>
-              <DialogDescription>{t('%restoreForm_description%')}</DialogDescription>
-            </DialogHeader>
-            <p aria-live="polite" className="tw:text-sm">
-              {t('%restoreForm_loadingZip_message%')}
-            </p>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={handleCancelButton}
-                aria-label={t('%restoreForm_cancel%')}
-              >
-                {t('%restoreForm_cancel%')}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        )}
-      </Dialog>
-
-      {/* Progress overlay — non-cancelable (BHV-326). Escape / outside-click no-op. */}
-      {(isSubmitting || pickerStage === 'submitting') && (
-        <Dialog open>
-          <DialogContent
-            role="dialog"
-            aria-label={t('%restoreForm_progress_title%')}
-            data-testid="restore-form-progress"
-            className="tw:flex tw:max-w-md tw:flex-col tw:gap-3"
-            showCloseButton={false}
-            onEscapeKeyDown={(e) => e.preventDefault()}
-            onPointerDownOutside={(e) => e.preventDefault()}
-            onInteractOutside={(e) => e.preventDefault()}
-          >
-            <DialogHeader>
-              <DialogTitle>{t('%restoreForm_progress_title%')}</DialogTitle>
-            </DialogHeader>
-            <div aria-live="polite" className="tw:flex tw:flex-col tw:gap-2">
-              <Progress value={progressPercent} />
-              <p className="tw:text-sm">{progressMessage}</p>
-            </div>
-            {/* NO Cancel button per BHV-326. */}
-          </DialogContent>
-        </Dialog>
-      )}
-
-      {/* ZIP-load error modal — cancel surface */}
-      {zipLoadError !== undefined && (
-        <Dialog open onOpenChange={(next) => !next && handleZipLoadErrorDismiss()}>
-          <DialogContent
-            role="dialog"
-            aria-label={t('%restoreForm_zipLoadError_title%')}
-            data-testid="restore-form-zip-load-error"
-            className="tw:flex tw:max-w-md tw:flex-col tw:gap-3"
-          >
-            <DialogHeader>
-              <DialogTitle>{t('%restoreForm_zipLoadError_title%')}</DialogTitle>
-              <DialogDescription>{t('%restoreForm_zipLoadError_message%')}</DialogDescription>
-            </DialogHeader>
-            <p className="tw:text-sm tw:break-all">{zipLoadError}</p>
-            <DialogFooter>
-              <Button
-                onClick={handleZipLoadErrorDismiss}
-                aria-label={t('%restoreForm_zipLoadError_ok%')}
-              >
-                {t('%restoreForm_zipLoadError_ok%')}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
-
-      {/* Shared-project warning modal — pre-flight + retry */}
-      {sharedProjectPrompt && (
+    <TooltipProvider delayDuration={200}>
+      <div className="pr-twp tw:contents">
         <Dialog
-          open
+          open={open}
           onOpenChange={(next) => {
-            if (!next) {
-              if (sharedProjectPrompt.kind === 'pre-flight') handleSharedProjectPreflightNo();
-              else handleSharedProjectRetryNo();
-            }
+            // Don't allow Escape / outside-click to close while submitting (BHV-326).
+            if (!next && !isSubmitting && pickerStage !== 'submitting') handleCancelButton();
           }}
         >
-          <DialogContent
-            role="dialog"
-            aria-label={t('%restoreForm_sharedProjectWarning_title%')}
-            data-testid="restore-form-shared-project-warning"
-            className="tw:flex tw:max-w-md tw:flex-col tw:gap-3"
-          >
-            <DialogHeader>
-              <DialogTitle>{t('%restoreForm_sharedProjectWarning_title%')}</DialogTitle>
-              <DialogDescription>
-                {t('%restoreForm_sharedProjectWarning_message%')}
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={
-                  sharedProjectPrompt.kind === 'pre-flight'
-                    ? handleSharedProjectPreflightNo
-                    : handleSharedProjectRetryNo
-                }
-                aria-label={t('%restoreForm_sharedProjectWarning_no%')}
-              >
-                {t('%restoreForm_sharedProjectWarning_no%')}
-              </Button>
-              <Button
-                onClick={
-                  sharedProjectPrompt.kind === 'pre-flight'
-                    ? handleSharedProjectPreflightYes
-                    : handleSharedProjectRetryYes
-                }
-                aria-label={t('%restoreForm_sharedProjectWarning_yes%')}
-                data-testid="restore-form-shared-project-warning-yes"
-              >
-                {t('%restoreForm_sharedProjectWarning_yes%')}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
+          {pickerStage === 'loading-zip' && renderLoadingZip()}
+          {pickerStage === 'main' && renderMain()}
+          {pickerStage === 'browsing' && (
+            <DialogContent
+              className="tw:flex tw:max-w-md tw:flex-col tw:gap-3"
+              data-testid="restore-form-picker-placeholder"
+            >
+              <DialogHeader>
+                <DialogTitle>{t('%restoreForm_title%')}</DialogTitle>
+                <DialogDescription>{t('%restoreForm_description%')}</DialogDescription>
+              </DialogHeader>
+              <p aria-live="polite" className="tw:text-sm">
+                {t('%restoreForm_loadingZip_message%')}
+              </p>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={handleCancelButton}
+                  aria-label={t('%restoreForm_cancel%')}
+                >
+                  {t('%restoreForm_cancel%')}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          )}
         </Dialog>
-      )}
 
-      {/* Different-case conflict modal (VAL-102) */}
-      {caseConflictMessage !== undefined && (
-        <Dialog open onOpenChange={(next) => !next && handleCaseConflictDismiss()}>
-          <DialogContent
-            role="dialog"
-            aria-label={t('%restoreForm_caseConflict_title%')}
-            data-testid="restore-form-case-conflict"
-            className="tw:flex tw:max-w-md tw:flex-col tw:gap-3"
-          >
-            <DialogHeader>
-              <DialogTitle>{t('%restoreForm_caseConflict_title%')}</DialogTitle>
-              <DialogDescription>{t('%restoreForm_caseConflict_message%')}</DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button
-                onClick={handleCaseConflictDismiss}
-                aria-label={t('%restoreForm_caseConflict_ok%')}
-              >
-                {t('%restoreForm_caseConflict_ok%')}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
+        {/* Progress overlay — non-cancelable (BHV-326). Escape / outside-click no-op. */}
+        {(isSubmitting || pickerStage === 'submitting') && (
+          <Dialog open>
+            <DialogContent
+              role="dialog"
+              aria-label={t('%restoreForm_progress_title%')}
+              data-testid="restore-form-progress"
+              className="tw:flex tw:max-w-md tw:flex-col tw:gap-3"
+              showCloseButton={false}
+              onEscapeKeyDown={(e) => e.preventDefault()}
+              onPointerDownOutside={(e) => e.preventDefault()}
+              onInteractOutside={(e) => e.preventDefault()}
+            >
+              <DialogHeader>
+                <DialogTitle>{t('%restoreForm_progress_title%')}</DialogTitle>
+              </DialogHeader>
+              <div aria-live="polite" className="tw:flex tw:flex-col tw:gap-2">
+                <Progress value={progressPercent} />
+                <p className="tw:text-sm">{progressMessage}</p>
+              </div>
+              {/* NO Cancel button per BHV-326. */}
+            </DialogContent>
+          </Dialog>
+        )}
 
-      {/* Downgrade-files confirmation modal (batched — gm-029 / ALIGNMENT-007) */}
-      {downgradePrompt && (
-        <Dialog open onOpenChange={(next) => !next && handleDowngradeNo()}>
-          <DialogContent
-            role="dialog"
-            aria-label={t('%restoreForm_downgradeFiles_title%')}
-            data-testid="restore-form-downgrade-files"
-            className="tw:flex tw:max-w-md tw:flex-col tw:gap-3"
-          >
-            <DialogHeader>
-              <DialogTitle>{t('%restoreForm_downgradeFiles_title%')}</DialogTitle>
-              <DialogDescription>{t('%restoreForm_downgradeFiles_message%')}</DialogDescription>
-            </DialogHeader>
-            {downgradePrompt.fileIds.length > 0 && (
-              <ul className="tw:max-h-40 tw:overflow-auto tw:text-xs">
-                {downgradePrompt.fileIds.map((id) => (
-                  <li key={id}>
-                    <code>{id}</code>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={handleDowngradeNo}
-                aria-label={t('%restoreForm_downgradeFiles_no%')}
-              >
-                {t('%restoreForm_downgradeFiles_no%')}
-              </Button>
-              <Button
-                onClick={handleDowngradeYes}
-                aria-label={t('%restoreForm_downgradeFiles_yes%')}
-                data-testid="restore-form-downgrade-files-yes"
-              >
-                {t('%restoreForm_downgradeFiles_yes%')}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
+        {/* ZIP-load error modal — cancel surface */}
+        {zipLoadError !== undefined && (
+          <Dialog open onOpenChange={(next) => !next && handleZipLoadErrorDismiss()}>
+            <DialogContent
+              role="dialog"
+              aria-label={t('%restoreForm_zipLoadError_title%')}
+              data-testid="restore-form-zip-load-error"
+              className="tw:flex tw:max-w-md tw:flex-col tw:gap-3"
+            >
+              <DialogHeader>
+                <DialogTitle>{t('%restoreForm_zipLoadError_title%')}</DialogTitle>
+                <DialogDescription>{t('%restoreForm_zipLoadError_message%')}</DialogDescription>
+              </DialogHeader>
+              <p className="tw:text-sm tw:break-all">{zipLoadError}</p>
+              <DialogFooter>
+                <Button
+                  onClick={handleZipLoadErrorDismiss}
+                  aria-label={t('%restoreForm_zipLoadError_ok%')}
+                >
+                  {t('%restoreForm_zipLoadError_ok%')}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
 
-      {/* Persist-current-changes confirmation (gm-017 / PTX-20538 CN preservation) */}
-      {persistPrompt && (
-        <Dialog open onOpenChange={(next) => !next && handlePersistRefusal()}>
-          <DialogContent
-            role="dialog"
-            aria-label={t('%restoreForm_persistCurrentChanges_title%')}
-            data-testid="restore-form-persist-current-changes"
-            className="tw:flex tw:max-w-md tw:flex-col tw:gap-3"
+        {/* Shared-project warning modal — pre-flight + retry */}
+        {sharedProjectPrompt && (
+          <Dialog
+            open
+            onOpenChange={(next) => {
+              if (!next) {
+                if (sharedProjectPrompt.kind === 'pre-flight') handleSharedProjectPreflightNo();
+                else handleSharedProjectRetryNo();
+              }
+            }}
           >
-            <DialogHeader>
-              <DialogTitle>{t('%restoreForm_persistCurrentChanges_title%')}</DialogTitle>
-              <DialogDescription>
-                {t('%restoreForm_persistCurrentChanges_message%')}
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={handlePersistRefusal}
-                aria-label={t('%restoreForm_persistCurrentChanges_no%')}
-              >
-                {t('%restoreForm_persistCurrentChanges_no%')}
-              </Button>
-              <Button
-                onClick={handlePersistYes}
-                aria-label={t('%restoreForm_persistCurrentChanges_yes%')}
-                data-testid="restore-form-persist-current-changes-yes"
-              >
-                {t('%restoreForm_persistCurrentChanges_yes%')}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
+            <DialogContent
+              role="dialog"
+              aria-label={t('%restoreForm_sharedProjectWarning_title%')}
+              data-testid="restore-form-shared-project-warning"
+              className="tw:flex tw:max-w-md tw:flex-col tw:gap-3"
+            >
+              <DialogHeader>
+                <DialogTitle>{t('%restoreForm_sharedProjectWarning_title%')}</DialogTitle>
+                <DialogDescription>
+                  {t('%restoreForm_sharedProjectWarning_message%')}
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={
+                    sharedProjectPrompt.kind === 'pre-flight'
+                      ? handleSharedProjectPreflightNo
+                      : handleSharedProjectRetryNo
+                  }
+                  aria-label={t('%restoreForm_sharedProjectWarning_no%')}
+                >
+                  {t('%restoreForm_sharedProjectWarning_no%')}
+                </Button>
+                <Button
+                  onClick={
+                    sharedProjectPrompt.kind === 'pre-flight'
+                      ? handleSharedProjectPreflightYes
+                      : handleSharedProjectRetryYes
+                  }
+                  aria-label={t('%restoreForm_sharedProjectWarning_yes%')}
+                  data-testid="restore-form-shared-project-warning-yes"
+                >
+                  {t('%restoreForm_sharedProjectWarning_yes%')}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
 
-      {/* Generic submit-error modal */}
-      {submitError !== undefined && (
-        <Dialog open onOpenChange={(next) => !next && handleSubmitErrorDismiss()}>
-          <DialogContent
-            role="dialog"
-            aria-label={t('%restoreForm_submitError_title%')}
-            data-testid="restore-form-submit-error"
-            className="tw:flex tw:max-w-md tw:flex-col tw:gap-3"
-          >
-            <DialogHeader>
-              <DialogTitle>{t('%restoreForm_submitError_title%')}</DialogTitle>
-            </DialogHeader>
-            <p className="tw:text-sm">{submitError}</p>
-            <DialogFooter>
-              <Button
-                onClick={handleSubmitErrorDismiss}
-                aria-label={t('%restoreForm_submitError_ok%')}
-              >
-                {t('%restoreForm_submitError_ok%')}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
+        {/* Different-case conflict modal (VAL-102) */}
+        {caseConflictMessage !== undefined && (
+          <Dialog open onOpenChange={(next) => !next && handleCaseConflictDismiss()}>
+            <DialogContent
+              role="dialog"
+              aria-label={t('%restoreForm_caseConflict_title%')}
+              data-testid="restore-form-case-conflict"
+              className="tw:flex tw:max-w-md tw:flex-col tw:gap-3"
+            >
+              <DialogHeader>
+                <DialogTitle>{t('%restoreForm_caseConflict_title%')}</DialogTitle>
+                <DialogDescription>{t('%restoreForm_caseConflict_message%')}</DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  onClick={handleCaseConflictDismiss}
+                  aria-label={t('%restoreForm_caseConflict_ok%')}
+                >
+                  {t('%restoreForm_caseConflict_ok%')}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
 
-      {/* Differences tool dialog (UI-PKG-009 embedded) */}
-      {differencesConfig && onFetchSourceContent && (
-        <Dialog open onOpenChange={(next) => !next && handleDifferencesClose()}>
-          <DialogContent
-            role="dialog"
-            aria-label={t('%restoreForm_differencesDialog_title%')}
-            data-testid="restore-form-differences-dialog"
-            className="tw:flex tw:max-h-[90vh] tw:max-w-4xl tw:flex-col tw:gap-3"
-          >
-            <DialogHeader>
-              <DialogTitle>{t('%restoreForm_differencesDialog_title%')}</DialogTitle>
-            </DialogHeader>
-            <DifferencesToolView
-              leftSource={{
-                tokenOrText: differencesConfig.leftSourceToken,
-                label: t('%restoreForm_differencesDialog_leftPane%'),
-              }}
-              rightSource={{
-                tokenOrText: differencesConfig.rightSourceToken,
-                label: t('%restoreForm_differencesDialog_rightPane%'),
-              }}
-              initialRef={differencesConfig.initialRef}
-              displayOptions={differencesConfig.displayOptions}
-              onFetchSourceContent={onFetchSourceContent}
-              localizedStrings={localizedStrings}
-            />
-            <DialogFooter>
-              <Button
-                onClick={handleDifferencesClose}
-                aria-label={t('%restoreForm_differencesDialog_close%')}
-              >
-                {t('%restoreForm_differencesDialog_close%')}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
-    </div>
+        {/* Downgrade-files confirmation modal (batched — gm-029 / ALIGNMENT-007) */}
+        {downgradePrompt && (
+          <Dialog open onOpenChange={(next) => !next && handleDowngradeNo()}>
+            <DialogContent
+              role="dialog"
+              aria-label={t('%restoreForm_downgradeFiles_title%')}
+              data-testid="restore-form-downgrade-files"
+              className="tw:flex tw:max-w-md tw:flex-col tw:gap-3"
+            >
+              <DialogHeader>
+                <DialogTitle>{t('%restoreForm_downgradeFiles_title%')}</DialogTitle>
+                <DialogDescription>{t('%restoreForm_downgradeFiles_message%')}</DialogDescription>
+              </DialogHeader>
+              {downgradePrompt.fileIds.length > 0 && (
+                <ul className="tw:max-h-40 tw:overflow-auto tw:text-xs">
+                  {downgradePrompt.fileIds.map((id) => (
+                    <li key={id}>
+                      <code>{id}</code>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={handleDowngradeNo}
+                  aria-label={t('%restoreForm_downgradeFiles_no%')}
+                >
+                  {t('%restoreForm_downgradeFiles_no%')}
+                </Button>
+                <Button
+                  onClick={handleDowngradeYes}
+                  aria-label={t('%restoreForm_downgradeFiles_yes%')}
+                  data-testid="restore-form-downgrade-files-yes"
+                >
+                  {t('%restoreForm_downgradeFiles_yes%')}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {/* Persist-current-changes confirmation (gm-017 / PTX-20538 CN preservation) */}
+        {persistPrompt && (
+          <Dialog open onOpenChange={(next) => !next && handlePersistRefusal()}>
+            <DialogContent
+              role="dialog"
+              aria-label={t('%restoreForm_persistCurrentChanges_title%')}
+              data-testid="restore-form-persist-current-changes"
+              className="tw:flex tw:max-w-md tw:flex-col tw:gap-3"
+            >
+              <DialogHeader>
+                <DialogTitle>{t('%restoreForm_persistCurrentChanges_title%')}</DialogTitle>
+                <DialogDescription>
+                  {t('%restoreForm_persistCurrentChanges_message%')}
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={handlePersistRefusal}
+                  aria-label={t('%restoreForm_persistCurrentChanges_no%')}
+                >
+                  {t('%restoreForm_persistCurrentChanges_no%')}
+                </Button>
+                <Button
+                  onClick={handlePersistYes}
+                  aria-label={t('%restoreForm_persistCurrentChanges_yes%')}
+                  data-testid="restore-form-persist-current-changes-yes"
+                >
+                  {t('%restoreForm_persistCurrentChanges_yes%')}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {/* Generic submit-error modal */}
+        {submitError !== undefined && (
+          <Dialog open onOpenChange={(next) => !next && handleSubmitErrorDismiss()}>
+            <DialogContent
+              role="dialog"
+              aria-label={t('%restoreForm_submitError_title%')}
+              data-testid="restore-form-submit-error"
+              className="tw:flex tw:max-w-md tw:flex-col tw:gap-3"
+            >
+              <DialogHeader>
+                <DialogTitle>{t('%restoreForm_submitError_title%')}</DialogTitle>
+              </DialogHeader>
+              <p className="tw:text-sm">{submitError}</p>
+              <DialogFooter>
+                <Button
+                  onClick={handleSubmitErrorDismiss}
+                  aria-label={t('%restoreForm_submitError_ok%')}
+                >
+                  {t('%restoreForm_submitError_ok%')}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {/* Differences tool dialog (UI-PKG-009 embedded) */}
+        {differencesConfig && onFetchSourceContent && (
+          <Dialog open onOpenChange={(next) => !next && handleDifferencesClose()}>
+            <DialogContent
+              role="dialog"
+              aria-label={t('%restoreForm_differencesDialog_title%')}
+              data-testid="restore-form-differences-dialog"
+              className="tw:flex tw:max-h-[90vh] tw:max-w-4xl tw:flex-col tw:gap-3"
+            >
+              <DialogHeader>
+                <DialogTitle>{t('%restoreForm_differencesDialog_title%')}</DialogTitle>
+              </DialogHeader>
+              <DifferencesToolView
+                leftSource={{
+                  tokenOrText: differencesConfig.leftSourceToken,
+                  label: t('%restoreForm_differencesDialog_leftPane%'),
+                }}
+                rightSource={{
+                  tokenOrText: differencesConfig.rightSourceToken,
+                  label: t('%restoreForm_differencesDialog_rightPane%'),
+                }}
+                initialRef={differencesConfig.initialRef}
+                displayOptions={differencesConfig.displayOptions}
+                onFetchSourceContent={onFetchSourceContent}
+                localizedStrings={localizedStrings}
+              />
+              <DialogFooter>
+                <Button
+                  onClick={handleDifferencesClose}
+                  aria-label={t('%restoreForm_differencesDialog_close%')}
+                >
+                  {t('%restoreForm_differencesDialog_close%')}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+      </div>
+    </TooltipProvider>
   );
 }
 
