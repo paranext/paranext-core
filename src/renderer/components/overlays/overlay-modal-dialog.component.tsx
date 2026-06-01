@@ -41,12 +41,15 @@ export function OverlayModalDialog({ overlay }: OverlayModalShellProps) {
     [overlay],
   );
 
+  const rawSize = overlay.props.initialSize;
   const initialSize =
-    overlay.props.initialSize &&
-    typeof overlay.props.initialSize === 'object' &&
-    'width' in overlay.props.initialSize &&
-    'height' in overlay.props.initialSize
-      ? (overlay.props.initialSize as { width: number; height: number })
+    typeof rawSize === 'object' &&
+    rawSize &&
+    'width' in rawSize &&
+    'height' in rawSize &&
+    typeof rawSize.width === 'number' &&
+    typeof rawSize.height === 'number'
+      ? { width: rawSize.width, height: rawSize.height }
       : undefined;
 
   return (

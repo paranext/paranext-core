@@ -117,6 +117,7 @@ export function useProjectPickerData(): ProjectPickerData {
           shortName: editorDef.projectId,
         };
       }
+      // Module-level imports are stable references; only refreshCounter needs to trigger a re-fetch
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [refreshCounter]),
     undefined,
@@ -138,6 +139,7 @@ export function useProjectPickerData(): ProjectPickerData {
             }
           }),
         ),
+      // Module-level imports are stable references; safeRecentIds and refreshCounter trigger re-fetches
       // eslint-disable-next-line react-hooks/exhaustive-deps
       [safeRecentIds, refreshCounter],
     ),
@@ -178,7 +180,8 @@ export function useProjectPickerData(): ProjectPickerData {
           }
         }),
       );
-      return settled.filter((p) => p !== undefined) as ProjectItem[];
+      return settled.flatMap((p) => (p !== undefined ? [p] : []));
+      // Module-level imports are stable references; only refreshCounter needs to trigger a re-fetch
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [refreshCounter]),
     [],

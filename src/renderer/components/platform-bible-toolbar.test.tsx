@@ -54,7 +54,7 @@ vi.mock('@renderer/services/papi-frontend.service', () => ({
     })),
   },
   dataProviders: {
-    get: vi.fn(async () => null),
+    get: vi.fn(async () => undefined),
   },
 }));
 
@@ -117,31 +117,16 @@ vi.mock('platform-bible-react', async (importOriginal) => {
     ),
     BookChapterControl: () => <div data-testid="book-chapter-control" />,
     ScrollGroupSelector: () => <div data-testid="scroll-group-selector" />,
-    Select: ({
-      children,
-      disabled,
-    }: {
-      children?: React.ReactNode;
-      disabled?: boolean;
-      value?: string;
-      onValueChange?: (v: string) => void;
-    }) => (
+    Select: ({ children, disabled }: { children?: React.ReactNode; disabled?: boolean }) => (
       <div data-testid="project-picker-select" aria-disabled={disabled}>
         {children}
       </div>
     ),
-    SelectTrigger: ({ children }: { children?: React.ReactNode; className?: string }) => (
-      <div>{children}</div>
-    ),
+    SelectTrigger: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
     SelectContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-    SelectItem: ({
-      children,
-      value,
-    }: {
-      children?: React.ReactNode;
-      value?: string;
-      className?: string;
-    }) => <div data-value={value}>{children}</div>,
+    SelectItem: ({ children, value }: { children?: React.ReactNode; value?: string }) => (
+      <div data-value={value}>{children}</div>
+    ),
     SelectSeparator: () => <hr />,
     SelectValue: ({ placeholder }: { placeholder?: string }) => <span>{placeholder}</span>,
   };
