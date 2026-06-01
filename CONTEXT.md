@@ -34,6 +34,8 @@ The point at which a chapter transitions from ghost to committed. Triggered by a
 
 This is the same mechanism as Gmail's "undo send": the default outcome is commitment; the user must act within the window to prevent it.
 
+**Navigation during grace period:** If the translator navigates away before the timer expires, the countdown continues in the background. The undo notice persists in a global notification area and remains actionable until the timer expires. The chapter is committed (PDP write occurs) when the timer runs out, regardless of where the translator is.
+
 ## Model Text Panel
 
 An existing separate, synchronized, read-only panel that displays the current chapter of the model text alongside the translation editor. Serves the **reading reference** role. Distinct from ghost content.
