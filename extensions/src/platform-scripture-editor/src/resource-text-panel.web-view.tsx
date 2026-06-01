@@ -1,9 +1,4 @@
-import {
-  Editorial,
-  EditorOptions,
-  EditorRef,
-  getDefaultViewOptions,
-} from '@eten-tech-foundation/platform-editor';
+import { Editorial, EditorOptions, EditorRef } from '@eten-tech-foundation/platform-editor';
 import { EMPTY_USJ } from '@eten-tech-foundation/scripture-utilities';
 import type { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
@@ -35,8 +30,7 @@ import {
 } from 'platform-bible-utils';
 import { ChevronDown } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-// @ts-ignore: platform-scripture/src is not a published module entry-point; accessible via typeRoots symlink at dev time
-import { useEffectiveResourceReferenceList } from 'platform-scripture/src/use-effective-resource-reference-list';
+import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import type { DblResourceReference, EffectiveResourceReference } from 'platform-scripture';
 import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
 import { DEFAULT_RESOURCE_REFERENCE_LIST, selectTextConnection } from './select-dbl-resource';
@@ -143,7 +137,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
 
-  // --- Web view state ---
+  // #region Web view state
 
   // resourceType is injected by the web view provider at open time
   const [resourceType] = useWebViewState<ResourceType>('resourceType', 'ScriptureResource');
@@ -152,14 +146,14 @@ globalThis.webViewComponent = function ResourceTextPanel({
     undefined,
   );
 
+  // #endregion
+
   // #region Data sources
 
-  // useEffectiveResourceReferenceList is imported via @ts-ignore path; cast needed for type safety
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
   const [effectiveResources] = useEffectiveResourceReferenceList(
     projectId,
     'platformScripture.referencedProjectsAndResources',
-  ) as [{ items: EffectiveResourceReference[] } | undefined, boolean];
+  );
 
   const [adminResourceList, setAdminResourceList] = useProjectSetting(
     projectId,
@@ -271,7 +265,9 @@ globalThis.webViewComponent = function ResourceTextPanel({
   );
   const textDirection = useMemo(() => {
     if (isPlatformError(textDirectionPossiblyError)) {
-      logger.warn(`Error getting is right to left: ${getErrorMessage(textDirectionPossiblyError)}`);
+      logger.warn(
+        `Error getting text direction setting: ${getErrorMessage(textDirectionPossiblyError)}`,
+      );
       return DEFAULT_TEXT_DIRECTION;
     }
     return textDirectionPossiblyError || DEFAULT_TEXT_DIRECTION;
@@ -339,7 +335,6 @@ globalThis.webViewComponent = function ResourceTextPanel({
       isReadonly: true,
       hasSpellCheck: false,
       textDirection,
-      view: getDefaultViewOptions(),
     }),
     [textDirection],
   );

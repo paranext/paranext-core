@@ -25,8 +25,7 @@ import {
   LocalizeKey,
 } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-// @ts-ignore: platform-scripture/src is not a published module entry-point; accessible via typeRoots symlink at dev time
-import { useEffectiveResourceReferenceList } from 'platform-scripture/src/use-effective-resource-reference-list';
+import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { isDblResourceReference } from './resource-reference.utils';
 import type { DblResourceReference, EffectiveResourceReference } from 'platform-scripture';
 import { DEFAULT_RESOURCE_REFERENCE_LIST, selectTextConnection } from './select-dbl-resource';
@@ -60,8 +59,6 @@ globalThis.webViewComponent = function ModelTextPanel({
 
   // --- Data sources ---
 
-  // useEffectiveResourceReferenceList is imported via @ts-ignore path; cast needed for type safety
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
   const [effectiveModelTexts, isEffectiveModelTextsLoading] = useEffectiveResourceReferenceList(
     projectId,
     'platformScripture.modelTexts',
