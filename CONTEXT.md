@@ -38,7 +38,15 @@ This is the same mechanism as Gmail's "undo send": the default outcome is commit
 
 **Multiple in-flight grace periods:** Multiple chapters can be in pending-adoption state simultaneously. Each has its own independent timer and undo notice. Typing in Genesis 2 before Genesis 1's timer expires does not affect Genesis 1's timer.
 
-## Chapter Model Text Stamp
+## Re-ghosting
+
+Returning a committed chapter to ghost state. Accomplished by deleting the chapter's content from the PDP — once the chapter is empty, ghost content automatically appears. There is no smart structure conversion; the translator starts fresh from the new model text's ghost.
+
+A "Reset chapter" action with a confirmation warning is appropriate (the translator is knowingly discarding existing work). Lower implementation priority — its existence is useful for developer understanding of the system, but it is not a near-term user-facing feature.
+
+Future possibility (unrelated, not re-ghosting): a preview/conversion tool that dynamically maps an existing translated structure onto a different model text's structure. Not expected soon.
+
+**Note:** "Ghost" is an internal developer term and must not appear in any user-facing text, labels, or UI copy.
 
 When a chapter is adopted (committed), the ID of the current Structural Model Text is written to a new project setting — tentatively `platformScripture.chapterModelTexts` — as a map of chapter references to model text IDs. This stamp persists even if the global model text is later changed, and is the authoritative record of which model text a chapter's structure came from. It enables future features such as per-chapter re-structuring and provenance display.
 
