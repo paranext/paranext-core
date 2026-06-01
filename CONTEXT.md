@@ -38,6 +38,10 @@ This is the same mechanism as Gmail's "undo send": the default outcome is commit
 
 **Multiple in-flight grace periods:** Multiple chapters can be in pending-adoption state simultaneously. Each has its own independent timer and undo notice. Typing in Genesis 2 before Genesis 1's timer expires does not affect Genesis 1's timer.
 
+## Chapter Model Text Stamp
+
+When a chapter is adopted (committed), the ID of the current Structural Model Text is written to a new project setting — tentatively `platformScripture.chapterModelTexts` — as a map of chapter references to model text IDs. This stamp persists even if the global model text is later changed, and is the authoritative record of which model text a chapter's structure came from. It enables future features such as per-chapter re-structuring and provenance display.
+
 ## Structural Model Text
 
 The model text resource used as the source of ghost content (paragraph structure, markers, versification). Today this is always `platformScripture.modelTexts items[0]` — the same resource shown in the Model Text Panel (reading reference role). The two roles may be separated in a future setting, so ghost content code must route through a named abstraction rather than hardcoding `items[0]` directly.
