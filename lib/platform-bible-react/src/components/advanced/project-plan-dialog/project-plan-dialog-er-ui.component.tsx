@@ -81,6 +81,9 @@ export function ProjectPlanDialogErUi({
   const [pendingMove, setPendingMove] = useState<
     { stageIndex: number; taskIndex: number; dir: -1 | 1 } | undefined
   >(undefined);
+  // True only for changes the user has flagged as "customizing" the structure:
+  // stage move/delete, cross-stage task move, or task delete.
+  const [customized, setCustomized] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -88,6 +91,7 @@ export function ProjectPlanDialogErUi({
       setSelected(undefined);
       setActiveTab(defaultTab);
       setPendingMove(undefined);
+      setCustomized(false);
     }
   }, [open, plan, defaultTab]);
 
@@ -152,11 +156,13 @@ export function ProjectPlanDialogErUi({
     setSelected({ kind: 'task', stageId, taskId: task.id });
   };
 
-  const moveStage = (stageIndex: number, dir: -1 | 1) =>
+  const moveStage = (stageIndex: number, dir: -1 | 1) => {
     setWorkingPlan((prev) => ({
       ...prev,
       stages: moveItem(prev.stages, stageIndex, stageIndex + dir),
     }));
+    setCustomized(true);
+  };
 
   const moveTask = (stageIndex: number, taskIndex: number, dir: -1 | 1) => {
     const stage = workingPlan.stages[stageIndex];
@@ -191,11 +197,13 @@ export function ProjectPlanDialogErUi({
     });
     if (movedTaskId !== undefined && toStageId !== undefined)
       setSelected({ kind: 'task', stageId: toStageId, taskId: movedTaskId });
+    setCustomized(true);
   };
 
   const deleteStage = (stageId: string) => {
     setWorkingPlan((prev) => ({ ...prev, stages: prev.stages.filter((s) => s.id !== stageId) }));
     if (selectedStageId === stageId) setSelected(undefined);
+    setCustomized(true);
   };
 
   const deleteTask = (stageId: string, taskId: string) => {
@@ -206,6 +214,7 @@ export function ProjectPlanDialogErUi({
       ),
     }));
     if (selected?.kind === 'task' && selected.taskId === taskId) setSelected(undefined);
+    setCustomized(true);
   };
 
   const handleOrgPlanReplace = (selectedPlan: OrgProvidedPlan) => {
@@ -217,6 +226,7 @@ export function ProjectPlanDialogErUi({
       checks: structuredClone(selectedPlan.checks),
     });
     setSelected(undefined);
+    setCustomized(false);
   };
 
   const selectedStage =
@@ -239,17 +249,14 @@ export function ProjectPlanDialogErUi({
           <DialogTitle>Project Plan: {projectName}</DialogTitle>
         </DialogHeader>
 
-        <div className="tw:flex tw:items-center tw:justify-between tw:gap-3 tw:border-b tw:px-4 tw:py-3">
-          <div className="tw:flex tw:items-center tw:gap-2">
-            <span className="tw:text-sm tw:text-muted-foreground">Project Plan:</span>
-            <span className="tw:text-sm tw:font-medium">{workingPlan.name}</span>
-          </div>
+        <div className="tw:flex tw:items-center tw:gap-3 tw:border-b tw:px-4 tw:py-3">
           <OrgPlanPicker
             orgProvidedPlans={orgProvidedPlans}
             currentBasePlanRef={workingPlan.basePlanRef}
             isDirty={isDirty}
             onReplaceWith={handleOrgPlanReplace}
           />
+          {customized && <span className="tw:text-sm tw:text-muted-foreground">(customized)</span>}
         </div>
 
         <Tabs
