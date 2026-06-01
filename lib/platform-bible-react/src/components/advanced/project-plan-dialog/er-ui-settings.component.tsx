@@ -13,6 +13,7 @@ import { Textarea } from '@/components/shadcn-ui/textarea';
 import {
   DEFAULT_LANG,
   getLocalized,
+  type LangCode,
 } from '@/components/advanced/project-plan-dialog/localized.utils';
 import type {
   MarkCompleteMode,
@@ -54,6 +55,8 @@ interface ErUiSettingsProps {
   onStageChange: (next: PlanStage) => void;
   onTaskChange: (next: PlanTask) => void;
   onBack: () => void;
+  /** Language for the heading/subheading display; falls back to English. */
+  displayLang: LangCode;
 }
 
 export function ErUiSettings({
@@ -62,12 +65,15 @@ export function ErUiSettings({
   onStageChange,
   onTaskChange,
   onBack,
+  displayLang,
 }: ErUiSettingsProps) {
   const isTask = task !== undefined;
   const heading = isTask
-    ? getLocalized(task.names, DEFAULT_LANG) || '(unnamed task)'
-    : getLocalized(stage.names, DEFAULT_LANG) || '(unnamed stage)';
-  const subheading = isTask ? `In stage: ${getLocalized(stage.names, DEFAULT_LANG)}` : 'Stage';
+    ? getLocalized(task.names, displayLang, DEFAULT_LANG) || '(unnamed task)'
+    : getLocalized(stage.names, displayLang, DEFAULT_LANG) || '(unnamed stage)';
+  const subheading = isTask
+    ? `In stage: ${getLocalized(stage.names, displayLang, DEFAULT_LANG)}`
+    : 'Stage';
 
   return (
     <div className="tw:flex tw:flex-col tw:gap-5">

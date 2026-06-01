@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Globe, Plus } from 'lucide-react';
 import { Button } from '@/components/shadcn-ui/button';
 import {
   Dialog,
@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/shadcn-ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shadcn-ui/tabs';
 import { OrgPlanPicker } from '@/components/advanced/project-plan-dialog/org-plan-picker.component';
 import {
@@ -17,7 +18,12 @@ import {
 import { ErUiSettings } from '@/components/advanced/project-plan-dialog/er-ui-settings.component';
 import { ChecksTab } from '@/components/advanced/project-plan-dialog/checks-tab.component';
 import { MoveTaskConfirmDialog } from '@/components/advanced/project-plan-dialog/move-task-confirm-dialog.component';
-import { DEFAULT_LANG } from '@/components/advanced/project-plan-dialog/localized.utils';
+import {
+  DEFAULT_LANG,
+  langDisplayName,
+  planLangsWithContent,
+  type LangCode,
+} from '@/components/advanced/project-plan-dialog/localized.utils';
 import { cn } from '@/utils/shadcn-ui/utils';
 import type {
   CheckSetting,
@@ -84,6 +90,8 @@ export function ProjectPlanDialogErUi({
   // True only for changes the user has flagged as "customizing" the structure:
   // stage move/delete, cross-stage task move, or task delete.
   const [customized, setCustomized] = useState(false);
+  const [displayLang, setDisplayLang] = useState<LangCode>(DEFAULT_LANG);
+  const [langOpen, setLangOpen] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -92,8 +100,14 @@ export function ProjectPlanDialogErUi({
       setActiveTab(defaultTab);
       setPendingMove(undefined);
       setCustomized(false);
+      setDisplayLang(DEFAULT_LANG);
     }
   }, [open, plan, defaultTab]);
+
+  const availableLangs = useMemo(
+    () => planLangsWithContent(workingPlan.stages),
+    [workingPlan.stages],
+  );
 
   const basePlanName =
     orgProvidedPlans.find((p) => p.id === workingPlan.basePlanRef)?.name ?? workingPlan.name;
@@ -257,6 +271,40 @@ export function ProjectPlanDialogErUi({
             onReplaceWith={handleOrgPlanReplace}
           />
           {customized && <span className="tw:text-sm tw:text-muted-foreground">(customized)</span>}
+          <Popover open={langOpen} onOpenChange={setLangOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="tw:ms-auto tw:h-9 tw:gap-1.5">
+                <Globe className="tw:h-4 tw:w-4" />
+                <span className="tw:text-xs tw:font-normal tw:text-muted-foreground">Lang:</span>
+                <span>{langDisplayName(displayLang)}</span>
+              </Button>
+            </PopoverTrigger>
+            {/* Default Popover z-index is below the full-screen modal, so override. */}
+            <PopoverContent align="end" style={{ zIndex: 600 }} className="tw:w-64 tw:p-1">
+              <ul className="tw:flex tw:flex-col">
+                {availableLangs.map((lang) => (
+                  <li key={lang}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDisplayLang(lang);
+                        setLangOpen(false);
+                      }}
+                      className={cn(
+                        'tw:flex tw:w-full tw:items-center tw:justify-between tw:rounded tw:px-2 tw:py-1 tw:text-start tw:text-sm tw:hover:bg-accent',
+                        lang === displayLang && 'tw:bg-accent',
+                      )}
+                    >
+                      <span>{langDisplayName(lang)}</span>
+                      <span className="tw:text-[10px] tw:uppercase tw:text-muted-foreground">
+                        {lang}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </PopoverContent>
+          </Popover>
         </div>
 
         <Tabs
@@ -305,6 +353,7 @@ export function ProjectPlanDialogErUi({
                   onMoveTask={moveTask}
                   onDeleteStage={deleteStage}
                   onDeleteTask={deleteTask}
+                  displayLang={displayLang}
                   compact={showPanel}
                 />
               </div>
@@ -316,6 +365,7 @@ export function ProjectPlanDialogErUi({
                     onStageChange={handleStageChange}
                     onTaskChange={handleTaskChange}
                     onBack={() => setSelected(undefined)}
+                    displayLang={displayLang}
                   />
                 </div>
               )}

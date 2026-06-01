@@ -44,6 +44,24 @@ export function planLangs(stages: PlanStage[]): LangCode[] {
   return Array.from(set).sort();
 }
 
+/**
+ * Like {@link planLangs}, but only returns languages that actually have a non-empty value somewhere
+ * in the plan — i.e., languages the plan is genuinely localized into.
+ */
+export function planLangsWithContent(stages: PlanStage[]): LangCode[] {
+  const all = stages.flatMap((stage) => [
+    ...langsWithContent(stage.names),
+    ...langsWithContent(stage.descriptions),
+    ...stage.tasks.flatMap((task) => [
+      ...langsWithContent(task.names),
+      ...langsWithContent(task.descriptions),
+    ]),
+  ]);
+  const set = new Set<LangCode>(all);
+  if (set.size === 0) set.add(DEFAULT_LANG);
+  return Array.from(set).sort();
+}
+
 export function langDisplayName(code: LangCode): string {
   try {
     const dn = new Intl.DisplayNames([DEFAULT_LANG], { type: 'language' });

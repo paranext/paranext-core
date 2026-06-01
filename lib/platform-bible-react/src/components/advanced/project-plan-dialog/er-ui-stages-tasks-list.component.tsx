@@ -10,6 +10,7 @@ import { cn } from '@/utils/shadcn-ui/utils';
 import {
   DEFAULT_LANG,
   getLocalized,
+  type LangCode,
 } from '@/components/advanced/project-plan-dialog/localized.utils';
 import type { PlanStage, PlanTask } from '@/components/advanced/project-plan-dialog/types';
 
@@ -37,6 +38,8 @@ interface ErUiStagesTasksListProps {
   onMoveTask: (stageIndex: number, taskIndex: number, dir: -1 | 1) => void;
   onDeleteStage: (stageId: string) => void;
   onDeleteTask: (stageId: string, taskId: string) => void;
+  /** Language to display localized names/descriptions in; falls back to English. */
+  displayLang: LangCode;
   /** When true, rows truncate to a single line so the list fits a narrow sidebar. */
   compact?: boolean;
 }
@@ -49,6 +52,7 @@ export function ErUiStagesTasksList({
   onMoveTask,
   onDeleteStage,
   onDeleteTask,
+  displayLang,
   compact = false,
 }: ErUiStagesTasksListProps) {
   // React's ref typing requires `null` as the initial value, not `undefined`.
@@ -78,9 +82,9 @@ export function ErUiStagesTasksList({
               <Row
                 active={stageActive}
                 onClick={() => onToggle(stageActive ? undefined : { kind: 'stage', id: stage.id })}
-                primary={`Stage ${stageIndex + 1}: ${getLocalized(stage.names, DEFAULT_LANG) || '(unnamed stage)'}`}
+                primary={`Stage ${stageIndex + 1}: ${getLocalized(stage.names, displayLang, DEFAULT_LANG) || '(unnamed stage)'}`}
                 secondary={
-                  getLocalized(stage.descriptions, DEFAULT_LANG) ||
+                  getLocalized(stage.descriptions, displayLang, DEFAULT_LANG) ||
                   `${stage.tasks.length} task${stage.tasks.length === 1 ? '' : 's'}`
                 }
                 compact={compact}
@@ -117,9 +121,11 @@ export function ErUiStagesTasksList({
                           : { kind: 'task', stageId: stage.id, taskId: task.id },
                       )
                     }
-                    primary={getLocalized(task.names, DEFAULT_LANG) || '(unnamed task)'}
+                    primary={
+                      getLocalized(task.names, displayLang, DEFAULT_LANG) || '(unnamed task)'
+                    }
                     secondary={
-                      getLocalized(task.descriptions, DEFAULT_LANG) ||
+                      getLocalized(task.descriptions, displayLang, DEFAULT_LANG) ||
                       markCompleteLabel(task.markComplete)
                     }
                     compact={compact}
