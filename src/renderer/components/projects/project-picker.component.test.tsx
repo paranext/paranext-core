@@ -69,7 +69,7 @@ describe('ProjectPicker', () => {
 
   it('shows All projects section', () => {
     renderDialog();
-    expect(screen.getByText('All projects')).toBeInTheDocument();
+    expect(screen.getByText('Your projects')).toBeInTheDocument();
   });
 
   it('renders project as "Full Name (Short)"', () => {
@@ -85,7 +85,7 @@ describe('ProjectPicker', () => {
       shortName: 'OTH',
     };
     renderDialog({ recentProjects: [OTHER, WEB], currentProject: WEB });
-    const rows = screen.getAllByRole('row');
+    const rows = screen.getAllByRole('option');
     const webIndex = rows.findIndex((r) => r.textContent?.includes('World English Bible'));
     const otherIndex = rows.findIndex((r) => r.textContent?.includes('Other Bible'));
     expect(webIndex).toBeLessThan(otherIndex);

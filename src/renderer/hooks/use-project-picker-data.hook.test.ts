@@ -114,6 +114,7 @@ describe('useProjectPickerData', () => {
             if (key === 'platform.fullName') return `Full ${projectId}`;
             if (key === 'platform.name') return `Short ${projectId}`;
             if (key === 'platform.language') return 'English';
+            if (key === 'platform.isEditable') return true;
             return undefined;
           }),
         }) as never,
