@@ -1,6 +1,5 @@
 import type { DblResourceReference, ResourceReferenceList } from 'platform-scripture';
-// @ts-ignore: platform-scripture/src is not a published module entry-point; accessible via typeRoots symlink at dev time
-import { isDblResourceReference } from 'platform-scripture/src/resource-reference-list.utils';
+import { isDblResourceReference } from './resource-reference.utils';
 import { DblResourceData, isPlatformError, PlatformError } from 'platform-bible-utils';
 
 export const CURRENT_DATA_VERSION = '1.0.0';

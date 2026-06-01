@@ -27,7 +27,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 // @ts-ignore: platform-scripture/src is not a published module entry-point; accessible via typeRoots symlink at dev time
 import { useEffectiveResourceReferenceList } from 'platform-scripture/src/use-effective-resource-reference-list';
-import { isDblResourceReference } from 'platform-scripture/src/resource-reference-list.utils';
+import { isDblResourceReference } from './resource-reference.utils';
 import type { DblResourceReference, EffectiveResourceReference } from 'platform-scripture';
 import { DEFAULT_RESOURCE_REFERENCE_LIST, selectTextConnection } from './select-dbl-resource';
 

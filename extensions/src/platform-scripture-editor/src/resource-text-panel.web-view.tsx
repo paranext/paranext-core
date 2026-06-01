@@ -38,10 +38,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 // @ts-ignore: platform-scripture/src is not a published module entry-point; accessible via typeRoots symlink at dev time
 import { useEffectiveResourceReferenceList } from 'platform-scripture/src/use-effective-resource-reference-list';
 import type { DblResourceReference, EffectiveResourceReference } from 'platform-scripture';
-import {
-  isDblResourceReference,
-  isProjectReference,
-} from 'platform-scripture/src/resource-reference-list.utils';
+import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
 import { DEFAULT_RESOURCE_REFERENCE_LIST, selectTextConnection } from './select-dbl-resource';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
