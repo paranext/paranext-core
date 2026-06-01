@@ -1,8 +1,8 @@
 import { renderHook, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
-import { useProjectPickerData } from './use-project-picker-data.hook';
 import { EVENT_NAME_ON_DID_UPDATE_WEB_VIEW } from '@shared/services/web-view.service-model';
+import { useProjectPickerData } from './use-project-picker-data.hook';
 
 // --- Mocks ---
 
@@ -69,6 +69,8 @@ async function importMocks() {
 
 // --- Tests ---
 
+// vitest mocks use as-never to coerce partial objects to the full inferred return type
+/* eslint-disable no-type-assertion/no-type-assertion */
 describe('useProjectPickerData', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -204,3 +206,4 @@ describe('useProjectPickerData', () => {
     await waitFor(() => expect(result.current.currentProject?.fullName).toBe('Updated Project'));
   });
 });
+/* eslint-enable no-type-assertion/no-type-assertion */
