@@ -18,9 +18,17 @@ Ghost content shows **structure only** — translated text is stripped; structur
 
 ## Committed Content
 
-Project data that a translator has explicitly entered. The **chapter** is the atomic unit of commitment: if any project data exists for a chapter in the PDP, the entire chapter is treated as committed and ghost content is suppressed for it. Ghost content only appears in chapters with no existing project data.
+Project data that a translator has entered that crosses the **meaningful content threshold** (see below). The **chapter** is the atomic unit of commitment.
 
-**Adoption:** When a translator first types into a ghost chapter, the ghost structure (paranodes, verse slot positions, heading slots) is promoted to become the initial real project data for that chapter. The translator then edits within that committed scaffold. Ghost content is never written to the PDP directly — adoption is the only path from ghost to committed.
+**Per-chapter model text:** Once a chapter is committed, the global model text active at that moment is stamped onto the chapter as its model text. That stamp is what the chapter's ghost structure came from, and it persists even if the global model text is later changed.
+
+**Before commitment:** A chapter with no meaningful content has no stamped model text. It displays ghost content derived from the current global model text. Changing the global model text immediately updates the ghost for all uncommitted chapters.
+
+**Adoption:** When a chapter crosses the meaningful content threshold, its ghost structure (paranodes, verse slot positions, heading slots) is promoted to real project data, the current global model text is stamped onto the chapter, and subsequent edits are made within that committed scaffold.
+
+## Meaningful Content Threshold
+
+The point at which a chapter transitions from ghost to committed. Not yet precisely defined — "first keystroke" was proposed but the intent is something higher: content that represents real translation work, not an accidental or trivial edit. Needs to be resolved.
 
 ## Model Text Panel
 
