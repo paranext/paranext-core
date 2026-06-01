@@ -553,7 +553,6 @@ async function main() {
       try {
         await networkService.requestNoRetry(
           serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.cancelSync'),
-          undefined, // not triggered from a notification
         );
       } catch {
         /* no sync in progress, or extension unavailable */

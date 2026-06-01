@@ -102,7 +102,7 @@ internal class ParatextProjectSendReceiveService(
     /// validate that the cancel is for the expected sync operation. <see langword="null"/> when
     /// not called from a notification (e.g., on app shutdown).
     /// </param>
-    protected void CancelSync(NotificationId? notificationId)
+    protected void CancelSync(NotificationId? notificationId = null)
     {
         throw new PlatformUnimplementedException(
             $"Command '{nameof(CancelSync)}' is not implemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
