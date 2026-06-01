@@ -1,6 +1,6 @@
 import type { DblResourceReference, ResourceReferenceList } from 'platform-scripture';
-import { isDblResourceReference } from './resource-reference.utils';
 import { DblResourceData, isPlatformError, PlatformError } from 'platform-bible-utils';
+import { isDblResourceReference } from './resource-reference.utils';
 
 export const CURRENT_DATA_VERSION = '1.0.0';
 export const DEFAULT_RESOURCE_REFERENCE_LIST: ResourceReferenceList = {
