@@ -25,9 +25,9 @@ import {
   LocalizeKey,
 } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { DblResourceReference, EffectiveResourceReference } from 'platform-scripture';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { isDblResourceReference } from './resource-reference.utils';
-import type { DblResourceReference, EffectiveResourceReference } from 'platform-scripture';
 import { DEFAULT_RESOURCE_REFERENCE_LIST, selectTextConnection } from './select-dbl-resource';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';

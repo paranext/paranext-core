@@ -30,8 +30,8 @@ import {
 } from 'platform-bible-utils';
 import { ChevronDown } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import type { DblResourceReference, EffectiveResourceReference } from 'platform-scripture';
+import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
 import { DEFAULT_RESOURCE_REFERENCE_LIST, selectTextConnection } from './select-dbl-resource';
 

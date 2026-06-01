@@ -7,7 +7,6 @@ import type {
   ResourceReferenceList,
 } from 'platform-scripture';
 import { useProjectSetting, useProjectDataProvider } from '@papi/frontend/react';
-import { logger } from '@papi/frontend';
 
 const CURRENT_DATA_VERSION = '1.0.0';
 // Module-level constant avoids a useMemo with [] deps inside the hook
@@ -25,7 +24,7 @@ function getDeduplicationKey(item: ResourceReference): string | undefined {
   if ('id' in item && typeof item.id === 'string') return `id:${item.id}`;
   if ('name' in item && typeof item.name === 'string') return `name:${item.name}`;
   // Should never happen after upstream validation; discard rather than silently misidentify
-  logger.error(`Resource reference of type '${item.type}' has no string name; discarding.`);
+  console.error(`Resource reference of type '${item.type}' has no string name; discarding.`);
   return undefined;
 }
 
@@ -113,7 +112,7 @@ export function useEffectiveResourceReferenceList(
         return undefined;
       })
       .catch((err) => {
-        logger.error(`Failed to subscribe to user text connection settings: ${err}`);
+        console.error(`Failed to subscribe to user text connection settings: ${err}`);
       });
 
     return () => {
