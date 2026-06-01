@@ -6022,7 +6022,7 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
     [ALERT_DIALOG_TYPE]: DialogDataTypes<AlertDialogOptions, true>;
     [CONFIRM_DIALOG_TYPE]: DialogDataTypes<ConfirmDialogOptions, boolean>;
     [RESOURCE_PICKER_DIALOG_TYPE]: DialogDataTypes<ResourcePickerDialogOptions, DblResourceData>;
-    [PROJECT_PICKER_DIALOG_TYPE]: DialogDataTypes<ProjectPickerOptions, void>;
+    [PROJECT_PICKER_DIALOG_TYPE]: DialogDataTypes<ProjectPickerOptions, string>;
   }
   /** All dialog types that have DialogDefinition entries */
   export type DialogTabTypes = keyof DialogTypes;
