@@ -23,7 +23,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { sendCommand } from '@shared/services/command.service';
 import { DblResourceData, ResourceType, formatReplacementString } from 'platform-bible-utils';
 
-export const RESOURCE_PICKER_DIALOG_STRING_KEYS = [
+const RESOURCE_PICKER_DIALOG_STRING_KEYS: (
+  | '%resourcePicker_title%'
+  | '%resourcePicker_section_already_selected%'
+  | '%resourcePicker_section_installed%'
+  | '%resourcePicker_section_available_to_download%'
+  | '%resourcePicker_no_results%'
+  | '%resourcePicker_search_placeholder%'
+  | '%resourcePicker_language_filter_any%'
+  | '%resourcePicker_language_filter_multipleSelected%'
+  | '%resourcePicker_showing_count%'
+)[] = [
   '%resourcePicker_title%',
   '%resourcePicker_section_already_selected%',
   '%resourcePicker_section_installed%',
@@ -33,7 +43,7 @@ export const RESOURCE_PICKER_DIALOG_STRING_KEYS = [
   '%resourcePicker_language_filter_any%',
   '%resourcePicker_language_filter_multipleSelected%',
   '%resourcePicker_showing_count%',
-] as const;
+];
 
 export type ResourcePickerDialogLocalizedStrings = {
   [key in (typeof RESOURCE_PICKER_DIALOG_STRING_KEYS)[number]]?: string;
