@@ -34,6 +34,7 @@ import {
   convertScriptureRangeToEditorRange,
   formatEditorTitle,
   openCommentListAndSelectThread,
+  openTextConnectionPanels,
   resolveOpenEditorDispatch,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   startDefaultProjectPicker,
@@ -305,6 +306,10 @@ async function open(
       isReadOnly: !projectForWebView.isEditable,
       options,
     };
+
+    // If in simple interface mode, open/update the model text, bible text, and commentary text panels
+    if (interfaceMode === 'simple' && projectForWebView.projectId)
+      await openTextConnectionPanels(papi, projectForWebView.projectId);
 
     const openedWebViewId = await papi.webViews
       .openWebView(
