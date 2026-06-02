@@ -1006,19 +1006,33 @@ export function RestoreForm({
           </Label>
         </div>
 
-        {/* File list (UI-PKG-008 — RestoreFileList) */}
+        {/*
+          File list (UI-PKG-008 — RestoreFileList).
+
+          The wrapper sets `tw:min-h-[240px]` so the list doesn't collapse to near-zero height
+          when squeezed by a short dialog viewport. RestoreFileList's own root uses
+          `tw:flex tw:min-h-0 tw:flex-1 tw:flex-col` so the inner BookGridSelector can scroll;
+          that pattern correctly allows the list to shrink to enable internal scroll, but
+          without a positive min-h on a containing element, "shrink to enable scroll" goes all
+          the way to ~0px when the surrounding form-fields compete for vertical space.
+
+          See PR #305 improvement-plan Track D / D22 (runtime list-clipping detection +
+          auto-fix) for the canonical pattern + future automated catch.
+        */}
         {restorer && (
-          <RestoreFileList
-            entries={restorer.allFiles}
-            selectedFileIds={selectedFileIds}
-            hideSameFiles={hideSameFiles}
-            selectedFileId={selectedFileId}
-            onToggleFile={handleToggleFile}
-            onBulkToggle={handleBulkToggle}
-            onSelectFile={handleSelectFile}
-            onViewDifferences={handleViewDifferences}
-            localizedStrings={localizedStrings}
-          />
+          <div className="tw:flex tw:min-h-[240px] tw:flex-col">
+            <RestoreFileList
+              entries={restorer.allFiles}
+              selectedFileIds={selectedFileIds}
+              hideSameFiles={hideSameFiles}
+              selectedFileId={selectedFileId}
+              onToggleFile={handleToggleFile}
+              onBulkToggle={handleBulkToggle}
+              onSelectFile={handleSelectFile}
+              onViewDifferences={handleViewDifferences}
+              localizedStrings={localizedStrings}
+            />
+          </div>
         )}
 
         {/* Backup Description (read-only display) */}
