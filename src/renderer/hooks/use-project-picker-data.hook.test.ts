@@ -102,7 +102,8 @@ describe('useProjectPickerData', () => {
 
     const { result } = renderHook(() => useProjectPickerData());
 
-    await waitFor(() => expect(result.current.currentProject?.fullName).toBe('Genesis Project'));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.currentProject?.fullName).toBe('Genesis Project');
     expect(result.current.currentProject?.id).toBe('proj-abc');
   });
 
