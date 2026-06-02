@@ -12,7 +12,7 @@ const STRINGS: ProjectPickerLocalizedStrings = {
   '%projectPicker_section_recent%': 'Recent',
   '%projectPicker_section_projects%': 'Your projects',
   '%projectPicker_search_placeholder%': 'Search projects…',
-  '%projectPicker_no_results%': 'No results found',
+  '%projectPicker_no_results%': 'No projects found',
 };
 
 const WEB: ProjectItem = {
@@ -125,12 +125,12 @@ describe('ProjectPicker', () => {
     expect(screen.queryByText('King James Version')).not.toBeInTheDocument();
   });
 
-  it('shows "No results found" when search matches nothing', () => {
+  it('shows "No projects found" when search matches nothing', () => {
     renderDialog();
     fireEvent.change(screen.getByPlaceholderText('Search projects…'), {
       target: { value: 'zzznomatch' },
     });
-    expect(screen.getByText('No results found')).toBeInTheDocument();
+    expect(screen.getByText('No projects found')).toBeInTheDocument();
     expect(screen.queryByText('Recent')).not.toBeInTheDocument();
     expect(screen.queryByText('Your projects')).not.toBeInTheDocument();
   });

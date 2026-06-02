@@ -92,6 +92,9 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%toolbar_sync_open_status%',
   '%toolbar_sync_status_synced%',
   '%toolbar_sync_status_syncing%',
+  '%projectPicker_toolbar_select_project%',
+  '%projectPicker_toolbar_no_projects%',
+  '%projectPicker_toolbar_more_projects%',
 ];
 
 export function PlatformBibleToolbar() {
@@ -482,7 +485,13 @@ export function PlatformBibleToolbar() {
           disabled={!hasProjectPickerItems}
         >
           <SelectTrigger className="tw:max-w-64 tw:min-w-48">
-            <SelectValue placeholder={hasProjectPickerItems ? 'Select project' : 'No projects'}>
+            <SelectValue
+              placeholder={
+                hasProjectPickerItems
+                  ? localizedStrings['%projectPicker_toolbar_select_project%']
+                  : localizedStrings['%projectPicker_toolbar_no_projects%']
+              }
+            >
               {currentProject && (
                 <span className="tw:min-w-0 tw:flex-1 tw:truncate">
                   {currentProject.fullName} ({currentProject.shortName})
@@ -503,7 +512,7 @@ export function PlatformBibleToolbar() {
                 className="tw:w-full tw:cursor-pointer tw:px-2 tw:py-1.5 tw:text-start tw:text-sm tw:text-muted-foreground"
                 onClick={() => showProjectPicker()}
               >
-                More projects...
+                {localizedStrings['%projectPicker_toolbar_more_projects%']}
               </button>
             </SelectContent>
           )}
