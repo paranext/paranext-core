@@ -71,12 +71,15 @@ export type ProjectPickerData = {
   recentProjects: ProjectItem[];
   /** All projects, with recentProjects already excluded. */
   allProjects: ProjectItem[];
+  /** Set when fetching details for the current project fails. */
+  currentProjectError: string | undefined;
   isLoading: boolean;
 };
 
 export function useProjectPickerData(): ProjectPickerData {
   // Incrementing this triggers a refresh of usePromise calls
   const [refreshCounter, setRefreshCounter] = useState(0);
+  const [currentProjectError, setCurrentProjectError] = useState<string | undefined>(undefined);
   const refresh = useCallback(() => setRefreshCounter((n) => n + 1), []);
 
   const onDidOpenWebView = useMemo(() => getNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW), []);
@@ -112,15 +115,17 @@ export function useProjectPickerData(): ProjectPickerData {
         const { fullName, shortName, language, languageDisplayName } = await fetchProjectDetails(
           editorDef.projectId,
         );
+        setCurrentProjectError(undefined);
         return { id: editorDef.projectId, fullName, shortName, language, languageDisplayName };
       } catch (e) {
-        logger.warn(
-          `ProjectPicker: could not fetch name for project ${editorDef.projectId}: ${getErrorMessage(e)}`,
+        logger.error(
+          `ProjectPicker: could not fetch details for current project ${editorDef.projectId}: ${getErrorMessage(e)}`,
         );
+        setCurrentProjectError('Unable to load current project details');
         return {
           id: editorDef.projectId,
-          fullName: editorDef.projectId,
-          shortName: editorDef.projectId,
+          fullName: 'Unable to load current project details',
+          shortName: '???',
         };
       }
       // Module-level imports are stable references; only refreshCounter needs to trigger a re-fetch
@@ -211,6 +216,7 @@ export function useProjectPickerData(): ProjectPickerData {
     currentProject,
     recentProjects,
     allProjects,
+    currentProjectError,
     isLoading:
       isCurrentProjectLoading ||
       isRecentIdsLoading ||

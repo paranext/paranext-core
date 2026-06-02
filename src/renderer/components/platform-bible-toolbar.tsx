@@ -120,7 +120,8 @@ export function PlatformBibleToolbar() {
 
   const isPowerMode = useIsPowerMode();
 
-  const { currentProject, recentProjects, allProjects } = useProjectPickerData();
+  const { currentProject, recentProjects, allProjects, currentProjectError } =
+    useProjectPickerData();
 
   const openProject = useCallback(async (projectId: string) => {
     // This command comes from an extension and is not typed in CommandHandlers.
@@ -493,8 +494,14 @@ export function PlatformBibleToolbar() {
               }
             >
               {currentProject && (
-                <span className="tw:min-w-0 tw:flex-1 tw:truncate">
-                  {currentProject.fullName} ({currentProject.shortName})
+                <span
+                  className={cn(
+                    'tw:min-w-0 tw:flex-1 tw:truncate',
+                    currentProjectError && 'tw:text-destructive',
+                  )}
+                >
+                  {currentProjectError ??
+                    `${currentProject.fullName} (${currentProject.shortName})`}
                 </span>
               )}
             </SelectValue>
