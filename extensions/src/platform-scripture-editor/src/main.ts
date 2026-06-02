@@ -307,6 +307,10 @@ async function open(
       options,
     };
 
+    // If in simple interface mode, open/update the model text, bible text, and commentary text panels
+    if (interfaceMode === 'simple' && projectForWebView.projectId)
+      await openTextConnectionPanels(papi, projectForWebView.projectId);
+
     const openedWebViewId = await papi.webViews
       .openWebView(
         SCRIPTURE_EDITOR_WEBVIEW_TYPE,
@@ -316,10 +320,6 @@ async function open(
         openWebViewOptions,
       )
       .finally(emitDidFinish);
-
-    // If in simple interface mode, open/update the model text, bible text, and commentary text panels
-    if (interfaceMode === 'simple' && projectForWebView.projectId)
-      await openTextConnectionPanels(papi, projectForWebView.projectId);
 
     return openedWebViewId;
   }
