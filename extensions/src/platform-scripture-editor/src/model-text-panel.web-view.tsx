@@ -88,11 +88,7 @@ globalThis.webViewComponent = function ModelTextPanel({
         return Promise.resolve(undefined);
       }
 
-      const cachedResources = await papi.commands.sendCommand(
-        'platformGetResources.getCachedResources',
-      );
-      setFetchResources(false);
-      return cachedResources;
+      return papi.commands.sendCommand('platformGetResources.getCachedResources');
     }, [fetchResources]),
     undefined,
   );
