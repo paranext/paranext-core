@@ -51,6 +51,19 @@ export type ProjectPickerProps = {
   localizedStrings?: ProjectPickerLocalizedStrings;
 };
 
+/**
+ * Gets the localized value for the provided key
+ *
+ * @param strings Object containing localized strings
+ * @param key Key for a localized string
+ * @returns The localized value for the provided key, if available. Returns the key if no localized
+ *   value is available
+ */
+const localizeString = (
+  strings: ProjectPickerLocalizedStrings,
+  key: keyof ProjectPickerLocalizedStrings,
+) => strings[key] ?? key;
+
 function matchesSearch(project: ProjectItem, searchText: string): boolean {
   if (!searchText) return true;
   const lower = searchText.toLowerCase();
@@ -175,18 +188,15 @@ export default function ProjectPicker({
 
   const hasNoResults = sortedRecent.length === 0 && filteredAll.length === 0;
 
-  const titleText = localizedStrings['%projectPicker_title%'] ?? '%projectPicker_title%';
-  const recentLabel =
-    localizedStrings['%projectPicker_section_recent%'] ?? '%projectPicker_section_recent%';
-  const allLabel =
-    localizedStrings['%projectPicker_section_projects%'] ?? '%projectPicker_section_projects%';
-  const searchPlaceholder =
-    localizedStrings['%projectPicker_search_placeholder%'] ?? '%projectPicker_search_placeholder%';
-  const noResultsText =
-    localizedStrings['%projectPicker_no_results%'] ?? '%projectPicker_no_results%';
-  const currentProjectLabel =
-    localizedStrings['%projectPicker_current_project_label%'] ??
-    '%projectPicker_current_project_label%';
+  const titleText = localizeString(localizedStrings, '%projectPicker_title%');
+  const recentLabel = localizeString(localizedStrings, '%projectPicker_section_recent%');
+  const allLabel = localizeString(localizedStrings, '%projectPicker_section_projects%');
+  const searchPlaceholder = localizeString(localizedStrings, '%projectPicker_search_placeholder%');
+  const noResultsText = localizeString(localizedStrings, '%projectPicker_no_results%');
+  const currentProjectLabel = localizeString(
+    localizedStrings,
+    '%projectPicker_current_project_label%',
+  );
 
   const listboxOptions = useMemo(
     () => [...sortedRecent, ...filteredAll].map((p) => ({ id: p.id })),
