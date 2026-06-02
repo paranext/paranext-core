@@ -16,9 +16,20 @@ import {
 } from '@/components/shadcn-ui/select';
 
 const meta: Meta<typeof SettingsList> = {
-  title: 'Advanced/Settings/SettingsList',
+  title: 'Advanced/Settings/🚫 SettingsList',
   component: SettingsList,
   tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component: `
+> **Deprecated** (Jul 18 2025) — This component is no longer supported or tested. Use of this component is discouraged and it may be removed in the future.
+
+A set of components (SettingsList, SettingsListItem, SettingsListHeader) for rendering formatted settings lists.
+        `,
+      },
+    },
+  },
   decorators: [
     (Story) => (
       <div className="tw:max-w-2xl tw:p-4">
