@@ -106,6 +106,9 @@ export function useProjectPickerData(): ProjectPickerData {
 
   const [currentProject, isCurrentProjectLoading] = usePromise<ProjectItem | undefined>(
     useCallback(async () => {
+      // Referenced so this callback re-runs whenever refresh() is called
+      // eslint-disable-next-line no-unused-expressions
+      refreshCounter;
       const allDefs = await webViews.getAllOpenWebViewDefinitions();
       const editorDef = allDefs.find(
         (def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && def.projectId,
@@ -128,40 +131,39 @@ export function useProjectPickerData(): ProjectPickerData {
           shortName: '???',
         };
       }
-      // Module-level imports are stable references; only refreshCounter needs to trigger a re-fetch
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [refreshCounter]),
     undefined,
   );
 
   const [recentProjects, isRecentProjectsLoading] = usePromise<ProjectItem[]>(
-    useCallback(
-      async () => {
-        const results = await Promise.all(
-          safeRecentIds.map(async (id: string): Promise<ProjectItem | undefined> => {
-            try {
-              const { isEditable, ...details } = await fetchProjectDetails(id);
-              if (!isEditable) return undefined;
-              return { id, ...details };
-            } catch (e) {
-              logger.warn(
-                `ProjectPicker: could not fetch name for project ${id}: ${getErrorMessage(e)}`,
-              );
-              return undefined;
-            }
-          }),
-        );
-        return results.filter((p: ProjectItem | undefined): p is ProjectItem => p !== undefined);
-      },
-      // Module-level imports are stable references; safeRecentIds and refreshCounter trigger re-fetches
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      [safeRecentIds, refreshCounter],
-    ),
+    useCallback(async () => {
+      // Referenced so this callback re-runs whenever refresh() is called
+      // eslint-disable-next-line no-unused-expressions
+      refreshCounter;
+      const results = await Promise.all(
+        safeRecentIds.map(async (id: string): Promise<ProjectItem | undefined> => {
+          try {
+            const { isEditable, ...details } = await fetchProjectDetails(id);
+            if (!isEditable) return undefined;
+            return { id, ...details };
+          } catch (e) {
+            logger.warn(
+              `ProjectPicker: could not fetch name for project ${id}: ${getErrorMessage(e)}`,
+            );
+            return undefined;
+          }
+        }),
+      );
+      return results.filter((p: ProjectItem | undefined): p is ProjectItem => p !== undefined);
+    }, [safeRecentIds, refreshCounter]),
     [],
   );
 
   const [allProjectsWithRecent, isAllProjectsLoading] = usePromise<ProjectItem[]>(
     useCallback(async () => {
+      // Referenced so this callback re-runs whenever refresh() is called
+      // eslint-disable-next-line no-unused-expressions
+      refreshCounter;
       const metadata = await projectLookupService.getMetadataForAllProjects({
         includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
       });
@@ -197,8 +199,6 @@ export function useProjectPickerData(): ProjectPickerData {
         }),
       );
       return settled.flatMap((p) => (p !== undefined ? [p] : []));
-      // Module-level imports are stable references; only refreshCounter needs to trigger a re-fetch
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [refreshCounter]),
     [],
   );
