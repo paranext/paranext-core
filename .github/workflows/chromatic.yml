@@ -1,0 +1,49 @@
+name: Chromatic
+
+# Publishes the platform-bible-react Storybook to Chromatic for hosting + visual review.
+# Requires a repository secret named CHROMATIC_PROJECT_TOKEN (see Settings > Secrets and variables
+# > Actions). Get the token by creating a project at https://www.chromatic.com and linking this repo.
+
+on:
+  push:
+    branches: ['main', 'ai/main']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  chromatic:
+    name: Publish Storybook to Chromatic
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v4
+        with:
+          # Chromatic needs full git history to find and compare against baselines.
+          fetch-depth: 0
+
+      - name: Read package.json
+        id: package_json
+        uses: zoexx/github-action-json-file-properties@1.0.6
+        with:
+          file_path: 'package.json'
+
+      - name: Install Volta and toolchain
+        uses: volta-cli/action@v4
+
+      - name: Install Node.js and NPM
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
+          cache: npm
+
+      - name: Install packages
+        run: npm ci
+
+      - name: Publish to Chromatic
+        working-directory: lib/platform-bible-react
+        # --exit-zero-on-changes: visual changes are flagged in the Chromatic UI for review but do
+        # not fail this workflow. Remove that flag if you want the GitHub check to go red whenever
+        # snapshots change.
+        run: npx chromatic --build-script-name build:storybook --exit-zero-on-changes
+        env:
+          CHROMATIC_PROJECT_TOKEN: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}

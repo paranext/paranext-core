@@ -127,6 +127,32 @@ export type {
   ScriptureResultsViewerProps,
   ScriptureSrcItemDetail,
 } from './components/advanced/scripture-results-viewer/scripture-results-viewer.component';
+export {
+  ProjectPlanDialog,
+  type ProjectPlanDialogProps,
+  ProjectPlanDialogHierarchical,
+  type ProjectPlanDialogHierarchicalProps,
+  ProjectPlanDialogChecksMerged,
+  type ProjectPlanDialogChecksMergedProps,
+  ProjectPlanDialogErUi,
+  type ProjectPlanDialogErUiProps,
+  CHECK_GROUPS as PROJECT_PLAN_CHECK_GROUPS,
+  type BookCountsByDifficulty,
+  type CheckCatalogItem,
+  type CheckGroup as ProjectPlanCheckGroup,
+  type CheckGroupId as ProjectPlanCheckGroupId,
+  type CheckSetting as ProjectPlanCheckSetting,
+  type MarkCompleteMode,
+  type OrgProvidedPlan,
+  type PlanStage,
+  type PlanTask,
+  type ProjectPlan,
+  type RequiresEditingMode,
+  type Selection as ProjectPlanSelection,
+  type StageId as ProjectPlanStageId,
+  type TaskEffort,
+  type TaskStartCondition,
+} from './components/advanced/project-plan-dialog';
 export { default as ScopeSelector } from './components/advanced/scope-selector/scope-selector.component';
 export { SCOPE_SELECTOR_STRING_KEYS } from './components/advanced/scope-selector/scope-selector.component';
 export type { ScopeSelectorLocalizedStrings } from './components/advanced/scope-selector/scope-selector.component';

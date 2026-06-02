@@ -28,7 +28,22 @@ const preview: Preview = {
 
     options: {
       storySort: {
-        order: ['Home', 'Guidelines', 'Guides', 'Shadcn', 'Basics', 'Advanced', 'Demo'],
+        order: [
+          'Home',
+          'Guidelines',
+          'Guides',
+          'Shadcn',
+          'Basics',
+          'Advanced',
+          [
+            'Project Plan Dialog',
+            'Project Plan Dialog - Similar to ER UI',
+            'Project Plan Dialog - Single Editable Hierarchy',
+            'Project Plan Dialog - Checks merged',
+            '*',
+          ],
+          'Demo',
+        ],
       },
     },
 

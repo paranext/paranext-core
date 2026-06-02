@@ -123,6 +123,12 @@ function execInDevPackage(folder: string, cmd: string): void {
     NX_NO_CLOUD: 'true',
     // Disable npm registry authentication since it is not needed and would cause warnings
     NODE_AUTH_TOKEN: '',
+    // Run pnpm non-interactively: skips TTY prompts like the modules-dir purge confirmation
+    CI: 'true',
+    // Bypass pnpm 10's strict build-scripts gate (ERR_PNPM_IGNORED_BUILDS) so install scripts
+    // for native deps (@swc/core, esbuild, nx, oxc-resolver, unrs-resolver, core-js-pure) run
+    // without requiring an interactive `pnpm approve-builds` in scripture-editors
+    npm_config_dangerously_allow_all_builds: 'true',
   };
   execSync(cmd, { stdio: 'inherit', cwd: pathToUse, env });
 }
