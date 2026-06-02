@@ -97,6 +97,16 @@ public class NotificationServiceTests
     }
 
     [Test]
+    public void NotificationIdConverter_DeserializesNullToken_WhenTargetIsNullable()
+    {
+        // System.Text.Json intercepts `null` before invoking the converter for nullable structs,
+        // so NotificationIdConverter.Read (which would throw on Null tokens) is never called.
+        // This is the same path StreamJsonRpc takes when cancelSync is called with no argument.
+        NotificationId? result = JsonSerializer.Deserialize<NotificationId?>("null");
+        Assert.That(result, Is.Null);
+    }
+
+    [Test]
     public void NotificationIdConverter_FromJsonElement_StringElement()
     {
         var element = JsonDocument.Parse(@"""hello""").RootElement;

@@ -1,3 +1,5 @@
+using Paranext.DataProvider.Services;
+
 namespace Paranext.DataProvider.Projects.SendReceive;
 
 /// <summary>
@@ -95,7 +97,12 @@ internal class ParatextProjectSendReceiveService(
     /// done.
     /// Exception is thrown if this function is not implemented in the current application.
     /// </summary>
-    protected void CancelSync()
+    /// <param name="notificationId">
+    /// ID of the notification that triggered this cancel, if any. Implementations may use this to
+    /// validate that the cancel is for the expected sync operation. <see langword="null"/> when
+    /// not called from a notification (e.g., on app shutdown).
+    /// </param>
+    protected void CancelSync(NotificationId? notificationId = null)
     {
         throw new PlatformUnimplementedException(
             $"Command '{nameof(CancelSync)}' is not implemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
