@@ -316,6 +316,26 @@ async function open(
       )
       .finally(emitDidFinish);
 
+    // If this is 10 simple, then it needs to trigger the model text, bible text, and commentary
+    // text panels to open/update
+    if (interfaceMode === 'simple') {
+      try {
+        await papi.commands.sendCommand('platformScriptureEditor.openModelText', projectId);
+        await papi.commands.sendCommand(
+          'platformScriptureEditor.openResourceText',
+          'CommentaryResource',
+          projectId,
+        );
+        await papi.commands.sendCommand(
+          'platformScriptureEditor.openResourceText',
+          'ScriptureResource',
+          projectId,
+        );
+      } catch (err: unknown) {
+        logger.warn(`Error encountered trying to open text connections: ${getErrorMessage(err)}`);
+      }
+    }
+
     return openedWebViewId;
   }
   return undefined;
