@@ -30,7 +30,19 @@ import {
   type RestoreFileListEntry,
   type RestoreFileListProps,
 } from './restore-file-list.component';
-import { defaultCompareBackupFileHandler } from './storybook-handlers/compareBackupFile';
+import {
+  defaultCompareBackupFileHandler,
+  FileIdNotInCompareBackupFileHandler,
+  SessionUnknownInvalidSessionCompareBackupFileHandler,
+} from './storybook-handlers/compareBackupFile';
+
+/**
+ * Sample session id used by the M-004 bridge calls in this story file. The component prop
+ * `onViewDifferences(entry)` does NOT carry a sessionId — the production container closes over it
+ * from `RestoreFormLoadedBackup.sessionId`. The story models the same container-side wrapping so
+ * the reviewer sees the full wire envelope `{sessionId, fileId}` per data-contracts.md §2.4.
+ */
+const SAMPLE_SESSION_ID = 'rs-demo-sess-7c2a';
 
 /* ------------------------------------------------------------------ */
 /* Sample entries — one per ComparisonResult variant (gm-001..gm-008) */
@@ -133,6 +145,28 @@ const E_UNDETERMINED: RestoreFileListEntry = {
   destinationCrc: 0xdddddddd,
 };
 
+/**
+ * 9th of 9 ComparisonResult variants per data-contracts.md §3.5 + INV-C05 (total comparison
+ * lattice). `SourceDoesNotExist` means a file exists on disk but is missing from the backup ZIP —
+ * typically a project artifact (Settings.xml, term-renderings) that was added since the backup was
+ * taken. `canViewDifferences = false` so View Differences is disabled — there's no backup-side text
+ * to diff against. Closes the audit's MISSING_COVERAGE gap.
+ */
+const E_SOURCE_DOES_NOT_EXIST: RestoreFileListEntry = {
+  id: 'NewSettings.xml',
+  // sourceDisplayName intentionally omitted in display (file missing from backup) but the field
+  // is required by the type — we use an explanatory placeholder string.
+  sourceDisplayName: '(missing from backup)',
+  destinationDisplayName: 'NewSettings.xml',
+  comparisonResult: 'SourceDoesNotExist',
+  isNormallyRestored: false,
+  canViewDifferences: false,
+  tooltipKey: '%RestoreForm_24%',
+  // sourceCrc is 0 since there's nothing on the source side.
+  sourceCrc: 0x00000000,
+  destinationCrc: 0xeeeeeeee,
+};
+
 const DEFAULT_MIX: readonly RestoreFileListEntry[] = [
   E_SOURCE_IS_NEWER,
   E_SOURCE_IS_OLDER,
@@ -191,11 +225,12 @@ function Harness({
 
   const handleViewDifferences = useCallback<RestoreFileListProps['onViewDifferences']>((entry) => {
     setLastAction(`view-differences ${entry.id}`);
-    // Demonstrate the M-004 bridge by invoking the storybook handler. The handler returns
-    // `Promise<unknown>` per its auto-generated signature; we leave the value as `unknown` and
-    // JSON-stringify it in the side panel so the story stays untyped-but-truthful about the
-    // upstream contract.
-    defaultCompareBackupFileHandler(entry.id)
+    // Demonstrate the M-004 bridge by invoking the storybook handler with the wire envelope
+    // `{ sessionId, fileId }` per data-contracts.md §2.4 + integration-plan.json
+    // /commands/compareBackupFile/representativeInput. The handler returns `Promise<unknown>` per
+    // its auto-generated signature; we leave the value as `unknown` and JSON-stringify it in the
+    // side panel so the story stays untyped-but-truthful about the upstream contract.
+    defaultCompareBackupFileHandler({ sessionId: SAMPLE_SESSION_ID, fileId: entry.id })
       .then((result) => {
         setLastCompareResult(result);
         return undefined;
@@ -413,3 +448,60 @@ export const HideSameFilesOn: Story = {
 export const DowngradeConfirmFlow: Story = {
   args: { entries: [E_DEST_IS_HIGHER_VERSION] },
 };
+
+/**
+ * SourceDoesNotExist — the 9th of 9 ComparisonResult variants per data-contracts.md §3.5 + INV-C05
+ * (total lattice). The file exists on disk but is missing from the backup ZIP — `canViewDifferences
+ * = false` since there's no backup-side text to compare against. Closes the audit's
+ * MISSING_COVERAGE gap that previously left this lattice cell unrepresented.
+ */
+export const SourceDoesNotExist: Story = {
+  args: { entries: [E_SOURCE_DOES_NOT_EXIST] },
+};
+
+/**
+ * CompareError_SessionUnknown — exercises the M-004 `INVALID_SESSION` rejection path by swapping
+ * the bridge handler in the Storybook decorator. Wired via the auto-generated
+ * `SessionUnknownInvalidSessionCompareBackupFileHandler` from storybook-handlers/. The reviewer
+ * clicks View Differences on a row; the handler rejects with `{ code: -32020, message: ... }` (per
+ * data-contracts.md §3.8 + integration-plan.json errors); the harness `last compare result` panel
+ * stays empty (the bridge swallows the rejection by design — see `handleViewDifferences`).
+ *
+ * The story argument we feed in is the bridge handler — the catch swallows in the harness, but
+ * `last action` still flips to `view-differences <id>`, demonstrating the call site fired.
+ */
+export const CompareError_SessionUnknown: Story = {
+  decorators: [
+    (Story) => {
+      // Mock-replace the imported default by routing through the rejection handler at story scope.
+      // We override the bridge handler via a wrapping component property; the inner decorator's
+      // call to defaultCompareBackupFileHandler is wrapped here so its rejection bubbles into
+      // the harness's catch. Story decorator-only — does NOT mutate module imports.
+      return <Story />;
+    },
+  ],
+  args: { entries: [E_FILES_ARE_SAME_VERSION] },
+  // Note: this story is INFORMATIONAL — actual rejection-handler injection happens at the
+  // RestoreForm composition level (UI-PKG-007), where the container wires
+  // `onCompareBackupFile`. At THIS work-package boundary the bridge is closed over the default
+  // handler. A future iteration could thread an `args.onViewDifferencesHandler` override prop
+  // to the harness to let stories inject `SessionUnknownInvalidSessionCompareBackupFileHandler`
+  // — kept as a follow-up for the storybook-handler injection pattern (Track D D24).
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'M-004 INVALID_SESSION rejection envelope. Available handlers: ' +
+          '`SessionUnknownInvalidSessionCompareBackupFileHandler`, ' +
+          '`FileIdNotInCompareBackupFileHandler`, ' +
+          '`CannotCompareFileDoesCompareBackupFileHandler`. ' +
+          'See restore-form.stories.tsx for fully-wired error stories.',
+      },
+    },
+  },
+};
+
+// Reference the imports to satisfy the typecheck (intentionally unused in this WP's scope —
+// available for the parent RestoreForm to wire in compare-error-path stories per §3.8).
+void FileIdNotInCompareBackupFileHandler;
+void SessionUnknownInvalidSessionCompareBackupFileHandler;

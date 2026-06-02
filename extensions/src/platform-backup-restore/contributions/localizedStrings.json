@@ -81,6 +81,8 @@
       "%restoreForm_zipLoadError_title%": "Paratext",
       "%restoreForm_zipLoadError_message%": "Error occurred when reading backup file. File cannot be used for restore.",
       "%restoreForm_zipLoadError_ok%": "OK",
+      "%restoreForm_missingFile%": "Backup file could not be found. It may have been moved or deleted.",
+      "%restoreForm_invalidFile%": "The selected file is not a valid Paratext backup. Please choose a different file.",
       "%restoreForm_sharedProjectWarning_title%": "Paratext",
       "%restoreForm_sharedProjectWarning_message%": "This backup belongs to a shared project. If you are trying to recover text from an earlier stage in the project, please use the Project History feature instead. If you have lost the whole project and are trying to set it up again, please ask your administrator to add you to the project and then use Send/Receive to get it.\n\nContinue anyway?",
       "%restoreForm_sharedProjectWarning_yes%": "Yes",

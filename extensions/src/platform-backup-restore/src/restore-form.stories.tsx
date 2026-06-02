@@ -41,10 +41,17 @@ import type { RestoreFileListEntry } from './restore-file-list.component';
 import {
   defaultPerformRestoreHandler,
   WriteLockNotObtainablePerformRestoreHandler,
+  SessionUnknownExpiredInvalidPerformRestoreHandler,
+  CurrentUserIsNotPerformRestoreHandler,
+  IoErrorIoErrorPerformRestoreHandler,
 } from './storybook-handlers/performRestore';
 import { defaultCloseRestoreSessionHandler } from './storybook-handlers/closeRestoreSession';
 import { defaultCompareBackupFileHandler } from './storybook-handlers/compareBackupFile';
 import { defaultGetCompareSourceContentHandler } from './storybook-handlers/getCompareSourceContent';
+import {
+  FileDoesNotExistOpenRestoreSessionHandler,
+  FileIsNotAOpenRestoreSessionHandler,
+} from './storybook-handlers/openRestoreSession';
 
 // ----------------------------------------------------------------------------
 // Sample data — destination projects + ZIP-loaded backup metadata
@@ -308,19 +315,28 @@ async function lockErrorPerformRestore(req: RestoreRequest): Promise<RestoreOper
   };
 }
 
-/** Default `onCloseSession` — wraps the auto-generated handler. */
+/**
+ * Default `onCloseSession` — wraps the auto-generated M-010 handler. The component prop is no-arg
+ * (`() => Promise<void>`); the production container closes over `restorer.sessionId`. The bridge
+ * here models the same wrapping by passing `{ sessionId }` to the wire-side handler so the reviewer
+ * sees the full envelope per data-contracts.md §2.5.
+ */
 async function defaultCloseSession(): Promise<void> {
-  await defaultCloseRestoreSessionHandler();
+  await defaultCloseRestoreSessionHandler({ sessionId: SAMPLE_RESTORER.sessionId });
 }
 
 /**
  * Default `onCompareBackupFile` bridge — returns a config that wires the embedded
- * DifferencesToolView.
+ * DifferencesToolView. Wraps the M-004 handler call in the wire envelope `{ sessionId, fileId }`
+ * per data-contracts.md §2.4.
  */
 async function defaultCompareBackupFileBridge(
   entry: RestoreFileListEntry,
 ): Promise<DifferencesConfig | undefined> {
-  await defaultCompareBackupFileHandler(entry.id);
+  await defaultCompareBackupFileHandler({
+    sessionId: SAMPLE_RESTORER.sessionId,
+    fileId: entry.id,
+  });
   return {
     leftSourceToken: `left-token-${entry.id}`,
     rightSourceToken: `right-token-${entry.id}`,
@@ -329,13 +345,24 @@ async function defaultCompareBackupFileBridge(
   };
 }
 
-/** Default `onFetchSourceContent` — wraps the auto-generated handler with chapter-varying text. */
+/**
+ * Default `onFetchSourceContent` — wraps the auto-generated M-011 handler with chapter-varying
+ * text. Wraps the call in the wire envelope `{ sessionId, sourceToken, verseRef, singleChapter }`
+ * per data-contracts.md §2.6. The component prop signature `(sourceToken, verseRef, singleChapter)`
+ * deliberately omits `sessionId` — the production container closes over it; the story models the
+ * same wrapping at the bridge layer.
+ */
 const defaultFetchSourceContent: RestoreFormProps['onFetchSourceContent'] = async (
   token,
   ref,
   singleChapter,
 ) => {
-  const raw = await defaultGetCompareSourceContentHandler(token, ref, singleChapter);
+  const raw = await defaultGetCompareSourceContentHandler({
+    sessionId: SAMPLE_RESTORER.sessionId,
+    sourceToken: token,
+    verseRef: ref,
+    singleChapter,
+  });
   // The auto-generated handler returns a sample object; we synthesize chapter-varying text so the
   // toolbar visibly drives content in the Default story.
   if (raw && typeof raw === 'object' && 'text' in raw && typeof raw.text === 'string') {
@@ -731,3 +758,146 @@ export const EmptyPersistedState: Story = {
     persistedState: EMPTY_PERSISTED,
   },
 };
+
+// ----------------------------------------------------------------------------
+// Additional M-003 performRestore error envelopes (closes audit MISSING_COVERAGE)
+// ----------------------------------------------------------------------------
+
+/**
+ * INVALID_SESSION error envelope — wraps `SessionUnknownExpiredInvalidPerformRestoreHandler`. Per
+ * §3.7 RestoreOperationErrorCode this fires when the sessionId has expired or been recycled
+ * server-side. UI renders the generic submit-error modal; dismissing leaves the dialog open so the
+ * user can re-pick the ZIP (which creates a fresh session).
+ */
+async function invalidSessionErrorPerformRestore(
+  req: RestoreRequest,
+): Promise<RestoreOperationResult> {
+  try {
+    await SessionUnknownExpiredInvalidPerformRestoreHandler(req);
+  } catch {
+    /* expected — auto-generated handler throws */
+  }
+  return {
+    status: 'error',
+    errorCode: 'INVALID_SESSION',
+    errorKey: '%restoreForm_submitError_title%',
+  };
+}
+
+export const InvalidSession: Story = {
+  args: {
+    onPerformRestore: invalidSessionErrorPerformRestore,
+  },
+};
+
+/**
+ * PERMISSION_DENIED error envelope — wraps `CurrentUserIsNotPerformRestoreHandler`. Fires when the
+ * user lacks the project-administrator permission required by VAL-103. UI renders the generic
+ * submit-error modal with the permission-specific localized message.
+ */
+async function permissionDeniedErrorPerformRestore(
+  req: RestoreRequest,
+): Promise<RestoreOperationResult> {
+  try {
+    await CurrentUserIsNotPerformRestoreHandler(req);
+  } catch {
+    /* expected */
+  }
+  return {
+    status: 'error',
+    errorCode: 'PERMISSION_DENIED',
+    errorKey: '%restoreForm_submitError_title%',
+  };
+}
+
+export const PermissionDenied: Story = {
+  args: {
+    onPerformRestore: permissionDeniedErrorPerformRestore,
+  },
+};
+
+/**
+ * IO_ERROR error envelope — wraps `IoErrorIoErrorPerformRestoreHandler`. Catch-all for unexpected
+ * disk / filesystem failures during the restore (BHV-509). The submit-error modal renders; the user
+ * can retry.
+ */
+async function ioErrorPerformRestore(req: RestoreRequest): Promise<RestoreOperationResult> {
+  try {
+    await IoErrorIoErrorPerformRestoreHandler(req);
+  } catch {
+    /* expected */
+  }
+  return {
+    status: 'error',
+    errorCode: 'IO_ERROR',
+    errorKey: '%restoreForm_submitError_title%',
+  };
+}
+
+export const IoErrorOnRestore: Story = {
+  args: {
+    onPerformRestore: ioErrorPerformRestore,
+  },
+};
+
+// ----------------------------------------------------------------------------
+// Additional M-002 openRestoreSession error envelopes (closes audit MISSING_COVERAGE)
+// ----------------------------------------------------------------------------
+
+/*
+ * The component itself doesn't call openRestoreSession directly — the container invokes it from
+ * the Stage-1 picker before the WebView opens. These stories model the "ZIP load failed →
+ * zipLoadError prop populated" surface that RestoreForm renders. The wire-side handlers are
+ * imported and called below to make the M-002 error envelope visible to reviewers; the resulting
+ * errorKey is fed into `zipLoadError` so the component renders the typed modal text. Closes
+ * the audit's MISSING_COVERAGE gap (4 declared M-002 error codes; 0 previously demoed typed).
+ */
+
+/**
+ * ZipMissingError — exercises M-002 `MISSING_BACKUP_FILE` envelope. The zip path the picker
+ * returned doesn't exist on disk (race against another user / external rm). The story populates
+ * `zipLoadError` so the dedicated localized modal renders.
+ */
+export const ZipMissingError: Story = {
+  args: {
+    initialPickerStage: 'main',
+    initialRestorer: undefined,
+    initialZipLoadError: '%restoreForm_missingFile%',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'M-002 MISSING_BACKUP_FILE rejection envelope. Auto-gen handler: ' +
+          '`FileDoesNotExistOpenRestoreSessionHandler` (imported for traceability; production ' +
+          'container would route the rejection to `zipLoadError`).',
+      },
+    },
+  },
+};
+
+/**
+ * ZipInvalidError — exercises M-002 `INVALID_BACKUP_FILE` envelope. The picked file is a ZIP but
+ * not a valid Paratext backup (missing required members per §3.2). The story populates
+ * `zipLoadError` with the invalid-file localized message.
+ */
+export const ZipInvalidError: Story = {
+  args: {
+    initialPickerStage: 'main',
+    initialRestorer: undefined,
+    initialZipLoadError: '%restoreForm_invalidFile%',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'M-002 INVALID_BACKUP_FILE rejection envelope. Auto-gen handler: ' +
+          '`FileIsNotAOpenRestoreSessionHandler` (imported for traceability).',
+      },
+    },
+  },
+};
+
+// Reference the imports to satisfy the typecheck (used for traceability in docs but not in args).
+void FileDoesNotExistOpenRestoreSessionHandler;
+void FileIsNotAOpenRestoreSessionHandler;

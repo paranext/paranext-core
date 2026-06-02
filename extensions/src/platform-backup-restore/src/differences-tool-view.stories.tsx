@@ -27,7 +27,17 @@ import {
   SessionidNotRecognizedInvalidGetCompareSourceContentHandler,
   SourcetokenNotRecognizedForGetCompareSourceContentHandler,
   UnderlyingIOErrorGetCompareSourceContentHandler,
+  VerserefMalformedUnknownBookGetCompareSourceContentHandler,
 } from './storybook-handlers/getCompareSourceContent';
+
+/**
+ * Sample session id used by every story's wire-side handler call. The component prop signature
+ * `FetchSourceContent(sourceToken, verseRef, singleChapter)` deliberately omits `sessionId` — the
+ * production container closes over it from `RestoreFormLoadedBackup.sessionId`. The stories model
+ * the same container-side wrapping so the reviewer sees the full M-011 wire envelope `{sessionId,
+ * sourceToken, verseRef, singleChapter}` per data-contracts.md §2.6.
+ */
+const SAMPLE_SESSION_ID = 'rs-demo-sess-7c2a';
 
 const meta: Meta<typeof DifferencesToolView> = {
   title: 'Bundled Extensions/platform-backup-restore/DifferencesToolView',
@@ -100,7 +110,14 @@ function makeDefaultFetcher(): FetchSourceContent {
     // { status: null, text: 'Lorem ipsum dolor sit amet' } per data-contracts.md §3.12. We unwrap
     // .text to satisfy the FetchSourceContent return type; a `[pane] →` prefix makes the side
     // visible to the reviewer when both panes are routed through the same handler.
-    const result = await defaultGetCompareSourceContentHandler(token, verseRef, singleChapter);
+    // Wrap in the wire envelope { sessionId, sourceToken, verseRef, singleChapter } per §2.6 so
+    // the demoed shape matches what the production container passes to PAPI.
+    const result = await defaultGetCompareSourceContentHandler({
+      sessionId: SAMPLE_SESSION_ID,
+      sourceToken: token,
+      verseRef,
+      singleChapter,
+    });
     const text = extractTextFromGetCompareSourceContentResult(result);
     const sideLabel = token === LEFT_TOKEN ? '[left]' : '[right]';
     return `${sideLabel} ${text}`;
@@ -132,14 +149,26 @@ function extractTextFromGetCompareSourceContentResult(result: unknown): string {
 
 /** Adapter wrapping the auto-generated success handler so it satisfies `FetchSourceContent`. */
 const successFetcherFromHandler: FetchSourceContent = async (token, verseRef, singleChapter) => {
-  const result = await defaultGetCompareSourceContentHandler(token, verseRef, singleChapter);
+  // Wrap into the wire envelope { sessionId, sourceToken, verseRef, singleChapter } per §2.6.
+  const result = await defaultGetCompareSourceContentHandler({
+    sessionId: SAMPLE_SESSION_ID,
+    sourceToken: token,
+    verseRef,
+    singleChapter,
+  });
   return extractTextFromGetCompareSourceContentResult(result);
 };
 
 /** Adapter for an awaited rejection handler — the rejection bubbles through Promise<string>. */
 function makeRejectingFetcher(handler: (...args: unknown[]) => Promise<never>): FetchSourceContent {
   return async (token, verseRef, singleChapter) => {
-    await handler(token, verseRef, singleChapter);
+    // Wrap into the wire envelope { sessionId, sourceToken, verseRef, singleChapter } per §2.6.
+    await handler({
+      sessionId: SAMPLE_SESSION_ID,
+      sourceToken: token,
+      verseRef,
+      singleChapter,
+    });
     return '';
   };
 }
@@ -456,6 +485,25 @@ export const FetchErrorInvalidToken: Story = {
     displayOptions: { showToolbar: false, showOnlyDifferences: false },
     onFetchSourceContent: makeRejectingFetcher(
       SourcetokenNotRecognizedForGetCompareSourceContentHandler,
+    ),
+  },
+};
+
+/**
+ * Variant: M-011 `INVALID_VERSE_REF` rejection. Covers the malformed-or-unknown-book branch
+ * documented in data-contracts.md §3.12 + integration-plan.json#/commands/getCompareSourceContent
+ * /errors. Imports `VerserefMalformedUnknownBookGetCompareSourceContentHandler` from
+ * storybook-handlers/ — closes the audit's MISSING_COVERAGE gap (1 of 4 declared M-011 errors was
+ * not previously demoed).
+ */
+export const FetchErrorInvalidVerseRef: Story = {
+  args: {
+    leftSource: { tokenOrText: 'tok-left-invref', label: LEFT_LABEL },
+    rightSource: { tokenOrText: 'tok-right-invref', label: RIGHT_LABEL },
+    initialRef: DEFAULT_INITIAL_REF,
+    displayOptions: { showToolbar: false, showOnlyDifferences: false },
+    onFetchSourceContent: makeRejectingFetcher(
+      VerserefMalformedUnknownBookGetCompareSourceContentHandler,
     ),
   },
 };
