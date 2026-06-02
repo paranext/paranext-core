@@ -2,6 +2,7 @@ import { render, screen, fireEvent, renderHook, act } from '@testing-library/rea
 import '@testing-library/jest-dom';
 import { vi, describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { Dialog } from 'platform-bible-react';
+import { DblResourceData } from 'platform-bible-utils';
 import {
   ResourcePickerDialog,
   ResourcePickerDialogLocalizedStrings,
