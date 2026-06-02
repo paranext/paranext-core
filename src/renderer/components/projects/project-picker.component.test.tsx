@@ -11,8 +11,8 @@ const STRINGS: ProjectPickerLocalizedStrings = {
   '%projectPicker_title%': 'Project Picker',
   '%projectPicker_section_recent%': 'Recent',
   '%projectPicker_section_projects%': 'Your projects',
-  '%projectPicker_search_placeholder%': 'Search projects...',
-  '%projectPicker_no_results%': 'No projects found',
+  '%projectPicker_search_placeholder%': 'Search projects…',
+  '%projectPicker_no_results%': 'No results found',
 };
 
 const WEB: ProjectItem = {
@@ -99,7 +99,7 @@ describe('ProjectPicker', () => {
 
   it('filters both sections by search text (fullName match)', () => {
     renderDialog();
-    fireEvent.change(screen.getByPlaceholderText('Search projects...'), {
+    fireEvent.change(screen.getByPlaceholderText('Search projects…'), {
       target: { value: 'Reina' },
     });
     expect(screen.getByText('Reina Valera')).toBeInTheDocument();
@@ -109,7 +109,7 @@ describe('ProjectPicker', () => {
 
   it('filters by shortName match', () => {
     renderDialog();
-    fireEvent.change(screen.getByPlaceholderText('Search projects...'), {
+    fireEvent.change(screen.getByPlaceholderText('Search projects…'), {
       target: { value: 'KJV' },
     });
     expect(screen.getByText('King James Version')).toBeInTheDocument();
@@ -118,21 +118,21 @@ describe('ProjectPicker', () => {
 
   it('filters by language match', () => {
     renderDialog();
-    fireEvent.change(screen.getByPlaceholderText('Search projects...'), {
+    fireEvent.change(screen.getByPlaceholderText('Search projects…'), {
       target: { value: 'Spanish' },
     });
     expect(screen.getByText('Reina Valera')).toBeInTheDocument();
     expect(screen.queryByText('King James Version')).not.toBeInTheDocument();
   });
 
-  it('shows "No projects found" when search matches nothing', () => {
+  it('shows "No results found" when search matches nothing', () => {
     renderDialog();
-    fireEvent.change(screen.getByPlaceholderText('Search projects...'), {
+    fireEvent.change(screen.getByPlaceholderText('Search projects…'), {
       target: { value: 'zzznomatch' },
     });
-    expect(screen.getByText('No projects found')).toBeInTheDocument();
+    expect(screen.getByText('No results found')).toBeInTheDocument();
     expect(screen.queryByText('Recent')).not.toBeInTheDocument();
-    expect(screen.queryByText('All projects')).not.toBeInTheDocument();
+    expect(screen.queryByText('Your projects')).not.toBeInTheDocument();
   });
 
   it('shows a spinner when isLoading is true', () => {

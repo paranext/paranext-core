@@ -1,4 +1,5 @@
 import {
+  cn,
   DialogHeader,
   DialogTitle,
   Label,
@@ -8,10 +9,11 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  useListbox,
   Z_INDEX_MODAL,
 } from 'platform-bible-react';
 import { CheckIcon } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { RefObject, useMemo, useState } from 'react';
 
 export type ProjectItem = {
   id: string;
@@ -30,6 +32,7 @@ export const PROJECT_PICKER_STRING_KEYS = Object.freeze([
   '%projectPicker_section_projects%',
   '%projectPicker_search_placeholder%',
   '%projectPicker_no_results%',
+  '%projectPicker_current_project_label%',
 ] as const);
 
 export type ProjectPickerLocalizedStrings = {
@@ -66,12 +69,16 @@ function ProjectSection({
   label,
   projects,
   currentProjectId,
+  currentProjectLabel,
   onSelect,
+  onFocusOption,
 }: {
   label: string;
   projects: ProjectItem[];
   currentProjectId: string | undefined;
+  currentProjectLabel: string;
   onSelect: (projectId: string) => void;
+  onFocusOption: (id: string) => void;
 }) {
   if (projects.length === 0) return undefined;
   return (
@@ -85,22 +92,24 @@ function ProjectSection({
       {projects.map((p) => (
         <div
           key={p.id}
+          id={p.id}
           role="option"
           aria-selected={p.id === currentProjectId}
           tabIndex={0}
-          className="tw:col-span-3 tw:grid tw:cursor-pointer tw:grid-cols-subgrid tw:items-center tw:rounded tw:px-1 tw:py-1.5 tw:hover:bg-accent tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:outline-none"
+          className={cn(
+            'tw:col-span-3 tw:grid tw:cursor-pointer tw:grid-cols-subgrid tw:items-center tw:rounded tw:px-1 tw:py-1.5 tw:hover:bg-muted tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:outline-none',
+            p.id === currentProjectId && 'tw:bg-muted/50',
+          )}
           onClick={() => onSelect(p.id)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              onSelect(p.id);
-            }
+            if (e.key === 'Enter' || e.key === ' ') onSelect(p.id);
           }}
+          onFocus={() => onFocusOption(p.id)}
         >
           {/* Column 1 — short name, right-aligned */}
           <div className="tw:flex tw:items-center tw:justify-end tw:gap-1 tw:pr-2 tw:text-sm tw:font-medium">
             {p.id === currentProjectId && (
-              <CheckIcon className="tw:h-3 tw:w-3 tw:shrink-0" aria-label="current project" />
+              <CheckIcon className="tw:h-3 tw:w-3 tw:shrink-0" aria-label={currentProjectLabel} />
             )}
             {p.shortName}
           </div>
@@ -166,12 +175,24 @@ export default function ProjectPicker({
 
   const hasNoResults = sortedRecent.length === 0 && filteredAll.length === 0;
 
-  const titleText = localizedStrings['%projectPicker_title%'] ?? '%projectPicker_title%';
+  const titleText = localizedStrings['%projectPicker_title%'] ?? 'Select project';
   const recentLabel = localizedStrings['%projectPicker_section_recent%'] ?? 'Recent';
   const allLabel = localizedStrings['%projectPicker_section_projects%'] ?? 'Your projects';
   const searchPlaceholder =
-    localizedStrings['%projectPicker_search_placeholder%'] ?? 'Search projects...';
-  const noResultsText = localizedStrings['%projectPicker_no_results%'] ?? 'No projects found';
+    localizedStrings['%projectPicker_search_placeholder%'] ?? 'Search projects…';
+  const noResultsText = localizedStrings['%projectPicker_no_results%'] ?? 'No results found';
+  const currentProjectLabel =
+    localizedStrings['%projectPicker_current_project_label%'] ?? 'Current project';
+
+  const listboxOptions = useMemo(
+    () => [...sortedRecent, ...filteredAll].map((p) => ({ id: p.id })),
+    [sortedRecent, filteredAll],
+  );
+
+  const { listboxRef, handleKeyDown, focusOption } = useListbox({
+    options: listboxOptions,
+    onOptionSelect: ({ id }) => onSelect(id),
+  });
 
   return (
     <>
@@ -201,19 +222,28 @@ export default function ProjectPicker({
           <div
             role="listbox"
             aria-label={titleText}
+            tabIndex={0}
+            // useListbox returns a RefObject<HTMLElement>; we narrow to HTMLDivElement since this element is a div
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
+            ref={listboxRef as RefObject<HTMLDivElement>}
+            onKeyDown={handleKeyDown}
             className="tw:grid tw:grid-cols-[auto_1fr_auto]"
           >
             <ProjectSection
               label={recentLabel}
               projects={sortedRecent}
               currentProjectId={currentProject?.id}
+              currentProjectLabel={currentProjectLabel}
               onSelect={onSelect}
+              onFocusOption={focusOption}
             />
             <ProjectSection
               label={allLabel}
               projects={filteredAll}
               currentProjectId={currentProject?.id}
+              currentProjectLabel={currentProjectLabel}
               onSelect={onSelect}
+              onFocusOption={focusOption}
             />
           </div>
         )}

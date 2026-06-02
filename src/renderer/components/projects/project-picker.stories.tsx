@@ -9,8 +9,8 @@ const STRINGS: ProjectPickerLocalizedStrings = {
   '%projectPicker_title%': 'Project Picker',
   '%projectPicker_section_recent%': 'Recent',
   '%projectPicker_section_projects%': 'Your projects',
-  '%projectPicker_search_placeholder%': 'Search projects...',
-  '%projectPicker_no_results%': 'No projects found',
+  '%projectPicker_search_placeholder%': 'Search projects…',
+  '%projectPicker_no_results%': 'No results found',
 };
 
 const WEB: ProjectItem = {
@@ -51,7 +51,7 @@ const meta: Meta<typeof ProjectPicker> = {
   decorators: [
     (Story) => (
       <Dialog open modal={false}>
-        <div className="tw-flex tw-h-[550px] tw-w-[700px] tw-flex-col tw-rounded-lg tw-border tw-bg-background tw-shadow-xl">
+        <div className="tw:flex tw:h-[550px] tw:w-[700px] tw:flex-col tw:rounded-lg tw:border tw:bg-background tw:shadow-xl">
           <Story />
         </div>
       </Dialog>

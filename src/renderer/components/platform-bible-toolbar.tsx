@@ -119,17 +119,21 @@ export function PlatformBibleToolbar() {
 
   const { currentProject, recentProjects, allProjects } = useProjectPickerData();
 
+  const openProject = useCallback(async (projectId: string) => {
+    // This command comes from an extension and is not typed in CommandHandlers.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+    await (sendCommand as any)('platformScriptureEditor.openScriptureEditor', projectId);
+    const svc = await dataProviders.get('platformScripture.recentlyOpenedProjects');
+    await svc?.recordProjectOpened(projectId);
+  }, []);
+
   const showProjectPicker = useDialogCallback(
     PROJECT_PICKER_DIALOG_TYPE,
     { isModal: true },
     async (projectId) => {
       if (!projectId) return;
       try {
-        // This command comes from an extension and is not typed in CommandHandlers.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-        await (sendCommand as any)('platformScriptureEditor.openScriptureEditor', projectId);
-        const svc = await dataProviders.get('platformScripture.recentlyOpenedProjects');
-        await svc?.recordProjectOpened(projectId);
+        await openProject(projectId);
       } catch (e) {
         logger.warn(`ProjectPicker: error opening project ${projectId}: ${getErrorMessage(e)}`);
       }
@@ -468,11 +472,7 @@ export function PlatformBibleToolbar() {
           value={currentProject?.id ?? ''}
           onValueChange={async (projectId: string) => {
             try {
-              // This command comes from an extension and is not typed in CommandHandlers.
-              // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-              await (sendCommand as any)('platformScriptureEditor.openScriptureEditor', projectId);
-              const svc = await dataProviders.get('platformScripture.recentlyOpenedProjects');
-              await svc?.recordProjectOpened(projectId);
+              await openProject(projectId);
             } catch (e: unknown) {
               logger.warn(
                 `Toolbar caught an error while trying to open project ${projectId}: ${getErrorMessage(e)}`,
