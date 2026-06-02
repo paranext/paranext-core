@@ -16,6 +16,7 @@ import { logger } from '@shared/services/logger.service';
 import { type ProjectItem } from '@renderer/components/projects/project-picker.component';
 
 const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
+const EMPTY_RECENT_IDS: string[] = [];
 
 /**
  * Resolves a BCP-47 language tag to its localized display name. Returns undefined when the language
@@ -93,7 +94,7 @@ export function useProjectPickerData(): ProjectPickerData {
   // Recent project IDs from the service — reactive, updates when user opens projects
   const [rawRecentIds, , isRecentIdsLoading] = useData(
     'platformScripture.recentlyOpenedProjects',
-  ).RecentProjects(undefined, []);
+  ).RecentProjects(undefined, EMPTY_RECENT_IDS);
 
   const safeRecentIds = useMemo(
     () => (isPlatformError(rawRecentIds) ? [] : (rawRecentIds ?? [])),
