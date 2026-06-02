@@ -205,6 +205,8 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const [resources, isLoadingResources] = usePromise(
     useCallback(async () => {
       if (fetchResources) {
+        // Sets the `fetchResources` flag to false which will trigger the promise again next render
+        // to fetch the resources
         setFetchResources(false);
         return papi.commands.sendCommand('platformGetResources.getCachedResources');
       }
