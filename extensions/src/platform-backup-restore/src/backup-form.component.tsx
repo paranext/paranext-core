@@ -153,7 +153,7 @@ export interface UsbDeviceHint {
 
 /**
  * Project option extended for the BackupForm. Mirrors ui-state-contracts.md `BackupProjectOption` —
- * adds `hasFiguresFolder`, `isNotesType`, `defaultBookSet` to the base `ProjectOption` shape.
+ * adds `hasFiguresFolder`, `isNoteType`, `defaultBookSet` to the base `ProjectOption` shape.
  */
 export interface BackupProjectOption {
   id: string;
@@ -161,7 +161,7 @@ export interface BackupProjectOption {
   fullName: string;
   isResource: boolean;
   hasFiguresFolder: boolean;
-  isNotesType: boolean;
+  isNoteType: boolean;
   defaultBookSet: BookSet;
 }
 
@@ -222,7 +222,7 @@ export interface BackupValidationRequest {
   destinationPath: string;
   userName: string;
   selectedBookIds: string[];
-  isNotesType: boolean;
+  isNoteType: boolean;
 }
 
 /** Result returned from server-side validation. Echoes ui-state-contracts.md `ValidationResult`. */
@@ -460,7 +460,7 @@ export function BackupForm({
       destinationPath,
       userName,
       selectedBookIds: selectedBooks.bookIds,
-      isNotesType: selectedProject?.isNotesType ?? false,
+      isNoteType: selectedProject?.isNoteType ?? false,
     };
     onValidate(req)
       .then((result) => {
@@ -503,12 +503,12 @@ export function BackupForm({
   // VAL-001..VAL-004 local pre-checks. Server validation (`onValidate`) is authoritative; this
   // is the immediate-feedback layer.
   const isResourceProject = selectedProject?.isResource === true;
-  const isNotesType = selectedProject?.isNotesType === true;
+  const isNoteType = selectedProject?.isNoteType === true;
   const isUserNameEmpty = userName.trim() === '';
   const isDestinationEmpty = destinationPath.trim() === '';
   const isDestinationLocallyInvalid =
     !isDestinationEmpty && !isFileSpecLocallyValid(destinationPath);
-  const isBooksRequirementUnmet = selectedBooks.bookIds.length === 0 && !isNotesType;
+  const isBooksRequirementUnmet = selectedBooks.bookIds.length === 0 && !isNoteType;
 
   const canSubmit = useMemo(() => {
     if (isSubmitting) return false;

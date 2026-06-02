@@ -50,7 +50,7 @@ const SAMPLE_PROJECTS: BackupProjectOption[] = [
     fullName: 'New International Version',
     isResource: false,
     hasFiguresFolder: true,
-    isNotesType: false,
+    isNoteType: false,
     defaultBookSet: OT_NT_BOOKS,
   },
   {
@@ -59,7 +59,7 @@ const SAMPLE_PROJECTS: BackupProjectOption[] = [
     fullName: 'Berean Standard Bible',
     isResource: false,
     hasFiguresFolder: false,
-    isNotesType: false,
+    isNoteType: false,
     defaultBookSet: OT_NT_BOOKS,
   },
   {
@@ -68,7 +68,7 @@ const SAMPLE_PROJECTS: BackupProjectOption[] = [
     fullName: 'Translation Notes',
     isResource: false,
     hasFiguresFolder: false,
-    isNotesType: true,
+    isNoteType: true,
     defaultBookSet: NOTES_BOOKS,
   },
   {
@@ -77,7 +77,7 @@ const SAMPLE_PROJECTS: BackupProjectOption[] = [
     fullName: 'English Standard Version (Resource)',
     isResource: true,
     hasFiguresFolder: false,
-    isNotesType: false,
+    isNoteType: false,
     defaultBookSet: OT_NT_BOOKS,
   },
 ];
