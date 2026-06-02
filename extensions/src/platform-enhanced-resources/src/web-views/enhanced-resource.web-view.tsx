@@ -587,6 +587,8 @@ export function EnhancedResourceWebView({
   }
 
   const showShellEmpty = usj === undefined && !scripturePaneError;
+  if (showShellEmpty)
+    console.warn('[ER] tab bar hidden — usj:', usj, 'scripturePaneError:', scripturePaneError);
 
   return (
     <div className={cn('tw-flex tw-h-[100dvh] tw-flex-col tw-bg-background')}>
@@ -680,11 +682,11 @@ export function EnhancedResourceWebView({
                 hasMatches={hasMatches}
                 localizedStringsWithLoadingState={childStrings}
               />
-              <Tabs value={activeTab} className="tw-flex tw-h-full tw-flex-col">
+              <Tabs value={activeTab} className="tw-flex tw-flex-1 tw-flex-col tw-min-h-0">
                 <TabsContent
                   value="dictionary"
                   data-testid="er-dictionary-tab-panel"
-                  className="tw-flex tw-flex-1 tw-flex-col data-[state=inactive]:tw-hidden"
+                  className="tw-flex tw-flex-1 tw-flex-col tw-overflow-y-auto data-[state=inactive]:tw-hidden"
                 >
                   <DictionaryTab
                     items={dictionaryItems}
@@ -715,7 +717,7 @@ export function EnhancedResourceWebView({
                 <TabsContent
                   value="encyclopedia"
                   data-testid="er-encyclopedia-tab-panel"
-                  className="tw-flex tw-flex-1 tw-flex-col data-[state=inactive]:tw-hidden"
+                  className="tw-flex tw-flex-1 tw-flex-col tw-overflow-y-auto data-[state=inactive]:tw-hidden"
                 >
                   <EncyclopediaTab
                     items={encyclopediaItems}
@@ -736,7 +738,7 @@ export function EnhancedResourceWebView({
                 <TabsContent
                   value="media"
                   data-testid="er-media-tab-panel"
-                  className="tw-flex tw-flex-1 tw-flex-col data-[state=inactive]:tw-hidden"
+                  className="tw-flex tw-flex-1 tw-flex-col tw-overflow-y-auto data-[state=inactive]:tw-hidden"
                 >
                   <MediaImagesTab
                     items={mediaImagesItems}
@@ -753,7 +755,7 @@ export function EnhancedResourceWebView({
                 <TabsContent
                   value="maps"
                   data-testid="er-maps-tab-panel"
-                  className="tw-flex tw-flex-1 tw-flex-col data-[state=inactive]:tw-hidden"
+                  className="tw-flex tw-flex-1 tw-flex-col tw-overflow-y-auto data-[state=inactive]:tw-hidden"
                 >
                   <MediaMapsTab
                     items={mediaMapsItems}
@@ -946,8 +948,11 @@ function senseDisplaysFromPresentation(
   return senses.map((s) => ({
     id: s.id,
     senseNumber: s.senseNumber,
-    definition: s.definition,
-    glosses: s.glosses || undefined,
+    // Mirror ComputeFirstRelevantSensePreview: when no formal definition exists, use the gloss
+    // as the inline sense text so the card shows something meaningful (e.g. "but" not just "(483)").
+    definition: s.definition || s.glosses || '',
+    // Suppress the separate "Glosses:" row when the gloss is already serving as the definition.
+    glosses: s.definition ? s.glosses || undefined : undefined,
     domains:
       s.domains.length > 0
         ? s.domains.map((d) => ({
@@ -986,6 +991,7 @@ function entryDtoToPresenterInput(dto: DictionaryEntryDataDto): DictionaryEntryD
       senseId: s.senseId,
       definition: s.definition,
       glosses: s.glosses.map((g) => ({ language: g.language, text: g.text })),
+      occurrenceCount: s.occurrenceCount,
       // FN-019 forward fields are absent in today's C# DTO — presenter emits blank rows.
     })),
   };
@@ -1285,6 +1291,14 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
             err instanceof Error ? err.message : String(err)
           }`,
         );
+        console.warn(
+          '[ER] chapter load failed — tab bar will disappear. book:',
+          scrRef.book,
+          'chapter:',
+          scrRef.chapterNum,
+          'error:',
+          err,
+        );
         setUsj(undefined);
         setAnnotations([]);
         // Surface a user-visible error only for unexpected failures - missing-book / missing-data
@@ -1348,6 +1362,35 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     [scope, scrRefBook, scrRefChapterNum, scrRefVerseNum],
   );
 
+  // Clear the active word filter when the user navigates to a different chapter or book.
+  const prevChapterKeyRef = useRef(`${scrRefBook}:${scrRefChapterNum}`);
+  useEffect(() => {
+    const chapterKey = `${scrRefBook}:${scrRefChapterNum}`;
+    if (prevChapterKeyRef.current !== chapterKey) {
+      prevChapterKeyRef.current = chapterKey;
+      if (filteredTokenId) {
+        setFilteredTokenId(undefined);
+        setFilteredTokenSurface(undefined);
+        if (scope === 'current-sense') setScope('current-verse');
+      }
+    }
+  }, [
+    scrRefBook,
+    scrRefChapterNum,
+    filteredTokenId,
+    scope,
+    setFilteredTokenId,
+    setFilteredTokenSurface,
+    setScope,
+  ]);
+
+  // Look up the annotation for the currently filtered token so effects can
+  // populate lemma and targetLinks in the WordFilterInputDto.
+  const filteredAnnotation = useMemo(
+    () => annotations.find((a) => a.annotationId === filteredTokenId),
+    [annotations, filteredTokenId],
+  );
+
   // The current verseNum is still needed when constructing the load input
   // (every backend method takes a `currentReference`). Read it through a ref
   // inside each effect so the effect's dep array stays clean.
@@ -1374,11 +1417,11 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     const filter: WordFilterInputDto | undefined = filteredTokenId
       ? {
           tokenId: filteredTokenId,
-          lemma: '',
-          source: '',
-          translit: filteredTokenId, // best-effort until we wire a token→lemma resolver
+          lemma: filteredAnnotation?.metadata.lexicalLinks?.[0]?.split(':')?.[1] ?? '',
+          source: filteredTokenSurface ?? '',
+          translit: '',
           senses: '',
-          targetLinks: '',
+          targetLinks: filteredAnnotation?.metadata.targetLinks?.join(';') ?? '',
           clickOrigin: 'ScripturePane',
         }
       : undefined;
@@ -1574,11 +1617,11 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     const filter: WordFilterInputDto | undefined = filteredTokenId
       ? {
           tokenId: filteredTokenId,
-          lemma: '',
-          source: '',
-          translit: filteredTokenId,
+          lemma: filteredAnnotation?.metadata.lexicalLinks?.[0]?.split(':')?.[1] ?? '',
+          source: filteredTokenSurface ?? '',
+          translit: '',
           senses: '',
-          targetLinks: '',
+          targetLinks: filteredAnnotation?.metadata.targetLinks?.join(';') ?? '',
           clickOrigin: 'ScripturePane',
         }
       : undefined;
@@ -1594,6 +1637,8 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       userLanguage: glossLanguage,
       resourceId,
     };
+
+    console.log('[ER] encyclopedia filter:', JSON.stringify(filter));
 
     if (!erProxy) {
       setEncyclopediaItems([]);
@@ -2098,11 +2143,11 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     const filter: WordFilterInputDto | undefined = filteredTokenId
       ? {
           tokenId: filteredTokenId,
-          lemma: '',
-          source: '',
-          translit: filteredTokenId,
+          lemma: filteredAnnotation?.metadata.lexicalLinks?.[0]?.split(':')?.[1] ?? '',
+          source: filteredTokenSurface ?? '',
+          translit: '',
           senses: '',
-          targetLinks: '',
+          targetLinks: filteredAnnotation?.metadata.targetLinks?.join(';') ?? '',
           clickOrigin: 'ScripturePane',
         }
       : undefined;
@@ -2187,11 +2232,11 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     const filter: WordFilterInputDto | undefined = filteredTokenId
       ? {
           tokenId: filteredTokenId,
-          lemma: '',
-          source: '',
-          translit: filteredTokenId,
+          lemma: filteredAnnotation?.metadata.lexicalLinks?.[0]?.split(':')?.[1] ?? '',
+          source: filteredTokenSurface ?? '',
+          translit: '',
           senses: '',
-          targetLinks: '',
+          targetLinks: filteredAnnotation?.metadata.targetLinks?.join(';') ?? '',
           clickOrigin: 'ScripturePane',
         }
       : undefined;
@@ -2509,8 +2554,18 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       // Word click — set both filter id and surface for downstream display.
       setFilteredTokenId(tokenId);
       setFilteredTokenSurface(textContent);
+      if (annotation.metadata.verseNum && annotation.metadata.verseNum !== scrRef.verseNum)
+        setScrRef({ ...scrRef, verseNum: annotation.metadata.verseNum });
     },
-    [annotations, usj, setFilteredTokenId, setFilteredTokenSurface, setSelectedFootnote],
+    [
+      annotations,
+      usj,
+      setFilteredTokenId,
+      setFilteredTokenSurface,
+      setSelectedFootnote,
+      scrRef,
+      setScrRef,
+    ],
   );
 
   // FN-020 / BHV-308: context-menu placeholder. The real context-menu wiring
@@ -2980,7 +3035,7 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       dictionarySelectedTokenId={dictionarySelectedTokenId}
       dictionaryIsLoading={dictionaryIsLoading}
       dictionaryEmptyState={dictionaryEmptyState}
-      dictionaryFilterWord={filteredTokenId}
+      dictionaryFilterWord={searchValue || filteredTokenId}
       dictionaryScopeLabel={dictionaryScopeLabel}
       dictionaryActiveDictionary={dictionaryActiveDictionary}
       dictionaryHideLessRelevantSenses={dictionaryHideLessRelevantSenses}
@@ -3008,7 +3063,7 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       encyclopediaSelectedTokenId={encyclopediaSelectedTokenId}
       encyclopediaIsLoading={encyclopediaIsLoading}
       encyclopediaEmptyState={encyclopediaEmptyState}
-      encyclopediaFilterWord={filteredTokenId}
+      encyclopediaFilterWord={searchValue || filteredTokenId}
       encyclopediaScopeLabel={dictionaryScopeLabel}
       encyclopediaArticleDataMap={encyclopediaArticleDataMap}
       onEncyclopediaSelectionChange={setEncyclopediaSelectedTokenId}

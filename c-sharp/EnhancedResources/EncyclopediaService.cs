@@ -49,7 +49,7 @@ internal sealed partial class EncyclopediaService(
             CurrentRef: input.CurrentReference,
             Scope: input.Scope,
             LinkType: MarbleLinkType.Thematic,
-            FilterText: input.Filter?.Lemma ?? "",
+            FilterText: "",
             FilterSenses: input.Filter?.Senses ?? "",
             FilterClickOrigin: input.Filter?.ClickOrigin ?? FilterClickOrigin.ScripturePane,
             ResourceId: input.ResourceId
@@ -69,12 +69,16 @@ internal sealed partial class EncyclopediaService(
         }
 
         var items = new List<EncyclopediaDisplayItem>();
+        var seenLemmas = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var token in scopedTokens)
         {
             var firstLexicalLink = token.LexicalLinks?.FirstOrDefault();
             if (string.IsNullOrEmpty(firstLexicalLink))
                 continue;
             var (lemma, _, _, dictionary) = ParseLexLinkEntry(firstLexicalLink);
+
+            if (!seenLemmas.Add(lemma))
+                continue;
 
             var thematicIds = token.ThematicLinks ?? [];
             if (thematicIds.Count == 0)

@@ -12,4 +12,7 @@ internal record DictionaryEntryRecord(
     List<string> SubItemIds
 );
 
-internal record SenseRecord(string SenseId, List<GlossEntry> Glosses, string Definition);
+internal record SenseRecord(string SenseId, List<GlossEntry> Glosses, string Definition)
+{
+    public int OccurrenceCount { get; init; } = 0;
+}

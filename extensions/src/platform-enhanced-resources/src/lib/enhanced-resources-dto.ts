@@ -80,6 +80,7 @@ export type DictionaryEntryDataDto = {
     senseId: string;
     glosses: { language: string; text: string }[];
     definition: string;
+    occurrenceCount: number;
   }[];
   semanticDomains: string[];
   relatedLexemes: { lemma: string; entryId: string; relationship: string; gloss: string }[];

@@ -48,6 +48,8 @@ export interface MarbleAnnotationMetadata {
   imageLinks?: string[];
   /** Map_links values, split. Word-kind only. */
   mapLinks?: string[];
+  /** Verse number this word belongs to, captured at conversion time. Word-kind only. */
+  verseNum?: number;
   /** Caller character ('+', 'a', 'b', etc.). Note-kind only. */
   caller?: string;
   /** Raw inner XML of the note element. Note-kind only. */
@@ -113,7 +115,7 @@ export function convertMarbleChapterXml(marbleChapterXml: string): MarbleConvers
   const annotations: MarbleAnnotation[] = [];
   const usj: Usj = { type: USJ_TYPE, version: USJ_VERSION, content: [] };
 
-  walkChildren(usxBook, usj.content, '$', annotations);
+  walkChildren(usxBook, usj.content, '$', annotations, { value: 0 });
 
   return { usj, annotations };
 }
@@ -174,6 +176,7 @@ function walkChildren(
   output: ContentItem[],
   parentPath: string,
   annotations: MarbleAnnotation[],
+  currentVerseNum: { value: number } = { value: 0 },
 ): void {
   getChildren(parent).forEach((node) => {
     if (node.nodeType === NODE_TYPE_TEXT || node.nodeType === NODE_TYPE_CDATA) {
@@ -184,7 +187,7 @@ function walkChildren(
     if (node.nodeType !== NODE_TYPE_ELEMENT) return;
 
     const childPath = `${parentPath}.content[${output.length}]`;
-    const emitted = walkElement(node as XElement, childPath, annotations);
+    const emitted = walkElement(node as XElement, childPath, annotations, currentVerseNum);
     if (emitted) output.push(emitted);
   });
 }
@@ -193,24 +196,29 @@ function walkElement(
   el: XElement,
   path: string,
   annotations: MarbleAnnotation[],
+  currentVerseNum: { value: number },
 ): MarkerObject | undefined {
   switch (el.tagName) {
     case 'chapter':
       return emitChapter(el);
-    case 'verse':
-      return emitVerse(el);
+    case 'verse': {
+      const verseMarker = emitVerse(el);
+      const parsed = parseInt(verseMarker.number ?? '0', 10);
+      if (parsed > 0) currentVerseNum.value = parsed;
+      return verseMarker;
+    }
     case 'para':
-      return emitContainer(el, 'para', path, annotations);
+      return emitContainer(el, 'para', path, annotations, currentVerseNum);
     case 'char':
-      return emitContainer(el, 'char', path, annotations);
+      return emitContainer(el, 'char', path, annotations, currentVerseNum);
     case 'wg':
-      return emitWg(el, path, annotations);
+      return emitWg(el, path, annotations, currentVerseNum.value);
     case 'note':
       return emitNote(el, path, annotations);
     case 'ref':
       return emitRef(el);
     default:
-      return emitContainer(el, el.tagName, path, annotations);
+      return emitContainer(el, el.tagName, path, annotations, currentVerseNum);
   }
 }
 
@@ -235,11 +243,12 @@ function emitContainer(
   type: string,
   path: string,
   annotations: MarbleAnnotation[],
+  currentVerseNum: { value: number },
 ): MarkerObject {
   const styleAttr = el.getAttribute('style');
   const marker = styleAttr.length > 0 ? styleAttr : type;
   const out: MarkerObject = { type, marker, content: [] };
-  walkChildren(el, out.content!, path, annotations);
+  walkChildren(el, out.content!, path, annotations, currentVerseNum);
   return out;
 }
 
@@ -259,7 +268,12 @@ const WG_LINK_ATTRS: readonly string[] = [
 // title="wg" in the browser via CharNode.createDOM():207 — is tracked as FN-029 and
 // addressed editor-side in Session 2 by making the title attribute suppressible via a new
 // ViewOptions.showCharMarkerTitles option. See working-docs/2026-05-04-pt9-fidelity-session-1-design.md §7.
-function emitWg(el: XElement, path: string, annotations: MarbleAnnotation[]): MarbleMarker {
+function emitWg(
+  el: XElement,
+  path: string,
+  annotations: MarbleAnnotation[],
+  verseNum: number,
+): MarbleMarker {
   // Marble <wg> is an inline tagged word; emit as a `char` MarkerObject with
   // `marker="wg"`. The editor recognizes "wg" via its USFM char marker list
   // (FN-013), and the editor's __unknownAttributes mechanism preserves
@@ -288,6 +302,7 @@ function emitWg(el: XElement, path: string, annotations: MarbleAnnotation[]): Ma
         lexicalLinks: splitLinks(el.getAttribute('lexical_links')),
         imageLinks: splitLinks(el.getAttribute('image_links')),
         mapLinks: splitLinks(el.getAttribute('map_links')),
+        verseNum: verseNum > 0 ? verseNum : undefined,
       },
     });
   }

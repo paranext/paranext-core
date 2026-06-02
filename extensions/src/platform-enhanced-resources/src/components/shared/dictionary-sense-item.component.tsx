@@ -260,7 +260,7 @@ export function DictionarySenseItem({
         <span className="tw-shrink-0 tw-text-sm tw-font-semibold tw-tabular-nums">
           {sense.senseNumber}.
         </span>
-        <span className="tw-flex-1 tw-text-sm">{sense.definition}</span>
+        {sense.definition && <span className="tw-flex-1 tw-text-sm">{sense.definition}</span>}
         {fn022Mode ? (
           <TooltipProvider delayDuration={150}>
             <Tooltip>
