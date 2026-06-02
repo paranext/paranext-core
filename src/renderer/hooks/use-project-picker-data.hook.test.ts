@@ -22,11 +22,16 @@ vi.mock('@shared/services/logger.service', () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('@renderer/hooks/papi-hooks', () => ({
-  useData: vi.fn(() => ({
-    RecentProjects: vi.fn().mockReturnValue([[], vi.fn(), false]),
-  })),
-}));
+vi.mock('@renderer/hooks/papi-hooks', () => {
+  // Keep emptyIds stable so rawRecentIds has the same array reference across renders,
+  // preventing useMemo from re-running and triggering an infinite re-render loop.
+  const emptyIds: string[] = [];
+  return {
+    useData: vi.fn(() => ({
+      RecentProjects: vi.fn().mockReturnValue([emptyIds, vi.fn(), false]),
+    })),
+  };
+});
 
 vi.mock('@renderer/services/papi-frontend.service', () => ({
   webViews: {

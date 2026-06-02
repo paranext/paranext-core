@@ -156,7 +156,9 @@ export function useProjectPickerData(): ProjectPickerData {
 
   const [allProjectsWithRecent, isAllProjectsLoading] = usePromise<ProjectItem[]>(
     useCallback(async () => {
-      const metadata = await projectLookupService.getMetadataForAllProjects();
+      const metadata = await projectLookupService.getMetadataForAllProjects({
+        includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
+      });
       const settled = await Promise.all(
         metadata.map(async (m) => {
           try {
