@@ -82,14 +82,17 @@ globalThis.webViewComponent = function ModelTextPanel({
   const [resourcesPossiblyUndefined, isLoadingResources] = usePromise(
     useCallback(async () => {
       if (fetchResources) {
-        const cachedResources = await papi.commands.sendCommand(
-          'platformGetResources.getCachedResources',
-        );
+        // Sets the `fetchResources` flag to false which will trigger the promise again next render
+        // to fetch the resources
         setFetchResources(false);
-        return cachedResources;
+        return Promise.resolve(undefined);
       }
 
-      return Promise.resolve(undefined);
+      const cachedResources = await papi.commands.sendCommand(
+        'platformGetResources.getCachedResources',
+      );
+      setFetchResources(false);
+      return cachedResources;
     }, [fetchResources]),
     undefined,
   );
@@ -250,10 +253,13 @@ globalThis.webViewComponent = function ModelTextPanel({
   }
 
   // Zero state: no model text configured (or still loading)
-  if (!effectiveModelTexts || effectiveModelTexts.items.length === 0) {
+  if (isLoadingResources || !effectiveModelTexts || effectiveModelTexts.items.length === 0) {
     return (
       <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
-        {isEffectiveModelTextsLoading ? (
+        {/* Also shows spinner for if loading resources, except if there is no model text then */}
+        {/* it should directly show the button to pick a model text bellow */}
+        {isEffectiveModelTextsLoading ||
+        (isLoadingResources && effectiveModelText && effectiveModelTexts.items.length !== 0) ? (
           <Spinner />
         ) : (
           <>
@@ -287,7 +293,7 @@ globalThis.webViewComponent = function ModelTextPanel({
   }
 
   // Loading state: USJ not yet fetched (usjPossiblyError is undefined while the subscription is initializing)
-  if (isLoadingResources || !resourceProjectId || usjPossiblyError === undefined) {
+  if (!resourceProjectId || usjPossiblyError === undefined) {
     return (
       <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
         <Spinner />

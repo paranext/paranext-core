@@ -1,9 +1,8 @@
 import { Editorial, EditorOptions, EditorRef } from '@eten-tech-foundation/platform-editor';
 import { EMPTY_USJ } from '@eten-tech-foundation/scripture-utilities';
 import type { WebViewProps } from '@papi/core';
-import { logger } from '@papi/frontend';
+import papi, { logger } from '@papi/frontend';
 import {
-  useData,
   useDataProvider,
   useDialogCallback,
   useLocalizedStrings,
@@ -20,6 +19,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   Spinner,
+  usePromise,
 } from 'platform-bible-react';
 import {
   DblResourceData,
@@ -29,7 +29,7 @@ import {
   ResourceType,
 } from 'platform-bible-utils';
 import { ChevronDown } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DblResourceReference, EffectiveResourceReference } from 'platform-scripture';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
@@ -166,14 +166,28 @@ globalThis.webViewComponent = function ResourceTextPanel({
     projectId,
   );
 
+  const [fetchResources, setFetchResources] = useState(true);
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
-  const [resourcesPossiblyError] = useData(
-    'platformGetResources.dblResourcesProvider',
-  ).DblResources(undefined, []);
-  // Memoize to prevent a new [] reference on every render when resourcesPossiblyError is an error
+  const [resourcesPossiblyUndefined, isLoadingResources] = usePromise(
+    useCallback(async () => {
+      if (fetchResources) {
+        // Sets the `fetchResources` flag to false which will trigger the promise again next render
+        // to fetch the resources
+        setFetchResources(false);
+        return Promise.resolve(undefined);
+      }
+
+      const cachedResources = await papi.commands.sendCommand(
+        'platformGetResources.getCachedResources',
+      );
+      setFetchResources(false);
+      return cachedResources;
+    }, [fetchResources]),
+    undefined,
+  );
   const dblResources = useMemo(
-    () => (isPlatformError(resourcesPossiblyError) ? [] : resourcesPossiblyError),
-    [resourcesPossiblyError],
+    () => resourcesPossiblyUndefined ?? [],
+    [resourcesPossiblyUndefined],
   );
 
   // #endregion
@@ -365,7 +379,9 @@ globalThis.webViewComponent = function ResourceTextPanel({
     );
   }
 
-  if (!effectiveResources) {
+  // Also shows spinner for if loading resources, except if there is no resources then it should
+  // directly show the button to pick a resource bellow
+  if (!effectiveResources || (isLoadingResources && filteredResources.length !== 0)) {
     return (
       <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
         <Spinner />
