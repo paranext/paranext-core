@@ -25,9 +25,9 @@ public sealed class ProjectSettingsNames
 
     /// <summary>
     /// Whether the project has been published as a read-only reference / resource. This is a
-    /// computed, read-only setting — it is not stored in Settings.xml. The value is derived from
-    /// ScrText.IsResourceProject. Intentionally NOT included in s_platformBibleToParatextSettingsNames
-    /// because no Paratext setting name maps to it.
+    /// computed, read-only setting — it is not stored in Settings.xml. Intentionally NOT included
+    /// in s_platformBibleToParatextSettingsNames because no Paratext setting name maps to it; the
+    /// value is computed by ParatextProjectDataProvider's get-setting branch.
     /// </summary>
     public const string PB_IS_PUBLISHED = "platform.isPublished";
 

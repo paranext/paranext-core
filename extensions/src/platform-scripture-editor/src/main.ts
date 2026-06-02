@@ -173,7 +173,7 @@ async function open(
 
     const projectIdsMatchingReadonly = selectProjectIdsForOpenMode(
       projectsWithIsPublished,
-      isReadOnly,
+      isReadOnly ? 'resourceViewer' : 'scriptureEditor',
     );
 
     if (projectIdsMatchingReadonly.length > 0) {

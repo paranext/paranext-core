@@ -1188,19 +1188,19 @@ describe('resolveOpenEditorDispatch', () => {
 // #region selectProjectIdsForOpenMode
 
 describe('selectProjectIdsForOpenMode', () => {
-  it('returns only published project IDs when opening the Resource Viewer (isReadOnly=true)', () => {
+  it("returns only published project IDs when opening the Resource Viewer (mode='resourceViewer')", () => {
     const result = selectProjectIdsForOpenMode(
       [
         { projectId: 'ProjA', isPublished: true },
         { projectId: 'ProjB', isPublished: false },
         { projectId: 'ProjC', isPublished: true },
       ],
-      true,
+      'resourceViewer',
     );
     expect(result).toEqual(['ProjA', 'ProjC']);
   });
 
-  it('returns only non-published project IDs when opening the Scripture Editor (isReadOnly=false)', () => {
+  it("returns only non-published project IDs when opening the Scripture Editor (mode='scriptureEditor')", () => {
     const result = selectProjectIdsForOpenMode(
       [
         { projectId: 'ProjA', isPublished: true },
@@ -1208,7 +1208,7 @@ describe('selectProjectIdsForOpenMode', () => {
         { projectId: 'ProjC', isPublished: true },
         { projectId: 'ProjD', isPublished: false },
       ],
-      false,
+      'scriptureEditor',
     );
     expect(result).toEqual(['ProjB', 'ProjD']);
   });
@@ -1220,7 +1220,7 @@ describe('selectProjectIdsForOpenMode', () => {
         { projectId: 'ProjA', isPublished: true },
         { projectId: 'ProjM', isPublished: true },
       ],
-      true,
+      'resourceViewer',
     );
     expect(result).toEqual(['ProjZ', 'ProjA', 'ProjM']);
   });
@@ -1230,18 +1230,18 @@ describe('selectProjectIdsForOpenMode', () => {
       { projectId: 'ProjA', isPublished: true },
       { projectId: 'ProjB', isPublished: true },
     ];
-    expect(selectProjectIdsForOpenMode(allPublished, false)).toEqual([]);
+    expect(selectProjectIdsForOpenMode(allPublished, 'scriptureEditor')).toEqual([]);
 
     const allUnpublished = [
       { projectId: 'ProjA', isPublished: false },
       { projectId: 'ProjB', isPublished: false },
     ];
-    expect(selectProjectIdsForOpenMode(allUnpublished, true)).toEqual([]);
+    expect(selectProjectIdsForOpenMode(allUnpublished, 'resourceViewer')).toEqual([]);
   });
 
   it('returns an empty array when given no projects', () => {
-    expect(selectProjectIdsForOpenMode([], true)).toEqual([]);
-    expect(selectProjectIdsForOpenMode([], false)).toEqual([]);
+    expect(selectProjectIdsForOpenMode([], 'resourceViewer')).toEqual([]);
+    expect(selectProjectIdsForOpenMode([], 'scriptureEditor')).toEqual([]);
   });
 });
 

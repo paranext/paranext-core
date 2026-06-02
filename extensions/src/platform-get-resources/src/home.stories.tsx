@@ -33,8 +33,8 @@ const staticLocalProjectsAndResources: LocalProjectInfo[] = [
   },
   {
     projectId: '14',
-    // Non-published but non-editable Scripture text (e.g. Paratext Editable=F). Still a project,
-    // not a resource — it should appear with the Scripture-project icon, not the resource icon.
+    // Non-published but non-editable Scripture text (e.g. Paratext Editable=F) — should appear
+    // with the unpublished-project icon, not the published-resource icon.
     isPublished: false,
     fullName:
       'Project 3 - read-only This_is_a_project_with_a_very_long_name_01234567890_!/"§$%&/()=?_öäüß',
