@@ -217,6 +217,7 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
       ...localizedOptions,
       isDialog: true as const,
       role: dialogDef.dialogRole ?? 'dialog',
+      initialSize: dialogDef.initialSize,
       submitDialog: (data: DialogTypes[DialogTabType]['responseType']) => {
         if (!modalOverlayId) {
           logger.error('submitDialog called before modal overlay ID was assigned');

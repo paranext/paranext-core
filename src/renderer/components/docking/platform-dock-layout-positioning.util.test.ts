@@ -4,6 +4,10 @@ import { FloatLayout } from '@shared/models/docking-framework.model';
 import { getFloatPosition } from './platform-dock-layout-positioning.util';
 
 vi.mock('../../../shared/services/logger.service');
+vi.mock('@renderer/services/theme.service-host', () => ({
+  __esModule: true,
+  localThemeService: {},
+}));
 
 describe('Dock Layout Component', () => {
   describe('getFloatPosition()', () => {

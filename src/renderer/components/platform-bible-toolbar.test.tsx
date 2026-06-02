@@ -42,6 +42,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
     ]),
   })),
   useDataProvider: vi.fn(() => undefined),
+  useDialogCallback: vi.fn(() => vi.fn()),
   useSetting: vi.fn(() => ['simple', vi.fn(), vi.fn(), false]),
 }));
 
@@ -51,6 +52,9 @@ vi.mock('@renderer/services/papi-frontend.service', () => ({
       marketingVersion: '1.0.0',
       marketingVersionMoniker: undefined,
     })),
+  },
+  dataProviders: {
+    get: vi.fn(async () => undefined),
   },
 }));
 
@@ -86,6 +90,15 @@ vi.mock('@shared/services/logger.service', () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
 
+vi.mock('@renderer/hooks/use-project-picker-data.hook', () => ({
+  useProjectPickerData: vi.fn(() => ({
+    currentProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
+    recentProjects: [{ id: 'proj-1', fullName: 'Test Project', shortName: 'TP' }],
+    allProjects: [],
+    isLoading: false,
+  })),
+}));
+
 vi.mock('platform-bible-react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('platform-bible-react')>();
   return {
@@ -104,6 +117,18 @@ vi.mock('platform-bible-react', async (importOriginal) => {
     ),
     BookChapterControl: () => <div data-testid="book-chapter-control" />,
     ScrollGroupSelector: () => <div data-testid="scroll-group-selector" />,
+    Select: ({ children, disabled }: { children?: React.ReactNode; disabled?: boolean }) => (
+      <div data-testid="project-picker-select" aria-disabled={disabled}>
+        {children}
+      </div>
+    ),
+    SelectTrigger: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+    SelectContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+    SelectItem: ({ children, value }: { children?: React.ReactNode; value?: string }) => (
+      <div data-value={value}>{children}</div>
+    ),
+    SelectSeparator: () => <hr />,
+    SelectValue: ({ placeholder }: { placeholder?: string }) => <span>{placeholder}</span>,
   };
 });
 
@@ -396,6 +421,29 @@ describe('PlatformBibleToolbar — Scroll group selector visibility by interface
     render(<PlatformBibleToolbar />);
     await waitFor(() => {
       expect(screen.getByTestId('scroll-group-selector')).toBeInTheDocument();
+    });
+  });
+});
+
+describe('PlatformBibleToolbar — project picker Select visibility by interface mode', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    mockSendCommand(true);
+  });
+
+  it('renders project picker Select when platform.interfaceMode is "simple"', async () => {
+    render(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(screen.getByTestId('project-picker-select')).toBeInTheDocument();
+    });
+  });
+
+  it('hides project picker Select when platform.interfaceMode is "power"', async () => {
+    vi.mocked(useSetting).mockReturnValue(['power', vi.fn(), vi.fn(), false]);
+    render(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(screen.queryByTestId('project-picker-select')).not.toBeInTheDocument();
     });
   });
 });

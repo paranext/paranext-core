@@ -3,12 +3,15 @@ import { provideMenuData } from '@renderer/components/platform-bible-menu.data';
 import {
   useData,
   useDataProvider,
+  useDialogCallback,
   useLocalizedStrings,
   useScrollGroupScrRef,
   useRecentScriptureRefs,
 } from '@renderer/hooks/papi-hooks';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
-import { app } from '@renderer/services/papi-frontend.service';
+import { useProjectPickerData } from '@renderer/hooks/use-project-picker-data.hook';
+import { PROJECT_PICKER_DIALOG_TYPE } from '@renderer/components/dialogs/dialog-definition.model';
+import { app, dataProviders } from '@renderer/services/papi-frontend.service';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
 import { localThemeService } from '@renderer/services/theme.service-host';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
@@ -24,6 +27,12 @@ import {
   Button,
   cn,
   getToolbarOSReservedSpaceClassName,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
   ScrollGroupSelector,
   Spinner,
   Toolbar,
@@ -83,6 +92,9 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%toolbar_sync_open_status%',
   '%toolbar_sync_status_synced%',
   '%toolbar_sync_status_syncing%',
+  '%projectPicker_toolbar_select_project%',
+  '%projectPicker_toolbar_no_projects%',
+  '%projectPicker_toolbar_more_projects%',
 ];
 
 export function PlatformBibleToolbar() {
@@ -107,6 +119,33 @@ export function PlatformBibleToolbar() {
   );
 
   const isPowerMode = useIsPowerMode();
+
+  const { currentProject, recentProjects, allProjects, currentProjectError } =
+    useProjectPickerData();
+
+  const openProject = useCallback(async (projectId: string) => {
+    // This command comes from an extension and is not typed in CommandHandlers.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+    await (sendCommand as any)('platformScriptureEditor.openScriptureEditor', projectId);
+    const svc = await dataProviders.get('platformScripture.recentlyOpenedProjects');
+    await svc?.recordProjectOpened(projectId);
+  }, []);
+
+  const showProjectPicker = useDialogCallback(
+    PROJECT_PICKER_DIALOG_TYPE,
+    { isModal: true },
+    async (projectId) => {
+      if (!projectId) return;
+      try {
+        await openProject(projectId);
+      } catch (e) {
+        logger.warn(`ProjectPicker: error opening project ${projectId}: ${getErrorMessage(e)}`);
+      }
+    },
+  );
+
+  const projectPickerItems = recentProjects.length > 0 ? recentProjects : allProjects;
+  const hasProjectPickerItems = projectPickerItems.length > 0;
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
@@ -432,6 +471,60 @@ export function PlatformBibleToolbar() {
           )}
         </Tooltip>
       </TooltipProvider>
+      {!isPowerMode && (
+        <Select
+          value={currentProject?.id ?? ''}
+          onValueChange={async (projectId: string) => {
+            try {
+              await openProject(projectId);
+            } catch (e: unknown) {
+              logger.warn(
+                `Toolbar caught an error while trying to open project ${projectId}: ${getErrorMessage(e)}`,
+              );
+            }
+          }}
+          disabled={!hasProjectPickerItems}
+        >
+          <SelectTrigger className="tw:max-w-64 tw:min-w-48">
+            <SelectValue
+              placeholder={
+                hasProjectPickerItems
+                  ? localizedStrings['%projectPicker_toolbar_select_project%']
+                  : localizedStrings['%projectPicker_toolbar_no_projects%']
+              }
+            >
+              {currentProject && (
+                <span
+                  className={cn(
+                    'tw:min-w-0 tw:flex-1 tw:truncate',
+                    currentProjectError && 'tw:text-destructive',
+                  )}
+                >
+                  {currentProjectError ??
+                    `${currentProject.fullName} (${currentProject.shortName})`}
+                </span>
+              )}
+            </SelectValue>
+          </SelectTrigger>
+          {hasProjectPickerItems && (
+            <SelectContent>
+              {projectPickerItems.map((p) => (
+                <SelectItem key={p.id} value={p.id} className="tw:whitespace-normal">
+                  {p.fullName} ({p.shortName})
+                </SelectItem>
+              ))}
+              <SelectSeparator />
+              <button
+                type="button"
+                className="tw:w-full tw:cursor-pointer tw:px-2 tw:py-1.5 tw:text-start tw:text-sm"
+                onClick={() => showProjectPicker()}
+              >
+                {localizedStrings['%projectPicker_toolbar_more_projects%']}
+              </button>
+            </SelectContent>
+          )}
+        </Select>
+      )}
       <BookChapterControl
         scrRef={scrRef}
         handleSubmit={setScrRef}
