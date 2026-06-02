@@ -208,10 +208,10 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
         // Sets the `fetchResources` flag to false which will trigger the promise again next render
         // to fetch the resources
         setFetchResources(false);
-        return papi.commands.sendCommand('platformGetResources.getCachedResources');
+        return Promise.resolve(undefined);
       }
 
-      return Promise.resolve(undefined);
+      return papi.commands.sendCommand('platformGetResources.getCachedResources');
     }, [fetchResources]),
     undefined,
   );
