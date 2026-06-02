@@ -812,3 +812,42 @@ export async function syncOnProjectSwitch(
 }
 
 // #endregion Project-Switch Sync
+
+// #region Text Connection Panels
+
+/**
+ * Opens or updates the model text, commentary, and scripture resource panels for a project.
+ *
+ * @param papi The instance of papi to send the commands with
+ * @param projectId The id of the project to open the text connections for
+ */
+export async function openTextConnectionPanels(
+  papi: typeof PapiBackend,
+  projectId: string,
+): Promise<void> {
+  try {
+    await papi.commands.sendCommand('platformScriptureEditor.openModelText', projectId);
+  } catch (e) {
+    papi.logger.warn(`Error opening model text panel: ${getErrorMessage(e)}`);
+  }
+  try {
+    await papi.commands.sendCommand(
+      'platformScriptureEditor.openResourceText',
+      'CommentaryResource',
+      projectId,
+    );
+  } catch (e) {
+    papi.logger.warn(`Error opening commentary text panel: ${getErrorMessage(e)}`);
+  }
+  try {
+    await papi.commands.sendCommand(
+      'platformScriptureEditor.openResourceText',
+      'ScriptureResource',
+      projectId,
+    );
+  } catch (e) {
+    papi.logger.warn(`Error opening scripture resource text panel: ${getErrorMessage(e)}`);
+  }
+}
+
+// #endregion Text Connection Panels
