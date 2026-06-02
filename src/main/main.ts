@@ -27,6 +27,7 @@ import { extensionAssetProtocolService } from '@main/services/extension-asset-pr
 import { extensionHostService } from '@main/services/extension-host.service';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
+import { performShutdownTasks } from '@main/shutdown-tasks';
 import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
 import {
   CommandLineArgs,
@@ -41,7 +42,7 @@ import {
   MAX_ZOOM_FACTOR,
   MIN_ZOOM_FACTOR,
 } from '@shared/data/platform.data';
-import { CATEGORY_COMMAND, GET_METHODS } from '@shared/data/rpc.model';
+import { GET_METHODS } from '@shared/data/rpc.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import * as commandService from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
@@ -51,11 +52,10 @@ import * as networkService from '@shared/services/network.service';
 import { get } from '@shared/services/project-data-provider.service';
 import { settingsService } from '@shared/services/settings.service';
 import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
-import { serializeRequestType, SerializedRequestType } from '@shared/utils/util';
+import { SerializedRequestType } from '@shared/utils/util';
 import windowStateKeeper from 'electron-window-state';
 import { CommandNames } from 'papi-shared-types';
 import {
-  AsyncVariable,
   getErrorMessage,
   isPlatformError,
   serialize,
@@ -146,7 +146,6 @@ if (!isFirstInstance) {
 // #endregion
 
 const PROCESS_CLOSE_TIME_OUT_MS = 2000;
-const SHUTDOWN_SYNC_TIME_OUT_MS = 10 * 60 * 1000; // 10 minutes
 
 /** Height of the custom title bar buttons on Windows */
 const TITLE_BAR_BUTTON_HEIGHT = 47;
@@ -545,42 +544,13 @@ async function main() {
       event.preventDefault();
       isWindowClosing = true;
 
-      logger.info('Syncing projects on shutdown...');
-
-      // Cancel any in-progress sync, then run a fresh full sync before shutdown.
-      // All errors are swallowed — extension may not be installed, or sync may fail.
-      // Shutdown must never be permanently blocked.
       try {
-        await networkService.requestNoRetry(
-          serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.cancelSync'),
-        );
-      } catch {
-        /* no sync in progress, or extension unavailable */
+        await performShutdownTasks();
+      } finally {
+        // `event.preventDefault()` above suppresses Electron's default close; destroy() here
+        // triggers the 'closed' event and allows the app to quit.
+        mainWindow?.destroy();
       }
-
-      const syncComplete = new AsyncVariable<void>('shutdown sync', SHUTDOWN_SYNC_TIME_OUT_MS);
-      (async () => {
-        try {
-          await networkService.requestNoRetry(
-            serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.syncProjects'),
-            undefined, // `undefined` means sync all projects
-          );
-          if (!syncComplete.hasTimedOut) syncComplete.resolveToValue(undefined);
-        } catch {
-          // sync failed — settle anyway
-          if (!syncComplete.hasTimedOut) syncComplete.resolveToValue(undefined);
-        }
-      })();
-      try {
-        await syncComplete.promise;
-        logger.info('Sync on shutdown complete');
-      } catch {
-        /* timed out */
-      }
-
-      // Destroys the main window allowing the rest of the close sequence to continue. This is the
-      // equivalent of doing `mainWindow.close()` just without triggering the `close` event.
-      mainWindow?.destroy();
     });
 
     mainWindow.on('closed', async () => {

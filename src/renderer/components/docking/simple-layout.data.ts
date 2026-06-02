@@ -61,26 +61,22 @@ export const simpleLayout: LayoutBase = {
                 id: '27616073-bf60-4f2b-9518-922d1a7d3601',
                 tabType: TAB_TYPE_WEBVIEW,
                 data: {
-                  // TODO PT-3962: Replace with Bible texts tab webViewType when implemented
-                  webViewType: 'platformGetResources.newTab',
+                  webViewType: 'platformScriptureEditor.bibleTexts',
                   id: '27616073-bf60-4f2b-9518-922d1a7d3601',
                   contentType: 'react',
                   state: {},
                 },
               },
-              // TODO PT-3963: Hook up the Commentaries tab here. Left commented out (rather than
-              // a second NewTab placeholder) so column 3 doesn't render two visually identical
-              // tabs in the meantime. Will also need to update test at line 44 in simple-layout.data.test.ts once implemented.
-              // {
-              //   id: '6c950d23-f8d7-4482-a384-93ea0481698b',
-              //   tabType: TAB_TYPE_WEBVIEW,
-              //   data: {
-              //     webViewType: '<commentaries webViewType>',
-              //     id: '6c950d23-f8d7-4482-a384-93ea0481698b',
-              //     contentType: 'react',
-              //     state: {},
-              //   },
-              // },
+              {
+                id: '6c950d23-f8d7-4482-a384-93ea0481698b',
+                tabType: TAB_TYPE_WEBVIEW,
+                data: {
+                  webViewType: 'platformScriptureEditor.commentaries',
+                  id: '6c950d23-f8d7-4482-a384-93ea0481698b',
+                  contentType: 'react',
+                  state: {},
+                },
+              },
             ] as SavedTabInfo[],
           },
         ],
