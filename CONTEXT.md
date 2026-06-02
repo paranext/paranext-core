@@ -5,6 +5,7 @@
 A scripture resource (e.g. a DBL translation) used as a reference for a translation project. Stored as a `ResourceReferenceList` under `platformScripture.modelTexts`.
 
 Has two distinct roles:
+
 - **Reading reference** — the text the team reads while translating (currently served by the Model Text Panel)
 - **Structural template** — the source of paragraph structure, headings, markers, and versification used to scaffold the translation editor
 
