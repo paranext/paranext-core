@@ -33,11 +33,11 @@ Pick each from the Storybook toolbar. Selection is persisted under `localStorage
 
 The effective row is one of six composite IDs (also used for `parameters.themes.themeOverride`):
 
-| Theme          | Light            | Dark            |
-| -------------- | ---------------- | --------------- |
-| Shadcn Neutral | `shadcn-light`   | `shadcn-dark`   |
-| Platform       | `platform-light` | `platform-dark` |
-| Paratext       | `paratext-light` | `paratext-dark` |
+| Theme          | Light            | Dark             |
+| -------------- | ---------------- | ---------------- |
+| Shadcn Neutral | `shadcn-light`   | `shadcn-dark`    |
+| Platform       | `platform-light` | `platform-dark`  |
+| Paratext       | `paratext-light` | `paratext-dark`  |
 
 Shadcn Neutral is Storybook-only (not in `themes.data.json`); Platform and Paratext match the
 running app.
@@ -87,23 +87,23 @@ Manual colors on primitives do not follow the active theme.
 <ExampleBlock
   variant="avoid"
   preview={
-  <input
-    value="this has manual colors"
-    aria-label="Bad example input with manual colors"
-    readOnly
-    className="tw:file:border-0 tw:flex tw:h-8 tw:rounded-md tw:border tw:border-slate-300 tw:bg-white tw:px-3 tw:py-2 tw:text-sm tw:text-slate-900 tw:ring-offset-white tw:file:bg-transparent tw:file:text-sm tw:file:font-medium tw:placeholder:text-slate-400 tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-slate-400 tw:focus-visible:ring-offset-2 tw:disabled:cursor-not-allowed tw:disabled:opacity-50"
-  />
-}
+    <input
+      value="this has manual colors"
+      aria-label="Bad example input with manual colors"
+      readOnly
+      className="tw:file:border-0 tw:flex tw:h-8 tw:rounded-md tw:border tw:border-slate-300 tw:bg-white tw:px-3 tw:py-2 tw:text-sm tw:text-slate-900 tw:ring-offset-white tw:file:bg-transparent tw:file:text-sm tw:file:font-medium tw:placeholder:text-slate-400 tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-slate-400 tw:focus-visible:ring-offset-2 tw:disabled:cursor-not-allowed tw:disabled:opacity-50"
+    />
+  }
   code={`<input
-value="this has manual colors"
-aria-label="Bad example input with manual colors"
-readOnly
-className="tw:file:border-0 tw:flex tw:h-8 tw:rounded-md tw:border
-  tw:border-slate-300 tw:bg-white tw:px-3 tw:py-2 tw:text-sm tw:text-slate-900
-  tw:ring-offset-white tw:file:bg-transparent tw:file:text-sm tw:file:font-medium
-  tw:placeholder:text-slate-400 tw:focus-visible:outline-none tw:focus-visible:ring-2
-  tw:focus-visible:ring-slate-400 tw:focus-visible:ring-offset-2
-  tw:disabled:cursor-not-allowed tw:disabled:opacity-50"
+  value="this has manual colors"
+  aria-label="Bad example input with manual colors"
+  readOnly
+  className="tw:file:border-0 tw:flex tw:h-8 tw:rounded-md tw:border
+    tw:border-slate-300 tw:bg-white tw:px-3 tw:py-2 tw:text-sm tw:text-slate-900
+    tw:ring-offset-white tw:file:bg-transparent tw:file:text-sm tw:file:font-medium
+    tw:placeholder:text-slate-400 tw:focus-visible:outline-none tw:focus-visible:ring-2
+    tw:focus-visible:ring-slate-400 tw:focus-visible:ring-offset-2
+    tw:disabled:cursor-not-allowed tw:disabled:opacity-50"
 />`}
 >
   Manual styles, unable to be themed.
