@@ -6,7 +6,7 @@ import {
   ResourcePickerDialogLocalizedStrings,
 } from './resource-picker.dialog';
 
-const SAMPLE_RESOURCES: DblResourceData[] = [
+export const SAMPLE_RESOURCES: DblResourceData[] = [
   {
     dblEntryUid: 'selected-1',
     displayName: 'NIV',
@@ -97,7 +97,7 @@ const SAMPLE_RESOURCES: DblResourceData[] = [
   },
 ];
 
-const SAMPLE_SELECTED_IDS: string[] = ['selected-1', 'selected-2'];
+export const SAMPLE_SELECTED_IDS: string[] = ['selected-1', 'selected-2'];
 
 const STRINGS: ResourcePickerDialogLocalizedStrings = {
   '%resourcePicker_title%': 'Resource picker',

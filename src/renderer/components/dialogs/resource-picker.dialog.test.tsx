@@ -1,105 +1,13 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, renderHook, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { vi, beforeAll, afterAll } from 'vitest';
+import { vi, describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { Dialog } from 'platform-bible-react';
-import { DblResourceData } from 'platform-bible-utils';
 import {
   ResourcePickerDialog,
   ResourcePickerDialogLocalizedStrings,
+  useProgressiveList,
 } from './resource-picker.dialog';
-
-const SAMPLE_RESOURCES: DblResourceData[] = [
-  {
-    dblEntryUid: 'selected-1',
-    displayName: 'NIV',
-    fullName: 'New International Version',
-    bestLanguageName: 'English',
-    type: 'ScriptureResource',
-    size: 12000000,
-    installed: true,
-    updateAvailable: false,
-    projectId: 'prj-niv',
-  },
-  {
-    dblEntryUid: 'selected-2',
-    displayName: 'RVR60',
-    fullName: 'Reina Valera 1960',
-    bestLanguageName: 'Spanish',
-    type: 'ScriptureResource',
-    size: 9800000,
-    installed: true,
-    updateAvailable: false,
-    projectId: 'prj-rvr',
-  },
-  {
-    dblEntryUid: 'installed-1',
-    displayName: 'ESV',
-    fullName: 'English Standard Version',
-    bestLanguageName: 'English',
-    type: 'ScriptureResource',
-    size: 11500000,
-    installed: true,
-    updateAvailable: false,
-    projectId: 'prj-esv',
-  },
-  {
-    dblEntryUid: 'installed-2',
-    displayName: 'KJV',
-    fullName: 'King James Version',
-    bestLanguageName: 'English',
-    type: 'ScriptureResource',
-    size: 8200000,
-    installed: true,
-    updateAvailable: true,
-    projectId: 'prj-kjv',
-  },
-  {
-    dblEntryUid: 'installed-3',
-    displayName: 'UBS-SLR',
-    fullName: 'UBS Source Language Resource',
-    bestLanguageName: 'Greek',
-    type: 'SourceLanguageResource',
-    size: 25000000,
-    installed: true,
-    updateAvailable: false,
-    projectId: 'prj-ubsslr',
-  },
-  {
-    dblEntryUid: 'download-1',
-    displayName: 'NLT',
-    fullName: 'New Living Translation',
-    bestLanguageName: 'English',
-    type: 'ScriptureResource',
-    size: 10200000,
-    installed: false,
-    updateAvailable: false,
-    projectId: 'prj-nlt',
-  },
-  {
-    dblEntryUid: 'download-2',
-    displayName: 'UBS HB',
-    fullName: 'UBS Handbook',
-    bestLanguageName: 'English',
-    type: 'XmlResource',
-    size: 5400000,
-    installed: false,
-    updateAvailable: false,
-    projectId: 'prj-ubshb',
-  },
-  {
-    dblEntryUid: 'download-3',
-    displayName: 'BHS',
-    fullName: 'Biblia Hebraica Stuttgartensia',
-    bestLanguageName: 'Hebrew',
-    type: 'SourceLanguageResource',
-    size: 18700000,
-    installed: false,
-    updateAvailable: false,
-    projectId: 'prj-bhs',
-  },
-];
-
-const SAMPLE_SELECTED_IDS: string[] = ['selected-1', 'selected-2'];
+import { SAMPLE_RESOURCES, SAMPLE_SELECTED_IDS } from './resource-picker.dialog.stories';
 
 beforeAll(() => {
   vi.stubGlobal(
@@ -248,5 +156,90 @@ describe('ResourcePickerDialog', () => {
     renderDialog({ allResources: manyResources, selectedResourceIds: [] });
     expect(screen.getByText('RES-49')).toBeInTheDocument();
     expect(screen.queryByText('RES-50')).not.toBeInTheDocument();
+  });
+});
+
+type IOCallback = (entries: Partial<IntersectionObserverEntry>[]) => void;
+let ioCallback: IOCallback;
+const mockObserve = vi.fn();
+const mockDisconnect = vi.fn();
+
+describe('useProgressiveList', () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'IntersectionObserver',
+      vi.fn((cb: IOCallback) => {
+        ioCallback = cb;
+        return { observe: mockObserve, disconnect: mockDisconnect };
+      }),
+    );
+  });
+
+  afterEach(() => {
+    vi.stubGlobal(
+      'IntersectionObserver',
+      vi.fn(() => ({ observe: vi.fn(), disconnect: vi.fn() })),
+    );
+    vi.clearAllMocks();
+  });
+
+  const makeItems = (count: number) => Array.from({ length: count }, (_, i) => i);
+
+  it('returns the first pageSize items initially and reports hasMore', () => {
+    const items = makeItems(120);
+    const { result } = renderHook(() => useProgressiveList(items, 50));
+
+    expect(result.current.visibleItems).toHaveLength(50);
+    expect(result.current.visibleItems[0]).toBe(0);
+    expect(result.current.visibleItems[49]).toBe(49);
+    expect(result.current.hasMore).toBe(true);
+  });
+
+  it('appends the next page when the sentinel intersects', () => {
+    const items = makeItems(120);
+    const { result } = renderHook(() => useProgressiveList(items, 50));
+
+    act(() => {
+      ioCallback([{ isIntersecting: true }]);
+    });
+
+    expect(result.current.visibleItems).toHaveLength(100);
+    expect(result.current.hasMore).toBe(true);
+  });
+
+  it('resets to the first page when the items array reference changes', () => {
+    const first = makeItems(120);
+    const { result, rerender } = renderHook(({ items }) => useProgressiveList(items, 50), {
+      initialProps: { items: first },
+    });
+
+    act(() => {
+      ioCallback([{ isIntersecting: true }]);
+    });
+    expect(result.current.visibleItems).toHaveLength(100);
+
+    const second = makeItems(80);
+    rerender({ items: second });
+
+    expect(result.current.visibleItems).toHaveLength(50);
+  });
+
+  it('sets hasMore to false and caps visibleItems at items.length when list is small', () => {
+    const items = makeItems(20);
+    const { result } = renderHook(() => useProgressiveList(items, 50));
+
+    expect(result.current.visibleItems).toHaveLength(20);
+    expect(result.current.hasMore).toBe(false);
+  });
+
+  it('does not advance the page when the sentinel fires with isIntersecting false', () => {
+    const items = makeItems(120);
+    const { result } = renderHook(() => useProgressiveList(items, 50));
+
+    act(() => {
+      ioCallback([{ isIntersecting: false }]);
+    });
+
+    expect(result.current.visibleItems).toHaveLength(50);
   });
 });

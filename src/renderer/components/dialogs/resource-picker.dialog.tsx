@@ -1,3 +1,4 @@
+import { Check } from 'lucide-react';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import {
   DialogHeader,
@@ -23,17 +24,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { sendCommand } from '@shared/services/command.service';
 import { DblResourceData, ResourceType, formatReplacementString } from 'platform-bible-utils';
 
-const RESOURCE_PICKER_DIALOG_STRING_KEYS: (
-  | '%resourcePicker_title%'
-  | '%resourcePicker_section_already_selected%'
-  | '%resourcePicker_section_installed%'
-  | '%resourcePicker_section_available_to_download%'
-  | '%resourcePicker_no_results%'
-  | '%resourcePicker_search_placeholder%'
-  | '%resourcePicker_language_filter_any%'
-  | '%resourcePicker_language_filter_multipleSelected%'
-  | '%resourcePicker_showing_count%'
-)[] = [
+export const RESOURCE_PICKER_DIALOG_STRING_KEYS: readonly [
+  '%resourcePicker_title%',
+  '%resourcePicker_section_already_selected%',
+  '%resourcePicker_section_installed%',
+  '%resourcePicker_section_available_to_download%',
+  '%resourcePicker_no_results%',
+  '%resourcePicker_search_placeholder%',
+  '%resourcePicker_language_filter_any%',
+  '%resourcePicker_language_filter_multipleSelected%',
+  '%resourcePicker_showing_count%',
+] = [
   '%resourcePicker_title%',
   '%resourcePicker_section_already_selected%',
   '%resourcePicker_section_installed%',
@@ -54,7 +55,14 @@ const localizeString = (
   key: keyof ResourcePickerDialogLocalizedStrings,
 ) => strings[key] ?? key;
 
-function useProgressiveList<T>(items: T[], pageSize = 50) {
+/**
+ * Progressively reveals `items` in pages of `pageSize`. Attach `sentinelRef` to a hidden element at
+ * the bottom of the rendered list — when it scrolls into view, the next page loads. Resets to page
+ * 1 whenever the `items` array reference changes (e.g. after a filter update). Pass `null` as the
+ * ref initial value; the IntersectionObserver skips observation if the element isn't mounted yet
+ * (safe in tests where the DOM stub may not be connected).
+ */
+export function useProgressiveList<T>(items: T[], pageSize = 50) {
   const [visibleCount, setVisibleCount] = useState(pageSize);
   // null is required by useRef for DOM elements
   // eslint-disable-next-line no-null/no-null
@@ -91,6 +99,56 @@ function matchesSearch(resource: DblResourceData, searchText: string): boolean {
     resource.displayName.toLowerCase().includes(lower) ||
     resource.fullName.toLowerCase().includes(lower) ||
     resource.bestLanguageName.toLowerCase().includes(lower)
+  );
+}
+
+function ResourceSection({
+  label,
+  resources,
+  onSelect,
+}: {
+  label: string;
+  resources: DblResourceData[];
+  onSelect?: (r: DblResourceData) => void;
+}) {
+  if (resources.length === 0) return undefined;
+  return (
+    <>
+      <TableRow className="tw:border-0 tw:hover:bg-transparent" aria-hidden>
+        <TableCell colSpan={4} className="tw:border-0 tw:pt-4 tw:pb-0">
+          <Label className="tw:text-xs tw:tracking-wider tw:text-muted-foreground tw:uppercase">
+            {label}
+          </Label>
+        </TableCell>
+      </TableRow>
+      {resources.map((r) => (
+        <TableRow
+          key={r.dblEntryUid}
+          className={
+            onSelect ? 'tw:cursor-pointer tw:border-0' : 'tw:pointer-events-none tw:border-0'
+          }
+          onClick={onSelect ? () => onSelect(r) : undefined}
+          onKeyDown={
+            onSelect
+              ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') onSelect(r);
+                }
+              : undefined
+          }
+        >
+          <TableCell className="tw:w-5 tw:border-0 tw:py-1 tw:pr-1">
+            {!onSelect && <Check className="tw:h-3.5 tw:w-3.5" />}
+          </TableCell>
+          <TableCell className="tw:border-0 tw:py-1 tw:pr-2 tw:font-normal tw:whitespace-nowrap">
+            {r.displayName}
+          </TableCell>
+          <TableCell className="tw:border-0 tw:py-1 tw:pl-2">{r.fullName}</TableCell>
+          <TableCell className="tw:border-0 tw:py-1 tw:pl-4 tw:text-right tw:text-muted-foreground">
+            {r.bestLanguageName}
+          </TableCell>
+        </TableRow>
+      ))}
+    </>
   );
 }
 
@@ -229,77 +287,16 @@ export function ResourcePickerDialog({
         {!hasNoResults && !isResourcesLoading && (
           <Table>
             <TableBody>
-              {alreadySelected.length > 0 && (
-                <>
-                  <TableRow className="tw:border-0 tw:hover:bg-transparent">
-                    <TableCell colSpan={2} className="tw:border-0 tw:pt-4 tw:pb-0">
-                      <Label className="tw:text-xs tw:tracking-wider tw:text-muted-foreground tw:uppercase">
-                        {alreadySelectedLabel}
-                      </Label>
-                    </TableCell>
-                  </TableRow>
-                  {alreadySelected.map((r) => (
-                    <TableRow
-                      key={r.dblEntryUid}
-                      className="tw:pointer-events-none tw:border-0 tw:opacity-50"
-                    >
-                      <TableCell className="tw:border-0 tw:py-1 tw:pr-2 tw:font-normal tw:whitespace-nowrap">
-                        {r.displayName}
-                      </TableCell>
-                      <TableCell className="tw:border-0 tw:py-1 tw:pl-2">{r.fullName}</TableCell>
-                    </TableRow>
-                  ))}
-                </>
-              )}
-              {installed.length > 0 && (
-                <>
-                  <TableRow className="tw:border-0 tw:hover:bg-transparent">
-                    <TableCell colSpan={2} className="tw:border-0 tw:pt-4 tw:pb-0">
-                      <Label className="tw:text-xs tw:tracking-wider tw:text-muted-foreground tw:uppercase">
-                        {installedLabel}
-                      </Label>
-                    </TableCell>
-                  </TableRow>
-                  {installed.map((r) => (
-                    <TableRow
-                      key={r.dblEntryUid}
-                      className="tw:cursor-pointer tw:border-0"
-                      onClick={() => onSelect(r)}
-                    >
-                      <TableCell className="tw:border-0 tw:py-1 tw:pr-2 tw:font-normal tw:whitespace-nowrap">
-                        {r.displayName}
-                      </TableCell>
-                      <TableCell className="tw:border-0 tw:py-1 tw:pl-2">{r.fullName}</TableCell>
-                    </TableRow>
-                  ))}
-                </>
-              )}
-              {toDownload.length > 0 && (
-                <>
-                  <TableRow className="tw:border-0 tw:hover:bg-transparent">
-                    <TableCell colSpan={2} className="tw:border-0 tw:pt-4 tw:pb-0">
-                      <Label className="tw:text-xs tw:tracking-wider tw:text-muted-foreground tw:uppercase">
-                        {toDownloadLabel}
-                      </Label>
-                    </TableCell>
-                  </TableRow>
-                  {visibleToDownload.map((r) => (
-                    <TableRow
-                      key={r.dblEntryUid}
-                      className="tw:cursor-pointer tw:border-0"
-                      onClick={() => onSelect(r)}
-                    >
-                      <TableCell className="tw:border-0 tw:py-1 tw:pr-2 tw:font-normal tw:whitespace-nowrap">
-                        {r.displayName}
-                      </TableCell>
-                      <TableCell className="tw:border-0 tw:py-1 tw:pl-2">{r.fullName}</TableCell>
-                    </TableRow>
-                  ))}
-                </>
-              )}
+              <ResourceSection label={alreadySelectedLabel} resources={alreadySelected} />
+              <ResourceSection label={installedLabel} resources={installed} onSelect={onSelect} />
+              <ResourceSection
+                label={toDownloadLabel}
+                resources={visibleToDownload}
+                onSelect={onSelect}
+              />
               {hasMore && (
                 <TableRow className="tw:border-0">
-                  <TableCell colSpan={2} className="tw:border-0 tw:p-0">
+                  <TableCell colSpan={4} className="tw:border-0 tw:p-0">
                     <div ref={sentinelRef} aria-hidden />
                   </TableCell>
                 </TableRow>
@@ -317,7 +314,9 @@ function ResourcePickerDialogWrapper({
   selectedResourceIds,
   submitDialog,
 }: DialogTypes[typeof RESOURCE_PICKER_DIALOG_TYPE]['props']) {
-  const [localizedStrings] = useLocalizedStrings(RESOURCE_PICKER_DIALOG_STRING_KEYS);
+  const [localizedStrings] = useLocalizedStrings(
+    useMemo(() => RESOURCE_PICKER_DIALOG_STRING_KEYS, []),
+  );
 
   const [resources, isResourcesLoading] = usePromise(
     useCallback(async () => sendCommand('platformGetResources.getCachedResources'), []),
