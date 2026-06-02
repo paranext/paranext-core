@@ -167,8 +167,8 @@ export function ResourcePickerDialog({
     if (selectedLanguages.length === languageOptions.length || selectedLanguages.length === 0)
       return anyLanguageText;
     if (selectedLanguages.length === 1) {
-      const matchingType = languageOptions.find((type) => type.value === selectedLanguages[0]);
-      if (matchingType) return matchingType.label;
+      const matchingLanguage = languageOptions.find((lang) => lang.value === selectedLanguages[0]);
+      if (matchingLanguage) return matchingLanguage.label;
     }
     return formatReplacementString(
       localizeString(localizedStrings, '%resourcePicker_language_filter_multipleSelected%'),
@@ -264,7 +264,7 @@ export function ResourcePickerDialog({
                   ))}
                 </>
               )}
-              {visibleToDownload.length > 0 && (
+              {toDownload.length > 0 && (
                 <>
                   <TableRow className="tw:border-0 tw:hover:bg-transparent">
                     <TableCell colSpan={2} className="tw:border-0 tw:pt-4 tw:pb-0">
@@ -302,14 +302,12 @@ export function ResourcePickerDialog({
   );
 }
 
-const STRING_KEYS = [...RESOURCE_PICKER_DIALOG_STRING_KEYS];
-
 function ResourcePickerDialogWrapper({
   resourceType,
   selectedResourceIds,
   submitDialog,
 }: DialogTypes[typeof RESOURCE_PICKER_DIALOG_TYPE]['props']) {
-  const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
+  const [localizedStrings] = useLocalizedStrings([...RESOURCE_PICKER_DIALOG_STRING_KEYS]);
 
   const [resources, isResourcesLoading] = usePromise(
     useCallback(async () => sendCommand('platformGetResources.getCachedResources'), []),
