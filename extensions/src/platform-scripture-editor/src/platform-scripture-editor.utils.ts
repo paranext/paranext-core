@@ -818,7 +818,7 @@ export async function syncOnProjectSwitch(
 /**
  * Opens or updates the model text, commentary, and scripture resource panels for a project.
  *
- * @param papi The instance of papi to send the commands with
+ * @param papi The instance of papi to send the commands
  * @param projectId The id of the project to open the text connections for
  */
 export async function openTextConnectionPanels(
