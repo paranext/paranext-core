@@ -302,7 +302,7 @@
   "%project_settings_project_group1_description%": "Settings pertaining to the selected project",
   "%project_settings_project_group1_label%": "Project properties",
   "%projectPicker_current_project_label%": "Current project",
-  "%projectPicker_no_results%": "No results found",
+  "%projectPicker_no_results%": "No projects found",
   "%projectPicker_search_placeholder%": "Search projects…",
   "%projectPicker_section_projects%": "Your Projects",
   "%projectPicker_section_recent%": "Recent",

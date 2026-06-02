@@ -500,7 +500,7 @@ export function PlatformBibleToolbar() {
               <SelectSeparator />
               <button
                 type="button"
-                className="tw:w-full tw:cursor-pointer tw:px-2 tw:py-1.5 tw:text-left tw:text-sm tw:text-muted-foreground"
+                className="tw:w-full tw:cursor-pointer tw:px-2 tw:py-1.5 tw:text-start tw:text-sm tw:text-muted-foreground"
                 onClick={() => showProjectPicker()}
               >
                 More projects...

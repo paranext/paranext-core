@@ -175,14 +175,18 @@ export default function ProjectPicker({
 
   const hasNoResults = sortedRecent.length === 0 && filteredAll.length === 0;
 
-  const titleText = localizedStrings['%projectPicker_title%'] ?? 'Select project';
-  const recentLabel = localizedStrings['%projectPicker_section_recent%'] ?? 'Recent';
-  const allLabel = localizedStrings['%projectPicker_section_projects%'] ?? 'Your projects';
+  const titleText = localizedStrings['%projectPicker_title%'] ?? '%projectPicker_title%';
+  const recentLabel =
+    localizedStrings['%projectPicker_section_recent%'] ?? '%projectPicker_section_recent%';
+  const allLabel =
+    localizedStrings['%projectPicker_section_projects%'] ?? '%projectPicker_section_projects%';
   const searchPlaceholder =
-    localizedStrings['%projectPicker_search_placeholder%'] ?? 'Search projects…';
-  const noResultsText = localizedStrings['%projectPicker_no_results%'] ?? 'No results found';
+    localizedStrings['%projectPicker_search_placeholder%'] ?? '%projectPicker_search_placeholder%';
+  const noResultsText =
+    localizedStrings['%projectPicker_no_results%'] ?? '%projectPicker_no_results%';
   const currentProjectLabel =
-    localizedStrings['%projectPicker_current_project_label%'] ?? 'Current project';
+    localizedStrings['%projectPicker_current_project_label%'] ??
+    '%projectPicker_current_project_label%';
 
   const listboxOptions = useMemo(
     () => [...sortedRecent, ...filteredAll].map((p) => ({ id: p.id })),
