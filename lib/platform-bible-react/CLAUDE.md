@@ -1,0 +1,1 @@
+/home/lwenger/Documents/Development/ai-prompts/ai-porting/claude-md/platform-bible-react/CLAUDE.md

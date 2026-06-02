@@ -1,0 +1,1 @@
+/home/lwenger/Documents/Development/ai-prompts/ai-porting/claude-md/c-sharp/CLAUDE.md
