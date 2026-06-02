@@ -105,22 +105,24 @@ describe('runDownload', () => {
     ).rejects.toThrow('ECONNREFUSED');
   });
 
-  it('detection failure: warns with reason and skips download', async () => {
-    const warn = vi.fn();
-    const deps = makeDeps({ warn });
-    await runDownload(
-      {
-        ...baseOpts,
-        detection: { org: undefined, reason: 'no .git directory found' },
-      },
-      deps,
-    );
+  it('detection failure: throws with the underlying reason and never starts the download', async () => {
+    // We throw (instead of warning + skipping) so an unexpected git/origin problem can't silently
+    // turn into a missing lexical DB at runtime. The reason from the detector is surfaced in the
+    // error message so the cause is debuggable without digging into download-db.ts.
+    const deps = makeDeps();
+    await expect(
+      runDownload(
+        {
+          ...baseOpts,
+          detection: { org: undefined, reason: 'no .git directory found' },
+        },
+        deps,
+      ),
+    ).rejects.toThrow(/no \.git directory found/);
     expect(deps.fetchRemoteChecksum).not.toHaveBeenCalled();
     expect(deps.downloadFile).not.toHaveBeenCalled();
     expect(deps.extractXzFile).not.toHaveBeenCalled();
-    const warnings = warn.mock.calls.flat().join('\n');
-    expect(warnings).toContain('no .git directory found');
-    expect(warnings).toContain('lenient mode');
+    expect(deps.warn).not.toHaveBeenCalled();
   });
 
   it('local file present + matching checksum: skips download, skips extract if extracted file exists', async () => {

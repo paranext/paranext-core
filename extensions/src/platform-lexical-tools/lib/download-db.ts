@@ -359,18 +359,19 @@ export interface RunDownloadOptions {
 /**
  * Orchestrates lexical DB download: discover org → compute URLs → fetch checksum → skip/download →
  * verify → extract. Applies strict-vs-lenient policy: when the detected org is exactly
- * {@link STRICT_ORG}, missing files (HTTP 404) hard-fail; otherwise they are logged and skipped so
- * forks (or unparseable origins) don't break `npm install`. See the README section "Lexical
- * database downloads (forks)" for the contract.
+ * {@link STRICT_ORG}, missing files (HTTP 404) hard-fail; for any other detected org they are logged
+ * and skipped so forks don't break `npm install`. Failure to detect the org at all (no git repo,
+ * unparseable origin, etc.) is treated as an unexpected configuration error and throws rather than
+ * running leniently — a silent download skip from a weird git error would be worse than a loud
+ * failure. See the README section "Lexical database downloads (forks)" for the contract.
  */
 export async function runDownload(opts: RunDownloadOptions, deps: DownloadDeps): Promise<void> {
   const { detection, localDbDir, localDbPath, dbFilename, checksumFilename } = opts;
 
   if (detection.org === undefined) {
-    deps.warn(
-      `Could not detect GitHub org from origin remote (${detection.reason}) — running in lenient mode (missing files will be skipped)`,
+    throw new Error(
+      `Could not detect GitHub org from origin remote (${detection.reason}) — aborting lexical DB download. Configure a recognizable GitHub \`origin\` remote (HTTPS or SSH) so the strict/lenient policy can be applied.`,
     );
-    return;
   }
 
   const isStrict = detection.org === STRICT_ORG;
@@ -443,10 +444,9 @@ export async function runDownload(opts: RunDownloadOptions, deps: DownloadDeps):
   } catch (error) {
     if (error instanceof FileNotFoundError) {
       if (isStrict) throw error;
-      // Use log (not warn) because a 404 on a fork is an expected outcome — the fork hasn't
-      // published their own lexical DB. Detection failure (no origin / no git) uses warn because
-      // that situation is unexpected and warrants attention. See the README section "Lexical
-      // database downloads (forks)" for the user-facing contract.
+      // Use log (not throw) because a 404 on a fork is an expected outcome — the fork hasn't
+      // published their own lexical DB. See the README section "Lexical database downloads
+      // (forks)" for the user-facing contract.
       deps.log(
         `Lexical database files not found at ${error.url} — extension will run without lexical data.`,
       );

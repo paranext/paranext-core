@@ -18,7 +18,11 @@ database from `https://github.com/<your-org>/dependencies` (branch `main`, subdi
   provided.
 
 Network errors that aren't 404 (e.g. DNS failure, connection refused) still fail in both
-modes — "expected missing" is the only condition treated leniently.
+modes — "expected missing" is the only condition treated leniently. Likewise, if the
+GitHub org cannot be detected from the local clone's `origin` remote (no git repository,
+unrecognized remote URL, etc.), the download aborts with an error rather than running
+leniently — a silent skip from an unexpected git/origin problem would be worse than a
+loud failure.
 
 To publish your own DB for a fork, create a `dependencies` repo in your org with
 `lexical-db/lexical.db.xz` and `lexical-db/lexical.db.xz.sha256` on the `main` branch.
