@@ -42,16 +42,18 @@ async function fetchProjectDetails(projectId: string): Promise<{
   shortName: string;
   language?: string;
   languageDisplayName?: string;
+  isEditable: boolean;
 }> {
   const pdp = await papiFrontendProjectDataProviderService.get(
     PROJECT_INTERFACE_PLATFORM_BASE,
     projectId,
   );
-  const [fullName, shortName, language, languageTag] = await Promise.all([
+  const [fullName, shortName, language, languageTag, isEditable] = await Promise.all([
     pdp.getSetting('platform.fullName'),
     pdp.getSetting('platform.name'),
     pdp.getSetting('platform.language'),
     pdp.getSetting('platform.languageTag'),
+    pdp.getSetting('platform.isEditable'),
   ]);
   const resolved = resolveLanguage(language, languageTag);
   return {
@@ -59,6 +61,7 @@ async function fetchProjectDetails(projectId: string): Promise<{
     shortName,
     language: resolved?.tag,
     languageDisplayName: resolved?.displayName,
+    isEditable: !!isEditable,
   };
 }
 
@@ -105,8 +108,10 @@ export function useProjectPickerData(): ProjectPickerData {
       );
       if (!editorDef?.projectId) return undefined;
       try {
-        const details = await fetchProjectDetails(editorDef.projectId);
-        return { id: editorDef.projectId, ...details };
+        const { fullName, shortName, language, languageDisplayName } = await fetchProjectDetails(
+          editorDef.projectId,
+        );
+        return { id: editorDef.projectId, fullName, shortName, language, languageDisplayName };
       } catch (e) {
         logger.warn(
           `ProjectPicker: could not fetch name for project ${editorDef.projectId}: ${getErrorMessage(e)}`,
@@ -125,20 +130,23 @@ export function useProjectPickerData(): ProjectPickerData {
 
   const [recentProjects, isRecentProjectsLoading] = usePromise<ProjectItem[]>(
     useCallback(
-      async () =>
-        Promise.all(
-          safeRecentIds.map(async (id: string): Promise<ProjectItem> => {
+      async () => {
+        const results = await Promise.all(
+          safeRecentIds.map(async (id: string): Promise<ProjectItem | undefined> => {
             try {
-              const details = await fetchProjectDetails(id);
+              const { isEditable, ...details } = await fetchProjectDetails(id);
+              if (!isEditable) return undefined;
               return { id, ...details };
             } catch (e) {
               logger.warn(
                 `ProjectPicker: could not fetch name for project ${id}: ${getErrorMessage(e)}`,
               );
-              return { id, fullName: id, shortName: id };
+              return undefined;
             }
           }),
-        ),
+        );
+        return results.filter((p: ProjectItem | undefined): p is ProjectItem => p !== undefined);
+      },
       // Module-level imports are stable references; safeRecentIds and refreshCounter trigger re-fetches
       // eslint-disable-next-line react-hooks/exhaustive-deps
       [safeRecentIds, refreshCounter],
