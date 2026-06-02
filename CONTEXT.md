@@ -51,6 +51,8 @@ Future possibility (unrelated, not re-ghosting): a preview/conversion tool that 
 
 The user-facing term for ghost content — the structural scaffolding shown in the translation editor for chapters with no committed content. Communicates "a pattern from the model text that you fill in and make your own." The word "Ghost" must never appear in user-facing text; "Template" is used instead in all UI copy, labels, and help text.
 
+## Chapter Model Text Stamp
+
 When a chapter is adopted (committed), the ID of the current Structural Model Text is written to a new project setting — tentatively `platformScripture.chapterModelTexts` — as a map of chapter references to model text IDs. This stamp persists even if the global model text is later changed, and is the authoritative record of which model text a chapter's structure came from. It enables future features such as per-chapter re-structuring and provenance display.
 
 ## Structural Model Text
