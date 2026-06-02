@@ -108,6 +108,15 @@ describe('overlay.service-host', () => {
     clearAllOverlays();
   });
 
+  afterEach(() => {
+    // Guarantee real timers are restored even if a test threw between
+    // `vi.useFakeTimers()` and an inline `vi.useRealTimers()`. Without this, a single
+    // assertion failure inside a fake-timer block can leave fake timers active for
+    // every subsequent test, making real `setTimeout` calls hang until the default
+    // testTimeout — producing cascading, non-deterministic timeouts in unrelated tests.
+    vi.useRealTimers();
+  });
+
   describe('context menus', () => {
     beforeEach(() => {
       vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue(DEFAULT_WEB_VIEW_MENU);
