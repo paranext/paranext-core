@@ -205,19 +205,28 @@ internal static class MarbleLexiconLoader
                         domains.Add(text);
                 }
 
+                int senseOccurrenceCount = 0;
                 foreach (var refStr in ReadReferences(meaning))
                 {
                     var vref = ParseLexReference(refStr);
                     if (vref.HasValue)
+                    {
                         occurrences.Add(vref.Value);
+                        senseOccurrenceCount++;
+                    }
                 }
 
                 var definition =
-                    (string?)meaning.Element("DefinitionShort")
-                    ?? (string?)meaning.Element("DefinitionLong")
+                    (string?)meaning.Descendants("DefinitionShort").FirstOrDefault()
+                    ?? (string?)meaning.Descendants("DefinitionLong").FirstOrDefault()
                     ?? "";
 
-                senses.Add(new SenseRecord(senseId, senseGlosses, definition));
+                senses.Add(
+                    new SenseRecord(senseId, senseGlosses, definition)
+                    {
+                        OccurrenceCount = senseOccurrenceCount,
+                    }
+                );
             }
 
             var morphology = (string?)entry.Descendants("PartOfSpeech").FirstOrDefault() ?? "";

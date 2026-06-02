@@ -113,10 +113,13 @@ internal sealed class DictionaryService(DictionaryData data, IMarbleBookTokenPro
             {
                 var filteredGlosses = s
                     .Glosses.Where(g =>
-                        string.Equals(g.Language, glossLanguage, StringComparison.Ordinal)
+                        string.Equals(g.Language, glossLanguage, StringComparison.OrdinalIgnoreCase)
                     )
                     .ToList();
-                return new DictionarySense(s.SenseId, filteredGlosses, s.Definition);
+                return new DictionarySense(s.SenseId, filteredGlosses, s.Definition)
+                {
+                    OccurrenceCount = s.OccurrenceCount,
+                };
             })
             .ToList();
     }

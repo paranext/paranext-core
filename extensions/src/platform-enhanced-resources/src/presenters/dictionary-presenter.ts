@@ -53,6 +53,8 @@ interface DictionarySenseInput {
   senseId: string;
   definition: string;
   glosses: DictionaryGlossInput[];
+  /** Total occurrences of this sense across all loaded references (from LEXReferences in XML). */
+  occurrenceCount?: number;
   /** FN-019 forward field: backend `Sense.Comments`. */
   comments?: string;
   /** FN-019 forward field: backend `Lexicon_Note`. */
@@ -220,7 +222,7 @@ export function presentDictionaryEntry(
     const isRelevant = options.relevantSenseIds.has(sense.senseId);
 
     const refs = options.verseOccurrencesBySenseId[sense.senseId] ?? [];
-    const count = refs.length;
+    const count = sense.occurrenceCount ?? refs.length;
     const verseRangeLabel = options.formatVerseRange(refs);
     const tooltip = options.formatSenseOccurrencesTooltip({
       senseNumber,

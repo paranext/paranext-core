@@ -18,7 +18,10 @@ public record DictionaryEntryData(
 /// A single sense within a dictionary entry, with glosses and definition.
 /// Source: Section 4.8 M-008
 /// </summary>
-public record DictionarySense(string SenseId, IList<GlossEntry> Glosses, string Definition);
+public record DictionarySense(string SenseId, IList<GlossEntry> Glosses, string Definition)
+{
+    public int OccurrenceCount { get; init; } = 0;
+}
 
 /// <summary>
 /// A gloss entry with language code and text.

@@ -948,8 +948,11 @@ function senseDisplaysFromPresentation(
   return senses.map((s) => ({
     id: s.id,
     senseNumber: s.senseNumber,
-    definition: s.definition,
-    glosses: s.glosses || undefined,
+    // Mirror ComputeFirstRelevantSensePreview: when no formal definition exists, use the gloss
+    // as the inline sense text so the card shows something meaningful (e.g. "but" not just "(483)").
+    definition: s.definition || s.glosses || '',
+    // Suppress the separate "Glosses:" row when the gloss is already serving as the definition.
+    glosses: s.definition ? s.glosses || undefined : undefined,
     domains:
       s.domains.length > 0
         ? s.domains.map((d) => ({
@@ -988,6 +991,7 @@ function entryDtoToPresenterInput(dto: DictionaryEntryDataDto): DictionaryEntryD
       senseId: s.senseId,
       definition: s.definition,
       glosses: s.glosses.map((g) => ({ language: g.language, text: g.text })),
+      occurrenceCount: s.occurrenceCount,
       // FN-019 forward fields are absent in today's C# DTO — presenter emits blank rows.
     })),
   };
