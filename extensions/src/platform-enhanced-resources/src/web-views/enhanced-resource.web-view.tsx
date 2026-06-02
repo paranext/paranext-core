@@ -1362,6 +1362,28 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     [scope, scrRefBook, scrRefChapterNum, scrRefVerseNum],
   );
 
+  // Clear the active word filter when the user navigates to a different chapter or book.
+  const prevChapterKeyRef = useRef(`${scrRefBook}:${scrRefChapterNum}`);
+  useEffect(() => {
+    const chapterKey = `${scrRefBook}:${scrRefChapterNum}`;
+    if (prevChapterKeyRef.current !== chapterKey) {
+      prevChapterKeyRef.current = chapterKey;
+      if (filteredTokenId) {
+        setFilteredTokenId(undefined);
+        setFilteredTokenSurface(undefined);
+        if (scope === 'current-sense') setScope('current-verse');
+      }
+    }
+  }, [
+    scrRefBook,
+    scrRefChapterNum,
+    filteredTokenId,
+    scope,
+    setFilteredTokenId,
+    setFilteredTokenSurface,
+    setScope,
+  ]);
+
   // Look up the annotation for the currently filtered token so effects can
   // populate lemma and targetLinks in the WordFilterInputDto.
   const filteredAnnotation = useMemo(
