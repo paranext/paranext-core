@@ -19,21 +19,17 @@ import {
 import { Button, Spinner, usePromise } from 'platform-bible-react';
 import {
   DblResourceData,
+  formatReplacementString,
   getErrorMessage,
   isPlatformError,
   LocalizeKey,
 } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-// @ts-ignore: platform-scripture/src is not a published module entry-point; accessible via typeRoots symlink at dev time
-import { useEffectiveResourceReferenceList } from 'platform-scripture/src/use-effective-resource-reference-list';
-import type {
-  DblResourceReference,
-  EffectiveResourceReference,
-  ResourceReferenceList,
-} from 'platform-scripture';
+import type { DblResourceReference, EffectiveResourceReference } from 'platform-scripture';
+import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
+import { isDblResourceReference } from './resource-reference.utils';
+import { DEFAULT_RESOURCE_REFERENCE_LIST, selectTextConnection } from './select-dbl-resource';
 
-const CURRENT_DATA_VERSION = '1.0.0';
-const DEFAULT_LIST: ResourceReferenceList = { dataVersion: CURRENT_DATA_VERSION, items: [] };
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
 const defaultUsj: Usj = {
@@ -46,12 +42,15 @@ const MODEL_TEXT_PANEL_STRING_KEYS: LocalizeKey[] = [
   '%webView_modelTextPanel_installing%',
   '%webView_modelTextPanel_noProject%',
   '%webView_modelTextPanel_pickModelText%',
+  '%webView_modelTextPanel_title%',
+  '%webView_modelTextPanel_title_withResource%',
   '%webView_modelTextPanel_unknownResource%',
   '%webView_modelTextPanel_emptyState_prompt%',
 ];
 
 globalThis.webViewComponent = function ModelTextPanel({
   projectId,
+  updateWebViewDefinition,
   useWebViewScrollGroupScrRef,
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => MODEL_TEXT_PANEL_STRING_KEYS, []));
@@ -60,20 +59,21 @@ globalThis.webViewComponent = function ModelTextPanel({
 
   // --- Data sources ---
 
-  // useEffectiveResourceReferenceList is imported via @ts-ignore path; cast needed for type safety
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
   const [effectiveModelTexts, isEffectiveModelTextsLoading] = useEffectiveResourceReferenceList(
     projectId,
     'platformScripture.modelTexts',
   );
 
-  const [adminModelTextsSetting, setAdminModelTexts] = useProjectSetting(
+  const [adminModelTexts, setAdminModelTexts] = useProjectSetting(
     projectId,
     'platformScripture.modelTexts',
-    DEFAULT_LIST,
+    DEFAULT_RESOURCE_REFERENCE_LIST,
   );
 
-  const pdp = useProjectDataProvider('platformScripture.textConnectionSettings', projectId);
+  const textConnectionsProvider = useProjectDataProvider(
+    'platformScripture.textConnectionSettings',
+    projectId,
+  );
 
   // --- DBL resource resolution ---
 
@@ -98,10 +98,8 @@ globalThis.webViewComponent = function ModelTextPanel({
   const effectiveModelText = effectiveModelTexts?.items[0];
   // EffectiveResourceReference is a discriminated union; checking `.type` narrows to DblResourceReference
   let dblRef: (EffectiveResourceReference & DblResourceReference) | undefined;
-  if (effectiveModelText?.type === 'dblResource') {
-    // EffectiveResourceReference union check doesn't satisfy TS discriminated union refinement
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    dblRef = effectiveModelText as EffectiveResourceReference & DblResourceReference;
+  if (isDblResourceReference(effectiveModelText)) {
+    dblRef = effectiveModelText;
   }
   const match = dblRef ? dblResources.find((r) => r.dblEntryUid === dblRef.id) : undefined;
 
@@ -120,6 +118,22 @@ globalThis.webViewComponent = function ModelTextPanel({
   }, [isInstalling, fetchResources, dblResourcesProvider, matchDblEntryUid]);
 
   const resourceProjectId = match?.installed ? match.projectId : undefined;
+
+  // --- Dynamic title: "Model text: {displayName}" when a resource is loaded ---
+
+  const modelTextSmallName = match?.installed ? match.displayName : undefined;
+  useEffect(() => {
+    const baseTitle = localizedStrings['%webView_modelTextPanel_title%'];
+    if (!baseTitle) return;
+    if (modelTextSmallName) {
+      const fmt = localizedStrings['%webView_modelTextPanel_title_withResource%'];
+      updateWebViewDefinition({
+        title: formatReplacementString(fmt, { textName: modelTextSmallName }),
+      });
+    } else {
+      updateWebViewDefinition({ title: baseTitle });
+    }
+  }, [modelTextSmallName, localizedStrings, updateWebViewDefinition]);
 
   // --- USJ from the resolved resource project ---
 
@@ -157,9 +171,7 @@ globalThis.webViewComponent = function ModelTextPanel({
 
   const currentModelTextIds = useMemo(() => {
     const items = effectiveModelTexts?.items ?? [];
-    const dblItems = items.filter(
-      (r): r is EffectiveResourceReference & DblResourceReference => r.type === 'dblResource',
-    );
+    const dblItems = items.filter((r) => isDblResourceReference(r));
     const adminDblItems = dblItems.filter((r) => r.source === 'admin');
     const relevantItems =
       adminDblItems.length > 0 ? adminDblItems : dblItems.filter((r) => r.source === 'user');
@@ -167,45 +179,20 @@ globalThis.webViewComponent = function ModelTextPanel({
   }, [effectiveModelTexts]);
 
   const handleResourceSelect = useCallback(
-    async (resource: DblResourceData) => {
-      const newRef: DblResourceReference = {
-        type: 'dblResource',
-        name: resource.displayName,
-        id: resource.dblEntryUid,
-      };
-
-      const canUserWriteProjectTextConnectionSettings =
-        await pdp?.canUserWriteProjectTextConnectionSettings();
-
-      if (canUserWriteProjectTextConnectionSettings && setAdminModelTexts) {
-        if (isPlatformError(adminModelTextsSetting)) return;
-        // ResourceReference union: .id is not on all members; cast is safe after checking .type
-        const existingItems = adminModelTextsSetting.items.filter(
-          (item): item is DblResourceReference => {
-            if (item.type !== 'dblResource') return false;
-            // DblResourceReference.id exists after .type check; ResourceReference union requires cast
-            // eslint-disable-next-line no-type-assertion/no-type-assertion
-            return (item as DblResourceReference).id !== resource.dblEntryUid;
-          },
-        );
-        setAdminModelTexts({
-          dataVersion: adminModelTextsSetting.dataVersion,
-          items: [newRef, ...existingItems],
-        });
-      } else {
-        const currentUserDblItems = (effectiveModelTexts?.items ?? [])
-          .filter((r) => r.source === 'user')
-          .filter(
-            (r): r is EffectiveResourceReference & DblResourceReference =>
-              r.type === 'dblResource' && r.id !== resource.dblEntryUid,
-          );
-        await pdp?.setUserModelTexts({
-          dataVersion: DEFAULT_LIST.dataVersion,
-          items: [newRef, ...currentUserDblItems],
-        });
-      }
-    },
-    [adminModelTextsSetting, effectiveModelTexts, setAdminModelTexts, pdp],
+    (resource: DblResourceData) =>
+      selectTextConnection(
+        resource,
+        adminModelTexts,
+        setAdminModelTexts,
+        textConnectionsProvider
+          ? () => textConnectionsProvider.canUserWriteProjectTextConnectionSettings()
+          : undefined,
+        textConnectionsProvider ? () => textConnectionsProvider.getUserModelTexts() : undefined,
+        textConnectionsProvider
+          ? (list) => textConnectionsProvider.setUserModelTexts(list)
+          : undefined,
+      ),
+    [adminModelTexts, setAdminModelTexts, textConnectionsProvider],
   );
 
   const showResourcePicker = useDialogCallback(

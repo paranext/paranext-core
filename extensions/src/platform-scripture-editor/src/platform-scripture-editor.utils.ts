@@ -661,6 +661,33 @@ export async function openDefaultActiveProjectIfApplicable(
     hasFailed = true;
   }
 
+  // Tries to open the resource text panels
+  try {
+    await papi.commands.sendCommand(
+      'platformScriptureEditor.openResourceText',
+      'ScriptureResource',
+      top.id,
+    );
+  } catch (e) {
+    papi.logger.warn(
+      `Default active project picker: openResourceText (ScriptureResource) for ${top.id} failed: ${getErrorMessage(e)}`,
+    );
+    hasFailed = true;
+  }
+
+  try {
+    await papi.commands.sendCommand(
+      'platformScriptureEditor.openResourceText',
+      'CommentaryResource',
+      top.id,
+    );
+  } catch (e) {
+    papi.logger.warn(
+      `Default active project picker: openResourceText (CommentaryResource) for ${top.id} failed: ${getErrorMessage(e)}`,
+    );
+    hasFailed = true;
+  }
+
   return hasFailed ? 'failed' : 'filled';
 }
 
@@ -711,7 +738,12 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
     }
     pickerState = 'running';
     try {
-      await openDefaultActiveProjectIfApplicable(papi);
+      const outcome = await openDefaultActiveProjectIfApplicable(papi);
+      if (outcome !== 'filled') {
+        papi.logger.debug(
+          `Default active project picker: unexpected outcome received: '${outcome}'`,
+        );
+      }
     } catch (e) {
       // `openDefaultActiveProjectIfApplicable` catches its own errors and returns 'failed'; this
       // catch only fires on unexpected throws (e.g. PAPI plumbing bugs).

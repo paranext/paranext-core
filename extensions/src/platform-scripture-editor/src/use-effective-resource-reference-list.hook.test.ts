@@ -7,7 +7,7 @@ import type {
   ITextConnectionSettingsProjectDataProvider,
 } from 'platform-scripture';
 import { useProjectSetting, useProjectDataProvider } from '@papi/frontend/react';
-import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list';
+import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 
 vi.mock('@papi/frontend/react', () => ({
   useProjectSetting: vi.fn(),

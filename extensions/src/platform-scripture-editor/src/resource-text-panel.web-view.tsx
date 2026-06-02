@@ -1,0 +1,431 @@
+import { Editorial, EditorOptions, EditorRef } from '@eten-tech-foundation/platform-editor';
+import { EMPTY_USJ } from '@eten-tech-foundation/scripture-utilities';
+import type { WebViewProps } from '@papi/core';
+import { logger } from '@papi/frontend';
+import {
+  useData,
+  useDataProvider,
+  useDialogCallback,
+  useLocalizedStrings,
+  useProjectData,
+  useProjectDataProvider,
+  useProjectSetting,
+} from '@papi/frontend/react';
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  Spinner,
+} from 'platform-bible-react';
+import {
+  DblResourceData,
+  getErrorMessage,
+  isPlatformError,
+  LocalizeKey,
+  ResourceType,
+} from 'platform-bible-utils';
+import { ChevronDown } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import type { DblResourceReference, EffectiveResourceReference } from 'platform-scripture';
+import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
+import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
+import { DEFAULT_RESOURCE_REFERENCE_LIST, selectTextConnection } from './select-dbl-resource';
+
+const DEFAULT_TEXT_DIRECTION = 'ltr';
+
+const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
+  '%webView_resourcePanel_noProject%',
+  '%webView_resourcePanel_installing%',
+  '%webView_resourcePanel_downloadResources%',
+  '%webView_resourcePanel_bibleTexts_emptyState_prompt%',
+  '%webView_resourcePanel_bibleTexts_pick%',
+  '%webView_resourcePanel_commentaries_emptyState_prompt%',
+  '%webView_resourcePanel_commentaries_pick%',
+];
+
+/** Returns the `id` field for reference types that have one, or `undefined` for others. */
+function getRefId(ref: EffectiveResourceReference): string | undefined {
+  if (isDblResourceReference(ref) || isProjectReference(ref)) {
+    return ref.id;
+  }
+  return undefined;
+}
+
+/**
+ * Returns the display label for a resource reference in the form `{fullName} ({displayName})` for
+ * DBL resources, falling back to `ref.name` if the DblResourceData entry is not yet in the list.
+ * Returns `ref.name` for project references.
+ */
+function getRefLabel(ref: EffectiveResourceReference, dblResourcesList: DblResourceData[]): string {
+  if (isDblResourceReference(ref)) {
+    const dblData = dblResourcesList.find((r) => r.dblEntryUid === ref.id);
+    if (dblData) return `${dblData.fullName} (${dblData.displayName})`;
+    return ref.name;
+  }
+  if (isProjectReference(ref)) {
+    return ref.name;
+  }
+  return '';
+}
+
+type ResourceSelectorDropdownProps = {
+  filteredResources: EffectiveResourceReference[];
+  selectedRef: EffectiveResourceReference | undefined;
+  dblResources: DblResourceData[];
+  onSelectResource: (id: string) => void;
+  onShowResourcePicker: () => void;
+  downloadResourcesLabel: string;
+};
+
+function ResourceSelectorDropdown({
+  filteredResources,
+  selectedRef,
+  dblResources,
+  onSelectResource,
+  onShowResourcePicker,
+  downloadResourcesLabel,
+}: ResourceSelectorDropdownProps) {
+  return (
+    <div className="tw:px-2 tw:py-1">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            className="tw:h-8 tw:w-full tw:justify-between tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap"
+          >
+            <span className="tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
+              {selectedRef ? getRefLabel(selectedRef, dblResources) : ''}
+            </span>
+            <ChevronDown className="tw:ml-1 tw:h-4 tw:w-4 tw:shrink-0" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="tw:w-72">
+          {filteredResources.map((ref) => {
+            const refId = getRefId(ref);
+            return (
+              <DropdownMenuCheckboxItem
+                key={refId}
+                checked={refId === (selectedRef ? getRefId(selectedRef) : undefined)}
+                onCheckedChange={() => {
+                  if (refId) onSelectResource(refId);
+                }}
+              >
+                {getRefLabel(ref, dblResources)}
+              </DropdownMenuCheckboxItem>
+            );
+          })}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => onShowResourcePicker()}>
+            {downloadResourcesLabel}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+globalThis.webViewComponent = function ResourceTextPanel({
+  projectId,
+  useWebViewState,
+  useWebViewScrollGroupScrRef,
+}: WebViewProps) {
+  const [localizedStrings] = useLocalizedStrings(RESOURCE_PANEL_STRING_KEYS);
+
+  const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
+
+  // #region Web view state
+
+  // resourceType is injected by the web view provider at open time
+  const [resourceType] = useWebViewState<ResourceType>('resourceType', 'ScriptureResource');
+  const [selectedResourceId, setSelectedResourceId] = useWebViewState<string | undefined>(
+    'selectedResourceId',
+    undefined,
+  );
+
+  // #endregion
+
+  // #region Data sources
+
+  const [effectiveResources] = useEffectiveResourceReferenceList(
+    projectId,
+    'platformScripture.referencedProjectsAndResources',
+  );
+
+  const [adminResourceList, setAdminResourceList] = useProjectSetting(
+    projectId,
+    'platformScripture.referencedProjectsAndResources',
+    DEFAULT_RESOURCE_REFERENCE_LIST,
+  );
+
+  const textConnectionsProvider = useProjectDataProvider(
+    'platformScripture.textConnectionSettings',
+    projectId,
+  );
+
+  const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
+  const [resourcesPossiblyError] = useData(
+    'platformGetResources.dblResourcesProvider',
+  ).DblResources(undefined, []);
+  // Memoize to prevent a new [] reference on every render when resourcesPossiblyError is an error
+  const dblResources = useMemo(
+    () => (isPlatformError(resourcesPossiblyError) ? [] : resourcesPossiblyError),
+    [resourcesPossiblyError],
+  );
+
+  // #endregion
+
+  // #region Filter list based on resourceType
+
+  const filteredResources = useMemo((): EffectiveResourceReference[] => {
+    if (!effectiveResources) return [];
+    return effectiveResources.items.filter((ref) => {
+      if (isDblResourceReference(ref)) {
+        return dblResources.find((r) => r.dblEntryUid === ref.id)?.type === resourceType;
+      }
+      if (isProjectReference(ref)) {
+        // ProjectReferences only appear in the Bible Texts tab
+        return resourceType === 'ScriptureResource';
+      }
+      return false;
+    });
+  }, [effectiveResources, dblResources, resourceType]);
+
+  // #endregion
+
+  // #region Selection management
+
+  // Auto-correct selectedResourceId when the selected item leaves the filtered list
+  useEffect(() => {
+    if (filteredResources.length === 0) return;
+    const currentId = filteredResources.find((r) => getRefId(r) === selectedResourceId);
+    if (!currentId) setSelectedResourceId(getRefId(filteredResources[0]));
+  }, [filteredResources, selectedResourceId, setSelectedResourceId]);
+
+  const selectedRef =
+    filteredResources.find((r) => getRefId(r) === selectedResourceId) ?? filteredResources[0];
+
+  let resourceProjectId: string | undefined;
+  let isInstalling = false;
+  let dblMatch: (typeof dblResources)[number] | undefined;
+
+  if (isDblResourceReference(selectedRef)) {
+    dblMatch = dblResources.find((r) => r.dblEntryUid === selectedRef.id);
+    isInstalling = dblMatch !== undefined && !dblMatch.installed;
+    resourceProjectId = dblMatch?.installed ? dblMatch.projectId : undefined;
+  } else if (isProjectReference(selectedRef)) {
+    resourceProjectId = selectedRef.id;
+  }
+
+  // Auto-install when the selected DblResource exists but isn't installed
+  const matchDblEntryUid = dblMatch?.dblEntryUid;
+  useEffect(() => {
+    if (isInstalling && dblResourcesProvider && matchDblEntryUid !== undefined) {
+      dblResourcesProvider
+        .installDblResource(matchDblEntryUid)
+        .catch((e: unknown) =>
+          logger.error(`Resource panel auto-install failed: ${getErrorMessage(e)}`),
+        );
+    }
+  }, [isInstalling, dblResourcesProvider, matchDblEntryUid]);
+
+  // #endregion
+
+  // #region USJ Fetch
+
+  const [usjPossiblyError] = useProjectData(
+    'platformScripture.USJ_Chapter',
+    resourceProjectId,
+  ).ChapterUSJ(
+    useMemo(
+      () => ({
+        book: scrRef.book,
+        chapterNum: scrRef.chapterNum,
+        verseNum: 1,
+        versificationStr: scrRef.versificationStr,
+      }),
+      [scrRef.book, scrRef.chapterNum, scrRef.versificationStr],
+    ),
+    EMPTY_USJ,
+  );
+
+  const usjFromPdp = !isPlatformError(usjPossiblyError) ? usjPossiblyError : undefined;
+
+  // #endregion
+
+  // #region Text direction
+
+  const [textDirectionPossiblyError] = useProjectSetting(
+    resourceProjectId,
+    'platform.textDirection',
+    DEFAULT_TEXT_DIRECTION,
+  );
+  const textDirection = useMemo(() => {
+    if (isPlatformError(textDirectionPossiblyError)) {
+      logger.warn(
+        `Error getting text direction setting: ${getErrorMessage(textDirectionPossiblyError)}`,
+      );
+      return DEFAULT_TEXT_DIRECTION;
+    }
+    return textDirectionPossiblyError || DEFAULT_TEXT_DIRECTION;
+  }, [textDirectionPossiblyError]);
+
+  // #endregion
+
+  // #region Resource picker dialog
+
+  // Only DblResourceReference IDs are passed to the Resource Picker as pre-selected
+  const currentFilteredDblIds = useMemo(() => {
+    return filteredResources
+      .filter(
+        (r): r is EffectiveResourceReference & DblResourceReference => r.type === 'dblResource',
+      )
+      .map((r) => r.id);
+  }, [filteredResources]);
+
+  const handleResourceSelect = useCallback(
+    (resource: DblResourceData) =>
+      selectTextConnection(
+        resource,
+        adminResourceList,
+        setAdminResourceList,
+        textConnectionsProvider
+          ? () => textConnectionsProvider.canUserWriteProjectTextConnectionSettings()
+          : undefined,
+        textConnectionsProvider
+          ? () => textConnectionsProvider.getUserReferencedProjectsAndResources()
+          : undefined,
+        textConnectionsProvider
+          ? (list) => textConnectionsProvider.setUserReferencedProjectsAndResources(list)
+          : undefined,
+        setSelectedResourceId,
+      ),
+    [adminResourceList, setAdminResourceList, textConnectionsProvider, setSelectedResourceId],
+  );
+
+  const showResourcePicker = useDialogCallback(
+    'platform.resourcePicker',
+    useMemo(
+      () => ({ resourceType, selectedResourceIds: currentFilteredDblIds }),
+      [resourceType, currentFilteredDblIds],
+    ),
+    useCallback(
+      (resource: DblResourceData | undefined) => {
+        if (!resource) return;
+        handleResourceSelect(resource).catch((e) =>
+          logger.error(`Resource selection failed: ${getErrorMessage(e)}`),
+        );
+      },
+      [handleResourceSelect],
+    ),
+  );
+
+  // #endregion
+
+  // #region Editor
+
+  // EditorRef requires null initial value per React ref convention
+  // eslint-disable-next-line no-null/no-null
+  const editorRef = useRef<EditorRef | null>(null);
+  const options: EditorOptions = useMemo(
+    () => ({
+      isReadonly: true,
+      hasSpellCheck: false,
+      textDirection,
+    }),
+    [textDirection],
+  );
+
+  useEffect(() => {
+    if (usjFromPdp) editorRef.current?.setUsj(usjFromPdp);
+  }, [usjFromPdp]);
+
+  // #endregion
+
+  // #region Render
+
+  const emptyStatePromptKey =
+    resourceType === 'ScriptureResource'
+      ? '%webView_resourcePanel_bibleTexts_emptyState_prompt%'
+      : '%webView_resourcePanel_commentaries_emptyState_prompt%';
+
+  const pickButtonKey =
+    resourceType === 'ScriptureResource'
+      ? '%webView_resourcePanel_bibleTexts_pick%'
+      : '%webView_resourcePanel_commentaries_pick%';
+
+  if (!projectId) {
+    return (
+      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
+        <p>{localizedStrings['%webView_resourcePanel_noProject%']}</p>
+      </div>
+    );
+  }
+
+  if (!effectiveResources) {
+    return (
+      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
+        <Spinner />
+      </div>
+    );
+  }
+
+  // Zero state: the filtered list is empty (nothing configured for this resourceType)
+  if (filteredResources.length === 0) {
+    return (
+      <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
+        <p>{localizedStrings[emptyStatePromptKey]}</p>
+        <Button onClick={() => showResourcePicker()}>{localizedStrings[pickButtonKey]}</Button>
+      </div>
+    );
+  }
+
+  // Installing state: selected DblResource found but not yet installed
+  if (isInstalling) {
+    return (
+      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:gap-2 tw:p-8 tw:text-center">
+        <Spinner />
+        <span>{localizedStrings['%webView_resourcePanel_installing%']}</span>
+      </div>
+    );
+  }
+
+  // Loading state: USJ not yet available
+  if (!resourceProjectId || usjPossiblyError === undefined) {
+    return (
+      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
+        <Spinner />
+      </div>
+    );
+  }
+
+  // Active state: resource is installed and USJ is available
+  return (
+    <div className="tw:flex tw:h-screen tw:flex-col">
+      <ResourceSelectorDropdown
+        filteredResources={filteredResources}
+        selectedRef={selectedRef}
+        dblResources={dblResources}
+        onSelectResource={setSelectedResourceId}
+        onShowResourcePicker={showResourcePicker}
+        downloadResourcesLabel={localizedStrings['%webView_resourcePanel_downloadResources%']}
+      />
+
+      {/* Scripture content */}
+      <div className="tw:flex-1 tw:overflow-auto" dir={options.textDirection}>
+        <Editorial
+          ref={editorRef}
+          scrRef={scrRef}
+          onScrRefChange={setScrRef}
+          options={options}
+          logger={logger}
+        />
+      </div>
+    </div>
+  );
+
+  // #endregion
+};
