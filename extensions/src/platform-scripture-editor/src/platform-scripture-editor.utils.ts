@@ -485,6 +485,43 @@ export function resolveOpenEditorDispatch(
 
 // #endregion Open Editor Dispatch
 
+// #region Open Project Filter
+
+/** Which project-selection dialog the caller is populating. */
+export type OpenProjectDialogMode = 'resourceViewer' | 'scriptureEditor';
+
+/**
+ * Filter a list of projects (paired with their `platform.isPublished` value) to those that belong
+ * in the project-selection dialog for a given open mode.
+ *
+ * Used by the `open()` flow in `main.ts` when no `projectId` is supplied and we need to populate
+ * the Scripture Editor / Resource Viewer project picker. The rule is:
+ *
+ * - `'resourceViewer'` → include projects where `isPublished === true`. The Resource Viewer lists
+ *   published references / resources.
+ * - `'scriptureEditor'` → include projects where `isPublished === false`. The Scripture Editor lists
+ *   unpublished projects.
+ *
+ * Pure function — does not touch PAPI. The caller is responsible for fetching each project's
+ * `platform.isPublished` setting beforehand.
+ *
+ * @param projectsWithIsPublished List of projects, each with their `platform.isPublished` setting
+ *   value already fetched.
+ * @param mode Which dialog the caller is populating — see {@link OpenProjectDialogMode}.
+ * @returns Project IDs that match the requested open mode, in the original input order.
+ */
+export function selectProjectIdsForOpenMode(
+  projectsWithIsPublished: ReadonlyArray<{ projectId: string; isPublished: boolean }>,
+  mode: OpenProjectDialogMode,
+): string[] {
+  const wantPublished = mode === 'resourceViewer';
+  return projectsWithIsPublished
+    .filter(({ isPublished }) => isPublished === wantPublished)
+    .map(({ projectId }) => projectId);
+}
+
+// #endregion Open Project Filter
+
 // #region Default Active Project Picker
 
 /**

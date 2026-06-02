@@ -54,6 +54,12 @@
   "%product_shortName%": {
     "fallbackKey": "%product_name%"
   },
+  "%project_settings_platform_isEditable_description%": {
+    "deprecationInfo": {
+      "date": "2026-05-26",
+      "message": "The meaning of platform.isEditable was clarified to refer specifically to a project's primary content (e.g. Scripture text). Use %project_settings_platform_isEditable_description_2% for the new wording; the new project setting %project_settings_platform_isPublished_description% captures the 'is this a published reference / resource' distinction."
+    }
+  },
   "%project_settings_project_group1_description%": {
     "fallbackKey": "%project_settings_platform_group1_description%"
   },

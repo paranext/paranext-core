@@ -61,7 +61,7 @@ export type SortConfig = {
 
 export type LocalProjectInfo = {
   projectId: string;
-  isEditable: boolean;
+  isPublished: boolean;
   fullName: string;
   name: string;
   language: string;
@@ -72,7 +72,7 @@ export type MergedProjectInfo = {
   name: string;
   fullName: string;
   language: string;
-  isEditable: boolean;
+  isPublished: boolean;
   isSendReceivable: boolean;
   isLocallyAvailable?: boolean;
   editedStatus?: EditedStatus;
@@ -98,9 +98,11 @@ export type HomeProps = {
    * Callback function to open a project.
    *
    * @param projectId - The ID of the project to open.
-   * @param isEditable - Whether the project is editable.
+   * @param isPublished - Whether the project is a published resource (read-only reference). Pass
+   *   this through to the open command so the caller can dispatch to the Resource Viewer for
+   *   published projects and the Scripture Editor for non-published projects.
    */
-  onOpenProject?: (projectId: string, isEditable: boolean) => void;
+  onOpenProject?: (projectId: string, isPublished: boolean) => void;
   /**
    * Callback function to send/receive a project.
    *
@@ -204,7 +206,8 @@ export function Home({
           name: sharedProject.name,
           fullName: sharedProject.fullName,
           language: sharedProject.language,
-          isEditable: true,
+          // Shared (send/receive) projects are not published resources.
+          isPublished: false,
           isSendReceivable: true,
           isLocallyAvailable: localProjectsInfo?.some((project) => project.projectId === projectId),
           editedStatus: sharedProject.editedStatus,
@@ -221,7 +224,7 @@ export function Home({
           name: project.name,
           fullName: project.fullName,
           language: project.language,
-          isEditable: project.isEditable,
+          isPublished: project.isPublished,
           isSendReceivable: false,
           isLocallyAvailable: true,
         });
@@ -350,12 +353,12 @@ export function Home({
   const openButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
     if (isMenuItem)
       return (
-        <DropdownMenuItem onClick={() => onOpenProject(project.projectId, project.isEditable)}>
+        <DropdownMenuItem onClick={() => onOpenProject(project.projectId, project.isPublished)}>
           <span>{openText}</span>
         </DropdownMenuItem>
       );
     return (
-      <Button onClick={() => onOpenProject(project.projectId, project.isEditable)}>
+      <Button onClick={() => onOpenProject(project.projectId, project.isPublished)}>
         {openText}
       </Button>
     );
@@ -455,7 +458,7 @@ export function Home({
                           }}
                           onDoubleClick={() =>
                             project.isLocallyAvailable
-                              ? onOpenProject(project.projectId, project.isEditable)
+                              ? onOpenProject(project.projectId, project.isPublished)
                               : !isSendReceiveInProgress && onSendReceiveProject(project.projectId)
                           }
                           key={project.projectId}
@@ -476,10 +479,10 @@ export function Home({
                                 {project.editedStatus === 'edited' && (
                                   <div className="tw:rounded-full tw:bg-primary tw:h-2 tw:w-2 tw:ms-[-8px]" />
                                 )}
-                                {project.isEditable ? (
-                                  <ScrollText className="tw:pr-0" size={18} />
-                                ) : (
+                                {project.isPublished ? (
                                   <BookOpen className="tw:pr-0" size={18} />
+                                ) : (
+                                  <ScrollText className="tw:pr-0" size={18} />
                                 )}
                               </div>
 

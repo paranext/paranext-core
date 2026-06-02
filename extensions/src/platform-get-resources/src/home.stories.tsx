@@ -12,28 +12,30 @@ const localizedStrings = getLocalizedStrings([...HOME_STRING_KEYS]);
 const staticLocalProjectsAndResources: LocalProjectInfo[] = [
   {
     projectId: '1',
-    isEditable: false,
+    isPublished: true,
     fullName: 'Resource 1',
     name: 'Res1',
     language: 'myLanguage',
   },
   {
     projectId: '2',
-    isEditable: false,
+    isPublished: true,
     fullName: 'Resource 2',
     name: 'Res2',
     language: 'English',
   },
   {
     projectId: '13',
-    isEditable: true,
+    isPublished: false,
     fullName: 'Project 4 - editable',
     name: 'Pr4',
     language: '2ndLanguage',
   },
   {
     projectId: '14',
-    isEditable: false,
+    // Non-published but non-editable Scripture text (e.g. Paratext Editable=F) — should appear
+    // with the unpublished-project icon, not the published-resource icon.
+    isPublished: false,
     fullName:
       'Project 3 - read-only This_is_a_project_with_a_very_long_name_01234567890_!/"§$%&/()=?_öäüß',
     name: 'Pr3',
@@ -41,14 +43,14 @@ const staticLocalProjectsAndResources: LocalProjectInfo[] = [
   },
   {
     projectId: '25',
-    isEditable: true,
+    isPublished: false,
     fullName: 'Project 5 - editable',
     name: 'Pr5',
     language: 'German',
   },
   {
     projectId: '26',
-    isEditable: false,
+    isPublished: true,
     fullName: 'SDBH/SDBG',
     name: 'SdDict',
     language: 'Hebrew/Greek',
@@ -152,7 +154,7 @@ function OnlyWebProjectDecorator(Story: (update?: { args: HomeProps }) => ReactE
   const onlyWebProjectList: LocalProjectInfo[] = [
     {
       projectId: '0',
-      isEditable: false,
+      isPublished: true,
       fullName: 'The WEB project',
       name: 'WEB',
       language: 'myLanguage',

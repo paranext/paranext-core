@@ -3787,12 +3787,78 @@ declare module 'papi-shared-types' {
      */
     'platform.fullName': string;
     /**
-     * Whether or not the project is editable. This is a general "editable", not necessarily that it
-     * is editable by the current user.
+     * Whether or not the primary content of the project is currently editable. If this is `false`,
+     * ancillary data may still be editable. This is a project-wide "editable"; if this is `true`,
+     * that does not necessarily mean it is editable by the current user.
      *
-     * Projects that are not editable are sometimes called "resources".
+     * This setting is intended to be used as a central location to turn off all editing of the
+     * primary content of the project temporarily. For example, an administrator of a Scripture
+     * project may want to disable editing the Scripture text while allowing users to comment on the
+     * project for a period of review.
+     *
+     * Each project may implement this differently. For Paratext Scripture projects, not editable
+     * means the following are not editable:
+     *
+     * - Scripture text
+     * - Inventory approval statuses
+     * - Biblical terms renderings
+     *
+     * While most everything else on the project is still editable such as the following
+     * (non-exhaustive):
+     *
+     * - Project comments
+     * - Biblical terms renderings descriptions
+     * - Project settings
+     * - Project plan
+     * - User permissions
+     *
+     * Note: not all of these editable rules are necessarily enforced on an API level for Paratext
+     * Scripture projects; some rules may be enforced only in UI.
+     *
+     * This is a coarse, project-level approximation of "the user can edit the primary content of
+     * this project" and currently doubles as our user-permissions proxy for editing primary project
+     * data. In the future, using it to check for editing permissions will be replaced by
+     * fine-grained user permissions.
+     *
+     * Use this setting when you need to determine whether **a project's primary content may be
+     * edited**.
+     *
+     * For determining whether a project should be treated as a fully read-only published reference
+     * / resource, use {@link ProjectSettingTypes['platform.isPublished'] | `platform.isPublished`}.
+     * If the project is read-only or a published resource, this setting should be `false` and
+     * {@link ProjectSettingTypes['platform.isPublished'] | `platform.isPublished`} should be
+     * `true`.
+     *
+     * If `isPublished` is `true`, then `isEditable` should always be `false`.
+     *
+     * Defaults to `true`.
      */
     'platform.isEditable': boolean;
+    /**
+     * Whether this project has been published and is therefore not currently writeable in any way.
+     *
+     * A "published" project is one that has been packaged or delivered for use as a reference (e.g.
+     * a Bible resource downloaded from DBL, a global-note-type resource). Nothing on a published
+     * project is writeable — not the primary content or ancillary data.
+     *
+     * Use this setting when you need to:
+     *
+     * - Determine whether a project has been packaged/delivered in a way that it is intended to be
+     *   used as a reference for consultation rather than a project that is actively being worked
+     *   on.
+     * - Determine whether ancillary data on a project (extension data, settings, etc.) may be
+     *   modified. On a published project the answer is always "no"; on a non-published project it
+     *   may still be "no" for other reasons but is at least not gated by publication.
+     *
+     * Do **not** use this setting as the sole gate on editing the primary content of a project —
+     * that is what {@link ProjectSettingTypes['platform.isEditable'] | `platform.isEditable`} is
+     * for. A non-published project may still have non-editable primary content for other reasons.
+     *
+     * If `isPublished` is `true`, then `isEditable` should always be `false`.
+     *
+     * Defaults to `false`.
+     */
+    'platform.isPublished': boolean;
     /**
      * Which way the project's text flows. 'ltr' = left-to-right; 'rtl' = right-to-left. '' or
      * undefined = left-to-right (may be changed in the future to detect). Defaults to ''. This is

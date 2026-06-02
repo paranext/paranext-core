@@ -28,8 +28,17 @@ export const platformProjectSettings: ProjectSettingsContribution = {
     },
     'platform.isEditable': {
       label: '%project_settings_platform_isEditable_label%',
-      description: '%project_settings_platform_isEditable_description%',
+      // Use the `_2` key: the meaning of `platform.isEditable` was clarified to be about a
+      // project's primary content (not "is it a resource"), so the original description string is
+      // misleading. No metadata.json fallback is registered intentionally — translators should
+      // retranslate this string fresh rather than inheriting the older meaning.
+      description: '%project_settings_platform_isEditable_description_2%',
       default: true,
+    },
+    'platform.isPublished': {
+      label: '%project_settings_platform_isPublished_label%',
+      description: '%project_settings_platform_isPublished_description%',
+      default: false,
     },
     'platform.textDirection': {
       label: '%project_settings_platform_textDirection_label%',
@@ -64,6 +73,10 @@ const isEditableValidator: ProjectSettingValidator<'platform.isEditable'> = asyn
   newValue: boolean,
 ) => typeof newValue === 'boolean';
 
+const isPublishedValidator: ProjectSettingValidator<'platform.isPublished'> = async (
+  newValue: boolean,
+) => typeof newValue === 'boolean';
+
 const textDirectionValidator: ProjectSettingValidator<'platform.textDirection'> = async (
   newValue: string | undefined,
 ) => {
@@ -77,5 +90,6 @@ export const coreProjectSettingsValidators: Partial<AllProjectSettingsValidators
   'platform.language': languageValidator,
   'platform.languageTag': languageTagValidator,
   'platform.isEditable': isEditableValidator,
+  'platform.isPublished': isPublishedValidator,
   'platform.textDirection': textDirectionValidator,
 };

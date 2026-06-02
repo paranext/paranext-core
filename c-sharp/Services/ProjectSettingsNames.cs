@@ -23,6 +23,14 @@ public sealed class ProjectSettingsNames
     public const string PB_IS_EDITABLE = "platform.isEditable";
     public const string PT_IS_EDITABLE = "Editable";
 
+    /// <summary>
+    /// Whether the project has been published as a read-only reference / resource. This is a
+    /// computed, read-only setting — it is not stored in Settings.xml. Intentionally NOT included
+    /// in s_platformBibleToParatextSettingsNames because no Paratext setting name maps to it; the
+    /// value is computed by ParatextProjectDataProvider's get-setting branch.
+    /// </summary>
+    public const string PB_IS_PUBLISHED = "platform.isPublished";
+
     public const string PB_TEXT_DIRECTION = "platform.textDirection";
     public const string PT_TEXT_DIRECTION = "TextDirection";
 

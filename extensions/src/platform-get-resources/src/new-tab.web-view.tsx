@@ -9,7 +9,7 @@ import { Home, HOME_STRING_KEYS } from './home.component';
 
 type LocalProjectInfo = {
   projectId: string;
-  isEditable: boolean;
+  isPublished: boolean;
   fullName: string;
   name: string;
   language: string;
@@ -34,13 +34,13 @@ globalThis.webViewComponent = function NewTab({ id: webViewId }: WebViewProps) {
 
   const [projectLoading, setProjectLoading] = useState<boolean>(false);
 
-  const openResource = (projectId: string, isEditable: boolean) => {
+  const openResource = (projectId: string, isPublished: boolean) => {
     setProjectLoading(true);
 
     return papi.commands.sendCommand(
-      isEditable
-        ? 'platformScriptureEditor.openScriptureEditor'
-        : 'platformScriptureEditor.openResourceViewer',
+      isPublished
+        ? 'platformScriptureEditor.openResourceViewer'
+        : 'platformScriptureEditor.openScriptureEditor',
       projectId,
       undefined,
       webViewId,
@@ -78,7 +78,7 @@ globalThis.webViewComponent = function NewTab({ id: webViewId }: WebViewProps) {
           const pdp = await papi.projectDataProviders.get('platform.base', data.id);
           return {
             projectId: data.id,
-            isEditable: await pdp.getSetting('platform.isEditable'),
+            isPublished: await pdp.getSetting('platform.isPublished'),
             fullName: await pdp.getSetting('platform.fullName'),
             name: await pdp.getSetting('platform.name'),
             language: await pdp.getSetting('platform.language'),
@@ -112,7 +112,7 @@ globalThis.webViewComponent = function NewTab({ id: webViewId }: WebViewProps) {
       localizedStringsWithLoadingState={localizedStringsWithLoadingState}
       localProjectsInfo={localProjectsInfo}
       isLoadingLocalProjects={isLoadingLocalProjects}
-      onOpenProject={(projectId, isEditable) => openResource(projectId, isEditable)}
+      onOpenProject={(projectId, isPublished) => openResource(projectId, isPublished)}
       showGetResourcesButton={false}
       headerContent={
         <>
