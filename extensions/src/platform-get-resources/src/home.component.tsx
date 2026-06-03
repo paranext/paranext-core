@@ -52,6 +52,7 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_items%',
   '%resources_itemsFiltered%',
   '%resources_language%',
+  '%resources_lastSynchronized%',
   '%resources_noProjects%',
   '%resources_noProjectsInstruction%',
   '%resources_noSearchResults%',
@@ -213,6 +214,7 @@ export function Home({
     : getLocalizedString('%resources_items%');
   const itemsFilteredText: string = getLocalizedString('%resources_itemsFiltered%');
   const languageText: string = getLocalizedString('%resources_language%');
+  const lastSynchronizedText: string = getLocalizedString('%resources_lastSynchronized%');
   const noProjectsText: string = getLocalizedString('%resources_noProjects%');
   const noProjectsInstructionText: string = getLocalizedString('%resources_noProjectsInstruction%');
   const noSearchResultsText: string = getLocalizedString('%resources_noSearchResults%');
@@ -374,6 +376,10 @@ export function Home({
 
   const relativeTimeFormatter = useMemo(() => {
     return new Intl.RelativeTimeFormat(uiLocales, { style: 'long', numeric: 'auto' });
+  }, [uiLocales]);
+
+  const exactDateTimeFormatter = useMemo(() => {
+    return new Intl.DateTimeFormat(uiLocales, { dateStyle: 'long', timeStyle: 'short' });
   }, [uiLocales]);
 
   const getSendReceiveButtonContent = (project: MergedProjectInfo) => {
@@ -626,11 +632,32 @@ export function Home({
                           </TableCell>
                           {filteredAndSortedProjects.some((proj) => proj.isSendReceivable) && (
                             <TableCell className="tw:hidden tw:sm:!table-cell tw:cursor-default">
-                              {project.lastSendReceiveDate &&
-                                formatTimeSpan(
-                                  relativeTimeFormatter,
-                                  new Date(project.lastSendReceiveDate),
-                                )}
+                              {project.lastSendReceiveDate && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span>
+                                        {formatTimeSpan(
+                                          relativeTimeFormatter,
+                                          new Date(project.lastSendReceiveDate),
+                                        )}
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="left">
+                                      <div className="tw:flex tw:flex-col tw:gap-0.5">
+                                        <div className="tw:text-muted-foreground tw:text-xs">
+                                          {lastSynchronizedText}
+                                        </div>
+                                        <div>
+                                          {exactDateTimeFormatter.format(
+                                            new Date(project.lastSendReceiveDate),
+                                          )}
+                                        </div>
+                                      </div>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
                             </TableCell>
                           )}
                           <TableCell className="tw:max-[300px]:hidden">
