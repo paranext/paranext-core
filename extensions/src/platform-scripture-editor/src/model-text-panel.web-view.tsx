@@ -197,7 +197,11 @@ globalThis.webViewComponent = function ModelTextPanel({
   const showResourcePicker = useDialogCallback(
     'platform.resourcePicker',
     useMemo(
-      () => ({ resourceType: 'ScriptureResource', selectedResourceIds: currentModelTextIds }),
+      () => ({
+        resourceType: 'ScriptureResource',
+        selectedResourceIds: currentModelTextIds,
+        isModal: true,
+      }),
       [currentModelTextIds],
     ),
     useCallback(

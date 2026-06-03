@@ -92,7 +92,7 @@
       "%webView_modelTextPanel_installing%": "Installing resource…",
       "%webView_modelTextPanel_noProject%": "No project selected.",
       "%webView_modelTextPanel_pickModelText%": "Pick model text…",
-      "%webView_modelTextPanel_title%": "Model Text",
+      "%webView_modelTextPanel_title%": "Model text",
       "%webView_modelTextPanel_title_withResource%": "Model text: {textName}",
       "%webView_modelTextPanel_unknownResource%": "The selected model text could not be found.",
       "%webView_modelTextPanel_emptyState_prompt%": "No model text selected. Pick one to display a reference translation alongside your project.",
