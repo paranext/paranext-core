@@ -197,7 +197,7 @@ export function Home({
   onOpenProject = () => {},
   onSendReceiveProject = () => {},
   onGetStarted = () => {},
-  showGetResourcesButton = true,
+  showGetResourcesButton = false,
   isSendReceiveInProgress = false,
   isLoadingLocalProjects = false,
   isLoadingRemoteProjects = false,
@@ -459,18 +459,29 @@ export function Home({
   return (
     <Card className="tw:flex tw:h-screen tw:flex-col tw:rounded-none tw:border-0">
       <CardHeader
-        className={cn(
-          'tw:shrink-0 tw:[@media(max-height:28rem)]:!pb-2 tw:[@media(max-height:28rem)]:!pt-4 tw:max-[300px]:!pb-0',
-          { 'tw:max-[300px]:!pb-2': showGetResourcesButton },
-        )}
+        className={cn('tw:shrink-0 tw:[@media(max-height:28rem)]:!pb-2 tw:max-[300px]:!pb-0', {
+          'tw:max-[300px]:!pb-2': showGetResourcesButton,
+        })}
       >
         <div className="tw:flex tw:flex-col tw:sm:flex-row tw:sm:justify-between tw:gap-4">
           <div className="tw:flex tw:flex-col tw:gap-4 tw:w-full tw:sm:max-w-sm">
             <div className="tw:flex tw:gap-4 tw:items-center tw:[@media(max-height:28rem)]:!hidden tw:max-sm:!hidden">
               {headerContent}
             </div>
-            <div className="tw:flex tw:flex-col tw:items-start tw:gap-2 tw:sm:flex-row tw:sm:items-center">
-              <div className="tw:w-full tw:min-w-0 tw:sm:flex-1">
+            <div
+              className={cn(
+                'tw:flex tw:gap-2',
+                showGetResourcesButton
+                  ? 'tw:flex-col tw:items-start tw:sm:flex-row tw:sm:items-center'
+                  : 'tw:items-center',
+              )}
+            >
+              <div
+                className={cn(
+                  'tw:min-w-0',
+                  showGetResourcesButton ? 'tw:w-full tw:sm:flex-1' : 'tw:flex-1',
+                )}
+              >
                 <SearchBar
                   value={textFilter}
                   onSearch={setTextFilter}
@@ -489,7 +500,7 @@ export function Home({
             </div>
           </div>
           {showGetResourcesButton && (
-            <div className="tw:hidden tw:sm:block tw:sm:self-end">{getResourcesButton}</div>
+            <div className="tw:max-sm:hidden tw:sm:self-end">{getResourcesButton}</div>
           )}
         </div>
       </CardHeader>
@@ -734,7 +745,7 @@ export function Home({
           </div>
         </CardContent>
       )}
-      <CardFooter className="tw:shrink-0 tw:flex-col tw:justify-center tw:p-4 tw:border-t tw:gap-2 tw:[@media(max-height:32rem)]:!hidden">
+      <CardFooter className="tw:shrink-0 tw:flex-col tw:justify-center tw:p-4 tw:border-t tw:gap-2 tw:[@media(max-height:28rem)]:!hidden">
         <Label>
           {filteredAndSortedProjects.length !== mergedProjectInfo.length
             ? itemsFilteredText
