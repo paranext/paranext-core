@@ -52,19 +52,25 @@ export const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(
     const dir: Direction = readDirection();
 
     return (
-      <div id={id} className={cn('tw:relative', { 'tw:w-full': isFullWidth }, className)}>
+      <div
+        id={id}
+        className={cn('tw:relative tw:@container/search', { 'tw:w-full': isFullWidth }, className)}
+      >
         <Search
           className={cn(
-            'tw:absolute tw:top-1/2 tw:h-4 tw:w-4 tw:-translate-y-1/2 tw:transform tw:opacity-50',
+            'tw:absolute tw:top-1/2 tw:h-4 tw:w-4 tw:-translate-y-1/2 tw:transform tw:opacity-50 tw:@max-[7rem]/search:hidden',
             { 'tw:right-3': dir === 'rtl' },
             { 'tw:left-3': dir === 'ltr' },
           )}
         />
         <Input
           ref={inputRef}
-          className={cn('tw:w-full tw:overflow-hidden tw:text-ellipsis tw:ps-9', {
-            'tw:pe-8': value,
-          })}
+          className={cn(
+            'tw:w-full tw:overflow-hidden tw:text-ellipsis tw:ps-9 tw:@max-[7rem]/search:ps-3',
+            {
+              'tw:pe-8': value,
+            },
+          )}
           placeholder={placeholder}
           value={value}
           onChange={(e) => onSearch(e.target.value)}
