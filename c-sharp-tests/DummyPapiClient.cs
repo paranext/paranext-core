@@ -31,6 +31,8 @@ namespace TestParanextDataProvider
             return Task.FromResult(_localMethods.TryAdd(requestType, requestHandler));
         }
 
+        public IReadOnlyCollection<string> RegisteredRequestTypes => _localMethods.Keys.ToArray();
+
         public override Task SendEventAsync(string eventType, object? eventParameters)
         {
             _sentEvents.Enqueue((eventType, eventParameters));
