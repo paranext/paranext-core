@@ -31,8 +31,7 @@ internal class LocalParatextProjects
         "CountryStatuses.xml",
     ];
 
-    // Published projects (ScrText.IsResourceProject == true, i.e. ResourceScrText and
-    // JoinedScrText) are read-only in PT9 — ResourceProjectFileManager.SetXml() throws
+    // Published projects are read-only in PT9 — ResourceProjectFileManager.SetXml() throws
     // AttemptedResourceWritingException — and cannot accept comment writes. They therefore do not
     // advertise legacyCommentManager.comments; everything else still applies because published
     // projects can still be read for scripture and resource-references. The unpublished list is
@@ -124,18 +123,21 @@ internal class LocalParatextProjects
     /// </summary>
     public IEnumerable<ProjectDetails> GetAvailableUnpublishedProjectDetails()
     {
+        // IsResourceProject is true for ResourceScrText and JoinedScrText (PT9's read-only
+        // resource-backed project shapes); everything else is unpublished.
         return GetVisibleScrTexts()
             .Where(scrText => !scrText.IsResourceProject)
             .Select(scrText => scrText.GetProjectDetails());
     }
 
     /// <summary>
-    /// Available published Paratext projects (read-only DBL / biblical resources — backed by
-    /// <c>ResourceScrText</c> or <c>JoinedScrText</c> in PT9). Used by
-    /// <see cref="ParatextPublishedProjectDataProviderFactory"/> to populate its project list.
+    /// Available published Paratext projects (read-only DBL / biblical resources).
+    /// Used by <see cref="ParatextPublishedProjectDataProviderFactory"/> to populate its project list.
     /// </summary>
     public IEnumerable<ProjectDetails> GetAvailablePublishedProjectDetails()
     {
+        // IsResourceProject is true for ResourceScrText and JoinedScrText (PT9's read-only
+        // resource-backed project shapes).
         return GetVisibleScrTexts()
             .Where(scrText => scrText.IsResourceProject)
             .Select(scrText => scrText.GetProjectDetails());
