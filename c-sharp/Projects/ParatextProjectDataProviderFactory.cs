@@ -27,9 +27,9 @@ internal class ParatextProjectDataProviderFactory : ParatextProjectDataProviderF
             .ToList();
     }
 
-    // Published projects (ScrText.IsResourceProject == true) belong to
-    // ParatextPublishedProjectDataProviderFactory. Reject them here so callers don't end up with an
-    // unpublished PDP whose advertised interfaces lie about what the project can actually do.
+    // Published projects belong to ParatextPublishedProjectDataProviderFactory. Reject them here so
+    // callers don't end up with an unpublished PDP whose advertised interfaces lie about what the
+    // project can actually do.
     protected override bool ShouldServeProject(ScrText scrText)
     {
         return !scrText.IsResourceProject;
