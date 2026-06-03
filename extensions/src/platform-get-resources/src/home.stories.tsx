@@ -93,63 +93,69 @@ export default meta;
 
 type Story = StoryObj<typeof Home>;
 
-function DefaultHomeDecorator(Story: (update?: { args: HomeProps }) => ReactElement) {
-  const [localProjectsAndResources, setLocalProjectsAndResources] = useState<LocalProjectInfo[]>(
-    [],
-  );
-  const [isLoadingLocalProjects, setIsLoadingLocalProjects] = useState<boolean>(true);
+function createHomeDecorator(extraArgs: Partial<HomeProps> = {}) {
+  return function HomeDecorator(Story: (update?: { args: HomeProps }) => ReactElement) {
+    const [localProjectsAndResources, setLocalProjectsAndResources] = useState<LocalProjectInfo[]>(
+      [],
+    );
+    const [isLoadingLocalProjects, setIsLoadingLocalProjects] = useState<boolean>(true);
 
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      setLocalProjectsAndResources(staticLocalProjectsAndResources);
-      setIsLoadingLocalProjects(false);
-    }, 500);
-    return () => clearTimeout(timeout);
-  }, []);
+    useEffect(() => {
+      const timeout = setTimeout(() => {
+        setLocalProjectsAndResources(staticLocalProjectsAndResources);
+        setIsLoadingLocalProjects(false);
+      }, 500);
+      return () => clearTimeout(timeout);
+    }, []);
 
-  const [sharedProjectsAndResources, setSharedProjectsAndResources] = useState<SharedProjectsInfo>(
-    {},
-  );
-  const [isLoadingRemoteProjects, setIsLoadingRemoteProjects] = useState<boolean>(true);
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      setSharedProjectsAndResources(staticProjectsAndResources);
-      setIsLoadingRemoteProjects(false);
-    }, 2000);
-    return () => clearTimeout(timeout);
-  }, []);
+    const [sharedProjectsAndResources, setSharedProjectsAndResources] =
+      useState<SharedProjectsInfo>({});
+    const [isLoadingRemoteProjects, setIsLoadingRemoteProjects] = useState<boolean>(true);
+    useEffect(() => {
+      const timeout = setTimeout(() => {
+        setSharedProjectsAndResources(staticProjectsAndResources);
+        setIsLoadingRemoteProjects(false);
+      }, 2000);
+      return () => clearTimeout(timeout);
+    }, []);
 
-  return (
-    <Story
-      args={{
-        localizedStringsWithLoadingState: [localizedStrings, false],
-        localProjectsInfo: localProjectsAndResources,
-        isLoadingLocalProjects,
-        sharedProjectsInfo: sharedProjectsAndResources,
-        isLoadingRemoteProjects,
-        headerContent: (
-          <>
-            <HomeIcon size="36" />
-            <CardTitle>Home or New Tab</CardTitle>
-          </>
-        ),
-        onOpenProject: () => {
-          // Show an alert for demonstration purposes
-          // eslint-disable-next-line no-alert
-          alert('Open project');
-        },
-        onSendReceiveProject: () => {
-          // Show an alert for demonstration purposes
-          // eslint-disable-next-line no-alert
-          alert('Send/Receive project');
-        },
-      }}
-    />
-  );
+    return (
+      <Story
+        args={{
+          localizedStringsWithLoadingState: [localizedStrings, false],
+          localProjectsInfo: localProjectsAndResources,
+          isLoadingLocalProjects,
+          sharedProjectsInfo: sharedProjectsAndResources,
+          isLoadingRemoteProjects,
+          headerContent: (
+            <>
+              <HomeIcon size="36" />
+              <CardTitle>Home or New Tab</CardTitle>
+            </>
+          ),
+          onOpenProject: () => {
+            // Show an alert for demonstration purposes
+            // eslint-disable-next-line no-alert
+            alert('Open project');
+          },
+          onSendReceiveProject: () => {
+            // Show an alert for demonstration purposes
+            // eslint-disable-next-line no-alert
+            alert('Send/Receive project');
+          },
+          ...extraArgs,
+        }}
+      />
+    );
+  };
 }
 
 export const Default: Story = {
-  decorators: [DefaultHomeDecorator],
+  decorators: [createHomeDecorator({ showGetResourcesButton: true })],
+};
+
+export const GetResourcesUnavailable: Story = {
+  decorators: [createHomeDecorator({ showGetResourcesButton: false })],
 };
 
 export const NoProjectsNoHeader: Story = {
