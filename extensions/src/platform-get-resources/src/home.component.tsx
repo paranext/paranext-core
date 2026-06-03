@@ -22,7 +22,7 @@ import {
   TooltipTrigger,
 } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
-import { formatTimeSpan } from 'platform-bible-utils';
+import { formatReplacementString, formatTimeSpan } from 'platform-bible-utils';
 import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
 import { ReactNode, useMemo, useState } from 'react';
 import { HomeItemDropdownMenu } from './home-item-menu';
@@ -508,7 +508,9 @@ export function Home({
                             filterOptions
                               .find((opt) => opt.key === projectResourceFilter)
                               ?.label.toLowerCase() || '';
-                          return noItemsFoundText.replace('{0}', filterLabel);
+                          return formatReplacementString(noItemsFoundText, {
+                            filter: filterLabel,
+                          });
                         }
                         return noSearchResultsText;
                       })()}
@@ -607,10 +609,11 @@ export function Home({
                                       <div className="tw:text-muted-foreground tw:text-xs">
                                         {project.isPublished
                                           ? resourceTooltipText
-                                          : paratextProjectTooltipText.replace(
-                                              '{0}',
-                                              project.isEditable ? editableText : readOnlyText,
-                                            )}
+                                          : formatReplacementString(paratextProjectTooltipText, {
+                                              editability: project.isEditable
+                                                ? editableText
+                                                : readOnlyText,
+                                            })}
                                       </div>
                                     </div>
                                   </TooltipContent>
@@ -709,9 +712,10 @@ export function Home({
       <CardFooter className="tw:shrink-0 tw:flex-col tw:justify-center tw:p-4 tw:border-t tw:gap-2 tw:[@media(max-height:28rem)]:!hidden">
         <Label>
           {filteredAndSortedProjects.length !== mergedProjectInfo.length
-            ? itemsFilteredText
-                .replace('{0}', String(filteredAndSortedProjects.length))
-                .replace('{1}', String(mergedProjectInfo.length))
+            ? formatReplacementString(itemsFilteredText, {
+                shown: filteredAndSortedProjects.length,
+                total: mergedProjectInfo.length,
+              })
             : `${filteredAndSortedProjects.length} ${itemsText}`}
         </Label>
       </CardFooter>
