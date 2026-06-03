@@ -444,6 +444,12 @@ export function Home({
     );
   };
 
+  const getResourcesButton = (
+    <Button onClick={onOpenGetResources} className="tw:bg-muted" variant="ghost">
+      {`+ ${getResourcesText}`}
+    </Button>
+  );
+
   return (
     <Card className="tw:flex tw:h-screen tw:flex-col tw:rounded-none tw:border-0">
       <CardHeader
@@ -452,33 +458,32 @@ export function Home({
           { 'tw:max-[300px]:!pb-2': showGetResourcesButton },
         )}
       >
-        <div className="tw:flex tw:flex-wrap tw:justify-between tw:gap-4">
-          <div className="tw:flex tw:flex-col tw:gap-4 tw:max-w-72 tw:w-full">
-            <div className="tw:flex tw:gap-4 tw:items-center tw:[@media(max-height:28rem)]:!hidden tw:max-[300px]:!hidden">
+        <div className="tw:flex tw:flex-col tw:sm:flex-row tw:sm:justify-between tw:gap-4">
+          <div className="tw:flex tw:flex-col tw:gap-4 tw:w-full tw:sm:max-w-sm">
+            <div className="tw:flex tw:gap-4 tw:items-center tw:[@media(max-height:28rem)]:!hidden tw:max-sm:!hidden">
               {headerContent}
             </div>
-            <div className="tw:flex tw:gap-2 tw:items-center">
-              <div className="tw:min-w-0 tw:flex-1">
+            <div className="tw:flex tw:flex-col tw:items-start tw:gap-2 tw:sm:flex-row tw:sm:items-center">
+              <div className="tw:w-full tw:min-w-0 tw:sm:flex-1">
                 <SearchBar
                   value={textFilter}
                   onSearch={setTextFilter}
                   placeholder={filterInputText}
                 />
               </div>
-              <ProjectResourceFilter
-                value={projectResourceFilter}
-                onChange={setProjectResourceFilter}
-                options={filterOptions}
-                localizedAllText={filterAllText}
-              />
+              <div className="tw:flex tw:gap-2 tw:items-center">
+                <ProjectResourceFilter
+                  value={projectResourceFilter}
+                  onChange={setProjectResourceFilter}
+                  options={filterOptions}
+                  localizedAllText={filterAllText}
+                />
+                {showGetResourcesButton && <div className="tw:sm:hidden">{getResourcesButton}</div>}
+              </div>
             </div>
           </div>
           {showGetResourcesButton && (
-            <div className="tw:self-end">
-              <Button onClick={onOpenGetResources} className="tw:bg-muted" variant="ghost">
-                {`+ ${getResourcesText}`}
-              </Button>
-            </div>
+            <div className="tw:hidden tw:sm:block tw:sm:self-end">{getResourcesButton}</div>
           )}
         </div>
       </CardHeader>
@@ -617,7 +622,10 @@ export function Home({
                                   </TooltipTrigger>
                                   <TooltipContent side="right">
                                     <div className="tw:flex tw:flex-col tw:gap-0.5">
-                                      <div className="tw:wrap-anywhere">{project.fullName}</div>
+                                      <div className="tw:wrap-anywhere tw:font-bold">
+                                        {project.fullName}
+                                      </div>
+                                      <div className="tw:text-xs">{project.language}</div>
                                       <div className="tw:text-muted-foreground tw:text-xs">
                                         {project.isPublished
                                           ? resourceTooltipText
