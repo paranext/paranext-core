@@ -16,6 +16,10 @@ test.describe('UI Interaction', () => {
   // which blocks until `extensionService.initialize()` finishes in the extension
   // host. On slow CI that can exceed the default 10s PAPI request timeout.
   const SLOW_CI_PAPI_TIMEOUT_MS = 30_000;
+  // On slow macOS CI runners the settings data provider can take longer than the
+  // default 60 s to appear in rpc.discover. 90 s stays safely within the 120 s
+  // Playwright test timeout while leaving 30 s for the subsequent sendPapiRequestOnce.
+  const SETTINGS_REGISTRATION_TIMEOUT_MS = 90_000;
 
   test.beforeAll(async ({ electronApp }) => {
     // Maximize the window once so everything is visible and clickable for all tests
@@ -30,7 +34,7 @@ test.describe('UI Interaction', () => {
     // platform.interfaceLanguage setting in dev-appdata.
     // Fast-fail guard: on slow CI the settings data provider can register
     // after this beforeAll starts; this throws a clear error if it never does.
-    await waitForPapiMethodRegistered(SETTINGS_SET_METHOD);
+    await waitForPapiMethodRegistered(SETTINGS_SET_METHOD, undefined, SETTINGS_REGISTRATION_TIMEOUT_MS);
     await sendPapiRequestOnce(
       SETTINGS_SET_METHOD,
       ['platform.interfaceLanguage', ['en']],
