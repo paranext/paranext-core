@@ -66,7 +66,7 @@ export const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(
         <Input
           ref={inputRef}
           className={cn(
-            'tw:w-full tw:overflow-hidden tw:text-ellipsis tw:ps-9 tw:@max-[7rem]/search:ps-3',
+            'tw:w-full tw:overflow-hidden tw:text-ellipsis tw:text-sm tw:ps-9 tw:@max-[7rem]/search:ps-3',
             {
               'tw:pe-8': value,
             },
