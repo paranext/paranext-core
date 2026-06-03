@@ -1,0 +1,15 @@
+/*! @license DOMPurify 3.4.1 | (c) Cure53 and other contributors | Released under the Apache license 2.0 and Mozilla Public License 2.0 | github.com/cure53/DOMPurify/blob/3.4.1/LICENSE */
+
+/**
+ * @license @tabler/icons-react v3.41.1 - MIT
+ *
+ * This source code is licensed under the MIT license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+
+/**
+ * @license lucide-react v1.8.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
