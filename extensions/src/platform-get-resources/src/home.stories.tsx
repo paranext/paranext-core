@@ -13,6 +13,7 @@ const staticLocalProjectsAndResources: LocalProjectInfo[] = [
   {
     projectId: '1',
     isPublished: true,
+    isEditable: false,
     fullName: 'Resource 1',
     name: 'Res1',
     language: 'myLanguage',
@@ -20,6 +21,7 @@ const staticLocalProjectsAndResources: LocalProjectInfo[] = [
   {
     projectId: '2',
     isPublished: true,
+    isEditable: false,
     fullName: 'Resource 2',
     name: 'Res2',
     language: 'English',
@@ -27,6 +29,7 @@ const staticLocalProjectsAndResources: LocalProjectInfo[] = [
   {
     projectId: '13',
     isPublished: false,
+    isEditable: true,
     fullName: 'Project 4 - editable',
     name: 'Pr4',
     language: '2ndLanguage',
@@ -34,8 +37,9 @@ const staticLocalProjectsAndResources: LocalProjectInfo[] = [
   {
     projectId: '14',
     // Non-published but non-editable Scripture text (e.g. Paratext Editable=F) — should appear
-    // with the unpublished-project icon, not the published-resource icon.
+    // with the read-only Paratext-project icon, not the published-resource icon.
     isPublished: false,
+    isEditable: false,
     fullName:
       'Project 3 - read-only This_is_a_project_with_a_very_long_name_01234567890_!/"§$%&/()=?_öäüß',
     name: 'Pr3',
@@ -44,6 +48,7 @@ const staticLocalProjectsAndResources: LocalProjectInfo[] = [
   {
     projectId: '25',
     isPublished: false,
+    isEditable: true,
     fullName: 'Project 5 - editable',
     name: 'Pr5',
     language: 'German',
@@ -51,6 +56,7 @@ const staticLocalProjectsAndResources: LocalProjectInfo[] = [
   {
     projectId: '26',
     isPublished: true,
+    isEditable: false,
     fullName: 'SDBH/SDBG',
     name: 'SdDict',
     language: 'Hebrew/Greek',
@@ -155,6 +161,7 @@ function OnlyWebProjectDecorator(Story: (update?: { args: HomeProps }) => ReactE
     {
       projectId: '0',
       isPublished: true,
+      isEditable: false,
       fullName: 'The WEB project',
       name: 'WEB',
       language: 'myLanguage',
