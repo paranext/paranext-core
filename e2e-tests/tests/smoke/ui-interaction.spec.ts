@@ -34,7 +34,11 @@ test.describe('UI Interaction', () => {
     // platform.interfaceLanguage setting in dev-appdata.
     // Fast-fail guard: on slow CI the settings data provider can register
     // after this beforeAll starts; this throws a clear error if it never does.
-    await waitForPapiMethodRegistered(SETTINGS_SET_METHOD, undefined, SETTINGS_REGISTRATION_TIMEOUT_MS);
+    await waitForPapiMethodRegistered(
+      SETTINGS_SET_METHOD,
+      undefined,
+      SETTINGS_REGISTRATION_TIMEOUT_MS,
+    );
     await sendPapiRequestOnce(
       SETTINGS_SET_METHOD,
       ['platform.interfaceLanguage', ['en']],
