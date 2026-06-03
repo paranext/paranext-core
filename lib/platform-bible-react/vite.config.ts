@@ -33,8 +33,7 @@ const config = defineConfig({
         internal: path.resolve(__dirname, 'src/internal.ts'),
       },
       formats: ['es', 'cjs'],
-      fileName: (format, entryName) =>
-        `${entryName}.${format === 'es' ? 'js' : format}`,
+      fileName: (format, entryName) => `${entryName}.${format === 'es' ? 'js' : format}`,
     },
     rollupOptions: {
       external: [
