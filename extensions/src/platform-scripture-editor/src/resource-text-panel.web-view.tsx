@@ -234,12 +234,14 @@ globalThis.webViewComponent = function ResourceTextPanel({
   const matchDblEntryUid = dblMatch?.dblEntryUid;
   useEffect(() => {
     if (!fetchResources && isInstalling && dblResourcesProvider && matchDblEntryUid !== undefined) {
-      setFetchResources(true);
-      dblResourcesProvider
-        .installDblResource(matchDblEntryUid)
-        .catch((e: unknown) =>
-          logger.error(`Resource panel auto-install failed: ${getErrorMessage(e)}`),
-        );
+      (async () => {
+        try {
+          await dblResourcesProvider.installDblResource(matchDblEntryUid);
+        } catch (e: unknown) {
+          logger.error(`Resource panel auto-install failed: ${getErrorMessage(e)}`);
+        }
+        setFetchResources(true);
+      })();
     }
   }, [fetchResources, isInstalling, dblResourcesProvider, matchDblEntryUid]);
 
