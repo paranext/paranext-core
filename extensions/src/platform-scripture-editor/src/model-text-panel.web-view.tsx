@@ -136,11 +136,14 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
 
   const installResource = useCallback(
     (dblEntryUid: string) => {
-      dblResourcesProvider
-        ?.installDblResource(dblEntryUid)
-        .catch((e: unknown) =>
-          logger.error(`Model text auto-install failed: ${getErrorMessage(e)}`),
-        );
+      (async () => {
+        try {
+          await dblResourcesProvider?.installDblResource(dblEntryUid);
+        } catch (e: unknown) {
+          logger.error(`Model text auto-install failed: ${getErrorMessage(e)}`);
+        }
+        setFetchResources(true);
+      })();
     },
     [dblResourcesProvider],
   );
