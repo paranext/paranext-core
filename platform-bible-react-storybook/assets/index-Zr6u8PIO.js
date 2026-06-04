@@ -1,1 +1,0 @@
-import{r}from"./iframe-D-8W8-90.js";function o(e){const t=r.useRef({value:e,previous:e});return r.useMemo(()=>(t.current.value!==e&&(t.current.previous=t.current.value,t.current.value=e),t.current.previous),[e])}export{o as u};
