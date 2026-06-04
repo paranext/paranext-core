@@ -233,7 +233,8 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // Auto-install when the selected DblResource exists but isn't installed
   const matchDblEntryUid = dblMatch?.dblEntryUid;
   useEffect(() => {
-    if (isInstalling && dblResourcesProvider && matchDblEntryUid !== undefined) {
+    if (!fetchResources && isInstalling && dblResourcesProvider && matchDblEntryUid !== undefined) {
+      setFetchResources(true);
       dblResourcesProvider
         .installDblResource(matchDblEntryUid)
         .catch((e: unknown) =>
@@ -312,7 +313,8 @@ globalThis.webViewComponent = function ResourceTextPanel({
           ? (list) => textConnectionsProvider.setUserReferencedProjectsAndResources(list)
           : undefined,
         setSelectedResourceId,
-      ),
+      ).then(() => setSelectedResourceId(resource.dblEntryUid)),
+
     [adminResourceList, setAdminResourceList, textConnectionsProvider, setSelectedResourceId],
   );
 
