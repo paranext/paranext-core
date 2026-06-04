@@ -576,12 +576,12 @@ export function EnhancedResourceWebView({
       <div
         aria-busy="true"
         aria-label={resourceName}
-        className="tw-flex tw-h-[100dvh] tw-flex-col tw-gap-3 tw-p-4"
+        className="tw:flex tw:h-[100dvh] tw:flex-col tw:gap-3 tw:p-4"
       >
-        <Skeleton className="tw-h-8 tw-w-full" />
-        <Skeleton className="tw-h-8 tw-w-full" />
-        <Skeleton className="tw-flex-1 tw-w-full" />
-        <Skeleton className="tw-h-32 tw-w-full" />
+        <Skeleton className="tw:h-8 tw:w-full" />
+        <Skeleton className="tw:h-8 tw:w-full" />
+        <Skeleton className="tw:flex-1 tw:w-full" />
+        <Skeleton className="tw:h-32 tw:w-full" />
       </div>
     );
   }
@@ -591,7 +591,7 @@ export function EnhancedResourceWebView({
     console.warn('[ER] tab bar hidden — usj:', usj, 'scripturePaneError:', scripturePaneError);
 
   return (
-    <div className={cn('tw-flex tw-h-[100dvh] tw-flex-col tw-bg-background')}>
+    <div className={cn('tw:flex tw:h-[100dvh] tw:flex-col tw:bg-background')}>
       <WarningRibbons
         ribbons={ribbons}
         resourceName={resourceName}
@@ -626,18 +626,18 @@ export function EnhancedResourceWebView({
         recentSearches={recentSearches}
         localizedStringsWithLoadingState={childStrings}
       />
-      <div className="tw-flex tw-min-h-0 tw-flex-1">
+      <div className="tw:flex tw:min-h-0 tw:flex-1">
         {showShellEmpty ? (
-          <div className="tw-flex tw-h-full tw-w-full tw-flex-col tw-items-center tw-justify-center tw-gap-1 tw-p-6 tw-text-center tw-text-muted-foreground">
-            <span className="tw-text-base tw-font-semibold">{emptyTitle}</span>
-            <span className="tw-text-sm">{emptyDescription}</span>
+          <div className="tw:flex tw:h-full tw:w-full tw:flex-col tw:items-center tw:justify-center tw:gap-1 tw:p-6 tw:text-center tw:text-muted-foreground">
+            <span className="tw:text-base tw:font-semibold">{emptyTitle}</span>
+            <span className="tw:text-sm">{emptyDescription}</span>
           </div>
         ) : (
-          <ResizablePanelGroup direction="vertical" className="tw-h-full">
+          <ResizablePanelGroup direction="vertical" className="tw:h-full">
             <ResizablePanel
               defaultSize={splitterPercentage}
               minSize={20}
-              className="tw-flex tw-flex-col"
+              className="tw:flex tw:flex-col"
             >
               <EnhancedResourceFootnotesPane
                 usj={usj}
@@ -668,7 +668,7 @@ export function EnhancedResourceWebView({
             <ResizablePanel
               defaultSize={100 - splitterPercentage}
               minSize={20}
-              className="tw-flex tw-flex-col"
+              className="tw:flex tw:flex-col"
             >
               {/* Theme 8 — tab/filter/scope row sits at the top of the lower split panel. */}
               <EnhancedResourceTabBar
@@ -682,11 +682,11 @@ export function EnhancedResourceWebView({
                 hasMatches={hasMatches}
                 localizedStringsWithLoadingState={childStrings}
               />
-              <Tabs value={activeTab} className="tw-flex tw-flex-1 tw-flex-col tw-min-h-0">
+              <Tabs value={activeTab} className="tw:flex tw:flex-1 tw:flex-col tw:min-h-0">
                 <TabsContent
                   value="dictionary"
                   data-testid="er-dictionary-tab-panel"
-                  className="tw-flex tw-flex-1 tw-flex-col tw-overflow-y-auto data-[state=inactive]:tw-hidden"
+                  className="tw:flex tw:flex-1 tw:flex-col tw:overflow-y-auto tw:data-[state=inactive]:hidden"
                 >
                   <DictionaryTab
                     items={dictionaryItems}
@@ -717,7 +717,7 @@ export function EnhancedResourceWebView({
                 <TabsContent
                   value="encyclopedia"
                   data-testid="er-encyclopedia-tab-panel"
-                  className="tw-flex tw-flex-1 tw-flex-col tw-overflow-y-auto data-[state=inactive]:tw-hidden"
+                  className="tw:flex tw:flex-1 tw:flex-col tw:overflow-y-auto tw:data-[state=inactive]:hidden"
                 >
                   <EncyclopediaTab
                     items={encyclopediaItems}
@@ -738,7 +738,7 @@ export function EnhancedResourceWebView({
                 <TabsContent
                   value="media"
                   data-testid="er-media-tab-panel"
-                  className="tw-flex tw-flex-1 tw-flex-col tw-overflow-y-auto data-[state=inactive]:tw-hidden"
+                  className="tw:flex tw:flex-1 tw:flex-col tw:overflow-y-auto tw:data-[state=inactive]:hidden"
                 >
                   <MediaImagesTab
                     items={mediaImagesItems}
@@ -755,7 +755,7 @@ export function EnhancedResourceWebView({
                 <TabsContent
                   value="maps"
                   data-testid="er-maps-tab-panel"
-                  className="tw-flex tw-flex-1 tw-flex-col tw-overflow-y-auto data-[state=inactive]:tw-hidden"
+                  className="tw:flex tw:flex-1 tw:flex-col tw:overflow-y-auto tw:data-[state=inactive]:hidden"
                 >
                   <MediaMapsTab
                     items={mediaMapsItems}

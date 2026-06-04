@@ -1,4 +1,4 @@
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import {
   Tooltip,
   TooltipContent,
@@ -71,14 +71,14 @@ function ErDictionaryListItemContent<T extends IndexedListItem>({
   occurrenceCount?: number;
 }) {
   return (
-    <div className="tw-flex tw-w-full tw-flex-col tw-gap-0.5">
-      <div className="tw-flex tw-items-baseline tw-gap-2">
-        <span className="tw-text-sm tw-font-medium">{item.primaryText}</span>
+    <div className="tw:flex tw:w-full tw:flex-col tw:gap-0.5">
+      <div className="tw:flex tw:items-baseline tw:gap-2">
+        <span className="tw:text-sm tw:font-medium">{item.primaryText}</span>
         {showSourceLanguage && item.sourceLanguageText && (
-          <span className="tw-text-sm tw-text-muted-foreground">
+          <span className="tw:text-sm tw:text-muted-foreground">
             {item.sourceLanguageText}
             {showTransliteration && item.transliteration && (
-              <span className="tw-ml-1">({item.transliteration})</span>
+              <span className="tw:ml-1">({item.transliteration})</span>
             )}
           </span>
         )}
@@ -86,7 +86,7 @@ function ErDictionaryListItemContent<T extends IndexedListItem>({
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <span className="tw-ml-1 tw-cursor-help tw-rounded tw-bg-accent tw-px-1.5 tw-py-0.5 tw-text-xs">
+                <span className="tw:ml-1 tw:cursor-help tw:rounded tw:bg-accent tw:px-1.5 tw:py-0.5 tw:text-xs">
                   {occurrenceCount}
                 </span>
               </TooltipTrigger>
@@ -97,20 +97,20 @@ function ErDictionaryListItemContent<T extends IndexedListItem>({
           </TooltipProvider>
         )}
       </div>
-      <div className="tw-flex tw-items-center tw-gap-2 tw-overflow-hidden">
+      <div className="tw:flex tw:items-center tw:gap-2 tw:overflow-hidden">
         {description && (
-          <p className="tw-truncate tw-text-sm tw-text-muted-foreground">{description}</p>
+          <p className="tw:truncate tw:text-sm tw:text-muted-foreground">{description}</p>
         )}
         {badges?.map((badge) => (
           <span
             key={badge}
-            className={cn('tw-shrink-0 tw-rounded tw-bg-accent tw-px-1.5 tw-py-0.5 tw-text-xs')}
+            className={cn('tw:shrink-0 tw:rounded tw:bg-accent tw:px-1.5 tw:py-0.5 tw:text-xs')}
           >
             {badge}
           </span>
         ))}
       </div>
-      <Separator className="tw-mt-1" />
+      <Separator className="tw:mt-1" />
     </div>
   );
 }

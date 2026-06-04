@@ -282,10 +282,10 @@ export function EnhancedResourceTopToolbar({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" aria-label={tabMenuLabel}>
-          <Menu className="tw-h-4 tw-w-4" />
+          <Menu className="tw:h-4 tw:w-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="tw-min-w-56">
+      <DropdownMenuContent align="start" className="tw:min-w-56">
         <DropdownMenuCheckboxItem
           checked={viewMenu.showFootnotes}
           onCheckedChange={onToggleShowFootnotes}
@@ -342,7 +342,7 @@ export function EnhancedResourceTopToolbar({
   // is missing (e.g. before the wiring layer resolves) we fall back to the simple labelled
   // button so the toolbar still renders.
   const startArea = (
-    <div className="tw-flex tw-items-center tw-gap-2">
+    <div className="tw:flex tw:items-center tw:gap-2">
       {scrRef && onScrRefChange ? (
         <BookChapterControl
           scrRef={scrRef}
@@ -355,7 +355,7 @@ export function EnhancedResourceTopToolbar({
           variant="outline"
           size="sm"
           aria-label={referenceLabel}
-          className="tw-font-mono"
+          className="tw:font-mono"
           onClick={onReferenceClick}
         >
           {currentReferenceLabel ?? referenceLabel}
@@ -375,18 +375,18 @@ export function EnhancedResourceTopToolbar({
           highlightMode === 'all-research-terms' ? 'none' : 'all-research-terms',
         )
       }
-      className={cn('tw-text-xs', highlightMode === 'all-research-terms' && 'tw-bg-accent')}
+      className={cn('tw:text-xs', highlightMode === 'all-research-terms' && 'tw:bg-accent')}
     >
       {highlightLabel}
     </Button>
   );
 
   const endArea = (
-    <div className="tw-flex tw-items-center tw-gap-2">
+    <div className="tw:flex tw:items-center tw:gap-2">
       <Tooltip>
         <TooltipTrigger asChild>
           <Button variant="ghost" size="icon" aria-label={infoLabel} onClick={onInfoClick}>
-            <Info className="tw-h-4 tw-w-4" />
+            <Info className="tw:h-4 tw:w-4" />
           </Button>
         </TooltipTrigger>
         <TooltipContent>{infoLabel}</TooltipContent>
@@ -411,7 +411,7 @@ export function EnhancedResourceTopToolbar({
         onSelectProjectMenuItem={() => {}}
         onSelectViewInfoMenuItem={() => {}}
         startAreaChildren={
-          <div className="tw-flex tw-items-center tw-gap-2">
+          <div className="tw:flex tw:items-center tw:gap-2">
             {projectMenuTrigger}
             {startArea}
           </div>
@@ -533,11 +533,11 @@ export function EnhancedResourceTabBar({
   // (green when there are matches, orange when no matches) only fires when a filter is active so
   // the empty state stays visually neutral. (BT integration may consume `hasMatches` later — see
   // SB#2 / Theme 9 origin notes.)
-  let filterTintClass = 'tw-bg-background';
+  let filterTintClass = 'tw:bg-background';
   if (filterActive) {
     filterTintClass = hasMatches
-      ? 'tw-bg-emerald-100 dark:tw-bg-emerald-900/40'
-      : 'tw-bg-orange-100 dark:tw-bg-orange-900/40';
+      ? 'tw:bg-emerald-100 tw:dark:bg-emerald-900/40'
+      : 'tw:bg-orange-100 tw:dark:bg-orange-900/40';
   }
 
   return (
@@ -545,25 +545,25 @@ export function EnhancedResourceTabBar({
     // `@sm:` variants below resolve against this element's inline-size, not the viewport.
     // The named form (`tw-@container/toolbar`) is necessary if other ancestors also declare
     // containers; using a name makes the resolution deterministic.
-    <div className="tw-@container/toolbar tw-w-full">
-      <div className="tw-flex tw-flex-nowrap tw-items-center tw-gap-2 tw-overflow-hidden tw-border-b tw-px-2 tw-py-1.5">
-        <Tabs value={activeTab} onValueChange={handleTabChange} className="tw-flex-shrink-0">
+    <div className="tw-@container/toolbar tw:w-full">
+      <div className="tw:flex tw:flex-nowrap tw:items-center tw:gap-2 tw:overflow-hidden tw:border-b tw:px-2 tw:py-1.5">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="tw:shrink-0">
           <TabsList>
             <TabsTrigger value="dictionary" aria-label={tabDictLabel}>
-              <BookOpen className="tw-h-4 tw-w-4 @sm/toolbar:tw-me-1" />
-              <span className="tw-hidden @sm/toolbar:tw-inline">{tabDictLabel}</span>
+              <BookOpen className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
+              <span className="tw:hidden tw:@sm/toolbar:inline">{tabDictLabel}</span>
             </TabsTrigger>
             <TabsTrigger value="encyclopedia" aria-label={tabEncycLabel}>
-              <Book className="tw-h-4 tw-w-4 @sm/toolbar:tw-me-1" />
-              <span className="tw-hidden @sm/toolbar:tw-inline">{tabEncycLabel}</span>
+              <Book className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
+              <span className="tw:hidden tw:@sm/toolbar:inline">{tabEncycLabel}</span>
             </TabsTrigger>
             <TabsTrigger value="media" aria-label={tabMediaLabel}>
-              <ImageIcon className="tw-h-4 tw-w-4 @sm/toolbar:tw-me-1" />
-              <span className="tw-hidden @sm/toolbar:tw-inline">{tabMediaLabel}</span>
+              <ImageIcon className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
+              <span className="tw:hidden tw:@sm/toolbar:inline">{tabMediaLabel}</span>
             </TabsTrigger>
             <TabsTrigger value="maps" aria-label={tabMapsLabel}>
-              <MapPin className="tw-h-4 tw-w-4 @sm/toolbar:tw-me-1" />
-              <span className="tw-hidden @sm/toolbar:tw-inline">{tabMapsLabel}</span>
+              <MapPin className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
+              <span className="tw:hidden tw:@sm/toolbar:inline">{tabMapsLabel}</span>
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -577,7 +577,7 @@ export function EnhancedResourceTabBar({
         <div
           data-testid="er-filter-box"
           className={cn(
-            'tw-flex tw-min-w-[80px] tw-flex-1 tw-shrink tw-items-center tw-gap-1 tw-rounded tw-border tw-px-1',
+            'tw:flex tw:min-w-[80px] tw:flex-1 tw:shrink tw:items-center tw:gap-1 tw:rounded tw:border tw:px-1',
             filterTintClass,
           )}
         >
@@ -585,7 +585,7 @@ export function EnhancedResourceTabBar({
             value={searchValue}
             readOnly
             aria-label={filterAriaLabel}
-            className="tw-h-7 tw-min-w-0 tw-flex-1 tw-border-0 tw-bg-transparent tw-text-xs focus-visible:tw-ring-0"
+            className="tw:h-7 tw:min-w-0 tw:flex-1 tw:border-0 tw:bg-transparent tw:text-xs tw:focus-visible:ring-0"
           />
           {filterActive && (
             <Button
@@ -593,9 +593,9 @@ export function EnhancedResourceTabBar({
               size="icon"
               aria-label={filterClearLabel}
               onClick={() => onSearchChange('')}
-              className="tw-h-6 tw-w-6 tw-flex-shrink-0"
+              className="tw:h-6 tw:w-6 tw:shrink-0"
             >
-              <X className="tw-h-3.5 tw-w-3.5" />
+              <X className="tw:h-3.5 tw:w-3.5" />
             </Button>
           )}
         </div>
@@ -603,7 +603,7 @@ export function EnhancedResourceTabBar({
         <Select value={scope} onValueChange={handleScopeChange}>
           <SelectTrigger
             aria-label={scopeLabel}
-            className="tw-w-32 tw-flex-shrink-0 @sm/toolbar:tw-w-44"
+            className="tw:w-32 tw:shrink-0 tw:@sm/toolbar:w-44"
             role="combobox"
           >
             <SelectValue />
@@ -663,7 +663,7 @@ export function Toolbar(props: ToolbarProps) {
   } = props;
 
   return (
-    <div className="tw-flex tw-flex-col">
+    <div className="tw:flex tw:flex-col">
       <EnhancedResourceTopToolbar
         viewMenu={viewMenu}
         viewMenuHandlers={viewMenuHandlers}

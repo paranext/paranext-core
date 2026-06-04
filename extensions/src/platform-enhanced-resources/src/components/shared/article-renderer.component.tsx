@@ -109,7 +109,7 @@ function renderParagraphInline(
         <Button
           key={`link-${link.rawReference}`}
           variant="link"
-          className="tw-h-auto tw-p-0 tw-align-baseline tw-text-sm"
+          className="tw:h-auto tw:p-0 tw:align-baseline tw:text-sm"
           aria-label={verseLinkAriaLabel}
           data-testid={`verse-link-${link.rawReference}`}
           onClick={() => onVerseLinkClick(link)}
@@ -128,7 +128,7 @@ function renderParagraphInline(
       <Button
         key={`link-${link.rawReference}`}
         variant="link"
-        className="tw-h-auto tw-p-0 tw-align-baseline tw-text-sm"
+        className="tw:h-auto tw:p-0 tw:align-baseline tw:text-sm"
         aria-label={verseLinkAriaLabel}
         data-testid={`verse-link-${link.rawReference}`}
         onClick={() => onVerseLinkClick(link)}
@@ -189,7 +189,7 @@ export function ArticleRenderer({
 
   if (!article) {
     return (
-      <div role="status" className="tw-py-2 tw-text-xs tw-italic tw-text-muted-foreground">
+      <div role="status" className="tw:py-2 tw:text-xs tw:italic tw:text-muted-foreground">
         {emptyMessage}
       </div>
     );
@@ -207,21 +207,21 @@ export function ArticleRenderer({
   return (
     <article
       data-testid={`article-renderer-${article.articleId}`}
-      className={cn('tw-flex tw-flex-col tw-gap-3', isPreview ? 'tw-text-sm' : 'tw-text-base')}
+      className={cn('tw:flex tw:flex-col tw:gap-3', isPreview ? 'tw:text-sm' : 'tw:text-base')}
     >
-      {!isPreview && <h3 className="tw-text-base tw-font-semibold">{article.title}</h3>}
-      <div className="tw-flex tw-flex-col tw-gap-2">
+      {!isPreview && <h3 className="tw:text-base tw:font-semibold">{article.title}</h3>}
+      <div className="tw:flex tw:flex-col tw:gap-2">
         {paragraphsToRender.map((paragraph, idx) => {
           const showInlineImages = !isPreview && paragraph.inlineImageIds.length > 0;
           return (
             // Paragraph order is the only stable identity; backend doesn't ship paragraph ids.
             // eslint-disable-next-line react/no-array-index-key
-            <div key={idx} className="tw-flex tw-flex-col tw-gap-2">
-              <p className="tw-leading-relaxed">
+            <div key={idx} className="tw:flex tw:flex-col tw:gap-2">
+              <p className="tw:leading-relaxed">
                 {renderParagraphInline(paragraph, verseLinkOpenLabel, onVerseLinkClick)}
               </p>
               {showInlineImages && (
-                <div className="tw-flex tw-flex-wrap tw-gap-2">
+                <div className="tw:flex tw:flex-wrap tw:gap-2">
                   {paragraph.inlineImageIds.map((imageId) => {
                     const url = imageUrlResolver?.(imageId);
                     return (
@@ -231,16 +231,16 @@ export function ArticleRenderer({
                         aria-label={inlineImageOpenLabel}
                         data-testid={`article-image-${imageId}`}
                         onClick={() => onImageClick(imageId)}
-                        className="tw-overflow-hidden tw-rounded tw-border tw-border-border tw-bg-muted/30 tw-p-0"
+                        className="tw:overflow-hidden tw:rounded tw:border tw:border-border tw:bg-muted/30 tw:p-0"
                       >
                         {url ? (
                           <img
                             src={url}
                             alt={`${imageAltLabel}: ${imageId}`}
-                            className="tw-block tw-h-auto tw-max-w-[240px]"
+                            className="tw:block tw:h-auto tw:max-w-[240px]"
                           />
                         ) : (
-                          <span className="tw-block tw-px-3 tw-py-6 tw-text-xs tw-text-muted-foreground">
+                          <span className="tw:block tw:px-3 tw:py-6 tw:text-xs tw:text-muted-foreground">
                             {imageId}
                           </span>
                         )}
@@ -253,21 +253,21 @@ export function ArticleRenderer({
           );
         })}
         {truncated && (
-          <p className="tw-text-xs tw-italic tw-text-muted-foreground">{truncatedNotice}</p>
+          <p className="tw:text-xs tw:italic tw:text-muted-foreground">{truncatedNotice}</p>
         )}
       </div>
 
       {allVerseLinks.length > 0 && (
         <section aria-label={referencesHeader}>
-          <h4 className="tw-mb-1 tw-text-xs tw-font-semibold tw-uppercase tw-text-muted-foreground">
+          <h4 className="tw:mb-1 tw:text-xs tw:font-semibold tw:uppercase tw:text-muted-foreground">
             {referencesHeader}
           </h4>
-          <div className="tw-flex tw-flex-wrap tw-gap-2">
+          <div className="tw:flex tw:flex-wrap tw:gap-2">
             {allVerseLinks.map((link) => (
               <Button
                 key={link.rawReference}
                 variant="link"
-                className="tw-h-auto tw-p-0 tw-text-sm"
+                className="tw:h-auto tw:p-0 tw:text-sm"
                 aria-label={verseLinkOpenLabel}
                 data-testid={`verse-link-footer-${link.rawReference}`}
                 onClick={() => onVerseLinkClick(link)}
@@ -281,15 +281,15 @@ export function ArticleRenderer({
 
       {article.crossReferences.length > 0 && (
         <section aria-label={seeAlsoHeader}>
-          <h4 className="tw-mb-1 tw-text-xs tw-font-semibold tw-uppercase tw-text-muted-foreground">
+          <h4 className="tw:mb-1 tw:text-xs tw:font-semibold tw:uppercase tw:text-muted-foreground">
             {seeAlsoHeader}
           </h4>
-          <ul className="tw-flex tw-flex-col tw-gap-1">
+          <ul className="tw:flex tw:flex-col tw:gap-1">
             {article.crossReferences.map((ref) => (
               <li key={`${ref.type}-${ref.targetArticleId}`}>
                 <Button
                   variant="link"
-                  className="tw-h-auto tw-p-0 tw-text-sm"
+                  className="tw:h-auto tw:p-0 tw:text-sm"
                   aria-label={crossRefOpenLabel}
                   data-testid={`see-also-${ref.targetArticleId}`}
                   onClick={() => onCrossReferenceClick(ref)}

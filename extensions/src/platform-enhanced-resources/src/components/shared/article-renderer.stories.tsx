@@ -33,7 +33,7 @@ const meta: Meta<typeof ArticleRenderer> = {
   },
   decorators: [
     (Story) => (
-      <div className="tw-w-[640px] tw-rounded tw-border tw-border-border tw-p-4">
+      <div className="tw:w-[640px] tw:rounded tw:border tw:border-border tw:p-4">
         <Story />
       </div>
     ),
@@ -59,9 +59,9 @@ function InteractiveArticleRendererDemo() {
     setEventLog((s) => [`${new Date().toISOString().slice(11, 19)} ${label}`, ...s].slice(0, 12));
 
   return (
-    <div className="tw-flex tw-flex-col tw-gap-3">
-      <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-3 tw-text-xs">
-        <label className="tw-flex tw-items-center tw-gap-1">
+    <div className="tw:flex tw:flex-col tw:gap-3">
+      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-3 tw:text-xs">
+        <label className="tw:flex tw:items-center tw:gap-1">
           Article:
           <select
             value={fixture}
@@ -80,7 +80,7 @@ function InteractiveArticleRendererDemo() {
             <option value="minimal">Minimal</option>
           </select>
         </label>
-        <label className="tw-flex tw-items-center tw-gap-1">
+        <label className="tw:flex tw:items-center tw:gap-1">
           Mode:
           <select
             value={mode}
@@ -95,7 +95,7 @@ function InteractiveArticleRendererDemo() {
           </select>
         </label>
         {mode === 'preview' && (
-          <label className="tw-flex tw-items-center tw-gap-1">
+          <label className="tw:flex tw:items-center tw:gap-1">
             Preview paragraphs:
             <input
               type="number"
@@ -103,7 +103,7 @@ function InteractiveArticleRendererDemo() {
               max={10}
               value={previewParagraphs}
               onChange={(e) => setPreviewParagraphs(Number(e.target.value))}
-              className="tw-w-14"
+              className="tw:w-14"
             />
           </label>
         )}
@@ -118,10 +118,10 @@ function InteractiveArticleRendererDemo() {
         onImageClick={(imageId) => log(`image-click ${imageId}`)}
         localizedStringsWithLoadingState={[localizedStrings, false]}
       />
-      <div className="tw-rounded tw-border tw-border-dashed tw-border-border tw-p-2 tw-text-xs">
-        <div className="tw-mb-1 tw-font-semibold">Event log (most recent first):</div>
+      <div className="tw:rounded tw:border tw:border-dashed tw:border-border tw:p-2 tw:text-xs">
+        <div className="tw:mb-1 tw:font-semibold">Event log (most recent first):</div>
         {eventLog.length === 0 ? (
-          <span className="tw-text-muted-foreground">
+          <span className="tw:text-muted-foreground">
             (Click a verse link, a cross-reference, or an inline image...)
           </span>
         ) : (

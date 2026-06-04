@@ -26,8 +26,8 @@ const meta: Meta<typeof MediaViewer> = {
     (Story) => (
       // The Dialog renders into a portal at document.body, so the surrounding container exists
       // mostly to provide a stable backdrop in the Storybook canvas.
-      <div className="tw-relative tw-h-[720px] tw-w-[1024px] tw-border tw-border-border tw-bg-muted/40">
-        <div className="tw-p-4 tw-text-sm tw-text-muted-foreground">
+      <div className="tw:relative tw:h-[720px] tw:w-[1024px] tw:border tw:border-border tw:bg-muted/40">
+        <div className="tw:p-4 tw:text-sm tw:text-muted-foreground">
           MediaViewer Dialog is rendered in a portal - look at the center of the viewport.
         </div>
         <Story />
@@ -60,7 +60,7 @@ export const Default: StoryObj<typeof MediaViewer> = {
     const handlePrev = currentIndex > 0 ? () => setCurrentIndex((i) => i - 1) : undefined;
 
     return (
-      <div className="tw-flex tw-flex-col tw-gap-3 tw-p-4">
+      <div className="tw:flex tw:flex-col tw:gap-3 tw:p-4">
         <Button
           type="button"
           onClick={() => {
@@ -70,7 +70,7 @@ export const Default: StoryObj<typeof MediaViewer> = {
         >
           Open MediaViewer
         </Button>
-        <p className="tw-text-sm tw-text-muted-foreground">
+        <p className="tw:text-sm tw:text-muted-foreground">
           Use the toolbar arrows to navigate, the zoom buttons to scale, and Escape to close.
           Previous is disabled at the first image and Next is disabled at the last image.
         </p>

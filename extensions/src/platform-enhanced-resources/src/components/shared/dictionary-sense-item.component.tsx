@@ -130,7 +130,7 @@ function renderRowValue(
   return (
     <Button
       variant="link"
-      className="tw-h-auto tw-p-0 tw-text-xs"
+      className="tw:h-auto tw:p-0 tw:text-xs"
       data-testid={`dictionary-sense-domain-${senseId}-${row.index}`}
       onClick={() => onDomainClick?.(row.domain)}
     >
@@ -252,22 +252,22 @@ export function DictionarySenseItem({
       aria-label={dimmed ? lessRelevantLabel : undefined}
       data-testid={`dictionary-sense-${sense.id}`}
       className={cn(
-        'tw-flex tw-flex-col tw-gap-2 tw-rounded tw-border tw-border-border tw-bg-background tw-p-2',
-        dimmed && 'tw-opacity-60',
+        'tw:flex tw:flex-col tw:gap-2 tw:rounded tw:border tw:border-border tw:bg-background tw:p-2',
+        dimmed && 'tw:opacity-60',
       )}
     >
-      <div className="tw-flex tw-flex-wrap tw-items-baseline tw-gap-2">
-        <span className="tw-shrink-0 tw-text-sm tw-font-semibold tw-tabular-nums">
+      <div className="tw:flex tw:flex-wrap tw:items-baseline tw:gap-2">
+        <span className="tw:shrink-0 tw:text-sm tw:font-semibold tw:tabular-nums">
           {sense.senseNumber}.
         </span>
-        {sense.definition && <span className="tw-flex-1 tw-text-sm">{sense.definition}</span>}
+        {sense.definition && <span className="tw:flex-1 tw:text-sm">{sense.definition}</span>}
         {fn022Mode ? (
           <TooltipProvider delayDuration={150}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="link"
-                  className="tw-h-auto tw-shrink-0 tw-p-0 tw-text-xs"
+                  className="tw:h-auto tw:shrink-0 tw:p-0 tw:text-xs"
                   onClick={() => onSenseOccurrencesClick(sense.id)}
                   aria-label={sense.occurrencesTooltip}
                   data-testid={`dictionary-sense-occurrences-${sense.id}`}
@@ -281,7 +281,7 @@ export function DictionarySenseItem({
         ) : (
           <Button
             variant="link"
-            className="tw-h-auto tw-shrink-0 tw-p-0 tw-text-xs"
+            className="tw:h-auto tw:shrink-0 tw:p-0 tw:text-xs"
             onClick={() => onSenseOccurrencesClick(sense.id)}
             data-testid={`dictionary-sense-occurrences-${sense.id}`}
           >
@@ -290,11 +290,11 @@ export function DictionarySenseItem({
         )}
       </div>
       {tableRows.length > 0 && (
-        <dl className="tw-grid tw-grid-cols-[max-content_1fr] tw-gap-x-3 tw-gap-y-1 tw-pl-6 tw-text-xs">
+        <dl className="tw:grid tw:grid-cols-[max-content_1fr] tw:gap-x-3 tw:gap-y-1 tw:pl-6 tw:text-xs">
           {tableRows.map((row) => (
             <Fragment key={row.key}>
-              <dt className="tw-font-semibold tw-text-muted-foreground">{row.label}</dt>
-              <dd className="tw-m-0">{renderRowValue(row, sense.id, onDomainClick)}</dd>
+              <dt className="tw:font-semibold tw:text-muted-foreground">{row.label}</dt>
+              <dd className="tw:m-0">{renderRowValue(row, sense.id, onDomainClick)}</dd>
             </Fragment>
           ))}
         </dl>

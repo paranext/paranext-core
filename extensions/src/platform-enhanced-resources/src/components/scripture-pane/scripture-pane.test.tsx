@@ -563,7 +563,7 @@ describe('EnhancedScripturePane', () => {
   describe('D-008 logger wrapper (annotation-resolver miss suppression)', () => {
     it('passes a logger prop to Editorial that downgrades the annotation-resolver miss to debug', async () => {
       const papiModule = await import('@papi/frontend');
-      const papiLogger = papiModule.logger as {
+      const papiLogger = papiModule.logger as unknown as {
         error: ReturnType<typeof vi.fn>;
         warn: ReturnType<typeof vi.fn>;
         info: ReturnType<typeof vi.fn>;
@@ -595,7 +595,7 @@ describe('EnhancedScripturePane', () => {
 
     it('still surfaces unrelated editor errors at the original level', async () => {
       const papiModule = await import('@papi/frontend');
-      const papiLogger = papiModule.logger as {
+      const papiLogger = papiModule.logger as unknown as {
         error: ReturnType<typeof vi.fn>;
         warn: ReturnType<typeof vi.fn>;
         debug: ReturnType<typeof vi.fn>;

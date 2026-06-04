@@ -113,21 +113,21 @@ export function MediaMapsTab({
 
   return (
     <div
-      className="tw-flex tw-h-full tw-min-h-0 tw-flex-col"
+      className="tw:flex tw:h-full tw:min-h-0 tw:flex-col"
       data-testid="media-maps-tab"
       aria-label={tabLabel}
     >
-      <div className="tw-flex tw-shrink-0 tw-items-center tw-justify-between tw-border-b tw-border-border tw-px-2 tw-py-1">
-        <span className="tw-text-xs tw-font-semibold tw-uppercase tw-text-muted-foreground">
+      <div className="tw:flex tw:shrink-0 tw:items-center tw:justify-between tw:border-b tw:border-border tw:px-2 tw:py-1">
+        <span className="tw:text-xs tw:font-semibold tw:uppercase tw:text-muted-foreground">
           {tabLabel}
         </span>
         {items.length > 0 && (
-          <span className="tw-text-xs tw-text-muted-foreground" data-testid="media-maps-count">
+          <span className="tw:text-xs tw:text-muted-foreground" data-testid="media-maps-count">
             {countMessage}
           </span>
         )}
       </div>
-      <div className="tw-flex tw-min-h-0 tw-flex-1">
+      <div className="tw:flex tw:min-h-0 tw:flex-1">
         <SourceLanguageIndexedList
           items={rowItems}
           selectedItemId={selectedItemId}
@@ -154,7 +154,7 @@ export function MediaMapsTab({
               localizedStringsWithLoadingState={childStrings}
             />
           )}
-          className="tw-h-full tw-w-full"
+          className="tw:h-full tw:w-full"
         />
       </div>
     </div>

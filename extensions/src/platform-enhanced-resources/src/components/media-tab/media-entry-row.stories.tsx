@@ -36,7 +36,7 @@ const meta: Meta<typeof MediaEntryRow> = {
   },
   decorators: [
     (Story) => (
-      <div className="tw-w-[420px] tw-border tw-border-border tw-p-2">
+      <div className="tw:w-[420px] tw:border tw:border-border tw:p-2">
         <Story />
       </div>
     ),
@@ -66,9 +66,9 @@ function InteractiveMediaEntryRowDemo() {
   const item = FIXTURES[fixture];
 
   return (
-    <div className="tw-flex tw-flex-col tw-gap-2">
-      <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-3 tw-text-xs">
-        <label className="tw-flex tw-items-center tw-gap-1">
+    <div className="tw:flex tw:flex-col tw:gap-2">
+      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-3 tw:text-xs">
+        <label className="tw:flex tw:items-center tw:gap-1">
           Fixture:
           <select
             value={fixture}
@@ -87,11 +87,11 @@ function InteractiveMediaEntryRowDemo() {
             <option value="sba-galilee">Galilee (Satellite Bible Atlas)</option>
           </select>
         </label>
-        <label className="tw-flex tw-items-center tw-gap-1">
+        <label className="tw:flex tw:items-center tw:gap-1">
           <input type="checkbox" checked={!loaded} onChange={(e) => setLoaded(!e.target.checked)} />
           Defer (BHV-359 skeleton)
         </label>
-        <label className="tw-flex tw-items-center tw-gap-1">
+        <label className="tw:flex tw:items-center tw:gap-1">
           <input
             type="checkbox"
             checked={!hasResolver}
@@ -99,7 +99,7 @@ function InteractiveMediaEntryRowDemo() {
           />
           No thumbnail resolver
         </label>
-        <span className="tw-text-muted-foreground">{item.description}</span>
+        <span className="tw:text-muted-foreground">{item.description}</span>
       </div>
       <MediaEntryRow
         item={item}

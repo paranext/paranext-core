@@ -27,7 +27,7 @@ const meta: Meta<typeof EncyclopediaEntryDetail> = {
   },
   decorators: [
     (Story) => (
-      <div className="tw-w-[640px] tw-rounded tw-border tw-border-border tw-bg-muted/20 tw-p-3">
+      <div className="tw:w-[640px] tw:rounded tw:border tw:border-border tw:bg-muted/20 tw:p-3">
         <Story />
       </div>
     ),
@@ -64,9 +64,9 @@ function InteractiveEntryDetailDemo() {
   const { entry, article } = FIXTURES[fixture];
 
   return (
-    <div className="tw-flex tw-flex-col tw-gap-3">
-      <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-3 tw-text-xs">
-        <label className="tw-flex tw-items-center tw-gap-1">
+    <div className="tw:flex tw:flex-col tw:gap-3">
+      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-3 tw:text-xs">
+        <label className="tw:flex tw:items-center tw:gap-1">
           Fixture:
           <select
             value={fixture}
@@ -85,7 +85,7 @@ function InteractiveEntryDetailDemo() {
             <option value="minimal-bibliography">Selected Bibliography (single ¶)</option>
           </select>
         </label>
-        <label className="tw-flex tw-items-center tw-gap-1">
+        <label className="tw:flex tw:items-center tw:gap-1">
           <input
             type="checkbox"
             checked={showLoading}
@@ -93,7 +93,7 @@ function InteractiveEntryDetailDemo() {
           />
           Show loading skeleton (articleData undefined)
         </label>
-        <label className="tw-flex tw-items-center tw-gap-1">
+        <label className="tw:flex tw:items-center tw:gap-1">
           Preview paragraphs:
           <input
             type="number"
@@ -101,7 +101,7 @@ function InteractiveEntryDetailDemo() {
             max={10}
             value={previewParagraphs}
             onChange={(e) => setPreviewParagraphs(Number(e.target.value))}
-            className="tw-w-14"
+            className="tw:w-14"
           />
         </label>
       </div>

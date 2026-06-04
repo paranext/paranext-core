@@ -1068,7 +1068,7 @@ export function EnhancedScripturePane({
 
   if (errorMessage) {
     return (
-      <Alert variant="destructive" data-testid="er-scripture-pane" className="tw-m-4">
+      <Alert variant="destructive" data-testid="er-scripture-pane" className="tw:m-4">
         <AlertTitle>{errorTitle}</AlertTitle>
         <AlertDescription>{errorMessage}</AlertDescription>
       </Alert>
@@ -1081,12 +1081,12 @@ export function EnhancedScripturePane({
         data-testid="er-scripture-pane"
         aria-busy="true"
         aria-label={typeof loadingText === 'string' ? loadingText : undefined}
-        className="tw-flex tw-h-full tw-flex-col tw-gap-3 tw-rounded-none tw-border-0 tw-p-4"
+        className="tw:flex tw:h-full tw:flex-col tw:gap-3 tw:rounded-none tw:border-0 tw:p-4"
       >
-        <Skeleton className="tw-h-6 tw-w-32" />
-        <Skeleton className="tw-h-4 tw-w-full" />
-        <Skeleton className="tw-h-4 tw-w-11/12" />
-        <Skeleton className="tw-h-4 tw-w-10/12" />
+        <Skeleton className="tw:h-6 tw:w-32" />
+        <Skeleton className="tw:h-4 tw:w-full" />
+        <Skeleton className="tw:h-4 tw:w-11/12" />
+        <Skeleton className="tw:h-4 tw:w-10/12" />
       </Card>
     );
   }
@@ -1095,21 +1095,21 @@ export function EnhancedScripturePane({
     return (
       <Card
         data-testid="er-scripture-pane"
-        className="tw-flex tw-h-full tw-flex-col tw-items-center tw-justify-center tw-gap-1 tw-rounded-none tw-border-0 tw-p-6 tw-text-center tw-text-muted-foreground"
+        className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:gap-1 tw:rounded-none tw:border-0 tw:p-6 tw:text-center tw:text-muted-foreground"
       >
-        <span className="tw-text-base tw-font-semibold">{emptyTitle}</span>
-        <span className="tw-text-sm">{emptyDescription}</span>
+        <span className="tw:text-base tw:font-semibold">{emptyTitle}</span>
+        <span className="tw:text-sm">{emptyDescription}</span>
       </Card>
     );
   }
 
   return (
     <div
-      className="tw-flex tw-h-full tw-flex-col tw-overflow-hidden"
+      className="tw:flex tw:h-full tw:flex-col tw:overflow-hidden"
       data-testid="er-scripture-pane"
     >
       <div
-        className="tw-flex tw-min-h-0 tw-flex-1 tw-flex-col"
+        className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col"
         // Inline style is the appropriate primitive for a continuous numeric zoom factor that the
         // user can drive from the View menu - Tailwind classes can't express arbitrary scales.
         style={{ fontSize: `${scripturePaneZoom}rem` }}
@@ -1124,7 +1124,7 @@ export function EnhancedScripturePane({
         {filteredTokenId && (
           <p
             role="status"
-            className="tw-mt-3 tw-rounded tw-bg-accent tw-px-2 tw-py-1 tw-text-xs tw-text-accent-foreground"
+            className="tw:mt-3 tw:rounded tw:bg-accent tw:px-2 tw:py-1 tw:text-xs tw:text-accent-foreground"
           >
             {`${filterActiveLabel}: ${filteredTokenSurface ?? filteredTokenId}`}
           </p>

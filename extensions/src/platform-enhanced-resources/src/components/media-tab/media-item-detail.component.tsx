@@ -65,21 +65,21 @@ export function MediaItemDetail({
         onClick={onClose}
         variant="ghost"
         size="sm"
-        className="tw-mb-3"
+        className="tw:mb-3"
       >
-        <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
+        <ArrowLeft className="tw:mr-1 tw:h-4 tw:w-4" />
         {backToListLabel}
       </Button>
-      <div className="tw-mb-3 tw-flex tw-items-center tw-gap-2">
-        <h2 className="tw-text-lg">{item.title}</h2>
+      <div className="tw:mb-3 tw:flex tw:items-center tw:gap-2">
+        <h2 className="tw:text-lg">{item.title}</h2>
         <Badge variant="outline">{item.mediaType}</Badge>
       </div>
       {previewUrl && (
-        <div className="tw-relative tw-mb-3">
+        <div className="tw:relative tw:mb-3">
           <img
             src={previewUrl}
             alt={thumbnailLabel}
-            className="tw-w-full tw-rounded tw-object-contain"
+            className="tw:w-full tw:rounded tw:object-contain"
           />
           <Button
             type="button"
@@ -87,14 +87,14 @@ export function MediaItemDetail({
             size="icon"
             onClick={onMaximize}
             aria-label={maximizeLabel}
-            className="tw-absolute tw-right-2 tw-top-2 tw-h-8 tw-w-8 tw-bg-background/80 tw-shadow"
+            className="tw:absolute tw:right-2 tw:top-2 tw:h-8 tw:w-8 tw:bg-background/80 tw:shadow"
           >
-            <Maximize2 className="tw-h-4 tw-w-4" aria-hidden="true" />
+            <Maximize2 className="tw:h-4 tw:w-4" aria-hidden="true" />
           </Button>
         </div>
       )}
       {item.referenceLabel && (
-        <p className="tw-text-sm tw-text-muted-foreground">{item.referenceLabel}</p>
+        <p className="tw:text-sm tw:text-muted-foreground">{item.referenceLabel}</p>
       )}
     </div>
   );

@@ -1,5 +1,5 @@
 import { RefObject, useEffect, useMemo, useRef, useState } from 'react';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { useListbox, type ListboxOption } from '@/hooks/listbox-keyboard-navigation.hook';
 import { Separator } from '@/components/shadcn-ui/separator';
 import { Skeleton } from '@/components/shadcn-ui/skeleton';
@@ -134,14 +134,14 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
 
   if (isLoading) {
     return (
-      <div className={cn('tw-flex tw-flex-col tw-gap-2 tw-p-2', className)}>
+      <div className={cn('tw:flex tw:flex-col tw:gap-2 tw:p-2', className)}>
         {Array.from({ length: 6 }, (_, i) => (
           <Skeleton
             // Loading skeleton placeholders don't have meaningful keys
             // eslint-disable-next-line react/no-array-index-key
             key={i}
-            className={cn('tw-h-12 tw-w-full tw-rounded', {
-              'tw-h-20': variant === 'thumbnail',
+            className={cn('tw:h-12 tw:w-full tw:rounded', {
+              'tw:h-20': variant === 'thumbnail',
             })}
           />
         ))}
@@ -153,7 +153,7 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
     return (
       <div
         className={cn(
-          'tw-flex tw-items-center tw-justify-center tw-p-8 tw-text-sm tw-text-muted-foreground',
+          'tw:flex tw:items-center tw:justify-center tw:p-8 tw:text-sm tw:text-muted-foreground',
           className,
         )}
       >
@@ -170,7 +170,7 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       ref={listboxRef as RefObject<HTMLUListElement>}
       aria-activedescendant={activeId ?? undefined}
-      className="tw-outline-none focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background"
+      className="tw:outline-none tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-1 tw:focus:ring-offset-background"
       onKeyDown={handleKeyDown}
     >
       {items.map((item) => {
@@ -190,10 +190,10 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
               }
             }}
             className={cn(
-              'tw-flex tw-cursor-pointer tw-items-center tw-gap-3 tw-p-2 tw-outline-none',
+              'tw:flex tw:cursor-pointer tw:items-center tw:gap-3 tw:p-2 tw:outline-none',
               {
-                'tw-bg-muted': isSelected,
-                'hover:tw-bg-muted': !isSelected,
+                'tw:bg-muted': isSelected,
+                'tw:hover:bg-muted': !isSelected,
               },
             )}
           >
@@ -219,14 +219,14 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
       : undefined;
 
   return (
-    <div ref={containerRef} className={cn('tw-relative tw-flex tw-h-full tw-overflow-hidden', className)}>
+    <div ref={containerRef} className={cn('tw:relative tw:flex tw:h-full tw:overflow-hidden', className)}>
       {detailElement ? (
         // Side-by-side ResizablePanelGroup split per PR #2209 stories pattern: list at ~33% with
         // a draggable handle, detail at ~67%. The detail is a sibling of the list (not an overlay)
         // so all controls outside the SLI remain interactive while the detail is open.
-        <ResizablePanelGroup direction="horizontal" className="tw-h-full tw-w-full">
+        <ResizablePanelGroup direction="horizontal" className="tw:h-full tw:w-full">
           <ResizablePanel defaultSize={33.3333} minSize={20}>
-            <div className="tw-h-full tw-overflow-y-auto">{listContent}</div>
+            <div className="tw:h-full tw:overflow-y-auto">{listContent}</div>
           </ResizablePanel>
           <ResizableHandle />
           <ResizablePanel defaultSize={66.6667} minSize={30}>
@@ -234,14 +234,14 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
               ref={detailPanelRef}
               role="region"
               aria-label="Selected item details"
-              className="tw-h-full tw-overflow-y-auto tw-bg-background tw-p-4"
+              className="tw:h-full tw:overflow-y-auto tw:bg-background tw:p-4"
             >
               {detailElement}
             </div>
           </ResizablePanel>
         </ResizablePanelGroup>
       ) : (
-        <div className="tw-h-full tw-w-full tw-overflow-y-auto">{listContent}</div>
+        <div className="tw:h-full tw:w-full tw:overflow-y-auto">{listContent}</div>
       )}
     </div>
   );
@@ -265,21 +265,21 @@ function DefaultListItemContent<T extends IndexedListItem>({
         <img
           src={item.thumbnailUrl}
           alt={item.thumbnailAlt ?? item.primaryText}
-          className="tw-h-14 tw-w-14 tw-shrink-0 tw-rounded tw-object-cover"
+          className="tw:h-14 tw:w-14 tw:shrink-0 tw:rounded tw:object-cover"
         />
       )}
-      <div className="tw-flex tw-flex-1 tw-items-baseline tw-gap-4 tw-overflow-hidden">
-        <span className="tw-shrink-0 tw-truncate tw-text-sm">{item.primaryText}</span>
+      <div className="tw:flex tw:flex-1 tw:items-baseline tw:gap-4 tw:overflow-hidden">
+        <span className="tw:shrink-0 tw:truncate tw:text-sm">{item.primaryText}</span>
         {showSourceLanguage && item.sourceLanguageText && (
-          <span className="tw-truncate tw-text-sm tw-text-muted-foreground">
+          <span className="tw:truncate tw:text-sm tw:text-muted-foreground">
             {item.sourceLanguageText}
             {showTransliteration && item.transliteration && (
-              <span className="tw-ml-1">({item.transliteration})</span>
+              <span className="tw:ml-1">({item.transliteration})</span>
             )}
           </span>
         )}
       </div>
-      <Separator className="tw-absolute tw-bottom-0 tw-left-0 tw-right-0" />
+      <Separator className="tw:absolute tw:bottom-0 tw:left-0 tw:right-0" />
     </>
   );
 }

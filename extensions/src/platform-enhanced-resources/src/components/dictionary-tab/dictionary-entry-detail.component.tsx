@@ -219,9 +219,9 @@ export function DictionaryEntryDetail({
       onClick={onClose}
       variant="ghost"
       size="sm"
-      className="tw-mb-3 tw-self-start"
+      className="tw:mb-3 tw:self-start"
     >
-      <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
+      <ArrowLeft className="tw:mr-1 tw:h-4 tw:w-4" />
       {backToListLabel}
     </Button>
   ) : undefined;
@@ -251,9 +251,9 @@ export function DictionaryEntryDetail({
 
   if (!hasAnyContent) {
     return (
-      <div className="tw-flex tw-flex-col">
+      <div className="tw:flex tw:flex-col">
         {backButton}
-        <div role="status" className="tw-py-2 tw-text-xs tw-italic tw-text-muted-foreground">
+        <div role="status" className="tw:py-2 tw:text-xs tw:italic tw:text-muted-foreground">
           {emptyDetail}
         </div>
       </div>
@@ -303,7 +303,7 @@ export function DictionaryEntryDetail({
 
   return (
     <div
-      className="tw-flex tw-flex-col tw-gap-3 tw-pt-2"
+      className="tw:flex tw:flex-col tw:gap-3 tw:pt-2"
       data-testid={`dictionary-entry-detail-${tokenId}`}
     >
       {backButton}
@@ -311,10 +311,10 @@ export function DictionaryEntryDetail({
       {/* Source-language word + transliteration; clickable, with ContextMenu (Theme 16). */}
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          <div className="tw-flex tw-flex-wrap tw-items-baseline tw-gap-2">
+          <div className="tw:flex tw:flex-wrap tw:items-baseline tw:gap-2">
             <Button
               variant="link"
-              className={cn('tw-h-auto tw-p-0 tw-text-base tw-font-semibold')}
+              className={cn('tw:h-auto tw:p-0 tw:text-base tw:font-semibold')}
               aria-label={sourceTextTooltip}
               onClick={() => onSourceTextClick(tokenId)}
               data-testid={`dictionary-entry-detail-source-${tokenId}`}
@@ -322,7 +322,7 @@ export function DictionaryEntryDetail({
               <span>{sourceText}</span>
             </Button>
             {transliteration && (
-              <span className="tw-text-sm tw-italic tw-text-muted-foreground">
+              <span className="tw:text-sm tw:italic tw:text-muted-foreground">
                 ({transliteration})
               </span>
             )}
@@ -334,11 +334,11 @@ export function DictionaryEntryDetail({
       {/* Senses + hide-less-relevant toggle. */}
       {senses && senses.length > 0 && (
         <section aria-label={sensesHeader}>
-          <div className="tw-mb-2 tw-flex tw-items-center tw-justify-between">
-            <h4 className="tw-text-xs tw-font-semibold tw-uppercase tw-text-muted-foreground">
+          <div className="tw:mb-2 tw:flex tw:items-center tw:justify-between">
+            <h4 className="tw:text-xs tw:font-semibold tw:uppercase tw:text-muted-foreground">
               {sensesHeader}
             </h4>
-            <label className="tw-flex tw-items-center tw-gap-2 tw-text-xs">
+            <label className="tw:flex tw:items-center tw:gap-2 tw:text-xs">
               <Switch
                 checked={hideLessRelevantSenses}
                 onCheckedChange={onToggleHideLessRelevantSenses}
@@ -347,7 +347,7 @@ export function DictionaryEntryDetail({
               <span>{hideLessRelevantLabel}</span>
             </label>
           </div>
-          <div className="tw-flex tw-flex-col tw-gap-2">
+          <div className="tw:flex tw:flex-col tw:gap-2">
             {senses.map((sense, idx) => (
               <DictionarySenseItem
                 key={senseKeys[idx]}
@@ -366,7 +366,7 @@ export function DictionaryEntryDetail({
       <div>
         <Button
           variant="link"
-          className="tw-h-auto tw-p-0 tw-text-sm"
+          className="tw:h-auto tw:p-0 tw:text-sm"
           onClick={() => onAllOccurrencesClick(tokenId)}
           data-testid={`dictionary-entry-detail-all-occurrences-${tokenId}`}
         >
@@ -375,23 +375,23 @@ export function DictionaryEntryDetail({
       </div>
 
       {/* Was this helpful? prompt (Theme 13b). */}
-      <section aria-label={wasThisHelpfulLabel} className="tw-mt-2 tw-flex tw-flex-col tw-gap-2">
-        <span className="tw-text-xs tw-font-semibold tw-uppercase tw-text-muted-foreground">
+      <section aria-label={wasThisHelpfulLabel} className="tw:mt-2 tw:flex tw:flex-col tw:gap-2">
+        <span className="tw:text-xs tw:font-semibold tw:uppercase tw:text-muted-foreground">
           {wasThisHelpfulLabel}
         </span>
         <RadioGroup
           value={helpfulAnswer ?? ''}
           onValueChange={handleHelpfulnessChange}
-          className="tw-flex tw-flex-row tw-gap-4"
+          className="tw:flex tw:flex-row tw:gap-4"
           aria-label={wasThisHelpfulLabel}
         >
-          <div className="tw-flex tw-items-center tw-gap-2">
+          <div className="tw:flex tw:items-center tw:gap-2">
             <RadioGroupItem value="yes" id={`dictionary-entry-detail-helpful-yes-${tokenId}`} />
             <Label htmlFor={`dictionary-entry-detail-helpful-yes-${tokenId}`}>
               {helpfulYesLabel}
             </Label>
           </div>
-          <div className="tw-flex tw-items-center tw-gap-2">
+          <div className="tw:flex tw:items-center tw:gap-2">
             <RadioGroupItem value="no" id={`dictionary-entry-detail-helpful-no-${tokenId}`} />
             <Label htmlFor={`dictionary-entry-detail-helpful-no-${tokenId}`}>
               {helpfulNoLabel}
@@ -401,7 +401,7 @@ export function DictionaryEntryDetail({
         {helpfulAnswer && (
           <Button
             variant="link"
-            className="tw-h-auto tw-self-start tw-p-0 tw-text-xs"
+            className="tw:h-auto tw:self-start tw:p-0 tw:text-xs"
             onClick={onGiveFeedback}
             data-testid={`dictionary-entry-detail-give-feedback-${tokenId}`}
           >
