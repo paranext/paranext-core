@@ -6,9 +6,7 @@
       "type": "book",
       "marker": "id",
       "code": "GEN",
-      "content": [
-        "- Paragraphless Project"
-      ]
+      "content": ["- Paragraphless Project"]
     },
     {
       "type": "chapter",
