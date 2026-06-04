@@ -40,7 +40,7 @@ type Story = StoryObj<typeof SemanticDomainViewer>;
  * - Open / close the Dialog (trigger button + Dialog X / Esc / click-outside).
  * - Navigate the breadcrumb tree popovers. Top-level (depth-0) entries are a SINGLE combined
  *   chevron+label button that ONLY toggles expand/collapse - clicking does NOT select. Nested
- *   (depth-1+) entries keep the click-to-select behavior and gain `hover:tw-underline`.
+ *   (depth-1+) entries keep the click-to-select behavior and gain `tw:hover:underline`.
  * - Verify the breadcrumb chain does NOT overflow under the Dialog's close-X button at the default
  *   rendered width (90vw / max 3xl).
  * - Keyboard: ArrowUp / ArrowDown move list selection inside the Dialog; Esc closes the Dialog; Tab /
@@ -117,8 +117,8 @@ export const Default: Story = {
     }, []);
 
     return (
-      <div className="tw-relative tw-h-[720px] tw-w-[1024px] tw-bg-muted tw-p-4">
-        <div className="tw-mb-3 tw-flex tw-flex-wrap tw-gap-2">
+      <div className="tw:relative tw:h-[720px] tw:w-[1024px] tw:bg-muted tw:p-4">
+        <div className="tw:mb-3 tw:flex tw:flex-wrap tw:gap-2">
           <Button onClick={openWithDeepPath}>Open Semantic Domain Viewer</Button>
           <Button variant="outline" onClick={openAtRoot}>
             Open at root (cold entry)
@@ -138,9 +138,9 @@ export const Default: Story = {
             Open in loading state
           </Button>
         </div>
-        <div className="tw-rounded tw-border tw-bg-background tw-p-3 tw-text-sm">
-          <p className="tw-mb-1 tw-font-semibold">How to verify the bug fixes:</p>
-          <ol className="tw-list-inside tw-list-decimal tw-space-y-0.5 tw-text-muted-foreground">
+        <div className="tw:rounded tw:border tw:bg-background tw:p-3 tw:text-sm">
+          <p className="tw:mb-1 tw:font-semibold">How to verify the bug fixes:</p>
+          <ol className="tw:list-inside tw:list-decimal tw:space-y-0.5 tw:text-muted-foreground">
             <li>
               Click any breadcrumb segment to open its tree popover. Click a TOP-level entry (e.g.,
               &ldquo;1. Physical&rdquo;) - it should expand/collapse only. The tree must remain

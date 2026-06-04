@@ -60,7 +60,7 @@ const meta: Meta<typeof DictionarySenseItem> = {
   },
   decorators: [
     (Story) => (
-      <div className="tw-w-[480px] tw-p-4">
+      <div className="tw:w-[480px] tw:p-4">
         <Story />
       </div>
     ),
@@ -84,9 +84,9 @@ function InteractiveSenseDemo() {
   const sense: DictionarySenseDisplay = isRelevant ? RELEVANT_SENSE : LESS_RELEVANT_SENSE;
 
   return (
-    <div className="tw-flex tw-flex-col tw-gap-3">
-      <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-3 tw-text-xs">
-        <label className="tw-flex tw-items-center tw-gap-1">
+    <div className="tw:flex tw:flex-col tw:gap-3">
+      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-3 tw:text-xs">
+        <label className="tw:flex tw:items-center tw:gap-1">
           <input
             type="checkbox"
             checked={hideLessRelevant}
@@ -94,7 +94,7 @@ function InteractiveSenseDemo() {
           />
           Hide less-relevant
         </label>
-        <label className="tw-flex tw-items-center tw-gap-1">
+        <label className="tw:flex tw:items-center tw:gap-1">
           <input
             type="checkbox"
             checked={isRelevant}
@@ -102,7 +102,7 @@ function InteractiveSenseDemo() {
           />
           Mark as relevant
         </label>
-        <span className="tw-text-muted-foreground">
+        <span className="tw:text-muted-foreground">
           Occurrences-link clicks: <strong>{clickCount}</strong>
         </span>
       </div>

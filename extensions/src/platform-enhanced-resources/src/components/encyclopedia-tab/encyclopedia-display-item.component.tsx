@@ -134,11 +134,11 @@ export function EncyclopediaDisplayItem({
       <ContextMenuTrigger asChild>
         <div
           data-testid={`encyclopedia-entry-${item.tokenId}`}
-          className="tw-flex tw-w-full tw-flex-col tw-gap-0.5"
+          className="tw:flex tw:w-full tw:flex-col tw:gap-0.5"
         >
           <Button
             variant="link"
-            className="tw-h-auto tw-justify-start tw-p-0 tw-text-start tw-text-sm"
+            className="tw:h-auto tw:justify-start tw:p-0 tw:text-start tw:text-sm"
             aria-label={sourceTextTooltip}
             onClick={() => {
               // FN-020(c): NO stopPropagation - bubble so the SLI listbox option handler
@@ -146,19 +146,19 @@ export function EncyclopediaDisplayItem({
               onSourceTextClick(item.tokenId);
             }}
           >
-            <span className="tw-truncate tw-font-semibold">{item.translit}</span>
+            <span className="tw:truncate tw:font-semibold">{item.translit}</span>
           </Button>
           {showSourceScript && (
             <span
               data-source-language-text
               aria-label={sourceTextTooltip}
-              className="tw-truncate tw-text-xs tw-text-muted-foreground"
+              className="tw:truncate tw:text-xs tw:text-muted-foreground"
             >
               {item.lemma}
             </span>
           )}
           {teaserPreview && (
-            <p className="tw-line-clamp-1 tw-text-xs tw-text-muted-foreground">{teaserPreview}</p>
+            <p className="tw:line-clamp-1 tw:text-xs tw:text-muted-foreground">{teaserPreview}</p>
           )}
         </div>
       </ContextMenuTrigger>

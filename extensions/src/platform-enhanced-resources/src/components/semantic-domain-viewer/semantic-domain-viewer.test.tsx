@@ -153,7 +153,13 @@ function getRowDiv(li: HTMLLIElement): HTMLDivElement {
 
 /** Find the chevron / combined-expand button for a treeitem (always the first button). */
 function getRowButton(li: HTMLLIElement): HTMLButtonElement {
-  const button = getRowDiv(li).querySelector<HTMLButtonElement>(':scope > button');
+  // Use direct-children filtering rather than a `:scope > button` querySelector. jsdom's nwsapi
+  // implements `:scope` by building an anchoring selector from the context element's class list,
+  // which chokes on Tailwind v4 colon classes (e.g. `tw:flex`) - parsing `:flex` as an unknown
+  // pseudo-class. Filtering children sidesteps the selector engine entirely.
+  const button = Array.from(getRowDiv(li).children).find(
+    (c): c is HTMLButtonElement => c instanceof HTMLButtonElement,
+  );
   if (!button) throw new Error('Expected a button inside the treeitem row');
   return button;
 }
@@ -164,7 +170,11 @@ function getRowButton(li: HTMLLIElement): HTMLButtonElement {
  * clicked.
  */
 function getLabelButton(li: HTMLLIElement): HTMLButtonElement {
-  const buttons = getRowDiv(li).querySelectorAll<HTMLButtonElement>(':scope > button');
+  // Direct-children filtering (not `:scope > button`) - see getRowButton for the nwsapi/Tailwind-v4
+  // colon-class rationale.
+  const buttons = Array.from(getRowDiv(li).children).filter(
+    (c): c is HTMLButtonElement => c instanceof HTMLButtonElement,
+  );
   const button = buttons[buttons.length - 1];
   if (!button) throw new Error('Expected a button inside the treeitem row');
   return button;

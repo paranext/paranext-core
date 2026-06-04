@@ -89,18 +89,18 @@ function RibbonShell({
       role="alert"
       variant={variant}
       className={cn(
-        'tw-relative tw-flex tw-flex-col tw-gap-1 tw-rounded-none tw-border-x-0',
-        dismissible ? 'tw-pe-9' : 'tw-pe-3',
+        'tw:relative tw:flex tw:flex-col tw:gap-1 tw:rounded-none tw:border-x-0',
+        dismissible ? 'tw:pe-9' : 'tw:pe-3',
       )}
     >
-      <Info className="tw-h-4 tw-w-4" />
-      <AlertTitle className="tw-text-sm">{title}</AlertTitle>
-      <AlertDescription className="tw-flex tw-flex-wrap tw-items-center tw-gap-x-2 tw-text-xs">
+      <Info className="tw:h-4 tw:w-4" />
+      <AlertTitle className="tw:text-sm">{title}</AlertTitle>
+      <AlertDescription className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:text-xs">
         <span>{description}</span>
         {actionLabel && (
           <Button
             variant="link"
-            className="tw-h-auto tw-p-0 tw-text-xs"
+            className="tw:h-auto tw:p-0 tw:text-xs"
             disabled={actionDisabled}
             onClick={onAction}
           >
@@ -114,9 +114,9 @@ function RibbonShell({
           size="icon"
           aria-label={dismissLabel}
           onClick={onDismiss}
-          className="tw-absolute tw-end-1 tw-top-1 tw-h-7 tw-w-7"
+          className="tw:absolute tw:end-1 tw:top-1 tw:h-7 tw:w-7"
         >
-          <X className="tw-h-4 tw-w-4" />
+          <X className="tw:h-4 tw:w-4" />
         </Button>
       )}
     </Alert>
@@ -159,7 +159,7 @@ export function WarningRibbons({
   }
 
   return (
-    <div className="tw-flex tw-flex-col">
+    <div className="tw:flex tw:flex-col">
       {ribbons.missingBook && (
         <RibbonShell
           variant="destructive"

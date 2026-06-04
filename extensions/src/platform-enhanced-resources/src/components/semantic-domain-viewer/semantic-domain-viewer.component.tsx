@@ -126,10 +126,10 @@ export function SemanticDomainViewer({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         data-testid="semantic-domain-viewer"
-        className="tw-flex tw-h-[80vh] tw-max-h-[600px] tw-w-[90vw] tw-max-w-3xl tw-flex-col tw-overflow-hidden tw-p-0"
+        className="tw:flex tw:h-[80vh] tw:max-h-[600px] tw:w-[90vw] tw:max-w-3xl tw:flex-col tw:overflow-hidden tw:p-0"
       >
-        <DialogTitle className="tw-sr-only">{titleLabel}</DialogTitle>
-        <DialogDescription className="tw-sr-only">{descriptionLabel}</DialogDescription>
+        <DialogTitle className="tw:sr-only">{titleLabel}</DialogTitle>
+        <DialogDescription className="tw:sr-only">{descriptionLabel}</DialogDescription>
         <ErDictionaryFilteredList
           items={filteredEntries}
           domainPath={effectivePath}
@@ -158,12 +158,12 @@ export function SemanticDomainViewer({
               localizedStringsWithLoadingState={localizedStringsWithLoadingState}
             />
           )}
-          // tw-pe-12 (48px) reserves room on the inline-end side for the Dialog's
+          // tw:pe-12 (48px) reserves room on the inline-end side for the Dialog's
           // absolute-positioned close X (top-right). The internal BreadcrumbBar measures
           // its parent's clientWidth to drive its collapse-to-ellipsis logic, so applying
           // the padding here naturally shrinks the available width and keeps the breadcrumbs
           // from running under the X button. [Revised: 2026-04-29 - Theme 17 #11b]
-          className="tw-h-full tw-pe-12"
+          className="tw:h-full tw:pe-12"
         />
       </DialogContent>
     </Dialog>

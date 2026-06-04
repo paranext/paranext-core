@@ -30,7 +30,7 @@ beforeAll(() => {
 // Minimal USJ with a single note for smoke-testing the rendering path.
 const SAMPLE_USJ: Usj = {
   type: 'USJ',
-  version: '0.2.1',
+  version: '3.1',
   content: [
     { type: 'chapter', marker: 'c', number: '1' },
     { type: 'verse', marker: 'v', number: '1' },

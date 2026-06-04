@@ -74,27 +74,27 @@ export function EncyclopediaEntryDetail({
   const renderBody = () => {
     if (!articleData) {
       return (
-        <div aria-busy="true" aria-label={loadingLabel} className="tw-flex tw-flex-col tw-gap-2">
-          <Skeleton className="tw-h-4 tw-w-full" />
-          <Skeleton className="tw-h-4 tw-w-11/12" />
-          <Skeleton className="tw-h-4 tw-w-3/4" />
+        <div aria-busy="true" aria-label={loadingLabel} className="tw:flex tw:flex-col tw:gap-2">
+          <Skeleton className="tw:h-4 tw:w-full" />
+          <Skeleton className="tw:h-4 tw:w-11/12" />
+          <Skeleton className="tw:h-4 tw:w-3/4" />
         </div>
       );
     }
     if (articleData.paragraphs.length === 0) {
       return (
-        <div role="status" className="tw-text-xs tw-italic tw-text-muted-foreground">
+        <div role="status" className="tw:text-xs tw:italic tw:text-muted-foreground">
           {emptyDetail}
         </div>
       );
     }
     const paragraphsToShow = articleData.paragraphs.slice(0, Math.max(0, previewParagraphCount));
     return (
-      <div className="tw-flex tw-flex-col tw-gap-2">
+      <div className="tw:flex tw:flex-col tw:gap-2">
         {paragraphsToShow.map((paragraph, idx) => (
           // Paragraph order is the only stable identity; backend doesn't ship paragraph ids.
           // eslint-disable-next-line react/no-array-index-key
-          <p key={idx} className="tw-text-sm tw-leading-relaxed">
+          <p key={idx} className="tw:text-sm tw:leading-relaxed">
             {paragraph.text}
           </p>
         ))}
@@ -105,10 +105,10 @@ export function EncyclopediaEntryDetail({
   return (
     <div
       data-testid={`encyclopedia-entry-detail-${entry.articleId}`}
-      className="tw-flex tw-flex-col tw-gap-2 tw-pt-2"
+      className="tw:flex tw:flex-col tw:gap-2 tw:pt-2"
     >
-      <header className="tw-flex tw-items-baseline tw-justify-between tw-gap-2">
-        <h4 className="tw-text-sm tw-font-semibold">{entry.title}</h4>
+      <header className="tw:flex tw:items-baseline tw:justify-between tw:gap-2">
+        <h4 className="tw:text-sm tw:font-semibold">{entry.title}</h4>
       </header>
 
       {renderBody()}
@@ -118,7 +118,7 @@ export function EncyclopediaEntryDetail({
           variant="link"
           size="sm"
           data-testid={`encyclopedia-article-link-${entry.articleId}`}
-          className="tw-h-auto tw-self-start tw-p-0 tw-text-sm"
+          className="tw:h-auto tw:self-start tw:p-0 tw:text-sm"
           onClick={() => onArticleLinkClick(entry.articleId)}
         >
           {viewArticleLabel}

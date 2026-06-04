@@ -161,16 +161,16 @@ export function EncyclopediaTab({
 
   return (
     <div
-      className="tw-flex tw-h-full tw-min-h-0 tw-flex-col"
+      className="tw:flex tw:h-full tw:min-h-0 tw:flex-col"
       data-testid="encyclopedia-tab"
       aria-label={tabLabel}
     >
-      <div className="tw-flex tw-shrink-0 tw-items-center tw-border-b tw-border-border tw-px-2 tw-py-1">
-        <span className="tw-text-xs tw-font-semibold tw-uppercase tw-text-muted-foreground">
+      <div className="tw:flex tw:shrink-0 tw:items-center tw:border-b tw:border-border tw:px-2 tw:py-1">
+        <span className="tw:text-xs tw:font-semibold tw:uppercase tw:text-muted-foreground">
           {tabLabel}
         </span>
       </div>
-      <div className="tw-flex tw-min-h-0 tw-flex-1">
+      <div className="tw:flex tw:min-h-0 tw:flex-1">
         <SourceLanguageIndexedList
           items={rowItems}
           selectedItemId={selectedTokenId}
@@ -189,9 +189,9 @@ export function EncyclopediaTab({
             />
           )}
           renderDetailContent={(item, onClose) => (
-            <div className="tw-flex tw-flex-col tw-gap-3">
-              <Button onClick={onClose} variant="ghost" size="sm" className="tw-self-start">
-                <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
+            <div className="tw:flex tw:flex-col tw:gap-3">
+              <Button onClick={onClose} variant="ghost" size="sm" className="tw:self-start">
+                <ArrowLeft className="tw:mr-1 tw:h-4 tw:w-4" />
                 {backToListLabel}
               </Button>
               {item.entries.map((entryRef) => (
@@ -206,7 +206,7 @@ export function EncyclopediaTab({
               ))}
             </div>
           )}
-          className="tw-h-full tw-w-full"
+          className="tw:h-full tw:w-full"
         />
       </div>
     </div>

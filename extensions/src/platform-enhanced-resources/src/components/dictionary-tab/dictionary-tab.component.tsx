@@ -221,12 +221,12 @@ export function DictionaryTab({
 
   return (
     <div
-      className="tw-flex tw-h-full tw-min-h-0 tw-flex-col"
+      className="tw:flex tw:h-full tw:min-h-0 tw:flex-col"
       data-testid="dictionary-tab"
       aria-label={dictionaryLabel}
     >
-      <div className="tw-flex tw-shrink-0 tw-items-center tw-justify-between tw-gap-2 tw-border-b tw-border-border tw-px-2 tw-py-1">
-        <span className="tw-text-xs tw-font-semibold tw-uppercase tw-text-muted-foreground">
+      <div className="tw:flex tw:shrink-0 tw:items-center tw:justify-between tw:gap-2 tw:border-b tw:border-border tw:px-2 tw:py-1">
+        <span className="tw:text-xs tw:font-semibold tw:uppercase tw:text-muted-foreground">
           {dictionaryLabel}
         </span>
         {/*
@@ -240,7 +240,7 @@ export function DictionaryTab({
           <Button
             variant="link"
             size="sm"
-            className="tw-h-auto tw-p-0 tw-text-xs"
+            className="tw:h-auto tw:p-0 tw:text-xs"
             onClick={onBrowseSemanticDomainsClick}
             data-testid="dictionary-browse-semantic-domains"
           >
@@ -248,7 +248,7 @@ export function DictionaryTab({
           </Button>
         )}
       </div>
-      <div className="tw-flex tw-min-h-0 tw-flex-1">
+      <div className="tw:flex tw:min-h-0 tw:flex-1">
         <SourceLanguageIndexedList
           items={rowItems}
           selectedItemId={selectedTokenId}
@@ -293,7 +293,7 @@ export function DictionaryTab({
               localizedStringsWithLoadingState={childStrings}
             />
           )}
-          className="tw-h-full tw-w-full"
+          className="tw:h-full tw:w-full"
         />
       </div>
     </div>

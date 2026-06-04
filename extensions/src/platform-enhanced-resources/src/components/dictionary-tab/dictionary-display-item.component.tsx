@@ -173,12 +173,12 @@ export function DictionaryDisplayItem({
       <ContextMenuTrigger asChild>
         <div
           data-testid={`dictionary-entry-${item.tokenId}`}
-          className="tw-flex tw-w-full tw-items-baseline tw-gap-3"
+          className="tw:flex tw:w-full tw:items-baseline tw:gap-3"
         >
-          <div className="tw-flex tw-min-w-0 tw-shrink-0 tw-flex-col">
+          <div className="tw:flex tw:min-w-0 tw:shrink-0 tw:flex-col">
             <Button
               variant="link"
-              className="tw-h-auto tw-justify-start tw-p-0 tw-text-start tw-text-sm"
+              className="tw:h-auto tw:justify-start tw:p-0 tw:text-start tw:text-sm"
               aria-label={sourceTextTooltip}
               onClick={() => {
                 // FN-020(c): NO stopPropagation - we want the click to bubble so the SLI
@@ -186,22 +186,22 @@ export function DictionaryDisplayItem({
                 onSourceTextClick(item.tokenId);
               }}
             >
-              <span className="tw-truncate tw-font-semibold">{item.sourceText}</span>
+              <span className="tw:truncate tw:font-semibold">{item.sourceText}</span>
             </Button>
             {item.translit && (
-              <span className="tw-truncate tw-text-xs tw-italic tw-text-muted-foreground">
+              <span className="tw:truncate tw:text-xs tw:italic tw:text-muted-foreground">
                 {item.translit}
               </span>
             )}
           </div>
           {preview && (
-            <span className="tw-flex-1 tw-truncate tw-text-sm tw-text-muted-foreground">
+            <span className="tw:flex-1 tw:truncate tw:text-sm tw:text-muted-foreground">
               {preview}
             </span>
           )}
           {additionalRelevantSenseCount > 0 && (
             <span
-              className="tw-inline-flex tw-shrink-0 tw-items-center tw-rounded tw-bg-muted tw-px-1.5 tw-text-xs tw-text-muted-foreground"
+              className="tw:inline-flex tw:shrink-0 tw:items-center tw:rounded tw:bg-muted tw:px-1.5 tw:text-xs tw:text-muted-foreground"
               title={additionalRelevantSensesTooltip(additionalRelevantSenseCount)}
             >
               +{additionalRelevantSenseCount}

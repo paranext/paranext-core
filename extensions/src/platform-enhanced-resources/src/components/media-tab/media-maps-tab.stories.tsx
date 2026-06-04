@@ -26,7 +26,7 @@ const meta: Meta<typeof MediaMapsTab> = {
   },
   decorators: [
     (Story) => (
-      <div className="tw-h-[640px] tw-w-[480px] tw-border tw-border-border">
+      <div className="tw:h-[640px] tw:w-[480px] tw:border tw:border-border">
         <Story />
       </div>
     ),
@@ -73,9 +73,9 @@ function InteractiveMediaMapsTabDemo() {
       : undefined;
 
   return (
-    <div className="tw-flex tw-h-full tw-flex-col tw-gap-2">
-      <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-3 tw-text-xs">
-        <label className="tw-flex tw-items-center tw-gap-1">
+    <div className="tw:flex tw:h-full tw:flex-col tw:gap-2">
+      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-3 tw:text-xs">
+        <label className="tw:flex tw:items-center tw:gap-1">
           Items:
           <select
             value={String(itemCount)}
@@ -90,15 +90,15 @@ function InteractiveMediaMapsTabDemo() {
             <option value="3">3 (default)</option>
           </select>
         </label>
-        <label className="tw-flex tw-items-center tw-gap-1">
+        <label className="tw:flex tw:items-center tw:gap-1">
           <input type="checkbox" checked={!loaded} onChange={(e) => setLoaded(!e.target.checked)} />
           Defer thumbnails (BHV-359 skeleton)
         </label>
-        <span className="tw-text-muted-foreground">
+        <span className="tw:text-muted-foreground">
           selected: {selectedItemId ?? '(none)'} · maximized: {maximizedId ?? '(none)'}
         </span>
       </div>
-      <div className="tw-flex-1 tw-min-h-0">
+      <div className="tw:flex-1 tw:min-h-0">
         <MediaMapsTab
           items={items}
           selectedItemId={selectedItemId}
