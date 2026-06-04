@@ -23,6 +23,7 @@ import {
 } from 'platform-bible-react';
 import {
   DblResourceData,
+  formatReplacementString,
   getErrorMessage,
   isPlatformError,
   LocalizeKey,
@@ -43,8 +44,12 @@ const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
   '%webView_resourcePanel_downloadResources%',
   '%webView_resourcePanel_bibleTexts_emptyState_prompt%',
   '%webView_resourcePanel_bibleTexts_pick%',
+  '%webView_resourcePanel_bibleTexts_title%',
+  '%webView_resourcePanel_bibleTexts_title_withResource%',
   '%webView_resourcePanel_commentaries_emptyState_prompt%',
   '%webView_resourcePanel_commentaries_pick%',
+  '%webView_resourcePanel_commentaries_title%',
+  '%webView_resourcePanel_commentaries_title_withResource%',
 ];
 
 /** Returns the `id` field for reference types that have one, or `undefined` for others. */
@@ -130,6 +135,7 @@ function ResourceSelectorDropdown({
 
 globalThis.webViewComponent = function ResourceTextPanel({
   projectId,
+  updateWebViewDefinition,
   useWebViewState,
   useWebViewScrollGroupScrRef,
 }: WebViewProps) {
@@ -244,6 +250,46 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // #endregion
 
+  // #region Dynamic title
+
+  let resourceShortName: string | undefined;
+  if (isDblResourceReference(selectedRef) && dblMatch?.installed) {
+    resourceShortName = dblMatch.displayName;
+  } else if (isProjectReference(selectedRef)) {
+    resourceShortName = selectedRef?.name;
+  }
+
+  const titleKey =
+    resourceType === 'ScriptureResource'
+      ? '%webView_resourcePanel_bibleTexts_title%'
+      : '%webView_resourcePanel_commentaries_title%';
+  const titleWithResourceKey =
+    resourceType === 'ScriptureResource'
+      ? '%webView_resourcePanel_bibleTexts_title_withResource%'
+      : '%webView_resourcePanel_commentaries_title_withResource%';
+
+  useEffect(() => {
+    const baseTitle = localizedStrings[titleKey];
+    if (!baseTitle) return;
+    if (resourceShortName) {
+      updateWebViewDefinition({
+        title: formatReplacementString(localizedStrings[titleWithResourceKey], {
+          textName: resourceShortName,
+        }),
+      });
+    } else {
+      updateWebViewDefinition({ title: baseTitle });
+    }
+  }, [
+    resourceShortName,
+    localizedStrings,
+    titleKey,
+    titleWithResourceKey,
+    updateWebViewDefinition,
+  ]);
+
+  // #endregion
+
   // #region USJ Fetch
 
   const [usjPossiblyError] = useProjectData(
@@ -319,7 +365,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
   const showResourcePicker = useDialogCallback(
     'platform.resourcePicker',
     useMemo(
-      () => ({ resourceType, selectedResourceIds: currentFilteredDblIds }),
+      () => ({ resourceType, selectedResourceIds: currentFilteredDblIds, isModal: true }),
       [resourceType, currentFilteredDblIds],
     ),
     useCallback(
