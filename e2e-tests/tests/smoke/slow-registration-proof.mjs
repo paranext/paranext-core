@@ -1,18 +1,18 @@
 /**
  * Proof-of-fix script for the slow-CI flake in ui-interaction.spec.ts.
  *
- * The real flake: on slow macOS CI runners, the settings data-provider takes
- * longer than the default 60 s to register, so waitForPapiMethodRegistered
- * (which polls rpc.discover) throws before the method appears.
- * The fix: raise the explicit timeout from 60 s to 90 s.
+ * The real flake: on slow macOS CI runners, the settings data-provider takes longer than the
+ * default 60 s to register, so waitForPapiMethodRegistered (which polls rpc.discover) throws before
+ * the method appears. The fix: raise the explicit timeout from 60 s to 90 s.
  *
- * This script replicates the problem by running a mock rpc.discover server
- * that withholds the target method for REGISTRATION_DELAY_MS, then proves:
- *   - OLD_TIMEOUT_MS (< REGISTRATION_DELAY_MS) → fails  [RED LIGHT]
- *   - NEW_TIMEOUT_MS (> REGISTRATION_DELAY_MS) → passes  [GREEN LIGHT]
+ * This script replicates the problem by running a mock rpc.discover server that withholds the
+ * target method for REGISTRATION_DELAY_MS, then proves:
  *
- * The timings are compressed (seconds not minutes) for local reproducibility;
- * the boundary relationship is identical to the CI scenario.
+ * - OLD_TIMEOUT_MS (< REGISTRATION_DELAY_MS) → fails [RED LIGHT]
+ * - NEW_TIMEOUT_MS (> REGISTRATION_DELAY_MS) → passes [GREEN LIGHT]
+ *
+ * The timings are compressed (seconds not minutes) for local reproducibility; the boundary
+ * relationship is identical to the CI scenario.
  */
 
 import { WebSocketServer } from 'ws';
@@ -26,9 +26,9 @@ const WebSocket = require('ws');
 
 // ── Timing constants ─────────────────────────────────────────────────────────
 // Compressed from the real CI scenario (65 s registration, 60 s vs 90 s):
-const REGISTRATION_DELAY_MS = 5_000;  // simulates the slow CI: ~65 s on real runners
-const OLD_TIMEOUT_MS = 3_000;          // original 60 s default — TOO SHORT
-const NEW_TIMEOUT_MS = 7_000;          // fix value 90 s — long enough
+const REGISTRATION_DELAY_MS = 5_000; // simulates the slow CI: ~65 s on real runners
+const OLD_TIMEOUT_MS = 3_000; // original 60 s default — TOO SHORT
+const NEW_TIMEOUT_MS = 7_000; // fix value 90 s — long enough
 
 const TARGET_METHOD = 'object:platform.settingsServiceDataProvider-data.set';
 const MOCK_PORT = 19_876;
@@ -41,8 +41,12 @@ async function waitForPapiMethodRegistered(methodName, port, timeoutMs) {
   while (Date.now() - start < timeoutMs) {
     const remaining = timeoutMs - (Date.now() - start);
     try {
-      const result = await sendPapiRequestOnce('rpc.discover', [], port,
-        Math.min(10_000, Math.max(1_000, remaining)));
+      const result = await sendPapiRequestOnce(
+        'rpc.discover',
+        [],
+        port,
+        Math.min(10_000, Math.max(1_000, remaining)),
+      );
       if (result.methods?.some((m) => m.name === methodName)) return;
     } catch {
       /* next poll */
@@ -51,9 +55,7 @@ async function waitForPapiMethodRegistered(methodName, port, timeoutMs) {
     if (sleepMs <= 0) break;
     await new Promise((r) => setTimeout(r, sleepMs));
   }
-  throw new Error(
-    `PAPI method "${methodName}" not listed in rpc.discover within ${timeoutMs}ms`
-  );
+  throw new Error(`PAPI method "${methodName}" not listed in rpc.discover within ${timeoutMs}ms`);
 }
 
 // ── One-shot JSON-RPC WebSocket request (identical logic to helpers.ts) ──────
@@ -70,15 +72,24 @@ function sendPapiRequestOnce(method, params, port, perRequestTimeoutMs) {
     });
     ws.on('message', (data) => {
       let parsed;
-      try { parsed = JSON.parse(data.toString()); } catch (e) {
-        clearTimeout(timer); ws.close(); reject(e); return;
+      try {
+        parsed = JSON.parse(data.toString());
+      } catch (e) {
+        clearTimeout(timer);
+        ws.close();
+        reject(e);
+        return;
       }
       if (parsed.id !== 1) return;
-      clearTimeout(timer); ws.close();
+      clearTimeout(timer);
+      ws.close();
       if (parsed.error) reject(new Error(JSON.stringify(parsed.error)));
       else resolve(parsed.result);
     });
-    ws.on('error', (e) => { clearTimeout(timer); reject(e); });
+    ws.on('error', (e) => {
+      clearTimeout(timer);
+      reject(e);
+    });
   });
 }
 
@@ -95,9 +106,10 @@ function startMockServer(registrationDelayMs) {
         return;
       }
       const elapsed = Date.now() - serverStart;
-      const methods = elapsed >= registrationDelayMs
-        ? [{ name: TARGET_METHOD }]  // method appears after the delay
-        : [];                          // not registered yet
+      const methods =
+        elapsed >= registrationDelayMs
+          ? [{ name: TARGET_METHOD }] // method appears after the delay
+          : []; // not registered yet
       ws.send(JSON.stringify({ jsonrpc: '2.0', id: req.id, result: { methods } }));
     });
   });
@@ -113,7 +125,9 @@ async function main() {
 
   // ── RED LIGHT ────────────────────────────────────────────────────────────
   console.log(`RED LIGHT: waitForPapiMethodRegistered timeout=${OLD_TIMEOUT_MS}ms`);
-  console.log(`  (analogous to old 60 s default — shorter than the ${REGISTRATION_DELAY_MS / 1000} s delay)`);
+  console.log(
+    `  (analogous to old 60 s default — shorter than the ${REGISTRATION_DELAY_MS / 1000} s delay)`,
+  );
 
   let redServer = startMockServer(REGISTRATION_DELAY_MS);
   const redStart = Date.now();
@@ -136,7 +150,9 @@ async function main() {
 
   // ── GREEN LIGHT ──────────────────────────────────────────────────────────
   console.log(`\nGREEN LIGHT: waitForPapiMethodRegistered timeout=${NEW_TIMEOUT_MS}ms`);
-  console.log(`  (analogous to the fix: 90 s — longer than the ${REGISTRATION_DELAY_MS / 1000} s delay)`);
+  console.log(
+    `  (analogous to the fix: 90 s — longer than the ${REGISTRATION_DELAY_MS / 1000} s delay)`,
+  );
 
   let greenServer = startMockServer(REGISTRATION_DELAY_MS);
   const greenStart = Date.now();
@@ -158,7 +174,12 @@ async function main() {
   console.log('\n✓ Proof complete: raising the timeout from below to above the registration');
   console.log('  time turns the failure into a pass. The fix is verified.\n');
   console.log('Note: on slow CI the numbers are:');
-  console.log(`  registration time ≈ 60-70 s, old timeout = 60 s (fails), new timeout = 90 s (passes)`);
+  console.log(
+    `  registration time ≈ 60-70 s, old timeout = 60 s (fails), new timeout = 90 s (passes)`,
+  );
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
