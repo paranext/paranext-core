@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Paranext.DataProvider.Checklists;
 using Paranext.DataProvider.Checks;
+using Paranext.DataProvider.EnhancedResources;
 using Paranext.DataProvider.ManageBooks;
 using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.ParatextUtils;
@@ -95,6 +96,11 @@ public static class Program
                 paratextProjects,
                 paratextFactory
             );
+            var enhancedResourceFactory = new EnhancedResourceFactory(
+                papi,
+                paratextProjects,
+                new MarbleDataLoader()
+            );
             await Task.WhenAll(
                 paratextFactory.InitializeAsync(),
                 inventoryDataProvider.RegisterDataProviderAsync(),
@@ -103,7 +109,8 @@ public static class Program
                 paratextRegistrationService.InitializeAsync(),
                 paratextSendReceiveService.InitializeAsync(),
                 checklistNetworkObject.InitializeAsync(),
-                manageBooksService.RegisterNetworkObjectAsync()
+                manageBooksService.RegisterNetworkObjectAsync(),
+                enhancedResourceFactory.InitializeAsync()
             );
 
             // Things that only run in our "noisy dev mode" go here

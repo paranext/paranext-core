@@ -14,6 +14,7 @@
     ".storybook/mocks/*.ts",
     "src",
     "assets",
-    "e2e-tests"
+    "e2e-tests",
+    "scripts"
   ]
 }
