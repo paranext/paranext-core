@@ -244,7 +244,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
       dblResourcesProvider
         .installDblResource(matchDblEntryUid)
         .catch((e: unknown) =>
-          logger.error(`Resource panel install failed: ${getErrorMessage(e)}`),
+          logger.error(`Resource panel auto-install failed: ${getErrorMessage(e)}`),
         );
     }
   }, [fetchResources, isInstalling, dblResourcesProvider, matchDblEntryUid]);
