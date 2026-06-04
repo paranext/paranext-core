@@ -93,13 +93,13 @@ export function ArticleViewer({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         data-testid="article-viewer"
-        className="tw-flex tw-max-h-[90vh] tw-w-[90vw] tw-max-w-4xl tw-flex-col tw-overflow-hidden"
+        className="tw:flex tw:max-h-[90vh] tw:w-[90vw] tw:max-w-4xl tw:flex-col tw:overflow-hidden"
       >
-        <DialogTitle className="tw-truncate" data-testid="article-viewer-title">
+        <DialogTitle className="tw:truncate" data-testid="article-viewer-title">
           {headingText}
         </DialogTitle>
-        <DialogDescription className="tw-sr-only">{titleFallback}</DialogDescription>
-        <div className="tw-flex-1 tw-overflow-y-auto" data-testid="article-viewer-content">
+        <DialogDescription className="tw:sr-only">{titleFallback}</DialogDescription>
+        <div className="tw:flex-1 tw:overflow-y-auto" data-testid="article-viewer-content">
           {articleData ? (
             <ArticleRenderer
               article={articleData}
@@ -111,12 +111,12 @@ export function ArticleViewer({
               localizedStringsWithLoadingState={localizedStringsWithLoadingState}
             />
           ) : (
-            <div className="tw-flex tw-flex-col tw-gap-3" data-testid="article-viewer-loading">
-              <Skeleton className="tw-h-5 tw-w-1/2" />
-              <Skeleton className="tw-h-4 tw-w-full" />
-              <Skeleton className="tw-h-4 tw-w-11/12" />
-              <Skeleton className="tw-h-4 tw-w-10/12" />
-              <Skeleton className="tw-h-4 tw-w-3/4" />
+            <div className="tw:flex tw:flex-col tw:gap-3" data-testid="article-viewer-loading">
+              <Skeleton className="tw:h-5 tw:w-1/2" />
+              <Skeleton className="tw:h-4 tw:w-full" />
+              <Skeleton className="tw:h-4 tw:w-11/12" />
+              <Skeleton className="tw:h-4 tw:w-10/12" />
+              <Skeleton className="tw:h-4 tw:w-3/4" />
             </div>
           )}
         </div>

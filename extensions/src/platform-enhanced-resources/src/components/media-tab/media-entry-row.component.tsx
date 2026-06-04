@@ -88,44 +88,44 @@ export function MediaEntryRow({
   return (
     <div
       data-testid={`media-entry-${item.imageId}`}
-      className={cn('tw-flex tw-w-full tw-items-center tw-gap-3')}
+      className={cn('tw:flex tw:w-full tw:items-center tw:gap-3')}
     >
       <div
         className={cn(
-          'tw-flex tw-h-14 tw-w-14 tw-shrink-0 tw-items-center tw-justify-center',
-          'tw-overflow-hidden tw-rounded tw-border tw-border-border tw-bg-muted/40',
+          'tw:flex tw:h-14 tw:w-14 tw:shrink-0 tw:items-center tw:justify-center',
+          'tw:overflow-hidden tw:rounded tw:border tw:border-border tw:bg-muted/40',
         )}
       >
         {!loaded && (
           <Skeleton
             aria-busy="true"
             aria-label={thumbnailLoadingLabel}
-            className="tw-h-full tw-w-full"
+            className="tw:h-full tw:w-full"
           />
         )}
         {loaded && thumbnailUrl && (
           <img
             src={thumbnailUrl}
             alt={thumbnailLabel}
-            className="tw-h-full tw-w-full tw-object-cover"
+            className="tw:h-full tw:w-full tw:object-cover"
           />
         )}
         {loaded && !thumbnailUrl && (
           // No resolver supplied - render a neutral placeholder block so the layout stays stable.
           // (Storybook supplies a resolver; production wiring layer always supplies one too.)
-          <span aria-hidden className="tw-text-xs tw-text-muted-foreground">
+          <span aria-hidden className="tw:text-xs tw:text-muted-foreground">
             {item.collection.slice(0, 3)}
           </span>
         )}
       </div>
-      <div className="tw-flex tw-flex-1 tw-flex-col tw-gap-0.5 tw-overflow-hidden">
-        <div className="tw-flex tw-items-baseline tw-gap-2">
-          <span className="tw-truncate tw-text-sm tw-font-medium">{item.title}</span>
-          <Badge variant="outline" className="tw-shrink-0 tw-text-xs">
+      <div className="tw:flex tw:flex-1 tw:flex-col tw:gap-0.5 tw:overflow-hidden">
+        <div className="tw:flex tw:items-baseline tw:gap-2">
+          <span className="tw:truncate tw:text-sm tw:font-medium">{item.title}</span>
+          <Badge variant="outline" className="tw:shrink-0 tw:text-xs">
             {item.mediaType}
           </Badge>
         </div>
-        <span className="tw-truncate tw-text-xs tw-text-muted-foreground">
+        <span className="tw:truncate tw:text-xs tw:text-muted-foreground">
           {item.referenceLabel}
         </span>
       </div>

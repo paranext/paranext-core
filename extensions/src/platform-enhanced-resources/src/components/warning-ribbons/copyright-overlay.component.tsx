@@ -72,19 +72,19 @@ export function CopyrightOverlay({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange} modal={false}>
-      <DialogContent className="tw-max-w-2xl">
+      <DialogContent className="tw:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{titleText}</DialogTitle>
         </DialogHeader>
-        <div className="tw-flex tw-max-h-[60vh] tw-flex-col tw-gap-3 tw-overflow-y-auto tw-pr-1">
+        <div className="tw:flex tw:max-h-[60vh] tw:flex-col tw:gap-3 tw:overflow-y-auto tw:pr-1">
           {copyrightInfo ? (
             copyrightInfo.split(/\n+/).map((paragraph) => (
-              <p key={paragraph} className="tw-text-sm tw-leading-relaxed">
+              <p key={paragraph} className="tw:text-sm tw:leading-relaxed">
                 {paragraph}
               </p>
             ))
           ) : (
-            <p className="tw-text-sm tw-italic tw-text-muted-foreground">{emptyMessage}</p>
+            <p className="tw:text-sm tw:italic tw:text-muted-foreground">{emptyMessage}</p>
           )}
         </div>
         <DialogFooter>

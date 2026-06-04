@@ -116,25 +116,25 @@ export function EnhancedResourceFootnotesPane({
 
   // When the pane is hidden, render only the children (no panel group, no footnote list).
   if (!isVisible) {
-    return <div className="tw-flex tw-h-full tw-w-full tw-flex-col tw-min-h-0">{children}</div>;
+    return <div className="tw:flex tw:h-full tw:w-full tw:flex-col tw:min-h-0">{children}</div>;
   }
 
   return (
-    <div ref={setContainerRef} className="tw-h-full tw-w-full tw-min-h-0">
+    <div ref={setContainerRef} className="tw:h-full tw:w-full tw:min-h-0">
       <ResizablePanelGroup
         direction="vertical"
-        className="tw-h-full tw-w-full tw-min-h-0"
+        className="tw:h-full tw:w-full tw:min-h-0"
         onLayout={(sizes) => sizes.length >= 2 && setPaneSizePercent(sizes[1])}
       >
-        <ResizablePanel className="tw-flex tw-flex-col tw-min-h-0">
-          <div className="tw-flex tw-flex-col tw-flex-1 tw-min-h-0">{children}</div>
+        <ResizablePanel className="tw:flex tw:flex-col tw:min-h-0">
+          <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">{children}</div>
         </ResizablePanel>
         <ResizableHandle />
         <ResizablePanel
           defaultSize={paneSizePercent}
           minSize={minPercent}
           maxSize={Math.max(maxPercent, paneSizePercent)}
-          className="tw-bg-sidebar tw-pl-2 tw-pt-2 tw-pb-0 tw-pr-0 tw-flex tw-flex-col tw-min-h-0"
+          className="tw:bg-sidebar tw:pl-2 tw:pt-2 tw:pb-0 tw:pr-0 tw:flex tw:flex-col tw:min-h-0"
         >
           <FootnoteList
             classNameForItems="scripture-font"

@@ -126,10 +126,10 @@ export function MediaViewer({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         data-testid="media-viewer"
-        className="tw-flex tw-max-h-[95vh] tw-w-[95vw] tw-max-w-[95vw] tw-flex-col tw-overflow-hidden tw-p-4"
+        className="tw:flex tw:max-h-[95vh] tw:w-[95vw] tw:max-w-[95vw] tw:flex-col tw:overflow-hidden tw:p-4"
       >
-        <div className="tw-flex tw-items-center tw-gap-2">
-          <DialogTitle className="tw-flex-1 tw-truncate">{item ? item.title : ''}</DialogTitle>
+        <div className="tw:flex tw:items-center tw:gap-2">
+          <DialogTitle className="tw:flex-1 tw:truncate">{item ? item.title : ''}</DialogTitle>
           <TooltipProvider delayDuration={300}>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -141,9 +141,9 @@ export function MediaViewer({
                   disabled={!onPrev}
                   aria-label={previousLabel}
                   data-testid="media-viewer-previous"
-                  className="tw-h-8 tw-w-8"
+                  className="tw:h-8 tw:w-8"
                 >
-                  <ChevronLeft className="tw-h-4 tw-w-4" aria-hidden="true" />
+                  <ChevronLeft className="tw:h-4 tw:w-4" aria-hidden="true" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{previousLabel}</TooltipContent>
@@ -158,9 +158,9 @@ export function MediaViewer({
                   disabled={!onNext}
                   aria-label={nextLabel}
                   data-testid="media-viewer-next"
-                  className="tw-h-8 tw-w-8"
+                  className="tw:h-8 tw:w-8"
                 >
-                  <ChevronRight className="tw-h-4 tw-w-4" aria-hidden="true" />
+                  <ChevronRight className="tw:h-4 tw:w-4" aria-hidden="true" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{nextLabel}</TooltipContent>
@@ -175,15 +175,15 @@ export function MediaViewer({
                   disabled={zoom <= ZOOM_MIN}
                   aria-label={zoomOutLabel}
                   data-testid="media-viewer-zoom-out"
-                  className="tw-h-8 tw-w-8"
+                  className="tw:h-8 tw:w-8"
                 >
-                  <ZoomOut className="tw-h-4 tw-w-4" aria-hidden="true" />
+                  <ZoomOut className="tw:h-4 tw:w-4" aria-hidden="true" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{zoomOutLabel}</TooltipContent>
             </Tooltip>
             <span
-              className="tw-w-12 tw-text-center tw-text-xs tw-tabular-nums tw-text-muted-foreground"
+              className="tw:w-12 tw:text-center tw:text-xs tw:tabular-nums tw:text-muted-foreground"
               data-testid="media-viewer-zoom-percent"
             >
               {zoomPercent}%
@@ -198,35 +198,35 @@ export function MediaViewer({
                   disabled={zoom >= ZOOM_MAX}
                   aria-label={zoomInLabel}
                   data-testid="media-viewer-zoom-in"
-                  className="tw-h-8 tw-w-8"
+                  className="tw:h-8 tw:w-8"
                 >
-                  <ZoomIn className="tw-h-4 tw-w-4" aria-hidden="true" />
+                  <ZoomIn className="tw:h-4 tw:w-4" aria-hidden="true" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{zoomInLabel}</TooltipContent>
             </Tooltip>
           </TooltipProvider>
           {/* Spacer to clear the built-in DialogContent close (X) button */}
-          <div className="tw-w-8" />
+          <div className="tw:w-8" />
         </div>
-        <div className="tw-flex tw-flex-1 tw-items-center tw-justify-center tw-overflow-auto">
+        <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:overflow-auto">
           {item && resolvedImageUrl && (
             <img
               src={resolvedImageUrl}
               alt={altText}
               data-testid="media-viewer-image"
               style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}
-              className="tw-max-h-full tw-max-w-full tw-object-contain tw-transition-transform"
+              className="tw:max-h-full tw:max-w-full tw:object-contain tw:transition-transform"
             />
           )}
         </div>
         {item?.caption && (
-          <p className="tw-text-sm tw-text-muted-foreground" data-testid="media-viewer-caption">
+          <p className="tw:text-sm tw:text-muted-foreground" data-testid="media-viewer-caption">
             {item.caption}
           </p>
         )}
         {/* ARIA live region: announce zoom changes to screen readers without interrupting. */}
-        <div role="status" aria-live="polite" className="tw-sr-only">
+        <div role="status" aria-live="polite" className="tw:sr-only">
           {zoomAnnouncement}
         </div>
       </DialogContent>

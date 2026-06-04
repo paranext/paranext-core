@@ -1,5 +1,5 @@
 import { RefObject, useMemo } from 'react';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { useListbox, type ListboxOption } from '@/hooks/listbox-keyboard-navigation.hook';
 import { Separator } from '@/components/shadcn-ui/separator';
 import { Skeleton } from '@/components/shadcn-ui/skeleton';
@@ -61,13 +61,13 @@ export default function LexicalDictionaryList<T extends LexicalDictionaryEntry>(
 
   if (isLoading) {
     return (
-      <div className={cn('tw-flex tw-flex-col tw-gap-2 tw-p-2', className)}>
+      <div className={cn('tw:flex tw:flex-col tw:gap-2 tw:p-2', className)}>
         {Array.from({ length: 6 }, (_, i) => (
           <Skeleton
             // Loading skeleton placeholders don't have meaningful keys
             // eslint-disable-next-line react/no-array-index-key
             key={i}
-            className="tw-h-12 tw-w-full tw-rounded"
+            className="tw:h-12 tw:w-full tw:rounded"
           />
         ))}
       </div>
@@ -78,7 +78,7 @@ export default function LexicalDictionaryList<T extends LexicalDictionaryEntry>(
     return (
       <div
         className={cn(
-          'tw-flex tw-items-center tw-justify-center tw-p-8 tw-text-sm tw-text-muted-foreground',
+          'tw:flex tw:items-center tw:justify-center tw:p-8 tw:text-sm tw:text-muted-foreground',
           className,
         )}
       >
@@ -88,7 +88,7 @@ export default function LexicalDictionaryList<T extends LexicalDictionaryEntry>(
   }
 
   return (
-    <div className={cn('tw-overflow-y-auto tw-px-2 tw-py-2', className)}>
+    <div className={cn('tw:overflow-y-auto tw:px-2 tw:py-2', className)}>
       <ul
         role="listbox"
         tabIndex={0}
@@ -96,7 +96,7 @@ export default function LexicalDictionaryList<T extends LexicalDictionaryEntry>(
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         ref={listboxRef as RefObject<HTMLUListElement>}
         aria-activedescendant={activeId ?? undefined}
-        className="tw-outline-none focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background"
+        className="tw:outline-none tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-1 tw:focus:ring-offset-background"
         onKeyDown={handleKeyDown}
       >
         {items.map((entry) => {
@@ -111,20 +111,20 @@ export default function LexicalDictionaryList<T extends LexicalDictionaryEntry>(
                 id={entry.id}
                 onClick={() => onItemClick?.(entry)}
                 className={cn(
-                  'tw-flex tw-flex-col tw-p-2 tw-outline-none focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background',
+                  'tw:flex tw:flex-col tw:p-2 tw:outline-none tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-1 tw:focus:ring-offset-background',
                   {
-                    'tw-bg-muted': isSelected,
-                    'hover:tw-bg-muted': !isSelected,
+                    'tw:bg-muted': isSelected,
+                    'tw:hover:bg-muted': !isSelected,
                   },
                 )}
                 tabIndex={-1}
               >
-                <div className="tw-flex tw-items-baseline tw-gap-2">
-                  <span className="scripture-font tw-text-sm">{entry.primaryText}</span>
+                <div className="tw:flex tw:items-baseline tw:gap-2">
+                  <span className="scripture-font tw:text-sm">{entry.primaryText}</span>
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className="tw-ml-1 tw-cursor-help tw-rounded tw-bg-accent tw-px-1.5 tw-py-0.5 tw-text-xs">
+                        <span className="tw:ml-1 tw:cursor-help tw:rounded tw:bg-accent tw:px-1.5 tw:py-0.5 tw:text-xs">
                           {entry.occurrenceCount}
                         </span>
                       </TooltipTrigger>
@@ -134,13 +134,13 @@ export default function LexicalDictionaryList<T extends LexicalDictionaryEntry>(
                     </Tooltip>
                   </TooltipProvider>
                 </div>
-                <div className="tw-mt-0.5 tw-flex tw-items-center tw-gap-2 tw-overflow-hidden">
-                  <p className="tw-truncate tw-text-sm tw-text-muted-foreground">{entry.glosses}</p>
+                <div className="tw:mt-0.5 tw:flex tw:items-center tw:gap-2 tw:overflow-hidden">
+                  <p className="tw:truncate tw:text-sm tw:text-muted-foreground">{entry.glosses}</p>
                   {entry.strongsCodes.map((strongsCode) => (
                     <TooltipProvider key={strongsCode}>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <span className="tw-ml-1 tw-shrink-0 tw-cursor-help tw-rounded tw-bg-accent tw-px-1.5 tw-py-0.5 tw-text-xs">
+                          <span className="tw:ml-1 tw:shrink-0 tw:cursor-help tw:rounded tw:bg-accent tw:px-1.5 tw:py-0.5 tw:text-xs">
                             {strongsCode}
                           </span>
                         </TooltipTrigger>

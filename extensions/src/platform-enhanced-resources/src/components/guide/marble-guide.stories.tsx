@@ -17,8 +17,8 @@ const meta: Meta<typeof MarbleGuide> = {
     (Story) => (
       // The Dialog renders into a portal at document.body, so the surrounding container exists
       // mostly to provide a stable backdrop in the Storybook canvas.
-      <div className="tw-relative tw-h-[720px] tw-w-[1024px] tw-border tw-border-border tw-bg-muted/40">
-        <div className="tw-p-4 tw-text-sm tw-text-muted-foreground">
+      <div className="tw:relative tw:h-[720px] tw:w-[1024px] tw:border tw:border-border tw:bg-muted/40">
+        <div className="tw:p-4 tw:text-sm tw:text-muted-foreground">
           MarbleGuide Dialog renders in a portal - look at the centred modal.
         </div>
         <Story />
@@ -76,8 +76,8 @@ export const Default: StoryObj<typeof MarbleGuide> = {
     }, []);
 
     return (
-      <div className="tw-flex tw-flex-col tw-gap-3 tw-p-4">
-        <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-3">
+      <div className="tw:flex tw:flex-col tw:gap-3 tw:p-4">
+        <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-3">
           <Button
             type="button"
             onClick={handleReopen}
@@ -87,20 +87,20 @@ export const Default: StoryObj<typeof MarbleGuide> = {
             Show guide
           </Button>
           <span
-            className="tw-text-sm tw-text-muted-foreground"
+            className="tw:text-sm tw:text-muted-foreground"
             data-testid="story-state-display-never-show-again"
           >
             neverShowAgain = {neverShowAgain ? 'true' : 'false'}
           </span>
           <span
-            className="tw-text-sm tw-text-muted-foreground"
+            className="tw:text-sm tw:text-muted-foreground"
             data-testid="story-state-display-last-persisted"
           >
             lastPersisted (showGuide saved on last close) ={' '}
             {lastPersisted === undefined ? '(none yet)' : (!lastPersisted).toString()}
           </span>
         </div>
-        <p className="tw-text-sm tw-text-muted-foreground">
+        <p className="tw:text-sm tw:text-muted-foreground">
           Click <strong>Show guide</strong> to (re)open the Dialog. Toggle the checkbox inside the
           Dialog and close via the Close button, Esc, the X corner button, or the overlay click; the
           inline lines above reflect the live <code>neverShowAgain</code> value plus the

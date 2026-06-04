@@ -201,7 +201,7 @@ export function MarbleGuide({
   // there are no blue/gray/orange theme tokens in the current design system.
   const blueChip = (
     <span
-      className="tw-rounded tw-bg-primary tw-px-1.5 tw-py-0.5 tw-font-medium tw-text-primary-foreground"
+      className="tw:rounded tw:bg-primary tw:px-1.5 tw:py-0.5 tw:font-medium tw:text-primary-foreground"
       data-testid="marble-guide-color-chip-blue"
     >
       {blueWord}
@@ -209,7 +209,7 @@ export function MarbleGuide({
   );
   const grayChip = (
     <span
-      className="tw-rounded tw-bg-muted tw-px-1.5 tw-py-0.5 tw-font-medium tw-text-muted-foreground"
+      className="tw:rounded tw:bg-muted tw:px-1.5 tw:py-0.5 tw:font-medium tw:text-muted-foreground"
       data-testid="marble-guide-color-chip-gray"
     >
       {grayWord}
@@ -217,7 +217,7 @@ export function MarbleGuide({
   );
   const orangeChip = (
     <span
-      className="tw-rounded tw-bg-destructive tw-px-1.5 tw-py-0.5 tw-font-medium tw-text-destructive-foreground"
+      className="tw:rounded tw:bg-destructive tw:px-1.5 tw:py-0.5 tw:font-medium tw:text-destructive-foreground"
       data-testid="marble-guide-color-chip-orange"
     >
       {orangeWord}
@@ -229,7 +229,7 @@ export function MarbleGuide({
     // with no-op handler).
     <button
       type="button"
-      className="tw-cursor-pointer tw-text-primary tw-underline focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring"
+      className="tw:cursor-pointer tw:text-primary tw:underline tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
       onClick={() => {}}
       data-testid="marble-guide-help-link"
     >
@@ -238,10 +238,10 @@ export function MarbleGuide({
   );
   const infoIconChip = (
     <span
-      className="tw-inline-flex tw-h-5 tw-w-5 tw-items-center tw-justify-center tw-rounded tw-border tw-border-border tw-bg-muted tw-align-text-bottom"
+      className="tw:inline-flex tw:h-5 tw:w-5 tw:items-center tw:justify-center tw:rounded tw:border tw:border-border tw:bg-muted tw:align-text-bottom"
       aria-hidden
     >
-      <Info className="tw-h-3.5 tw-w-3.5 tw-text-muted-foreground" aria-hidden />
+      <Info className="tw:h-3.5 tw:w-3.5 tw:text-muted-foreground" aria-hidden />
     </span>
   );
 
@@ -254,18 +254,18 @@ export function MarbleGuide({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="tw-flex tw-max-h-[80vh] tw-max-w-2xl tw-flex-col tw-gap-0 tw-p-0"
+        className="tw:flex tw:max-h-[80vh] tw:max-w-2xl tw:flex-col tw:gap-0 tw:p-0"
         data-testid="marble-guide"
       >
-        <DialogHeader className="tw-border-b tw-border-border tw-px-6 tw-py-4">
+        <DialogHeader className="tw:border-b tw:border-border tw:px-6 tw:py-4">
           <DialogTitle data-testid="marble-guide-title">{titleLabel}</DialogTitle>
-          <DialogDescription className="tw-sr-only">{descriptionLabel}</DialogDescription>
+          <DialogDescription className="tw:sr-only">{descriptionLabel}</DialogDescription>
         </DialogHeader>
 
         {/* Scrollable body. PT9 used a 725x465 fixed-size FixedDialog window; PT10 uses a max-
             height + overflow-y so the dialog adapts to viewport while still scrolling content. */}
         <div
-          className="tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-gap-3 tw-overflow-y-auto tw-px-6 tw-py-4 tw-text-sm tw-leading-relaxed"
+          className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col tw:gap-3 tw:overflow-y-auto tw:px-6 tw:py-4 tw:text-sm tw:leading-relaxed"
           data-testid="marble-guide-content"
         >
           <p>{overview}</p>
@@ -287,37 +287,37 @@ export function MarbleGuide({
             })}
           </p>
 
-          <p className="tw-pt-2 tw-font-semibold">{tabsHeader}</p>
+          <p className="tw:pt-2 tw:font-semibold">{tabsHeader}</p>
           <div
-            className="tw-grid tw-grid-cols-4 tw-gap-2 tw-rounded tw-border tw-border-border tw-bg-muted/30 tw-p-3 tw-text-center"
+            className="tw:grid tw:grid-cols-4 tw:gap-2 tw:rounded tw:border tw:border-border tw:bg-muted/30 tw:p-3 tw:text-center"
             data-testid="marble-guide-tab-grid"
           >
-            <div className="tw-flex tw-flex-col tw-items-center tw-gap-1">
-              <BookOpen className="tw-h-6 tw-w-6 tw-text-foreground" aria-hidden />
-              <span className="tw-text-xs">{tabDictionary}</span>
+            <div className="tw:flex tw:flex-col tw:items-center tw:gap-1">
+              <BookOpen className="tw:h-6 tw:w-6 tw:text-foreground" aria-hidden />
+              <span className="tw:text-xs">{tabDictionary}</span>
             </div>
-            <div className="tw-flex tw-flex-col tw-items-center tw-gap-1">
-              <Book className="tw-h-6 tw-w-6 tw-text-foreground" aria-hidden />
-              <span className="tw-text-xs">{tabEncyclopedia}</span>
+            <div className="tw:flex tw:flex-col tw:items-center tw:gap-1">
+              <Book className="tw:h-6 tw:w-6 tw:text-foreground" aria-hidden />
+              <span className="tw:text-xs">{tabEncyclopedia}</span>
             </div>
-            <div className="tw-flex tw-flex-col tw-items-center tw-gap-1">
-              <ImageIcon className="tw-h-6 tw-w-6 tw-text-foreground" aria-hidden />
-              <span className="tw-text-xs">{tabMedia}</span>
+            <div className="tw:flex tw:flex-col tw:items-center tw:gap-1">
+              <ImageIcon className="tw:h-6 tw:w-6 tw:text-foreground" aria-hidden />
+              <span className="tw:text-xs">{tabMedia}</span>
             </div>
-            <div className="tw-flex tw-flex-col tw-items-center tw-gap-1">
-              <MapPin className="tw-h-6 tw-w-6 tw-text-foreground" aria-hidden />
-              <span className="tw-text-xs">{tabMaps}</span>
+            <div className="tw:flex tw:flex-col tw:items-center tw:gap-1">
+              <MapPin className="tw:h-6 tw:w-6 tw:text-foreground" aria-hidden />
+              <span className="tw:text-xs">{tabMaps}</span>
             </div>
           </div>
 
-          <p className="tw-pt-2">{updateFrequently}</p>
+          <p className="tw:pt-2">{updateFrequently}</p>
 
           <p>{interleavePlaceholders(howToOpenGuideTemplate, { infoIcon: infoIconChip })}</p>
 
           <p>
             <button
               type="button"
-              className="tw-cursor-pointer tw-text-primary tw-underline focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring"
+              className="tw:cursor-pointer tw:text-primary tw:underline tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
               onClick={() => {}}
               data-testid="marble-guide-more-help-link"
             >
@@ -326,7 +326,7 @@ export function MarbleGuide({
           </p>
         </div>
 
-        <DialogFooter className="tw-flex tw-flex-row tw-items-center tw-justify-between tw-gap-3 tw-border-t tw-border-border tw-px-6 tw-py-3 sm:tw-justify-between">
+        <DialogFooter className="tw:flex tw:flex-row tw:items-center tw:justify-between tw:gap-3 tw:border-t tw:border-border tw:px-6 tw:py-3 tw:sm:justify-between">
           <Button
             type="button"
             variant="default"
@@ -335,7 +335,7 @@ export function MarbleGuide({
           >
             {closeLabel}
           </Button>
-          <div className="tw-flex tw-items-center tw-gap-2">
+          <div className="tw:flex tw:items-center tw:gap-2">
             <Checkbox
               id="marble-guide-never-show-again"
               checked={neverShowAgain}
@@ -344,7 +344,7 @@ export function MarbleGuide({
             />
             <Label
               htmlFor="marble-guide-never-show-again"
-              className="tw-cursor-pointer tw-text-sm tw-font-normal"
+              className="tw:cursor-pointer tw:text-sm tw:font-normal"
             >
               {neverShowAgainLabel}
             </Label>

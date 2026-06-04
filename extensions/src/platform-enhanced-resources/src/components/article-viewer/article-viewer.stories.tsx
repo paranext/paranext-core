@@ -99,8 +99,8 @@ const meta: Meta<typeof ArticleViewer> = {
     (Story) => (
       // The Dialog renders into a portal at document.body, so the surrounding container exists
       // mostly to provide a stable backdrop in the Storybook canvas.
-      <div className="tw-relative tw-h-[720px] tw-w-[1024px] tw-border tw-border-border tw-bg-muted/40">
-        <div className="tw-p-4 tw-text-sm tw-text-muted-foreground">
+      <div className="tw:relative tw:h-[720px] tw:w-[1024px] tw:border tw:border-border tw:bg-muted/40">
+        <div className="tw:p-4 tw:text-sm tw:text-muted-foreground">
           ArticleViewer Dialog is rendered in a portal - look at the center of the viewport.
         </div>
         <Story />
@@ -169,8 +169,8 @@ export const Default: StoryObj<typeof ArticleViewer> = {
     }, []);
 
     return (
-      <div className="tw-flex tw-flex-col tw-gap-3 tw-p-4">
-        <div className="tw-flex tw-flex-wrap tw-gap-2">
+      <div className="tw:flex tw:flex-col tw:gap-3 tw:p-4">
+        <div className="tw:flex tw:flex-wrap tw:gap-2">
           <Button type="button" onClick={() => openWithArticle(SEED_ARTICLE_ID)}>
             Open ArticleViewer
           </Button>
@@ -192,7 +192,7 @@ export const Default: StoryObj<typeof ArticleViewer> = {
             Open loading state
           </Button>
         </div>
-        <p className="tw-text-sm tw-text-muted-foreground">
+        <p className="tw:text-sm tw:text-muted-foreground">
           Click a See also link to swap articles in place, hover an abbreviation (e.g. ANE) to see
           its tooltip, click an inline image or verse reference to log the callback. Escape and
           click-outside close.

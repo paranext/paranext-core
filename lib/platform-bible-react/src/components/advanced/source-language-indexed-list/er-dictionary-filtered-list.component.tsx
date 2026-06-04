@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { Button } from '@/components/shadcn-ui/button';
 import {
   DropdownMenu,
@@ -187,11 +187,11 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
 
   const renderListBody = (): ReactNode => {
     if (isLoading) {
-      return <div className="tw-p-4 tw-text-sm tw-text-muted-foreground">Loading...</div>;
+      return <div className="tw:p-4 tw:text-sm tw:text-muted-foreground">Loading...</div>;
     }
     if (items.length === 0) {
       return (
-        <div className="tw-p-4 tw-text-sm tw-text-muted-foreground">
+        <div className="tw:p-4 tw:text-sm tw:text-muted-foreground">
           {emptyStateMessage ?? 'No items found'}
         </div>
       );
@@ -201,7 +201,7 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
         ref={listRef}
         role="listbox"
         tabIndex={0}
-        className="tw-p-0.5 tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-inset focus-visible:tw-ring-ring"
+        className="tw:p-0.5 tw:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-inset tw:focus-visible:ring-ring"
         onKeyDown={handleListKeyDown}
       >
         {items.map((item, idx) => {
@@ -220,16 +220,16 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
                 setFocusedIndex(-1);
                 selectItem(item);
               }}
-              className={cn('tw-cursor-pointer tw-border-b tw-p-2', {
-                'tw-bg-muted': isSelected,
-                'hover:tw-bg-muted': !isSelected,
-                'tw-ring-1 tw-ring-inset tw-ring-ring': isFocused && !isSelected,
+              className={cn('tw:cursor-pointer tw:border-b tw:p-2', {
+                'tw:bg-muted': isSelected,
+                'tw:hover:bg-muted': !isSelected,
+                'tw:ring-1 tw:ring-inset tw:ring-ring': isFocused && !isSelected,
               })}
             >
               {renderItem ? (
                 renderItem(item)
               ) : (
-                <span className="tw-text-sm">{item.primaryText}</span>
+                <span className="tw:text-sm">{item.primaryText}</span>
               )}
             </li>
           );
@@ -240,10 +240,10 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
   const listElement = renderListBody();
 
   return (
-    <div className={cn('tw-flex tw-h-full tw-flex-col tw-overflow-hidden', className)}>
+    <div className={cn('tw:flex tw:h-full tw:flex-col tw:overflow-hidden', className)}>
       {/* Header: breadcrumbs + back */}
-      <div className="tw-flex tw-items-center tw-gap-1 tw-border-b tw-px-2 tw-py-1.5">
-        <div className="tw-min-w-0 tw-flex-1">
+      <div className="tw:flex tw:items-center tw:gap-1 tw:border-b tw:px-2 tw:py-1.5">
+        <div className="tw:min-w-0 tw:flex-1">
           <BreadcrumbBar
             path={domainPath}
             allDomains={allDomains}
@@ -251,15 +251,15 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
           />
         </div>
         {onClose && (
-          <Button variant="ghost" size="sm" className="tw-shrink-0 tw-gap-1" onClick={onClose}>
-            <ArrowUp className="tw-h-4 tw-w-4" />
+          <Button variant="ghost" size="sm" className="tw:shrink-0 tw:gap-1" onClick={onClose}>
+            <ArrowUp className="tw:h-4 tw:w-4" />
             Back
           </Button>
         )}
       </div>
 
       {/* Inline list + detail */}
-      <div ref={containerRef} className="tw-relative tw-flex tw-flex-1 tw-overflow-hidden">
+      <div ref={containerRef} className="tw:relative tw:flex tw:flex-1 tw:overflow-hidden">
         {renderListAndDetail({
           showSideBySide: !!showSideBySide,
           showFullDetail: !!showFullDetail,
@@ -297,17 +297,17 @@ function renderListAndDetail({
   detailElement: ReactNode;
   listMinPct: number;
   detailMinPct: number;
-  detailPanelRef: RefObject<HTMLDivElement>;
+  detailPanelRef: RefObject<HTMLDivElement | null>;
 }): ReactNode {
   if (showSideBySide && detailElement !== undefined) {
     return (
       <ResizablePanelGroup direction="horizontal">
         <ResizablePanel defaultSize={33.3333} minSize={listMinPct}>
-          <div className="tw-h-full tw-overflow-y-auto">{listElement}</div>
+          <div className="tw:h-full tw:overflow-y-auto">{listElement}</div>
         </ResizablePanel>
         <ResizableHandle />
         <ResizablePanel defaultSize={66.6667} minSize={detailMinPct}>
-          <div className="tw-h-full tw-overflow-y-auto tw-bg-background tw-p-4">
+          <div className="tw:h-full tw:overflow-y-auto tw:bg-background tw:p-4">
             {detailElement}
           </div>
         </ResizablePanel>
@@ -318,13 +318,13 @@ function renderListAndDetail({
     return (
       <div
         ref={detailPanelRef}
-        className="tw-h-full tw-w-full tw-overflow-y-auto tw-bg-background tw-p-4"
+        className="tw:h-full tw:w-full tw:overflow-y-auto tw:bg-background tw:p-4"
       >
         {detailElement}
       </div>
     );
   }
-  return <div className="tw-h-full tw-w-full tw-overflow-y-auto">{listElement}</div>;
+  return <div className="tw:h-full tw:w-full tw:overflow-y-auto">{listElement}</div>;
 }
 
 // ---------------------------------------------------------------------------
@@ -404,23 +404,23 @@ function BreadcrumbBar({
   const ellipsisExpandId = hiddenSegments[0]?.id ?? path[0]?.id;
 
   return (
-    <div ref={outerRef} className="tw-overflow-hidden">
+    <div ref={outerRef} className="tw:overflow-hidden">
       {/* Hidden measurement row */}
       <div
         ref={fullRef}
-        className="tw-pointer-events-none tw-invisible tw-absolute tw-flex tw-items-center tw-gap-0.5 tw-whitespace-nowrap"
+        className="tw:pointer-events-none tw:invisible tw:absolute tw:flex tw:items-center tw:gap-0.5 tw:whitespace-nowrap"
         aria-hidden
       >
         {path.map((d, i) => (
-          <span key={d.id} className="tw-flex tw-shrink-0 tw-items-center tw-gap-0.5">
-            {i > 0 && <ChevronRight className="tw-h-3 tw-w-3" />}
-            <span className="tw-px-1.5 tw-py-1 tw-text-sm">{d.label}</span>
+          <span key={d.id} className="tw:flex tw:shrink-0 tw:items-center tw:gap-0.5">
+            {i > 0 && <ChevronRight className="tw:h-3 tw:w-3" />}
+            <span className="tw:px-1.5 tw:py-1 tw:text-sm">{d.label}</span>
           </span>
         ))}
       </div>
 
       {/* Visible breadcrumbs */}
-      <div className="tw-inline-flex tw-items-center tw-gap-0.5">
+      <div className="tw:inline-flex tw:items-center tw:gap-0.5">
         {!hideRoot && path[0] && (
           <SegmentDropdown
             label={path[0].label}
@@ -435,14 +435,14 @@ function BreadcrumbBar({
         {showEllipsis && (
           <>
             {!hideRoot && (
-              <ChevronRight className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-muted-foreground" />
+              <ChevronRight className="tw:h-3 tw:w-3 tw:shrink-0 tw:text-muted-foreground" />
             )}
             <TooltipProvider delayDuration={0}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span>
                     <SegmentDropdown
-                      label={<MoreHorizontal className="tw-h-3 tw-w-3" />}
+                      label={<MoreHorizontal className="tw:h-3 tw:w-3" />}
                       isLast={false}
                       allDomains={allDomains}
                       currentPath={path}
@@ -453,7 +453,7 @@ function BreadcrumbBar({
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                  <p className="tw-text-xs">{hiddenTooltip}</p>
+                  <p className="tw:text-xs">{hiddenTooltip}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -467,8 +467,8 @@ function BreadcrumbBar({
           // "ellipsis > last item", never just an ellipsis on its own.
           if (idx <= hideCount && !isLast) return undefined;
           return (
-            <span key={domain.id} className="tw-flex tw-shrink-0 tw-items-center tw-gap-0.5">
-              <ChevronRight className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-muted-foreground" />
+            <span key={domain.id} className="tw:flex tw:shrink-0 tw:items-center tw:gap-0.5">
+              <ChevronRight className="tw:h-3 tw:w-3 tw:shrink-0 tw:text-muted-foreground" />
               <SegmentDropdown
                 label={domain.label}
                 isLast={isLast}
@@ -522,9 +522,9 @@ function SegmentDropdown({
         <button
           type="button"
           className={cn(
-            'tw-shrink-0 tw-cursor-pointer tw-rounded tw-text-sm hover:tw-bg-muted',
-            isEllipsis ? 'tw-flex tw-items-center tw-px-1 tw-py-1' : 'tw-px-1.5 tw-py-1',
-            isLast && !isEllipsis && 'tw-font-bold',
+            'tw:shrink-0 tw:cursor-pointer tw:rounded tw:text-sm tw:hover:bg-muted',
+            isEllipsis ? 'tw:flex tw:items-center tw:px-1 tw:py-1' : 'tw:px-1.5 tw:py-1',
+            isLast && !isEllipsis && 'tw:font-bold',
           )}
         >
           {label}
@@ -532,7 +532,7 @@ function SegmentDropdown({
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="start"
-        className="tw-max-h-[500px] tw-w-[300px] tw-overflow-y-auto tw-p-1"
+        className="tw:max-h-[500px] tw:w-[300px] tw:overflow-y-auto tw:p-1"
         style={{ zIndex: Z_INDEX_MODAL + 10 }}
         onEscapeKeyDown={(e) => {
           e.stopPropagation();
@@ -803,7 +803,7 @@ function TreeNodeList({
   expandToId: string;
   onSelect: (path: SemanticDomain[]) => void;
   parentPath: SemanticDomain[];
-  scrollRef: RefObject<HTMLButtonElement>;
+  scrollRef: RefObject<HTMLButtonElement | null>;
   /** When true this is the outermost list — render as `role="tree"`; otherwise `role="group"`. */
   isRoot?: boolean;
 }) {
@@ -816,7 +816,7 @@ function TreeNodeList({
     <ul
       role={isRoot ? 'tree' : 'group'}
       aria-label={isRoot ? 'Semantic domain tree' : undefined}
-      className={cn('tw-space-y-0.5', { 'tw-ml-3': parentPath.length > 0 })}
+      className={cn('tw:space-y-0.5', { 'tw:ml-3': parentPath.length > 0 })}
     >
       {domains.map((domain) => {
         const thisPath = [...parentPath, domain];
@@ -861,7 +861,7 @@ function TreeNodeList({
  *   button. Clicking it ONLY toggles expand/collapse — it never calls `onSelect`. This prevents the
  *   surrounding tree from collapsing when a user clicks a top-level entry to drill into it.
  * - `depth >= 1` (nested domains): the chevron and label are SEPARATE buttons. The chevron toggles
- *   expand; the label triggers `onSelect`. The label gains `hover:tw-underline` to make the click
+ *   expand; the label triggers `onSelect`. The label gains `tw:hover:underline` to make the click
  *   affordance visually clearer. [Revised: 2026-04-29]
  */
 function TreeNode({
@@ -886,7 +886,7 @@ function TreeNode({
   currentPath: SemanticDomain[];
   expandToId: string;
   onSelect: (path: SemanticDomain[]) => void;
-  scrollRef: RefObject<HTMLButtonElement>;
+  scrollRef: RefObject<HTMLButtonElement | null>;
   isScrollTarget: boolean;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
@@ -910,7 +910,7 @@ function TreeNode({
       aria-selected={isSelected}
       aria-expanded={ariaExpanded}
     >
-      <div className="tw-flex tw-items-center tw-gap-0.5">
+      <div className="tw:flex tw:items-center tw:gap-0.5">
         {isTopLevelWithChildren ? (
           // Combined chevron + label button. Clicking ONLY expands/collapses; it does not
           // call onSelect. This avoids the bug where clicking a top-level domain selected
@@ -919,15 +919,15 @@ function TreeNode({
             type="button"
             ref={isScrollTarget ? scrollRef : undefined}
             className={cn(
-              'tw-flex tw-flex-1 tw-items-center tw-gap-0.5 tw-rounded tw-px-1.5 tw-py-0.5 tw-text-left tw-text-sm focus:tw-outline-none focus:tw-ring-1 focus:tw-ring-ring',
-              isSelected ? 'tw-bg-accent tw-font-medium' : 'hover:tw-bg-muted',
+              'tw:flex tw:flex-1 tw:items-center tw:gap-0.5 tw:rounded tw:px-1.5 tw:py-0.5 tw:text-left tw:text-sm tw:focus:outline-none tw:focus:ring-1 tw:focus:ring-ring',
+              isSelected ? 'tw:bg-accent tw:font-medium' : 'tw:hover:bg-muted',
             )}
             aria-expanded={expanded}
             onClick={() => setExpanded(!expanded)}
           >
             <ChevronRight
-              className={cn('tw-h-3 tw-w-3 tw-shrink-0 tw-transition-transform', {
-                'tw-rotate-90': expanded,
+              className={cn('tw:h-3 tw:w-3 tw:shrink-0 tw:transition-transform', {
+                'tw:rotate-90': expanded,
               })}
             />
             <span>{domain.label}</span>
@@ -937,26 +937,26 @@ function TreeNode({
             {hasChildren ? (
               <button
                 type="button"
-                className="tw-flex tw-h-5 tw-w-5 tw-shrink-0 tw-items-center tw-justify-center tw-rounded hover:tw-bg-muted focus:tw-outline-none focus:tw-ring-1 focus:tw-ring-ring"
+                className="tw:flex tw:h-5 tw:w-5 tw:shrink-0 tw:items-center tw:justify-center tw:rounded tw:hover:bg-muted tw:focus:outline-none tw:focus:ring-1 tw:focus:ring-ring"
                 aria-expanded={expanded}
                 aria-label={expanded ? 'Collapse' : 'Expand'}
                 onClick={() => setExpanded(!expanded)}
               >
                 <ChevronRight
-                  className={cn('tw-h-3 tw-w-3 tw-transition-transform', {
-                    'tw-rotate-90': expanded,
+                  className={cn('tw:h-3 tw:w-3 tw:transition-transform', {
+                    'tw:rotate-90': expanded,
                   })}
                 />
               </button>
             ) : (
-              <span className="tw-w-5 tw-shrink-0" />
+              <span className="tw:w-5 tw:shrink-0" />
             )}
             <button
               type="button"
               ref={isScrollTarget ? scrollRef : undefined}
               className={cn(
-                'tw-flex-1 tw-rounded tw-px-1.5 tw-py-0.5 tw-text-left tw-text-sm focus:tw-outline-none focus:tw-ring-1 focus:tw-ring-ring',
-                isSelected ? 'tw-bg-accent tw-font-medium' : 'hover:tw-bg-muted hover:tw-underline',
+                'tw:flex-1 tw:rounded tw:px-1.5 tw:py-0.5 tw:text-left tw:text-sm tw:focus:outline-none tw:focus:ring-1 tw:focus:ring-ring',
+                isSelected ? 'tw:bg-accent tw:font-medium' : 'tw:hover:bg-muted tw:hover:underline',
               )}
               onClick={() => onSelect(thisPath)}
             >

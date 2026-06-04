@@ -24,7 +24,7 @@ const meta: Meta<typeof EncyclopediaTab> = {
   },
   decorators: [
     (Story) => (
-      <div className="tw-h-[640px] tw-w-[800px] tw-border tw-border-border">
+      <div className="tw:h-[640px] tw:w-[800px] tw:border tw:border-border">
         <Story />
       </div>
     ),
@@ -74,9 +74,9 @@ function InteractiveEncyclopediaTabDemo() {
     setEventLog((s) => [`${new Date().toISOString().slice(11, 19)} ${label}`, ...s].slice(0, 12));
 
   return (
-    <div className="tw-flex tw-h-full tw-flex-col tw-gap-2">
-      <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-3 tw-text-xs">
-        <label className="tw-flex tw-items-center tw-gap-1">
+    <div className="tw:flex tw:h-full tw:flex-col tw:gap-2">
+      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-3 tw:text-xs">
+        <label className="tw:flex tw:items-center tw:gap-1">
           Fixture:
           <select
             value={fixture}
@@ -98,11 +98,11 @@ function InteractiveEncyclopediaTabDemo() {
             </option>
           </select>
         </label>
-        <span className="tw-text-muted-foreground">
+        <span className="tw:text-muted-foreground">
           Selected: <strong>{selectedTokenId ?? 'none'}</strong>
         </span>
       </div>
-      <div className="tw-min-h-0 tw-flex-1">
+      <div className="tw:min-h-0 tw:flex-1">
         <EncyclopediaTab
           items={items}
           articleDataMap={MOCK_ARTICLE_DATA_MAP}
@@ -115,10 +115,10 @@ function InteractiveEncyclopediaTabDemo() {
           scopeLabel="current verse"
         />
       </div>
-      <div className="tw-rounded tw-border tw-border-dashed tw-border-border tw-p-2 tw-text-xs">
-        <div className="tw-mb-1 tw-font-semibold">Event log (most recent first):</div>
+      <div className="tw:rounded tw:border tw:border-dashed tw:border-border tw:p-2 tw:text-xs">
+        <div className="tw:mb-1 tw:font-semibold">Event log (most recent first):</div>
         {eventLog.length === 0 ? (
-          <span className="tw-text-muted-foreground">
+          <span className="tw:text-muted-foreground">
             (Click a row, the source word, or right-click for the context menu...)
           </span>
         ) : (

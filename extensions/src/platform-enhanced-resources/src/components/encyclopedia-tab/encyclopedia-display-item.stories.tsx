@@ -24,7 +24,7 @@ const meta: Meta<typeof EncyclopediaDisplayItem> = {
   },
   decorators: [
     (Story) => (
-      <div className="tw-w-[720px] tw-rounded tw-border tw-border-border tw-p-3">
+      <div className="tw:w-[720px] tw:rounded tw:border tw:border-border tw:p-3">
         <Story />
       </div>
     ),
@@ -59,9 +59,9 @@ function InteractiveDisplayItemDemo() {
     setEventLog((s) => [`${new Date().toISOString().slice(11, 19)} ${label}`, ...s].slice(0, 12));
 
   return (
-    <div className="tw-flex tw-flex-col tw-gap-3">
-      <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-3 tw-text-xs">
-        <label className="tw-flex tw-items-center tw-gap-1">
+    <div className="tw:flex tw:flex-col tw:gap-3">
+      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-3 tw:text-xs">
+        <label className="tw:flex tw:items-center tw:gap-1">
           Fixture:
           <select
             value={fixture}
@@ -90,10 +90,10 @@ function InteractiveDisplayItemDemo() {
         onCopyLemma={(entry) => log(`copy-lemma ${entry.translit}`)}
         localizedStringsWithLoadingState={[localizedStrings, false]}
       />
-      <div className="tw-rounded tw-border tw-border-dashed tw-border-border tw-p-2 tw-text-xs">
-        <div className="tw-mb-1 tw-font-semibold">Event log (most recent first):</div>
+      <div className="tw:rounded tw:border tw:border-dashed tw:border-border tw:p-2 tw:text-xs">
+        <div className="tw:mb-1 tw:font-semibold">Event log (most recent first):</div>
         {eventLog.length === 0 ? (
-          <span className="tw-text-muted-foreground">
+          <span className="tw:text-muted-foreground">
             (Click the source word or right-click the row for the context menu...)
           </span>
         ) : (

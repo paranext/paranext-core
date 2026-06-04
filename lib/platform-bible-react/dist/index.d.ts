@@ -1892,6 +1892,273 @@ export type UiLanguageSelectorProps = {
  * @param {UiLanguageSelectorProps} props - The props for the component.
  */
 export declare function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, id, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
+/** Base item interface for items displayed in the SourceLanguageIndexedList */
+export type IndexedListItem = {
+	/** Unique identifier for the item */
+	id: string;
+	/** Primary display text (term in the resource) */
+	primaryText: string;
+	/** Secondary display text (term in source language) */
+	sourceLanguageText?: string;
+	/** Transliteration of the source language text */
+	transliteration?: string;
+	/** Optional thumbnail URL for the 'thumbnail' variant */
+	thumbnailUrl?: string;
+	/** Optional alt text for the thumbnail */
+	thumbnailAlt?: string;
+};
+/** A domain associated with a dictionary entry, displayed as a clickable link */
+export type EntryDomain = {
+	/** Unique identifier for the domain */
+	id: string;
+	/** Display label for the domain */
+	label: string;
+	/** The taxonomy this domain belongs to (e.g., 'SDBH-Lexical', 'SDBG-Contextual') */
+	taxonomy?: string;
+	/** Domain code (e.g., '1.2.3') */
+	code?: string;
+	/** Parent domain for 2-level hierarchy (undefined if this is a top-level domain) */
+	parentId?: string;
+};
+/** Props for the SourceLanguageIndexedList component */
+export type SourceLanguageIndexedListProps<T extends IndexedListItem> = {
+	/** Array of items to display in the list */
+	items: T[];
+	/** Custom render function for each list item row. If not provided, the default layout is used */
+	renderItem?: (item: T) => React$1.ReactNode;
+	/**
+	 * Render function for the detail content shown in a right-side drawer when an item is selected.
+	 * If not provided, no drawer is shown and `onItemClick` fires directly.
+	 */
+	renderDetailContent?: (item: T, onClose: () => void) => React$1.ReactNode;
+	/** Callback when an item is clicked (fires in addition to opening the drawer if both exist) */
+	onItemClick?: (item: T) => void;
+	/** ID of the currently selected item */
+	selectedItemId?: string;
+	/** Message to display when items array is empty */
+	emptyStateMessage?: string;
+	/** Whether items are currently being loaded */
+	isLoading?: boolean;
+	/** Display variant: 'text' for default text list, 'thumbnail' for media/maps with image preview */
+	variant?: "text" | "thumbnail";
+	/** Whether to show the source language column */
+	showSourceLanguage?: boolean;
+	/** Whether to show transliteration in brackets after source language text */
+	showTransliteration?: boolean;
+	/** Callback fired when user presses a character key (for type-ahead search) */
+	onCharacterPress?: (char: string) => void;
+	/** Additional CSS class names */
+	className?: string;
+};
+/** Props for the ER Dictionary list component */
+export type ErDictionaryListProps<T extends IndexedListItem> = SourceLanguageIndexedListProps<T> & {
+	/** Additional description text per item (e.g., glosses) */
+	getDescription?: (item: T) => string;
+	/** Additional badge texts per item (e.g., Strong's codes) */
+	getBadges?: (item: T) => string[];
+	/** Occurrence count per item */
+	getOccurrenceCount?: (item: T) => number;
+};
+/** A semantic domain in a hierarchical tree (up to 5 levels) */
+export type SemanticDomain = {
+	/** Unique identifier for the domain */
+	id: string;
+	/** Display label for the domain */
+	label: string;
+	/** Child domains */
+	children?: SemanticDomain[];
+};
+/** Props for the ER Dictionary Filtered by Type component */
+export type ErDictionaryFilteredListProps<T extends IndexedListItem> = {
+	/** Items filtered to the currently selected domain */
+	items: T[];
+	/** Custom render function for each list item row */
+	renderItem?: (item: T) => React$1.ReactNode;
+	/** Render function for the detail content shown in a drawer when an entry is clicked */
+	renderDetailContent?: (item: T, onClose: () => void) => React$1.ReactNode;
+	/** Callback when an item is clicked */
+	onItemClick?: (item: T) => void;
+	/** ID of the currently selected item */
+	selectedItemId?: string;
+	/** Message to display when items array is empty */
+	emptyStateMessage?: string;
+	/** Whether items are currently being loaded */
+	isLoading?: boolean;
+	/** Breadcrumb path: array of domains from root to the currently selected domain */
+	domainPath: SemanticDomain[];
+	/** All top-level domains (root of the tree, for navigation) */
+	allDomains: SemanticDomain[];
+	/** Callback when a different domain is selected. Receives the new full path. */
+	onDomainChange: (newPath: SemanticDomain[]) => void;
+	/** Callback for the close (X) button. When provided, renders a close button on the right. */
+	onClose?: () => void;
+	/** Additional CSS class names */
+	className?: string;
+};
+/** An encyclopedia article teaser */
+export type EncyclopediaTeaser = IndexedListItem & {
+	/** Short teaser/summary text for the article */
+	teaserText?: string;
+};
+/** Props for the ER Encyclopedia list component */
+export type ErEncyclopediaListProps<T extends EncyclopediaTeaser> = SourceLanguageIndexedListProps<T>;
+/** A media item (image or map) */
+export type MediaItem = IndexedListItem & {
+	/** Type of media */
+	mediaType: "image" | "map";
+	/** Caption or description for the media */
+	caption?: string;
+};
+/** Props for the ER Media list component */
+export type ErMediaListProps<T extends MediaItem> = Omit<SourceLanguageIndexedListProps<T>, "variant">;
+/** A lexical dictionary entry for use in the shared LexicalDictionaryList */
+export type LexicalDictionaryEntry = IndexedListItem & {
+	/** Strong's codes for this entry */
+	strongsCodes: string[];
+	/** Formatted glosses string */
+	glosses: string;
+	/** Number of occurrences */
+	occurrenceCount: number;
+};
+/** Props for the Lexical Dictionary list component */
+export type LexicalDictionaryListProps<T extends LexicalDictionaryEntry> = {
+	/** Array of dictionary entries */
+	items: T[];
+	/** Callback when an item is clicked */
+	onItemClick?: (item: T) => void;
+	/** ID of the currently selected item */
+	selectedItemId?: string;
+	/** Message to display when items array is empty */
+	emptyStateMessage?: string;
+	/** Whether items are currently being loaded */
+	isLoading?: boolean;
+	/** Callback fired when user presses a character key */
+	onCharacterPress?: (char: string) => void;
+	/** Additional CSS class names */
+	className?: string;
+	/** Localized string for occurrence count tooltip */
+	occurrenceCountLabel?: string;
+	/** Localized string for Strong's code tooltip */
+	strongsCodeLabel?: string;
+};
+/** Localization string keys used by the indexed list components */
+export declare const SOURCE_LANGUAGE_INDEXED_LIST_STRING_KEYS: LocalizeKey[];
+/** Localized strings type for the indexed list components */
+export type SourceLanguageIndexedListLocalizedStrings = {
+	[localizedKey in (typeof SOURCE_LANGUAGE_INDEXED_LIST_STRING_KEYS)[number]]?: string;
+};
+/**
+ * A shared list component for displaying source-language indexed items. Supports two-column layout
+ * (resource term + source language term), keyboard navigation, text and thumbnail variants,
+ * loading/empty states, and an optional side-by-side detail panel.
+ *
+ * When `renderDetailContent` is provided, clicking an item opens a side-by-side detail panel using
+ * a `ResizablePanelGroup` split (list at ~33%, detail at ~67%, with a draggable handle). This is
+ * the pattern from PR #2209's stories (`source-language-indexed-list.stories.tsx`); the previous
+ * absolute-positioned and vaul-`Drawer` implementations are both abandoned because the former
+ * obscured the list and the latter triggered Radix `pointer-events: none` body locks that left only
+ * the "back to list" button interactive across the whole page.
+ *
+ * Click swap: clicking a different list item while the panel is open swaps the detail content
+ * without requiring a close-then-reopen cycle. Clicking the already-selected item closes the
+ * detail. Pressing Escape while focus is inside the detail panel closes it (focus returns to the
+ * listbox). The list and detail are siblings inside the same scrollable container, so outer
+ * toolbars, tab switches, scope selectors, and any controls outside the SLI remain fully live.
+ *
+ * Used by Enhanced Resources (dictionary, encyclopedia, media) and lexical tools (dictionary).
+ *
+ * @example
+ *
+ * ```tsx
+ * <SourceLanguageIndexedList
+ *   items={dictionaryItems}
+ *   onItemClick={handleItemClick}
+ *   selectedItemId={selectedId}
+ *   showSourceLanguage
+ *   showTransliteration
+ *   renderDetailContent={(item, onClose) => (
+ *     <DictionaryEntryDetail entry={item} onBack={onClose} />
+ *   )}
+ * />;
+ * ```
+ */
+export function SourceLanguageIndexedList<T extends IndexedListItem>({ items, renderItem, renderDetailContent, onItemClick, selectedItemId: controlledSelectedId, emptyStateMessage, isLoading, variant, showSourceLanguage, showTransliteration, onCharacterPress, className, }: SourceLanguageIndexedListProps<T>): import("react/jsx-runtime").JSX.Element;
+/**
+ * ER Dictionary list component. Wraps SourceLanguageIndexedList with dictionary-specific rendering
+ * showing both columns (resource term + source language term), occurrence count badges, gloss
+ * descriptions, and Strong's code badges.
+ *
+ * @example
+ *
+ * ```tsx
+ * <ErDictionaryList
+ *   items={dictionaryItems}
+ *   onItemClick={handleSelect}
+ *   showSourceLanguage
+ *   showTransliteration
+ *   getDescription={(item) => item.glosses}
+ *   getBadges={(item) => item.strongsCodes}
+ *   getOccurrenceCount={(item) => item.count}
+ * />;
+ * ```
+ */
+export function ErDictionaryList<T extends IndexedListItem>({ getDescription, getBadges, getOccurrenceCount, showSourceLanguage, showTransliteration, ...listProps }: ErDictionaryListProps<T>): import("react/jsx-runtime").JSX.Element;
+/**
+ * ER Dictionary list filtered by semantic domain with breadcrumb navigation.
+ *
+ * Each breadcrumb segment opens a DropdownMenu with a keyboard-navigable domain tree. The list
+ * supports arrow-key navigation: in wide mode arrows immediately select items; in narrow mode
+ * arrows move focus and Enter/Space submits.
+ */
+export function ErDictionaryFilteredList<T extends IndexedListItem>({ items, renderItem, renderDetailContent, onItemClick, selectedItemId, emptyStateMessage, isLoading, domainPath, allDomains, onDomainChange, onClose, className, }: ErDictionaryFilteredListProps<T>): import("react/jsx-runtime").JSX.Element;
+/**
+ * ER Encyclopedia list component. Wraps SourceLanguageIndexedList with encyclopedia-specific
+ * rendering showing article titles with teaser/summary text and source language terms.
+ *
+ * @example
+ *
+ * ```tsx
+ * <ErEncyclopediaList
+ *   items={encyclopediaItems}
+ *   onItemClick={handleSelect}
+ *   showSourceLanguage
+ * />;
+ * ```
+ */
+export function ErEncyclopediaList<T extends EncyclopediaTeaser>({ showSourceLanguage, showTransliteration, ...listProps }: ErEncyclopediaListProps<T>): import("react/jsx-runtime").JSX.Element;
+/**
+ * ER Media list component (images and maps). Wraps SourceLanguageIndexedList with the thumbnail
+ * variant, showing image previews alongside item titles, captions, and media type badges.
+ *
+ * @example
+ *
+ * ```tsx
+ * <ErMediaList items={mediaItems} onItemClick={handleSelect} showSourceLanguage />;
+ * ```
+ */
+export function ErMediaList<T extends MediaItem>({ showSourceLanguage, showTransliteration, ...listProps }: ErMediaListProps<T>): import("react/jsx-runtime").JSX.Element;
+/**
+ * Lexical Dictionary list component. Extracted from platform-lexical-tools extension dictionary
+ * list pattern. Displays dictionary entries with lemma, occurrence count badge, formatted glosses,
+ * and Strong's code badges. Uses keyboard navigation via `useListbox`.
+ *
+ * This is the shared version of
+ * `extensions/src/platform-lexical-tools/src/components/dictionary/dictionary-list-item.component.tsx`
+ * moved to platform-bible-react so it can be reused by both lexical tools and enhanced resources.
+ *
+ * @example
+ *
+ * ```tsx
+ * <LexicalDictionaryList
+ *   items={entries}
+ *   onItemClick={handleSelect}
+ *   selectedItemId={selectedId}
+ *   occurrenceCountLabel="Occurrences in chapter"
+ *   strongsCodeLabel="Strong's code"
+ * />;
+ * ```
+ */
+export function LexicalDictionaryList<T extends LexicalDictionaryEntry>({ items, onItemClick, selectedItemId, emptyStateMessage, isLoading, onCharacterPress, className, occurrenceCountLabel, strongsCodeLabel, }: LexicalDictionaryListProps<T>): import("react/jsx-runtime").JSX.Element;
 export type ChecklistProps = {
 	/** Optional string representing the id attribute of the Checklist */
 	id?: string;
