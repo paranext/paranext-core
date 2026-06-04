@@ -241,7 +241,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
           logger.error(`Resource panel auto-install failed: ${getErrorMessage(e)}`),
         );
     }
-  }, [isInstalling, dblResourcesProvider, matchDblEntryUid]);
+  }, [fetchResources, isInstalling, dblResourcesProvider, matchDblEntryUid]);
 
   // #endregion
 
