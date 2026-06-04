@@ -160,6 +160,28 @@ export {
   type LanguageInfo,
   type UiLanguageSelectorProps,
 } from './components/advanced/ui-language-selector.component';
+export { default as SourceLanguageIndexedList } from './components/advanced/source-language-indexed-list/source-language-indexed-list.component';
+export type {
+  IndexedListItem,
+  EntryDomain,
+  SourceLanguageIndexedListProps,
+  ErDictionaryListProps,
+  ErDictionaryFilteredListProps,
+  ErEncyclopediaListProps,
+  ErMediaListProps,
+  LexicalDictionaryListProps,
+  SemanticDomain,
+  EncyclopediaTeaser,
+  MediaItem,
+  LexicalDictionaryEntry,
+  SourceLanguageIndexedListLocalizedStrings,
+} from './components/advanced/source-language-indexed-list/source-language-indexed-list.types';
+export { SOURCE_LANGUAGE_INDEXED_LIST_STRING_KEYS } from './components/advanced/source-language-indexed-list/source-language-indexed-list.types';
+export { default as ErDictionaryList } from './components/advanced/source-language-indexed-list/er-dictionary-list.component';
+export { default as ErDictionaryFilteredList } from './components/advanced/source-language-indexed-list/er-dictionary-filtered-list.component';
+export { default as ErEncyclopediaList } from './components/advanced/source-language-indexed-list/er-encyclopedia-list.component';
+export { default as ErMediaList } from './components/advanced/source-language-indexed-list/er-media-list.component';
+export { default as LexicalDictionaryList } from './components/advanced/source-language-indexed-list/lexical-dictionary-list.component';
 
 export { default as ChapterRangeSelector } from './components/basics/chapter-range-selector.component';
 export type { ChapterRangeSelectorProps } from './components/basics/chapter-range-selector.component';

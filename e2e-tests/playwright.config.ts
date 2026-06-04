@@ -6,7 +6,7 @@ import { defineConfig } from '@playwright/test';
  * - `smoke` (default): tests share a single Electron instance per worker — fast, for CI.
  * - `isolated`: each test gets a fresh Electron restart — for state-mutating tests.
  */
-export default defineConfig({
+const config = defineConfig({
   testDir: './tests',
   testIgnore: ['**/_example/**'], // _example/ contains reference templates, not runnable tests
   fullyParallel: false, // Electron tests need serial execution
@@ -26,6 +26,9 @@ export default defineConfig({
   globalSetup: './global-setup.ts',
   globalTeardown: './global-teardown.ts',
   outputDir: './test-results',
+  // Invariant: every directory under `tests/` (except `_example/`) MUST be reachable
+  // from at least one project entry below. If you add a new test directory, register it
+  // here AND wire it into either CI (`test:e2e:smoke`) or a local-only npm script.
   projects: [
     {
       name: 'smoke',
@@ -35,5 +38,15 @@ export default defineConfig({
       name: 'isolated',
       testDir: './tests/isolated',
     },
+    {
+      // Local-only - NOT wired into CI's `test:e2e:smoke`. The ER tests need real
+      // Marble resources (e.g., ESV16UK+) which are not available in CI. Run locally:
+      //   ./.erb/scripts/refresh.sh    # boot the app once with CDP enabled
+      //   npm run test:e2e:enhanced-resources
+      name: 'enhanced-resources',
+      testDir: './tests/enhanced-resources',
+    },
   ],
 });
+
+export default config;
