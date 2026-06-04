@@ -22,16 +22,10 @@ vi.mock('@shared/services/logger.service', () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('@renderer/hooks/papi-hooks', () => {
-  // Keep emptyIds stable so rawRecentIds has the same array reference across renders,
-  // preventing useMemo from re-running and triggering an infinite re-render loop.
-  const emptyIds: string[] = [];
-  return {
-    useData: vi.fn(() => ({
-      RecentProjects: vi.fn().mockReturnValue([emptyIds, vi.fn(), false]),
-    })),
-  };
-});
+// useData is set up per-test in beforeEach; the factory just provides the mock function shell.
+vi.mock('@renderer/hooks/papi-hooks', () => ({
+  useData: vi.fn(),
+}));
 
 vi.mock('@renderer/services/papi-frontend.service', () => ({
   webViews: {
@@ -62,14 +56,26 @@ vi.mock('@shared/services/project-data-provider.service', () => ({
 
 const EDITOR_WEB_VIEW_TYPE = 'platformScriptureEditor.react';
 
+// Stable reference across renders so rawRecentIds keeps the same array identity, preventing
+// useMemo from recomputing safeRecentIds every render which would recreate the useCallback
+// and trigger an infinite reload loop in usePromise.
+const DEFAULT_RECENT_IDS: string[] = [];
+
 async function importMocks() {
+  const { getNetworkEvent } = await import('@shared/services/network.service');
   const { webViews } = await import('@renderer/services/papi-frontend.service');
   const { projectLookupService } = await import('@shared/services/project-lookup.service');
   const { papiFrontendProjectDataProviderService } = await import(
     '@shared/services/project-data-provider.service'
   );
   const { useData } = await import('@renderer/hooks/papi-hooks');
-  return { webViews, projectLookupService, papiFrontendProjectDataProviderService, useData };
+  return {
+    getNetworkEvent,
+    webViews,
+    projectLookupService,
+    papiFrontendProjectDataProviderService,
+    useData,
+  };
 }
 
 // --- Tests ---
@@ -77,14 +83,37 @@ async function importMocks() {
 // vitest mocks use as-never to coerce partial objects to the full inferred return type
 /* eslint-disable no-type-assertion/no-type-assertion */
 describe('useProjectPickerData', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+  beforeEach(async () => {
+    // resetAllMocks clears both call history and any mockReturnValue/mockImplementation overrides
+    // set by individual tests. clearAllMocks only clears call history, so without reset, a test
+    // that calls mockReturnValue(...) contaminates all subsequent tests.
+    vi.resetAllMocks();
+
+    const {
+      getNetworkEvent,
+      webViews,
+      projectLookupService,
+      papiFrontendProjectDataProviderService,
+      useData,
+    } = await importMocks();
+
+    vi.mocked(getNetworkEvent).mockImplementation(() => vi.fn(() => vi.fn()));
+    vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([]);
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([]);
+    vi.mocked(papiFrontendProjectDataProviderService.get).mockResolvedValue({
+      getSetting: vi.fn(async (key: string) => {
+        if (key === 'platform.fullName') return 'Mock Full Name';
+        if (key === 'platform.name') return 'Mock';
+        if (key === 'platform.language') return 'English';
+        return undefined;
+      }),
+    } as never);
+    vi.mocked(useData).mockImplementation(() => ({
+      RecentProjects: vi.fn().mockReturnValue([DEFAULT_RECENT_IDS, vi.fn(), false]),
+    }));
   });
 
   it('returns undefined currentProject when no Scripture Editor web view is open', async () => {
-    const { webViews } = await importMocks();
-    vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([]);
-
     const { result } = renderHook(() => useProjectPickerData());
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -102,15 +131,15 @@ describe('useProjectPickerData', () => {
 
     const { result } = renderHook(() => useProjectPickerData());
 
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-    expect(result.current.currentProject?.fullName).toBe('Genesis Project');
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.currentProject?.fullName).toBe('Genesis Project');
+    });
     expect(result.current.currentProject?.id).toBe('proj-abc');
   });
 
   it('returns allProjects from projectLookupService', async () => {
-    const { webViews, projectLookupService, papiFrontendProjectDataProviderService } =
-      await importMocks();
-    vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([]);
+    const { projectLookupService, papiFrontendProjectDataProviderService } = await importMocks();
     vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([
       { id: 'p1', projectInterfaces: [], pdpFactoryInfo: {} },
       { id: 'p2', projectInterfaces: [], pdpFactoryInfo: {} },
@@ -146,13 +175,10 @@ describe('useProjectPickerData', () => {
   });
 
   it('recentProjects reflects recent project IDs from data provider', async () => {
-    const { webViews, projectLookupService, papiFrontendProjectDataProviderService, useData } =
-      await importMocks();
-    vi.mocked(useData).mockReturnValue({
+    const { papiFrontendProjectDataProviderService, useData } = await importMocks();
+    vi.mocked(useData).mockImplementation(() => ({
       RecentProjects: vi.fn().mockReturnValue([['proj-r1', 'proj-r2'], vi.fn(), false]),
-    } as never);
-    vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([]);
-    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([]);
+    }));
     vi.mocked(papiFrontendProjectDataProviderService.get).mockImplementation(
       async (_iface: string, projectId: string) =>
         ({
@@ -168,8 +194,10 @@ describe('useProjectPickerData', () => {
 
     const { result } = renderHook(() => useProjectPickerData());
 
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-    expect(result.current.recentProjects).toHaveLength(2);
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.recentProjects).toHaveLength(2);
+    });
     expect(result.current.recentProjects[0]).toMatchObject({
       id: 'proj-r1',
       fullName: 'Full proj-r1',
@@ -183,9 +211,7 @@ describe('useProjectPickerData', () => {
   });
 
   it('excludes non-editable projects from allProjects', async () => {
-    const { webViews, projectLookupService, papiFrontendProjectDataProviderService } =
-      await importMocks();
-    vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([]);
+    const { projectLookupService, papiFrontendProjectDataProviderService } = await importMocks();
     vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([
       { id: 'editable', projectInterfaces: [], pdpFactoryInfo: {} },
       { id: 'readonly', projectInterfaces: [], pdpFactoryInfo: {} },
@@ -205,18 +231,19 @@ describe('useProjectPickerData', () => {
 
     const { result } = renderHook(() => useProjectPickerData());
 
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-    expect(result.current.allProjects).toHaveLength(1);
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.allProjects).toHaveLength(1);
+    });
     expect(result.current.allProjects[0].id).toBe('editable');
   });
 
   it('excludes recent projects from allProjects', async () => {
-    const { webViews, projectLookupService, papiFrontendProjectDataProviderService, useData } =
+    const { projectLookupService, papiFrontendProjectDataProviderService, useData } =
       await importMocks();
-    vi.mocked(useData).mockReturnValue({
+    vi.mocked(useData).mockImplementation(() => ({
       RecentProjects: vi.fn().mockReturnValue([['proj-r1'], vi.fn(), false]),
-    } as never);
-    vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([]);
+    }));
     vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([
       { id: 'proj-r1', projectInterfaces: [], pdpFactoryInfo: {} },
       { id: 'proj-other', projectInterfaces: [], pdpFactoryInfo: {} },
@@ -236,14 +263,17 @@ describe('useProjectPickerData', () => {
 
     const { result } = renderHook(() => useProjectPickerData());
 
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-    expect(result.current.allProjects).toHaveLength(1);
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.allProjects).toHaveLength(1);
+    });
     expect(result.current.allProjects[0].id).toBe('proj-other');
     expect(result.current.recentProjects[0].id).toBe('proj-r1');
   });
 
   it('refreshes currentProject when onDidUpdateWebView fires', async () => {
-    const { getNetworkEvent } = await import('@shared/services/network.service');
+    const { getNetworkEvent, webViews, papiFrontendProjectDataProviderService } =
+      await importMocks();
     let capturedCallback: (() => void) | undefined;
     vi.mocked(getNetworkEvent).mockImplementation(
       (eventName: string) =>
@@ -253,7 +283,6 @@ describe('useProjectPickerData', () => {
         }) as never,
     );
 
-    const { webViews, papiFrontendProjectDataProviderService } = await importMocks();
     vi.mocked(webViews.getAllOpenWebViewDefinitions)
       .mockResolvedValueOnce([])
       .mockResolvedValue([
