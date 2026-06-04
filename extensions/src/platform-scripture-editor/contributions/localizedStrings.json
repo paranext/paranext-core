@@ -193,9 +193,9 @@
       "%webView_resourcePanel_bibleTexts_title%": "Textos bíblicos",
       "%webView_resourcePanel_bibleTexts_title_withResource%": "Texto bíblico: {textName}",
       "%webView_resourcePanel_commentaries_emptyState_prompt%": "Ningún comentario seleccionado. Elige uno para mostrar un comentario junto a tu proyecto.",
-      "%webView_resourcePanel_commentaries_pick%": "Elegir comentarios…",
-      "%webView_resourcePanel_commentaries_title%": "Comentarios",
-      "%webView_resourcePanel_commentaries_title_withResource%": "Comentario: {textName}",
+      "%webView_resourcePanel_commentaries_pick%": "Elegir comentarios bíblicos…",
+      "%webView_resourcePanel_commentaries_title%": "Comentarios bíblicos",
+      "%webView_resourcePanel_commentaries_title_withResource%": "Comentario bíblico: {textName}",
       "%webView_resourcePanel_downloadResources%": "Descargar recursos…",
       "%webView_resourcePanel_installing%": "Instalando recurso…",
       "%webView_resourcePanel_noProject%": "Ningún proyecto seleccionado."
