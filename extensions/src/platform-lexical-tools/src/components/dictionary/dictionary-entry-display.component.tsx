@@ -174,7 +174,7 @@ export function DictionaryEntryDisplay({
             {dictionaryEntry.strongsCodes.map((strongsCode) => (
               <li
                 key={strongsCode}
-                className="tw:ml-auto tw:rounded tw:bg-accent tw:px-2 tw:py-0.5 tw:text-sm tw:accent-foreground"
+                className="tw:ml-auto tw:rounded tw:bg-accent tw:px-2 tw:py-0.5 tw:text-sm tw:text-accent-foreground"
               >
                 {strongsCode}
               </li>
