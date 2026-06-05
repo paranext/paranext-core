@@ -16,9 +16,12 @@ const config = defineConfig({
   build: {
     sourcemap: true,
     lib: {
-      entry: path.resolve(__dirname, 'src/index.ts'),
+      entry: {
+        index: path.resolve(__dirname, 'src/index.ts'),
+        internal: path.resolve(__dirname, 'src/internal.ts'),
+      },
       formats: ['es', 'cjs'],
-      fileName: (format) => `index.${format === 'es' ? 'js' : format}`,
+      fileName: (format, entryName) => `${entryName}.${format === 'es' ? 'js' : format}`,
     },
     rollupOptions: {
       external: [
