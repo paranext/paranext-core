@@ -333,12 +333,16 @@ export async function sendPapiRequestOnce<T>(
 /**
  * Poll `rpc.discover` until `methodName` appears in `result.methods` or `timeoutMs` elapses. Uses
  * the same registration map as the live PAPI server (renderer-registered commands included).
+ *
+ * `port` is optional so callers can skip it and supply only `timeoutMs`:
+ * `waitForPapiMethodRegistered(method, undefined, 120_000)`.
  */
 export async function waitForPapiMethodRegistered(
   methodName: string,
-  port: number = DEFAULT_WEBSOCKET_PORT,
+  port?: number,
   timeoutMs = 60_000,
 ): Promise<void> {
+  const resolvedPort = port ?? DEFAULT_WEBSOCKET_PORT;
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const remaining = timeoutMs - (Date.now() - start);
@@ -346,7 +350,7 @@ export async function waitForPapiMethodRegistered(
       const result = await sendPapiRequestOnce<RpcDiscoverResult>(
         GET_METHODS,
         [],
-        port,
+        resolvedPort,
         Math.min(10_000, Math.max(1000, remaining)),
       );
       if (result.methods?.some((m) => m.name === methodName)) return;

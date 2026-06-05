@@ -16,6 +16,9 @@ test.describe('UI Interaction', () => {
   // which blocks until `extensionService.initialize()` finishes in the extension
   // host. On slow CI that can exceed the default 10s PAPI request timeout.
   const SLOW_CI_PAPI_TIMEOUT_MS = 30_000;
+  // macOS ARM CI runners initialize the extension host more slowly than Linux/Windows;
+  // 60 s is not enough to wait for the settings data provider to register.
+  const PAPI_REGISTRATION_TIMEOUT_MS = 120_000;
 
   test.beforeAll(async ({ electronApp }) => {
     // Maximize the window once so everything is visible and clickable for all tests
@@ -28,9 +31,10 @@ test.describe('UI Interaction', () => {
     // Force the interface language to English so menu-item text matchers
     // (e.g. /Help/i) are deterministic regardless of the developer's saved
     // platform.interfaceLanguage setting in dev-appdata.
-    // Fast-fail guard: on slow CI the settings data provider can register
-    // after this beforeAll starts; this throws a clear error if it never does.
-    await waitForPapiMethodRegistered(SETTINGS_SET_METHOD);
+    // Fast-fail guard: on slow CI (especially macOS ARM) the settings data provider can
+    // register after this beforeAll starts. Pass undefined for the port so the default
+    // is used, and a longer timeout to avoid spurious failures on slow runners.
+    await waitForPapiMethodRegistered(SETTINGS_SET_METHOD, undefined, PAPI_REGISTRATION_TIMEOUT_MS);
     await sendPapiRequestOnce(
       SETTINGS_SET_METHOD,
       ['platform.interfaceLanguage', ['en']],
