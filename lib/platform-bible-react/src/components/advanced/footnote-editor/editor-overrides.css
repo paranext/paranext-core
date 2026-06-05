@@ -1,21 +1,7 @@
-/* Need to be able to override the styles for the editor that happens to have an underscore */
-/* stylelint-disable selector-class-pattern */
-
 /* By default the editor is too tall for the footnote editor, even while empty, so this makes it
    shorter. */
 .footnote-editor .editor-input {
   min-height: 75px;
-}
-
-/* Allow the editor to shrink to fit its container when used inline in the footnote pane */
-.footnote-editor .editor-container {
-  min-width: 0;
-  max-width: none;
-  margin: 0;
-}
-
-.footnote-editor .ContentEditable__root {
-  min-width: 0;
 }
 
 .footnote-editor .typeahead-popover {
@@ -26,6 +12,8 @@
   display: none;
 }
 
+/* Need to be able to override the styles for the editor that happens to have an underscore */
+/* stylelint-disable selector-class-pattern */
 .footnote-editor .text-spacing .usfm_p {
   text-indent: 0;
 }

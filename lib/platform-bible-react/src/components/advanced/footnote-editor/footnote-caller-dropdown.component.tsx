@@ -16,6 +16,7 @@ import { Button } from '@/components/shadcn-ui/button';
 import { GENERATOR_NOTE_CALLER, HIDDEN_NOTE_CALLER } from '@eten-tech-foundation/platform-editor';
 import { Input } from '@/components/shadcn-ui/input';
 import { KeyboardEvent, useEffect, useRef, useState } from 'react';
+import { Z_INDEX_FOOTNOTE_EDITOR } from '@/components/z-index';
 import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-editor.types';
 
 interface FootnoteCallerDropdownProps {
@@ -36,21 +37,25 @@ const renderCallerButtonContent = (
   localizedStrings: FootnoteEditorLocalizedStrings,
   customCaller: string,
 ) => {
-  let symbol = customCaller;
-  let label = localizedStrings['%footnoteEditor_callerDropdown_item_custom%'];
-
   if (callerType === 'generated') {
-    symbol = '+';
-    label = localizedStrings['%footnoteEditor_callerDropdown_item_generated%'];
-  } else if (callerType === 'hidden') {
-    symbol = '-';
-    label = localizedStrings['%footnoteEditor_callerDropdown_item_hidden%'];
+    return (
+      <>
+        <p>+</p> {localizedStrings['%footnoteEditor_callerDropdown_item_generated%']}
+      </>
+    );
+  }
+
+  if (callerType === 'hidden') {
+    return (
+      <>
+        <p>-</p> {localizedStrings['%footnoteEditor_callerDropdown_item_hidden%']}
+      </>
+    );
   }
 
   return (
     <>
-      <span className="tw-shrink-0">{symbol}</span>
-      <span className="tw-truncate">{label}</span>
+      <p>{customCaller}</p> {localizedStrings['%footnoteEditor_callerDropdown_item_custom%']}
     </>
   );
 };
@@ -144,7 +149,7 @@ export function FootnoteCallerDropdown({
         <Tooltip>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="tw-h-6 tw-min-w-0 tw-overflow-hidden">
+              <Button variant="outline" className="tw:h-6">
                 {renderCallerButtonContent(callerType, localizedStrings, customCaller)}
               </Button>
             </DropdownMenuTrigger>
@@ -155,7 +160,7 @@ export function FootnoteCallerDropdown({
         </Tooltip>
       </TooltipProvider>
       <DropdownMenuContent
-        className="tw-z-[300]"
+        style={{ zIndex: Z_INDEX_FOOTNOTE_EDITOR }}
         onClick={() => {
           if (isCustomCallerInputFocused.current) isCustomCallerInputFocused.current = false;
         }}
@@ -172,18 +177,18 @@ export function FootnoteCallerDropdown({
           checked={selectedCallerType === 'generated'}
           onCheckedChange={() => setSelectedCallerType('generated')}
         >
-          <div className="tw-flex tw-w-full tw-justify-between">
+          <div className="tw:flex tw:w-full tw:justify-between">
             <span>{localizedStrings['%footnoteEditor_callerDropdown_item_generated%']}</span>
-            <span className="tw-w-10 tw-text-center">{GENERATOR_NOTE_CALLER}</span>
+            <span className="tw:w-10 tw:text-center">{GENERATOR_NOTE_CALLER}</span>
           </div>
         </DropdownMenuCheckboxItem>
         <DropdownMenuCheckboxItem
           checked={selectedCallerType === 'hidden'}
           onCheckedChange={() => setSelectedCallerType('hidden')}
         >
-          <div className="tw-flex tw-w-full tw-justify-between">
+          <div className="tw:flex tw:w-full tw:justify-between">
             <span>{localizedStrings['%footnoteEditor_callerDropdown_item_hidden%']}</span>
-            <span className="tw-w-10 tw-text-center">{HIDDEN_NOTE_CALLER}</span>
+            <span className="tw:w-10 tw:text-center">{HIDDEN_NOTE_CALLER}</span>
           </div>
         </DropdownMenuCheckboxItem>
         <DropdownMenuCheckboxItem
@@ -197,7 +202,7 @@ export function FootnoteCallerDropdown({
           }}
           onSelect={(event) => event.preventDefault()}
         >
-          <div className="tw-flex tw-w-full tw-justify-between">
+          <div className="tw:flex tw:w-full tw:justify-between">
             <span>{localizedStrings['%footnoteEditor_callerDropdown_item_custom%']}</span>
             <Input
               tabIndex={0}
@@ -207,7 +212,7 @@ export function FootnoteCallerDropdown({
                 isCustomCallerInputFocused.current = true;
               }}
               ref={customCallerInputRef}
-              className="tw-h-auto tw-w-10 tw-p-0 tw-text-center"
+              className="tw:h-auto tw:w-10 tw:p-0 tw:text-center"
               value={newCustomCaller}
               onKeyDown={(event) => {
                 if (

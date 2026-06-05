@@ -85,33 +85,6 @@ export const Default: Story = {
   },
 };
 
-/** Footnote editor in inline mode (no width-locking, fills container). */
-export const Inline: Story = {
-  args: {
-    noteOps: sampleFootnoteOps,
-    noteKey: 'story-note-inline',
-    inline: true,
-  },
-};
-
-/** Inline editor in a narrow container to demonstrate responsive toolbar. */
-export const InlineNarrow: Story = {
-  decorators: [
-    (Story) => (
-      <ThemeProvider>
-        <div className="tw-w-[280px] tw-border tw-border-dashed tw-border-slate-400 tw-p-2">
-          <Story />
-        </div>
-      </ThemeProvider>
-    ),
-  ],
-  args: {
-    noteOps: sampleFootnoteOps,
-    noteKey: 'story-note-narrow',
-    inline: true,
-  },
-};
-
 /** Cross-reference editor. */
 export const CrossReference: Story = {
   args: {

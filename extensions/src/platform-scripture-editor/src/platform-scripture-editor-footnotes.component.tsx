@@ -1,4 +1,4 @@
-import { PropsWithChildren, ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { PropsWithChildren, useCallback, useEffect, useRef, useState } from 'react';
 import { MarkerObject, Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
   FootnoteList,
@@ -30,14 +30,6 @@ export type FootnotesLayoutProps = PropsWithChildren<{
   showMarkers: boolean;
   useWebViewState: UseWebViewStateHook;
   onFootnoteSelected?: (index: number) => void;
-  /** Whether footnotes are editable (shows edit buttons, enables double-click to edit) */
-  isEditable?: boolean;
-  /** The index of the footnote currently being edited inline, or undefined if none */
-  editingFootnoteIndex?: number;
-  /** Called when the user requests to edit a footnote (double-click or edit button) */
-  onFootnoteEditRequested?: (index: number) => void;
-  /** Render function for the inline footnote editor */
-  footnoteEditorRenderer?: (index: number) => ReactNode;
 }>;
 
 export function FootnotesLayout({
@@ -46,10 +38,6 @@ export function FootnotesLayout({
   showMarkers,
   useWebViewState,
   onFootnoteSelected,
-  isEditable,
-  editingFootnoteIndex,
-  onFootnoteEditRequested,
-  footnoteEditorRenderer,
 }: FootnotesLayoutProps) {
   const [footnotes, setFootnotes] = useState<MarkerObject[]>([]);
 
@@ -152,7 +140,7 @@ export function FootnotesLayout({
     20,
   );
 
-  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const debouncedSetFootnotesPaneSize = useCallback(
     (size: number) => {
@@ -237,39 +225,28 @@ export function FootnotesLayout({
     [footnotes, footnoteListKey, onFootnoteSelected],
   );
 
-  /** Handle a footnote edit request from double-click or edit button. */
-  const handleFootnoteEditRequested = useCallback(
-    (_footnote: MarkerObject, index: number, listId: string | number) => {
-      if (index < 0 || index >= footnotes.length || listId !== footnoteListKey) return;
-      onFootnoteEditRequested?.(index);
-    },
-    [footnotes, footnoteListKey, onFootnoteEditRequested],
-  );
-
   return (
-    <div ref={setContainerRef} className="tw-h-full tw-w-full tw-min-h-0">
+    <div ref={setContainerRef} className="tw:h-full tw:w-full tw:min-h-0">
       <ResizablePanelGroup
         direction={footnotesPanePosition === 'bottom' ? 'vertical' : 'horizontal'}
-        className="tw-h-full tw-w-full tw-min-h-0"
+        className="tw:h-full tw:w-full tw:min-h-0"
         onLayout={onLayoutFootnotesPane}
       >
         {children && (
           <>
-            <ResizablePanel className="tw-flex tw-flex-col tw-min-h-0 tw-overflow-hidden">
-              <div className="tw-flex tw-flex-col tw-flex-1 tw-min-h-0 tw-overflow-auto">
-                {children}
-              </div>
+            <ResizablePanel className="tw:flex tw:flex-col tw:min-h-0">
+              <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">{children}</div>
             </ResizablePanel>
             <ResizableHandle />
           </>
         )}
         <ResizablePanel
           defaultSize={footnotesPaneSizePercent}
-          className="tw-bg-sidebar tw-pl-2 tw-pt-2 tw-pb-0 tw-pr-0 tw-flex tw-flex-col tw-min-h-0"
+          className="tw:bg-sidebar tw:pl-2 tw:pt-2 tw:pb-0 tw:pr-0 tw:flex tw:flex-col tw:min-h-0"
           minSize={footnotesPaneMinPercent}
           maxSize={footnotesPaneMaxPercent}
         >
-          <div className="tw-flex tw-flex-col tw-flex-1 tw-min-h-0">
+          <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
             <FootnoteList
               classNameForItems="scripture-font"
               listId={footnoteListKey}
@@ -279,12 +256,6 @@ export function FootnotesLayout({
               formatCaller={showMarkers ? (c) => c : undefined}
               selectedFootnote={selectedFootnote?.footnote}
               onFootnoteSelected={handleFootnoteSelected}
-              isEditable={isEditable}
-              editingFootnoteIndex={editingFootnoteIndex}
-              onFootnoteEditRequested={
-                onFootnoteEditRequested ? handleFootnoteEditRequested : undefined
-              }
-              footnoteEditorRenderer={footnoteEditorRenderer}
             />
           </div>
         </ResizablePanel>

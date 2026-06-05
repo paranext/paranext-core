@@ -1,4 +1,6 @@
 import { Button } from '@/components/shadcn-ui/button';
+import { ButtonGroup } from '@/components/shadcn-ui/button-group';
+import { CancelAcceptButtons } from '@/components/basics/cancel-accept-buttons.component';
 import {
   DeltaOp,
   DeltaOpInsertNoteEmbed,
@@ -11,7 +13,7 @@ import {
   isInsertEmbedOpOfType,
   StateChangeSnapshot,
 } from '@eten-tech-foundation/platform-editor';
-import { Check, Copy, X } from 'lucide-react';
+import { Copy } from 'lucide-react';
 import {
   useCallback,
   useEffect,
@@ -69,11 +71,6 @@ export interface FootnoteEditorProps {
    * parent editor, so the client does not need to handle this in the `onChange` callback.
    */
   parentEditorRef?: RefObject<EditorRef | null>;
-  /**
-   * When true, the editor is rendered inline (e.g., inside the footnote pane) rather than inside a
-   * popover. Skips width-locking so the editor fills its container naturally.
-   */
-  inline?: boolean;
 }
 
 /**
@@ -157,7 +154,6 @@ export default function FootnoteEditor({
   defaultMarkerMenuTrigger,
   localizedStrings,
   parentEditorRef,
-  inline,
 }: FootnoteEditorProps) {
   // These refs must have default values of `null` to be accepted by the React elements as refs
   /* eslint-disable no-null/no-null */
@@ -171,15 +167,17 @@ export default function FootnoteEditor({
   // language, undo/redo enabling) don't cause the popover to resize while editing.
   // useLayoutEffect fires after DOM layout but before paint, so getBoundingClientRect() returns
   // the natural width. The parent PopoverContent unmounts this component on close, so the effect
-  // re-runs fresh on each open. Skipped when inline, so the editor fills its container naturally.
+  // re-runs fresh on each open.
   useLayoutEffect(() => {
-    if (inline || !containerRef.current) return;
+    if (!containerRef.current) return;
     const { width } = containerRef.current.getBoundingClientRect();
     if (width > 0) containerRef.current.style.width = `${width}px`;
-  }, [inline]);
+  }, []);
 
   const [callerType, setCallerType] = useState<FootnoteCallerType>('generated');
+  const [originalCallerType, setOriginalCallerType] = useState<FootnoteCallerType>('generated');
   const [customCaller, setCustomCaller] = useState<string>('*');
+  const [originalCustomCaller, setOriginalCustomCaller] = useState<string>('*');
 
   const [noteType, setNoteType] = useState<string>('f');
 
@@ -249,8 +247,10 @@ export default function FootnoteEditor({
         parsedCallerType = 'hidden';
       } else if (rawCaller) {
         setCustomCaller(rawCaller);
+        setOriginalCustomCaller(rawCaller);
       }
       setCallerType(parsedCallerType);
+      setOriginalCallerType(parsedCallerType);
       // Assigns note type
       setNoteType(noteOp.insert.note?.style ?? 'f');
       timeout = setTimeout(() => {
@@ -504,14 +504,13 @@ export default function FootnoteEditor({
     };
   }, [showMarkersMenu, showInlineMarkersMenu, defaultMarkerMenuTrigger]);
 
+  const copyButtonTooltip = localizedStrings['%footnoteEditor_copyButton_tooltip%'];
+
   return (
     <>
-      <div
-        ref={containerRef}
-        className="footnote-editor tw-grid tw-w-full tw-min-w-0 tw-grid-cols-1 tw-gap-[12px]"
-      >
-        <div className="tw-flex tw-gap-2">
-          <div className="tw-flex tw-min-w-0 tw-flex-1 tw-gap-2">
+      <div ref={containerRef} className="footnote-editor tw:grid tw:gap-[12px]">
+        <div className="tw:flex">
+          <div className="tw:flex tw:gap-4">
             <FootnoteTypeDropdown
               isTypeSwitchable={isTypeSwitchable}
               noteType={noteType}
@@ -526,51 +525,39 @@ export default function FootnoteEditor({
               localizedStrings={localizedStrings}
             />
           </div>
-          <div className="tw-ml-auto tw-flex tw-shrink-0 tw-justify-end tw-gap-2">
-            <UndoRedoButtons
-              onUndoClick={() => editorRef.current?.undo()}
-              onRedoClick={() => editorRef.current?.redo()}
-              canUndo={!isAtInitialState}
-              canRedo={canRedo}
-              localizedStrings={localizedStrings}
-            />
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    onClick={closeAndSave}
-                    className="tw-h-6 tw-w-6"
-                    size="icon"
-                    variant="ghost"
-                  >
-                    <Check />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{localizedStrings['%footnoteEditor_saveButton_tooltip%']}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button onClick={onClose} className="tw-h-6 tw-w-6" size="icon" variant="ghost">
-                    <X />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{localizedStrings['%footnoteEditor_cancelButton_tooltip%']}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+          <div className="tw:flex tw:w-full tw:justify-end">
+            <ButtonGroup>
+              <UndoRedoButtons
+                onUndoClick={() => editorRef.current?.undo()}
+                onRedoClick={() => editorRef.current?.redo()}
+                canUndo={!isAtInitialState}
+                canRedo={canRedo}
+                localizedStrings={localizedStrings}
+              />
+              <CancelAcceptButtons
+                onCancelClick={onClose}
+                onAcceptClick={closeAndSave}
+                canAccept={
+                  !isAtInitialState ||
+                  originalCallerType !== callerType ||
+                  (callerType === 'custom' && customCaller !== originalCustomCaller)
+                }
+                localizedStrings={localizedStrings}
+                acceptLabel={localizedStrings['%footnoteEditor_saveButton_tooltip%']}
+              />
+            </ButtonGroup>
           </div>
         </div>
         <div
           ref={editorParentRef}
-          className="tw-relative tw-rounded-[6px] tw-border-2 tw-border-ring"
+          className="tw:relative tw:rounded-[6px] tw:border-2 tw:border-ring"
         >
           <div className={classNameForEditor}>
-            <EditorKeyboardShortcuts editorRef={editorRef}>
+            <EditorKeyboardShortcuts
+              editorRef={editorRef}
+              canUndo={!isAtInitialState}
+              canRedo={canRedo}
+            >
               <Editorial
                 options={options}
                 onStateChange={handleStateChange}
@@ -582,13 +569,14 @@ export default function FootnoteEditor({
               />
             </EditorKeyboardShortcuts>
           </div>
-          <div className="tw-absolute tw-bottom-0 tw-right-0">
+          <div className="tw:absolute tw:bottom-0 tw:right-0">
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
+                    aria-label={copyButtonTooltip}
                     onClick={handleCopy}
-                    className="tw-h-6 tw-w-6"
+                    className="tw:h-6 tw:w-6"
                     variant="ghost"
                     size="icon"
                   >
@@ -596,7 +584,7 @@ export default function FootnoteEditor({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>{localizedStrings['%footnoteEditor_copyButton_tooltip%']}</p>
+                  <p>{copyButtonTooltip}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -604,14 +592,14 @@ export default function FootnoteEditor({
         </div>
       </div>
       <div
-        className="tw-absolute"
+        className="tw:absolute"
         ref={outerBorderRef}
         style={{ top: 0, left: 0, height: 0, width: 0 }}
       />
       {/** Inline markers menu components */}
       <Popover open={showMarkersMenu}>
         <PopoverAnchor
-          className="tw-absolute"
+          className="tw:absolute"
           style={{
             top: markersMenuAnchorY,
             left: markersMenuAnchorX,
@@ -621,7 +609,7 @@ export default function FootnoteEditor({
           }}
         />
         <PopoverContent
-          className="tw-w-[500px] tw-p-0"
+          className="tw:w-[500px] tw:p-0"
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();
