@@ -118,7 +118,7 @@ borders into other stories — keep them scoped if you touch that file.
 
 ## Verify before committing
 
-1. `npx tsc -p ./tsconfig.json` — clean.
+1. Type check by running `npx tsc -p ./tsconfig.json` — clean.
 2. ESLint on changed files — clean (prettier-format first).
 3. `npm run storybook:build` — exit 0 (the real `@papi`-free gate).
 4. Open each story and exercise it: filters/search/scope change the results, writes reflect,

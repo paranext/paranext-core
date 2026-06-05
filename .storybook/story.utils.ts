@@ -1,7 +1,7 @@
 /**
  * Shared Storybook helpers for the bundled-extension webview component stories.
  *
- * See `.storybook/STORYBOOK-INTERACTIVITY.md` for the full guidelines on writing fully-interactive,
+ * See `.storybook/storybook-interactivity.md` for the full guidelines on writing fully-interactive,
  * real-app-like stories (the split pattern, reproducing the web view's filtering/search derivation,
  * callback conventions, editor styling, and verification).
  *
