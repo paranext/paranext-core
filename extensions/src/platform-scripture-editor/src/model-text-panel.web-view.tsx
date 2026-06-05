@@ -181,8 +181,15 @@ globalThis.webViewComponent = function ModelTextPanel({
           : undefined,
         dblResourcesProvider
           ? async (dblEntryUid) => {
-              await dblResourcesProvider.installDblResource(dblEntryUid);
-              setFetchResources(true);
+              try {
+                await dblResourcesProvider.installDblResource(dblEntryUid);
+                setFetchResources(true);
+              } catch {
+                papi.notifications.send({
+                  message: '%webView_selectDblResource_installFailed%',
+                  severity: 'error',
+                });
+              }
             }
           : undefined,
       ),
