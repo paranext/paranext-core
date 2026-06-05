@@ -143,9 +143,11 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
       try {
         await dblResourcesProvider?.installDblResource(dblEntryUid);
         setFetchResources(true);
-      } catch (e: unknown) {
-        logger.error(`Model text auto-install failed: ${getErrorMessage(e)}`);
-        throw e;
+      } catch {
+        papi.notifications.send({
+          message: '%webView_selectDblResource_installFailed%',
+          severity: 'error',
+        });
       }
     },
     [dblResourcesProvider],

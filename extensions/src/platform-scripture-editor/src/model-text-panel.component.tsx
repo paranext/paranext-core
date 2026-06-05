@@ -18,7 +18,6 @@ import type {
 import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { selectTextConnection } from './select-dbl-resource';
 
-const CURRENT_DATA_VERSION = '1.0.0';
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
 /**

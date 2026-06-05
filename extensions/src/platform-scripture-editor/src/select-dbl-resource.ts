@@ -1,6 +1,5 @@
 import type { DblResourceReference, ResourceReferenceList } from 'platform-scripture';
 import { DblResourceData, isPlatformError, PlatformError } from 'platform-bible-utils';
-import papi from '@papi/frontend';
 import { isDblResourceReference } from './resource-reference.utils';
 
 export const CURRENT_DATA_VERSION = '1.0.0';
@@ -44,15 +43,7 @@ export async function selectTextConnection(
   onSelect?: (dblEntryUid: string) => void,
 ): Promise<void> {
   if (!resource.installed && installResource) {
-    try {
-      await installResource(resource.dblEntryUid);
-    } catch {
-      papi.notifications.send({
-        message: '%webView_selectDblResource_installFailed%',
-        severity: 'error',
-      });
-      return;
-    }
+    await installResource(resource.dblEntryUid);
   }
   const newRef: DblResourceReference = {
     type: 'dblResource',
