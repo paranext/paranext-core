@@ -89,7 +89,14 @@ export function CopyConflictPrompt({
                 onChoose('nonExistingChapters', conflict.books);
               }}
             >
-              {t('%manageBooks_copy_confirmNonExistingChapters%', 'Copy non-existing chapters')}
+              {/* Label honestly describes the PT9 WriteChaptersToBook semantic;
+                  see import-conflict-prompt for the rationale. The localize key
+                  is %manageBooks_copy_confirmMergeFromSource% — the prior
+                  "confirmNonExistingChapters" key promised a behavior the wire
+                  never implemented, so the key was renamed along with the
+                  English copy so existing translations don't silently
+                  mis-apply to the new semantic. */}
+              {t('%manageBooks_copy_confirmMergeFromSource%', 'Merge from source')}
             </Button>
           </div>
         </div>

@@ -31,7 +31,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { AlertTriangle, Ban, ChevronDown, ChevronRight, X } from 'lucide-react';
+import { AlertTriangle, Ban, Check, ChevronDown, ChevronRight, X } from 'lucide-react';
 import { Canon } from '@sillsdev/scripture';
 import {
   Badge,
@@ -46,6 +46,7 @@ import {
   TooltipTrigger,
 } from 'platform-bible-react';
 import { getSectionForBook, Section } from 'platform-bible-utils';
+import { fmtTemplate } from './manage-books-dialog.utils';
 
 /* ------------------------------------------------------------------ */
 /* Public types                                                       */
@@ -60,6 +61,14 @@ export type BookGridTone = 'neutral' | 'older' | 'newer' | 'new' | 'same';
 /** Grouping mode for the pill grid. */
 export type BookGridGroupBy = 'canon' | 'status' | 'none';
 
+/**
+ * Locale-stable identifier for a Status-grouping bucket. Drives both group ordering (via
+ * `STATUS_GROUP_PRIORITY`) and group collapse-state in a way that does NOT depend on the
+ * (localized) display label. Producers MUST set this in lock-step with `statusLabel`; the grid
+ * groups by key and renders the label.
+ */
+export type BookGridStatusGroup = 'inProject' | 'notInProject' | 'newer' | 'older' | 'new' | 'same';
+
 /** A single book entry rendered as a pill in the grid. */
 export type BookGridItem = {
   /** USFM 3-letter book id (`'GEN'`, `'EXO'`, …). */
@@ -72,8 +81,14 @@ export type BookGridItem = {
   /** Drives the comparison-badge variant (none if `'neutral'`). */
   tone: Exclude<BookGridTone, 'hidden'>;
   /**
-   * Used as the section header when grouping by Status, AND as the badge text (or part of it).
-   * Pre-localized by the caller.
+   * Locale-stable group identifier. Used for grouping books and ordering groups when grouping by
+   * Status. Pair this with a `statusLabel` for display.
+   */
+  statusGroupKey: BookGridStatusGroup;
+  /**
+   * Display text for the status badge AND the group header when grouping by Status. Pre-localized
+   * by the caller. Grouping itself uses `statusGroupKey` (locale-stable) so this label may vary
+   * across locales without affecting group ordering.
    */
   statusLabel: string;
   /**
@@ -122,7 +137,11 @@ const BOOK_PILL_BASE_CLASS =
 const bookPillClasses = (present: boolean): string =>
   cn(
     BOOK_PILL_BASE_CLASS,
-    'tw:transition-colors tw:hover:bg-primary/90 tw:hover:text-primary-foreground',
+    // Use a 20%-opacity primary tint on hover and leave the text foreground
+    // untouched. A higher-contrast treatment (`bg-primary/90` +
+    // `text-primary-foreground`) makes hovered pills look "selected" and
+    // confuses users about which pills are actually selected.
+    'tw:transition-colors tw:hover:bg-primary/20',
     present
       ? 'tw:border-primary/40 tw:bg-accent'
       : 'tw:border-dashed tw:border-primary/40 tw:text-muted-foreground',
@@ -149,35 +168,24 @@ const STATUS_BADGE_VARIANT: Record<
 };
 
 /**
- * Group-priority table mirroring the source story's `STATUS_GROUP_PRIORITY`. Lower numbers appear
- * first when grouping by status. Labels not present here default to 50 and keep first-encountered
- * order. The keys match the orchestrator's pre-localized `statusLabel` values.
+ * Group-priority table keyed by the locale-stable `BookGridStatusGroup` identifier. Lower numbers
+ * appear first when grouping by status. Keys not present here default to 50 and keep
+ * first-encountered order.
+ *
+ * Keying on `BookGridStatusGroup` (rather than the localized `statusLabel`) is required so section
+ * ordering survives non-English locales — a label-based lookup would always miss under translation
+ * and every group would tie at 50.
  */
-const STATUS_GROUP_PRIORITY: Record<string, number> = {
-  // English
-  'In project, tracked': 0,
-  'In project, untracked': 1,
-  'In project': 2,
-  Tracked: 3,
-  Untracked: 4,
-  'In scope': 5,
-  'New - in scope': 10,
-  'New - out of scope': 11,
-  New: 12,
-  Newer: 20,
-  Same: 21,
-  Older: 22,
-  'Out of scope': 80,
-  'Not in project': 100,
+const STATUS_GROUP_PRIORITY: Record<BookGridStatusGroup, number> = {
+  inProject: 2,
+  new: 12,
+  newer: 20,
+  same: 21,
+  older: 22,
+  notInProject: 100,
 };
 
-/**
- * Status group labels that should default to collapsed. Mirrors the source story so destructive /
- * risky groups stay tucked away until the user opens them.
- */
-const DEFAULT_COLLAPSED_STATUS_GROUPS: ReadonlySet<string> = new Set(['New - out of scope']);
-
-const statusGroupPriority = (label: string): number => STATUS_GROUP_PRIORITY[label] ?? 50;
+const statusGroupPriority = (key: BookGridStatusGroup): number => STATUS_GROUP_PRIORITY[key] ?? 50;
 
 /**
  * Helper for callers that want to convert a comparison state into a pill tone directly. Mirrors the
@@ -243,12 +251,6 @@ export type BookGridLocalizedStrings = {
   /** Filter-input placeholder. */
   filterPlaceholder?: string;
 };
-
-const fmt = (template: string, ...values: ReadonlyArray<string | number>): string =>
-  template.replace(/\{(\d+)\}/g, (_, idx) => {
-    const v = values[Number(idx)];
-    return v === undefined ? '' : String(v);
-  });
 
 /* ------------------------------------------------------------------ */
 /* Group-by toggle (radio)                                            */
@@ -394,45 +396,43 @@ export function BookGridSelector({
         { label: localizedStrings?.canonGroupExtra ?? 'Extra', items: extra },
       ].filter((g) => g.items.length > 0);
     }
-    // status grouping
-    const order: string[] = [];
-    const byLabel = new Map<string, BookGridItem[]>();
+    // status grouping — bucket by locale-stable `statusGroupKey` and use the
+    // first item's (localized) `statusLabel` as the display label.
+    const order: BookGridStatusGroup[] = [];
+    const byKey = new Map<BookGridStatusGroup, BookGridItem[]>();
+    const labelByKey = new Map<BookGridStatusGroup, string>();
     items.forEach((it) => {
-      const bucket = byLabel.get(it.statusLabel);
+      const bucket = byKey.get(it.statusGroupKey);
       if (bucket) {
         bucket.push(it);
       } else {
-        byLabel.set(it.statusLabel, [it]);
-        order.push(it.statusLabel);
+        byKey.set(it.statusGroupKey, [it]);
+        labelByKey.set(it.statusGroupKey, it.statusLabel);
+        order.push(it.statusGroupKey);
       }
     });
     const sortedOrder = order
-      .map((label, idx) => ({ label, idx }))
+      .map((key, idx) => ({ key, idx }))
       .sort((a, b) => {
-        const pa = statusGroupPriority(a.label);
-        const pb = statusGroupPriority(b.label);
+        const pa = statusGroupPriority(a.key);
+        const pb = statusGroupPriority(b.key);
         return pa === pb ? a.idx - b.idx : pa - pb;
       })
-      .map((entry) => entry.label);
-    return sortedOrder.map((label) => ({ label, items: byLabel.get(label) ?? [] }));
+      .map((entry) => entry.key);
+    return sortedOrder.map((key) => ({
+      label: labelByKey.get(key),
+      items: byKey.get(key) ?? [],
+    }));
   }, [items, groupBy, localizedStrings]);
 
   // -- collapse state -----------------------------------------------------
+  //
+  // No groups default-collapse today. If a future producer needs a
+  // default-collapsed group, add a `ReadonlySet<BookGridStatusGroup>` keyed
+  // by the locale-stable group key (NOT by the localized label, which would
+  // silently miss under non-English locales) and check it in `isCollapsed`
+  // below.
   const [userCollapsedGroups, setUserCollapsedGroups] = useState<Set<string>>(() => new Set());
-  const [seenGroups, setSeenGroups] = useState<Set<string>>(() => new Set());
-  useEffect(() => {
-    setSeenGroups((prev) => {
-      const next = new Set(prev);
-      let changed = false;
-      groups.forEach((g) => {
-        if (g.label && !next.has(g.label)) {
-          next.add(g.label);
-          changed = true;
-        }
-      });
-      return changed ? next : prev;
-    });
-  }, [groups]);
   const toggleCollapsed = (label: string) =>
     setUserCollapsedGroups((prev) => {
       const next = new Set(prev);
@@ -442,21 +442,16 @@ export function BookGridSelector({
     });
   const isCollapsed = (label?: string) => {
     if (!label) return false;
-    if (seenGroups.has(label)) {
-      const defaultCollapsed = DEFAULT_COLLAPSED_STATUS_GROUPS.has(label);
-      const userToggled = userCollapsedGroups.has(label);
-      return defaultCollapsed !== userToggled;
-    }
-    return DEFAULT_COLLAPSED_STATUS_GROUPS.has(label);
+    return userCollapsedGroups.has(label);
   };
 
   // Books participating in keyboard navigation = expanded groups only.
   const flatBooks = useMemo(
     () => groups.flatMap((g) => (isCollapsed(g.label) ? [] : g.items)),
-    // `isCollapsed` is a closure over userCollapsedGroups + seenGroups; the
-    // hooks-deps rule cannot follow it, so we list those deps explicitly.
+    // `isCollapsed` is a closure over userCollapsedGroups; the hooks-deps rule
+    // cannot follow it, so we list that dep explicitly.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [groups, userCollapsedGroups, seenGroups],
+    [groups, userCollapsedGroups],
   );
   const groupStarts = useMemo(() => {
     const starts: number[] = [];
@@ -466,10 +461,10 @@ export function BookGridSelector({
       if (!isCollapsed(g.label)) sum += g.items.length;
     });
     return starts;
-    // `isCollapsed` is closed over groups + userCollapsedGroups + seenGroups; the
-    // hooks rule cannot resolve that, so we list those deps manually here.
+    // `isCollapsed` is closed over groups + userCollapsedGroups; the hooks
+    // rule cannot resolve that, so we list those deps manually here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groups, userCollapsedGroups, seenGroups]);
+  }, [groups, userCollapsedGroups]);
 
   // Using null for React ref compatibility
   // eslint-disable-next-line no-null/no-null
@@ -615,12 +610,23 @@ export function BookGridSelector({
     const body = (
       <>
         {interactive && (
-          <Checkbox
-            checked={isSelected}
-            tabIndex={-1}
+          // The pill is an outer <button> (further below). Using shadcn's
+          // <Checkbox> here renders a Radix Checkbox.Root <button>, which
+          // triggers the "<button> cannot appear as a descendant of <button>"
+          // DOM warning. The visual is purely decorative — the outer <button>
+          // handles all interaction (we set aria-hidden + tabIndex={-1}). Use a
+          // presentational <span> that mirrors the Checkbox look so DOM
+          // nesting stays valid. Mirrors
+          // lib/platform-bible-react/src/components/shadcn-ui/checkbox.tsx.
+          <span
             aria-hidden
-            className="tw:pointer-events-none tw:shrink-0"
-          />
+            className={cn(
+              'tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center tw:rounded-sm tw:border tw:border-primary',
+              isSelected && 'tw:bg-primary tw:text-primary-foreground',
+            )}
+          >
+            {isSelected && <Check className="tw:h-4 tw:w-4" />}
+          </span>
         )}
         {dot}
         <span className="tw:shrink-0 tw:font-medium">{item.book}</span>
@@ -677,7 +683,8 @@ export function BookGridSelector({
       return (
         <Tooltip>
           <TooltipTrigger asChild>{plain}</TooltipTrigger>
-          <TooltipContent side="bottom" align="end">
+          {/* Tooltip renders bottom-LEFT (align="start"). */}
+          <TooltipContent side="bottom" align="start">
             {tooltipContent}
           </TooltipContent>
         </Tooltip>
@@ -743,7 +750,8 @@ export function BookGridSelector({
     return (
       <Tooltip>
         <TooltipTrigger asChild>{button}</TooltipTrigger>
-        <TooltipContent side="bottom" align="end">
+        {/* Tooltip renders bottom-LEFT alignment. */}
+        <TooltipContent side="bottom" align="start">
           {tooltipContent}
         </TooltipContent>
       </Tooltip>
@@ -758,7 +766,12 @@ export function BookGridSelector({
       )}
     >
       {groups.map((group, gi) => {
-        const collapsed = isCollapsed(group.label);
+        // When there's only ONE group (e.g. all visible books fall under "In
+        // project" so canon grouping collapses to one), the collapse chevron
+        // is gratuitous — collapsing it would hide the entire grid. Force the
+        // group expanded and render its header as static text (handled below).
+        const isSingleGroup = groups.length === 1;
+        const collapsed = isSingleGroup ? false : isCollapsed(group.label);
         const groupBooks = group.items.map((it) => it.book);
         const groupSelectedCount = groupBooks.reduce(
           (acc, book) => (selected.has(book) ? acc + 1 : acc),
@@ -783,7 +796,7 @@ export function BookGridSelector({
         // measurement / nav code has something to point at, but the header is
         // skipped entirely when grouping is `'none'`.
         const showHeader = !!group.label;
-        const selectAllAria = group.label ? fmt(selectAllTemplate, group.label) : '';
+        const selectAllAria = group.label ? fmtTemplate(selectAllTemplate, group.label) : '';
         return (
           <section
             key={group.label ?? 'all'}
@@ -795,24 +808,42 @@ export function BookGridSelector({
                 className={cn(
                   'tw:sticky tw:top-0 tw:z-10 tw:flex tw:items-center tw:gap-2 tw:bg-background',
                   gi === 0 ? 'tw:pt-0' : 'tw:pt-1',
+                  // When the group is collapsed, visually tie the checkbox to
+                  // the header by drawing a rounded border around the whole
+                  // row. Without it the header label and its select-all
+                  // checkbox can read as unrelated when no pills are visible
+                  // below.
+                  collapsed && 'tw:rounded-md tw:border tw:border-border tw:px-2',
                 )}
               >
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => group.label && toggleCollapsed(group.label)}
-                  aria-expanded={!collapsed}
-                  className="tw:h-6 tw:flex-1 tw:justify-start tw:gap-1 tw:px-2 tw:text-[11px] tw:font-semibold tw:uppercase tw:tracking-wider tw:text-muted-foreground tw:hover:text-foreground"
-                >
-                  <Chevron className="tw:h-3.5 tw:w-3.5" aria-hidden />
-                  <span>{group.label}</span>
-                  <span className="tw:ml-1 tw:font-normal tw:normal-case tw:tracking-normal tw:text-muted-foreground/70">
-                    {renderGroupCount && group.label
-                      ? renderGroupCount(group.label, group.items)
-                      : `(${group.items.length})`}
+                {isSingleGroup ? (
+                  /* Single-group static header — no chevron, no <Button>, no toggle. */
+                  <span className="tw:flex tw:h-6 tw:flex-1 tw:items-center tw:gap-1 tw:px-2 tw:text-[11px] tw:font-semibold tw:uppercase tw:tracking-wider tw:text-muted-foreground">
+                    <span>{group.label}</span>
+                    <span className="tw:ml-1 tw:font-normal tw:normal-case tw:tracking-normal tw:text-muted-foreground/70">
+                      {renderGroupCount && group.label
+                        ? renderGroupCount(group.label, group.items)
+                        : `(${group.items.length})`}
+                    </span>
                   </span>
-                </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => group.label && toggleCollapsed(group.label)}
+                    aria-expanded={!collapsed}
+                    className="tw:h-6 tw:flex-1 tw:justify-start tw:gap-1 tw:px-2 tw:text-[11px] tw:font-semibold tw:uppercase tw:tracking-wider tw:text-muted-foreground tw:hover:text-foreground"
+                  >
+                    <Chevron className="tw:h-3.5 tw:w-3.5" aria-hidden />
+                    <span>{group.label}</span>
+                    <span className="tw:ml-1 tw:font-normal tw:normal-case tw:tracking-normal tw:text-muted-foreground/70">
+                      {renderGroupCount && group.label
+                        ? renderGroupCount(group.label, group.items)
+                        : `(${group.items.length})`}
+                    </span>
+                  </Button>
+                )}
                 {interactive && !(hideGroupSelectAll?.(group.label) ?? false) && (
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -847,8 +878,11 @@ export function BookGridSelector({
                 className={cn(
                   'tw:grid tw:auto-rows-min tw:gap-1 tw:text-sm',
                   group.label && 'tw:mt-0.5',
+                  // Group-hover preview uses the same 20%-opacity primary tint
+                  // as the pill hover (`bg-primary/20`) and leaves text
+                  // foreground alone.
                   hoveredGroupLabel === group.label &&
-                    'tw:[&_>li>button]:!bg-primary tw:[&_>li>button]:!text-primary-foreground tw:[&_>li>div]:!bg-primary tw:[&_>li>div]:!text-primary-foreground',
+                    'tw:[&_>li>button]:!bg-primary/20 tw:[&_>li>div]:!bg-primary/20',
                 )}
               >
                 {group.items.map((item, i) => {

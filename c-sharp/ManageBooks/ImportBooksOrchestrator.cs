@@ -797,17 +797,32 @@ public static class ImportBooksOrchestrator
         string bookId = SIL.Scripture.Canon.BookNumberToId(bookNum);
         try
         {
-            // replaceEntireBook=true routes whole-book replacement via
-            // PutText with chapterNum=0 (PT9 WriteTextToFile analog).
-            // replaceEntireBook=false also uses PutText with chapterNum=0
-            // here because our test seam (DummyScrText + InMemoryFileManager)
-            // doesn't expose the per-chapter SplitIntoChapters path. The
-            // chapter-merge behavior (BHV-110) is handled transitively by
-            // ParatextData's PutText semantics — WriteChaptersToBook coverage
-            // is the Paratext test suite's responsibility (deferred per
-            // traceability report).
-            scrText.PutText(bookNum, 0, false, bookText, null);
-            return true;
+            // Two behaviors port directly from PT9 ImportSfmText
+            // (ParatextData/ImportSfmText.cs:159-285):
+            //
+            //   - replaceEntireBook=true  → whole-book write (clobbers every
+            //     chapter in dest, including chapters not in source). Maps to
+            //     PT9's `chkReplaceEntireBooks.Checked` path.
+            //   - replaceEntireBook=false → "merge from source": split the
+            //     source text into chapters, overwrite the matching chapters in
+            //     dest, leave dest chapters not in source intact. Maps to PT9's
+            //     `WriteChaptersToBook` path. The UI label is "Merge book(s)"
+            //     — "Import non-existing chapters" would have promised a
+            //     behavior PT9 never had.
+            //
+            // PutText with chapterNum>0 goes through the same ProjectFileManager
+            // path the whole-book write uses, so InMemoryFileManager handles
+            // per-chapter writes correctly without a special test seam.
+            if (replaceEntireBook)
+            {
+                scrText.PutText(bookNum, 0, false, bookText, null);
+                return true;
+            }
+            // Merge path — port of PT9 ImportSfmText.WriteChaptersToBook
+            // (ParatextData/ImportSfmText.cs:245-286). Empty source chapters are
+            // skipped except when the dest is also empty AND it's chapter 1
+            // (preserving the "first import populates an empty book" path).
+            return TryMergeChaptersFromSource(scrText, bookNum, bookText, errors);
         }
         catch (LockNotObtainedException ex)
         {
@@ -835,6 +850,99 @@ public static class ImportBooksOrchestrator
             );
             return false;
         }
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: ParatextData/ImportSfmText.cs:245-286 (WriteChaptersToBook)
+    //
+    // Chapter-merge path that wires up when the user picks "Merge book(s)" /
+    // "Merge from source" instead of "Replace entire books". Splits source text
+    // into chapters via ScrText.SplitIntoChapters, then writes each non-empty
+    // chapter via PutText(bookNum, chapterNum, ...). Dest chapters not in
+    // source survive unchanged; source chapters overwrite their dest
+    // counterparts.
+    private static readonly System.Text.RegularExpressions.Regex EmptyChapterPattern =
+        new(@"^(\\id [^\r\n]*)?\s*$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private static bool TryMergeChaptersFromSource(
+        ScrText scrText,
+        int bookNum,
+        string bookText,
+        List<AlertEntry> errors
+    )
+    {
+        string bookId = SIL.Scripture.Canon.BookNumberToId(bookNum);
+        List<string> chapters;
+        try
+        {
+            chapters = ScrText.SplitIntoChapters(scrText.Name, bookNum, bookText);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(
+                $"[ImportBooks.TryMergeChaptersFromSource] split failed for book {bookId}: {ex}"
+            );
+            errors.Add(
+                new AlertEntry(
+                    $"Failed to split book {bookId} into chapters",
+                    "Import",
+                    AlertLevel.Error
+                )
+            );
+            return false;
+        }
+
+        bool destBookExists = scrText.Settings.BooksPresentSet.IsSelected(bookNum);
+        // PT9's parity: when the dest book doesn't exist, write the joined chapters in one
+        // PutText(0) call so BooksPresentSet picks it up via the existing fast path.
+        if (!destBookExists)
+        {
+            scrText.PutText(bookNum, 0, false, bookText, null);
+            return true;
+        }
+
+        // PT9 logic: dest's chapter-1 text decides whether an empty source chapter 1 should be
+        // written (only if dest's chapter 1 is also empty).
+        string destChapter1Text = string.Empty;
+        try
+        {
+            var vref = new SIL.Scripture.VerseRef(bookNum, 1, 0, scrText.Settings.Versification);
+            destChapter1Text = scrText.GetText(vref, true, false) ?? string.Empty;
+        }
+        catch (Exception)
+        {
+            destChapter1Text = string.Empty;
+        }
+
+        for (int i = 0; i < chapters.Count; i += 1)
+        {
+            string chapterText = chapters[i];
+            if (EmptyChapterPattern.IsMatch(chapterText))
+            {
+                // Skip empty source chapters except chapter 1 of an empty book.
+                if (i != 0 || destChapter1Text.Trim().Length != 0)
+                    continue;
+            }
+            try
+            {
+                scrText.PutText(bookNum, i + 1, false, chapterText, null);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(
+                    $"[ImportBooks.TryMergeChaptersFromSource] PutText failed for {bookId} ch {i + 1}: {ex}"
+                );
+                errors.Add(
+                    new AlertEntry(
+                        $"Failed to import book {bookId} (chapter {i + 1})",
+                        "Import",
+                        AlertLevel.Error
+                    )
+                );
+                return false;
+            }
+        }
+        return true;
     }
 
     // === NEW IN PT10 ===

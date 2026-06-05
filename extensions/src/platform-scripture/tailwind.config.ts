@@ -64,6 +64,8 @@ const config: Config = {
   plugins: [
     // Prose styles as sensible defaults for markdown renderer component
     typography(),
+
+    // #endregion
   ],
 };
 

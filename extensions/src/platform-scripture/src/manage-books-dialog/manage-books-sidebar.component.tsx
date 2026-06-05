@@ -28,6 +28,7 @@ import {
   ProjectSelectorOpenTab,
   ProjectSelector,
   ProjectSelectorProject,
+  type ProjectSelectorLocalizedStrings,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -78,31 +79,36 @@ function getSectionLabels(
   id: ManageBooksSidebarSectionId,
   t: (key: keyof ManageBooksDialogLocalizedStrings, fallback: string) => string,
 ): { label: string; subtitle: string; tooltip?: string } {
+  // The five action sections (show / create / copy / import / delete) have
+  // self-explanatory labels, so they skip the subtitle row. The workflow rows
+  // below (progress-tracking / book-names / introductions) keep subtitles
+  // because the label alone
+  // doesn't convey what the row does.
   switch (id) {
     case 'show':
       return {
         label: t('%manageBooks_sidebar_show_label%', 'Show books'),
-        subtitle: t('%manageBooks_sidebar_show_subtitle%', 'View books in this project'),
+        subtitle: '',
       };
     case 'create':
       return {
         label: t('%manageBooks_sidebar_create_label%', 'Create books'),
-        subtitle: t('%manageBooks_sidebar_create_subtitle%', 'Add new books'),
+        subtitle: '',
       };
     case 'copy':
       return {
         label: t('%manageBooks_sidebar_copy_label%', 'Copy books'),
-        subtitle: t('%manageBooks_sidebar_copy_subtitle%', 'Copy between projects'),
+        subtitle: '',
       };
     case 'import':
       return {
         label: t('%manageBooks_sidebar_import_label%', 'Import books'),
-        subtitle: t('%manageBooks_sidebar_import_subtitle%', 'Import from files'),
+        subtitle: '',
       };
     case 'delete':
       return {
         label: t('%manageBooks_sidebar_delete_label%', 'Delete books'),
-        subtitle: t('%manageBooks_sidebar_delete_subtitle%', 'Remove books'),
+        subtitle: '',
       };
     case 'progress-tracking':
       return {
@@ -180,6 +186,19 @@ export type ManageBooksSidebarProps = {
 
   /** Localized strings (forwarded from the orchestrator). */
   t: (key: keyof ManageBooksDialogLocalizedStrings, fallback: string) => string;
+
+  /**
+   * Localized strings for the embedded `<ProjectSelector>` popover. Forwarded from the dialog via
+   * the same prop name.
+   */
+  projectSelectorLocalizedStrings?: ProjectSelectorLocalizedStrings;
+
+  /**
+   * Drives the icon-only collapse. When true, the sidebar renders as a narrow rail (w-14) with
+   * hidden labels + group headings. When false, the full w-64 rail. Sourced from the dialog's
+   * ResizeObserver on its own width.
+   */
+  isNarrow?: boolean;
 };
 
 /** Map sidebar section id → ManageBooksAction (only valid for the 5 in-scope sections). */
@@ -237,6 +256,8 @@ export function ManageBooksSidebar({
   isTargetEditable,
   targetShortName,
   t,
+  projectSelectorLocalizedStrings,
+  isNarrow = false,
 }: ManageBooksSidebarProps) {
   const activeSectionId = actionToSectionId(active);
   // Read-only target → block mutating actions. `undefined` means "still loading", so we leave
@@ -251,37 +272,89 @@ export function ManageBooksSidebar({
   return (
     <nav
       aria-label={t('%manageBooks_sidebar_heading%', 'Manage books')}
-      className="tw:flex tw:w-64 tw:shrink-0 tw:flex-col tw:gap-1 tw:overflow-y-auto tw:border-r tw:bg-muted/40 tw:p-3"
+      // JS-driven responsive collapse. `isNarrow` is sourced from the dialog's
+      // ResizeObserver. Avoids Tailwind container-queries because the
+      // `@md/dialog:` variants don't reach the iframe stylesheets — see the
+      // dialog wrapper's comment for the full background.
+      className={cn(
+        'tw:flex tw:shrink-0 tw:flex-col tw:gap-1 tw:overflow-y-auto tw:border-r tw:bg-muted/40',
+        isNarrow ? 'tw:w-14 tw:p-1' : 'tw:w-64 tw:p-3',
+      )}
       data-testid="manage-books-sidebar"
     >
-      <div className="tw:flex tw:flex-col tw:gap-1 tw:px-2 tw:pt-2 tw:pb-3">
-        <Label
-          htmlFor="manage-books-sidebar-project"
-          className="tw:text-xs tw:text-muted-foreground"
-        >
-          {t('%manageBooks_header_projectLabel%', 'Project')}
-        </Label>
-        <div data-testid="manage-books-sidebar-project-trigger">
-          <ProjectSelector
-            mode="project"
-            projects={projects}
-            openTabs={openTabs ?? []}
-            selection={{ projectId }}
-            onChangeSelection={({ projectId: nextId }) => {
-              if (nextId) onProjectIdChange(nextId);
-            }}
-            buttonClassName="tw:h-8 tw:w-full tw:font-normal"
-            isDisabled={isSubmitting}
-            ariaLabel={t('%manageBooks_header_projectLabel%', 'Project')}
-            // Fallback when the project list is still loading or the active projectId hasn't
-            // landed in the list yet. We deliberately do NOT echo `projectId` here — projectIds
-            // are GUIDs and would render as a 32-char hex string in the trigger, which the
-            // verifier flagged as unreadable. The localized "Select project" string is the
-            // correct momentary fallback; once `projects` resolves and contains `projectId`,
-            // ProjectSelector renders the matching `shortName` (e.g. "ESVUS16") in the trigger.
-            buttonPlaceholder={t('%manageBooks_sidebar_projectPlaceholder%', 'Select project')}
-          />
-        </div>
+      <div
+        className={cn(
+          'tw:flex tw:flex-col tw:gap-1 tw:pt-2 tw:pb-3',
+          isNarrow ? 'tw:px-0' : 'tw:px-2',
+        )}
+      >
+        {!isNarrow && (
+          <Label
+            htmlFor="manage-books-sidebar-project"
+            className="tw:text-xs tw:text-muted-foreground"
+          >
+            {t('%manageBooks_header_projectLabel%', 'Project')}
+          </Label>
+        )}
+        {/* The ProjectSelector trigger shows the active project's shortName,
+            which is opaque to anyone who doesn't already know the
+            abbreviation. Wrap the trigger in a tooltip surfacing the fullName
+            so the user can hover to disambiguate. Tooltip is suppressed when
+            fullName equals the shortName (no extra info) or when projects
+            haven't resolved yet. */}
+        {(() => {
+          const activeProject = projects.find((p) => p.id === projectId);
+          const fullName = activeProject?.fullName;
+          const shortName = activeProject?.shortName;
+          const showTooltip = !!fullName && fullName !== shortName;
+          // In narrow mode the sidebar is a ~56px rail. The default
+          // `tw:w-full` trigger clips the shortName to a glyph or two — confusing. Render
+          // the trigger as an icon-only button (just chevron) instead; the hover tooltip
+          // surfaces the full project name (or shortName fallback). Always show the
+          // tooltip in narrow mode so the user has SOME way to identify the active project
+          // without opening the popover.
+          const selectorElement = (
+            <div data-testid="manage-books-sidebar-project-trigger">
+              <ProjectSelector
+                mode="project"
+                projects={projects}
+                openTabs={openTabs ?? []}
+                selection={{ projectId }}
+                onChangeSelection={({ projectId: nextId }) => {
+                  if (nextId) onProjectIdChange(nextId);
+                }}
+                buttonClassName={cn(
+                  'tw:h-8 tw:font-normal',
+                  isNarrow ? 'tw:w-10 tw:justify-center tw:px-2' : 'tw:w-full',
+                )}
+                isDisabled={isSubmitting}
+                ariaLabel={t('%manageBooks_header_projectLabel%', 'Project')}
+                // Fallback when the project list is still loading or the active projectId hasn't
+                // landed in the list yet. We deliberately do NOT echo `projectId` here — projectIds
+                // are GUIDs and would render as a 32-char hex string in the trigger, which the
+                // verifier flagged as unreadable. The localized "Select project" string is the
+                // correct momentary fallback; once `projects` resolves and contains `projectId`,
+                // ProjectSelector renders the matching `shortName` (e.g. "ESVUS16") in the trigger.
+                buttonPlaceholder={t('%manageBooks_sidebar_projectPlaceholder%', 'Select project')}
+                localizedStrings={projectSelectorLocalizedStrings}
+              />
+            </div>
+          );
+          // In narrow mode always show the tooltip (shortName or fullName) since the
+          // visible trigger is icon-only. In wide mode, only show when fullName adds info.
+          const narrowTooltipText = fullName || shortName || '';
+          if (!isNarrow && !showTooltip) return selectorElement;
+          // Tooltips render to the right of the rail in narrow mode (no other room),
+          // above the trigger in wide mode.
+          return (
+            <Tooltip>
+              <TooltipTrigger asChild>{selectorElement}</TooltipTrigger>
+              <TooltipContent side={isNarrow ? 'right' : 'top'}>
+                {isNarrow ? narrowTooltipText : fullName}
+              </TooltipContent>
+            </Tooltip>
+          );
+        })()}
       </div>
       {SECTIONS.map(({ id, groupStart, disabled: defDisabled, Icon }, index) => {
         // A section is disabled at runtime if either:
@@ -315,44 +388,61 @@ export function ManageBooksSidebar({
             data-testid={`manage-books-sidebar-section-${id}`}
             data-active={isActive ? 'true' : undefined}
             data-read-only-disabled={isReadOnlyDisabled ? 'true' : undefined}
+            // JS-driven (isNarrow) collapse — see <nav>'s comment above.
             className={cn(
-              'tw:flex tw:items-start tw:gap-3 tw:rounded-md tw:px-3 tw:py-2 tw:text-start tw:text-sm tw:transition-colors',
+              'tw:flex tw:items-start tw:rounded-md tw:py-2 tw:text-start tw:text-sm tw:transition-colors',
+              isNarrow ? 'tw:justify-center tw:gap-0 tw:px-2' : 'tw:justify-start tw:gap-3 tw:px-3',
               !disabled && 'tw:hover:bg-accent tw:hover:text-accent-foreground',
               !disabled &&
                 'tw:focus-visible:outline-hidden tw:focus-visible:ring-2 tw:focus-visible:ring-ring',
               isActive && 'tw:bg-accent tw:font-medium tw:text-accent-foreground',
               disabled && 'tw:cursor-not-allowed tw:opacity-50',
             )}
+            aria-label={labels.label}
           >
             <Icon className="tw:mt-0.5 tw:h-4 tw:w-4 tw:shrink-0" aria-hidden />
-            <span className="tw:flex tw:flex-col">
-              <span>{labels.label}</span>
-              <span className="tw:text-xs tw:font-normal tw:text-muted-foreground">
-                {labels.subtitle}
+            {!isNarrow && (
+              <span className="tw:flex tw:flex-col">
+                <span>{labels.label}</span>
+                {labels.subtitle && (
+                  <span className="tw:text-xs tw:font-normal tw:text-muted-foreground">
+                    {labels.subtitle}
+                  </span>
+                )}
               </span>
-            </span>
+            )}
           </button>
         );
 
+        // In icon-only mode the section labels are hidden, so every section
+        // needs a tooltip surfacing its label. Disabled sections show the
+        // read-only message; active and enabled sections show their label.
+        // The tooltip is harmless at wide widths too — it simply repeats text
+        // already visible inline.
+        const tooltipText = tooltip ?? labels.label;
         return (
           <Fragment key={id}>
             {showSeparator && <Separator className="tw:my-1" />}
-            {groupHeading && (
+            {groupHeading && !isNarrow && (
               <div className="tw:mt-1 tw:px-3 tw:text-[11px] tw:font-semibold tw:uppercase tw:tracking-wider tw:text-muted-foreground">
                 {groupHeading}
               </div>
             )}
-            {disabled && tooltip ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  {/* Wrapper span so the tooltip works on a disabled button */}
-                  <span>{buttonElement}</span>
-                </TooltipTrigger>
-                <TooltipContent side="right">{tooltip}</TooltipContent>
-              </Tooltip>
-            ) : (
-              buttonElement
-            )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                {/* Wrapper span so the tooltip works on a disabled button too */}
+                <span>{buttonElement}</span>
+              </TooltipTrigger>
+              {/* In wide mode the sidebar is the full rail and tooltips
+                  render above the row (`side="top"`) so they don't collide
+                  with the dialog body. In narrow (icon-only) mode the sidebar
+                  is a left rail and tooltips need to render to its right —
+                  `side="top"` would collide with the dialog header for the
+                  topmost row, and there's no inline label to read otherwise.
+                  Radix's collision detection flips automatically if there's
+                  no room. */}
+              <TooltipContent side={isNarrow ? 'right' : 'top'}>{tooltipText}</TooltipContent>
+            </Tooltip>
           </Fragment>
         );
       })}

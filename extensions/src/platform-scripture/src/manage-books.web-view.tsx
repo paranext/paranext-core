@@ -22,7 +22,11 @@ import { useLocalizedStrings, useProjectSetting } from '@papi/frontend/react';
 import { WebViewProps } from '@papi/core';
 import { Canon } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ProjectSelectorOpenTab, ProjectSelectorProject } from 'platform-bible-react';
+import type {
+  ProjectSelectorLocalizedStrings,
+  ProjectSelectorOpenTab,
+  ProjectSelectorProject,
+} from 'platform-bible-react';
 import { formatReplacementString, getErrorMessage } from 'platform-bible-utils';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import {
@@ -77,7 +81,14 @@ type ImportFileEntry = {
  * C# `ProjectListResult`.
  */
 type ProjectListResult = {
-  projects: { projectId: string; name: string; projectType: string; isEditable: boolean }[];
+  projects: {
+    projectId: string;
+    name: string;
+    projectType: string;
+    isEditable: boolean;
+    /** Whether the project is a resource (read-only published text). */
+    isResource: boolean;
+  }[];
 };
 
 /**
@@ -93,6 +104,31 @@ type SidebarProject = ProjectSelectorProject & { isEditable: boolean };
  * are the ones we actually call in this wiring pass — not all 13 backend methods need a TS
  * signature for the dialog to function.
  */
+/**
+ * Wire-shape of a single book's comparison entry returned by `getBookComparison` /
+ * `parseImportFiles`. Mirrors C# `BookComparisonEntry` (see ManageBooks/BookComparisonEntry.cs).
+ * `SourceLastModified` / `DestLastModified` are ISO-8601 strings or null when the side has no date
+ * (file missing or empty text).
+ */
+type BookComparisonEntry = {
+  bookNum: number;
+  bookName: string;
+  comparisonState:
+    | 'FilesAreSame'
+    | 'DestDoesNotExist'
+    | 'SourceIsNewer'
+    | 'SourceIsOlder'
+    | 'Undetermined'
+    | 'SourceDoesNotExist';
+  defaultIncluded: boolean;
+  selectable: boolean;
+  tooltipInfo: string;
+  sourceLastModified: string | null;
+  destLastModified: string | null;
+};
+
+type BookComparisonResult = { entries: BookComparisonEntry[] };
+
 interface ManageBooksNetworkObject {
   filterProjects: (input: {
     purpose: string;
@@ -111,12 +147,29 @@ interface ManageBooksNetworkObject {
     fromProjectId: string;
     toProjectId: string;
     bookNumbers: number[];
+    /**
+     * When true (default), each book is written via `PutText(bookNum, 0, ...)` — destination
+     * replaced. When false, the orchestrator runs the chapter-merge path (port of PT9
+     * `WriteChaptersToBook`): source chapters overwrite dest counterparts; dest chapters not in
+     * source survive. Optional + backwards-compatible.
+     */
+    replaceEntireBook?: boolean;
   }) => Promise<MutationResult>;
   importBooks: (input: {
     projectId: string;
     files: ImportFileEntry[];
     replaceEntireBook: boolean;
   }) => Promise<MutationResult>;
+  /** Per-book Copy comparison. */
+  getBookComparison: (input: {
+    fromProjectId: string;
+    toProjectId: string;
+  }) => Promise<BookComparisonResult>;
+  /** Per-book Import comparison; same wire shape as `getBookComparison`. */
+  parseImportFiles: (input: {
+    projectId: string;
+    files: ImportFileEntry[];
+  }) => Promise<BookComparisonResult>;
 }
 
 // ===== Adapter helpers =====================================================
@@ -327,6 +380,50 @@ global.webViewComponent = function ManageBooksWebView({
     return out;
   }, [localizedStrings]);
 
+  // The ProjectSelector popover's internal strings (search placeholder,
+  // filter labels, section headings) are not localized by default. Build a
+  // ProjectSelectorLocalizedStrings object from the resolved manage-books
+  // strings so all three pickers (sidebar / Copy "From" / Create "Based on")
+  // share the same translations.
+  const projectSelectorLocalizedStrings = useMemo<ProjectSelectorLocalizedStrings>(() => {
+    const resolve = (key: keyof typeof localizedStrings, fallback: string) => {
+      const value = localizedStrings[key];
+      return typeof value === 'string' ? value : fallback;
+    };
+    return {
+      searchPlaceholder: resolve(
+        '%manageBooks_projectSelector_searchPlaceholder%',
+        'Search projects & resources',
+      ),
+      filterAriaLabel: resolve('%manageBooks_projectSelector_filterAriaLabel%', 'Filter'),
+      groupSectionLabel: resolve('%manageBooks_projectSelector_groupSectionLabel%', 'Group'),
+      filterSectionLabel: resolve('%manageBooks_projectSelector_filterSectionLabel%', 'Filter'),
+      filterGroupByOpenTabs: resolve(
+        '%manageBooks_projectSelector_filterGroupByOpenTabs%',
+        'By open tabs',
+      ),
+      filterShowSelectedOnly: resolve(
+        '%manageBooks_projectSelector_filterShowSelectedOnly%',
+        'Show selected only',
+      ),
+      openTabsSectionHeading: resolve(
+        '%manageBooks_projectSelector_openTabsSectionHeading%',
+        'Opened project & resource tabs',
+      ),
+      otherProjectsSectionHeading: resolve(
+        '%manageBooks_projectSelector_otherProjectsSectionHeading%',
+        'Your projects & resources',
+      ),
+      boundButClosedTooltip: resolve(
+        '%manageBooks_projectSelector_boundButClosedTooltip%',
+        'Bound to {group} · not currently open',
+      ),
+      openButtonLabel: resolve('%manageBooks_projectSelector_openButtonLabel%', 'Open'),
+      selectAll: resolve('%manageBooks_projectSelector_selectAll%', 'Select all'),
+      clearAll: resolve('%manageBooks_projectSelector_clearAll%', 'Clear all'),
+    };
+  }, [localizedStrings]);
+
   // ===== PAPI: project list =================================================
   // Resolve the manage-books NetworkObject lazily on first render.
   const [manageBooksApi, setManageBooksApi] = useState<ManageBooksNetworkObject | undefined>(
@@ -392,20 +489,37 @@ global.webViewComponent = function ManageBooksWebView({
     return [];
   }, [booksPresentRaw]);
 
+  // Per-project per-book lastModified dates sourced from
+  // manageBooksApi.getBookComparison. The dialog asks for books via
+  // loadBooks(pid) and the result is a ManageBooksDialogBookInfo[] with an
+  // optional `lastModified` field. We collect dates as comparison calls land
+  // and merge them into the response on the fly, so Copy/Import mode's
+  // computeCompareState heuristic (already wired in the dialog) starts
+  // producing real `sourceIsNewer`/`sourceIsOlder`/`same`/`new` states.
+  const [datesByProject, setDatesByProject] = useState<Record<string, Record<string, string>>>({});
+
   // Cache books for OTHER projects the dialog asks about (e.g. Copy source,
   // Create model). The dialog's loadBooks is called eagerly on project
   // change; we delegate to a per-project getProjectSetting fetch.
   const [bookCache, setBookCache] = useState<Record<string, ManageBooksDialogBookInfo[]>>({});
+  const decorateWithDates = useCallback(
+    (pid: string, books: ManageBooksDialogBookInfo[]): ManageBooksDialogBookInfo[] => {
+      const dates = datesByProject[pid];
+      if (!dates) return books;
+      return books.map((b) => (dates[b.id] ? { ...b, lastModified: dates[b.id] } : b));
+    },
+    [datesByProject],
+  );
   const loadBooks = useCallback(
     async (pid: string): Promise<ManageBooksDialogBookInfo[]> => {
-      if (pid === projectId) return activeBooks;
-      if (bookCache[pid]) return bookCache[pid];
+      if (pid === projectId) return decorateWithDates(pid, activeBooks);
+      if (bookCache[pid]) return decorateWithDates(pid, bookCache[pid]);
       try {
         const pdp = await papi.projectDataProviders.get('platform.base', pid);
         const bp = await pdp.getSetting('platformScripture.booksPresent');
         const decoded = decodeBooksPresent(typeof bp === 'string' ? bp : BOOKS_PRESENT_DEFAULT);
         setBookCache((prev) => ({ ...prev, [pid]: decoded }));
-        return decoded;
+        return decorateWithDates(pid, decoded);
       } catch (e) {
         logger.warn(
           `manage-books: loadBooks(${pid}) failed: ${e instanceof Error ? e.message : String(e)}`,
@@ -413,8 +527,77 @@ global.webViewComponent = function ManageBooksWebView({
         return [];
       }
     },
-    [projectId, activeBooks, bookCache],
+    [projectId, activeBooks, bookCache, decorateWithDates],
   );
+
+  // Side-channel: whenever the dialog asks about a non-active project (Copy
+  // source, Create reference), also fire a getBookComparison(from=other,
+  // to=active) so we can populate lastModified for both sides. The dialog's
+  // gridItems heuristic (computeCompareState) consumes those dates and
+  // produces correct new/newer/older/same labels.
+  useEffect(() => {
+    if (!manageBooksApi || !projectId) return undefined;
+    const otherIds = Object.keys(bookCache);
+    if (otherIds.length === 0) return undefined;
+    let cancelled = false;
+    Promise.all(
+      otherIds.map(async (otherId) => {
+        try {
+          const result = await manageBooksApi.getBookComparison({
+            fromProjectId: otherId,
+            toProjectId: projectId,
+          });
+          if (cancelled) return undefined;
+          const fromDates: Record<string, string> = {};
+          const toDates: Record<string, string> = {};
+          result.entries.forEach((e) => {
+            const bookId = Canon.bookNumberToId(e.bookNum);
+            if (!bookId) return;
+            if (e.sourceLastModified) fromDates[bookId] = e.sourceLastModified;
+            if (e.destLastModified) toDates[bookId] = e.destLastModified;
+          });
+          return { otherId, fromDates, toDates };
+        } catch (err) {
+          logger.warn(
+            `manage-books: getBookComparison(${otherId}, ${projectId}) failed: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+          return undefined;
+        }
+      }),
+    )
+      .then((results) => {
+        if (cancelled) return undefined;
+        const next: Record<string, Record<string, string>> = {};
+        let touchedAny = false;
+        results.forEach((r) => {
+          if (!r) return;
+          touchedAny = true;
+          next[r.otherId] = r.fromDates;
+          next[projectId] = { ...(next[projectId] ?? {}), ...r.toDates };
+        });
+        if (!touchedAny) return undefined;
+        setDatesByProject((prev) => {
+          const merged = { ...prev };
+          Object.entries(next).forEach(([pid, dates]) => {
+            merged[pid] = { ...merged[pid], ...dates };
+          });
+          return merged;
+        });
+        return undefined;
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+    // datesByProject deliberately omitted from deps — listing it would re-fire the
+    // effect on every comparison response, causing an infinite loop. We accept that
+    // the cache check above is a soft-skip; the worst case is one redundant API
+    // call per (other, active) pair, which the backend short-circuits via its own
+    // caching.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manageBooksApi, projectId, bookCache]);
 
   // ===== Versification (per-project) =========================================
   const loadVersification = useCallback(
@@ -471,6 +654,9 @@ global.webViewComponent = function ManageBooksWebView({
             name: displayName,
             fullName: fullName ?? p.name,
             isEditable: p.isEditable,
+            // Forward the isResource flag so the dialog can filter resources
+            // out of the Copy "From" / Create "Based on" pickers.
+            isResource: p.isResource,
           };
         }),
       );
@@ -626,22 +812,16 @@ global.webViewComponent = function ManageBooksWebView({
       strategy?: ManageBooksCopyStrategy;
     }): Promise<MutationResult | undefined> => {
       if (!manageBooksApi) return undefined;
-      // TODO (Vladimir #16 follow-up / parallel to Sebastian #15): the C#
-      // `copyBooks` PAPI method has no strategy parameter — `CopyBooksOrchestrator.CopyBooks`
-      // unconditionally writes the whole book via `PutText(bookNum, 0, false, ...)`.
-      // The dialog now lets the user pick `replaceEntireBooks` vs
-      // `nonExistingChapters`, and we forward `args.strategy` here for parity
-      // with `onImportBooks`, but until the backend honors a strategy flag both
-      // choices currently behave as `replaceEntireBooks`. Mirrors Sebastian's
-      // note about Import's `replaceEntireBook` flag being a no-op today.
-      // When the backend lands a real merge path, add `replaceEntireBook:
-      // args.strategy !== 'nonExistingChapters'` to the payload below and
-      // update `CopyBooksRequest` / `CopyBooksOrchestrator.CopyBooks`
-      // accordingly.
+      // The backend honors `replaceEntireBook`.
+      // `strategy === 'nonExistingChapters'` routes through PT9's
+      // WriteChaptersToBook semantic (chapter-by-chapter merge, source
+      // overwrites collisions, dest chapters not in source survive). The
+      // default + `replaceEntireBooks` route through whole-book replacement.
       return manageBooksApi.copyBooks({
         fromProjectId: args.sourceProjectId,
         toProjectId: args.destProjectId,
         bookNumbers: booksToNumbers(args.books),
+        replaceEntireBook: args.strategy !== 'nonExistingChapters',
       });
     },
     [manageBooksApi],
@@ -772,6 +952,7 @@ global.webViewComponent = function ManageBooksWebView({
         localizedStrings={localizedStrings}
         sidebarProjects={sidebarProjects}
         openTabs={projectSelectorOpenTabs}
+        projectSelectorLocalizedStrings={projectSelectorLocalizedStrings}
       />
       <GreekEstherTemplatePicker
         open={pickerOpen}

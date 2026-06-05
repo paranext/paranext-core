@@ -292,7 +292,10 @@ describe('partitionAndSort', () => {
     expect(other!.rows.some((r) => r.isBoundButClosed && r.projectId === 'a')).toBe(true);
   });
 
-  it('selected rows float to the top of their section', () => {
+  it('selected rows stay in alphabetical position (no float-to-top)', () => {
+    // Selected rows do NOT float to the top — the component scrolls the
+    // selected row into view on open, but the ordering itself is the
+    // canonical alphabetical sort.
     const many: ProjectSelectorProject[] = [
       { id: 'z', shortName: 'Z', fullName: 'Z' },
       { id: 'a', shortName: 'A', fullName: 'A' },
@@ -306,8 +309,7 @@ describe('partitionAndSort', () => {
     });
     const sections = partitionAndSort(rows, true);
     const other = sections.find((s) => s.kind === 'other');
-    expect(other!.rows[0].projectId).toBe('m');
-    expect(other!.rows[1].projectId).toBe('a');
+    expect(other!.rows.map((r) => r.projectId)).toEqual(['a', 'm']);
   });
 
   it('selection state is preserved across groupByOpenTabs flips', () => {
