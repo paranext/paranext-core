@@ -1246,6 +1246,7 @@ global.webViewComponent = function FindWebView({
       onCancelReplace={handleCancelReplace}
       onResultsScroll={handleResultsScroll}
       getBookUsj={getBookUsj}
+      logger={logger}
     />
   );
 };

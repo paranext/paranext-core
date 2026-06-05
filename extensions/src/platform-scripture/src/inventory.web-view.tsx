@@ -133,63 +133,33 @@ function formatOccurrencesForDisplay(
 
 /**
  * Creates a stable inventory input range for the given verses reference, scope, and project
- * identifier.
+ * identifier. The returned range only changes when the fields that actually affect the inventory
+ * query change — so navigating within a book (in `'book'` scope) or within a chapter (in
+ * `'chapter'` scope) does not refire the inventory request.
  *
- * @param versesRef - Current verses reference
+ * @param verseRef - Current verses reference
  * @param scope - Scope of analysis ('verse', 'chapter', or 'book')
  * @param projectId - Project identifier
- * @returns Formatted inventory input range and a stable verses reference for the given scope
+ * @returns Formatted, stable inventory input range
  */
 function useInventoryInputRange(
   verseRef: SerializedVerseRef,
   scope: Scope,
   projectId: string | undefined,
 ) {
-  const dependencies = useMemo(
-    () => ({
-      projectId,
-      scope,
-      book: verseRef.book,
-      chapterNum: verseRef.chapterNum,
-      verseNum: verseRef.verseNum,
-    }),
-    // Leave out verseRef to avoid unnecessary re-renders
+  // Intentionally narrowed dependency values: in `'book'` scope chapter/verse don't matter, and in
+  // `'chapter'` scope verse doesn't matter — so we substitute stable sentinel values to avoid
+  // recomputing the range as the user navigates within the scope. Extracted to named locals so
+  // the dependency array stays statically analysable (see react-hooks/exhaustive-deps).
+  const stableChapterNum = scope === 'book' ? 1 : verseRef.chapterNum;
+  const stableVerseNum = scope === 'verse' ? verseRef.verseNum : 1;
+  return useMemo(
+    () => createInventoryInputRange(verseRef, scope, projectId ?? ''),
+    // Leave `verseRef` out of the dependency array on purpose: we already track the fields that
+    // actually drive the query via the narrowed locals above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [
-      projectId,
-      scope,
-      verseRef.book,
-      // Always include chapterNum, but use stable value for 'book' scope
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      scope === 'book' ? 1 : verseRef.chapterNum,
-      // Always include verseNum, but use stable value for 'book' and 'chapter' scope
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      scope === 'verse' ? verseRef.verseNum : 1,
-    ],
+    [projectId, scope, verseRef.book, stableChapterNum, stableVerseNum],
   );
-
-  const inventoryInputRange = useMemo(() => {
-    return createInventoryInputRange(verseRef, scope, projectId ?? '');
-    // Defining custom dependencies above
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dependencies]);
-
-  const stableVerseRefForScope = useMemo(() => {
-    switch (scope) {
-      case 'book':
-        return { book: verseRef.book, chapterNum: 1, verseNum: 1 };
-      case 'chapter':
-        return { book: verseRef.book, chapterNum: verseRef.chapterNum, verseNum: 1 };
-      case 'verse':
-        return verseRef;
-      default:
-        return verseRef;
-    }
-    // Defining custom dependencies above
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dependencies]);
-
-  return { inventoryInputRange, stableVerseRefForScope };
 }
 
 /** Checks if the given type is a valid inventory web view type. */
@@ -234,7 +204,7 @@ global.webViewComponent = function InventoryWebView({
   );
   const [typeStrings] = useLocalizedStrings(useMemo(() => [...typeStringKeys], [typeStringKeys]));
 
-  const { inventoryInputRange } = useInventoryInputRange(verseRef, scope, projectId);
+  const inventoryInputRange = useInventoryInputRange(verseRef, scope, projectId);
 
   const {
     inventoryItems,

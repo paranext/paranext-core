@@ -39,7 +39,6 @@ import { HomeItemDropdownMenu } from './home-item-menu';
  * localized strings and pass them into the localizedStrings prop of this component
  */
 export const HOME_STRING_KEYS = Object.freeze([
-  '%general_error_title%',
   '%resources_action%',
   '%resources_activity%',
   '%resources_clearSearch%',
@@ -57,6 +56,7 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_noSearchResults%',
   '%resources_open%',
   '%resources_searchedFor%',
+  '%resources_syncFailed_title%',
   '%resources_sync%',
 ] as const);
 
@@ -208,7 +208,9 @@ export function Home({
   const openText: string = getLocalizedString('%resources_open%');
   const searchedForText: string = getLocalizedString('%resources_searchedFor%');
   const syncText: string = getLocalizedString('%resources_sync%');
-  const errorTitleText: string = getLocalizedString('%general_error_title%');
+  // Specific title for failed sync/get attempts — the alert is only shown for that flow, so a
+  // contextual title ("Sync failed") communicates what failed better than the generic "Error".
+  const syncFailedTitleText: string = getLocalizedString('%resources_syncFailed_title%');
 
   // Surfaces a business error (e.g. a project locked by another user) when an async action
   // callback rejects, so failures are visible in the UI rather than only logged by the webview.
@@ -418,7 +420,7 @@ export function Home({
         <div className="tw:mx-4 tw:mb-2">
           <Alert variant="destructive">
             <AlertCircle className="tw:h-4 tw:w-4" />
-            <AlertTitle>{errorTitleText}</AlertTitle>
+            <AlertTitle>{syncFailedTitleText}</AlertTitle>
             <AlertDescription>{actionError}</AlertDescription>
           </Alert>
         </div>
