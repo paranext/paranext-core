@@ -187,7 +187,7 @@ If you are developing `paranext-core` itself or developing extensions based on a
 
 Running `npm install` in `paranext-core` will automatically link development versions of npm packages `@eten-tech-foundation/platform-editor` and `@eten-tech-foundation/scripture-utilities` from `scripture-editors` via [yalc](https://github.com/wclr/yalc). This allows you to develop those packages alongside Platform.Bible.
 
-Note: `npm install` will check out the revision of `scripture-editors` specified in [`dev-packages.json`](./dev-packages.json) (it will throw and ask you to do something with your working changes if you have any so your changes don't get messed up). However, the general expectation is that this revision for the `scripture-editors` repository is the branch named `platform-yalc`. To make your local development and build servers use changes from `scripture-editors/main`, update the `platform-yalc` branch in the `eten-tech-foundation/scripture-editors` repository by rebasing it onto `main` and force-pushing. Example:
+Note: `npm install` will check out the revision of `scripture-editors` specified in [`dev-packages.json`](./dev-packages.json) (it will throw and ask you to do something with your working changes if you have any so your changes don't get messed up). However, the general expectation is that this revision for the `scripture-editors` repository is the branch named `platform-yalc` when this repo is on `main` and `release-prep` when this repo is on `release-prep`. To make your local development and build servers use changes from `scripture-editors/main`, update the corresponding branch in the `eten-tech-foundation/scripture-editors` repository by rebasing it onto `main` and force-pushing. Example:
 
 ```bash
 # from a clone of scripture-editors (or adjust path accordingly)
@@ -290,19 +290,24 @@ npm run package
 
 These steps will walk you through releasing a version on GitHub and bumping the version to a new version so future changes apply to the new in-progress version.
 
-1. Make sure the versions in this repo are on the version number you want to release. If they are not, manually dispatch the [Bump Versions workflow](#bumping-version-without-publishing-a-release) or run the `bump-versions` npm script to set the versions to what you want to release on the branch you want to release from.
+1. Prepare each repository in your [`dev-packages.json`](./dev-packages.json) depending on what kind of release you are publishing:
 
-2. Manually dispatch the Publish workflow in GitHub Actions targeting the branch you want to release from. This workflow creates a new pre-release for the version you intend to release and creates a new `bump-versions-<next_version>` branch to bump the version after the release so future changes apply to a new in-progress version instead of to the already released version. This workflow has the following inputs:
+   - Release candidate, alpha, etc.: rebase `release-prep` on `main` if it has not been rebased already for this release cycle.
+   - Full release: publish an actual release of that npm package, and update the version used in this repo accordingly. Remove the entry from `dev-packages.json` entirely so it uses the real published package.
+
+2. Make sure the versions in this repo are on the version number you want to release. If they are not, manually dispatch the [Bump Versions workflow](#bumping-version-without-publishing-a-release) or run the `bump-versions` npm script to set the versions to what you want to release on the branch you want to release from.
+
+3. Manually dispatch the Publish workflow in GitHub Actions targeting the branch you want to release from. This workflow creates a new pre-release for the version you intend to release and creates a new `bump-versions-<next_version>` branch to bump the version after the release so future changes apply to a new in-progress version instead of to the already released version. This workflow has the following inputs:
 
    - `version`: enter the version you intend to publish (e.g. 0.2.0). This is simply for verification to make sure you release the code that you intend to release. It is compared to the version in the code, and the workflow will fail if they do not match.
    - `newVersionAfterPublishing`: enter the version you want to bump to after releasing (e.g. 0.3.0-alpha.0). Future changes will apply to this new version instead of to the version that was already released. Leave blank if you don't want to bump
    - `bumpRef`: enter the Git ref you want to create the bump versions branch from, e.g. `main`. Leave blank if you want to use the branch selected for the workflow run. For example, if you release from a stable branch named `release-prep`, you may want to bump the version on `main` so future development work happens on the new version, then you can rebase `release-prep` onto `main` when you are ready to start preparing the next stable release.
    - `uploadReleaseAssets`: whether to upload the release assets to [Amazon S3](https://aws.amazon.com/s3/). If false, the release will still be created in GitHub, but no assets will be uploaded to S3.
 
-3. In GitHub, adjust the new draft release's body and other metadata as desired, then publish the release.
-4. Open a PR and merge the newly created `bump-versions-<next_version>` branch.
-5. Update the [Software Version Info](https://github.com/paranext/paranext/wiki/Software-Version-Info) page with information about this release.
-6. When appropriate, in [Snapcraft](https://snapcraft.io/platform-bible/releases), promote the newly uploaded release to the appropriate channel.
+4. In GitHub, adjust the new draft release's body and other metadata as desired, then publish the release.
+5. Open a PR and merge the newly created `bump-versions-<next_version>` branch.
+6. Update the [Software Version Info](https://github.com/paranext/paranext/wiki/Software-Version-Info) page with information about this release.
+7. When appropriate, in [Snapcraft](https://snapcraft.io/platform-bible/releases), promote the newly uploaded release to the appropriate channel.
 
 ### Configure uploading release assets to Amazon S3
 
