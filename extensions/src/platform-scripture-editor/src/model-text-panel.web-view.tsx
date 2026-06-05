@@ -102,19 +102,8 @@ globalThis.webViewComponent = function ModelTextPanel({
   }
   const match = dblRef ? dblResources.find((r) => r.dblEntryUid === dblRef.id) : undefined;
 
-  // Auto-install when the resource exists but isn't installed yet
+  // Installing state: resource found in DBL list but not yet installed
   const isInstalling = dblRef !== undefined && match !== undefined && !match.installed;
-  const matchDblEntryUid = match?.dblEntryUid;
-  useEffect(() => {
-    if (!fetchResources && isInstalling && dblResourcesProvider && matchDblEntryUid !== undefined) {
-      setFetchResources(true);
-      dblResourcesProvider
-        .installDblResource(matchDblEntryUid)
-        .catch((e: unknown) =>
-          logger.error(`Model text auto-install failed: ${getErrorMessage(e)}`),
-        );
-    }
-  }, [isInstalling, fetchResources, dblResourcesProvider, matchDblEntryUid]);
 
   const resourceProjectId = match?.installed ? match.projectId : undefined;
 
@@ -190,8 +179,14 @@ globalThis.webViewComponent = function ModelTextPanel({
         textConnectionsProvider
           ? (list) => textConnectionsProvider.setUserModelTexts(list)
           : undefined,
+        dblResourcesProvider
+          ? async (dblEntryUid) => {
+              await dblResourcesProvider.installDblResource(dblEntryUid);
+              setFetchResources(true);
+            }
+          : undefined,
       ),
-    [adminModelTexts, setAdminModelTexts, textConnectionsProvider],
+    [adminModelTexts, setAdminModelTexts, textConnectionsProvider, dblResourcesProvider],
   );
 
   const showResourcePicker = useDialogCallback(

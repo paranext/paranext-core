@@ -106,7 +106,8 @@
       "%webView_resourcePanel_commentaries_title_withResource%": "Commentaries: {textName}",
       "%webView_resourcePanel_downloadResources%": "Download resources…",
       "%webView_resourcePanel_installing%": "Installing resource…",
-      "%webView_resourcePanel_noProject%": "No project selected."
+      "%webView_resourcePanel_noProject%": "No project selected.",
+      "%webView_selectDblResource_installFailed%": "Failed to install resource. Please try again."
     },
     "es": {
       "%mainMenu_openPlatformResourceViewer%": "Abrir el visor de recursos",
