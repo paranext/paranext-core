@@ -191,6 +191,14 @@ globalThis.webViewComponent = function ResourceTextPanel({
     () => resourcesPossiblyUndefined ?? [],
     [resourcesPossiblyUndefined],
   );
+  const [canWriteProjectSettings] = usePromise(
+    useCallback(
+      async () =>
+        (await textConnectionsProvider?.canUserWriteProjectTextConnectionSettings()) ?? false,
+      [textConnectionsProvider],
+    ),
+    false,
+  );
 
   // #endregion
 
@@ -214,12 +222,29 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // #region Selection management
 
-  // Auto-correct selectedResourceId when the selected item leaves the filtered list
+  // Holds the ID of a resource just selected from the picker while it propagates through the
+  // reactive settings chain and into filteredResources. Prevents the auto-correct below from
+  // resetting the selection before the new resource has arrived in the list.
+  const [pendingResourceId, setPendingResourceId] = useState<string | undefined>(undefined);
+
+  // Once the pending resource appears in filteredResources, commit it as the active selection.
+  useEffect(() => {
+    if (!pendingResourceId) return;
+    const found = filteredResources.find((r) => getRefId(r) === pendingResourceId);
+    if (found) {
+      setSelectedResourceId(pendingResourceId);
+      setPendingResourceId(undefined);
+    }
+  }, [filteredResources, pendingResourceId, setSelectedResourceId]);
+
+  // Auto-correct selectedResourceId when the selected item leaves the filtered list.
+  // Skipped while a pending selection is in-flight to avoid overriding it prematurely.
   useEffect(() => {
     if (filteredResources.length === 0) return;
+    if (pendingResourceId) return;
     const currentId = filteredResources.find((r) => getRefId(r) === selectedResourceId);
     if (!currentId) setSelectedResourceId(getRefId(filteredResources[0]));
-  }, [filteredResources, selectedResourceId, setSelectedResourceId]);
+  }, [filteredResources, selectedResourceId, setSelectedResourceId, pendingResourceId]);
 
   const selectedRef =
     filteredResources.find((r) => getRefId(r) === selectedResourceId) ?? filteredResources[0];
@@ -235,18 +260,6 @@ globalThis.webViewComponent = function ResourceTextPanel({
   } else if (isProjectReference(selectedRef)) {
     resourceProjectId = selectedRef.id;
   }
-
-  // Auto-install when the selected DblResource exists but isn't installed
-  const matchDblEntryUid = dblMatch?.dblEntryUid;
-  useEffect(() => {
-    if (isInstalling && dblResourcesProvider && matchDblEntryUid !== undefined) {
-      dblResourcesProvider
-        .installDblResource(matchDblEntryUid)
-        .catch((e: unknown) =>
-          logger.error(`Resource panel auto-install failed: ${getErrorMessage(e)}`),
-        );
-    }
-  }, [isInstalling, dblResourcesProvider, matchDblEntryUid]);
 
   // #endregion
 
@@ -348,18 +361,22 @@ globalThis.webViewComponent = function ResourceTextPanel({
         resource,
         adminResourceList,
         setAdminResourceList,
-        textConnectionsProvider
-          ? () => textConnectionsProvider.canUserWriteProjectTextConnectionSettings()
-          : undefined,
+        canWriteProjectSettings,
         textConnectionsProvider
           ? () => textConnectionsProvider.getUserReferencedProjectsAndResources()
           : undefined,
         textConnectionsProvider
           ? (list) => textConnectionsProvider.setUserReferencedProjectsAndResources(list)
           : undefined,
-        setSelectedResourceId,
+        dblResourcesProvider
+          ? async (dblEntryUid) => {
+              await dblResourcesProvider.installDblResource(dblEntryUid);
+              setFetchResources(true);
+            }
+          : undefined,
+        setPendingResourceId,
       ),
-    [adminResourceList, setAdminResourceList, textConnectionsProvider, setSelectedResourceId],
+    [adminResourceList, setAdminResourceList, textConnectionsProvider, dblResourcesProvider],
   );
 
   const showResourcePicker = useDialogCallback(

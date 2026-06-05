@@ -16,6 +16,7 @@ import type {
   ResourceReferenceList,
 } from 'platform-scripture';
 import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { selectTextConnection } from './select-dbl-resource';
 
 const CURRENT_DATA_VERSION = '1.0.0';
 const DEFAULT_TEXT_DIRECTION = 'ltr';
@@ -58,6 +59,8 @@ export type ModelTextPanelProps = {
   isLoadingResources: boolean;
   /** The project's admin-level model-text setting (used when writing an admin choice). */
   adminModelTexts: ResourceReferenceList | undefined;
+  /** The user-level model-text setting (used when writing a user choice). */
+  userModelTexts: ResourceReferenceList | undefined;
   /** Whether the user may write project (admin) settings; decides admin vs. user persistence. */
   canWriteProjectSettings: boolean;
   /** Current Scripture reference for the editor. */
@@ -68,11 +71,11 @@ export type ModelTextPanelProps = {
    * Install a DBL resource by its entry uid (fire-and-forget; the panel re-resolves once
    * installed).
    */
-  installResource: (dblEntryUid: string) => void;
+  installResource: (dblEntryUid: string) => Promise<void>;
   /** Persist an admin-level model-text list. */
   setAdminModelTexts: (list: ResourceReferenceList) => void;
   /** Persist a user-level model-text list. */
-  setUserModelTexts: (list: ResourceReferenceList) => void | Promise<void>;
+  setUserModelTexts: (list: ResourceReferenceList) => Promise<void>;
   /**
    * Open the resource picker for the user to choose a model text. Resolves with the chosen
    * resource, or `undefined` if the picker was cancelled. In the app this opens the
@@ -106,6 +109,7 @@ export function ModelTextPanel({
   dblResources,
   isLoadingResources,
   adminModelTexts,
+  userModelTexts,
   canWriteProjectSettings,
   scrRef = DEFAULT_SCR_REF,
   onScrRefChange = () => {},
@@ -208,42 +212,22 @@ export function ModelTextPanel({
   }, [effectiveModelTexts]);
 
   const handleResourceSelect = useCallback(
-    async (resource: DblResourceData) => {
-      const newRef: DblResourceReference = {
-        type: 'dblResource',
-        name: resource.displayName,
-        id: resource.dblEntryUid,
-      };
-
-      if (canWriteProjectSettings && adminModelTexts) {
-        const existingItems = adminModelTexts.items.filter((item): item is DblResourceReference => {
-          if (item.type !== 'dblResource') return false;
-          // DblResourceReference.id exists after .type check; the union still requires a cast
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          return (item as DblResourceReference).id !== resource.dblEntryUid;
-        });
-        setAdminModelTexts({
-          dataVersion: adminModelTexts.dataVersion,
-          items: [newRef, ...existingItems],
-        });
-      } else {
-        const currentUserDblItems = (effectiveModelTexts?.items ?? [])
-          .filter((r) => r.source === 'user')
-          .filter(
-            (r): r is EffectiveResourceReference & DblResourceReference =>
-              r.type === 'dblResource' && r.id !== resource.dblEntryUid,
-          );
-        await setUserModelTexts({
-          dataVersion: CURRENT_DATA_VERSION,
-          items: [newRef, ...currentUserDblItems],
-        });
-      }
-    },
+    async (resource: DblResourceData) =>
+      selectTextConnection(
+        resource,
+        adminModelTexts,
+        setAdminModelTexts,
+        canWriteProjectSettings,
+        async () => userModelTexts,
+        setUserModelTexts,
+        async () => installResource(resource.dblEntryUid),
+      ),
     [
       adminModelTexts,
       canWriteProjectSettings,
       effectiveModelTexts,
       setAdminModelTexts,
+      userModelTexts,
       setUserModelTexts,
     ],
   );

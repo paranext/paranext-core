@@ -76,6 +76,10 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     'platformScripture.textConnectionSettings',
     projectId,
   );
+  const [userModelTexts] = usePromise(
+    useCallback(async () => await textConnectionsProvider?.getUserModelTexts(), []),
+    undefined,
+  );
 
   const [fetchResources, setFetchResources] = useState(true);
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
@@ -135,15 +139,14 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
   // --- Operation callbacks ---
 
   const installResource = useCallback(
-    (dblEntryUid: string) => {
-      (async () => {
-        try {
-          await dblResourcesProvider?.installDblResource(dblEntryUid);
-        } catch (e: unknown) {
-          logger.error(`Model text auto-install failed: ${getErrorMessage(e)}`);
-        }
+    async (dblEntryUid: string) => {
+      try {
+        await dblResourcesProvider?.installDblResource(dblEntryUid);
         setFetchResources(true);
-      })();
+      } catch (e: unknown) {
+        logger.error(`Model text auto-install failed: ${getErrorMessage(e)}`);
+        throw e;
+      }
     },
     [dblResourcesProvider],
   );
@@ -209,6 +212,7 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
       dblResources={dblResources}
       isLoadingResources={isLoadingResources}
       adminModelTexts={adminModelTexts}
+      userModelTexts={userModelTexts}
       canWriteProjectSettings={canWriteProjectSettings}
       scrRef={scrRef}
       onScrRefChange={setScrRef}
