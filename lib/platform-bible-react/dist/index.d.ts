@@ -495,7 +495,7 @@ type ProjectScrollGroupSelection = {
 	projectId?: string;
 	scrollGroupId?: ScrollGroupId;
 };
-type ProjectSelectorLocalizedStrings = {
+export type ProjectSelectorLocalizedStrings = {
 	/** Placeholder for the popover's search input. Defaults to `"Search projects & resources"`. */
 	searchPlaceholder?: string;
 	/** Accessible label for the filter menu icon button. Defaults to `"Filter"`. */

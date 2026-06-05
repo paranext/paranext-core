@@ -398,6 +398,151 @@ namespace TestParanextDataProvider.ManageBooks
         }
 
         // =====================================================================
+        // Wire-shape for SourceLastModified / DestLastModified.
+        //
+        // ToIsoOrNull (private) is exercised indirectly through the public
+        // SetDefaultEligibility entry point. The contract these tests pin:
+        //   - ISO-8601 UTC string when the side has text AND a real timestamp.
+        //   - null when the side's text is empty (no meaningful date).
+        //   - null when the timestamp is DateTime.MinValue (the absent-file
+        //     sentinel from SafeGetBookModified) — even if text is present.
+        // The frontend's whole status-comparison heuristic depends on this
+        // shape; a regression here would silently revert all Copy/Import
+        // pills to "Undetermined".
+        // =====================================================================
+
+        // Regex (ECMAScript-style) matching the ISO-8601 UTC prefix produced by
+        // `DateTime.ToString("o", InvariantCulture)`. We anchor only on the
+        // "date T time" body and ignore the trailing fractional seconds + "Z"
+        // — that's a Round-trip-format implementation detail and not part of
+        // the contract the frontend reads.
+        private static readonly System.Text.RegularExpressions.Regex IsoBodyRegex =
+            new(@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}");
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-006")]
+        [Property("BehaviorId", "BHV-109")]
+        [Description(
+            "Both source and dest present with distinct timestamps: SourceLastModified "
+                + "and DestLastModified are both populated with ISO-8601 strings and "
+                + "match the chosen comparison state."
+        )]
+        public void SetDefaultEligibility_BothTimestampsPresent_BothPopulated()
+        {
+            var sourceMod = new DateTime(2026, 3, 10, 12, 0, 0, DateTimeKind.Utc);
+            var destMod = new DateTime(2026, 3, 1, 12, 0, 0, DateTimeKind.Utc);
+
+            BookComparisonEntry entry = CopyBooksOrchestrator.SetDefaultEligibility(
+                bookNum: 40,
+                bookName: "Matthew",
+                sourceText: "\\id MAT newer\r\n",
+                destText: "\\id MAT older\r\n",
+                sourceModified: sourceMod,
+                destModified: destMod
+            );
+
+            Assert.That(entry.ComparisonState, Is.EqualTo(ComparisonState.SourceIsNewer));
+            Assert.That(
+                entry.SourceLastModified,
+                Is.Not.Null,
+                "Source text is non-empty AND timestamp is not MinValue → SourceLastModified populated"
+            );
+            Assert.That(
+                entry.DestLastModified,
+                Is.Not.Null,
+                "Dest text is non-empty AND timestamp is not MinValue → DestLastModified populated"
+            );
+            Assert.That(IsoBodyRegex.IsMatch(entry.SourceLastModified!), Is.True);
+            Assert.That(IsoBodyRegex.IsMatch(entry.DestLastModified!), Is.True);
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-006")]
+        [Property("BehaviorId", "BHV-109")]
+        [Description(
+            "Source text empty: SourceLastModified must be null regardless of the "
+                + "sourceModified DateTime value (ToIsoOrNull short-circuits on empty text)."
+        )]
+        public void SetDefaultEligibility_SourceTextEmpty_SourceLastModifiedNull()
+        {
+            BookComparisonEntry entry = CopyBooksOrchestrator.SetDefaultEligibility(
+                bookNum: 2,
+                bookName: "Exodus",
+                sourceText: "",
+                destText: "\\id EXO content\r\n",
+                // Intentionally pass a non-MinValue DateTime so the only reason
+                // SourceLastModified could be null is the empty-text branch.
+                sourceModified: new DateTime(2026, 3, 10, 12, 0, 0, DateTimeKind.Utc),
+                destModified: new DateTime(2026, 3, 1, 12, 0, 0, DateTimeKind.Utc)
+            );
+
+            Assert.That(entry.SourceLastModified, Is.Null);
+            Assert.That(
+                entry.DestLastModified,
+                Is.Not.Null,
+                "Dest side still populated when its text is non-empty"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-006")]
+        [Property("BehaviorId", "BHV-109")]
+        [Description(
+            "Dest text empty: DestLastModified must be null regardless of the "
+                + "destModified DateTime value."
+        )]
+        public void SetDefaultEligibility_DestTextEmpty_DestLastModifiedNull()
+        {
+            BookComparisonEntry entry = CopyBooksOrchestrator.SetDefaultEligibility(
+                bookNum: 3,
+                bookName: "Leviticus",
+                sourceText: "\\id LEV content\r\n",
+                destText: "",
+                sourceModified: new DateTime(2026, 3, 10, 12, 0, 0, DateTimeKind.Utc),
+                destModified: new DateTime(2026, 3, 1, 12, 0, 0, DateTimeKind.Utc)
+            );
+
+            Assert.That(entry.DestLastModified, Is.Null);
+            Assert.That(
+                entry.SourceLastModified,
+                Is.Not.Null,
+                "Source side still populated when its text is non-empty"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-006")]
+        [Property("BehaviorId", "BHV-109")]
+        [Description(
+            "Both texts present but DateTime.MinValue on one side (sentinel from "
+                + "SafeGetBookModified when the read failed) → that side's "
+                + "*LastModified maps to null. Frontend distinguishes 'no date' "
+                + "from 'epoch' on this null."
+        )]
+        public void SetDefaultEligibility_MinValueTimestamp_MapsToNull()
+        {
+            BookComparisonEntry entry = CopyBooksOrchestrator.SetDefaultEligibility(
+                bookNum: 40,
+                bookName: "Matthew",
+                sourceText: "\\id MAT content\r\n",
+                destText: "\\id MAT different content\r\n",
+                sourceModified: DateTime.MinValue,
+                destModified: new DateTime(2026, 3, 5, 12, 0, 0, DateTimeKind.Utc)
+            );
+
+            Assert.That(
+                entry.SourceLastModified,
+                Is.Null,
+                "DateTime.MinValue must map to null even when text is non-empty"
+            );
+            Assert.That(entry.DestLastModified, Is.Not.Null);
+        }
+
+        // =====================================================================
         // LoadBooks — comparison pair construction (EXT-007)
         //
         // BHV-313: enumerates Canon.AllBooks, filters by destination-project
@@ -829,6 +974,151 @@ namespace TestParanextDataProvider.ManageBooks
                 "CopyCustomVersification must delegate to ParatextData without "
                     + "throwing NotImplementedException once implemented."
             );
+        }
+
+        // =====================================================================
+        // CopyBooks — replaceEntireBook=false chapter-merge branch
+        // (port of PT9 ImportSfmText.WriteChaptersToBook)
+        // =====================================================================
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-007")]
+        [Property("BehaviorId", "BHV-110")]
+        [Description(
+            "Merge mode: when dest book doesn't exist, the orchestrator takes the "
+                + "whole-book PutText fast path — parallels the ImportBooks merge path."
+        )]
+        public void CopyBooks_MergeMode_DestBookMissing_WritesWholeBook()
+        {
+            _fromScrText.PutText(1, 0, false, "\\id GEN\n\\c 1\n\\v 1 source", null);
+            Assert.That(
+                _toScrText.BooksPresentSet.IsSelected(1),
+                Is.False,
+                "precondition: GEN absent in dest"
+            );
+            var selected = new BookSet();
+            selected.Add(1);
+
+            CopyBooksResult result = CopyBooksOrchestrator.CopyBooks(
+                _fromScrText,
+                _toScrText,
+                selected,
+                replaceEntireBook: false
+            );
+
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.CopiedCount, Is.EqualTo(1));
+            Assert.That(
+                _toScrText.BooksPresentSet.IsSelected(1),
+                Is.True,
+                "GEN must be created in dest via the missing-book fast path"
+            );
+            Assert.That(
+                _toScrText.GetText(1),
+                Does.Contain("source"),
+                "Dest book must carry the source content"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-007")]
+        [Property("BehaviorId", "BHV-110")]
+        [Description(
+            "Merge mode: source chapters overwrite their dest counterparts; dest "
+                + "chapters NOT present in source survive (PT9 WriteChaptersToBook "
+                + "semantic — ImportSfmText.cs:270-285)."
+        )]
+        public void CopyBooks_MergeMode_OverwritesOverlapping_PreservesNonOverlap()
+        {
+            // Source has GEN chapters 1-2 with source content
+            _fromScrText.PutText(
+                1,
+                0,
+                false,
+                "\\id GEN\n\\c 1\n\\v 1 source-ch1\n\\c 2\n\\v 1 source-ch2",
+                null
+            );
+            // Dest has GEN chapters 1-3 with dest content
+            _toScrText.PutText(
+                1,
+                0,
+                false,
+                "\\id GEN\n\\c 1\n\\v 1 dest-ch1\n\\c 2\n\\v 1 dest-ch2\n\\c 3\n\\v 1 dest-ch3",
+                null
+            );
+            var selected = new BookSet();
+            selected.Add(1);
+
+            CopyBooksResult result = CopyBooksOrchestrator.CopyBooks(
+                _fromScrText,
+                _toScrText,
+                selected,
+                replaceEntireBook: false
+            );
+
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.CopiedCount, Is.EqualTo(1));
+
+            string finalText = _toScrText.GetText(1);
+            // Source content replaces dest where they overlap
+            Assert.That(
+                finalText,
+                Does.Contain("source-ch1"),
+                "Chapter 1 source must replace dest content"
+            );
+            Assert.That(
+                finalText,
+                Does.Contain("source-ch2"),
+                "Chapter 2 source must replace dest content"
+            );
+            // Dest chapter 3 was not in source — must survive
+            Assert.That(
+                finalText,
+                Does.Contain("dest-ch3"),
+                "Chapter 3 was not in source and must survive the merge"
+            );
+            Assert.That(
+                finalText,
+                Does.Not.Contain("dest-ch1"),
+                "Chapter 1 dest content must NOT survive — source overwrites collisions"
+            );
+            Assert.That(
+                finalText,
+                Does.Not.Contain("dest-ch2"),
+                "Chapter 2 dest content must NOT survive — source overwrites collisions"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-007")]
+        [Property("BehaviorId", "BHV-110")]
+        [Description(
+            "Merge mode passes through the request flag end-to-end: "
+                + "CopyBooksRequest.ReplaceEntireBook=false must reach the orchestrator "
+                + "and take the merge code path."
+        )]
+        public void CopyBooks_MergeMode_ReplaceFlag_PlumbedThrough()
+        {
+            // Smoke check that the explicit replaceEntireBook=false path doesn't
+            // regress when the dest is empty. (The merge-specific assertions live
+            // in the two tests above; this guards the parameter plumbing.)
+            _fromScrText.PutText(1, 0, false, "\\id GEN\n\\c 1\n\\v 1 a", null);
+            var selected = new BookSet();
+            selected.Add(1);
+
+            CopyBooksResult resultMerge = CopyBooksOrchestrator.CopyBooks(
+                _fromScrText,
+                _toScrText,
+                selected,
+                replaceEntireBook: false
+            );
+
+            Assert.That(resultMerge.Success, Is.True);
+            Assert.That(resultMerge.CopiedCount, Is.EqualTo(1));
+            Assert.That(_toScrText.BooksPresentSet.IsSelected(1), Is.True);
         }
 
         // -----------------------------------------------------------------

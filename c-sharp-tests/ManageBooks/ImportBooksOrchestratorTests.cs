@@ -679,6 +679,71 @@ namespace TestParanextDataProvider.ManageBooks
         }
 
         // =====================================================================
+        // Import wire-shape for SourceLastModified / DestLastModified.
+        //
+        // Import's BuildComparisonEntry passes preflightSourceTimestamp =
+        // DateTime.UtcNow as the source modification time. Together with a
+        // non-empty source text, that means SourceLastModified must be a
+        // valid recent ISO-8601 string for every extracted book. The Copy
+        // side already pins the precise ToIsoOrNull contract via its
+        // SetDefaultEligibility tests; the assertion here is the Import
+        // entry-point integration: a parse of any non-empty source produces
+        // a non-null, ISO-shaped SourceLastModified on the wire.
+        // =====================================================================
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-009")]
+        [Property("BehaviorId", "BHV-109")]
+        [Description(
+            "ParseImportFiles surfaces a non-null, ISO-8601-shaped "
+                + "SourceLastModified for every extracted book — the value "
+                + "originates from preflightSourceTimestamp = DateTime.UtcNow."
+        )]
+        public void ParseImportFiles_SourceLastModified_IsRecentIsoString()
+        {
+            var files = new[]
+            {
+                new ImportFileEntry(
+                    FileName: "gen.sfm",
+                    Content: "\\id GEN - Test\n\\c 1\n\\v 1 In the beginning...",
+                    Included: true
+                ),
+            };
+
+            DateTime before = DateTime.UtcNow.AddSeconds(-1);
+            BookComparisonResult result = ImportBooksOrchestrator.ParseImportFiles(_scrText, files);
+            DateTime after = DateTime.UtcNow.AddSeconds(1);
+
+            Assert.That(result.Entries, Has.Count.EqualTo(1));
+            BookComparisonEntry entry = result.Entries[0];
+
+            Assert.That(entry.SourceLastModified, Is.Not.Null);
+            Assert.That(
+                System.Text.RegularExpressions.Regex.IsMatch(
+                    entry.SourceLastModified!,
+                    @"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"
+                ),
+                Is.True,
+                $"SourceLastModified must be ISO-8601 shaped (got '{entry.SourceLastModified}')"
+            );
+
+            // Parse back and assert it falls inside the bracket we captured around
+            // ParseImportFiles — this pins the contract that the timestamp is
+            // generated at-parse-time (UtcNow), not derived from any pre-canned
+            // value in the ImportFileEntry.
+            var parsed = DateTime
+                .Parse(
+                    entry.SourceLastModified!,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.RoundtripKind
+                )
+                .ToUniversalTime();
+            Assert.That(parsed, Is.GreaterThanOrEqualTo(before));
+            Assert.That(parsed, Is.LessThanOrEqualTo(after));
+        }
+
+        // =====================================================================
         // CheckOverlappingFiles — TS-085 / BHV-318 / VAL-012 / gm-012
         // =====================================================================
 
@@ -1128,6 +1193,155 @@ namespace TestParanextDataProvider.ManageBooks
                 Has.Count.EqualTo(0),
                 "BooksPresentSet unchanged when no extractable book"
             );
+        }
+
+        // =====================================================================
+        // ImportBooks — replaceEntireBook=false chapter-merge branch
+        // (port of PT9 ImportSfmText.WriteChaptersToBook)
+        // =====================================================================
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("BehaviorId", "BHV-110")]
+        [Description(
+            "Merge mode: when dest book doesn't exist, the orchestrator takes the "
+                + "whole-book PutText fast path (mirrors PT9 ImportSfmText.cs:261-269)."
+        )]
+        public void ImportBooks_MergeMode_DestBookMissing_WritesWholeFile()
+        {
+            const string content = "\\id GEN\n\\c 1\n\\v 1 First.";
+            ImportFileEntry[] files = new[]
+            {
+                new ImportFileEntry(FileName: "gen.sfm", Content: content, Included: true),
+            };
+
+            ImportBooksResult result = ImportBooksOrchestrator.ImportBooks(
+                _scrText,
+                files,
+                replaceEntireBook: false
+            );
+
+            Assert.That(result.Success, Is.True);
+            Assert.That(
+                _scrText.BooksPresentSet.IsSelected(1),
+                Is.True,
+                "GEN must be created via the dest-missing fast path"
+            );
+            VerifyUsfmSame(content, _scrText.GetText(1), _scrText, bookNum: 1);
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("BehaviorId", "BHV-110")]
+        [Description(
+            "Merge mode: source chapters overwrite their dest counterparts; dest "
+                + "chapters NOT present in source survive (port of PT9 "
+                + "WriteChaptersToBook semantic, ImportSfmText.cs:270-285)."
+        )]
+        public void ImportBooks_MergeMode_OverwritesOverlapping_PreservesNonOverlap()
+        {
+            // Arrange: dest has GEN with chapters 1-3
+            _scrText.PutText(
+                1,
+                0,
+                false,
+                "\\id GEN\n\\c 1\n\\v 1 dest-ch1\n\\c 2\n\\v 1 dest-ch2\n\\c 3\n\\v 1 dest-ch3",
+                null
+            );
+            Assert.That(
+                _scrText.BooksPresentSet.IsSelected(1),
+                Is.True,
+                "precondition: GEN present in dest with chapters 1-3"
+            );
+
+            // Source has only chapters 1-2 with new content
+            ImportFileEntry[] files = new[]
+            {
+                new ImportFileEntry(
+                    FileName: "gen.sfm",
+                    Content: "\\id GEN\n\\c 1\n\\v 1 source-ch1\n\\c 2\n\\v 1 source-ch2",
+                    Included: true
+                ),
+            };
+
+            ImportBooksResult result = ImportBooksOrchestrator.ImportBooks(
+                _scrText,
+                files,
+                replaceEntireBook: false
+            );
+
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.ImportedCount, Is.EqualTo(1));
+
+            string finalText = _scrText.GetText(1);
+            // Source chapters overwrite dest counterparts (collision behavior)
+            Assert.That(
+                finalText,
+                Does.Contain("source-ch1"),
+                "Chapter 1 should reflect source content after merge"
+            );
+            Assert.That(
+                finalText,
+                Does.Contain("source-ch2"),
+                "Chapter 2 should reflect source content after merge"
+            );
+            // Dest chapter 3 was not in source → must survive (the key merge property)
+            Assert.That(
+                finalText,
+                Does.Contain("dest-ch3"),
+                "Chapter 3 was not in source and must survive the merge"
+            );
+            // Dest chapter 1/2 content should NOT survive (overwritten by source)
+            Assert.That(
+                finalText,
+                Does.Not.Contain("dest-ch1"),
+                "Chapter 1 source content must replace dest content"
+            );
+            Assert.That(
+                finalText,
+                Does.Not.Contain("dest-ch2"),
+                "Chapter 2 source content must replace dest content"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("BehaviorId", "BHV-110")]
+        [Description(
+            "Merge mode wrapper: BooksPresentSet remains stable for an existing "
+                + "book that's being merged into — no spurious add/remove churn."
+        )]
+        public void ImportBooks_MergeMode_ExistingBook_BooksPresentSetStable()
+        {
+            // Arrange: dest already has GEN
+            _scrText.PutText(1, 0, false, "\\id GEN\n\\c 1\n\\v 1 existing", null);
+            int booksBefore = _scrText.BooksPresentSet.Count;
+
+            ImportFileEntry[] files = new[]
+            {
+                new ImportFileEntry(
+                    FileName: "gen.sfm",
+                    Content: "\\id GEN\n\\c 1\n\\v 1 updated",
+                    Included: true
+                ),
+            };
+
+            ImportBooksResult result = ImportBooksOrchestrator.ImportBooks(
+                _scrText,
+                files,
+                replaceEntireBook: false
+            );
+
+            Assert.That(result.Success, Is.True);
+            Assert.That(
+                _scrText.BooksPresentSet.Count,
+                Is.EqualTo(booksBefore),
+                "Merge into existing book must not add/remove anything from BooksPresentSet"
+            );
+            Assert.That(_scrText.BooksPresentSet.IsSelected(1), Is.True);
         }
 
         // -------------------------------------------------------------------

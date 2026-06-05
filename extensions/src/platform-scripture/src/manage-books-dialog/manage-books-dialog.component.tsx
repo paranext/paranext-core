@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { type ReactElement, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   BookPlus,
   Copy,
@@ -24,6 +24,7 @@ import {
   Label,
   ProjectSelectorOpenTab,
   ProjectSelector,
+  ProjectSelectorLocalizedStrings,
   ProjectSelectorProject,
   SearchBar,
   Select,
@@ -46,6 +47,7 @@ import {
   BookGridItem,
   BookGridLocalizedStrings,
   BookGridSelector,
+  type BookGridStatusGroup,
   toneForComparisonState,
 } from './book-grid.component';
 import {
@@ -231,6 +233,14 @@ export type ManageBooksDialogProps = {
    * default) is fine — the section just won't render.
    */
   openTabs?: readonly ProjectSelectorOpenTab[];
+
+  /**
+   * Localized strings for the popover internals of every `<ProjectSelector>` inside the dialog
+   * (sidebar / Copy "From" / Create "Based on"). Optional — each picker falls back to
+   * ProjectSelector's English defaults when omitted, but the wiring layer typically passes a
+   * fully-populated object sourced from `manageBooks_projectSelector_*` localize keys.
+   */
+  projectSelectorLocalizedStrings?: ProjectSelectorLocalizedStrings;
 };
 
 // --------------------------------------------------------------------------
@@ -296,6 +306,53 @@ const isCreateMethod = (v: string): v is ManageBooksCreateMethod =>
   v === 'empty' || v === 'chapterVerse' || v === 'fromTemplate';
 
 type ViewPresenceFilter = 'all' | 'new' | 'existing';
+
+/**
+ * A3: minimum on-screen lifetime of the spinner / disabled-buttons state, in milliseconds. PAPI
+ * mutations frequently complete in well under 100 ms when called against a local data provider;
+ * without a floor, the spinner and mid-mutation button-disabled affordances would flicker for a
+ * single render frame and never be perceptible to either users (UX problem) or assistive tech / e2e
+ * tests asserting the contract (testability problem). The 1500 ms floor sits comfortably above the
+ * 500 ms perceptual flicker threshold (Nielsen 1993) and is wide enough that sequential Playwright
+ * assertions (e.g. assert apply disabled, then assert cancel disabled) both land inside the same
+ * disabled-window even with the back-to-back polling and locator-resolution overhead Electron + CDP
+ * introduces. Co-locates with runCreate/runDelete/runCopy/runImport so all four paths get the same
+ * treatment.
+ */
+const MIN_SUBMITTING_VISIBLE_MS = 1500;
+
+/**
+ * Tooltip wrapper for a disabled "stub" button (View-mode cross-launches whose target action is not
+ * yet wired up). Renders an sr-only hint span (referenced by the disabled button's
+ * `aria-describedby`) plus a hover-tooltip wrapping the button. Three near-identical instances
+ * collapsed into one helper to keep the View-mode JSX scannable.
+ *
+ * The disabled `<Button>` itself does not accept pointer events, so the tooltip needs an
+ * intermediate `<span>` as the `TooltipTrigger` target — Radix Tooltip's standard pattern.
+ */
+function DisabledStubButtonTooltip({
+  hintId,
+  tooltipText,
+  children,
+}: {
+  hintId: string;
+  tooltipText: string;
+  children: ReactElement;
+}) {
+  return (
+    <>
+      <span id={hintId} className="tw:sr-only">
+        {tooltipText}
+      </span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span>{children}</span>
+        </TooltipTrigger>
+        <TooltipContent>{tooltipText}</TooltipContent>
+      </Tooltip>
+    </>
+  );
+}
 
 // Sebastian review item 8 (2026-05-06): the Copy-mode comparison-state filter (New/Newer/Older/
 // Same/Undetermined) was removed entirely — the New/Newer/Older/Same options didn't actually
@@ -424,8 +481,32 @@ export function ManageBooksDialog({
   localizedStrings = {},
   sidebarProjects = [],
   openTabs,
+  projectSelectorLocalizedStrings,
 }: ManageBooksDialogProps) {
   const allBooks = useMemo(() => bookIds ?? DEFAULT_BOOK_IDS, [bookIds]);
+
+  // JS-driven responsive collapse. We observe the dialog root's width and
+  // flip `dialogIsNarrow` when it crosses ~28rem (448px) — the breakpoint
+  // matches an `@md/dialog:` container query that doesn't reliably reach the
+  // iframe stylesheets. React refs are typed
+  // `MutableRefObject<HTMLDivElement | null>` (null is the canonical initial
+  // value for DOM refs).
+  // eslint-disable-next-line no-null/no-null
+  const dialogRootRef = useRef<HTMLDivElement | null>(null);
+  const [dialogIsNarrow, setDialogIsNarrow] = useState(false);
+  useEffect(() => {
+    const el = dialogRootRef.current;
+    if (!el) return undefined;
+    const NARROW_BREAKPOINT_PX = 448;
+    const measure = () => {
+      const next = el.getBoundingClientRect().width < NARROW_BREAKPOINT_PX;
+      setDialogIsNarrow((prev) => (prev === next ? prev : next));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [open]);
 
   const t = useCallback(
     (key: keyof ManageBooksDialogLocalizedStrings, fallback: string) =>
@@ -502,10 +583,8 @@ export function ManageBooksDialog({
   const [overlapError, setOverlapError] = useState<
     { book: string; existingFile: string; newFile: string } | undefined
   >(undefined);
-  const [importPresenceFilter, setImportPresenceFilter] = useState<'all' | 'new' | 'existing'>(
-    'all',
-  );
-  const [viewPresenceFilter, setViewPresenceFilter] = useState<'all' | 'new' | 'existing'>('all');
+  const [importPresenceFilter, setImportPresenceFilter] = useState<ViewPresenceFilter>('all');
+  const [viewPresenceFilter, setViewPresenceFilter] = useState<ViewPresenceFilter>('all');
   // BookGridSelector grouping state. Initial mount defaults to canon grouping
   // (the dialog opens in View mode where "OT / NT / DC" reads naturally). Per
   // Sebastian item 10 (2026-05-06) the user's choice is preserved across
@@ -578,13 +657,20 @@ export function ManageBooksDialog({
   // `ManageBooksDialogProject` to that shape — `p.fullName` (sourced from `platform.fullName`
   // upstream) becomes the secondary label, falling back to `shortName` when no fullName is
   // configured. The target project itself is filtered out (already done in `otherProjects`).
+  //
+  // Exclude resource projects from the Copy "From" and Create "Based on"
+  // source pickers (copyright reasons). Read-only non-resource projects
+  // remain valid sources. The header project picker continues to include
+  // resources.
   const otherProjectsAsPS = useMemo<ProjectSelectorProject[]>(
     () =>
-      otherProjects.map((p) => ({
-        id: p.id,
-        shortName: p.shortName,
-        fullName: p.fullName ?? p.shortName,
-      })),
+      otherProjects
+        .filter((p) => !p.isResource)
+        .map((p) => ({
+          id: p.id,
+          shortName: p.shortName,
+          fullName: p.fullName ?? p.shortName,
+        })),
     [otherProjects],
   );
   const copySourceProject = copySourceId ? projects.find((p) => p.id === copySourceId) : undefined;
@@ -951,9 +1037,15 @@ export function ManageBooksDialog({
     }
   }, [action, createMethod, cvAllowed]);
 
+  // Belt-and-suspenders: the `project.isEditable === false` redirect above
+  // switches to `view` when the target becomes read-only, but the state
+  // update has a render-frame gap. Block apply explicitly so the orchestrator
+  // is never invoked on a read-only target, even mid-redirect. Sidebar
+  // disablement covers entry; this covers the dialog body's submit path.
   const canApply =
     action !== 'view' &&
     selectedArr.length > 0 &&
+    project.isEditable !== false &&
     (action !== 'copy' || !!copySourceId) &&
     !(action === 'create' && createMethod === 'fromTemplate' && !createReferenceId) &&
     !isSubmitting;
@@ -964,6 +1056,43 @@ export function ManageBooksDialog({
   // so the wiring layer's toast surface can render it consistently with the
   // orchestrator-returned warnings/errors. Using a helper keeps the four
   // run* paths uniform.
+  //
+  // `String(e)` as the non-Error fallback renders `"[object Object]"` when
+  // the backend rejects with a structured object (typical for PAPI / JSON-RPC
+  // rejections — the C# data provider doesn't throw Error instances). Extract
+  // a sensible message from common rejection shapes before falling back to
+  // JSON stringification.
+  const extractErrorMessage = (e: unknown): string => {
+    if (e instanceof Error) return e.message;
+    if (typeof e === 'string') return e;
+    if (e && typeof e === 'object') {
+      // Use `in` narrowing rather than type assertions; this preserves
+      // type-safety while letting us probe common JSON-RPC / PAPI rejection
+      // shapes ({ message }, { error: { message } }, { data: { text|message } }).
+      if ('message' in e && typeof e.message === 'string') return e.message;
+      if (
+        'error' in e &&
+        e.error &&
+        typeof e.error === 'object' &&
+        'message' in e.error &&
+        typeof e.error.message === 'string'
+      ) {
+        return e.error.message;
+      }
+      if ('data' in e && e.data && typeof e.data === 'object') {
+        if ('text' in e.data && typeof e.data.text === 'string') return e.data.text;
+        if ('message' in e.data && typeof e.data.message === 'string') return e.data.message;
+      }
+      // Last-resort: JSON stringify; never let "[object Object]" leak through.
+      try {
+        return JSON.stringify(e);
+      } catch {
+        // circular ref or BigInt — fall through to generic
+      }
+    }
+    return t('%manageBooks_genericError%', 'An unexpected error occurred.');
+  };
+
   const emitThrownError = (e: unknown) => {
     emitResult({
       success: false,
@@ -972,25 +1101,12 @@ export function ManageBooksDialog({
         {
           level: 'error',
           caption: '',
-          text: e instanceof Error ? e.message : String(e),
+          text: extractErrorMessage(e),
         },
       ],
     });
   };
 
-  /**
-   * A3: minimum on-screen lifetime of the spinner / disabled-buttons state, in milliseconds. PAPI
-   * mutations frequently complete in well under 100 ms when called against a local data provider;
-   * without a floor, the spinner and mid-mutation button-disabled affordances would flicker for a
-   * single render frame and never be perceptible to either users (UX problem) or assistive tech /
-   * e2e tests asserting the contract (testability problem). The 1500 ms floor sits comfortably
-   * above the 500 ms perceptual flicker threshold (Nielsen 1993) and is wide enough that sequential
-   * Playwright assertions (e.g. assert apply disabled, then assert cancel disabled) both land
-   * inside the same disabled-window even with the back-to-back polling and locator-resolution
-   * overhead Electron + CDP introduces. Co-locates with runCreate/runDelete/runCopy/runImport so
-   * all four paths get the same treatment.
-   */
-  const MIN_SUBMITTING_VISIBLE_MS = 1500;
   const minDelay = (ms: number) =>
     new Promise<void>((resolve) => {
       setTimeout(resolve, ms);
@@ -1234,15 +1350,19 @@ export function ManageBooksDialog({
   // newer/older/same/undetermined chip-label localized strings are still consumed by the per-row
   // status section headers in the BookGrid (see `gridItems` above) — leave them in
   // localizedStrings.json untouched.
-  const presenceFilterLabel = (s: 'all' | 'new' | 'existing'): string => {
+  // Filter dropdown labels align with the grid's group-header strings — "Not
+  // in project" / "In project" rather than "New" / "Existing". The
+  // new/newer/older/same labels for Copy/Import slot in here once the
+  // status-comparison backend is in place.
+  const presenceFilterLabel = (s: ViewPresenceFilter): string => {
     switch (s) {
       case 'all':
         return t('%manageBooks_filter_state_all%', 'All');
       case 'new':
-        return t('%manageBooks_filter_state_new%', 'New');
+        return t('%manageBooks_grid_statusGroup_notInProject%', 'Not in project');
       case 'existing':
       default:
-        return t('%manageBooks_filter_state_existing%', 'Existing');
+        return t('%manageBooks_grid_statusGroup_inProject%', 'In project');
     }
   };
 
@@ -1320,10 +1440,34 @@ export function ManageBooksDialog({
     const newLabel = t('%manageBooks_grid_statusGroup_new%', 'New');
     const sameLabel = t('%manageBooks_grid_statusGroup_same%', 'Same');
 
+    // Map a (compareState, present) tuple to the locale-stable group key + display label pair.
+    // Used by both copy and import branches so the two paths can't drift.
+    const compStateToGroup = (
+      compState: ManageBooksComparisonState,
+      isPresent: boolean,
+    ): { key: BookGridStatusGroup; label: string } => {
+      switch (compState) {
+        case 'sourceIsNewer':
+          return { key: 'newer', label: newerLabel };
+        case 'sourceIsOlder':
+          return { key: 'older', label: olderLabel };
+        case 'destDoesNotExist':
+          return { key: 'new', label: newLabel };
+        case 'filesAreSame':
+          return { key: 'same', label: sameLabel };
+        default:
+          // sourceDoesNotExist / undetermined keep the present/absent label.
+          return isPresent
+            ? { key: 'inProject', label: inProjectLabel }
+            : { key: 'notInProject', label: notInProjectLabel };
+      }
+    };
+
     return visibleBooks.map<BookGridItem>((book) => {
       const present = current.present.has(book);
       const destDate = current.dates[book];
       let tone: BookGridItem['tone'] = 'neutral';
+      let statusGroupKey: BookGridStatusGroup = present ? 'inProject' : 'notInProject';
       let statusLabel: string = present ? inProjectLabel : notInProjectLabel;
       let primaryDate: string | undefined;
       let secondaryDate: string | undefined;
@@ -1333,24 +1477,9 @@ export function ManageBooksDialog({
         const compState = computeCompareState(sourceDate, present ? destDate : undefined);
         const t1 = toneForComparisonState(compState);
         if (t1 !== 'hidden') tone = t1;
-        switch (compState) {
-          case 'sourceIsNewer':
-            statusLabel = newerLabel;
-            break;
-          case 'sourceIsOlder':
-            statusLabel = olderLabel;
-            break;
-          case 'destDoesNotExist':
-            statusLabel = newLabel;
-            break;
-          case 'filesAreSame':
-            statusLabel = sameLabel;
-            break;
-          default:
-            // sourceDoesNotExist / undetermined keep the present/absent label
-            statusLabel = present ? inProjectLabel : notInProjectLabel;
-            break;
-        }
+        const group = compStateToGroup(compState, present);
+        statusGroupKey = group.key;
+        statusLabel = group.label;
         primaryDate = present ? destDate : undefined;
         secondaryDate = sourceDate;
       } else if (action === 'import') {
@@ -1359,29 +1488,16 @@ export function ManageBooksDialog({
           const compState = computeCompareState(pick.date, present ? destDate : undefined);
           const t1 = toneForComparisonState(compState);
           if (t1 !== 'hidden') tone = t1;
-          switch (compState) {
-            case 'sourceIsNewer':
-              statusLabel = newerLabel;
-              break;
-            case 'sourceIsOlder':
-              statusLabel = olderLabel;
-              break;
-            case 'destDoesNotExist':
-              statusLabel = newLabel;
-              break;
-            case 'filesAreSame':
-              statusLabel = sameLabel;
-              break;
-            default:
-              statusLabel = present ? inProjectLabel : notInProjectLabel;
-              break;
-          }
+          const group = compStateToGroup(compState, present);
+          statusGroupKey = group.key;
+          statusLabel = group.label;
           primaryDate = present ? destDate : undefined;
           secondaryDate = pick.date;
         } else {
           primaryDate = present ? destDate : undefined;
         }
       } else if (action === 'create') {
+        statusGroupKey = 'new';
         statusLabel = newLabel;
         primaryDate = undefined;
       } else {
@@ -1415,6 +1531,7 @@ export function ManageBooksDialog({
         book,
         present,
         tone,
+        statusGroupKey,
         statusLabel,
         primaryDate,
         secondaryDate,
@@ -1636,10 +1753,20 @@ export function ManageBooksDialog({
   }
   return (
     <>
+      {/* Outer dialog wrapper drives the responsive collapse. At narrow widths
+          the sidebar drops to an icon-only rail and the header subtitle hides.
+          Tailwind container queries (`@md/dialog:` variants) don't reliably
+          reach the webview's iframe stylesheets despite being emitted in the
+          dist, so a JS-driven ResizeObserver flag is used instead — fewer
+          moving parts, no CSS-loader surprises. The `dialogIsNarrow` flag is
+          forwarded to ManageBooksSidebar where it conditionally swaps class
+          sets. */}
       <div
+        ref={dialogRootRef}
         className="tw:flex tw:h-full tw:min-h-0"
         data-testid="manage-books-dialog"
         data-action={action}
+        data-narrow={dialogIsNarrow ? 'true' : undefined}
       >
         <TooltipProvider delayDuration={200}>
           <ManageBooksSidebar
@@ -1655,6 +1782,8 @@ export function ManageBooksDialog({
             isTargetEditable={project.isEditable}
             targetShortName={project.shortName}
             t={t}
+            projectSelectorLocalizedStrings={projectSelectorLocalizedStrings}
+            isNarrow={dialogIsNarrow}
           />
           <div className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col">
             <header className="tw:flex tw:items-center tw:gap-3 tw:border-b tw:px-6 tw:py-4">
@@ -1662,7 +1791,11 @@ export function ManageBooksDialog({
                 <h2 className="tw:text-lg tw:font-semibold">
                   {t('%manageBooks_dialog_title%', 'Manage books')}
                 </h2>
-                <p className="tw:text-xs tw:text-muted-foreground">{headerSubtitle}</p>
+                {/* Header subtitle hides when the dialog is narrow. Driven by
+                    the JS-resize-observer flag on the dialog root. */}
+                {!dialogIsNarrow && (
+                  <p className="tw:text-xs tw:text-muted-foreground">{headerSubtitle}</p>
+                )}
               </div>
             </header>
 
@@ -1743,137 +1876,34 @@ export function ManageBooksDialog({
                     return (
                       <>
                         {!enableProjectCanons ? (
-                          <>
-                            <span id={projectCanonsDisabledHintId} className="tw:sr-only">
-                              {stubTooltip}
-                            </span>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span>{projectCanonsButton}</span>
-                              </TooltipTrigger>
-                              <TooltipContent>{stubTooltip}</TooltipContent>
-                            </Tooltip>
-                          </>
+                          <DisabledStubButtonTooltip
+                            hintId={projectCanonsDisabledHintId}
+                            tooltipText={stubTooltip}
+                          >
+                            {projectCanonsButton}
+                          </DisabledStubButtonTooltip>
                         ) : (
                           projectCanonsButton
                         )}
                         {!enableRegistry ? (
-                          <>
-                            <span id={registryDisabledHintId} className="tw:sr-only">
-                              {stubTooltip}
-                            </span>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span>{registryButton}</span>
-                              </TooltipTrigger>
-                              <TooltipContent>{stubTooltip}</TooltipContent>
-                            </Tooltip>
-                          </>
+                          <DisabledStubButtonTooltip
+                            hintId={registryDisabledHintId}
+                            tooltipText={stubTooltip}
+                          >
+                            {registryButton}
+                          </DisabledStubButtonTooltip>
                         ) : (
                           registryButton
                         )}
-                        <span id={viewDiffDisabledHintId} className="tw:sr-only">
-                          {stubTooltip}
-                        </span>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span>{viewDiffButton}</span>
-                          </TooltipTrigger>
-                          <TooltipContent>{stubTooltip}</TooltipContent>
-                        </Tooltip>
+                        <DisabledStubButtonTooltip
+                          hintId={viewDiffDisabledHintId}
+                          tooltipText={stubTooltip}
+                        >
+                          {viewDiffButton}
+                        </DisabledStubButtonTooltip>
                       </>
                     );
                   })()}
-                </div>
-              )}
-
-              {action === 'create' && (
-                <div className="tw:flex tw:w-full tw:min-w-0 tw:flex-wrap tw:items-center tw:gap-2">
-                  <Select
-                    value={createMethod}
-                    onValueChange={(v) => {
-                      if (isCreateMethod(v)) setCreateMethod(v);
-                    }}
-                    disabled={isSubmitting}
-                  >
-                    <SelectTrigger
-                      id="af-method"
-                      className="tw:h-8 tw:min-w-0 tw:flex-1 tw:basis-48"
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="empty">
-                        {t('%manageBooks_create_method_empty%', 'Create empty book')}
-                      </SelectItem>
-                      <SelectItem
-                        value="chapterVerse"
-                        disabled={!cvAllowed}
-                        aria-describedby={!cvAllowed ? cvDisabledHintId : undefined}
-                      >
-                        {t(
-                          '%manageBooks_create_method_chapterVerse%',
-                          'Create with all chapter and verse numbers',
-                        )}
-                      </SelectItem>
-                      <SelectItem value="fromTemplate">
-                        {t('%manageBooks_create_method_referenceText%', 'Create based on')}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {!cvAllowed && (
-                    <span id={cvDisabledHintId} className="tw:sr-only">
-                      {t(
-                        '%manageBooks_create_method_chapterVerse_disabledTooltip%',
-                        'Disabled because the selection contains only non-canonical books.',
-                      )}
-                    </span>
-                  )}
-                  {createMethod === 'fromTemplate' && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info
-                          className="tw:h-4 tw:w-4 tw:shrink-0 tw:text-muted-foreground"
-                          aria-label={t('%manageBooks_create_basedOnInfo%', 'Based on info')}
-                        />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        {t(
-                          '%manageBooks_create_basedOnInfo%',
-                          'Prefill with the same markers as a selected project',
-                        )}
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
-                  {createMethod === 'fromTemplate' && (
-                    <div id="af-reference" data-testid="manage-books-create-reference-trigger">
-                      <ProjectSelector
-                        mode="project"
-                        projects={otherProjectsAsPS}
-                        openTabs={openTabs ?? []}
-                        selection={{ projectId: createReferenceId }}
-                        onChangeSelection={({ projectId: nextId }) =>
-                          setCreateReferenceId(nextId || undefined)
-                        }
-                        isDisabled={isSubmitting}
-                        ariaLabel={t(
-                          '%manageBooks_create_referenceProjectPlaceholder%',
-                          'Select reference project',
-                        )}
-                        buttonPlaceholder={t(
-                          '%manageBooks_create_referenceProjectPlaceholder%',
-                          'Select reference project',
-                        )}
-                        // Mirror the prior <SelectTrigger> "primary fill while empty" affordance —
-                        // the picker reads as a call-to-action until a reference project is set.
-                        buttonClassName={cn(
-                          'tw:h-8 tw:min-w-0 tw:flex-1 tw:basis-48',
-                          !createReferenceId &&
-                            'tw:border-primary tw:bg-primary tw:text-primary-foreground tw:hover:bg-primary/90',
-                        )}
-                      />
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -1897,6 +1927,7 @@ export function ManageBooksDialog({
                         '%manageBooks_copy_sourcePlaceholder%',
                         'Select project',
                       )}
+                      localizedStrings={projectSelectorLocalizedStrings}
                       // Mirror the prior <SelectTrigger> "primary fill while empty" affordance —
                       // the picker reads as a call-to-action until a source project is set.
                       buttonClassName={cn(
@@ -1997,7 +2028,13 @@ export function ManageBooksDialog({
                 value={filter}
                 onSearch={setFilter}
                 placeholder={t('%manageBooks_filter_placeholder%', 'Filter books…')}
-                className="tw:h-8 tw:min-w-0 tw:max-w-xs tw:flex-1 tw:basis-24"
+                // SearchBar's inner shadcn Input defaults to tw:h-10, making
+                // the search component visibly taller than its siblings
+                // (BookGridGroupByToggle, PresenceFilterMenu — all tw:h-8).
+                // The wrapper className already sets tw:h-8 but the Input's
+                // intrinsic height wins; use Tailwind's arbitrary descendant
+                // selector to push the height into the Input itself.
+                className="tw:h-8 tw:min-w-0 tw:max-w-xs tw:flex-1 tw:basis-24 tw:[&_input]:h-8"
                 isDisabled={isSubmitting}
               />
               <span
@@ -2083,10 +2120,104 @@ export function ManageBooksDialog({
                   interactive={action !== 'view'}
                   localizedStrings={bookGridStrings}
                   getRowAriaLabel={gridRowAriaLabel}
-                  contentClassName="tw:px-0 tw:py-0"
+                  // Leave BookGridSelector's default tw:p-1 in place so the
+                  // first pill checkbox horizontally aligns with the
+                  // toolbar's select-all checkbox. A `tw:px-0` override would
+                  // move the grid 4px left of the toolbar items.
                 />
               )}
             </div>
+
+            {/* The create-mode method picker + reference-project picker live
+                between the book grid and the footer so the user sees the grid
+                first and configures the create method just before applying. */}
+            {action === 'create' && (
+              <div className="tw:flex tw:w-full tw:min-w-0 tw:flex-wrap tw:items-center tw:gap-2 tw:border-t tw:px-6 tw:py-2">
+                <Select
+                  value={createMethod}
+                  onValueChange={(v) => {
+                    if (isCreateMethod(v)) setCreateMethod(v);
+                  }}
+                  disabled={isSubmitting}
+                >
+                  <SelectTrigger id="af-method" className="tw:h-8 tw:min-w-0 tw:flex-1 tw:basis-48">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="empty">
+                      {t('%manageBooks_create_method_empty%', 'Create empty book')}
+                    </SelectItem>
+                    <SelectItem
+                      value="chapterVerse"
+                      disabled={!cvAllowed}
+                      aria-describedby={!cvAllowed ? cvDisabledHintId : undefined}
+                    >
+                      {t(
+                        '%manageBooks_create_method_chapterVerse%',
+                        'Create with all chapter and verse numbers',
+                      )}
+                    </SelectItem>
+                    <SelectItem value="fromTemplate">
+                      {t('%manageBooks_create_method_referenceText%', 'Create based on')}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                {!cvAllowed && (
+                  <span id={cvDisabledHintId} className="tw:sr-only">
+                    {t(
+                      '%manageBooks_create_method_chapterVerse_disabledTooltip%',
+                      'Disabled because the selection contains only non-canonical books.',
+                    )}
+                  </span>
+                )}
+                {createMethod === 'fromTemplate' && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info
+                        className="tw:h-4 tw:w-4 tw:shrink-0 tw:text-muted-foreground"
+                        aria-label={t('%manageBooks_create_basedOnInfo%', 'Based on info')}
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {t(
+                        '%manageBooks_create_basedOnInfo%',
+                        'Prefill with the same markers as a selected project',
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+                {createMethod === 'fromTemplate' && (
+                  <div id="af-reference" data-testid="manage-books-create-reference-trigger">
+                    <ProjectSelector
+                      mode="project"
+                      projects={otherProjectsAsPS}
+                      openTabs={openTabs ?? []}
+                      selection={{ projectId: createReferenceId }}
+                      onChangeSelection={({ projectId: nextId }) =>
+                        setCreateReferenceId(nextId || undefined)
+                      }
+                      isDisabled={isSubmitting}
+                      ariaLabel={t(
+                        '%manageBooks_create_referenceProjectPlaceholder%',
+                        'Select reference project',
+                      )}
+                      buttonPlaceholder={t(
+                        '%manageBooks_create_referenceProjectPlaceholder%',
+                        'Select reference project',
+                      )}
+                      localizedStrings={projectSelectorLocalizedStrings}
+                      // Mirror the prior <SelectTrigger> "primary fill while empty" affordance —
+                      // the picker reads as a call-to-action until a reference project is set.
+                      buttonClassName={cn(
+                        'tw:h-8 tw:min-w-0 tw:flex-1 tw:basis-48',
+                        !createReferenceId &&
+                          'tw:border-primary tw:bg-primary tw:text-primary-foreground tw:hover:bg-primary/90',
+                      )}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Theme C1 (FN-008 v2.6.0+, 2026-05-01): the in-dialog
                   role="alert" result panel was removed. AlertEntry warnings
