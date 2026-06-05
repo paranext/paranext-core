@@ -52,17 +52,25 @@ export const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(
     const dir: Direction = readDirection();
 
     return (
-      <div id={id} className={cn('tw:relative', { 'tw:w-full': isFullWidth }, className)}>
+      <div
+        id={id}
+        className={cn('tw:relative tw:@container/search', { 'tw:w-full': isFullWidth }, className)}
+      >
         <Search
           className={cn(
-            'tw:absolute tw:top-1/2 tw:h-4 tw:w-4 tw:-translate-y-1/2 tw:transform tw:opacity-50',
+            'tw:absolute tw:top-1/2 tw:h-4 tw:w-4 tw:-translate-y-1/2 tw:transform tw:opacity-50 tw:@max-[7rem]/search:hidden',
             { 'tw:right-3': dir === 'rtl' },
             { 'tw:left-3': dir === 'ltr' },
           )}
         />
         <Input
           ref={inputRef}
-          className="tw:w-full tw:text-ellipsis tw:pe-9 tw:ps-9"
+          className={cn(
+            'tw:w-full tw:overflow-hidden tw:text-ellipsis tw:text-sm tw:ps-9 tw:@max-[7rem]/search:ps-3',
+            {
+              'tw:pe-8': value,
+            },
+          )}
           placeholder={placeholder}
           value={value}
           onChange={(e) => onSearch(e.target.value)}
@@ -73,7 +81,7 @@ export const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(
             variant="ghost"
             size="icon"
             className={cn(
-              'tw:absolute tw:top-1/2 tw:h-7 tw:-translate-y-1/2 tw:transform tw:hover:bg-transparent',
+              'tw:absolute tw:inset-y-0 tw:my-auto tw:h-7',
               { 'tw:left-0': dir === 'rtl' },
               { 'tw:right-0': dir === 'ltr' },
             )}
