@@ -7,6 +7,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { LocalizedBookData } from './find-types';
 import SearchResult, {
+  FindLogger,
   HidableFindResult,
   SEARCH_RESULT_LOCALIZED_STRING_KEYS,
 } from './search-result.component';
@@ -41,6 +42,8 @@ type SearchResultsInBookProps = {
   localizedStrings: {
     [localizedInventoryKey in (typeof SEARCH_RESULT_LOCALIZED_STRING_KEYS)[number]]?: LocalizedStringValue;
   };
+  /** Optional logger forwarded to children for unexpected USJ-load / parse errors. */
+  logger?: FindLogger;
 };
 
 /** Handles rendering the results within a single book of a search. */
@@ -57,6 +60,7 @@ export function SearchResultsInBook({
   localizedStrings,
   isReplaceMode,
   isReplacing,
+  logger,
 }: SearchResultsInBookProps) {
   const [usjBook, setUsjBook] = useState<Usj | undefined>(undefined);
 
@@ -67,26 +71,28 @@ export function SearchResultsInBook({
         if (isActive) setUsjBook(usj);
         return undefined;
       })
-      .catch(() => {
-        // The verse context is best-effort; if loading the book USJ fails, leave it undefined so
-        // results still render without surrounding context.
+      .catch((error) => {
+        // The verse context is best-effort: render results without surrounding context if loading
+        // the book USJ fails, but still log so unexpected PDP errors aren't invisible.
+        logger?.warn(`Find: failed to load USJ for book ${bookId}:`, error);
         if (isActive) setUsjBook(undefined);
       });
     return () => {
       isActive = false;
     };
-  }, [getBookUsj, bookId]);
+  }, [getBookUsj, bookId, logger]);
 
   const usjReaderWriter = useMemo(() => {
     if (!usjBook) return undefined;
     try {
       return new UsjReaderWriter(usjBook, { markersMap: USFM_MARKERS_MAP_PARATEXT_3_0 });
-    } catch {
-      // If the USJ can't be parsed, fall back to rendering results without verse context rather
-      // than surfacing an error.
+    } catch (error) {
+      // Same best-effort policy: fall back to no-context rendering, but log unexpected parse
+      // failures so they aren't silently lost.
+      logger?.warn(`Find: failed to parse USJ for book ${bookId}:`, error);
       return undefined;
     }
-  }, [usjBook]);
+  }, [usjBook, bookId, logger]);
 
   const firstReplacedIndex = results.findIndex((r) => r.isReplaced);
 
@@ -107,6 +113,7 @@ export function SearchResultsInBook({
           localizedStrings={localizedStrings}
           isReplaceMode={isReplaceMode}
           isReplacing={isReplacing}
+          logger={logger}
         />
       ))}
     </>

@@ -278,10 +278,12 @@ export function ChecksSidePanel({
           onChange={onSelectCheckTypes}
           placeholder={localizedStrings['%webView_checksSidePanel_checkTypeFilter_label%']}
           hasToggleAllFeature
-          selectAllText="Select All"
-          clearAllText="Clear All"
+          selectAllText={localizedStrings['%webview_checksSidePanel_checkTypeFilter_selectAll%']}
+          clearAllText={localizedStrings['%webview_checksSidePanel_checkTypeFilter_deselectAll%']}
           customSelectedText={selectedChecksCountLabel}
-          commandEmptyMessage="No checks found"
+          commandEmptyMessage={
+            localizedStrings['%webview_checksSidePanel_checkTypeFilter_noChecksFound%']
+          }
           isOpen={isCheckTypesOpen}
           onOpenChange={setIsCheckTypesOpen}
           sortSelected={false}

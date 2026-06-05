@@ -29,6 +29,7 @@ export const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_checksSidePanel_checkTypeFilter_countLabel%',
   '%webview_checksSidePanel_checkTypeFilter_deselectAll%',
   '%webView_checksSidePanel_checkTypeFilter_label%',
+  '%webview_checksSidePanel_checkTypeFilter_noChecksFound%',
   '%webview_checksSidePanel_checkTypeFilter_selectAll%',
   '%webview_checksSidePanel_checkTypeFilter_setUp%',
   // Misc used elsewhere on the page

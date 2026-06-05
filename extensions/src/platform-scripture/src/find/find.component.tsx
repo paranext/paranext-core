@@ -43,7 +43,11 @@ import { FindJobStatus, WordRestriction } from 'platform-scripture';
 import React, { useCallback, useMemo, useRef } from 'react';
 import { FindFilters } from './find-filters.component';
 import { LocalizedBookData, SearchTextType } from './find-types';
-import { HidableFindResult, SEARCH_RESULT_LOCALIZED_STRING_KEYS } from './search-result.component';
+import {
+  FindLogger,
+  HidableFindResult,
+  SEARCH_RESULT_LOCALIZED_STRING_KEYS,
+} from './search-result.component';
 import { SearchResultsInBook } from './search-results-in-book.component';
 
 /** Localization keys used by the {@link Find} component itself (excludes child component keys). */
@@ -200,6 +204,11 @@ export type FindProps = {
   onResultsScroll: (event: React.UIEvent<HTMLDivElement>) => void;
   /** Retrieves the USJ for a book so each result's verse context can be computed. */
   getBookUsj: (bookId: string) => Promise<Usj | undefined>;
+  /**
+   * Optional logger for unexpected USJ load/parse failures while building verse context. The
+   * webview supplies the PAPI logger; stories may omit it. The component stays `@papi`-free.
+   */
+  logger?: FindLogger;
 };
 
 /**
@@ -255,6 +264,7 @@ export function Find({
   onCancelReplace,
   onResultsScroll,
   getBookUsj,
+  logger,
 }: FindProps) {
   // useRef requires null as the initial value when used with a DOM element ref
   // eslint-disable-next-line no-null/no-null
@@ -705,6 +715,7 @@ export function Find({
                 localizedStrings={searchResultLocalizedStrings}
                 isReplaceMode={activeMode === 'replace'}
                 isReplacing={isReplacing}
+                logger={logger}
               />
             );
           });
