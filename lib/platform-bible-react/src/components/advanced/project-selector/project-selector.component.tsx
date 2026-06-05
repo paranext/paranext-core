@@ -240,10 +240,7 @@ type RowRenderProps = {
   strings: Required<ProjectSelectorLocalizedStrings>;
   onClick: (row: ProjectRow) => void;
   onOpen: ((row: ProjectRow) => void) | undefined;
-  /**
-   * Forwarded by the parent so it can scroll the selected row into view when
-   * the popover opens.
-   */
+  /** Forwarded by the parent so it can scroll the selected row into view when the popover opens. */
   selectedRowRef?: RefObject<HTMLDivElement | null>;
 };
 
