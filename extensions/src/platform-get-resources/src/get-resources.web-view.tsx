@@ -97,6 +97,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
         .then(() => {
           // Trigger a refetch so the resource list reflects the new installed state.
           setFetchResources(true);
+          return undefined;
         })
         .catch((error) => {
           logger.debug(getErrorMessage(error));
