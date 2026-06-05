@@ -239,17 +239,14 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // Auto-install when the selected DblResource exists but isn't installed
   const matchDblEntryUid = dblMatch?.dblEntryUid;
   useEffect(() => {
-    if (!fetchResources && isInstalling && dblResourcesProvider && matchDblEntryUid !== undefined) {
-      (async () => {
-        try {
-          await dblResourcesProvider.installDblResource(matchDblEntryUid);
-        } catch (e: unknown) {
-          logger.error(`Resource panel auto-install failed: ${getErrorMessage(e)}`);
-        }
-        setFetchResources(true);
-      })();
+    if (isInstalling && dblResourcesProvider && matchDblEntryUid !== undefined) {
+      dblResourcesProvider
+        .installDblResource(matchDblEntryUid)
+        .catch((e: unknown) =>
+          logger.error(`Resource panel auto-install failed: ${getErrorMessage(e)}`),
+        );
     }
-  }, [fetchResources, isInstalling, dblResourcesProvider, matchDblEntryUid]);
+  }, [isInstalling, dblResourcesProvider, matchDblEntryUid]);
 
   // #endregion
 
@@ -361,8 +358,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
           ? (list) => textConnectionsProvider.setUserReferencedProjectsAndResources(list)
           : undefined,
         setSelectedResourceId,
-      ).then(() => setSelectedResourceId(resource.dblEntryUid)),
-
+      ),
     [adminResourceList, setAdminResourceList, textConnectionsProvider, setSelectedResourceId],
   );
 
