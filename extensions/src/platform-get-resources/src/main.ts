@@ -93,7 +93,6 @@ async function getCachedResources(): Promise<DblResourceData[] | undefined> {
           return {
             ...resource,
             installed: isInstalled,
-            updateAvailable: false,
             projectId: matchingLocalProject?.id ?? '',
           };
         }
