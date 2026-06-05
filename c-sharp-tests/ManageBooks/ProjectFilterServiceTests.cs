@@ -78,11 +78,12 @@ namespace TestParanextDataProvider.ManageBooks
                 type: ProjectType.MarbleResource,
                 editable: false
             );
-            // Sebastian/Mike review item #29 follow-up (2026-05-11): a scripture-typed
-            // resource project — surfaces ProjectSummary.IsResource = true so the Copy
-            // "From" / Create "Based on" pickers can hide resources without an extra API
-            // call. We need a scripture type here (not MarbleResource) so the filter's
-            // IsScripture() predicate keeps it in the AllScripture result.
+            // Scripture-typed resource project — surfaces
+            // ProjectSummary.IsResource = true so the Copy "From" / Create
+            // "Based on" pickers can hide resources without an extra API
+            // call. We need a scripture type here (not MarbleResource) so the
+            // filter's IsScripture() predicate keeps it in the AllScripture
+            // result.
             _resource = CreateResourceScrText(
                 name: "StdResource",
                 type: ProjectType.Standard,
@@ -390,9 +391,9 @@ namespace TestParanextDataProvider.ManageBooks
                 Is.True,
                 "StdEditable must report IsEditable = true"
             );
-            // Sebastian/Mike review item #29 follow-up (2026-05-11): IsResource must be
-            // populated for every summary so the picker can filter. Non-resource
-            // ScrTexts (DummyScrText doesn't override IsResourceProject) → false.
+            // IsResource must be populated for every summary so the picker
+            // can filter. Non-resource ScrTexts (DummyScrText doesn't override
+            // IsResourceProject) → false.
             Assert.That(
                 stdSummary.IsResource,
                 Is.False,
@@ -422,7 +423,7 @@ namespace TestParanextDataProvider.ManageBooks
         [Property("CapabilityId", "CAP-011")]
         [Property("BehaviorId", "BHV-411")]
         [Description(
-            "Sebastian/Mike review item #29 follow-up: a scripture-typed project whose ScrText.IsResourceProject returns true must surface ProjectSummary.IsResource = true so the Copy/Create pickers can hide resources without an extra API call."
+            "A scripture-typed project whose ScrText.IsResourceProject returns true must surface ProjectSummary.IsResource = true so the Copy/Create pickers can hide resources without an extra API call."
         )]
         public void FilterProjects_Summary_ResourceProject_IsResourceTrue()
         {
@@ -550,7 +551,7 @@ namespace TestParanextDataProvider.ManageBooks
         }
 
         // -----------------------------------------------------------------
-        // Support: marker subclass for review item #29 follow-up.
+        // Support: marker subclass for resource-project test coverage.
         //
         // ScrText.IsResourceProject is `virtual` and defaults to false on
         // DummyScrText. Resources in production override it to true (see

@@ -679,8 +679,7 @@ namespace TestParanextDataProvider.ManageBooks
         }
 
         // =====================================================================
-        // Sebastian/Vladimir review items #14 + #44 (2026-05-11) — Import
-        // wire-shape for SourceLastModified / DestLastModified.
+        // Import wire-shape for SourceLastModified / DestLastModified.
         //
         // Import's BuildComparisonEntry passes preflightSourceTimestamp =
         // DateTime.UtcNow as the source modification time. Together with a
@@ -697,9 +696,9 @@ namespace TestParanextDataProvider.ManageBooks
         [Property("CapabilityId", "CAP-009")]
         [Property("BehaviorId", "BHV-109")]
         [Description(
-            "Sebastian/Vladimir #14 + #44: ParseImportFiles surfaces a non-null, "
-                + "ISO-8601-shaped SourceLastModified for every extracted book — the "
-                + "value originates from preflightSourceTimestamp = DateTime.UtcNow."
+            "ParseImportFiles surfaces a non-null, ISO-8601-shaped "
+                + "SourceLastModified for every extracted book — the value "
+                + "originates from preflightSourceTimestamp = DateTime.UtcNow."
         )]
         public void ParseImportFiles_SourceLastModified_IsRecentIsoString()
         {
@@ -1198,7 +1197,7 @@ namespace TestParanextDataProvider.ManageBooks
 
         // =====================================================================
         // ImportBooks — replaceEntireBook=false chapter-merge branch
-        // (Stage 7 / Sebastian #15 — port of PT9 ImportSfmText.WriteChaptersToBook)
+        // (port of PT9 ImportSfmText.WriteChaptersToBook)
         // =====================================================================
 
         [Test]

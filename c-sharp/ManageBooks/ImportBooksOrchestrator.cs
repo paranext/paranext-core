@@ -797,14 +797,7 @@ public static class ImportBooksOrchestrator
         string bookId = SIL.Scripture.Canon.BookNumberToId(bookNum);
         try
         {
-            // Sebastian review item #15 (2026-05-11): the previous implementation
-            // wrote the whole book regardless of `replaceEntireBook`, citing the
-            // test-seam concern. Re-check during round 2 showed PutText with
-            // chapterNum>0 goes through the same ProjectFileManager path the
-            // whole-book write uses, so the seam isn't actually a blocker —
-            // InMemoryFileManager handles per-chapter writes correctly.
-            //
-            // The two behaviors port directly from PT9 ImportSfmText
+            // Two behaviors port directly from PT9 ImportSfmText
             // (ParatextData/ImportSfmText.cs:159-285):
             //
             //   - replaceEntireBook=true  → whole-book write (clobbers every
@@ -813,9 +806,13 @@ public static class ImportBooksOrchestrator
             //   - replaceEntireBook=false → "merge from source": split the
             //     source text into chapters, overwrite the matching chapters in
             //     dest, leave dest chapters not in source intact. Maps to PT9's
-            //     `WriteChaptersToBook` path. The UI label "Merge book(s)" is
-            //     intentional — the round-1 "Import non-existing chapters"
-            //     wording promised a behavior PT9 never had.
+            //     `WriteChaptersToBook` path. The UI label is "Merge book(s)"
+            //     — "Import non-existing chapters" would have promised a
+            //     behavior PT9 never had.
+            //
+            // PutText with chapterNum>0 goes through the same ProjectFileManager
+            // path the whole-book write uses, so InMemoryFileManager handles
+            // per-chapter writes correctly without a special test seam.
             if (replaceEntireBook)
             {
                 scrText.PutText(bookNum, 0, false, bookText, null);
@@ -857,12 +854,13 @@ public static class ImportBooksOrchestrator
 
     // === PORTED FROM PT9 ===
     // Source: ParatextData/ImportSfmText.cs:245-286 (WriteChaptersToBook)
-    // Sebastian review item #15 (2026-05-11): chapter-merge path that wires up
-    // when the user picks "Merge book(s)" / "Merge from source" instead of
-    // "Replace entire books". Splits source text into chapters via
-    // ScrText.SplitIntoChapters, then writes each non-empty chapter via
-    // PutText(bookNum, chapterNum, ...). Dest chapters not in source survive
-    // unchanged; source chapters overwrite their dest counterparts.
+    //
+    // Chapter-merge path that wires up when the user picks "Merge book(s)" /
+    // "Merge from source" instead of "Replace entire books". Splits source text
+    // into chapters via ScrText.SplitIntoChapters, then writes each non-empty
+    // chapter via PutText(bookNum, chapterNum, ...). Dest chapters not in
+    // source survive unchanged; source chapters overwrite their dest
+    // counterparts.
     private static readonly System.Text.RegularExpressions.Regex EmptyChapterPattern =
         new(@"^(\\id [^\r\n]*)?\s*$", System.Text.RegularExpressions.RegexOptions.Compiled);
 

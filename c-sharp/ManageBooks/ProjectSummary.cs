@@ -16,10 +16,9 @@ namespace Paranext.DataProvider.ManageBooks;
 /// <param name="IsEditable">Whether the project reports itself as editable.</param>
 /// <param name="IsResource">
 /// Whether the project is a resource (read-only published text). Sourced from
-/// PT9 <c>ScrText.IsResourceProject</c>. Added 2026-05-11 for review item #29 —
-/// the Copy "From" / Create "Based on" pickers must exclude resources for
-/// copyright reasons; the header picker still includes them (treated like any
-/// other read-only project).
+/// PT9 <c>ScrText.IsResourceProject</c>. The Copy "From" / Create "Based on"
+/// pickers must exclude resources for copyright reasons; the header picker
+/// still includes them (treated like any other read-only project).
 /// </param>
 public record ProjectSummary(
     string ProjectId,

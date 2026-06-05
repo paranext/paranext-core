@@ -137,10 +137,10 @@ const BOOK_PILL_BASE_CLASS =
 const bookPillClasses = (present: boolean): string =>
   cn(
     BOOK_PILL_BASE_CLASS,
-    // Sebastian review item 39 (2026-05-11) overrides round-1 item 24: use a 20%-opacity
-    // primary tint on hover and leave the text foreground untouched. The prior treatment
-    // (`bg-primary/90` + `text-primary-foreground`) produced a high-contrast "selected"
-    // look on hover that confused users about which pills were actually selected.
+    // Use a 20%-opacity primary tint on hover and leave the text foreground
+    // untouched. A higher-contrast treatment (`bg-primary/90` +
+    // `text-primary-foreground`) makes hovered pills look "selected" and
+    // confuses users about which pills are actually selected.
     'tw:transition-colors tw:hover:bg-primary/20',
     present
       ? 'tw:border-primary/40 tw:bg-accent'
@@ -172,8 +172,8 @@ const STATUS_BADGE_VARIANT: Record<
  * appear first when grouping by status. Keys not present here default to 50 and keep
  * first-encountered order.
  *
- * Sebastian/Vladimir Minor (2026-05-11): previously keyed on English `statusLabel` values, which
- * silently broke section ordering under any non-English locale because the lookup would always miss
+ * Keying on `BookGridStatusGroup` (rather than the localized `statusLabel`) is required so section
+ * ordering survives non-English locales — a label-based lookup would always miss under translation
  * and every group would tie at 50.
  */
 const STATUS_GROUP_PRIORITY: Record<BookGridStatusGroup, number> = {
@@ -427,13 +427,11 @@ export function BookGridSelector({
 
   // -- collapse state -----------------------------------------------------
   //
-  // No groups default-collapse today. The historical `DEFAULT_COLLAPSED_STATUS_GROUPS`
-  // (with a single entry 'New - out of scope') is dead code — no current producer
-  // emits that status — and was flagged by the Sebastian/Vladimir 2026-05-11
-  // follow-up because it was keyed by English label and would silently break under
-  // any non-English locale. Removed entirely. If a future producer needs a
-  // default-collapsed group, reintroduce as `ReadonlySet<BookGridStatusGroup>`
-  // keyed by the locale-stable group key and check it in `isCollapsed` below.
+  // No groups default-collapse today. If a future producer needs a
+  // default-collapsed group, add a `ReadonlySet<BookGridStatusGroup>` keyed
+  // by the locale-stable group key (NOT by the localized label, which would
+  // silently miss under non-English locales) and check it in `isCollapsed`
+  // below.
   const [userCollapsedGroups, setUserCollapsedGroups] = useState<Set<string>>(() => new Set());
   const toggleCollapsed = (label: string) =>
     setUserCollapsedGroups((prev) => {
@@ -612,13 +610,14 @@ export function BookGridSelector({
     const body = (
       <>
         {interactive && (
-          // Sebastian review item 46 (2026-05-11): the pill is an outer <button> (line ~688
-          // below). Using shadcn's <Checkbox> here renders a Radix Checkbox.Root <button>,
-          // which yields a console warning: "<button> cannot appear as a descendant of
-          // <button>". The visual is purely decorative — the outer <button> handles all
-          // interaction and we set aria-hidden + tabIndex={-1} previously to confirm it.
-          // Swap to a presentational <span> that mirrors the Checkbox look so DOM nesting is
-          // valid. Mirrors lib/platform-bible-react/src/components/shadcn-ui/checkbox.tsx.
+          // The pill is an outer <button> (further below). Using shadcn's
+          // <Checkbox> here renders a Radix Checkbox.Root <button>, which
+          // triggers the "<button> cannot appear as a descendant of <button>"
+          // DOM warning. The visual is purely decorative — the outer <button>
+          // handles all interaction (we set aria-hidden + tabIndex={-1}). Use a
+          // presentational <span> that mirrors the Checkbox look so DOM
+          // nesting stays valid. Mirrors
+          // lib/platform-bible-react/src/components/shadcn-ui/checkbox.tsx.
           <span
             aria-hidden
             className={cn(
@@ -684,8 +683,7 @@ export function BookGridSelector({
       return (
         <Tooltip>
           <TooltipTrigger asChild>{plain}</TooltipTrigger>
-          {/* Sebastian review item 40 (2026-05-11) overrides round-1 item 7: tooltip
-              renders bottom-LEFT (align="start") rather than bottom-right. */}
+          {/* Tooltip renders bottom-LEFT (align="start"). */}
           <TooltipContent side="bottom" align="start">
             {tooltipContent}
           </TooltipContent>
@@ -752,7 +750,7 @@ export function BookGridSelector({
     return (
       <Tooltip>
         <TooltipTrigger asChild>{button}</TooltipTrigger>
-        {/* Sebastian review item 40 (2026-05-11) — bottom-LEFT alignment. */}
+        {/* Tooltip renders bottom-LEFT alignment. */}
         <TooltipContent side="bottom" align="start">
           {tooltipContent}
         </TooltipContent>
@@ -768,10 +766,10 @@ export function BookGridSelector({
       )}
     >
       {groups.map((group, gi) => {
-        // Sebastian review item 31 (2026-05-11): when there's only ONE group (e.g. all
-        // visible books fall under "In project" so canon grouping collapses to one), the
-        // collapse chevron is gratuitous — collapsing it would hide the entire grid. Force
-        // the group expanded and render its header as static text (handled below).
+        // When there's only ONE group (e.g. all visible books fall under "In
+        // project" so canon grouping collapses to one), the collapse chevron
+        // is gratuitous — collapsing it would hide the entire grid. Force the
+        // group expanded and render its header as static text (handled below).
         const isSingleGroup = groups.length === 1;
         const collapsed = isSingleGroup ? false : isCollapsed(group.label);
         const groupBooks = group.items.map((it) => it.book);
@@ -810,16 +808,16 @@ export function BookGridSelector({
                 className={cn(
                   'tw:sticky tw:top-0 tw:z-10 tw:flex tw:items-center tw:gap-2 tw:bg-background',
                   gi === 0 ? 'tw:pt-0' : 'tw:pt-1',
-                  // Sebastian review item 32 (2026-05-11): when the group is collapsed,
-                  // visually tie the checkbox to the header by drawing a rounded border
-                  // around the whole row. Without it the header label and its select-all
-                  // checkbox can read as unrelated when no pills are visible below.
+                  // When the group is collapsed, visually tie the checkbox to
+                  // the header by drawing a rounded border around the whole
+                  // row. Without it the header label and its select-all
+                  // checkbox can read as unrelated when no pills are visible
+                  // below.
                   collapsed && 'tw:rounded-md tw:border tw:border-border tw:px-2',
                 )}
               >
                 {isSingleGroup ? (
-                  /* Sebastian review item 31 (2026-05-11): single-group static header —
-                     no chevron, no <Button>, no toggle. */
+                  /* Single-group static header — no chevron, no <Button>, no toggle. */
                   <span className="tw:flex tw:h-6 tw:flex-1 tw:items-center tw:gap-1 tw:px-2 tw:text-[11px] tw:font-semibold tw:uppercase tw:tracking-wider tw:text-muted-foreground">
                     <span>{group.label}</span>
                     <span className="tw:ml-1 tw:font-normal tw:normal-case tw:tracking-normal tw:text-muted-foreground/70">
@@ -880,9 +878,9 @@ export function BookGridSelector({
                 className={cn(
                   'tw:grid tw:auto-rows-min tw:gap-1 tw:text-sm',
                   group.label && 'tw:mt-0.5',
-                  // Sebastian review item 39 (2026-05-11) overrides round-1 item 24:
-                  // group-hover preview uses the same 20%-opacity primary tint as the
-                  // pill hover (`bg-primary/20`) and leaves text foreground alone.
+                  // Group-hover preview uses the same 20%-opacity primary tint
+                  // as the pill hover (`bg-primary/20`) and leaves text
+                  // foreground alone.
                   hoveredGroupLabel === group.label &&
                     'tw:[&_>li>button]:!bg-primary/20 tw:[&_>li>div]:!bg-primary/20',
                 )}

@@ -86,9 +86,9 @@ export type ManageBooksDialogProject = {
   /**
    * Whether the project is a resource (published read-only text). Sourced from PT9
    * `ScrText.IsResourceProject` via the C# `ProjectSummary.IsResource` field. Used by the Copy
-   * "From" / Create "Based on" pickers to exclude resources for copyright reasons (Sebastian/Mike
-   * review item #29). The header project picker continues to include resources — they get the
-   * read-only treatment via `isEditable === false`.
+   * "From" / Create "Based on" pickers to exclude resources for copyright reasons. The header
+   * project picker continues to include resources — they get the read-only treatment via
+   * `isEditable === false`.
    */
   isResource?: boolean;
 };

@@ -92,7 +92,7 @@ function setupUser() {
   return userEvent.setup({ pointerEventsCheck: 0 });
 }
 
-describe('ProjectSelector — search-clear-on-close (Sebastian #5)', () => {
+describe('ProjectSelector — search-clear-on-close', () => {
   it('resets the search query when the popover is closed and reopened', async () => {
     const user = setupUser();
     render(<ProjectSelectorHarness initialSelected="esvus16" />);
@@ -122,7 +122,7 @@ describe('ProjectSelector — search-clear-on-close (Sebastian #5)', () => {
   });
 });
 
-describe('ProjectSelector — scroll-to-selected on open (Sebastian #5)', () => {
+describe('ProjectSelector — scroll-to-selected on open', () => {
   // ProjectSelector's open-popover useEffect calls scrollIntoView with the
   // distinguishing argument shape `{ block: 'nearest', behavior: 'auto' }`.
   // cmdk also calls scrollIntoView (for keyboard focus management) but only

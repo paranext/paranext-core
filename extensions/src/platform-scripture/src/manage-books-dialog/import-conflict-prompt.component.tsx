@@ -84,16 +84,16 @@ export function ImportConflictPrompt({
                 onChoose('nonExistingChapters', conflict.books);
               }}
             >
-              {/* Sebastian review item #15 (2026-05-11): renamed from "Import non-existing
-                  chapters" — that label was a PT10-only invention that promised a behavior
-                  PT9 never had. The actual semantic is PT9's WriteChaptersToBook: source
-                  chapters overwrite their dest counterparts; dest chapters not in source
-                  survive. "Merge from files" parallels the Copy prompt's "Merge from source"
-                  and names what is being merged. The localize key is the NEW
-                  %manageBooks_import_mergeFromFiles% (the previous "nonExistingChapters" key
-                  had a meaning that didn't match the wired-up behavior, so the key was
-                  renamed along with the English copy so existing translations don't
-                  silently mis-apply to the changed semantic). */}
+              {/* Label honestly describes PT9's WriteChaptersToBook semantic:
+                  source chapters overwrite their dest counterparts; dest
+                  chapters not in source survive. "Merge from files" parallels
+                  the Copy prompt's "Merge from source" and names what is
+                  being merged. The localize key is
+                  %manageBooks_import_mergeFromFiles% — the prior
+                  "nonExistingChapters" key promised a behavior the wire never
+                  implemented, so the key was renamed along with the English
+                  copy so existing translations don't silently mis-apply to
+                  the changed semantic. */}
               {t('%manageBooks_import_mergeFromFiles%', 'Merge from files')}
             </Button>
           </div>

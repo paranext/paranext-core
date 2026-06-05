@@ -292,10 +292,10 @@ describe('partitionAndSort', () => {
     expect(other!.rows.some((r) => r.isBoundButClosed && r.projectId === 'a')).toBe(true);
   });
 
-  it('selected rows stay in alphabetical position (no float-to-top) per #5', () => {
-    // Sebastian review item #5 (2026-05-11): float-to-top was removed in favour of
-    // stable alphabetical ordering; the component scrolls the selected row into view
-    // on open, but the ordering itself is the canonical alphabetical sort.
+  it('selected rows stay in alphabetical position (no float-to-top)', () => {
+    // Selected rows do NOT float to the top — the component scrolls the
+    // selected row into view on open, but the ordering itself is the
+    // canonical alphabetical sort.
     const many: ProjectSelectorProject[] = [
       { id: 'z', shortName: 'Z', fullName: 'Z' },
       { id: 'a', shortName: 'A', fullName: 'A' },

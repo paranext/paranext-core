@@ -241,8 +241,8 @@ type RowRenderProps = {
   onClick: (row: ProjectRow) => void;
   onOpen: ((row: ProjectRow) => void) | undefined;
   /**
-   * Sebastian #5 (2026-05-11): forwarded by the parent so it can scroll the selected row into view
-   * when the popover opens (replacing the prior float-to-top behavior).
+   * Forwarded by the parent so it can scroll the selected row into view when
+   * the popover opens.
    */
   selectedRowRef?: RefObject<HTMLDivElement | null>;
 };
@@ -346,11 +346,10 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen, selectedRowRef }:
       <span className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center">
         {leftCheck}
       </span>
-      {/* Sebastian #35 (2026-05-11): row label uses a 2-line layout — shortName on top,
-          fullName muted below. Each line truncates independently. Tooltip-on-clip still
-          works because the wrapping span is what scrollWidth/clientWidth is measured on
-          (truncation in EITHER child contributes to overflow). Reviewer confirmation
-          requested before this lands wide. */}
+      {/* Row label uses a 2-line layout — shortName on top, fullName muted
+          below. Each line truncates independently. Tooltip-on-clip still
+          works because the wrapping span is what scrollWidth/clientWidth is
+          measured on (truncation in EITHER child contributes to overflow). */}
       <span
         ref={labelRef}
         className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:items-start tw:overflow-hidden tw:text-start"
@@ -502,15 +501,15 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   const [groupByOpenTabs, setGroupByOpenTabs] = useState(props.defaultGroupByOpenTabs ?? true);
   const [showSelectedOnly, setShowSelectedOnly] = useState(false);
 
-  // Sebastian #5 (2026-05-11): clear the search filter when the popover closes so the
-  // next open starts fresh. Previously the query persisted across open/close, which
-  // confused users who'd typed a filter and expected the list to reset.
+  // Clear the search filter when the popover closes so the next open starts
+  // fresh — a persisted query across open/close confuses users who typed a
+  // filter and expected the list to reset.
   //
-  // Scroll-to-selected: when the popover opens, scroll the selected row into view
-  // (replaces the float-to-top behavior removed in rows.ts). The ref is wired through
-  // ProjectRowView; in multi-select the last selected row in the alphabetical order
-  // wins (good-enough for the typical project-mode case where there's only one).
-  // null is the canonical initial value for React DOM refs.
+  // Scroll-to-selected: when the popover opens, scroll the selected row into
+  // view. The ref is wired through ProjectRowView; in multi-select the last
+  // selected row in the alphabetical order wins (good-enough for the typical
+  // project-mode case where there's only one). null is the canonical initial
+  // value for React DOM refs.
   // eslint-disable-next-line no-null/no-null
   const selectedRowRef = useRef<HTMLDivElement>(null);
   const handleOpenChange = useCallback((nextOpen: boolean) => {

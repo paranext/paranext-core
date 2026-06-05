@@ -27,9 +27,9 @@ namespace Paranext.DataProvider.ManageBooks;
 /// <param name="TooltipInfo">Tooltip describing the state to the user.</param>
 /// <param name="SourceLastModified">
 /// ISO-8601 timestamp (UTC) for the source book's last modification, or null when the source
-/// has no recorded date (file missing, in-memory file manager, etc.). Sebastian/Vladimir review
-/// item #14 + #44 (2026-05-11): the Copy/Import UI tooltips and status badges depend on these
-/// per-side timestamps. Backwards-compatible addition — older clients ignore the field.
+/// has no recorded date (file missing, in-memory file manager, etc.). The Copy/Import UI
+/// tooltips and status badges depend on these per-side timestamps. Backwards-compatible
+/// addition — older clients ignore the field.
 /// </param>
 /// <param name="DestLastModified">
 /// ISO-8601 timestamp (UTC) for the destination book's last modification, or null when absent.

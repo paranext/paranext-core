@@ -237,11 +237,11 @@ async function openManageBooks(
   // Manage Books dialog at a time). `existingId: '?'` matches any open instance of this
   // web-view-type; if none is found we fall through and create a new one.
   //
-  // Sebastian review item 28 (2026-05-11): open as a floating panel rather than a docked
-  // tab so the user gets a properly-sized window from the start. Mirrors the Settings
-  // pattern at src/renderer/services/web-view.service-host.ts:1805. We keep the existing-
-  // tab reuse path so an already-floating Manage Books window is brought to the front
-  // instead of opening a new one.
+  // Open as a floating panel rather than a docked tab so the user gets a
+  // properly-sized window from the start. Mirrors the Settings pattern at
+  // src/renderer/services/web-view.service-host.ts:1805. We keep the
+  // existing-tab reuse path so an already-floating Manage Books window is
+  // brought to the front instead of opening a new one.
   const floatingLayout = {
     type: 'float',
     position: 'center',

@@ -398,8 +398,7 @@ namespace TestParanextDataProvider.ManageBooks
         }
 
         // =====================================================================
-        // Sebastian/Vladimir review items #14 + #44 (2026-05-11) — wire-shape
-        // for SourceLastModified / DestLastModified.
+        // Wire-shape for SourceLastModified / DestLastModified.
         //
         // ToIsoOrNull (private) is exercised indirectly through the public
         // SetDefaultEligibility entry point. The contract these tests pin:
@@ -979,7 +978,7 @@ namespace TestParanextDataProvider.ManageBooks
 
         // =====================================================================
         // CopyBooks — replaceEntireBook=false chapter-merge branch
-        // (Stage 7 / Sebastian #15 — port of PT9 ImportSfmText.WriteChaptersToBook)
+        // (port of PT9 ImportSfmText.WriteChaptersToBook)
         // =====================================================================
 
         [Test]

@@ -235,11 +235,10 @@ export type ManageBooksDialogProps = {
   openTabs?: readonly ProjectSelectorOpenTab[];
 
   /**
-   * Sebastian review item #45 (2026-05-11): localized strings for the popover internals of every
-   * `<ProjectSelector>` inside the dialog (sidebar / Copy "From" / Create "Based on"). Optional —
-   * each picker falls back to ProjectSelector's English defaults when omitted, but the wiring layer
-   * typically passes a fully-populated object sourced from `manageBooks_projectSelector_*` localize
-   * keys.
+   * Localized strings for the popover internals of every `<ProjectSelector>` inside the dialog
+   * (sidebar / Copy "From" / Create "Based on"). Optional — each picker falls back to
+   * ProjectSelector's English defaults when omitted, but the wiring layer typically passes a
+   * fully-populated object sourced from `manageBooks_projectSelector_*` localize keys.
    */
   projectSelectorLocalizedStrings?: ProjectSelectorLocalizedStrings;
 };
@@ -486,11 +485,12 @@ export function ManageBooksDialog({
 }: ManageBooksDialogProps) {
   const allBooks = useMemo(() => bookIds ?? DEFAULT_BOOK_IDS, [bookIds]);
 
-  // Sebastian #6 + #42 (2026-05-11): JS-driven responsive collapse. We observe the
-  // dialog root's width and flip `dialogIsNarrow` when it crosses ~28rem (448px) — the
-  // breakpoint matches the originally-attempted `@md/dialog:` container query. React
-  // refs are typed `MutableRefObject<HTMLDivElement | null>` (null is the canonical
-  // initial value for DOM refs).
+  // JS-driven responsive collapse. We observe the dialog root's width and
+  // flip `dialogIsNarrow` when it crosses ~28rem (448px) — the breakpoint
+  // matches an `@md/dialog:` container query that doesn't reliably reach the
+  // iframe stylesheets. React refs are typed
+  // `MutableRefObject<HTMLDivElement | null>` (null is the canonical initial
+  // value for DOM refs).
   // eslint-disable-next-line no-null/no-null
   const dialogRootRef = useRef<HTMLDivElement | null>(null);
   const [dialogIsNarrow, setDialogIsNarrow] = useState(false);
@@ -658,9 +658,10 @@ export function ManageBooksDialog({
   // upstream) becomes the secondary label, falling back to `shortName` when no fullName is
   // configured. The target project itself is filtered out (already done in `otherProjects`).
   //
-  // Mike review item #29 (2026-05-11): exclude resource projects from the Copy "From" and
-  // Create "Based on" source pickers (copyright reasons). Read-only non-resource projects
-  // remain valid sources. The header project picker continues to include resources.
+  // Exclude resource projects from the Copy "From" and Create "Based on"
+  // source pickers (copyright reasons). Read-only non-resource projects
+  // remain valid sources. The header project picker continues to include
+  // resources.
   const otherProjectsAsPS = useMemo<ProjectSelectorProject[]>(
     () =>
       otherProjects
@@ -1036,12 +1037,11 @@ export function ManageBooksDialog({
     }
   }, [action, createMethod, cvAllowed]);
 
-  // Sebastian review item 36 (2026-05-11, belt-and-suspenders): the
-  // `project.isEditable === false` redirect at line ~659 switches to `view`
-  // when the target becomes read-only, but the state update has a render-frame
-  // gap. Block apply explicitly so the orchestrator is never invoked on a
-  // read-only target, even mid-redirect. Sidebar disablement (#18) covers
-  // entry; this covers the dialog body's submit path.
+  // Belt-and-suspenders: the `project.isEditable === false` redirect above
+  // switches to `view` when the target becomes read-only, but the state
+  // update has a render-frame gap. Block apply explicitly so the orchestrator
+  // is never invoked on a read-only target, even mid-redirect. Sidebar
+  // disablement covers entry; this covers the dialog body's submit path.
   const canApply =
     action !== 'view' &&
     selectedArr.length > 0 &&
@@ -1057,12 +1057,11 @@ export function ManageBooksDialog({
   // orchestrator-returned warnings/errors. Using a helper keeps the four
   // run* paths uniform.
   //
-  // Sebastian review item 36 (2026-05-11): the previous implementation used
-  // `String(e)` as the non-Error fallback, which renders `"[object Object]"`
-  // when the backend rejects with a structured object (typical for PAPI /
-  // JSON-RPC rejections — the C# data provider doesn't throw Error instances).
-  // Extract a sensible message from common rejection shapes before falling back
-  // to JSON stringification.
+  // `String(e)` as the non-Error fallback renders `"[object Object]"` when
+  // the backend rejects with a structured object (typical for PAPI / JSON-RPC
+  // rejections — the C# data provider doesn't throw Error instances). Extract
+  // a sensible message from common rejection shapes before falling back to
+  // JSON stringification.
   const extractErrorMessage = (e: unknown): string => {
     if (e instanceof Error) return e.message;
     if (typeof e === 'string') return e;
@@ -1351,10 +1350,10 @@ export function ManageBooksDialog({
   // newer/older/same/undetermined chip-label localized strings are still consumed by the per-row
   // status section headers in the BookGrid (see `gridItems` above) — leave them in
   // localizedStrings.json untouched.
-  // Sebastian review item 43 (2026-05-11): align filter dropdown labels with the grid's
-  // group-header strings — "Not in project" / "In project" rather than "New" / "Existing".
-  // Stage 6 will add the new/newer/older/same labels for Copy/Import once the status-
-  // comparison backend is in place.
+  // Filter dropdown labels align with the grid's group-header strings — "Not
+  // in project" / "In project" rather than "New" / "Existing". The
+  // new/newer/older/same labels for Copy/Import slot in here once the
+  // status-comparison backend is in place.
   const presenceFilterLabel = (s: ViewPresenceFilter): string => {
     switch (s) {
       case 'all':
@@ -1754,14 +1753,14 @@ export function ManageBooksDialog({
   }
   return (
     <>
-      {/* Sebastian review items 6 + 42 (2026-05-11): outer dialog wrapper drives the
-          responsive collapse. At narrow widths the sidebar drops to an icon-only rail
-          and the header subtitle hides. Originally tried Tailwind's container queries
-          (`@md/dialog:` variants), but those utility classes weren't reaching the
-          webview's iframe stylesheets despite being emitted in the dist. Switched to a
-          JS-driven approach with ResizeObserver — fewer moving parts, no CSS-loader
-          surprises. The `dialogIsNarrow` flag is forwarded to ManageBooksSidebar where
-          it conditionally swaps class sets. */}
+      {/* Outer dialog wrapper drives the responsive collapse. At narrow widths
+          the sidebar drops to an icon-only rail and the header subtitle hides.
+          Tailwind container queries (`@md/dialog:` variants) don't reliably
+          reach the webview's iframe stylesheets despite being emitted in the
+          dist, so a JS-driven ResizeObserver flag is used instead — fewer
+          moving parts, no CSS-loader surprises. The `dialogIsNarrow` flag is
+          forwarded to ManageBooksSidebar where it conditionally swaps class
+          sets. */}
       <div
         ref={dialogRootRef}
         className="tw:flex tw:h-full tw:min-h-0"
@@ -1792,8 +1791,8 @@ export function ManageBooksDialog({
                 <h2 className="tw:text-lg tw:font-semibold">
                   {t('%manageBooks_dialog_title%', 'Manage books')}
                 </h2>
-                {/* Header subtitle hides when the dialog is narrow (Sebastian #6/#42).
-                    Driven by the JS-resize-observer flag on the dialog root. */}
+                {/* Header subtitle hides when the dialog is narrow. Driven by
+                    the JS-resize-observer flag on the dialog root. */}
                 {!dialogIsNarrow && (
                   <p className="tw:text-xs tw:text-muted-foreground">{headerSubtitle}</p>
                 )}
@@ -2029,12 +2028,12 @@ export function ManageBooksDialog({
                 value={filter}
                 onSearch={setFilter}
                 placeholder={t('%manageBooks_filter_placeholder%', 'Filter books…')}
-                // Sebastian review item 37 (2026-05-11): SearchBar's inner shadcn Input
-                // defaults to tw:h-10, making the search component visibly taller than its
-                // siblings (BookGridGroupByToggle, PresenceFilterMenu — all tw:h-8). The
-                // wrapper className already sets tw:h-8 but the Input's intrinsic height
-                // wins; use Tailwind's arbitrary descendant selector to push the height
-                // into the Input itself.
+                // SearchBar's inner shadcn Input defaults to tw:h-10, making
+                // the search component visibly taller than its siblings
+                // (BookGridGroupByToggle, PresenceFilterMenu — all tw:h-8).
+                // The wrapper className already sets tw:h-8 but the Input's
+                // intrinsic height wins; use Tailwind's arbitrary descendant
+                // selector to push the height into the Input itself.
                 className="tw:h-8 tw:min-w-0 tw:max-w-xs tw:flex-1 tw:basis-24 tw:[&_input]:h-8"
                 isDisabled={isSubmitting}
               />
@@ -2121,20 +2120,17 @@ export function ManageBooksDialog({
                   interactive={action !== 'view'}
                   localizedStrings={bookGridStrings}
                   getRowAriaLabel={gridRowAriaLabel}
-                  // Sebastian review item 34 (2026-05-11): leave BookGridSelector's
-                  // default tw:p-1 in place so the first pill checkbox horizontally
-                  // aligns with the toolbar's select-all checkbox. The prior tw:px-0
-                  // override moved the grid 4px left of the toolbar items.
+                  // Leave BookGridSelector's default tw:p-1 in place so the
+                  // first pill checkbox horizontally aligns with the
+                  // toolbar's select-all checkbox. A `tw:px-0` override would
+                  // move the grid 4px left of the toolbar items.
                 />
               )}
             </div>
 
-            {/* Sebastian review item 38 (2026-05-11, CSV row #11 amended fix): the create-mode
-                method picker + reference-project picker live between the book grid and the
-                footer so the user sees the grid first and configures the create method just
-                before applying. Previously these controls sat in the action row at the top of
-                the dialog (alongside the action toggle group); review #11 only landed the
-                label-prefix + default-method changes from that round. */}
+            {/* The create-mode method picker + reference-project picker live
+                between the book grid and the footer so the user sees the grid
+                first and configures the create method just before applying. */}
             {action === 'create' && (
               <div className="tw:flex tw:w-full tw:min-w-0 tw:flex-wrap tw:items-center tw:gap-2 tw:border-t tw:px-6 tw:py-2">
                 <Select

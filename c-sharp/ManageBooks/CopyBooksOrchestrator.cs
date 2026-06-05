@@ -194,11 +194,10 @@ public static class CopyBooksOrchestrator
         DateTime destModified
     )
     {
-        // Sebastian/Vladimir review items #14 + #44 (2026-05-11): surface both
-        // modification timestamps on the wire entry so the Copy/Import UI can
-        // show them in pill tooltips. `DateTime.MinValue` (the absent-file
-        // sentinel from SafeGetBookModified) maps to null on the wire so the
-        // frontend can distinguish "no date" from "epoch".
+        // Surface both modification timestamps on the wire entry so the
+        // Copy/Import UI can show them in pill tooltips. `DateTime.MinValue`
+        // (the absent-file sentinel from SafeGetBookModified) maps to null on
+        // the wire so the frontend can distinguish "no date" from "epoch".
         string? sourceIso = ToIsoOrNull(sourceModified, sourceText);
         string? destIso = ToIsoOrNull(destModified, destText);
 
@@ -636,7 +635,7 @@ public static class CopyBooksOrchestrator
             Name: scrText.Name,
             ProjectType: scrText.Settings.TranslationInfo.Type.InternalValue,
             IsEditable: scrText.Settings.IsEditableText,
-            // #29 (2026-05-11): see ProjectFilterService.ToSummary for rationale.
+            // See ProjectFilterService.ToSummary for rationale.
             IsResource: scrText.IsResourceProject
         );
 
@@ -861,12 +860,12 @@ public static class CopyBooksOrchestrator
                 toScrText.PutText(bookNum, 0, false, sourceUsfm, null);
                 return true;
             }
-            // Sebastian review item #15 (2026-05-11): merge path — port of PT9
-            // ImportSfmText.WriteChaptersToBook (ParatextData/ImportSfmText.cs:245-286).
-            // Source chapters overwrite their dest counterparts; dest chapters absent
-            // from source survive. Empty source chapters are skipped except when the
-            // dest book is also empty (allows the "first copy populates an empty book"
-            // path to work). Uses the same Regex compiled in ImportBooksOrchestrator.
+            // Merge path — port of PT9 ImportSfmText.WriteChaptersToBook
+            // (ParatextData/ImportSfmText.cs:245-286). Source chapters overwrite
+            // their dest counterparts; dest chapters absent from source survive.
+            // Empty source chapters are skipped except when the dest book is also
+            // empty (allows the "first copy populates an empty book" path to
+            // work). Uses the same Regex compiled in ImportBooksOrchestrator.
             return TryCopyChaptersFromSource(fromScrText, toScrText, bookNum, sourceUsfm, errors);
         }
         catch (Exception ex)
@@ -881,10 +880,10 @@ public static class CopyBooksOrchestrator
         }
     }
 
-    // Sebastian review item #15 (2026-05-11): see TryCopyOneBook above. Per-chapter
-    // merge path. Local copy of the empty-chapter regex (intentionally duplicated
-    // across CAP-007 and CAP-010; consolidating would cross capability boundaries —
-    // mirrors the SafeGetBookText/SafeGetBookModified duplication-rationale).
+    // Per-chapter merge path (see TryCopyOneBook above). Local copy of the
+    // empty-chapter regex (intentionally duplicated across CAP-007 and
+    // CAP-010; consolidating would cross capability boundaries — mirrors the
+    // SafeGetBookText/SafeGetBookModified duplication-rationale).
     private static readonly System.Text.RegularExpressions.Regex MergeEmptyChapterPattern =
         new(@"^(\\id [^\r\n]*)?\s*$", System.Text.RegularExpressions.RegexOptions.Compiled);
 

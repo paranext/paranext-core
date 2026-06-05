@@ -18,9 +18,9 @@ namespace Paranext.DataProvider.ManageBooks;
 /// <param name="ToProjectId">Destination project id.</param>
 /// <param name="BookNumbers">1-based canonical book numbers to copy.</param>
 /// <param name="ReplaceEntireBook">
-/// Sebastian review item #15 (2026-05-11): when true (default), each book is
-/// written via <c>PutText(bookNum, 0, ...)</c> — destination is fully replaced.
-/// When false, the orchestrator uses the chapter-merge path (port of PT9
+/// When true (default), each book is written via
+/// <c>PutText(bookNum, 0, ...)</c> — destination is fully replaced. When
+/// false, the orchestrator uses the chapter-merge path (port of PT9
 /// <c>ImportSfmText.WriteChaptersToBook</c>): source chapters overwrite their
 /// dest counterparts; dest chapters not in source survive. Optional + defaults
 /// to true so the existing wire-shape contract stays backwards-compatible.

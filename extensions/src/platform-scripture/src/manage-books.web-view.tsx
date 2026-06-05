@@ -86,7 +86,7 @@ type ProjectListResult = {
     name: string;
     projectType: string;
     isEditable: boolean;
-    /** Whether the project is a resource (read-only published text). See review item #29. */
+    /** Whether the project is a resource (read-only published text). */
     isResource: boolean;
   }[];
 };
@@ -108,7 +108,7 @@ type SidebarProject = ProjectSelectorProject & { isEditable: boolean };
  * Wire-shape of a single book's comparison entry returned by `getBookComparison` /
  * `parseImportFiles`. Mirrors C# `BookComparisonEntry` (see ManageBooks/BookComparisonEntry.cs).
  * `SourceLastModified` / `DestLastModified` are ISO-8601 strings or null when the side has no date
- * (file missing or empty text). Added Sebastian/Vladimir #14 + #44 (2026-05-11).
+ * (file missing or empty text).
  */
 type BookComparisonEntry = {
   bookNum: number;
@@ -148,10 +148,10 @@ interface ManageBooksNetworkObject {
     toProjectId: string;
     bookNumbers: number[];
     /**
-     * Sebastian review item #15 (2026-05-11): when true (default), each book is written via
-     * `PutText(bookNum, 0, ...)` — destination replaced. When false, the orchestrator runs the
-     * chapter-merge path (port of PT9 `WriteChaptersToBook`): source chapters overwrite dest
-     * counterparts; dest chapters not in source survive. Optional + backwards-compatible.
+     * When true (default), each book is written via `PutText(bookNum, 0, ...)` — destination
+     * replaced. When false, the orchestrator runs the chapter-merge path (port of PT9
+     * `WriteChaptersToBook`): source chapters overwrite dest counterparts; dest chapters not in
+     * source survive. Optional + backwards-compatible.
      */
     replaceEntireBook?: boolean;
   }) => Promise<MutationResult>;
@@ -160,12 +160,12 @@ interface ManageBooksNetworkObject {
     files: ImportFileEntry[];
     replaceEntireBook: boolean;
   }) => Promise<MutationResult>;
-  /** #14 + #44 (2026-05-11): per-book Copy comparison; was always available but never wired. */
+  /** Per-book Copy comparison. */
   getBookComparison: (input: {
     fromProjectId: string;
     toProjectId: string;
   }) => Promise<BookComparisonResult>;
-  /** #14 + #44 (2026-05-11): per-book Import comparison; same wire shape. */
+  /** Per-book Import comparison; same wire shape as `getBookComparison`. */
   parseImportFiles: (input: {
     projectId: string;
     files: ImportFileEntry[];
@@ -380,11 +380,11 @@ global.webViewComponent = function ManageBooksWebView({
     return out;
   }, [localizedStrings]);
 
-  // Sebastian review item #45 (2026-05-11): the ProjectSelector popover's internal
-  // strings (search placeholder, filter labels, section headings) are not
-  // localized by default. Build a ProjectSelectorLocalizedStrings object from the
-  // resolved manage-books strings so all three pickers (sidebar / Copy "From" /
-  // Create "Based on") share the same translations.
+  // The ProjectSelector popover's internal strings (search placeholder,
+  // filter labels, section headings) are not localized by default. Build a
+  // ProjectSelectorLocalizedStrings object from the resolved manage-books
+  // strings so all three pickers (sidebar / Copy "From" / Create "Based on")
+  // share the same translations.
   const projectSelectorLocalizedStrings = useMemo<ProjectSelectorLocalizedStrings>(() => {
     const resolve = (key: keyof typeof localizedStrings, fallback: string) => {
       const value = localizedStrings[key];
@@ -489,13 +489,13 @@ global.webViewComponent = function ManageBooksWebView({
     return [];
   }, [booksPresentRaw]);
 
-  // Sebastian/Vladimir review items #14 + #44 (2026-05-11): per-project per-book
-  // lastModified dates sourced from manageBooksApi.getBookComparison. The dialog asks
-  // for books via loadBooks(pid) and the result is a ManageBooksDialogBookInfo[] with
-  // an optional `lastModified` field. We collect dates as comparison calls land and
-  // merge them into the response on the fly, so Copy/Import mode's
-  // computeCompareState heuristic (already wired in the dialog) starts producing
-  // real `sourceIsNewer`/`sourceIsOlder`/`same`/`new` states.
+  // Per-project per-book lastModified dates sourced from
+  // manageBooksApi.getBookComparison. The dialog asks for books via
+  // loadBooks(pid) and the result is a ManageBooksDialogBookInfo[] with an
+  // optional `lastModified` field. We collect dates as comparison calls land
+  // and merge them into the response on the fly, so Copy/Import mode's
+  // computeCompareState heuristic (already wired in the dialog) starts
+  // producing real `sourceIsNewer`/`sourceIsOlder`/`same`/`new` states.
   const [datesByProject, setDatesByProject] = useState<Record<string, Record<string, string>>>({});
 
   // Cache books for OTHER projects the dialog asks about (e.g. Copy source,
@@ -530,11 +530,11 @@ global.webViewComponent = function ManageBooksWebView({
     [projectId, activeBooks, bookCache, decorateWithDates],
   );
 
-  // Side-channel: whenever the dialog asks about a non-active project (Copy source,
-  // Create reference), also fire a getBookComparison(from=other, to=active) so we
-  // can populate lastModified for both sides. The dialog's gridItems heuristic
-  // (computeCompareState) consumes those dates and produces correct new/newer/
-  // older/same labels. See review items #14 + #44.
+  // Side-channel: whenever the dialog asks about a non-active project (Copy
+  // source, Create reference), also fire a getBookComparison(from=other,
+  // to=active) so we can populate lastModified for both sides. The dialog's
+  // gridItems heuristic (computeCompareState) consumes those dates and
+  // produces correct new/newer/older/same labels.
   useEffect(() => {
     if (!manageBooksApi || !projectId) return undefined;
     const otherIds = Object.keys(bookCache);
@@ -654,8 +654,8 @@ global.webViewComponent = function ManageBooksWebView({
             name: displayName,
             fullName: fullName ?? p.name,
             isEditable: p.isEditable,
-            // #29 (2026-05-11): forward the isResource flag so the dialog can filter
-            // resources out of the Copy "From" / Create "Based on" pickers.
+            // Forward the isResource flag so the dialog can filter resources
+            // out of the Copy "From" / Create "Based on" pickers.
             isResource: p.isResource,
           };
         }),
@@ -812,10 +812,10 @@ global.webViewComponent = function ManageBooksWebView({
       strategy?: ManageBooksCopyStrategy;
     }): Promise<MutationResult | undefined> => {
       if (!manageBooksApi) return undefined;
-      // Sebastian review item #15 + Vladimir #16 (2026-05-11): the backend now
-      // honors `replaceEntireBook`. `strategy === 'nonExistingChapters'` routes
-      // through PT9's WriteChaptersToBook semantic (chapter-by-chapter merge,
-      // source overwrites collisions, dest chapters not in source survive). The
+      // The backend honors `replaceEntireBook`.
+      // `strategy === 'nonExistingChapters'` routes through PT9's
+      // WriteChaptersToBook semantic (chapter-by-chapter merge, source
+      // overwrites collisions, dest chapters not in source survive). The
       // default + `replaceEntireBooks` route through whole-book replacement.
       return manageBooksApi.copyBooks({
         fromProjectId: args.sourceProjectId,

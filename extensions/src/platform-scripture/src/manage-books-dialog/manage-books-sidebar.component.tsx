@@ -79,10 +79,10 @@ function getSectionLabels(
   id: ManageBooksSidebarSectionId,
   t: (key: keyof ManageBooksDialogLocalizedStrings, fallback: string) => string,
 ): { label: string; subtitle: string; tooltip?: string } {
-  // Sebastian review item 33 (2026-05-11): drop subtitles from the five action sections
-  // (show / create / copy / import / delete) — their labels are self-explanatory and the
-  // subtitle row added visual noise without information. Keep subtitles on the workflow
-  // rows below (progress-tracking / book-names / introductions) where the label alone
+  // The five action sections (show / create / copy / import / delete) have
+  // self-explanatory labels, so they skip the subtitle row. The workflow rows
+  // below (progress-tracking / book-names / introductions) keep subtitles
+  // because the label alone
   // doesn't convey what the row does.
   switch (id) {
     case 'show':
@@ -188,15 +188,15 @@ export type ManageBooksSidebarProps = {
   t: (key: keyof ManageBooksDialogLocalizedStrings, fallback: string) => string;
 
   /**
-   * Sebastian review item #45 (2026-05-11): localized strings for the embedded `<ProjectSelector>`
-   * popover. Forwarded from the dialog via the same prop name.
+   * Localized strings for the embedded `<ProjectSelector>` popover. Forwarded from the dialog via
+   * the same prop name.
    */
   projectSelectorLocalizedStrings?: ProjectSelectorLocalizedStrings;
 
   /**
-   * Sebastian #6 + #42 (2026-05-11): drives the icon-only collapse. When true, the sidebar renders
-   * as a narrow rail (w-14) with hidden labels + group headings. When false, the full w-64 rail.
-   * Sourced from the dialog's ResizeObserver on its own width.
+   * Drives the icon-only collapse. When true, the sidebar renders as a narrow rail (w-14) with
+   * hidden labels + group headings. When false, the full w-64 rail. Sourced from the dialog's
+   * ResizeObserver on its own width.
    */
   isNarrow?: boolean;
 };
@@ -272,10 +272,10 @@ export function ManageBooksSidebar({
   return (
     <nav
       aria-label={t('%manageBooks_sidebar_heading%', 'Manage books')}
-      // Sebastian #6 + #42 (2026-05-11): JS-driven responsive collapse. `isNarrow` is
-      // sourced from the dialog's ResizeObserver. Avoids Tailwind container-queries
-      // because the `@md/dialog:` variants weren't reaching the iframe stylesheets in
-      // testing — see the dialog wrapper's comment for full background.
+      // JS-driven responsive collapse. `isNarrow` is sourced from the dialog's
+      // ResizeObserver. Avoids Tailwind container-queries because the
+      // `@md/dialog:` variants don't reach the iframe stylesheets — see the
+      // dialog wrapper's comment for the full background.
       className={cn(
         'tw:flex tw:shrink-0 tw:flex-col tw:gap-1 tw:overflow-y-auto tw:border-r tw:bg-muted/40',
         isNarrow ? 'tw:w-14 tw:p-1' : 'tw:w-64 tw:p-3',
@@ -296,11 +296,12 @@ export function ManageBooksSidebar({
             {t('%manageBooks_header_projectLabel%', 'Project')}
           </Label>
         )}
-        {/* Sebastian review item 30 (2026-05-11): the ProjectSelector trigger shows the
-            active project's shortName, which is opaque to anyone who doesn't already know
-            the abbreviation. Wrap the trigger in a tooltip surfacing the fullName so the
-            user can hover to disambiguate. Tooltip is suppressed when fullName equals the
-            shortName (no extra info) or when projects haven't resolved yet. */}
+        {/* The ProjectSelector trigger shows the active project's shortName,
+            which is opaque to anyone who doesn't already know the
+            abbreviation. Wrap the trigger in a tooltip surfacing the fullName
+            so the user can hover to disambiguate. Tooltip is suppressed when
+            fullName equals the shortName (no extra info) or when projects
+            haven't resolved yet. */}
         {(() => {
           const activeProject = projects.find((p) => p.id === projectId);
           const fullName = activeProject?.fullName;
@@ -413,11 +414,11 @@ export function ManageBooksSidebar({
           </button>
         );
 
-        // Sebastian review items 6 + 42 (2026-05-11): in icon-only mode the section
-        // labels are hidden, so every section needs a tooltip surfacing its label.
-        // Disabled sections show the read-only message (#41 / #18). Active and enabled
-        // sections show their label; the tooltip is harmless at wide widths too — it
-        // simply repeats text already visible inline.
+        // In icon-only mode the section labels are hidden, so every section
+        // needs a tooltip surfacing its label. Disabled sections show the
+        // read-only message; active and enabled sections show their label.
+        // The tooltip is harmless at wide widths too — it simply repeats text
+        // already visible inline.
         const tooltipText = tooltip ?? labels.label;
         return (
           <Fragment key={id}>
@@ -432,13 +433,14 @@ export function ManageBooksSidebar({
                 {/* Wrapper span so the tooltip works on a disabled button too */}
                 <span>{buttonElement}</span>
               </TooltipTrigger>
-              {/* Sebastian review item 41 (2026-05-11): in wide mode the sidebar is the
-                  full rail and tooltips render above the row (`side="top"`) so they don't
-                  collide with the dialog body. In narrow (icon-only) mode the sidebar is a
-                  left rail and tooltips need to render to its right — `side="top"` would
-                  collide with the dialog header for the topmost row, and there's no label
-                  to read otherwise. Radix's collision detection flips automatically if
-                  there's no room. */}
+              {/* In wide mode the sidebar is the full rail and tooltips
+                  render above the row (`side="top"`) so they don't collide
+                  with the dialog body. In narrow (icon-only) mode the sidebar
+                  is a left rail and tooltips need to render to its right —
+                  `side="top"` would collide with the dialog header for the
+                  topmost row, and there's no inline label to read otherwise.
+                  Radix's collision detection flips automatically if there's
+                  no room. */}
               <TooltipContent side={isNarrow ? 'right' : 'top'}>{tooltipText}</TooltipContent>
             </Tooltip>
           </Fragment>
