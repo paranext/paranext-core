@@ -45,7 +45,6 @@
     "@eten-tech-foundation/scripture-utilities": "~0.1.6",
     "@stylistic/eslint-plugin-ts": "^2.13.0",
     "@swc/core": "1.13.3",
-    "@tailwindcss/postcss": "^4.0.0",
     "@tailwindcss/typography": "^0.5.16",
     "@types/node": "^22.19.13",
     "@types/react": "^19.0.0",

@@ -83,6 +83,14 @@ export type ManageBooksDialogProject = {
    * read-only.
    */
   isEditable?: boolean;
+  /**
+   * Whether the project is a resource (published read-only text). Sourced from PT9
+   * `ScrText.IsResourceProject` via the C# `ProjectSummary.IsResource` field. Used by the Copy
+   * "From" / Create "Based on" pickers to exclude resources for copyright reasons. The header
+   * project picker continues to include resources — they get the read-only treatment via
+   * `isEditable === false`.
+   */
+  isResource?: boolean;
 };
 
 /**
@@ -202,7 +210,7 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_copy_confirmReplace%',
   '%manageBooks_copy_confirmCancel%',
   // Vladimir review #16: Copy gets the same 3-way conflict prompt as Import.
-  '%manageBooks_copy_confirmNonExistingChapters%',
+  '%manageBooks_copy_confirmMergeFromSource%',
   // Per-action empty states
   '%manageBooks_create_emptyState_allPresent%',
   '%manageBooks_delete_emptyState_noBooks%',
@@ -211,6 +219,19 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   // Filter bar
   '%manageBooks_filter_placeholder%',
   '%manageBooks_filter_books%',
+  '%manageBooks_genericError%',
+  '%manageBooks_projectSelector_boundButClosedTooltip%',
+  '%manageBooks_projectSelector_clearAll%',
+  '%manageBooks_projectSelector_filterAriaLabel%',
+  '%manageBooks_projectSelector_filterGroupByOpenTabs%',
+  '%manageBooks_projectSelector_filterSectionLabel%',
+  '%manageBooks_projectSelector_filterShowSelectedOnly%',
+  '%manageBooks_projectSelector_groupSectionLabel%',
+  '%manageBooks_projectSelector_openButtonLabel%',
+  '%manageBooks_projectSelector_openTabsSectionHeading%',
+  '%manageBooks_projectSelector_otherProjectsSectionHeading%',
+  '%manageBooks_projectSelector_searchPlaceholder%',
+  '%manageBooks_projectSelector_selectAll%',
   '%manageBooks_filter_count%',
   '%manageBooks_filter_zero%',
   '%manageBooks_filter_state_all%',
@@ -265,7 +286,7 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_import_conflictBody2%',
   '%manageBooks_import_conflictCancel%',
   '%manageBooks_import_replaceEntireBooks%',
-  '%manageBooks_import_nonExistingChapters%',
+  '%manageBooks_import_mergeFromFiles%',
   '%manageBooks_import_usxConfirmTitle%',
   '%manageBooks_import_usxConfirmBody%',
   '%manageBooks_import_usxConfirmAccept%',

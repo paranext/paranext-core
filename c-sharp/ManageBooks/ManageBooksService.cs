@@ -882,7 +882,8 @@ internal sealed class ManageBooksService : NetworkObject
             result = CopyBooksOrchestrator.CopyBooks(
                 fromScrText,
                 toScrText,
-                ToBookSet(request.BookNumbers)
+                ToBookSet(request.BookNumbers),
+                request.ReplaceEntireBook
             );
         }
         catch (LockNotObtainedException)

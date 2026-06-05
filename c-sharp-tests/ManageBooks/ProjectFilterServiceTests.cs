@@ -50,6 +50,7 @@ namespace TestParanextDataProvider.ManageBooks
         private DummyScrText _bt = null!;
         private DummyScrText _notes = null!;
         private DummyScrText _marble = null!;
+        private ResourceDummyScrText _resource = null!;
 
         [SetUp]
         public override async Task TestSetupAsync()
@@ -77,12 +78,24 @@ namespace TestParanextDataProvider.ManageBooks
                 type: ProjectType.MarbleResource,
                 editable: false
             );
+            // Scripture-typed resource project — surfaces
+            // ProjectSummary.IsResource = true so the Copy "From" / Create
+            // "Based on" pickers can hide resources without an extra API
+            // call. We need a scripture type here (not MarbleResource) so the
+            // filter's IsScripture() predicate keeps it in the AllScripture
+            // result.
+            _resource = CreateResourceScrText(
+                name: "StdResource",
+                type: ProjectType.Standard,
+                editable: false
+            );
 
             AddProject(_std);
             AddProject(_stdReadOnly);
             AddProject(_bt);
             AddProject(_notes);
             AddProject(_marble);
+            AddProject(_resource);
         }
 
         [TearDown]
@@ -93,6 +106,7 @@ namespace TestParanextDataProvider.ManageBooks
             _bt?.Dispose();
             _notes?.Dispose();
             _marble?.Dispose();
+            _resource?.Dispose();
         }
 
         // -------------------------------------------------------------------
@@ -377,6 +391,14 @@ namespace TestParanextDataProvider.ManageBooks
                 Is.True,
                 "StdEditable must report IsEditable = true"
             );
+            // IsResource must be populated for every summary so the picker
+            // can filter. Non-resource ScrTexts (DummyScrText doesn't override
+            // IsResourceProject) → false.
+            Assert.That(
+                stdSummary.IsResource,
+                Is.False,
+                "non-resource ScrText must report IsResource = false"
+            );
 
             var readOnlySummary = result.Projects.FirstOrDefault(p => p.Name == _stdReadOnly.Name);
             Assert.That(readOnlySummary, Is.Not.Null);
@@ -384,6 +406,41 @@ namespace TestParanextDataProvider.ManageBooks
                 readOnlySummary!.IsEditable,
                 Is.False,
                 "StdReadOnly must report IsEditable = false"
+            );
+            Assert.That(
+                readOnlySummary.IsResource,
+                Is.False,
+                "non-resource read-only ScrText must report IsResource = false"
+            );
+        }
+
+        // -------------------------------------------------------------------
+        // ACCEPTANCE: ProjectSummary.IsResource — populated from ScrText.IsResourceProject
+        // -------------------------------------------------------------------
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-011")]
+        [Property("BehaviorId", "BHV-411")]
+        [Description(
+            "A scripture-typed project whose ScrText.IsResourceProject returns true must surface ProjectSummary.IsResource = true so the Copy/Create pickers can hide resources without an extra API call."
+        )]
+        public void FilterProjects_Summary_ResourceProject_IsResourceTrue()
+        {
+            var input = new ProjectFilterInput(ProjectFilterPurpose.AllScripture, null);
+
+            ProjectListResult result = ProjectFilterService.FilterProjects(input);
+
+            var resourceSummary = result.Projects.FirstOrDefault(p => p.Name == _resource.Name);
+            Assert.That(
+                resourceSummary,
+                Is.Not.Null,
+                "scripture-typed resource project must appear in AllScripture filter result (IncludeProjects.ScriptureOnly includes resources)"
+            );
+            Assert.That(
+                resourceSummary!.IsResource,
+                Is.True,
+                "ScrText.IsResourceProject == true must flow through to ProjectSummary.IsResource"
             );
         }
 
@@ -467,6 +524,47 @@ namespace TestParanextDataProvider.ManageBooks
         {
             var details = CreateProjectDetails(scrText);
             ParatextProjects.FakeAddProject(details, scrText);
+        }
+
+        // ResourceDummyScrText overrides IsResourceProject so we can exercise the
+        // ProjectSummary.IsResource plumbing without needing a real ResourceScrText
+        // (which depends on a zipped-resource file on disk).
+        private ResourceDummyScrText CreateResourceScrText(
+            string name,
+            Enum<ProjectType> type,
+            bool editable
+        )
+        {
+            var details = new Paranext.DataProvider.Projects.ProjectDetails(
+                name,
+                new Paranext.DataProvider.Projects.ProjectMetadata(
+                    HexId.CreateNew().ToString(),
+                    []
+                ),
+                ""
+            );
+            var scrText = new ResourceDummyScrText(details);
+            string baseName = type.IsDerivedType() ? "PlaceholderBase" : "";
+            scrText.Settings.TranslationInfo = new TranslationInformation(type, baseName);
+            scrText.Settings.Editable = editable;
+            return scrText;
+        }
+
+        // -----------------------------------------------------------------
+        // Support: marker subclass for resource-project test coverage.
+        //
+        // ScrText.IsResourceProject is `virtual` and defaults to false on
+        // DummyScrText. Resources in production override it to true (see
+        // ResourceScrText.cs and JoinedScrText.cs). This subclass mirrors that
+        // override so the filter-service IsResource plumbing can be tested
+        // without needing a real on-disk zipped resource.
+        // -----------------------------------------------------------------
+        private sealed class ResourceDummyScrText : DummyScrText
+        {
+            public ResourceDummyScrText(Paranext.DataProvider.Projects.ProjectDetails details)
+                : base(details) { }
+
+            public override bool IsResourceProject => true;
         }
     }
 }

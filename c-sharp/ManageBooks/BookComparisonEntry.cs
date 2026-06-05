@@ -25,11 +25,23 @@ namespace Paranext.DataProvider.ManageBooks;
 /// <param name="Selectable">Whether the user can toggle the checkbox (false only for
 ///   <see cref="ComparisonState.SourceDoesNotExist"/>).</param>
 /// <param name="TooltipInfo">Tooltip describing the state to the user.</param>
+/// <param name="SourceLastModified">
+/// ISO-8601 timestamp (UTC) for the source book's last modification, or null when the source
+/// has no recorded date (file missing, in-memory file manager, etc.). The Copy/Import UI
+/// tooltips and status badges depend on these per-side timestamps. Backwards-compatible
+/// addition — older clients ignore the field.
+/// </param>
+/// <param name="DestLastModified">
+/// ISO-8601 timestamp (UTC) for the destination book's last modification, or null when absent.
+/// See <paramref name="SourceLastModified"/>.
+/// </param>
 public record BookComparisonEntry(
     int BookNum,
     string BookName,
     ComparisonState ComparisonState,
     bool DefaultIncluded,
     bool Selectable,
-    string TooltipInfo
+    string TooltipInfo,
+    string? SourceLastModified = null,
+    string? DestLastModified = null
 );

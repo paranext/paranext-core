@@ -156,6 +156,10 @@ public static class ProjectFilterService
             ProjectId: scrText.Guid.ToString(),
             Name: scrText.Name,
             ProjectType: scrText.Settings.TranslationInfo.Type.InternalValue,
-            IsEditable: scrText.Settings.IsEditableText
+            IsEditable: scrText.Settings.IsEditableText,
+            // Plumb IsResourceProject through the wire so the Copy "From" /
+            // Create "Based on" pickers can filter resources out on the
+            // frontend without a separate API call.
+            IsResource: scrText.IsResourceProject
         );
 }

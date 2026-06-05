@@ -194,28 +194,49 @@ public static class CopyBooksOrchestrator
         DateTime destModified
     )
     {
+        // Surface both modification timestamps on the wire entry so the
+        // Copy/Import UI can show them in pill tooltips. `DateTime.MinValue`
+        // (the absent-file sentinel from SafeGetBookModified) maps to null on
+        // the wire so the frontend can distinguish "no date" from "epoch".
+        string? sourceIso = ToIsoOrNull(sourceModified, sourceText);
+        string? destIso = ToIsoOrNull(destModified, destText);
+
         // 1. Identical texts (and dest is non-empty) → FilesAreSame.
         if (!string.IsNullOrEmpty(destText) && sourceText == destText)
-            return FilesAreSameEntry(bookNum, bookName);
+            return FilesAreSameEntry(bookNum, bookName, sourceIso, destIso);
 
         // 2. Source missing → SourceDoesNotExist (Selectable=false). Also
         // covers the both-empty case (LoadBooks_BothProjectsEmpty).
         if (string.IsNullOrEmpty(sourceText))
-            return SourceDoesNotExistEntry(bookNum, bookName);
+            return SourceDoesNotExistEntry(bookNum, bookName, sourceIso, destIso);
 
         // 3. Dest missing → DestDoesNotExist (include=true per INV-C07).
         if (string.IsNullOrEmpty(destText))
-            return DestDoesNotExistEntry(bookNum, bookName);
+            return DestDoesNotExistEntry(bookNum, bookName, sourceIso, destIso);
 
         // 4. Both texts present and different → compare modification times.
         if (sourceModified > destModified)
-            return SourceIsNewerEntry(bookNum, bookName);
+            return SourceIsNewerEntry(bookNum, bookName, sourceIso, destIso);
 
         if (sourceModified < destModified)
-            return SourceIsOlderEntry(bookNum, bookName);
+            return SourceIsOlderEntry(bookNum, bookName, sourceIso, destIso);
 
         // 5. Same timestamp, different text → Undetermined (TS-027).
-        return UndeterminedEntry(bookNum, bookName);
+        return UndeterminedEntry(bookNum, bookName, sourceIso, destIso);
+    }
+
+    /// <summary>
+    /// Maps a DateTime + text pair to an ISO-8601 string for the wire, or null when the
+    /// underlying side has no meaningful date (file missing or empty text).
+    /// </summary>
+    private static string? ToIsoOrNull(DateTime when, string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return null;
+        if (when == DateTime.MinValue)
+            return null;
+        return when.ToUniversalTime()
+            .ToString("o", System.Globalization.CultureInfo.InvariantCulture);
     }
 
     // -----------------------------------------------------------------------
@@ -230,69 +251,111 @@ public static class CopyBooksOrchestrator
     // -----------------------------------------------------------------------
 
     /// <summary>INV-C06: FilesAreSame → pre-select=false, selectable=true.</summary>
-    private static BookComparisonEntry FilesAreSameEntry(int bookNum, string bookName) =>
+    private static BookComparisonEntry FilesAreSameEntry(
+        int bookNum,
+        string bookName,
+        string? sourceIso,
+        string? destIso
+    ) =>
         BuildEntry(
             bookNum,
             bookName,
             ComparisonState.FilesAreSame,
             defaultIncluded: false,
             selectable: true,
-            tooltip: FilesAreSameTooltipKey
+            tooltip: FilesAreSameTooltipKey,
+            sourceIso: sourceIso,
+            destIso: destIso
         );
 
     /// <summary>SourceDoesNotExist is the only state with Selectable=false (TS-090).</summary>
-    private static BookComparisonEntry SourceDoesNotExistEntry(int bookNum, string bookName) =>
+    private static BookComparisonEntry SourceDoesNotExistEntry(
+        int bookNum,
+        string bookName,
+        string? sourceIso,
+        string? destIso
+    ) =>
         BuildEntry(
             bookNum,
             bookName,
             ComparisonState.SourceDoesNotExist,
             defaultIncluded: false,
             selectable: false,
-            tooltip: SourceDoesNotExistTooltipKey
+            tooltip: SourceDoesNotExistTooltipKey,
+            sourceIso: sourceIso,
+            destIso: destIso
         );
 
     /// <summary>INV-C07: DestDoesNotExist → pre-select=true (corrects PT9 FB 29809).</summary>
-    private static BookComparisonEntry DestDoesNotExistEntry(int bookNum, string bookName) =>
+    private static BookComparisonEntry DestDoesNotExistEntry(
+        int bookNum,
+        string bookName,
+        string? sourceIso,
+        string? destIso
+    ) =>
         BuildEntry(
             bookNum,
             bookName,
             ComparisonState.DestDoesNotExist,
             defaultIncluded: true,
             selectable: true,
-            tooltip: DestDoesNotExistTooltipKey
+            tooltip: DestDoesNotExistTooltipKey,
+            sourceIso: sourceIso,
+            destIso: destIso
         );
 
     /// <summary>SourceIsNewer → pre-select=true (corrects PT9 FB 29809; TS-025).</summary>
-    private static BookComparisonEntry SourceIsNewerEntry(int bookNum, string bookName) =>
+    private static BookComparisonEntry SourceIsNewerEntry(
+        int bookNum,
+        string bookName,
+        string? sourceIso,
+        string? destIso
+    ) =>
         BuildEntry(
             bookNum,
             bookName,
             ComparisonState.SourceIsNewer,
             defaultIncluded: true,
             selectable: true,
-            tooltip: SourceIsNewerTooltipKey
+            tooltip: SourceIsNewerTooltipKey,
+            sourceIso: sourceIso,
+            destIso: destIso
         );
 
     /// <summary>SourceIsOlder → pre-select=false (TS-026).</summary>
-    private static BookComparisonEntry SourceIsOlderEntry(int bookNum, string bookName) =>
+    private static BookComparisonEntry SourceIsOlderEntry(
+        int bookNum,
+        string bookName,
+        string? sourceIso,
+        string? destIso
+    ) =>
         BuildEntry(
             bookNum,
             bookName,
             ComparisonState.SourceIsOlder,
             defaultIncluded: false,
             selectable: true,
-            tooltip: SourceIsOlderTooltipKey
+            tooltip: SourceIsOlderTooltipKey,
+            sourceIso: sourceIso,
+            destIso: destIso
         );
 
     /// <summary>Undetermined (same timestamp, different text) → pre-select=false, empty tooltip (TS-027).</summary>
-    private static BookComparisonEntry UndeterminedEntry(int bookNum, string bookName) =>
+    private static BookComparisonEntry UndeterminedEntry(
+        int bookNum,
+        string bookName,
+        string? sourceIso,
+        string? destIso
+    ) =>
         BuildEntry(
             bookNum,
             bookName,
             ComparisonState.Undetermined,
             defaultIncluded: false,
             selectable: true,
-            tooltip: UndeterminedTooltip
+            tooltip: UndeterminedTooltip,
+            sourceIso: sourceIso,
+            destIso: destIso
         );
 
     /// <summary>Positional-to-record adapter so each per-state factory above is a one-liner.</summary>
@@ -302,8 +365,10 @@ public static class CopyBooksOrchestrator
         ComparisonState state,
         bool defaultIncluded,
         bool selectable,
-        string tooltip
-    ) => new(bookNum, bookName, state, defaultIncluded, selectable, tooltip);
+        string tooltip,
+        string? sourceIso,
+        string? destIso
+    ) => new(bookNum, bookName, state, defaultIncluded, selectable, tooltip, sourceIso, destIso);
 
     // === NEW IN PT10 ===
     // Reason: PT9 read text via PtwFileInfo, which gracefully handles missing
@@ -569,7 +634,9 @@ public static class CopyBooksOrchestrator
             ProjectId: scrText.Guid.ToString(),
             Name: scrText.Name,
             ProjectType: scrText.Settings.TranslationInfo.Type.InternalValue,
-            IsEditable: scrText.Settings.IsEditableText
+            IsEditable: scrText.Settings.IsEditableText,
+            // See ProjectFilterService.ToSummary for rationale.
+            IsResource: scrText.IsResourceProject
         );
 
     // =====================================================================
@@ -660,7 +727,8 @@ public static class CopyBooksOrchestrator
     public static CopyBooksResult CopyBooks(
         ScrText fromScrText,
         ScrText toScrText,
-        BookSet selectedBooks
+        BookSet selectedBooks,
+        bool replaceEntireBook = true
     )
     {
         // LockNotObtained seam: the wire-layer UNAVAILABLE mapping is exercised
@@ -705,7 +773,15 @@ public static class CopyBooksOrchestrator
                 continue;
             }
 
-            if (TryCopyOneBook(fromScrText, toScrText, bookNum, domainErrorStrings))
+            if (
+                TryCopyOneBook(
+                    fromScrText,
+                    toScrText,
+                    bookNum,
+                    replaceEntireBook,
+                    domainErrorStrings
+                )
+            )
             {
                 copiedCount++;
                 lastCopiedBookNum = bookNum;
@@ -771,6 +847,7 @@ public static class CopyBooksOrchestrator
         ScrText fromScrText,
         ScrText toScrText,
         int bookNum,
+        bool replaceEntireBook,
         List<string> errors
     )
     {
@@ -778,8 +855,18 @@ public static class CopyBooksOrchestrator
         try
         {
             string sourceUsfm = fromScrText.GetText(bookNum);
-            toScrText.PutText(bookNum, 0, false, sourceUsfm, null);
-            return true;
+            if (replaceEntireBook)
+            {
+                toScrText.PutText(bookNum, 0, false, sourceUsfm, null);
+                return true;
+            }
+            // Merge path — port of PT9 ImportSfmText.WriteChaptersToBook
+            // (ParatextData/ImportSfmText.cs:245-286). Source chapters overwrite
+            // their dest counterparts; dest chapters absent from source survive.
+            // Empty source chapters are skipped except when the dest book is also
+            // empty (allows the "first copy populates an empty book" path to
+            // work). Uses the same Regex compiled in ImportBooksOrchestrator.
+            return TryCopyChaptersFromSource(fromScrText, toScrText, bookNum, sourceUsfm, errors);
         }
         catch (Exception ex)
         {
@@ -791,6 +878,78 @@ public static class CopyBooksOrchestrator
             errors.Add($"Failed to copy book {bookId}");
             return false;
         }
+    }
+
+    // Per-chapter merge path (see TryCopyOneBook above). Local copy of the
+    // empty-chapter regex (intentionally duplicated across CAP-007 and
+    // CAP-010; consolidating would cross capability boundaries — mirrors the
+    // SafeGetBookText/SafeGetBookModified duplication-rationale).
+    private static readonly System.Text.RegularExpressions.Regex MergeEmptyChapterPattern =
+        new(@"^(\\id [^\r\n]*)?\s*$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private static bool TryCopyChaptersFromSource(
+        ScrText fromScrText,
+        ScrText toScrText,
+        int bookNum,
+        string sourceUsfm,
+        List<string> errors
+    )
+    {
+        string bookId = Canon.BookNumberToId(bookNum);
+        List<string> chapters;
+        try
+        {
+            chapters = ScrText.SplitIntoChapters(toScrText.Name, bookNum, sourceUsfm);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(
+                $"[CopyBooks.TryCopyChaptersFromSource] split failed for book {bookId}: {ex}"
+            );
+            errors.Add($"Failed to split book {bookId} into chapters");
+            return false;
+        }
+
+        bool destBookExists = toScrText.Settings.BooksPresentSet.IsSelected(bookNum);
+        if (!destBookExists)
+        {
+            toScrText.PutText(bookNum, 0, false, sourceUsfm, null);
+            return true;
+        }
+
+        string destChapter1Text = string.Empty;
+        try
+        {
+            var vref = new VerseRef(bookNum, 1, 0, toScrText.Settings.Versification);
+            destChapter1Text = toScrText.GetText(vref, true, false) ?? string.Empty;
+        }
+        catch (Exception)
+        {
+            destChapter1Text = string.Empty;
+        }
+
+        for (int i = 0; i < chapters.Count; i += 1)
+        {
+            string chapterText = chapters[i];
+            if (MergeEmptyChapterPattern.IsMatch(chapterText))
+            {
+                if (i != 0 || destChapter1Text.Trim().Length != 0)
+                    continue;
+            }
+            try
+            {
+                toScrText.PutText(bookNum, i + 1, false, chapterText, null);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(
+                    $"[CopyBooks.TryCopyChaptersFromSource] PutText failed for {bookId} ch {i + 1}: {ex}"
+                );
+                errors.Add($"Failed to copy book {bookId} (chapter {i + 1})");
+                return false;
+            }
+        }
+        return true;
     }
 
     // === PORTED FROM PT9 ===
