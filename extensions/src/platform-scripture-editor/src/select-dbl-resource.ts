@@ -43,7 +43,11 @@ export async function selectTextConnection(
   onSelect?: (dblEntryUid: string) => void,
 ): Promise<void> {
   if (!resource.installed && installResource) {
-    await installResource(resource.dblEntryUid);
+    try {
+      await installResource(resource.dblEntryUid);
+    } catch {
+      return;
+    }
   }
   const newRef: DblResourceReference = {
     type: 'dblResource',
