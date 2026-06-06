@@ -1,7 +1,6 @@
 // === PORTED FROM PT9 ===
 // Source: PT9/Paratext/Marble/MarbleForm.cs:2589-2670 (GetTooltipHtml restructured
 // to return TooltipData instead of HTML). Maps to: EXT-002.
-using Paranext.DataProvider.Errors;
 
 namespace Paranext.DataProvider.EnhancedResources;
 
