@@ -5,7 +5,7 @@ import { BlockFormatDropDown } from '@/components/demo/scripture-editor/BlockFor
 import { Button } from '@/components/shadcn-ui/button';
 import { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { ListEnd, Redo, Shuffle, Superscript, Undo } from 'lucide-react';
+import { Redo, Undo } from 'lucide-react';
 import { RefObject } from 'react';
 
 interface PlatformToolbarProps {
@@ -157,33 +157,6 @@ export function PlatformToolbar({
                 <Redo />
               </Button>
               <BlockFormatDropDown editorRef={editorRef} blockMarker={blockMarker} />
-              <Button
-                aria-label="Insert footnote"
-                title="Insert footnote"
-                variant="ghost"
-                size="icon"
-                onClick={handleInsertFootnote}
-              >
-                <Superscript />
-              </Button>
-              <Button
-                aria-label="Insert cross-reference"
-                title="Insert cross-reference"
-                variant="ghost"
-                size="icon"
-                onClick={handleInsertCrossReference}
-              >
-                <Shuffle />
-              </Button>
-              <Button
-                aria-label="Insert endnote"
-                title="Insert endnote"
-                variant="ghost"
-                size="icon"
-                onClick={handleInsertEndnote}
-              >
-                <ListEnd />
-              </Button>
             </>
           )}
         </>
