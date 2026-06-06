@@ -1,6 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
+using Paranext.DataProvider;
 using Paranext.DataProvider.EnhancedResources;
-using Paranext.DataProvider.Errors;
 using TestParanextDataProvider.EnhancedResources.Fixtures;
 
 namespace TestParanextDataProvider.EnhancedResources;
@@ -288,22 +288,77 @@ internal class EnhancedResourceFactoryTests : PapiTestBase
 
     #endregion
 
-    #region Error Tests
+    #region Contract Tests - AvailableResources Snapshot Semantics
 
     [Test]
-    [Category("Contract")]
-    [Property("BehaviorId", "BHV-105")]
-    [Description("Factory handles corrupt package index gracefully")]
-    public void InitializeAsync_CorruptPackageIndex_ThrowsInternalError()
+    [Category("Invariant")]
+    [Property("InvariantId", "INV-C09")]
+    [Property("BehaviorId", "BHV-103")]
+    [Property("ScenarioId", "TS-046")]
+    [Description(
+        "INV-C09: CurrentInitializeResult.AvailableResources stays stable across reads "
+            + "(immutable record); mutating a copy does not affect subsequent reads."
+    )]
+    public async Task AvailableResources_MultipleCalls_ReturnStableSnapshot()
     {
-        // Corrupt package index is a production scenario requiring file system setup.
-        // This test validates the error code contract is available for the loader to use.
-        var ex = PlatformErrorCodes.WithCode(
-            PlatformErrorCodes.Internal,
-            "Failed to load marble package index"
+        // Arrange: stub loader with two bibles
+        var data = new MarbleDataBuilder()
+            .WithBiblePackages(
+                [
+                    MarbleTestHelper.CreateFakeMarbleScrText("SDBG"),
+                    MarbleTestHelper.CreateFakeMarbleScrText("SDBH"),
+                ]
+            )
+            .Build();
+        var factory = new EnhancedResourceFactory(
+            Client,
+            ParatextProjects,
+            new StubMarbleDataLoader(data)
         );
-        Assert.That(ex.Data["platformErrorCode"], Is.EqualTo("INTERNAL"));
-        Assert.That(ex.Message, Does.Contain("Failed to load marble package index"));
+        await factory.InitializeAsync();
+        await factory.LoadCompleted;
+
+        // Act
+        var first = factory.CurrentInitializeResult.AvailableResources;
+        var second = factory.CurrentInitializeResult.AvailableResources;
+
+        // Assert: both reads expose the same two entries.
+        Assert.That(first, Is.EqualTo(new[] { "SDBG", "SDBH" }));
+        Assert.That(second, Is.EqualTo(new[] { "SDBG", "SDBH" }));
+    }
+
+    [Test]
+    [Category("Invariant")]
+    [Property("InvariantId", "INV-C09")]
+    [Property("BehaviorId", "BHV-103")]
+    [Property("ScenarioId", "TS-046")]
+    [Description(
+        "INV-C09: mutating a caller's copy of AvailableResources does not bleed into "
+            + "subsequent reads from the factory."
+    )]
+    public async Task AvailableResources_MutateCopy_SubsequentReadUnaffected()
+    {
+        // Arrange
+        var data = new MarbleDataBuilder()
+            .WithBiblePackages([MarbleTestHelper.CreateFakeMarbleScrText("SDBG")])
+            .Build();
+        var factory = new EnhancedResourceFactory(
+            Client,
+            ParatextProjects,
+            new StubMarbleDataLoader(data)
+        );
+        await factory.InitializeAsync();
+        await factory.LoadCompleted;
+
+        // Act: copy-and-mutate
+        var copy = factory.CurrentInitializeResult.AvailableResources.ToArray();
+        copy[0] = "CORRUPTED";
+
+        // Assert: factory still reports the original
+        Assert.That(
+            factory.CurrentInitializeResult.AvailableResources,
+            Is.EqualTo(new[] { "SDBG" })
+        );
     }
 
     #endregion

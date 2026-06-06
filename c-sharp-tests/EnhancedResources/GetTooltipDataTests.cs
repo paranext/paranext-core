@@ -1,6 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
+using Paranext.DataProvider;
 using Paranext.DataProvider.EnhancedResources;
-using Paranext.DataProvider.Errors;
 using SIL.Scripture;
 using TestParanextDataProvider.EnhancedResources.Fixtures;
 
@@ -355,7 +355,10 @@ internal class GetTooltipDataTests
         {
             ["en"] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
             {
-                [s_greekNounToken.Text] = new List<string> { "word", "speech", "reason" },
+                // Key must be NFD-normalized to match the production lookup, which
+                // normalizes the term to FormD before probing the gloss table.
+                [s_greekNounToken.Text.Normalize(System.Text.NormalizationForm.FormD)] =
+                    new List<string> { "word", "speech", "reason" },
             },
         };
         var dataAccess = new MarbleDataAccessService(
@@ -405,7 +408,8 @@ internal class GetTooltipDataTests
         {
             ["en"] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
             {
-                [s_greekNounToken.Text] = new List<string> { "word" },
+                [s_greekNounToken.Text.Normalize(System.Text.NormalizationForm.FormD)] =
+                    new List<string> { "word" },
             },
         };
         var dataAccess = new MarbleDataAccessService(
@@ -815,7 +819,7 @@ internal class GetTooltipDataTests
         // service's "is not { Count: > 0 }" guard.
         var tokenWithoutLinks = s_greekNounToken with
         {
-            LexicalLinks = null
+            LexicalLinks = null,
         };
         var dataAccess = MarbleTestHelper.BuildServiceWithTestData();
         var bookTokensProvider = new FakeMarbleBookTokenProvider().With(

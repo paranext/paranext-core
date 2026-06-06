@@ -540,5 +540,116 @@ namespace TestParanextDataProvider.EnhancedResources
         }
 
         #endregion
+
+        #region Direct Service Method - FindLocalizedGlossesForTerm
+
+        // Merged from the former EnhancedResourceGoldenMasterTests: these exercise
+        // MarbleDataAccessService.FindLocalizedGlossesForTerm directly for gm-020/021/022.
+        // The contract tests above cover the same scenarios through GlossLookupFunction.Execute.
+
+        [Test]
+        [Category("GoldenMaster")]
+        [Property("CapabilityId", "CAP-001")]
+        [Property("ScenarioId", "TS-005")]
+        [Property("BehaviorId", "BHV-105")]
+        [Property("GoldenMasterId", "gm-020")]
+        [Description(
+            "gm-020: FindLocalizedGlossesForTerm returns 'God' for Hebrew Elohim in English"
+        )]
+        public void FindLocalizedGlossesForTerm_HebrewElohimEnglish_ReturnsGod()
+        {
+            // Arrange: Build marble data access with test data
+            var service = MarbleTestHelper.BuildServiceWithTestData();
+
+            // Golden master input:
+            //   termLemma: "אֱלֹהִים" (Elohim)
+            //   language: "en"
+            string termLemma = MarbleTestHelper.Elohim;
+            string language = "en";
+
+            // Act
+            var glosses = service.FindLocalizedGlossesForTerm(termLemma, language);
+
+            // Assert: Golden master expected output
+            //   glossCount: 1
+            //   glosses: ["God"]
+            Assert.That(glosses, Is.Not.Null);
+            Assert.That(glosses.Count, Is.EqualTo(1), "gm-020: Expected exactly 1 gloss");
+            Assert.That(glosses[0], Is.EqualTo("God"), "gm-020: Elohim in English should be 'God'");
+        }
+
+        [Test]
+        [Category("GoldenMaster")]
+        [Property("CapabilityId", "CAP-001")]
+        [Property("ScenarioId", "TS-006")]
+        [Property("BehaviorId", "BHV-105")]
+        [Property("GoldenMasterId", "gm-021")]
+        [Description(
+            "gm-021: FindLocalizedGlossesForTerm falls back to English for unavailable language"
+        )]
+        public void FindLocalizedGlossesForTerm_UnavailableLanguage_FallsBackToEnglishGod()
+        {
+            // Arrange
+            var service = MarbleTestHelper.BuildServiceWithTestData();
+
+            // Golden master input:
+            //   termLemma: "אֱלֹהִים" (Elohim)
+            //   language: "xx-unavailable"
+            string termLemma = MarbleTestHelper.Elohim;
+            string language = "xx-unavailable";
+
+            // Act
+            var glosses = service.FindLocalizedGlossesForTerm(termLemma, language);
+
+            // Assert: Golden master expected output - falls back to English
+            //   glossCount: 1
+            //   glosses: ["God"]
+            Assert.That(glosses, Is.Not.Null);
+            Assert.That(
+                glosses.Count,
+                Is.EqualTo(1),
+                "gm-021: Should fall back to English and return 1 gloss"
+            );
+            Assert.That(
+                glosses[0],
+                Is.EqualTo("God"),
+                "gm-021: Fallback to English should return 'God'"
+            );
+        }
+
+        [Test]
+        [Category("GoldenMaster")]
+        [Property("CapabilityId", "CAP-001")]
+        [Property("ScenarioId", "TS-007")]
+        [Property("BehaviorId", "BHV-105")]
+        [Property("GoldenMasterId", "gm-022")]
+        [Description("gm-022: FindLocalizedGlossesForTerm maps zh-Hant to Chinese gloss data")]
+        public void FindLocalizedGlossesForTerm_ChineseTraditional_ReturnsMappedChineseGloss()
+        {
+            // Arrange
+            var service = MarbleTestHelper.BuildServiceWithTestData();
+
+            // Golden master input:
+            //   termLemma: "אֱלֹהִים" (Elohim)
+            //   language: "zh-Hant"
+            string termLemma = MarbleTestHelper.Elohim;
+            string language = "zh-Hant";
+
+            // Act
+            var glosses = service.FindLocalizedGlossesForTerm(termLemma, language);
+
+            // Assert: Golden master expected output
+            //   glossCount: 1
+            //   glosses: ["上帝；神"]
+            Assert.That(glosses, Is.Not.Null);
+            Assert.That(glosses.Count, Is.EqualTo(1), "gm-022: Should return 1 Chinese gloss");
+            Assert.That(
+                glosses[0],
+                Is.EqualTo(MarbleTestHelper.ElohimChineseGloss),
+                "gm-022: Chinese mapping should return '上帝；神'"
+            );
+        }
+
+        #endregion
     }
 }

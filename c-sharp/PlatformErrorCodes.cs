@@ -44,13 +44,15 @@ public static class PlatformErrorCodes
     internal const string PlatformErrorCodeDataKey = "platformErrorCode";
 
     /// <summary>
-    /// Builds an exception carrying a PlatformError code in
-    /// <c>Exception.Data["platformErrorCode"]</c>. The network layer extracts the
-    /// code and forwards it to <c>newPlatformError()</c> on the TS side.
+    /// Builds an <see cref="InvalidOperationException"/> carrying a PlatformError
+    /// code in <c>Exception.Data["platformErrorCode"]</c>. The network layer
+    /// extracts the code and forwards it to <c>newPlatformError()</c> on the TS
+    /// side. The exception type is informational only — the wire protocol keys
+    /// solely off <c>Exception.Data</c>.
     /// </summary>
-    public static Exception WithCode(string code, string message)
+    public static InvalidOperationException WithCode(string code, string message)
     {
-        var ex = new Exception(message);
+        var ex = new InvalidOperationException(message);
         ex.Data[PlatformErrorCodeDataKey] = code;
         return ex;
     }
@@ -61,8 +63,8 @@ public static class PlatformErrorCodes
     // with the existing WithCode for cases where the caller wants to wrap
     // and rethrow with extra context.
     /// <summary>
-    /// Throws an <see cref="Exception"/> carrying the supplied PlatformError
-    /// <paramref name="code"/> and <paramref name="message"/>. Marked
+    /// Throws an <see cref="InvalidOperationException"/> carrying the supplied
+    /// PlatformError <paramref name="code"/> and <paramref name="message"/>. Marked
     /// <see cref="DoesNotReturnAttribute"/> so static analysis treats call
     /// sites as terminating — `Throw(...)` is a complete statement, no
     /// `throw` keyword needed at the call site.
