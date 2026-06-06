@@ -12,7 +12,7 @@ import {
 import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, useCallback, useMemo, useRef, useState } from 'react';
 import { renderEditorialWithToolbar } from '@/components/demo/scripture-editor/editorial-with-toolbar.renderer';
 import {
   annotationRangeWeb1,
@@ -107,6 +107,7 @@ type ViewOptionsStory = Omit<Story, 'args' | 'argTypes' | 'render'> & {
 };
 
 export const Default: Story = {
+  render: (args, context) => renderEditorialWithToolbar(args, context, defaultScrRef),
   args: {
     defaultUsj: usjWeb,
     scrRef: defaultScrRef,
@@ -114,6 +115,7 @@ export const Default: Story = {
 };
 
 export const Empty: Story = {
+  render: (args, context) => renderEditorialWithToolbar(args, context, defaultScrRef),
   args: {
     defaultUsj: usjEmpty,
     scrRef: defaultScrRef,
@@ -121,6 +123,7 @@ export const Empty: Story = {
 };
 
 export const ReadOnly: Story = {
+  render: (args, context) => renderEditorialWithToolbar(args, context, defaultScrRef),
   args: {
     defaultUsj: usjWeb,
     scrRef: defaultScrRef,
@@ -145,7 +148,6 @@ export const RTL: Story = {
   args: {
     defaultUsj: usjHebrew,
     options: {
-      hasExternalUI: true,
       textDirection: 'rtl',
     },
   },
@@ -169,12 +171,8 @@ function handleAnnotationOnRemove(type: string, id: string, cause: string, textC
 }
 
 export const Annotated: Story = {
-  render: (args) => {
-    // Ref must default to null to be accepted by React as an element ref
-    // eslint-disable-next-line no-null/no-null
-    const editorRef = useRef<EditorRef | null>(null);
-
-    useEffect(() => {
+  render: (args, context) =>
+    renderEditorialWithToolbar(args, context, defaultScrRef, (editorRef) => {
       const timeoutId = setTimeout(() => {
         if (editorRef.current) {
           editorRef.current.setAnnotation(
@@ -194,10 +192,7 @@ export const Annotated: Story = {
         }
       }, 0);
       return () => clearTimeout(timeoutId);
-    }, []);
-
-    return <Editorial {...args} ref={editorRef} />;
-  },
+    }),
   args: {
     defaultUsj: usjWeb,
     scrRef: defaultScrRef,
@@ -205,7 +200,6 @@ export const Annotated: Story = {
 };
 
 const insertNoteOptions: EditorOptions = {
-  hasExternalUI: true,
   view: { ...getDefaultViewOptions(), noteMode: 'expandInline' },
 };
 
@@ -229,7 +223,6 @@ export const InsertNote: Story = {
 };
 
 const customNodeOptions: EditorOptions = {
-  hasExternalUI: true,
   nodes: {
     noteCallers: ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'],
     noteCallerOnClick: (event, noteNodeKey, isCollapsed, getCaller, setCaller, getNoteOps) => {
@@ -285,7 +278,6 @@ export const CustomMarkerTrigger: Story = {
   args: {
     defaultUsj: usjWeb,
     options: {
-      hasExternalUI: false,
       markerMenuTrigger: '?',
     },
   },
@@ -469,7 +461,6 @@ export const EditorViewOptions: ViewOptionsStory = {
       () => ({
         defaultUsj: usjWeb,
         options: {
-          hasExternalUI: true,
           view: {
             markerMode,
             noteMode,
