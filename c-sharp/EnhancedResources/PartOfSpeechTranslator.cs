@@ -3,7 +3,6 @@
 // Maps to: EXT-052, BHV-615
 
 using System.Text;
-using Paranext.DataProvider.Errors;
 
 namespace Paranext.DataProvider.EnhancedResources;
 

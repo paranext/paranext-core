@@ -330,60 +330,6 @@ namespace TestParanextDataProvider.EnhancedResources
 
         #endregion
 
-        #region ResourceScrText Tests (placeholders - require fixture zips)
-
-        [Test]
-        [Category("Contract")]
-        [Property("ScenarioId", "TS-008")]
-        [Property("BehaviorId", "BHV-106")]
-        [Description(
-            "ResourceScrText loaded with isMarbleResource flag enforces read-only (IsProtectedText=true)"
-        )]
-        public void ResourceScrText_MarbleResource_IsProtectedText()
-        {
-            // INV-C02: Resource texts are always read-only.
-            // ResourceScrText.IsProtectedText returns true for marble resources.
-            // Full validation requires marble zip files on disk (integration test).
-            Assert.Pass(
-                "INV-C02: ResourceScrText read-only enforcement is a ParatextData NuGet behavior."
-            );
-        }
-
-        [Test]
-        [Category("Contract")]
-        [Property("ScenarioId", "TS-008")]
-        [Property("BehaviorId", "BHV-106")]
-        [Description("ResourceScrText Editable setter throws InvalidOperationException")]
-        public void ResourceScrText_SetEditable_ThrowsInvalidOperation()
-        {
-            Assert.Pass(
-                "INV-C02: ResourceScrText Editable throw is a ParatextData NuGet behavior."
-            );
-        }
-
-        [Test]
-        [Category("Contract")]
-        [Property("ScenarioId", "TS-009")]
-        [Property("BehaviorId", "BHV-106")]
-        [Description("ResourceScrText Name setter throws InvalidOperationException")]
-        public void ResourceScrText_SetName_ThrowsInvalidOperation()
-        {
-            Assert.Pass(
-                "INV-C03: ResourceScrText Name immutability is a ParatextData NuGet behavior."
-            );
-        }
-
-        [Test]
-        [Category("Contract")]
-        [Property("ScenarioId", "TS-010")]
-        [Property("BehaviorId", "BHV-106")]
-        [Description("ResourceScrText deletes corrupt zip file and notifies user (VAL-001)")]
-        public void ResourceScrText_CorruptZip_DeletesFileAndNotifies()
-        {
-            Assert.Pass("Placeholder: needs file system setup with corrupt zip to validate");
-        }
-
-        #endregion
 
         #region InstallableResource Tests (placeholders)
 

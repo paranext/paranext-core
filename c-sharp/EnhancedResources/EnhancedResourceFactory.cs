@@ -3,7 +3,6 @@
 // Routes each command to an instance service via volatile-published fields; services
 // stay null until the background MarbleDataLoader.LoadAsync task finishes successfully,
 // after which each Route* helper returns real data. Spec Section 7 and 9.
-using Paranext.DataProvider.Errors;
 using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.Projects;
 

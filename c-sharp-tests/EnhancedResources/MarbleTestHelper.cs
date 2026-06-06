@@ -32,7 +32,15 @@ internal static class MarbleTestHelper
             {
                 [Elohim] = new List<string> { "God" },
                 ["sampleTerm"] = new List<string> { "sample gloss" },
-                ["λόγος"] = new List<string> { "word", "speech", "reason" },
+                // Production stores gloss keys NFD-normalized (see MarbleLexiconLoader);
+                // the lookup normalizes the term to FormD before probing, so the fixture
+                // key must also be NFD or the precomposed Greek ό (U+03CC) never matches.
+                ["λόγος".Normalize(System.Text.NormalizationForm.FormD)] = new List<string>
+                {
+                    "word",
+                    "speech",
+                    "reason",
+                },
             },
             ["zh-Hans"] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
             {

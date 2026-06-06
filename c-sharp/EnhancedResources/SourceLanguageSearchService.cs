@@ -2,7 +2,6 @@
 // Source: PT9/Paratext/EditMenu/FindReplaceForm.cs (~600 lines, UpdateSearchLabel + source search pipeline)
 // Maps to: EXT-070-077, CAP-012
 using System.Text.RegularExpressions;
-using Paranext.DataProvider.Errors;
 using SIL.Scripture;
 
 namespace Paranext.DataProvider.EnhancedResources;
