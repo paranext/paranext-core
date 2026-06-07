@@ -262,27 +262,6 @@ export const CustomNoteOptions: Story = {
   },
 };
 
-export const CustomMarkerTrigger: Story = {
-  render: (args, context) => renderEditorialWithToolbar(args, context, defaultScrRef),
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'This story demonstrates using a custom marker menu trigger key. **Try typing "?" ' +
-          '(question mark) anywhere in the editor text to open the marker menu!** The default ' +
-          'trigger is "\\\\" (backslash), but this story changes it to "?" for demonstration. ' +
-          'The marker menu allows you to insert USFM markers into the text.',
-      },
-    },
-  },
-  args: {
-    defaultUsj: usjWeb,
-    options: {
-      markerMenuTrigger: '?',
-    },
-  },
-};
-
 export const FootnoteEditorView: FootnoteEditorViewStory = {
   argTypes: {
     language: {
