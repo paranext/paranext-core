@@ -981,12 +981,6 @@ function entryDtoToPresenterInput(dto: DictionaryEntryDataDto): DictionaryEntryD
     lemma: dto.lemma,
     morphology: dto.morphology,
     semanticDomains: dto.semanticDomains,
-    relatedLexemes: dto.relatedLexemes.map((r) => ({
-      lemma: r.lemma,
-      entryId: r.entryId,
-      relationship: r.relationship,
-      gloss: r.gloss,
-    })),
     senses: dto.senses.map((s) => ({
       senseId: s.senseId,
       definition: s.definition,
@@ -1495,7 +1489,17 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     return () => {
       cancelled = true;
     };
-  }, [erProxy, resourceId, bookNum, scopeKeyedRefKey, scope, filteredTokenId, showTranslations]);
+  }, [
+    erProxy,
+    resourceId,
+    bookNum,
+    scopeKeyedRefKey,
+    scope,
+    filteredTokenId,
+    filteredAnnotation,
+    filteredTokenSurface,
+    showTranslations,
+  ]);
 
   // Effect: load entry detail (senses + presentation) whenever the user selects a row.
   useEffect(() => {
@@ -1695,6 +1699,8 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     scopeKeyedRefKey,
     scope,
     filteredTokenId,
+    filteredAnnotation,
+    filteredTokenSurface,
     hebrewDisplayMode,
     greekDisplayMode,
   ]);
@@ -2210,6 +2216,8 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     scopeKeyedRefKey,
     scope,
     filteredTokenId,
+    filteredAnnotation,
+    filteredTokenSurface,
   ]);
 
   // Effect: load Maps tab. Mirrors the Images-tab effect with `tabType: 'Maps'`.
@@ -2299,6 +2307,8 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     scopeKeyedRefKey,
     scope,
     filteredTokenId,
+    filteredAnnotation,
+    filteredTokenSurface,
   ]);
 
   // MediaViewer (centered Dialog) state. Driven by either tab's Maximize button via the

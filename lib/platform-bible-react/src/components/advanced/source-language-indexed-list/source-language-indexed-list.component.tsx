@@ -219,7 +219,10 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
       : undefined;
 
   return (
-    <div ref={containerRef} className={cn('tw:relative tw:flex tw:h-full tw:overflow-hidden', className)}>
+    <div
+      ref={containerRef}
+      className={cn('tw:relative tw:flex tw:h-full tw:overflow-hidden', className)}
+    >
       {detailElement ? (
         // Side-by-side ResizablePanelGroup split per PR #2209 stories pattern: list at ~33% with
         // a draggable handle, detail at ~67%. The detail is a sibling of the list (not an overlay)

@@ -17,7 +17,6 @@ namespace TestParanextDataProvider.EnhancedResources;
 ///   - entryId, lemma
 ///   - senses (with glosses and definitions)
 ///   - semanticDomains
-///   - relatedLexemes (with lemma, entryId, relationship, gloss)
 ///   - morphology
 ///
 /// Error conditions:
@@ -68,7 +67,6 @@ internal class DictionaryEntryTests
             "Senses must be populated for a valid entry"
         );
         Assert.That(result.SemanticDomains, Is.Not.Null, "SemanticDomains must not be null");
-        Assert.That(result.RelatedLexemes, Is.Not.Null, "RelatedLexemes must not be null");
         Assert.That(result.Morphology, Is.Not.Null, "Morphology must not be null");
     }
 
@@ -285,102 +283,9 @@ internal class DictionaryEntryTests
 
     #endregion
 
-    #region Related Lexemes
-
-    [Test]
-    [Category("Contract")]
-    [Property("CapabilityId", "CAP-008")]
-    [Property("ScenarioId", "TS-069")]
-    [Property("BehaviorId", "BHV-364")]
-    [Description("Related lexemes populated with lemma, entryId, relationship, and gloss")]
-    public void GetDictionaryEntry_RelatedLexemes_HaveRequiredFields()
-    {
-        // Arrange: Entry with known related lexemes
-        var input = new DictionaryEntryInput(EntryId: "logos", GlossLanguage: "en");
-
-        // Act
-        var result = BuildService().GetDictionaryEntry(input);
-
-        // Assert: Related lexemes have all required fields
-        Assert.That(
-            result.RelatedLexemes,
-            Is.Not.Empty,
-            "Expected related lexemes for entry with shared glosses/domains"
-        );
-        foreach (var related in result.RelatedLexemes)
-        {
-            Assert.That(
-                related.Lemma,
-                Is.Not.Null.And.Not.Empty,
-                "Related lexeme must have a Lemma"
-            );
-            Assert.That(
-                related.EntryId,
-                Is.Not.Null.And.Not.Empty,
-                "Related lexeme must have an EntryId"
-            );
-            Assert.That(
-                related.Relationship,
-                Is.Not.Null.And.Not.Empty,
-                "Related lexeme must have a Relationship type"
-            );
-            Assert.That(
-                related.Gloss,
-                Is.Not.Null,
-                "Related lexeme must have a Gloss (may be empty string)"
-            );
-        }
-    }
-
-    [Test]
-    [Category("Contract")]
-    [Property("CapabilityId", "CAP-008")]
-    [Property("ScenarioId", "TS-069")]
-    [Property("BehaviorId", "BHV-364")]
-    [Description("Related lexemes do not include the source entry itself")]
-    public void GetDictionaryEntry_RelatedLexemes_ExcludesSelf()
-    {
-        // Arrange
-        var input = new DictionaryEntryInput(EntryId: "logos", GlossLanguage: "en");
-
-        // Act
-        var result = BuildService().GetDictionaryEntry(input);
-
-        // Assert: Source entry's own lemma must not appear in related lexemes
-        Assert.That(result.RelatedLexemes, Is.Not.Empty);
-        var selfRefs = result.RelatedLexemes.Where(r => r.Lemma == result.Lemma).ToList();
-        Assert.That(
-            selfRefs,
-            Is.Empty,
-            "Source entry must not appear in its own RelatedLexemes (self-exclusion)"
-        );
-    }
-
-    [Test]
-    [Category("Contract")]
-    [Property("CapabilityId", "CAP-008")]
-    [Property("ScenarioId", "TS-069")]
-    [Property("BehaviorId", "BHV-364")]
-    [Description("Entry with no related lexemes returns empty list, not null")]
-    public void GetDictionaryEntry_NoRelatedLexemes_ReturnsEmptyList()
-    {
-        // Arrange: Entry with no shared glosses or semantic domains
-        // (kai has unique gloss "and" and no domains)
-        var input = new DictionaryEntryInput(EntryId: "kai", GlossLanguage: "en");
-
-        // Act
-        var result = BuildService().GetDictionaryEntry(input);
-
-        // Assert
-        Assert.That(result.RelatedLexemes, Is.Not.Null, "RelatedLexemes must not be null");
-        Assert.That(
-            result.RelatedLexemes,
-            Is.Empty,
-            "Entry with no related terms should have empty RelatedLexemes list"
-        );
-    }
-
-    #endregion
+    // NOTE: Related-lexeme tests removed - GetDictionaryEntry no longer returns related lexemes.
+    // The PT9 Marble dictionary does not expose them at the entry level (data-shape audit #7a);
+    // see DictionaryEntryData / DictionaryService for the rationale and the canonical PT9 home.
 
     #region Morphology
 
