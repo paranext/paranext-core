@@ -4,7 +4,11 @@ import { CardTitle } from 'platform-bible-react';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import { ReactElement, useEffect, useState } from 'react';
 import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
+import { alertCommand, rejectingMock } from '../../../../.storybook/story.utils';
 import { Home, HomeProps, LocalProjectInfo, HOME_STRING_KEYS } from './home.component';
+
+const GET_STARTED_URL =
+  'https://github.com/paranext/paranext/wiki/Getting-Started-with-Platform.Bible-and-Paratext-10-Studio';
 
 // Get all localized strings needed by the Home component
 const localizedStrings = getLocalizedStrings([...HOME_STRING_KEYS]);
@@ -124,19 +128,22 @@ function DefaultHomeDecorator(Story: (update?: { args: HomeProps }) => ReactElem
         headerContent: (
           <>
             <HomeIcon size="36" />
-            <CardTitle>Home or New Tab</CardTitle>
+            <CardTitle>Home</CardTitle>
           </>
         ),
-        onOpenProject: () => {
-          // Show an alert for demonstration purposes
-          // eslint-disable-next-line no-alert
-          alert('Open project');
-        },
-        onSendReceiveProject: () => {
-          // Show an alert for demonstration purposes
-          // eslint-disable-next-line no-alert
-          alert('Send/Receive project');
-        },
+        onOpenProject: (projectId, isPublished) =>
+          alertCommand(
+            isPublished
+              ? 'platformScriptureEditor.openResourceViewer'
+              : 'platformScriptureEditor.openScriptureEditor',
+            { projectId },
+          ),
+        onSendReceiveProject: (projectId) =>
+          alertCommand('paratextBibleSendReceive.sendReceiveProjects', {
+            projectIds: [projectId],
+          }),
+        onOpenGetResources: () => alertCommand('platformGetResources.openGetResources'),
+        onGetStarted: () => alertCommand('platform.openWindow', { url: GET_STARTED_URL }),
       }}
     />
   );
@@ -173,4 +180,41 @@ function OnlyWebProjectDecorator(Story: (update?: { args: HomeProps }) => ReactE
 
 export const OnlyWebProject: Story = {
   decorators: [OnlyWebProjectDecorator],
+};
+
+/**
+ * Demonstrates how the component surfaces a _business_ failure: clicking the sync/get button for a
+ * shared project triggers a rejected `onSendReceiveProject`, and the component shows the error in a
+ * destructive alert (not a "backend unavailable" error).
+ */
+function SendReceiveErrorDecorator(Story: (update?: { args: HomeProps }) => ReactElement) {
+  return (
+    <Story
+      args={{
+        localizedStringsWithLoadingState: [localizedStrings, false],
+        localProjectsInfo: staticLocalProjectsAndResources,
+        sharedProjectsInfo: staticProjectsAndResources,
+        headerContent: (
+          <>
+            <HomeIcon size="36" />
+            <CardTitle>Home</CardTitle>
+          </>
+        ),
+        onOpenProject: (projectId, isPublished) =>
+          alertCommand(
+            isPublished
+              ? 'platformScriptureEditor.openResourceViewer'
+              : 'platformScriptureEditor.openScriptureEditor',
+            { projectId },
+          ),
+        onSendReceiveProject: rejectingMock(
+          'Cannot send/receive: project is locked by another user',
+        ),
+      }}
+    />
+  );
+}
+
+export const SendReceiveError: Story = {
+  decorators: [SendReceiveErrorDecorator],
 };

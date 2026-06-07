@@ -1,12 +1,6 @@
-import { logger } from '@papi/frontend';
 import { Copy, X } from 'lucide-react';
 import { Button, DropdownMenuItem, ResultsCard } from 'platform-bible-react';
-import {
-  getErrorMessage,
-  LocalizedStringValue,
-  LocalizeKey,
-  UsjReaderWriter,
-} from 'platform-bible-utils';
+import { LocalizedStringValue, LocalizeKey, UsjReaderWriter } from 'platform-bible-utils';
 import { FindResult } from 'platform-scripture';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { LocalizedBookData } from './find-types';
@@ -27,6 +21,12 @@ export const SEARCH_RESULT_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%webView_find_replace%',
   '%webView_find_replaced%',
 ];
+
+/**
+ * Minimal logger shape consumed by the find search components — kept local so the components stay
+ * `@papi`-free. The webview supplies `@papi/frontend`'s `logger`; Storybook stories omit it.
+ */
+export type FindLogger = { warn: (...args: unknown[]) => void };
 
 /** Props interface for the SearchResult component */
 interface SearchResultProps {
@@ -55,6 +55,8 @@ interface SearchResultProps {
   localizedStrings: {
     [localizedInventoryKey in (typeof SEARCH_RESULT_LOCALIZED_STRING_KEYS)[number]]?: LocalizedStringValue;
   };
+  /** Optional logger for unexpected USFM-parsing errors (the webview passes the PAPI logger). */
+  logger?: FindLogger;
 }
 
 const countWords = (text: string): number => {
@@ -94,6 +96,7 @@ export default function SearchResult({
   localizedStrings,
   isReplaceMode,
   isReplacing,
+  logger,
 }: SearchResultProps) {
   // useRef requires null as the initial value for DOM refs
   // eslint-disable-next-line no-null/no-null
@@ -154,10 +157,16 @@ export default function SearchResult({
 
       return { beforeText, text, afterText };
     } catch (error) {
-      logger.warn(`Error determining text parts for search result: ${getErrorMessage(error)}`);
+      // The verse context is best-effort: fall back to rendering the result without surrounding
+      // context rather than surfacing an error to the user. We still trace the failure when a
+      // logger is supplied so unexpected USFM-parsing regressions show up in support logs.
+      logger?.warn(
+        `Find: failed to extract verse context for ${searchResult.start.verseRef.book} ${searchResult.start.verseRef.chapterNum}:${searchResult.start.verseRef.verseNum}:`,
+        error,
+      );
       return undefined;
     }
-  }, [usjReaderWriter, searchResult, isVisible]);
+  }, [usjReaderWriter, searchResult, isVisible, logger]);
 
   /**
    * Highlights the search term within the verse text by wrapping the specified occurrence in a

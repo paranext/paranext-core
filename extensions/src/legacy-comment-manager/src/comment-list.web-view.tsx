@@ -3,14 +3,6 @@ import papi, { logger } from '@papi/frontend';
 import {
   AddCommentToThreadOptions,
   COMMENT_LIST_STRING_KEYS,
-  CommentList,
-  Label,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  Skeleton,
   usePromise,
 } from 'platform-bible-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -24,6 +16,16 @@ import { isPlatformError, LegacyCommentThread, serialize } from 'platform-bible-
 import { VerseRef } from '@sillsdev/scripture';
 import type { LegacyCommentThreadSelector } from 'legacy-comment-manager';
 import { CommentListWebViewMessage } from './comment-list-messages.model';
+import {
+  CommentFilter,
+  CommentListPanel,
+  COMMENT_LIST_PANEL_EXTRA_STRING_KEYS,
+  FILTER_UNREAD_ASSIGNED,
+  FILTER_UNRESOLVED_ASSIGNED,
+  ScopeFilter,
+  SCOPE_FILTER_CURRENT_CHAPTER,
+  UNFILTERED,
+} from './comment-list.component';
 
 const DEFAULT_LEGACY_COMMENT_THREADS: LegacyCommentThread[] = [];
 
@@ -50,34 +52,6 @@ async function withPdp<PDP, T>(
   return action(pdp);
 }
 
-// Filter constants and types
-const UNFILTERED = 'unfiltered';
-const FILTER_UNRESOLVED_ASSIGNED = 'unresolved-assigned-to-me';
-const FILTER_UNREAD_ASSIGNED = 'unread-assigned-to-me';
-const SCOPE_FILTER_CURRENT_CHAPTER = 'current-chapter';
-
-const commentFilterToLabelKey = {
-  [FILTER_UNRESOLVED_ASSIGNED]: '%comment_filter_unresolved_assigned_to_me%',
-  [FILTER_UNREAD_ASSIGNED]: '%comment_filter_unread_assigned_to_me%',
-  [UNFILTERED]: '%comment_filter_all%',
-} as const;
-
-type CommentFilter = keyof typeof commentFilterToLabelKey;
-
-const scopeFilterToLabelKey = {
-  [SCOPE_FILTER_CURRENT_CHAPTER]: '%comment_filter_scope_current_chapter%',
-  [UNFILTERED]: '%comment_filter_scope_all_books%',
-} as const;
-
-type ScopeFilter = keyof typeof scopeFilterToLabelKey;
-
-function isCommentFilter(value: string): value is CommentFilter {
-  return value in commentFilterToLabelKey;
-}
-function isScopeFilter(value: string): value is ScopeFilter {
-  return value in scopeFilterToLabelKey;
-}
-
 global.webViewComponent = function CommentListWebView({
   useWebViewScrollGroupScrRef,
   useWebViewState,
@@ -85,16 +59,7 @@ global.webViewComponent = function CommentListWebView({
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(
     useMemo(() => {
-      return [
-        ...Array.from(COMMENT_LIST_STRING_KEYS),
-        '%comment_filter_all%',
-        '%comment_filter_scope_all_books%',
-        '%comment_filter_scope_current_chapter%',
-        '%comment_filter_unread_assigned_to_me%',
-        '%comment_filter_unresolved_assigned_to_me%',
-        '%no_comments%',
-        '%no_comments_match_filter%',
-      ];
+      return [...Array.from(COMMENT_LIST_STRING_KEYS), ...COMMENT_LIST_PANEL_EXTRA_STRING_KEYS];
     }, []),
   );
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
@@ -362,107 +327,28 @@ global.webViewComponent = function CommentListWebView({
     [setScrRef, editorWebViewId, editorWebViewController],
   );
 
-  if (isLoadingCommentThreads || !commentsPdp) {
-    return (
-      <div className="tw:bg-background tw:flex-1 tw:p-2 tw:space-y-4">
-        {[...Array(10)].map((_, index) => (
-          <Skeleton
-            // There are no other unique identifiers for these items
-            // eslint-disable-next-line react/no-array-index-key
-            key={`comment-thread-skeleton-${index}`}
-            className="tw:h-48 tw:w-full"
-          />
-        ))}
-      </div>
-    );
-  }
-
   return (
-    <div className="tw:flex tw:flex-col tw:h-full">
-      {/* Filter toolbar */}
-      <div className="tw:flex tw:flex-row tw:flex-wrap tw:gap-1 tw:items-center tw:pb-2 tw:px-4 tw:pt-4">
-        {/* Comment filter dropdown */}
-        <Select
-          value={commentFilter}
-          onValueChange={(value) => {
-            if (isCommentFilter(value)) setCommentFilter(value);
-          }}
-        >
-          <SelectTrigger className="tw:w-auto tw:min-w-48">
-            <SelectValue>
-              <div className="tw:text-start tw:overflow-hidden tw:text-ellipsis tw:text-sm tw:font-normal">
-                {localizedStrings[commentFilterToLabelKey[commentFilter]]}
-              </div>
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent className="tw:max-w-sm" align="start">
-            {Object.keys(commentFilterToLabelKey)
-              .filter(isCommentFilter)
-              .map((value) => (
-                <SelectItem key={value} value={value}>
-                  {localizedStrings[commentFilterToLabelKey[value]]}
-                </SelectItem>
-              ))}
-          </SelectContent>
-        </Select>
-
-        {/* Scope filter dropdown */}
-        <Select
-          value={scopeFilter}
-          onValueChange={(value) => {
-            if (isScopeFilter(value)) setScopeFilter(value);
-          }}
-        >
-          <SelectTrigger className="tw:w-auto tw:min-w-48">
-            <SelectValue>
-              <div className="tw:text-start tw:overflow-hidden tw:text-ellipsis tw:text-sm tw:font-normal">
-                {localizedStrings[scopeFilterToLabelKey[scopeFilter]]}
-              </div>
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent className="tw:max-w-sm" align="start">
-            {Object.keys(scopeFilterToLabelKey)
-              .filter(isScopeFilter)
-              .map((value) => (
-                <SelectItem key={value} value={value}>
-                  {localizedStrings[scopeFilterToLabelKey[value]]}
-                </SelectItem>
-              ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Comments list */}
-      <div className="tw:flex-1 tw:overflow-auto">
-        {safeCommentThreads.length === 0 ? (
-          <div className="tw:m-4 tw:flex tw:justify-center">
-            <Label>
-              {commentFilter === UNFILTERED && scopeFilter === UNFILTERED
-                ? localizedStrings['%no_comments%']
-                : localizedStrings['%no_comments_match_filter%']}
-            </Label>
-          </div>
-        ) : (
-          <CommentList
-            classNameForVerseText="scripture-font"
-            threads={safeCommentThreads}
-            currentUser={currentUserName}
-            localizedStrings={localizedStrings}
-            handleAddCommentToThread={handleAddCommentToThread}
-            handleUpdateComment={handleUpdateComment}
-            handleDeleteComment={handleDeleteComment}
-            handleReadStatusChange={handleReadStatusChange}
-            assignableUsers={assignableUsers}
-            canUserAddCommentToThread={canUserAddCommentToThread}
-            canUserAssignThreadCallback={canUserAssignThreadCallback}
-            canUserResolveThreadCallback={canUserResolveThreadCallback}
-            canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
-            selectedThreadId={selectedThreadId}
-            onSelectedThreadChange={setSelectedThreadId}
-            onVerseRefClick={handleVerseRefClick}
-          />
-        )}
-      </div>
-    </div>
+    <CommentListPanel
+      localizedStrings={localizedStrings}
+      isLoading={isLoadingCommentThreads || !commentsPdp}
+      threads={safeCommentThreads}
+      currentUser={currentUserName}
+      commentFilter={commentFilter}
+      onCommentFilterChange={setCommentFilter}
+      scopeFilter={scopeFilter}
+      onScopeFilterChange={setScopeFilter}
+      handleAddCommentToThread={handleAddCommentToThread}
+      handleUpdateComment={handleUpdateComment}
+      handleDeleteComment={handleDeleteComment}
+      handleReadStatusChange={handleReadStatusChange}
+      assignableUsers={assignableUsers}
+      canUserAddCommentToThread={canUserAddCommentToThread}
+      canUserAssignThreadCallback={canUserAssignThreadCallback}
+      canUserResolveThreadCallback={canUserResolveThreadCallback}
+      canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
+      selectedThreadId={selectedThreadId}
+      onSelectedThreadChange={setSelectedThreadId}
+      onVerseRefClick={handleVerseRefClick}
+    />
   );
 };
