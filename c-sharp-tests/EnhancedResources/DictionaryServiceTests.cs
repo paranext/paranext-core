@@ -370,104 +370,12 @@ internal class DictionaryServiceTests
 
     #endregion
 
-    #region BHV-110: Related Lexeme Discovery
-
-    [Test]
-    [Category("Contract")]
-    [Property("CapabilityId", "CAP-007")]
-    [Property("BehaviorId", "BHV-110")]
-    [Description("Dictionary items include related lexemes populated by shared gloss")]
-    public void LoadDictionaryResources_WithGlossRelations_PopulatesRelatedLexemes()
-    {
-        var service = BuildService(
-            bookTokens: DictionaryFixtures.BuildBookTokenProviderForNtTokens("test-resource")
-        );
-        var input = new DictionaryLoadInput(
-            CurrentReference: new VerseRef(40, 1, 1),
-            Scope: ScopeEnum.CurrentVerse,
-            Filter: null,
-            ShowTranslations: false,
-            GlossLanguage: "en",
-            ResourceId: "test-resource"
-        );
-
-        var result = service.LoadResources(input);
-
-        var itemsWithRelated = result.Items.Where(i => i.RelatedLexemes?.Count > 0).ToList();
-        Assert.That(itemsWithRelated, Is.Not.Empty);
-        var glossRelations = itemsWithRelated
-            .SelectMany(i => i.RelatedLexemes!)
-            .Where(r => r.RelationType == "Gloss")
-            .ToList();
-        Assert.That(glossRelations, Is.Not.Empty);
-    }
-
-    [Test]
-    [Category("Contract")]
-    [Property("CapabilityId", "CAP-007")]
-    [Property("BehaviorId", "BHV-110")]
-    [Description("Related lexemes include SemanticDomain relation type")]
-    public void LoadDictionaryResources_WithDomainRelations_PopulatesRelatedLexemes()
-    {
-        var service = BuildService(
-            bookTokens: DictionaryFixtures.BuildBookTokenProviderForNtTokens("test-resource")
-        );
-        var input = new DictionaryLoadInput(
-            CurrentReference: new VerseRef(40, 1, 1),
-            Scope: ScopeEnum.CurrentVerse,
-            Filter: null,
-            ShowTranslations: false,
-            GlossLanguage: "en",
-            ResourceId: "test-resource"
-        );
-
-        var result = service.LoadResources(input);
-
-        var domainRelations = result
-            .Items.Where(i => i.RelatedLexemes != null)
-            .SelectMany(i => i.RelatedLexemes!)
-            .Where(r => r.RelationType == "SemanticDomain")
-            .ToList();
-        Assert.That(domainRelations, Is.Not.Empty);
-    }
-
-    #endregion
-
-    #region INV-C07: Related Lexeme Self-Exclusion
-
-    [Test]
-    [Category("Invariant")]
-    [Property("CapabilityId", "CAP-007")]
-    [Property("InvariantId", "INV-C07")]
-    [Property("BehaviorId", "BHV-110")]
-    [Description("INV-C07: source lexeme is excluded from its own related lexemes list")]
-    public void LoadDictionaryResources_RelatedLexemes_ExcludesSelf()
-    {
-        var service = BuildService(
-            bookTokens: DictionaryFixtures.BuildBookTokenProviderForNtTokens("test-resource")
-        );
-        var input = new DictionaryLoadInput(
-            CurrentReference: new VerseRef(40, 1, 1),
-            Scope: ScopeEnum.CurrentVerse,
-            Filter: null,
-            ShowTranslations: false,
-            GlossLanguage: "en",
-            ResourceId: "test-resource"
-        );
-
-        var result = service.LoadResources(input);
-
-        foreach (var item in result.Items)
-        {
-            if (item.RelatedLexemes?.Count > 0)
-            {
-                var selfRefs = item.RelatedLexemes.Where(r => r.Lemma == item.Term).ToList();
-                Assert.That(selfRefs, Is.Empty);
-            }
-        }
-    }
-
-    #endregion
+    // NOTE: Related-lexeme tests were removed when related lexemes were dropped from the Enhanced
+    // Resources dictionary. The PT9 Marble dictionary does not expose related lexemes at the entry
+    // level (data-shape audit #7a); PT9's related-lexeme feature (ParatextData
+    // LexiconExtensions.GetRelatedLexemes) belongs to Find Related Words / Biblical Terms over the
+    // project lexicon, not this resource dictionary. loadDictionary/readDictionaryEntry no longer
+    // compute or return related lexemes, so the former BHV-110 / INV-C07 tests no longer apply.
 
     #region Error Cases
 
@@ -589,35 +497,6 @@ internal class DictionaryServiceTests
 
     #endregion
 
-    #region TS-019: Related Lexemes Empty When Language Not Set
-
-    [Test]
-    [Category("Contract")]
-    [Property("CapabilityId", "CAP-007")]
-    [Property("BehaviorId", "BHV-110")]
-    [Description("Related lexemes are empty when gloss language is not set")]
-    public void LoadDictionaryResources_NoLanguage_RelatedLexemesEmpty()
-    {
-        var service = BuildService();
-        var input = new DictionaryLoadInput(
-            CurrentReference: new VerseRef(40, 1, 1),
-            Scope: ScopeEnum.CurrentVerse,
-            Filter: null,
-            ShowTranslations: false,
-            GlossLanguage: "",
-            ResourceId: "test-resource"
-        );
-
-        var result = service.LoadResources(input);
-
-        foreach (var item in result.Items)
-        {
-            Assert.That(item.RelatedLexemes == null || item.RelatedLexemes.Count == 0, Is.True);
-        }
-    }
-
-    #endregion
-
     #region Word Filter (BHV-308)
 
     [Test]
@@ -709,93 +588,10 @@ internal class DictionaryServiceTests
 
     #endregion
 
-    #region Golden Master Tests (gm-023, gm-024)
-
-    [Test]
-    [Category("GoldenMaster")]
-    [Property("CapabilityId", "CAP-007")]
-    [Property("BehaviorId", "BHV-110")]
-    [Property("GoldenMasterId", "gm-023")]
-    [Description("gm-023: GetRelatedLexemes by shared gloss returns 4 related lexemes for logos")]
-    public void GetRelatedLexemes_SharedGloss_MatchesGoldenMaster()
-    {
-        var service = BuildService();
-
-        var related = service.FindRelatedLexemes("logos", "en");
-
-        Assert.That(related.Count, Is.EqualTo(4));
-        Assert.That(related.Any(r => r.Lemma == "rhema" && r.RelationType == "Gloss"), Is.True);
-        Assert.That(
-            related.Any(r => r.Lemma == "rhema" && r.RelationType == "SemanticDomain"),
-            Is.True
-        );
-        Assert.That(related.Any(r => r.Lemma == "aggelia" && r.RelationType == "Gloss"), Is.True);
-        Assert.That(
-            related.Any(r => r.Lemma == "aggelia" && r.RelationType == "SemanticDomain"),
-            Is.True
-        );
-        Assert.That(related.Any(r => r.Lemma == "logos"), Is.False, "INV-C07 self-exclusion");
-        Assert.That(related.Any(r => r.Lemma == "graphe"), Is.False);
-        Assert.That(related.Any(r => r.Lemma == "kai"), Is.False);
-    }
-
-    [Test]
-    [Category("GoldenMaster")]
-    [Property("CapabilityId", "CAP-007")]
-    [Property("BehaviorId", "BHV-110")]
-    [Property("GoldenMasterId", "gm-024")]
-    [Description(
-        "gm-024: GetRelatedLexemes by shared domain returns 5 related lexemes including euangelion"
-    )]
-    public void GetRelatedLexemes_SharedDomain_MatchesGoldenMaster()
-    {
-        // Extend the default SDBH lexicon with euangelion using a record `with` expression.
-        var baseData = DictionaryFixtures.BuildDictionaryData();
-        var sdbh = baseData.ByDictionary["SDBH"];
-        var extendedLexicon = new Dictionary<
-            string,
-            (IReadOnlyList<string> Glosses, IReadOnlyList<string> Domains)
-        >(sdbh.Lexicon, StringComparer.OrdinalIgnoreCase)
-        {
-            ["euangelion"] = (
-                new List<string> { "gospel" },
-                new List<string> { "Communication", "Sacred Texts" }
-            ),
-        };
-        var data = baseData with
-        {
-            ByDictionary = new Dictionary<string, DictionaryPerPackage>(
-                StringComparer.OrdinalIgnoreCase
-            )
-            {
-                ["SDBH"] = sdbh with { Lexicon = extendedLexicon },
-                ["SDBG"] = baseData.ByDictionary["SDBG"],
-                ["DCLEX"] = baseData.ByDictionary["DCLEX"],
-            },
-        };
-        var service = BuildService(data: data);
-
-        var related = service.FindRelatedLexemes("logos", "en");
-
-        Assert.That(related.Count, Is.EqualTo(5));
-        Assert.That(related.Any(r => r.Lemma == "rhema" && r.RelationType == "Gloss"), Is.True);
-        Assert.That(
-            related.Any(r => r.Lemma == "rhema" && r.RelationType == "SemanticDomain"),
-            Is.True
-        );
-        Assert.That(related.Any(r => r.Lemma == "aggelia" && r.RelationType == "Gloss"), Is.True);
-        Assert.That(
-            related.Any(r => r.Lemma == "aggelia" && r.RelationType == "SemanticDomain"),
-            Is.True
-        );
-        Assert.That(
-            related.Any(r => r.Lemma == "euangelion" && r.RelationType == "SemanticDomain"),
-            Is.True
-        );
-        Assert.That(related.Any(r => r.Lemma == "logos"), Is.False, "INV-C07 self-exclusion");
-    }
-
-    #endregion
+    // NOTE: Golden masters gm-023/gm-024 (GetRelatedLexemes by shared gloss/domain) were removed
+    // along with the related-lexeme feature - see the note above and data-shape audit #7a. The
+    // canonical PT9 related-lexeme algorithm lives in ParatextData
+    // (LexiconExtensions.GetRelatedLexemes) for a future Find Related Words / Biblical Terms port.
 
     #region INV-C04: Duplicate LexemeKey handled internally
 

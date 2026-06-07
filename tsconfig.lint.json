@@ -13,7 +13,6 @@
     ".storybook/*.ts",
     "src",
     "assets",
-    "e2e-tests",
-    "scripts"
+    "e2e-tests"
   ]
 }

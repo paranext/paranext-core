@@ -70,7 +70,6 @@ function buildEntry(overrides: Partial<DictionaryEntryDataInput> = {}): Dictiona
     lemma: 'ἀγάπη',
     morphology: 'noun-fem',
     semanticDomains: [],
-    relatedLexemes: [],
     senses: [],
     ...overrides,
   };
@@ -113,9 +112,6 @@ describe('dictionary-presenter', () => {
         lemma: 'ἀγάπη',
         morphology: 'noun-fem',
         semanticDomains: ['25.43'],
-        relatedLexemes: [
-          { lemma: 'φιλέω', entryId: 'entry-200', relationship: 'Gloss', gloss: 'love' },
-        ],
         senses: [
           {
             senseId: 'sense-1',

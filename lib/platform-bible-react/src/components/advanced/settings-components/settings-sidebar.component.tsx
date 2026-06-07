@@ -1,4 +1,5 @@
-import ProjectSelector, {
+import {
+  ProjectSelector,
   type ProjectSelectorProject,
 } from '@/components/advanced/project-selector/project-selector.component';
 import { Z_INDEX_OVERLAY } from '@/components/z-index';

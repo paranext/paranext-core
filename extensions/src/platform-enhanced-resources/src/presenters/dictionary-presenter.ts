@@ -63,25 +63,20 @@ interface DictionarySenseInput {
   subDomains?: DictionarySubDomainInput[];
 }
 
-/** Related lexeme cross-reference. */
-interface RelatedLexemeInput {
-  lemma: string;
-  entryId: string;
-  relationship: string;
-  gloss: string;
-}
-
 /**
  * Extended `DictionaryEntryData` input — the contract DTO plus optional FN-019 forward fields on
  * senses. Any present field is honored; any absent field collapses to the documented default in the
  * output.
+ *
+ * Related lexemes are intentionally absent: the PT9 Marble dictionary does not expose them at the
+ * entry level (data-shape audit #7a). PT9's related-lexeme feature lives in Find Related Words /
+ * Biblical Terms over the project lexicon, not this resource dictionary.
  */
 export interface DictionaryEntryDataInput {
   entryId: string;
   lemma: string;
   morphology: string;
   semanticDomains: string[];
-  relatedLexemes: RelatedLexemeInput[];
   senses: DictionarySenseInput[];
 }
 
