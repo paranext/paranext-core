@@ -33,7 +33,6 @@ public record DictionaryDisplayItem(
     IList<int> RelevantSenseIndices,
     string FirstRelevantSensePreview,
     IList<SemanticDomainRef>? SemanticDomains = null,
-    IList<RelatedLexemeRef>? RelatedLexemes = null,
     IList<EncyclopediaLinkRef>? EncyclopediaLinks = null,
     IList<VerseRef>? VerseOccurrences = null
 );

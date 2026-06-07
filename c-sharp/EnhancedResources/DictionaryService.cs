@@ -100,7 +100,6 @@ internal sealed class DictionaryService(DictionaryData data, IMarbleBookTokenPro
             Lemma: entry.Lemma,
             Senses: BuildSenses(entry.Senses, input.GlossLanguage),
             SemanticDomains: entry.SemanticDomains,
-            RelatedLexemes: BuildRelatedLexemes(entry.Lemma),
             Morphology: entry.Morphology
         );
     }
@@ -121,72 +120,6 @@ internal sealed class DictionaryService(DictionaryData data, IMarbleBookTokenPro
                 };
             })
             .ToList();
-    }
-
-    private List<RelatedLexemeData> BuildRelatedLexemes(string sourceLemma)
-    {
-        // Walk every loaded dictionary, deduping across packages so the same
-        // lemma in multiple slices isn't reported repeatedly.
-        // Lexicon is keyed by NFD-normalized lemma (PT9 MarbleDataAccess.cs:1444);
-        // normalize the source so the lookup hits.
-        var sourceKey = sourceLemma.Normalize(System.Text.NormalizationForm.FormD);
-        var results = new List<RelatedLexemeData>();
-        // Dedup across packages (fixture may share the same lexicon under multiple
-        // dictionary ShortNames, and in production DCLEX may overlap SDBG/SDBH).
-        // First package containing sourceLemma produces the full result set; later
-        // packages are no-ops via this set.
-        var seen = new HashSet<(string Lemma, string Relationship)>();
-        foreach (var pkg in data.ByDictionary.Values)
-        {
-            if (!pkg.Lexicon.TryGetValue(sourceKey, out var sourceInfo))
-                continue;
-
-            foreach (var (lemma, otherInfo) in pkg.Lexicon)
-            {
-                if (lemma == sourceKey)
-                    continue;
-
-                var sharedGlosses = sourceInfo.Glosses.Intersect(otherInfo.Glosses).ToList();
-                if (sharedGlosses.Count > 0 && seen.Add((lemma, "Gloss")))
-                {
-                    results.Add(
-                        new RelatedLexemeData(
-                            Lemma: lemma,
-                            EntryId: FindEntryIdForLemma(lemma) ?? lemma,
-                            Relationship: "Gloss",
-                            Gloss: sharedGlosses[0]
-                        )
-                    );
-                }
-
-                var sharedDomains = sourceInfo.Domains.Intersect(otherInfo.Domains).ToList();
-                if (sharedDomains.Count > 0 && seen.Add((lemma, "SemanticDomain")))
-                {
-                    results.Add(
-                        new RelatedLexemeData(
-                            Lemma: lemma,
-                            EntryId: FindEntryIdForLemma(lemma) ?? lemma,
-                            Relationship: "SemanticDomain",
-                            Gloss: otherInfo.Glosses.Count > 0 ? otherInfo.Glosses[0] : ""
-                        )
-                    );
-                }
-            }
-        }
-        return results;
-    }
-
-    private string? FindEntryIdForLemma(string lemma)
-    {
-        // EntryId is the NFD-normalized lemma; the dict key already matches
-        // that. Direct lookup beats the previous full-table scan.
-        var lemmaKey = lemma.Normalize(System.Text.NormalizationForm.FormD);
-        foreach (var pkg in data.ByDictionary.Values)
-        {
-            if (pkg.EntriesById.ContainsKey(lemmaKey))
-                return lemmaKey;
-        }
-        return null;
     }
 
     // === PORTED FROM PT9 ===
@@ -272,8 +205,6 @@ internal sealed class DictionaryService(DictionaryData data, IMarbleBookTokenPro
         }
 
         items = DeduplicateItems(items);
-        if (!string.IsNullOrEmpty(input.GlossLanguage))
-            items = PopulateRelatedLexemes(items, input.GlossLanguage);
 
         var emptyStateMessage = items.Count == 0 ? GetEmptyStateMessage(input) : null;
         return new DictionaryLoadResult(items, activeDictionary, emptyStateMessage);
@@ -365,65 +296,6 @@ internal sealed class DictionaryService(DictionaryData data, IMarbleBookTokenPro
     }
 
     // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/DictionaryTab.cs via LexiconExtensions.GetRelatedLexemes
-    // Maps to: BHV-110, INV-C07
-    /// <summary>
-    /// Find related lexemes for a source lexeme by shared glosses and semantic domains,
-    /// walking every loaded dictionary.
-    /// </summary>
-    public IList<RelatedLexemeRef> FindRelatedLexemes(string sourceLexeme, string glossLanguage)
-    {
-        if (string.IsNullOrEmpty(glossLanguage))
-            return [];
-
-        // Walk every loaded dictionary, but dedupe across packages: if the same
-        // lemma appears in SDBG and DCLEX (or any combination), report each
-        // (lemma, RelationType) at most once. Lexicon is NFD-keyed.
-        var sourceKey = sourceLexeme.Normalize(System.Text.NormalizationForm.FormD);
-        var results = new List<RelatedLexemeRef>();
-        // Same dedup rationale as BuildRelatedLexemes above.
-        var seen = new HashSet<(string Lemma, string RelationType)>();
-        foreach (var pkg in data.ByDictionary.Values)
-        {
-            if (!pkg.Lexicon.TryGetValue(sourceKey, out var sourceEntry))
-                continue;
-
-            foreach (var (lemma, entry) in pkg.Lexicon)
-            {
-                if (lemma == sourceKey)
-                    continue;
-
-                var sharedGlosses = sourceEntry.Glosses.Intersect(entry.Glosses).ToList();
-                if (sharedGlosses.Count > 0 && seen.Add((lemma, "Gloss")))
-                {
-                    results.Add(
-                        new RelatedLexemeRef(
-                            Lemma: lemma,
-                            Translit: lemma,
-                            Gloss: sharedGlosses[0],
-                            RelationType: "Gloss"
-                        )
-                    );
-                }
-
-                var sharedDomains = sourceEntry.Domains.Intersect(entry.Domains).ToList();
-                if (sharedDomains.Count > 0 && seen.Add((lemma, "SemanticDomain")))
-                {
-                    results.Add(
-                        new RelatedLexemeRef(
-                            Lemma: lemma,
-                            Translit: lemma,
-                            Gloss: entry.Glosses.Count > 0 ? entry.Glosses[0] : "",
-                            RelationType: "SemanticDomain"
-                        )
-                    );
-                }
-            }
-        }
-        return results;
-    }
-
-    // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Marble/DictionaryTab.cs via LexiconExtensions.GetInterlinearDisplayString
     // Maps to: spec-007, BHV-112
     /// <summary>
@@ -446,20 +318,6 @@ internal sealed class DictionaryService(DictionaryData data, IMarbleBookTokenPro
         items
             .GroupBy(i => i.TokenId)
             .Select(g => g.First() with { OccurrenceCount = g.Sum(i => i.OccurrenceCount) })
-            .ToList();
-
-    // BHV-110: Populate related lexemes for each display item
-    private List<DictionaryDisplayItem> PopulateRelatedLexemes(
-        List<DictionaryDisplayItem> items,
-        string glossLanguage
-    ) =>
-        items
-            .Select(item =>
-                item with
-                {
-                    RelatedLexemes = FindRelatedLexemes(item.Term, glossLanguage),
-                }
-            )
             .ToList();
 
     // BHV-352: Generate empty state message based on input context
