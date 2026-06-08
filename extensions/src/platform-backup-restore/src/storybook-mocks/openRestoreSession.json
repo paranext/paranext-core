@@ -1,0 +1,48 @@
+{
+  "metadata": {
+    "allFiles": [
+      {
+        "canViewDifferences": true,
+        "comparisonResult": "FilesAreSame",
+        "destinationCrc": 3.14,
+        "destinationDisplayName": "Sample displayName",
+        "id": "id-001",
+        "isNormallyRestored": true,
+        "sourceCrc": 3.14,
+        "sourceDisplayName": "Sample displayName",
+        "tooltipKey": "Sample tooltipKey"
+      },
+      {
+        "canViewDifferences": true,
+        "comparisonResult": "FilesAreSame",
+        "destinationCrc": 3.14,
+        "destinationDisplayName": "Sample displayName",
+        "id": "id-001",
+        "isNormallyRestored": true,
+        "sourceCrc": 3.14,
+        "sourceDisplayName": "Sample displayName",
+        "tooltipKey": "Sample tooltipKey"
+      },
+      {
+        "canViewDifferences": true,
+        "comparisonResult": "FilesAreSame",
+        "destinationCrc": 3.14,
+        "destinationDisplayName": "Sample displayName",
+        "id": "id-001",
+        "isNormallyRestored": true,
+        "sourceCrc": 3.14,
+        "sourceDisplayName": "Sample displayName",
+        "tooltipKey": "Sample tooltipKey"
+      }
+    ],
+    "description": "Sample description",
+    "filePath": "/sample/path",
+    "hasFigures": true,
+    "isLegacyBackup": true,
+    "projectGuid": "sample-project",
+    "projectName": "sample-project",
+    "sharedProjectMarkers": true
+  },
+  "sessionId": "id-001",
+  "status": null
+}

@@ -1,0 +1,264 @@
+using System.IO;
+using Paratext.Data;
+using SIL.Scripture;
+
+namespace Paranext.DataProvider.BackupRestore;
+
+// === NEW IN PT10 ===
+// Reason: CAP-024 service backing the M-011 getCompareSourceContent wire
+//   method. Added per DEC-319 to close the wire gap between CAP-005 (which
+//   emits opaque sourceTokens in the FileCompareConfig) and the
+//   DifferencesToolView React component (CAP-UI-009) which must resolve
+//   those tokens to chapter or whole-book text on demand.
+//
+// Pattern: stateless static service (Decision Registry
+//   `patterns.csharp.staticServiceForPureLogic`) — pure mapping from
+//   (RestoreSession, ScrText?, sourceToken, VerseRef, singleChapter) to
+//   GetCompareSourceContentResult. No state, no I/O of its own — delegates
+//   reads to IRestorerHandle.ReadFileText (backup side) or ScrText.GetText
+//   (destination side).
+//
+// PT9 anchor: PT9 had no equivalent — DifferencesToolForm received in-process
+//   IGetText instances directly via ForGetPutTexts. PT10's React UI is
+//   process-separate; the wire surface needs an opaque-token resolver.
+//   Resolver's signature mirrors PT9 IGetText.GetText(VerseRef, bool, bool)
+//   chapter-or-book granularity (Paratext/ParatextData/IGetText.cs:10) and
+//   the call pattern at Paratext/EditMenu/FindInRevision.cs:18
+//   (versionGetter.GetText(vref, vref.ChapterNum != 0, false)).
+//
+// Token format (CAP-020):
+//   * tok-src-{sessionId}-{fileName} — backup-side (reads through IRestorerHandle)
+//   * tok-dst-{sessionId}-{fileName} — destination-side (reads through ScrText)
+//
+// Error matrix (data-contracts.md §4.7):
+//   * INVALID_TOKEN     — token doesn't parse, or sessionId portion mismatches
+//   * INVALID_VERSE_REF — verseRef.BookNum == 0 (unknown book id)
+//   * IO_ERROR          — backup-side IRestorerHandle.ReadFileText throws IOException;
+//                         destination-side ScrText.GetText throws IOException;
+//                         tok-dst-* with null destinationProject
+//   Note: INVALID_SESSION is the wire layer's responsibility (rejects the
+//         request before invoking the resolver) — the resolver only sees live
+//         sessions.
+//
+// Invariants:
+//   * INV-C01 — read-only (the resolver never invokes ScrText.PutText /
+//     IRestorerHandle write methods; structurally enforced by signature).
+//
+// Maps to: data-contracts.md §4.7 (M-011 getCompareSourceContent);
+//          strategic-plan-backend.md §CAP-024; backend-alignment.md
+//          §CompareSourceContentResolver.
+
+/// <summary>
+/// CAP-024 service: resolves an opaque <c>sourceToken</c> issued by
+/// <see cref="CompareToBackupBridgeService.BuildCompareConfig"/> (CAP-020) to
+/// either a chapter of text (<paramref name="singleChapter"/> = <c>true</c>)
+/// or a whole book (<paramref name="singleChapter"/> = <c>false</c>). Mirrors
+/// PT9's <c>IGetText.GetText(VerseRef, bool, bool)</c> at
+/// <c>Paratext/ParatextData/IGetText.cs:10</c> — never per-verse.
+/// </summary>
+/// <remarks>
+/// <para>
+/// SIMPLE BODY (despite cross-feature complexity at the requirements layer):
+/// the resolver is a token-parse + branch-by-side dispatch. The complexity
+/// lives in the wire-layer plumbing (destination-project lookup) and in the
+/// IRestorerHandle / ScrText collaborators — both of which are documented in
+/// their own files.
+/// </para>
+/// <para>
+/// Stateless static — no constructor, no instance state. Tests instantiate
+/// inputs (RestoreSession + ScrText? + token + VerseRef + bool) and assert
+/// on the return envelope. INV-C01 (read-only) is structurally enforced:
+/// no overload of <see cref="Resolve"/> accepts a writer, and the body never
+/// invokes a writer on either collaborator.
+/// </para>
+/// </remarks>
+internal static class CompareSourceContentResolver
+{
+    /// <summary>
+    /// Resolves <paramref name="sourceToken"/> against the indicated source
+    /// (backup ZIP for <c>tok-src-*</c> via
+    /// <see cref="IRestorerHandle.ReadFileText"/>; destination project for
+    /// <c>tok-dst-*</c> via <see cref="ScrText.GetText(VerseRef, bool, bool)"/>)
+    /// at the requested granularity.
+    /// </summary>
+    /// <param name="session">The live restore session. Wire layer guarantees
+    /// this is non-null and registered (INVALID_SESSION is the wire layer's
+    /// responsibility).</param>
+    /// <param name="destinationProject">The destination <see cref="ScrText"/>
+    /// for <c>tok-dst-*</c> tokens. May be <c>null</c> when the wire layer
+    /// could not resolve the destination — <c>tok-dst-*</c> tokens with null
+    /// destination return <see cref="GetCompareSourceContentErrorCode.IoError"/>.
+    /// Unused for <c>tok-src-*</c> tokens.</param>
+    /// <param name="sourceToken">Opaque token from
+    /// <see cref="FileCompareConfig.LeftSourceToken"/> /
+    /// <see cref="FileCompareConfig.RightSourceToken"/>. Format per CAP-020:
+    /// <c>tok-src-{sessionId}-{fileName}</c> /
+    /// <c>tok-dst-{sessionId}-{fileName}</c>.</param>
+    /// <param name="verseRef">The verse reference identifying chapter (when
+    /// <paramref name="singleChapter"/> = <c>true</c>) or book (when
+    /// <c>false</c>). <c>BookNum == 0</c> returns INVALID_VERSE_REF.</param>
+    /// <param name="singleChapter">Mirrors PT9
+    /// <c>IGetText.GetText</c>'s <c>singleChapter</c> param. <c>true</c> →
+    /// chapter; <c>false</c> → whole book.</param>
+    public static GetCompareSourceContentResult Resolve(
+        RestoreSession session,
+        ScrText? destinationProject,
+        string sourceToken,
+        VerseRef verseRef,
+        bool singleChapter
+    )
+    {
+        // EXPLANATION:
+        // 3-step dispatch:
+        //   (A) Parse + validate sourceToken (strict positional grammar from
+        //       CAP-020). Anything other than
+        //       "tok-(src|dst)-{12hex}-{fileName}" whose 12-hex equals
+        //       session.SessionId → INVALID_TOKEN.
+        //   (B) verseRef.BookNum == 0 → INVALID_VERSE_REF. Short-circuits before
+        //       any read so an unknown book never triggers a useless I/O call.
+        //   (C) Branch on prefix:
+        //         tok-src-* → session.Restorer (IRestorerHandle).ReadFileText
+        //         tok-dst-* → destinationProject?.GetText(_, _, doMapIn: false)
+        //       Both paths catch IOException → IO_ERROR. tok-dst-* with a null
+        //       destinationProject is also IO_ERROR (wire layer could not
+        //       resolve a destination).
+        //   Empty text from either side → Success("") per §4.7 (caller renders
+        //   blank pane; NOT an error).
+
+        // (A) Token parse + sessionId match.
+        if (
+            !TryParseToken(
+                sourceToken,
+                session.SessionId,
+                out bool isSourceSide,
+                out string fileName
+            )
+        )
+        {
+            return InvalidTokenError();
+        }
+
+        // (B) verseRef gate — short-circuits BEFORE any read.
+        if (verseRef.BookNum == 0)
+        {
+            return new GetCompareSourceContentResult.Error(
+                GetCompareSourceContentErrorCode.InvalidVerseRef,
+                "%compare_invalidVerseRef%"
+            );
+        }
+
+        // (C) Branch by side.
+        if (isSourceSide)
+        {
+            var handle = (IRestorerHandle)session.Restorer;
+            try
+            {
+                string text = handle.ReadFileText(fileName, verseRef, singleChapter);
+                return new GetCompareSourceContentResult.Success(text);
+            }
+            catch (IOException)
+            {
+                return IoErrorEnvelope();
+            }
+        }
+
+        // tok-dst-* branch
+        if (destinationProject is null)
+        {
+            return IoErrorEnvelope();
+        }
+        try
+        {
+            string text = destinationProject.GetText(verseRef, singleChapter, doMapIn: false);
+            return new GetCompareSourceContentResult.Success(text);
+        }
+        catch (IOException)
+        {
+            return IoErrorEnvelope();
+        }
+    }
+
+    /// <summary>
+    /// Parse <paramref name="sourceToken"/> against the strict positional
+    /// grammar minted by <see cref="CompareToBackupBridgeService"/> (CAP-020):
+    /// <c>"tok-src-" | "tok-dst-"</c> (8) + sessionId (12) + <c>'-'</c> (1) +
+    /// fileName (n; may be empty). Any deviation — wrong prefix, length below
+    /// the 21-char minimum, missing separator, or a sessionId portion that
+    /// doesn't ordinal-equal <paramref name="expectedSessionId"/> — returns
+    /// <c>false</c> with default <c>out</c> values.
+    /// </summary>
+    /// <param name="sourceToken">Opaque token from the wire request.</param>
+    /// <param name="expectedSessionId">The live
+    /// <see cref="RestoreSession.SessionId"/> — the parser rejects any token
+    /// whose sessionId portion doesn't match (returns INVALID_TOKEN per §4.7,
+    /// not INVALID_SESSION, because the wire layer has already validated the
+    /// request's <c>sessionId</c>).</param>
+    /// <param name="isSourceSide"><c>true</c> for <c>tok-src-*</c> (backup
+    /// side, reads via <see cref="IRestorerHandle.ReadFileText"/>);
+    /// <c>false</c> for <c>tok-dst-*</c> (destination side, reads via
+    /// <see cref="ScrText.GetText(VerseRef, bool, bool)"/>).</param>
+    /// <param name="fileName">The filename portion of the token (substring
+    /// after the separator). May be empty per the CAP-020 emit format.</param>
+    /// <returns><c>true</c> if the token is fully validated; <c>false</c>
+    /// otherwise (caller should return
+    /// <see cref="GetCompareSourceContentErrorCode.InvalidToken"/>).</returns>
+    private static bool TryParseToken(
+        string sourceToken,
+        string expectedSessionId,
+        out bool isSourceSide,
+        out string fileName
+    )
+    {
+        // Layout (CAP-020): "tok-src-" (8) + sessionId (12) + "-" (1) + fileName (n)
+        // OR                "tok-dst-" (8) + sessionId (12) + "-" (1) + fileName (n)
+        // Minimum length therefore = 8 + 12 + 1 = 21 (fileName may be empty).
+        const string SRC_PREFIX = "tok-src-";
+        const string DST_PREFIX = "tok-dst-";
+        const int PREFIX_LEN = 8; // both prefixes have the same length
+        const int SESSION_ID_LEN = 12;
+        const int MIN_TOKEN_LEN = PREFIX_LEN + SESSION_ID_LEN + 1; // +1 for the separator
+
+        isSourceSide = false;
+        fileName = string.Empty;
+
+        bool isSrc = sourceToken.StartsWith(SRC_PREFIX, System.StringComparison.Ordinal);
+        bool isDst = !isSrc && sourceToken.StartsWith(DST_PREFIX, System.StringComparison.Ordinal);
+        if (!isSrc && !isDst)
+        {
+            return false;
+        }
+        if (sourceToken.Length < MIN_TOKEN_LEN)
+        {
+            return false;
+        }
+        if (sourceToken[PREFIX_LEN + SESSION_ID_LEN] != '-')
+        {
+            return false;
+        }
+        string sessionPortion = sourceToken.Substring(PREFIX_LEN, SESSION_ID_LEN);
+        if (!string.Equals(sessionPortion, expectedSessionId, System.StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        isSourceSide = isSrc;
+        fileName = sourceToken.Substring(PREFIX_LEN + SESSION_ID_LEN + 1);
+        return true;
+    }
+
+    /// <summary>
+    /// Build the canonical INVALID_TOKEN error envelope. Centralizes the
+    /// localize key so the four token-parser bail-outs in
+    /// <see cref="TryParseToken"/> stay uniform with the §4.7 error matrix.
+    /// </summary>
+    private static GetCompareSourceContentResult.Error InvalidTokenError() =>
+        new(GetCompareSourceContentErrorCode.InvalidToken, "%compare_invalidSourceToken%");
+
+    /// <summary>
+    /// Build the canonical IO_ERROR envelope. Centralizes the localize key so
+    /// the three IO_ERROR sites (backup IOException, destination null,
+    /// destination IOException) stay uniform with the §4.7 error matrix.
+    /// </summary>
+    private static GetCompareSourceContentResult.Error IoErrorEnvelope() =>
+        new(GetCompareSourceContentErrorCode.IoError, "%compare_sourceIoError%");
+}

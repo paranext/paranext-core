@@ -256,6 +256,8 @@ Generated_Code/
 # because we have git ;-)
 _UpgradeReport_Files/
 Backup*/
+# But DO track the BackupRestore/ feature folder (paratext-backup-restore port).
+!BackupRestore/
 UpgradeLog*.XML
 UpgradeLog*.htm
 ServiceFabricBackup/

@@ -1,0 +1,142 @@
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace Paranext.DataProvider.BackupRestore;
+
+// === NEW IN PT10 ===
+// Reason: CAP-009 partial-class fragment for M-008 getRestoreDestinationProjects (per
+//   strategic-plan-backend.md §CAP-009 + data-contracts.md §5.2). This file SUPPLIES
+//   the GetRestoreDestinationProjectsAsync method onto the `BackupRestoreDataProvider`
+//   partial-class declared in BackupRestoreDataProvider.cs (CAP-002).
+//
+// Mirrors CAP-002 / CAP-003's file-split convention: each capability owns its own
+// partial-class fragment (one method per file) to avoid edit-collision with parallel
+// agents.
+//
+// Wire-layer responsibilities (per data-contracts.md §5.2 + CAP-009 strategic plan):
+//   (1) Throw ArgumentException("INVALID_SESSION") when
+//       request.OnlyAllowNewProjects == true. The field is preserved for re-add
+//       traceability per scope-cascade-pattern.md / FN-010; PT10 has no
+//       cmdNewProject sub-flow so the only-new-projects code path is unreachable.
+//   (2) Read the snapshot from the RestoreDestinationProjectsServiceOverride
+//       (test seam) or — when GREEN-state lands a default-injection mechanism —
+//       a per-instance service.
+//   (3) Return a fresh List<RestoreDestinationProject> (defensive copy so callers
+//       cannot mutate the cached internal snapshot).
+//
+// Wire event surface (E-002 onDidUpdateRestoreDestinationProjects):
+//   The event is emitted by CAP-021's RestoreDestinationProjectsService via its
+//   inherited SubscribableSnapshotService.NotifyProjectsChanged. CAP-009's wire
+//   method does NOT itself emit events — it only READS from the snapshot. Admin-
+//   permission flips fire E-002 through CAP-021's machinery; the next call to
+//   GetRestoreDestinationProjectsAsync returns the updated CurrentUserIsAdmin flag.
+//
+// Test seam — RestoreDestinationProjectsServiceOverride:
+//   PT10 GREEN-state will inject the service via the eventual constructor on the
+//   facade. CAP-009 RED-state uses a static-property test seam (mirrors
+//   `RestorerFactoryOverride` precedent from CAP-003) so unit tests can plug in a
+//   service built against the PapiTestBase's `DummyPapiClient` +
+//   `DummyLocalParatextProjects`. Production code MUST NOT touch this.
+//
+// Maps to: data-contracts.md §3.11 (RestoreDestinationProject element shape);
+//   data-contracts.md §5.2 (DT-002 selector); strategic-plan-backend.md §CAP-009
+//   (M-008 wire shape).
+// Behaviors: BHV-315 (cmbScrTextDest populated with editable non-resource projects —
+//   Scope Note: PT10 narrow to existing-only post-FN-010).
+// Invariants: INV-B05 (Restoring over an existing project requires admin permission —
+//   surfaced via the `CurrentUserIsAdmin` flag on each list element).
+
+internal sealed partial class BackupRestoreDataProvider
+{
+    /// <summary>
+    /// Test seam — replace the default <see cref="RestoreDestinationProjectsService"/>
+    /// with one built against the test fixture's <c>DummyPapiClient</c> +
+    /// <c>DummyLocalParatextProjects</c>. Mirrors
+    /// <see cref="RestorerFactoryOverride"/> precedent. Tests set this in
+    /// <c>[SetUp]</c> and reset to <c>null</c> in <c>[TearDown]</c>. Production code
+    /// MUST NOT touch this.
+    /// </summary>
+    /// <remarks>
+    /// Today this seam is the ONLY injection mechanism for the underlying
+    /// <see cref="RestoreDestinationProjectsService"/>. CAP-001 BE-7 owns the
+    /// production wiring — it will inject a per-instance service via the facade's
+    /// constructor and remove the need for this seam outside tests.
+    /// </remarks>
+    internal static RestoreDestinationProjectsService? RestoreDestinationProjectsServiceOverride { get; set; }
+
+    /// <summary>
+    /// Wire entry point for M-008 getRestoreDestinationProjects
+    /// (strategic-plan-backend.md §CAP-009; data-contracts.md §5.2 DT-002 surface).
+    /// Returns the current snapshot of <see cref="RestoreDestinationProject"/>
+    /// records from the underlying CAP-021
+    /// <see cref="RestoreDestinationProjectsService"/>.
+    /// </summary>
+    /// <param name="request">Request payload. See
+    /// <see cref="GetRestoreDestinationProjectsRequest"/>.</param>
+    /// <param name="cancellationToken">Cancellation token from the JSON-RPC
+    /// dispatcher. Currently unused — snapshot reads are synchronous and short.
+    /// Reserved for future asynchronicity.</param>
+    /// <returns>
+    /// A fresh <see cref="List{T}"/> of <see cref="RestoreDestinationProject"/>
+    /// records — defensive copy so caller mutations do not affect the service's
+    /// cached snapshot.
+    /// </returns>
+    /// <exception cref="ArgumentException">
+    /// Thrown with message <c>"INVALID_SESSION"</c> when
+    /// <see cref="GetRestoreDestinationProjectsRequest.OnlyAllowNewProjects"/> is
+    /// <c>true</c>. The field is preserved for re-add traceability per
+    /// <c>scope-cascade-pattern.md</c>; PT10's wire surface stays stable even though
+    /// the only-new-projects code path is unreachable post-FN-010.
+    /// </exception>
+    public Task<List<RestoreDestinationProject>> GetRestoreDestinationProjectsAsync(
+        GetRestoreDestinationProjectsRequest request,
+        CancellationToken cancellationToken = default
+    )
+    {
+        _ = cancellationToken;
+
+        // EXPLANATION:
+        // Guard chain mirrors the data-contracts.md §5.2 / FN-010 cascade preservation:
+        //   (1) `OnlyAllowNewProjects == true` → throw ArgumentException("INVALID_SESSION").
+        //       The field is preserved in the request schema for re-add traceability per
+        //       scope-cascade-pattern.md; the only-new-projects code path is unreachable
+        //       post-FN-010 (no cmdNewProject sub-flow in PT10). The literal "INVALID_SESSION"
+        //       is the wire-stable error message — the JSON-RPC dispatcher converts the
+        //       thrown exception into a JSON-RPC error response.
+        //   (2) Read the snapshot from CAP-021's RestoreDestinationProjectsService via the
+        //       test seam. CAP-001 BE-7 will land the production injection mechanism
+        //       (constructor-injected default) — until then, only the test seam is wired.
+        //   (3) Return a fresh `List<RestoreDestinationProject>` (defensive copy). The
+        //       underlying `GetSnapshot()` already returns an immutable copy, but wrapping
+        //       it in a fresh mutable List ensures caller `Clear`/`Add`/`Remove` cannot
+        //       affect the service's cached snapshot AND honors the wire-method's declared
+        //       `List<T>` return shape.
+        //
+        // E-002 emission is NOT done here. CAP-021's RestoreDestinationProjectsService.
+        // NotifyProjectsChanged owns event emission via its inherited
+        // SubscribableSnapshotService. Admin-permission flips fire E-002 through that
+        // machinery; this wire method only READS the post-flip snapshot.
+
+        if (request.OnlyAllowNewProjects)
+        {
+            throw new ArgumentException("INVALID_SESSION", nameof(request));
+        }
+
+        // The test seam is the only injection mechanism in CAP-009 GREEN. CAP-001 BE-7
+        // will add a constructor-injected default for production. Until then, callers
+        // outside tests will hit a NullReferenceException — by design — because the
+        // production wiring is not yet in place.
+        RestoreDestinationProjectsService service =
+            RestoreDestinationProjectsServiceOverride
+            ?? throw new InvalidOperationException(
+                "RestoreDestinationProjectsService is not wired. "
+                    + "Tests must set RestoreDestinationProjectsServiceOverride; "
+                    + "production wiring is CAP-001 BE-7 work."
+            );
+
+        IReadOnlyList<RestoreDestinationProject> snapshot = service.GetSnapshot();
+        return Task.FromResult(new List<RestoreDestinationProject>(snapshot));
+    }
+}
