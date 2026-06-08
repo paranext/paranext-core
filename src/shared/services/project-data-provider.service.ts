@@ -23,6 +23,7 @@ import { ProjectMetadataWithoutFactoryInfo } from '@shared/models/project-metada
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import { getPDPFactoryNetworkObjectNameFromId } from '@shared/models/project-lookup.service-model';
 import { IProjectDataProviderEngineFactory } from '@shared/models/project-data-provider-engine-factory.model';
+import type { NetworkObjectDocumentation } from '@shared/models/openrpc.model';
 
 /**
  * Class that creates Project Data Providers of a specific set of `projectInterface`s. Layers over
@@ -76,9 +77,23 @@ class ProjectDataProviderFactory<SupportedProjectInterfaces extends ProjectInter
     return lock.runExclusive(async () => {
       let pdpId = this.pdpIds.get(key);
       if (!pdpId) {
+        const factoryReturn =
+          await this.pdpEngineFactory.createProjectDataProviderEngine(projectId);
+        const isEnvelope =
+          typeof factoryReturn === 'object' &&
+          factoryReturn !== null &&
+          'projectDataProviderEngine' in factoryReturn;
+        const projectDataProviderEngine = isEnvelope
+          ? factoryReturn.projectDataProviderEngine
+          : factoryReturn;
+        const perPdpAttributes = isEnvelope ? factoryReturn.attributes : undefined;
+        const perPdpDocumentation = isEnvelope ? factoryReturn.documentation : undefined;
+
         pdpId = await this.#registerProjectDataProvider(
-          await this.pdpEngineFactory.createProjectDataProviderEngine(projectId),
+          projectDataProviderEngine,
           projectId,
+          perPdpAttributes,
+          perPdpDocumentation,
         );
         if (!pdpId) throw new Error(`Could not register project data provider for ${projectId}`);
         this.pdpIds.set(key, pdpId);
@@ -91,6 +106,8 @@ class ProjectDataProviderFactory<SupportedProjectInterfaces extends ProjectInter
   async #registerProjectDataProvider(
     projectDataProviderEngine: IProjectDataProviderEngine<SupportedProjectInterfaces>,
     projectId: string,
+    perPdpAttributes?: { [property: string]: unknown },
+    perPdpDocumentation?: NetworkObjectDocumentation,
   ): Promise<string> {
     // Check to make sure new Base PDPs fulfill the requirements of the `platform.base` `projectInterface`
     if (
@@ -105,12 +122,15 @@ class ProjectDataProviderFactory<SupportedProjectInterfaces extends ProjectInter
     // fulfills `platform.base`
 
     const pdpId: string = `${newNonce()}-pdp`;
-    const pdp = await registerEngineByType<
-      UnionToIntersection<ProjectInterfaceDataTypes[SupportedProjectInterfaces[number]]> & {}
-    >(pdpId, projectDataProviderEngine, 'pdp', {
+    // Per-PDP attributes spread first; platform-canonical fields (projectId, projectInterfaces) win.
+    const mergedAttributes = {
+      ...perPdpAttributes,
       projectId,
       projectInterfaces: this.projectInterfaces,
-    });
+    };
+    const pdp = await registerEngineByType<
+      UnionToIntersection<ProjectInterfaceDataTypes[SupportedProjectInterfaces[number]]> & {}
+    >(pdpId, projectDataProviderEngine, 'pdp', mergedAttributes, perPdpDocumentation);
     this.pdpCleanupList.add(pdp);
     return pdpId;
   }
@@ -119,12 +139,14 @@ class ProjectDataProviderFactory<SupportedProjectInterfaces extends ProjectInter
 /**
  * Add a new Project Data Provider Factory to PAPI that uses the given engine.
  *
- * @param pdpFactoryId Unique id for this PDP factory
+ * @param pdpFactoryId Unique id for this PDP factory.
  * @param projectInterfaces The standardized sets of methods (`projectInterface`s) supported by the
- *   Project Data Provider Engines produced by this factory. Indicates what sort of project data
- *   should be available on the PDPEs created by this factory.
- * @param pdpEngineFactory Used in a ProjectDataProviderFactory to create ProjectDataProviders
- * @returns Promise that resolves to a disposable object when the registration operation completes
+ *   Project Data Provider Engines produced by this factory.
+ * @param pdpEngineFactory Used in a ProjectDataProviderFactory to create ProjectDataProviders.
+ * @param attributes Optional registration-level attributes. The platform overwrites the
+ *   `projectInterfaces` field — that field is always the platform-canonical value.
+ * @param documentation Optional `NetworkObjectDocumentation` for the factory itself.
+ * @returns Promise that resolves to a disposable object when the registration operation completes.
  */
 export async function registerProjectDataProviderEngineFactory<
   SupportedProjectInterfaces extends ProjectInterfaces[],
@@ -132,14 +154,19 @@ export async function registerProjectDataProviderEngineFactory<
   pdpFactoryId: string,
   projectInterfaces: SupportedProjectInterfaces,
   pdpEngineFactory: IProjectDataProviderEngineFactory<SupportedProjectInterfaces>,
+  attributes?: { [property: string]: unknown },
+  documentation?: NetworkObjectDocumentation,
 ): Promise<Dispose> {
   const factoryNetworkObjectId = getPDPFactoryNetworkObjectNameFromId(pdpFactoryId);
   const factory = new ProjectDataProviderFactory(pdpFactoryId, projectInterfaces, pdpEngineFactory);
+  // Spread caller attributes first, then overlay canonical projectInterfaces (platform always wins).
+  const mergedAttributes = { ...attributes, projectInterfaces };
   return networkObjectService.set<ProjectDataProviderFactory<SupportedProjectInterfaces>>(
     factoryNetworkObjectId,
     factory,
     PDP_FACTORY_OBJECT_TYPE,
-    { projectInterfaces },
+    mergedAttributes,
+    documentation,
   );
 }
 
