@@ -24,7 +24,7 @@ export type OpenRpc = {
   openrpc: string;
   info: Info;
   servers?: Server[];
-  methods: (Method | Notification)[];
+  methods: (Method | OpenRpcNotification)[];
   components?: Components;
   externalDocs?: ExternalDocumentation;
 };
@@ -172,11 +172,11 @@ export type SingleMethodDocumentation = {
  * one-way messages from server to client. Per the OpenRPC convention (no `result` ⇒ notification),
  * these are serialized into the same root `methods` array as Methods on the wire.
  */
-export type Notification = Omit<Method, 'result'>;
+export type OpenRpcNotification = Omit<Method, 'result'>;
 
 /** Documentation about a single notification */
 export type SingleNotificationDocumentation = {
-  notification: Omit<Notification, 'name'>;
+  notification: Omit<OpenRpcNotification, 'name'>;
   components?: Components;
 };
 
