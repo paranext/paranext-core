@@ -37,6 +37,20 @@ import { logger } from '@shared/services/logger.service';
 import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
 import { JSONRPCResponse } from 'json-rpc-2.0';
 import { NetworkMethodHandlerOptions } from '@shared/models/network.model';
+import type { SharedNetworkEventTypes } from 'papi-shared-types';
+
+/**
+ * Source of truth for which event names use shared semantics at the central registry. Must stay in
+ * sync with the `SharedNetworkEventTypes` type alias in `papi-shared-types.ts` — the test
+ * `network.service.shared-events.test.ts` enforces the invariant.
+ *
+ * Add entries here when adding a new shared event to `SharedNetworkEventTypes`.
+ */
+export const SHARED_EVENT_NAMES = new Set<keyof SharedNetworkEventTypes>([
+  'network-object.onDidCreateNetworkObject',
+  'network-object.onDidDisposeNetworkObject',
+  'shared-store.onDidChange',
+]);
 
 // #region Local event handling
 
