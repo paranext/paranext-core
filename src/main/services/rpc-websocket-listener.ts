@@ -6,13 +6,18 @@ import {
   EventHandler,
   GET_METHODS,
   InternalRequestHandler,
+  REGISTER_EVENT,
   REGISTER_METHOD,
   RequestParams,
   requestWithRetry,
+  UNREGISTER_EVENT,
   UNREGISTER_METHOD,
   WEBSOCKET_PORT,
 } from '@shared/data/rpc.model';
 import { IRpcMethodRegistrar, RegisteredRpcMethodDetails } from '@shared/models/rpc.interface';
+import { SingleNotificationDocumentation } from '@shared/models/openrpc.model';
+import { SHARED_EVENT_NAMES } from '@shared/services/network.service';
+import type { SharedNetworkEventTypes } from 'papi-shared-types';
 import { getErrorMessage, Mutex } from 'platform-bible-utils';
 import { WebSocketServer } from 'ws';
 import { logger } from '@shared/services/logger.service';
@@ -25,6 +30,74 @@ import {
   SingleMethodDocumentation,
 } from '@shared/models/openrpc.model';
 import { RpcServer } from './rpc-server';
+
+interface EventRegistrant {
+  handler: unknown;
+  documentation?: SingleNotificationDocumentation;
+}
+
+/**
+ * Tracks registered network event emitters, enforcing shared vs. exclusive ownership policy.
+ *
+ * @internal Exported for unit-testing only; not part of the public API.
+ */
+export class RpcEventRegistry {
+  private byName = new Map<string, EventRegistrant[]>();
+
+  /**
+   * Try to register an event. Returns `true` if accepted, `false` if rejected.
+   *
+   * - Name in `SHARED_EVENT_NAMES` (shared): multiple handlers may register; same handler twice
+   *   rejected.
+   * - Name not in `SHARED_EVENT_NAMES` (exclusive): first registrant wins; any subsequent
+   *   registration from any handler is rejected.
+   */
+  tryRegister(
+    handler: unknown,
+    eventName: string,
+    documentation?: SingleNotificationDocumentation,
+  ): boolean {
+    const isShared = SHARED_EVENT_NAMES.has(eventName as keyof SharedNetworkEventTypes);
+    const existing = this.byName.get(eventName);
+
+    if (!existing) {
+      this.byName.set(eventName, [{ handler, documentation }]);
+      return true;
+    }
+
+    if (isShared) {
+      if (existing.some((r) => r.handler === handler)) return false;
+      existing.push({ handler, documentation });
+      return true;
+    }
+
+    return false;
+  }
+
+  /** Remove a registrant. Returns `true` if the handler had registered this event. */
+  tryUnregister(handler: unknown, eventName: string): boolean {
+    const existing = this.byName.get(eventName);
+    if (!existing) return false;
+    const index = existing.findIndex((r) => r.handler === handler);
+    if (index < 0) return false;
+    existing.splice(index, 1);
+    if (existing.length === 0) this.byName.delete(eventName);
+    return true;
+  }
+
+  /** Remove all event registrations for the given handler (e.g. when a websocket closes) */
+  unregisterAll(handler: unknown): void {
+    this.byName.forEach((registrants, eventName) => {
+      const filtered = registrants.filter((r) => r.handler !== handler);
+      if (filtered.length === 0) this.byName.delete(eventName);
+      else this.byName.set(eventName, filtered);
+    });
+  }
+
+  entries(): IterableIterator<[string, EventRegistrant[]]> {
+    return this.byName.entries();
+  }
+}
 
 /**
  * Owns the WebSocketServer that listens for clients to connect to the web socket. When a client
@@ -46,6 +119,7 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
   private readonly rpcServerBySocket = new Map<WebSocket, RpcServer>();
   private readonly rpcMethodDetailsByMethodName = new Map<string, RegisteredRpcMethodDetails>();
   private readonly localMethodsByMethodName = new Map<string, InternalRequestHandler>();
+  private readonly rpcEventDetailsByEventName = new RpcEventRegistry();
 
   constructor() {
     bindClassMethods.call(this);
@@ -154,6 +228,17 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
     return true;
   }
 
+  async registerEvent(
+    eventName: string,
+    documentation?: SingleNotificationDocumentation,
+  ): Promise<boolean> {
+    return this.rpcEventDetailsByEventName.tryRegister(this, eventName, documentation);
+  }
+
+  async unregisterEvent(eventName: string): Promise<boolean> {
+    return this.rpcEventDetailsByEventName.tryUnregister(this, eventName);
+  }
+
   generateOpenRpcSchema(): OpenRpc {
     const openRpcSchema = createEmptyOpenRpc(app.getVersion());
     openRpcSchema.methods = [
@@ -194,6 +279,46 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
         result: {
           name: 'return value',
           summary: 'Whether the method was successfully unregistered',
+          schema: { type: 'boolean' },
+        },
+      },
+      {
+        name: REGISTER_EVENT,
+        summary: 'Register a network event emitter with the main process',
+        params: [
+          {
+            name: 'eventName',
+            required: true,
+            summary: 'Name of the event to register',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'documentation',
+            required: false,
+            summary: 'Documentation for the event in OpenRPC notification format',
+            schema: { type: 'object' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'Whether the event was successfully registered',
+          schema: { type: 'boolean' },
+        },
+      },
+      {
+        name: UNREGISTER_EVENT,
+        summary: 'Unregister a network event emitter from the main process',
+        params: [
+          {
+            name: 'eventName',
+            required: true,
+            summary: 'Name of the event to unregister',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'Whether the event was successfully unregistered',
           schema: { type: 'boolean' },
         },
       },
@@ -282,6 +407,7 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
       webSocket,
       this.propagateEvent,
       this.rpcMethodDetailsByMethodName,
+      this.rpcEventDetailsByEventName,
     );
     rpcServer.connect();
     this.rpcServerBySocket.set(webSocket, rpcServer);

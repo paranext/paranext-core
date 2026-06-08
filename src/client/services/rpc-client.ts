@@ -16,16 +16,21 @@ import {
   deserializeMessage,
   EventHandler,
   InternalRequestHandler,
+  REGISTER_EVENT,
   REGISTER_METHOD,
   RequestParams,
   sendPayloadToWebSocket,
+  UNREGISTER_EVENT,
   UNREGISTER_METHOD,
   WEBSOCKET_PORT,
 } from '@shared/data/rpc.model';
 import { createWebSocket } from '@client/services/web-socket.factory';
 import { AsyncVariable, getErrorMessage, Mutex, MutexMap } from 'platform-bible-utils';
 import { bindClassMethods, SerializedRequestType } from '@shared/utils/util';
-import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
+import {
+  SingleMethodDocumentation,
+  SingleNotificationDocumentation,
+} from '@shared/models/openrpc.model';
 
 /**
  * Manages the JSON-RPC protocol on the client end of a websocket that connects to main
@@ -177,6 +182,25 @@ export class RpcClient implements IRpcMethodRegistrar {
       if (!this.jsonRpcServer.hasMethod(methodName)) return false;
       const successful = await this.jsonRpcClient.request(UNREGISTER_METHOD, [methodName]);
       if (successful) this.jsonRpcServer.removeMethod(methodName);
+      return successful;
+    });
+  }
+
+  async registerEvent(
+    eventName: string,
+    documentation?: SingleNotificationDocumentation,
+  ): Promise<boolean> {
+    const mutex = this.registrationMutexMap.get(eventName);
+    return mutex.runExclusive(async () => {
+      const success = await this.jsonRpcClient.request(REGISTER_EVENT, [eventName, documentation]);
+      return success;
+    });
+  }
+
+  async unregisterEvent(eventName: string): Promise<boolean> {
+    const mutex = this.registrationMutexMap.get(eventName);
+    return mutex.runExclusive(async () => {
+      const successful = await this.jsonRpcClient.request(UNREGISTER_EVENT, [eventName]);
       return successful;
     });
   }
