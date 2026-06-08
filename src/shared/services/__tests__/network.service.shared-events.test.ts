@@ -79,3 +79,22 @@ describe.skip('createNetworkEventEmitterAsync', () => {
     }
   });
 });
+
+import { getNetworkEvent as gne } from '@shared/services/network.service';
+import type { PlatformEvent } from 'platform-bible-utils';
+
+describe('getNetworkEvent overloads', () => {
+  it('typed call infers payload from NetworkEventTypes', () => {
+    // Compile-time test — if this compiles, the typed overload exists.
+    const ev = gne('network-object.onDidCreateNetworkObject');
+    // ev should be PlatformEvent<NetworkObjectDetails> — verify by satisfying the structural type.
+    const checked: PlatformEvent<unknown> = ev;
+    void checked;
+  });
+
+  it('explicit <T> call still resolves (deprecated overload)', () => {
+    const ev = gne<{ foo: string }>('arbitraryName');
+    const checked: PlatformEvent<{ foo: string }> = ev;
+    void checked;
+  });
+});

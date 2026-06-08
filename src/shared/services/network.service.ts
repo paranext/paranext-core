@@ -428,16 +428,30 @@ export const createNetworkEventEmitterAsync = async <EventType extends keyof Net
 };
 
 /**
- * Gets the network event with the specified type. Creates the emitter if it does not exist
+ * Subscribe to a typed network event. Declare the event in `NetworkEventTypes` (or rely on
+ * `SharedNetworkEventTypes` inheritance for platform events) and the payload type is inferred.
  *
  * @param eventType Unique network event type for coordinating between connections
  * @returns Event for the event type that runs the callback provided when the event is emitted
  */
-export const getNetworkEvent = <T>(eventType: string): PlatformEvent<T> => {
-  // Return event with the generic type.
+export function getNetworkEvent<EventType extends keyof NetworkEventTypes>(
+  eventType: EventType,
+): PlatformEvent<NetworkEventTypes[EventType]>;
+/**
+ * Subscribe to a network event with an explicit payload type.
+ *
+ * @deprecated 8 June 2026. Use the typed signature: declare the event in `NetworkEventTypes` and
+ *   call `getNetworkEvent('your.event.name')` without an explicit type parameter. If your event
+ *   name is dynamic (e.g., per-instance data-provider events), this signature continues to work
+ *   functionally; suppress the deprecation warning at the call site with a brief comment.
+ * @param eventType Unique network event type for coordinating between connections
+ * @returns Event for the event type that runs the callback provided when the event is emitted
+ */
+export function getNetworkEvent<T>(eventType: string): PlatformEvent<T>;
+export function getNetworkEvent(eventType: string): PlatformEvent<unknown> {
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return createNetworkEventEmitterInternal(eventType, false).event as PlatformEvent<T>;
-};
+  return createNetworkEventEmitterInternal(eventType, false).event as PlatformEvent<unknown>;
+}
 
 // #endregion
 
