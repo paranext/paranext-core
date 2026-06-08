@@ -19,6 +19,11 @@ export type OrderedItem = {
 export type OrderedExtensibleContainer = OrderedItem & {
   /** Determines whether other items can be added to this after it has been defined */
   isExtensible?: boolean;
+  /**
+   * Set to `true` to mark this extension point as experimental. Extensions reading menu data should
+   * check this before contributing to the point. Informational only.
+   */
+  isExperimental?: boolean;
 };
 
 /** Group of menu items that belongs in a column */
@@ -98,6 +103,11 @@ export type ColumnsWithHeaders = {
   [property: ReferencedItem]: MenuColumnWithHeader;
   /** Defines whether columns can be added to this multi-column menu */
   isExtensible?: boolean;
+  /**
+   * Set to `true` to mark the entire columns-collection as an experimental extension point.
+   * Informational only.
+   */
+  isExperimental?: boolean;
 };
 
 /** Menu that contains a column without a header */
@@ -126,6 +136,10 @@ export type WebViewMenu = {
   topMenu: MultiColumnMenu | undefined;
   /** Menu that opens when you right click on the main body/area of a tab */
   contextMenu: SingleColumnMenu | undefined;
+  /**
+   * Set to `true` to mark this entire WebView menu shape as experimental. Informational only.
+   */
+  isExperimental?: boolean;
 };
 
 /** Menus for all web views */
@@ -226,6 +240,10 @@ export const menuDocumentSchema = {
                 'Defines whether contributions are allowed to add menu groups to this column',
               type: 'boolean',
             },
+            isExperimental: {
+              description: 'Marks this extension point as experimental. Informational only.',
+              type: 'boolean',
+            },
           },
           required: ['label', 'order'],
           additionalProperties: false,
@@ -235,6 +253,11 @@ export const menuDocumentSchema = {
         isExtensible: {
           description:
             'Defines whether contributions are allowed to add columns to this multi-column menu',
+          type: 'boolean',
+        },
+        isExperimental: {
+          description:
+            'Marks the entire columns-collection as an experimental extension point. Informational only.',
           type: 'boolean',
         },
       },
@@ -265,6 +288,10 @@ export const menuDocumentSchema = {
                     'Defines whether contributions are allowed to add menu items to this menu group',
                   type: 'boolean',
                 },
+                isExperimental: {
+                  description: 'Marks this extension point as experimental. Informational only.',
+                  type: 'boolean',
+                },
               },
               required: ['order'],
               additionalProperties: false,
@@ -283,6 +310,10 @@ export const menuDocumentSchema = {
                 isExtensible: {
                   description:
                     'Defines whether contributions are allowed to add menu items to this menu group',
+                  type: 'boolean',
+                },
+                isExperimental: {
+                  description: 'Marks this extension point as experimental. Informational only.',
                   type: 'boolean',
                 },
               },
@@ -417,6 +448,10 @@ export const menuDocumentSchema = {
         contextMenu: {
           description: 'Menu that opens when you right click on the main body/area of a tab',
           $ref: '#/$defs/singleColumnMenu',
+        },
+        isExperimental: {
+          description: 'Marks this WebView menu as experimental. Informational only.',
+          type: 'boolean',
         },
       },
       additionalProperties: false,
