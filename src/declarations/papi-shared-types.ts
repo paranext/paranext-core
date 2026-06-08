@@ -22,6 +22,7 @@ declare module 'papi-shared-types' {
     NetworkObjectDetails,
   } from '@shared/models/network-object.model';
   import type { StoreChangeEvent } from '@shared/services/shared-store.service';
+  import type { ScrollGroupUpdateInfo } from '@shared/services/scroll-group.service-model';
   // Used in JSDocs
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import type { WebViewFactory } from '@shared/models/web-view-factory.model';
@@ -805,7 +806,12 @@ declare module 'papi-shared-types' {
    * Mark a single event as experimental by adding `\/** @experimental *\/` directly above its
    * entry.
    */
-  export interface NetworkEventTypes extends SharedNetworkEventTypes {}
+  export interface NetworkEventTypes extends SharedNetworkEventTypes {
+    /** Emitted when extensions finish reloading. `true` if reload succeeded, `false` if it failed. */
+    'platform.onDidReloadExtensions': boolean;
+    /** Emitted when the Scripture reference for a scroll group changes. */
+    'scrollGroup:onDidUpdateScrRef': ScrollGroupUpdateInfo;
+  }
 
   // #endregion
 }
