@@ -24,9 +24,10 @@ test.describe('UI Interaction', () => {
   const SETTINGS_REGISTRATION_TIMEOUT_MS = PROCESS_READY_TIMEOUT;
 
   test.beforeAll(async ({ electronApp }) => {
-    // Extend the beforeAll timeout to fit SETTINGS_REGISTRATION_TIMEOUT_MS (120 s)
-    // + SLOW_CI_PAPI_TIMEOUT_MS (30 s) + slack (30 s) on the slowest CI runners.
-    test.setTimeout(180_000);
+    // Extend the beforeAll timeout to cover SETTINGS_REGISTRATION_TIMEOUT_MS (120 s)
+    // + up to 3 sendPapiRequestOnce retries (3 × 30 s) + 2 re-poll waits (2 × 30 s)
+    // + 2 sleeps (2 × 2 s) + slack → ~300 s worst case on the slowest CI runners.
+    test.setTimeout(300_000);
     // Maximize the window once so everything is visible and clickable for all tests
     // Wait for the first window to exist before maximizing
     await electronApp.firstWindow({ timeout: 10_000 });
@@ -44,12 +45,28 @@ test.describe('UI Interaction', () => {
       undefined,
       SETTINGS_REGISTRATION_TIMEOUT_MS,
     );
-    await sendPapiRequestOnce(
-      SETTINGS_SET_METHOD,
-      ['platform.interfaceLanguage', ['en']],
-      undefined,
-      SLOW_CI_PAPI_TIMEOUT_MS,
-    );
+    // The set handler internally awaits waitForResyncContributions(), which can
+    // cause the extension host's WebSocket to close before responding on slow CI
+    // ("Web socket N has closed"). Retry on that specific transient error.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await sendPapiRequestOnce(
+          SETTINGS_SET_METHOD,
+          ['platform.interfaceLanguage', ['en']],
+          undefined,
+          SLOW_CI_PAPI_TIMEOUT_MS,
+        );
+        break;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        const isWsClose = msg.includes('Web socket') && msg.includes('has closed');
+        if (!isWsClose || attempt >= 2) throw err;
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 2_000);
+        });
+        await waitForPapiMethodRegistered(SETTINGS_SET_METHOD, undefined, SLOW_CI_PAPI_TIMEOUT_MS);
+      }
+    }
   });
 
   test('should open the About dialog from the Help menu', async ({ mainPage }) => {
