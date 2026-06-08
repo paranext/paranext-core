@@ -23,6 +23,11 @@ declare module 'papi-shared-types' {
   } from '@shared/models/network-object.model';
   import type { StoreChangeEvent } from '@shared/services/shared-store.service';
   import type { ScrollGroupUpdateInfo } from '@shared/services/scroll-group.service-model';
+  import type {
+    CloseWebViewEvent,
+    OpenWebViewEvent,
+    UpdateWebViewEvent,
+  } from '@shared/services/web-view.service-model';
   // Used in JSDocs
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import type { WebViewFactory } from '@shared/models/web-view-factory.model';
@@ -745,6 +750,17 @@ declare module 'papi-shared-types' {
     'platform.onDidReloadExtensions': boolean;
     /** Emitted when the Scripture reference for a scroll group changes. */
     'scrollGroup:onDidUpdateScrRef': ScrollGroupUpdateInfo;
+    /**
+     * @deprecated 13 November 2024. Use {@link NetworkEventTypes.'webView:onDidOpenWebView'}
+     *   instead.
+     */
+    'webView:onDidAddWebView': OpenWebViewEvent;
+    /** Emitted when a WebView is created. */
+    'webView:onDidOpenWebView': OpenWebViewEvent;
+    /** Emitted when a WebView is updated. */
+    'webView:onDidUpdateWebView': UpdateWebViewEvent;
+    /** Emitted when a WebView is closed. */
+    'webView:onDidCloseWebView': CloseWebViewEvent;
   }
 
   // #endregion
