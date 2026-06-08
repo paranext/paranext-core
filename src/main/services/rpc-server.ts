@@ -10,7 +10,11 @@ import {
   JSONRPCServer,
 } from 'json-rpc-2.0';
 import { logger } from '@shared/services/logger.service';
-import { IRpcHandler, RegisteredRpcMethodDetails } from '@shared/models/rpc.interface';
+import {
+  IRpcEventRegistry,
+  IRpcHandler,
+  RegisteredRpcMethodDetails,
+} from '@shared/models/rpc.interface';
 import {
   ConnectionStatus,
   createErrorResponse,
@@ -18,14 +22,19 @@ import {
   createSuccessResponse,
   deserializeMessage,
   InternalRequestHandler,
+  REGISTER_EVENT,
   REGISTER_METHOD,
   RequestParams,
   requestWithRetry,
   sendPayloadToWebSocket,
+  UNREGISTER_EVENT,
   UNREGISTER_METHOD,
 } from '@shared/data/rpc.model';
 import { bindClassMethods, SerializedRequestType } from '@shared/utils/util';
-import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
+import {
+  SingleMethodDocumentation,
+  SingleNotificationDocumentation,
+} from '@shared/models/openrpc.model';
 import { getErrorMessage } from 'platform-bible-utils';
 
 type PropagateEventMethod = <T>(source: RpcServer, eventType: string, event: T) => void;
@@ -48,6 +57,7 @@ export class RpcServer implements IRpcHandler {
   /** Refers to any process that connected to main over the websocket */
   private readonly jsonRpcClient: JSONRPCClient;
   private readonly rpcMethodDetailsByMethodName: Map<string, RegisteredRpcMethodDetails>;
+  private readonly rpcEventDetailsByEventName: IRpcEventRegistry;
   /** Called by an RpcServer when all other RpcServers should emit an event over the network */
   private readonly propagateEventMethod: PropagateEventMethod;
 
@@ -56,6 +66,7 @@ export class RpcServer implements IRpcHandler {
     webSocket: WebSocket,
     propagateEventMethod: PropagateEventMethod,
     rpcMethodDetailsByMethodName: Map<string, RegisteredRpcMethodDetails>,
+    rpcEventDetailsByEventName: IRpcEventRegistry,
   ) {
     bindClassMethods.call(this);
     this.name = name;
@@ -77,9 +88,12 @@ export class RpcServer implements IRpcHandler {
       this.createNextRequestId,
     );
     this.rpcMethodDetailsByMethodName = rpcMethodDetailsByMethodName;
+    this.rpcEventDetailsByEventName = rpcEventDetailsByEventName;
 
     this.addMethodToRpcServer(REGISTER_METHOD, this.registerRemoteMethod);
     this.addMethodToRpcServer(UNREGISTER_METHOD, this.unregisterRemoteMethod);
+    this.addMethodToRpcServer(REGISTER_EVENT, this.registerRemoteEvent);
+    this.addMethodToRpcServer(UNREGISTER_EVENT, this.unregisterRemoteEvent);
   }
 
   async connect(): Promise<boolean> {
@@ -161,6 +175,14 @@ export class RpcServer implements IRpcHandler {
     return handlersMatch;
   }
 
+  registerRemoteEvent(eventName: string, documentation?: SingleNotificationDocumentation): boolean {
+    return this.rpcEventDetailsByEventName.tryRegister(this, eventName, documentation);
+  }
+
+  unregisterRemoteEvent(eventName: string): boolean {
+    return this.rpcEventDetailsByEventName.tryUnregister(this, eventName);
+  }
+
   private createNextRequestId(): number {
     const retVal = this.requestId;
     this.requestId += 1;
@@ -207,6 +229,7 @@ export class RpcServer implements IRpcHandler {
       logger.debug(`Method '${methodName}' removed since websocket ${this.name} closed`);
       this.rpcMethodDetailsByMethodName.delete(methodName);
     });
+    this.rpcEventDetailsByEventName.unregisterAll(this);
   }
 
   private onWebSocketError(ev: Event): void {
