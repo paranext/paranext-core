@@ -470,11 +470,19 @@ const set = async <T extends NetworkableObject>(
       objectAttributes,
     );
 
+    const objectIsExperimental = objectDocumentation['x-experimental'] === true;
+
     netObjDetails.functionNames.forEach((functionName) => {
       const requestType = getNetworkObjectRequestType(id, functionName);
-      const methodDocs =
+      const baseMethodDocs =
         objectDocumentation.methods?.find((method) => method.name === functionName) ??
         getEmptyMethodDocs();
+      // Fan out the object-level experimental marker onto each method's docs. A per-method explicit
+      // 'x-experimental' wins; absent that, the object-level value propagates.
+      const methodDocs =
+        objectIsExperimental && baseMethodDocs['x-experimental'] === undefined
+          ? { ...baseMethodDocs, 'x-experimental': true as const }
+          : baseMethodDocs;
       const unsub = networkService.registerRequestHandler(
         requestType,
         // Assert as any to allow indexing on the function name
