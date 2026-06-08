@@ -17,7 +17,11 @@ declare module 'papi-shared-types' {
     IDisposableDataProvider,
   } from '@shared/models/data-provider.interface';
   import type { ExtractDataProviderDataTypes } from '@shared/models/extract-data-provider-data-types.model';
-  import type { NetworkableObject } from '@shared/models/network-object.model';
+  import type {
+    NetworkableObject,
+    NetworkObjectDetails,
+  } from '@shared/models/network-object.model';
+  import type { StoreChangeEvent } from '@shared/services/shared-store.service';
   // Used in JSDocs
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import type { WebViewFactory } from '@shared/models/web-view-factory.model';
@@ -761,6 +765,47 @@ declare module 'papi-shared-types' {
    * @example 'platform.placeholderWebView'
    */
   export type WebViewControllerTypes = keyof WebViewControllers;
+
+  // #endregion
+
+  // #region Network Events
+
+  /**
+   * Network events emitted from multiple processes (each process emits its own local event under
+   * the same name). Declared by the platform; not extensible by extensions.
+   *
+   * The names listed here are the source of truth for which event names use shared semantics at the
+   * central registry. An event name in this type allows registration from multiple processes (each
+   * process registers once, all emitters are valid sources). Any other event name uses exclusive
+   * semantics (one registrant ever).
+   *
+   * Subscribers do not need to know which events are shared — `getNetworkEvent` handles both kinds
+   * identically.
+   */
+  export type SharedNetworkEventTypes = {
+    'network-object.onDidCreateNetworkObject': NetworkObjectDetails;
+    'network-object.onDidDisposeNetworkObject': string;
+    'shared-store.onDidChange': StoreChangeEvent;
+  };
+
+  /**
+   * All known network events. Extensions augment this to declare their own events. Inherits the
+   * platform's shared events automatically.
+   *
+   * To declare a new event for use with `createNetworkEventEmitterAsync`:
+   *
+   * ```ts
+   * declare module 'papi-shared-types' {
+   *   export interface NetworkEventTypes {
+   *     'myExt.somethingHappened': { foo: string };
+   *   }
+   * }
+   * ```
+   *
+   * Mark a single event as experimental by adding `\/** @experimental *\/` directly above its
+   * entry.
+   */
+  export interface NetworkEventTypes extends SharedNetworkEventTypes {}
 
   // #endregion
 }
