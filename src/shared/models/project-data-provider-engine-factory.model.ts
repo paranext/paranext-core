@@ -1,6 +1,7 @@
 import { IProjectDataProviderEngine } from '@shared/models/project-data-provider-engine.model';
 import { ProjectMetadataFilterOptions } from '@shared/models/project-data-provider-factory.interface';
 import { ProjectMetadataWithoutFactoryInfo } from '@shared/models/project-metadata.model';
+import type { NetworkObjectDocumentation } from '@shared/models/openrpc.model';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { ProjectInterfaces } from 'papi-shared-types';
 import { escapeStringRegexp, getErrorMessage } from 'platform-bible-utils';
@@ -42,16 +43,29 @@ export interface IProjectDataProviderEngineFactory<
   ): Promise<ProjectMetadataWithoutFactoryInfo[]>;
   /**
    * Create a {@link IProjectDataProviderEngine} for the project requested so the papi can create an
-   * {@link IProjectDataProvider} for the project. This project will have the same
-   * `projectInterface`s as this Project Data Provider Engine Factory
+   * {@link IProjectDataProvider} for the project.
+   *
+   * The return value may be either the engine directly, or an envelope object with the engine plus
+   * optional per-PDP-instance attributes and documentation. The unusual property name
+   * `projectDataProviderEngine` (rather than `engine`) is deliberate — it cannot collide with a
+   * property the engine itself might expose, so the platform's narrowing check on the return shape
+   * is unambiguous.
+   *
+   * The platform overwrites `projectId` in any supplied per-PDP attributes — that field is always
+   * the platform-canonical value.
    *
    * @param projectId Id of the project for which to create a {@link IProjectDataProviderEngine}
-   * @returns A promise that resolves to a {@link IProjectDataProviderEngine} for the project passed
-   *   in
+   * @returns Either the engine, or an envelope `{ projectDataProviderEngine, attributes?,
+   *   documentation? }`
    */
-  createProjectDataProviderEngine(
-    projectId: string,
-  ): Promise<IProjectDataProviderEngine<SupportedProjectInterfaces>>;
+  createProjectDataProviderEngine(projectId: string): Promise<
+    | IProjectDataProviderEngine<SupportedProjectInterfaces>
+    | {
+        projectDataProviderEngine: IProjectDataProviderEngine<SupportedProjectInterfaces>;
+        attributes?: { [property: string]: unknown };
+        documentation?: NetworkObjectDocumentation;
+      }
+  >;
 }
 
 /**
