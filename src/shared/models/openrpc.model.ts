@@ -24,7 +24,7 @@ export type OpenRpc = {
   openrpc: string;
   info: Info;
   servers?: Server[];
-  methods: Method[];
+  methods: (Method | Notification)[];
   components?: Components;
   externalDocs?: ExternalDocumentation;
 };
@@ -108,6 +108,11 @@ export type Method = {
   name: string;
   params: (ContentDescriptor | Reference)[];
   result: ContentDescriptor | Reference;
+  /**
+   * Set to `true` to mark this method as experimental — its shape may change without notice.
+   * Informational only; does not affect runtime behavior. See the experimental APIs wiki page.
+   */
+  'x-experimental'?: boolean;
   /** A short summary of what the method does. */
   summary?: string;
   /**
@@ -162,12 +167,31 @@ export type SingleMethodDocumentation = {
   components?: Components;
 };
 
+/**
+ * An OpenRPC notification — same shape as a {@link Method}, but without `result`. Used for events /
+ * one-way messages from server to client. Per the OpenRPC convention (no `result` ⇒ notification),
+ * these are serialized into the same root `methods` array as Methods on the wire.
+ */
+export type Notification = Omit<Method, 'result'>;
+
+/** Documentation about a single notification */
+export type SingleNotificationDocumentation = {
+  notification: Omit<Notification, 'name'>;
+  components?: Components;
+};
+
 /** Documentation about all methods on a network object */
 export type NetworkObjectDocumentation = {
   summary?: string;
   description?: string;
   methods?: Method[];
   components?: Components;
+  /**
+   * Set to `true` to mark every method registered for this network object as experimental. The
+   * marker is fanned out onto each method's `'x-experimental'` field inside
+   * `networkObjectService.set`.
+   */
+  'x-experimental'?: boolean;
 };
 
 /** Create an object of type {@link OpenRpc} to hold documentation for PAPI websocket methods */
