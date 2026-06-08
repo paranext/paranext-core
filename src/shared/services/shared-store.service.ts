@@ -31,7 +31,7 @@ type StoreEntry = {
 };
 
 // Store change event emitted when a value is set or removed
-type StoreChangeEvent = StoreEntry & {
+export type StoreChangeEvent = StoreEntry & {
   key: string;
 };
 
