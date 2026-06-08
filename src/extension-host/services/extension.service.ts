@@ -68,7 +68,7 @@ import {
   UriHandler,
 } from '@shared/models/handle-uri-privilege.model';
 import {
-  createNetworkEventEmitter,
+  createNetworkEventEmitterAsync,
   registerRequestHandler,
 } from '@shared/services/network.service';
 import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
@@ -1563,7 +1563,7 @@ export const initialize = () => {
 
     appUriScheme = (await appService.getAppInfo()).uriScheme;
 
-    reloadFinishedEventEmitter = createNetworkEventEmitter<boolean>(
+    reloadFinishedEventEmitter = await createNetworkEventEmitterAsync(
       'platform.onDidReloadExtensions',
     );
 

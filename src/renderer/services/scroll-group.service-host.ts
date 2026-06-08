@@ -1,6 +1,6 @@
 import { logger } from '@shared/services/logger.service';
 import { networkObjectService } from '@shared/services/network-object.service';
-import { createNetworkEventEmitter } from '@shared/services/network.service';
+import { createNetworkEventEmitterAsync } from '@shared/services/network.service';
 import {
   EVENT_NAME_ON_DID_UPDATE_SCR_REF,
   IScrollGroupRemoteService,
@@ -14,6 +14,8 @@ import {
   deepClone,
   deserialize,
   isPlatformError,
+  type PlatformEvent,
+  type PlatformEventEmitter,
   ScrollGroupId,
   serialize,
 } from 'platform-bible-utils';
@@ -56,9 +58,7 @@ function saveScrRefs() {
 }
 
 /** Emitter for changing Scripture reference on a scroll group */
-const onDidUpdateScrRefEmitter = createNetworkEventEmitter<ScrollGroupUpdateInfo>(
-  EVENT_NAME_ON_DID_UPDATE_SCR_REF,
-);
+let onDidUpdateScrRefEmitter: PlatformEventEmitter<ScrollGroupUpdateInfo> | undefined;
 
 /**
  * All Scroll Group IDs that are intended to be shown in scroll group selectors. This is a
@@ -68,7 +68,13 @@ const onDidUpdateScrRefEmitter = createNetworkEventEmitter<ScrollGroupUpdateInfo
 export const availableScrollGroupIds = [undefined, ...Array(5).keys()];
 
 /** Event that emits with information about a changed Scripture Reference for a scroll group */
-export const onDidUpdateScrRef = onDidUpdateScrRefEmitter.event;
+export const onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo> = (callback) => {
+  if (!onDidUpdateScrRefEmitter)
+    throw new Error(
+      'scroll-group.service-host not initialized — call startScrollGroupService() before subscribing to onDidUpdateScrRef',
+    );
+  return onDidUpdateScrRefEmitter.event(callback);
+};
 
 /** See {@link IScrollGroupRemoteService.getScrRef} */
 export function getScrRefSync(scrollGroupId: ScrollGroupId = 0): SerializedVerseRef {
@@ -109,7 +115,7 @@ export function setScrRefSync(
   // Update the scr ref and send out an event
   scrRefs[scrollGroupIdDefaulted] = scrRefClone;
   saveScrRefs();
-  onDidUpdateScrRefEmitter.emit({ scrollGroupId: scrollGroupIdDefaulted, scrRef: scrRefClone });
+  onDidUpdateScrRefEmitter?.emit({ scrollGroupId: scrollGroupIdDefaulted, scrRef: scrRefClone });
 
   if (shouldSetVerseRefSetting && scrollGroupIdDefaulted === 0)
     (async () => {
@@ -139,6 +145,11 @@ const scrollGroupService: IScrollGroupRemoteService = {
 
 /** Register the network object that backs the scroll group service */
 export async function startScrollGroupService(): Promise<void> {
+  onDidUpdateScrRefEmitter = await createNetworkEventEmitterAsync(
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    EVENT_NAME_ON_DID_UPDATE_SCR_REF as 'scrollGroup:onDidUpdateScrRef',
+  );
+
   await networkObjectService.set(NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE, scrollGroupService);
 
   // Keep scroll group 0 in sync with the verse ref setting for backwards compatibility
