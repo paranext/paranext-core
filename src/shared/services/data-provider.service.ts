@@ -44,6 +44,7 @@ import {
 import { IDataProvider, IDisposableDataProvider } from '@shared/models/data-provider.interface';
 import { notificationService } from '@shared/services/notification.service';
 import { PlatformNotification } from '@shared/models/notification.service-model';
+import type { NetworkObjectDocumentation } from '@shared/models/openrpc.model';
 
 /** Suffix on network objects that indicates that the network object is a data provider */
 const DATA_PROVIDER_LABEL = 'data';
@@ -782,6 +783,9 @@ function buildDataProvider<DataProviderName extends DataProviderNames>(
  *   providers), a unique type name should be used to distinguish from generic data providers.
  * @param dataProviderAttributes Optional object that will be sent in a network event to provide
  *   additional metadata about the data provider represented by this engine.
+ * @param documentation Optional OpenRPC-style documentation for the data provider network object.
+ *   When `documentation['x-experimental']` is `true`, the provider's methods will be automatically
+ *   tagged as experimental in the OpenRPC document.
  *
  *   WARNING: registering a dataProviderEngine mutates the provided object. Its `notifyUpdate` and
  *   `set` methods are layered over to facilitate data provider subscriptions.
@@ -793,6 +797,7 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
   dataProviderEngine: IDataProviderEngine<DataProviderTypes[DataProviderName]>,
   dataProviderType: string = 'dataProvider',
   dataProviderAttributes: { [property: string]: unknown } | undefined = undefined,
+  documentation?: NetworkObjectDocumentation,
 ): Promise<DisposableDataProviders[DataProviderName]> {
   await initialize();
 
@@ -835,6 +840,7 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
     dataProviderInternal,
     dataProviderType,
     dataProviderAttributes,
+    documentation,
   )) as unknown as DisposableDataProviders[DataProviderName];
 
   // Get the local network object proxy for the data provider so the provider can't be disposed
@@ -869,6 +875,9 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
  *   providers), a unique type name should be used to distinguish from generic data providers.
  * @param dataProviderAttributes Optional object that will be sent in a network event to provide
  *   additional metadata about the data provider represented by this engine.
+ * @param documentation Optional OpenRPC-style documentation for the data provider network object.
+ *   When `documentation['x-experimental']` is `true`, the provider's methods will be automatically
+ *   tagged as experimental in the OpenRPC document.
  *
  *   WARNING: registering a dataProviderEngine mutates the provided object. Its `notifyUpdate` and
  *   `set` methods are layered over to facilitate data provider subscriptions.
@@ -882,6 +891,7 @@ export async function registerEngineByType<TDataTypes extends DataProviderDataTy
   dataProviderEngine: IDataProviderEngine<TDataTypes>,
   dataProviderType: string = 'dataProvider',
   dataProviderAttributes: { [property: string]: unknown } | undefined = undefined,
+  documentation?: NetworkObjectDocumentation,
 ): Promise<IDisposableDataProvider<IDataProvider<TDataTypes>>> {
   // All the types on this function and `registerEngine` are just TypeScript helpers. They do not
   // serve us well in this particular case, so we're ignoring the types and using our own since we
@@ -892,6 +902,7 @@ export async function registerEngineByType<TDataTypes extends DataProviderDataTy
     dataProviderEngine as any,
     dataProviderType,
     dataProviderAttributes,
+    documentation,
   );
   /* eslint-enable no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any */
 }
