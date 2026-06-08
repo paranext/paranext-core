@@ -43,7 +43,7 @@ import {
 import { registerCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { networkObjectService } from '@shared/services/network-object.service';
-import { createNetworkEventEmitter } from '@shared/services/network.service';
+import { createNetworkEventEmitterAsync } from '@shared/services/network.service';
 import { settingsService } from '@shared/services/settings.service';
 import { webViewProviderService } from '@shared/services/web-view-provider.service';
 import {
@@ -71,6 +71,8 @@ import {
   isSerializable,
   isString,
   newGuid,
+  type PlatformEvent,
+  type PlatformEventEmitter,
   serialize,
   split,
   startsWith,
@@ -95,14 +97,16 @@ import {
  * @deprecated 13 November 2024. Changed to {@link onDidOpenWebViewEmitter}. This remains for now to
  *   support anyone listening to this event over websocket
  */
-const onDidAddWebViewEmitter = createNetworkEventEmitter<OpenWebViewEvent>(
-  EVENT_NAME_ON_DID_ADD_WEB_VIEW,
-);
+let onDidAddWebViewEmitter: PlatformEventEmitter<OpenWebViewEvent> | undefined;
 
 /** Emitter for when a webview is created */
-const onDidOpenWebViewEmitter = createNetworkEventEmitter<OpenWebViewEvent>(
-  EVENT_NAME_ON_DID_OPEN_WEB_VIEW,
-);
+let onDidOpenWebViewEmitter: PlatformEventEmitter<OpenWebViewEvent> | undefined;
+
+/** Emitter for when a webview is updated */
+let onDidUpdateWebViewEmitter: PlatformEventEmitter<UpdateWebViewEvent> | undefined;
+
+/** Emitter for when a webview is removed */
+let onDidCloseWebViewEmitter: PlatformEventEmitter<CloseWebViewEvent> | undefined;
 
 /**
  * Emits an event for when a web view is created
@@ -111,28 +115,36 @@ const onDidOpenWebViewEmitter = createNetworkEventEmitter<OpenWebViewEvent>(
  * {@link onDidAddWebViewEmitter}, but this will likely be removed at some point
  */
 function emitOnDidOpenWebView(event: OpenWebViewEvent) {
-  onDidAddWebViewEmitter.emit(event);
-  onDidOpenWebViewEmitter.emit(event);
+  if (onDidAddWebViewEmitter) onDidAddWebViewEmitter.emit(event);
+  if (onDidOpenWebViewEmitter) onDidOpenWebViewEmitter.emit(event);
 }
 
 /** Event that emits with webView info when a webView is created */
-export const onDidOpenWebView = onDidOpenWebViewEmitter.event;
-
-/** Emitter for when a webview is updated */
-const onDidUpdateWebViewEmitter = createNetworkEventEmitter<UpdateWebViewEvent>(
-  EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
-);
+export const onDidOpenWebView: PlatformEvent<OpenWebViewEvent> = (callback) => {
+  if (!onDidOpenWebViewEmitter)
+    throw new Error(
+      'web-view.service-host not initialized — call initialize() before subscribing to onDidOpenWebView',
+    );
+  return onDidOpenWebViewEmitter.event(callback);
+};
 
 /** Event that emits with webView info when a webView is updated */
-export const onDidUpdateWebView = onDidUpdateWebViewEmitter.event;
-
-/** Emitter for when a webview is removed */
-const onDidCloseWebViewEmitter = createNetworkEventEmitter<CloseWebViewEvent>(
-  EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
-);
+export const onDidUpdateWebView: PlatformEvent<UpdateWebViewEvent> = (callback) => {
+  if (!onDidUpdateWebViewEmitter)
+    throw new Error(
+      'web-view.service-host not initialized — call initialize() before subscribing to onDidUpdateWebView',
+    );
+  return onDidUpdateWebViewEmitter.event(callback);
+};
 
 /** Event that emits with webView info when a webView is removed */
-export const onDidCloseWebView = onDidCloseWebViewEmitter.event;
+export const onDidCloseWebView: PlatformEvent<CloseWebViewEvent> = (callback) => {
+  if (!onDidCloseWebViewEmitter)
+    throw new Error(
+      'web-view.service-host not initialized — call initialize() before subscribing to onDidCloseWebView',
+    );
+  return onDidCloseWebViewEmitter.event(callback);
+};
 
 /**
  * Alias for `window.open` because `window.open` is deleted to prevent web views from accessing it.
@@ -640,7 +652,7 @@ function setDockLayout(dockLayout: PapiDockLayout | undefined): void {
 // TODO: We could short-circuit saveLayout when no meaningful change happened. - IJH 2023-05-1
 const onLayoutChange: OnLayoutChange = async (newLayout, _currentTabId, changeInfo) => {
   if (changeInfo?.didCloseWebView && changeInfo.webViewDefinition)
-    onDidCloseWebViewEmitter.emit({
+    onDidCloseWebViewEmitter?.emit({
       webView: convertWebViewDefinitionToSaved(changeInfo.webViewDefinition),
     });
 
@@ -945,7 +957,7 @@ export function updateWebViewDefinitionSync(
       }
 
       // Emit the update event
-      onDidUpdateWebViewEmitter.emit({
+      onDidUpdateWebViewEmitter?.emit({
         webView,
       });
     }
@@ -1697,7 +1709,7 @@ async function openOrReloadWebView(
       layout: finalLayout,
     });
   else
-    onDidUpdateWebViewEmitter.emit({
+    onDidUpdateWebViewEmitter?.emit({
       webView: convertWebViewDefinitionToSaved(finalWebView),
     });
 
@@ -1921,6 +1933,24 @@ export const initialize = () => {
     };
 
     // #endregion
+
+    // Create network event emitters
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    onDidAddWebViewEmitter = await createNetworkEventEmitterAsync(
+      EVENT_NAME_ON_DID_ADD_WEB_VIEW as 'webView:onDidAddWebView',
+    );
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    onDidOpenWebViewEmitter = await createNetworkEventEmitterAsync(
+      EVENT_NAME_ON_DID_OPEN_WEB_VIEW as 'webView:onDidOpenWebView',
+    );
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    onDidUpdateWebViewEmitter = await createNetworkEventEmitterAsync(
+      EVENT_NAME_ON_DID_UPDATE_WEB_VIEW as 'webView:onDidUpdateWebView',
+    );
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    onDidCloseWebViewEmitter = await createNetworkEventEmitterAsync(
+      EVENT_NAME_ON_DID_CLOSE_WEB_VIEW as 'webView:onDidCloseWebView',
+    );
 
     isInitialized = true;
 
