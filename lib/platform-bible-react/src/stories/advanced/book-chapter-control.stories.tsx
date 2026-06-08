@@ -12,6 +12,7 @@ type BookChapterControlWrapperProps = {
   className?: string;
   getActiveBookIds?: () => string[];
   getEndVerse?: (bookId: string, chapterNum: number) => number;
+  onOpenChange?: (open: boolean) => void;
 };
 
 /**
@@ -94,6 +95,10 @@ const meta: Meta<typeof BookChapterControl> = {
   args: {
     scrRef: defaultScrRef,
     handleSubmit: fn((scrRef) => console.log('Scripture reference changed:', scrRef)),
+    // Explicit spy so Storybook doesn't synthesize an implicit action arg for this `on*`
+    // handler. The component invokes `onOpenChange` from an effect on open/close, which would
+    // otherwise trip SB_PREVIEW_API_0002 (ImplicitActionsDuringRendering).
+    onOpenChange: fn(),
   },
   render: (args) => <BookChapterControlWrapper {...args} />,
 } satisfies Meta<typeof BookChapterControl>;
