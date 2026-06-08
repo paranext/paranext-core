@@ -34,10 +34,13 @@ import { PapiNetworkEventEmitter } from '@shared/models/papi-network-event-emitt
 import { IRpcMethodRegistrar } from '@shared/models/rpc.interface';
 import { createRpcHandler } from '@shared/services/rpc-handler.factory';
 import { logger } from '@shared/services/logger.service';
-import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
+import {
+  SingleMethodDocumentation,
+  SingleNotificationDocumentation,
+} from '@shared/models/openrpc.model';
 import { JSONRPCResponse } from 'json-rpc-2.0';
 import { NetworkMethodHandlerOptions } from '@shared/models/network.model';
-import type { SharedNetworkEventTypes } from 'papi-shared-types';
+import type { NetworkEventTypes, SharedNetworkEventTypes } from 'papi-shared-types';
 
 /**
  * Source of truth for which event names use shared semantics at the central registry. Must stay in
@@ -372,17 +375,57 @@ const createNetworkEventEmitterInternal = <T>(
 };
 
 /**
- * Creates an event emitter that works properly over the network. Other connections receive this
- * event when it is emitted.
+ * Creates an event emitter that works properly over the network.
  *
- * WARNING: You can only create a network event emitter once per eventType to prevent hijacked event
- * emitters.
+ * @deprecated 8 June 2026. Use `createNetworkEventEmitterAsync`. Events created via the sync API
+ *   are not centrally registered and do not appear in the OpenRPC document. The async version
+ *   properly restricts event registration to prevent multiple sources from emitting the same
+ *   network event (unless the event is declared in `SharedNetworkEventTypes`, in which case it
+ *   accepts multiple registrants by design).
  *
+ *   WARNING: You can only create a network event emitter once per eventType to prevent hijacked event
+ *   emitters.
  * @param eventType Unique network event type for coordinating between connections
  * @returns Event emitter whose event works between connections
  */
 export const createNetworkEventEmitter = <T>(eventType: string): PlatformEventEmitter<T> =>
   createNetworkEventEmitterInternal(eventType, true);
+
+/**
+ * Create a network event emitter that participates in central registration. The returned emitter
+ * appears in the OpenRPC document if `documentation` is provided.
+ *
+ * If the event name is in `SharedNetworkEventTypes`, the central registry uses shared semantics:
+ * multiple processes may register the same name (each process registers once); all corresponding
+ * emitters are valid sources.
+ *
+ * Otherwise the registry uses exclusive semantics: only one process may register a given name;
+ * subsequent registrations from any process are rejected.
+ *
+ * Intra-process duplicate registration is always rejected regardless of the event's domain.
+ *
+ * @param eventType A key of `NetworkEventTypes` (which inherits `SharedNetworkEventTypes`).
+ * @param documentation Optional notification documentation. Carries `'x-experimental': true` to
+ *   mark the event as experimental.
+ */
+export const createNetworkEventEmitterAsync = async <EventType extends keyof NetworkEventTypes>(
+  eventType: EventType,
+  documentation?: SingleNotificationDocumentation,
+): Promise<PlatformEventEmitter<NetworkEventTypes[EventType]>> => {
+  await initialize();
+  if (!jsonRpc) throw new Error('RPC handler not set');
+  const accepted = await jsonRpc.registerEvent(eventType, documentation);
+  if (!accepted) {
+    throw new Error(
+      `Event "${eventType}" was rejected by the central registry (likely already registered from another process).`,
+    );
+  }
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return createNetworkEventEmitterInternal<NetworkEventTypes[EventType]>(
+    eventType,
+    true,
+  ) as PlatformEventEmitter<NetworkEventTypes[EventType]>;
+};
 
 /**
  * Gets the network event with the specified type. Creates the emitter if it does not exist
@@ -400,7 +443,9 @@ export const getNetworkEvent = <T>(eventType: string): PlatformEvent<T> => {
 
 // Declare an interface for the object we're exporting so that JSDoc comments propagate
 export interface PapiNetworkService {
+  /** @deprecated 8 June 2026. Use createNetworkEventEmitterAsync. */
   createNetworkEventEmitter: typeof createNetworkEventEmitter;
+  createNetworkEventEmitterAsync: typeof createNetworkEventEmitterAsync;
   getNetworkEvent: typeof getNetworkEvent;
 }
 
@@ -411,5 +456,6 @@ export interface PapiNetworkService {
  */
 export const papiNetworkService: PapiNetworkService = {
   createNetworkEventEmitter,
+  createNetworkEventEmitterAsync,
   getNetworkEvent,
 };
