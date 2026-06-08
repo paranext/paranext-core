@@ -10,7 +10,7 @@ import { ProcessType } from '@shared/global-this.model';
 
 const SHARED_STORE_PREFIX = 'shared-store';
 const STORE_GET_REQUEST = `${SHARED_STORE_PREFIX}:get`;
-const STORE_CHANGE_EVENT = `${SHARED_STORE_PREFIX}:change`;
+const STORE_CHANGE_EVENT = 'shared-store.onDidChange';
 
 // https://en.wikipedia.org/wiki/Lamport_timestamp
 let localCounter: number = 0;
@@ -81,7 +81,7 @@ export async function initialize(networkService: NetworkService): Promise<void> 
   logger.debug(`Initializing shared store service`);
 
   // Prepare to emit changes as they are made to the local store
-  storeChangeEmitter = networkService.createNetworkEventEmitter(STORE_CHANGE_EVENT);
+  storeChangeEmitter = await networkService.createNetworkEventEmitterAsync(STORE_CHANGE_EVENT);
 
   // Listen for changes from other processes to update the local store
   networkService.getNetworkEvent<StoreChangeEvent>(STORE_CHANGE_EVENT)((event) => {

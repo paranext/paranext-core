@@ -45,6 +45,33 @@ const initialize = (): Promise<void> => {
     // TODO: Might be best to make a singleton or something
     await networkService.initialize();
 
+    onDidCreateNetworkObjectEmitter = await networkService.createNetworkEventEmitterAsync(
+      'network-object.onDidCreateNetworkObject',
+    );
+
+    onDidDisposeNetworkObjectEmitter = await networkService.createNetworkEventEmitterAsync(
+      'network-object.onDidDisposeNetworkObject',
+    );
+
+    // Subscribe to the dispose event to clean up local and remote network object registrations
+    onDidDisposeNetworkObject((id: string) => {
+      const networkObjectRegistration = networkObjectRegistrations.get(id);
+
+      if (networkObjectRegistration) {
+        // Alert users of this specific network object that it was disposed
+        networkObjectRegistration.onDidDisposeEmitter.emit();
+
+        // Dispose of the network object registration itself
+        networkObjectRegistration.onDidDisposeEmitter.dispose();
+
+        // Dispose of the proxy
+        networkObjectRegistration.revokeProxy();
+
+        // Dispose of the network object registration
+        networkObjectRegistrations.delete(id);
+      }
+    });
+
     isInitialized = true;
   })();
 
@@ -119,51 +146,39 @@ const hasKnown = (id: string): boolean => networkObjectRegistrations.has(id);
 
 /**
  * Emitter for when a network object is created. Includes the list of functions exposed by the
- * network object.
+ * network object. Initialized inside `initialize()`.
  */
-const onDidCreateNetworkObjectEmitter =
-  networkService.createNetworkEventEmitter<NetworkObjectDetails>(
-    serializeRequestType(CATEGORY_NETWORK_OBJECT, 'onDidCreateNetworkObject'),
-  );
+let onDidCreateNetworkObjectEmitter: PlatformEventEmitter<NetworkObjectDetails> | undefined;
 
 /**
  * Event that fires when a new object has been created on the network (locally or remotely). The
  * event contains information about the new network object.
  */
-export const onDidCreateNetworkObject = onDidCreateNetworkObjectEmitter.event;
+export const onDidCreateNetworkObject: PlatformEvent<NetworkObjectDetails> = (callback) => {
+  if (!onDidCreateNetworkObjectEmitter)
+    throw new Error(
+      'network-object.service not initialized — call initialize() before subscribing to onDidCreateNetworkObject',
+    );
+  return onDidCreateNetworkObjectEmitter.event(callback);
+};
 
 /**
  * Emitter for when a network object is disposed. Provides the ID so that the local emitter specific
  * to that object can be run.
  *
  * Only run on local network object registration! Processes should only dispose their own network
- * objects
+ * objects. Initialized inside `initialize()`.
  */
-const onDidDisposeNetworkObjectEmitter = networkService.createNetworkEventEmitter<string>(
-  serializeRequestType(CATEGORY_NETWORK_OBJECT, 'onDidDisposeNetworkObject'),
-);
+let onDidDisposeNetworkObjectEmitter: PlatformEventEmitter<string> | undefined;
 
 /** Event that fires with a network object ID when that object is disposed locally or remotely */
-export const onDidDisposeNetworkObject = onDidDisposeNetworkObjectEmitter.event;
-
-/** Runs to dispose of local and remote network objects when we receive events telling us to do so */
-onDidDisposeNetworkObject((id: string) => {
-  const networkObjectRegistration = networkObjectRegistrations.get(id);
-
-  if (networkObjectRegistration) {
-    // Alert users of this specific network object that it was disposed
-    networkObjectRegistration.onDidDisposeEmitter.emit();
-
-    // Dispose of the network object registration itself
-    networkObjectRegistration.onDidDisposeEmitter.dispose();
-
-    // Dispose of the proxy
-    networkObjectRegistration.revokeProxy();
-
-    // Dispose of the network object registration
-    networkObjectRegistrations.delete(id);
-  }
-});
+export const onDidDisposeNetworkObject: PlatformEvent<string> = (callback) => {
+  if (!onDidDisposeNetworkObjectEmitter)
+    throw new Error(
+      'network-object.service not initialized — call initialize() before subscribing to onDidDisposeNetworkObject',
+    );
+  return onDidDisposeNetworkObjectEmitter.event(callback);
+};
 
 // #endregion
 
@@ -538,7 +553,7 @@ const set = async <T extends NetworkableObject>(
 
       // Send an event notifying everyone that this network object is no longer available
       // The event listener removes the network object from the registration map
-      onDidDisposeNetworkObjectEmitter.emit(id);
+      if (onDidDisposeNetworkObjectEmitter) onDidDisposeNetworkObjectEmitter.emit(id);
       return true;
     });
 
@@ -554,7 +569,7 @@ const set = async <T extends NetworkableObject>(
 
     // Notify that the network object was successfully registered
     logger.debug(`Network object registered: ${serialize(netObjDetails)}`);
-    onDidCreateNetworkObjectEmitter.emit(netObjDetails);
+    if (onDidCreateNetworkObjectEmitter) onDidCreateNetworkObjectEmitter.emit(netObjDetails);
 
     // Override objectToShare's type's force-undefined onDidDispose to DisposableNetworkObject's
     // onDidDispose type because it had an onDidDispose added in overrideOnDidDispose.
