@@ -27,6 +27,7 @@ import {
   createEmptyOpenRpc,
   getEmptyMethodDocs,
   OpenRpc,
+  OpenRpcNotification,
   SingleMethodDocumentation,
 } from '@shared/models/openrpc.model';
 import { RpcServer } from './rpc-server';
@@ -364,6 +365,46 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
         });
       }
     });
+    for (const [eventName, registrants] of this.rpcEventDetailsByEventName.entries()) {
+      // First registration's documentation wins (matches the conflict policy).
+      const docs = registrants.find((r) => r.documentation)?.documentation;
+      if (!docs) continue; // events with no documentation are not surfaced in OpenRPC
+
+      const notificationEntry: OpenRpcNotification = {
+        name: eventName,
+        ...docs.notification,
+      };
+      openRpcSchema.methods.push(notificationEntry);
+
+      if (docs.components) {
+        openRpcSchema.components = {
+          schemas: {
+            ...docs.components.schemas,
+            ...openRpcSchema.components?.schemas,
+          },
+          contentDescriptors: {
+            ...docs.components.contentDescriptors,
+            ...openRpcSchema.components?.contentDescriptors,
+          },
+          examples: {
+            ...docs.components.examples,
+            ...openRpcSchema.components?.examples,
+          },
+          links: {
+            ...docs.components.links,
+            ...openRpcSchema.components?.links,
+          },
+          errors: {
+            ...docs.components.errors,
+            ...openRpcSchema.components?.errors,
+          },
+          tags: {
+            ...docs.components.tags,
+            ...openRpcSchema.components?.tags,
+          },
+        };
+      }
+    }
     openRpcSchema.methods.sort((a, b) => a.name.localeCompare(b.name));
     return openRpcSchema;
   }
