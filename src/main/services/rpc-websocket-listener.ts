@@ -15,90 +15,24 @@ import {
   WEBSOCKET_PORT,
 } from '@shared/data/rpc.model';
 import { IRpcMethodRegistrar, RegisteredRpcMethodDetails } from '@shared/models/rpc.interface';
-import { SingleNotificationDocumentation } from '@shared/models/openrpc.model';
-import { MULTI_SOURCE_EVENT_NAMES } from '@shared/services/network.service';
-import type { MultiSourceNetworkEvents } from 'papi-shared-types';
-import { getErrorMessage, Mutex } from 'platform-bible-utils';
-import { WebSocketServer } from 'ws';
-import { logger } from '@shared/services/logger.service';
-import { JSONRPCErrorCode, JSONRPCResponse } from 'json-rpc-2.0';
-import { bindClassMethods, SerializedRequestType } from '@shared/utils/util';
 import {
   createEmptyOpenRpc,
   getEmptyMethodDocs,
   Notification,
   OpenRpc,
   SingleMethodDocumentation,
+  SingleNotificationDocumentation,
 } from '@shared/models/openrpc.model';
+import { getErrorMessage, Mutex } from 'platform-bible-utils';
+import { WebSocketServer } from 'ws';
+import { logger } from '@shared/services/logger.service';
+import { JSONRPCErrorCode, JSONRPCResponse } from 'json-rpc-2.0';
+import { bindClassMethods, SerializedRequestType } from '@shared/utils/util';
 import { RpcServer } from './rpc-server';
+// RpcEventRegistry was extracted to its own file to satisfy max-classes-per-file
+import { RpcEventRegistry } from './rpc-event-registry';
 
-interface EventRegistrant {
-  handler: unknown;
-  documentation?: SingleNotificationDocumentation;
-}
-
-/**
- * Tracks registered network event emitters, enforcing shared vs. exclusive ownership policy.
- *
- * @internal Exported for unit-testing only; not part of the public API.
- */
-export class RpcEventRegistry {
-  private byName = new Map<string, EventRegistrant[]>();
-
-  /**
-   * Try to register an event. Returns `true` if accepted, `false` if rejected.
-   *
-   * - Name in `MULTI_SOURCE_EVENT_NAMES` (multi-source): multiple handlers may register; same handler
-   *   twice rejected.
-   * - Name not in `MULTI_SOURCE_EVENT_NAMES` (single-source): first registrant wins; any subsequent
-   *   registration from any handler is rejected.
-   */
-  tryRegister(
-    handler: unknown,
-    eventName: string,
-    documentation?: SingleNotificationDocumentation,
-  ): boolean {
-    const isMultiSource = MULTI_SOURCE_EVENT_NAMES.has(eventName as keyof MultiSourceNetworkEvents);
-    const existing = this.byName.get(eventName);
-
-    if (!existing) {
-      this.byName.set(eventName, [{ handler, documentation }]);
-      return true;
-    }
-
-    if (isMultiSource) {
-      if (existing.some((r) => r.handler === handler)) return false;
-      existing.push({ handler, documentation });
-      return true;
-    }
-
-    return false;
-  }
-
-  /** Remove a registrant. Returns `true` if the handler had registered this event. */
-  tryUnregister(handler: unknown, eventName: string): boolean {
-    const existing = this.byName.get(eventName);
-    if (!existing) return false;
-    const index = existing.findIndex((r) => r.handler === handler);
-    if (index < 0) return false;
-    existing.splice(index, 1);
-    if (existing.length === 0) this.byName.delete(eventName);
-    return true;
-  }
-
-  /** Remove all event registrations for the given handler (e.g. when a websocket closes) */
-  unregisterAll(handler: unknown): void {
-    this.byName.forEach((registrants, eventName) => {
-      const filtered = registrants.filter((r) => r.handler !== handler);
-      if (filtered.length === 0) this.byName.delete(eventName);
-      else this.byName.set(eventName, filtered);
-    });
-  }
-
-  entries(): IterableIterator<[string, EventRegistrant[]]> {
-    return this.byName.entries();
-  }
-}
+export { RpcEventRegistry };
 
 /**
  * Owns the WebSocketServer that listens for clients to connect to the web socket. When a client
@@ -365,10 +299,12 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
         });
       }
     });
-    for (const [eventName, registrants] of this.rpcEventDetailsByEventName.entries()) {
+    // Convert the entries iterator to an array so we can use .forEach() (avoids for-of + continue)
+    Array.from(this.rpcEventDetailsByEventName.entries()).forEach(([eventName, registrants]) => {
       // First registration's documentation wins (matches the conflict policy).
       const docs = registrants.find((r) => r.documentation)?.documentation;
-      if (!docs) continue; // events with no documentation are not surfaced in OpenRPC
+      // Events with no documentation are not surfaced in OpenRPC
+      if (!docs) return;
 
       const notificationEntry: Notification = {
         name: eventName,
@@ -404,7 +340,7 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
           },
         };
       }
-    }
+    });
     openRpcSchema.methods.sort((a, b) => a.name.localeCompare(b.name));
     return openRpcSchema;
   }

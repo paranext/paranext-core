@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { RpcEventRegistry } from '@main/services/rpc-websocket-listener';
 
 // Mock heavy dependencies so this test can run outside the Electron main process
 vi.mock('electron', () => ({ app: { getVersion: () => '0.0.0' } }));
@@ -6,8 +7,6 @@ vi.mock('ws', () => ({ WebSocketServer: vi.fn() }));
 vi.mock('@shared/services/logger.service', () => ({
   logger: { warn: vi.fn(), info: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
-
-import { RpcEventRegistry } from '@main/services/rpc-websocket-listener';
 
 describe('RpcEventRegistry — multi-source vs single-source policy', () => {
   const fakeA = { id: 'A' };

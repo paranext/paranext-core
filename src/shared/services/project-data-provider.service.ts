@@ -80,9 +80,7 @@ class ProjectDataProviderFactory<SupportedProjectInterfaces extends ProjectInter
         const factoryReturn =
           await this.pdpEngineFactory.createProjectDataProviderEngine(projectId);
         const isEnvelope =
-          typeof factoryReturn === 'object' &&
-          factoryReturn !== null &&
-          'projectDataProviderEngine' in factoryReturn;
+          typeof factoryReturn === 'object' && 'projectDataProviderEngine' in factoryReturn;
         const projectDataProviderEngine = isEnvelope
           ? factoryReturn.projectDataProviderEngine
           : factoryReturn;
