@@ -1,6 +1,6 @@
 import { logger } from '@shared/services/logger.service';
 import { networkObjectService } from '@shared/services/network-object.service';
-import { createNetworkEventEmitterAsync } from '@shared/services/network.service';
+import { createNetworkEventEmitterAsync, getNetworkEvent } from '@shared/services/network.service';
 import {
   EVENT_NAME_ON_DID_UPDATE_SCR_REF,
   IScrollGroupRemoteService,
@@ -14,7 +14,6 @@ import {
   deepClone,
   deserialize,
   isPlatformError,
-  type PlatformEvent,
   type PlatformEventEmitter,
   ScrollGroupId,
   serialize,
@@ -61,16 +60,6 @@ function saveScrRefs() {
 let onDidUpdateScrRefEmitter: PlatformEventEmitter<ScrollGroupUpdateInfo> | undefined;
 
 /**
- * Subscribers that called `onDidUpdateScrRef` before the emitter was created. They get bound to the
- * real emitter inside `startScrollGroupService` and removed from this list.
- */
-const pendingOnDidUpdateScrRefSubscribers: {
-  callback: (event: ScrollGroupUpdateInfo) => void;
-  realUnsub?: () => boolean;
-  disposed: boolean;
-}[] = [];
-
-/**
  * All Scroll Group IDs that are intended to be shown in scroll group selectors. This is a
  * placeholder and will be refactored significantly in
  * https://github.com/paranext/paranext-core/issues/788
@@ -78,22 +67,11 @@ const pendingOnDidUpdateScrRefSubscribers: {
 export const availableScrollGroupIds = [undefined, ...Array(5).keys()];
 
 /** Event that emits with information about a changed Scripture Reference for a scroll group */
-export const onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo> = (callback) => {
-  if (onDidUpdateScrRefEmitter) return onDidUpdateScrRefEmitter.event(callback);
-
-  const entry: (typeof pendingOnDidUpdateScrRefSubscribers)[number] = {
-    callback,
-    disposed: false,
-  };
-  pendingOnDidUpdateScrRefSubscribers.push(entry);
-  return () => {
-    entry.disposed = true;
-    if (entry.realUnsub) return entry.realUnsub();
-    const i = pendingOnDidUpdateScrRefSubscribers.indexOf(entry);
-    if (i >= 0) pendingOnDidUpdateScrRefSubscribers.splice(i, 1);
-    return true;
-  };
-};
+export const onDidUpdateScrRef = getNetworkEvent(
+  // serializeRequestType returns SerializedRequestType, not a literal — cast to match the registry key
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  EVENT_NAME_ON_DID_UPDATE_SCR_REF as 'scrollGroup:onDidUpdateScrRef',
+);
 
 /** See {@link IScrollGroupRemoteService.getScrRef} */
 export function getScrRefSync(scrollGroupId: ScrollGroupId = 0): SerializedVerseRef {
@@ -173,14 +151,6 @@ export async function startScrollGroupService(): Promise<void> {
   onDidUpdateScrRefEmitter = await createNetworkEventEmitterAsync(
     EVENT_NAME_ON_DID_UPDATE_SCR_REF as 'scrollGroup:onDidUpdateScrRef',
   );
-
-  // Drain any subscribers that registered before the emitter existed.
-  while (pendingOnDidUpdateScrRefSubscribers.length > 0) {
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const entry = pendingOnDidUpdateScrRefSubscribers.shift()!;
-    if (entry.disposed) continue;
-    entry.realUnsub = onDidUpdateScrRefEmitter.event(entry.callback);
-  }
 
   await networkObjectService.set(NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE, scrollGroupService);
 

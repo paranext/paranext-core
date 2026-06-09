@@ -7652,7 +7652,7 @@ declare module 'shared/services/settings.service' {
 declare module 'renderer/services/scroll-group.service-host' {
   import { ScrollGroupUpdateInfo } from 'shared/services/scroll-group.service-model';
   import { SerializedVerseRef } from '@sillsdev/scripture';
-  import { type PlatformEvent, ScrollGroupId } from 'platform-bible-utils';
+  import { ScrollGroupId } from 'platform-bible-utils';
   /**
    * All Scroll Group IDs that are intended to be shown in scroll group selectors. This is a
    * placeholder and will be refactored significantly in
@@ -7660,7 +7660,7 @@ declare module 'renderer/services/scroll-group.service-host' {
    */
   export const availableScrollGroupIds: (number | undefined)[];
   /** Event that emits with information about a changed Scripture Reference for a scroll group */
-  export const onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo>;
+  export const onDidUpdateScrRef: import('platform-bible-utils').PlatformEvent<ScrollGroupUpdateInfo>;
   /** See {@link IScrollGroupRemoteService.getScrRef} */
   export function getScrRefSync(scrollGroupId?: ScrollGroupId): SerializedVerseRef;
   /**
