@@ -10,7 +10,7 @@ import { ProcessType } from '@shared/global-this.model';
 
 const SHARED_STORE_PREFIX = 'shared-store';
 const STORE_GET_REQUEST = `${SHARED_STORE_PREFIX}:get`;
-const STORE_CHANGE_EVENT = 'shared-store.onDidChange';
+const STORE_CHANGE_EVENT = 'shared-store:change';
 
 // https://en.wikipedia.org/wiki/Lamport_timestamp
 let localCounter: number = 0;

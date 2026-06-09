@@ -10,9 +10,9 @@ describe('SHARED_EVENT_NAMES stays in sync with SharedNetworkEventTypes', () => 
   it('contains every key of SharedNetworkEventTypes', () => {
     type RequiredKeys = keyof SharedNetworkEventTypes;
     const required: RequiredKeys[] = [
-      'network-object.onDidCreateNetworkObject',
-      'network-object.onDidDisposeNetworkObject',
-      'shared-store.onDidChange',
+      'object:onDidCreateNetworkObject',
+      'object:onDidDisposeNetworkObject',
+      'shared-store:change',
     ];
     for (const name of required) expect(SHARED_EVENT_NAMES.has(name)).toBe(true);
   });
@@ -86,7 +86,7 @@ import type { PlatformEvent } from 'platform-bible-utils';
 describe('getNetworkEvent overloads', () => {
   it('typed call infers payload from NetworkEventTypes', () => {
     // Compile-time test — if this compiles, the typed overload exists.
-    const ev = gne('network-object.onDidCreateNetworkObject');
+    const ev = gne('object:onDidCreateNetworkObject');
     // ev should be PlatformEvent<NetworkObjectDetails> — verify by satisfying the structural type.
     const checked: PlatformEvent<unknown> = ev;
     void checked;
