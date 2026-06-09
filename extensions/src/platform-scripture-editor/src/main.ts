@@ -873,8 +873,8 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   );
 
   // Create the selection changed event emitter
-  selectionChangedEventEmitter = papi.network.createNetworkEventEmitter<SelectionChangeEvent>(
-    EDITOR_SELECTION_CHANGED_EVENT,
+  selectionChangedEventEmitter = await papi.network.createNetworkEventEmitterAsync(
+    EDITOR_SELECTION_CHANGED_EVENT as 'platformScriptureEditor.onDidSelectionChange',
   );
 
   // Await the registration promises at the end so we don't hold everything else up
