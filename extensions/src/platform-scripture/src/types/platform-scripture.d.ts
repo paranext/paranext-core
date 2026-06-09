@@ -2233,4 +2233,8 @@ declare module 'papi-shared-types' {
      */
     'platformScripture.allowInvisibleCharacters': boolean;
   }
+
+  export interface NetworkEventTypes {
+    checkResultsInvalidated: CheckResultsInvalidated;
+  }
 }

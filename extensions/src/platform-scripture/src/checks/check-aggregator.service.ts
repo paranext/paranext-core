@@ -1,7 +1,7 @@
 import papi, { DataProviderEngine, logger } from '@papi/backend';
 import { DataProviderUpdateInstructions, IDisposableDataProvider } from '@papi/core';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { createSyncProxyForAsyncObject, newGuid } from 'platform-bible-utils';
+import { createSyncProxyForAsyncObject, newGuid, PlatformEventEmitter } from 'platform-bible-utils';
 import {
   CheckJobRunner,
   CheckJobScope,
@@ -386,6 +386,7 @@ const checkAggregatorServiceProviderName = 'platformScripture.checkAggregator';
 
 let initializationPromise: Promise<void> | undefined;
 let dataProvider: IDisposableDataProvider<ICheckAggregatorService>;
+let resultsInvalidatedEventEmitter: PlatformEventEmitter<CheckResultsInvalidated> | undefined;
 async function initialize(): Promise<void> {
   if (!initializationPromise) {
     initializationPromise = new Promise<void>((resolve, reject) => {
@@ -394,6 +395,9 @@ async function initialize(): Promise<void> {
           dataProvider = await papi.dataProviders.registerEngine(
             checkAggregatorServiceProviderName,
             new CheckAggregatorDataProviderEngine(),
+          );
+          resultsInvalidatedEventEmitter = await papi.network.createNetworkEventEmitterAsync(
+            CHECK_RESULTS_INVALIDATED_EVENT as 'checkResultsInvalidated',
           );
           resolve();
         } catch (error) {
@@ -406,12 +410,9 @@ async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-const resultsInvalidatedEventEmitter =
-  papi.network.createNetworkEventEmitter<CheckResultsInvalidated>(CHECK_RESULTS_INVALIDATED_EVENT);
-
 /** Notify all listeners that check results have been invalidated and should be refreshed */
 export function notifyCheckResultsInvalidated(e: CheckResultsInvalidated): void {
-  resultsInvalidatedEventEmitter.emit(e);
+  if (resultsInvalidatedEventEmitter) resultsInvalidatedEventEmitter.emit(e);
 }
 
 const checkAggregatorServiceObjectToProxy = Object.freeze({});
@@ -424,7 +425,7 @@ const serviceObject = createSyncProxyForAsyncObject<ICheckAggregatorService>(asy
 async function dispose(): Promise<boolean> {
   const disposalResults: boolean[] = await Promise.all([
     dataProvider.dispose(),
-    resultsInvalidatedEventEmitter.dispose(),
+    ...(resultsInvalidatedEventEmitter ? [resultsInvalidatedEventEmitter.dispose()] : []),
   ]);
   return disposalResults.every((result) => result);
 }
