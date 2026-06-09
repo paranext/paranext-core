@@ -11,6 +11,7 @@ import {
 // Mock dependencies
 vi.mock('@shared/services/network.service', () => ({
   createNetworkEventEmitter: vi.fn(),
+  createNetworkEventEmitterAsync: vi.fn(),
   getNetworkEvent: vi.fn(),
   request: vi.fn(),
   registerRequestHandler: vi.fn(),
@@ -54,6 +55,11 @@ describe('sharedStoreService', () => {
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       mockEmitter as unknown as PlatformEventEmitter<unknown>,
     );
+    vi.mocked(networkService.createNetworkEventEmitterAsync).mockResolvedValue(
+      // Needed for testing
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      mockEmitter as unknown as PlatformEventEmitter<unknown>,
+    );
 
     // Mock event handler subscription
     vi.mocked(networkService.getNetworkEvent).mockReturnValue(mockEventHandler);
@@ -72,8 +78,10 @@ describe('sharedStoreService', () => {
   describe('initialize', () => {
     it('should initialize the service with a unique process ID', async () => {
       await initializeSharedStore(networkService);
-      expect(networkService.createNetworkEventEmitter).toHaveBeenCalledWith('shared-store:change');
-      expect(networkService.getNetworkEvent).toHaveBeenCalledWith('shared-store:change');
+      expect(networkService.createNetworkEventEmitterAsync).toHaveBeenCalledWith(
+        'shared-store.onDidChange',
+      );
+      expect(networkService.getNetworkEvent).toHaveBeenCalledWith('shared-store.onDidChange');
       expect(mockEventHandler).toHaveBeenCalled();
     });
 
