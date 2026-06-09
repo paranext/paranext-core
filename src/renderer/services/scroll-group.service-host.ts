@@ -61,6 +61,16 @@ function saveScrRefs() {
 let onDidUpdateScrRefEmitter: PlatformEventEmitter<ScrollGroupUpdateInfo> | undefined;
 
 /**
+ * Subscribers that called `onDidUpdateScrRef` before the emitter was created. They get bound to the
+ * real emitter inside `startScrollGroupService` and removed from this list.
+ */
+const pendingOnDidUpdateScrRefSubscribers: {
+  callback: (event: ScrollGroupUpdateInfo) => void;
+  realUnsub?: () => boolean;
+  disposed: boolean;
+}[] = [];
+
+/**
  * All Scroll Group IDs that are intended to be shown in scroll group selectors. This is a
  * placeholder and will be refactored significantly in
  * https://github.com/paranext/paranext-core/issues/788
@@ -69,11 +79,20 @@ export const availableScrollGroupIds = [undefined, ...Array(5).keys()];
 
 /** Event that emits with information about a changed Scripture Reference for a scroll group */
 export const onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo> = (callback) => {
-  if (!onDidUpdateScrRefEmitter)
-    throw new Error(
-      'scroll-group.service-host not initialized — call startScrollGroupService() before subscribing to onDidUpdateScrRef',
-    );
-  return onDidUpdateScrRefEmitter.event(callback);
+  if (onDidUpdateScrRefEmitter) return onDidUpdateScrRefEmitter.event(callback);
+
+  const entry: (typeof pendingOnDidUpdateScrRefSubscribers)[number] = {
+    callback,
+    disposed: false,
+  };
+  pendingOnDidUpdateScrRefSubscribers.push(entry);
+  return () => {
+    entry.disposed = true;
+    if (entry.realUnsub) return entry.realUnsub();
+    const i = pendingOnDidUpdateScrRefSubscribers.indexOf(entry);
+    if (i >= 0) pendingOnDidUpdateScrRefSubscribers.splice(i, 1);
+    return true;
+  };
 };
 
 /** See {@link IScrollGroupRemoteService.getScrRef} */
@@ -154,6 +173,14 @@ export async function startScrollGroupService(): Promise<void> {
   onDidUpdateScrRefEmitter = await createNetworkEventEmitterAsync(
     EVENT_NAME_ON_DID_UPDATE_SCR_REF as 'scrollGroup:onDidUpdateScrRef',
   );
+
+  // Drain any subscribers that registered before the emitter existed.
+  while (pendingOnDidUpdateScrRefSubscribers.length > 0) {
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const entry = pendingOnDidUpdateScrRefSubscribers.shift()!;
+    if (entry.disposed) continue;
+    entry.realUnsub = onDidUpdateScrRefEmitter.event(entry.callback);
+  }
 
   await networkObjectService.set(NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE, scrollGroupService);
 
