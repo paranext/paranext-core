@@ -127,7 +127,7 @@ unless asked.
 >
 > - Post a short digest to the `#review-ux` Discord thread when there is ≥1 CONFIDENT finding.
 > - Open a single tracking issue summarizing the night's blockers.
-> - Email me (alex_mercado@sil.org) the triage table via the Gmail tools.
+> - Email the triage table to the UX lead via the Gmail tools.
 > - Tighten/loosen the "significant change" threshold in Backstop B.
 > - Narrow the primary bucket to specific labels or a specific milestone.
 >
