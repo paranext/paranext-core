@@ -216,7 +216,7 @@ export function UserProfilePopover() {
           <CircleUserRound />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className={cn('tw:w-[340px]')}>
+      <PopoverContent align="end" className={cn('tw:w-80')}>
         <PopoverHeader className="tw:border-b tw:pb-2">
           {isRegistrationLoading ? (
             <>
@@ -289,8 +289,8 @@ export function UserProfilePopover() {
             {localizedStrings['%userProfile_networkSettings%']}
           </Button>
         </div>
-        <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:px-2">
-          <span className="tw:flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-muted-foreground">
+        <div className="tw:flex tw:items-start tw:justify-between tw:gap-2 tw:px-2">
+          <span className="tw:flex tw:shrink-0 tw:items-center tw:gap-1.5 tw:pt-1 tw:text-xs tw:text-muted-foreground">
             <Globe className="tw:h-3.5 tw:w-3.5" />
             {localizedStrings['%userProfile_language%']}
           </span>
@@ -300,7 +300,7 @@ export function UserProfilePopover() {
             onValueChange={handleLanguageChange}
             size="sm"
             spacing={2}
-            className="tw:flex-wrap tw:justify-end"
+            className="tw:min-w-0 tw:flex-1 tw:flex-wrap tw:justify-end"
           >
             {Object.entries(availableLanguages).map(([tag, info]) => (
               <ToggleGroupItem
