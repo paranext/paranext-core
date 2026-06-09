@@ -135,6 +135,12 @@ function sharedStoreKeyForRequestType(
 }
 
 function getTimeoutMsForRequestType(requestType: SerializedRequestType): number {
+  // Custom timeouts live in the shared store. Reading shared store before it has finished
+  // initializing would throw (and would break its Lamport-clock sync guarantee anyway). The
+  // bootstrap window can include network requests fired by React components mounted before
+  // initializeSharedStoreService() resolves, so during that window fall back to the default
+  // timeout — a custom override is an optimization, not a correctness requirement here.
+  if (!sharedStoreService.isInitialized()) return requestTimeoutMs;
   const sharedVal = sharedStoreService.get(sharedStoreKeyForRequestType(requestType));
   return typeof sharedVal === 'number' && sharedVal >= 0 ? sharedVal : requestTimeoutMs;
 }

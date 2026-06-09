@@ -220,6 +220,16 @@ function remove<K extends SharedStoreKeys>(key: K): void {
 }
 
 /**
+ * Returns `true` once {@link initialize} has fully completed. Use this to gate optional reads of the
+ * shared store from code that may run during the bootstrap window — e.g., network-request timeout
+ * lookups that have a sensible default. Required reads of the shared store should `await
+ * initialize` instead so the value is guaranteed accurate per the Lamport-clock contract.
+ */
+function isInitialized(): boolean {
+  return !!processId && !!storeChangeEmitter;
+}
+
+/**
  * Keys for timeout lengths for network requests. Keys are dynamically constructed by adding this
  * prefix to the `requestType`.
  */
@@ -255,4 +265,5 @@ export const sharedStoreService = {
   get,
   set,
   remove,
+  isInitialized,
 };
