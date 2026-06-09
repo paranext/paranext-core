@@ -61,9 +61,9 @@ const DEFAULT_AVAILABLE_LANGUAGES: Record<string, LanguageInfo> = {
 
 /**
  * Sentinel placeholder used as the default while CurrentTheme loads. The label is never displayed —
- * it just satisfies the `\`%${string}%``shape required by ThemeDefinitionExpanded. Reusing an
- * existing key avoids introducing a bogus i18n entry, mirroring the pattern
- * in`platform-bible-toolbar.tsx`.
+ * it just satisfies the `\`%${string}%`` shape required by ThemeDefinitionExpanded. Reusing an
+ * existing key avoids introducing a bogus i18n entry, mirroring the pattern in
+ * `platform-bible-toolbar.tsx`.
  */
 const DEFAULT_THEME_VALUE: ThemeDefinitionExpanded = {
   themeFamilyId: '',
@@ -72,6 +72,15 @@ const DEFAULT_THEME_VALUE: ThemeDefinitionExpanded = {
   label: '%toolbar_theme_loading%',
   cssVariables: {},
 };
+
+/** Sort entries so 'en' is first, then everything else alphabetically by BCP-47 tag. */
+function sortLanguageEntries<T>(entries: [string, T][]): [string, T][] {
+  return [...entries].sort(([a], [b]) => {
+    if (a === 'en' && b !== 'en') return -1;
+    if (b === 'en' && a !== 'en') return 1;
+    return a.localeCompare(b);
+  });
+}
 
 /**
  * Popover triggered from the top-right of the toolbar that surfaces the user's profile (name,
@@ -129,6 +138,7 @@ export function UserProfilePopover() {
   )
     ? DEFAULT_AVAILABLE_LANGUAGES
     : availableLanguagesPossiblyError;
+  const sortedLanguageEntries = sortLanguageEntries(Object.entries(availableLanguages));
 
   const handleLanguageChange = (value: string) => {
     if (value === '') return;
@@ -194,14 +204,20 @@ export function UserProfilePopover() {
     };
   }, [isOpen]);
 
+  // "Not registered" is a state of the whole header — show it only when neither the name nor the
+  // email are populated. When the user has a name but no email, the email line is omitted entirely
+  // so we don't imply the user is unregistered just because the email field happens to be blank.
+  const registeredName = registrationData?.name ?? '';
+  const registeredEmail = registrationData?.email ?? '';
+  const isRegistered = registeredName.length > 0 || registeredEmail.length > 0;
   const nameText =
-    registrationData?.name && registrationData.name.length > 0
-      ? registrationData.name
+    registeredName.length > 0
+      ? registeredName
       : localizedStrings['%userProfile_header_defaultName%'];
-  const emailText =
-    registrationData?.email && registrationData.email.length > 0
-      ? registrationData.email
-      : localizedStrings['%userProfile_header_notRegistered%'];
+  let emailText: string | undefined;
+  if (registeredEmail.length > 0) emailText = registeredEmail;
+  else if (!isRegistered) emailText = localizedStrings['%userProfile_header_notRegistered%'];
+  else emailText = undefined;
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
@@ -216,8 +232,8 @@ export function UserProfilePopover() {
           <CircleUserRound />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className={cn('tw:w-80')}>
-        <PopoverHeader className="tw:border-b tw:pb-2">
+      <PopoverContent align="end" className={cn('tw:w-80 tw:gap-1.5')}>
+        <PopoverHeader className="tw:gap-0 tw:border-b tw:px-2 tw:pb-1.5">
           {isRegistrationLoading ? (
             <>
               <Skeleton data-testid="user-profile-name-skeleton" className="tw:h-4 tw:w-32" />
@@ -228,8 +244,23 @@ export function UserProfilePopover() {
             </>
           ) : (
             <>
-              <PopoverTitle data-testid="user-profile-name">{nameText}</PopoverTitle>
-              <PopoverDescription data-testid="user-profile-email">{emailText}</PopoverDescription>
+              <PopoverTitle
+                data-testid="user-profile-name"
+                className="tw:text-xs tw:leading-tight tw:font-bold"
+              >
+                {nameText}
+              </PopoverTitle>
+              {emailText !== undefined && (
+                <PopoverDescription
+                  data-testid="user-profile-email"
+                  // Inline style: arbitrary tw:text-[11px] is not picked up by this build's
+                  // Tailwind setup; use raw CSS to hit the design's 11px body size.
+                  style={{ fontSize: '11px' }}
+                  className="tw:leading-tight"
+                >
+                  {emailText}
+                </PopoverDescription>
+              )}
             </>
           )}
         </PopoverHeader>
@@ -238,18 +269,20 @@ export function UserProfilePopover() {
           value={safeInterfaceMode}
           onValueChange={handleInterfaceModeChange}
           spacing={2}
-          className="tw:w-full"
+          className="tw:w-full tw:items-stretch tw:px-2"
         >
           <ToggleGroupItem
             value="simple"
             data-testid="user-profile-interface-mode-simple"
             variant="outline"
-            className="tw:h-auto tw:flex-1 tw:flex-col tw:items-start tw:gap-1 tw:p-3 tw:text-left tw:whitespace-normal tw:data-[state=on]:border-primary tw:data-[state=on]:bg-primary/5 tw:data-[state=on]:text-primary"
+            className="tw:h-auto tw:flex-1 tw:flex-col tw:items-start tw:gap-0.5 tw:p-2 tw:text-left tw:whitespace-normal tw:data-[state=on]:border-primary tw:data-[state=on]:bg-primary/10 tw:data-[state=on]:text-primary tw:data-[state=on]:ring-1 tw:data-[state=on]:ring-primary/30"
           >
-            <span className="tw:text-xs tw:font-semibold">
+            {/* Inline font sizes: arbitrary tw:text-[Npx] utilities are not picked up by this
+                build's Tailwind setup, so raw CSS is used to hit the design's exact pixel sizes. */}
+            <span className="tw:leading-tight tw:font-semibold" style={{ fontSize: '11px' }}>
               {localizedStrings['%userProfile_interfaceMode_simple_label%']}
             </span>
-            <span className="tw:text-[10px] tw:leading-tight tw:text-muted-foreground">
+            <span className="tw:leading-tight tw:text-muted-foreground" style={{ fontSize: '9px' }}>
               {localizedStrings['%userProfile_interfaceMode_simple_description%']}
             </span>
           </ToggleGroupItem>
@@ -257,17 +290,17 @@ export function UserProfilePopover() {
             value="power"
             data-testid="user-profile-interface-mode-power"
             variant="outline"
-            className="tw:h-auto tw:flex-1 tw:flex-col tw:items-start tw:gap-1 tw:p-3 tw:text-left tw:whitespace-normal tw:data-[state=on]:border-primary tw:data-[state=on]:bg-primary/5 tw:data-[state=on]:text-primary"
+            className="tw:h-auto tw:flex-1 tw:flex-col tw:items-start tw:gap-0.5 tw:p-2 tw:text-left tw:whitespace-normal tw:data-[state=on]:border-primary tw:data-[state=on]:bg-primary/10 tw:data-[state=on]:text-primary tw:data-[state=on]:ring-1 tw:data-[state=on]:ring-primary/30"
           >
-            <span className="tw:text-xs tw:font-semibold">
+            <span className="tw:leading-tight tw:font-semibold" style={{ fontSize: '11px' }}>
               {localizedStrings['%userProfile_interfaceMode_power_label%']}
             </span>
-            <span className="tw:text-[10px] tw:leading-tight tw:text-muted-foreground">
+            <span className="tw:leading-tight tw:text-muted-foreground" style={{ fontSize: '9px' }}>
               {localizedStrings['%userProfile_interfaceMode_power_description%']}
             </span>
           </ToggleGroupItem>
         </ToggleGroup>
-        <div className="tw:flex tw:flex-col tw:gap-1 tw:border-t tw:pt-2">
+        <div className="tw:flex tw:flex-col tw:gap-0 tw:border-t tw:pt-1">
           <Button
             variant="ghost"
             size="sm"
@@ -302,14 +335,16 @@ export function UserProfilePopover() {
             spacing={2}
             className="tw:min-w-0 tw:flex-1 tw:flex-wrap tw:justify-end"
           >
-            {Object.entries(availableLanguages).map(([tag, info]) => (
+            {sortedLanguageEntries.map(([tag, info]) => (
               <ToggleGroupItem
                 key={tag}
                 value={tag}
                 variant="outline"
                 data-testid={`user-profile-language-${tag}`}
                 aria-label={info.autonym ?? tag}
-                className="tw:h-6 tw:min-w-0 tw:px-2 tw:text-[10px]"
+                className="tw:h-6 tw:min-w-0 tw:px-2"
+                // Inline font size: see comment on the mode toggle items above.
+                style={{ fontSize: '10px' }}
               >
                 {tag.toUpperCase()}
               </ToggleGroupItem>

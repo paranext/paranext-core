@@ -169,6 +169,19 @@ describe('UserProfilePopover header', () => {
     );
     expect(screen.getByTestId('user-profile-email')).toHaveTextContent('Not registered');
   });
+
+  test('renders the name and OMITS the email row when name is set but email is blank', async () => {
+    vi.mocked(sendCommand).mockResolvedValueOnce({
+      name: 'Alice Translator',
+      code: '******-******-******-******-******',
+      email: '',
+      supporterName: '',
+    });
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    await waitFor(() => expect(screen.getByText('Alice Translator')).toBeInTheDocument());
+    expect(screen.queryByTestId('user-profile-email')).not.toBeInTheDocument();
+  });
 });
 
 describe('UserProfilePopover interface mode', () => {
@@ -235,6 +248,27 @@ describe('UserProfilePopover language picker', () => {
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
     fireEvent.click(await screen.findByTestId('user-profile-language-en'));
     expect(mockState.setInterfaceLanguage).not.toHaveBeenCalled();
+  });
+
+  test('renders English first, then the rest alphabetically by BCP-47 tag', async () => {
+    setMockSetting('availableLanguages', {
+      fr: { autonym: 'Français' },
+      es: { autonym: 'Español' },
+      en: { autonym: 'English' },
+      de: { autonym: 'Deutsch' },
+    });
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    await screen.findByTestId('user-profile-language-en');
+    const pills = Array.from(
+      document.querySelectorAll('[data-testid^="user-profile-language-"]'),
+    ).map((el) => el.getAttribute('data-testid'));
+    expect(pills).toEqual([
+      'user-profile-language-en',
+      'user-profile-language-de',
+      'user-profile-language-es',
+      'user-profile-language-fr',
+    ]);
   });
 });
 
