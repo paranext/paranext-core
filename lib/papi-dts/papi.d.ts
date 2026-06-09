@@ -981,8 +981,8 @@ declare module 'shared/data/rpc.model' {
   export const UNREGISTER_METHOD = 'network:unregisterMethod';
   /**
    * Register a network event emitter with the main process so that the event is tracked centrally.
-   * Shared vs. exclusive semantics are determined by looking up the event name in
-   * `SHARED_EVENT_NAMES`.
+   * Multi-source vs. single-source semantics are determined by looking up the event name in
+   * `MULTI_SOURCE_EVENT_NAMES`.
    */
   export const REGISTER_EVENT = 'network:registerEvent';
   /**
@@ -1149,7 +1149,7 @@ declare module 'shared/models/openrpc.model' {
     openrpc: string;
     info: Info;
     servers?: Server[];
-    methods: (Method | OpenRpcNotification)[];
+    methods: (Method | Notification)[];
     components?: Components;
     externalDocs?: ExternalDocumentation;
   };
@@ -1282,8 +1282,8 @@ declare module 'shared/models/openrpc.model' {
   };
   export type MethodDocumentationWithoutName = Omit<Method, 'name'>;
   /**
-   * Documentation about a single {@link Method}. Informational only; appears in the generated
-   * OpenRPC document.
+   * Documentation about a single {@link Method}. Informational only; appears in the generated OpenRPC
+   * document.
    *
    * Set `method['x-experimental']: true` to mark this method as experimental.
    */
@@ -1299,15 +1299,15 @@ declare module 'shared/models/openrpc.model' {
    * Set `'x-experimental': true` on the notification object to mark it as experimental. Informational
    * only; appears in the generated OpenRPC document.
    */
-  export type OpenRpcNotification = Omit<Method, 'result'>;
+  export type Notification = Omit<Method, 'result'>;
   /**
-   * Documentation about a single {@link OpenRpcNotification}. Informational only; appears in the
-   * generated OpenRPC document.
+   * Documentation about a single {@link Notification}. Informational only; appears in the generated
+   * OpenRPC document.
    *
    * Set `notification['x-experimental']: true` to mark this notification as experimental.
    */
   export type SingleNotificationDocumentation = {
-    notification: Omit<OpenRpcNotification, 'name'>;
+    notification: Omit<Notification, 'name'>;
     components?: Components;
   };
   /**
@@ -1423,9 +1423,9 @@ declare module 'shared/models/rpc.interface' {
     /** Unregister a method so it is no longer available to RPC requests */
     unregisterMethod: (methodName: string) => Promise<boolean>;
     /**
-     * Register a centrally-tracked network event with the main process. Shared vs exclusive semantics
-     * is determined by looking up the event name in `SHARED_EVENT_NAMES`. See
-     * {@link SharedNetworkEventTypes} for shared vs exclusive semantics.
+     * Register a centrally-tracked network event with the main process. Multi-source vs single-source
+     * semantics is determined by looking up the event name in `MULTI_SOURCE_EVENT_NAMES`. See
+     * {@link MultiSourceNetworkEvents} for multi-source vs single-source semantics.
      *
      * Returns `true` if the registration was accepted, `false` otherwise. Used by
      * `createNetworkEventEmitterAsync`; not for direct caller use.
@@ -1683,10 +1683,10 @@ declare module 'main/services/rpc-websocket-listener' {
     /**
      * Try to register an event. Returns `true` if accepted, `false` if rejected.
      *
-     * - Name in `SHARED_EVENT_NAMES` (shared): multiple handlers may register; same handler twice
-     *   rejected.
-     * - Name not in `SHARED_EVENT_NAMES` (exclusive): first registrant wins; any subsequent
-     *   registration from any handler is rejected.
+     * - Name in `MULTI_SOURCE_EVENT_NAMES` (multi-source): multiple handlers may register; same
+     *   handler twice rejected.
+     * - Name not in `MULTI_SOURCE_EVENT_NAMES` (single-source): first registrant wins; any
+     *   subsequent registration from any handler is rejected.
      */
     tryRegister(
       handler: unknown,
@@ -1777,15 +1777,19 @@ declare module 'shared/services/network.service' {
     SingleNotificationDocumentation,
   } from 'shared/models/openrpc.model';
   import { NetworkMethodHandlerOptions } from 'shared/models/network.model';
-  import type { NetworkEventTypes, SharedNetworkEventTypes } from 'papi-shared-types';
+  import type {
+    MultiSourceNetworkEvents,
+    NetworkEvents,
+    NetworkEventTypes,
+  } from 'papi-shared-types';
   /**
-   * Source of truth for which event names use shared semantics at the central registry. Must stay in
-   * sync with the `SharedNetworkEventTypes` type alias in `papi-shared-types.ts` — the test
+   * Source of truth for which event names use multi-source semantics at the central registry. Must
+   * stay in sync with the `MultiSourceNetworkEvents` type alias in `papi-shared-types.ts` — the test
    * `network.service.shared-events.test.ts` enforces the invariant.
    *
-   * Add entries here when adding a new shared event to `SharedNetworkEventTypes`.
+   * Add entries here when adding a new multi-source event to `MultiSourceNetworkEvents`.
    */
-  export const SHARED_EVENT_NAMES: Set<keyof SharedNetworkEventTypes>;
+  export const MULTI_SOURCE_EVENT_NAMES: Set<keyof MultiSourceNetworkEvents>;
   export function initialize(): Promise<void>;
   /** Closes the network services gracefully */
   export const shutdown: () => Promise<void>;
@@ -1848,11 +1852,11 @@ declare module 'shared/services/network.service' {
    * @deprecated 8 June 2026. Use `createNetworkEventEmitterAsync`. Events created via the sync API
    *   are not centrally registered and do not appear in the OpenRPC document. The async version
    *   properly restricts event registration to prevent multiple sources from emitting the same
-   *   network event (unless the event is declared in {@link SharedNetworkEventTypes}, in which case it
-   *   accepts multiple registrants by design).
+   *   network event (unless the event is declared in {@link MultiSourceNetworkEvents}, in which case
+   *   it accepts multiple registrants by design).
    *
-   *   WARNING: You can only create a network event emitter once per eventType to prevent hijacked event
-   *   emitters.
+   *   WARNING: You can only create a network event emitter once per eventType to prevent hijacked
+   *   event emitters.
    * @param eventType Unique network event type for coordinating between connections
    * @returns Event emitter whose event works between connections
    */
@@ -1861,41 +1865,40 @@ declare module 'shared/services/network.service' {
    * Create a network event emitter that participates in central registration. The returned emitter
    * appears in the OpenRPC document if `documentation` is provided.
    *
-   * If the event name is in {@link SharedNetworkEventTypes}, the central registry uses shared
+   * If the event name is in {@link MultiSourceNetworkEvents}, the central registry uses multi-source
    * semantics: multiple processes may register the same name (each process registers once); all
    * corresponding emitters are valid sources.
    *
-   * Otherwise the registry uses exclusive semantics: only one process may register a given name;
+   * Otherwise the registry uses single-source semantics: only one process may register a given name;
    * subsequent registrations from any process are rejected.
    *
    * Intra-process duplicate registration is always rejected regardless of the event's domain.
    *
-   * See {@link SharedNetworkEventTypes} for shared vs exclusive semantics.
+   * See {@link MultiSourceNetworkEvents} for multi-source vs single-source semantics.
    *
-   * @param eventType The name of the event to register. Must be a key of {@link NetworkEventTypes}.
+   * @param eventType The name of the event to register. Must be a key of {@link NetworkEvents}.
    * @param documentation Optional notification documentation. Carries
    *   `notification['x-experimental']: true` to mark the event as experimental.
    */
-  export const createNetworkEventEmitterAsync: <EventType extends keyof NetworkEventTypes>(
+  export const createNetworkEventEmitterAsync: <EventType extends NetworkEventTypes>(
     eventType: EventType,
     documentation?: SingleNotificationDocumentation,
-  ) => Promise<PlatformEventEmitter<NetworkEventTypes[EventType]>>;
+  ) => Promise<PlatformEventEmitter<NetworkEvents[EventType]>>;
   /**
    * Subscribe to a typed network event. The payload type is inferred from the event's declaration in
-   * {@link NetworkEventTypes}.
+   * {@link NetworkEvents}.
    *
-   * @param eventType The name of the event to subscribe to. Must be a key of
-   *   {@link NetworkEventTypes}.
+   * @param eventType The name of the event to subscribe to. Must be a key of {@link NetworkEvents}.
    * @returns Event for the event type that runs the callback provided when the event is emitted
    */
-  export function getNetworkEvent<EventType extends keyof NetworkEventTypes>(
+  export function getNetworkEvent<EventType extends NetworkEventTypes>(
     eventType: EventType,
-  ): PlatformEvent<NetworkEventTypes[EventType]>;
+  ): PlatformEvent<NetworkEvents[EventType]>;
   /**
    * Subscribe to a network event with an explicit payload type.
    *
-   * @deprecated 8 June 2026. Use the typed signature: declare the event in {@link NetworkEventTypes}
-   *   and call `getNetworkEvent('your.event.name')` without an explicit type parameter.
+   * @deprecated 8 June 2026. Use the typed signature: declare the event in {@link NetworkEvents} and
+   *   call `getNetworkEvent('your.event.name')` without an explicit type parameter.
    * @param eventType Unique network event type for coordinating between connections
    * @returns Event for the event type that runs the callback provided when the event is emitted
    */
@@ -1974,11 +1977,12 @@ declare module 'shared/services/network-object.service' {
    *   object did not already define a `dispose` function, one will be added.
    *
    *   WARNING: setting a network object mutates the provided object.
-   * @param objectType String identifier for the network object type (e.g. `'object'`, `'dataProvider'`)
+   * @param objectType String identifier for the network object type (e.g. `'object'`,
+   *   `'dataProvider'`)
    * @param objectAttributes Optional key-value metadata attached to the network object registration.
    * @param objectDocumentation Optional {@link NetworkObjectDocumentation} for this network object.
-   *   Set `objectDocumentation['x-experimental']: true` to mark all methods on this network object
-   *   as experimental.
+   *   Set `objectDocumentation['x-experimental']: true` to mark all methods on this network object as
+   *   experimental.
    * @returns `objectToShare` modified to be a network object
    */
   const set: <T extends NetworkableObject>(
@@ -4514,33 +4518,43 @@ declare module 'papi-shared-types' {
    * Network events emitted from multiple processes (each process emits its own local event under
    * the same name). Declared by the platform; not extensible by extensions.
    *
-   * The names listed here are the source of truth for which event names use shared semantics at the
-   * central registry. An event name in this type allows registration from multiple processes (each
-   * process registers once, all emitters are valid sources). Any other event name uses exclusive
-   * semantics (one registrant ever).
+   * The names listed here are the source of truth for which event names use multi-source semantics
+   * at the central registry. An event name in this type allows registration from multiple processes
+   * (each process registers once, all emitters are valid sources). Any other event name uses
+   * single-source semantics (one registrant ever).
    *
-   * Subscribers do not need to know which events are shared — `getNetworkEvent` handles both kinds
-   * identically.
+   * Subscribers do not need to know which events are multi-source — `getNetworkEvent` handles both
+   * kinds identically.
    *
-   * See {@link NetworkEventTypes} for the full registry of known event names.
+   * See {@link NetworkEvents} for the full registry of known event names.
    */
-  type SharedNetworkEventTypes = {
-    /** Emitted when a network object is created in any process. Payload includes the new object's details. */
+  type MultiSourceNetworkEvents = {
+    /**
+     * Emitted when a network object is created in any process. Payload includes the new object's
+     * details.
+     */
     'object:onDidCreateNetworkObject': NetworkObjectDetails;
-    /** Emitted when a network object is disposed in any process. Payload is the disposed object's ID. */
+    /**
+     * Emitted when a network object is disposed in any process. Payload is the disposed object's
+     * ID.
+     */
     'object:onDidDisposeNetworkObject': string;
-    /** Emitted when a value in the shared store changes. Payload includes the key and new value with Lamport timestamp. */
+    /**
+     * Emitted when a value in the shared store changes. Payload includes the key and new value with
+     * Lamport timestamp.
+     */
     'shared-store:change': StoreChangeEvent;
   };
   /**
-   * All known network events. Extensions augment this to declare their own events. Inherits the
-   * platform's shared events from {@link SharedNetworkEventTypes} automatically.
+   * Mapping of network event names to their payload types. Extensions augment this to declare their
+   * own events. Inherits the platform's multi-source events from {@link MultiSourceNetworkEvents}
+   * automatically.
    *
    * To declare a new event for use with `createNetworkEventEmitterAsync`:
    *
    * ```ts
    * declare module 'papi-shared-types' {
-   *   export interface NetworkEventTypes {
+   *   export interface NetworkEvents {
    *     'myExt.somethingHappened': { foo: string };
    *   }
    * }
@@ -4549,14 +4563,13 @@ declare module 'papi-shared-types' {
    * Mark a single event as experimental by adding `\/** @experimental *\/` directly above its
    * entry.
    */
-  interface NetworkEventTypes extends SharedNetworkEventTypes {
+  interface NetworkEvents extends MultiSourceNetworkEvents {
     /** Emitted when extensions finish reloading. `true` if reload succeeded, `false` if it failed. */
     'platform.onDidReloadExtensions': boolean;
     /** Emitted when the Scripture reference for a scroll group changes. */
     'scrollGroup:onDidUpdateScrRef': ScrollGroupUpdateInfo;
     /**
-     * @deprecated 13 November 2024. Use {@link NetworkEventTypes.'webView:onDidOpenWebView'}
-     *   instead.
+     * @deprecated 13 November 2024. Use {@link NetworkEvents.'webView:onDidOpenWebView'} instead.
      */
     'webView:onDidAddWebView': OpenWebViewEvent;
     /** Emitted when a WebView is created. */
@@ -4566,6 +4579,8 @@ declare module 'papi-shared-types' {
     /** Emitted when a WebView is closed. */
     'webView:onDidCloseWebView': CloseWebViewEvent;
   }
+  /** Union of all known network event names (keys of {@link NetworkEvents}). */
+  type NetworkEventTypes = keyof NetworkEvents;
 }
 declare module 'shared/services/command.service' {
   import { UnsubscriberAsync } from 'platform-bible-utils';
@@ -5477,8 +5492,8 @@ declare module 'shared/models/project-data-provider-engine-factory.model' {
       layeringFilters?: ProjectMetadataFilterOptions,
     ): Promise<ProjectMetadataWithoutFactoryInfo[]>;
     /**
-     * Create an {@link IProjectDataProviderEngine} for the project requested so the papi can create
-     * an {@link IProjectDataProvider} for the project.
+     * Create an {@link IProjectDataProviderEngine} for the project requested so the papi can create an
+     * {@link IProjectDataProvider} for the project.
      *
      * The return value may be either the engine directly, or an envelope containing the engine and
      * PDP network metadata (per-PDP attributes and documentation).
@@ -5487,8 +5502,8 @@ declare module 'shared/models/project-data-provider-engine-factory.model' {
      * — those fields are always the platform-canonical values.
      *
      * @param projectId Id of the project for which to create an {@link IProjectDataProviderEngine}
-     * @returns Either the {@link IProjectDataProviderEngine} directly, or an envelope
-     *   `{ projectDataProviderEngine, attributes?, documentation? }`
+     * @returns Either the {@link IProjectDataProviderEngine} directly, or an envelope `{
+     *   projectDataProviderEngine, attributes?, documentation? }`
      */
     createProjectDataProviderEngine(projectId: string): Promise<
       | IProjectDataProviderEngine<SupportedProjectInterfaces>

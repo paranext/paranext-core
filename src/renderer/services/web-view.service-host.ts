@@ -1952,7 +1952,7 @@ export const initialize = () => {
     // Create network event emitters
     // These EVENT_NAME_* constants are produced by `serializeRequestType`, which returns
     // `SerializedRequestType` (a branded string), not the literal string type. The casts tell
-    // TypeScript which entry in `NetworkEventTypes` each constant corresponds to.
+    // TypeScript which entry in `NetworkEvents` each constant corresponds to.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     onDidAddWebViewEmitter = await createNetworkEventEmitterAsync(
       EVENT_NAME_ON_DID_ADD_WEB_VIEW as 'webView:onDidAddWebView',

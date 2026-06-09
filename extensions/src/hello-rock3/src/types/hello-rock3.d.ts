@@ -204,7 +204,7 @@ declare module 'papi-shared-types' {
     HelloRock3Event,
   } from 'hello-rock3';
 
-  export interface NetworkEventTypes {
+  export interface NetworkEvents {
     /** Emitted each time the `helloRock3.helloRock3` command is called */
     'helloRock3.onHelloRock3': HelloRock3Event;
   }
