@@ -5,8 +5,8 @@ description: Nightly routine that finds PRs needing a design review and runs the
 
 # Nightly Design Review Routine
 
-A belt-and-suspenders sweep: it assumes developers *should* run `ux-design-review` before
-their UX review but *might not*, and catches what slipped through — ideally before merge.
+A belt-and-suspenders sweep: it assumes developers _should_ run `ux-design-review` before
+their UX review but _might not_, and catches what slipped through — ideally before merge.
 It invokes the shared **`ux-design-review`** skill on each selected PR and gives you **one
 report you can triage in a minute**, with the noisy runs clearly marked so you can ignore
 them.
@@ -36,23 +36,27 @@ Use the GitHub tools against `paranext/paranext-core`. Build the candidate set f
 buckets, in priority order. Only consider PRs that touch UI-affecting files (see the
 `ux-design-review` skill's file globs); skip the rest entirely.
 
-**Primary — ready + UX-flagged, pre-merge** (the main job: catch issues *before* merge)
+**Primary — ready + UX-flagged, pre-merge** (the main job: catch issues _before_ merge)
+
 - Open, **non-draft** PRs that are UX-relevant: carry a `ux` / UI label, **or** their linked
   Jira work item's UX-review property is `needs review` (the PR description links the Jira
   item per `ui-review.mdx`).
 
 **Backstop A — approved + green, pre-merge** (last safe moment before merge)
+
 - Open, non-draft PRs with code-review approval and passing CI, even if not UX-flagged —
   these are about to land.
 
 **Backstop B — just-merged but unreviewed or significantly changed** (retrospective net)
+
 - PRs **merged in the last 24h** that this routine never reviewed, **or** that received
   significant changes (roughly >50 changed lines, or new UI files) after their last review.
 
 **De-dupe / skip:**
+
 - Skip a PR if `ux-design-review` already reviewed this PR at its current head and nothing
   UI-affecting changed since. Detect prior reviews by your own review marker (see Step 3) or
-  a recorded head SHA. The point of Backstop B is *significant change* — re-review only when
+  a recorded head SHA. The point of Backstop B is _significant change_ — re-review only when
   the diff materially moved.
 - Skip drafts and WIP outright (they belong to the dev, not the net).
 
@@ -75,8 +79,8 @@ triage and easy to act on:
 
 1. **Triage table first**, sorted so I can ignore the noise:
 
-   | PR | Verdict | Blockers | Majors | One-line reason |
-   |----|---------|----------|--------|-----------------|
+   | PR  | Verdict | Blockers | Majors | One-line reason |
+   | --- | ------- | -------- | ------ | --------------- |
 
    List **CONFIDENT** runs at the top, **LOW SIGNAL** (safe-to-ignore) clearly grouped at the
    bottom with their reason, **CLEAN** in between. The verdict line is the whole point: I
@@ -90,7 +94,7 @@ triage and easy to act on:
 **Never auto-post.** Posting a PR review happens only if I explicitly tell you to (then the
 skill's `--comment` path submits one review per PR).
 
-> Review marker: when you *do* post on my say-so, the posted review is the dedupe marker for
+> Review marker: when you _do_ post on my say-so, the posted review is the dedupe marker for
 > Step 1. For runs you don't post, record the reviewed head SHA in your session notes / the
 > report so the next night's sweep doesn't re-flag an unchanged PR.
 

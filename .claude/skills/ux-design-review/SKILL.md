@@ -15,7 +15,7 @@ comments). It does two jobs at once:
 
 1. **Enforce** what the design system already says (every finding cites a guideline).
 2. **Discover gaps** — when the change does something UX-significant the guidelines are
-   silent on, emit a *gap candidate* instead of inventing a rule.
+   silent on, emit a _gap candidate_ instead of inventing a rule.
 
 ---
 
@@ -50,26 +50,29 @@ below — but treat that drift as itself worth flagging.
 Report findings in only these two severities. Anything below them is noise — suppress it.
 
 ### Blocker — breaks access or loses/destroys something; must fix before merge
+
 - Interactive element not keyboard-reachable or not operable by keyboard
-  (Design Principles: *"All interactive UI must be keyboard navigable."*)
+  (Design Principles: _"All interactive UI must be keyboard navigable."_)
 - Missing focus indicator on a focusable control
 - Icon-only button with no `aria-label` (Design Principles: icon-only buttons)
-- Color-contrast failure, especially where two state changes stack (Design Principles: *State changes and contrast*) or in dark mode
-- Destructive/discard action using the wrong icon (`X` instead of `Trash2`) or with no safeguard (Design Principles: *Destructive action icon*)
+- Color-contrast failure, especially where two state changes stack (Design Principles: _State changes and contrast_) or in dark mode
+- Destructive/discard action using the wrong icon (`X` instead of `Trash2`) or with no safeguard (Design Principles: _Destructive action icon_)
 - A control whose hidden/truncated content is unreachable by any other means at 300px width (Responsiveness)
 
 ### Major — clearly degrades the experience; should fix
+
 - Missing standard affordance: a list/menu item without the consistent `hover: bg-muted` / `selected: bg-muted/50` style other items have (Component Choices)
-- No feedback on an async action — selection/trigger doesn't update or show a pending/loading state after the user acts *(gap-adjacent; see gap candidates)*
-- Layout instability — a control or trigger changes size/jumps after a state change instead of holding a stable width *(gap-adjacent)*
-- Cross-surface inconsistency — the same job presented two different ways (e.g. a picker that is a modal in one place and a floating webview in another) without a documented reason *(gap-adjacent)*
-- Wrong dialog button order (cancel left / confirm right) or non-descriptive labels like **OK** (Design Principles: *Dialogs, toolbars, and action buttons*)
+- No feedback on an async action — selection/trigger doesn't update or show a pending/loading state after the user acts _(gap-adjacent; see gap candidates)_
+- Layout instability — a control or trigger changes size/jumps after a state change instead of holding a stable width _(gap-adjacent)_
+- Cross-surface inconsistency — the same job presented two different ways (e.g. a picker that is a modal in one place and a floating webview in another) without a documented reason _(gap-adjacent)_
+- Wrong dialog button order (cancel left / confirm right) or non-descriptive labels like **OK** (Design Principles: _Dialogs, toolbars, and action buttons_)
 - Component misuse — using a raw element where a documented component is required (e.g. not using the listbox pattern for a list; manual gap spacing instead of `ButtonGroup`; wrong Combobox icon)
 - Responsiveness break — horizontal scroll or unusable layout below 300px; more than one horizontal scrollbar (Responsiveness)
 - Keyboard shortcut rendered with the wrong per-OS convention (Keyboard shortcuts)
-- Tooltip missing on an icon/label-less control, or a redundant/over-long tooltip (Design Principles: *Tooltips*)
+- Tooltip missing on an icon/label-less control, or a redundant/over-long tooltip (Design Principles: _Tooltips_)
 
 ### Do NOT report (nitpicks — suppress)
+
 - Pixel-level padding/margin/alignment tweaks not tied to a guideline
 - Subjective color or wording preferences
 - Naming/style bikeshedding
@@ -89,7 +92,7 @@ accordingly rather than dumping noise:
 - **No Storybook deliverable** for new/changed UI (ui-review.mdx expects one) — you can't
   fully verify behavior from a static diff
 - PR description **lacks reference-UI links/paths** for comparisons it makes (ui-review.mdx:
-  *Linking to reference UI*) — you can't verify the "consistent with X" claims
+  _Linking to reference UI_) — you can't verify the "consistent with X" claims
 - The change is a **large refactor** where UI diffs are incidental
 - You **could not locate** the referenced component(s) to compare against
 
@@ -108,13 +111,15 @@ VERDICT: <CONFIDENT | LOW SIGNAL | CLEAN>  —  <N blockers, M majors>  —  PR 
 
 - **CONFIDENT** — the diff is reviewable and you found real blocking/major issues. Act on it.
 - **CLEAN** — reviewable, no big issues found. (Still list any gap candidates.)
-- **LOW SIGNAL** — premature/unverifiable per the checks above. *Safe to skim or ignore.*
+- **LOW SIGNAL** — premature/unverifiable per the checks above. _Safe to skim or ignore._
   Always state the reason in the same line, e.g. `LOW SIGNAL (draft, CI red) — output is likely noise`.
 
 Then:
 
 ### Findings
+
 For each finding:
+
 - **Severity** (Blocker / Major)
 - **Location** — `path/to/file.tsx:line` (and Storybook story if relevant)
 - **Issue** — one or two sentences, in Saroj's terms
@@ -123,6 +128,7 @@ For each finding:
 - **Confidence** — High / Medium / Low (Low-confidence findings must justify why they're still worth a human's glance, or be dropped)
 
 ### Gap candidates
+
 UX-significant things the change does that the **guidelines don't cover**. Do not phrase
 these as violations. For each: what the change does, why it matters for Saroj, and a
 proposed addition to the design system. These feed the gap log (see below). The three
@@ -132,6 +138,7 @@ floating webview, and when to use the Overlay Service)** — should be matched a
 if the change touches them, cite the gap log entry rather than re-deriving.
 
 ### Ready-to-paste PR comment
+
 A collapsed-friendly markdown block the reader can paste as a PR review comment verbatim.
 Big issues only; link each to its guideline. **Do not post it** unless explicitly told to
 (see Posting).
@@ -152,18 +159,21 @@ the review body. Use one review, not many comments. Never post LOW SIGNAL runs.
 ## Inputs
 
 Works on whatever it's given:
+
 - A PR number/URL → fetch the diff, description, labels, CI status, linked Storybook, and
   review/CI state via the GitHub tools.
 - A local diff → review against the working tree (`git diff`), skip the PR-state checks and
   note that in the verdict reason.
 
 Restrict attention to UI-affecting files:
+
 ```
 lib/platform-bible-react/src/**/*.{tsx,css}
 src/**/*.{tsx,css}
 extensions/**/*.{tsx,css}
 tailwind.config.ts, **/postcss.config.*, theme/token files
 ```
+
 If a PR touches none of these, return `CLEAN — no UI-affecting files` and stop.
 
 ---
