@@ -23,6 +23,7 @@ import {
 } from '@main/services/app.service-host';
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
 import { dotnetDataProvider } from '@main/services/dotnet-data-provider.service';
+import { enhancedResourceProtocolService } from '@main/services/enhanced-resource-protocol.service';
 import { extensionAssetProtocolService } from '@main/services/extension-asset-protocol.service';
 import { extensionHostService } from '@main/services/extension-host.service';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
@@ -386,6 +387,9 @@ async function main() {
 
     // Set our custom protocol handler to load assets from extensions
     extensionAssetProtocolService.initialize();
+
+    // Set our custom protocol handler to load Enhanced Resources binary assets (papi-er://)
+    enhancedResourceProtocolService.initialize();
 
     // Register listeners on the window, so the state is updated automatically
     // (the listeners will be removed when the window is closed)

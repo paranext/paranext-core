@@ -74,9 +74,9 @@
         NOTE: `papi-er:` is intentionally omitted from connect-src even though it is permitted in
         img-src / media-src. Enhanced Resources images are renderable (the <img> tag works) but
         NOT fetchable from renderer JS - this prevents WebView / extension code from reading raw
-        image bytes via fetch() / XHR and exfiltrating them. The scheme is also registered as a
-        privileged scheme in main.ts with supportFetchAPI=false / corsEnabled=false to enforce
-        the same posture at the Chromium layer.
+        image bytes via fetch() / XHR and exfiltrating them. The scheme is served via
+        protocol.handle in enhanced-resource-protocol.service.ts (same mechanism as papi-extension:);
+        the renderable-not-fetchable posture is enforced here by omitting it from connect-src.
       img-src load images
         'self' so images can be loaded from us
         papi-extension: so images can be loaded from installed extensions
