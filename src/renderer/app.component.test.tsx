@@ -26,8 +26,14 @@ vi.mock('@shared/services/network.service', async (importOriginal) => {
     createNetworkEventEmitter: () => {
       return new PlatformEventEmitter();
     },
+    createNetworkEventEmitterAsync: async () => {
+      return new PlatformEventEmitter();
+    },
     papiNetworkService: {
       createNetworkEventEmitter: () => {
+        return new PlatformEventEmitter();
+      },
+      createNetworkEventEmitterAsync: async () => {
         return new PlatformEventEmitter();
       },
       onDidClientConnect: new PlatformEventEmitter().event,
