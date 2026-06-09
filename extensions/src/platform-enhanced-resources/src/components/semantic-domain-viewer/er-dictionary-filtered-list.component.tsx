@@ -7,31 +7,25 @@ import {
   useRef,
   useState,
 } from 'react';
-import { cn } from '@/utils/shadcn-ui/utils';
-import { Button } from '@/components/shadcn-ui/button';
 import {
+  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
-} from '@/components/shadcn-ui/dropdown-menu';
-import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
-} from '@/components/shadcn-ui/resizable';
-import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@/components/shadcn-ui/tooltip';
+  Z_INDEX_MODAL,
+  cn,
+  type IndexedListItem,
+  type SemanticDomain,
+} from 'platform-bible-react';
 import { ArrowUp, ChevronRight, MoreHorizontal } from 'lucide-react';
-import { Z_INDEX_MODAL } from '@/components/z-index';
-import type {
-  ErDictionaryFilteredListProps,
-  IndexedListItem,
-  SemanticDomain,
-} from './source-language-indexed-list.types';
+import type { ErDictionaryFilteredListProps } from './er-dictionary-filtered-list.types';
 
 /** Minimum width in pixels for the list panel when shown side-by-side with details. */
 const LIST_MIN_PX = 100;

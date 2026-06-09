@@ -55,6 +55,7 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
   onItemClick,
   selectedItemId: controlledSelectedId,
   emptyStateMessage = 'No items found',
+  detailRegionLabel = 'Selected item details',
   isLoading = false,
   variant = 'text',
   showSourceLanguage = false,
@@ -62,17 +63,17 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
   onCharacterPress,
   className,
 }: SourceLanguageIndexedListProps<T>) {
-  const [drawerItemId, setDrawerItemId] = useState<string | undefined>();
+  const [detailItemId, setDetailItemId] = useState<string | undefined>();
   // ref.current expects null not undefined for div ref
   // eslint-disable-next-line no-null/no-null
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Use controlled selection if provided, otherwise use internal state
-  const effectiveSelectedId = controlledSelectedId ?? drawerItemId;
+  const effectiveSelectedId = controlledSelectedId ?? detailItemId;
 
-  const drawerItem = useMemo(
-    () => (drawerItemId ? items.find((item) => item.id === drawerItemId) : undefined),
-    [drawerItemId, items],
+  const detailItem = useMemo(
+    () => (detailItemId ? items.find((item) => item.id === detailItemId) : undefined),
+    [detailItemId, items],
   );
 
   const options: ListboxOption[] = useMemo(() => items.map((item) => ({ id: item.id })), [items]);
@@ -80,9 +81,9 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
   const handleItemSelect = (item: T) => {
     onItemClick?.(item);
     if (renderDetailContent) {
-      // Always set to the clicked item so the drawer stays open with new content.
-      // Clicking the already-selected item closes the drawer.
-      setDrawerItemId(item.id === drawerItemId ? undefined : item.id);
+      // Always set to the clicked item so the detail panel stays open with new content.
+      // Clicking the already-selected item closes the detail panel.
+      setDetailItemId(item.id === detailItemId ? undefined : item.id);
     }
   };
 
@@ -100,8 +101,8 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
   // On close, restore focus to the listbox so arrow keys navigate again
   // starting from the previously-selected item.
   const handleCloseDetail = () => {
-    const closingId = drawerItemId;
-    setDrawerItemId(undefined);
+    const closingId = detailItemId;
+    setDetailItemId(undefined);
     if (closingId) {
       requestAnimationFrame(() => {
         focusOption(closingId);
@@ -116,7 +117,7 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
   // eslint-disable-next-line no-null/no-null
   const detailPanelRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!drawerItem) return undefined;
+    if (!detailItem) return undefined;
     const node = detailPanelRef.current;
     if (!node) return undefined;
     const handleDetailKeyDown = (e: KeyboardEvent) => {
@@ -130,7 +131,7 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
     // handleCloseDetail uses refs/state setters that are stable enough; we only
     // re-bind when the open/close edge transitions.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drawerItem]);
+  }, [detailItem]);
 
   if (isLoading) {
     return (
@@ -214,8 +215,8 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
   );
 
   const detailElement =
-    renderDetailContent && drawerItem
-      ? renderDetailContent(drawerItem, handleCloseDetail)
+    renderDetailContent && detailItem
+      ? renderDetailContent(detailItem, handleCloseDetail)
       : undefined;
 
   return (
@@ -236,7 +237,7 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
             <div
               ref={detailPanelRef}
               role="region"
-              aria-label="Selected item details"
+              aria-label={detailRegionLabel}
               className="tw:h-full tw:overflow-y-auto tw:bg-background tw:p-4"
             >
               {detailElement}

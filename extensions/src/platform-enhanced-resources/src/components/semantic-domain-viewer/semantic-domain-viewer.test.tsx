@@ -295,8 +295,8 @@ describe('SemanticDomainViewer', () => {
   // keyboard handler logic is verified by:
   //
   //   1. The handler implementation lives in `TreeKeyboardContainer.handleKeyDown` in
-  //      `lib/platform-bible-react/.../er-dictionary-filtered-list.component.tsx` and is
-  //      covered by the FN-005 evidence file's manual verification + Storybook tests.
+  //      `./er-dictionary-filtered-list.component.tsx` and is covered by the FN-005 evidence
+  //      file's manual verification + Storybook tests.
   //   2. The expand/collapse path is exercised here via mouse click (see "depth-0 chevron
   //      button toggles aria-expanded" above) — which exercises the same `setExpanded`
   //      setter the keyboard path calls.
