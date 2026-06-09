@@ -159,3 +159,27 @@ describe('UserProfilePopover interface mode', () => {
     expect(mockState.setInterfaceMode).not.toHaveBeenCalled();
   });
 });
+
+describe('UserProfilePopover action rows', () => {
+  test('"Profile & Registration" click sends the command and closes the popover', async () => {
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    const button = await screen.findByTestId('user-profile-action-registration');
+    fireEvent.click(button);
+    expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
+      'paratextRegistration.showParatextRegistration',
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  test('"Network Settings" click sends the command and closes the popover', async () => {
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    const button = await screen.findByTestId('user-profile-action-network');
+    fireEvent.click(button);
+    expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
+      'paratextRegistration.showInternetSettings',
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+});

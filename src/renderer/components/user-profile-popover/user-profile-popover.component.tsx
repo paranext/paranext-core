@@ -11,7 +11,7 @@ import {
   ToggleGroup,
   ToggleGroupItem,
 } from 'platform-bible-react';
-import { CircleUserRound } from 'lucide-react';
+import { CircleUserRound, User, Wifi } from 'lucide-react';
 import { useLocalizedStrings, useSetting } from '@renderer/hooks/papi-hooks';
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
@@ -33,6 +33,8 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%userProfile_interfaceMode_simple_description%',
   '%userProfile_interfaceMode_power_label%',
   '%userProfile_interfaceMode_power_description%',
+  '%userProfile_profileAndRegistration%',
+  '%userProfile_networkSettings%',
 ];
 
 /**
@@ -58,6 +60,20 @@ export function UserProfilePopover() {
     } catch (e: unknown) {
       logger.warn(`UserProfilePopover: failed to set interface mode: ${getErrorMessage(e)}`);
     }
+  };
+
+  const handleProfileAndRegistration = () => {
+    sendCommand('paratextRegistration.showParatextRegistration').catch((e: unknown) => {
+      logger.warn(`UserProfilePopover: failed to open registration: ${getErrorMessage(e)}`);
+    });
+    setIsOpen(false);
+  };
+
+  const handleNetworkSettings = () => {
+    sendCommand('paratextRegistration.showInternetSettings').catch((e: unknown) => {
+      logger.warn(`UserProfilePopover: failed to open internet settings: ${getErrorMessage(e)}`);
+    });
+    setIsOpen(false);
   };
 
   useEffect(() => {
@@ -152,6 +168,28 @@ export function UserProfilePopover() {
             </span>
           </ToggleGroupItem>
         </ToggleGroup>
+        <div className="tw:flex tw:flex-col tw:gap-1 tw:border-t tw:pt-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="tw:w-full tw:justify-start tw:gap-2 tw:px-2 tw:font-normal"
+            onClick={handleProfileAndRegistration}
+            data-testid="user-profile-action-registration"
+          >
+            <User className="tw:h-3.5 tw:w-3.5" />
+            {localizedStrings['%userProfile_profileAndRegistration%']}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="tw:w-full tw:justify-start tw:gap-2 tw:px-2 tw:font-normal"
+            onClick={handleNetworkSettings}
+            data-testid="user-profile-action-network"
+          >
+            <Wifi className="tw:h-3.5 tw:w-3.5" />
+            {localizedStrings['%userProfile_networkSettings%']}
+          </Button>
+        </div>
       </PopoverContent>
     </Popover>
   );
