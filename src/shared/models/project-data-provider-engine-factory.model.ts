@@ -52,8 +52,8 @@ export interface IProjectDataProviderEngineFactory<
    * — those fields are always the platform-canonical values.
    *
    * @param projectId Id of the project for which to create an {@link IProjectDataProviderEngine}
-   * @returns Either the {@link IProjectDataProviderEngine} directly, or an envelope `{
-   *   projectDataProviderEngine, attributes?, documentation? }`
+   * @returns Either the {@link IProjectDataProviderEngine} or an envelope containing the engine and
+   *   per-PDP network object metadata (attributes and documentation).
    */
   createProjectDataProviderEngine(projectId: string): Promise<
     | IProjectDataProviderEngine<SupportedProjectInterfaces>

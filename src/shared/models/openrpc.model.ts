@@ -162,10 +162,10 @@ export type Tag = {
 export type MethodDocumentationWithoutName = Omit<Method, 'name'>;
 
 /**
- * Documentation about a single {@link Method}. Informational only; appears in the generated OpenRPC
- * document.
+ * Documentation about a single {@link Method}.
  *
- * Set `method['x-experimental']: true` to mark this method as experimental.
+ * Set `method['x-experimental']: true` to mark this method as experimental. Informational only;
+ * appears in the generated OpenRPC document.
  */
 export type SingleMethodDocumentation = {
   method: MethodDocumentationWithoutName;
@@ -183,10 +183,10 @@ export type SingleMethodDocumentation = {
 export type Notification = Omit<Method, 'result'>;
 
 /**
- * Documentation about a single {@link Notification}. Informational only; appears in the generated
- * OpenRPC document.
+ * Documentation about a single {@link Notification}.
  *
  * Set `notification['x-experimental']: true` to mark this notification as experimental.
+ * Informational only; appears in the generated OpenRPC document.
  */
 export type SingleNotificationDocumentation = {
   notification: Omit<Notification, 'name'>;
@@ -194,8 +194,8 @@ export type SingleNotificationDocumentation = {
 };
 
 /**
- * Documentation about all methods on a network object. Pass to `networkObjectService.set`,
- * `dataProviderService.registerEngine`, or `webViewProviderService.registerWebViewProvider`.
+ * Documentation about a network object — what it is, and OpenRPC documentation for each of its
+ * methods.
  */
 export type NetworkObjectDocumentation = {
   summary?: string;

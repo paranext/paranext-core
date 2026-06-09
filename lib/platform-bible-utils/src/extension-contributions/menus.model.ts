@@ -244,7 +244,8 @@ export const menuDocumentSchema = {
               type: 'boolean',
             },
             isExperimental: {
-              description: 'Marks this extension point as experimental. Informational only.',
+              description:
+                'Set to `true` to mark this extension point as experimental. Experimental menu content may change or be removed without notice.',
               type: 'boolean',
             },
           },
@@ -260,7 +261,7 @@ export const menuDocumentSchema = {
         },
         isExperimental: {
           description:
-            'Marks the entire columns-collection as an experimental extension point. Informational only.',
+            'Set to `true` to mark this columns collection as experimental. Experimental menu content may change or be removed without notice.',
           type: 'boolean',
         },
       },
@@ -292,7 +293,8 @@ export const menuDocumentSchema = {
                   type: 'boolean',
                 },
                 isExperimental: {
-                  description: 'Marks this extension point as experimental. Informational only.',
+                  description:
+                    'Set to `true` to mark this extension point as experimental. Experimental menu content may change or be removed without notice.',
                   type: 'boolean',
                 },
               },
@@ -316,7 +318,8 @@ export const menuDocumentSchema = {
                   type: 'boolean',
                 },
                 isExperimental: {
-                  description: 'Marks this extension point as experimental. Informational only.',
+                  description:
+                    'Set to `true` to mark this extension point as experimental. Experimental menu content may change or be removed without notice.',
                   type: 'boolean',
                 },
               },
@@ -453,7 +456,8 @@ export const menuDocumentSchema = {
           $ref: '#/$defs/singleColumnMenu',
         },
         isExperimental: {
-          description: 'Marks this WebView menu as experimental. Informational only.',
+          description:
+            'Set to `true` to mark this WebView menu as experimental. Experimental menu content may change or be removed without notice.',
           type: 'boolean',
         },
       },

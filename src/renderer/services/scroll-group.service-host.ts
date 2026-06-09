@@ -14,6 +14,7 @@ import {
   deepClone,
   deserialize,
   isPlatformError,
+  type PlatformEvent,
   type PlatformEventEmitter,
   ScrollGroupId,
   serialize,
@@ -67,10 +68,8 @@ let onDidUpdateScrRefEmitter: PlatformEventEmitter<ScrollGroupUpdateInfo> | unde
 export const availableScrollGroupIds = [undefined, ...Array(5).keys()];
 
 /** Event that emits with information about a changed Scripture Reference for a scroll group */
-export const onDidUpdateScrRef = getNetworkEvent(
-  // serializeRequestType returns SerializedRequestType, not a literal — cast to match the registry key
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  EVENT_NAME_ON_DID_UPDATE_SCR_REF as 'scrollGroup:onDidUpdateScrRef',
+export const onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo> = getNetworkEvent(
+  EVENT_NAME_ON_DID_UPDATE_SCR_REF,
 );
 
 /** See {@link IScrollGroupRemoteService.getScrRef} */
@@ -146,11 +145,7 @@ const scrollGroupService: IScrollGroupRemoteService = {
 
 /** Register the network object that backs the scroll group service */
 export async function startScrollGroupService(): Promise<void> {
-  // serializeRequestType returns SerializedRequestType, not a string literal — cast needed
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  onDidUpdateScrRefEmitter = await createNetworkEventEmitterAsync(
-    EVENT_NAME_ON_DID_UPDATE_SCR_REF as 'scrollGroup:onDidUpdateScrRef',
-  );
+  onDidUpdateScrRefEmitter = await createNetworkEventEmitterAsync(EVENT_NAME_ON_DID_UPDATE_SCR_REF);
 
   await networkObjectService.set(NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE, scrollGroupService);
 
