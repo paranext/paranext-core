@@ -796,11 +796,10 @@ function buildDataProvider<DataProviderName extends DataProviderNames>(
 async function registerEngine<DataProviderName extends DataProviderNames>(
   providerName: DataProviderName,
   dataProviderEngine: IDataProviderEngine<DataProviderTypes[DataProviderName]>,
-  dataProviderType?: string,
-  dataProviderAttributes?: { [property: string]: unknown },
-  documentation?: NetworkObjectDocumentation,
+  dataProviderType: string = 'dataProvider',
+  dataProviderAttributes: { [property: string]: unknown } | undefined = undefined,
+  documentation: NetworkObjectDocumentation | undefined = undefined,
 ): Promise<DisposableDataProviders[DataProviderName]> {
-  const resolvedDataProviderType = dataProviderType ?? 'dataProvider';
   await initialize();
 
   if (hasKnown(providerName))
@@ -848,7 +847,7 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
   const disposableDataProvider = (await networkObjectService.set(
     dataProviderObjectId,
     dataProviderInternal,
-    resolvedDataProviderType,
+    dataProviderType,
     dataProviderAttributes,
     documentation,
   )) as unknown as DisposableDataProviders[DataProviderName];
@@ -899,9 +898,9 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
 export async function registerEngineByType<TDataTypes extends DataProviderDataTypes>(
   providerName: string,
   dataProviderEngine: IDataProviderEngine<TDataTypes>,
-  dataProviderType?: string,
-  dataProviderAttributes?: { [property: string]: unknown },
-  documentation?: NetworkObjectDocumentation,
+  dataProviderType: string = 'dataProvider',
+  dataProviderAttributes: { [property: string]: unknown } | undefined = undefined,
+  documentation: NetworkObjectDocumentation | undefined = undefined,
 ): Promise<IDisposableDataProvider<IDataProvider<TDataTypes>>> {
   // All the types on this function and `registerEngine` are just TypeScript helpers. They do not
   // serve us well in this particular case, so we're ignoring the types and using our own since we
