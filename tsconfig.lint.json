@@ -10,8 +10,7 @@
     ".erb/configs",
     ".erb/mocks",
     ".erb/scripts",
-    ".storybook/*.ts",
-    ".storybook/mocks/*.ts",
+    ".storybook/**/*.ts",
     "src",
     "assets",
     "e2e-tests"

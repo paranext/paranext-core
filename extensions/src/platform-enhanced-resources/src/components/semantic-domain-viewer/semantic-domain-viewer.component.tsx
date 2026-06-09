@@ -3,11 +3,11 @@ import {
   DialogContent,
   DialogDescription,
   DialogTitle,
-  ErDictionaryFilteredList,
   type IndexedListItem,
   type SemanticDomain,
 } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
+import ErDictionaryFilteredList from './er-dictionary-filtered-list.component';
 import {
   DictionaryDisplayItem,
   DICTIONARY_DISPLAY_ITEM_STRING_KEYS,

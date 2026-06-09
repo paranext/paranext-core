@@ -1612,8 +1612,9 @@ async function openOrReloadWebView(
   //   Note: `papi-er:` is intentionally NOT in connect-src even though it appears in img-src and
   //   media-src below. Enhanced Resources image bytes are renderable (the <img> tag works) but
   //   not fetchable from WebView JS - this prevents WebView code from reading raw image bytes
-  //   via fetch() / XHR. The scheme is also registered as a privileged scheme in main.ts with
-  //   supportFetchAPI=false / corsEnabled=false to enforce the same posture at the Chromium layer.
+  //   via fetch() / XHR. The scheme is served via protocol.handle in
+  //   enhanced-resource-protocol.service.ts (same mechanism as papi-extension:); the
+  //   renderable-not-fetchable posture is enforced here by omitting it from connect-src.
   // img-src load images
   //   'self' so images can be loaded from us
   //   papi-extension: so images can be loaded from installed extensions
