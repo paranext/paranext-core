@@ -14,6 +14,10 @@ type MockState = {
   interfaceLanguage: string[];
   setInterfaceLanguage: ReturnType<typeof vi.fn>;
   availableLanguages: Record<string, { autonym: string }>;
+  themeType: 'light' | 'dark';
+  setTheme: ReturnType<typeof vi.fn>;
+  shouldMatchSystem: boolean;
+  setShouldMatchSystem: ReturnType<typeof vi.fn>;
 };
 
 const DEFAULT_AVAILABLE_LANGUAGES: Record<string, { autonym: string }> = {
@@ -28,6 +32,10 @@ const mockState: MockState = {
   interfaceLanguage: ['en'],
   setInterfaceLanguage: vi.fn(),
   availableLanguages: DEFAULT_AVAILABLE_LANGUAGES,
+  themeType: 'light',
+  setTheme: vi.fn(),
+  shouldMatchSystem: false,
+  setShouldMatchSystem: vi.fn(),
 };
 
 const setMockSetting = <K extends keyof MockState>(key: K, value: MockState[K]) => {
@@ -62,10 +70,16 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   }),
   useData: vi.fn(() => ({
     CurrentTheme: vi.fn(() => [
-      { type: 'light', id: 'light', themeFamilyId: 'light', label: 'Light', cssVariables: {} },
-      vi.fn(),
+      {
+        type: mockState.themeType,
+        id: mockState.themeType,
+        themeFamilyId: mockState.themeType,
+        label: mockState.themeType,
+        cssVariables: {},
+      },
+      mockState.setTheme,
     ]),
-    ShouldMatchSystem: vi.fn(() => [false, vi.fn()]),
+    ShouldMatchSystem: vi.fn(() => [mockState.shouldMatchSystem, mockState.setShouldMatchSystem]),
     AvailableInterfaceLanguages: vi.fn(() => [mockState.availableLanguages]),
   })),
   useDataProvider: vi.fn(() => undefined),
@@ -86,6 +100,10 @@ beforeEach(() => {
   setMockSetting('interfaceLanguage', ['en']);
   setMockSetting('setInterfaceLanguage', vi.fn());
   setMockSetting('availableLanguages', DEFAULT_AVAILABLE_LANGUAGES);
+  setMockSetting('themeType', 'light');
+  setMockSetting('setTheme', vi.fn());
+  setMockSetting('shouldMatchSystem', false);
+  setMockSetting('setShouldMatchSystem', vi.fn());
   vi.mocked(sendCommand).mockClear();
 });
 
@@ -217,5 +235,58 @@ describe('UserProfilePopover language picker', () => {
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
     fireEvent.click(await screen.findByTestId('user-profile-language-en'));
     expect(mockState.setInterfaceLanguage).not.toHaveBeenCalled();
+  });
+});
+
+describe('UserProfilePopover appearance', () => {
+  test('selected pill is "system" when shouldMatchSystem is true', async () => {
+    setMockSetting('shouldMatchSystem', true);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    expect(await screen.findByTestId('user-profile-appearance-system')).toHaveAttribute(
+      'data-state',
+      'on',
+    );
+  });
+
+  test('selected pill is theme.type when shouldMatchSystem is false', async () => {
+    setMockSetting('themeType', 'dark');
+    setMockSetting('shouldMatchSystem', false);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    expect(await screen.findByTestId('user-profile-appearance-dark')).toHaveAttribute(
+      'data-state',
+      'on',
+    );
+  });
+
+  test('clicking Light while in system mode disables shouldMatchSystem and sets type=light', async () => {
+    setMockSetting('themeType', 'dark');
+    setMockSetting('shouldMatchSystem', true);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(await screen.findByTestId('user-profile-appearance-light'));
+    expect(mockState.setShouldMatchSystem).toHaveBeenCalledWith(false);
+    expect(mockState.setTheme).toHaveBeenCalledWith({ type: 'light' });
+  });
+
+  test('clicking Dark while NOT in system mode only calls setTheme', async () => {
+    setMockSetting('themeType', 'light');
+    setMockSetting('shouldMatchSystem', false);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(await screen.findByTestId('user-profile-appearance-dark'));
+    expect(mockState.setShouldMatchSystem).not.toHaveBeenCalled();
+    expect(mockState.setTheme).toHaveBeenCalledWith({ type: 'dark' });
+  });
+
+  test('clicking System calls setShouldMatchSystem(true)', async () => {
+    setMockSetting('themeType', 'light');
+    setMockSetting('shouldMatchSystem', false);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(await screen.findByTestId('user-profile-appearance-system'));
+    expect(mockState.setShouldMatchSystem).toHaveBeenCalledWith(true);
+    expect(mockState.setTheme).not.toHaveBeenCalled();
   });
 });

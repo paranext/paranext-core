@@ -11,12 +11,23 @@ import {
   ToggleGroup,
   ToggleGroupItem,
 } from 'platform-bible-react';
-import { CircleUserRound, Globe, User, Wifi } from 'lucide-react';
-import { useData, useLocalizedStrings, useSetting } from '@renderer/hooks/papi-hooks';
+import { CircleUserRound, Globe, Monitor, Moon, Sun, User, Wifi } from 'lucide-react';
+import {
+  useData,
+  useDataProvider,
+  useLocalizedStrings,
+  useSetting,
+} from '@renderer/hooks/papi-hooks';
 import { sendCommand } from '@shared/services/command.service';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
-import { getErrorMessage, isPlatformError, LocalizeKey } from 'platform-bible-utils';
+import { themeServiceDataProviderName } from '@shared/services/theme.service-model';
+import {
+  getErrorMessage,
+  isPlatformError,
+  LocalizeKey,
+  type ThemeDefinitionExpanded,
+} from 'platform-bible-utils';
 import type { LanguageInfo } from 'platform-bible-react';
 import { useEffect, useState } from 'react';
 
@@ -38,10 +49,28 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%userProfile_profileAndRegistration%',
   '%userProfile_networkSettings%',
   '%userProfile_language%',
+  '%userProfile_appearance%',
+  '%userProfile_appearance_light%',
+  '%userProfile_appearance_dark%',
+  '%userProfile_appearance_system%',
 ];
 
 const DEFAULT_AVAILABLE_LANGUAGES: Record<string, LanguageInfo> = {
   en: { autonym: 'English' },
+};
+
+/**
+ * Sentinel placeholder used as the default while CurrentTheme loads. The label is never displayed —
+ * it just satisfies the `\`%${string}%``shape required by ThemeDefinitionExpanded. Reusing an
+ * existing key avoids introducing a bogus i18n entry, mirroring the pattern
+ * in`platform-bible-toolbar.tsx`.
+ */
+const DEFAULT_THEME_VALUE: ThemeDefinitionExpanded = {
+  themeFamilyId: '',
+  type: 'light',
+  id: 'light',
+  label: '%toolbar_theme_loading%',
+  cssVariables: {},
 };
 
 /**
@@ -109,6 +138,40 @@ export function UserProfilePopover() {
       setInterfaceLanguage(next);
     } catch (e: unknown) {
       logger.warn(`UserProfilePopover: failed to set interface language: ${getErrorMessage(e)}`);
+    }
+  };
+
+  const themeDataProvider = useDataProvider(themeServiceDataProviderName);
+  const [theme, setTheme] = useData(themeDataProvider).CurrentTheme(undefined, DEFAULT_THEME_VALUE);
+  const [shouldMatchSystem, setShouldMatchSystem] = useData(themeDataProvider).ShouldMatchSystem(
+    undefined,
+    false,
+  );
+
+  const themeUsable = !isPlatformError(theme);
+  const shouldMatchSystemUsable = !isPlatformError(shouldMatchSystem);
+
+  let appearanceValue: '' | 'light' | 'dark' | 'system' = '';
+  if (themeUsable && shouldMatchSystemUsable) {
+    if (shouldMatchSystem) appearanceValue = 'system';
+    else appearanceValue = theme.type === 'dark' ? 'dark' : 'light';
+  }
+
+  const handleAppearanceChange = (value: string) => {
+    if (value === '') return;
+    if (value !== 'light' && value !== 'dark' && value !== 'system') return;
+    try {
+      if (value === 'system') {
+        if (shouldMatchSystemUsable && shouldMatchSystem) return;
+        setShouldMatchSystem?.(true);
+        return;
+      }
+      if (shouldMatchSystemUsable && shouldMatchSystem) {
+        setShouldMatchSystem?.(false);
+      }
+      setTheme?.({ type: value });
+    } catch (e: unknown) {
+      logger.warn(`UserProfilePopover: failed to set appearance: ${getErrorMessage(e)}`);
     }
   };
 
@@ -251,6 +314,46 @@ export function UserProfilePopover() {
                 {tag.toUpperCase()}
               </ToggleGroupItem>
             ))}
+          </ToggleGroup>
+        </div>
+        <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:px-2">
+          <span className="tw:text-xs tw:text-muted-foreground">
+            {localizedStrings['%userProfile_appearance%']}
+          </span>
+          <ToggleGroup
+            type="single"
+            value={appearanceValue}
+            onValueChange={handleAppearanceChange}
+            size="sm"
+            spacing={2}
+          >
+            <ToggleGroupItem
+              value="light"
+              variant="outline"
+              data-testid="user-profile-appearance-light"
+              aria-label={localizedStrings['%userProfile_appearance_light%']}
+              className="tw:h-6 tw:min-w-0 tw:px-1.5"
+            >
+              <Sun className="tw:h-3 tw:w-3" />
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="dark"
+              variant="outline"
+              data-testid="user-profile-appearance-dark"
+              aria-label={localizedStrings['%userProfile_appearance_dark%']}
+              className="tw:h-6 tw:min-w-0 tw:px-1.5"
+            >
+              <Moon className="tw:h-3 tw:w-3" />
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="system"
+              variant="outline"
+              data-testid="user-profile-appearance-system"
+              aria-label={localizedStrings['%userProfile_appearance_system%']}
+              className="tw:h-6 tw:min-w-0 tw:px-1.5"
+            >
+              <Monitor className="tw:h-3 tw:w-3" />
+            </ToggleGroupItem>
           </ToggleGroup>
         </div>
       </PopoverContent>
