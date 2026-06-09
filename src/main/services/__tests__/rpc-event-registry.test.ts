@@ -25,9 +25,9 @@ describe('RpcEventRegistry — shared vs exclusive policy', () => {
   });
 
   it('shared: multiple handlers may register; same handler twice rejected', () => {
-    expect(reg.tryRegister(fakeA, 'network-object.onDidCreateNetworkObject')).toBe(true);
-    expect(reg.tryRegister(fakeB, 'network-object.onDidCreateNetworkObject')).toBe(true);
-    expect(reg.tryRegister(fakeA, 'network-object.onDidCreateNetworkObject')).toBe(false);
+    expect(reg.tryRegister(fakeA, 'object:onDidCreateNetworkObject')).toBe(true);
+    expect(reg.tryRegister(fakeB, 'object:onDidCreateNetworkObject')).toBe(true);
+    expect(reg.tryRegister(fakeA, 'object:onDidCreateNetworkObject')).toBe(false);
   });
 
   it('tryUnregister removes a handler and returns true', () => {

@@ -2235,6 +2235,7 @@ declare module 'papi-shared-types' {
   }
 
   export interface NetworkEventTypes {
+    /** Emitted when check results are invalidated and subscribers should refresh their data. */
     checkResultsInvalidated: CheckResultsInvalidated;
   }
 }

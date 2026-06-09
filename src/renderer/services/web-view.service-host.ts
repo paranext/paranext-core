@@ -112,8 +112,16 @@ let onDidCloseWebViewEmitter: PlatformEventEmitter<CloseWebViewEvent> | undefine
  * {@link onDidAddWebViewEmitter}, but this will likely be removed at some point
  */
 function emitOnDidOpenWebView(event: OpenWebViewEvent) {
-  if (onDidAddWebViewEmitter) onDidAddWebViewEmitter.emit(event);
-  if (onDidOpenWebViewEmitter) onDidOpenWebViewEmitter.emit(event);
+  if (!onDidAddWebViewEmitter)
+    throw new Error(
+      'web-view.service-host not initialized — call initialize() before emitting onDidAddWebView',
+    );
+  if (!onDidOpenWebViewEmitter)
+    throw new Error(
+      'web-view.service-host not initialized — call initialize() before emitting onDidOpenWebView',
+    );
+  onDidAddWebViewEmitter.emit(event);
+  onDidOpenWebViewEmitter.emit(event);
 }
 
 /** Event that emits with webView info when a webView is created */
@@ -634,10 +642,15 @@ function setDockLayout(dockLayout: PapiDockLayout | undefined): void {
  */
 // TODO: We could short-circuit saveLayout when no meaningful change happened. - IJH 2023-05-1
 const onLayoutChange: OnLayoutChange = async (newLayout, _currentTabId, changeInfo) => {
-  if (changeInfo?.didCloseWebView && changeInfo.webViewDefinition)
-    onDidCloseWebViewEmitter?.emit({
+  if (changeInfo?.didCloseWebView && changeInfo.webViewDefinition) {
+    if (!onDidCloseWebViewEmitter)
+      throw new Error(
+        'web-view.service-host not initialized — call initialize() before emitting onDidCloseWebView',
+      );
+    onDidCloseWebViewEmitter.emit({
       webView: convertWebViewDefinitionToSaved(changeInfo.webViewDefinition),
     });
+  }
 
   return saveLayout(newLayout);
 };
@@ -850,7 +863,11 @@ export function updateWebViewDefinitionSync(
       }
 
       // Emit the update event
-      onDidUpdateWebViewEmitter?.emit({
+      if (!onDidUpdateWebViewEmitter)
+        throw new Error(
+          'web-view.service-host not initialized — call initialize() before emitting onDidUpdateWebView',
+        );
+      onDidUpdateWebViewEmitter.emit({
         webView,
       });
     }
@@ -1594,10 +1611,15 @@ async function openOrReloadWebView(
       webView: convertWebViewDefinitionToSaved(finalWebView),
       layout: finalLayout,
     });
-  else
-    onDidUpdateWebViewEmitter?.emit({
+  else {
+    if (!onDidUpdateWebViewEmitter)
+      throw new Error(
+        'web-view.service-host not initialized — call initialize() before emitting onDidUpdateWebView',
+      );
+    onDidUpdateWebViewEmitter.emit({
       webView: convertWebViewDefinitionToSaved(finalWebView),
     });
+  }
 
   return webView.id;
 }
@@ -1821,6 +1843,9 @@ export const initialize = () => {
     // #endregion
 
     // Create network event emitters
+    // These EVENT_NAME_* constants are produced by `serializeRequestType`, which returns
+    // `SerializedRequestType` (a branded string), not the literal string type. The casts tell
+    // TypeScript which entry in `NetworkEventTypes` each constant corresponds to.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     onDidAddWebViewEmitter = await createNetworkEventEmitterAsync(
       EVENT_NAME_ON_DID_ADD_WEB_VIEW as 'webView:onDidAddWebView',
@@ -1829,10 +1854,12 @@ export const initialize = () => {
     onDidOpenWebViewEmitter = await createNetworkEventEmitterAsync(
       EVENT_NAME_ON_DID_OPEN_WEB_VIEW as 'webView:onDidOpenWebView',
     );
+    // serializeRequestType returns SerializedRequestType, not a string literal — cast needed
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     onDidUpdateWebViewEmitter = await createNetworkEventEmitterAsync(
       EVENT_NAME_ON_DID_UPDATE_WEB_VIEW as 'webView:onDidUpdateWebView',
     );
+    // serializeRequestType returns SerializedRequestType, not a string literal — cast needed
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     onDidCloseWebViewEmitter = await createNetworkEventEmitterAsync(
       EVENT_NAME_ON_DID_CLOSE_WEB_VIEW as 'webView:onDidCloseWebView',

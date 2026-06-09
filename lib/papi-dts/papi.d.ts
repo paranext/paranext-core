@@ -1282,8 +1282,10 @@ declare module 'shared/models/openrpc.model' {
   };
   export type MethodDocumentationWithoutName = Omit<Method, 'name'>;
   /**
-   * Documentation about a single method. Set `method['x-experimental']: true` to mark this method as
-   * experimental. Informational only; appears in the generated OpenRPC document.
+   * Documentation about a single {@link Method}. Informational only; appears in the generated
+   * OpenRPC document.
+   *
+   * Set `method['x-experimental']: true` to mark this method as experimental.
    */
   export type SingleMethodDocumentation = {
     method: MethodDocumentationWithoutName;
@@ -1299,22 +1301,27 @@ declare module 'shared/models/openrpc.model' {
    */
   export type OpenRpcNotification = Omit<Method, 'result'>;
   /**
-   * Documentation about a single notification. Set `notification['x-experimental']: true` to mark
-   * this notification as experimental. Informational only; appears in the generated OpenRPC document.
+   * Documentation about a single {@link OpenRpcNotification}. Informational only; appears in the
+   * generated OpenRPC document.
+   *
+   * Set `notification['x-experimental']: true` to mark this notification as experimental.
    */
   export type SingleNotificationDocumentation = {
     notification: Omit<OpenRpcNotification, 'name'>;
     components?: Components;
   };
-  /** Documentation about all methods on a network object */
+  /**
+   * Documentation about all methods on a network object. Pass to `networkObjectService.set`,
+   * `dataProviderService.registerEngine`, or `webViewProviderService.registerWebViewProvider`.
+   */
   export type NetworkObjectDocumentation = {
     summary?: string;
     description?: string;
     methods?: Method[];
     components?: Components;
     /**
-     * Set to `true` to mark every method registered for this network object as experimental. The
-     * marker is fanned out onto each method's `'x-experimental'` field inside
+     * Set to `true` to mark every {@link Method} registered for this network object as experimental.
+     * The marker is fanned out onto each method's `'x-experimental'` field inside
      * `networkObjectService.set`.
      */
     'x-experimental'?: boolean;
@@ -1417,7 +1424,8 @@ declare module 'shared/models/rpc.interface' {
     unregisterMethod: (methodName: string) => Promise<boolean>;
     /**
      * Register a centrally-tracked network event with the main process. Shared vs exclusive semantics
-     * is determined by looking up the event name in `SHARED_EVENT_NAMES`.
+     * is determined by looking up the event name in `SHARED_EVENT_NAMES`. See
+     * {@link SharedNetworkEventTypes} for shared vs exclusive semantics.
      *
      * Returns `true` if the registration was accepted, `false` otherwise. Used by
      * `createNetworkEventEmitterAsync`; not for direct caller use.
@@ -1840,7 +1848,7 @@ declare module 'shared/services/network.service' {
    * @deprecated 8 June 2026. Use `createNetworkEventEmitterAsync`. Events created via the sync API
    *   are not centrally registered and do not appear in the OpenRPC document. The async version
    *   properly restricts event registration to prevent multiple sources from emitting the same
-   *   network event (unless the event is declared in `SharedNetworkEventTypes`, in which case it
+   *   network event (unless the event is declared in {@link SharedNetworkEventTypes}, in which case it
    *   accepts multiple registrants by design).
    *
    *   WARNING: You can only create a network event emitter once per eventType to prevent hijacked event
@@ -1853,28 +1861,31 @@ declare module 'shared/services/network.service' {
    * Create a network event emitter that participates in central registration. The returned emitter
    * appears in the OpenRPC document if `documentation` is provided.
    *
-   * If the event name is in `SharedNetworkEventTypes`, the central registry uses shared semantics:
-   * multiple processes may register the same name (each process registers once); all corresponding
-   * emitters are valid sources.
+   * If the event name is in {@link SharedNetworkEventTypes}, the central registry uses shared
+   * semantics: multiple processes may register the same name (each process registers once); all
+   * corresponding emitters are valid sources.
    *
    * Otherwise the registry uses exclusive semantics: only one process may register a given name;
    * subsequent registrations from any process are rejected.
    *
    * Intra-process duplicate registration is always rejected regardless of the event's domain.
    *
-   * @param eventType A key of `NetworkEventTypes` (which inherits `SharedNetworkEventTypes`).
-   * @param documentation Optional notification documentation. Carries `'x-experimental': true` to
-   *   mark the event as experimental.
+   * See {@link SharedNetworkEventTypes} for shared vs exclusive semantics.
+   *
+   * @param eventType The name of the event to register. Must be a key of {@link NetworkEventTypes}.
+   * @param documentation Optional notification documentation. Carries
+   *   `notification['x-experimental']: true` to mark the event as experimental.
    */
   export const createNetworkEventEmitterAsync: <EventType extends keyof NetworkEventTypes>(
     eventType: EventType,
     documentation?: SingleNotificationDocumentation,
   ) => Promise<PlatformEventEmitter<NetworkEventTypes[EventType]>>;
   /**
-   * Subscribe to a typed network event. Declare the event in `NetworkEventTypes` (or rely on
-   * `SharedNetworkEventTypes` inheritance for platform events) and the payload type is inferred.
+   * Subscribe to a typed network event. The payload type is inferred from the event's declaration in
+   * {@link NetworkEventTypes}.
    *
-   * @param eventType Unique network event type for coordinating between connections
+   * @param eventType The name of the event to subscribe to. Must be a key of
+   *   {@link NetworkEventTypes}.
    * @returns Event for the event type that runs the callback provided when the event is emitted
    */
   export function getNetworkEvent<EventType extends keyof NetworkEventTypes>(
@@ -1883,16 +1894,13 @@ declare module 'shared/services/network.service' {
   /**
    * Subscribe to a network event with an explicit payload type.
    *
-   * @deprecated 8 June 2026. Use the typed signature: declare the event in `NetworkEventTypes` and
-   *   call `getNetworkEvent('your.event.name')` without an explicit type parameter. If your event
-   *   name is dynamic (e.g., per-instance data-provider events), this signature continues to work
-   *   functionally; suppress the deprecation warning at the call site with a brief comment.
+   * @deprecated 8 June 2026. Use the typed signature: declare the event in {@link NetworkEventTypes}
+   *   and call `getNetworkEvent('your.event.name')` without an explicit type parameter.
    * @param eventType Unique network event type for coordinating between connections
    * @returns Event for the event type that runs the callback provided when the event is emitted
    */
   export function getNetworkEvent<T>(eventType: string): PlatformEvent<T>;
   export interface PapiNetworkService {
-    /** @deprecated 8 June 2026. Use createNetworkEventEmitterAsync. */
     createNetworkEventEmitter: typeof createNetworkEventEmitter;
     createNetworkEventEmitterAsync: typeof createNetworkEventEmitterAsync;
     getNetworkEvent: typeof getNetworkEvent;
@@ -1966,6 +1974,11 @@ declare module 'shared/services/network-object.service' {
    *   object did not already define a `dispose` function, one will be added.
    *
    *   WARNING: setting a network object mutates the provided object.
+   * @param objectType String identifier for the network object type (e.g. `'object'`, `'dataProvider'`)
+   * @param objectAttributes Optional key-value metadata attached to the network object registration.
+   * @param objectDocumentation Optional {@link NetworkObjectDocumentation} for this network object.
+   *   Set `objectDocumentation['x-experimental']: true` to mark all methods on this network object
+   *   as experimental.
    * @returns `objectToShare` modified to be a network object
    */
   const set: <T extends NetworkableObject>(
@@ -3545,7 +3558,9 @@ declare module 'shared/services/web-view-provider.service' {
    *
    *   WARNING: setting a webView provider mutates the provided object.
    * @param attributes Optional additional attributes to attach to the network object
-   * @param documentation Optional OpenRPC-style documentation for the network object
+   * @param documentation Optional {@link NetworkObjectDocumentation} for this web view provider. Set
+   *   `documentation['x-experimental']: true` to mark all methods on this web view provider as
+   *   experimental.
    * @returns `webViewProvider` modified to be a network object and able to be disposed with `dispose`
    */
   function registerWebViewProvider(
@@ -4434,15 +4449,20 @@ declare module 'papi-shared-types' {
    *
    * Subscribers do not need to know which events are shared — `getNetworkEvent` handles both kinds
    * identically.
+   *
+   * See {@link NetworkEventTypes} for the full registry of known event names.
    */
   type SharedNetworkEventTypes = {
-    'network-object.onDidCreateNetworkObject': NetworkObjectDetails;
-    'network-object.onDidDisposeNetworkObject': string;
-    'shared-store.onDidChange': StoreChangeEvent;
+    /** Emitted when a network object is created in any process. Payload includes the new object's details. */
+    'object:onDidCreateNetworkObject': NetworkObjectDetails;
+    /** Emitted when a network object is disposed in any process. Payload is the disposed object's ID. */
+    'object:onDidDisposeNetworkObject': string;
+    /** Emitted when a value in the shared store changes. Payload includes the key and new value with Lamport timestamp. */
+    'shared-store:change': StoreChangeEvent;
   };
   /**
    * All known network events. Extensions augment this to declare their own events. Inherits the
-   * platform's shared events automatically.
+   * platform's shared events from {@link SharedNetworkEventTypes} automatically.
    *
    * To declare a new event for use with `createNetworkEventEmitterAsync`:
    *
@@ -5385,21 +5405,18 @@ declare module 'shared/models/project-data-provider-engine-factory.model' {
       layeringFilters?: ProjectMetadataFilterOptions,
     ): Promise<ProjectMetadataWithoutFactoryInfo[]>;
     /**
-     * Create a {@link IProjectDataProviderEngine} for the project requested so the papi can create an
-     * {@link IProjectDataProvider} for the project.
+     * Create an {@link IProjectDataProviderEngine} for the project requested so the papi can create
+     * an {@link IProjectDataProvider} for the project.
      *
-     * The return value may be either the engine directly, or an envelope object with the engine plus
-     * optional per-PDP-instance attributes and documentation. The unusual property name
-     * `projectDataProviderEngine` (rather than `engine`) is deliberate — it cannot collide with a
-     * property the engine itself might expose, so the platform's narrowing check on the return shape
-     * is unambiguous.
+     * The return value may be either the engine directly, or an envelope containing the engine and
+     * PDP network metadata (per-PDP attributes and documentation).
      *
-     * The platform overwrites `projectId` in any supplied per-PDP attributes — that field is always
-     * the platform-canonical value.
+     * The platform overwrites `projectId` and `projectInterfaces` in any supplied per-PDP attributes
+     * — those fields are always the platform-canonical values.
      *
-     * @param projectId Id of the project for which to create a {@link IProjectDataProviderEngine}
-     * @returns Either the engine, or an envelope `{ projectDataProviderEngine, attributes?,
-     *   documentation? }`
+     * @param projectId Id of the project for which to create an {@link IProjectDataProviderEngine}
+     * @returns Either the {@link IProjectDataProviderEngine} directly, or an envelope
+     *   `{ projectDataProviderEngine, attributes?, documentation? }`
      */
     createProjectDataProviderEngine(projectId: string): Promise<
       | IProjectDataProviderEngine<SupportedProjectInterfaces>
@@ -5675,11 +5692,13 @@ declare module 'shared/services/project-data-provider.service' {
    *
    * @param pdpFactoryId Unique id for this PDP factory.
    * @param projectInterfaces The standardized sets of methods (`projectInterface`s) supported by the
-   *   Project Data Provider Engines produced by this factory.
+   *   Project Data Provider Engines produced by this factory. Indicates what sort of project data
+   *   should be available on the PDPEs created by this factory.
    * @param pdpEngineFactory Used in a ProjectDataProviderFactory to create ProjectDataProviders.
    * @param attributes Optional registration-level attributes. The platform overwrites the
    *   `projectInterfaces` field — that field is always the platform-canonical value.
-   * @param documentation Optional `NetworkObjectDocumentation` for the factory itself.
+   * @param documentation Optional {@link NetworkObjectDocumentation} for the factory itself. Set
+   *   `documentation['x-experimental']: true` to mark all methods on this factory as experimental.
    * @returns Promise that resolves to a disposable object when the registration operation completes.
    */
   export function registerProjectDataProviderEngineFactory<

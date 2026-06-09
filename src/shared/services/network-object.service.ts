@@ -433,6 +433,12 @@ const get = async <T extends object>(
  *   object did not already define a `dispose` function, one will be added.
  *
  *   WARNING: setting a network object mutates the provided object.
+ * @param objectType String identifier for the network object type (e.g. `'object'`,
+ *   `'dataProvider'`)
+ * @param objectAttributes Optional key-value metadata attached to the network object registration.
+ * @param objectDocumentation Optional {@link NetworkObjectDocumentation} for this network object.
+ *   Set `objectDocumentation['x-experimental']: true` to mark all methods on this network object as
+ *   experimental.
  * @returns `objectToShare` modified to be a network object
  */
 
@@ -553,7 +559,11 @@ const set = async <T extends NetworkableObject>(
 
       // Send an event notifying everyone that this network object is no longer available
       // The event listener removes the network object from the registration map
-      if (onDidDisposeNetworkObjectEmitter) onDidDisposeNetworkObjectEmitter.emit(id);
+      if (!onDidDisposeNetworkObjectEmitter)
+        throw new Error(
+          'network-object.service not initialized — call initialize() before emitting onDidDisposeNetworkObject',
+        );
+      onDidDisposeNetworkObjectEmitter.emit(id);
       return true;
     });
 
@@ -569,7 +579,11 @@ const set = async <T extends NetworkableObject>(
 
     // Notify that the network object was successfully registered
     logger.debug(`Network object registered: ${serialize(netObjDetails)}`);
-    if (onDidCreateNetworkObjectEmitter) onDidCreateNetworkObjectEmitter.emit(netObjDetails);
+    if (!onDidCreateNetworkObjectEmitter)
+      throw new Error(
+        'network-object.service not initialized — call initialize() before emitting onDidCreateNetworkObject',
+      );
+    onDidCreateNetworkObjectEmitter.emit(netObjDetails);
 
     // Override objectToShare's type's force-undefined onDidDispose to DisposableNetworkObject's
     // onDidDispose type because it had an onDidDispose added in overrideOnDidDispose.

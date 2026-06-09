@@ -16,17 +16,6 @@ import {
 // that avoids race conditions with the events that fire around the same time.
 const networkObjectIDsToDetails = new Map<string, NetworkObjectDetails>();
 
-onDidCreateNetworkObject((networkObjectDetails) => {
-  if (networkObjectIDsToDetails.has(networkObjectDetails.id))
-    logger.warn(`Re-saving network object details for ${networkObjectDetails.id}`);
-  networkObjectIDsToDetails.set(networkObjectDetails.id, networkObjectDetails);
-});
-
-onDidDisposeNetworkObject((networkObjectId) => {
-  if (!networkObjectIDsToDetails.delete(networkObjectId))
-    logger.warn(`Notification of disposed object ${networkObjectId} that was previously unknown`);
-});
-
 // Making this async to align with the service model even though it could really be synchronous
 async function getAllNetworkObjectDetails(): Promise<Record<string, NetworkObjectDetails>> {
   const allNetworkObjectDetails: Record<string, NetworkObjectDetails> = {};
@@ -40,8 +29,29 @@ const networkObjectStatusService: NetworkObjectStatusRemoteServiceType = {
   getAllNetworkObjectDetails,
 };
 
+/**
+ * Initialize the network object status service by setting up subscriptions to network object
+ * lifecycle events. Must be called after `networkObjectService.initialize()` (which initializes the
+ * event emitters), and before any network objects are registered.
+ */
+async function initialize(): Promise<void> {
+  await networkObjectService.initialize();
+
+  onDidCreateNetworkObject((networkObjectDetails) => {
+    if (networkObjectIDsToDetails.has(networkObjectDetails.id))
+      logger.warn(`Re-saving network object details for ${networkObjectDetails.id}`);
+    networkObjectIDsToDetails.set(networkObjectDetails.id, networkObjectDetails);
+  });
+
+  onDidDisposeNetworkObject((networkObjectId) => {
+    if (!networkObjectIDsToDetails.delete(networkObjectId))
+      logger.warn(`Notification of disposed object ${networkObjectId} that was previously unknown`);
+  });
+}
+
 /** Register the network object that backs the network object status service */
 export async function startNetworkObjectStatusService(): Promise<void> {
+  await initialize();
   await networkObjectService.set<NetworkObjectStatusRemoteServiceType>(
     networkObjectStatusServiceNetworkObjectName,
     networkObjectStatusService,

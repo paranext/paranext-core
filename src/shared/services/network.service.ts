@@ -380,7 +380,7 @@ const createNetworkEventEmitterInternal = <T>(
  * @deprecated 8 June 2026. Use `createNetworkEventEmitterAsync`. Events created via the sync API
  *   are not centrally registered and do not appear in the OpenRPC document. The async version
  *   properly restricts event registration to prevent multiple sources from emitting the same
- *   network event (unless the event is declared in `SharedNetworkEventTypes`, in which case it
+ *   network event (unless the event is declared in {@link SharedNetworkEventTypes}, in which case it
  *   accepts multiple registrants by design).
  *
  *   WARNING: You can only create a network event emitter once per eventType to prevent hijacked event
@@ -395,18 +395,20 @@ export const createNetworkEventEmitter = <T>(eventType: string): PlatformEventEm
  * Create a network event emitter that participates in central registration. The returned emitter
  * appears in the OpenRPC document if `documentation` is provided.
  *
- * If the event name is in `SharedNetworkEventTypes`, the central registry uses shared semantics:
- * multiple processes may register the same name (each process registers once); all corresponding
- * emitters are valid sources.
+ * If the event name is in {@link SharedNetworkEventTypes}, the central registry uses shared
+ * semantics: multiple processes may register the same name (each process registers once); all
+ * corresponding emitters are valid sources.
  *
  * Otherwise the registry uses exclusive semantics: only one process may register a given name;
  * subsequent registrations from any process are rejected.
  *
  * Intra-process duplicate registration is always rejected regardless of the event's domain.
  *
- * @param eventType A key of `NetworkEventTypes` (which inherits `SharedNetworkEventTypes`).
- * @param documentation Optional notification documentation. Carries `'x-experimental': true` to
- *   mark the event as experimental.
+ * See {@link SharedNetworkEventTypes} for shared vs exclusive semantics.
+ *
+ * @param eventType The name of the event to register. Must be a key of {@link NetworkEventTypes}.
+ * @param documentation Optional notification documentation. Carries
+ *   `notification['x-experimental']: true` to mark the event as experimental.
  */
 export const createNetworkEventEmitterAsync = async <EventType extends keyof NetworkEventTypes>(
   eventType: EventType,
@@ -428,10 +430,11 @@ export const createNetworkEventEmitterAsync = async <EventType extends keyof Net
 };
 
 /**
- * Subscribe to a typed network event. Declare the event in `NetworkEventTypes` (or rely on
- * `SharedNetworkEventTypes` inheritance for platform events) and the payload type is inferred.
+ * Subscribe to a typed network event. The payload type is inferred from the event's declaration in
+ * {@link NetworkEventTypes}.
  *
- * @param eventType Unique network event type for coordinating between connections
+ * @param eventType The name of the event to subscribe to. Must be a key of
+ *   {@link NetworkEventTypes}.
  * @returns Event for the event type that runs the callback provided when the event is emitted
  */
 export function getNetworkEvent<EventType extends keyof NetworkEventTypes>(
@@ -440,10 +443,8 @@ export function getNetworkEvent<EventType extends keyof NetworkEventTypes>(
 /**
  * Subscribe to a network event with an explicit payload type.
  *
- * @deprecated 8 June 2026. Use the typed signature: declare the event in `NetworkEventTypes` and
- *   call `getNetworkEvent('your.event.name')` without an explicit type parameter. If your event
- *   name is dynamic (e.g., per-instance data-provider events), this signature continues to work
- *   functionally; suppress the deprecation warning at the call site with a brief comment.
+ * @deprecated 8 June 2026. Use the typed signature: declare the event in {@link NetworkEventTypes}
+ *   and call `getNetworkEvent('your.event.name')` without an explicit type parameter.
  * @param eventType Unique network event type for coordinating between connections
  * @returns Event for the event type that runs the callback provided when the event is emitted
  */
@@ -457,7 +458,6 @@ export function getNetworkEvent(eventType: string): PlatformEvent<unknown> {
 
 // Declare an interface for the object we're exporting so that JSDoc comments propagate
 export interface PapiNetworkService {
-  /** @deprecated 8 June 2026. Use createNetworkEventEmitterAsync. */
   createNetworkEventEmitter: typeof createNetworkEventEmitter;
   createNetworkEventEmitterAsync: typeof createNetworkEventEmitterAsync;
   getNetworkEvent: typeof getNetworkEvent;
