@@ -109,6 +109,36 @@ let onDidUpdateWebViewEmitter: PlatformEventEmitter<UpdateWebViewEvent> | undefi
 let onDidCloseWebViewEmitter: PlatformEventEmitter<CloseWebViewEvent> | undefined;
 
 /**
+ * Subscribers that called `onDidOpenWebView` before the emitter was created. They get bound to the
+ * real emitter inside `initialize` and removed from this list.
+ */
+const pendingOnDidOpenWebViewSubscribers: {
+  callback: (event: OpenWebViewEvent) => void;
+  realUnsub?: Unsubscriber;
+  disposed: boolean;
+}[] = [];
+
+/**
+ * Subscribers that called `onDidUpdateWebView` before the emitter was created. They get bound to
+ * the real emitter inside `initialize` and removed from this list.
+ */
+const pendingOnDidUpdateWebViewSubscribers: {
+  callback: (event: UpdateWebViewEvent) => void;
+  realUnsub?: Unsubscriber;
+  disposed: boolean;
+}[] = [];
+
+/**
+ * Subscribers that called `onDidCloseWebView` before the emitter was created. They get bound to the
+ * real emitter inside `initialize` and removed from this list.
+ */
+const pendingOnDidCloseWebViewSubscribers: {
+  callback: (event: CloseWebViewEvent) => void;
+  realUnsub?: Unsubscriber;
+  disposed: boolean;
+}[] = [];
+
+/**
  * Emits an event for when a web view is created
  *
  * Actually emits two updates to support backwards compatibility with deprecated
@@ -129,29 +159,56 @@ function emitOnDidOpenWebView(event: OpenWebViewEvent) {
 
 /** Event that emits with webView info when a webView is created */
 export const onDidOpenWebView: PlatformEvent<OpenWebViewEvent> = (callback) => {
-  if (!onDidOpenWebViewEmitter)
-    throw new Error(
-      'web-view.service-host not initialized — call initialize() before subscribing to onDidOpenWebView',
-    );
-  return onDidOpenWebViewEmitter.event(callback);
+  if (onDidOpenWebViewEmitter) return onDidOpenWebViewEmitter.event(callback);
+
+  const entry: (typeof pendingOnDidOpenWebViewSubscribers)[number] = {
+    callback,
+    disposed: false,
+  };
+  pendingOnDidOpenWebViewSubscribers.push(entry);
+  return () => {
+    entry.disposed = true;
+    if (entry.realUnsub) return entry.realUnsub();
+    const i = pendingOnDidOpenWebViewSubscribers.indexOf(entry);
+    if (i >= 0) pendingOnDidOpenWebViewSubscribers.splice(i, 1);
+    return true;
+  };
 };
 
 /** Event that emits with webView info when a webView is updated */
 export const onDidUpdateWebView: PlatformEvent<UpdateWebViewEvent> = (callback) => {
-  if (!onDidUpdateWebViewEmitter)
-    throw new Error(
-      'web-view.service-host not initialized — call initialize() before subscribing to onDidUpdateWebView',
-    );
-  return onDidUpdateWebViewEmitter.event(callback);
+  if (onDidUpdateWebViewEmitter) return onDidUpdateWebViewEmitter.event(callback);
+
+  const entry: (typeof pendingOnDidUpdateWebViewSubscribers)[number] = {
+    callback,
+    disposed: false,
+  };
+  pendingOnDidUpdateWebViewSubscribers.push(entry);
+  return () => {
+    entry.disposed = true;
+    if (entry.realUnsub) return entry.realUnsub();
+    const i = pendingOnDidUpdateWebViewSubscribers.indexOf(entry);
+    if (i >= 0) pendingOnDidUpdateWebViewSubscribers.splice(i, 1);
+    return true;
+  };
 };
 
 /** Event that emits with webView info when a webView is removed */
 export const onDidCloseWebView: PlatformEvent<CloseWebViewEvent> = (callback) => {
-  if (!onDidCloseWebViewEmitter)
-    throw new Error(
-      'web-view.service-host not initialized — call initialize() before subscribing to onDidCloseWebView',
-    );
-  return onDidCloseWebViewEmitter.event(callback);
+  if (onDidCloseWebViewEmitter) return onDidCloseWebViewEmitter.event(callback);
+
+  const entry: (typeof pendingOnDidCloseWebViewSubscribers)[number] = {
+    callback,
+    disposed: false,
+  };
+  pendingOnDidCloseWebViewSubscribers.push(entry);
+  return () => {
+    entry.disposed = true;
+    if (entry.realUnsub) return entry.realUnsub();
+    const i = pendingOnDidCloseWebViewSubscribers.indexOf(entry);
+    if (i >= 0) pendingOnDidCloseWebViewSubscribers.splice(i, 1);
+    return true;
+  };
 };
 
 /**
@@ -1961,16 +2018,42 @@ export const initialize = () => {
     onDidOpenWebViewEmitter = await createNetworkEventEmitterAsync(
       EVENT_NAME_ON_DID_OPEN_WEB_VIEW as 'webView:onDidOpenWebView',
     );
+
+    // Drain any subscribers that registered before the emitter existed.
+    while (pendingOnDidOpenWebViewSubscribers.length > 0) {
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const entry = pendingOnDidOpenWebViewSubscribers.shift()!;
+      if (entry.disposed) continue;
+      entry.realUnsub = onDidOpenWebViewEmitter.event(entry.callback);
+    }
+
     // serializeRequestType returns SerializedRequestType, not a string literal — cast needed
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     onDidUpdateWebViewEmitter = await createNetworkEventEmitterAsync(
       EVENT_NAME_ON_DID_UPDATE_WEB_VIEW as 'webView:onDidUpdateWebView',
     );
+
+    // Drain any subscribers that registered before the emitter existed.
+    while (pendingOnDidUpdateWebViewSubscribers.length > 0) {
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const entry = pendingOnDidUpdateWebViewSubscribers.shift()!;
+      if (entry.disposed) continue;
+      entry.realUnsub = onDidUpdateWebViewEmitter.event(entry.callback);
+    }
+
     // serializeRequestType returns SerializedRequestType, not a string literal — cast needed
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     onDidCloseWebViewEmitter = await createNetworkEventEmitterAsync(
       EVENT_NAME_ON_DID_CLOSE_WEB_VIEW as 'webView:onDidCloseWebView',
     );
+
+    // Drain any subscribers that registered before the emitter existed.
+    while (pendingOnDidCloseWebViewSubscribers.length > 0) {
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const entry = pendingOnDidCloseWebViewSubscribers.shift()!;
+      if (entry.disposed) continue;
+      entry.realUnsub = onDidCloseWebViewEmitter.event(entry.callback);
+    }
 
     onDidCloseWebView(({ webView: { id, webViewType } }) => {
       if (!deleteWebViewNonce(id))

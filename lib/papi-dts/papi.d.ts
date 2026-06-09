@@ -1683,10 +1683,10 @@ declare module 'main/services/rpc-websocket-listener' {
     /**
      * Try to register an event. Returns `true` if accepted, `false` if rejected.
      *
-     * - Name in `MULTI_SOURCE_EVENT_NAMES` (multi-source): multiple handlers may register; same
-     *   handler twice rejected.
-     * - Name not in `MULTI_SOURCE_EVENT_NAMES` (single-source): first registrant wins; any
-     *   subsequent registration from any handler is rejected.
+     * - Name in `MULTI_SOURCE_EVENT_NAMES` (multi-source): multiple handlers may register; same handler
+     *   twice rejected.
+     * - Name not in `MULTI_SOURCE_EVENT_NAMES` (single-source): first registrant wins; any subsequent
+     *   registration from any handler is rejected.
      */
     tryRegister(
       handler: unknown,
@@ -1855,8 +1855,8 @@ declare module 'shared/services/network.service' {
    *   network event (unless the event is declared in {@link MultiSourceNetworkEvents}, in which case
    *   it accepts multiple registrants by design).
    *
-   *   WARNING: You can only create a network event emitter once per eventType to prevent hijacked
-   *   event emitters.
+   *   WARNING: You can only create a network event emitter once per eventType to prevent hijacked event
+   *   emitters.
    * @param eventType Unique network event type for coordinating between connections
    * @returns Event emitter whose event works between connections
    */
@@ -4568,9 +4568,7 @@ declare module 'papi-shared-types' {
     'platform.onDidReloadExtensions': boolean;
     /** Emitted when the Scripture reference for a scroll group changes. */
     'scrollGroup:onDidUpdateScrRef': ScrollGroupUpdateInfo;
-    /**
-     * @deprecated 13 November 2024. Use {@link NetworkEvents.'webView:onDidOpenWebView'} instead.
-     */
+    /** @deprecated 13 November 2024. Use {@link NetworkEvents.'webView:onDidOpenWebView'} instead. */
     'webView:onDidAddWebView': OpenWebViewEvent;
     /** Emitted when a WebView is created. */
     'webView:onDidOpenWebView': OpenWebViewEvent;
