@@ -13,6 +13,13 @@ type MockState = {
   setInterfaceMode: ReturnType<typeof vi.fn>;
   interfaceLanguage: string[];
   setInterfaceLanguage: ReturnType<typeof vi.fn>;
+  availableLanguages: Record<string, { autonym: string }>;
+};
+
+const DEFAULT_AVAILABLE_LANGUAGES: Record<string, { autonym: string }> = {
+  en: { autonym: 'English' },
+  es: { autonym: 'Español' },
+  fr: { autonym: 'Français' },
 };
 
 const mockState: MockState = {
@@ -20,6 +27,7 @@ const mockState: MockState = {
   setInterfaceMode: vi.fn(),
   interfaceLanguage: ['en'],
   setInterfaceLanguage: vi.fn(),
+  availableLanguages: DEFAULT_AVAILABLE_LANGUAGES,
 };
 
 const setMockSetting = <K extends keyof MockState>(key: K, value: MockState[K]) => {
@@ -58,7 +66,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       vi.fn(),
     ]),
     ShouldMatchSystem: vi.fn(() => [false, vi.fn()]),
-    AvailableInterfaceLanguages: vi.fn(() => [{ en: { autonym: 'English' } }]),
+    AvailableInterfaceLanguages: vi.fn(() => [mockState.availableLanguages]),
   })),
   useDataProvider: vi.fn(() => undefined),
 }));
@@ -77,6 +85,7 @@ beforeEach(() => {
   setMockSetting('setInterfaceMode', vi.fn());
   setMockSetting('interfaceLanguage', ['en']);
   setMockSetting('setInterfaceLanguage', vi.fn());
+  setMockSetting('availableLanguages', DEFAULT_AVAILABLE_LANGUAGES);
   vi.mocked(sendCommand).mockClear();
 });
 
@@ -181,5 +190,32 @@ describe('UserProfilePopover action rows', () => {
       'paratextRegistration.showInternetSettings',
     );
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+});
+
+describe('UserProfilePopover language picker', () => {
+  test('renders one pill per available language with the primary selected', async () => {
+    setMockSetting('interfaceLanguage', ['en', 'es']);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    expect(await screen.findByTestId('user-profile-language-en')).toBeInTheDocument();
+    expect(screen.getByTestId('user-profile-language-en')).toHaveAttribute('data-state', 'on');
+  });
+
+  test('clicking a non-primary language moves it to the front, preserving fallbacks', async () => {
+    setMockSetting('interfaceLanguage', ['en', 'es']);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    // 'en' is selectable but already primary - select 'es' instead
+    fireEvent.click(await screen.findByTestId('user-profile-language-es'));
+    expect(mockState.setInterfaceLanguage).toHaveBeenCalledWith(['es', 'en']);
+  });
+
+  test('clicking the already-primary language is a no-op (deselect attempt ignored)', async () => {
+    setMockSetting('interfaceLanguage', ['en']);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(await screen.findByTestId('user-profile-language-en'));
+    expect(mockState.setInterfaceLanguage).not.toHaveBeenCalled();
   });
 });

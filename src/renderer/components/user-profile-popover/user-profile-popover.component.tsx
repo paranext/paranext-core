@@ -11,11 +11,13 @@ import {
   ToggleGroup,
   ToggleGroupItem,
 } from 'platform-bible-react';
-import { CircleUserRound, User, Wifi } from 'lucide-react';
-import { useLocalizedStrings, useSetting } from '@renderer/hooks/papi-hooks';
+import { CircleUserRound, Globe, User, Wifi } from 'lucide-react';
+import { useData, useLocalizedStrings, useSetting } from '@renderer/hooks/papi-hooks';
 import { sendCommand } from '@shared/services/command.service';
+import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
 import { getErrorMessage, isPlatformError, LocalizeKey } from 'platform-bible-utils';
+import type { LanguageInfo } from 'platform-bible-react';
 import { useEffect, useState } from 'react';
 
 type RegistrationData = {
@@ -35,7 +37,12 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%userProfile_interfaceMode_power_description%',
   '%userProfile_profileAndRegistration%',
   '%userProfile_networkSettings%',
+  '%userProfile_language%',
 ];
+
+const DEFAULT_AVAILABLE_LANGUAGES: Record<string, LanguageInfo> = {
+  en: { autonym: 'English' },
+};
 
 /**
  * Popover triggered from the top-right of the toolbar that surfaces the user's profile (name,
@@ -74,6 +81,35 @@ export function UserProfilePopover() {
       logger.warn(`UserProfilePopover: failed to open internet settings: ${getErrorMessage(e)}`);
     });
     setIsOpen(false);
+  };
+
+  const [interfaceLanguage, setInterfaceLanguage] = useSetting('platform.interfaceLanguage', [
+    'en',
+  ]);
+  const safeInterfaceLanguage =
+    isPlatformError(interfaceLanguage) || interfaceLanguage.length === 0
+      ? ['en']
+      : interfaceLanguage;
+  const primaryLanguage = safeInterfaceLanguage[0] ?? 'en';
+
+  const [availableLanguagesPossiblyError] = useData(
+    localizationService.dataProviderName,
+  ).AvailableInterfaceLanguages(undefined, DEFAULT_AVAILABLE_LANGUAGES);
+  const availableLanguages: Record<string, LanguageInfo> = isPlatformError(
+    availableLanguagesPossiblyError,
+  )
+    ? DEFAULT_AVAILABLE_LANGUAGES
+    : availableLanguagesPossiblyError;
+
+  const handleLanguageChange = (value: string) => {
+    if (value === '') return;
+    if (value === primaryLanguage) return;
+    const next = [value, ...safeInterfaceLanguage.filter((l) => l !== value)];
+    try {
+      setInterfaceLanguage(next);
+    } catch (e: unknown) {
+      logger.warn(`UserProfilePopover: failed to set interface language: ${getErrorMessage(e)}`);
+    }
   };
 
   useEffect(() => {
@@ -189,6 +225,33 @@ export function UserProfilePopover() {
             <Wifi className="tw:h-3.5 tw:w-3.5" />
             {localizedStrings['%userProfile_networkSettings%']}
           </Button>
+        </div>
+        <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:px-2">
+          <span className="tw:flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-muted-foreground">
+            <Globe className="tw:h-3.5 tw:w-3.5" />
+            {localizedStrings['%userProfile_language%']}
+          </span>
+          <ToggleGroup
+            type="single"
+            value={primaryLanguage}
+            onValueChange={handleLanguageChange}
+            size="sm"
+            spacing={2}
+            className="tw:flex-wrap tw:justify-end"
+          >
+            {Object.entries(availableLanguages).map(([tag, info]) => (
+              <ToggleGroupItem
+                key={tag}
+                value={tag}
+                variant="outline"
+                data-testid={`user-profile-language-${tag}`}
+                aria-label={info.autonym ?? tag}
+                className="tw:h-6 tw:min-w-0 tw:px-2 tw:text-[10px]"
+              >
+                {tag.toUpperCase()}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
         </div>
       </PopoverContent>
     </Popover>
