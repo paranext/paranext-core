@@ -161,7 +161,10 @@ export type Tag = {
 
 export type MethodDocumentationWithoutName = Omit<Method, 'name'>;
 
-/** Documentation about a single method */
+/**
+ * Documentation about a single method. Set `method['x-experimental']: true` to mark this method as
+ * experimental. Informational only; appears in the generated OpenRPC document.
+ */
 export type SingleMethodDocumentation = {
   method: MethodDocumentationWithoutName;
   components?: Components;
@@ -171,10 +174,17 @@ export type SingleMethodDocumentation = {
  * An OpenRPC notification — same shape as a {@link Method}, but without `result`. Used for events /
  * one-way messages from server to client. Per the OpenRPC convention (no `result` ⇒ notification),
  * these are serialized into the same root `methods` array as Methods on the wire.
+ *
+ * Set `'x-experimental': true` on the notification object to mark it as experimental. Informational
+ * only; appears in the generated OpenRPC document.
  */
 export type OpenRpcNotification = Omit<Method, 'result'>;
 
-/** Documentation about a single notification */
+/**
+ * Documentation about a single notification. Set `notification['x-experimental']: true` to mark
+ * this notification as experimental. Informational only; appears in the generated OpenRPC
+ * document.
+ */
 export type SingleNotificationDocumentation = {
   notification: Omit<OpenRpcNotification, 'name'>;
   components?: Components;
