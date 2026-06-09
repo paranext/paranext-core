@@ -8,7 +8,6 @@ import {
   PlatformEventEmitter,
   aggregateUnsubscriberAsyncs,
   serialize,
-  Unsubscriber,
   UnsubscriberAsync,
   getAllObjectFunctionNames,
   isString,
@@ -50,25 +49,9 @@ const initialize = (): Promise<void> => {
       'object:onDidCreateNetworkObject',
     );
 
-    // Drain any subscribers that registered before the emitter existed.
-    while (pendingOnDidCreateNetworkObjectSubscribers.length > 0) {
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const entry = pendingOnDidCreateNetworkObjectSubscribers.shift()!;
-      if (entry.disposed) continue;
-      entry.realUnsub = onDidCreateNetworkObjectEmitter.event(entry.callback);
-    }
-
     onDidDisposeNetworkObjectEmitter = await networkService.createNetworkEventEmitterAsync(
       'object:onDidDisposeNetworkObject',
     );
-
-    // Drain any subscribers that registered before the emitter existed.
-    while (pendingOnDidDisposeNetworkObjectSubscribers.length > 0) {
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const entry = pendingOnDidDisposeNetworkObjectSubscribers.shift()!;
-      if (entry.disposed) continue;
-      entry.realUnsub = onDidDisposeNetworkObjectEmitter.event(entry.callback);
-    }
 
     // Subscribe to the dispose event to clean up local and remote network object registrations
     onDidDisposeNetworkObject((id: string) => {
@@ -168,35 +151,12 @@ const hasKnown = (id: string): boolean => networkObjectRegistrations.has(id);
 let onDidCreateNetworkObjectEmitter: PlatformEventEmitter<NetworkObjectDetails> | undefined;
 
 /**
- * Subscribers that called `onDidCreateNetworkObject` before the emitter was created. They get bound
- * to the real emitter inside `initialize` and removed from this list.
- */
-const pendingOnDidCreateNetworkObjectSubscribers: {
-  callback: (event: NetworkObjectDetails) => void;
-  realUnsub?: Unsubscriber;
-  disposed: boolean;
-}[] = [];
-
-/**
  * Event that fires when a new object has been created on the network (locally or remotely). The
  * event contains information about the new network object.
  */
-export const onDidCreateNetworkObject: PlatformEvent<NetworkObjectDetails> = (callback) => {
-  if (onDidCreateNetworkObjectEmitter) return onDidCreateNetworkObjectEmitter.event(callback);
-
-  const entry: (typeof pendingOnDidCreateNetworkObjectSubscribers)[number] = {
-    callback,
-    disposed: false,
-  };
-  pendingOnDidCreateNetworkObjectSubscribers.push(entry);
-  return () => {
-    entry.disposed = true;
-    if (entry.realUnsub) return entry.realUnsub();
-    const i = pendingOnDidCreateNetworkObjectSubscribers.indexOf(entry);
-    if (i >= 0) pendingOnDidCreateNetworkObjectSubscribers.splice(i, 1);
-    return true;
-  };
-};
+export const onDidCreateNetworkObject = networkService.getNetworkEvent(
+  'object:onDidCreateNetworkObject',
+);
 
 /**
  * Emitter for when a network object is disposed. Provides the ID so that the local emitter specific
@@ -207,33 +167,10 @@ export const onDidCreateNetworkObject: PlatformEvent<NetworkObjectDetails> = (ca
  */
 let onDidDisposeNetworkObjectEmitter: PlatformEventEmitter<string> | undefined;
 
-/**
- * Subscribers that called `onDidDisposeNetworkObject` before the emitter was created. They get
- * bound to the real emitter inside `initialize` and removed from this list.
- */
-const pendingOnDidDisposeNetworkObjectSubscribers: {
-  callback: (event: string) => void;
-  realUnsub?: Unsubscriber;
-  disposed: boolean;
-}[] = [];
-
 /** Event that fires with a network object ID when that object is disposed locally or remotely */
-export const onDidDisposeNetworkObject: PlatformEvent<string> = (callback) => {
-  if (onDidDisposeNetworkObjectEmitter) return onDidDisposeNetworkObjectEmitter.event(callback);
-
-  const entry: (typeof pendingOnDidDisposeNetworkObjectSubscribers)[number] = {
-    callback,
-    disposed: false,
-  };
-  pendingOnDidDisposeNetworkObjectSubscribers.push(entry);
-  return () => {
-    entry.disposed = true;
-    if (entry.realUnsub) return entry.realUnsub();
-    const i = pendingOnDidDisposeNetworkObjectSubscribers.indexOf(entry);
-    if (i >= 0) pendingOnDidDisposeNetworkObjectSubscribers.splice(i, 1);
-    return true;
-  };
-};
+export const onDidDisposeNetworkObject = networkService.getNetworkEvent(
+  'object:onDidDisposeNetworkObject',
+);
 
 // #endregion
 
