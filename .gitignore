@@ -60,10 +60,7 @@ e2e-tests/test-results/
 e2e-tests/.dev-server.pid
 
 # claude
-.claude/*
-# Track shared, version-controlled skills while keeping local Claude config ignored
-!.claude/skills/
-!.claude/skills/**
+.claude
 .claude.backup/
 .context
 c-sharp/CLAUDE.md
