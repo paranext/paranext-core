@@ -4,6 +4,28 @@ import { vi } from 'vitest';
 import { sendCommand } from '@shared/services/command.service';
 import { UserProfilePopover } from './user-profile-popover.component';
 
+// Closure-referenced mock state, mutated by individual tests via the `setMockSetting` helper
+// below. Using a closure (instead of per-test `mockImplementation` casts) keeps the mock factory
+// strongly typed — the vi.mock factory infers types loosely while still letting tests vary
+// behavior between cases without any `as` assertions.
+type MockState = {
+  interfaceMode: 'simple' | 'power';
+  setInterfaceMode: ReturnType<typeof vi.fn>;
+  interfaceLanguage: string[];
+  setInterfaceLanguage: ReturnType<typeof vi.fn>;
+};
+
+const mockState: MockState = {
+  interfaceMode: 'simple',
+  setInterfaceMode: vi.fn(),
+  interfaceLanguage: ['en'],
+  setInterfaceLanguage: vi.fn(),
+};
+
+const setMockSetting = <K extends keyof MockState>(key: K, value: MockState[K]) => {
+  mockState[key] = value;
+};
+
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
@@ -23,7 +45,13 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%userProfile_appearance_system%': 'Follow system',
     },
   ]),
-  useSetting: vi.fn(() => ['simple', vi.fn(), vi.fn(), false]),
+  useSetting: vi.fn((key: string) => {
+    if (key === 'platform.interfaceMode')
+      return [mockState.interfaceMode, mockState.setInterfaceMode, vi.fn(), false];
+    if (key === 'platform.interfaceLanguage')
+      return [mockState.interfaceLanguage, mockState.setInterfaceLanguage, vi.fn(), false];
+    return [undefined, vi.fn(), vi.fn(), false];
+  }),
   useData: vi.fn(() => ({
     CurrentTheme: vi.fn(() => [
       { type: 'light', id: 'light', themeFamilyId: 'light', label: 'Light', cssVariables: {} },
@@ -42,6 +70,15 @@ vi.mock('@shared/services/command.service', () => ({
 vi.mock('@shared/services/logger.service', () => ({
   logger: { warn: vi.fn(), error: vi.fn() },
 }));
+
+// Reset mock state and call history between tests so each test starts from a known baseline.
+beforeEach(() => {
+  setMockSetting('interfaceMode', 'simple');
+  setMockSetting('setInterfaceMode', vi.fn());
+  setMockSetting('interfaceLanguage', ['en']);
+  setMockSetting('setInterfaceLanguage', vi.fn());
+  vi.mocked(sendCommand).mockClear();
+});
 
 describe('UserProfilePopover', () => {
   test('renders the trigger button with the user profile aria-label', () => {
@@ -104,5 +141,21 @@ describe('UserProfilePopover header', () => {
       expect(screen.getByTestId('user-profile-name')).toHaveTextContent('User Profile'),
     );
     expect(screen.getByTestId('user-profile-email')).toHaveTextContent('Not registered');
+  });
+});
+
+describe('UserProfilePopover interface mode', () => {
+  test('toggles to Power Mode when Power is clicked from Simple', () => {
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(screen.getByTestId('user-profile-interface-mode-power'));
+    expect(mockState.setInterfaceMode).toHaveBeenCalledWith('power');
+  });
+
+  test('ignores deselect attempt on the already-selected mode', () => {
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(screen.getByTestId('user-profile-interface-mode-simple'));
+    expect(mockState.setInterfaceMode).not.toHaveBeenCalled();
   });
 });

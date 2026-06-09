@@ -8,12 +8,14 @@ import {
   PopoverTitle,
   PopoverTrigger,
   Skeleton,
+  ToggleGroup,
+  ToggleGroupItem,
 } from 'platform-bible-react';
 import { CircleUserRound } from 'lucide-react';
-import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { useLocalizedStrings, useSetting } from '@renderer/hooks/papi-hooks';
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
-import { getErrorMessage, LocalizeKey } from 'platform-bible-utils';
+import { getErrorMessage, isPlatformError, LocalizeKey } from 'platform-bible-utils';
 import { useEffect, useState } from 'react';
 
 type RegistrationData = {
@@ -27,6 +29,10 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%toolbar_userProfile_label%',
   '%userProfile_header_defaultName%',
   '%userProfile_header_notRegistered%',
+  '%userProfile_interfaceMode_simple_label%',
+  '%userProfile_interfaceMode_simple_description%',
+  '%userProfile_interfaceMode_power_label%',
+  '%userProfile_interfaceMode_power_description%',
 ];
 
 /**
@@ -40,6 +46,19 @@ export function UserProfilePopover() {
   const [registrationData, setRegistrationData] = useState<RegistrationData | undefined>(undefined);
   const [isRegistrationLoading, setIsRegistrationLoading] = useState(false);
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
+
+  const [interfaceMode, setInterfaceMode] = useSetting('platform.interfaceMode', 'simple');
+  const safeInterfaceMode = isPlatformError(interfaceMode) ? 'simple' : interfaceMode;
+
+  const handleInterfaceModeChange = (value: string) => {
+    if (value === '') return;
+    if (value !== 'simple' && value !== 'power') return;
+    try {
+      setInterfaceMode(value);
+    } catch (e: unknown) {
+      logger.warn(`UserProfilePopover: failed to set interface mode: ${getErrorMessage(e)}`);
+    }
+  };
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -99,6 +118,40 @@ export function UserProfilePopover() {
             </>
           )}
         </PopoverHeader>
+        <ToggleGroup
+          type="single"
+          value={safeInterfaceMode}
+          onValueChange={handleInterfaceModeChange}
+          spacing={2}
+          className="tw:w-full"
+        >
+          <ToggleGroupItem
+            value="simple"
+            data-testid="user-profile-interface-mode-simple"
+            variant="outline"
+            className="tw:h-auto tw:flex-1 tw:flex-col tw:items-start tw:gap-1 tw:p-3 tw:text-left tw:whitespace-normal tw:data-[state=on]:border-primary tw:data-[state=on]:bg-primary/5 tw:data-[state=on]:text-primary"
+          >
+            <span className="tw:text-xs tw:font-semibold">
+              {localizedStrings['%userProfile_interfaceMode_simple_label%']}
+            </span>
+            <span className="tw:text-[10px] tw:leading-tight tw:text-muted-foreground">
+              {localizedStrings['%userProfile_interfaceMode_simple_description%']}
+            </span>
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="power"
+            data-testid="user-profile-interface-mode-power"
+            variant="outline"
+            className="tw:h-auto tw:flex-1 tw:flex-col tw:items-start tw:gap-1 tw:p-3 tw:text-left tw:whitespace-normal tw:data-[state=on]:border-primary tw:data-[state=on]:bg-primary/5 tw:data-[state=on]:text-primary"
+          >
+            <span className="tw:text-xs tw:font-semibold">
+              {localizedStrings['%userProfile_interfaceMode_power_label%']}
+            </span>
+            <span className="tw:text-[10px] tw:leading-tight tw:text-muted-foreground">
+              {localizedStrings['%userProfile_interfaceMode_power_description%']}
+            </span>
+          </ToggleGroupItem>
+        </ToggleGroup>
       </PopoverContent>
     </Popover>
   );
