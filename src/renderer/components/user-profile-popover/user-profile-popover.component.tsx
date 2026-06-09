@@ -332,7 +332,7 @@ export function UserProfilePopover() {
             onClick={handleProfileAndRegistration}
             data-testid="user-profile-action-registration"
           >
-            <User className="tw:h-3.5 tw:w-3.5" />
+            <User className="tw:size-3.5" />
             {localizedStrings['%userProfile_profileAndRegistration%']}
           </Button>
           <Button
@@ -342,13 +342,13 @@ export function UserProfilePopover() {
             onClick={handleNetworkSettings}
             data-testid="user-profile-action-network"
           >
-            <Wifi className="tw:h-3.5 tw:w-3.5" />
+            <Wifi className="tw:size-3.5" />
             {localizedStrings['%userProfile_networkSettings%']}
           </Button>
         </div>
         <div className="tw:flex tw:items-start tw:justify-between tw:gap-2 tw:px-2">
           <span className="tw:flex tw:shrink-0 tw:items-center tw:gap-1.5 tw:pt-1 tw:text-xs tw:text-muted-foreground">
-            <Globe className="tw:h-3.5 tw:w-3.5" />
+            <Globe className="tw:size-3.5" />
             {localizedStrings['%userProfile_language%']}
           </span>
           <ToggleGroup
@@ -393,7 +393,7 @@ export function UserProfilePopover() {
               aria-label={localizedStrings['%userProfile_appearance_light%']}
               className="tw:h-6 tw:min-w-0 tw:px-1.5"
             >
-              <Sun className="tw:h-3 tw:w-3" />
+              <Sun className="tw:size-3" />
             </ToggleGroupItem>
             <ToggleGroupItem
               value="dark"
@@ -402,7 +402,7 @@ export function UserProfilePopover() {
               aria-label={localizedStrings['%userProfile_appearance_dark%']}
               className="tw:h-6 tw:min-w-0 tw:px-1.5"
             >
-              <Moon className="tw:h-3 tw:w-3" />
+              <Moon className="tw:size-3" />
             </ToggleGroupItem>
             <ToggleGroupItem
               value="system"
@@ -411,7 +411,7 @@ export function UserProfilePopover() {
               aria-label={localizedStrings['%userProfile_appearance_system%']}
               className="tw:h-6 tw:min-w-0 tw:px-1.5"
             >
-              <Monitor className="tw:h-3 tw:w-3" />
+              <Monitor className="tw:size-3" />
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
