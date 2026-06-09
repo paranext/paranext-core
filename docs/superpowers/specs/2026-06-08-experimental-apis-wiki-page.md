@@ -97,6 +97,7 @@ declare module 'papi-shared-types' {
 }
 
 await papi.projectDataProviders.registerProjectDataProviderEngineFactory(
+  'myExt.expFactory',
   ['myExt.expInterface'],
   factory,
   /* attributes */ {},
