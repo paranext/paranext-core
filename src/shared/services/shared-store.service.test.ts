@@ -81,9 +81,9 @@ describe('sharedStoreService', () => {
     it('should initialize the service with a unique process ID', async () => {
       await initializeSharedStore(networkService);
       expect(networkService.createNetworkEventEmitterAsync).toHaveBeenCalledWith(
-        'shared-store.onDidChange',
+        'shared-store:change',
       );
-      expect(networkService.getNetworkEvent).toHaveBeenCalledWith('shared-store.onDidChange');
+      expect(networkService.getNetworkEvent).toHaveBeenCalledWith('shared-store:change');
       expect(mockEventHandler).toHaveBeenCalled();
     });
 

@@ -789,9 +789,9 @@ declare module 'papi-shared-types' {
    * identically.
    */
   export type SharedNetworkEventTypes = {
-    'network-object.onDidCreateNetworkObject': NetworkObjectDetails;
-    'network-object.onDidDisposeNetworkObject': string;
-    'shared-store.onDidChange': StoreChangeEvent;
+    'object:onDidCreateNetworkObject': NetworkObjectDetails;
+    'object:onDidDisposeNetworkObject': string;
+    'shared-store:change': StoreChangeEvent;
   };
 
   /**

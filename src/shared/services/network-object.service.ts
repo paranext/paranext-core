@@ -46,11 +46,11 @@ const initialize = (): Promise<void> => {
     await networkService.initialize();
 
     onDidCreateNetworkObjectEmitter = await networkService.createNetworkEventEmitterAsync(
-      'network-object.onDidCreateNetworkObject',
+      'object:onDidCreateNetworkObject',
     );
 
     onDidDisposeNetworkObjectEmitter = await networkService.createNetworkEventEmitterAsync(
-      'network-object.onDidDisposeNetworkObject',
+      'object:onDidDisposeNetworkObject',
     );
 
     // Subscribe to the dispose event to clean up local and remote network object registrations

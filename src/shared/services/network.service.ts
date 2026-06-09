@@ -50,9 +50,9 @@ import type { NetworkEventTypes, SharedNetworkEventTypes } from 'papi-shared-typ
  * Add entries here when adding a new shared event to `SharedNetworkEventTypes`.
  */
 export const SHARED_EVENT_NAMES = new Set<keyof SharedNetworkEventTypes>([
-  'network-object.onDidCreateNetworkObject',
-  'network-object.onDidDisposeNetworkObject',
-  'shared-store.onDidChange',
+  'object:onDidCreateNetworkObject',
+  'object:onDidDisposeNetworkObject',
+  'shared-store:change',
 ]);
 
 // #region Local event handling
