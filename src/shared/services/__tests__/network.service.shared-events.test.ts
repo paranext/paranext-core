@@ -1,28 +1,28 @@
 import { describe, it, expect } from 'vitest';
 import {
-  SHARED_EVENT_NAMES,
+  MULTI_SOURCE_EVENT_NAMES,
   createNetworkEventEmitterAsync,
   getNetworkEvent,
 } from '@shared/services/network.service';
-import type { SharedNetworkEventTypes } from 'papi-shared-types';
+import type { MultiSourceNetworkEvents } from 'papi-shared-types';
 
-describe('SHARED_EVENT_NAMES stays in sync with SharedNetworkEventTypes', () => {
-  it('contains every key of SharedNetworkEventTypes', () => {
-    type RequiredKeys = keyof SharedNetworkEventTypes;
+describe('MULTI_SOURCE_EVENT_NAMES stays in sync with MultiSourceNetworkEvents', () => {
+  it('contains every key of MultiSourceNetworkEvents', () => {
+    type RequiredKeys = keyof MultiSourceNetworkEvents;
     const required: RequiredKeys[] = [
       'object:onDidCreateNetworkObject',
       'object:onDidDisposeNetworkObject',
       'shared-store:change',
     ];
-    for (const name of required) expect(SHARED_EVENT_NAMES.has(name)).toBe(true);
+    for (const name of required) expect(MULTI_SOURCE_EVENT_NAMES.has(name)).toBe(true);
   });
 
-  it('contains no names absent from SharedNetworkEventTypes', () => {
-    type AllowedKeys = keyof SharedNetworkEventTypes;
-    for (const name of SHARED_EVENT_NAMES) {
-      // The cast verifies the runtime constant only contains keys SharedNetworkEventTypes declares.
-      // If a new entry is added to SHARED_EVENT_NAMES without adding it to SharedNetworkEventTypes,
-      // this assignment is a type error and the test fails to compile.
+  it('contains no names absent from MultiSourceNetworkEvents', () => {
+    type AllowedKeys = keyof MultiSourceNetworkEvents;
+    for (const name of MULTI_SOURCE_EVENT_NAMES) {
+      // The cast verifies the runtime constant only contains keys MultiSourceNetworkEvents declares.
+      // If a new entry is added to MULTI_SOURCE_EVENT_NAMES without adding it to
+      // MultiSourceNetworkEvents, this assignment is a type error and the test fails to compile.
       const typed: AllowedKeys = name;
       expect(typeof typed).toBe('string');
     }
@@ -41,9 +41,9 @@ describe.skip('createNetworkEventEmitterAsync', () => {
 
   it('resolves to a functional emitter for a declared event name', async () => {
     try {
-      // The 'as never' cast bypasses the keyof NetworkEventTypes constraint at the call site for
-      // a name that won't have been declared in this test's compilation unit. The runtime accepts
-      // any string; the typed constraint is enforced at production call sites by NetworkEventTypes.
+      // The 'as never' cast bypasses the NetworkEventTypes constraint at the call site for a name
+      // that won't have been declared in this test's compilation unit. The runtime accepts any
+      // string; the typed constraint is enforced at production call sites by NetworkEventTypes.
       const emitter = await createNetworkEventEmitterAsync('myExt.testEvent' as never);
       let received: unknown;
       getNetworkEvent('myExt.testEvent' as never)((event) => {
@@ -64,7 +64,7 @@ describe.skip('createNetworkEventEmitterAsync', () => {
     }
   });
 
-  it('rejects a second registration of the same exclusive event name within one process', async () => {
+  it('rejects a second registration of the same single-source event name within one process', async () => {
     try {
       await createNetworkEventEmitterAsync('myExt.unique' as never);
       await expect(createNetworkEventEmitterAsync('myExt.unique' as never)).rejects.toThrow();
@@ -84,7 +84,7 @@ import { getNetworkEvent as gne } from '@shared/services/network.service';
 import type { PlatformEvent } from 'platform-bible-utils';
 
 describe('getNetworkEvent overloads', () => {
-  it('typed call infers payload from NetworkEventTypes', () => {
+  it('typed call infers payload from NetworkEvents', () => {
     // Compile-time test — if this compiles, the typed overload exists.
     const ev = gne('object:onDidCreateNetworkObject');
     // ev should be PlatformEvent<NetworkObjectDetails> — verify by satisfying the structural type.

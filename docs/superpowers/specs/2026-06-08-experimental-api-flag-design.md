@@ -128,7 +128,7 @@ await papi.webViewProviders.registerWebViewProvider(
 
 ```typescript
 declare module 'papi-shared-types' {
-  export interface NetworkEventTypes {
+  export interface NetworkEvents {
     /** @experimental */
     'myExt.somethingHappened': { foo: string };
   }
@@ -151,7 +151,7 @@ const emitter = await papi.network.createNetworkEventEmitterAsync('myExt.somethi
 // emitter is PapiEventEmitter<{ foo: string }> — inferred from the event name
 ```
 
-A small set of platform infrastructure events (e.g., `network-object.onDidCreateNetworkObject`) are intentionally emitted from multiple processes. They live in a closed `SharedNetworkEventTypes` type that `NetworkEventTypes` inherits from. Extensions don't author shared events — but they can subscribe to them like any other event. See the "Event registration plumbing" section for how this is enforced at the central registry.
+A small set of platform infrastructure events (e.g., `network-object.onDidCreateNetworkObject`) are intentionally emitted from multiple processes. They live in a closed `MultiSourceNetworkEvents` type that `NetworkEvents` inherits from. Extensions don't author multi-source events — but they can subscribe to them like any other event. See the "Event registration plumbing" section for how this is enforced at the central registry.
 
 ### Menus
 
@@ -224,7 +224,7 @@ Today's events have no central registry. Each process holds a local `eventEmitte
 
 ### Type registry shape
 
-A single augmentable interface for events, with a closed type alias declaring the platform's shared events. The shared alias is the source of truth at both the type level and the runtime registry.
+A single augmentable interface for events, with a closed type alias declaring the platform's multi-source events. The multi-source alias is the source of truth at both the type level and the runtime registry.
 
 ````typescript
 declare module 'papi-shared-types' {
@@ -232,93 +232,97 @@ declare module 'papi-shared-types' {
    * Network events emitted from multiple processes (each process emits its own local event under
    * the same name). Declared by the platform; not extensible by extensions.
    *
-   * The names listed here are the source of truth for which event names use shared semantics at the
-   * central registry. An event name in this type allows registration from multiple processes (each
-   * process registers once, all emitters are valid sources). Any other event name uses exclusive
-   * semantics (one registrant ever).
+   * The names listed here are the source of truth for which event names use multi-source semantics
+   * at the central registry. An event name in this type allows registration from multiple processes
+   * (each process registers once, all emitters are valid sources). Any other event name uses
+   * single-source semantics (one registrant ever).
    *
-   * Subscribers do not need to know which events are shared — `getNetworkEvent` handles both kinds
-   * identically.
+   * Subscribers do not need to know which events are multi-source — `getNetworkEvent` handles both
+   * kinds identically.
    */
-  export type SharedNetworkEventTypes = {
+  export type MultiSourceNetworkEvents = {
     'network-object.onDidCreateNetworkObject': NetworkObjectDetails;
     'network-object.onDidDisposeNetworkObject': string;
     'shared-store.onDidChange': StoreChangeEvent;
   };
 
   /**
-   * All known network events. Extensions augment this to declare their own events. Inherits the
-   * platform's shared events automatically.
+   * Mapping of network event names to their payload types. Extensions augment this to declare their
+   * own events. Inherits the platform's multi-source events automatically.
    *
    * To declare a new event for use with `createNetworkEventEmitterAsync`:
    *
    * ```ts
    * declare module 'papi-shared-types' {
-   *   export interface NetworkEventTypes {
+   *   export interface NetworkEvents {
    *     'myExt.somethingHappened': { foo: string };
    *   }
    * }
    * ```
    */
-  export interface NetworkEventTypes extends SharedNetworkEventTypes {}
+  export interface NetworkEvents extends MultiSourceNetworkEvents {}
+
+  /** Union of all known network event names (keys of {@link NetworkEvents}). */
+  export type NetworkEventTypes = keyof NetworkEvents;
 }
 ````
 
 The runtime mirror is a constant in `network.service.ts`:
 
 ```typescript
-const SHARED_EVENT_NAMES = new Set<keyof SharedNetworkEventTypes>([
+const MULTI_SOURCE_EVENT_NAMES = new Set<keyof MultiSourceNetworkEvents>([
   'network-object.onDidCreateNetworkObject',
   'network-object.onDidDisposeNetworkObject',
   'shared-store.onDidChange',
 ]);
 ```
 
-The constant and the type alias must stay in sync; a build-time assertion (or a unit test) verifies that every key in `SharedNetworkEventTypes` appears in `SHARED_EVENT_NAMES`.
+The constant and the type alias must stay in sync; a build-time assertion (or a unit test) verifies that every key in `MultiSourceNetworkEvents` appears in `MULTI_SOURCE_EVENT_NAMES`.
 
 ### New emitter creator — single function
 
-One function. Whether the runtime treats a registration as shared or exclusive is determined by the name's presence in `SHARED_EVENT_NAMES`, not by which function the caller invokes.
+One function. Whether the runtime treats a registration as multi-source or single-source is determined by the name's presence in `MULTI_SOURCE_EVENT_NAMES`, not by which function the caller invokes.
 
 ```typescript
 /**
  * Create a network event emitter that participates in central registration. The returned emitter
  * appears in the OpenRPC document if `documentation` is provided.
  *
- * If the event name is in `SharedNetworkEventTypes`, the central registry uses **shared** semantics:
- * multiple processes may register the same name (each process registers once); all corresponding
- * emitters are valid sources.
+ * If the event name is in `MultiSourceNetworkEvents`, the central registry uses **multi-source**
+ * semantics: multiple processes may register the same name (each process registers once); all
+ * corresponding emitters are valid sources.
  *
- * Otherwise the central registry uses **exclusive** semantics: only one process may register a given
- * name; subsequent registrations from any process are rejected.
+ * Otherwise the central registry uses **single-source** semantics: only one process may register a
+ * given name; subsequent registrations from any process are rejected.
  *
  * Intra-process duplicate registration is always rejected regardless of the event's domain.
  *
- * @param eventType  Must be a key of `NetworkEventTypes` (which inherits `SharedNetworkEventTypes`).
+ * @param eventType  Must be a key of `NetworkEvents` (which inherits `MultiSourceNetworkEvents`).
+ *                   Equivalently, must satisfy the `NetworkEventTypes` string-union alias.
  * @param documentation  Optional notification documentation. Carries `'x-experimental': true` to
  *                       mark the event as experimental.
  */
-createNetworkEventEmitterAsync<EventType extends keyof NetworkEventTypes>(
+createNetworkEventEmitterAsync<EventType extends NetworkEventTypes>(
   eventType: EventType,
   documentation?: SingleNotificationDocumentation,
-): Promise<PapiEventEmitter<NetworkEventTypes[EventType]>>;
+): Promise<PapiEventEmitter<NetworkEvents[EventType]>>;
 ```
 
 ### Subscriber — typed overload + deprecated fallback
 
 ```typescript
 /**
- * Subscribe to a typed network event. Declare the event in `NetworkEventTypes` (or rely on
- * `SharedNetworkEventTypes` inheritance for platform events) and the payload type is inferred.
+ * Subscribe to a typed network event. Declare the event in `NetworkEvents` (or rely on
+ * `MultiSourceNetworkEvents` inheritance for platform events) and the payload type is inferred.
  */
-function getNetworkEvent<EventType extends keyof NetworkEventTypes>(
+function getNetworkEvent<EventType extends NetworkEventTypes>(
   eventType: EventType,
-): PlatformEvent<NetworkEventTypes[EventType]>;
+): PlatformEvent<NetworkEvents[EventType]>;
 
 /**
- * @deprecated 8 June 2026. Use the typed signature: declare the event in `NetworkEventTypes` and
- *   call `getNetworkEvent('your.event.name')` without an explicit type parameter. If your event
- *   name is dynamic (e.g., per-instance data-provider events), this signature continues to work
+ * @deprecated 8 June 2026. Use the typed signature: declare the event in `NetworkEvents` and call
+ *   `getNetworkEvent('your.event.name')` without an explicit type parameter. If your event name is
+ *   dynamic (e.g., per-instance data-provider events), this signature continues to work
  *   functionally; suppress the deprecation warning at the call site.
  */
 function getNetworkEvent<T>(eventType: string): PlatformEvent<T>;
@@ -335,7 +339,7 @@ The sync `createNetworkEventEmitter` signature is **unchanged** — preserving f
  * @deprecated 8 June 2026. Use createNetworkEventEmitterAsync. Events created via the sync API
  *   are not centrally registered and do not appear in the OpenRPC document. The async version
  *   properly restricts event registration to prevent multiple sources from emitting the same
- *   network event (unless the event is declared in `SharedNetworkEventTypes`, in which case it
+ *   network event (unless the event is declared in `MultiSourceNetworkEvents`, in which case it
  *   accepts multiple registrants by design).
  */
 createNetworkEventEmitter<T>(eventType: string): PapiEventEmitter<T>;
@@ -343,18 +347,18 @@ createNetworkEventEmitter<T>(eventType: string): PapiEventEmitter<T>;
 
 ### Wire-level plumbing
 
-1. Add a new `REGISTER_EVENT` RPC method on the main process, modeled directly on `REGISTER_METHOD` at `src/main/services/rpc-server.ts:141-145`. The payload carries the event name and optional `SingleNotificationDocumentation`. No domain discriminator is sent over the wire — the registry decides shared vs exclusive by looking up the name in `SHARED_EVENT_NAMES`.
+1. Add a new `REGISTER_EVENT` RPC method on the main process, modeled directly on `REGISTER_METHOD` at `src/main/services/rpc-server.ts:141-145`. The payload carries the event name and optional `SingleNotificationDocumentation`. No domain discriminator is sent over the wire — the registry decides multi-source vs single-source by looking up the name in `MULTI_SOURCE_EVENT_NAMES`.
 2. Add `rpcEventDetailsByEventName: Map<string, { registrants: { processId: string; documentation?: SingleNotificationDocumentation }[] }>` to `RpcWebsocketListener`, parallel to the existing `rpcMethodDetailsByMethodName` at `src/main/services/rpc-websocket-listener.ts:47`.
 3. `createNetworkEventEmitterAsync` invokes `REGISTER_EVENT` and awaits the response before resolving the returned emitter.
-4. `generateOpenRpcSchema()` iterates the event registry and includes each event once as a `Notification` entry in the root `methods` array. Whether the event is shared or exclusive is not exposed in OpenRPC output — both kinds appear as notifications, indistinguishable on the wire.
+4. `generateOpenRpcSchema()` iterates the event registry and includes each event once as a `Notification` entry in the root `methods` array. Whether the event is multi-source or single-source is not exposed in OpenRPC output — both kinds appear as notifications, indistinguishable on the wire.
 
 ### Conflict policy
 
-The central registry decides behavior per registration by checking the event name against `SHARED_EVENT_NAMES`:
+The central registry decides behavior per registration by checking the event name against `MULTI_SOURCE_EVENT_NAMES`:
 
-**Name in `SHARED_EVENT_NAMES` (shared).** Multiple processes may register; each process may register only once. The first registration's documentation is used for OpenRPC output; subsequent documentation is ignored with a debug-level log noting that the documentation was already established.
+**Name in `MULTI_SOURCE_EVENT_NAMES` (multi-source).** Multiple processes may register; each process may register only once. The first registration's documentation is used for OpenRPC output; subsequent documentation is ignored with a debug-level log noting that the documentation was already established.
 
-**Name not in `SHARED_EVENT_NAMES` (exclusive).** First registrant wins. Any subsequent registration from any process is rejected with an error that names the existing registrant's process ID.
+**Name not in `MULTI_SOURCE_EVENT_NAMES` (single-source).** First registrant wins. Any subsequent registration from any process is rejected with an error that names the existing registrant's process ID.
 
 **Intra-process duplicate (either kind).** Always rejected — preserves today's hard error at `src/shared/services/network.service.ts:328-329`.
 
@@ -368,19 +372,19 @@ The deprecated sync `createNetworkEventEmitter` continues to function exactly as
 
 `createNetworkEventEmitter` has 36 occurrences in the codebase. 11 of those are foundational — the API implementation in `src/shared/services/network.service.ts` (7), the emitter model in `src/shared/models/papi-network-event-emitter.model.ts` (1), and generated `lib/papi-dts/papi.d.ts` references (3) — and are touched as part of the foundational work below, not the migration.
 
-The remaining 25 are user-level call sites that all migrate to the same `createNetworkEventEmitterAsync` function. Whether an event is treated as shared or exclusive is determined at the central registry by name lookup against `SHARED_EVENT_NAMES`, not by which function is called — so the migration code path is identical regardless. The categorization below only determines **where each event name's type is declared**: in `SharedNetworkEventTypes` (closed alias in core, for the 3 platform-shared events) or in `NetworkEventTypes` (the augmentable interface, for everything else).
+The remaining 25 are user-level call sites that all migrate to the same `createNetworkEventEmitterAsync` function. Whether an event is treated as multi-source or single-source is determined at the central registry by name lookup against `MULTI_SOURCE_EVENT_NAMES`, not by which function is called — so the migration code path is identical regardless. The categorization below only determines **where each event name's type is declared**: in `MultiSourceNetworkEvents` (closed alias in core, for the 3 platform multi-source events) or in `NetworkEvents` (the augmentable interface, for everything else).
 
-### Events whose names go in `SharedNetworkEventTypes` (3 sites)
+### Events whose names go in `MultiSourceNetworkEvents` (3 sites)
 
-These live in `src/shared/services/*` and are emitted by every process that hosts the service. Their names are added to the closed `SharedNetworkEventTypes` type alias in core declarations and to the `SHARED_EVENT_NAMES` runtime constant:
+These live in `src/shared/services/*` and are emitted by every process that hosts the service. Their names are added to the closed `MultiSourceNetworkEvents` type alias in core declarations and to the `MULTI_SOURCE_EVENT_NAMES` runtime constant:
 
 - `src/shared/services/network-object.service.ts:124-127` — `onDidCreateNetworkObjectEmitter`. Every process emits when it creates a local network object.
 - `src/shared/services/network-object.service.ts:142-144` — `onDidDisposeNetworkObjectEmitter`. Every process emits when it disposes a local network object (comment at lines 139-141 explicitly notes the multi-process intent).
 - `src/shared/services/shared-store.service.ts:84` — `storeChangeEmitter`. Every process emits when its local store changes.
 
-### Events whose names go in `NetworkEventTypes` (22 sites)
+### Events whose names go in `NetworkEvents` (22 sites)
 
-Single-process emitters. Names are added to the augmentable `NetworkEventTypes` interface (in core declarations for platform events; in extension `.d.ts` files for extension events). One site (the data-provider per-instance emitter) has a dynamic name and uses the type-assertion pattern shown below. Categorized by migration ease:
+Single-source emitters. Names are added to the augmentable `NetworkEvents` interface (in core declarations for platform events; in extension `.d.ts` files for extension events). One site (the data-provider per-instance emitter) has a dynamic name and uses the type-assertion pattern shown below. Categorized by migration ease:
 
 **Easy** — already in an async initialization context, straightforward `await` swap:
 
@@ -392,15 +396,15 @@ Single-process emitters. Names are added to the augmentable `NetworkEventTypes` 
 
 **Dynamic-name (type-assertion pattern)** — one site has a name that can't be a literal in the registry:
 
-- `src/shared/services/data-provider.service.ts:817` — the name is `serializeRequestType(dataProviderObjectId, ON_DID_UPDATE)`, computed per data-provider instance. The payload type is statically known from the surrounding function's generics. Migration uses a double assertion (name into `keyof NetworkEventTypes` to satisfy the constraint, then result into the known emitter type) with a comment explaining why the literal-name path isn't available:
+- `src/shared/services/data-provider.service.ts:817` — the name is `serializeRequestType(dataProviderObjectId, ON_DID_UPDATE)`, computed per data-provider instance. The payload type is statically known from the surrounding function's generics. Migration uses a double assertion (name into `NetworkEventTypes` to satisfy the constraint, then result into the known emitter type) with a comment explaining why the literal-name path isn't available:
 
   ```ts
   const dynamicName = serializeRequestType(dataProviderObjectId, ON_DID_UPDATE);
   const onDidUpdateEmitter = (await networkService.createNetworkEventEmitterAsync(
     // Per-instance data provider events have dynamic names that can't be declared in
-    // NetworkEventTypes. Cast the name to satisfy the constraint; the payload type is
-    // recovered from the surrounding function's generic context.
-    dynamicName as keyof NetworkEventTypes,
+    // NetworkEvents. Cast the name to satisfy the NetworkEventTypes constraint; the payload
+    // type is recovered from the surrounding function's generic context.
+    dynamicName as NetworkEventTypes,
   )) as unknown as PapiEventEmitter<
     DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>
   >;
@@ -425,7 +429,7 @@ Bootstrap-order note: the `REGISTER_EVENT` RPC method itself must be registered 
 
 ### Dynamic event-name escape hatch
 
-Some core code (data-provider change events, etc.) creates emitters with names not declared in `NetworkEventTypes`. The async signature requires `keyof NetworkEventTypes`, so these sites use `as keyof NetworkEventTypes` to type-assert. Document the reason inline with a brief comment.
+Some core code (data-provider change events, etc.) creates emitters with names not declared in `NetworkEvents`. The async signature requires `NetworkEventTypes` (the string-union alias), so these sites use `as NetworkEventTypes` to type-assert. Document the reason inline with a brief comment.
 
 ## Registration surfaces — fanout
 
@@ -511,17 +515,17 @@ These TSDocs are part of the implementation, not separate docs files.
 
 `network.service.ts` tests:
 
-- `createNetworkEventEmitterAsync` resolves to a functional emitter for any name in `NetworkEventTypes`; central registry is populated.
-- For a name in `SHARED_EVENT_NAMES`: same-name re-registration from a different process succeeds; the new registrant is appended to `registrants[]`; subsequent documentation is ignored.
-- For a name not in `SHARED_EVENT_NAMES`: same-name re-registration (from any process) rejects with an error naming the existing registrant's process ID.
+- `createNetworkEventEmitterAsync` resolves to a functional emitter for any name in `NetworkEvents`; central registry is populated.
+- For a name in `MULTI_SOURCE_EVENT_NAMES`: same-name re-registration from a different process succeeds; the new registrant is appended to `registrants[]`; subsequent documentation is ignored.
+- For a name not in `MULTI_SOURCE_EVENT_NAMES`: same-name re-registration (from any process) rejects with an error naming the existing registrant's process ID.
 - Intra-process duplicate (either kind) rejects with the existing error.
-- Build-time/test-time assertion: every key in `SharedNetworkEventTypes` appears in `SHARED_EVENT_NAMES` and vice versa — the two sources must stay in sync.
+- Build-time/test-time assertion: every key in `MultiSourceNetworkEvents` appears in `MULTI_SOURCE_EVENT_NAMES` and vice versa — the two sources must stay in sync.
 - Events created via the deprecated sync API do **not** appear in OpenRPC output and do **not** populate the central registry.
 
 `getNetworkEvent` overload tests:
 
-- New call without `<T>` for a name in `NetworkEventTypes` resolves to the typed overload and the returned payload type is correctly inferred.
-- New call without `<T>` for a name in `SharedNetworkEventTypes` (inherited) likewise infers correctly.
+- New call without `<T>` for a name in `NetworkEvents` resolves to the typed overload and the returned payload type is correctly inferred.
+- New call without `<T>` for a name in `MultiSourceNetworkEvents` (inherited) likewise infers correctly.
 - Existing call with explicit `<T>` (e.g., `getNetworkEvent<MyType>('foo')`) continues to compile and returns `PlatformEvent<MyType>`; resolves to the deprecated overload.
 - IDE strikethrough on the deprecated overload verified (manual / snapshot).
 
@@ -561,15 +565,15 @@ All changes are additive and non-breaking.
 In one PR / change set:
 
 1. `openrpc.model.ts` type changes (`Method`, `Notification`, `NetworkObjectDocumentation`, root `OpenRpc.methods`).
-2. `papi-shared-types.ts` additions: `SharedNetworkEventTypes` (closed type alias with platform shared events) and `NetworkEventTypes` (augmentable interface extending `SharedNetworkEventTypes`); TSDoc on each explaining authoring and the `@experimental` convention.
-3. `SHARED_EVENT_NAMES` constant in `network.service.ts` mirroring `SharedNetworkEventTypes`; build-time / test-time assertion that the two stay in sync.
+2. `papi-shared-types.ts` additions: `MultiSourceNetworkEvents` (closed type alias with platform multi-source events), `NetworkEvents` (augmentable interface extending `MultiSourceNetworkEvents`), and `NetworkEventTypes` (= `keyof NetworkEvents`); TSDoc on each explaining authoring and the `@experimental` convention.
+3. `MULTI_SOURCE_EVENT_NAMES` constant in `network.service.ts` mirroring `MultiSourceNetworkEvents`; build-time / test-time assertion that the two stay in sync.
 4. `createNetworkEventEmitterAsync` implementation + `createNetworkEventEmitter` deprecation tag (signature unchanged).
 5. `getNetworkEvent` typed overload + deprecated explicit-`<T>` overload (signature behavior unchanged for existing callers).
 6. `REGISTER_EVENT` RPC method + `rpcEventDetailsByEventName` in `RpcWebsocketListener` (storing registrants list; shared-vs-exclusive decided by name lookup on each registration).
 7. `generateOpenRpcSchema()` extended to include notifications.
 8. Registration site updates: commands (existing docs param), `networkObjectService.set` (existing 5th param), `dataProviderService.registerEngine` / `registerEngineByType` (new docs param after existing attributes), `webViewProviderService.registerWebViewProvider` (new `attributes` param, then new docs param), PDP factory (new attributes + docs params; return shape augmented with `projectDataProviderEngine` discriminator).
 9. Menus model `isExperimental` additions on `OrderedExtensibleContainer`, `ColumnsWithHeaders`, `WebViewMenu`, plus matching JSON Schema entries.
-10. 25-site migration of `createNetworkEventEmitter` to `createNetworkEventEmitterAsync` (single function; 3 of the names go into `SharedNetworkEventTypes`, the rest into `NetworkEventTypes`).
+10. 25-site migration of `createNetworkEventEmitter` to `createNetworkEventEmitterAsync` (single function; 3 of the names go into `MultiSourceNetworkEvents`, the rest into `NetworkEvents`).
 11. TSDoc on documentation types pointing out where to set `'x-experimental': true`.
 12. Context standards update.
 13. Wiki page kept in sync with each implementation PR; final contents published to the Paranext wiki at the end.

@@ -1,7 +1,7 @@
 import { describe, it, expectTypeOf } from 'vitest';
 import type {
   Method,
-  OpenRpcNotification,
+  Notification,
   NetworkObjectDocumentation,
   OpenRpc,
   SingleNotificationDocumentation,
@@ -18,14 +18,14 @@ describe('openrpc.model — experimental marker types', () => {
     expectTypeOf(m['x-experimental']).toEqualTypeOf<boolean | undefined>();
   });
 
-  it('OpenRpcNotification has no result field', () => {
-    const n: OpenRpcNotification = {
+  it('Notification has no result field', () => {
+    const n: Notification = {
       name: 'x',
       params: [],
       'x-experimental': true,
     };
-    // @ts-expect-error — OpenRpcNotification cannot have a result
-    const bad: OpenRpcNotification = { name: 'x', params: [], result: { name: 'r', schema: {} } };
+    // @ts-expect-error — Notification cannot have a result
+    const bad: Notification = { name: 'x', params: [], result: { name: 'r', schema: {} } };
     void bad;
     expectTypeOf(n.name).toEqualTypeOf<string>();
   });
@@ -35,7 +35,7 @@ describe('openrpc.model — experimental marker types', () => {
     expectTypeOf(d['x-experimental']).toEqualTypeOf<boolean | undefined>();
   });
 
-  it('OpenRpc.methods accepts both Method and OpenRpcNotification', () => {
+  it('OpenRpc.methods accepts both Method and Notification', () => {
     const doc: OpenRpc = {
       openrpc: '1.2.6',
       info: { title: 't', version: 'v' },
@@ -44,20 +44,20 @@ describe('openrpc.model — experimental marker types', () => {
         { name: 'b', params: [] }, // notification
       ],
     };
-    expectTypeOf(doc.methods).toEqualTypeOf<(Method | OpenRpcNotification)[]>();
+    expectTypeOf(doc.methods).toEqualTypeOf<(Method | Notification)[]>();
   });
 
   it('SingleNotificationDocumentation has notification omitting name and result', () => {
     const d: SingleNotificationDocumentation = {
       notification: { params: [], 'x-experimental': true },
     };
-    expectTypeOf(d.notification).toEqualTypeOf<Omit<OpenRpcNotification, 'name'>>();
+    expectTypeOf(d.notification).toEqualTypeOf<Omit<Notification, 'name'>>();
   });
 
   it('NetworkObjectDocumentation.methods rejects notifications', () => {
-    const notification: OpenRpcNotification = { name: 'evt', params: [] };
+    const notification: Notification = { name: 'evt', params: [] };
     const bad: NetworkObjectDocumentation = {
-      // @ts-expect-error — NetworkObjectDocumentation.methods only accepts Method[], not OpenRpcNotification[]
+      // @ts-expect-error — NetworkObjectDocumentation.methods only accepts Method[], not Notification[]
       methods: [notification],
     };
     void bad;

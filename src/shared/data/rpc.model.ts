@@ -237,8 +237,8 @@ export const UNREGISTER_METHOD = 'network:unregisterMethod';
 
 /**
  * Register a network event emitter with the main process so that the event is tracked centrally.
- * Shared vs. exclusive semantics are determined by looking up the event name in
- * `SHARED_EVENT_NAMES`.
+ * Multi-source vs. single-source semantics are determined by looking up the event name in
+ * `MULTI_SOURCE_EVENT_NAMES`.
  */
 export const REGISTER_EVENT = 'network:registerEvent';
 

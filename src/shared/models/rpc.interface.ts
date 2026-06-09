@@ -88,9 +88,9 @@ export interface IRpcMethodRegistrar extends IRpcHandler {
   /** Unregister a method so it is no longer available to RPC requests */
   unregisterMethod: (methodName: string) => Promise<boolean>;
   /**
-   * Register a centrally-tracked network event with the main process. Shared vs exclusive semantics
-   * is determined by looking up the event name in `SHARED_EVENT_NAMES`. See
-   * {@link SharedNetworkEventTypes} for shared vs exclusive semantics.
+   * Register a centrally-tracked network event with the main process. Multi-source vs single-source
+   * semantics is determined by looking up the event name in `MULTI_SOURCE_EVENT_NAMES`. See
+   * {@link MultiSourceNetworkEvents} for multi-source vs single-source semantics.
    *
    * Returns `true` if the registration was accepted, `false` otherwise. Used by
    * `createNetworkEventEmitterAsync`; not for direct caller use.

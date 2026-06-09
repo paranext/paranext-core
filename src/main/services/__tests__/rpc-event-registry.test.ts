@@ -9,7 +9,7 @@ vi.mock('@shared/services/logger.service', () => ({
 
 import { RpcEventRegistry } from '@main/services/rpc-websocket-listener';
 
-describe('RpcEventRegistry — shared vs exclusive policy', () => {
+describe('RpcEventRegistry — multi-source vs single-source policy', () => {
   const fakeA = { id: 'A' };
   const fakeB = { id: 'B' };
 
@@ -18,13 +18,13 @@ describe('RpcEventRegistry — shared vs exclusive policy', () => {
     reg = new RpcEventRegistry();
   });
 
-  it('exclusive: first registrant wins; subsequent registrations from any handler rejected', () => {
+  it('single-source: first registrant wins; subsequent registrations from any handler rejected', () => {
     expect(reg.tryRegister(fakeA, 'myExt.exclusive')).toBe(true);
     expect(reg.tryRegister(fakeA, 'myExt.exclusive')).toBe(false);
     expect(reg.tryRegister(fakeB, 'myExt.exclusive')).toBe(false);
   });
 
-  it('shared: multiple handlers may register; same handler twice rejected', () => {
+  it('multi-source: multiple handlers may register; same handler twice rejected', () => {
     expect(reg.tryRegister(fakeA, 'object:onDidCreateNetworkObject')).toBe(true);
     expect(reg.tryRegister(fakeB, 'object:onDidCreateNetworkObject')).toBe(true);
     expect(reg.tryRegister(fakeA, 'object:onDidCreateNetworkObject')).toBe(false);

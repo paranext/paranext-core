@@ -822,11 +822,11 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
   // Create a networked update event
   const dynamicEventName = serializeRequestType(dataProviderObjectId, ON_DID_UPDATE);
   // Per-instance data provider events have dynamic names that can't be declared in
-  // NetworkEventTypes. Cast the name to satisfy the constraint; the payload type is recovered
+  // NetworkEvents. Cast the name to satisfy the constraint; the payload type is recovered
   // from the surrounding function's generic context.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const onDidUpdateEmitter = (await networkService.createNetworkEventEmitterAsync(
-    dynamicEventName as keyof NetworkEventTypes,
+    dynamicEventName as NetworkEventTypes,
   )) as unknown as PlatformEventEmitter<
     DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>
   >;

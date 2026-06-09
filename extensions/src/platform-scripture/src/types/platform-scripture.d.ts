@@ -2234,7 +2234,7 @@ declare module 'papi-shared-types' {
     'platformScripture.allowInvisibleCharacters': boolean;
   }
 
-  export interface NetworkEventTypes {
+  export interface NetworkEvents {
     /** Emitted when check results are invalidated and subscribers should refresh their data. */
     checkResultsInvalidated: CheckResultsInvalidated;
   }

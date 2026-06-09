@@ -714,17 +714,17 @@ declare module 'papi-shared-types' {
    * Network events emitted from multiple processes (each process emits its own local event under
    * the same name). Declared by the platform; not extensible by extensions.
    *
-   * The names listed here are the source of truth for which event names use shared semantics at the
-   * central registry. An event name in this type allows registration from multiple processes (each
-   * process registers once, all emitters are valid sources). Any other event name uses exclusive
-   * semantics (one registrant ever).
+   * The names listed here are the source of truth for which event names use multi-source semantics
+   * at the central registry. An event name in this type allows registration from multiple processes
+   * (each process registers once, all emitters are valid sources). Any other event name uses
+   * single-source semantics (one registrant ever).
    *
-   * Subscribers do not need to know which events are shared — `getNetworkEvent` handles both kinds
-   * identically.
+   * Subscribers do not need to know which events are multi-source — `getNetworkEvent` handles both
+   * kinds identically.
    *
-   * See {@link NetworkEventTypes} for the full registry of known event names.
+   * See {@link NetworkEvents} for the full registry of known event names.
    */
-  export type SharedNetworkEventTypes = {
+  export type MultiSourceNetworkEvents = {
     /**
      * Emitted when a network object is created in any process. Payload includes the new object's
      * details.
@@ -743,14 +743,15 @@ declare module 'papi-shared-types' {
   };
 
   /**
-   * All known network events. Extensions augment this to declare their own events. Inherits the
-   * platform's shared events from {@link SharedNetworkEventTypes} automatically.
+   * Mapping of network event names to their payload types. Extensions augment this to declare their
+   * own events. Inherits the platform's multi-source events from {@link MultiSourceNetworkEvents}
+   * automatically.
    *
    * To declare a new event for use with `createNetworkEventEmitterAsync`:
    *
    * ```ts
    * declare module 'papi-shared-types' {
-   *   export interface NetworkEventTypes {
+   *   export interface NetworkEvents {
    *     'myExt.somethingHappened': { foo: string };
    *   }
    * }
@@ -759,15 +760,12 @@ declare module 'papi-shared-types' {
    * Mark a single event as experimental by adding `\/** @experimental *\/` directly above its
    * entry.
    */
-  export interface NetworkEventTypes extends SharedNetworkEventTypes {
+  export interface NetworkEvents extends MultiSourceNetworkEvents {
     /** Emitted when extensions finish reloading. `true` if reload succeeded, `false` if it failed. */
     'platform.onDidReloadExtensions': boolean;
     /** Emitted when the Scripture reference for a scroll group changes. */
     'scrollGroup:onDidUpdateScrRef': ScrollGroupUpdateInfo;
-    /**
-     * @deprecated 13 November 2024. Use {@link NetworkEventTypes.'webView:onDidOpenWebView'}
-     *   instead.
-     */
+    /** @deprecated 13 November 2024. Use {@link NetworkEvents.'webView:onDidOpenWebView'} instead. */
     'webView:onDidAddWebView': OpenWebViewEvent;
     /** Emitted when a WebView is created. */
     'webView:onDidOpenWebView': OpenWebViewEvent;
@@ -776,6 +774,9 @@ declare module 'papi-shared-types' {
     /** Emitted when a WebView is closed. */
     'webView:onDidCloseWebView': CloseWebViewEvent;
   }
+
+  /** Union of all known network event names (keys of {@link NetworkEvents}). */
+  export type NetworkEventTypes = keyof NetworkEvents;
 
   // #endregion
 }

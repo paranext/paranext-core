@@ -16,8 +16,8 @@ import {
 } from '@shared/data/rpc.model';
 import { IRpcMethodRegistrar, RegisteredRpcMethodDetails } from '@shared/models/rpc.interface';
 import { SingleNotificationDocumentation } from '@shared/models/openrpc.model';
-import { SHARED_EVENT_NAMES } from '@shared/services/network.service';
-import type { SharedNetworkEventTypes } from 'papi-shared-types';
+import { MULTI_SOURCE_EVENT_NAMES } from '@shared/services/network.service';
+import type { MultiSourceNetworkEvents } from 'papi-shared-types';
 import { getErrorMessage, Mutex } from 'platform-bible-utils';
 import { WebSocketServer } from 'ws';
 import { logger } from '@shared/services/logger.service';
@@ -26,8 +26,8 @@ import { bindClassMethods, SerializedRequestType } from '@shared/utils/util';
 import {
   createEmptyOpenRpc,
   getEmptyMethodDocs,
+  Notification,
   OpenRpc,
-  OpenRpcNotification,
   SingleMethodDocumentation,
 } from '@shared/models/openrpc.model';
 import { RpcServer } from './rpc-server';
@@ -48,9 +48,9 @@ export class RpcEventRegistry {
   /**
    * Try to register an event. Returns `true` if accepted, `false` if rejected.
    *
-   * - Name in `SHARED_EVENT_NAMES` (shared): multiple handlers may register; same handler twice
-   *   rejected.
-   * - Name not in `SHARED_EVENT_NAMES` (exclusive): first registrant wins; any subsequent
+   * - Name in `MULTI_SOURCE_EVENT_NAMES` (multi-source): multiple handlers may register; same handler
+   *   twice rejected.
+   * - Name not in `MULTI_SOURCE_EVENT_NAMES` (single-source): first registrant wins; any subsequent
    *   registration from any handler is rejected.
    */
   tryRegister(
@@ -58,7 +58,7 @@ export class RpcEventRegistry {
     eventName: string,
     documentation?: SingleNotificationDocumentation,
   ): boolean {
-    const isShared = SHARED_EVENT_NAMES.has(eventName as keyof SharedNetworkEventTypes);
+    const isMultiSource = MULTI_SOURCE_EVENT_NAMES.has(eventName as keyof MultiSourceNetworkEvents);
     const existing = this.byName.get(eventName);
 
     if (!existing) {
@@ -66,7 +66,7 @@ export class RpcEventRegistry {
       return true;
     }
 
-    if (isShared) {
+    if (isMultiSource) {
       if (existing.some((r) => r.handler === handler)) return false;
       existing.push({ handler, documentation });
       return true;
@@ -370,7 +370,7 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
       const docs = registrants.find((r) => r.documentation)?.documentation;
       if (!docs) continue; // events with no documentation are not surfaced in OpenRPC
 
-      const notificationEntry: OpenRpcNotification = {
+      const notificationEntry: Notification = {
         name: eventName,
         ...docs.notification,
       };

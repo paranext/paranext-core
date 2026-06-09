@@ -40,16 +40,16 @@ import {
 } from '@shared/models/openrpc.model';
 import { JSONRPCResponse } from 'json-rpc-2.0';
 import { NetworkMethodHandlerOptions } from '@shared/models/network.model';
-import type { NetworkEventTypes, SharedNetworkEventTypes } from 'papi-shared-types';
+import type { MultiSourceNetworkEvents, NetworkEvents, NetworkEventTypes } from 'papi-shared-types';
 
 /**
- * Source of truth for which event names use shared semantics at the central registry. Must stay in
- * sync with the `SharedNetworkEventTypes` type alias in `papi-shared-types.ts` — the test
+ * Source of truth for which event names use multi-source semantics at the central registry. Must
+ * stay in sync with the `MultiSourceNetworkEvents` type alias in `papi-shared-types.ts` — the test
  * `network.service.shared-events.test.ts` enforces the invariant.
  *
- * Add entries here when adding a new shared event to `SharedNetworkEventTypes`.
+ * Add entries here when adding a new multi-source event to `MultiSourceNetworkEvents`.
  */
-export const SHARED_EVENT_NAMES = new Set<keyof SharedNetworkEventTypes>([
+export const MULTI_SOURCE_EVENT_NAMES = new Set<keyof MultiSourceNetworkEvents>([
   'object:onDidCreateNetworkObject',
   'object:onDidDisposeNetworkObject',
   'shared-store:change',
@@ -380,8 +380,8 @@ const createNetworkEventEmitterInternal = <T>(
  * @deprecated 8 June 2026. Use `createNetworkEventEmitterAsync`. Events created via the sync API
  *   are not centrally registered and do not appear in the OpenRPC document. The async version
  *   properly restricts event registration to prevent multiple sources from emitting the same
- *   network event (unless the event is declared in {@link SharedNetworkEventTypes}, in which case it
- *   accepts multiple registrants by design).
+ *   network event (unless the event is declared in {@link MultiSourceNetworkEvents}, in which case
+ *   it accepts multiple registrants by design).
  *
  *   WARNING: You can only create a network event emitter once per eventType to prevent hijacked event
  *   emitters.
@@ -395,25 +395,25 @@ export const createNetworkEventEmitter = <T>(eventType: string): PlatformEventEm
  * Create a network event emitter that participates in central registration. The returned emitter
  * appears in the OpenRPC document if `documentation` is provided.
  *
- * If the event name is in {@link SharedNetworkEventTypes}, the central registry uses shared
+ * If the event name is in {@link MultiSourceNetworkEvents}, the central registry uses multi-source
  * semantics: multiple processes may register the same name (each process registers once); all
  * corresponding emitters are valid sources.
  *
- * Otherwise the registry uses exclusive semantics: only one process may register a given name;
+ * Otherwise the registry uses single-source semantics: only one process may register a given name;
  * subsequent registrations from any process are rejected.
  *
  * Intra-process duplicate registration is always rejected regardless of the event's domain.
  *
- * See {@link SharedNetworkEventTypes} for shared vs exclusive semantics.
+ * See {@link MultiSourceNetworkEvents} for multi-source vs single-source semantics.
  *
- * @param eventType The name of the event to register. Must be a key of {@link NetworkEventTypes}.
+ * @param eventType The name of the event to register. Must be a key of {@link NetworkEvents}.
  * @param documentation Optional notification documentation. Carries
  *   `notification['x-experimental']: true` to mark the event as experimental.
  */
-export const createNetworkEventEmitterAsync = async <EventType extends keyof NetworkEventTypes>(
+export const createNetworkEventEmitterAsync = async <EventType extends NetworkEventTypes>(
   eventType: EventType,
   documentation?: SingleNotificationDocumentation,
-): Promise<PlatformEventEmitter<NetworkEventTypes[EventType]>> => {
+): Promise<PlatformEventEmitter<NetworkEvents[EventType]>> => {
   await initialize();
   if (!jsonRpc) throw new Error('RPC handler not set');
   const accepted = await jsonRpc.registerEvent(eventType, documentation);
@@ -423,28 +423,27 @@ export const createNetworkEventEmitterAsync = async <EventType extends keyof Net
     );
   }
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return createNetworkEventEmitterInternal<NetworkEventTypes[EventType]>(
+  return createNetworkEventEmitterInternal<NetworkEvents[EventType]>(
     eventType,
     true,
-  ) as PlatformEventEmitter<NetworkEventTypes[EventType]>;
+  ) as PlatformEventEmitter<NetworkEvents[EventType]>;
 };
 
 /**
  * Subscribe to a typed network event. The payload type is inferred from the event's declaration in
- * {@link NetworkEventTypes}.
+ * {@link NetworkEvents}.
  *
- * @param eventType The name of the event to subscribe to. Must be a key of
- *   {@link NetworkEventTypes}.
+ * @param eventType The name of the event to subscribe to. Must be a key of {@link NetworkEvents}.
  * @returns Event for the event type that runs the callback provided when the event is emitted
  */
-export function getNetworkEvent<EventType extends keyof NetworkEventTypes>(
+export function getNetworkEvent<EventType extends NetworkEventTypes>(
   eventType: EventType,
-): PlatformEvent<NetworkEventTypes[EventType]>;
+): PlatformEvent<NetworkEvents[EventType]>;
 /**
  * Subscribe to a network event with an explicit payload type.
  *
- * @deprecated 8 June 2026. Use the typed signature: declare the event in {@link NetworkEventTypes}
- *   and call `getNetworkEvent('your.event.name')` without an explicit type parameter.
+ * @deprecated 8 June 2026. Use the typed signature: declare the event in {@link NetworkEvents} and
+ *   call `getNetworkEvent('your.event.name')` without an explicit type parameter.
  * @param eventType Unique network event type for coordinating between connections
  * @returns Event for the event type that runs the callback provided when the event is emitted
  */

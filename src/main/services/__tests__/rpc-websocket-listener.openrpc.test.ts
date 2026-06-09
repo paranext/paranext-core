@@ -57,7 +57,7 @@ describe('generateOpenRpcSchema() includes notifications from the event registry
     expect(foundDocs).toBeUndefined();
   });
 
-  it('first registration documentation wins for shared events', () => {
+  it('first registration documentation wins for multi-source events', () => {
     const firstDocs = {
       notification: { params: [], summary: 'First handler summary' },
     };

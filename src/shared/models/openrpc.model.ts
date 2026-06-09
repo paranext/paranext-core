@@ -24,7 +24,7 @@ export type OpenRpc = {
   openrpc: string;
   info: Info;
   servers?: Server[];
-  methods: (Method | OpenRpcNotification)[];
+  methods: (Method | Notification)[];
   components?: Components;
   externalDocs?: ExternalDocumentation;
 };
@@ -180,16 +180,16 @@ export type SingleMethodDocumentation = {
  * Set `'x-experimental': true` on the notification object to mark it as experimental. Informational
  * only; appears in the generated OpenRPC document.
  */
-export type OpenRpcNotification = Omit<Method, 'result'>;
+export type Notification = Omit<Method, 'result'>;
 
 /**
- * Documentation about a single {@link OpenRpcNotification}. Informational only; appears in the
- * generated OpenRPC document.
+ * Documentation about a single {@link Notification}. Informational only; appears in the generated
+ * OpenRPC document.
  *
  * Set `notification['x-experimental']: true` to mark this notification as experimental.
  */
 export type SingleNotificationDocumentation = {
-  notification: Omit<OpenRpcNotification, 'name'>;
+  notification: Omit<Notification, 'name'>;
   components?: Components;
 };
 

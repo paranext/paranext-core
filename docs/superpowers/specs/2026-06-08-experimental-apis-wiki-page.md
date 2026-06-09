@@ -111,11 +111,11 @@ For per-PDP-instance customization, the factory's `createProjectDataProviderEngi
 
 ### Network events
 
-Declare your event in the `NetworkEventTypes` interface and create the emitter — the payload type is inferred from the registry, and the platform handles registration uniformly.
+Declare your event in the `NetworkEvents` interface and create the emitter — the payload type is inferred from the registry, and the platform handles registration uniformly.
 
 ```typescript
 declare module 'papi-shared-types' {
-  export interface NetworkEventTypes {
+  export interface NetworkEvents {
     /** @experimental */
     'myExt.somethingHappened': { foo: string };
   }
@@ -145,9 +145,9 @@ papi.network.getNetworkEvent('myExt.somethingHappened')((event) => {
 
 #### Subscribing to platform events
 
-A small set of platform infrastructure events (network-object lifecycle, shared-store changes) are emitted from every process that hosts the corresponding service. These are declared in `SharedNetworkEventTypes`, which `NetworkEventTypes` inherits from, so they show up in IntelliSense alongside extension-declared events. As a subscriber, you don't need to know which events are shared — `getNetworkEvent` handles both the same way.
+A small set of platform infrastructure events (network-object lifecycle, shared-store changes) are emitted from every process that hosts the corresponding service. These are declared in `MultiSourceNetworkEvents`, which `NetworkEvents` inherits from, so they show up in IntelliSense alongside extension-declared events. As a subscriber, you don't need to know which events are multi-source — `getNetworkEvent` handles both the same way.
 
-The platform owns this list; extensions don't author shared events. If you ever find yourself wanting a single name emitted from multiple processes (rare), you can either:
+The platform owns this list; extensions don't author multi-source events. If you ever find yourself wanting a single name emitted from multiple processes (rare), you can either:
 
 1. Pick the more natural pattern: each process emits its own distinctly-named event (`myExt.fromMain.thing`, `myExt.fromExtHost.thing`) and subscribers listen to whichever they care about.
 2. Open a platform issue describing the use case — the shared-event surface is intentionally small.
@@ -162,7 +162,7 @@ The synchronous `createNetworkEventEmitter` is deprecated as of 8 June 2026. It 
 
 Migrate new code to `createNetworkEventEmitterAsync`.
 
-The legacy `getNetworkEvent<T>(name)` overload that takes an explicit type parameter is also deprecated — IntelliSense will show strikethrough on calls that resolve to it. Migrate by declaring your event in `NetworkEventTypes` and dropping the explicit `<T>`:
+The legacy `getNetworkEvent<T>(name)` overload that takes an explicit type parameter is also deprecated — IntelliSense will show strikethrough on calls that resolve to it. Migrate by declaring your event in `NetworkEvents` and dropping the explicit `<T>`:
 
 ```typescript
 // Before (deprecated)
@@ -170,7 +170,7 @@ const ev = papi.network.getNetworkEvent<MyType>('myExt.somethingHappened');
 
 // After
 declare module 'papi-shared-types' {
-  export interface NetworkEventTypes {
+  export interface NetworkEvents {
     'myExt.somethingHappened': MyType;
   }
 }
