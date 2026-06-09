@@ -169,6 +169,7 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
         effectiveModelTexts={effectiveModelTexts}
         isEffectiveModelTextsLoading={false}
         dblResources={resources}
+        isLoadingResources={false}
         adminModelTexts={{ dataVersion: DATA_VERSION, items: adminItems }}
         canWriteProjectSettings={config.canWriteProjectSettings ?? true}
         scrRef={scrRef}

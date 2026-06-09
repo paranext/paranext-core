@@ -54,6 +54,8 @@ export type ModelTextPanelProps = {
   isEffectiveModelTextsLoading: boolean;
   /** All DBL resources — used to match the configured model text and to feed the resource picker. */
   dblResources: DblResourceData[];
+  /** Whether the DBL resources are still loading. */
+  isLoadingResources: boolean;
   /** The project's admin-level model-text setting (used when writing an admin choice). */
   adminModelTexts: ResourceReferenceList | undefined;
   /** Whether the user may write project (admin) settings; decides admin vs. user persistence. */
@@ -102,6 +104,7 @@ export function ModelTextPanel({
   effectiveModelTexts,
   isEffectiveModelTextsLoading,
   dblResources,
+  isLoadingResources,
   adminModelTexts,
   canWriteProjectSettings,
   scrRef = DEFAULT_SCR_REF,
@@ -261,11 +264,14 @@ export function ModelTextPanel({
     );
   }
 
-  // Zero state: no model text configured (or still loading the list).
-  if (!effectiveModelTexts || effectiveModelTexts.items.length === 0) {
+  // Zero state: no model text configured (or still loading the list / DBL resources).
+  if (isLoadingResources || !effectiveModelTexts || effectiveModelTexts.items.length === 0) {
     return (
       <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
-        {isEffectiveModelTextsLoading ? (
+        {/* Also shows spinner for if loading resources, except if there is no model text then */}
+        {/* it should directly show the button to pick a model text below */}
+        {isEffectiveModelTextsLoading ||
+        (isLoadingResources && effectiveModelText && effectiveModelTexts?.items.length !== 0) ? (
           <Spinner />
         ) : (
           <>
