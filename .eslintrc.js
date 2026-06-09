@@ -209,6 +209,7 @@ module.exports = {
       },
       rules: {
         // Rules from jest/recommended not included in vitest/legacy-recommended
+        'vitest/expect-expect': ['error', { assertFunctionNames: ['expect', 'expectTypeOf'] }],
         'vitest/no-alias-methods': 'error',
         'vitest/no-conditional-expect': 'error',
         'vitest/no-disabled-tests': 'warn',

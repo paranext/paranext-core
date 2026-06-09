@@ -1,4 +1,4 @@
-import { describe, it, expectTypeOf } from 'vitest';
+import { describe, it, expect, expectTypeOf } from 'vitest';
 import type {
   Method,
   Notification,
@@ -26,7 +26,7 @@ describe('openrpc.model — experimental marker types', () => {
     };
     // @ts-expect-error — Notification cannot have a result
     const bad: Notification = { name: 'x', params: [], result: { name: 'r', schema: {} } };
-    void bad;
+    expect(bad).toBeDefined();
     expectTypeOf(n.name).toEqualTypeOf<string>();
   });
 
@@ -60,6 +60,6 @@ describe('openrpc.model — experimental marker types', () => {
       // @ts-expect-error — NetworkObjectDocumentation.methods only accepts Method[], not Notification[]
       methods: [notification],
     };
-    void bad;
+    expect(bad).toBeDefined();
   });
 });

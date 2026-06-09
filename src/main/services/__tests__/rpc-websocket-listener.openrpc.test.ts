@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { RpcEventRegistry } from '@main/services/rpc-websocket-listener';
 
 // Mock heavy dependencies so this test can run outside the Electron main process
 vi.mock('electron', () => ({ app: { getVersion: () => '0.0.0' } }));
@@ -6,8 +7,6 @@ vi.mock('ws', () => ({ WebSocketServer: vi.fn() }));
 vi.mock('@shared/services/logger.service', () => ({
   logger: { warn: vi.fn(), info: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
-
-import { RpcEventRegistry } from '@main/services/rpc-websocket-listener';
 
 describe('generateOpenRpcSchema() includes notifications from the event registry', () => {
   // We test via RpcEventRegistry directly because constructing a full RpcWebSocketListener
@@ -41,6 +40,9 @@ describe('generateOpenRpcSchema() includes notifications from the event registry
     expect(foundDocs?.notification['x-experimental']).toBe(true);
 
     // Verify the notification entry shape (no result field):
+    // The non-null assertion is needed here: we have already asserted foundDocs is defined above,
+    // but TypeScript's narrowing doesn't carry across the expression boundary.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     const notificationEntry = { name: eventName, ...foundDocs!.notification };
     expect('result' in notificationEntry).toBe(false);
     expect(notificationEntry.name).toBe('myExt.onDidSomething');
@@ -53,7 +55,7 @@ describe('generateOpenRpcSchema() includes notifications from the event registry
     expect(entries).toHaveLength(1);
     const [, registrants] = entries[0];
     const foundDocs = registrants.find((r) => r.documentation)?.documentation;
-    // The production loop does `if (!docs) continue;` — confirm docs is undefined here
+    // The production loop does `if (!docs) return;` — confirm docs is undefined here
     expect(foundDocs).toBeUndefined();
   });
 

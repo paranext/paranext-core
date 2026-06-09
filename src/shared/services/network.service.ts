@@ -40,20 +40,9 @@ import {
 } from '@shared/models/openrpc.model';
 import { JSONRPCResponse } from 'json-rpc-2.0';
 import { NetworkMethodHandlerOptions } from '@shared/models/network.model';
-import type { MultiSourceNetworkEvents, NetworkEvents, NetworkEventTypes } from 'papi-shared-types';
+import type { NetworkEvents, NetworkEventTypes } from 'papi-shared-types';
 
-/**
- * Source of truth for which event names use multi-source semantics at the central registry. Must
- * stay in sync with the `MultiSourceNetworkEvents` type alias in `papi-shared-types.ts` — the test
- * `network.service.shared-events.test.ts` enforces the invariant.
- *
- * Add entries here when adding a new multi-source event to `MultiSourceNetworkEvents`.
- */
-export const MULTI_SOURCE_EVENT_NAMES = new Set<keyof MultiSourceNetworkEvents>([
-  'object:onDidCreateNetworkObject',
-  'object:onDidDisposeNetworkObject',
-  'shared-store:change',
-]);
+export { MULTI_SOURCE_EVENT_NAMES } from '@shared/data/network-event-names';
 
 // #region Local event handling
 
@@ -422,11 +411,7 @@ export const createNetworkEventEmitterAsync = async <EventType extends NetworkEv
       `Event "${eventType}" was rejected by the central registry (likely already registered from another process).`,
     );
   }
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return createNetworkEventEmitterInternal<NetworkEvents[EventType]>(
-    eventType,
-    true,
-  ) as PlatformEventEmitter<NetworkEvents[EventType]>;
+  return createNetworkEventEmitterInternal<NetworkEvents[EventType]>(eventType, true);
 };
 
 /**
@@ -449,8 +434,7 @@ export function getNetworkEvent<EventType extends NetworkEventTypes>(
  */
 export function getNetworkEvent<T>(eventType: string): PlatformEvent<T>;
 export function getNetworkEvent(eventType: string): PlatformEvent<unknown> {
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return createNetworkEventEmitterInternal(eventType, false).event as PlatformEvent<unknown>;
+  return createNetworkEventEmitterInternal(eventType, false).event;
 }
 
 // #endregion

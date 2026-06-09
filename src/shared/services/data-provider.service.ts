@@ -796,10 +796,11 @@ function buildDataProvider<DataProviderName extends DataProviderNames>(
 async function registerEngine<DataProviderName extends DataProviderNames>(
   providerName: DataProviderName,
   dataProviderEngine: IDataProviderEngine<DataProviderTypes[DataProviderName]>,
-  dataProviderType: string = 'dataProvider',
-  dataProviderAttributes: { [property: string]: unknown } | undefined = undefined,
+  dataProviderType?: string,
+  dataProviderAttributes?: { [property: string]: unknown },
   documentation?: NetworkObjectDocumentation,
 ): Promise<DisposableDataProviders[DataProviderName]> {
+  const resolvedDataProviderType = dataProviderType ?? 'dataProvider';
   await initialize();
 
   if (hasKnown(providerName))
@@ -824,12 +825,13 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
   // Per-instance data provider events have dynamic names that can't be declared in
   // NetworkEvents. Cast the name to satisfy the constraint; the payload type is recovered
   // from the surrounding function's generic context.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  /* eslint-disable no-type-assertion/no-type-assertion */
   const onDidUpdateEmitter = (await networkService.createNetworkEventEmitterAsync(
     dynamicEventName as NetworkEventTypes,
   )) as unknown as PlatformEventEmitter<
     DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>
   >;
+  /* eslint-enable no-type-assertion/no-type-assertion */
 
   // Build the data provider
   const dataProviderInternal = buildDataProvider(
@@ -846,7 +848,7 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
   const disposableDataProvider = (await networkObjectService.set(
     dataProviderObjectId,
     dataProviderInternal,
-    dataProviderType,
+    resolvedDataProviderType,
     dataProviderAttributes,
     documentation,
   )) as unknown as DisposableDataProviders[DataProviderName];
@@ -897,8 +899,8 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
 export async function registerEngineByType<TDataTypes extends DataProviderDataTypes>(
   providerName: string,
   dataProviderEngine: IDataProviderEngine<TDataTypes>,
-  dataProviderType: string = 'dataProvider',
-  dataProviderAttributes: { [property: string]: unknown } | undefined = undefined,
+  dataProviderType?: string,
+  dataProviderAttributes?: { [property: string]: unknown },
   documentation?: NetworkObjectDocumentation,
 ): Promise<IDisposableDataProvider<IDataProvider<TDataTypes>>> {
   // All the types on this function and `registerEngine` are just TypeScript helpers. They do not

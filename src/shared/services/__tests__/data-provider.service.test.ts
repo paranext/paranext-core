@@ -1,4 +1,4 @@
-import { describe, it } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import type { NetworkObjectDocumentation } from '@shared/models/openrpc.model';
 import { dataProviderService } from '@shared/services/data-provider.service';
 import type { registerEngineByType } from '@shared/services/data-provider.service';
@@ -24,8 +24,8 @@ describe('dataProviderService.registerEngine — documentation parameter', () =>
     type DocParam = Sig[4];
     // This assignment would fail to compile if DocParam is not assignable from
     // NetworkObjectDocumentation | undefined.
-    const _check: DocParam = undefined satisfies NetworkObjectDocumentation | undefined;
-    void _check;
+    const docParamCheck: DocParam = undefined satisfies NetworkObjectDocumentation | undefined;
+    expect(docParamCheck).toBeUndefined();
   });
 });
 
@@ -35,7 +35,7 @@ describe('registerEngineByType — documentation parameter', () => {
     type Sig = Parameters<typeof registerEngineByType>;
     // The 5th parameter (index 4) should be NetworkObjectDocumentation | undefined.
     type DocParam = Sig[4];
-    const _check: DocParam = undefined satisfies NetworkObjectDocumentation | undefined;
-    void _check;
+    const docParamCheck: DocParam = undefined satisfies NetworkObjectDocumentation | undefined;
+    expect(docParamCheck).toBeUndefined();
   });
 });

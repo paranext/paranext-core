@@ -19,8 +19,8 @@ import { describe, it, expect } from 'vitest';
  */
 function applyExperimentalFanout(
   objectIsExperimental: boolean,
-  baseMethodDocs: { 'x-experimental'?: boolean; [key: string]: unknown },
-): { 'x-experimental'?: boolean; [key: string]: unknown } {
+  baseMethodDocs: { [key: string]: unknown; 'x-experimental'?: boolean },
+): { [key: string]: unknown; 'x-experimental'?: boolean } {
   return objectIsExperimental && baseMethodDocs['x-experimental'] === undefined
     ? { ...baseMethodDocs, 'x-experimental': true as const }
     : baseMethodDocs;
@@ -69,6 +69,9 @@ describe('networkObjectService.set — x-experimental fanout', () => {
       const base = { summary: 'foo' };
       const result = applyExperimentalFanout(true, base);
       expect(result).not.toBe(base);
+      // Cast is needed: `base` is typed as `{ summary: string }` but we need to access the
+      // index signature to verify the property was not mutated.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       expect((base as { 'x-experimental'?: boolean })['x-experimental']).toBeUndefined();
     });
   });
