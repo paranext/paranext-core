@@ -33,7 +33,7 @@ declare module 'hello-rock3' {
     IBaseProjectDataProvider<HelloRock3ProjectDataTypes> & HelloRock3ProjectDataProviderMethods;
 
   /** Event containing information about `helloRock3` */
-  type HelloRock3Event = {
+  export type HelloRock3Event = {
     /**
      * How many times the `helloRock3` function has been run (called by `helloRock3.helloRock3`
      * command)
@@ -201,7 +201,13 @@ declare module 'papi-shared-types' {
     IHelloRock3ProjectDataProvider,
     HelloRock3ProjectWebViewController,
     HTMLColorNames,
+    HelloRock3Event,
   } from 'hello-rock3';
+
+  export interface NetworkEventTypes {
+    /** Emitted each time the `helloRock3.helloRock3` command is called */
+    'helloRock3.onHelloRock3': HelloRock3Event;
+  }
 
   export interface CommandHandlers {
     /**

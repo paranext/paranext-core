@@ -458,8 +458,9 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     reactWebView2Provider,
   );
 
-  onHelloRock3Emitter =
-    papi.network.createNetworkEventEmitter<HelloRock3Event>(onHelloRock3EventType);
+  onHelloRock3Emitter = await papi.network.createNetworkEventEmitterAsync(
+    onHelloRock3EventType as 'helloRock3.onHelloRock3',
+  );
 
   const helloRock3Promise = papi.commands.registerCommand('helloRock3.helloRock3', helloRock3);
 
