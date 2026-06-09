@@ -1,5 +1,5 @@
 import { Check } from 'lucide-react';
-import { Button, Checklist, Label } from 'platform-bible-react';
+import { Button, CheckboxGroup, Label } from 'platform-bible-react';
 import { useState } from 'react';
 import { Canon } from '@sillsdev/scripture';
 import { LocalizeKey } from 'platform-bible-utils';
@@ -37,7 +37,7 @@ function SelectBooksDialog({
     <div className="select-books-dialog">
       <Label>{prompt}</Label>
       <div className="select-books-dialog-scroll">
-        <Checklist
+        <CheckboxGroup
           className="book-list"
           listItems={bookIds}
           createLabel={createBookLabel}

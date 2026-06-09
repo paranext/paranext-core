@@ -1,12 +1,12 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import { useState } from 'react';
-import { Checklist } from '@/components/basics/checklist.component';
+import { CheckboxGroup } from '@/components/basics/checkbox-group.component';
 import { Card, CardContent } from '@/components/shadcn-ui/card';
 
-const meta: Meta<typeof Checklist> = {
-  title: 'Basics/Checklist',
-  component: Checklist,
+const meta: Meta<typeof CheckboxGroup> = {
+  title: 'Basics/CheckboxGroup',
+  component: CheckboxGroup,
   tags: ['autodocs'],
   argTypes: {
     handleSelectListItem: { action: 'item selected' },
@@ -17,7 +17,7 @@ const meta: Meta<typeof Checklist> = {
 
 export default meta;
 
-type Story = StoryObj<typeof Checklist>;
+type Story = StoryObj<typeof CheckboxGroup>;
 
 export const Default: Story = {
   args: {
@@ -43,7 +43,7 @@ export const InCard: Story = {
     return (
       <Card>
         <CardContent className="tw:h-64 tw:w-full tw:overflow-auto tw:p-4">
-          <Checklist
+          <CheckboxGroup
             {...args}
             selectedListItems={selectedItems}
             handleSelectListItem={handleSelect}
@@ -60,7 +60,8 @@ export const InCard: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'A checklist displayed inside a card container, similar to the original example.',
+        story:
+          'A checkbox list displayed inside a card container, similar to the original example.',
       },
     },
   },
@@ -81,7 +82,7 @@ export const ManyItems: Story = {
 
     return (
       <div className="tw:h-96 tw:w-80">
-        <Checklist
+        <CheckboxGroup
           {...args}
           selectedListItems={selectedItems}
           handleSelectListItem={handleSelect}
@@ -97,7 +98,7 @@ export const ManyItems: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'A checklist with many items to demonstrate scrolling behavior.',
+        story: 'A checkbox list with many items to demonstrate scrolling behavior.',
       },
     },
   },
@@ -117,7 +118,11 @@ export const Interactive: Story = {
     };
 
     return (
-      <Checklist {...args} selectedListItems={selectedItems} handleSelectListItem={handleSelect} />
+      <CheckboxGroup
+        {...args}
+        selectedListItems={selectedItems}
+        handleSelectListItem={handleSelect}
+      />
     );
   },
   args: {
@@ -128,7 +133,7 @@ export const Interactive: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'An interactive checklist where you can select and deselect items.',
+        story: 'An interactive checkbox list where you can select and deselect items.',
       },
     },
   },
