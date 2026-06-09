@@ -1135,13 +1135,6 @@ function deleteWebViewNonce(id: WebViewId) {
   return webViewNoncesById.delete(id);
 }
 
-onDidCloseWebView(({ webView: { id, webViewType } }) => {
-  if (!deleteWebViewNonce(id))
-    logger.warn(
-      `Tried to delete webViewNonce for web view with id ${id} (type ${webViewType}), but a nonce was not found. May not be an issue, but worth investigating`,
-    );
-});
-
 // #endregion webViewNonce
 
 // #region Set up global variables to use in `openWebView`'s `imports` below
@@ -1844,6 +1837,13 @@ export const initialize = () => {
     onDidCloseWebViewEmitter = await createNetworkEventEmitterAsync(
       EVENT_NAME_ON_DID_CLOSE_WEB_VIEW as 'webView:onDidCloseWebView',
     );
+
+    onDidCloseWebView(({ webView: { id, webViewType } }) => {
+      if (!deleteWebViewNonce(id))
+        logger.warn(
+          `Tried to delete webViewNonce for web view with id ${id} (type ${webViewType}), but a nonce was not found. May not be an issue, but worth investigating`,
+        );
+    });
 
     isInitialized = true;
 
