@@ -162,8 +162,10 @@ export type Tag = {
 export type MethodDocumentationWithoutName = Omit<Method, 'name'>;
 
 /**
- * Documentation about a single method. Set `method['x-experimental']: true` to mark this method as
- * experimental. Informational only; appears in the generated OpenRPC document.
+ * Documentation about a single {@link Method}. Informational only; appears in the generated OpenRPC
+ * document.
+ *
+ * Set `method['x-experimental']: true` to mark this method as experimental.
  */
 export type SingleMethodDocumentation = {
   method: MethodDocumentationWithoutName;
@@ -181,24 +183,28 @@ export type SingleMethodDocumentation = {
 export type OpenRpcNotification = Omit<Method, 'result'>;
 
 /**
- * Documentation about a single notification. Set `notification['x-experimental']: true` to mark
- * this notification as experimental. Informational only; appears in the generated OpenRPC
- * document.
+ * Documentation about a single {@link OpenRpcNotification}. Informational only; appears in the
+ * generated OpenRPC document.
+ *
+ * Set `notification['x-experimental']: true` to mark this notification as experimental.
  */
 export type SingleNotificationDocumentation = {
   notification: Omit<OpenRpcNotification, 'name'>;
   components?: Components;
 };
 
-/** Documentation about all methods on a network object */
+/**
+ * Documentation about all methods on a network object. Pass to `networkObjectService.set`,
+ * `dataProviderService.registerEngine`, or `webViewProviderService.registerWebViewProvider`.
+ */
 export type NetworkObjectDocumentation = {
   summary?: string;
   description?: string;
   methods?: Method[];
   components?: Components;
   /**
-   * Set to `true` to mark every method registered for this network object as experimental. The
-   * marker is fanned out onto each method's `'x-experimental'` field inside
+   * Set to `true` to mark every {@link Method} registered for this network object as experimental.
+   * The marker is fanned out onto each method's `'x-experimental'` field inside
    * `networkObjectService.set`.
    */
   'x-experimental'?: boolean;

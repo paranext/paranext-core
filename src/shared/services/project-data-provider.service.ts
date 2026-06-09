@@ -141,11 +141,13 @@ class ProjectDataProviderFactory<SupportedProjectInterfaces extends ProjectInter
  *
  * @param pdpFactoryId Unique id for this PDP factory.
  * @param projectInterfaces The standardized sets of methods (`projectInterface`s) supported by the
- *   Project Data Provider Engines produced by this factory.
+ *   Project Data Provider Engines produced by this factory. Indicates what sort of project data
+ *   should be available on the PDPEs created by this factory.
  * @param pdpEngineFactory Used in a ProjectDataProviderFactory to create ProjectDataProviders.
  * @param attributes Optional registration-level attributes. The platform overwrites the
  *   `projectInterfaces` field — that field is always the platform-canonical value.
- * @param documentation Optional `NetworkObjectDocumentation` for the factory itself.
+ * @param documentation Optional {@link NetworkObjectDocumentation} for the factory itself. Set
+ *   `documentation['x-experimental']: true` to mark all methods on this factory as experimental.
  * @returns Promise that resolves to a disposable object when the registration operation completes.
  */
 export async function registerProjectDataProviderEngineFactory<

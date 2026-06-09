@@ -397,7 +397,7 @@ async function initialize(): Promise<void> {
             new CheckAggregatorDataProviderEngine(),
           );
           resultsInvalidatedEventEmitter = await papi.network.createNetworkEventEmitterAsync(
-            CHECK_RESULTS_INVALIDATED_EVENT as 'checkResultsInvalidated',
+            CHECK_RESULTS_INVALIDATED_EVENT,
           );
           resolve();
         } catch (error) {
@@ -412,7 +412,11 @@ async function initialize(): Promise<void> {
 
 /** Notify all listeners that check results have been invalidated and should be refreshed */
 export function notifyCheckResultsInvalidated(e: CheckResultsInvalidated): void {
-  if (resultsInvalidatedEventEmitter) resultsInvalidatedEventEmitter.emit(e);
+  if (!resultsInvalidatedEventEmitter)
+    throw new Error(
+      'check-aggregator.service not initialized — call initialize() before emitting checkResultsInvalidated',
+    );
+  resultsInvalidatedEventEmitter.emit(e);
 }
 
 const checkAggregatorServiceObjectToProxy = Object.freeze({});

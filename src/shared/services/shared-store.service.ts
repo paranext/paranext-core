@@ -10,7 +10,9 @@ import { ProcessType } from '@shared/global-this.model';
 
 const SHARED_STORE_PREFIX = 'shared-store';
 const STORE_GET_REQUEST = `${SHARED_STORE_PREFIX}:get`;
-const STORE_CHANGE_EVENT = 'shared-store:change';
+// The template literal widens to `string`; cast to the matching NetworkEventTypes key.
+// eslint-disable-next-line no-type-assertion/no-type-assertion
+const STORE_CHANGE_EVENT = `${SHARED_STORE_PREFIX}:change` as 'shared-store:change';
 
 // https://en.wikipedia.org/wiki/Lamport_timestamp
 let localCounter: number = 0;

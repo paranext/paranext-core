@@ -100,7 +100,9 @@ function hasKnownWebViewProvider(webViewType: string): boolean {
  *
  *   WARNING: setting a webView provider mutates the provided object.
  * @param attributes Optional additional attributes to attach to the network object
- * @param documentation Optional OpenRPC-style documentation for the network object
+ * @param documentation Optional {@link NetworkObjectDocumentation} for this web view provider. Set
+ *   `documentation['x-experimental']: true` to mark all methods on this web view provider as
+ *   experimental.
  * @returns `webViewProvider` modified to be a network object and able to be disposed with `dispose`
  */
 async function registerWebViewProvider(

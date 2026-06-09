@@ -115,7 +115,11 @@ export function setScrRefSync(
   // Update the scr ref and send out an event
   scrRefs[scrollGroupIdDefaulted] = scrRefClone;
   saveScrRefs();
-  onDidUpdateScrRefEmitter?.emit({ scrollGroupId: scrollGroupIdDefaulted, scrRef: scrRefClone });
+  if (!onDidUpdateScrRefEmitter)
+    throw new Error(
+      'scroll-group.service-host not initialized — call startScrollGroupService() before emitting onDidUpdateScrRef',
+    );
+  onDidUpdateScrRefEmitter.emit({ scrollGroupId: scrollGroupIdDefaulted, scrRef: scrRefClone });
 
   if (shouldSetVerseRefSetting && scrollGroupIdDefaulted === 0)
     (async () => {
@@ -145,8 +149,9 @@ const scrollGroupService: IScrollGroupRemoteService = {
 
 /** Register the network object that backs the scroll group service */
 export async function startScrollGroupService(): Promise<void> {
+  // serializeRequestType returns SerializedRequestType, not a string literal — cast needed
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   onDidUpdateScrRefEmitter = await createNetworkEventEmitterAsync(
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
     EVENT_NAME_ON_DID_UPDATE_SCR_REF as 'scrollGroup:onDidUpdateScrRef',
   );
 

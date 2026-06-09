@@ -787,16 +787,30 @@ declare module 'papi-shared-types' {
    *
    * Subscribers do not need to know which events are shared — `getNetworkEvent` handles both kinds
    * identically.
+   *
+   * See {@link NetworkEventTypes} for the full registry of known event names.
    */
   export type SharedNetworkEventTypes = {
+    /**
+     * Emitted when a network object is created in any process. Payload includes the new object's
+     * details.
+     */
     'object:onDidCreateNetworkObject': NetworkObjectDetails;
+    /**
+     * Emitted when a network object is disposed in any process. Payload is the disposed object's
+     * ID.
+     */
     'object:onDidDisposeNetworkObject': string;
+    /**
+     * Emitted when a value in the shared store changes. Payload includes the key and new value with
+     * Lamport timestamp.
+     */
     'shared-store:change': StoreChangeEvent;
   };
 
   /**
    * All known network events. Extensions augment this to declare their own events. Inherits the
-   * platform's shared events automatically.
+   * platform's shared events from {@link SharedNetworkEventTypes} automatically.
    *
    * To declare a new event for use with `createNetworkEventEmitterAsync`:
    *

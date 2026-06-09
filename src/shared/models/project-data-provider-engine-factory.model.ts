@@ -42,21 +42,18 @@ export interface IProjectDataProviderEngineFactory<
     layeringFilters?: ProjectMetadataFilterOptions,
   ): Promise<ProjectMetadataWithoutFactoryInfo[]>;
   /**
-   * Create a {@link IProjectDataProviderEngine} for the project requested so the papi can create an
+   * Create an {@link IProjectDataProviderEngine} for the project requested so the papi can create an
    * {@link IProjectDataProvider} for the project.
    *
-   * The return value may be either the engine directly, or an envelope object with the engine plus
-   * optional per-PDP-instance attributes and documentation. The unusual property name
-   * `projectDataProviderEngine` (rather than `engine`) is deliberate — it cannot collide with a
-   * property the engine itself might expose, so the platform's narrowing check on the return shape
-   * is unambiguous.
+   * The return value may be either the engine directly, or an envelope containing the engine and
+   * PDP network metadata (per-PDP attributes and documentation).
    *
-   * The platform overwrites `projectId` in any supplied per-PDP attributes — that field is always
-   * the platform-canonical value.
+   * The platform overwrites `projectId` and `projectInterfaces` in any supplied per-PDP attributes
+   * — those fields are always the platform-canonical values.
    *
-   * @param projectId Id of the project for which to create a {@link IProjectDataProviderEngine}
-   * @returns Either the engine, or an envelope `{ projectDataProviderEngine, attributes?,
-   *   documentation? }`
+   * @param projectId Id of the project for which to create an {@link IProjectDataProviderEngine}
+   * @returns Either the {@link IProjectDataProviderEngine} directly, or an envelope `{
+   *   projectDataProviderEngine, attributes?, documentation? }`
    */
   createProjectDataProviderEngine(projectId: string): Promise<
     | IProjectDataProviderEngine<SupportedProjectInterfaces>

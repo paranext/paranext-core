@@ -239,8 +239,8 @@ const helloRock3ProjectViewerProvider: IWebViewProviderWithType = {
 /** Number of times the `helloRock3` function has been called */
 let helloRock3Count = 0;
 /** Emitter to inform subscribers when `helloRock3` is called */
-let onHelloRock3Emitter: PlatformEventEmitter<HelloRock3Event>;
-const onHelloRock3EventType = 'helloRock3.onHelloRock3';
+let onHelloRock3Emitter: PlatformEventEmitter<HelloRock3Event> | undefined;
+const onHelloRock3EventType = 'helloRock3.onHelloRock3' as const;
 
 /**
  * Simple function to return `Hello Third Rock!`. Registered as a command handler.
@@ -250,7 +250,9 @@ const onHelloRock3EventType = 'helloRock3.onHelloRock3';
  */
 function helloRock3() {
   helloRock3Count += 1;
-  onHelloRock3Emitter?.emit({ times: helloRock3Count });
+  if (!onHelloRock3Emitter)
+    throw new Error('hello-rock3 not initialized — call activate() before emitting onHelloRock3');
+  onHelloRock3Emitter.emit({ times: helloRock3Count });
   return 'Hello Third Rock!';
 }
 
@@ -458,9 +460,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     reactWebView2Provider,
   );
 
-  onHelloRock3Emitter = await papi.network.createNetworkEventEmitterAsync(
-    onHelloRock3EventType as 'helloRock3.onHelloRock3',
-  );
+  onHelloRock3Emitter = await papi.network.createNetworkEventEmitterAsync(onHelloRock3EventType);
 
   const helloRock3Promise = papi.commands.registerCommand('helloRock3.helloRock3', helloRock3);
 

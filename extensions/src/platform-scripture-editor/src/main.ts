@@ -55,7 +55,7 @@ const COMMENTARIES_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.commentaries';
  * Network event name for editor selection change events. Use
  * `papi.network.getNetworkEvent('platformScriptureEditor.onDidSelectionChange')` to subscribe.
  */
-const EDITOR_SELECTION_CHANGED_EVENT = 'platformScriptureEditor.onDidSelectionChange';
+const EDITOR_SELECTION_CHANGED_EVENT = 'platformScriptureEditor.onDidSelectionChange' as const;
 
 /** Event emitter for selection change events. Created in activate() */
 let selectionChangedEventEmitter: PlatformEventEmitter<SelectionChangeEvent> | undefined;
@@ -811,7 +811,11 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
         if (firstSelectionAsync && !firstSelectionAsync.hasSettled) {
           firstSelectionAsync.resolveToValue(selection);
         }
-        selectionChangedEventEmitter?.emit({ webViewId, selection });
+        if (!selectionChangedEventEmitter)
+          throw new Error(
+            'platform-scripture-editor not initialized — call activate() before emitting selectionChanged',
+          );
+        selectionChangedEventEmitter.emit({ webViewId, selection });
       },
       async dispose() {
         currentSelection = undefined;
@@ -1232,7 +1236,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
 
   // Create the selection changed event emitter
   selectionChangedEventEmitter = await papi.network.createNetworkEventEmitterAsync(
-    EDITOR_SELECTION_CHANGED_EVENT as 'platformScriptureEditor.onDidSelectionChange',
+    EDITOR_SELECTION_CHANGED_EVENT,
   );
 
   // Default active project picker for simple layout. Subscribes to web-view-open and
