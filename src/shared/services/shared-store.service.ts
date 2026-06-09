@@ -148,13 +148,17 @@ export function resetForTesting(): void {
 }
 
 /**
- * Get a value from the shared store with proper typing
+ * Get a value from the shared store with proper typing.
+ *
+ * Returns `undefined` if the service has not yet completed initialization. This lets callers (e.g.,
+ * network-request timeout lookup) run during the bootstrap window without crashing.
  *
  * @param key The key of the value to retrieve
- * @returns A cloned copy of the value associated with the key, or undefined if not found
+ * @returns A cloned copy of the value associated with the key, or undefined if not found or if the
+ *   service is not yet initialized
  */
 function get<K extends SharedStoreKeys>(key: K): SharedStoreValues[K] | undefined {
-  if (!processId || !storeChangeEmitter) throw new Error('Shared store service is not initialized');
+  if (!processId || !storeChangeEmitter) return undefined;
   try {
     // Assert the specific type associated with this key
     // eslint-disable-next-line no-type-assertion/no-type-assertion

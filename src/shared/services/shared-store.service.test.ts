@@ -190,11 +190,14 @@ describe('sharedStoreService', () => {
       expect(valueAfterRemove).toBeUndefined();
     });
 
-    it('should throw if trying to use the service before initialization', async () => {
+    it('should return undefined on get and throw on set/remove if used before initialization', async () => {
       resetForTesting();
       const error = 'Shared store service is not initialized';
 
-      expect(() => sharedStoreService.get(testKey)).toThrow(error);
+      // get is forgiving during bootstrap — early callers (e.g., network-request timeout lookup)
+      // can run before the service finishes initializing without crashing
+      expect(sharedStoreService.get(testKey)).toBeUndefined();
+      // set and remove still throw because they mutate state
       expect(() => sharedStoreService.set(testKey, 5000)).toThrow(error);
       expect(() => sharedStoreService.remove(testKey)).toThrow(error);
     });
