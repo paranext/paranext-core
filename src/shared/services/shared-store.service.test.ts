@@ -58,7 +58,9 @@ describe('sharedStoreService', () => {
     vi.mocked(networkService.createNetworkEventEmitterAsync).mockResolvedValue(
       // Needed for testing
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      mockEmitter as unknown as PlatformEventEmitter<unknown>,
+      mockEmitter as unknown as Awaited<
+        ReturnType<typeof networkService.createNetworkEventEmitterAsync>
+      >,
     );
 
     // Mock event handler subscription
