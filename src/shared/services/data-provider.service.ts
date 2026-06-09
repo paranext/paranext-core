@@ -40,6 +40,7 @@ import {
   DataProviderTypes,
   DataProviders,
   DisposableDataProviders,
+  NetworkEventTypes,
 } from 'papi-shared-types';
 import { IDataProvider, IDisposableDataProvider } from '@shared/models/data-provider.interface';
 import { notificationService } from '@shared/services/notification.service';
@@ -819,9 +820,16 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
   );
 
   // Create a networked update event
-  const onDidUpdateEmitter = networkService.createNetworkEventEmitter<
+  const dynamicEventName = serializeRequestType(dataProviderObjectId, ON_DID_UPDATE);
+  // Per-instance data provider events have dynamic names that can't be declared in
+  // NetworkEventTypes. Cast the name to satisfy the constraint; the payload type is recovered
+  // from the surrounding function's generic context.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const onDidUpdateEmitter = (await networkService.createNetworkEventEmitterAsync(
+    dynamicEventName as keyof NetworkEventTypes,
+  )) as unknown as PlatformEventEmitter<
     DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>
-  >(serializeRequestType(dataProviderObjectId, ON_DID_UPDATE));
+  >;
 
   // Build the data provider
   const dataProviderInternal = buildDataProvider(
