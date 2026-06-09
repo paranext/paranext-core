@@ -66,7 +66,7 @@ declare module 'shared/services/scroll-group.service-model' {
   import { PlatformEvent, ScrollGroupId } from 'platform-bible-utils';
   export const NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE = 'ScrollGroupService';
   /** Name to use when creating a network event that is fired when webViews are updated */
-  export const EVENT_NAME_ON_DID_UPDATE_SCR_REF: `${string}:${string}`;
+  export const EVENT_NAME_ON_DID_UPDATE_SCR_REF: 'scrollGroup:onDidUpdateScrRef';
   /**
    * Combination of a {@link ScrollGroupId} and a SerializedVerseRef. If this value is a number, that
    * means this should be synced with the scroll group sharing that number. If this value is an
@@ -1282,10 +1282,10 @@ declare module 'shared/models/openrpc.model' {
   };
   export type MethodDocumentationWithoutName = Omit<Method, 'name'>;
   /**
-   * Documentation about a single {@link Method}. Informational only; appears in the generated OpenRPC
-   * document.
+   * Documentation about a single {@link Method}.
    *
-   * Set `method['x-experimental']: true` to mark this method as experimental.
+   * Set `method['x-experimental']: true` to mark this method as experimental. Informational only;
+   * appears in the generated OpenRPC document.
    */
   export type SingleMethodDocumentation = {
     method: MethodDocumentationWithoutName;
@@ -1301,18 +1301,18 @@ declare module 'shared/models/openrpc.model' {
    */
   export type Notification = Omit<Method, 'result'>;
   /**
-   * Documentation about a single {@link Notification}. Informational only; appears in the generated
-   * OpenRPC document.
+   * Documentation about a single {@link Notification}.
    *
    * Set `notification['x-experimental']: true` to mark this notification as experimental.
+   * Informational only; appears in the generated OpenRPC document.
    */
   export type SingleNotificationDocumentation = {
     notification: Omit<Notification, 'name'>;
     components?: Components;
   };
   /**
-   * Documentation about all methods on a network object. Pass to `networkObjectService.set`,
-   * `dataProviderService.registerEngine`, or `webViewProviderService.registerWebViewProvider`.
+   * Documentation about a network object — what it is, and OpenRPC documentation for each of its
+   * methods.
    */
   export type NetworkObjectDocumentation = {
     summary?: string;
@@ -3437,22 +3437,22 @@ declare module 'shared/services/web-view.service-model' {
     webViewId: WebViewId,
   ): Promise<NetworkObject<WebViewControllers[WebViewType]> | undefined>;
   /** @deprecated 13 November 2024. Renamed to {@link EVENT_NAME_ON_DID_OPEN_WEB_VIEW} */
-  export const EVENT_NAME_ON_DID_ADD_WEB_VIEW: `${string}:${string}`;
+  export const EVENT_NAME_ON_DID_ADD_WEB_VIEW: 'webView:onDidAddWebView';
   /** Name to use when creating a network event that is fired when webViews are created */
-  export const EVENT_NAME_ON_DID_OPEN_WEB_VIEW: `${string}:${string}`;
+  export const EVENT_NAME_ON_DID_OPEN_WEB_VIEW: 'webView:onDidOpenWebView';
   /** Event emitted when webViews are created */
   export type OpenWebViewEvent = {
     webView: SavedWebViewDefinition;
     layout: Layout;
   };
   /** Name to use when creating a network event that is fired when webViews are updated */
-  export const EVENT_NAME_ON_DID_UPDATE_WEB_VIEW: `${string}:${string}`;
+  export const EVENT_NAME_ON_DID_UPDATE_WEB_VIEW: 'webView:onDidUpdateWebView';
   /** Event emitted when webViews are updated */
   export type UpdateWebViewEvent = {
     webView: SavedWebViewDefinition;
   };
   /** Name to use when creating a network event that is fired when webViews are closed */
-  export const EVENT_NAME_ON_DID_CLOSE_WEB_VIEW: `${string}:${string}`;
+  export const EVENT_NAME_ON_DID_CLOSE_WEB_VIEW: 'webView:onDidCloseWebView';
   /** Event emitted when webViews are closed */
   export type CloseWebViewEvent = {
     webView: SavedWebViewDefinition;
@@ -5500,8 +5500,8 @@ declare module 'shared/models/project-data-provider-engine-factory.model' {
      * — those fields are always the platform-canonical values.
      *
      * @param projectId Id of the project for which to create an {@link IProjectDataProviderEngine}
-     * @returns Either the {@link IProjectDataProviderEngine} directly, or an envelope `{
-     *   projectDataProviderEngine, attributes?, documentation? }`
+     * @returns Either the {@link IProjectDataProviderEngine} or an envelope containing the engine and
+     *   per-PDP network object metadata (attributes and documentation).
      */
     createProjectDataProviderEngine(projectId: string): Promise<
       | IProjectDataProviderEngine<SupportedProjectInterfaces>
@@ -7756,7 +7756,7 @@ declare module 'shared/services/settings.service' {
 declare module 'renderer/services/scroll-group.service-host' {
   import { ScrollGroupUpdateInfo } from 'shared/services/scroll-group.service-model';
   import { SerializedVerseRef } from '@sillsdev/scripture';
-  import { ScrollGroupId } from 'platform-bible-utils';
+  import { type PlatformEvent, ScrollGroupId } from 'platform-bible-utils';
   /**
    * All Scroll Group IDs that are intended to be shown in scroll group selectors. This is a
    * placeholder and will be refactored significantly in
@@ -7764,7 +7764,7 @@ declare module 'renderer/services/scroll-group.service-host' {
    */
   export const availableScrollGroupIds: (number | undefined)[];
   /** Event that emits with information about a changed Scripture Reference for a scroll group */
-  export const onDidUpdateScrRef: import('platform-bible-utils').PlatformEvent<ScrollGroupUpdateInfo>;
+  export const onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo>;
   /** See {@link IScrollGroupRemoteService.getScrRef} */
   export function getScrRefSync(scrollGroupId?: ScrollGroupId): SerializedVerseRef;
   /**

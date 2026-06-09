@@ -215,16 +215,18 @@ export async function getWebViewController<WebViewType extends WebViewController
 }
 
 /** @deprecated 13 November 2024. Renamed to {@link EVENT_NAME_ON_DID_OPEN_WEB_VIEW} */
+// eslint-disable-next-line no-type-assertion/no-type-assertion
 export const EVENT_NAME_ON_DID_ADD_WEB_VIEW = serializeRequestType(
   CATEGORY_WEB_VIEW,
   'onDidAddWebView',
-);
+) as 'webView:onDidAddWebView';
 
 /** Name to use when creating a network event that is fired when webViews are created */
+// eslint-disable-next-line no-type-assertion/no-type-assertion
 export const EVENT_NAME_ON_DID_OPEN_WEB_VIEW = serializeRequestType(
   CATEGORY_WEB_VIEW,
   'onDidOpenWebView',
-);
+) as 'webView:onDidOpenWebView';
 
 /** Event emitted when webViews are created */
 export type OpenWebViewEvent = {
@@ -233,10 +235,11 @@ export type OpenWebViewEvent = {
 };
 
 /** Name to use when creating a network event that is fired when webViews are updated */
+// eslint-disable-next-line no-type-assertion/no-type-assertion
 export const EVENT_NAME_ON_DID_UPDATE_WEB_VIEW = serializeRequestType(
   CATEGORY_WEB_VIEW,
   'onDidUpdateWebView',
-);
+) as 'webView:onDidUpdateWebView';
 
 /** Event emitted when webViews are updated */
 export type UpdateWebViewEvent = {
@@ -244,10 +247,11 @@ export type UpdateWebViewEvent = {
 };
 
 /** Name to use when creating a network event that is fired when webViews are closed */
+// eslint-disable-next-line no-type-assertion/no-type-assertion
 export const EVENT_NAME_ON_DID_CLOSE_WEB_VIEW = serializeRequestType(
   CATEGORY_WEB_VIEW,
   'onDidCloseWebView',
-);
+) as 'webView:onDidCloseWebView';
 
 /** Event emitted when webViews are closed */
 export type CloseWebViewEvent = {

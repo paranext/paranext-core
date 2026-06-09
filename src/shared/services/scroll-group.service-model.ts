@@ -8,10 +8,11 @@ export const NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE = 'ScrollGroupService';
 const CATEGORY_SCROLL_GROUP = 'scrollGroup';
 
 /** Name to use when creating a network event that is fired when webViews are updated */
+// eslint-disable-next-line no-type-assertion/no-type-assertion
 export const EVENT_NAME_ON_DID_UPDATE_SCR_REF = serializeRequestType(
   CATEGORY_SCROLL_GROUP,
   'onDidUpdateScrRef',
-);
+) as 'scrollGroup:onDidUpdateScrRef';
 
 /**
  * Combination of a {@link ScrollGroupId} and a SerializedVerseRef. If this value is a number, that

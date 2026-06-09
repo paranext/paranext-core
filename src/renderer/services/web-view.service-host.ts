@@ -127,22 +127,13 @@ function emitOnDidOpenWebView(event: OpenWebViewEvent) {
 }
 
 /** Event that emits with webView info when a webView is created */
-export const onDidOpenWebView = getNetworkEvent(
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  EVENT_NAME_ON_DID_OPEN_WEB_VIEW as 'webView:onDidOpenWebView',
-);
+export const onDidOpenWebView = getNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW);
 
 /** Event that emits with webView info when a webView is updated */
-export const onDidUpdateWebView = getNetworkEvent(
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  EVENT_NAME_ON_DID_UPDATE_WEB_VIEW as 'webView:onDidUpdateWebView',
-);
+export const onDidUpdateWebView = getNetworkEvent(EVENT_NAME_ON_DID_UPDATE_WEB_VIEW);
 
 /** Event that emits with webView info when a webView is removed */
-export const onDidCloseWebView = getNetworkEvent(
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  EVENT_NAME_ON_DID_CLOSE_WEB_VIEW as 'webView:onDidCloseWebView',
-);
+export const onDidCloseWebView = getNetworkEvent(EVENT_NAME_ON_DID_CLOSE_WEB_VIEW);
 
 /**
  * Alias for `window.open` because `window.open` is deleted to prevent web views from accessing it.
@@ -1940,28 +1931,13 @@ export const initialize = () => {
     // #endregion
 
     // Create network event emitters
-    // These EVENT_NAME_* constants are produced by `serializeRequestType`, which returns
-    // `SerializedRequestType` (a branded string), not the literal string type. The casts tell
-    // TypeScript which entry in `NetworkEvents` each constant corresponds to.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    onDidAddWebViewEmitter = await createNetworkEventEmitterAsync(
-      EVENT_NAME_ON_DID_ADD_WEB_VIEW as 'webView:onDidAddWebView',
-    );
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    onDidOpenWebViewEmitter = await createNetworkEventEmitterAsync(
-      EVENT_NAME_ON_DID_OPEN_WEB_VIEW as 'webView:onDidOpenWebView',
-    );
-
-    // serializeRequestType returns SerializedRequestType, not a string literal — cast needed
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    onDidAddWebViewEmitter = await createNetworkEventEmitterAsync(EVENT_NAME_ON_DID_ADD_WEB_VIEW);
+    onDidOpenWebViewEmitter = await createNetworkEventEmitterAsync(EVENT_NAME_ON_DID_OPEN_WEB_VIEW);
     onDidUpdateWebViewEmitter = await createNetworkEventEmitterAsync(
-      EVENT_NAME_ON_DID_UPDATE_WEB_VIEW as 'webView:onDidUpdateWebView',
+      EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
     );
-
-    // serializeRequestType returns SerializedRequestType, not a string literal — cast needed
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
     onDidCloseWebViewEmitter = await createNetworkEventEmitterAsync(
-      EVENT_NAME_ON_DID_CLOSE_WEB_VIEW as 'webView:onDidCloseWebView',
+      EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
     );
 
     onDidCloseWebView(({ webView: { id, webViewType } }) => {
