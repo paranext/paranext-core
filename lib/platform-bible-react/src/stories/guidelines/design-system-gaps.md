@@ -5,7 +5,7 @@ on**. Maintained by the `ux-design-review` skill and the `nightly-design-review`
 by anyone reviewing UI.
 
 This is **not** a list of rule violations — those get fixed against existing guidelines. This
-is the list of *missing rules*: places where the AI (or a human) repeatedly has to make a
+is the list of _missing rules_: places where the AI (or a human) repeatedly has to make a
 judgment call because the design system hasn't decided yet. When an entry has enough evidence,
 the UX team turns it into a real guideline (likely a new or expanded `.mdx` in this folder) and
 removes it from here.
@@ -26,6 +26,7 @@ removes it from here.
 ## Open gaps
 
 ### Feedback on async actions (pending / loading / optimistic state)
+
 - **What:** When a user makes a selection that takes time to apply (e.g. choosing a project
   from a dropdown trigger), we have no rule for how the control should acknowledge the action
   before the result is ready — update optimistically, show a spinner/skeleton, or disable.
@@ -41,6 +42,7 @@ removes it from here.
 - **Frequency:** 1 (seed)
 
 ### Layout stability — no size jump on state change
+
 - **What:** No rule that a control should reserve stable dimensions across its states. A trigger
   that fits its content can change width when the selection changes, shifting surrounding layout.
 - **Why it matters (Saroj):** Controls that resize or jump after interaction are disorienting and
@@ -55,6 +57,7 @@ removes it from here.
 - **Frequency:** 1 (seed)
 
 ### Picker presentation consistency (modal vs. overlay vs. floating webview)
+
 - **What:** The same kind of task — picking something — is presented differently in different
   places (a modal in one flow, a floating webview in another). We have no rule for which
   presentation a picker should use, or when to reach for the Overlay Service.
@@ -67,5 +70,5 @@ removes it from here.
 - **Proposed addition:** An Interactions guideline defining the canonical picker presentation and
   when to use the Overlay Service / command palette vs. a modal vs. a floating webview — including
   how core and extension surfaces should align. Responsiveness already documents the
-  webview/popover constraint; this would add the *which-to-use* decision.
+  webview/popover constraint; this would add the _which-to-use_ decision.
 - **Frequency:** 1 (seed)
