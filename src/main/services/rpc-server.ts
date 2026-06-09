@@ -135,7 +135,16 @@ export class RpcServer implements IRpcHandler {
 
   // Outgoing event from this server to the client it is connected to
   emitEventOnNetwork<T>(eventType: string, event: T): void {
-    this.jsonRpcClient.notify(eventType, [event]);
+    // Wrap notify so any synchronous throw inside the JSON-RPC client / underlying
+    // WebSocket cannot bubble up as an uncaught exception when the peer socket is
+    // half-closed. See D-010.
+    try {
+      this.jsonRpcClient.notify(eventType, [event]);
+    } catch (error) {
+      logger.warn(
+        `RpcServer ${this.name}: notify('${eventType}') threw; dropping. ${getErrorMessage(error)}`,
+      );
+    }
   }
 
   registerRemoteMethod(methodName: string, methodDocs?: SingleMethodDocumentation): boolean {
@@ -201,7 +210,21 @@ export class RpcServer implements IRpcHandler {
   }
 
   private onWebSocketError(ev: Event): void {
-    this.handleError('Server websocket error event occurred', ev);
+    // The ws `ErrorEvent` carries the real reason on `.error` / `.message`; `JSON.stringify(ev)`
+    // collapses to "{}" because those properties are non-enumerable. Surface them explicitly so
+    // the actual transport failure (invalid UTF-8 frame, max-payload, ECONNRESET, ...) is logged.
+    // Narrow with `in`/`instanceof` (no type assertions) since `Event` does not declare these.
+    let message = 'unknown';
+    let code = 'n/a';
+    let stack = '';
+    if ('message' in ev && typeof ev.message === 'string') message = ev.message;
+    if ('error' in ev && ev.error instanceof Error) {
+      message = ev.error.message;
+      stack = ev.error.stack ?? '';
+      if ('code' in ev.error && typeof ev.error.code === 'string') code = ev.error.code;
+    }
+    const detail = `message=${message} code=${code}${stack ? `\nstack: ${stack}` : ''}`;
+    this.handleError(`Server websocket error event occurred: ${detail}`, detail);
   }
 
   private async onMessageReceivedByWebSocket(ev: MessageEvent) {

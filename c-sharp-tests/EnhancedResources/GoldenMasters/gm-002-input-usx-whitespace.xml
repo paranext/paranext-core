@@ -1,0 +1,14 @@
+<?xml version='1.0' encoding='utf-8'?>
+<EmdrosDump>
+<usx version="2.0">
+<book code="GEN">
+<usx_book style="id" code="GEN">
+<chapter style="c" code="GEN" pubnumber="" chapter="1" altnumber=""/>
+<para style="s1">The Creation of the World</para>
+<para style="p">
+<verse chapter="1" style="v" code="GEN" pubnumber="1"/>In the <note style="x" caller="+"><char style="xo" closed="false">1:1 </char><char style="xt" closed="false">Job 38:4-7</char></note> <verse chapter="1" style="v" code="GEN" pubnumber="2"/><wg target_links="00100100100004" strong="H7225" thematic_links="" lexical_links="SDBH:רֵאשִׁית:001001000" textual_links="HOTTP0" image_links="" map_links="" >beginning</wg>
+</para>
+</usx_book>
+</book>
+</usx>
+</EmdrosDump>

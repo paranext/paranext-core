@@ -135,7 +135,7 @@ namespace TestParanextDataProvider.ManageBooks
                 ReplaceEntireBook: true
             );
 
-            var ex = Assert.ThrowsAsync<Exception>(
+            var ex = Assert.ThrowsAsync<InvalidOperationException>(
                 async () => await _service.ParseImportFilesAsync(request)
             );
             Assert.That(
