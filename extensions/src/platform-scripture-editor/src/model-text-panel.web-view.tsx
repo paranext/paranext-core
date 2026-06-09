@@ -2,7 +2,6 @@ import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-util
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
-  useData,
   useDataProvider,
   useLocalizedStrings,
   useProjectDataProvider,
@@ -21,7 +20,7 @@ import type {
   EffectiveResourceReference,
   ResourceReferenceList,
 } from 'platform-scripture';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { isDblResourceReference } from './resource-reference.utils';
 import { DEFAULT_RESOURCE_REFERENCE_LIST } from './select-dbl-resource';
@@ -78,11 +77,25 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     projectId,
   );
 
+  const [fetchResources, setFetchResources] = useState(true);
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
-  const [resourcesPossiblyError] = useData(
-    'platformGetResources.dblResourcesProvider',
-  ).DblResources(undefined, []);
-  const dblResources = isPlatformError(resourcesPossiblyError) ? [] : resourcesPossiblyError;
+  const [resourcesPossiblyUndefined, isLoadingResources] = usePromise(
+    useCallback(async () => {
+      if (fetchResources) {
+        // Sets the `fetchResources` flag to false which will trigger the promise again next render
+        // to fetch the resources
+        setFetchResources(false);
+        return Promise.resolve(undefined);
+      }
+
+      return papi.commands.sendCommand('platformGetResources.getCachedResources');
+    }, [fetchResources]),
+    undefined,
+  );
+  const dblResources = useMemo(
+    () => resourcesPossiblyUndefined ?? [],
+    [resourcesPossiblyUndefined],
+  );
 
   const [canWriteProjectSettings] = usePromise(
     useCallback(
@@ -151,6 +164,7 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
       papi.dialogs.showDialog('platform.resourcePicker', {
         resourceType: 'ScriptureResource',
         selectedResourceIds,
+        isModal: true,
       }),
     [],
   );
@@ -190,6 +204,7 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
       effectiveModelTexts={effectiveModelTexts}
       isEffectiveModelTextsLoading={isEffectiveModelTextsLoading}
       dblResources={dblResources}
+      isLoadingResources={isLoadingResources}
       adminModelTexts={adminModelTexts}
       canWriteProjectSettings={canWriteProjectSettings}
       scrRef={scrRef}
