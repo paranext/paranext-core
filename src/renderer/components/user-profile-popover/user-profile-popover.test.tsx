@@ -1,6 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
+import { sendCommand } from '@shared/services/command.service';
 import { UserProfilePopover } from './user-profile-popover.component';
 
 vi.mock('@renderer/hooks/papi-hooks', () => ({
@@ -53,5 +54,55 @@ describe('UserProfilePopover', () => {
     render(<UserProfilePopover />);
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+});
+
+describe('UserProfilePopover header', () => {
+  test('shows skeleton placeholders while registration fetch is pending', async () => {
+    let resolveFetch: (v: {
+      name: string;
+      code: string;
+      email: string;
+      supporterName: string;
+    }) => void = () => {};
+    vi.mocked(sendCommand).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    expect(await screen.findByTestId('user-profile-name-skeleton')).toBeInTheDocument();
+    expect(screen.getByTestId('user-profile-email-skeleton')).toBeInTheDocument();
+    resolveFetch({ name: '', code: '', email: '', supporterName: '' });
+  });
+
+  test('renders registered name and email when fetch resolves with data', async () => {
+    vi.mocked(sendCommand).mockResolvedValueOnce({
+      name: 'Alice Translator',
+      code: '******-******-******-******-******',
+      email: 'alice@example.com',
+      supporterName: '',
+    });
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    await waitFor(() => expect(screen.getByText('Alice Translator')).toBeInTheDocument());
+    expect(screen.getByText('alice@example.com')).toBeInTheDocument();
+  });
+
+  test('renders fallback "User Profile" and "Not registered" when fetch resolves empty', async () => {
+    vi.mocked(sendCommand).mockResolvedValueOnce({
+      name: '',
+      code: '',
+      email: '',
+      supporterName: '',
+    });
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    await waitFor(() =>
+      expect(screen.getByTestId('user-profile-name')).toHaveTextContent('User Profile'),
+    );
+    expect(screen.getByTestId('user-profile-email')).toHaveTextContent('Not registered');
   });
 });
