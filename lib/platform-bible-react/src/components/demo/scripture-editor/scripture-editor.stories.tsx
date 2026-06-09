@@ -209,10 +209,10 @@ export const InsertNote: Story = {
     docs: {
       description: {
         story:
-          'This story demonstrates inserting notes. Use the Project menu (hamburger) or the ' +
-          'toolbar buttons above the editor to insert footnotes, cross-references, and endnotes ' +
-          'at the current cursor position. Selecting text before inserting a footnote will use ' +
-          'that text as the footnote quote. You can also insert by typing "\\f", "\\x", or "\\fe".',
+          'This story demonstrates inserting notes. Use the Project menu (hamburger) above the ' +
+          'editor to insert footnotes, cross-references, and endnotes at the current cursor ' +
+          'position. Selecting text before inserting a footnote will use that text as the ' +
+          'footnote quote. You can also insert by typing "\\f", "\\x", or "\\fe".',
       },
     },
   },
