@@ -170,19 +170,25 @@ export function ParagraphMarkerTooltipOverlay({ children }: Props) {
       {children}
       <TooltipProvider>
         <Tooltip open={!!hoveredData}>
-          <TooltipTrigger asChild>
-            <div
-              aria-hidden="true"
-              style={{
-                position: 'absolute',
-                top: hoveredData?.top ?? 0,
-                left: hoveredData?.left ?? 0,
-                width: 1,
-                height: 1,
-                pointerEvents: 'none',
-              }}
-            />
-          </TooltipTrigger>
+          <TooltipTrigger
+            aria-hidden="true"
+            tabIndex={-1}
+            style={{
+              position: 'absolute',
+              top: hoveredData?.top ?? 0,
+              left: hoveredData?.left ?? 0,
+              width: 1,
+              height: 1,
+              opacity: 0,
+              pointerEvents: 'none',
+              padding: 0,
+              border: 'none',
+              background: 'transparent',
+              cursor: 'default',
+              minWidth: 0,
+              minHeight: 0,
+            }}
+          />
           <TooltipContent side="top" align="start">
             {tooltipText}
           </TooltipContent>
