@@ -3,6 +3,8 @@ import { computePosition, extractMarker } from './paragraph-marker-tooltip.utils
 
 // Mock element factory — avoids jsdom dependency for pure-function tests.
 const makeEl = (rect: { top: number; bottom: number; left: number }, scrollTop = 0): HTMLElement =>
+  // Type assertion needed to satisfy HTMLElement interface when creating mock object without jsdom dependency
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   ({
     getBoundingClientRect: () => ({
       top: rect.top,
