@@ -118,6 +118,24 @@
       "message": "This exists to test deprecating localized strings. Do not remove or use."
     }
   },
+  "%toolbar_theme_change_to_dark%": {
+    "deprecationInfo": {
+      "date": "2026-06-10",
+      "message": "The toolbar's standalone theme toggle button was replaced by the appearance toggle in the User Profile popover. Use %userProfile_appearance_dark%."
+    }
+  },
+  "%toolbar_theme_change_to_light%": {
+    "deprecationInfo": {
+      "date": "2026-06-10",
+      "message": "The toolbar's standalone theme toggle button was replaced by the appearance toggle in the User Profile popover. Use %userProfile_appearance_light%."
+    }
+  },
+  "%toolbar_theme_loading_error%": {
+    "deprecationInfo": {
+      "date": "2026-06-10",
+      "message": "The toolbar's standalone theme toggle button was replaced by the appearance toggle in the User Profile popover, which does not surface a separate theme-loading error tooltip."
+    }
+  },
   "%undoButton_tooltip%": {
     "notes": "The tooltip text for the undo button in the common undo/redo control used in various editors.",
     "fallbackKey": "%Paratext.Base.ProjectComments.CommentEditorForm.uiUndo.ToolTipText%"
