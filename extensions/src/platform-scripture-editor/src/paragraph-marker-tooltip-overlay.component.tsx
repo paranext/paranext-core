@@ -21,6 +21,8 @@ export function ParagraphMarkerTooltipOverlay({ children }: Props) {
   const scrollContainerRef = useRef<HTMLElement | undefined>(undefined);
   const currentParaRef = useRef<HTMLElement | undefined>(undefined);
   const rafIdRef = useRef<number>(0);
+  // Set to true by keydown so the tooltip stays hidden until the mouse actually moves.
+  const suppressUntilMoveRef = useRef(false);
   // Keeps the trigger at the last known paragraph position while the tooltip closes, so the
   // close animation doesn't jump to top:0 and appear above the editor.
   const lastPositionRef = useRef<TooltipPosition>({ top: 0, left: 0 });
@@ -73,7 +75,15 @@ export function ParagraphMarkerTooltipOverlay({ children }: Props) {
     }
   }, []);
 
+  const handleMouseMove = useCallback(() => {
+    if (!suppressUntilMoveRef.current) return;
+    suppressUntilMoveRef.current = false;
+    // Reset currentParaRef so the next mouseover (on any element boundary) re-shows the tooltip.
+    currentParaRef.current = undefined;
+  }, []);
+
   const handleMouseLeave = useCallback(() => {
+    suppressUntilMoveRef.current = false;
     currentParaRef.current = undefined;
     setHoveredData(undefined);
   }, []);
@@ -89,6 +99,7 @@ export function ParagraphMarkerTooltipOverlay({ children }: Props) {
     // Only clear when focus leaves the wrapper entirely, not when moving between internal children.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+      suppressUntilMoveRef.current = false;
       currentParaRef.current = undefined;
       setHoveredData(undefined);
     }
@@ -118,7 +129,11 @@ export function ParagraphMarkerTooltipOverlay({ children }: Props) {
 
     const handleKeyDown = () => {
       // Capture phase required: Lexical calls stopPropagation() on keydown before React sees it.
-      currentParaRef.current = undefined;
+      // Don't clear currentParaRef here — keeping it set prevents the tooltip from blinking back
+      // on the next span-boundary mouseover while the user is still typing. suppressUntilMoveRef
+      // stays true until the mouse actually moves, at which point currentParaRef is reset and
+      // the next mouseover re-evaluates normally.
+      suppressUntilMoveRef.current = true;
       setHoveredData(undefined);
     };
 
@@ -159,6 +174,7 @@ export function ParagraphMarkerTooltipOverlay({ children }: Props) {
       ref={positionAnchorRef}
       style={{ position: 'relative' }}
       onMouseOver={handleMouseOver}
+      onMouseMove={handleMouseMove}
       onFocus={handleFocus}
       onMouseOut={handleMouseOut}
       onBlur={handleBlur}
