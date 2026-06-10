@@ -109,10 +109,18 @@ describe('sharedStoreService', () => {
       expect(networkService.request).toHaveBeenCalledWith('shared-store:get');
     });
 
-    it('should throw if initialized multiple times', async () => {
+    it('should be idempotent — subsequent initialize calls return the same promise', async () => {
+      const first = initializeSharedStore(networkService);
+      const second = initializeSharedStore(networkService);
+      // Both calls return the same in-flight promise
+      expect(second).toBe(first);
+      await first;
+      // After resolution, further calls still no-op (no second registration of handlers/emitters)
+      const createEmitterCallCount = vi.mocked(networkService.createNetworkEventEmitterAsync).mock
+        .calls.length;
       await initializeSharedStore(networkService);
-      await expect(initializeSharedStore(networkService)).rejects.toThrow(
-        'Shared store service is already initialized',
+      expect(vi.mocked(networkService.createNetworkEventEmitterAsync).mock.calls.length).toBe(
+        createEmitterCallCount,
       );
     });
   });

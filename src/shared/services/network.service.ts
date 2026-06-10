@@ -25,9 +25,15 @@ import {
   stringLength,
   UnsubscriberAsync,
 } from 'platform-bible-utils';
+// Shared-store imports network.service dynamically inside its own initialize() to break what would
+// otherwise be a static cycle. The runtime cycle is safe because the dynamic import resolves after
+// both modules have loaded their declarations.
+// eslint-disable-next-line import/no-cycle
 import {
+  initialize as initializeSharedStoreService,
   RequestTimeoutSharedStoreKey,
   sharedStoreService,
+  STORE_GET_REQUEST,
 } from '@shared/services/shared-store.service';
 import { deserializeRequestType, SerializedRequestType } from '@shared/utils/util';
 import { PapiNetworkEventEmitter } from '@shared/models/papi-network-event-emitter.model';
@@ -139,8 +145,13 @@ function getTimeoutMsForRequestType(requestType: SerializedRequestType): number 
   // initializing would throw (and would break its Lamport-clock sync guarantee anyway). The
   // bootstrap window can include network requests fired by React components mounted before
   // initializeSharedStoreService() resolves, so during that window fall back to the default
-  // timeout — a custom override is an optimization, not a correctness requirement here.
-  if (!sharedStoreService.isInitialized()) return requestTimeoutMs;
+  // timeout — a small bootstrapping problem that can be improved later..
+  if (!sharedStoreService.isInitialized()) {
+    logger.warn(
+      `Shared store not initialized; using default request timeout of ${requestTimeoutMs}ms for request type ${requestType}`,
+    );
+    return requestTimeoutMs;
+  }
   const sharedVal = sharedStoreService.get(sharedStoreKeyForRequestType(requestType));
   return typeof sharedVal === 'number' && sharedVal >= 0 ? sharedVal : requestTimeoutMs;
 }
@@ -194,6 +205,11 @@ async function doRequest<TParam extends Array<unknown>, TReturn>(
 ): Promise<TReturn> {
   validateRequestTypeFormatting(requestType);
   await initialize();
+  // Ensure the shared store service is initialized before this request so any custom timeout for
+  // the request type is honored. Skip the gate for shared-store's own internal requests fired
+  // during its initialization — they cannot wait for the service that fires them, or we'd
+  // deadlock. The initialize call is idempotent and safe to invoke from anywhere.
+  if (requestType !== STORE_GET_REQUEST) await initializeSharedStoreService();
   if (!jsonRpc) throw new Error('RPC handler not set');
   const responseAsyncVariable = new AsyncVariable<JSONRPCResponse | PlatformError>(
     `response to ${requestType}`,
