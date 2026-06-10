@@ -140,7 +140,8 @@ export type WebViewMenu = {
   contextMenu: SingleColumnMenu | undefined;
   /**
    * Set to `true` to mark this WebView menu as experimental. Experimental menu content may change
-   * or be removed without notice. Extensions reading this should treat the marker as informational.
+   * or be removed without notice. Extensions reading this should treat the marker as
+   * informational.
    */
   isExperimental?: boolean;
 };
