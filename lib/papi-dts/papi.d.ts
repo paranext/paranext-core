@@ -999,6 +999,13 @@ declare module 'shared/data/rpc.model' {
   export const CATEGORY_COMMAND = 'command';
 }
 declare module 'shared/services/shared-store.service' {
+  /**
+   * Internal request type used by the shared store service to fetch the initial store contents during
+   * its own initialization. Exported so the network service's `doRequest` gate can identify this
+   * request and skip awaiting shared-store initialization on it (otherwise we'd deadlock: init awaits
+   * this request, the request awaits init).
+   */
+  export const STORE_GET_REQUEST = 'shared-store:get';
   type LamportClock = {
     counter: number;
     processId: string;
@@ -1012,13 +1019,30 @@ declare module 'shared/services/shared-store.service' {
   };
   type NetworkService = typeof import('shared/services/network.service');
   /**
-   * Initialize the shared store service, setting up request handlers and event listeners. This
-   * function should be called by each of our JS processes early during start up.
+   * Initialize the shared store service, setting up request handlers and event listeners. Idempotent:
+   * subsequent calls return the same promise as the first call.
    *
-   * @param networkService The network service to use for communication between processes
+   * @param networkService The network service module.
    * @returns A promise that resolves when the service is initialized
    */
   export function initialize(networkService: NetworkService): Promise<void>;
+  /**
+   * Wait for the shared store service to be ready.
+   *
+   * - If {@link initialize} has already been called, returns the existing in-flight promise (no timeout
+   *   — we wait as long as init takes).
+   * - If {@link initialize} has not been called yet, waits up to `startTimeoutMs` for it to start then
+   *   returns the resulting promise.
+   *
+   * Throws if {@link initialize} never starts within `startTimeoutMs`. Callers that can tolerate the
+   * absence of a ready shared store should catch and fall back.
+   *
+   * @param startTimeoutMs Time to wait for initialize() to be called before throwing. Default 1000ms
+   *   — generous enough to cover normal bootstrap, short enough to avoid hanging requests when
+   *   initialize is never called.
+   * @throws If initialize() does not start within `startTimeoutMs`.
+   */
+  export function waitForInitialization(startTimeoutMs?: number): Promise<void>;
   /**
    * Reset the shared store service state for testing. This function is only exported for testing
    * purposes and should not be used in production code.
@@ -1053,6 +1077,13 @@ declare module 'shared/services/shared-store.service' {
    */
   function remove<K extends SharedStoreKeys>(key: K): void;
   /**
+   * Returns `true` once {@link initialize} has fully completed. Use this to gate optional reads of the
+   * shared store from code that may run during the bootstrap window — e.g., network-request timeout
+   * lookups that have a sensible default. Required reads of the shared store should `await
+   * initialize` instead so the value is guaranteed accurate per the Lamport-clock contract.
+   */
+  function isInitialized(): boolean;
+  /**
    * Keys for timeout lengths for network requests. Keys are dynamically constructed by adding this
    * prefix to the `requestType`.
    */
@@ -1084,6 +1115,7 @@ declare module 'shared/services/shared-store.service' {
     get: typeof get;
     set: typeof set;
     remove: typeof remove;
+    isInitialized: typeof isInitialized;
   };
 }
 declare module 'shared/models/papi-network-event-emitter.model' {
@@ -1657,18 +1689,19 @@ declare module 'main/services/rpc-server' {
   }
   export default RpcServer;
 }
-declare module 'main/services/rpc-websocket-listener' {
-  import {
-    ConnectionStatus,
-    EventHandler,
-    InternalRequestHandler,
-    RequestParams,
-  } from 'shared/data/rpc.model';
-  import { IRpcMethodRegistrar } from 'shared/models/rpc.interface';
+declare module 'shared/data/network-event-names' {
+  import type { MultiSourceNetworkEvents } from 'papi-shared-types';
+  /**
+   * Source of truth for which event names use multi-source semantics at the central registry. Must
+   * stay in sync with the `MultiSourceNetworkEvents` type alias in `papi-shared-types.ts` — the test
+   * `network.service.shared-events.test.ts` enforces the invariant.
+   *
+   * Add entries here when adding a new multi-source event to `MultiSourceNetworkEvents`.
+   */
+  export const MULTI_SOURCE_EVENT_NAMES: Set<keyof MultiSourceNetworkEvents>;
+}
+declare module 'main/services/rpc-event-registry' {
   import { SingleNotificationDocumentation } from 'shared/models/openrpc.model';
-  import { JSONRPCResponse } from 'json-rpc-2.0';
-  import { SerializedRequestType } from 'shared/utils/util';
-  import { OpenRpc, SingleMethodDocumentation } from 'shared/models/openrpc.model';
   interface EventRegistrant {
     handler: unknown;
     documentation?: SingleNotificationDocumentation;
@@ -1699,6 +1732,25 @@ declare module 'main/services/rpc-websocket-listener' {
     unregisterAll(handler: unknown): void;
     entries(): IterableIterator<[string, EventRegistrant[]]>;
   }
+  export default RpcEventRegistry;
+}
+declare module 'main/services/rpc-websocket-listener' {
+  import {
+    ConnectionStatus,
+    EventHandler,
+    InternalRequestHandler,
+    RequestParams,
+  } from 'shared/data/rpc.model';
+  import { IRpcMethodRegistrar } from 'shared/models/rpc.interface';
+  import {
+    OpenRpc,
+    SingleMethodDocumentation,
+    SingleNotificationDocumentation,
+  } from 'shared/models/openrpc.model';
+  import { JSONRPCResponse } from 'json-rpc-2.0';
+  import { SerializedRequestType } from 'shared/utils/util';
+  import { RpcEventRegistry } from 'main/services/rpc-event-registry';
+  export { RpcEventRegistry };
   /**
    * Owns the WebSocketServer that listens for clients to connect to the web socket. When a client
    * connects, an RpcServer is created in this same process to service that connection.
@@ -1777,19 +1829,8 @@ declare module 'shared/services/network.service' {
     SingleNotificationDocumentation,
   } from 'shared/models/openrpc.model';
   import { NetworkMethodHandlerOptions } from 'shared/models/network.model';
-  import type {
-    MultiSourceNetworkEvents,
-    NetworkEvents,
-    NetworkEventTypes,
-  } from 'papi-shared-types';
-  /**
-   * Source of truth for which event names use multi-source semantics at the central registry. Must
-   * stay in sync with the `MultiSourceNetworkEvents` type alias in `papi-shared-types.ts` — the test
-   * `network.service.shared-events.test.ts` enforces the invariant.
-   *
-   * Add entries here when adding a new multi-source event to `MultiSourceNetworkEvents`.
-   */
-  export const MULTI_SOURCE_EVENT_NAMES: Set<keyof MultiSourceNetworkEvents>;
+  import type { NetworkEvents, NetworkEventTypes } from 'papi-shared-types';
+  export { MULTI_SOURCE_EVENT_NAMES } from 'shared/data/network-event-names';
   export function initialize(): Promise<void>;
   /** Closes the network services gracefully */
   export const shutdown: () => Promise<void>;
@@ -4958,7 +4999,7 @@ declare module 'shared/services/data-provider.service' {
           [property: string]: unknown;
         }
       | undefined,
-    documentation?: NetworkObjectDocumentation,
+    documentation?: NetworkObjectDocumentation | undefined,
   ): Promise<DisposableDataProviders[DataProviderName]>;
   /**
    * Creates a data provider to be shared on the network layering over the provided data provider
@@ -4995,7 +5036,7 @@ declare module 'shared/services/data-provider.service' {
           [property: string]: unknown;
         }
       | undefined,
-    documentation?: NetworkObjectDocumentation,
+    documentation?: NetworkObjectDocumentation | undefined,
   ): Promise<IDisposableDataProvider<IDataProvider<TDataTypes>>>;
   /**
    *
