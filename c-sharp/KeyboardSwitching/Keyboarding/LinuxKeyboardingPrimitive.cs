@@ -21,16 +21,16 @@ namespace Paranext.DataProvider.KeyboardSwitching.Keyboarding;
 /// </summary>
 public sealed class LinuxKeyboardingPrimitive : IKeyboardingPrimitive
 {
+    private readonly IIbusKeyboardApi _api;
+
     /// <summary>
-    /// Production constructor: wires the real IBus D-Bus adapter.
+    /// Production constructor: wires the real IBus D-Bus adapter. Never throws — the
+    /// adapter touches the daemon per call, so an absent IBus (XKB-only system)
+    /// surfaces later as contained per-call fallbacks, not as a construction failure.
     /// </summary>
     [SupportedOSPlatform("linux")]
     public LinuxKeyboardingPrimitive()
-    {
-        // RED stub: the implementer wires the real Tmds.DBus.Protocol-backed adapter
-        // (and makes the Linux-conditional csproj dependency decision) in GREEN.
-        throw new NotImplementedException();
-    }
+        : this(new IbusKeyboardApi()) { }
 
     /// <summary>
     /// Seam constructor for tests: the primitive's mapping and guard logic runs against
@@ -38,24 +38,76 @@ public sealed class LinuxKeyboardingPrimitive : IKeyboardingPrimitive
     /// </summary>
     internal LinuxKeyboardingPrimitive(IIbusKeyboardApi api)
     {
-        // RED stub: intentionally does not touch the seam so each failing test points
-        // at the method under test, and so construction never throws even when IBus is
-        // unreachable (the no-IBus fallback contract).
-        _ = api;
+        _api = api;
     }
 
     public IReadOnlyList<KeyboardOption> EnumerateAvailable()
     {
-        throw new NotImplementedException();
+        try
+        {
+            // ToList() materializes eagerly, so any seam/mapping throw surfaces here,
+            // inside the containment catch below — IBus order preserved. An engine
+            // without a long name still needs a non-empty display name for the
+            // dropdown (BHV-305): fall back to the engine name itself.
+            return _api.ListEngines()
+                .Select(engine => new KeyboardOption(
+                    KeyboardId.FromIbusEngine(engine.Name),
+                    string.IsNullOrEmpty(engine.LongName) ? engine.Name : engine.LongName
+                ))
+                .ToList();
+        }
+        catch (Exception e)
+        {
+            // VAL-B-04 containment on the read path: an unreachable IBus daemon
+            // (XKB-only system, dropped connection) degrades to the empty steady
+            // state (FN-008) — logged, never propagated.
+            Console.Error.WriteLine($"LinuxKeyboardingPrimitive: keyboard enumeration failed: {e}");
+            return [];
+        }
     }
 
-    public Task<bool> ActivateAsync(string keyboardId)
+    public async Task<bool> ActivateAsync(string keyboardId)
     {
-        throw new NotImplementedException();
+        // Ids this primitive cannot own (foreign prefix, missing prefix, null/empty,
+        // empty "ibus:" payload) degrade to "nothing activated" WITHOUT touching the
+        // daemon. TryGetIbusEngine splits on the FIRST colon only, so engine names
+        // with embedded colons ("xkb:us::eng") reach IBus verbatim (CAP-001).
+        if (!KeyboardId.TryGetIbusEngine(keyboardId, out string engineName))
+            return false;
+
+        try
+        {
+            return await _api.SetGlobalEngineAsync(engineName);
+        }
+        catch (Exception e)
+        {
+            // VAL-B-04 verbatim contract from IKeyboardingPrimitive: errors are logged,
+            // not thrown — keyboard activation failures must never block typing. The
+            // await contains sync seam throws and faulted activations (timeouts) alike.
+            Console.Error.WriteLine(
+                $"LinuxKeyboardingPrimitive: activation of '{keyboardId}' failed: {e}"
+            );
+            return false;
+        }
     }
 
     public string? GetCurrentlyActiveKeyboardId()
     {
-        throw new NotImplementedException();
+        try
+        {
+            string? engineName = _api.GetGlobalEngine();
+            // "No global engine" (null — and a blank name, defensively) maps to null
+            // ("undefined" on the wire for CurrentOsKeyboard), never to "ibus:" —
+            // FromIbusEngine rejects empty engine names, so guard before minting.
+            return string.IsNullOrEmpty(engineName) ? null : KeyboardId.FromIbusEngine(engineName);
+        }
+        catch (Exception e)
+        {
+            // VAL-B-04 containment on the read path: fault degrades to "unknown".
+            Console.Error.WriteLine(
+                $"LinuxKeyboardingPrimitive: reading the active keyboard failed: {e}"
+            );
+            return null;
+        }
     }
 }
