@@ -14,16 +14,24 @@ public sealed class NoOpKeyboardingPrimitive : IKeyboardingPrimitive
 {
     public IReadOnlyList<KeyboardOption> EnumerateAvailable()
     {
-        throw new NotImplementedException();
+        // Empty list (never null) — FN-008: an empty keyboard list is a valid steady
+        // state, so consumers handle the NoOp's enumeration without special-casing.
+        return [];
     }
 
     public Task<bool> ActivateAsync(string keyboardId)
     {
-        throw new NotImplementedException();
+        // Deliberately ignores keyboardId WITHOUT validating it: the NoOp is the
+        // safety net for "no platform implementation", so it must never throw — even
+        // for null/empty input. Input validation is a wire-boundary concern
+        // (data-contracts §2.1). "false" = nothing was activated (degraded-primitive
+        // contract, VAL-B-04 spirit at the OS layer).
+        return Task.FromResult(false);
     }
 
     public string? GetCurrentlyActiveKeyboardId()
     {
-        throw new NotImplementedException();
+        // No OS keyboard exists to report; null maps to `undefined` on the wire.
+        return null;
     }
 }
