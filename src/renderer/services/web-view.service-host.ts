@@ -67,6 +67,7 @@ import {
   deserialize,
   getStylesheetForTheme,
   indexOf,
+  isPlatformError,
   isSerializable,
   isString,
   newGuid,
@@ -76,6 +77,7 @@ import {
   substring,
   THEME_STYLE_ELEMENT_ID,
   Unsubscriber,
+  UnsubscriberAsync,
 } from 'platform-bible-utils';
 import {
   closeOpenUsersnapForm,
@@ -646,16 +648,16 @@ async function loadLayout(layout?: LayoutInfo): Promise<void> {
     return;
   }
 
-  // Startup load — pick the layout based on interface mode. This runs once at startup; changes
-  // to `platform.interfaceMode` at runtime do not re-trigger a layout switch (no user-facing
-  // mode switcher exists yet).
+  // Pick the layout based on interface mode. Runs at startup and again whenever
+  // `platform.interfaceMode` changes (see the subscription in `registerDockLayout`).
   //
-  // Note: in simple mode we intentionally ignore `DOCK_LAYOUT_KEY` and always load the static
-  // `simpleLayout` — the 3-column layout should be restored on every startup regardless of what
-  // the user did in the previous session. `onLayoutChange` still fires (and writes to
-  // `DOCK_LAYOUT_KEY`) when the user resizes a column in simple mode, but those writes are
-  // vestigial: the stored value is never read back, so user resizes in simple mode are
-  // ephemeral by design.
+  // - Power mode loads the user's saved layout from `DOCK_LAYOUT_KEY` (falling back to
+  //   `testLayout` if nothing is saved). `saveLayout` only writes to `DOCK_LAYOUT_KEY` when the
+  //   user is in power mode, so this value is preserved across visits to simple mode.
+  // - Simple mode always loads the static `simpleLayout` and never persists user changes — the
+  //   3-column layout is restored every time simple mode is entered. `saveLayout` is a no-op in
+  //   simple mode, so resizing or rearranging in simple mode is ephemeral by design and does not
+  //   clobber the saved power layout.
   const interfaceMode = await settingsService.get('platform.interfaceMode');
   const layoutToLoad =
     interfaceMode === 'simple'
@@ -678,13 +680,16 @@ function getStorageValue<T>(key: string, defaultValue: T): T {
 }
 
 /**
- * Persists the current dock layout information.
+ * Persists the current dock layout information to `DOCK_LAYOUT_KEY` — but only when the user is in
+ * power mode. Simple mode always reloads the static `simpleLayout` (see `loadLayout`), so we
+ * deliberately skip writing in simple mode to avoid clobbering the user's saved power-mode layout.
  *
  * @param layout Layout to persist
  */
 async function saveLayout(layout: LayoutInfo): Promise<void> {
-  const currentLayout = layout;
-  localStorage.setItem(DOCK_LAYOUT_KEY, serialize(currentLayout));
+  const interfaceMode = await settingsService.get('platform.interfaceMode');
+  if (interfaceMode === 'simple') return;
+  localStorage.setItem(DOCK_LAYOUT_KEY, serialize(layout));
 }
 
 /**
@@ -708,12 +713,72 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
   // because making this function async would probably be annoying in React
   loadLayout();
 
+  // Reload the layout whenever `platform.interfaceMode` changes so the user-facing mode switcher
+  // (see `UserProfilePopover`) can swap layouts live without a restart. Use
+  // `retrieveDataImmediately: false` so we don't double-load on startup — `loadLayout` above
+  // already handles the initial load.
+  //
+  // The subscribe call is async, but we don't want to make `registerDockLayout` itself async.
+  // To keep cleanup safe even when the dock layout is unregistered before subscribe resolves, we
+  // track the request with `unsubscribeRequested` and tear down inside the subscribe IIFE as
+  // soon as we have the unsubscriber.
+  let unsubscribeInterfaceMode: UnsubscriberAsync | undefined;
+  let unsubscribeRequested = false;
+  const subscribeToInterfaceMode = async () => {
+    try {
+      const unsub = await settingsService.subscribe(
+        'platform.interfaceMode',
+        async (newMode) => {
+          if (isPlatformError(newMode)) {
+            logger.warn(
+              `Dock layout failed to read updated platform.interfaceMode setting: ${newMode}`,
+            );
+            return;
+          }
+          try {
+            await loadLayout();
+          } catch (err) {
+            logger.warn(`Dock layout failed to reload after interface mode change: ${err}`);
+          }
+        },
+        { retrieveDataImmediately: false },
+      );
+      if (unsubscribeRequested) {
+        // The dock layout was unregistered before we got the unsubscriber back — tear down now.
+        try {
+          await unsub();
+        } catch (err) {
+          logger.warn(`Dock layout failed to unsubscribe from platform.interfaceMode: ${err}`);
+        }
+      } else {
+        unsubscribeInterfaceMode = unsub;
+      }
+    } catch (err) {
+      logger.warn(`Dock layout failed to subscribe to platform.interfaceMode: ${err}`);
+    }
+  };
+  subscribeToInterfaceMode();
+
   // Return an unsubscriber to unregister this dock layout. The primary situation in which I see
   // this happening is when you change something on the renderer that causes a live hot reload
   return () => {
     // Somehow this is not the registered dock layout anymore
     if (papiDockLayoutVar !== currentPapiDockLayoutVar)
       throw new Error('Tried to unregister an old dock layout');
+
+    unsubscribeRequested = true;
+    if (unsubscribeInterfaceMode) {
+      const unsub = unsubscribeInterfaceMode;
+      unsubscribeInterfaceMode = undefined;
+      const runUnsubscribe = async () => {
+        try {
+          await unsub();
+        } catch (err) {
+          logger.warn(`Dock layout failed to unsubscribe from platform.interfaceMode: ${err}`);
+        }
+      };
+      runUnsubscribe();
+    }
 
     setDockLayout(undefined);
 

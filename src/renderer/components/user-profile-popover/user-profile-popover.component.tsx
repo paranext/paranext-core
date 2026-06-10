@@ -10,6 +10,11 @@ import {
   Skeleton,
   ToggleGroup,
   ToggleGroupItem,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+  type LanguageInfo,
 } from 'platform-bible-react';
 import { CircleUserRound, Globe, Monitor, Moon, Sun, User, Wifi } from 'lucide-react';
 import {
@@ -18,6 +23,7 @@ import {
   useLocalizedStrings,
   useSetting,
 } from '@renderer/hooks/papi-hooks';
+import { useInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
 import { sendCommand } from '@shared/services/command.service';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
@@ -28,15 +34,9 @@ import {
   LocalizeKey,
   type ThemeDefinitionExpanded,
 } from 'platform-bible-utils';
-import type { LanguageInfo } from 'platform-bible-react';
+import type { RegistrationData } from 'paratext-registration';
 import { useEffect, useState } from 'react';
-
-type RegistrationData = {
-  name: string;
-  code: string;
-  email: string;
-  supporterName: string;
-};
+import './user-profile-popover.component.css';
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%toolbar_userProfile_label%',
@@ -59,11 +59,16 @@ const DEFAULT_AVAILABLE_LANGUAGES: Record<string, LanguageInfo> = {
   en: { autonym: 'English' },
 };
 
+/** Matches the tooltip delay used elsewhere in `platform-bible-toolbar.tsx`. */
+const TOOLTIP_DELAY = 300;
+
 /**
- * Sentinel placeholder used as the default while CurrentTheme loads. The label is never displayed —
- * it just satisfies the `\`%${string}%`` shape required by ThemeDefinitionExpanded. Reusing an
- * existing key avoids introducing a bogus i18n entry, mirroring the pattern in
- * `platform-bible-toolbar.tsx`.
+ * Placeholder passed as the default value for the `CurrentTheme` data hook so it has something
+ * structurally valid to return while the real theme loads. Nothing on this object is ever surfaced
+ * to the user — the popover only reads `theme.type` and only after `isPlatformError` passes — so
+ * the `label` is irrelevant and just needs to satisfy `ThemeDefinitionExpanded`'s `%${string}%`
+ * shape; reusing the existing `%toolbar_theme_loading%` localize key avoids introducing a bogus
+ * i18n entry purely for this sentinel.
  */
 const DEFAULT_THEME_VALUE: ThemeDefinitionExpanded = {
   themeFamilyId: '',
@@ -94,8 +99,7 @@ export function UserProfilePopover() {
   const [isRegistrationLoading, setIsRegistrationLoading] = useState(false);
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
 
-  const [interfaceMode, setInterfaceMode] = useSetting('platform.interfaceMode', 'simple');
-  const safeInterfaceMode = isPlatformError(interfaceMode) ? 'simple' : interfaceMode;
+  const [safeInterfaceMode, setInterfaceMode] = useInterfaceMode();
 
   const handleInterfaceModeChange = (value: string) => {
     if (value === '') return;
@@ -107,18 +111,22 @@ export function UserProfilePopover() {
     }
   };
 
-  const handleProfileAndRegistration = () => {
-    sendCommand('paratextRegistration.showParatextRegistration').catch((e: unknown) => {
-      logger.warn(`UserProfilePopover: failed to open registration: ${getErrorMessage(e)}`);
-    });
+  const handleProfileAndRegistration = async () => {
     setIsOpen(false);
+    try {
+      await sendCommand('paratextRegistration.showParatextRegistration');
+    } catch (e: unknown) {
+      logger.warn(`UserProfilePopover: failed to open registration: ${getErrorMessage(e)}`);
+    }
   };
 
-  const handleNetworkSettings = () => {
-    sendCommand('paratextRegistration.showInternetSettings').catch((e: unknown) => {
-      logger.warn(`UserProfilePopover: failed to open internet settings: ${getErrorMessage(e)}`);
-    });
+  const handleNetworkSettings = async () => {
     setIsOpen(false);
+    try {
+      await sendCommand('paratextRegistration.showInternetSettings');
+    } catch (e: unknown) {
+      logger.warn(`UserProfilePopover: failed to open internet settings: ${getErrorMessage(e)}`);
+    }
   };
 
   const [interfaceLanguage, setInterfaceLanguage] = useSetting('platform.interfaceLanguage', [
@@ -152,20 +160,21 @@ export function UserProfilePopover() {
   };
 
   const themeDataProvider = useDataProvider(themeServiceDataProviderName);
-  const [theme, setTheme] = useData(themeDataProvider).CurrentTheme(undefined, DEFAULT_THEME_VALUE);
-  const [shouldMatchSystem, setShouldMatchSystem] = useData(themeDataProvider).ShouldMatchSystem(
-    undefined,
-    false,
-  );
+  const [theme, setTheme] = useData<typeof themeServiceDataProviderName>(
+    themeDataProvider,
+  ).CurrentTheme(undefined, DEFAULT_THEME_VALUE);
+  const [shouldMatchSystem, setShouldMatchSystem] = useData<typeof themeServiceDataProviderName>(
+    themeDataProvider,
+  ).ShouldMatchSystem(undefined, false);
 
   const themeUsable = !isPlatformError(theme);
   const shouldMatchSystemUsable = !isPlatformError(shouldMatchSystem);
 
-  let appearanceValue: '' | 'light' | 'dark' | 'system' = '';
-  if (themeUsable && shouldMatchSystemUsable) {
-    if (shouldMatchSystem) appearanceValue = 'system';
-    else appearanceValue = theme.type === 'dark' ? 'dark' : 'light';
-  }
+  const appearanceValue: '' | 'light' | 'dark' | 'system' = (() => {
+    if (!themeUsable || !shouldMatchSystemUsable) return '';
+    if (shouldMatchSystem) return 'system';
+    return theme.type === 'dark' ? 'dark' : 'light';
+  })();
 
   const handleAppearanceChange = (value: string) => {
     if (value === '') return;
@@ -221,17 +230,26 @@ export function UserProfilePopover() {
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="pr-twp tw:h-8 tw:shrink-0"
-          aria-label={localizedStrings['%toolbar_userProfile_label%']}
-          data-testid="user-profile-popover-trigger"
-        >
-          <CircleUserRound />
-        </Button>
-      </PopoverTrigger>
+      <TooltipProvider delayDuration={TOOLTIP_DELAY}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="pr-twp tw:h-8 tw:shrink-0"
+                aria-label={localizedStrings['%toolbar_userProfile_label%']}
+                data-testid="user-profile-popover-trigger"
+              >
+                <CircleUserRound />
+              </Button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p className="tw:font-light">{localizedStrings['%toolbar_userProfile_label%']}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       <PopoverContent align="end" className={cn('tw:w-80 tw:gap-1.5')}>
         <PopoverHeader className="tw:gap-0 tw:border-b tw:px-2 tw:pb-1.5">
           {isRegistrationLoading ? (
@@ -253,10 +271,7 @@ export function UserProfilePopover() {
               {emailText !== undefined && (
                 <PopoverDescription
                   data-testid="user-profile-email"
-                  // Inline style: arbitrary tw:text-[11px] is not picked up by this build's
-                  // Tailwind setup; use raw CSS to hit the design's 11px body size.
-                  style={{ fontSize: '11px' }}
-                  className="tw:leading-tight"
+                  className="user-profile-popover-text-11 tw:leading-tight"
                 >
                   {emailText}
                 </PopoverDescription>
@@ -271,10 +286,6 @@ export function UserProfilePopover() {
           spacing={2}
           className="tw:w-full tw:items-stretch tw:px-2"
         >
-          {/* Selected styling is applied via direct conditional className rather than the
-              `tw:data-[state=on]:` variant — utilities with that variant + opacity modifiers
-              (e.g. tw:bg-primary/10) are not reliably generated by this build's Tailwind setup,
-              so the variant ends up as dead markup and the card looks identical when selected. */}
           <ToggleGroupItem
             value="simple"
             data-testid="user-profile-interface-mode-simple"
@@ -282,21 +293,18 @@ export function UserProfilePopover() {
             className={cn(
               'tw:h-auto tw:flex-1 tw:flex-col tw:items-start tw:gap-0.5 tw:p-2 tw:text-left tw:whitespace-normal',
               safeInterfaceMode === 'simple' &&
-                'tw:border-2 tw:border-primary tw:bg-accent tw:text-primary tw:shadow-sm',
+                'tw:border-2 tw:border-primary tw:bg-accent tw:text-accent-foreground tw:shadow-sm',
             )}
           >
-            {/* Inline font sizes: arbitrary tw:text-[Npx] utilities are not picked up by this
-                build's Tailwind setup, so raw CSS is used to hit the design's exact pixel sizes. */}
             <span
               className={cn(
-                'tw:leading-tight tw:font-semibold',
-                safeInterfaceMode === 'simple' && 'tw:text-primary',
+                'user-profile-popover-text-11 tw:leading-tight tw:font-semibold',
+                safeInterfaceMode === 'simple' && 'tw:text-accent-foreground',
               )}
-              style={{ fontSize: '11px' }}
             >
               {localizedStrings['%userProfile_interfaceMode_simple_label%']}
             </span>
-            <span className="tw:leading-tight tw:text-muted-foreground" style={{ fontSize: '9px' }}>
+            <span className="user-profile-popover-text-10 tw:leading-tight tw:text-muted-foreground">
               {localizedStrings['%userProfile_interfaceMode_simple_description%']}
             </span>
           </ToggleGroupItem>
@@ -307,19 +315,18 @@ export function UserProfilePopover() {
             className={cn(
               'tw:h-auto tw:flex-1 tw:flex-col tw:items-start tw:gap-0.5 tw:p-2 tw:text-left tw:whitespace-normal',
               safeInterfaceMode === 'power' &&
-                'tw:border-2 tw:border-primary tw:bg-accent tw:text-primary tw:shadow-sm',
+                'tw:border-2 tw:border-primary tw:bg-accent tw:text-accent-foreground tw:shadow-sm',
             )}
           >
             <span
               className={cn(
-                'tw:leading-tight tw:font-semibold',
-                safeInterfaceMode === 'power' && 'tw:text-primary',
+                'user-profile-popover-text-11 tw:leading-tight tw:font-semibold',
+                safeInterfaceMode === 'power' && 'tw:text-accent-foreground',
               )}
-              style={{ fontSize: '11px' }}
             >
               {localizedStrings['%userProfile_interfaceMode_power_label%']}
             </span>
-            <span className="tw:leading-tight tw:text-muted-foreground" style={{ fontSize: '9px' }}>
+            <span className="user-profile-popover-text-10 tw:leading-tight tw:text-muted-foreground">
               {localizedStrings['%userProfile_interfaceMode_power_description%']}
             </span>
           </ToggleGroupItem>
@@ -366,9 +373,7 @@ export function UserProfilePopover() {
                 variant="outline"
                 data-testid={`user-profile-language-${tag}`}
                 aria-label={info.autonym ?? tag}
-                className="tw:h-6 tw:min-w-0 tw:px-2"
-                // Inline font size: see comment on the mode toggle items above.
-                style={{ fontSize: '10px' }}
+                className="user-profile-popover-text-10 tw:h-6 tw:min-w-0 tw:px-2"
               >
                 {tag.toUpperCase()}
               </ToggleGroupItem>
@@ -419,5 +424,3 @@ export function UserProfilePopover() {
     </Popover>
   );
 }
-
-export default UserProfilePopover;

@@ -4,6 +4,22 @@ import { vi } from 'vitest';
 import { sendCommand } from '@shared/services/command.service';
 import { UserProfilePopover } from './user-profile-popover.component';
 
+// Radix Popover/Tooltip use ResizeObserver internally; jsdom doesn't provide it, so we stub a
+// no-op implementation. The methods intentionally don't use `this` since they're empty stubs.
+beforeAll(() => {
+  global.ResizeObserver = class {
+    // jsdom stub: empty no-op intentionally has no `this` usage
+    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+    observe() {}
+    // jsdom stub: empty no-op intentionally has no `this` usage
+    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+    unobserve() {}
+    // jsdom stub: empty no-op intentionally has no `this` usage
+    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+    disconnect() {}
+  };
+});
+
 // Closure-referenced mock state, mutated by individual tests via the `setMockSetting` helper
 // below. Using a closure (instead of per-test `mockImplementation` casts) keeps the mock factory
 // strongly typed — the vi.mock factory infers types loosely while still letting tests vary
@@ -45,15 +61,15 @@ const setMockSetting = <K extends keyof MockState>(key: K, value: MockState[K]) 
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
-      '%toolbar_userProfile_label%': 'User Profile',
-      '%userProfile_header_defaultName%': 'User Profile',
+      '%toolbar_userProfile_label%': 'User profile',
+      '%userProfile_header_defaultName%': 'User profile',
       '%userProfile_header_notRegistered%': 'Not registered',
-      '%userProfile_interfaceMode_simple_label%': 'Simple Mode',
+      '%userProfile_interfaceMode_simple_label%': 'Simple mode',
       '%userProfile_interfaceMode_simple_description%': 'Streamlined',
-      '%userProfile_interfaceMode_power_label%': 'Power Mode',
+      '%userProfile_interfaceMode_power_label%': 'Power mode',
       '%userProfile_interfaceMode_power_description%': 'Full',
-      '%userProfile_profileAndRegistration%': 'Profile & Registration',
-      '%userProfile_networkSettings%': 'Network Settings',
+      '%userProfile_profileAndRegistration%': 'Profile & registration',
+      '%userProfile_networkSettings%': 'Network settings',
       '%userProfile_language%': 'Language',
       '%userProfile_appearance%': 'Appearance',
       '%userProfile_appearance_light%': 'Light',
@@ -111,7 +127,7 @@ describe('UserProfilePopover', () => {
   test('renders the trigger button with the user profile aria-label', () => {
     render(<UserProfilePopover />);
     expect(screen.getByTestId('user-profile-popover-trigger')).toBeInTheDocument();
-    expect(screen.getByLabelText('User Profile')).toBeInTheDocument();
+    expect(screen.getByLabelText('User profile')).toBeInTheDocument();
   });
 
   test('opens the popover when the trigger is clicked', async () => {
@@ -155,7 +171,7 @@ describe('UserProfilePopover header', () => {
     expect(screen.getByText('alice@example.com')).toBeInTheDocument();
   });
 
-  test('renders fallback "User Profile" and "Not registered" when fetch resolves empty', async () => {
+  test('renders fallback "User profile" and "Not registered" when fetch resolves empty', async () => {
     vi.mocked(sendCommand).mockResolvedValueOnce({
       name: '',
       code: '',
@@ -165,7 +181,7 @@ describe('UserProfilePopover header', () => {
     render(<UserProfilePopover />);
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
     await waitFor(() =>
-      expect(screen.getByTestId('user-profile-name')).toHaveTextContent('User Profile'),
+      expect(screen.getByTestId('user-profile-name')).toHaveTextContent('User profile'),
     );
     expect(screen.getByTestId('user-profile-email')).toHaveTextContent('Not registered');
   });
@@ -185,7 +201,7 @@ describe('UserProfilePopover header', () => {
 });
 
 describe('UserProfilePopover interface mode', () => {
-  test('toggles to Power Mode when Power is clicked from Simple', () => {
+  test('toggles to Power mode when Power is clicked from Simple', () => {
     render(<UserProfilePopover />);
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
     fireEvent.click(screen.getByTestId('user-profile-interface-mode-power'));
@@ -201,7 +217,7 @@ describe('UserProfilePopover interface mode', () => {
 });
 
 describe('UserProfilePopover action rows', () => {
-  test('"Profile & Registration" click sends the command and closes the popover', async () => {
+  test('"Profile & registration" click sends the command and closes the popover', async () => {
     render(<UserProfilePopover />);
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
     const button = await screen.findByTestId('user-profile-action-registration');
@@ -212,7 +228,7 @@ describe('UserProfilePopover action rows', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
-  test('"Network Settings" click sends the command and closes the popover', async () => {
+  test('"Network settings" click sends the command and closes the popover', async () => {
     render(<UserProfilePopover />);
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
     const button = await screen.findByTestId('user-profile-action-network');

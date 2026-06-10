@@ -1,0 +1,12 @@
+/* Tailwind utilities are not processed for core renderer code (the root tailwind.config.ts is
+   Storybook-only, and the renderer webpack pipeline has no postcss/tailwind loaders). Arbitrary
+   tw:text-[Npx] sizes therefore cannot be used here, so the precise sub-`tw:text-xs` sizes that
+   the design calls for are defined as raw CSS classes. */
+
+.user-profile-popover-text-11 {
+  font-size: 11px;
+}
+
+.user-profile-popover-text-10 {
+  font-size: 10px;
+}
