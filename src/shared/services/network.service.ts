@@ -29,7 +29,7 @@ import {
   RequestTimeoutSharedStoreKey,
   sharedStoreService,
   STORE_GET_REQUEST,
-  whenInitialized as whenSharedStoreInitialized,
+  waitForInitialization as waitForSharedStoreInitialization,
 } from '@shared/services/shared-store.service';
 import { deserializeRequestType, SerializedRequestType } from '@shared/utils/util';
 import { PapiNetworkEventEmitter } from '@shared/models/papi-network-event-emitter.model';
@@ -204,10 +204,18 @@ async function doRequest<TParam extends Array<unknown>, TReturn>(
   // Ensure the shared store service is ready before this request so any custom timeout for the
   // request type is honored. Skip the gate for shared-store's own internal requests fired during
   // its initialization — they cannot wait for the service that fires them, or we'd deadlock.
-  // whenInitialized resolves immediately if shared-store init has already started; if not, it
-  // waits up to a short timeout, then falls through to the default-timeout fallback in
-  // getTimeoutMsForRequestType.
-  if (requestType !== STORE_GET_REQUEST) await whenSharedStoreInitialized();
+  // waitForSharedStoreInitialization throws if shared-store init does not start within its
+  // timeout; we catch and continue with the default timeout in that case so a missing/late
+  // shared-store init does not block all network traffic.
+  if (requestType !== STORE_GET_REQUEST) {
+    try {
+      await waitForSharedStoreInitialization();
+    } catch (e) {
+      logger.warn(
+        `Proceeding with default timeout for ${requestType} — shared store not ready: ${getErrorMessage(e)}`,
+      );
+    }
+  }
   if (!jsonRpc) throw new Error('RPC handler not set');
   const responseAsyncVariable = new AsyncVariable<JSONRPCResponse | PlatformError>(
     `response to ${requestType}`,

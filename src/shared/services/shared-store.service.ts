@@ -99,21 +99,13 @@ resetInitializationStartedSignal();
 
 /**
  * Initialize the shared store service, setting up request handlers and event listeners. Idempotent:
- * subsequent calls return the same promise as the first call, and the `networkService` argument is
- * ignored on subsequent calls. The first caller (e.g., index.tsx during startup) MUST provide
- * `networkService` — calling without one before any prior call throws, because shared-store cannot
- * statically import the network service (it would create a circular dependency).
+ * subsequent calls return the same promise as the first call.
  *
- * @param networkService The network service module. Required on the first call; ignored thereafter.
+ * @param networkService The network service module.
  * @returns A promise that resolves when the service is initialized
  */
 export function initialize(networkService: NetworkService): Promise<void> {
   if (initializationPromise) return initializationPromise;
-  if (!networkService)
-    throw new Error(
-      'Shared store service initialize() requires networkService on the first call. ' +
-        'Call this from the process bootstrap before any consumers (e.g., index.tsx).',
-    );
   initializationStartedResolve();
   initializationPromise = (async () => {
     // Generate a unique process ID for this process that still includes the process type
@@ -184,25 +176,28 @@ export function initialize(networkService: NetworkService): Promise<void> {
  * - If {@link initialize} has already been called, returns the existing in-flight promise (no timeout
  *   — we wait as long as init takes).
  * - If {@link initialize} has not been called yet, waits up to `startTimeoutMs` for it to start then
- *   returns the resulting promise. If init never starts within that window, resolves anyway so the
- *   caller can fall back to a default.
+ *   returns the resulting promise.
  *
- * Use this from code that benefits from but does not require accurate shared-store data — e.g.,
- * `network.service.doRequest` gating its custom-timeout lookup. Code that requires accuracy should
- * `await initialize(networkService)` instead, or fail loudly if shared store is not ready.
+ * Throws if {@link initialize} never starts within `startTimeoutMs`. Callers that can tolerate the
+ * absence of a ready shared store should catch and fall back.
  *
- * @param startTimeoutMs Time to wait for initialize() to be called before giving up. Default 1000ms
+ * @param startTimeoutMs Time to wait for initialize() to be called before throwing. Default 1000ms
  *   — generous enough to cover normal bootstrap, short enough to avoid hanging requests when
  *   initialize is never called.
+ * @throws If initialize() does not start within `startTimeoutMs`.
  */
-export async function whenInitialized(startTimeoutMs: number = 1000): Promise<void> {
+export async function waitForInitialization(startTimeoutMs: number = 1000): Promise<void> {
   if (initializationPromise) return initializationPromise;
   const timeoutPromise = new Promise<'timeout'>((resolve) => {
     setTimeout(() => resolve('timeout'), startTimeoutMs);
   });
   const startedPromise = initializationStartedPromise.then(() => 'started' as const);
   const result = await Promise.race([startedPromise, timeoutPromise]);
-  if (result === 'started' && initializationPromise) return initializationPromise;
+  if (result === 'timeout' || !initializationPromise)
+    throw new Error(
+      `Shared store service initialize() was not called within ${startTimeoutMs}ms — caller cannot wait for readiness.`,
+    );
+  return initializationPromise;
 }
 
 /**
