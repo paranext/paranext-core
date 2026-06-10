@@ -42,17 +42,14 @@ public sealed class WindowsKeyboardingPrimitive : IKeyboardingPrimitive
     {
         try
         {
-            List<KeyboardOption> options = [];
-            foreach (nint hkl in _api.GetInstalledLayouts())
-            {
-                options.Add(
-                    new KeyboardOption(
-                        KeyboardId.FromWindowsHkl(hkl),
-                        _api.GetLayoutDisplayName(hkl)
-                    )
-                );
-            }
-            return options;
+            // ToList() materializes eagerly, so any OS-layer/mapping throw surfaces
+            // here, inside the containment catch below — OS order preserved.
+            return _api.GetInstalledLayouts()
+                .Select(hkl => new KeyboardOption(
+                    KeyboardId.FromWindowsHkl(hkl),
+                    _api.GetLayoutDisplayName(hkl)
+                ))
+                .ToList();
         }
         catch (Exception e)
         {
