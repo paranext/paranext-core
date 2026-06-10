@@ -141,11 +141,14 @@ function getTimeoutMsForRequestType(requestType: SerializedRequestType): number 
   // initializing would throw (and would break its Lamport-clock sync guarantee anyway). The
   // bootstrap window can include network requests fired by React components mounted before
   // initializeSharedStoreService() resolves, so during that window fall back to the default
-  // timeout — a small bootstrapping problem that can be improved later..
+  // timeout — a small bootstrapping problem that can be improved later.
   if (!sharedStoreService.isInitialized()) {
-    logger.warn(
-      `Shared store not initialized; using default request timeout of ${requestTimeoutMs}ms for request type ${requestType}`,
-    );
+    // Suppress the warning for shared-store's own internal bootstrap request — it's expected to
+    // run before initialization completes (it's part of the initialization).
+    if (requestType !== STORE_GET_REQUEST)
+      logger.warn(
+        `Shared store not initialized; using default request timeout of ${requestTimeoutMs}ms for request type ${requestType}`,
+      );
     return requestTimeoutMs;
   }
   const sharedVal = sharedStoreService.get(sharedStoreKeyForRequestType(requestType));
