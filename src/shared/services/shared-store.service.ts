@@ -4,6 +4,7 @@ import {
   getErrorMessage,
   PlatformEventEmitter,
   serialize,
+  wait,
 } from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
 import { ProcessType } from '@shared/global-this.model';
@@ -85,8 +86,8 @@ let initializationPromise: Promise<void> | undefined;
 
 /**
  * Resolved when {@link initialize} is first called (regardless of whether it has completed).
- * {@link whenInitialized} awaits this to know when to start waiting on the actual init promise.
- * Recreated by {@link resetForTesting} so each test starts with a fresh signal.
+ * {@link waitForInitialization} awaits this to know when to start waiting on the actual init
+ * promise. Recreated by {@link resetForTesting} so each test starts with a fresh signal.
  */
 let initializationStartedResolve: () => void;
 let initializationStartedPromise: Promise<void>;
@@ -112,27 +113,44 @@ export function initialize(networkService: NetworkService): Promise<void> {
     processId = `${globalThis.processType}-${Math.random().toString(36).substring(2, 10)}`;
     logger.debug(`Initializing shared store service`);
 
-    // Prepare to emit changes as they are made to the local store
-    storeChangeEmitter = await networkService.createNetworkEventEmitterAsync(STORE_CHANGE_EVENT);
-
-    // Listen for changes from other processes to update the local store
+    // Subscribe to remote changes immediately. getNetworkEvent is synchronous-effective — it
+    // attaches a handler to the local emitter for this name; no network round-trip — so we don't
+    // gate the parallel work below on it.
     networkService.getNetworkEvent(STORE_CHANGE_EVENT)((event) => {
       if (event.clock.processId !== processId) setFromRemote(event.key, event);
     });
 
-    // Outside of the main process, sync the local store to the main store's data initially
+    // The two network round-trips below (create emitter + fetch initial / register handler) are
+    // independent and can run in parallel. Each cuts the network-latency contribution of bootstrap
+    // roughly in half.
     if (globalThis.processType !== ProcessType.Main) {
-      try {
-        const initial: Record<string, StoreEntry> = await networkService.request(STORE_GET_REQUEST);
-        if (!initial) return;
-        Object.entries(initial).forEach(([key, entry]) => setFromRemote(key, entry));
-      } catch (error) {
-        logger.warn(`Error initializing local store: ${getErrorMessage(error)}`);
-      }
+      // Outside the main process: create the emitter AND fetch initial store data concurrently.
+      // Catch the entire initial-sync failure path (request error OR malformed entries) so it
+      // doesn't reject the Promise.all and lose the emitter — we want the emitter assigned even
+      // if the initial sync fails.
+      const [emitter] = await Promise.all([
+        networkService.createNetworkEventEmitterAsync(STORE_CHANGE_EVENT),
+        (async () => {
+          try {
+            const initial = await networkService.request<[], Record<string, StoreEntry>>(
+              STORE_GET_REQUEST,
+            );
+            if (!initial) return;
+            Object.entries(initial).forEach(([key, entry]) => setFromRemote(key, entry));
+          } catch (error) {
+            logger.warn(`Error initializing local store: ${getErrorMessage(error)}`);
+          }
+        })(),
+      ]);
+      storeChangeEmitter = emitter;
+      return;
     }
-    // Inside the main process, handle get requests to return data
-    else {
-      await networkService.registerRequestHandler(
+
+    // Inside the main process: create the emitter AND register the handler that serves the other
+    // processes' initial-fetch requests, concurrently.
+    const [emitter] = await Promise.all([
+      networkService.createNetworkEventEmitterAsync(STORE_CHANGE_EVENT),
+      networkService.registerRequestHandler(
         STORE_GET_REQUEST,
         (key?: string) => (key === undefined ? { ...localStore } : localStore[key]?.value),
         {
@@ -164,8 +182,9 @@ export function initialize(networkService: NetworkService): Promise<void> {
             },
           },
         },
-      );
-    }
+      ),
+    ]);
+    storeChangeEmitter = emitter;
   })();
   return initializationPromise;
 }
@@ -188,12 +207,8 @@ export function initialize(networkService: NetworkService): Promise<void> {
  */
 export async function waitForInitialization(startTimeoutMs: number = 1000): Promise<void> {
   if (initializationPromise) return initializationPromise;
-  const timeoutPromise = new Promise<'timeout'>((resolve) => {
-    setTimeout(() => resolve('timeout'), startTimeoutMs);
-  });
-  const startedPromise = initializationStartedPromise.then(() => 'started' as const);
-  const result = await Promise.race([startedPromise, timeoutPromise]);
-  if (result === 'timeout' || !initializationPromise)
+  await Promise.race([initializationStartedPromise, wait(startTimeoutMs)]);
+  if (!initializationPromise)
     throw new Error(
       `Shared store service initialize() was not called within ${startTimeoutMs}ms — caller cannot wait for readiness.`,
     );
