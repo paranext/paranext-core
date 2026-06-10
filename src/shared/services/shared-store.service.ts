@@ -72,9 +72,9 @@ function compareClocks(x: LamportClock, y: LamportClock): number {
 // Create an event emitter to notify about store changes
 let storeChangeEmitter: PlatformEventEmitter<StoreChangeEvent> | undefined;
 
-// Cannot import the network service directly at module scope because it would create a circular
-// dependency. The dynamic import inside `initialize` resolves at runtime after both modules have
-// loaded, which is safe.
+// Type-only reference to the network service. Type-only imports are erased at compile time and do
+// not create a runtime cycle, so it's safe even though network.service statically imports from
+// this module.
 type NetworkService = typeof import('@shared/services/network.service');
 
 /**
@@ -84,39 +84,54 @@ type NetworkService = typeof import('@shared/services/network.service');
 let initializationPromise: Promise<void> | undefined;
 
 /**
+ * Resolved when {@link initialize} is first called (regardless of whether it has completed).
+ * {@link whenInitialized} awaits this to know when to start waiting on the actual init promise.
+ * Recreated by {@link resetForTesting} so each test starts with a fresh signal.
+ */
+let initializationStartedResolve: () => void;
+let initializationStartedPromise: Promise<void>;
+function resetInitializationStartedSignal(): void {
+  initializationStartedPromise = new Promise<void>((resolve) => {
+    initializationStartedResolve = resolve;
+  });
+}
+resetInitializationStartedSignal();
+
+/**
  * Initialize the shared store service, setting up request handlers and event listeners. Idempotent:
- * subsequent calls return the same promise as the first call. May be called from anywhere — the
- * first caller from index.tsx may pass `networkService`; subsequent calls (e.g., from
- * `network.service.doRequest` gating on shared-store readiness) need not.
+ * subsequent calls return the same promise as the first call, and the `networkService` argument is
+ * ignored on subsequent calls. The first caller (e.g., index.tsx during startup) MUST provide
+ * `networkService` — calling without one before any prior call throws, because shared-store cannot
+ * statically import the network service (it would create a circular dependency).
  *
- * @param networkService Optional network service module. If omitted, it is loaded via dynamic
- *   `import()` to break the static circular dependency.
+ * @param networkService The network service module. Required on the first call; ignored thereafter.
  * @returns A promise that resolves when the service is initialized
  */
-export function initialize(networkService?: NetworkService): Promise<void> {
+export function initialize(networkService: NetworkService): Promise<void> {
   if (initializationPromise) return initializationPromise;
+  if (!networkService)
+    throw new Error(
+      'Shared store service initialize() requires networkService on the first call. ' +
+        'Call this from the process bootstrap before any consumers (e.g., index.tsx).',
+    );
+  initializationStartedResolve();
   initializationPromise = (async () => {
-    // Dynamic import breaks what would otherwise be a static circular dependency: network.service
-    // statically imports this module for the bootstrap gate in doRequest. The runtime cycle is
-    // safe because by the time this function runs, both modules have loaded their declarations.
-    // eslint-disable-next-line import/no-cycle
-    const ns: NetworkService = networkService ?? (await import('@shared/services/network.service'));
     // Generate a unique process ID for this process that still includes the process type
     processId = `${globalThis.processType}-${Math.random().toString(36).substring(2, 10)}`;
     logger.debug(`Initializing shared store service`);
 
     // Prepare to emit changes as they are made to the local store
-    storeChangeEmitter = await ns.createNetworkEventEmitterAsync(STORE_CHANGE_EVENT);
+    storeChangeEmitter = await networkService.createNetworkEventEmitterAsync(STORE_CHANGE_EVENT);
 
     // Listen for changes from other processes to update the local store
-    ns.getNetworkEvent(STORE_CHANGE_EVENT)((event) => {
+    networkService.getNetworkEvent(STORE_CHANGE_EVENT)((event) => {
       if (event.clock.processId !== processId) setFromRemote(event.key, event);
     });
 
     // Outside of the main process, sync the local store to the main store's data initially
     if (globalThis.processType !== ProcessType.Main) {
       try {
-        const initial: Record<string, StoreEntry> = await ns.request(STORE_GET_REQUEST);
+        const initial: Record<string, StoreEntry> = await networkService.request(STORE_GET_REQUEST);
         if (!initial) return;
         Object.entries(initial).forEach(([key, entry]) => setFromRemote(key, entry));
       } catch (error) {
@@ -125,7 +140,7 @@ export function initialize(networkService?: NetworkService): Promise<void> {
     }
     // Inside the main process, handle get requests to return data
     else {
-      await ns.registerRequestHandler(
+      await networkService.registerRequestHandler(
         STORE_GET_REQUEST,
         (key?: string) => (key === undefined ? { ...localStore } : localStore[key]?.value),
         {
@@ -164,6 +179,33 @@ export function initialize(networkService?: NetworkService): Promise<void> {
 }
 
 /**
+ * Wait for the shared store service to be ready.
+ *
+ * - If {@link initialize} has already been called, returns the existing in-flight promise (no timeout
+ *   — we wait as long as init takes).
+ * - If {@link initialize} has not been called yet, waits up to `startTimeoutMs` for it to start then
+ *   returns the resulting promise. If init never starts within that window, resolves anyway so the
+ *   caller can fall back to a default.
+ *
+ * Use this from code that benefits from but does not require accurate shared-store data — e.g.,
+ * `network.service.doRequest` gating its custom-timeout lookup. Code that requires accuracy should
+ * `await initialize(networkService)` instead, or fail loudly if shared store is not ready.
+ *
+ * @param startTimeoutMs Time to wait for initialize() to be called before giving up. Default 1000ms
+ *   — generous enough to cover normal bootstrap, short enough to avoid hanging requests when
+ *   initialize is never called.
+ */
+export async function whenInitialized(startTimeoutMs: number = 1000): Promise<void> {
+  if (initializationPromise) return initializationPromise;
+  const timeoutPromise = new Promise<'timeout'>((resolve) => {
+    setTimeout(() => resolve('timeout'), startTimeoutMs);
+  });
+  const startedPromise = initializationStartedPromise.then(() => 'started' as const);
+  const result = await Promise.race([startedPromise, timeoutPromise]);
+  if (result === 'started' && initializationPromise) return initializationPromise;
+}
+
+/**
  * Reset the shared store service state for testing. This function is only exported for testing
  * purposes and should not be used in production code.
  */
@@ -173,6 +215,7 @@ export function resetForTesting(): void {
   Object.keys(localStore).forEach((key) => delete localStore[key]);
   storeChangeEmitter = undefined;
   initializationPromise = undefined;
+  resetInitializationStartedSignal();
 }
 
 /**
