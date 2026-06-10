@@ -16,11 +16,14 @@ export function ParagraphMarkerTooltipOverlay({ children }: Props) {
   // The ref needs to start out with null for it to work as an element ref
   // eslint-disable-next-line no-null/no-null
   const positionAnchorRef = useRef<HTMLDivElement>(null);
-  // scrollContainerRef: the element whose scrollTop changes when content scrolls (.editor-container).
-  // Assigned in useEffect by walking firstElementChild until overflow-y: auto/scroll is found.
+  // scrollContainerRef: the ancestor element whose scroll causes content to move.
+  // Assigned in useEffect by walking parentElement ancestors until overflow-y: auto/scroll is found.
   const scrollContainerRef = useRef<HTMLElement | undefined>(undefined);
   const currentParaRef = useRef<HTMLElement | undefined>(undefined);
   const rafIdRef = useRef<number>(0);
+  // Keeps the trigger at the last known paragraph position while the tooltip closes, so the
+  // close animation doesn't jump to top:0 and appear above the editor.
+  const lastPositionRef = useRef<TooltipPosition>({ top: 0, left: 0 });
 
   const blockMarkerKeys = useMemo<LocalizeKey[]>(() => Object.values(blockMarkerToBlockNames), []);
   const [localizedStrings] = useLocalizedStrings(blockMarkerKeys);
@@ -40,14 +43,16 @@ export function ParagraphMarkerTooltipOverlay({ children }: Props) {
     currentParaRef.current = para ?? undefined;
     const anchor = positionAnchorRef.current;
     const scroller = scrollContainerRef.current;
-    setHoveredData(
-      para && anchor && scroller
-        ? {
-            ...computePosition(para, anchor, scroller),
-            marker: extractMarker(para.className) ?? '',
-          }
-        : undefined,
-    );
+    if (para && anchor && scroller) {
+      const marker = extractMarker(para.className);
+      if (marker) {
+        const pos = computePosition(para, anchor, scroller);
+        lastPositionRef.current = pos;
+        setHoveredData({ ...pos, marker });
+        return;
+      }
+    }
+    setHoveredData(undefined);
   }, []);
 
   const handleMouseOut = useCallback((e: React.MouseEvent) => {
@@ -93,25 +98,21 @@ export function ParagraphMarkerTooltipOverlay({ children }: Props) {
     const positionAnchor = positionAnchorRef.current;
     if (!positionAnchor) return;
 
-    // Find the scroll container by walking first-child from positionAnchor until we reach
-    // an element with overflow-y: auto or scroll. In the platform-editor DOM this is
-    // .editor-container, which is a near-top descendant of our wrapper.
-    // Falls back to positionAnchor if no scrolling ancestor is found within the subtree.
+    // Find the scroll container by walking UP through parentElement ancestors until we reach
+    // an element with overflow-y: auto or scroll. The editor's scroll container is an ancestor
+    // of positionAnchor — walking DOWN into children never reaches it.
+    // Falls back to positionAnchor if no scrolling ancestor is found.
     let scrollContainer: HTMLElement = positionAnchor;
-    // firstElementChild is typed as Element; cast to HTMLElement to traverse the subtree
+    // parentElement is typed as HTMLElement | null; null terminates the walk
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    let candidate: HTMLElement | undefined = positionAnchor.firstElementChild as
-      | HTMLElement
-      | undefined;
+    let candidate: HTMLElement | null = positionAnchor.parentElement;
     while (candidate) {
       const { overflowY } = window.getComputedStyle(candidate);
       if (overflowY === 'auto' || overflowY === 'scroll') {
         scrollContainer = candidate;
         break;
       }
-      // firstElementChild is typed as Element; cast to HTMLElement to continue traversal
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      candidate = candidate.firstElementChild as HTMLElement | undefined;
+      candidate = candidate.parentElement;
     }
     scrollContainerRef.current = scrollContainer;
 
@@ -126,22 +127,18 @@ export function ParagraphMarkerTooltipOverlay({ children }: Props) {
       rafIdRef.current = requestAnimationFrame(() => {
         const para = currentParaRef.current;
         if (para && positionAnchorRef.current && scrollContainerRef.current) {
-          setHoveredData((prev) =>
-            prev
-              ? {
-                  ...computePosition(
-                    para,
-                    // positionAnchorRef.current is confirmed non-undefined by the if-guard above
-                    // eslint-disable-next-line no-type-assertion/no-type-assertion
-                    positionAnchorRef.current!,
-                    // scrollContainerRef.current is confirmed non-undefined by the if-guard above
-                    // eslint-disable-next-line no-type-assertion/no-type-assertion
-                    scrollContainerRef.current!,
-                  ),
-                  marker: prev.marker,
-                }
-              : undefined,
-          );
+          setHoveredData((prev) => {
+            if (!prev) return undefined;
+            // positionAnchorRef.current and scrollContainerRef.current confirmed by the if-guard above
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
+            const newPos = computePosition(
+              para,
+              positionAnchorRef.current!,
+              scrollContainerRef.current!,
+            );
+            lastPositionRef.current = newPos;
+            return { ...newPos, marker: prev.marker };
+          });
         }
       });
     };
@@ -175,8 +172,8 @@ export function ParagraphMarkerTooltipOverlay({ children }: Props) {
             tabIndex={-1}
             style={{
               position: 'absolute',
-              top: hoveredData?.top ?? 0,
-              left: hoveredData?.left ?? 0,
+              top: hoveredData?.top ?? lastPositionRef.current.top,
+              left: hoveredData?.left ?? lastPositionRef.current.left,
               width: 1,
               height: 1,
               opacity: 0,

@@ -2,9 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { computePosition, extractMarker } from './paragraph-marker-tooltip.utils';
 
 // Mock element factory — avoids jsdom dependency for pure-function tests.
-const makeEl = (rect: { top: number; bottom: number; left: number }, scrollTop = 0): HTMLElement =>
-  // Type assertion needed to satisfy HTMLElement interface when creating mock object without jsdom dependency
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
+// scrollContainer is treated as an ancestor of positionAnchor, so its getBoundingClientRect().top
+// determines the visible-area boundary used for clamping. No scrollTop property is needed.
+// Type assertion needed to satisfy HTMLElement interface when creating mock object without jsdom dependency
+// eslint-disable-next-line no-type-assertion/no-type-assertion
+const makeEl = (rect: { top: number; bottom: number; left: number }): HTMLElement =>
   ({
     getBoundingClientRect: () => ({
       top: rect.top,
@@ -17,7 +19,6 @@ const makeEl = (rect: { top: number; bottom: number; left: number }, scrollTop =
       y: rect.top,
       toJSON: () => ({}),
     }),
-    scrollTop,
   }) as unknown as HTMLElement;
 
 describe('extractMarker', () => {
@@ -38,55 +39,64 @@ describe('extractMarker', () => {
   });
 });
 
+// In these tests scrollContainer is an ancestor of positionAnchor.  When the user has
+// scrolled N px down, positionAnchor's viewport top is at -N (it moved up), para viewport
+// positions follow from their content positions, and the scroller stays at viewport 0.
 describe('computePosition', () => {
-  it('returns top-left of a visible para when scrollTop is 0', () => {
+  it('returns correct top and left=0 for a visible para with no scroll', () => {
+    // No scroll: anchor at viewport 0, para at content position 100 → viewport 100
     const anchor = makeEl({ top: 0, bottom: 800, left: 0 });
     const para = makeEl({ top: 100, bottom: 150, left: 20 });
-    const scroller = makeEl({ top: 0, bottom: 800, left: 0 }, 0);
-    expect(computePosition(para, anchor, scroller)).toEqual({ top: 100, left: 20 });
+    const scroller = makeEl({ top: 0, bottom: 800, left: 0 });
+    // topInContent = 100-0=100; visibleAreaTop = 0-0=0; clamp→100
+    expect(computePosition(para, anchor, scroller)).toEqual({ top: 100, left: 0 });
   });
 
-  it('subtracts anchor left from para left', () => {
+  it('always returns left=0 regardless of para horizontal position (leading margin)', () => {
     const anchor = makeEl({ top: 0, bottom: 800, left: 50 });
     const para = makeEl({ top: 100, bottom: 150, left: 70 });
-    const scroller = makeEl({ top: 0, bottom: 800, left: 0 }, 0);
-    expect(computePosition(para, anchor, scroller)).toEqual({ top: 100, left: 20 });
+    const scroller = makeEl({ top: 0, bottom: 800, left: 0 });
+    expect(computePosition(para, anchor, scroller)).toEqual({ top: 100, left: 0 });
   });
 
-  it('adds scrollTop to produce content-relative top', () => {
-    const anchor = makeEl({ top: 0, bottom: 600, left: 0 });
-    const para = makeEl({ top: 300, bottom: 400, left: 0 });
-    const scroller = makeEl({ top: 0, bottom: 600, left: 0 }, 200);
-    // topInContent = 300 + 200 = 500; clampedTop = max(500, 200) = 500
-    expect(computePosition(para, anchor, scroller)).toEqual({ top: 500, left: 0 });
+  it('para and anchor move together on scroll so topInContent reflects content position', () => {
+    // Scrolled 200px: anchor at viewport -200, para at content pos 300 → viewport 100
+    const anchor = makeEl({ top: -200, bottom: 400, left: 0 });
+    const para = makeEl({ top: 100, bottom: 200, left: 0 });
+    const scroller = makeEl({ top: 0, bottom: 600, left: 0 });
+    // topInContent = 100-(-200)=300; visibleAreaTop = 0-(-200)=200; clamp→max(300,200)=300
+    expect(computePosition(para, anchor, scroller)).toEqual({ top: 300, left: 0 });
   });
 
-  it('clamps to scrollTop when para top has scrolled above viewport', () => {
-    // para.top = -50 means the top of the para is 50px above the viewport
-    const anchor = makeEl({ top: 0, bottom: 600, left: 0 });
-    const para = makeEl({ top: -50, bottom: 300, left: 0 });
-    const scroller = makeEl({ top: 0, bottom: 600, left: 0 }, 200);
-    // topInContent = -50 + 200 = 150; clampedTop = max(150, 200) = 200
+  it('clamps to visible area top when para has partially scrolled above viewport', () => {
+    // Scrolled 200px: anchor at -200; para content pos 50-350, viewport top = -150 (above viewport)
+    const anchor = makeEl({ top: -200, bottom: 400, left: 0 });
+    const para = makeEl({ top: -150, bottom: 150, left: 0 });
+    const scroller = makeEl({ top: 0, bottom: 600, left: 0 });
+    // topInContent = -150-(-200)=50; visibleAreaTop = 0-(-200)=200; clamp→max(50,200)=200
+    // bottomInContent = 150-(-200)=350; finalTop = min(200,349)=200
     expect(computePosition(para, anchor, scroller)).toEqual({ top: 200, left: 0 });
   });
 
   it('caps at para bottom minus 1 when para is almost entirely scrolled past', () => {
-    // Only 10px of the para remains visible at the top of the viewport
-    const anchor = makeEl({ top: 0, bottom: 600, left: 0 });
+    // Scrolled 500px: anchor at -500; para content pos 200-510, viewport top=-300, bottom=10
+    const anchor = makeEl({ top: -500, bottom: 100, left: 0 });
     const para = makeEl({ top: -300, bottom: 10, left: 0 });
-    const scroller = makeEl({ top: 0, bottom: 600, left: 0 }, 500);
-    // topInContent = -300 + 500 = 200; bottomInContent = 10 + 500 = 510
-    // clampedTop = max(200, 500) = 500; finalTop = min(500, 509) = 500
+    const scroller = makeEl({ top: 0, bottom: 600, left: 0 });
+    // topInContent = -300-(-500)=200; visibleAreaTop = 0-(-500)=500
+    // clampedTop = max(200,500)=500; bottomInContent = 10-(-500)=510
+    // finalTop = min(500,509)=500
     expect(computePosition(para, anchor, scroller)).toEqual({ top: 500, left: 0 });
   });
 
   it('caps at para bottom minus 1 when para is tiny and near-fully scrolled past', () => {
-    // Tiny para (10px tall) with only a sliver left in view
-    const anchor = makeEl({ top: 0, bottom: 600, left: 0 });
+    // Tiny para (10px) with only a sliver visible: anchor at -100, para content pos 50-60
+    const anchor = makeEl({ top: -100, bottom: 500, left: 0 });
     const para = makeEl({ top: -50, bottom: -40, left: 0 });
-    const scroller = makeEl({ top: 0, bottom: 600, left: 0 }, 100);
-    // topInContent = -50 + 100 = 50; bottomInContent = -40 + 100 = 60
-    // clampedTop = max(50, 100) = 100; finalTop = min(100, 59) = 59
+    const scroller = makeEl({ top: 0, bottom: 600, left: 0 });
+    // topInContent = -50-(-100)=50; visibleAreaTop = 0-(-100)=100
+    // clampedTop = max(50,100)=100; bottomInContent = -40-(-100)=60
+    // finalTop = min(100,59)=59
     expect(computePosition(para, anchor, scroller)).toEqual({ top: 59, left: 0 });
   });
 });
