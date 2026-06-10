@@ -125,7 +125,9 @@ public class KeyboardIdTests
         // Canonical emission is lowercase, but parse tolerates uppercase hex digits —
         // ids may round-trip through user-edited settings files (plan decision D3).
         Assert.That(KeyboardId.TryGetWindowsHkl("win:F0010409", out nint hkl), Is.True);
-        Assert.That(hkl, Is.EqualTo((nint)0xF0010409L));
+        // unchecked: silences CS8778 — on a 32-bit nint this constant conversion would wrap,
+        // which is exactly the lossless low-DWORD round-trip behavior under test.
+        Assert.That(hkl, Is.EqualTo(unchecked((nint)0xF0010409L)));
     }
 
     [TestCase(null)] // null keyboardId

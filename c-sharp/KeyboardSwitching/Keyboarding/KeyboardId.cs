@@ -1,5 +1,11 @@
+using System.Globalization;
+
 namespace Paranext.DataProvider.KeyboardSwitching.Keyboarding;
 
+// === NEW IN PT10 ===
+// Reason: PT10-only normalized keyboard ID format — PT9 has no cross-platform keyboard ID
+// scheme (PT9 anchor only for opacity semantics: IKeyboardDefinition.Id is opaque).
+// Maps to: CAP-001
 /// <summary>
 /// Mints and parses the normalized, platform-prefixed keyboard ID format used across PT10:
 /// <c>"win:&lt;hkl-hex&gt;"</c> (Windows), <c>"ibus:&lt;engine&gt;"</c> (Linux),
@@ -16,10 +22,13 @@ namespace Paranext.DataProvider.KeyboardSwitching.Keyboarding;
 /// <remarks>
 /// CAP-001 (keyboard-switching, PT10-only design — no PT9 anchor for the format itself;
 /// PT9 anchor for opacity: IKeyboardDefinition.Id).
-/// NOTE: TDD RED-state stub — implementation arrives with the tdd-implementer for CAP-001.
 /// </remarks>
 public static class KeyboardId
 {
+    private const string WINDOWS_MARKER = "win:";
+    private const string IBUS_MARKER = "ibus:";
+    private const string MAC_MARKER = "mac:";
+
     /// <summary>
     /// Translates a Windows keyboard layout handle (HKL) into a normalized keyboard ID of the
     /// form <c>"win:&lt;hkl-hex&gt;"</c> (lowercase hex, no leading-zero padding).
@@ -28,7 +37,12 @@ public static class KeyboardId
     /// <exception cref="ArgumentException">Thrown when <paramref name="hkl"/> is zero.</exception>
     public static string FromWindowsHkl(nint hkl)
     {
-        throw new NotImplementedException();
+        if (hkl == 0)
+            throw new ArgumentException("HKL must not be zero (NULL handle)", nameof(hkl));
+
+        // Format from the full unsigned native value so negative (sign-extended) HKLs
+        // round-trip losslessly without baking pointer width into the string format.
+        return WINDOWS_MARKER + ((nuint)hkl).ToString("x", CultureInfo.InvariantCulture);
     }
 
     /// <summary>
@@ -39,7 +53,29 @@ public static class KeyboardId
     /// </summary>
     public static bool TryGetWindowsHkl(string? keyboardId, out nint hkl)
     {
-        throw new NotImplementedException();
+        hkl = 0;
+
+        if (string.IsNullOrEmpty(keyboardId))
+            return false;
+        if (!keyboardId.StartsWith(WINDOWS_MARKER, StringComparison.Ordinal))
+            return false;
+
+        // AllowHexSpecifier alone (NOT NumberStyles.HexNumber, which would also tolerate
+        // leading/trailing whitespace): hex digits parse case-insensitively, everything
+        // else stays strict-canonical. Parsing as ulong rejects payloads over 64 bits.
+        string payload = keyboardId[WINDOWS_MARKER.Length..];
+        if (
+            !ulong.TryParse(
+                payload,
+                NumberStyles.AllowHexSpecifier,
+                CultureInfo.InvariantCulture,
+                out ulong value
+            )
+        )
+            return false;
+
+        hkl = unchecked((nint)value);
+        return true;
     }
 
     /// <summary>
@@ -51,7 +87,8 @@ public static class KeyboardId
     /// <exception cref="ArgumentException">Thrown when <paramref name="engineName"/> is empty.</exception>
     public static string FromIbusEngine(string engineName)
     {
-        throw new NotImplementedException();
+        ArgumentException.ThrowIfNullOrEmpty(engineName);
+        return IBUS_MARKER + engineName;
     }
 
     /// <summary>
@@ -61,7 +98,7 @@ public static class KeyboardId
     /// </summary>
     public static bool TryGetIbusEngine(string? keyboardId, out string engineName)
     {
-        throw new NotImplementedException();
+        return TryGetPayload(keyboardId, IBUS_MARKER, out engineName);
     }
 
     /// <summary>
@@ -73,7 +110,8 @@ public static class KeyboardId
     /// <exception cref="ArgumentException">Thrown when <paramref name="inputSourceId"/> is empty.</exception>
     public static string FromMacInputSource(string inputSourceId)
     {
-        throw new NotImplementedException();
+        ArgumentException.ThrowIfNullOrEmpty(inputSourceId);
+        return MAC_MARKER + inputSourceId;
     }
 
     /// <summary>
@@ -83,6 +121,27 @@ public static class KeyboardId
     /// </summary>
     public static bool TryGetMacInputSource(string? keyboardId, out string inputSourceId)
     {
-        throw new NotImplementedException();
+        return TryGetPayload(keyboardId, MAC_MARKER, out inputSourceId);
+    }
+
+    /// <summary>
+    /// Shared string-payload extraction: the marker is matched exactly (lowercase, ordinal),
+    /// splitting on the FIRST colon only so payloads with embedded colons (e.g. IBus
+    /// <c>"xkb:us::eng"</c>) are returned verbatim. Null/empty IDs, foreign-prefix IDs, and
+    /// empty payloads all return <c>false</c> without throwing (INV-C07).
+    /// </summary>
+    private static bool TryGetPayload(string? keyboardId, string marker, out string payload)
+    {
+        payload = "";
+
+        if (string.IsNullOrEmpty(keyboardId))
+            return false;
+        if (!keyboardId.StartsWith(marker, StringComparison.Ordinal))
+            return false;
+        if (keyboardId.Length == marker.Length)
+            return false; // empty payload — an empty platform id is not a keyboard
+
+        payload = keyboardId[marker.Length..];
+        return true;
     }
 }
