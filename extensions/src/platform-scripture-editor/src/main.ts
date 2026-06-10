@@ -900,6 +900,9 @@ function createResourceTextPanelProvider(
         ? resourceTextPanelPendingProjectIds.get(webViewType)
         : (openWebViewOptions.projectId ?? savedWebView.projectId);
       resourceTextPanelPendingProjectIds.delete(webViewType);
+      // Intentionally does not force scrollGroupScrRef in simple mode. Bible texts and
+      // commentaries are read-only reference panels that navigate independently; they are
+      // not scroll-synced with the scripture editor in simple mode.
       return {
         ...savedWebView,
         title,
