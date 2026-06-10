@@ -55,15 +55,12 @@ public static class KeyboardId
     {
         hkl = 0;
 
-        if (string.IsNullOrEmpty(keyboardId))
-            return false;
-        if (!keyboardId.StartsWith(WINDOWS_MARKER, StringComparison.Ordinal))
+        if (!TryGetPayload(keyboardId, WINDOWS_MARKER, out string payload))
             return false;
 
         // AllowHexSpecifier alone (NOT NumberStyles.HexNumber, which would also tolerate
         // leading/trailing whitespace): hex digits parse case-insensitively, everything
         // else stays strict-canonical. Parsing as ulong rejects payloads over 64 bits.
-        string payload = keyboardId[WINDOWS_MARKER.Length..];
         if (
             !ulong.TryParse(
                 payload,
@@ -74,6 +71,10 @@ public static class KeyboardId
         )
             return false;
 
+        // Permissive Try-pattern asymmetry, by design: "win:0" parses to hkl = 0 even though
+        // FromWindowsHkl rejects 0, so a canonically minted id can never carry that payload
+        // (implementer decision I4). On a hypothetical 32-bit runtime this cast would
+        // truncate >32-bit payloads; PT10 ships 64-bit only, so the path is unreachable.
         hkl = unchecked((nint)value);
         return true;
     }
