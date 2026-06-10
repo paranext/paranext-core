@@ -932,10 +932,18 @@ function createLocalDataProviderToProxy<DataProviderName extends DataProviderNam
   dataProviderObjectId: DataProviderName,
   dataProviderPromise: Promise<DataProviders[DataProviderName]>,
 ): Partial<DataProviderInternal<DataProviderTypes[DataProviderName]>> {
-  // Create a networked update event
-  const onDidUpdate = networkService.getNetworkEvent<boolean>(
-    serializeRequestType(dataProviderObjectId, ON_DID_UPDATE),
-  );
+  // Create a networked update event. Per-instance data provider events have dynamic names that
+  // can't be declared in NetworkEvents, so we use the documented escape hatch: cast the name to
+  // satisfy the typed overload's constraint, then assert the result type.
+  const dynamicEventName = serializeRequestType(dataProviderObjectId, ON_DID_UPDATE);
+  // Two unavoidable type assertions for the dynamic-name escape hatch — see comment above.
+  /* eslint-disable no-type-assertion/no-type-assertion */
+  const onDidUpdate = networkService.getNetworkEvent(
+    dynamicEventName as NetworkEventTypes,
+  ) as unknown as PlatformEvent<
+    DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>
+  >;
+  /* eslint-enable no-type-assertion/no-type-assertion */
 
   return createDataProviderProxy(undefined, dataProviderPromise, onDidUpdate);
 }

@@ -1,30 +1,21 @@
-import { PlatformEvent, createSyncProxyForAsyncObject } from 'platform-bible-utils';
+import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
 import { getNetworkEvent } from '@shared/services/network.service';
 import {
-  OpenWebViewEvent,
   EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
   EVENT_NAME_ON_DID_OPEN_WEB_VIEW,
   EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
   NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
-  CloseWebViewEvent,
-  UpdateWebViewEvent,
   WebViewServiceType,
   getWebViewController,
 } from '@shared/services/web-view.service-model';
 import { networkObjectService } from '@shared/services/network-object.service';
 import { networkObjectStatusService } from './network-object-status.service';
 
-const onDidOpenWebView: PlatformEvent<OpenWebViewEvent> = getNetworkEvent<OpenWebViewEvent>(
-  EVENT_NAME_ON_DID_OPEN_WEB_VIEW,
-);
+const onDidOpenWebView = getNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW);
 
-const onDidUpdateWebView: PlatformEvent<UpdateWebViewEvent> = getNetworkEvent<UpdateWebViewEvent>(
-  EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
-);
+const onDidUpdateWebView = getNetworkEvent(EVENT_NAME_ON_DID_UPDATE_WEB_VIEW);
 
-const onDidCloseWebView: PlatformEvent<CloseWebViewEvent> = getNetworkEvent<CloseWebViewEvent>(
-  EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
-);
+const onDidCloseWebView = getNetworkEvent(EVENT_NAME_ON_DID_CLOSE_WEB_VIEW);
 
 let networkObject: WebViewServiceType;
 let initializationPromise: Promise<void>;

@@ -9,7 +9,13 @@ import { logger } from '@shared/services/logger.service';
 import { ProcessType } from '@shared/global-this.model';
 
 const SHARED_STORE_PREFIX = 'shared-store';
-const STORE_GET_REQUEST = `${SHARED_STORE_PREFIX}:get`;
+/**
+ * Internal request type used by the shared store service to fetch the initial store contents during
+ * its own initialization. Exported so the network service's `doRequest` gate can identify this
+ * request and skip awaiting shared-store initialization on it (otherwise we'd deadlock: init awaits
+ * this request, the request awaits init).
+ */
+export const STORE_GET_REQUEST = `${SHARED_STORE_PREFIX}:get`;
 // The template literal widens to `string`; cast to the matching NetworkEvents key.
 // eslint-disable-next-line no-type-assertion/no-type-assertion
 const STORE_CHANGE_EVENT = `${SHARED_STORE_PREFIX}:change` as 'shared-store:change';
@@ -66,74 +72,95 @@ function compareClocks(x: LamportClock, y: LamportClock): number {
 // Create an event emitter to notify about store changes
 let storeChangeEmitter: PlatformEventEmitter<StoreChangeEvent> | undefined;
 
-// Cannot import the network service directly because it would create a circular dependency
+// Cannot import the network service directly at module scope because it would create a circular
+// dependency. The dynamic import inside `initialize` resolves at runtime after both modules have
+// loaded, which is safe.
 type NetworkService = typeof import('@shared/services/network.service');
 
 /**
- * Initialize the shared store service, setting up request handlers and event listeners. This
- * function should be called by each of our JS processes early during start up.
+ * In-flight initialization promise. Subsequent calls to {@link initialize} return this same promise
+ * so the function is idempotent.
+ */
+let initializationPromise: Promise<void> | undefined;
+
+/**
+ * Initialize the shared store service, setting up request handlers and event listeners. Idempotent:
+ * subsequent calls return the same promise as the first call. May be called from anywhere — the
+ * first caller from index.tsx may pass `networkService`; subsequent calls (e.g., from
+ * `network.service.doRequest` gating on shared-store readiness) need not.
  *
- * @param networkService The network service to use for communication between processes
+ * @param networkService Optional network service module. If omitted, it is loaded via dynamic
+ *   `import()` to break the static circular dependency.
  * @returns A promise that resolves when the service is initialized
  */
-export async function initialize(networkService: NetworkService): Promise<void> {
-  if (processId) throw new Error('Shared store service is already initialized');
-  // Generate a unique process ID for this process that still includes the process type
-  processId = `${globalThis.processType}-${Math.random().toString(36).substring(2, 10)}`;
-  logger.debug(`Initializing shared store service`);
+export function initialize(networkService?: NetworkService): Promise<void> {
+  if (initializationPromise) return initializationPromise;
+  initializationPromise = (async () => {
+    // Dynamic import breaks what would otherwise be a static circular dependency: network.service
+    // statically imports this module for the bootstrap gate in doRequest. The runtime cycle is
+    // safe because by the time this function runs, both modules have loaded their declarations.
+    // eslint-disable-next-line import/no-cycle
+    const ns: NetworkService = networkService ?? (await import('@shared/services/network.service'));
+    // Generate a unique process ID for this process that still includes the process type
+    processId = `${globalThis.processType}-${Math.random().toString(36).substring(2, 10)}`;
+    logger.debug(`Initializing shared store service`);
 
-  // Prepare to emit changes as they are made to the local store
-  storeChangeEmitter = await networkService.createNetworkEventEmitterAsync(STORE_CHANGE_EVENT);
+    // Prepare to emit changes as they are made to the local store
+    storeChangeEmitter = await ns.createNetworkEventEmitterAsync(STORE_CHANGE_EVENT);
 
-  // Listen for changes from other processes to update the local store
-  networkService.getNetworkEvent<StoreChangeEvent>(STORE_CHANGE_EVENT)((event) => {
-    if (event.clock.processId !== processId) setFromRemote(event.key, event);
-  });
+    // Listen for changes from other processes to update the local store
+    ns.getNetworkEvent(STORE_CHANGE_EVENT)((event) => {
+      if (event.clock.processId !== processId) setFromRemote(event.key, event);
+    });
 
-  // Outside of the main process, sync the local store to the main store's data initially
-  if (globalThis.processType !== ProcessType.Main) {
-    try {
-      const initial: Record<string, StoreEntry> = await networkService.request(STORE_GET_REQUEST);
-      if (!initial) return;
-      Object.entries(initial).forEach(([key, entry]) => setFromRemote(key, entry));
-    } catch (error) {
-      logger.warn(`Error initializing local store: ${getErrorMessage(error)}`);
+    // Outside of the main process, sync the local store to the main store's data initially
+    if (globalThis.processType !== ProcessType.Main) {
+      try {
+        const initial: Record<string, StoreEntry> = await ns.request(STORE_GET_REQUEST);
+        if (!initial) return;
+        Object.entries(initial).forEach(([key, entry]) => setFromRemote(key, entry));
+      } catch (error) {
+        logger.warn(`Error initializing local store: ${getErrorMessage(error)}`);
+      }
     }
-  }
-  // Inside the main process, handle get requests to return data
-  else {
-    await networkService.registerRequestHandler(
-      STORE_GET_REQUEST,
-      (key?: string) => (key === undefined ? { ...localStore } : localStore[key]?.value),
-      {
-        method: {
-          summary: 'Get values from the shared store',
-          params: [
-            {
-              name: 'key',
-              required: false,
-              summary: 'The key of the value to retrieve (leave undefined to get the entire store)',
-              schema: { type: 'string' },
-            },
-          ],
-          result: {
-            name: 'return value',
-            summary: 'The value associated with the key, or the entire store if no key is provided',
-            schema: {
-              oneOf: [
-                { type: 'string' },
-                { type: 'number' },
-                { type: 'boolean' },
-                { type: 'object' },
-                { type: 'array' },
-                { type: 'null' },
-              ],
+    // Inside the main process, handle get requests to return data
+    else {
+      await ns.registerRequestHandler(
+        STORE_GET_REQUEST,
+        (key?: string) => (key === undefined ? { ...localStore } : localStore[key]?.value),
+        {
+          method: {
+            summary: 'Get values from the shared store',
+            params: [
+              {
+                name: 'key',
+                required: false,
+                summary:
+                  'The key of the value to retrieve (leave undefined to get the entire store)',
+                schema: { type: 'string' },
+              },
+            ],
+            result: {
+              name: 'return value',
+              summary:
+                'The value associated with the key, or the entire store if no key is provided',
+              schema: {
+                oneOf: [
+                  { type: 'string' },
+                  { type: 'number' },
+                  { type: 'boolean' },
+                  { type: 'object' },
+                  { type: 'array' },
+                  { type: 'null' },
+                ],
+              },
             },
           },
         },
-      },
-    );
-  }
+      );
+    }
+  })();
+  return initializationPromise;
 }
 
 /**
@@ -145,6 +172,7 @@ export function resetForTesting(): void {
   localCounter = 0;
   Object.keys(localStore).forEach((key) => delete localStore[key]);
   storeChangeEmitter = undefined;
+  initializationPromise = undefined;
 }
 
 /**
