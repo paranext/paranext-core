@@ -80,9 +80,13 @@ export function ParagraphMarkerTooltipOverlay({ children }: Props) {
   }, []);
 
   // Accessibility companion for onMouseOut: hide tooltip when focus moves outside the editor
-  const handleBlur = useCallback(() => {
-    currentParaRef.current = undefined;
-    setHoveredData(undefined);
+  const handleBlur = useCallback((e: React.FocusEvent) => {
+    // Only clear when focus leaves the wrapper entirely, not when moving between internal children.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+      currentParaRef.current = undefined;
+      setHoveredData(undefined);
+    }
   }, []);
 
   useEffect(() => {
