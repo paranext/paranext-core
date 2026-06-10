@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using Paranext.DataProvider.KeyboardSwitching.Keyboarding;
 
 namespace TestParanextDataProvider.KeyboardSwitching.Keyboarding;
@@ -14,6 +15,10 @@ namespace TestParanextDataProvider.KeyboardSwitching.Keyboarding;
 /// </summary>
 [TestFixture]
 [Platform(Include = "Win")]
+// The NUnit Platform gate above guarantees this fixture only RUNS on Windows; the
+// attribute below tells the CA1416 platform-compatibility analyzer the same thing so
+// constructing the [SupportedOSPlatform("windows")] production primitive is clean.
+[SupportedOSPlatform("windows")]
 public class WindowsKeyboardingPrimitiveSmokeTests
 {
     [Test]
