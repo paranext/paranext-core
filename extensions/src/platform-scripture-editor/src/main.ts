@@ -849,12 +849,19 @@ const modelTextPanelWebViewProvider: IWebViewProvider = {
       currentModelTextProjectId !== undefined
         ? currentModelTextProjectId
         : (openWebViewOptions.projectId ?? savedWebView.projectId);
+    currentModelTextProjectId = undefined;
+    // Re-read every call so mode changes are picked up at open/replace/restore time.
+    const interfaceMode = await papi.settings.get('platform.interfaceMode');
     return {
       ...savedWebView,
       title: '%webView_modelTextPanel_title%',
       projectId,
       content: modelTextPanelWebView,
       styles: modelTextPanelWebViewStyles,
+      // In simple mode, force the model text panel to scroll group 0 so it stays verse-synced
+      // with the scripture editor (which is also forced to 0 in simple mode). Power mode preserves
+      // the saved value.
+      scrollGroupScrRef: interfaceMode === 'simple' ? 0 : savedWebView.scrollGroupScrRef,
     };
   },
 };
