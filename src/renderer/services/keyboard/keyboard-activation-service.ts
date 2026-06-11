@@ -5,6 +5,14 @@
 // alignment-decisions #25, #27, #29 §A/§G/§H; data-contracts §4.4/§4.5, §8 INV-C04/INV-C05).
 // Maps to: CAP-010
 
+// `*.service.ts` / `*.service-host.ts` denote PAPI service wrappers / network-object engines in
+// this codebase; this class is deliberately NOT a PAPI surface (see class JSDoc) — it is an
+// internal collaborator of the renderer keyboard cluster, named like its sibling
+// `keyboard-association-store.ts` and pinned at this path by the CAP-010 strategic plan. Renaming
+// to `keyboard-activation.service.ts` would mislabel it next to the real `keyboard.service.ts`
+// (CAP-008) and `keyboard.service-host.ts` (CAP-015).
+/* eslint-disable paranext/service-file-naming */
+
 import { getErrorMessage, isPlatformError, UnsubscriberAsync } from 'platform-bible-utils';
 import { dataProviderService } from '@shared/services/data-provider.service';
 import { notificationService } from '@shared/services/notification.service';
