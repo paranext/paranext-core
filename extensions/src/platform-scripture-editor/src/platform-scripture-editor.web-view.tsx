@@ -78,7 +78,7 @@ import {
   ScriptureEditorViewType,
   ScriptureRangeUsjVerseRefChapterLocation,
 } from 'platform-scripture-editor';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { PropsWithChildren, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
 import { ChevronDown } from 'lucide-react';
 import { useAnnotationStyleSheet } from './annotations/use-annotation-stylesheet.hook';
@@ -100,6 +100,16 @@ import {
   openCommentListAndSelectThreadSafe,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
 } from './platform-scripture-editor.utils';
+
+/**
+ * Pass-through wrapper for the editor inside {@link InPortal}. `react-reverse-portal`'s `InPortal`
+ * clones its child with the props passed to `OutPortal` (always at least `node: undefined`), and
+ * cloning a `Fragment` with any prop other than `key`/`children` makes React log an error. This
+ * wrapper absorbs those props so `renderEditor` can keep returning a Fragment.
+ */
+function PortalContents({ children }: PropsWithChildren) {
+  return children;
+}
 
 /**
  * Time in ms to delay taking action to wait for the editor to load. Hope to be obsoleted by a way
@@ -1721,7 +1731,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         endAreaChildren={scrollGroupSelector}
       />
       {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state */}
-      <InPortal node={editorPortalNode}>{renderEditor()}</InPortal>
+      <InPortal node={editorPortalNode}>
+        <PortalContents>{renderEditor()}</PortalContents>
+      </InPortal>
       <div
         ref={editorContainerRef}
         className="tw:h-auto tw:flex-1 tw:min-h-0 tw:overflow-auto"
