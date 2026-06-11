@@ -291,4 +291,19 @@ describe('LastUsedKeyboardStore — reads have no side effects (read-only LastUs
     expect(notifications).toEqual([]);
     expect(localStorage.getItem(lastUsedKeyboardsByProjectStorageKey)).toBe(rawBefore);
   });
+
+  // Aliasing guard (refactorer-CAP-018 R1): `get` is forwarded onto the CAP-015 read-only
+  // LastUsedKeyboards PAPI path and into CAP-014 suggestion logic — a consumer mutating the
+  // returned value must NOT corrupt private store state or desync it from localStorage
+  it('returns a defensive copy: mutating the returned map does not affect store state or persistence', () => {
+    const store = createStore();
+    store.append(GUID_1, 'vernacular', 'ar-SA');
+
+    const leaked = store.get(GUID_1);
+    leaked.vernacular?.push('injected-id');
+    leaked.comments = ['injected-surface'];
+
+    expect(store.get(GUID_1)).toEqual({ vernacular: ['ar-SA'] });
+    expect(readPersisted()).toEqual({ [GUID_1]: { vernacular: ['ar-SA'] } });
+  });
 });

@@ -15,6 +15,7 @@ import type {
 } from '@shared/services/keyboard.service-model';
 import { MAX_LAST_USED_KEYBOARDS } from '@shared/services/keyboard.service-model';
 import { logger } from '@shared/services/logger.service';
+import { deepClone } from 'platform-bible-utils';
 
 /**
  * `window.localStorage` key holding all per-project last-used keyboard lists (alignment-decision
@@ -133,10 +134,12 @@ export class LastUsedKeyboardStore {
   /**
    * Returns the per-surface last-used keyboard lists for the given project (most-recent first).
    * Returns an EMPTY map (not `undefined`) when the project has no entry. Pure read — never writes
-   * or notifies.
+   * or notifies. The returned map is a defensive copy: consumers (CAP-014 suggestion logic, the
+   * CAP-015 read-only `LastUsedKeyboards` PAPI path) cannot mutate private store state through it.
    */
   get(projectId: ProjectId): SurfaceKeyboardArrayMap {
-    return this.ensureLoaded()[projectId] ?? {};
+    const surfaceMap = this.ensureLoaded()[projectId];
+    return surfaceMap ? deepClone(surfaceMap) : {};
   }
 
   /**
