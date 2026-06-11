@@ -10,7 +10,7 @@ import { LucideProps } from 'lucide-react';
 import { CommentStatus, DblResourceData, LanguageStrings, LegacyCommentThread, LocalizeKey, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ResourceType, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
 import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as RadixTabs, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import React$1 from 'react';
-import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithoutRef, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, RefObject } from 'react';
+import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithoutRef, FC, FocusEventHandler, LegacyRef, MouseEventHandler, MutableRefObject, PropsWithChildren, ReactNode, RefObject } from 'react';
 import * as ResizablePrimitive from 'react-resizable-panels';
 import { ToasterProps, toast as sonner } from 'sonner';
 import { Drawer as DrawerPrimitive } from 'vaul';
@@ -448,6 +448,163 @@ interface DataTableProps<TData, TValue> {
  * from TanStack's React Table library
  */
 export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, stickyHeader, onRowClickHandler, id, isLoading, noResultsMessage, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
+/** Minimal project metadata fed to the selector. */
+export type ProjectSelectorProject = {
+	id: string;
+	shortName: string;
+	fullName: string;
+	language?: string;
+	languageCode?: string;
+	/**
+	 * When `true`, the row for this project is rendered muted, is not selectable, and the
+	 * `disabledReason` (if provided) is surfaced in the row tooltip. Use when a project is present in
+	 * the list but cannot be picked in the current context (e.g. a read-only target, a reference
+	 * project that lacks the required data type). Already-selected pairs that become disabled remain
+	 * visible — the selector renders them as disabled-and-selected so the user can see the prior
+	 * selection but can't toggle it again.
+	 */
+	isDisabled?: boolean;
+	/** Human-readable explanation surfaced in the row tooltip when `isDisabled` is true. */
+	disabledReason?: string;
+};
+/** A project that is currently open in a specific scroll group. */
+export type ProjectSelectorOpenTab = {
+	projectId: string;
+	scrollGroupId: ScrollGroupId;
+	/**
+	 * Optional, pre-formatted "current scripture reference" for this scroll group (e.g. `"MAT
+	 * 3:16"`). Surfaced in the row tooltip. Caller decides the format — the selector does no
+	 * scripture-ref formatting of its own.
+	 */
+	scrollGroupScrRefLabel?: string;
+};
+/**
+ * A `(projectId, scrollGroupId)` pair. `scrollGroupId` is undefined when the pair refers to a
+ * project that is not currently open in any scroll group.
+ */
+export type ProjectSelectorProjectPair = {
+	projectId: string;
+	scrollGroupId?: ScrollGroupId;
+};
+type ProjectSelection = {
+	projectId?: string;
+};
+type ProjectMultiSelection = {
+	pairs: readonly ProjectSelectorProjectPair[];
+};
+type ProjectScrollGroupSelection = {
+	projectId?: string;
+	scrollGroupId?: ScrollGroupId;
+};
+export type ProjectSelectorLocalizedStrings = {
+	/** Placeholder for the popover's search input. Defaults to `"Search projects & resources"`. */
+	searchPlaceholder?: string;
+	/** Accessible label for the filter menu icon button. Defaults to `"Filter"`. */
+	filterAriaLabel?: string;
+	/** Filter menu: section heading for the grouping toggle. Defaults to `"Group"`. */
+	groupSectionLabel?: string;
+	/** Filter menu: section heading for the filter toggles. Defaults to `"Filter"`. */
+	filterSectionLabel?: string;
+	/** Filter menu: "By open tabs" item under the Group section. Defaults to `"By open tabs"`. */
+	filterGroupByOpenTabs?: string;
+	/** Filter menu: multi-only item under the Filter section. Defaults to `"Show selected only"`. */
+	filterShowSelectedOnly?: string;
+	/** Section heading for the Open tabs section. Defaults to `"Opened project & resource tabs"`. */
+	openTabsSectionHeading?: string;
+	/** Section heading for the Other projects section. Defaults to `"Your projects & resources"`. */
+	otherProjectsSectionHeading?: string;
+	/**
+	 * Tooltip on the bound-but-closed chip. `{group}` is replaced with the scroll-group letter.
+	 * Defaults to `"Bound to {group} · not currently open"`.
+	 */
+	boundButClosedTooltip?: string;
+	/** Label of the "Open" button shown on bound-but-closed rows. Defaults to `"Open"`. */
+	openButtonLabel?: string;
+	/** Multi-select: "Select all" button. Defaults to `"Select all"`. */
+	selectAll?: string;
+	/** Multi-select: "Clear all" button. Defaults to `"Clear all"`. */
+	clearAll?: string;
+};
+type CommonProps = {
+	projects: readonly ProjectSelectorProject[];
+	openTabs: readonly ProjectSelectorOpenTab[];
+	buttonPlaceholder?: string;
+	commandEmptyMessage?: string;
+	ariaLabel?: string;
+	buttonVariant?: ButtonProps["variant"];
+	buttonClassName?: string;
+	popoverContentClassName?: string;
+	popoverContentStyle?: React$1.CSSProperties;
+	alignDropDown?: "start" | "center" | "end";
+	isDisabled?: boolean;
+	localizedStrings?: ProjectSelectorLocalizedStrings;
+	/** Initial state of the "Group by open tabs" toggle. Defaults to `true`. */
+	defaultGroupByOpenTabs?: boolean;
+};
+type ProjectSelectorProps = (CommonProps & {
+	mode: "project";
+	selection: ProjectSelection;
+	onChangeSelection: (selection: {
+		projectId: string;
+	}) => void;
+	/**
+	 * Trigger label format. `'shortName'` (the default) renders just the selected project's
+	 * short name. `'shortNameAndFullName'` renders `"{shortName} - {fullName}"` (skipping the
+	 * suffix when the full name is absent or equal to the short name); since the short name
+	 * leads the string, the trigger's existing ellipsis truncation produces e.g.
+	 * `"arb - True Meaning Ar…"` when space is short, and the trigger's `title` still carries
+	 * the untruncated text for native hover.
+	 */
+	triggerLabelFormat?: "shortName" | "shortNameAndFullName";
+}) | (CommonProps & {
+	mode: "project-multi";
+	selection: ProjectMultiSelection;
+	onChangeSelection: (selection: {
+		pairs: ProjectSelectorProjectPair[];
+	}) => void;
+	/**
+	 * Called when the user clicks the "Open" button on a bound-but-closed row (or the row
+	 * itself). The caller is expected to open a tab via `papi.webViews.openWebView(...)`.
+	 */
+	onOpenProjectInGroup?: (projectId: string, scrollGroupId: ScrollGroupId) => void;
+	/**
+	 * Optional custom trigger label when at least one pair is selected. Receives the list of
+	 * selected `(project, scrollGroupId)` tuples. Defaults to `"N: short1 (A), short2 (B),
+	 * ..."`.
+	 */
+	getSelectedText?: (selected: ReadonlyArray<{
+		project: ProjectSelectorProject;
+		scrollGroupId?: ScrollGroupId;
+	}>) => string;
+}) | (CommonProps & {
+	mode: "projectScrollGroup";
+	selection: ProjectScrollGroupSelection;
+	onChangeSelection: (selection: {
+		projectId: string;
+		scrollGroupId: ScrollGroupId;
+	}) => void;
+	/**
+	 * Called when the user picks a not-open-project row OR clicks the "Open" button on a
+	 * bound-but-closed row. The caller is expected to open a tab via
+	 * `papi.webViews.openWebView(...)`.
+	 */
+	onOpenProjectInGroup: (projectId: string, scrollGroupId: ScrollGroupId) => void;
+});
+/**
+ * Combo-box project picker with three modes:
+ *
+ * - `project` — single-select, one row per project; chips list every open scroll group as metadata
+ *   (non-interactive, the whole row is the click target).
+ * - `project-multi` — multi-select over `(projectId, scrollGroupId)` pairs. Same project open in two
+ *   scroll groups renders as two independently-selectable rows. Projects not open anywhere render
+ *   as a single row with no chip.
+ * - `projectScrollGroup` — single-select of one `(projectId, scrollGroupId)` pair. Clicking a
+ *   not-open-project row selects the project in Group A and calls `onOpenProjectInGroup`.
+ *
+ * In both per-pair modes, a currently-selected pair whose tab is not open renders as a synthetic
+ * row with a diagonally-struck chip and an "Open" button.
+ */
+export declare function ProjectSelector(props: ProjectSelectorProps): import("react/jsx-runtime").JSX.Element;
 interface MarkdownRendererProps {
 	/** Optional unique identifier */
 	id?: string;
@@ -830,7 +987,8 @@ export declare function FootnoteItem({ footnote, layout, formatCaller, showMarke
 /** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */
 export declare function FootnoteList({ className, classNameForItems, footnotes, layout, listId, selectedFootnote, showMarkers, suppressFormatting, formatCaller, onFootnoteSelected, }: FootnoteListProps): import("react/jsx-runtime").JSX.Element;
 export type Scope = "selectedText" | "verse" | "chapter" | "book" | "selectedBooks";
-type ScopeWithRange = Scope | "range";
+/** Same as `Scope` plus a verse-range option. Used by `ScopeSelector` when range mode is enabled. */
+export type ScopeWithRange = Scope | "range";
 type Status = "approved" | "unapproved" | "unknown";
 /** Occurrence of item in inventory. Primarily used by table that shows occurrences */
 export type InventoryItemOccurrence = {
@@ -1322,7 +1480,8 @@ export declare const SCOPE_SELECTOR_STRING_KEYS: readonly [
 export type ScopeSelectorLocalizedStrings = {
 	[localizedInventoryKey in (typeof SCOPE_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
-type ScopeSelectorVariant = "radio" | "dropdown";
+/** Visual layout variant for the scope options. */
+export type ScopeSelectorVariant = "radio" | "dropdown";
 interface ScopeSelectorProps {
 	/** The current scope selection */
 	scope: ScopeWithRange;
@@ -1887,6 +2046,107 @@ export type UiLanguageSelectorProps = {
  * @param {UiLanguageSelectorProps} props - The props for the component.
  */
 export declare function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, id, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
+/** Base item interface for items displayed in the SourceLanguageIndexedList */
+export type IndexedListItem = {
+	/** Unique identifier for the item */
+	id: string;
+	/** Primary display text (term in the resource) */
+	primaryText: string;
+	/** Secondary display text (term in source language) */
+	sourceLanguageText?: string;
+	/** Transliteration of the source language text */
+	transliteration?: string;
+	/** Optional thumbnail URL for the 'thumbnail' variant */
+	thumbnailUrl?: string;
+	/** Optional alt text for the thumbnail */
+	thumbnailAlt?: string;
+};
+/** Props for the SourceLanguageIndexedList component */
+export type SourceLanguageIndexedListProps<T extends IndexedListItem> = {
+	/** Array of items to display in the list */
+	items: T[];
+	/** Custom render function for each list item row. If not provided, the default layout is used */
+	renderItem?: (item: T) => React$1.ReactNode;
+	/**
+	 * Render function for the detail content shown in a right-side drawer when an item is selected.
+	 * If not provided, no drawer is shown and `onItemClick` fires directly.
+	 */
+	renderDetailContent?: (item: T, onClose: () => void) => React$1.ReactNode;
+	/** Callback when an item is clicked (fires in addition to opening the drawer if both exist) */
+	onItemClick?: (item: T) => void;
+	/** ID of the currently selected item */
+	selectedItemId?: string;
+	/** Message to display when items array is empty */
+	emptyStateMessage?: string;
+	/**
+	 * Accessible label for the detail panel region (announced to screen readers). Pass a localized
+	 * string. Defaults to the English "Selected item details".
+	 */
+	detailRegionLabel?: string;
+	/** Whether items are currently being loaded */
+	isLoading?: boolean;
+	/** Display variant: 'text' for default text list, 'thumbnail' for media/maps with image preview */
+	variant?: "text" | "thumbnail";
+	/** Whether to show the source language column */
+	showSourceLanguage?: boolean;
+	/** Whether to show transliteration in brackets after source language text */
+	showTransliteration?: boolean;
+	/** Callback fired when user presses a character key (for type-ahead search) */
+	onCharacterPress?: (char: string) => void;
+	/** Additional CSS class names */
+	className?: string;
+};
+/** A semantic domain in a hierarchical tree (up to 5 levels) */
+export type SemanticDomain = {
+	/** Unique identifier for the domain */
+	id: string;
+	/** Display label for the domain */
+	label: string;
+	/** Child domains */
+	children?: SemanticDomain[];
+};
+/** Localization string keys used by the indexed list components */
+export declare const SOURCE_LANGUAGE_INDEXED_LIST_STRING_KEYS: LocalizeKey[];
+/** Localized strings type for the indexed list components */
+export type SourceLanguageIndexedListLocalizedStrings = {
+	[localizedKey in (typeof SOURCE_LANGUAGE_INDEXED_LIST_STRING_KEYS)[number]]?: string;
+};
+/**
+ * A shared list component for displaying source-language indexed items. Supports two-column layout
+ * (resource term + source language term), keyboard navigation, text and thumbnail variants,
+ * loading/empty states, and an optional side-by-side detail panel.
+ *
+ * When `renderDetailContent` is provided, clicking an item opens a side-by-side detail panel using
+ * a `ResizablePanelGroup` split (list at ~33%, detail at ~67%, with a draggable handle). This is
+ * the pattern from PR #2209's stories (`source-language-indexed-list.stories.tsx`); the previous
+ * absolute-positioned and vaul-`Drawer` implementations are both abandoned because the former
+ * obscured the list and the latter triggered Radix `pointer-events: none` body locks that left only
+ * the "back to list" button interactive across the whole page.
+ *
+ * Click swap: clicking a different list item while the panel is open swaps the detail content
+ * without requiring a close-then-reopen cycle. Clicking the already-selected item closes the
+ * detail. Pressing Escape while focus is inside the detail panel closes it (focus returns to the
+ * listbox). The list and detail are siblings inside the same scrollable container, so outer
+ * toolbars, tab switches, scope selectors, and any controls outside the SLI remain fully live.
+ *
+ * Used by Enhanced Resources (dictionary, encyclopedia, media) and lexical tools (dictionary).
+ *
+ * @example
+ *
+ * ```tsx
+ * <SourceLanguageIndexedList
+ *   items={dictionaryItems}
+ *   onItemClick={handleItemClick}
+ *   selectedItemId={selectedId}
+ *   showSourceLanguage
+ *   showTransliteration
+ *   renderDetailContent={(item, onClose) => (
+ *     <DictionaryEntryDetail entry={item} onBack={onClose} />
+ *   )}
+ * />;
+ * ```
+ */
+export function SourceLanguageIndexedList<T extends IndexedListItem>({ items, renderItem, renderDetailContent, onItemClick, selectedItemId: controlledSelectedId, emptyStateMessage, detailRegionLabel, isLoading, variant, showSourceLanguage, showTransliteration, onCharacterPress, className, }: SourceLanguageIndexedListProps<T>): import("react/jsx-runtime").JSX.Element;
 /**
  * @deprecated 2026-06-08 Use {@link CheckboxGroupProps} instead. `ChecklistProps` is kept as the
  *   existing export for backward compatibility and will be removed in a future release.
@@ -2106,6 +2366,59 @@ type EditorKeyboardShortcutsProps = React$1.PropsWithChildren & {
  * have the `Editorial` component instance as a child of this component.
  */
 export declare function EditorKeyboardShortcuts({ children, editorRef, canUndo, canRedo, }: EditorKeyboardShortcutsProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Props for {@link LinkedScrRefButton}.
+ *
+ * The component renders a scripture reference (or any short label) as a shadcn `Button` variant
+ * `link`, wrapped in a tooltip. Used when a scripture reference should double as a navigation
+ * affordance — clicking the reference text takes the user to that location in scripture.
+ *
+ * NOTE: This is a small, intentionally narrow primitive. PR #1949 introduces a richer
+ * `LinkedScrRefDisplay` component built around `SerializedVerseRef` and the formatted-range
+ * utilities in `platform-bible-utils`. When that PR merges, consumers that already have structured
+ * `SerializedVerseRef` data should prefer `LinkedScrRefDisplay`. This button is for cases where the
+ * reference is already rendered as a string and only the link affordance is needed.
+ */
+export type LinkedScrRefButtonProps = {
+	/**
+	 * The scripture reference (or any short label) to render as link text. Already-formatted — no
+	 * internal formatting is applied. Pass an empty string to render nothing.
+	 */
+	scrRef: string;
+	/** Click handler. Receives the standard mouse event. */
+	onClick?: React$1.MouseEventHandler<HTMLButtonElement>;
+	/**
+	 * Tooltip content displayed on hover. Typical usage: a localized "Go to {scrRef}" string built by
+	 * the consumer. Pass a `ReactNode` to surface complex content if needed.
+	 */
+	tooltipContent?: React$1.ReactNode;
+	/**
+	 * Optional accessible name override. When omitted, the button's text content (the scripture ref)
+	 * provides the accessible name.
+	 */
+	ariaLabel?: string;
+	/** Optional class name appended to the button's class list. */
+	className?: string;
+	/**
+	 * Optional `data-testid` for the button. The default `'linked-scr-ref-button'` is rarely unique
+	 * enough — pass a feature-scoped value when the button appears in tested flows.
+	 */
+	testId?: string;
+};
+/**
+ * Renders a scripture reference as a clickable shadcn link-button with a hover tooltip. Designed
+ * for table cells / row affordances where the reference string itself is the navigation target —
+ * e.g. the first column of the markers-checklist data table, where clicking `GEN 1:1` navigates the
+ * active scripture editor to that verse.
+ *
+ * The button uses `variant="link"` styling, so it inherits the foreground color and
+ * underline-on-hover treatment without the chrome of a standard button. Wrap in a parent that
+ * controls layout (the button itself is `inline-flex`).
+ *
+ * If no `onClick` is provided, the button is disabled and the tooltip still surfaces (useful for
+ * read-only contexts where the reference should not be navigable but should still be readable).
+ */
+export declare function LinkedScrRefButton({ scrRef, onClick, tooltipContent, ariaLabel, className, testId, }: LinkedScrRefButtonProps): import("react/jsx-runtime").JSX.Element | undefined;
 /**
  * Object containing all keys used for localization in this component. If you're using this
  * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
@@ -2841,9 +3154,7 @@ export declare function Tooltip({ ...props }: React$1.ComponentProps<typeof Tool
 /** @inheritdoc Tooltip */
 export declare function TooltipTrigger({ className, variant, ...props }: React$1.ComponentProps<typeof TooltipPrimitive.Trigger> & ButtonProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Tooltip */
-export declare function TooltipContent({ className, sideOffset, style, showArrow, children, ...props }: React$1.ComponentProps<typeof TooltipPrimitive.Content> & {
-	showArrow?: boolean;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function TooltipContent({ className, sideOffset, style, children, ...props }: React$1.ComponentProps<typeof TooltipPrimitive.Content>): import("react/jsx-runtime").JSX.Element;
 type Side = "primary" | "secondary";
 type SidebarContextProps = {
 	state: "expanded" | "collapsed";
@@ -3186,8 +3497,8 @@ export declare const useListbox: ({ options, onFocusChange, onOptionSelect, onCh
 	/** Focus an option by its ID */
 	focusOption: (id: string) => void;
 };
-/** Z-index for elements that need to appear above rc-dock floating tabs and potential modals (~200) */
-export declare const Z_INDEX_ABOVE_DOCK = 600;
+/** Z-index for elements that need to appear above rc-dock floating tabs (~200) */
+export declare const Z_INDEX_ABOVE_DOCK = 250;
 /** Z-index for the footnote editor layer */
 export declare const Z_INDEX_FOOTNOTE_EDITOR = 300;
 /** Z-index for overlay popovers and context menus */
@@ -3196,6 +3507,11 @@ export declare const Z_INDEX_OVERLAY = 400;
 export declare const Z_INDEX_MODAL_BACKDROP = 450;
 /** Z-index for modal dialog content */
 export declare const Z_INDEX_MODAL = 500;
+/**
+ * Z-index for tooltips — must render above modal dialogs since tooltips can be triggered from
+ * elements inside a modal (e.g. help icons in form fields).
+ */
+export declare const Z_INDEX_TOOLTIP = 550;
 /**
  * Tailwind and CSS class application helper function. Uses
  * [`clsx`](https://www.npmjs.com/package/clsx) to make it easy to apply classes conditionally using

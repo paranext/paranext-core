@@ -92,6 +92,69 @@ function setupUser() {
   return userEvent.setup({ pointerEventsCheck: 0 });
 }
 
+describe('ProjectSelector — trigger label format', () => {
+  it('renders only the shortName by default', () => {
+    render(<ProjectSelectorHarness initialSelected="esvus16" />);
+    const trigger = screen.getByRole('combobox', { name: 'Project' });
+    expect(trigger).toHaveTextContent('ESVUS16');
+    expect(trigger).not.toHaveTextContent('English Standard Version (US) 2016');
+  });
+
+  it("renders 'shortName - fullName' when triggerLabelFormat is shortNameAndFullName", () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ projectId: 'esvus16' }}
+        onChangeSelection={() => {}}
+        buttonPlaceholder="Select a project"
+        ariaLabel="Project"
+        triggerLabelFormat="shortNameAndFullName"
+      />,
+    );
+    const trigger = screen.getByRole('combobox', { name: 'Project' });
+    expect(trigger).toHaveTextContent('ESVUS16 - English Standard Version (US) 2016');
+    // The untruncated text is available for native hover via title.
+    expect(trigger).toHaveAttribute('title', 'ESVUS16 - English Standard Version (US) 2016');
+  });
+
+  it('skips the fullName suffix when fullName equals shortName', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={[{ id: 'p1', shortName: 'ABC', fullName: 'ABC' }]}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ projectId: 'p1' }}
+        onChangeSelection={() => {}}
+        buttonPlaceholder="Select a project"
+        ariaLabel="Project"
+        triggerLabelFormat="shortNameAndFullName"
+      />,
+    );
+    const trigger = screen.getByRole('combobox', { name: 'Project' });
+    expect(trigger).toHaveTextContent('ABC');
+    expect(trigger).not.toHaveTextContent('ABC - ABC');
+  });
+
+  it('renders the placeholder when nothing is selected regardless of format', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ projectId: undefined }}
+        onChangeSelection={() => {}}
+        buttonPlaceholder="Select a project"
+        ariaLabel="Project"
+        triggerLabelFormat="shortNameAndFullName"
+      />,
+    );
+    const trigger = screen.getByRole('combobox', { name: 'Project' });
+    expect(trigger).toHaveTextContent('Select a project');
+  });
+});
+
 describe('ProjectSelector — search-clear-on-close', () => {
   it('resets the search query when the popover is closed and reopened', async () => {
     const user = setupUser();

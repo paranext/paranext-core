@@ -163,6 +163,15 @@ export type ProjectSelectorProps =
       mode: 'project';
       selection: ProjectSelection;
       onChangeSelection: (selection: { projectId: string }) => void;
+      /**
+       * Trigger label format. `'shortName'` (the default) renders just the selected project's short
+       * name. `'shortNameAndFullName'` renders `"{shortName} - {fullName}"` (skipping the suffix
+       * when the full name is absent or equal to the short name); since the short name leads the
+       * string, the trigger's existing ellipsis truncation produces e.g. `"arb - True Meaning Ar…"`
+       * when space is short, and the trigger's `title` still carries the untruncated text for
+       * native hover.
+       */
+      triggerLabelFormat?: 'shortName' | 'shortNameAndFullName';
     })
   | (CommonProps & {
       mode: 'project-multi';
@@ -679,7 +688,14 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     switch (props.mode) {
       case 'project': {
         const selected = props.projects.find((p) => p.id === props.selection.projectId);
-        const text = selected ? selected.shortName : (props.buttonPlaceholder ?? '');
+        let text = selected ? selected.shortName : (props.buttonPlaceholder ?? '');
+        if (
+          selected &&
+          props.triggerLabelFormat === 'shortNameAndFullName' &&
+          selected.fullName &&
+          selected.fullName !== selected.shortName
+        )
+          text = `${selected.shortName} - ${selected.fullName}`;
         return { node: text, title: text };
       }
       case 'project-multi': {
@@ -764,6 +780,9 @@ export function ProjectSelector(props: ProjectSelectorProps) {
           aria-expanded={open}
           aria-label={props.ariaLabel}
           disabled={props.isDisabled ?? false}
+          // Native hover surfaces the untruncated label when the trigger
+          // ellipsis-truncates it (e.g. triggerLabelFormat='shortNameAndFullName').
+          title={triggerContent.title}
           className={cn(
             'tw:flex tw:w-[180px] tw:items-center tw:justify-between tw:overflow-hidden',
             props.buttonClassName,

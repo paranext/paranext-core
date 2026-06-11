@@ -278,23 +278,17 @@ export function ManageBooksSidebar({
             {t('%manageBooks_header_projectLabel%', 'Project')}
           </Label>
         )}
-        {/* The ProjectSelector trigger shows the active project's shortName,
-            which is opaque to anyone who doesn't already know the
-            abbreviation. Wrap the trigger in a tooltip surfacing the fullName
-            so the user can hover to disambiguate. Tooltip is suppressed when
-            fullName equals the shortName (no extra info) or when projects
-            haven't resolved yet. */}
+        {/* In wide mode the trigger shows "{shortName} - {fullName}" inline
+            (Manila UX follow-up; ellipsis-truncated by the trigger itself, with
+            the untruncated text in the native title attribute), so no Radix
+            tooltip is needed. In narrow mode the sidebar is a ~56px rail and
+            the trigger is icon-only, so a tooltip surfaces the project name —
+            otherwise the user has no way to identify the active project
+            without opening the popover. */}
         {(() => {
           const activeProject = projects.find((p) => p.id === projectId);
           const fullName = activeProject?.fullName;
           const shortName = activeProject?.shortName;
-          const showTooltip = !!fullName && fullName !== shortName;
-          // In narrow mode the sidebar is a ~56px rail. The default
-          // `tw:w-full` trigger clips the shortName to a glyph or two — confusing. Render
-          // the trigger as an icon-only button (just chevron) instead; the hover tooltip
-          // surfaces the full project name (or shortName fallback). Always show the
-          // tooltip in narrow mode so the user has SOME way to identify the active project
-          // without opening the popover.
           const selectorElement = (
             <div data-testid="manage-books-sidebar-project-trigger">
               <ProjectSelector
@@ -311,6 +305,7 @@ export function ManageBooksSidebar({
                 )}
                 isDisabled={isSubmitting}
                 ariaLabel={t('%manageBooks_header_projectLabel%', 'Project')}
+                triggerLabelFormat={isNarrow ? 'shortName' : 'shortNameAndFullName'}
                 // Fallback when the project list is still loading or the active projectId hasn't
                 // landed in the list yet. We deliberately do NOT echo `projectId` here — projectIds
                 // are GUIDs and would render as a 32-char hex string in the trigger, which the
@@ -322,18 +317,13 @@ export function ManageBooksSidebar({
               />
             </div>
           );
-          // In narrow mode always show the tooltip (shortName or fullName) since the
-          // visible trigger is icon-only. In wide mode, only show when fullName adds info.
+          if (!isNarrow) return selectorElement;
+          // Narrow rail: tooltip renders to the right (no other room).
           const narrowTooltipText = fullName || shortName || '';
-          if (!isNarrow && !showTooltip) return selectorElement;
-          // Tooltips render to the right of the rail in narrow mode (no other room),
-          // above the trigger in wide mode.
           return (
             <Tooltip>
               <TooltipTrigger asChild>{selectorElement}</TooltipTrigger>
-              <TooltipContent side={isNarrow ? 'right' : 'top'}>
-                {isNarrow ? narrowTooltipText : fullName}
-              </TooltipContent>
+              <TooltipContent side="right">{narrowTooltipText}</TooltipContent>
             </Tooltip>
           );
         })()}
