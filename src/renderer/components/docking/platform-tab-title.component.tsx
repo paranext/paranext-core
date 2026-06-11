@@ -34,6 +34,7 @@ import {
 } from '@shared/models/web-view-move.model';
 import { WebViewId } from '@shared/models/web-view.model';
 import { sendCommand } from '@shared/services/command.service';
+import { contextKeysService } from '@shared/services/context-keys.service';
 import { logger } from '@shared/services/logger.service';
 import { notificationService } from '@shared/services/notification.service';
 import { windowService } from '@shared/services/window.service';
@@ -54,6 +55,7 @@ import {
 } from 'platform-bible-react';
 import { LUCIDE_ICON_NAMES, LucideIcon, ShortcutKeys } from 'platform-bible-react/experimental';
 import {
+  evaluateMenu,
   getErrorMessage,
   isLocalizeKey,
   isPlatformError,
@@ -423,6 +425,26 @@ export function PlatformTabTitle({
     useState<Localized<SingleColumnMenu>>(EMPTY_TAB_MENU);
 
   /**
+   * The contributed menu with its when-expressions applied. Evaluated once per read: a
+   * when-expression on a tab item reflects the context keys as they stand when the read lands, not
+   * as they change afterwards. Only visibility applies here, since the converted items carry no
+   * disabled or checked state.
+   */
+  const evaluatedTabMenu = useMemo(
+    () =>
+      evaluateMenu(
+        contributedTabMenu,
+        contextKeysService.get,
+        { webViewId, webViewType },
+        (expression, error) =>
+          logger.warn(
+            `Error evaluating tab menu when-expression '${expression}': ${getErrorMessage(error)}`,
+          ),
+      ),
+    [contributedTabMenu, webViewId, webViewType],
+  );
+
+  /**
    * The contributed menu as this mode offers it. Simple mode shows the zoom group alone: every
    * other tab item is a no-op there — floating is off for its groups, and moving reaches a second
    * window Simple mode does not have — while zooming this tab's content behaves identically in both
@@ -432,10 +454,10 @@ export function PlatformTabTitle({
    * and a converted item no longer says which group it came from.
    */
   const tabMenuForMode = useMemo(() => {
-    if (isPowerMode) return contributedTabMenu;
-    if (isSimpleMode) return filterTabMenuToGroup(contributedTabMenu, CONTENT_ZOOM_TAB_MENU_GROUP);
+    if (isPowerMode) return evaluatedTabMenu;
+    if (isSimpleMode) return filterTabMenuToGroup(evaluatedTabMenu, CONTENT_ZOOM_TAB_MENU_GROUP);
     return EMPTY_TAB_MENU;
-  }, [isPowerMode, isSimpleMode, contributedTabMenu]);
+  }, [isPowerMode, isSimpleMode, evaluatedTabMenu]);
 
   /**
    * The contributed tab menu, converted for rendering. Empty until the read below lands, and for a
