@@ -1,5 +1,11 @@
 {
   "metadata": {
+    "%manageBooks_copy_confirmBody%": {
+      "fallbackKey": "%manageBooks_copy_confirmBodyWithBooks%"
+    },
+    "%manageBooks_view_diff_label%": {
+      "fallbackKey": "%manageBooks_view_compareVersions_label%"
+    },
     "%inventoryName_Character%": {
       "fallbackKey": "%CheckType_3%"
     },
@@ -140,8 +146,6 @@
       "%manageBooks_param_projectNotFound%": "Project not found: {0}",
       "%manageBooks_param_sourceProjectNotFound%": "Source project not found: {0}",
       "%manageBooks_sidebar_heading%": "Manage books",
-      "%manageBooks_sidebar_group_manage%": "Manage project books",
-      "%manageBooks_sidebar_group_reference%": "Reference",
       "%manageBooks_sidebar_show_label%": "Show books",
       "%manageBooks_sidebar_show_subtitle%": "View books in this project",
       "%manageBooks_sidebar_create_label%": "Create books",
@@ -159,10 +163,7 @@
       "%manageBooks_bookNames_label%": "Book names",
       "%manageBooks_bookNames_subtitle%": "Edit short and long book names (TOC1–3)",
       "%manageBooks_bookNames_notYetAvailable%": "Book names editing is not yet available — coming soon.",
-      "%manageBooks_introductions_label%": "Introductions",
-      "%manageBooks_introductions_subtitle%": "Compare introductory USFM across projects",
-      "%manageBooks_introductions_notYetAvailable%": "Introductions are not yet available — coming soon.",
-      "%manageBooks_copy_confirmBody%": "{0} of the books you are copying already exist in {1}.",
+      "%manageBooks_copy_confirmBodyWithBooks%": "{0} book(s) already exist in {1}: {2}",
       "%manageBooks_copy_confirmCancel%": "Cancel",
       "%manageBooks_copy_confirmMergeFromSource%": "Merge from source",
       "%manageBooks_copy_confirmReplace%": "Replace entire books",
@@ -317,7 +318,7 @@
       "%manageBooks_versification_septuagint%": "Septuagint",
       "%manageBooks_versification_unknown%": "Unknown",
       "%manageBooks_versification_vulgate%": "Vulgate",
-      "%manageBooks_view_diff_label%": "View differences",
+      "%manageBooks_view_compareVersions_label%": "Compare versions…",
       "%manageBooks_view_disabledStub_notYetAvailable%": "Not yet available — coming soon",
       "%manageBooks_view_openProjectCanons%": "Project canons…",
       "%manageBooks_view_openRegistry%": "Registry",

@@ -58,23 +58,35 @@ export function CopyConflictPrompt({
             <DialogDescription>
               {conflict
                 ? fmtTemplate(
+                    // Lists the conflicting book names like the import-conflict
+                    // prompt does (Manila UX follow-up: "the message should
+                    // also list the book name(s)"). New key — the old
+                    // %manageBooks_copy_confirmBody% (count-only, 2 args) is
+                    // redirected via metadata fallbackKey since its
+                    // placeholder arity changed.
                     t(
-                      '%manageBooks_copy_confirmBody%',
-                      '{0} of the books you are copying already exist in {1}.',
+                      '%manageBooks_copy_confirmBodyWithBooks%',
+                      '{0} book(s) already exist in {1}: {2}',
                     ),
                     conflict.existing.length,
                     projectName,
+                    conflict.existing.join(', '),
                   )
                 : ''}
             </DialogDescription>
           </DialogHeader>
-          {/* Bug 2 mirror — wrap on narrow widths so multiple long-label buttons fit the dialog. */}
+          {/* Bug 2 mirror — wrap on narrow widths so multiple long-label buttons fit the dialog.
+              Per-button tw:h-auto + tw:whitespace-normal overrides the shadcn
+              Button base's whitespace-nowrap/fixed height so a long label wraps
+              INSIDE its button instead of growing past the dialog bounds
+              (Manila UX follow-up). */}
           <div className="tw:flex tw:flex-col tw:gap-2 tw:sm:flex-row tw:sm:flex-wrap tw:sm:justify-end">
-            <Button variant="ghost" onClick={onCancel}>
+            <Button variant="ghost" className="tw:h-auto tw:whitespace-normal" onClick={onCancel}>
               {t('%manageBooks_copy_confirmCancel%', 'Cancel')}
             </Button>
             <Button
               variant="destructive"
+              className="tw:h-auto tw:whitespace-normal"
               onClick={() => {
                 if (!conflict) return;
                 onChoose('replaceEntireBooks', conflict.books);
@@ -84,6 +96,7 @@ export function CopyConflictPrompt({
             </Button>
             <Button
               variant="outline"
+              className="tw:h-auto tw:whitespace-normal"
               onClick={() => {
                 if (!conflict) return;
                 onChoose('nonExistingChapters', conflict.books);

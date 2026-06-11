@@ -206,7 +206,7 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_copy_emptyState_noBooks%',
   // Copy overwrite confirm
   '%manageBooks_copy_confirmTitle%',
-  '%manageBooks_copy_confirmBody%',
+  '%manageBooks_copy_confirmBodyWithBooks%',
   '%manageBooks_copy_confirmReplace%',
   '%manageBooks_copy_confirmCancel%',
   // Vladimir review #16: Copy gets the same 3-way conflict prompt as Import.
@@ -271,7 +271,7 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_grid_untracked%',
   '%manageBooks_grid_selectAll%',
   // View-mode shared stub label
-  '%manageBooks_view_diff_label%',
+  '%manageBooks_view_compareVersions_label%',
   '%manageBooks_view_disabledStub_notYetAvailable%',
   // Import flow
   '%manageBooks_import_choose%',
@@ -363,8 +363,6 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   // Sidebar (rebuild — ViewListSelect layout, 2026-05-02)
   '%manageBooks_sidebar_heading%',
   '%manageBooks_sidebar_projectPlaceholder%',
-  '%manageBooks_sidebar_group_manage%',
-  '%manageBooks_sidebar_group_reference%',
   '%manageBooks_sidebar_show_label%',
   '%manageBooks_sidebar_show_subtitle%',
   '%manageBooks_sidebar_create_label%',
@@ -386,9 +384,6 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_bookNames_label%',
   '%manageBooks_bookNames_subtitle%',
   '%manageBooks_bookNames_notYetAvailable%',
-  '%manageBooks_introductions_label%',
-  '%manageBooks_introductions_subtitle%',
-  '%manageBooks_introductions_notYetAvailable%',
 ] as const);
 
 /** Localized strings consumed by `ManageBooksDialog`. */

@@ -1,7 +1,7 @@
 /**
  * Stories for the manage-books-dialog component (the new ViewListSelect layout). Renders the
  * orchestrator inside a stateful harness so reviewers can exercise all 5 sidebar sections and see
- * the 3 disabled future-section rows.
+ * the 2 disabled future-section rows.
  *
  * Replaced the 6-variant exploration that lived in
  * `lib/platform-bible-react/src/stories/advanced/manage-books-dialog.stories.tsx` (deleted) — that
@@ -102,7 +102,7 @@ export const DisabledFutureSections: Story = {
     docs: {
       description: {
         story:
-          'The sidebar shows the 5 in-scope sections (Show / Create / Copy / Import / Delete) plus 3 disabled future sections (Progress tracking / Book Names / Introductions). Hover the disabled rows to see the "not yet available" tooltip.',
+          'The sidebar shows the 5 in-scope sections (Show / Create / Copy / Import / Delete) plus 2 disabled future sections (Progress tracking / Book Names). Hover the disabled rows to see the "not yet available" tooltip.',
       },
     },
   },

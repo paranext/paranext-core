@@ -559,16 +559,17 @@ export function BookGridSelector({
   const anyBadges = items.some((it) => it.tone !== 'neutral');
   const anyUnplanned = items.some((it) => it.unplanned);
   const needsWiderPills = anyBadges || anyUnplanned;
-  // Minimum-width thresholds chosen to roughly match the source story's
-  // breakpoint table at common Manage Books widths:
-  //   • narrow (<560px) → 2 cols
-  //   • mid (~720px)    → 3 cols
-  //   • wide (~900px)   → 4 cols
-  //   • full (~1200px+) → 5 cols
-  // 200px / 260px minimums hit those targets via auto-fill+minmax without
-  // needing media queries the extension's Tailwind compile pass doesn't emit.
+  // Minimum column widths track actual pill content (checkbox + dot + 3-char
+  // book code ≈ 90px; + comparison badge / warning glyph ≈ 170px) instead of
+  // the original 200px/260px floors, which left large dead space between the
+  // book code and the right-aligned badge and meant a full canon never fit on
+  // screen at once (Manila UX follow-up: "make book name columns more narrow
+  // ... so that all books can be viewed at once"). auto-fill+minmax then packs
+  // 6-8 columns at typical dialog widths instead of 4-5. The badge floor was
+  // sized against the longest current localized badge label ("Newer"/"Older"
+  // variants) — revisit if a longer translation lands.
   const gridStyle: CSSProperties = {
-    gridTemplateColumns: `repeat(auto-fill, minmax(${needsWiderPills ? 260 : 200}px, 1fr))`,
+    gridTemplateColumns: `repeat(auto-fill, minmax(${needsWiderPills ? 190 : 140}px, 1fr))`,
   };
 
   const outOfScopeText = localizedStrings?.outOfScope ?? 'Out of scope';
@@ -683,8 +684,10 @@ export function BookGridSelector({
       return (
         <Tooltip>
           <TooltipTrigger asChild>{plain}</TooltipTrigger>
-          {/* Tooltip renders bottom-LEFT (align="start"). */}
-          <TooltipContent side="bottom" align="start">
+          {/* Tooltip renders bottom-CENTER so it stays near the cursor on
+              wide pills (Manila UX follow-up: "tooltip should be a bit closer
+              to the item"). */}
+          <TooltipContent side="bottom" align="center">
             {tooltipContent}
           </TooltipContent>
         </Tooltip>
@@ -750,8 +753,9 @@ export function BookGridSelector({
     return (
       <Tooltip>
         <TooltipTrigger asChild>{button}</TooltipTrigger>
-        {/* Tooltip renders bottom-LEFT alignment. */}
-        <TooltipContent side="bottom" align="start">
+        {/* Tooltip renders bottom-CENTER so it stays near the cursor on wide
+            pills (Manila UX follow-up). */}
+        <TooltipContent side="bottom" align="center">
           {tooltipContent}
         </TooltipContent>
       </Tooltip>
@@ -833,7 +837,15 @@ export function BookGridSelector({
                     size="sm"
                     onClick={() => group.label && toggleCollapsed(group.label)}
                     aria-expanded={!collapsed}
-                    className="tw:h-6 tw:flex-1 tw:justify-start tw:gap-1 tw:px-2 tw:text-[11px] tw:font-semibold tw:uppercase tw:tracking-wider tw:text-muted-foreground tw:hover:text-foreground"
+                    // The shadcn ghost variant gained `aria-expanded:bg-muted`
+                    // in the preset upgrade, which painted every EXPANDED
+                    // group header with a persistent background bar. Neutralize
+                    // it here so headers are plain text with background on
+                    // hover only (Manila UX follow-up), while keeping
+                    // aria-expanded for accessibility. Other ghost dropdown
+                    // triggers still rely on the variant default, so this is a
+                    // per-usage override, not a button.tsx change.
+                    className="tw:h-6 tw:flex-1 tw:justify-start tw:gap-1 tw:px-2 tw:text-[11px] tw:font-semibold tw:uppercase tw:tracking-wider tw:text-muted-foreground tw:hover:text-foreground tw:aria-expanded:bg-transparent tw:aria-expanded:text-muted-foreground tw:hover:aria-expanded:bg-muted tw:hover:aria-expanded:text-foreground"
                   >
                     <Chevron className="tw:h-3.5 tw:w-3.5" aria-hidden />
                     <span>{group.label}</span>

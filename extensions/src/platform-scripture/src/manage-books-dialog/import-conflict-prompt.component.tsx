@@ -64,12 +64,17 @@ export function ImportConflictPrompt({
           <p className="tw:text-sm tw:text-muted-foreground">
             {t('%manageBooks_import_conflictBody2%', 'Choose how to proceed with the import.')}
           </p>
+          {/* Per-button tw:h-auto + tw:whitespace-normal overrides the shadcn
+              Button base's whitespace-nowrap/fixed height so a long label wraps
+              INSIDE its button instead of growing past the dialog bounds
+              (Manila UX follow-up). */}
           <div className="tw:flex tw:flex-col tw:gap-2 tw:sm:flex-row tw:sm:flex-wrap tw:sm:justify-end">
-            <Button variant="ghost" onClick={onCancel}>
+            <Button variant="ghost" className="tw:h-auto tw:whitespace-normal" onClick={onCancel}>
               {t('%manageBooks_import_conflictCancel%', 'Cancel')}
             </Button>
             <Button
               variant="destructive"
+              className="tw:h-auto tw:whitespace-normal"
               onClick={() => {
                 if (!conflict) return;
                 onChoose('replaceEntireBooks', conflict.books);
@@ -79,6 +84,7 @@ export function ImportConflictPrompt({
             </Button>
             <Button
               variant="outline"
+              className="tw:h-auto tw:whitespace-normal"
               onClick={() => {
                 if (!conflict) return;
                 onChoose('nonExistingChapters', conflict.books);

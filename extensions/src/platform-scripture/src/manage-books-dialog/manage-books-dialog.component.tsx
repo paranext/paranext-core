@@ -1872,7 +1872,7 @@ export function ManageBooksDialog({
                         aria-disabled
                         aria-describedby={viewDiffDisabledHintId}
                       >
-                        {t('%manageBooks_view_diff_label%', 'View differences')}
+                        {t('%manageBooks_view_compareVersions_label%', 'Compare versions…')}
                       </Button>
                     );
                     return (
