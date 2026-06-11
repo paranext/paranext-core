@@ -6,9 +6,6 @@
 // pre-select (alignment-decision #26), persisted privately in renderer `window.localStorage`
 // rather than papi.settings so arbitrary extensions cannot mutate it (alignment-decision #29 §B).
 // Maps to: CAP-018
-//
-// RED stub (CAP-018): full contracted surface; behavior implemented in the GREEN phase.
-// All methods throw `Not implemented (CAP-018 RED stub)`.
 
 import type {
   KeyboardId,
@@ -16,6 +13,8 @@ import type {
   ProjectId,
   SurfaceKeyboardArrayMap,
 } from '@shared/services/keyboard.service-model';
+import { MAX_LAST_USED_KEYBOARDS } from '@shared/services/keyboard.service-model';
+import { logger } from '@shared/services/logger.service';
 
 /**
  * `window.localStorage` key holding all per-project last-used keyboard lists (alignment-decision
@@ -62,6 +61,52 @@ export type LastUsedKeyboardStoreOptions = {
 };
 
 /**
+ * Copies the string-array-valued surface entries of a parsed persisted project value into a fresh
+ * {@link SurfaceKeyboardArrayMap}, narrowing entry-by-entry (non-conforming surface values are
+ * dropped from the in-memory view without rewriting — non-destructive at read, CAP-009
+ * INV-ROBUST-01 analog).
+ */
+function copySurfaceKeyboardArrayMap(value: object): SurfaceKeyboardArrayMap {
+  const surfaceMap: SurfaceKeyboardArrayMap = {};
+  Object.entries(value).forEach(([surfaceType, keyboardIds]) => {
+    if (Array.isArray(keyboardIds)) {
+      const stringIds = keyboardIds.filter((keyboardId) => typeof keyboardId === 'string');
+      if (stringIds.length === keyboardIds.length) surfaceMap[surfaceType] = stringIds;
+    }
+  });
+  return surfaceMap;
+}
+
+/**
+ * Parses the raw persisted localStorage value into the nested per-project shape. Corrupted JSON
+ * starts fresh without throwing (alignment-decision #29 §B: no throw; log); a parseable non-object
+ * value degrades to empty silently. The corrupt raw value is NOT overwritten at read time — the
+ * next successful append re-establishes a valid persisted shape.
+ */
+function parsePersisted(raw: string | undefined): LastUsedKeyboardsByProject {
+  if (raw === undefined) return {};
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    logger.warn(
+      `LastUsedKeyboardStore: corrupted JSON under '${lastUsedKeyboardsByProjectStorageKey}'; starting fresh. ${error}`,
+    );
+    return {};
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+
+  const map: LastUsedKeyboardsByProject = {};
+  Object.entries(parsed).forEach(([projectId, surfaceValue]) => {
+    if (surfaceValue && typeof surfaceValue === 'object' && !Array.isArray(surfaceValue))
+      map[projectId] = copySurfaceKeyboardArrayMap(surfaceValue);
+  });
+  return map;
+}
+
+/**
  * Renderer-hosted private store for per-project last-used keyboards (CAP-018; parallel to
  * {@link import('./keyboard-association-store').KeyboardAssociationStore | KeyboardAssociationStore}
  * but with private `window.localStorage` backing — alignment-decisions #26, #29 §B).
@@ -75,6 +120,12 @@ export type LastUsedKeyboardStoreOptions = {
 export class LastUsedKeyboardStore {
   private readonly options: LastUsedKeyboardStoreOptions;
 
+  /**
+   * In-memory view of the persisted value, lazily loaded on first access (construction must stay
+   * side-effect free — read-only `LastUsedKeyboards` PAPI surface guarantee).
+   */
+  private cache: LastUsedKeyboardsByProject | undefined;
+
   constructor(options: LastUsedKeyboardStoreOptions = {}) {
     this.options = options;
   }
@@ -85,7 +136,7 @@ export class LastUsedKeyboardStore {
    * or notifies.
    */
   get(projectId: ProjectId): SurfaceKeyboardArrayMap {
-    return this.notImplemented(`get(${projectId})`);
+    return this.ensureLoaded()[projectId] ?? {};
   }
 
   /**
@@ -97,7 +148,23 @@ export class LastUsedKeyboardStore {
    * already at the head of the surface's list is a no-op: nothing persisted, nothing emitted.
    */
   append(projectId: ProjectId, surfaceType: KeyboardSurfaceType, keyboardId: KeyboardId): void {
-    return this.notImplemented(`append(${projectId}, ${surfaceType}, ${keyboardId})`);
+    const cache = this.ensureLoaded();
+    const currentIds = cache[projectId]?.[surfaceType] ?? [];
+
+    // Dedup at head → full no-op: state unchanged, nothing persisted, NO emit (strategic plan
+    // edge case; protects CAP-015 from spurious sendUpdate on every unchanged focus-out)
+    if (currentIds[0] === keyboardId) return;
+
+    const nextIds = [keyboardId, ...currentIds.filter((id) => id !== keyboardId)].slice(
+      0,
+      MAX_LAST_USED_KEYBOARDS,
+    );
+    cache[projectId] = { ...cache[projectId], [surfaceType]: nextIds };
+
+    // Persist BEFORE notifying — CAP-015 subscribers reading on notification must see fresh state
+    // (data-contracts manual-switch store-before-emit side-effect note)
+    localStorage.setItem(lastUsedKeyboardsByProjectStorageKey, JSON.stringify(cache));
+    this.options.notifyDidChange?.({ projectId, surfaceType, keyboardId });
   }
 
   /**
@@ -105,13 +172,17 @@ export class LastUsedKeyboardStore {
    * scaffolding for a future PT10 reset flow — not exposed on any wire.
    */
   clearAll(): void {
-    return this.notImplemented('clearAll()');
+    this.cache = {};
+    localStorage.removeItem(lastUsedKeyboardsByProjectStorageKey);
   }
 
-  /** RED-stub helper; removed in GREEN. References the seam so the stub compiles cleanly. */
-  private notImplemented(member: string): never {
-    throw new Error(
-      `Not implemented (CAP-018 RED stub) — ${member} (seams configured: ${Object.keys(this.options).join(', ')})`,
-    );
+  /** Loads the persisted value at most once (synchronous — localStorage is sync). */
+  private ensureLoaded(): LastUsedKeyboardsByProject {
+    if (!this.cache)
+      this.cache = parsePersisted(
+        // Convert the WebStorage null-means-absent convention to undefined at the boundary
+        localStorage.getItem(lastUsedKeyboardsByProjectStorageKey) ?? undefined,
+      );
+    return this.cache;
   }
 }
