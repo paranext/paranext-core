@@ -74,8 +74,16 @@ vi.mock('@shared/services/localization.service', () => ({
   localizationService: { getLocalizedStrings: vi.fn(() => Promise.resolve({})) },
 }));
 
+vi.mock('@shared/services/web-view.service', () => ({
+  webViewService: {
+    getOpenWebViewDefinition: vi.fn(() => Promise.resolve(undefined)),
+  },
+}));
+
 vi.mock('@shared/services/network.service', () => ({
   getNetworkEvent: vi.fn(() => () => () => {}),
+  // The web view service proxy's module graph subscribes to this at load
+  onDidDisconnectClient: vi.fn(() => () => {}),
 }));
 
 // Import the service after its mocks are set up

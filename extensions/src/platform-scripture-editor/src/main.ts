@@ -615,6 +615,12 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       papi.localization.getLocalizedStrings,
     );
 
+    // Publish the context key driving `enabledWhen` on this web view's insert menu items
+    papi.contextKeys.set(
+      `platformScriptureEditor.webView.${savedWebView.id}.isEditable`,
+      !isReadOnly,
+    );
+
     return {
       ...savedWebView,
       title,
@@ -1561,6 +1567,14 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
+  // Clean up context keys this extension published for web views that close. (The web view's own
+  // footnotesPaneVisible key is renderer-owned and cannot be removed from here; it goes stale
+  // harmlessly until app restart.)
+  const unsubscribeOnDidCloseWebView = papi.webViews.onDidCloseWebView(({ webView }) => {
+    if (webView.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE) return;
+    papi.contextKeys.remove(`platformScriptureEditor.webView.${webView.id}.isEditable`);
+  });
+
   // Await the registration promises at the end so we don't hold everything else up
   const markerNotifier = new MarkersViewNotifier(papi, context.executionToken);
   const markerNotifierUnsubscribers = await markerNotifier.start();
@@ -1604,6 +1618,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
       },
     },
     unsubFromDefaultProjectPicker,
+    unsubscribeOnDidCloseWebView,
     ...markerNotifierUnsubscribers,
     await applySharedLayoutPromise,
     await finalizeProjectSwitchPromise,

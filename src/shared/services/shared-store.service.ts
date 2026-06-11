@@ -1,8 +1,10 @@
 import {
   AsyncVariable,
+  ContextKeyValue,
   deepEqual,
   deserialize,
   getErrorMessage,
+  PlatformEvent,
   PlatformEventEmitter,
   serialize,
 } from 'platform-bible-utils';
@@ -73,6 +75,25 @@ export type StoreChangeEvent = StoreEntry & {
 
 // Copy of the store within this process
 const localStore: Record<string, StoreEntry> = {};
+
+/** Event describing a change to a value in the shared store */
+export type SharedStoreChangeEvent = {
+  key: string;
+  value: unknown;
+};
+
+// Separate from the network emitter: locally-originated changes never re-enter through the
+// network path, so this in-process emitter is the only way for code in this process to observe
+// all changes (local and applied-remote) in one place.
+const onDidChangeStoreEmitter = new PlatformEventEmitter<SharedStoreChangeEvent>();
+
+/**
+ * Event that fires whenever any value in the shared store changes, whether the change was made in
+ * this process or applied from another process. Platform-internal. Not intended for use by
+ * extensions — extensions should use settings and other data providers for sharing data.
+ */
+export const onDidChangeSharedStore: PlatformEvent<SharedStoreChangeEvent> =
+  onDidChangeStoreEmitter.event;
 
 /** Increments the local counter and returns a new LamportClock object */
 function getNextClock(): LamportClock {
@@ -364,6 +385,7 @@ function get<K extends SharedStoreKeys>(key: K): SharedStoreValues[K] | undefine
  */
 function set<K extends SharedStoreKeys>(key: K, value?: SharedStoreValues[K]): void {
   if (!processId || !storeChangeEmitter) throw new Error('Shared store service is not initialized');
+  let clonedValue: SharedStoreValues[K] | undefined;
   try {
     const currentEntry = localStore[key];
     if (currentEntry && currentEntry.clock.processId !== processId)
@@ -372,7 +394,7 @@ function set<K extends SharedStoreKeys>(key: K, value?: SharedStoreValues[K]): v
     // one. A removed key must be re-set even if its stored value also happens to equal `value`.
     if (currentEntry && !currentEntry.deleted && deepEqual(currentEntry.value, value)) return;
     const clock = getNextClock();
-    const clonedValue = deserialize(serialize(value));
+    clonedValue = deserialize(serialize(value));
     localStore[key] = {
       value: clonedValue,
       clock,
@@ -384,14 +406,19 @@ function set<K extends SharedStoreKeys>(key: K, value?: SharedStoreValues[K]): v
     });
   } catch (error) {
     logger.error(`Error setting value for key ${key} in shared store:`, getErrorMessage(error));
+    return;
   }
+  // Outside the try so a throwing subscriber isn't mislabeled as a store write failure
+  onDidChangeStoreEmitter.emit({ key, value: clonedValue });
 }
 
 /** Update the local store based on an update from another process */
 function setFromRemote(key: string, entry: StoreEntry): void {
   localCounter = Math.max(localCounter, entry.clock.counter);
-  if (!localStore[key] || compareClocks(entry.clock, localStore[key].clock) > 0)
+  if (!localStore[key] || compareClocks(entry.clock, localStore[key].clock) > 0) {
     localStore[key] = entry;
+    onDidChangeStoreEmitter.emit({ key, value: entry.value });
+  }
 }
 
 /** Whether there is a live (set, not removed) value at the key in the local store. */
@@ -426,7 +453,10 @@ function remove<K extends SharedStoreKeys>(key: K): void {
     storeChangeEmitter.emit({ key, value: undefined, clock, deleted: true });
   } catch (error) {
     logger.error(`Error removing value for key ${key} from shared store:`, getErrorMessage(error));
+    return;
   }
+  // Outside the try so a throwing subscriber isn't mislabeled as a store write failure
+  onDidChangeStoreEmitter.emit({ key, value: undefined });
 }
 
 /**
@@ -526,6 +556,12 @@ function isInitialized(): boolean {
  */
 export type RequestTimeoutSharedStoreKey = `platform.customNetworkTimeoutMs.${string}`;
 
+/**
+ * Keys for context key values (see `context-keys.service.ts`). Keys are dynamically constructed by
+ * adding this prefix to the context key name.
+ */
+export type ContextKeySharedStoreKey = `contextKeys.${string}`;
+
 // Keep in sync with SharedStoreTypedKeys.cs
 /**
  * Defines the keys and types of values held in key-value pairs within the shared store service.
@@ -534,6 +570,7 @@ export type RequestTimeoutSharedStoreKey = `platform.customNetworkTimeoutMs.${st
  */
 export interface SharedStoreValues {
   [timeoutKey: RequestTimeoutSharedStoreKey]: number | undefined;
+  [contextKey: ContextKeySharedStoreKey]: ContextKeyValue | undefined;
 }
 
 export type SharedStoreKeys = keyof SharedStoreValues;

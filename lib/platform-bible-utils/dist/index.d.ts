@@ -1708,6 +1708,26 @@ export type MenuItemBase = OrderedItem & {
 	 * items that should show in every mode — most items need no value here at all.
 	 */
 	hiddenInterfaceModes?: InterfaceMode[];
+	/**
+	 * When-expression controlling whether this menu item is visible. If not provided, the item is
+	 * always visible. Expressions reference context keys (see `papi.contextKeys`) and support `&& ||
+	 * ! == != ( )`, single-quoted strings, numbers, `true`/`false`, and `{templateVar}` segments in
+	 * property references (web view menus provide `{webViewId}`, `{webViewType}`, and `{projectId}`;
+	 * the main menu provides none). Example: `"myExtension.project.{projectId}.isEditable &&
+	 * !platform.someFlag"`
+	 */
+	when?: string;
+	/**
+	 * When-expression controlling whether this menu item is enabled. If not provided, the item is
+	 * always enabled. Same grammar as {@link MenuItemBase.when}.
+	 */
+	enabledWhen?: string;
+	/**
+	 * Whether this menu item is currently disabled. Computed at runtime from
+	 * {@link MenuItemBase.enabledWhen} by `evaluateMenu` — NOT allowed in menus.json contributions
+	 * (rejected by the schema).
+	 */
+	disabled?: boolean;
 };
 /** Menu item that hosts a submenu */
 export type MenuItemContainingSubmenu = MenuItemBase & {
@@ -1728,6 +1748,18 @@ export type MenuItemContainingCommand = MenuItemBase & {
 	 * `papi-extension://helloWorld/assets/icon.png`
 	 */
 	iconPathBefore?: string;
+	/**
+	 * When-expression controlling whether this menu item shows a checkmark. If provided, the item
+	 * renders as a checkbox-style item (checked or unchecked); if not provided, the item renders as a
+	 * plain item. Same grammar as {@link MenuItemBase.when}.
+	 */
+	checkedWhen?: string;
+	/**
+	 * Whether this menu item's checkbox is currently checked. Computed at runtime from
+	 * {@link MenuItemContainingCommand.checkedWhen} by `evaluateMenu` — NOT allowed in menus.json
+	 * contributions (rejected by the schema).
+	 */
+	checked?: boolean;
 };
 /**
  * Group of menu items that can be combined with other groups to form a single context menu/submenu.
@@ -2006,6 +2038,7 @@ export declare const menuDocumentSchema: {
 					command?: undefined;
 					iconPathBefore?: undefined;
 					iconPathAfter?: undefined;
+					checkedWhen?: undefined;
 				};
 				required: string[];
 			} | {
@@ -2019,6 +2052,10 @@ export declare const menuDocumentSchema: {
 						type: string;
 					};
 					iconPathAfter: {
+						description: string;
+						type: string;
+					};
+					checkedWhen: {
 						description: string;
 						type: string;
 					};
@@ -2058,6 +2095,14 @@ export declare const menuDocumentSchema: {
 						enum: string[];
 					};
 					uniqueItems: boolean;
+				};
+				when: {
+					description: string;
+					type: string;
+				};
+				enabledWhen: {
+					description: string;
+					type: string;
 				};
 			};
 			required: string[];
@@ -4936,6 +4981,121 @@ export interface PaletteItem {
 	 */
 	muted?: boolean;
 }
+/**
+ * Value that can be stored in a context key. Deliberately constrained to scalar types so
+ * when-expression equality semantics stay trivial and the store is not used as a general-purpose
+ * state bus.
+ */
+export type ContextKeyValue = string | number | boolean;
+/**
+ * Function that synchronously looks up the current value of a context key.
+ *
+ * @param key The context key to look up
+ * @returns The current value, or `undefined` if the key has no value
+ */
+export type ContextKeyLookup = (key: string) => ContextKeyValue | undefined;
+/**
+ * Determines whether `key` is a structurally valid context key: at least two dot-separated
+ * segments, each consisting only of word characters (`A-Z a-z 0-9 _`) or hyphens. By convention the
+ * first segment should be the publishing extension's name (`platform` is reserved for the
+ * platform).
+ *
+ * @param key The context key to check
+ * @returns `true` if the key is structurally valid
+ */
+export declare function isValidContextKey(key: string): boolean;
+/**
+ * Determines whether `value` is a valid context key value ({@link ContextKeyValue})
+ *
+ * @param value The value to check
+ * @returns `true` if the value is a string, number, or boolean
+ */
+export declare function isValidContextKeyValue(value: unknown): value is ContextKeyValue;
+/** One segment of a property reference in a when-expression */
+export type WhenExpressionPropertySegment = {
+	type: "identifier";
+	text: string;
+} | {
+	type: "templateVar";
+	name: string;
+};
+/** Parsed form of a when-expression */
+export type WhenExpressionAst = {
+	type: "literal";
+	value: ContextKeyValue;
+} | {
+	type: "property";
+	segments: WhenExpressionPropertySegment[];
+} | {
+	type: "not";
+	operand: WhenExpressionAst;
+} | {
+	type: "equality";
+	operator: "==" | "!=";
+	left: WhenExpressionAst;
+	right: WhenExpressionAst;
+} | {
+	type: "and";
+	operands: WhenExpressionAst[];
+} | {
+	type: "or";
+	operands: WhenExpressionAst[];
+};
+/**
+ * Parses a when-expression into an AST. Results (including errors) are memoized by expression
+ * string.
+ *
+ * @param expression The when-expression to parse
+ * @returns The parsed AST
+ * @throws Error with a descriptive message if the expression is not valid
+ */
+export declare function parseWhenExpression(expression: string): WhenExpressionAst;
+/**
+ * Returns the names of all template variables (e.g. `webViewId` for `{webViewId}`) used in a
+ * when-expression. Used by contribution validation to reject unknown placeholders at load time.
+ *
+ * @param expression The when-expression to inspect
+ * @returns Array of unique template variable names
+ * @throws Error if the expression is not valid
+ */
+export declare function getTemplateVarNames(expression: string): string[];
+/**
+ * Evaluates a when-expression against the current context key values.
+ *
+ * @param expression The when-expression to evaluate (parse results are memoized)
+ * @param getContextKey Function that looks up the current value of a context key
+ * @param templateVars Values for `{placeholder}` segments in property references. A property
+ *   reference containing a placeholder with no value evaluates to `undefined` (falsy)
+ * @returns The boolean result of the expression. `undefined`, `false`, `0`, and `''` are falsy
+ * @throws Error if the expression is not valid (use load-time validation to avoid this)
+ */
+export declare function evaluateWhenExpression(expression: string, getContextKey: ContextKeyLookup, templateVars?: Record<string, string | undefined>): boolean;
+/** Menu document shapes that {@link evaluateMenu} can process */
+export type EvaluatableMenu = SingleColumnMenu | MultiColumnMenu | Localized<SingleColumnMenu> | Localized<MultiColumnMenu>;
+/** Callback invoked when a when-expression fails to evaluate */
+export type WhenExpressionErrorHandler = (expression: string, error: unknown) => void;
+/**
+ * Evaluates all when-expressions in a menu document against the current context key values.
+ *
+ * - Items whose `when` evaluates falsy are removed.
+ * - Items with `enabledWhen` get `disabled` set to the negated result.
+ * - Command items with `checkedWhen` get `checked` set to the result.
+ * - Submenu items whose submenus were emptied by that filtering are removed (recursively), and so are
+ *   groups and columns it emptied. Containers with no items in the document to begin with are left
+ *   alone, since a surface may fill them at open time.
+ * - The `when`/`enabledWhen`/`checkedWhen` fields are stripped from the output.
+ *
+ * The input document is not mutated; a deep clone is returned.
+ *
+ * @param menu The menu document to evaluate (localized or not)
+ * @param getContextKey Function that looks up the current value of a context key
+ * @param templateVars Values for `{placeholder}` segments in property references
+ * @param onError Called for each expression that fails to evaluate (rare — expressions are
+ *   validated at contribution load time). Failed expressions fail safe: `when` → hidden,
+ *   `enabledWhen` → disabled, `checkedWhen` → unchecked
+ * @returns A new menu document with expressions applied and stripped
+ */
+export declare function evaluateMenu<T extends EvaluatableMenu>(menu: T, getContextKey: ContextKeyLookup, templateVars?: Record<string, string | undefined>, onError?: WhenExpressionErrorHandler): T;
 export type ResourceType = "ScriptureResource" | "CommentaryResource" | "EnhancedResource" | "XmlResource" | "SourceLanguageResource";
 export type DblResourceData = {
 	dblEntryUid: string;

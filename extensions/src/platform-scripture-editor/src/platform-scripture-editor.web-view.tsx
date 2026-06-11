@@ -84,6 +84,7 @@ import {
 import {
   ABORTED,
   compareScrRefs,
+  evaluateMenu,
   formatReplacementString,
   getErrorMessage,
   getLocalizeKeysForScrollGroupIds,
@@ -950,6 +951,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   useEffect(() => {
     footnotesPaneVisibleRef.current = footnotesPaneVisible;
   }, [footnotesPaneVisible]);
+
+  // Publish the context key driving `checkedWhen` on this web view's Show Footnotes menu item
+  useEffect(() => {
+    papi.contextKeys.set(
+      `platformScriptureEditor.webView.${webViewId}.footnotesPaneVisible`,
+      footnotesPaneVisible,
+    );
+  }, [footnotesPaneVisible, webViewId]);
 
   /**
    * Whether the footnotes pane is ACTUALLY rendered — `footnotesPaneVisible && usjFromPdp`, not the
@@ -3525,7 +3534,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     DEFAULT_WEBVIEW_MENU,
   );
 
-  const webViewMenu = useMemo(() => {
+  const webViewMenuRaw = useMemo(() => {
     if (isPlatformError(webViewMenuPossiblyError)) {
       logger.warn(
         `Failed to load web view menu for ${SCRIPTURE_EDITOR_WEBVIEW_TYPE}`,
@@ -3535,6 +3544,37 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
     return webViewMenuPossiblyError;
   }, [webViewMenuPossiblyError]);
+
+  const menuTemplateVars = useMemo(
+    () => ({ webViewId, webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId }),
+    [webViewId, projectId],
+  );
+
+  // Evaluate menu when-expressions (enabledWhen / checkedWhen / when) using current context keys.
+  // IMPORTANT: papi.contextKeys has no onDidChange in @papi/frontend (v1, by design), so this
+  // useMemo will NOT re-evaluate when arbitrary context keys change - only keys listed as explicit
+  // dependencies trigger re-evaluation. Currently:
+  //   - `footnotesPaneVisible`: listed as a dep (changes on toggle, published by this web view)
+  //   - `isEditable`: NOT listed (static per web view, set once in getWebViewDefinition)
+  // If you add a menu item whose when-expression references a new dynamically-changing key, you
+  // MUST add that key's driving state as an explicit dep here too (reading it via
+  // papi.contextKeys.get inside the memo is not sufficient to create reactivity).
+  const webViewMenu = useMemo(() => {
+    if (!webViewMenuRaw.topMenu) return webViewMenuRaw;
+    const evaluatedTopMenu = evaluateMenu(
+      webViewMenuRaw.topMenu,
+      papi.contextKeys.get,
+      menuTemplateVars,
+      (expression, error) => {
+        logger.warn(
+          `Error evaluating menu when-expression '${expression}': ${getErrorMessage(error)}`,
+        );
+      },
+    );
+    return { ...webViewMenuRaw, topMenu: evaluatedTopMenu };
+    // footnotesPaneVisible drives checkedWhen so re-evaluate when it changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [webViewMenuRaw, menuTemplateVars, footnotesPaneVisible]);
 
   const [booksPresentPossiblyError] = useProjectSetting(
     projectId,

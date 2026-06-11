@@ -1,6 +1,10 @@
 //----------------------------------------------------------------------------------------------
 // NOTE: If you change any of the types, make sure the JSON schema at the end of this file gets
 // changed so they align.
+//
+// Exception: `disabled` (on MenuItemBase) and `checked` (on MenuItemContainingCommand) exist only
+// in the TS types, not in the schema. They are computed at runtime by `evaluateMenu` and are
+// intentionally rejected in menus.json contributions by `unevaluatedProperties: false`.
 //----------------------------------------------------------------------------------------------
 
 import { ReplaceType } from '../util';
@@ -71,6 +75,26 @@ export type MenuItemBase = OrderedItem & {
    * items that should show in every mode — most items need no value here at all.
    */
   hiddenInterfaceModes?: InterfaceMode[];
+  /**
+   * When-expression controlling whether this menu item is visible. If not provided, the item is
+   * always visible. Expressions reference context keys (see `papi.contextKeys`) and support `&& ||
+   * ! == != ( )`, single-quoted strings, numbers, `true`/`false`, and `{templateVar}` segments in
+   * property references (web view menus provide `{webViewId}`, `{webViewType}`, and `{projectId}`;
+   * the main menu provides none). Example: `"myExtension.project.{projectId}.isEditable &&
+   * !platform.someFlag"`
+   */
+  when?: string;
+  /**
+   * When-expression controlling whether this menu item is enabled. If not provided, the item is
+   * always enabled. Same grammar as {@link MenuItemBase.when}.
+   */
+  enabledWhen?: string;
+  /**
+   * Whether this menu item is currently disabled. Computed at runtime from
+   * {@link MenuItemBase.enabledWhen} by `evaluateMenu` — NOT allowed in menus.json contributions
+   * (rejected by the schema).
+   */
+  disabled?: boolean;
 };
 
 /** Menu item that hosts a submenu */
@@ -93,6 +117,18 @@ export type MenuItemContainingCommand = MenuItemBase & {
    * `papi-extension://helloWorld/assets/icon.png`
    */
   iconPathBefore?: string;
+  /**
+   * When-expression controlling whether this menu item shows a checkmark. If provided, the item
+   * renders as a checkbox-style item (checked or unchecked); if not provided, the item renders as a
+   * plain item. Same grammar as {@link MenuItemBase.when}.
+   */
+  checkedWhen?: string;
+  /**
+   * Whether this menu item's checkbox is currently checked. Computed at runtime from
+   * {@link MenuItemContainingCommand.checkedWhen} by `evaluateMenu` — NOT allowed in menus.json
+   * contributions (rejected by the schema).
+   */
+  checked?: boolean;
 };
 
 /**
@@ -225,6 +261,11 @@ export type Localized<T> = ReplaceType<ReplaceType<T, LocalizeKey, string>, Refe
 
 //----------------------------------------------------------------------------------------------
 // NOTE: If you change the schema below, make sure the TS types above get changed so they align.
+//
+// Exception: `disabled` (on MenuItemBase) and `checked` (on MenuItemContainingCommand) are NOT
+// in the schema — they are runtime-computed fields intentionally absent from contributions.
+// `unevaluatedProperties: false` on menuItem rejects them if someone tries to include them in
+// a menus.json file.
 //----------------------------------------------------------------------------------------------
 /** JSON schema object that aligns with the PlatformMenus type */
 export const menuDocumentSchema = {
@@ -422,6 +463,11 @@ export const menuDocumentSchema = {
                 'Uri path to the icon to display after the menu text. Ex: `papi-extension://helloWorld/assets/icon.png`',
               type: 'string',
             },
+            checkedWhen: {
+              description:
+                'When-expression controlling whether this menu item shows a checkmark. If provided, the item renders as a checkbox-style item; if not provided, the item renders as a plain (non-checkbox) item. References context keys; supports && || ! == != ( ), single-quoted strings, numbers, true/false, and {templateVar} segments.',
+              type: 'string',
+            },
           },
           required: ['command'],
         },
@@ -461,6 +507,16 @@ export const menuDocumentSchema = {
           type: 'array',
           items: { enum: ['simple', 'power'] },
           uniqueItems: true,
+        },
+        when: {
+          description:
+            'When-expression controlling whether this menu item is visible. If not provided, the item is always visible. References context keys; supports && || ! == != ( ), single-quoted strings, numbers, true/false, and {templateVar} segments (web view menus provide {webViewId}, {webViewType}, {projectId}; the main menu provides none).',
+          type: 'string',
+        },
+        enabledWhen: {
+          description:
+            'When-expression controlling whether this menu item is enabled. If not provided, the item is always enabled. Same grammar as when.',
+          type: 'string',
         },
       },
       required: ['label', 'group', 'order'],

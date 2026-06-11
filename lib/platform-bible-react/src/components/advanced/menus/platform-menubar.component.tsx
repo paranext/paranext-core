@@ -1,5 +1,6 @@
 import {
   Menubar,
+  MenubarCheckboxItem,
   MenubarContent,
   MenubarItem,
   MenubarMenu,
@@ -64,40 +65,64 @@ const getMenubarContent = (
       .filter((item) => item.group === groupKey)
       .sort((a, b) => a.order - b.order)
       .map((item: Localized<MenuItemContainingCommand | MenuItemContainingSubmenu>) => {
+        let menuEntry;
+        if ('command' in item) {
+          const itemContent = (
+            <>
+              {item.iconPathBefore && (
+                <MenuItemIcon icon={item.iconPathBefore} menuLabel={item.label} leading />
+              )}
+              {item.label}
+              {item.iconPathAfter && (
+                <MenuItemIcon icon={item.iconPathAfter} menuLabel={item.label} />
+              )}
+            </>
+          );
+          const handleSelect = () => {
+            // Since the item has a command, we know it is a MenuItemContainingCommand.
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
+            onSelectMenuItem(item as MenuItemContainingCommand);
+          };
+          if (item.checked !== undefined) {
+            menuEntry = (
+              <MenubarCheckboxItem
+                key={`menubar-item-${item.label}-${item.command}`}
+                checked={item.checked}
+                disabled={item.disabled}
+                onSelect={handleSelect}
+              >
+                {itemContent}
+              </MenubarCheckboxItem>
+            );
+          } else {
+            menuEntry = (
+              <MenubarItem
+                key={`menubar-item-${item.label}-${item.command}`}
+                disabled={item.disabled}
+                onSelect={handleSelect}
+              >
+                {itemContent}
+              </MenubarItem>
+            );
+          }
+        } else {
+          menuEntry = (
+            <MenubarSub key={`menubar-sub-${item.label}-${item.id}`}>
+              <MenubarSubTrigger disabled={item.disabled}>{item.label}</MenubarSubTrigger>
+              <MenubarSubContent>
+                {getMenubarContent(
+                  groups,
+                  items,
+                  getSubMenuGroupKeyForMenuItemId(groups, item.id),
+                  onSelectMenuItem,
+                )}
+              </MenubarSubContent>
+            </MenubarSub>
+          );
+        }
         return (
           <Tooltip key={`tooltip-${item.label}-${'command' in item ? item.command : item.id}`}>
-            <TooltipTrigger asChild>
-              {'command' in item ? (
-                <MenubarItem
-                  key={`menubar-item-${item.label}-${item.command}`}
-                  onClick={() => {
-                    // Since the item has a command, we know it is a MenuItemContainingCommand.
-                    // eslint-disable-next-line no-type-assertion/no-type-assertion
-                    onSelectMenuItem(item as MenuItemContainingCommand);
-                  }}
-                >
-                  {item.iconPathBefore && (
-                    <MenuItemIcon icon={item.iconPathBefore} menuLabel={item.label} leading />
-                  )}
-                  {item.label}
-                  {item.iconPathAfter && (
-                    <MenuItemIcon icon={item.iconPathAfter} menuLabel={item.label} />
-                  )}
-                </MenubarItem>
-              ) : (
-                <MenubarSub key={`menubar-sub-${item.label}-${item.id}`}>
-                  <MenubarSubTrigger>{item.label}</MenubarSubTrigger>
-                  <MenubarSubContent>
-                    {getMenubarContent(
-                      groups,
-                      items,
-                      getSubMenuGroupKeyForMenuItemId(groups, item.id),
-                      onSelectMenuItem,
-                    )}
-                  </MenubarSubContent>
-                </MenubarSub>
-              )}
-            </TooltipTrigger>
+            <TooltipTrigger asChild>{menuEntry}</TooltipTrigger>
             {item.tooltip && <TooltipContent>{item.tooltip}</TooltipContent>}
           </Tooltip>
         );

@@ -94,7 +94,8 @@
             "label": "%webView_platformScriptureEditor_showFootnotes%",
             "group": "platformScriptureEditor.footnotesPane",
             "order": 1,
-            "command": "platformScriptureEditor.toggleFootnotes"
+            "command": "platformScriptureEditor.toggleFootnotes",
+            "checkedWhen": "platformScriptureEditor.webView.{webViewId}.footnotesPaneVisible"
           },
           {
             "label": "%temp_webView_platformScriptureEditor_changeFootnotePaneLocation%",
@@ -149,19 +150,22 @@
             "label": "%webView_platformScriptureEditor_insertFootnoteAtSelection%",
             "group": "platformScriptureEditor.insertTextualNotes",
             "order": 1,
-            "command": "platformScriptureEditor.insertFootnoteAtSelection"
+            "command": "platformScriptureEditor.insertFootnoteAtSelection",
+            "enabledWhen": "platformScriptureEditor.webView.{webViewId}.isEditable"
           },
           {
             "label": "%webView_platformScriptureEditor_insertCrossReferenceAtSelection%",
             "group": "platformScriptureEditor.insertTextualNotes",
             "order": 2,
-            "command": "platformScriptureEditor.insertCrossReferenceAtSelection"
+            "command": "platformScriptureEditor.insertCrossReferenceAtSelection",
+            "enabledWhen": "platformScriptureEditor.webView.{webViewId}.isEditable"
           },
           {
             "label": "%webView_platformScriptureEditor_insertCommentAtSelection%",
             "group": "platformScriptureEditor.insertTextualNotes",
             "order": 3,
-            "command": "platformScriptureEditor.insertCommentAtSelection"
+            "command": "platformScriptureEditor.insertCommentAtSelection",
+            "enabledWhen": "platformScriptureEditor.webView.{webViewId}.isEditable"
           },
           {
             "label": "%webView_legacyCommentManager_openComments%",

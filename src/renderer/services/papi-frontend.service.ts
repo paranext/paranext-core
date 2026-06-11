@@ -10,6 +10,8 @@ import { INotificationService } from '@shared/models/notification.service-model'
 import { ProjectLookupServiceType } from '@shared/models/project-lookup.service-model';
 import { appService } from '@shared/services/app.service';
 import * as commandService from '@shared/services/command.service';
+import { papiContextKeysService } from '@shared/services/context-keys.service';
+import { IContextKeysService } from '@shared/services/context-keys.service-model';
 import { dataProviderService, DataProviderService } from '@shared/services/data-provider.service';
 import { dialogService } from '@shared/services/dialog.service';
 import { DialogService } from '@shared/services/dialog.service-model';
@@ -70,6 +72,8 @@ const papi = {
   app: appService,
   /** JSDOC DESTINATION commandService */
   commands: commandService,
+  /** JSDOC DESTINATION contextKeysService */
+  contextKeys: papiContextKeysService as IContextKeysService,
   /** JSDOC DESTINATION papiWebViewService */
   webViews: webViewService as WebViewServiceType,
   /** JSDOC DESTINATION dialogService */
@@ -142,6 +146,9 @@ Object.freeze(papi.app);
 /** JSDOC DESTINATION commandService */
 export const { commands } = papi;
 Object.freeze(papi.commands);
+/** JSDOC DESTINATION contextKeysService */
+export const { contextKeys } = papi;
+Object.freeze(papi.contextKeys);
 /** JSDOC DESTINATION papiWebViewService */
 export const { webViews } = papi;
 Object.freeze(papi.webViews);

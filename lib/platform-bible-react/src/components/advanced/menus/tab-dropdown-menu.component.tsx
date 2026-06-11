@@ -1,5 +1,6 @@
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
@@ -51,43 +52,67 @@ const getGroupContent = (
       .filter((item) => item.group === groupKey)
       .sort((a, b) => a.order - b.order)
       .map((item: Localized<MenuItemContainingCommand | MenuItemContainingSubmenu>) => {
+        let menuEntry;
+        if ('command' in item) {
+          const itemContent = (
+            <>
+              {item.iconPathBefore && (
+                <MenuItemIcon icon={item.iconPathBefore} menuLabel={item.label} leading />
+              )}
+              {item.label}
+              {item.iconPathAfter && (
+                <MenuItemIcon icon={item.iconPathAfter} menuLabel={item.label} />
+              )}
+            </>
+          );
+          const handleSelect = () => {
+            // Since the item has a command, we know it is a MenuItemContainingCommand.
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
+            onSelectMenuItem(item as MenuItemContainingCommand);
+          };
+          if (item.checked !== undefined) {
+            menuEntry = (
+              <DropdownMenuCheckboxItem
+                key={`dropdown-menu-item-${item.label}-${item.command}`}
+                checked={item.checked}
+                disabled={item.disabled}
+                onSelect={handleSelect}
+              >
+                {itemContent}
+              </DropdownMenuCheckboxItem>
+            );
+          } else {
+            menuEntry = (
+              <DropdownMenuItem
+                key={`dropdown-menu-item-${item.label}-${item.command}`}
+                disabled={item.disabled}
+                onSelect={handleSelect}
+              >
+                {itemContent}
+              </DropdownMenuItem>
+            );
+          }
+        } else {
+          menuEntry = (
+            <DropdownMenuSub key={`dropdown-menu-sub-${item.label}-${item.id}`}>
+              <DropdownMenuSubTrigger disabled={item.disabled}>{item.label}</DropdownMenuSubTrigger>
+
+              <DropdownMenuPortal>
+                <DropdownMenuSubContent>
+                  {getGroupContent(
+                    groups,
+                    items,
+                    getSubMenuGroupKeyForMenuItemId(groups, item.id),
+                    onSelectMenuItem,
+                  )}
+                </DropdownMenuSubContent>
+              </DropdownMenuPortal>
+            </DropdownMenuSub>
+          );
+        }
         return (
           <Tooltip key={`tooltip-${item.label}-${'command' in item ? item.command : item.id}`}>
-            <TooltipTrigger asChild>
-              {'command' in item ? (
-                <DropdownMenuItem
-                  key={`dropdown-menu-item-${item.label}-${item.command}`}
-                  onClick={() => {
-                    // Since the item has a command, we know it is a MenuItemContainingCommand.
-                    // eslint-disable-next-line no-type-assertion/no-type-assertion
-                    onSelectMenuItem(item as MenuItemContainingCommand);
-                  }}
-                >
-                  {item.iconPathBefore && (
-                    <MenuItemIcon icon={item.iconPathBefore} menuLabel={item.label} leading />
-                  )}
-                  {item.label}
-                  {item.iconPathAfter && (
-                    <MenuItemIcon icon={item.iconPathAfter} menuLabel={item.label} />
-                  )}
-                </DropdownMenuItem>
-              ) : (
-                <DropdownMenuSub key={`dropdown-menu-sub-${item.label}-${item.id}`}>
-                  <DropdownMenuSubTrigger>{item.label}</DropdownMenuSubTrigger>
-
-                  <DropdownMenuPortal>
-                    <DropdownMenuSubContent>
-                      {getGroupContent(
-                        groups,
-                        items,
-                        getSubMenuGroupKeyForMenuItemId(groups, item.id),
-                        onSelectMenuItem,
-                      )}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuPortal>
-                </DropdownMenuSub>
-              )}
-            </TooltipTrigger>
+            <TooltipTrigger asChild>{menuEntry}</TooltipTrigger>
             {item.tooltip && <TooltipContent>{item.tooltip}</TooltipContent>}
           </Tooltip>
         );

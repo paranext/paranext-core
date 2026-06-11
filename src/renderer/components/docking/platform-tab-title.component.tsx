@@ -30,6 +30,7 @@ import {
 } from '@shared/models/web-view-move.model';
 import { WebViewId } from '@shared/models/web-view.model';
 import { sendCommand } from '@shared/services/command.service';
+import { contextKeysService } from '@shared/services/context-keys.service';
 import { logger } from '@shared/services/logger.service';
 import { notificationService } from '@shared/services/notification.service';
 import { windowService } from '@shared/services/window.service';
@@ -47,7 +48,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { getErrorMessage, isLocalizeKey, isPlatformError, LocalizeKey } from 'platform-bible-utils';
+import {
+  evaluateMenu,
+  getErrorMessage,
+  isLocalizeKey,
+  isPlatformError,
+  LocalizeKey,
+} from 'platform-bible-utils';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import './platform-tab-title.component.scss';
@@ -351,7 +358,20 @@ export function PlatformTabTitle({
         );
         if (isStillMounted)
           setContributedItems(
-            convertContributionToContextMenuItems(webViewMenu.tabMenu ?? EMPTY_TAB_MENU),
+            convertContributionToContextMenuItems(
+              // Evaluated once, with this read: a when-expression on a tab item reflects the context
+              // keys as they stand when the tab mounts. Only visibility applies here, since the
+              // converted items carry no disabled or checked state
+              evaluateMenu(
+                webViewMenu.tabMenu ?? EMPTY_TAB_MENU,
+                contextKeysService.get,
+                { webViewId, webViewType },
+                (expression, error) =>
+                  logger.warn(
+                    `Error evaluating tab menu when-expression '${expression}': ${getErrorMessage(error)}`,
+                  ),
+              ),
+            ),
           );
       } catch (error) {
         // Said out loud rather than swallowed into an empty menu: the extension host logs the cause
@@ -366,7 +386,7 @@ export function PlatformTabTitle({
     return () => {
       isStillMounted = false;
     };
-  }, [isPowerMode, webViewType, id]);
+  }, [isPowerMode, webViewType, webViewId, id]);
 
   /**
    * What this tab can currently do, read when the menu opens rather than subscribed to. The menu

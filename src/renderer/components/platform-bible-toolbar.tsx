@@ -17,6 +17,7 @@ import { useSendReceiveAvailability } from '@renderer/hooks/use-send-receive-ava
 import { useProjectPickerData } from '@renderer/hooks/use-project-picker-data.hook';
 import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
 import { useWindowControlsOverlay } from '@renderer/hooks/use-window-controls-overlay.hook';
+import { useEvaluatedMenu } from '@renderer/hooks/use-evaluated-menu.hook';
 import { PROJECT_PICKER_DIALOG_TYPE } from '@renderer/components/dialogs/dialog-definition.model';
 import { app, dataProviders } from '@renderer/services/papi-frontend.service';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service';
@@ -71,6 +72,8 @@ import { CSSProperties, ReactNode, useCallback, useMemo } from 'react';
 const TOOLTIP_DELAY = 300;
 
 const MAIN_MENU_DEFAULT = { columns: {}, groups: {}, items: [] };
+/** The main menu provides no template variables for when-expressions in v1 */
+const MAIN_MENU_TEMPLATE_VARS = {};
 
 // Stable identity for the "nothing extra to offer" case, so the memo below does not hand
 // BookChapterControl a fresh empty array on every render.
@@ -448,6 +451,10 @@ export function PlatformBibleToolbar() {
     return menuDataPossiblyError;
   }, [menuDataPossiblyError]);
 
+  // `menuData` always has a value (usePromise provides a default), so the hook always returns a
+  // value too; the `?? menuData` only narrows the hook's `T | undefined` type for the Toolbar prop
+  const evaluatedMenuData = useEvaluatedMenu(menuData, MAIN_MENU_TEMPLATE_VARS) ?? menuData;
+
   const [marketingVersion] = usePromise(
     useCallback(async () => {
       const marketingInfo = await app.getMarketingInfo();
@@ -490,7 +497,7 @@ export function PlatformBibleToolbar() {
   return (
     <div data-testid="toolbar-reserved-space-wrapper" style={toolbarReservedSpaceStyle}>
       <Toolbar
-        menuData={menuData}
+        menuData={evaluatedMenuData}
         onSelectMenuItem={handleMenuCommand}
         className={cn(
           // If the toolbar height changes, the top inset for the workspace updating overlay and

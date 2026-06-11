@@ -44,6 +44,7 @@ import {
   useScrollGroupScrRef,
   useRecentScriptureRefs,
 } from '@renderer/hooks/papi-hooks';
+import { useEvaluatedMenu } from '@renderer/hooks/use-evaluated-menu.hook';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service';
 import { registerBookChapterControlHandle } from '@renderer/services/book-chapter-control.registry';
@@ -546,13 +547,19 @@ export function WebView({
     return webViewMenuPossiblyError;
   }, [id, webViewMenuPossiblyError, webViewType]);
 
+  const menuTemplateVars = useMemo(
+    () => ({ webViewId: id, webViewType, projectId }),
+    [id, webViewType, projectId],
+  );
+  const evaluatedTopMenu = useEvaluatedMenu(webViewMenu.topMenu, menuTemplateVars);
+
   return (
     <div className="web-view-parent">
       {shouldShowToolbar && !isLoadingMenu && !isPlatformError(webViewMenu) && (
         <TabToolbar
           onSelectProjectMenuItem={projectMenuCommandHandler}
           onSelectViewInfoMenuItem={viewInfoMenuCommandHandler}
-          projectMenuData={webViewMenu.topMenu}
+          projectMenuData={evaluatedTopMenu}
           className="web-view-tab-nav"
           // In simple mode, hide the per-tab BCV control and scroll group selector for ALL webview
           // types served by this generic tab toolbar (commentary, notes, etc.) — not just scripture
