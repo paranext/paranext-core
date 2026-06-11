@@ -50,12 +50,38 @@ const initialize = (): Promise<void> => {
     // eslint-disable-next-line @typescript-eslint/no-use-before-define
     onDidCreateNetworkObjectEmitter = await networkService.createNetworkEventEmitterAsync(
       'object:onDidCreateNetworkObject',
+      {
+        notification: {
+          summary: 'Emitted when a network object is created in any process.',
+          params: [
+            {
+              name: 'networkObjectDetails',
+              required: true,
+              summary: "The new network object's details.",
+              schema: { type: 'object' },
+            },
+          ],
+        },
+      },
     );
 
     // `initialize` runs after module evaluation; the emitter variable is defined later in the module.
     // eslint-disable-next-line @typescript-eslint/no-use-before-define
     onDidDisposeNetworkObjectEmitter = await networkService.createNetworkEventEmitterAsync(
       'object:onDidDisposeNetworkObject',
+      {
+        notification: {
+          summary: 'Emitted when a network object is disposed in any process.',
+          params: [
+            {
+              name: 'id',
+              required: true,
+              summary: "The disposed network object's ID.",
+              schema: { type: 'string' },
+            },
+          ],
+        },
+      },
     );
 
     // Subscribe to the dispose event to clean up local and remote network object registrations

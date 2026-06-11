@@ -21,7 +21,7 @@ When the API has stabilized and earned confidence, remove the experimental marke
 
 Two ways:
 
-**In your editor.** Hover over an API in TypeScript and look for the `@experimental` tag in the docstring. Members of an interface marked `@experimental` inherit the marker — every method on an experimental type is itself experimental in the generated documentation.
+**In your editor.** Hover over an API in TypeScript and look for the `@experimental` tag in the docstring. Members of an interface marked `@experimental` inherit the marker — every method on an experimental type is itself experimental in the generated documentation. (TypeDoc 0.28.3+ treats `@experimental` as a built-in modifier tag and cascades it to members automatically — no configuration needed.)
 
 **At runtime.** Inspect the live OpenRPC document (call the `rpc.discover` JSON-RPC method against the platform's WebSocket on port 8876). Experimental methods, notifications, and network objects carry `"x-experimental": true`.
 
@@ -130,7 +130,7 @@ const emitter = await papi.network.createNetworkEventEmitterAsync('myExt.somethi
     ],
   },
 });
-// emitter is PapiEventEmitter<{ foo: string }> — the payload type is inferred
+// emitter is PlatformEventEmitter<{ foo: string }> — the payload type is inferred
 ```
 
 If any other process tries to register the same event name, the platform rejects the second registration. Each event has exactly one source.

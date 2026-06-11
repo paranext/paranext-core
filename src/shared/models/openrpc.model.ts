@@ -110,7 +110,8 @@ export type Method = {
   result: ContentDescriptor | Reference;
   /**
    * Set to `true` to mark this method as experimental — its shape may change without notice.
-   * Informational only; does not affect runtime behavior. See the experimental APIs wiki page.
+   * Informational only; does not affect runtime behavior. See the
+   * {@link https://github.com/paranext/paranext-extension-template/wiki/Experimental-APIs | experimental APIs wiki page}.
    */
   'x-experimental'?: boolean;
   /** A short summary of what the method does. */
@@ -249,7 +250,7 @@ export function createEmptyOpenRpc(papiVersion: string): OpenRpc {
 
 const emptyDocs: MethodDocumentationWithoutName = {
   summary: '',
-  description: 'No documentation provided',
+  description: 'Method: No documentation provided',
   params: [],
   result: {
     name: 'return value',
@@ -268,4 +269,23 @@ Object.freeze(emptyDocs.result.schema);
  */
 export function getEmptyMethodDocs(): MethodDocumentationWithoutName {
   return emptyDocs;
+}
+
+// A notification is a {@link Method} without a `result`, so its placeholder docs are the empty
+// method docs minus `result`.
+const emptyNotificationDocs: Omit<MethodDocumentationWithoutName, 'result'> = {
+  summary: '',
+  description: 'Notification: No documentation provided',
+  params: [],
+};
+Object.freeze(emptyNotificationDocs);
+Object.freeze(emptyNotificationDocs.params);
+
+/**
+ * Get an empty {@link Notification} documentation object. Useful for surfacing events that didn't
+ * have their own documentation provided so that every registered event still appears in the OpenRPC
+ * document (mirroring how undocumented methods are surfaced via {@link getEmptyMethodDocs}).
+ */
+export function getEmptyNotificationDocs(): Omit<MethodDocumentationWithoutName, 'result'> {
+  return emptyNotificationDocs;
 }

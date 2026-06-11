@@ -1,13 +1,14 @@
 import {
+  AsyncVariable,
   deepEqual,
   deserialize,
   getErrorMessage,
   PlatformEventEmitter,
   serialize,
-  wait,
 } from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
 import { ProcessType } from '@shared/global-this.model';
+import type { SingleNotificationDocumentation } from '@shared/models/openrpc.model';
 
 const SHARED_STORE_PREFIX = 'shared-store';
 /**
@@ -20,6 +21,21 @@ export const STORE_GET_REQUEST = `${SHARED_STORE_PREFIX}:get`;
 // The template literal widens to `string`; cast to the matching NetworkEvents key.
 // eslint-disable-next-line no-type-assertion/no-type-assertion
 const STORE_CHANGE_EVENT = `${SHARED_STORE_PREFIX}:change` as 'shared-store:change';
+
+/** OpenRPC notification documentation for the {@link STORE_CHANGE_EVENT} network event. */
+const STORE_CHANGE_EVENT_DOCS: SingleNotificationDocumentation = {
+  notification: {
+    summary: 'Emitted when a value in the shared store changes.',
+    params: [
+      {
+        name: 'change',
+        required: true,
+        summary: 'The changed key and new value with its Lamport timestamp.',
+        schema: { type: 'object' },
+      },
+    ],
+  },
+};
 
 // https://en.wikipedia.org/wiki/Lamport_timestamp
 let localCounter: number = 0;
@@ -129,7 +145,7 @@ export function initialize(networkService: NetworkService): Promise<void> {
       // doesn't reject the Promise.all and lose the emitter — we want the emitter assigned even
       // if the initial sync fails.
       const [emitter] = await Promise.all([
-        networkService.createNetworkEventEmitterAsync(STORE_CHANGE_EVENT),
+        networkService.createNetworkEventEmitterAsync(STORE_CHANGE_EVENT, STORE_CHANGE_EVENT_DOCS),
         (async () => {
           try {
             const initial = await networkService.request<[], Record<string, StoreEntry>>(
@@ -149,7 +165,7 @@ export function initialize(networkService: NetworkService): Promise<void> {
     // Inside the main process: create the emitter AND register the handler that serves the other
     // processes' initial-fetch requests, concurrently.
     const [emitter] = await Promise.all([
-      networkService.createNetworkEventEmitterAsync(STORE_CHANGE_EVENT),
+      networkService.createNetworkEventEmitterAsync(STORE_CHANGE_EVENT, STORE_CHANGE_EVENT_DOCS),
       networkService.registerRequestHandler(
         STORE_GET_REQUEST,
         (key?: string) => (key === undefined ? { ...localStore } : localStore[key]?.value),
@@ -207,7 +223,21 @@ export function initialize(networkService: NetworkService): Promise<void> {
  */
 export async function waitForInitialization(startTimeoutMs: number = 1000): Promise<void> {
   if (initializationPromise) return initializationPromise;
-  await Promise.race([initializationStartedPromise, wait(startTimeoutMs)]);
+  // Wait for initialize() to start, bounded by startTimeoutMs. Use AsyncVariable for the timeout
+  // (per the async-coordination decision registry entry) rather than a raw Promise.race. The
+  // variable is created per call so its timeout is measured from this call, matching the previous
+  // per-call semantics; the long-lived `initializationStartedPromise` signal resolves it when
+  // initialize() starts. The timeout rejection is swallowed because the `initializationPromise`
+  // check below is what distinguishes "started" from "timed out".
+  const startGate = new AsyncVariable<undefined>(
+    'shared store initialization start',
+    startTimeoutMs,
+  );
+  // `initializationStartedPromise` only ever resolves (never rejects), but the `.catch` is required
+  // by lint and harmless; we intentionally do not await this — it just bridges the signal into the
+  // gate.
+  initializationStartedPromise.then(() => startGate.resolveToValue(undefined)).catch(() => {});
+  await startGate.promise.catch(() => {});
   if (!initializationPromise)
     throw new Error(
       `Shared store service initialize() was not called within ${startTimeoutMs}ms — caller cannot wait for readiness.`,

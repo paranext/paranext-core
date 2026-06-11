@@ -99,7 +99,8 @@ function hasKnownWebViewProvider(webViewType: string): boolean {
  *   of it.
  *
  *   WARNING: setting a webView provider mutates the provided object.
- * @param attributes Optional additional attributes to attach to the network object
+ * @param attributes Optional additional attributes to attach to the network object. The platform
+ *   overwrites the `webViewType` field — that field is always the platform-canonical value.
  * @param documentation Optional {@link NetworkObjectDocumentation} for this web view provider. Set
  *   `documentation['x-experimental']: true` to mark all methods on this web view provider as
  *   experimental.
@@ -146,7 +147,8 @@ async function registerWebViewProvider(
     webViewProviderObjectId,
     webViewProvider,
     WEB_VIEW_PROVIDER_OBJECT_TYPE,
-    { webViewType, ...attributes },
+    // Spread caller attributes first, then overlay canonical webViewType (platform always wins).
+    { ...attributes, webViewType },
     documentation,
   );
 

@@ -18,6 +18,7 @@ import { IRpcMethodRegistrar, RegisteredRpcMethodDetails } from '@shared/models/
 import {
   createEmptyOpenRpc,
   getEmptyMethodDocs,
+  getEmptyNotificationDocs,
   Notification,
   OpenRpc,
   SingleMethodDocumentation,
@@ -303,16 +304,15 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
     Array.from(this.rpcEventDetailsByEventName.entries()).forEach(([eventName, registrants]) => {
       // First registration's documentation wins (matches the conflict policy).
       const docs = registrants.find((r) => r.documentation)?.documentation;
-      // Events with no documentation are not surfaced in OpenRPC
-      if (!docs) return;
-
-      const notificationEntry: Notification = {
-        name: eventName,
-        ...docs.notification,
-      };
+      // Surface every registered event, mirroring how undocumented methods are surfaced above:
+      // events without their own documentation get a placeholder entry so the OpenRPC document
+      // lists all events, not just documented ones.
+      const notificationEntry: Notification = docs
+        ? { name: eventName, ...docs.notification }
+        : { name: eventName, ...getEmptyNotificationDocs() };
       openRpcSchema.methods.push(notificationEntry);
 
-      if (docs.components) {
+      if (docs?.components) {
         openRpcSchema.components = {
           schemas: {
             ...docs.components.schemas,

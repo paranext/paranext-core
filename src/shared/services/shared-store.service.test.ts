@@ -82,6 +82,7 @@ describe('sharedStoreService', () => {
       await initializeSharedStore(networkService);
       expect(networkService.createNetworkEventEmitterAsync).toHaveBeenCalledWith(
         'shared-store:change',
+        expect.objectContaining({ notification: expect.any(Object) }),
       );
       expect(networkService.getNetworkEvent).toHaveBeenCalledWith('shared-store:change');
       expect(mockEventHandler).toHaveBeenCalled();
