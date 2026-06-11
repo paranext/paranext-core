@@ -77,7 +77,11 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y snapd
-          sudo snap install snapcraft --classic
+          # Pin snapcraft to the 8.x track. snapcraft 9 (now latest/stable) removed the
+          # deprecated `snap` command alias, which electron-builder 26.x still invokes,
+          # breaking the snap build. Remove this pin once we move to electron-builder >= 27
+          # (which calls `snapcraft pack`). See electron-builder issue #8880 / PR #9517.
+          sudo snap install snapcraft --classic --channel=8.x/stable
           sudo snap install lxd
           sudo snap refresh lxd
           sudo lxd init --auto
