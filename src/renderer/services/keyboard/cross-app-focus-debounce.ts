@@ -9,7 +9,7 @@
 // exposed publicly (backend-alignment Utility Mapping Summary).
 // Maps to: CAP-011
 
-import { KeyboardId } from '@shared/services/keyboard.service-model';
+import type { KeyboardId } from '@shared/services/keyboard.service-model';
 
 /**
  * FB-27866 cross-app return guard (CAP-011; FN-015 / data-contracts §4.6 item 4).
