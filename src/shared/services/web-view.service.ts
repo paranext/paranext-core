@@ -1,4 +1,8 @@
-import { PlatformEvent, createSyncProxyForAsyncObject } from 'platform-bible-utils';
+import {
+  PlatformEvent,
+  createCachedInitializer,
+  createSyncProxyForAsyncObject,
+} from 'platform-bible-utils';
 import { getNetworkEvent } from '@shared/services/network.service';
 import {
   OpenWebViewEvent,
@@ -27,38 +31,20 @@ const onDidCloseWebView: PlatformEvent<CloseWebViewEvent> = getNetworkEvent<Clos
 );
 
 let networkObject: WebViewServiceType;
-let initializationPromise: Promise<void> | undefined;
-async function initialize(): Promise<void> {
-  if (!initializationPromise) {
-    initializationPromise = new Promise<void>((resolve, reject) => {
-      const executor = async () => {
-        try {
-          await networkObjectStatusService.waitForNetworkObject(
-            { id: NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE },
-            // Wait 30 seconds for the web view service to appear
-            30000,
-          );
+const initialize = createCachedInitializer(async () => {
+  await networkObjectStatusService.waitForNetworkObject(
+    { id: NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE },
+    // Wait 30 seconds for the web view service to appear
+    30000,
+  );
 
-          const localWebViewService = await networkObjectService.get<WebViewServiceType>(
-            NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
-          );
-          if (!localWebViewService)
-            throw new Error(
-              `${NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE} is not available as a network object`,
-            );
-          networkObject = localWebViewService;
-          resolve();
-        } catch (error) {
-          // Clear the cached promise so the next call retries instead of failing forever
-          initializationPromise = undefined;
-          reject(error);
-        }
-      };
-      executor();
-    });
-  }
-  return initializationPromise;
-}
+  const localWebViewService = await networkObjectService.get<WebViewServiceType>(
+    NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
+  );
+  if (!localWebViewService)
+    throw new Error(`${NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE} is not available as a network object`);
+  networkObject = localWebViewService;
+});
 
 export const webViewService = createSyncProxyForAsyncObject<WebViewServiceType>(
   async () => {

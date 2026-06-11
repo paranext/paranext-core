@@ -8,6 +8,7 @@ import { dataProviderService } from '@shared/services/data-provider.service';
 import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import {
+  createCachedInitializer,
   createSyncProxyForAsyncObject,
   Unsubscriber,
   ThemeFamiliesByIdExpanded,
@@ -54,35 +55,19 @@ class ThemeDataDataProviderEngine
   }
 }
 
-let initializationPromise: Promise<void> | undefined;
 /** Need to run initialize before using this */
 let dataProvider: IThemeDataService;
-export async function initialize(): Promise<void> {
-  if (!initializationPromise) {
-    initializationPromise = new Promise<void>((resolve, reject) => {
-      const executor = async () => {
-        try {
-          const currentThemes = themesDocumentCombiner.getAllThemeFamiliesById();
-          if (!currentThemes)
-            throw new Error(
-              'Theme data service host initialization error: Themes Document Combiner output was null!',
-            );
-          dataProvider = await dataProviderService.registerEngine(
-            themeDataServiceProviderName,
-            new ThemeDataDataProviderEngine(currentThemes),
-          );
-          resolve();
-        } catch (error) {
-          // Clear the cached promise so the next call retries instead of failing forever
-          initializationPromise = undefined;
-          reject(error);
-        }
-      };
-      executor();
-    });
-  }
-  return initializationPromise;
-}
+export const initialize = createCachedInitializer(async () => {
+  const currentThemes = themesDocumentCombiner.getAllThemeFamiliesById();
+  if (!currentThemes)
+    throw new Error(
+      'Theme data service host initialization error: Themes Document Combiner output was null!',
+    );
+  dataProvider = await dataProviderService.registerEngine(
+    themeDataServiceProviderName,
+    new ThemeDataDataProviderEngine(currentThemes),
+  );
+});
 
 /** This is an internal-only export for testing purposes and should not be used in development */
 export const testingThemeDataService = {

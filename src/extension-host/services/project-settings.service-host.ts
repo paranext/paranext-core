@@ -10,32 +10,21 @@ import {
 } from '@shared/services/project-settings.service-model';
 import { serializeRequestType } from '@shared/utils/util';
 import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
-import { getErrorMessage, includes, isLocalizeKey, isString } from 'platform-bible-utils';
+import {
+  createCachedInitializer,
+  getErrorMessage,
+  includes,
+  isLocalizeKey,
+  isString,
+} from 'platform-bible-utils';
 import { LocalizedProjectSettingsContributionInfo } from '@shared/utils/project-settings-document-combiner';
 import {
   projectSettingsDocumentCombiner,
   waitForResyncContributions,
 } from '@extension-host/services/contribution.service';
 
-let initializationPromise: Promise<void> | undefined;
 /** Do the setup this service needs to function */
-async function initialize(): Promise<void> {
-  if (!initializationPromise) {
-    initializationPromise = new Promise<void>((resolve, reject) => {
-      const executor = async () => {
-        try {
-          resolve();
-        } catch (error) {
-          // Clear the cached promise so the next call retries instead of failing forever
-          initializationPromise = undefined;
-          reject(error);
-        }
-      };
-      executor();
-    });
-  }
-  return initializationPromise;
-}
+const initialize = createCachedInitializer(async () => {});
 
 async function isValid<ProjectSettingName extends ProjectSettingNames>(
   key: ProjectSettingName,
