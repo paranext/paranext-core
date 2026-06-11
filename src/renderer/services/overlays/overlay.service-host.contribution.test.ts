@@ -74,6 +74,19 @@ vi.mock('@shared/services/localization.service', () => ({
   },
 }));
 
+vi.mock('@shared/services/web-view.service', () => ({
+  webViewService: {
+    getOpenWebViewDefinition: vi.fn(() => Promise.resolve(undefined)),
+  },
+}));
+
+vi.mock('@shared/services/context-keys.service', () => ({
+  contextKeysService: {
+    get: vi.fn(() => undefined),
+    onDidChange: vi.fn(() => vi.fn()),
+  },
+}));
+
 const mockGetWebViewMenu = vi.mocked(menuDataService.getWebViewMenu);
 
 describe('showContextMenu contribution integration', () => {
@@ -109,7 +122,8 @@ describe('showContextMenu contribution integration', () => {
       'test-webview',
     );
 
-    // Flush the getWebViewMenu promise so addOverlay is called
+    // Flush getWebViewMenu then getOpenWebViewDefinition so addOverlay is called
+    await Promise.resolve();
     await Promise.resolve();
 
     expect(mockGetWebViewMenu).toHaveBeenCalledWith('platformScripture.checkingResultsListWebView');
@@ -165,7 +179,8 @@ describe('showContextMenu contribution integration', () => {
       position: { x: 100, y: 200 },
     });
 
-    // Flush the getWebViewMenu promise so addOverlay is called
+    // Flush getWebViewMenu then getOpenWebViewDefinition so addOverlay is called
+    await Promise.resolve();
     await Promise.resolve();
 
     // Verify the overlay was added to the real store with correctly converted items

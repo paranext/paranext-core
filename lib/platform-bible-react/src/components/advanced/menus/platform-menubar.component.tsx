@@ -1,5 +1,6 @@
 import {
   Menubar,
+  MenubarCheckboxItem,
   MenubarContent,
   MenubarItem,
   MenubarMenu,
@@ -69,64 +70,86 @@ const getMenubarContent = (
   groups.map(({ groupKey, items }) => ({
     groupKey,
     items: items.map(({ item, subGroups = [] }) => {
+      let menuEntry: ReactNode;
+      if ('command' in item) {
+        const itemContent = (
+          <>
+            <MenuItemIcon
+              iconName={item.iconNameBefore}
+              icon={item.iconPathBefore}
+              menuLabel={item.label}
+              leading
+              leadingSlot={leadingSlot}
+            />
+            {item.label}
+            <MenuItemIcon
+              iconName={item.iconNameAfter}
+              icon={item.iconPathAfter}
+              menuLabel={item.label}
+            />
+            {item.shortcut && (
+              <MenubarShortcut className="tw:ps-4">
+                <ShortcutKeys hint={item.shortcut} />
+              </MenubarShortcut>
+            )}
+          </>
+        );
+        // `onSelect` rather than `onClick`: Radix does not fire `onSelect` for a disabled item
+        const handleSelect = () => {
+          // Since the item has a command, we know it is a MenuItemContainingCommand.
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          onSelectMenuItem(item as MenuItemContainingCommand);
+        };
+        menuEntry =
+          item.checked !== undefined ? (
+            <MenubarCheckboxItem
+              key={`menubar-item-${item.label}-${item.command}`}
+              checked={item.checked}
+              disabled={item.disabled}
+              onSelect={handleSelect}
+            >
+              {itemContent}
+            </MenubarCheckboxItem>
+          ) : (
+            <MenubarItem
+              key={`menubar-item-${item.label}-${item.command}`}
+              disabled={item.disabled}
+              onSelect={handleSelect}
+            >
+              {itemContent}
+            </MenubarItem>
+          );
+      } else {
+        menuEntry = (
+          <MenubarSub key={`menubar-sub-${item.label}-${item.id}`}>
+            <MenubarSubTrigger disabled={item.disabled}>
+              <MenuItemIcon
+                iconName={item.iconNameBefore}
+                menuLabel={item.label}
+                leading
+                leadingSlot={leadingSlot}
+              />
+              {item.label}
+              <MenuItemIcon iconName={item.iconNameAfter} menuLabel={item.label} />
+            </MenubarSubTrigger>
+            <MenubarSubContent>
+              {joinGroupsWithSeparators(
+                getMenubarContent(
+                  subGroups,
+                  onSelectMenuItem,
+                  getLeadingIconSlot(
+                    subGroups.flatMap((group) => group.items.map((node) => node.item)),
+                  ),
+                ),
+                createMenubarSeparator,
+              )}
+            </MenubarSubContent>
+          </MenubarSub>
+        );
+      }
       return (
         <Tooltip key={`tooltip-${item.label}-${'command' in item ? item.command : item.id}`}>
-          <TooltipTrigger asChild>
-            {'command' in item ? (
-              <MenubarItem
-                key={`menubar-item-${item.label}-${item.command}`}
-                onClick={() => {
-                  // Since the item has a command, we know it is a MenuItemContainingCommand.
-                  // eslint-disable-next-line no-type-assertion/no-type-assertion
-                  onSelectMenuItem(item as MenuItemContainingCommand);
-                }}
-              >
-                <MenuItemIcon
-                  iconName={item.iconNameBefore}
-                  icon={item.iconPathBefore}
-                  menuLabel={item.label}
-                  leading
-                  leadingSlot={leadingSlot}
-                />
-                {item.label}
-                <MenuItemIcon
-                  iconName={item.iconNameAfter}
-                  icon={item.iconPathAfter}
-                  menuLabel={item.label}
-                />
-                {item.shortcut && (
-                  <MenubarShortcut className="tw:ps-4">
-                    <ShortcutKeys hint={item.shortcut} />
-                  </MenubarShortcut>
-                )}
-              </MenubarItem>
-            ) : (
-              <MenubarSub key={`menubar-sub-${item.label}-${item.id}`}>
-                <MenubarSubTrigger>
-                  <MenuItemIcon
-                    iconName={item.iconNameBefore}
-                    menuLabel={item.label}
-                    leading
-                    leadingSlot={leadingSlot}
-                  />
-                  {item.label}
-                  <MenuItemIcon iconName={item.iconNameAfter} menuLabel={item.label} />
-                </MenubarSubTrigger>
-                <MenubarSubContent>
-                  {joinGroupsWithSeparators(
-                    getMenubarContent(
-                      subGroups,
-                      onSelectMenuItem,
-                      getLeadingIconSlot(
-                        subGroups.flatMap((group) => group.items.map((node) => node.item)),
-                      ),
-                    ),
-                    createMenubarSeparator,
-                  )}
-                </MenubarSubContent>
-              </MenubarSub>
-            )}
-          </TooltipTrigger>
+          <TooltipTrigger asChild>{menuEntry}</TooltipTrigger>
           {item.tooltip && <TooltipContent>{item.tooltip}</TooltipContent>}
         </Tooltip>
       );
