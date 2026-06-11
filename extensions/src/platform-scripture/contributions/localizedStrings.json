@@ -561,7 +561,11 @@
       "%manageBooks_openMenuItem%": "Manage books",
       "%manageBooks_sidebar_projectPlaceholder%": "Select project",
       "%keyboardSwitching_autoSwitched%": "Keyboard switched automatically",
+      "%keyboardSwitching_invalidKeyboardId%": "The specified keyboard id is not valid.",
+      "%keyboardSwitching_invalidSurfaceType%": "The specified keyboard surface type is not recognized.",
       "%keyboardSwitching_missingKeyboardFallback%": "The keyboard configured for this project is no longer available. Using the system default keyboard.",
+      "%keyboardSwitching_osQueryFailed%": "Could not determine the current keyboard from the operating system.",
+      "%keyboardSwitching_surfaceTypeRequiresWebView%": "Cannot set the current keyboard by surface type without a web view to provide the project context.",
       "%keyboardSwitching_webviewNotFocused%": "The specified web view is not currently focused."
     },
     "es": {
