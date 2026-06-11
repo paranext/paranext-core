@@ -13,7 +13,12 @@
 // (CAP-008) and `keyboard.service-host.ts` (CAP-015).
 /* eslint-disable paranext/service-file-naming */
 
-import { getErrorMessage, isPlatformError, UnsubscriberAsync } from 'platform-bible-utils';
+import {
+  getErrorMessage,
+  isPlatformError,
+  Unsubscriber,
+  UnsubscriberAsync,
+} from 'platform-bible-utils';
 import { dataProviderService } from '@shared/services/data-provider.service';
 import { notificationService } from '@shared/services/notification.service';
 import { logger } from '@shared/services/logger.service';
@@ -33,6 +38,31 @@ export type SetCurrentKeyboardOnOsOptions = {
    */
   silent?: boolean;
 };
+
+// === NEW IN PT10 === (keyboard-switching CAP-014 D7 hazard seam — added during CAP-014 GREEN)
+// Reason: the decision-#25 `CurrentOsKeyboard` subscriber below registers FIRST (the service
+// initializes before the CAP-014 router starts), so by the time any later subscriber runs,
+// `lastActivatedKeyboardId` has already been updated and the pre-update expected value is lost.
+// The manual-switch detector (alignment-decision #28 condition 1) needs that pre-update value to
+// distinguish PT10-initiated activations from user OS switches — it must flow THROUGH this
+// service (test-writer plan D5/D7; proofs/CAP-014/red-state.md "Notes for the Implementer").
+// Maps to: CAP-014
+/**
+ * Observer invoked synchronously from this service's decision-#25 `CurrentOsKeyboard` subscriber
+ * BEFORE it updates
+ * {@link KeyboardActivationService.getLastActiveKeyboardId | the last-active
+ * keyboard}.
+ *
+ * @param newKeyboardId The keyboard id the OS just reported active.
+ * @param expectedKeyboardId The PRE-update last-active value — what this service believed was
+ *   active before this change. `newKeyboardId !== expectedKeyboardId` means PT10 did NOT initiate
+ *   the change (PT10-initiated `activateAsync` writes record the id BEFORE the OS write per
+ *   INV-B1-04, so their notifications compare equal).
+ */
+export type CurrentOsKeyboardPreUpdateObserver = (
+  newKeyboardId: KeyboardId | undefined,
+  expectedKeyboardId: KeyboardId | undefined,
+) => void;
 
 /** Construction seams for {@link KeyboardActivationService} (plan D1). */
 export type KeyboardActivationServiceOptions = {
@@ -84,6 +114,10 @@ export class KeyboardActivationService {
   /** Releases the decision-#25 `CurrentOsKeyboard` subscription. Invoked by {@link shutdownAsync}. */
   private unsubscribeFromCurrentOsKeyboard: UnsubscriberAsync | undefined;
 
+  /** CAP-014 D7 seam — observers run BEFORE the decision-#25 `lastActivatedKeyboardId` update. */
+  private readonly currentOsKeyboardPreUpdateObservers =
+    new Set<CurrentOsKeyboardPreUpdateObserver>();
+
   constructor(options: KeyboardActivationServiceOptions) {
     this.options = options;
   }
@@ -122,9 +156,20 @@ export class KeyboardActivationService {
           );
           return;
         }
+        // CAP-014 HAZARD (test-writer plan D7): the manual-switch detector obtains the pre-update
+        // expected value through this seam — observers MUST run before the assignment below. An
+        // observer throw is contained so it can never corrupt decision-#25 state propagation.
+        this.currentOsKeyboardPreUpdateObservers.forEach((observer) => {
+          try {
+            observer(newKeyboardId, this.lastActivatedKeyboardId);
+          } catch (error) {
+            logger.warn(
+              `KeyboardActivationService: a CurrentOsKeyboard pre-update observer threw: ${getErrorMessage(error)}`,
+            );
+          }
+        });
         // Decision #25 (RM-010 visibility gap): external PAPI consumers' OS-keyboard mutations
-        // update this service's observable state. CAP-014 HAZARD (test-writer plan D7): the
-        // manual-switch detector must obtain the pre-update expected value through this service.
+        // update this service's observable state
         this.lastActivatedKeyboardId = newKeyboardId;
       },
       { retrieveDataImmediately: false },
@@ -212,6 +257,22 @@ export class KeyboardActivationService {
     // (spec-012 scenario 4).
     await this.setCurrentKeyboardOnOs(this.systemDefaultKeyboardId);
     return true;
+  }
+
+  // === NEW IN PT10 === (keyboard-switching CAP-014 D7 hazard seam)
+  // Reason: see CurrentOsKeyboardPreUpdateObserver above. Maps to: CAP-014
+  /**
+   * Registers a {@link CurrentOsKeyboardPreUpdateObserver} (CAP-014 manual-switch detection seam —
+   * test-writer plan D5/D7). Observers are invoked synchronously inside this service's decision-#25
+   * `CurrentOsKeyboard` subscriber, BEFORE `lastActivatedKeyboardId` updates.
+   *
+   * @returns Unsubscriber that unregisters the observer.
+   */
+  registerCurrentOsKeyboardPreUpdateObserver(
+    observer: CurrentOsKeyboardPreUpdateObserver,
+  ): Unsubscriber {
+    this.currentOsKeyboardPreUpdateObservers.add(observer);
+    return () => this.currentOsKeyboardPreUpdateObservers.delete(observer);
   }
 
   /**
