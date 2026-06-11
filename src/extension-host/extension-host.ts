@@ -51,18 +51,29 @@ process.on('exit', () => {
   logger.info('Finished killing child processes created by extensions');
 });
 
+/**
+ * Determines if an error is a broken pipe error e.g. the stdout pipe from extension host to main
+ * broke. Checks the `code` property because Node formats the message as `'write EPIPE'` (syscall
+ * first), with a message check as a fallback.
+ */
+function isEpipeError(error: unknown): boolean {
+  if (typeof error === 'object' && error && 'code' in error && error.code === 'EPIPE') return true;
+  return getErrorMessage(error).includes('EPIPE');
+}
+
 // Add unhandled exception and rejection handlers
 process.on('uncaughtException', (error) => {
-  const errorMessage = getErrorMessage(error);
+  // If the pipe from extension host to main breaks, stop logging to console because writing to the
+  // broken pipe throws EPIPE again, producing an infinite uncaughtException loop
+  if (isEpipeError(error)) logger.transports.console.level = false;
 
-  // If the pipe from extension host to main breaks, stop logging to console because it will infinitely
-  // produce errors in a loop
-  if (errorMessage.startsWith('EPIPE')) logger.transports.console.level = false;
-
-  logger.error(`Unhandled exception in extension host: ${errorMessage}`);
+  logger.error(`Unhandled exception in extension host: ${getErrorMessage(error)}`);
 });
 
 process.on('unhandledRejection', (reason) => {
+  // Same EPIPE feedback loop protection as uncaughtException above
+  if (isEpipeError(reason)) logger.transports.console.level = false;
+
   logger.error(`Unhandled promise rejection in extension host, reason: ${getErrorMessage(reason)}`);
 });
 
