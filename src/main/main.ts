@@ -453,6 +453,33 @@ async function main() {
       }
     });
 
+    // === NEW IN PT10 === (keyboard-switching CAP-017)
+    // Reason: RM-020 — PT9 reacted to OS-level app focus via WinForms `Form.Activated`/
+    // `Deactivate`; PT10's main process forwards Electron window focus/blur into the window
+    // service's `AppFocus` data type so subscribers (e.g. keyboard switching's
+    // CrossAppFocusDebounce) observe real app focus transitions. The renderer engine
+    // deduplicates same-value sets, so repeated events do not spam subscribers.
+    // Maps to: CAP-017
+    mainWindow.on('focus', async () => {
+      try {
+        await windowService.setAppFocus(true);
+      } catch (e) {
+        logger.warn(
+          `Failed to instruct window service to set app focus on window focus: ${getErrorMessage(e)}`,
+        );
+      }
+    });
+
+    mainWindow.on('blur', async () => {
+      try {
+        await windowService.setAppFocus(false);
+      } catch (e) {
+        logger.warn(
+          `Failed to instruct window service to set app focus on window blur: ${getErrorMessage(e)}`,
+        );
+      }
+    });
+
     /**
      * Unsubscribers to run when the window closes. The app doesn't shut down when the window closes
      * on Mac, so we need to unsubscribe some things

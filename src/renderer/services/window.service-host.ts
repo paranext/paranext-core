@@ -44,6 +44,18 @@ class WindowDataProviderEngine
 {
   /** The currently focused subject. Do NOT expose `FocusSubjectElement` outside this class */
   #focusSubject: FocusSubject | FocusSubjectElement | undefined;
+
+  // === NEW IN PT10 === (keyboard-switching CAP-017)
+  // Reason: PT9 reacted to OS-level app focus via WinForms `Form.Activated`/`Deactivate`; PT10
+  // tracks it as the `AppFocus` data type on this engine, mutated only by the main process's
+  // `mainWindow.on('focus'|'blur')` emitter through the `setAppFocus` proxy (RM-020).
+  // Maps to: CAP-017
+  /**
+   * Whether the main app window has OS-level focus. Defaults to focused — the app window is focused
+   * at launch, and the main-process emitter corrects on first blur
+   */
+  #appFocusSubject: AppFocusSubject = { isAppFocused: true };
+
   /**
    * Getting the focusSubject is async. We are firing off a promise to get it in the constructor,
    * and this tracks that promise. If `undefined`, the work is finished, and #focusSubject can be
@@ -174,8 +186,14 @@ class WindowDataProviderEngine
     return didChangeFocus;
   }
 
+  // === NEW IN PT10 === (keyboard-switching CAP-017)
+  // Reason: `AppFocus` data type host — no PT9 equivalent service; only the main process's
+  // focus/blur emitter mutates this via the `setAppFocus` proxy (RM-020). Same-value sets are
+  // deduplicated (mirror of #setFocusInternal) so subscribers like CAP-011
+  // CrossAppFocusDebounce only observe real focus transitions.
+  // Maps to: CAP-017
   async getAppFocus(): Promise<AppFocusSubject> {
-    return this.#throwNotImplementedAppFocus('getAppFocus()');
+    return this.#appFocusSubject;
   }
 
   // Can be called with or without a selector (mirror of setFocus; see IWindowService.setAppFocus)
@@ -183,9 +201,18 @@ class WindowDataProviderEngine
     isAppFocusedOrSelector: boolean | undefined,
     isAppFocusedPossiblyNotProvided?: boolean,
   ): Promise<DataProviderUpdateInstructions<WindowDataTypes>> {
-    return this.#throwNotImplementedAppFocus(
-      `setAppFocus(${isAppFocusedOrSelector}, ${isAppFocusedPossiblyNotProvided})`,
-    );
+    const isAppFocused = isAppFocusedOrSelector ?? isAppFocusedPossiblyNotProvided;
+
+    // No value provided (type-illegal per IWindowService overloads; defensive only) — no change
+    if (isAppFocused === undefined) return false;
+
+    const newAppFocusSubject: AppFocusSubject = { isAppFocused };
+
+    // Don't emit an AppFocus update when the value didn't actually change (no flicker spam)
+    if (deepEqual(this.#appFocusSubject, newAppFocusSubject)) return false;
+
+    this.#appFocusSubject = newAppFocusSubject;
+    return true;
   }
 
   async dispose(): Promise<boolean> {
@@ -220,13 +247,6 @@ class WindowDataProviderEngine
    */
   async #setDetectFocusInternal() {
     return this.#setFocusInternal(await detectFocus());
-  }
-
-  // Will track #appFocusSubject state on this engine once implemented
-  #throwNotImplementedAppFocus(methodCall: string): never {
-    throw new Error(
-      `Not implemented (CAP-017 RED stub): ${methodCall} on ${this.constructor.name}`,
-    );
   }
 }
 

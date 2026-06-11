@@ -53,12 +53,19 @@ export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabTy
 /** Instructions that indicate how to change the app window focus */
 export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | undefined;
 
+// === NEW IN PT10 === (keyboard-switching CAP-017)
+// Reason: PT9 observed OS-level app focus via WinForms `Form.Activated`/`Deactivate`; PT10
+// models it as the `AppFocus` data type (get + subscribe only) on the window service, mutated
+// solely by the main process's focus/blur emitter via the `setAppFocus` proxy (RM-020).
+// Maps to: CAP-017
 /** Whether the main application window itself currently has OS-level focus */
 export type AppFocusSubject = { isAppFocused: boolean };
 
 // Data Type to initialize data provider engine with
 export type WindowDataTypes = {
   Focus: DataProviderDataType<undefined, FocusSubject | undefined, SetFocusSpecifier>;
+  // === NEW IN PT10 === (keyboard-switching CAP-017)
+  // Reason: see AppFocusSubject above. Maps to: CAP-017
   /**
    * Whether the main application window has OS-level focus (`get` + `subscribe`; `set` data type is
    * `never` — PAPI consumers cannot push arbitrary data through the generic set path. Only the
@@ -139,6 +146,10 @@ export type IWindowService = {
     callback: (focusSubject: FocusSubject | PlatformError) => void,
     options?: DataProviderSubscriberOptions,
   ): Promise<UnsubscriberAsync>;
+  // === NEW IN PT10 === (keyboard-switching CAP-017)
+  // Reason: AppFocus surface on IWindowService — get/subscribe for PAPI consumers plus the
+  // internal `setAppFocus` proxy used only by the main-process focus/blur emitter (RM-020).
+  // Maps to: CAP-017
   /**
    * JSDOC SOURCE getAppFocus
    *

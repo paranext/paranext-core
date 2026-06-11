@@ -226,6 +226,12 @@ type WebViewDefinitionBase = {
    * @default false
    */
   shouldShowToolbar?: boolean;
+  // === NEW IN PT10 === (keyboard-switching CAP-017)
+  // Reason: PT9 hardcoded which WinForms controls were "vernacular" text fields; PT10 WebViews
+  // declare their keyboard surface so the FocusKeyboardRouter (CAP-014) can switch keyboards on
+  // focus. Updatable (in WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS) and NOT save-omitted (must
+  // round-trip through layout save/load).
+  // Maps to: CAP-017
   /**
    * Which keyboard surface this WebView wants active while it has focus. When the WebView gains
    * focus, the keyboard service activates the focused project's default keyboard for this surface
@@ -322,6 +328,9 @@ export const WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS = [
   'projectId',
   'scrollGroupScrRef',
   'state',
+  // === NEW IN PT10 === (keyboard-switching CAP-017)
+  // Reason: keyboardPreference must be updatable on open WebViews (see field on
+  // WebViewDefinitionBase). Maps to: CAP-017
   'keyboardPreference',
 ] as const;
 

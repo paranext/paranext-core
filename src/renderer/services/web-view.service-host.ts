@@ -913,9 +913,16 @@ export const closeTab = async (tabId: string): Promise<boolean> => {
   return (await getDockLayout()).removeTabFromDock(tabId);
 };
 
+// === NEW IN PT10 === (keyboard-switching CAP-017)
+// Reason: PT9 closed windows via WinForms form lifecycle; PT10 exposes a webview-scoped close on
+// the WebViewService network object, extending the existing closeTab → removeTabFromDock path.
+// Ids that are not open WebViews (unknown ids AND non-webview tab ids) resolve `false`, no throw.
+// Maps to: CAP-017
 /** See {@link WebViewServiceType.closeWebView} */
 export const closeWebView = async (webViewId: WebViewId): Promise<boolean> => {
-  throw new Error(`Not implemented (CAP-017 RED stub): closeWebView(${webViewId})`);
+  // Only close ids that are currently open WebViews — closeTab would also close non-webview tabs
+  if (!(await getDockLayout()).getWebViewDefinition(webViewId)) return false;
+  return closeTab(webViewId);
 };
 
 /**
