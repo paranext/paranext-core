@@ -504,6 +504,20 @@ function removeForbiddenElements(mutationList: MutationRecord[]) {
 /** `localstorage` key for saving and loading the dock layout */
 const DOCK_LAYOUT_KEY = 'dock-saved-layout';
 
+/**
+ * Cached value of the `platform.interfaceMode` setting.
+ *
+ * `saveLayout` runs on every layout change (tab focus, panel resize, drag, …). Reading the mode
+ * with `await settingsService.get` there would add an async settings round-trip to each of those
+ * high-frequency events and open a narrow race: a power-mode save dispatched just before a switch
+ * to simple mode could resolve with the new `'simple'` value and silently drop the user's power
+ * layout. We instead cache the mode here, seed it on the first `loadLayout`, and keep it current
+ * via the `platform.interfaceMode` subscription in `registerDockLayout`, so the common path is
+ * synchronous and race-free. `undefined` only before the first seed (very early startup), in which
+ * case `saveLayout` falls back to a direct read.
+ */
+let currentInterfaceMode: 'simple' | 'power' | undefined;
+
 /** Create a new dock layout promise variable */
 function createDockLayoutAsyncVar(): AsyncVariable<PapiDockLayout> {
   return new AsyncVariable<PapiDockLayout>('web-view.service-host.platformDockLayout');
@@ -659,6 +673,9 @@ async function loadLayout(layout?: LayoutInfo): Promise<void> {
   //   simple mode, so resizing or rearranging in simple mode is ephemeral by design and does not
   //   clobber the saved power layout.
   const interfaceMode = await settingsService.get('platform.interfaceMode');
+  // Seed/refresh the cache before loading so any `onLayoutChange` that the load triggers (and every
+  // subsequent `saveLayout`) sees the current mode without another settings round-trip.
+  currentInterfaceMode = interfaceMode;
   const layoutToLoad =
     interfaceMode === 'simple'
       ? dockLayoutVar.simpleLayout
@@ -684,10 +701,16 @@ function getStorageValue<T>(key: string, defaultValue: T): T {
  * power mode. Simple mode always reloads the static `simpleLayout` (see `loadLayout`), so we
  * deliberately skip writing in simple mode to avoid clobbering the user's saved power-mode layout.
  *
+ * Reads the mode from the `currentInterfaceMode` cache (kept current by `loadLayout` and the
+ * `platform.interfaceMode` subscription) so this stays synchronous on the hot path and avoids the
+ * power-save-dropped-on-switch race. Falls back to a direct settings read only before the cache has
+ * been seeded (very early startup).
+ *
  * @param layout Layout to persist
  */
 async function saveLayout(layout: LayoutInfo): Promise<void> {
-  const interfaceMode = await settingsService.get('platform.interfaceMode');
+  const interfaceMode =
+    currentInterfaceMode ?? (await settingsService.get('platform.interfaceMode'));
   if (interfaceMode === 'simple') return;
   localStorage.setItem(DOCK_LAYOUT_KEY, serialize(layout));
 }
@@ -735,6 +758,9 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
             );
             return;
           }
+          // Update the cache synchronously with the notification so any `saveLayout` racing the
+          // switch reads the new mode immediately (before `loadLayout`'s own read resolves).
+          currentInterfaceMode = newMode;
           try {
             await loadLayout();
           } catch (err) {

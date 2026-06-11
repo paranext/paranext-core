@@ -271,7 +271,7 @@ export function UserProfilePopover() {
               {emailText !== undefined && (
                 <PopoverDescription
                   data-testid="user-profile-email"
-                  className="user-profile-popover-text-11 tw:leading-tight"
+                  className="user-profile-popover-text-2xs tw:leading-tight"
                 >
                   {emailText}
                 </PopoverDescription>
@@ -298,13 +298,13 @@ export function UserProfilePopover() {
           >
             <span
               className={cn(
-                'user-profile-popover-text-11 tw:leading-tight tw:font-semibold',
+                'user-profile-popover-text-2xs tw:leading-tight tw:font-semibold',
                 safeInterfaceMode === 'simple' && 'tw:text-accent-foreground',
               )}
             >
               {localizedStrings['%userProfile_interfaceMode_simple_label%']}
             </span>
-            <span className="user-profile-popover-text-10 tw:leading-tight tw:text-muted-foreground">
+            <span className="user-profile-popover-text-3xs tw:leading-tight tw:text-muted-foreground">
               {localizedStrings['%userProfile_interfaceMode_simple_description%']}
             </span>
           </ToggleGroupItem>
@@ -320,13 +320,13 @@ export function UserProfilePopover() {
           >
             <span
               className={cn(
-                'user-profile-popover-text-11 tw:leading-tight tw:font-semibold',
+                'user-profile-popover-text-2xs tw:leading-tight tw:font-semibold',
                 safeInterfaceMode === 'power' && 'tw:text-accent-foreground',
               )}
             >
               {localizedStrings['%userProfile_interfaceMode_power_label%']}
             </span>
-            <span className="user-profile-popover-text-10 tw:leading-tight tw:text-muted-foreground">
+            <span className="user-profile-popover-text-3xs tw:leading-tight tw:text-muted-foreground">
               {localizedStrings['%userProfile_interfaceMode_power_description%']}
             </span>
           </ToggleGroupItem>
@@ -373,7 +373,7 @@ export function UserProfilePopover() {
                 variant="outline"
                 data-testid={`user-profile-language-${tag}`}
                 aria-label={info.autonym ?? tag}
-                className="user-profile-popover-text-10 tw:h-6 tw:min-w-0 tw:px-2"
+                className="user-profile-popover-text-3xs tw:h-6 tw:min-w-0 tw:px-2"
               >
                 {tag.toUpperCase()}
               </ToggleGroupItem>

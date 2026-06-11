@@ -59,22 +59,25 @@ const setMockSetting = <K extends keyof MockState>(key: K, value: MockState[K]) 
 };
 
 vi.mock('@renderer/hooks/papi-hooks', () => ({
+  // Deliberately sentinel values that differ from the production English strings. If the component
+  // ever hard-codes a label instead of rendering the localized string it was handed, these tests
+  // fail — proving the localization wiring is real end to end.
   useLocalizedStrings: vi.fn(() => [
     {
-      '%toolbar_userProfile_label%': 'User profile',
-      '%userProfile_header_defaultName%': 'User profile',
-      '%userProfile_header_notRegistered%': 'Not registered',
-      '%userProfile_interfaceMode_simple_label%': 'Simple mode',
-      '%userProfile_interfaceMode_simple_description%': 'Streamlined',
-      '%userProfile_interfaceMode_power_label%': 'Power mode',
-      '%userProfile_interfaceMode_power_description%': 'Full',
-      '%userProfile_profileAndRegistration%': 'Profile & registration',
-      '%userProfile_networkSettings%': 'Network settings',
-      '%userProfile_language%': 'Language',
-      '%userProfile_appearance%': 'Appearance',
-      '%userProfile_appearance_light%': 'Light',
-      '%userProfile_appearance_dark%': 'Dark',
-      '%userProfile_appearance_system%': 'Follow system',
+      '%toolbar_userProfile_label%': 'User profile button label',
+      '%userProfile_header_defaultName%': 'Default display name',
+      '%userProfile_header_notRegistered%': 'Registration needed',
+      '%userProfile_interfaceMode_simple_label%': 'Simplified UI',
+      '%userProfile_interfaceMode_simple_description%': 'Fewer panels',
+      '%userProfile_interfaceMode_power_label%': 'Advanced UI',
+      '%userProfile_interfaceMode_power_description%': 'All panels',
+      '%userProfile_profileAndRegistration%': 'Profile and registration row',
+      '%userProfile_networkSettings%': 'Network settings row',
+      '%userProfile_language%': 'UI language',
+      '%userProfile_appearance%': 'Appearance section',
+      '%userProfile_appearance_light%': 'Light theme',
+      '%userProfile_appearance_dark%': 'Dark theme',
+      '%userProfile_appearance_system%': 'Match OS theme',
     },
   ]),
   useSetting: vi.fn((key: string) => {
@@ -127,7 +130,7 @@ describe('UserProfilePopover', () => {
   test('renders the trigger button with the user profile aria-label', () => {
     render(<UserProfilePopover />);
     expect(screen.getByTestId('user-profile-popover-trigger')).toBeInTheDocument();
-    expect(screen.getByLabelText('User profile')).toBeInTheDocument();
+    expect(screen.getByLabelText('User profile button label')).toBeInTheDocument();
   });
 
   test('opens the popover when the trigger is clicked', async () => {
@@ -181,9 +184,9 @@ describe('UserProfilePopover header', () => {
     render(<UserProfilePopover />);
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
     await waitFor(() =>
-      expect(screen.getByTestId('user-profile-name')).toHaveTextContent('User profile'),
+      expect(screen.getByTestId('user-profile-name')).toHaveTextContent('Default display name'),
     );
-    expect(screen.getByTestId('user-profile-email')).toHaveTextContent('Not registered');
+    expect(screen.getByTestId('user-profile-email')).toHaveTextContent('Registration needed');
   });
 
   test('renders the name and OMITS the email row when name is set but email is blank', async () => {
