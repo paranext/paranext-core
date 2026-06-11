@@ -123,10 +123,21 @@ const BOOK_PILL_BASE_CLASS =
   'tw:flex tw:w-full tw:items-center tw:gap-2 tw:rounded tw:border tw:border-border tw:px-2 tw:py-1 tw:text-start';
 
 /**
- * Compose the pill's color/border classes for a given `present` flag. In-project (`present`) books
- * use the accent tone at rest and shift to primary on hover; absent books get a dashed primary
- * outline plus muted text and the same primary hover treatment. Per Sebastian item 24
- * (2026-05-06).
+ * Compose the pill's color/border classes for a given `present`/`disabled` state pair.
+ *
+ * - In-project (`present`) books use the accent tone at rest and shift to primary on hover.
+ * - Absent (addable) books get a dashed primary outline plus muted text and the same hover treatment
+ *   — dashed-primary uniquely means "available to act on". Per Sebastian item 24 (2026-05-06).
+ * - Disabled books (e.g. Create mode's not-in-reference books) render as "inert gray": solid
+ *   `border-border`, faint muted fill, slightly-muted FULL-OPACITY text so the book code stays
+ *   legible, no hover, no addable affordance. This replaces the former `opacity-50`-only treatment,
+ *   which was nearly indistinguishable from the enabled absent state (Manila UX follow-up:
+ *   "Difference between disabled and not in project is too subtle").
+ *
+ * The hover treatment is the original `bg-primary/90` + `text-primary-foreground` the UX team
+ * signed off in the original port; PR #2296 downgraded it to a `/20` tint that is visually
+ * indistinguishable from the at-rest accent color, which UX reported as "hover effect has been
+ * removed". Selection is conveyed by the checkbox glyph, not the hover color.
  *
  * NOTE on `tw:hover:bg-primary/90` vs `tw:hover:bg-primary`: the slashless `tw:hover:bg-primary`
  * does not get JIT-compiled in this build pipeline (only the slash variants `/10`, `/70`, `/80`,
@@ -134,18 +145,20 @@ const BOOK_PILL_BASE_CLASS =
  * actually exists in the stylesheet — without it the hover background falls back to the at-rest
  * accent color and the white `text-primary-foreground` becomes unreadable on the light background.
  */
-const bookPillClasses = (present: boolean): string =>
-  cn(
+const bookPillClasses = (present: boolean, disabled = false): string => {
+  if (disabled)
+    return cn(
+      BOOK_PILL_BASE_CLASS,
+      'tw:cursor-not-allowed tw:bg-muted/40 tw:text-muted-foreground/70',
+    );
+  return cn(
     BOOK_PILL_BASE_CLASS,
-    // Use a 20%-opacity primary tint on hover and leave the text foreground
-    // untouched. A higher-contrast treatment (`bg-primary/90` +
-    // `text-primary-foreground`) makes hovered pills look "selected" and
-    // confuses users about which pills are actually selected.
-    'tw:transition-colors tw:hover:bg-primary/20',
+    'tw:transition-colors tw:hover:bg-primary/90 tw:hover:text-primary-foreground',
     present
       ? 'tw:border-primary/40 tw:bg-accent'
       : 'tw:border-dashed tw:border-primary/40 tw:text-muted-foreground',
   );
+};
 
 /* ------------------------------------------------------------------ */
 /* Tone / status mapping                                              */
@@ -610,7 +623,7 @@ export function BookGridSelector({
 
     const body = (
       <>
-        {interactive && (
+        {interactive && !item.disabled && (
           // The pill is an outer <button> (further below). Using shadcn's
           // <Checkbox> here renders a Radix Checkbox.Root <button>, which
           // triggers the "<button> cannot appear as a descendant of <button>"
@@ -680,7 +693,7 @@ export function BookGridSelector({
     );
 
     if (!interactive) {
-      const plain = <div className={bookPillClasses(item.present)}>{body}</div>;
+      const plain = <div className={bookPillClasses(item.present, item.disabled)}>{body}</div>;
       return (
         <Tooltip>
           <TooltipTrigger asChild>{plain}</TooltipTrigger>
@@ -741,10 +754,9 @@ export function BookGridSelector({
         }}
         onFocus={() => setFocusedIndex(flatIndex)}
         className={cn(
-          bookPillClasses(item.present),
+          bookPillClasses(item.present, item.disabled),
           'tw:outline-hidden tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:ring-offset-1',
           isSelected && 'tw:text-accent-foreground',
-          item.disabled && 'tw:cursor-not-allowed tw:opacity-50',
         )}
       >
         {body}

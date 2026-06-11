@@ -1543,6 +1543,13 @@ export function ManageBooksDialog({
           t('%manageBooks_create_book_notInReference%', 'Not in {0}'),
           createReferenceProject.shortName,
         );
+        // Manila UX follow-up ("disabled vs not in project is too subtle"):
+        // cluster the non-creatable books in their own status group at the
+        // bottom (notInProject sorts last via STATUS_GROUP_PRIORITY) instead
+        // of interleaving them with creatable "New" books. Pairs with the
+        // inert-gray disabled pill styling in book-grid.component.tsx.
+        statusGroupKey = 'notInProject';
+        statusLabel = disabledReason;
       }
 
       return {
