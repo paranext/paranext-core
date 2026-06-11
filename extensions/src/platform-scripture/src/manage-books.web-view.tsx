@@ -295,8 +295,15 @@ global.webViewComponent = function ManageBooksWebView({
     initialProjectId ?? '',
   );
 
+  // The EXPLICIT open context wins over persisted state: since the Manila UX
+  // follow-up the dialog is only opened from a scripture editor's hamburger
+  // menu, so a fresh `initialProjectId` means "the user asked to manage THIS
+  // project's books" — a previously-persisted choice (possibly stale, or even
+  // a project id that no longer resolves) must not override it. Persistence
+  // still covers dock-layout session restores, where the definition carries
+  // no fresh option.
   const [projectId, setProjectIdLocal] = useState<string>(
-    () => persistedProjectId || initialProjectId || '',
+    () => initialProjectId || persistedProjectId || '',
   );
 
   // Pull all the localization strings the dialog + picker need in one batch. Including the

@@ -107,11 +107,16 @@ async function openManageBooksDialog(
   // when already open), then drive the hamburger.
   const existingEditor = mainPage.locator('.dock-tab', { hasText: ENTRY_PROJECT_NAME });
   if ((await existingEditor.count()) === 0) {
+    // Home's Open buttons / the editor hamburger are only clickable while
+    // their tab is the visible one in its dock panel — activate first.
+    await mainPage.locator('.dock-tab', { hasText: 'Home' }).first().click();
     const homeFrame = mainPage.frameLocator('iframe[title="Home"]');
     await homeFrame.locator(`tr:has-text("${ENTRY_PROJECT_NAME}") button:has-text("Open")`).click();
     await expect(mainPage.locator('.dock-tab', { hasText: ENTRY_PROJECT_NAME })).toBeVisible({
       timeout: 15_000,
     });
+  } else {
+    await existingEditor.first().click();
   }
   const editorFrame = mainPage.frameLocator(
     `iframe[title*="${ENTRY_PROJECT_NAME}" i][title*="Editable" i]`,

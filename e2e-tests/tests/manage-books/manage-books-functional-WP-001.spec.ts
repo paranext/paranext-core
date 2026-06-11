@@ -61,11 +61,18 @@ const ENTRY_PROJECT_NAME = 'wgPIDGIN';
 async function openManageBooksViaEditorMenu(mainPage: Page): Promise<void> {
   const existingEditor = mainPage.locator('.dock-tab', { hasText: ENTRY_PROJECT_NAME });
   if ((await existingEditor.count()) === 0) {
+    // The Home iframe's Open buttons are only clickable while the Home tab is
+    // the visible tab in its dock panel — activate it first.
+    await mainPage.locator('.dock-tab', { hasText: 'Home' }).first().click();
     const homeFrame = mainPage.frameLocator('iframe[title="Home"]');
     await homeFrame.locator(`tr:has-text("${ENTRY_PROJECT_NAME}") button:has-text("Open")`).click();
     await expect(mainPage.locator('.dock-tab', { hasText: ENTRY_PROJECT_NAME })).toBeVisible({
       timeout: 15_000,
     });
+  } else {
+    // Same constraint for the editor's hamburger: the editor iframe must be
+    // the visible tab before its in-iframe button can be clicked.
+    await existingEditor.first().click();
   }
   const editorFrame = mainPage.frameLocator(
     `iframe[title*="${ENTRY_PROJECT_NAME}" i][title*="Editable" i]`,
@@ -123,6 +130,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     // ("Project") menu — reserved `platform.manageBooks` default group, Project section.
     const existingEditor = mainPage.locator('.dock-tab', { hasText: ENTRY_PROJECT_NAME });
     if ((await existingEditor.count()) === 0) {
+      await mainPage.locator('.dock-tab', { hasText: 'Home' }).first().click();
       const homeFrame = mainPage.frameLocator('iframe[title="Home"]');
       await homeFrame
         .locator(`tr:has-text("${ENTRY_PROJECT_NAME}") button:has-text("Open")`)
@@ -130,6 +138,8 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
       await expect(mainPage.locator('.dock-tab', { hasText: ENTRY_PROJECT_NAME })).toBeVisible({
         timeout: 15_000,
       });
+    } else {
+      await existingEditor.first().click();
     }
     const editorFrame = mainPage.frameLocator(
       `iframe[title*="${ENTRY_PROJECT_NAME}" i][title*="Editable" i]`,
@@ -467,6 +477,13 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
     await frame.locator('[data-testid="manage-books-sidebar-section-create"]').first().click();
+
+    // The designed default creation method is 'Create based on' (fromTemplate), which
+    // gates apply on a reference project being chosen. This test's contract is
+    // "selecting books enables apply", so pick the self-contained 'Create empty book'
+    // method explicitly first.
+    await frame.locator('#af-method').click();
+    await frame.getByRole('option', { name: /Create empty book/i }).click();
 
     // Universe in Create mode is books NOT yet present. We click the first selectable
     // pill instead of hard-coding GEN (which may already exist in every test project).
@@ -1022,6 +1039,10 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
     await frame.locator('[data-testid="manage-books-sidebar-section-create"]').first().click();
+    // Pick the self-contained 'Create empty book' method — the designed default
+    // ('Create based on') gates apply on a reference project (see EVD-012).
+    await frame.locator('#af-method').click();
+    await frame.getByRole('option', { name: /Create empty book/i }).click();
     const firstCreatablePill = frame.locator('ul[role="listbox"] li[data-book]').first();
     await firstCreatablePill.click();
     const createApply = frame

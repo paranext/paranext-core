@@ -149,6 +149,34 @@ namespace TestParanextDataProvider.ManageBooks
             );
         }
 
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-011")]
+        [Property("BehaviorId", "BHV-411")]
+        [Description(
+            "ProjectSummary.ProjectId must use PT10's canonical PAPI project-id form "
+                + "(uppercase hex — see ProjectMetadata.Id which applies ToUpperInvariant). "
+                + "The UI compares these ids against papi-supplied ids (e.g. the scripture "
+                + "editor's webview projectId) with case-sensitive equality; a lowercase id "
+                + "makes the manage-books project picker fail to resolve the active project."
+        )]
+        public void FilterProjects_ProjectIds_UseCanonicalUppercaseForm()
+        {
+            var input = new ProjectFilterInput(ProjectFilterPurpose.AllScripture, null);
+
+            ProjectListResult result = ProjectFilterService.FilterProjects(input);
+
+            Assert.That(result.Projects, Is.Not.Empty);
+            foreach (ProjectSummary summary in result.Projects)
+            {
+                Assert.That(
+                    summary.ProjectId,
+                    Is.EqualTo(summary.ProjectId.ToUpperInvariant()),
+                    $"ProjectId for '{summary.Name}' must be uppercase (canonical papi form)"
+                );
+            }
+        }
+
         // -------------------------------------------------------------------
         // EditableTexts — scripture projects with IsEditable = true
         // -------------------------------------------------------------------

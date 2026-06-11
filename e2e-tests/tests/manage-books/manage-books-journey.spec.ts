@@ -102,7 +102,14 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
    */
   async function openEntryProject(mainPage: Page): Promise<void> {
     const existing = mainPage.locator('.dock-tab', { hasText: ENTRY_PROJECT_NAME });
-    if ((await existing.count()) > 0) return;
+    if ((await existing.count()) > 0) {
+      // The editor's in-iframe hamburger is only clickable while the editor
+      // tab is the visible tab in its dock panel — activate it.
+      await existing.first().click();
+      return;
+    }
+    // Same constraint for Home's Open buttons — activate Home first.
+    await mainPage.locator('.dock-tab', { hasText: 'Home' }).first().click();
     const homeFrame = mainPage.frameLocator('iframe[title="Home"]');
     await homeFrame.locator(`tr:has-text("${ENTRY_PROJECT_NAME}") button:has-text("Open")`).click();
     await expect(mainPage.locator('.dock-tab', { hasText: ENTRY_PROJECT_NAME })).toBeVisible({

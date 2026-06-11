@@ -153,7 +153,10 @@ public static class ProjectFilterService
     /// </summary>
     private static ProjectSummary ToSummary(ScrText scrText) =>
         new(
-            ProjectId: scrText.Guid.ToString(),
+            // Canonical papi project-id form is UPPERCASE hex (ProjectMetadata.Id
+            // applies ToUpperInvariant); the UI compares these against papi-supplied
+            // ids (e.g. the scripture editor's webview projectId) case-sensitively.
+            ProjectId: scrText.Guid.ToString().ToUpperInvariant(),
             Name: scrText.Name,
             ProjectType: scrText.Settings.TranslationInfo.Type.InternalValue,
             IsEditable: scrText.Settings.IsEditableText,
