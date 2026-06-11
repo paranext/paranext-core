@@ -19,7 +19,9 @@
 // - Scenarios: TS-019 (restore on non-project focus — BHV-311), TS-020/TS-024/TS-025 (project
 //   switch & immediate activation — BHV-313/351/352), TS-026 (comments surface activation —
 //   BHV-355), TS-031 (vernacular widget activation — BHV-401), TS-064/TS-065 (missing-keyboard
-//   cadence — BHV-350/VAL-B-05); TS-021 (BHV-314 IME suppression) is runtime-watch scope, see
+//   cadence — BHV-350/VAL-B-05), TS-066 (modal-return restoration — BHV-358 return half /
+//   FN-014 restore-on-close / INV-C08, inherited from CAP-012's traceability validator);
+//   TS-021 (BHV-314 IME suppression) is runtime-watch scope, see
 //   the IME regression-watch deliverable (implementation/decisions/ime-regression-watch.md)
 // - Behaviors: BHV-311..314, BHV-350..358, BHV-400..405, BHV-450 (EXT-105/110/150/151/152/200/201
 //   consolidation), BHV-356 (EXT-153 BT filter routing via CAP-013)
@@ -476,7 +478,7 @@ describe('FocusKeyboardRouter — missing configured keyboard (§4.6 item 5 / VA
   });
 });
 
-describe('FocusKeyboardRouter — restore on leaving a project surface (§4.6 item 2 / BHV-311, BHV-450 family / TS-019)', () => {
+describe('FocusKeyboardRouter — restore on leaving a project surface & re-activation on return (§4.6 items 2, 6 / BHV-311, BHV-358, BHV-450 family / TS-019, TS-066)', () => {
   // TS-019 / BHV-311 (EXT-200 consolidation): focus moving to a non-project subject restores the
   // captured system default for the project being left
   it('restores the system default when focus moves from a project surface to a non-WebView subject', async () => {
@@ -510,6 +512,23 @@ describe('FocusKeyboardRouter — restore on leaving a project surface (§4.6 it
 
     expect(fakeOsKeyboard.getWrites()).toEqual(['fr-FR']);
     expect(fakeOsKeyboard.getCurrentKeyboardIdSync()).toBe('fr-FR');
+  });
+
+  // TS-066 / BHV-358 (modal-RETURN half) / FN-014 restore-on-close (data-contracts.md:82, §4.6
+  // item 6) / INV-C08 (data-contracts.md:1459): when a modal (e.g. Save File dialog) closes and
+  // focus RETURNS to the SAME project surface, the router re-applies that surface's keyboard
+  // before the user types — the focus event on modal close is sufficient to drive this
+  // (data-contracts.md:891). An implementation that memoizes the last project surface and skips
+  // re-activation on return would pass every cold-start focus-in test but fail here.
+  it('re-activates the project keyboard when focus returns to the same surface after a modal (restore-on-close)', async () => {
+    await createStartedRouter();
+    await emitFocus(focusWebView(WV_VERNACULAR)); // project keyboard active
+    await emitFocus(FOCUS_OTHER); // modal opens — system default restored
+
+    await emitFocus(focusWebView(WV_VERNACULAR)); // modal closes — focus returns
+
+    expect(fakeOsKeyboard.getWrites()).toEqual(['ar-SA', SYSTEM_DEFAULT, 'ar-SA']);
+    expect(fakeOsKeyboard.getCurrentKeyboardIdSync()).toBe('ar-SA');
   });
 
   // Strategic-plan edge case (plan D10): a focus event for a DESTROYED WebView (definition no
