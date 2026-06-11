@@ -1,4 +1,4 @@
-import { renderHook, waitFor, act } from '@testing-library/react';
+import { renderHook, waitFor, act, configure, getConfig } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import { EVENT_NAME_ON_DID_UPDATE_WEB_VIEW } from '@shared/services/web-view.service-model';
@@ -83,6 +83,22 @@ async function importMocks() {
 // vitest mocks use as-never to coerce partial objects to the full inferred return type
 /* eslint-disable no-type-assertion/no-type-assertion */
 describe('useProjectPickerData', () => {
+  // The hook ORs four async loading flags (three usePromise calls + one useData). They resolve in
+  // ~60ms locally, but waitFor's deadline is wall-clock: on a starved CI runner the event loop can
+  // be blocked past RTL's 1000ms default before the (already-scheduled) resolutions run, producing
+  // spurious "isLoading still true" timeouts. There is no re-render loop (each callback runs exactly
+  // once), so a longer deadline only tolerates scheduler starvation - waitFor still returns the
+  // instant the condition is met, so the happy path is not slowed. Restored in afterAll so the
+  // raised timeout does not leak to other test files sharing the worker.
+  let originalAsyncUtilTimeout: number;
+  beforeAll(() => {
+    originalAsyncUtilTimeout = getConfig().asyncUtilTimeout;
+    configure({ asyncUtilTimeout: 5000 });
+  });
+  afterAll(() => {
+    configure({ asyncUtilTimeout: originalAsyncUtilTimeout });
+  });
+
   beforeEach(async () => {
     // resetAllMocks clears both call history and any mockReturnValue/mockImplementation overrides
     // set by individual tests. clearAllMocks only clears call history, so without reset, a test
