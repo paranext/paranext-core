@@ -22,16 +22,17 @@ namespace Paranext.DataProvider.KeyboardSwitching.Keyboarding;
 /// </summary>
 public sealed class MacKeyboardingPrimitive : IKeyboardingPrimitive
 {
+    private readonly IMacInputSourceApi _api;
+
     /// <summary>
     /// Production constructor: wires the real HIToolbox Text Input Services adapter.
+    /// Never throws — the adapter resolves its interop lazily per call, so a TIS-layer
+    /// failure surfaces later as contained per-call fallbacks, not as a construction
+    /// failure.
     /// </summary>
     [SupportedOSPlatform("macos")]
     public MacKeyboardingPrimitive()
-    {
-        throw new NotImplementedException(
-            "CAP-006 RED: production TIS adapter not implemented yet"
-        );
-    }
+        : this(new MacInputSourceApi()) { }
 
     /// <summary>
     /// Seam constructor for tests: the primitive's mapping and guard logic runs
@@ -39,26 +40,77 @@ public sealed class MacKeyboardingPrimitive : IKeyboardingPrimitive
     /// </summary>
     internal MacKeyboardingPrimitive(IMacInputSourceApi api)
     {
-        // RED-phase stub: the seam is intentionally unused until GREEN so each
-        // failing test points at the interface method under test, and construction
-        // never throws.
-        _ = api;
+        _api = api;
     }
 
     public IReadOnlyList<KeyboardOption> EnumerateAvailable()
     {
-        throw new NotImplementedException("CAP-006 RED: EnumerateAvailable not implemented yet");
+        try
+        {
+            // ToList() materializes eagerly, so any seam/mapping throw surfaces here,
+            // inside the containment catch below — TIS order preserved. An input
+            // source without a localized name still needs a non-empty display name
+            // for the dropdown (BHV-305): fall back to the input source id itself.
+            return _api.ListInputSources()
+                .Select(source => new KeyboardOption(
+                    KeyboardId.FromMacInputSource(source.Id),
+                    source.LocalizedName.Length > 0 ? source.LocalizedName : source.Id
+                ))
+                .ToList();
+        }
+        catch (Exception e)
+        {
+            // VAL-B-04 containment on the read path: a TIS interop fault degrades to
+            // the empty steady state (FN-008) — logged, never propagated.
+            Console.Error.WriteLine($"MacKeyboardingPrimitive: keyboard enumeration failed: {e}");
+            return [];
+        }
     }
 
     public Task<bool> ActivateAsync(string keyboardId)
     {
-        throw new NotImplementedException("CAP-006 RED: ActivateAsync not implemented yet");
+        // Ids this primitive cannot own (foreign prefix, missing prefix, null/empty,
+        // empty "mac:" payload) degrade to "nothing activated" WITHOUT touching the
+        // TIS layer. TryGetMacInputSource splits on the FIRST colon only, so the long
+        // dotted input-method ids reach TIS verbatim, case preserved (CAP-001).
+        if (!KeyboardId.TryGetMacInputSource(keyboardId, out string inputSourceId))
+            return Task.FromResult(false);
+
+        try
+        {
+            return Task.FromResult(_api.SelectInputSource(inputSourceId));
+        }
+        catch (Exception e)
+        {
+            // VAL-B-04 verbatim contract from IKeyboardingPrimitive: errors are
+            // logged, not thrown — keyboard activation failures must never block
+            // typing.
+            Console.Error.WriteLine(
+                $"MacKeyboardingPrimitive: activation of '{keyboardId}' failed: {e}"
+            );
+            return Task.FromResult(false);
+        }
     }
 
     public string? GetCurrentlyActiveKeyboardId()
     {
-        throw new NotImplementedException(
-            "CAP-006 RED: GetCurrentlyActiveKeyboardId not implemented yet"
-        );
+        try
+        {
+            string? inputSourceId = _api.GetCurrentInputSourceId();
+            // "Cannot determine" (null — and a blank id, defensively) maps to null
+            // ("undefined" on the wire for CurrentOsKeyboard), never to "mac:" —
+            // FromMacInputSource rejects empty ids, so guard before minting.
+            return string.IsNullOrEmpty(inputSourceId)
+                ? null
+                : KeyboardId.FromMacInputSource(inputSourceId);
+        }
+        catch (Exception e)
+        {
+            // VAL-B-04 containment on the read path: fault degrades to "unknown".
+            Console.Error.WriteLine(
+                $"MacKeyboardingPrimitive: reading the active keyboard failed: {e}"
+            );
+            return null;
+        }
     }
 }
