@@ -397,6 +397,8 @@ async function initialize(): Promise<void> {
           );
           resolve();
         } catch (error) {
+          // Clear the cached promise so the next call retries instead of failing forever
+          initializationPromise = undefined;
           reject(error);
         }
       };

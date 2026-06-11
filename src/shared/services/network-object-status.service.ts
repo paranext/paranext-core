@@ -11,7 +11,7 @@ import {
 import { AsyncVariable, isSubset } from 'platform-bible-utils';
 
 let networkObject: NetworkObjectStatusRemoteServiceType;
-let initializationPromise: Promise<void>;
+let initializationPromise: Promise<void> | undefined;
 async function initialize(): Promise<void> {
   if (!initializationPromise) {
     initializationPromise = new Promise<void>((resolve, reject) => {
@@ -28,6 +28,8 @@ async function initialize(): Promise<void> {
           networkObject = localNetworkObjectStatusService;
           resolve();
         } catch (error) {
+          // Clear the cached promise so the next call retries instead of failing forever
+          initializationPromise = undefined;
           reject(error);
         }
       };

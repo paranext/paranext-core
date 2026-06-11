@@ -7,7 +7,7 @@ import {
 } from '@shared/services/theme-data.service-model';
 
 let dataProvider: IThemeDataService;
-let initializationPromise: Promise<void>;
+let initializationPromise: Promise<void> | undefined;
 async function initialize(): Promise<void> {
   if (!initializationPromise) {
     initializationPromise = new Promise<void>((resolve, reject) => {
@@ -18,6 +18,8 @@ async function initialize(): Promise<void> {
           dataProvider = provider;
           resolve();
         } catch (error) {
+          // Clear the cached promise so the next call retries instead of failing forever
+          initializationPromise = undefined;
           reject(error);
         }
       };

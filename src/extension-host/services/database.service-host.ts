@@ -185,7 +185,7 @@ class DatabaseService implements IDatabaseService {
 /** This is an internal-only export for testing purposes and should not be used in development */
 export const testingDatabaseService = { DatabaseService };
 
-let initializationPromise: Promise<void>;
+let initializationPromise: Promise<void> | undefined;
 let databaseServiceNetworkObject: IDatabaseService;
 export async function initialize(): Promise<void> {
   if (!initializationPromise) {
@@ -198,6 +198,8 @@ export async function initialize(): Promise<void> {
           );
           resolve();
         } catch (error) {
+          // Clear the cached promise so the next call retries instead of failing forever
+          initializationPromise = undefined;
           reject(error);
         }
       };

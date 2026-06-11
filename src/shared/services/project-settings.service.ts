@@ -80,7 +80,7 @@ export function filterProjectSettingsContributionsByProjectInterfaces(
 }
 
 let networkObject: IProjectSettingsService;
-let initializationPromise: Promise<void>;
+let initializationPromise: Promise<void> | undefined;
 async function initialize(): Promise<void> {
   if (!initializationPromise) {
     initializationPromise = new Promise<void>((resolve, reject) => {
@@ -97,6 +97,8 @@ async function initialize(): Promise<void> {
           networkObject = localProjectSettingsService;
           resolve();
         } catch (error) {
+          // Clear the cached promise so the next call retries instead of failing forever
+          initializationPromise = undefined;
           reject(error);
         }
       };
