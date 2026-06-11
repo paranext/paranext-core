@@ -1,4 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
+import type { IDisposableDataProvider } from '@papi/core';
+import type { IRecentlyOpenedProjectsService } from 'platform-scripture';
 import {
   MAX_RECENT_PROJECTS,
   RecentlyOpenedProjectsDataProviderEngine,
@@ -196,5 +198,62 @@ describe('RecentlyOpenedProjectsDataProviderEngine', () => {
     const engine = new RecentlyOpenedProjectsDataProviderEngine(readRaw, writeRaw);
 
     expect(() => engine.setRecentProjects()).toThrow(/not supported/i);
+  });
+});
+
+describe('recentlyOpenedProjectsService initialization', () => {
+  // The tests only need a truthy provider object back from registerEngine
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const fakeDataProvider = {
+    getRecentProjects: vi.fn(),
+  } as unknown as IDisposableDataProvider<IRecentlyOpenedProjectsService>;
+
+  // initialize caches module-level state, so load a fresh copy for each test
+  async function importFreshService() {
+    vi.resetModules();
+    const { default: papi } = await import('@papi/backend');
+    const { recentlyOpenedProjectsService } = await import('./recently-opened-projects.service');
+    return {
+      recentlyOpenedProjectsService,
+      registerEngine: vi.mocked(papi.dataProviders.registerEngine),
+    };
+  }
+
+  it('throws when the service object is used before initialization', async () => {
+    const { recentlyOpenedProjectsService } = await importFreshService();
+
+    await expect(
+      recentlyOpenedProjectsService.serviceObject.getRecentProjects(undefined),
+    ).rejects.toThrow(/not initialized/);
+  });
+
+  it('retries registerEngine after a failed initialization', async () => {
+    const { recentlyOpenedProjectsService, registerEngine } = await importFreshService();
+    const { readRaw, writeRaw } = createFakes();
+    registerEngine
+      .mockRejectedValueOnce(new Error('transient failure'))
+      .mockResolvedValue(fakeDataProvider);
+
+    await expect(recentlyOpenedProjectsService.initialize(readRaw, writeRaw)).rejects.toThrow(
+      'transient failure',
+    );
+    await expect(
+      recentlyOpenedProjectsService.initialize(readRaw, writeRaw),
+    ).resolves.toBeUndefined();
+    expect(registerEngine).toHaveBeenCalledTimes(2);
+  });
+
+  it('shares one registration across concurrent and subsequent initialize calls', async () => {
+    const { recentlyOpenedProjectsService, registerEngine } = await importFreshService();
+    const { readRaw, writeRaw } = createFakes();
+    registerEngine.mockResolvedValue(fakeDataProvider);
+
+    await Promise.all([
+      recentlyOpenedProjectsService.initialize(readRaw, writeRaw),
+      recentlyOpenedProjectsService.initialize(readRaw, writeRaw),
+    ]);
+    await recentlyOpenedProjectsService.initialize(readRaw, writeRaw);
+
+    expect(registerEngine).toHaveBeenCalledTimes(1);
   });
 });

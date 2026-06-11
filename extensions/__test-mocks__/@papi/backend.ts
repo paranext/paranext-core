@@ -31,6 +31,9 @@ export class DataProviderEngine {
 }
 
 const papi = {
+  dataProviders: {
+    registerEngine: vi.fn(),
+  },
   projectDataProviders: {
     get: vi.fn().mockResolvedValue({
       getSetting: vi.fn().mockResolvedValue(undefined),
