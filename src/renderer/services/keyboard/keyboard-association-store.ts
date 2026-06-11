@@ -12,6 +12,7 @@ import type {
   SurfaceKeyboardMap,
 } from '@shared/services/keyboard.service-model';
 import { settingsService } from '@shared/services/settings.service';
+import { deepClone, Mutex } from 'platform-bible-utils';
 
 /**
  * Key of the single user-scoped setting holding all per-project keyboard associations
@@ -173,12 +174,13 @@ export class KeyboardAssociationStore {
   private loadPromise: Promise<void> | undefined;
 
   /**
-   * BA-RF-009 in-process write queue: mutations chain on the previous task's settled promise so
-   * concurrent `set`/`clearAll` calls apply in call order over the whole nested object (no lost
-   * updates). A re-entrant `set` from inside `notifyDidChange` only appends to the chain, so it
-   * cannot deadlock.
+   * BA-RF-009 in-process write queue: mutations run exclusively in FIFO order so concurrent
+   * `set`/`clearAll` calls apply in call order over the whole nested object (no lost updates). The
+   * lock is released even when a task rejects, so one failed write cannot poison subsequent queued
+   * writes. A re-entrant `set` from inside `notifyDidChange` only queues behind the in-flight task
+   * (it does not await inside the held lock), so it cannot deadlock.
    */
-  private writeQueue: Promise<unknown> = Promise.resolve();
+  private readonly writeMutex = new Mutex();
 
   constructor(options: KeyboardAssociationStoreOptions = {}) {
     this.options = options;
@@ -209,7 +211,7 @@ export class KeyboardAssociationStore {
     surfaceType: KeyboardSurfaceType,
     keyboardId: KeyboardId | undefined,
   ): Promise<SetKeyboardAssociationResult> {
-    return this.enqueue(async () => {
+    return this.writeMutex.runExclusive(async () => {
       await this.ensureLoaded();
 
       const previousKeyboardId = this.cache[projectId]?.[surfaceType];
@@ -217,19 +219,7 @@ export class KeyboardAssociationStore {
       if (previousKeyboardId === keyboardId)
         return { changed: false, previousKeyboardId, newKeyboardId: previousKeyboardId };
 
-      const next = structuredClone(this.cache);
-      if (keyboardId === undefined) {
-        // Sentinel = removal (INV-B1-03). Removing the last surface removes the project key
-        // entirely — no dangling empty project object (PT9 dict.Remove analog)
-        const projectMap = next[projectId];
-        if (projectMap) {
-          delete projectMap[surfaceType];
-          if (Object.keys(projectMap).length === 0) delete next[projectId];
-        }
-      } else {
-        next[projectId] = { ...next[projectId], [surfaceType]: keyboardId };
-      }
-
+      const next = this.buildNextCache(projectId, surfaceType, keyboardId);
       await settingsService.set(keyboardsByProjectSettingKey, next);
       this.cache = next;
       // Notify only AFTER the new state is persisted (INV-C01; D-SEAM-1)
@@ -243,12 +233,36 @@ export class KeyboardAssociationStore {
    * scaffolding for a future PT10 reset flow (FN-006 deferred) — not exposed on any wire.
    */
   async clearAll(): Promise<void> {
-    return this.enqueue(async () => {
+    return this.writeMutex.runExclusive(async () => {
       // Let any in-flight first load settle so a late load cannot resurrect cleared state
       await this.ensureLoaded();
       await settingsService.set(keyboardsByProjectSettingKey, {});
       this.cache = {};
     });
+  }
+
+  /**
+   * Builds the next nested map from the current cache without mutating it. A defined `keyboardId`
+   * deep-merges into the project's surface map; the `undefined` sentinel removes the surface entry
+   * (INV-B1-03), and removing the last surface removes the project key entirely — no dangling empty
+   * project object (PT9 dict.Remove analog).
+   */
+  private buildNextCache(
+    projectId: ProjectId,
+    surfaceType: KeyboardSurfaceType,
+    keyboardId: KeyboardId | undefined,
+  ): KeyboardsByProjectSetting {
+    const next = deepClone(this.cache);
+    if (keyboardId === undefined) {
+      const projectMap = next[projectId];
+      if (projectMap) {
+        delete projectMap[surfaceType];
+        if (Object.keys(projectMap).length === 0) delete next[projectId];
+      }
+    } else {
+      next[projectId] = { ...next[projectId], [surfaceType]: keyboardId };
+    }
+    return next;
   }
 
   /** Loads (and EXT-106-migrates) the persisted setting at most once. */
@@ -276,19 +290,5 @@ export class KeyboardAssociationStore {
     );
     this.cache = map;
     if (didRewrite) await settingsService.set(keyboardsByProjectSettingKey, map);
-  }
-
-  /**
-   * Appends a mutation task to the BA-RF-009 write queue. The queue pointer advances on the task's
-   * SETTLED promise (fulfilled or rejected), so one failed write cannot poison subsequent queued
-   * writes.
-   */
-  private enqueue<T>(task: () => Promise<T>): Promise<T> {
-    const result = this.writeQueue.then(task);
-    this.writeQueue = result.then(
-      () => undefined,
-      () => undefined,
-    );
-    return result;
   }
 }
