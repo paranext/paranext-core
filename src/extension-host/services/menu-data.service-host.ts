@@ -8,6 +8,7 @@ import { dataProviderService } from '@shared/services/data-provider.service';
 import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import {
+  createCachedInitializer,
   createSyncProxyForAsyncObject,
   PlatformMenus,
   MultiColumnMenu,
@@ -117,34 +118,18 @@ class MenuDataDataProviderEngine
   }
 }
 
-let initializationPromise: Promise<void> | undefined;
 /** Need to run initialize before using this */
 let dataProvider: IMenuDataService;
-export async function initialize(): Promise<void> {
-  if (!initializationPromise) {
-    initializationPromise = new Promise<void>((resolve, reject) => {
-      const executor = async () => {
-        try {
-          if (!menuDocumentCombiner.rawOutput)
-            throw new Error(
-              'Menu data service host initialization error: Menu Document Combiner output was null!',
-            );
-          dataProvider = await dataProviderService.registerEngine(
-            menuDataServiceProviderName,
-            new MenuDataDataProviderEngine(menuDocumentCombiner.rawOutput),
-          );
-          resolve();
-        } catch (error) {
-          // Clear the cached promise so the next call retries instead of failing forever
-          initializationPromise = undefined;
-          reject(error);
-        }
-      };
-      executor();
-    });
-  }
-  return initializationPromise;
-}
+export const initialize = createCachedInitializer(async () => {
+  if (!menuDocumentCombiner.rawOutput)
+    throw new Error(
+      'Menu data service host initialization error: Menu Document Combiner output was null!',
+    );
+  dataProvider = await dataProviderService.registerEngine(
+    menuDataServiceProviderName,
+    new MenuDataDataProviderEngine(menuDocumentCombiner.rawOutput),
+  );
+});
 
 /** This is an internal-only export for testing purposes and should not be used in development */
 export const testingMenuDataService = {

@@ -8,6 +8,7 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { ProjectDataProviderInterfaces } from 'papi-shared-types';
 import {
   AsyncVariable,
+  createCachedInitializer,
   getErrorMessage,
   Mutex,
   MutexMap,
@@ -409,44 +410,30 @@ const registerCheck = async (
 
 // #region Initialize the check runner
 
-let initializationPromise: Promise<void> | undefined;
 const unsubscribers = new UnsubscriberAsyncList();
+const initializeCheckRunner = createCachedInitializer(async () => {
+  dataProvider = await dataProviders.registerEngine(
+    'platformScripture.extensionHostCheckRunner',
+    checkRunnerEngine,
+    CHECK_RUNNER_NETWORK_OBJECT_TYPE,
+  );
+  unsubscribers.add(dataProvider.dispose);
+  unsubscribers.add(
+    await papi.commands.registerCommand('platformScripture.registerCheck', registerCheck, {
+      method: {
+        summary: 'Register a new check to run on the platform',
+        description:
+          'This will only run properly within the extension host. Do not call this from the websocket. Instead implement a check runner.',
+        params: [],
+        result: { name: 'return value', schema: {} },
+      },
+    }),
+  );
+});
+
+// Hoisted wrapper because initialize and registerCheck reference each other
 async function initialize(): Promise<void> {
-  if (!initializationPromise) {
-    initializationPromise = new Promise<void>((resolve, reject) => {
-      const executor = async () => {
-        try {
-          dataProvider = await dataProviders.registerEngine(
-            'platformScripture.extensionHostCheckRunner',
-            checkRunnerEngine,
-            CHECK_RUNNER_NETWORK_OBJECT_TYPE,
-          );
-          unsubscribers.add(dataProvider.dispose);
-          unsubscribers.add(
-            await papi.commands.registerCommand('platformScripture.registerCheck', registerCheck, {
-              method: {
-                summary: 'Register a new check to run on the platform',
-                description:
-                  'This will only run properly within the extension host. Do not call this from the websocket. Instead implement a check runner.',
-                params: [],
-                result: {
-                  name: 'return value',
-                  schema: {},
-                },
-              },
-            }),
-          );
-          resolve();
-        } catch (error) {
-          // Clear the cached promise so the next call retries instead of failing forever
-          initializationPromise = undefined;
-          reject(error);
-        }
-      };
-      executor();
-    });
-  }
-  return initializationPromise;
+  return initializeCheckRunner();
 }
 
 // #endregion

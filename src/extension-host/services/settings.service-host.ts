@@ -17,6 +17,7 @@ import { coreSettingsValidators } from '@extension-host/data/core-settings-info.
 import { SettingNames, SettingTypes } from 'papi-shared-types';
 import {
   Unsubscriber,
+  createCachedInitializer,
   createSyncProxyForAsyncObject,
   debounce,
   deserialize,
@@ -219,30 +220,14 @@ class SettingDataProviderEngine
   }
 }
 
-let initializationPromise: Promise<void> | undefined;
 /** Need to run initialize before using this */
 let dataProvider: ISettingsService;
-export async function initialize(): Promise<void> {
-  if (!initializationPromise) {
-    initializationPromise = new Promise<void>((resolve, reject) => {
-      const executor = async () => {
-        try {
-          dataProvider = await dataProviderService.registerEngine(
-            settingsServiceDataProviderName,
-            new SettingDataProviderEngine(await getSettingsDataFromFile()),
-          );
-          resolve();
-        } catch (error) {
-          // Clear the cached promise so the next call retries instead of failing forever
-          initializationPromise = undefined;
-          reject(error);
-        }
-      };
-      executor();
-    });
-  }
-  return initializationPromise;
-}
+export const initialize = createCachedInitializer(async () => {
+  dataProvider = await dataProviderService.registerEngine(
+    settingsServiceDataProviderName,
+    new SettingDataProviderEngine(await getSettingsDataFromFile()),
+  );
+});
 
 /** This is an internal-only export for testing purposes and should not be used in development */
 export const testingSettingService = {

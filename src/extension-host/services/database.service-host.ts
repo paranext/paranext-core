@@ -10,7 +10,11 @@ import {
   SqlOutputRow,
   NamedSqlParameters,
 } from '@shared/services/database.service-model';
-import { createSyncProxyForAsyncObject, startsWith } from 'platform-bible-utils';
+import {
+  createCachedInitializer,
+  createSyncProxyForAsyncObject,
+  startsWith,
+} from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
 import { newNonce } from '@shared/utils/util';
 import { getUriFromExtensionUri } from '@extension-host/services/asset-retrieval.service';
@@ -185,29 +189,13 @@ class DatabaseService implements IDatabaseService {
 /** This is an internal-only export for testing purposes and should not be used in development */
 export const testingDatabaseService = { DatabaseService };
 
-let initializationPromise: Promise<void> | undefined;
 let databaseServiceNetworkObject: IDatabaseService;
-export async function initialize(): Promise<void> {
-  if (!initializationPromise) {
-    initializationPromise = new Promise<void>((resolve, reject) => {
-      const executor = async () => {
-        try {
-          databaseServiceNetworkObject = await networkObjectService.set<IDatabaseService>(
-            databaseServiceNetworkObjectName,
-            new DatabaseService(),
-          );
-          resolve();
-        } catch (error) {
-          // Clear the cached promise so the next call retries instead of failing forever
-          initializationPromise = undefined;
-          reject(error);
-        }
-      };
-      executor();
-    });
-  }
-  return initializationPromise;
-}
+export const initialize = createCachedInitializer(async () => {
+  databaseServiceNetworkObject = await networkObjectService.set<IDatabaseService>(
+    databaseServiceNetworkObjectName,
+    new DatabaseService(),
+  );
+});
 
 // This will be needed later for disposing of the network object, choosing to ignore instead of
 // remove code that will be used later

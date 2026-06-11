@@ -11,6 +11,7 @@ import { dataProviderService } from '@shared/services/data-provider.service';
 import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import {
+  createCachedInitializer,
   createSyncProxyForAsyncObject,
   expandThemeContribution,
   deserialize,
@@ -575,36 +576,20 @@ const themeServiceEngine = new ThemeDataProviderEngine(
   saveUserThemesToLocalStorage,
 );
 
-let initializationPromise: Promise<void> | undefined;
 /** Need to run initialize before using this */
 let dataProvider: IThemeService;
-export async function initialize(): Promise<void> {
-  if (!initializationPromise) {
-    initializationPromise = new Promise<void>((resolve, reject) => {
-      const executor = async () => {
-        try {
-          const systemThemeChangesInfo = listenToSystemThemeChanges();
+export const initialize = createCachedInitializer(async () => {
+  const systemThemeChangesInfo = listenToSystemThemeChanges();
 
-          dataProvider = await dataProviderService.registerEngine(
-            themeServiceDataProviderName,
-            themeServiceEngine,
-          );
+  dataProvider = await dataProviderService.registerEngine(
+    themeServiceDataProviderName,
+    themeServiceEngine,
+  );
 
-          dataProvider.onDidDispose(() => {
-            systemThemeChangesInfo.unsubscribe();
-          });
-          resolve();
-        } catch (error) {
-          // Clear the cached promise so the next call retries instead of failing forever
-          initializationPromise = undefined;
-          reject(error);
-        }
-      };
-      executor();
-    });
-  }
-  return initializationPromise;
-}
+  dataProvider.onDidDispose(() => {
+    systemThemeChangesInfo.unsubscribe();
+  });
+});
 
 /** This is an internal-only export for testing purposes and should not be used in development */
 export const testingThemeService = {

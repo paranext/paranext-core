@@ -5,45 +5,29 @@ import {
   IScrollGroupService,
   ScrollGroupUpdateInfo,
 } from '@shared/services/scroll-group.service-model';
-import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
+import { createCachedInitializer, createSyncProxyForAsyncObject } from 'platform-bible-utils';
 import { networkObjectStatusService } from '@shared/services/network-object-status.service';
 import { networkObjectService } from '@shared/services/network-object.service';
 
 const onDidUpdateScrRef = getNetworkEvent<ScrollGroupUpdateInfo>(EVENT_NAME_ON_DID_UPDATE_SCR_REF);
 
 let networkObject: IScrollGroupService;
-let initializationPromise: Promise<void> | undefined;
-async function initialize(): Promise<void> {
-  if (!initializationPromise) {
-    initializationPromise = new Promise<void>((resolve, reject) => {
-      const executor = async () => {
-        try {
-          await networkObjectStatusService.waitForNetworkObject(
-            { id: NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE },
-            // Wait 30 seconds for the scroll group service to appear
-            30000,
-          );
+const initialize = createCachedInitializer(async () => {
+  await networkObjectStatusService.waitForNetworkObject(
+    { id: NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE },
+    // Wait 30 seconds for the scroll group service to appear
+    30000,
+  );
 
-          const localWebViewService = await networkObjectService.get<IScrollGroupService>(
-            NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
-          );
-          if (!localWebViewService)
-            throw new Error(
-              `${NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE} is not available as a network object`,
-            );
-          networkObject = localWebViewService;
-          resolve();
-        } catch (error) {
-          // Clear the cached promise so the next call retries instead of failing forever
-          initializationPromise = undefined;
-          reject(error);
-        }
-      };
-      executor();
-    });
-  }
-  return initializationPromise;
-}
+  const localWebViewService = await networkObjectService.get<IScrollGroupService>(
+    NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
+  );
+  if (!localWebViewService)
+    throw new Error(
+      `${NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE} is not available as a network object`,
+    );
+  networkObject = localWebViewService;
+});
 
 /**
  * JSDOC SOURCE scrollGroupService

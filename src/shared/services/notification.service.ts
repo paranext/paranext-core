@@ -3,35 +3,17 @@ import {
   type INotificationService,
 } from '@shared/models/notification.service-model';
 import { networkObjectService } from '@shared/services/network-object.service';
-import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
+import { createCachedInitializer, createSyncProxyForAsyncObject } from 'platform-bible-utils';
 
 let networkObject: INotificationService;
-let initializationPromise: Promise<void> | undefined;
-async function initialize(): Promise<void> {
-  if (!initializationPromise) {
-    initializationPromise = new Promise<void>((resolve, reject) => {
-      const executor = async () => {
-        try {
-          const localNotificationService = await networkObjectService.get<INotificationService>(
-            NotificationServiceNetworkObjectName,
-          );
-          if (!localNotificationService)
-            throw new Error(
-              `${NotificationServiceNetworkObjectName} is not available as a network object`,
-            );
-          networkObject = localNotificationService;
-          resolve();
-        } catch (error) {
-          // Clear the cached promise so the next call retries instead of failing forever
-          initializationPromise = undefined;
-          reject(error);
-        }
-      };
-      executor();
-    });
-  }
-  return initializationPromise;
-}
+const initialize = createCachedInitializer(async () => {
+  const localNotificationService = await networkObjectService.get<INotificationService>(
+    NotificationServiceNetworkObjectName,
+  );
+  if (!localNotificationService)
+    throw new Error(`${NotificationServiceNetworkObjectName} is not available as a network object`);
+  networkObject = localNotificationService;
+});
 
 /**
  * JSDOC SOURCE notificationService
