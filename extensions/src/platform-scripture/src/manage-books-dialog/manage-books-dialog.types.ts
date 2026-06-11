@@ -211,7 +211,7 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_copy_confirmReplace%',
   '%manageBooks_copy_confirmCancel%',
   // Vladimir review #16: Copy gets the same 3-way conflict prompt as Import.
-  '%manageBooks_copy_confirmMergeFromSource%',
+  '%manageBooks_copy_onlyNonExistingChapters%',
   // Per-action empty states
   '%manageBooks_create_emptyState_allPresent%',
   '%manageBooks_delete_emptyState_noBooks%',
@@ -287,7 +287,7 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_import_conflictBody2%',
   '%manageBooks_import_conflictCancel%',
   '%manageBooks_import_replaceEntireBooks%',
-  '%manageBooks_import_mergeFromFiles%',
+  '%manageBooks_import_onlyNonExistingChapters%',
   '%manageBooks_import_usxConfirmTitle%',
   '%manageBooks_import_usxConfirmBody%',
   '%manageBooks_import_usxConfirmAccept%',

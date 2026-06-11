@@ -90,17 +90,18 @@ export function ImportConflictPrompt({
                 onChoose('nonExistingChapters', conflict.books);
               }}
             >
-              {/* Label honestly describes PT9's WriteChaptersToBook semantic:
-                  source chapters overwrite their dest counterparts; dest
-                  chapters not in source survive. "Merge from files" parallels
-                  the Copy prompt's "Merge from source" and names what is
-                  being merged. The localize key is
-                  %manageBooks_import_mergeFromFiles% — the prior
-                  "nonExistingChapters" key promised a behavior the wire never
-                  implemented, so the key was renamed along with the English
-                  copy so existing translations don't silently mis-apply to
-                  the changed semantic. */}
-              {t('%manageBooks_import_mergeFromFiles%', 'Merge from files')}
+              {/* The backend now implements exactly what this label promises:
+                  only chapters missing/empty/scaffolding-only in the
+                  destination are written (ImportBooksOrchestrator
+                  TryMergeChaptersFromSource + UsfmChapterScaffolding). The key
+                  was renamed from %manageBooks_import_mergeFromFiles% (per the
+                  semantic-change-renames-the-key convention) when the Manila
+                  UX follow-up changed the wire behavior from PT9's
+                  chapter-overwrite merge to skip-existing-chapters. */}
+              {t(
+                '%manageBooks_import_onlyNonExistingChapters%',
+                'Only import non-existing chapters',
+              )}
             </Button>
           </div>
         </div>

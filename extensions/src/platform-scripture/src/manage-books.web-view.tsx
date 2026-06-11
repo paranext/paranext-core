@@ -836,9 +836,9 @@ global.webViewComponent = function ManageBooksWebView({
     }): Promise<MutationResult | undefined> => {
       if (!manageBooksApi) return undefined;
       // The backend honors `replaceEntireBook`.
-      // `strategy === 'nonExistingChapters'` routes through PT9's
-      // WriteChaptersToBook semantic (chapter-by-chapter merge, source
-      // overwrites collisions, dest chapters not in source survive). The
+      // `strategy === 'nonExistingChapters'` → only chapters that are
+      // missing, empty, or scaffolding-only in the destination are written
+      // (CopyBooksOrchestrator merge path + UsfmChapterScaffolding). The
       // default + `replaceEntireBooks` route through whole-book replacement.
       return manageBooksApi.copyBooks({
         fromProjectId: args.sourceProjectId,

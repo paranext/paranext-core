@@ -102,14 +102,14 @@ export function CopyConflictPrompt({
                 onChoose('nonExistingChapters', conflict.books);
               }}
             >
-              {/* Label honestly describes the PT9 WriteChaptersToBook semantic;
-                  see import-conflict-prompt for the rationale. The localize key
-                  is %manageBooks_copy_confirmMergeFromSource% — the prior
-                  "confirmNonExistingChapters" key promised a behavior the wire
-                  never implemented, so the key was renamed along with the
-                  English copy so existing translations don't silently
-                  mis-apply to the new semantic. */}
-              {t('%manageBooks_copy_confirmMergeFromSource%', 'Merge from source')}
+              {/* The backend now implements exactly what this label promises:
+                  only chapters missing/empty/scaffolding-only in the
+                  destination are written (CopyBooksOrchestrator
+                  TryCopyChaptersFromSource + UsfmChapterScaffolding). The key
+                  was renamed from %manageBooks_copy_confirmMergeFromSource%
+                  when the Manila UX follow-up changed the wire behavior from
+                  PT9's chapter-overwrite merge to skip-existing-chapters. */}
+              {t('%manageBooks_copy_onlyNonExistingChapters%', 'Only copy non-existing chapters')}
             </Button>
           </div>
         </div>

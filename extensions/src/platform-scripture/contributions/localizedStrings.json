@@ -1,5 +1,11 @@
 {
   "metadata": {
+    "%manageBooks_copy_confirmMergeFromSource%": {
+      "fallbackKey": "%manageBooks_copy_onlyNonExistingChapters%"
+    },
+    "%manageBooks_import_mergeFromFiles%": {
+      "fallbackKey": "%manageBooks_import_onlyNonExistingChapters%"
+    },
     "%manageBooks_delete_confirmBodyShared%": {
       "fallbackKey": "%manageBooks_delete_confirmBodySharedSendReceive%"
     },
@@ -168,7 +174,7 @@
       "%manageBooks_bookNames_notYetAvailable%": "Book names editing is not yet available — coming soon.",
       "%manageBooks_copy_confirmBodyWithBooks%": "{0} book(s) already exist in {1}: {2}",
       "%manageBooks_copy_confirmCancel%": "Cancel",
-      "%manageBooks_copy_confirmMergeFromSource%": "Merge from source",
+      "%manageBooks_copy_onlyNonExistingChapters%": "Only copy non-existing chapters",
       "%manageBooks_copy_confirmReplace%": "Replace entire books",
       "%manageBooks_copy_confirmTitle%": "Books already exist",
       "%manageBooks_copy_emptyState_chooseSource%": "Choose a source project to see books available to copy.",
@@ -298,7 +304,7 @@
       "%manageBooks_import_emptyState_addFiles%": "Add files to begin importing.",
       "%manageBooks_import_filesMatched_one%": "1 file matched",
       "%manageBooks_import_filesMatched_other%": "{0} files matched",
-      "%manageBooks_import_mergeFromFiles%": "Merge from files",
+      "%manageBooks_import_onlyNonExistingChapters%": "Only import non-existing chapters",
       "%manageBooks_import_overlapBody%": "Cannot import: {0} would be supplied by both \"{1}\" and \"{2}\".",
       "%manageBooks_import_overlapDismiss%": "Got it",
       "%manageBooks_import_overlapTitle%": "Two files map to the same book",

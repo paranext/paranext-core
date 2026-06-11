@@ -797,18 +797,19 @@ public static class ImportBooksOrchestrator
         string bookId = SIL.Scripture.Canon.BookNumberToId(bookNum);
         try
         {
-            // Two behaviors port directly from PT9 ImportSfmText
-            // (ParatextData/ImportSfmText.cs:159-285):
+            // Two behaviors:
             //
             //   - replaceEntireBook=true  → whole-book write (clobbers every
-            //     chapter in dest, including chapters not in source). Maps to
-            //     PT9's `chkReplaceEntireBooks.Checked` path.
-            //   - replaceEntireBook=false → "merge from source": split the
-            //     source text into chapters, overwrite the matching chapters in
-            //     dest, leave dest chapters not in source intact. Maps to PT9's
-            //     `WriteChaptersToBook` path. The UI label is "Merge book(s)"
-            //     — "Import non-existing chapters" would have promised a
-            //     behavior PT9 never had.
+            //     chapter in dest, including chapters not in source). Direct
+            //     port of PT9's `chkReplaceEntireBooks.Checked` path
+            //     (ParatextData/ImportSfmText.cs:159-243).
+            //   - replaceEntireBook=false → "Only import non-existing
+            //     chapters": write a source chapter ONLY when the matching
+            //     dest chapter is missing, empty, or holds nothing beyond
+            //     create-books scaffolding. Deliberate PT10 deviation from
+            //     PT9's WriteChaptersToBook (which overwrote colliding
+            //     chapters — for complete source files that amounted to
+            //     "merge overwrites everything"; Manila UX follow-up).
             //
             // PutText with chapterNum>0 goes through the same ProjectFileManager
             // path the whole-book write uses, so InMemoryFileManager handles
@@ -818,10 +819,6 @@ public static class ImportBooksOrchestrator
                 scrText.PutText(bookNum, 0, false, bookText, null);
                 return true;
             }
-            // Merge path — port of PT9 ImportSfmText.WriteChaptersToBook
-            // (ParatextData/ImportSfmText.cs:245-286). Empty source chapters are
-            // skipped except when the dest is also empty AND it's chapter 1
-            // (preserving the "first import populates an empty book" path).
             return TryMergeChaptersFromSource(scrText, bookNum, bookText, errors);
         }
         catch (LockNotObtainedException ex)
@@ -852,15 +849,16 @@ public static class ImportBooksOrchestrator
         }
     }
 
-    // === PORTED FROM PT9 ===
+    // === MODIFIED FROM PT9 ===
     // Source: ParatextData/ImportSfmText.cs:245-286 (WriteChaptersToBook)
     //
-    // Chapter-merge path that wires up when the user picks "Merge book(s)" /
-    // "Merge from source" instead of "Replace entire books". Splits source text
-    // into chapters via ScrText.SplitIntoChapters, then writes each non-empty
-    // chapter via PutText(bookNum, chapterNum, ...). Dest chapters not in
-    // source survive unchanged; source chapters overwrite their dest
-    // counterparts.
+    // Chapter-merge path that wires up when the user picks "Only import
+    // non-existing chapters" instead of "Replace entire books". Splits source
+    // text into chapters via ScrText.SplitIntoChapters, then writes a chapter
+    // via PutText(bookNum, chapterNum, ...) ONLY when the matching dest
+    // chapter is missing, empty, or scaffolding-only (see
+    // UsfmChapterScaffolding). Deviation from PT9, which overwrote every dest
+    // chapter present in the source — Manila UX follow-up.
     private static readonly System.Text.RegularExpressions.Regex EmptyChapterPattern =
         new(@"^(\\id [^\r\n]*)?\s*$", System.Text.RegularExpressions.RegexOptions.Compiled);
 
@@ -901,6 +899,32 @@ public static class ImportBooksOrchestrator
             return true;
         }
 
+        // "Only import non-existing chapters": split the DEST book so each
+        // source chapter can be checked against its dest counterpart. Without
+        // this analysis the mode's promise can't be kept, so failure to
+        // analyze the dest book is an error for this book, not a fall-through
+        // to overwriting.
+        List<string> destChapters;
+        try
+        {
+            string destUsfm = scrText.GetText(bookNum) ?? string.Empty;
+            destChapters = ScrText.SplitIntoChapters(scrText.Name, bookNum, destUsfm);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(
+                $"[ImportBooks.TryMergeChaptersFromSource] dest split failed for book {bookId}: {ex}"
+            );
+            errors.Add(
+                new AlertEntry(
+                    $"Failed to analyze existing book {bookId}; no chapters were imported",
+                    "Import",
+                    AlertLevel.Error
+                )
+            );
+            return false;
+        }
+
         // PT9 logic: dest's chapter-1 text decides whether an empty source chapter 1 should be
         // written (only if dest's chapter 1 is also empty).
         string destChapter1Text = string.Empty;
@@ -917,6 +941,13 @@ public static class ImportBooksOrchestrator
         for (int i = 0; i < chapters.Count; i += 1)
         {
             string chapterText = chapters[i];
+            // Dest chapter exists with real content → never overwrite it.
+            // (SplitIntoChapters returns a dense list: item i is chapter i+1.)
+            if (
+                i < destChapters.Count
+                && UsfmChapterScaffolding.HasContentBeyondScaffolding(destChapters[i])
+            )
+                continue;
             if (EmptyChapterPattern.IsMatch(chapterText))
             {
                 // Skip empty source chapters except chapter 1 of an empty book.
