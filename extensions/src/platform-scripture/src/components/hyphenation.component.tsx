@@ -229,8 +229,13 @@ export function Hyphenation({
 
   const handleDialogKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
-      // Sandboxed web views cannot use <form>, so handle Enter manually
-      if (event.key === 'Enter' && canSaveDialog) handleDialogSave();
+      // Sandboxed web views cannot use <form>, so handle Enter manually. Only handle Enter while
+      // focus is in a text input — otherwise Enter on the Cancel/Save buttons would save (or
+      // double-save) via this bubbled handler in addition to the button's own click.
+      if (event.key === 'Enter' && canSaveDialog && event.target instanceof HTMLInputElement) {
+        event.preventDefault();
+        handleDialogSave();
+      }
     },
     [canSaveDialog, handleDialogSave],
   );

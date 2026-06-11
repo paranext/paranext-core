@@ -35,10 +35,17 @@ export class HyphenationWebViewProvider implements IWebViewProvider {
 
     const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
 
-    let projectName: string | undefined;
+    // Fall back to the raw project ID (or blank) if the project's data provider is not available
+    // (e.g. freshly launched app or a saved layout whose project was removed) — the web view
+    // itself renders a "no project" message in that case, so the title should not block opening
+    let projectName: string = projectId ?? '';
     if (projectId) {
-      const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-      projectName = (await pdp.getSetting('platform.name')) ?? projectId;
+      try {
+        const pdp = await papi.projectDataProviders.get('platform.base', projectId);
+        projectName = (await pdp.getSetting('platform.name')) ?? projectId;
+      } catch {
+        projectName = projectId;
+      }
     }
 
     const title = formatReplacementString(

@@ -426,6 +426,34 @@ internal class HyphenationDataProviderTests : PapiTestBase
             _provider.SetHyphenationEntries(CreateSelector("missing"), CreateNullValue()),
             Is.True
         );
+        Assert.Multiple(() =>
+        {
+            Assert.That(_scrText.FileManager.Exists(Hyphenation.fileName), Is.False);
+            // The no-op must not leave the cached Hyphenation flagged as modified — a dangling
+            // "modified" write lock would later flush a phantom header-only file to disk
+            Assert.That(Hyphenation.Get(_scrText).IsModified, Is.False);
+        });
+    }
+
+    [TestCase("two words")] // whitespace would split the entry across lines
+    [TestCase("tab\tword")]
+    [TestCase("a=b")] // "=" is the hyphen marker
+    [TestCase("*word")] // leading "*" is the approved-entry marker
+    [TestCase("#word")] // leading "#" is the comment marker
+    public void SetHyphenationEntries_UnstorableWord_ThrowsAndDoesNotSave(string word)
+    {
+        // NEW IN PT10 guard: PT9's Wordlist only ever supplies words tokenized from project text,
+        // but PT10 exposes this as a public PAPI API, so malformed words must be rejected to
+        // protect the line-based hyphenatedWords.txt format
+        string hyphenation = word; // letters match, so only the word-shape check can reject it
+        Assert.That(
+            () =>
+                _provider.SetHyphenationEntries(
+                    CreateSelector(word),
+                    CreateUpdateValue(hyphenation.Replace("\t", "\\t"), isApproved: true)
+                ),
+            Throws.ArgumentException
+        );
         Assert.That(_scrText.FileManager.Exists(Hyphenation.fileName), Is.False);
     }
 

@@ -125,10 +125,15 @@ internal sealed class HyphenationDataProvider(PapiClient papiClient)
         {
             lock (hyphenation)
             {
+                // Check before acquiring the update lock: UpdateLock() assumes the data is
+                // modified, so taking it for a no-op would leave the file flagged as dirty and a
+                // later unrelated flush would materialize a phantom hyphenatedWords.txt
+                if (!hyphenation.Entries.ContainsKey(lowercaseWord))
+                    return true; // Nothing to delete; idempotent no-op
+
                 using (hyphenation.UpdateLock())
                 {
-                    if (!hyphenation.Entries.Remove(lowercaseWord))
-                        return true; // Nothing to delete; idempotent no-op
+                    hyphenation.Entries.Remove(lowercaseWord);
                 }
                 hyphenation.Save();
             }
@@ -140,6 +145,25 @@ internal sealed class HyphenationDataProvider(PapiClient papiClient)
                 ?? throw new ArgumentException(
                     $"Hyphenation update value must be an object or null (projectId: {selector.ProjectId}, word: {selector.Word})"
                 );
+
+            // === NEW IN PT10 ===
+            // Reason: PT9's Wordlist supplies words tokenized from project text, so malformed
+            // words never reach the hyphenation file. PT10 exposes this as a public PAPI API, so
+            // guard the line-based hyphenatedWords.txt format: whitespace would split an entry
+            // into multiple lines, "=" is the hyphen marker, leading "*" is the approved-entry
+            // marker, and leading "#" is the comment marker.
+            // Maps to: Infrastructure (mirrors isValidNewWord in hyphenation.utils.ts)
+            if (
+                selector.Word.Any(char.IsWhiteSpace)
+                || selector.Word.Contains('=')
+                || selector.Word.StartsWith('*')
+                || selector.Word.StartsWith('#')
+            )
+            {
+                throw new ArgumentException(
+                    $"Word cannot contain whitespace or '=' and cannot start with '*' or '#' (projectId: {selector.ProjectId}, word: {selector.Word})"
+                );
+            }
 
             // PT9 validation: hyphenation with "=" removed must match the word
             // (WordListForm.cs:2698, HyphenationEngine.cs:252)

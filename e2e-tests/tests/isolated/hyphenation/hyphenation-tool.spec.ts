@@ -47,6 +47,9 @@ import {
 
 const DEFAULT_WEBSOCKET_PORT = 8876;
 
+/** Network object name for the Paratext project data provider factory */
+const PARATEXT_PDPF_METHOD = 'object:platform.Paratext-pdpf.getProjectDataProviderId';
+
 /**
  * PT9-format hyphenation file seeded into the test project: one approved (starred) entry and one
  * guess entry. Format matches ParatextData's HyphenationData.Write output.
@@ -71,8 +74,12 @@ function readHyphenationFile(project: CommentTestProject): string {
 /**
  * Opens a scripture editor for the project, then opens the Hyphenation tool anchored to it. Modeled
  * on `openCommentList` in comment-test-helpers.ts (see its TSDoc for the retry rationale).
+ *
+ * @returns The webViewId of the opened Hyphenation tool. Use it to locate the tool's iframe —
+ *   title-based lookup is ambiguous because each invocation opens a new float window (so a second
+ *   test in the same worker would see two iframes with the same title).
  */
-async function openHyphenationTool(mainPage: Page, project: CommentTestProject): Promise<void> {
+async function openHyphenationTool(mainPage: Page, project: CommentTestProject): Promise<string> {
   // Wait for the dock layout's initial loadLayout() to complete before opening any new webviews
   // (see openCommentList step 1 for the race explanation)
   await mainPage.waitForSelector('iframe', { state: 'attached', timeout: 30_000 });
@@ -84,6 +91,18 @@ async function openHyphenationTool(mainPage: Page, project: CommentTestProject):
   );
   await waitForPapiMethodRegistered(
     'command:platformScripture.openHyphenation',
+    DEFAULT_WEBSOCKET_PORT,
+    30_000,
+  );
+
+  // Warm up the project's data provider before opening any views. Without this, the first
+  // project-interface lookup (e.g. `platform.base` while resolving the web view title) can fail
+  // with "No project found ... and project interface platform.base" on a freshly launched app.
+  // Mirrors createCommentThreads steps 1-2 in comment-test-helpers.ts.
+  await waitForPapiMethodRegistered(PARATEXT_PDPF_METHOD, DEFAULT_WEBSOCKET_PORT, 60_000);
+  await sendPapiRequestOnce<string>(
+    PARATEXT_PDPF_METHOD,
+    [project.projectId],
     DEFAULT_WEBSOCKET_PORT,
     30_000,
   );
@@ -104,7 +123,10 @@ async function openHyphenationTool(mainPage: Page, project: CommentTestProject):
       [project.projectId],
       DEFAULT_WEBSOCKET_PORT,
       60_000,
-    );
+    ).catch((e: unknown) => {
+      console.warn(`[openHyphenationTool] Attempt ${attempt + 1}: openResourceViewer threw: ${e}`);
+      return undefined;
+    });
 
     if (!editorId) {
       console.warn(
@@ -166,7 +188,7 @@ async function openHyphenationTool(mainPage: Page, project: CommentTestProject):
       .frameLocator(`iframe[data-web-view-id="${hyphenationWebViewId}"]`)
       .locator('body')
       .waitFor({ timeout: 10_000 });
-    return;
+    return hyphenationWebViewId;
   }
   /* eslint-enable no-await-in-loop, no-continue */
 
@@ -175,10 +197,9 @@ async function openHyphenationTool(mainPage: Page, project: CommentTestProject):
   );
 }
 
-/** Returns the frame locator for the Hyphenation tool web view iframe. */
-function getHyphenationFrame(mainPage: Page): FrameLocator {
-  // The Hyphenation tool iframe title is "Hyphenation: {projectName}"
-  return mainPage.frameLocator('iframe[title^="Hyphenation:"]');
+/** Returns the frame locator for the Hyphenation tool web view iframe with the given ID. */
+function getHyphenationFrame(mainPage: Page, webViewId: string): FrameLocator {
+  return mainPage.frameLocator(`iframe[data-web-view-id="${webViewId}"]`);
 }
 
 /** Returns the table row containing the given word. */
@@ -206,8 +227,8 @@ test.describe('Hyphenation tool (PT9 feature 5.6)', () => {
     test.setTimeout(180_000);
     await waitForAppReady(mainPage);
 
-    await openHyphenationTool(mainPage, project);
-    const frame = getHyphenationFrame(mainPage);
+    const webViewId = await openHyphenationTool(mainPage, project);
+    const frame = getHyphenationFrame(mainPage, webViewId);
 
     // ── View: the seeded PT9 entries are listed with their approval state ──────
     await expect(frame.getByText('hel=lo')).toBeVisible({ timeout: 30_000 });
@@ -249,7 +270,7 @@ test.describe('Hyphenation tool (PT9 feature 5.6)', () => {
 
     // ── Delete: remove "world" entirely (PT9: obliterate hyphenation) ─────────
     await worldRow.getByRole('button', { name: 'Delete' }).click();
-    await expect(frame.getByText('world')).not.toBeVisible({ timeout: 15_000 });
+    await expect(worldRow).not.toBeVisible({ timeout: 15_000 });
     await expect(() => {
       expect(readHyphenationFile(project)).not.toContain('world');
     }).toPass({ timeout: 15_000 });
@@ -261,8 +282,8 @@ test.describe('Hyphenation tool (PT9 feature 5.6)', () => {
     test.setTimeout(120_000);
     await waitForAppReady(mainPage);
 
-    await openHyphenationTool(mainPage, project);
-    const frame = getHyphenationFrame(mainPage);
+    const webViewId = await openHyphenationTool(mainPage, project);
+    const frame = getHyphenationFrame(mainPage, webViewId);
 
     await frame.getByRole('button', { name: /Add word/i }).click();
     await expect(frame.getByRole('dialog')).toBeVisible();
@@ -281,6 +302,6 @@ test.describe('Hyphenation tool (PT9 feature 5.6)', () => {
     // Cancel without saving — no entry is added
     await frame.getByRole('button', { name: 'Cancel' }).click();
     await expect(frame.getByRole('dialog')).not.toBeVisible();
-    await expect(frame.getByText('ex=am=ple')).not.toBeVisible();
+    await expect(getRowForWord(frame, 'example')).not.toBeVisible();
   });
 });

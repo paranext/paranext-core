@@ -2,7 +2,7 @@ import { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import { useData, useLocalizedStrings, useProjectSetting } from '@papi/frontend/react';
 import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
-import type { HyphenationEntry, HyphenationInfo } from 'platform-scripture';
+import type { HyphenationEntry, HyphenationEntryUpdate, HyphenationInfo } from 'platform-scripture';
 import { useCallback, useMemo } from 'react';
 import { Hyphenation } from './components/hyphenation.component';
 import { HYPHENATION_STRING_KEYS } from './components/hyphenation.utils';
@@ -66,43 +66,50 @@ global.webViewComponent = function HyphenationWebView({ projectId }: WebViewProp
     return textDirectionPossiblyError || TEXT_DIRECTION_DEFAULT;
   }, [textDirectionPossiblyError]);
 
-  const saveEntry = useCallback(
-    async (word: string, hyphenation: string, isApproved: boolean) => {
-      if (!projectId) return undefined;
+  /**
+   * Shared mutation path for upserts and deletes. Resolves to an error message (already localized
+   * by the backend where applicable) on failure, or `undefined` on success.
+   */
+  const mutateEntry = useCallback(
+    async (word: string, update: HyphenationEntryUpdate | undefined) => {
       try {
+        if (!projectId) throw new Error('No project');
         const dataProvider = await papi.dataProviders.get(
           'platformScripture.hyphenationDataProvider',
         );
         if (!dataProvider) throw new Error('Hyphenation data provider is not available');
-        await dataProvider.setHyphenationEntries({ projectId, word }, { hyphenation, isApproved });
+        await dataProvider.setHyphenationEntries({ projectId, word }, update);
         return undefined;
       } catch (error) {
         const errorMessage = getErrorMessage(error);
-        logger.warn(`Error saving hyphenation for "${word}": ${errorMessage}`);
+        logger.warn(`Error updating hyphenation for "${word}": ${errorMessage}`);
         return errorMessage;
       }
     },
     [projectId],
   );
 
-  const deleteEntry = useCallback(
-    async (word: string) => {
-      if (!projectId) return undefined;
-      try {
-        const dataProvider = await papi.dataProviders.get(
-          'platformScripture.hyphenationDataProvider',
-        );
-        if (!dataProvider) throw new Error('Hyphenation data provider is not available');
-        await dataProvider.setHyphenationEntries({ projectId, word }, undefined);
-        return undefined;
-      } catch (error) {
-        const errorMessage = getErrorMessage(error);
-        logger.warn(`Error deleting hyphenation for "${word}": ${errorMessage}`);
-        return errorMessage;
-      }
-    },
-    [projectId],
+  const saveEntry = useCallback(
+    async (word: string, hyphenation: string, isApproved: boolean) =>
+      mutateEntry(word, { hyphenation, isApproved }),
+    [mutateEntry],
   );
+
+  const deleteEntry = useCallback(
+    async (word: string) => mutateEntry(word, undefined),
+    [mutateEntry],
+  );
+
+  // The open command requires an editor project context, so this only happens if a saved layout
+  // restores the tab after its project was deleted/renamed. Render an explicit message rather
+  // than an empty-but-interactive table.
+  if (!projectId) {
+    return (
+      <div className="tw:p-4 tw:text-muted-foreground">
+        {localizedStrings['%webView_hyphenation_noProject%'] ?? 'No project selected.'}
+      </div>
+    );
+  }
 
   return (
     <Hyphenation

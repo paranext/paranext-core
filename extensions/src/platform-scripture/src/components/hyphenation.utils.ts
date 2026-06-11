@@ -17,6 +17,7 @@ export const HYPHENATION_STRING_KEYS = Object.freeze([
   '%webView_hyphenation_hyphenationLabel%',
   '%webView_hyphenation_invalidWordError%',
   '%webView_hyphenation_noEntries%',
+  '%webView_hyphenation_noProject%',
   '%webView_hyphenation_redundancyNotice%',
   '%webView_hyphenation_save%',
   '%webView_hyphenation_searchPlaceholder%',

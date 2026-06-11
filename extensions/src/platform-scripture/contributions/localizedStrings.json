@@ -578,7 +578,8 @@
       "%webView_hyphenation_title%": "Hyphenation: {projectName}",
       "%webView_hyphenation_toggleApproved%": "Toggle approved",
       "%webView_hyphenation_uppercaseNotice%": "Words with capital letters were detected in the hyphenation data file. Paratext stores only lowercase words, so they are shown and saved in lowercase.",
-      "%webView_hyphenation_wordLabel%": "Word"
+      "%webView_hyphenation_wordLabel%": "Word",
+      "%webView_hyphenation_noProject%": "No project selected."
     },
     "es": {
       "%inventoryName_Character%": "Inventario de caracteres",
@@ -814,7 +815,8 @@
       "%webView_hyphenation_title%": "División de palabras: {projectName}",
       "%webView_hyphenation_toggleApproved%": "Alternar aprobación",
       "%webView_hyphenation_uppercaseNotice%": "Se detectaron palabras con letras mayúsculas en el archivo de datos de división de palabras. Paratext almacena solo palabras en minúsculas, por lo que se muestran y guardan en minúsculas.",
-      "%webView_hyphenation_wordLabel%": "Palabra"
+      "%webView_hyphenation_wordLabel%": "Palabra",
+      "%webView_hyphenation_noProject%": "Ningún proyecto seleccionado."
     },
     "am": {
       "%manageBooks_error_adminRequired%": "ይህ ለአስተዳዳሪዎች ብቻ የሚገኘው ነው።",
