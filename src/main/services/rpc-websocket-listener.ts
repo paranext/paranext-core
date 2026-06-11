@@ -23,6 +23,7 @@ import {
   OpenRpc,
   SingleMethodDocumentation,
   SingleNotificationDocumentation,
+  withExperimentalPrefix,
 } from '@shared/models/openrpc.model';
 import { getErrorMessage, Mutex } from 'platform-bible-utils';
 import { WebSocketServer } from 'ws';
@@ -264,7 +265,8 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
         const newDocs = { name: methodName, ...details.methodDocs.method };
         // Overwrite the name with `methodName` in case `details.methodDocs.method` included a name
         newDocs.name = methodName;
-        openRpcSchema.methods.push(newDocs);
+        // Prepend "EXPERIMENTAL: " to the summary/description when the method is experimental.
+        openRpcSchema.methods.push(withExperimentalPrefix(newDocs));
         if (details.methodDocs.components) {
           openRpcSchema.components = {
             schemas: {
@@ -310,7 +312,8 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
       const notificationEntry: Notification = docs
         ? { name: eventName, ...docs.notification }
         : { name: eventName, ...getEmptyNotificationDocs() };
-      openRpcSchema.methods.push(notificationEntry);
+      // Prepend "EXPERIMENTAL: " to the summary/description when the event is experimental.
+      openRpcSchema.methods.push(withExperimentalPrefix(notificationEntry));
 
       if (docs?.components) {
         openRpcSchema.components = {

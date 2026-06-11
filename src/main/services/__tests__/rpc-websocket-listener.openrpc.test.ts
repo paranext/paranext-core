@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RpcEventRegistry, RpcWebSocketListener } from '@main/services/rpc-websocket-listener';
+import { EXPERIMENTAL_OPENRPC_PREFIX } from '@shared/models/openrpc.model';
 
 // Mock heavy dependencies so this test can run outside the Electron main process
 vi.mock('electron', () => ({ app: { getVersion: () => '0.0.0' } }));
@@ -101,5 +102,16 @@ describe('generateOpenRpcSchema() surfaces every registered event', () => {
     expect(entry?.description).toBe('Notification: No documentation provided');
     expect(entry?.params).toEqual([]);
     expect(entry && 'result' in entry).toBe(false);
+  });
+
+  it('prepends EXPERIMENTAL: to the summary of an experimental event', async () => {
+    await listener.registerEvent('myExt.expEvent', {
+      notification: { params: [], summary: 'Fires experimentally', 'x-experimental': true },
+    });
+
+    const schema = listener.generateOpenRpcSchema();
+    const entry = schema.methods.find((m) => m.name === 'myExt.expEvent');
+    expect(entry?.summary).toBe(`${EXPERIMENTAL_OPENRPC_PREFIX}Fires experimentally`);
+    expect(entry?.['x-experimental']).toBe(true);
   });
 });

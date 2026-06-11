@@ -6,6 +6,7 @@ import {
   initialize as initializeSharedStore,
   resetForTesting,
   sharedStoreService,
+  waitForInitialization,
 } from './shared-store.service';
 
 // Mock dependencies
@@ -122,6 +123,27 @@ describe('sharedStoreService', () => {
       await initializeSharedStore(networkService);
       expect(vi.mocked(networkService.createNetworkEventEmitterAsync).mock.calls.length).toBe(
         createEmitterCallCount,
+      );
+    });
+  });
+
+  describe('waitForInitialization', () => {
+    it('resolves immediately when initialize() has already been called', async () => {
+      await initializeSharedStore(networkService);
+      await expect(waitForInitialization()).resolves.toBeUndefined();
+    });
+
+    it('resolves once initialize() starts within the timeout', async () => {
+      // Begin waiting before initialize() is called; the generous timeout has not elapsed.
+      const waiting = waitForInitialization(1000);
+      await initializeSharedStore(networkService);
+      await expect(waiting).resolves.toBeUndefined();
+    });
+
+    it('throws if initialize() does not start within the timeout', async () => {
+      // initialize() is never called, so the start-timeout should elapse and reject.
+      await expect(waitForInitialization(30)).rejects.toThrow(
+        /initialize\(\) was not called within 30ms/,
       );
     });
   });
