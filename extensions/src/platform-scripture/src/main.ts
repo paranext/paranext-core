@@ -15,6 +15,11 @@ import {
 import { CHECKLIST_OPEN_SETTINGS_EVENT } from './checklist.model';
 import { FindWebViewOptions, FindWebViewProvider, findWebViewType } from './find.web-view-provider';
 import {
+  HyphenationWebViewOptions,
+  HyphenationWebViewProvider,
+  hyphenationWebViewType,
+} from './hyphenation.web-view-provider';
+import {
   checkAggregatorService,
   notifyCheckResultsInvalidated,
 } from './checks/check-aggregator.service';
@@ -129,6 +134,31 @@ async function openInventory(
   const options: InventoryWebViewOptions = { projectId };
   return papi.webViews.openWebView(
     webViewType,
+    { type: 'float', floatSize: { width: 700, height: 800 } },
+    options,
+  );
+}
+
+/**
+ * Open the Hyphenation tool for the project of the given editor web view. Mirrors
+ * {@link openInventory}: resolves the project from the calling editor's web view ID and does not
+ * open without a project context.
+ */
+async function openHyphenation(webViewId: string | undefined): Promise<string | undefined> {
+  let projectId: string | undefined;
+
+  if (webViewId) {
+    const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
+    projectId = webViewDefinition?.projectId;
+  }
+
+  if (!projectId) {
+    return undefined;
+  }
+
+  const options: HyphenationWebViewOptions = { projectId };
+  return papi.webViews.openWebView(
+    hyphenationWebViewType,
     { type: 'float', floatSize: { width: 700, height: 800 } },
     options,
   );
@@ -366,6 +396,7 @@ export async function activate(context: ExecutionActivationContext) {
     punctuationInventoryWebViewType,
   );
   const checksSidePanelWebViewProvider = new ChecksSidePanelWebViewProvider();
+  const hyphenationWebViewProvider = new HyphenationWebViewProvider();
   const findWebViewProvider = new FindWebViewProvider();
   const markersChecklistWebViewProvider = new ChecklistWebViewProvider();
   const manageBooksWebViewProvider = new ManageBooksWebViewProvider();
@@ -530,6 +561,34 @@ export async function activate(context: ExecutionActivationContext) {
   const showChecksSidePanelWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     checksSidePanelWebViewType,
     checksSidePanelWebViewProvider,
+  );
+
+  const openHyphenationPromise = papi.commands.registerCommand(
+    'platformScripture.openHyphenation',
+    openHyphenation,
+    {
+      method: {
+        summary: 'Open the Hyphenation tool',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary:
+              'The ID of the web view tied to the project whose hyphenation data should be shown',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the new Hyphenation tool web view',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+  const hyphenationWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    hyphenationWebViewType,
+    hyphenationWebViewProvider,
   );
 
   const openMarkersChecklistPromise = papi.commands.registerCommand(
@@ -714,6 +773,8 @@ export async function activate(context: ExecutionActivationContext) {
     await punctuationInventoryWebViewProviderPromise,
     await showChecksSidePanelPromise,
     await showChecksSidePanelWebViewProviderPromise,
+    await openHyphenationPromise,
+    await hyphenationWebViewProviderPromise,
     await openMarkersChecklistPromise,
     await openMarkersChecklistSettingsPromise,
     await markersChecklistWebViewProviderPromise,
