@@ -35,6 +35,12 @@ import { waitForAppReady } from '../../fixtures/helpers';
 const EVIDENCE_DIR = 'proofs/component-evidence/WP-002';
 const MANAGE_BOOKS_FRAME = 'iframe[title*="Manage Books" i]';
 const MENU_LABEL_REGEX = /Manage Books/i;
+/**
+ * Project whose editor hosts the Manage Books entry point (the Manila UX follow-up moved the menu
+ * item into the scripture editor's hamburger menu). Note this differs from the fixture projects the
+ * tests switch to via the dialog's own sidebar picker after opening.
+ */
+const ENTRY_PROJECT_NAME = 'wgPIDGIN';
 
 /**
  * WF-002 (P3U.1 verdict): The four Category 9 mutating tests rely on specific rotation projects
@@ -95,11 +101,23 @@ async function openManageBooksDialog(
   mainPage: Page,
   projectName: string = 'SRL',
 ): Promise<FrameLocator> {
-  await mainPage
-    .getByRole('menuitem', { name: /Project|Tools/i })
-    .first()
-    .click();
-  await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+  // The Manila UX follow-up moved the entry point from the application main
+  // menu into the scripture editor's hamburger ("Project") menu, which renders
+  // INSIDE the editor's iframe. Open the entry project's editor first (skipped
+  // when already open), then drive the hamburger.
+  const existingEditor = mainPage.locator('.dock-tab', { hasText: ENTRY_PROJECT_NAME });
+  if ((await existingEditor.count()) === 0) {
+    const homeFrame = mainPage.frameLocator('iframe[title="Home"]');
+    await homeFrame.locator(`tr:has-text("${ENTRY_PROJECT_NAME}") button:has-text("Open")`).click();
+    await expect(mainPage.locator('.dock-tab', { hasText: ENTRY_PROJECT_NAME })).toBeVisible({
+      timeout: 15_000,
+    });
+  }
+  const editorFrame = mainPage.frameLocator(
+    `iframe[title*="${ENTRY_PROJECT_NAME}" i][title*="Editable" i]`,
+  );
+  await editorFrame.locator("button[aria-label='Project']").first().click();
+  await editorFrame.getByRole('menuitem', { name: MENU_LABEL_REGEX }).first().click();
   await expect(mainPage.locator('.dock-tab', { hasText: /Manage Books/i })).toBeVisible({
     timeout: 15_000,
   });

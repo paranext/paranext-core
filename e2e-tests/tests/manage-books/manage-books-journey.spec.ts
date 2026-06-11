@@ -62,6 +62,13 @@ const SCREENSHOT_BASE = 'proofs/component-evidence/journey';
 const WEB_VIEW_TITLE_REGEX = /Manage Books/i;
 const MENU_LABEL_REGEX = /Manage Books/i;
 const MANAGE_BOOKS_FRAME = 'iframe[title*="Manage Books" i]';
+/**
+ * Project whose editor hosts the Manage Books entry point (Manila UX follow-up moved the menu item
+ * from the application main menu into the scripture editor's hamburger menu). Same test project the
+ * markers-checklist specs use. Tests that need a different target project still switch via the
+ * dialog's own sidebar project picker after opening.
+ */
+const ENTRY_PROJECT_NAME = 'wgPIDGIN';
 
 test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
   /**
@@ -90,20 +97,36 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
   });
 
   /**
-   * Helper: open the Manage Books unified dialog via the platform menu and return a frameLocator
-   * scoped to the dialog's web-view iframe. Mirrors the navigation pattern used by the per-WP
-   * functional tests so journey tests do not drift from the per-WP idiom.
+   * Helper: open the `ENTRY_PROJECT_NAME` project from the Home tab (skipped when its editor tab is
+   * already open). Shared bootstrap pattern with the markers-checklist specs.
+   */
+  async function openEntryProject(mainPage: Page): Promise<void> {
+    const existing = mainPage.locator('.dock-tab', { hasText: ENTRY_PROJECT_NAME });
+    if ((await existing.count()) > 0) return;
+    const homeFrame = mainPage.frameLocator('iframe[title="Home"]');
+    await homeFrame.locator(`tr:has-text("${ENTRY_PROJECT_NAME}") button:has-text("Open")`).click();
+    await expect(mainPage.locator('.dock-tab', { hasText: ENTRY_PROJECT_NAME })).toBeVisible({
+      timeout: 15_000,
+    });
+  }
+
+  /**
+   * Helper: open the Manage Books unified dialog via the scripture editor's hamburger ("Project")
+   * menu and return a frameLocator scoped to the dialog's web-view iframe. Mirrors the navigation
+   * pattern used by the per-WP functional tests so journey tests do not drift from the per-WP
+   * idiom.
    *
-   * The wiring phase places the entry under either the top-level "Project" or "Tools" menu (per
-   * ui-spec-manage-books.md "Trigger" — the final placement is decided in phase-3-ui when wiring
-   * menus.json). The helper accepts either to remain stable across that decision.
+   * The Manila UX follow-up moved the entry point from the application main menu into the editor
+   * hamburger (reserved `platform.manageBooks` default group in the Project section). The hamburger
+   * button and its Radix menu both render INSIDE the editor's iframe.
    */
   async function openManageBooks(mainPage: Page): Promise<FrameLocator> {
-    await mainPage
-      .getByRole('menuitem', { name: /Project|Tools/i })
-      .first()
-      .click();
-    await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+    await openEntryProject(mainPage);
+    const editorFrame = mainPage.frameLocator(
+      `iframe[title*="${ENTRY_PROJECT_NAME}" i][title*="Editable" i]`,
+    );
+    await editorFrame.locator("button[aria-label='Project']").first().click();
+    await editorFrame.getByRole('menuitem', { name: MENU_LABEL_REGEX }).first().click();
     const tab = mainPage.locator('.dock-tab', { hasText: WEB_VIEW_TITLE_REGEX });
     await expect(tab).toBeVisible({ timeout: 15_000 });
     return mainPage.frameLocator(MANAGE_BOOKS_FRAME);
@@ -661,8 +684,8 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
     const viewDeletedBook = frame.locator(`ul[role="listbox"] li[data-book="${targetBookId}"]`);
     await expect(viewDeletedBook).toBeVisible({ timeout: 10_000 });
     // The deleted book's pill must NOT contain the "Present" badge. We check that the pill
-    // text does not include "Present" — the badge renders the localized string
-    // "%manageBooks_pill_present%" → "Present" for present books only.
+    // text does not include "Present" — the badge renders the localized "Present" label for
+    // present books only.
     await expect(viewDeletedBook).not.toContainText(/Present/i);
 
     // EVD-J-006-b: View mode refreshed after Delete — deleted book no longer present.
