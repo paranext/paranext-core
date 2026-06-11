@@ -10,10 +10,11 @@ namespace Paranext.DataProvider.KeyboardSwitching.Keyboarding;
 /// keyboard input sources (<c>TISCreateInputSourceList</c>), read the active input
 /// source (<c>TISCopyCurrentKeyboardInputSource</c>), and activate an input source
 /// (<c>TISSelectInputSource</c>). The real implementation owns all interop details
-/// (the <c>[DllImport]</c> declarations, CFString/CFArray/CFDictionary marshaling,
-/// the Copy/Create-rule <c>CFTypeRef</c> retain/release lifecycle, and the TIS
-/// filter dictionary mechanics); tests substitute a fake so the primitive's mapping
-/// and guard logic runs on any OS.
+/// (the <c>[DllImport]</c> declarations, CFString/CFArray/CFBoolean marshaling,
+/// the Copy/Create-rule <c>CFTypeRef</c> retain/release lifecycle, and the
+/// keyboard-category/select-capable filtering — applied in managed code per
+/// implementer decision I2, <c>keyboarding-macos.md</c> §3.2); tests substitute a
+/// fake so the primitive's mapping and guard logic runs on any OS.
 /// <br />
 /// A TIS-layer failure (framework interop fault, CF marshaling error, concurrent
 /// input-source mutation surfacing as an exception) surfaces as member THROWS —
