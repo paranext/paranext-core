@@ -71,13 +71,13 @@ internal sealed class OsKeyboardDataProvider(
             if (!await _keyboardingPrimitive.ActivateAsync(keyboardId))
                 return false;
         }
-        catch (Exception ex)
+        catch (Exception e)
         {
             // VAL-B-04: OS-layer activation errors are swallowed and logged, never
             // propagated — keyboard activation failures must never block typing.
             // (CAP-002 primitives promise not to throw; this is wire-boundary defense.)
-            Console.WriteLine(
-                $"OsKeyboardDataProvider: failed to activate keyboard '{keyboardId}': {ex}"
+            Console.Error.WriteLine(
+                $"OsKeyboardDataProvider: activation of '{keyboardId}' failed: {e}"
             );
             return false;
         }
