@@ -1,4 +1,7 @@
 import type { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
+// Must stay a type-only import: keyboard.service-model imports `WebViewId` from this module, so
+// a value import here would create a runtime circular dependency
+import type { KeyboardSurfaceType } from '@shared/services/keyboard.service-model';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 // Used in JSDoc link
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -223,6 +226,15 @@ type WebViewDefinitionBase = {
    * @default false
    */
   shouldShowToolbar?: boolean;
+  /**
+   * Which keyboard surface this WebView wants active while it has focus. When the WebView gains
+   * focus, the keyboard service activates the focused project's default keyboard for this surface
+   * (if one is configured); when focus leaves, the system default keyboard is restored.
+   *
+   * `undefined` (default) means this WebView does not participate in focus-driven keyboard
+   * switching. Never `null`.
+   */
+  keyboardPreference?: KeyboardSurfaceType;
 };
 
 /** WebView representation using React */
@@ -310,6 +322,7 @@ export const WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS = [
   'projectId',
   'scrollGroupScrRef',
   'state',
+  'keyboardPreference',
 ] as const;
 
 /** The properties on a WebViewDefinition that may be updated when that webview is already displayed */

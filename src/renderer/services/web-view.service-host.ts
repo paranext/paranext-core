@@ -913,6 +913,11 @@ export const closeTab = async (tabId: string): Promise<boolean> => {
   return (await getDockLayout()).removeTabFromDock(tabId);
 };
 
+/** See {@link WebViewServiceType.closeWebView} */
+export const closeWebView = async (webViewId: WebViewId): Promise<boolean> => {
+  throw new Error(`Not implemented (CAP-017 RED stub): closeWebView(${webViewId})`);
+};
+
 /**
  * Floats a tab in the layout
  *
@@ -2016,6 +2021,7 @@ const papiWebViewService: WebViewServiceType = {
   getSavedWebViewDefinition: getOpenWebViewDefinition,
   getOpenWebViewDefinition,
   getAllOpenWebViewDefinitions,
+  closeWebView,
   getWebViewController,
 };
 

@@ -128,6 +128,15 @@ export interface WebViewServiceType {
   getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]>;
 
   /**
+   * Closes the WebView with the specified ID, removing its tab from the dock layout.
+   *
+   * @param webViewId The ID of the WebView to close
+   * @returns Promise that resolves to `true` if a WebView with the specified ID was found and
+   *   closed; `false` if no WebView with that ID was found (does not throw in that case)
+   */
+  closeWebView(webViewId: WebViewId): Promise<boolean>;
+
+  /**
    * Get an existing web view controller for an open web view.
    *
    * A Web View Controller is a network object that represents a web view and whose methods

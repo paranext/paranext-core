@@ -3,6 +3,7 @@ import {
   IWindowService,
   windowServiceObjectToProxy,
   windowServiceProviderName,
+  AppFocusSubject,
   FocusSubject,
   FocusSubjectOther,
   SetFocusSpecifier,
@@ -173,6 +174,20 @@ class WindowDataProviderEngine
     return didChangeFocus;
   }
 
+  async getAppFocus(): Promise<AppFocusSubject> {
+    return this.#throwNotImplementedAppFocus('getAppFocus()');
+  }
+
+  // Can be called with or without a selector (mirror of setFocus; see IWindowService.setAppFocus)
+  async setAppFocus(
+    isAppFocusedOrSelector: boolean | undefined,
+    isAppFocusedPossiblyNotProvided?: boolean,
+  ): Promise<DataProviderUpdateInstructions<WindowDataTypes>> {
+    return this.#throwNotImplementedAppFocus(
+      `setAppFocus(${isAppFocusedOrSelector}, ${isAppFocusedPossiblyNotProvided})`,
+    );
+  }
+
   async dispose(): Promise<boolean> {
     if (this.#unsubscribeOnDidFocus) {
       const success = this.#unsubscribeOnDidFocus();
@@ -205,6 +220,13 @@ class WindowDataProviderEngine
    */
   async #setDetectFocusInternal() {
     return this.#setFocusInternal(await detectFocus());
+  }
+
+  // Will track #appFocusSubject state on this engine once implemented
+  #throwNotImplementedAppFocus(methodCall: string): never {
+    throw new Error(
+      `Not implemented (CAP-017 RED stub): ${methodCall} on ${this.constructor.name}`,
+    );
   }
 }
 
