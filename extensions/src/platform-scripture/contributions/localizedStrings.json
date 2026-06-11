@@ -560,7 +560,7 @@
       "%webView_platformScripture_markersChecklist_settings%": "Settings",
       "%manageBooks_openMenuItem%": "Manage books",
       "%manageBooks_sidebar_projectPlaceholder%": "Select project",
-      "%keyboardSwitching_autoSwitched%": "Keyboard switched to {keyboardName}"
+      "%keyboardSwitching_autoSwitched%": "Keyboard switched automatically"
     },
     "es": {
       "%inventoryName_Character%": "Inventario de caracteres",
