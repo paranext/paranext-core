@@ -116,18 +116,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // skip registration entirely instead of relying solely on per-method runtime guards.
         if (ProjectDetails.Metadata.ProjectInterfaces.Contains(ProjectInterfaces.LEGACY_COMMENT))
         {
-            retVal.Add(("getCommentThreads", GetCommentThreads));
-            retVal.Add(("createComment", CreateComment));
-            retVal.Add(("addCommentToThread", AddCommentToThread));
-            retVal.Add(("deleteComment", DeleteComment));
-            retVal.Add(("updateComment", UpdateComment));
-            retVal.Add(("setIsCommentThreadRead", SetIsCommentThreadRead));
-            retVal.Add(("findAssignableUsers", FindAssignableUsers));
-            retVal.Add(("canUserCreateComments", CanUserCreateComments));
-            retVal.Add(("canUserAddCommentToThread", CanUserAddCommentToThread));
-            retVal.Add(("canUserAssignThread", CanUserAssignThread));
-            retVal.Add(("canUserResolveThread", CanUserResolveThread));
-            retVal.Add(("canUserEditOrDeleteComment", CanUserEditOrDeleteComment));
+            foreach (var commentFunction in GetCommentFunctions())
+                retVal.Add((commentFunction.Key, commentFunction.Value));
         }
 
         retVal.Add(("getSetting", GetProjectSetting));
@@ -270,6 +260,27 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                     )
                 ),
             },
+        };
+
+    /// <summary>
+    /// The comment wire methods (name -> handler) a PDP exposes, but only when its project advertises
+    /// <see cref="ProjectInterfaces.LEGACY_COMMENT"/> (see <see cref="GetFunctions"/>).
+    /// </summary>
+    internal Dictionary<string, Delegate> GetCommentFunctions() =>
+        new()
+        {
+            { "getCommentThreads", GetCommentThreads },
+            { "createComment", CreateComment },
+            { "addCommentToThread", AddCommentToThread },
+            { "deleteComment", DeleteComment },
+            { "updateComment", UpdateComment },
+            { "setIsCommentThreadRead", SetIsCommentThreadRead },
+            { "findAssignableUsers", FindAssignableUsers },
+            { "canUserCreateComments", CanUserCreateComments },
+            { "canUserAddCommentToThread", CanUserAddCommentToThread },
+            { "canUserAssignThread", CanUserAssignThread },
+            { "canUserResolveThread", CanUserResolveThread },
+            { "canUserEditOrDeleteComment", CanUserEditOrDeleteComment },
         };
 
     protected override Task StartDataProviderAsync()

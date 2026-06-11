@@ -6,21 +6,11 @@ namespace TestParanextDataProvider.Projects
     [ExcludeFromCodeCoverage]
     internal class ParatextProjectDataProviderWireSurfaceTests : PapiTestBase
     {
-        private static readonly string[] AllCommentWireMethodSuffixes =
-        [
-            ".getCommentThreads",
-            ".createComment",
-            ".addCommentToThread",
-            ".deleteComment",
-            ".updateComment",
-            ".setIsCommentThreadRead",
-            ".findAssignableUsers",
-            ".canUserCreateComments",
-            ".canUserAddCommentToThread",
-            ".canUserAssignThread",
-            ".canUserResolveThread",
-            ".canUserEditOrDeleteComment",
-        ];
+        // Pull the comment method names from the production source of truth
+        // (ParatextProjectDataProvider.GetCommentFunctions) so this test stays correct automatically
+        // when comment methods are added or removed.
+        private static string[] GetCommentWireMethodSuffixes(ParatextProjectDataProvider pdp) =>
+            pdp.GetCommentFunctions().Keys.Select(name => $".{name}").ToArray();
 
         [Test]
         public async Task UnpublishedPdp_RegistersAllCommentMethodsAsync()
@@ -40,7 +30,7 @@ namespace TestParanextDataProvider.Projects
             await pdp.RegisterDataProviderAsync();
 
             // Assert: every comment method is on the wire
-            foreach (var suffix in AllCommentWireMethodSuffixes)
+            foreach (var suffix in GetCommentWireMethodSuffixes(pdp))
             {
                 Assert.That(
                     Client.RegisteredRequestTypes.Any(k => k.EndsWith(suffix)),
@@ -68,7 +58,7 @@ namespace TestParanextDataProvider.Projects
             await pdp.RegisterDataProviderAsync();
 
             // Assert: no comment method appears on the wire
-            foreach (var suffix in AllCommentWireMethodSuffixes)
+            foreach (var suffix in GetCommentWireMethodSuffixes(pdp))
             {
                 Assert.That(
                     Client.RegisteredRequestTypes.Any(k => k.EndsWith(suffix)),

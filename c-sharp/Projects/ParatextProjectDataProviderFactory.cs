@@ -31,6 +31,10 @@ internal class ParatextProjectDataProviderFactory : ParatextProjectDataProviderF
         return startTask;
     }
 
+    /// <summary>
+    /// Lists the projects this factory advertises: the unpublished (editable) Paratext projects.
+    /// Published projects are advertised by <see cref="ParatextPublishedProjectDataProviderFactory"/>.
+    /// </summary>
     protected override List<ProjectMetadata>? GetAvailableProjects(JsonElement _ignore)
     {
         return _paratextProjects
