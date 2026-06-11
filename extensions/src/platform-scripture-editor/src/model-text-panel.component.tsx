@@ -217,17 +217,17 @@ export function ModelTextPanel({
         adminModelTexts,
         setAdminModelTexts,
         canWriteProjectSettings,
-        async () => userModelTexts,
+        userModelTexts,
         setUserModelTexts,
         async () => installResource(resource.dblEntryUid),
       ),
     [
       adminModelTexts,
       canWriteProjectSettings,
-      effectiveModelTexts,
       setAdminModelTexts,
       userModelTexts,
       setUserModelTexts,
+      installResource,
     ],
   );
 

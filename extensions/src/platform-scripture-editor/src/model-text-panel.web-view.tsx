@@ -77,7 +77,10 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     projectId,
   );
   const [userModelTexts] = usePromise(
-    useCallback(async () => await textConnectionsProvider?.getUserModelTexts(), []),
+    useCallback(
+      async () => textConnectionsProvider?.getUserModelTexts(),
+      [textConnectionsProvider],
+    ),
     undefined,
   );
 

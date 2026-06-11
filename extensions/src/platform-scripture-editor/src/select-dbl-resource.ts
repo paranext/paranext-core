@@ -24,20 +24,15 @@ export const DEFAULT_RESOURCE_REFERENCE_LIST: ResourceReferenceList = {
  *   user can update them
  * @param canUserWriteProjectSettings Whether the user is able to write to the global text
  *   connection project settings
- * @param getUserTextConnections Function to retrieve the local user's text connections
+ * @param userTextConnections Function to retrieve the local user's text connections
  * @param setUserTextConnections Function to set the local user's text connections
- * @param installResource Function to install a DBL resource by its entry UID. If provided and the
- *   resource is not yet installed, it will be installed before the text connection settings are
- *   updated. If installation fails, the settings update is cancelled.
- * @param onSelect Callback invoked with the selected resource's dblEntryUid after a successful
- *   write
  */
 export async function selectTextConnection(
   resource: DblResourceData,
   adminTextConnections: ResourceReferenceList | PlatformError | undefined,
   setAdminTextConnections: ((value: ResourceReferenceList) => void) | undefined,
   canUserWriteProjectSettings: boolean,
-  getUserTextConnections: (() => Promise<ResourceReferenceList | undefined>) | undefined,
+  userTextConnections: ResourceReferenceList | undefined,
   setUserTextConnections: ((list: ResourceReferenceList) => Promise<unknown>) | undefined,
   installResource?: (dblEntryUid: string) => Promise<void>,
   onSelect?: (dblEntryUid: string) => void,
@@ -67,10 +62,9 @@ export async function selectTextConnection(
       items: [newRef, ...existingItems],
     });
   } else {
-    const rawUserList = await getUserTextConnections?.();
-    const rawUserItems = rawUserList?.items ?? [];
+    const rawUserItems = userTextConnections?.items ?? [];
     await setUserTextConnections?.({
-      dataVersion: rawUserList?.dataVersion ?? DEFAULT_RESOURCE_REFERENCE_LIST.dataVersion,
+      dataVersion: userTextConnections?.dataVersion ?? DEFAULT_RESOURCE_REFERENCE_LIST.dataVersion,
       items: [
         newRef,
         ...rawUserItems.filter(

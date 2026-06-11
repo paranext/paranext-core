@@ -171,6 +171,13 @@ globalThis.webViewComponent = function ResourceTextPanel({
     'platformScripture.textConnectionSettings',
     projectId,
   );
+  const userResourceList = usePromise(
+    useCallback(
+      async () => textConnectionsProvider?.getUserReferencedProjectsAndResources(),
+      [textConnectionsProvider],
+    ),
+    undefined,
+  );
 
   const [fetchResources, setFetchResources] = useState(true);
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
@@ -362,9 +369,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
         adminResourceList,
         setAdminResourceList,
         canWriteProjectSettings,
-        textConnectionsProvider
-          ? () => textConnectionsProvider.getUserReferencedProjectsAndResources()
-          : undefined,
+        userResourceList,
         textConnectionsProvider
           ? (list) => textConnectionsProvider.setUserReferencedProjectsAndResources(list)
           : undefined,
@@ -385,9 +390,16 @@ globalThis.webViewComponent = function ResourceTextPanel({
               }
             }
           : undefined,
-        setPendingResourceId,
+        (dblEntryUid: string) => setPendingResourceId(dblEntryUid),
       ),
-    [adminResourceList, setAdminResourceList, textConnectionsProvider, dblResourcesProvider],
+    [
+      adminResourceList,
+      setAdminResourceList,
+      textConnectionsProvider,
+      dblResourcesProvider,
+      canWriteProjectSettings,
+      userResourceList,
+    ],
   );
 
   const showResourcePicker = useDialogCallback(
