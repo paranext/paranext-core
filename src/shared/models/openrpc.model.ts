@@ -291,20 +291,30 @@ export function getEmptyNotificationDocs(): Omit<MethodDocumentationWithoutName,
 }
 
 /** Prefix prepended to the `summary` and `description` of experimental methods and notifications. */
-export const EXPERIMENTAL_OPENRPC_PREFIX = 'EXPERIMENTAL: ';
+export const EXPERIMENTAL_OPENRPC_PREFIX = '[EXPERIMENTAL] ';
+
+/**
+ * Prepends {@link EXPERIMENTAL_OPENRPC_PREFIX} to a summary/description string. Leaves the string
+ * unchanged when it already starts with the prefix (idempotent). A falsy string still receives the
+ * prefix, so an experimental entry is always visibly marked even when it had no text.
+ */
+function prependExperimental(text: string | undefined): string {
+  if (text?.startsWith(EXPERIMENTAL_OPENRPC_PREFIX)) return text;
+  return `${EXPERIMENTAL_OPENRPC_PREFIX}${text ?? ''}`;
+}
 
 /**
  * Returns a shallow copy of an OpenRPC {@link Method} or {@link Notification} with
  * {@link EXPERIMENTAL_OPENRPC_PREFIX} prepended to its `summary` and `description` when the entry is
- * marked `'x-experimental'`. Returns the entry unchanged when it is not experimental. Call this on
- * a freshly-built entry so the prefix is applied at most once.
+ * marked `'x-experimental'`. Both fields are always set on an experimental entry — even a missing
+ * or empty summary/description becomes the bare prefix so the marker is never lost. Idempotent: an
+ * entry already starting with the prefix is left unchanged. Returns the entry untouched when it is
+ * not experimental.
  */
 export function withExperimentalPrefix<T extends Method | Notification>(entry: T): T {
   if (!entry['x-experimental']) return entry;
   const prefixed = { ...entry };
-  if (prefixed.summary !== undefined)
-    prefixed.summary = `${EXPERIMENTAL_OPENRPC_PREFIX}${prefixed.summary}`;
-  if (prefixed.description !== undefined)
-    prefixed.description = `${EXPERIMENTAL_OPENRPC_PREFIX}${prefixed.description}`;
+  prefixed.summary = prependExperimental(prefixed.summary);
+  prefixed.description = prependExperimental(prefixed.description);
   return prefixed;
 }

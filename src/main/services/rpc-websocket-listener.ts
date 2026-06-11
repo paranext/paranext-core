@@ -296,10 +296,11 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
           };
         }
       } else {
-        openRpcSchema.methods.push({
-          name: methodName,
-          ...getEmptyMethodDocs(),
-        });
+        // Wrap the placeholder too (a no-op unless experimental) so methods and events handle the
+        // experimental prefix consistently regardless of whether docs were provided.
+        openRpcSchema.methods.push(
+          withExperimentalPrefix({ name: methodName, ...getEmptyMethodDocs() }),
+        );
       }
     });
     // Convert the entries iterator to an array so we can use .forEach() (avoids for-of + continue)

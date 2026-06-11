@@ -110,10 +110,22 @@ describe('openrpc.model — experimental marker types', () => {
     expect(result).toBe(stable);
   });
 
-  it('withExperimentalPrefix leaves missing summary/description untouched', () => {
+  it('withExperimentalPrefix fills missing summary/description with the bare prefix', () => {
     const notification: Notification = { name: 'evt', params: [], 'x-experimental': true };
     const prefixed = withExperimentalPrefix(notification);
-    expect(prefixed.summary).toBeUndefined();
-    expect(prefixed.description).toBeUndefined();
+    // Even with no text, an experimental entry is marked so the flag is never lost.
+    expect(prefixed.summary).toBe(EXPERIMENTAL_OPENRPC_PREFIX);
+    expect(prefixed.description).toBe(EXPERIMENTAL_OPENRPC_PREFIX);
+  });
+
+  it('withExperimentalPrefix does not double-prefix an already-prefixed entry', () => {
+    const notification: Notification = {
+      name: 'evt',
+      params: [],
+      'x-experimental': true,
+      summary: `${EXPERIMENTAL_OPENRPC_PREFIX}Already marked`,
+    };
+    const prefixed = withExperimentalPrefix(notification);
+    expect(prefixed.summary).toBe(`${EXPERIMENTAL_OPENRPC_PREFIX}Already marked`);
   });
 });
