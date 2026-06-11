@@ -54,7 +54,7 @@ class ThemeDataDataProviderEngine
   }
 }
 
-let initializationPromise: Promise<void>;
+let initializationPromise: Promise<void> | undefined;
 /** Need to run initialize before using this */
 let dataProvider: IThemeDataService;
 export async function initialize(): Promise<void> {
@@ -73,6 +73,8 @@ export async function initialize(): Promise<void> {
           );
           resolve();
         } catch (error) {
+          // Clear the cached promise so the next call retries instead of failing forever
+          initializationPromise = undefined;
           reject(error);
         }
       };

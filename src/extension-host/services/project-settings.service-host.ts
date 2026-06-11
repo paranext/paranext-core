@@ -17,7 +17,7 @@ import {
   waitForResyncContributions,
 } from '@extension-host/services/contribution.service';
 
-let initializationPromise: Promise<void>;
+let initializationPromise: Promise<void> | undefined;
 /** Do the setup this service needs to function */
 async function initialize(): Promise<void> {
   if (!initializationPromise) {
@@ -26,6 +26,8 @@ async function initialize(): Promise<void> {
         try {
           resolve();
         } catch (error) {
+          // Clear the cached promise so the next call retries instead of failing forever
+          initializationPromise = undefined;
           reject(error);
         }
       };
