@@ -157,17 +157,8 @@ export class KeyboardActivationService {
           return;
         }
         // CAP-014 HAZARD (test-writer plan D7): the manual-switch detector obtains the pre-update
-        // expected value through this seam — observers MUST run before the assignment below. An
-        // observer throw is contained so it can never corrupt decision-#25 state propagation.
-        this.currentOsKeyboardPreUpdateObservers.forEach((observer) => {
-          try {
-            observer(newKeyboardId, this.lastActivatedKeyboardId);
-          } catch (error) {
-            logger.warn(
-              `KeyboardActivationService: a CurrentOsKeyboard pre-update observer threw: ${getErrorMessage(error)}`,
-            );
-          }
-        });
+        // expected value through this seam — observers MUST run before the assignment below
+        this.notifyCurrentOsKeyboardPreUpdateObservers(newKeyboardId);
         // Decision #25 (RM-010 visibility gap): external PAPI consumers' OS-keyboard mutations
         // update this service's observable state
         this.lastActivatedKeyboardId = newKeyboardId;
@@ -303,6 +294,26 @@ export class KeyboardActivationService {
 
     await this.unsubscribeFromCurrentOsKeyboard?.();
     this.unsubscribeFromCurrentOsKeyboard = undefined;
+  }
+
+  // === NEW IN PT10 === (keyboard-switching CAP-014 D7 hazard seam)
+  // Reason: see CurrentOsKeyboardPreUpdateObserver above. Maps to: CAP-014
+  /**
+   * Fans a `CurrentOsKeyboard` change out to the registered
+   * {@link CurrentOsKeyboardPreUpdateObserver | pre-update observers} with the PRE-update
+   * `lastActivatedKeyboardId` as the expected value. An observer throw is contained (logged) so it
+   * can never corrupt decision-#25 state propagation.
+   */
+  private notifyCurrentOsKeyboardPreUpdateObservers(newKeyboardId: KeyboardId | undefined): void {
+    this.currentOsKeyboardPreUpdateObservers.forEach((observer) => {
+      try {
+        observer(newKeyboardId, this.lastActivatedKeyboardId);
+      } catch (error) {
+        logger.warn(
+          `KeyboardActivationService: a CurrentOsKeyboard pre-update observer threw: ${getErrorMessage(error)}`,
+        );
+      }
+    });
   }
 
   /** Narrows the provider captured by {@link initializeAsync} with a descriptive failure mode. */

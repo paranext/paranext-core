@@ -14,6 +14,7 @@
 import {
   getErrorMessage,
   isPlatformError,
+  PlatformError,
   Unsubscriber,
   UnsubscriberAsync,
 } from 'platform-bible-utils';
@@ -180,39 +181,19 @@ export class FocusKeyboardRouter {
 
     this.unsubscribeFromFocus = await windowService.subscribeFocus(
       undefined,
-      (focusSubject) => {
-        if (!this.isStarted) return;
-        if (isPlatformError(focusSubject)) {
-          logger.warn(
-            `FocusKeyboardRouter received an error from the Focus subscription: ${getErrorMessage(focusSubject)}`,
-          );
-          return;
-        }
-        this.handleFocusChangeAsync(focusSubject).catch((error) => {
-          logger.warn(
-            `FocusKeyboardRouter failed to handle a focus change: ${getErrorMessage(error)}`,
-          );
-        });
-      },
+      this.createGuardedSubscriptionCallback<FocusSubject>('Focus', 'a focus change', (subject) =>
+        this.handleFocusChangeAsync(subject),
+      ),
       { retrieveDataImmediately: false },
     );
 
     this.unsubscribeFromAppFocus = await windowService.subscribeAppFocus(
       undefined,
-      (appFocusSubject) => {
-        if (!this.isStarted) return;
-        if (isPlatformError(appFocusSubject)) {
-          logger.warn(
-            `FocusKeyboardRouter received an error from the AppFocus subscription: ${getErrorMessage(appFocusSubject)}`,
-          );
-          return;
-        }
-        this.handleAppFocusChangeAsync(appFocusSubject).catch((error) => {
-          logger.warn(
-            `FocusKeyboardRouter failed to handle an app focus change: ${getErrorMessage(error)}`,
-          );
-        });
-      },
+      this.createGuardedSubscriptionCallback<AppFocusSubject>(
+        'AppFocus',
+        'an app focus change',
+        (subject) => this.handleAppFocusChangeAsync(subject),
+      ),
       { retrieveDataImmediately: false },
     );
 
@@ -258,6 +239,37 @@ export class FocusKeyboardRouter {
   }
 
   /**
+   * Wraps an async subject handler with the guards every window-service subscription callback
+   * needs: bail when stopped (defensive beyond the unsubscribers — an emitter holding a stale
+   * callback reference after {@link stopAsync} must not route), log-and-drop `PlatformError`
+   * emissions, and contain handler rejections so a routing failure can never break the emitter.
+   *
+   * @param subscriptionName The data type name used in the error-emission log message.
+   * @param failureDescription Completes the handler-rejection log message ("failed to handle …").
+   * @param handleSubjectAsync The async routing handler invoked for non-error emissions.
+   */
+  private createGuardedSubscriptionCallback<TSubject>(
+    subscriptionName: string,
+    failureDescription: string,
+    handleSubjectAsync: (subject: TSubject) => Promise<void>,
+  ): (subject: TSubject | PlatformError) => void {
+    return (subject) => {
+      if (!this.isStarted) return;
+      if (isPlatformError(subject)) {
+        logger.warn(
+          `FocusKeyboardRouter received an error from the ${subscriptionName} subscription: ${getErrorMessage(subject)}`,
+        );
+        return;
+      }
+      handleSubjectAsync(subject).catch((error) => {
+        logger.warn(
+          `FocusKeyboardRouter failed to handle ${failureDescription}: ${getErrorMessage(error)}`,
+        );
+      });
+    };
+  }
+
+  /**
    * Handles a `Focus` subject change (§4.6 item 2 / BHV-311..313, BHV-450 family; TS-019/020/066):
    *
    * 1. Samples the OS keyboard ONCE, before any write — the sample serves both the decision-#26
@@ -274,19 +286,7 @@ export class FocusKeyboardRouter {
     const osKeyboardIdNow = await this.getCurrentOsKeyboardIdSafeAsync();
     const nextSurface = await resolveProjectSurfaceAsync(focusSubject);
 
-    // Decision #26 focus-out append: the appended id is whatever is active at focus-out (the
-    // user's override OR the router's own focus-in activation — implementer decision I-2 follows
-    // the literal spec; flagged for CAP-015/UI review), never the about-to-be-restored default
-    if (
-      previousSurface &&
-      osKeyboardIdNow !== undefined &&
-      osKeyboardIdNow !== previousSurface.osKeyboardIdAtFocusIn
-    )
-      this.options.lastUsedKeyboardStore.append(
-        previousSurface.projectId,
-        previousSurface.surfaceType,
-        osKeyboardIdNow,
-      );
+    if (previousSurface) this.appendLastUsedKeyboardOnFocusOut(previousSurface, osKeyboardIdNow);
 
     this.focusedSurface = nextSurface
       ? { ...nextSurface, osKeyboardIdAtFocusIn: osKeyboardIdNow }
@@ -323,6 +323,29 @@ export class FocusKeyboardRouter {
     await this.activateConfiguredKeyboardAsync(
       focusedSurface.projectId,
       focusedSurface.surfaceType,
+    );
+  }
+
+  /**
+   * Decision-#26 focus-out append: the appended id is whatever is active at focus-out (the user's
+   * override OR the router's own focus-in activation — implementer decision I-2 follows the literal
+   * spec; flagged for CAP-015/UI review), never the about-to-be-restored default — the sample is
+   * taken BEFORE the restore write by construction. No append when the keyboard never changed while
+   * the surface was focused, or when the focus-out sample failed (`undefined`).
+   */
+  private appendLastUsedKeyboardOnFocusOut(
+    previousSurface: FocusedProjectSurface,
+    osKeyboardIdAtFocusOut: KeyboardId | undefined,
+  ): void {
+    if (
+      osKeyboardIdAtFocusOut === undefined ||
+      osKeyboardIdAtFocusOut === previousSurface.osKeyboardIdAtFocusIn
+    )
+      return;
+    this.options.lastUsedKeyboardStore.append(
+      previousSurface.projectId,
+      previousSurface.surfaceType,
+      osKeyboardIdAtFocusOut,
     );
   }
 
@@ -399,22 +422,18 @@ export class FocusKeyboardRouter {
     const configuredKeyboardId = await this.options.associationStore.get(projectId, surfaceType);
     if (configuredKeyboardId === undefined) return;
 
-    const keyboardIdToActivate = (await this.isKeyboardAvailableAsync(configuredKeyboardId))
-      ? configuredKeyboardId
-      : undefined;
-
-    if (keyboardIdToActivate === undefined) {
-      // §4.6 item 5 missing branch: notify on EVERY focus event (CAP-012 owns the cadence), then
-      // the unconditional system-default fallback (redundant OS writes are deduped by the CAP-010
-      // chokepoint — spec-013 disposition)
-      this.options.missingKeyboardNotifier.notify(configuredKeyboardId);
-      const systemDefaultKeyboardId = this.options.activationService.getSystemDefaultKeyboardId();
-      if (systemDefaultKeyboardId === undefined) return;
-      await this.activateGatedAsync(systemDefaultKeyboardId);
+    if (await this.isKeyboardAvailableAsync(configuredKeyboardId)) {
+      await this.activateGatedAsync(configuredKeyboardId);
       return;
     }
 
-    await this.activateGatedAsync(keyboardIdToActivate);
+    // §4.6 item 5 missing branch: notify on EVERY focus event (CAP-012 owns the cadence), then
+    // the unconditional system-default fallback (redundant OS writes are deduped by the CAP-010
+    // chokepoint — spec-013 disposition)
+    this.options.missingKeyboardNotifier.notify(configuredKeyboardId);
+    const systemDefaultKeyboardId = this.options.activationService.getSystemDefaultKeyboardId();
+    if (systemDefaultKeyboardId === undefined) return;
+    await this.activateGatedAsync(systemDefaultKeyboardId);
   }
 
   /**
