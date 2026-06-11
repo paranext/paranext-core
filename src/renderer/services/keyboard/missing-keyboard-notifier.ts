@@ -7,6 +7,8 @@
 // Maps to: CAP-012
 
 import type { KeyboardId } from '@shared/services/keyboard.service-model';
+import { notificationService } from '@shared/services/notification.service';
+import { logger } from '@shared/services/logger.service';
 
 /**
  * Once-per-session dedup gate for the missing-keyboard notification (VAL-B-05 / INV-C09).
@@ -20,6 +22,13 @@ import type { KeyboardId } from '@shared/services/keyboard.service-model';
  */
 export class MissingKeyboardNotifier {
   /**
+   * Suppression cache (VAL-B-05 / INV-C09): keyboard ids already notified this session. Keyed by
+   * the missing keyboard id ALONE (phase-2-decisions R-4) — surface type and project never widen
+   * it. Instance state, so a fresh notifier (new app session) starts with an empty cache.
+   */
+  private readonly notifiedKeyboardIds = new Set<KeyboardId>();
+
+  /**
    * Surface the missing-keyboard notification for `missingKeyboardId`, at most once per id per
    * session. Fire-and-forget: never throws; send failures are logged.
    *
@@ -29,10 +38,28 @@ export class MissingKeyboardNotifier {
    *   keyboard. Currently NOT interpolated into the message (bare-localize-key send per CAP-010
    *   decision I-2 / BA-RF-007); accepted so the future interpolation path needs no caller change.
    */
-  // eslint-disable-next-line @typescript-eslint/class-methods-use-this -- RED stub (CAP-012); implementation will use instance suppression state
   notify(missingKeyboardId: KeyboardId, projectShortName?: string): void {
-    throw new Error(
-      `Not implemented (CAP-012 RED stub): notify(${missingKeyboardId}, ${projectShortName})`,
-    );
+    if (this.notifiedKeyboardIds.has(missingKeyboardId)) return;
+    // Add BEFORE the async send settles so re-entrant detections during an in-flight send stay
+    // suppressed. A FAILED send also stays suppressed — deliberately unpinned (plan D6), minimal.
+    this.notifiedKeyboardIds.add(missingKeyboardId);
+
+    notificationService
+      .send({
+        // Bare localize key — the platform localizes at render time; projectShortName is NOT
+        // interpolated (CAP-010 decision I-2 / BA-RF-007; English default is parameter-free)
+        message: '%keyboardSwitching_missingKeyboardFallback%',
+        severity: 'warning',
+        // Defense-in-depth dedup: if a duplicate ever slips through, the platform REPLACES the
+        // live toast for the same id instead of stacking (backend-alignment §Events scheme)
+        notificationId: `keyboardSwitching:missingKeyboard:${missingKeyboardId}`,
+      })
+      .catch((error) => {
+        // Fire-and-forget must not leak a rejection, but errors are not invisible
+        // (data-contracts §3.4) — projectShortName is surfaced here as log context only
+        logger.error(
+          `keyboard-switching: failed to send missing-keyboard notification for keyboard '${missingKeyboardId}' (project '${projectShortName ?? '<unknown>'}'): ${error}`,
+        );
+      });
   }
 }
