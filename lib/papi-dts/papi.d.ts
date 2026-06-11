@@ -3127,6 +3127,7 @@ declare module 'shared/models/data-provider-engine.model' {
     DataProviderGetters,
     DataProviderUpdateInstructions,
     DataProviderSetters,
+    DataTypeNames,
   } from 'shared/models/data-provider.model';
   import { NetworkableObject } from 'shared/models/network-object.model';
   /**
@@ -3295,6 +3296,24 @@ declare module 'shared/models/data-provider-engine.model' {
     DataProviderGetters<TDataTypes> &
     Partial<WithNotifyUpdate<TDataTypes>>;
   export default IDataProviderEngine;
+  /**
+   * Figures out the data types serviced by a data provider engine by grouping the names of its
+   * functions: each `get<data_type>`/`set<data_type>` function (unless decorated with papi's
+   * `@ignore`) groups under `'get'`/`'set'` as its data type name, and every other function groups
+   * under `'other'` (as an empty string).
+   *
+   * Validates that the engine has a matching `set<data_type>` for every `get<data_type>` and vice
+   * versa — papi's data provider registration enforces this pairing before it builds a data provider
+   * over the engine. A read-only data type still needs a `set<data_type>`; it can always throw or
+   * return false (see {@link IDataProviderEngine}).
+   *
+   * @param dataProviderEngine Data provider engine whose functions to group by data type
+   * @returns Map of function kind to the data type names of the engine's functions of that kind
+   * @throws If the engine's `get<data_type>` and `set<data_type>` data types do not match
+   */
+  export function getDataProviderEngineDataTypeFunctions<TDataTypes extends DataProviderDataTypes>(
+    dataProviderEngine: IDataProviderEngine<TDataTypes>,
+  ): Map<'get' | 'set' | 'other', DataTypeNames<TDataTypes>[]>;
   /**
    *
    * Abstract class that provides a placeholder `notifyUpdate` for data provider engine classes. If a

@@ -3,8 +3,11 @@ import {
   DataProviderGetters,
   DataProviderUpdateInstructions,
   DataProviderSetters,
+  DataTypeNames,
+  getDataProviderDataTypeFromFunctionName,
 } from '@shared/models/data-provider.model';
 import { NetworkableObject } from '@shared/models/network-object.model';
+import { getAllObjectFunctionNames, groupBy, startsWith } from 'platform-bible-utils';
 
 // Note: the following comment uses ＠, not the actual @ character, to hackily provide @param and
 // such on this object. JSDoc does not usually carry these to classes inheriting from
@@ -144,6 +147,65 @@ export type IDataProviderEngine<TDataTypes extends DataProviderDataTypes = DataP
     Partial<WithNotifyUpdate<TDataTypes>>;
 
 export default IDataProviderEngine;
+
+/**
+ * Figures out the data types serviced by a data provider engine by grouping the names of its
+ * functions: each `get<data_type>`/`set<data_type>` function (unless decorated with papi's
+ * `@ignore`) groups under `'get'`/`'set'` as its data type name, and every other function groups
+ * under `'other'` (as an empty string).
+ *
+ * Validates that the engine has a matching `set<data_type>` for every `get<data_type>` and vice
+ * versa — papi's data provider registration enforces this pairing before it builds a data provider
+ * over the engine. A read-only data type still needs a `set<data_type>`; it can always throw or
+ * return false (see {@link IDataProviderEngine}).
+ *
+ * @param dataProviderEngine Data provider engine whose functions to group by data type
+ * @returns Map of function kind to the data type names of the engine's functions of that kind
+ * @throws If the engine's `get<data_type>` and `set<data_type>` data types do not match
+ */
+export function getDataProviderEngineDataTypeFunctions<TDataTypes extends DataProviderDataTypes>(
+  dataProviderEngine: IDataProviderEngine<TDataTypes>,
+): Map<'get' | 'set' | 'other', DataTypeNames<TDataTypes>[]> {
+  // We need an untyped version of the DPE so we can look up string-template-mapped-type properties
+  // on it even though the strings that get templated are one of many possibilities. It seems
+  // TypeScript is unable to distinguish that `DataTypeNames<TDataTypes>` is one specific set of
+  // names of data types
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const dataProviderEngineUntyped = dataProviderEngine as typeof dataProviderEngine & {
+    // The index signature requires `any` to allow dynamic property access on the intersection type.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    [key: string]: any;
+  };
+  // Figure out the available get/set methods' data types
+  const dataTypes = groupBy<string, 'get' | 'set' | 'other', DataTypeNames<TDataTypes>>(
+    [...getAllObjectFunctionNames(dataProviderEngine)],
+    (fnName) => {
+      // If the function was decorated with @ignore, do not consider it a special function
+      if (dataProviderEngineUntyped[fnName].isIgnored) return 'other';
+
+      if (startsWith(fnName, 'get')) return 'get';
+      if (startsWith(fnName, 'set')) return 'set';
+      return 'other';
+    },
+    (fnName, fnType) => {
+      // If it's not a get or a set, just return an empty string. We aren't planning to use this
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      if (fnType === 'other') return '' as DataTypeNames<TDataTypes>;
+
+      // Grab the data type out of the function names
+      return getDataProviderDataTypeFromFunctionName<TDataTypes>(fnName);
+    },
+  );
+
+  // Validate that the data provider engine has matching get and set functions
+  if (
+    dataTypes.get('get')?.length !== dataTypes.get('set')?.length ||
+    dataTypes.get('get')?.some((getDataType) => !dataTypes.get('set')?.includes(getDataType))
+  )
+    throw new Error('Data provider engine does not have matching get and set functions!');
+
+  return dataTypes;
+}
 
 /**
  * JSDOC SOURCE DataProviderEngine

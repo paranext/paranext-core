@@ -2,16 +2,16 @@
 // carried over from CAP-015 (implementer plan decisions I-8 and I-3).
 //
 // I-8 (BLOCKING): the engine's four read-only data types (`ProjectDefaultKeyboards`,
-// `SystemDefaultKeyboard`, `AvailableKeyboards`, `LastUsedKeyboards`) currently have NO `set*`
-// members, but the REAL `buildDataProvider` (src/shared/services/data-provider.service.ts:704-709)
+// `SystemDefaultKeyboard`, `AvailableKeyboards`, `LastUsedKeyboards`) must each carry a `set*`
+// member, because the REAL `buildDataProvider` (src/shared/services/data-provider.service.ts)
 // THROWS "Data provider engine does not have matching get and set functions!" at registration —
 // renderer startup would crash the moment `registerEngine` runs unmocked. The platform precedent
 // for read-only data types is a THROWING setter (localization.service-host.ts `setLocalizedString`
-// et al.). The parity test below replays the real validation's grouping logic — built from the
-// SAME `platform-bible-utils` functions the platform uses — against the engine that `initialize()`
-// registers, so registration can never crash startup. The companion behavior pin (setters exist
-// but always reject and never mutate/emit) lives in keyboard.service-host.test.ts (revised
-// CAP-015 read-only pin).
+// et al.). The parity test below runs the REAL validation (`buildDataProvider`'s
+// `getDataProviderEngineDataTypeFunctions`, exported from data-provider-engine.model — no drift
+// possible) against the engine that `initialize()` registers, so registration can never crash
+// startup. The companion behavior pin (setters exist but always reject and never mutate/emit)
+// lives in keyboard.service-host.test.ts (revised CAP-015 read-only pin).
 //
 // I-3: CAP-009's `resolveLegacyProjectKey` seam (EXT-106 pre-Guid migration, CAP-009 plan
 // D-SEAM-2) is unwired in the composition root — legacy ≤20-char short-name entries silently drop
@@ -22,8 +22,12 @@
 // implementer-CAP-015.md decisions I-8, I-3; CAP-009 test-writer plan D-SEAM-2.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getAllObjectFunctionNames, groupBy, startsWith } from 'platform-bible-utils';
-import type { KeyboardId, KeyboardSurfaceType } from '@shared/services/keyboard.service-model';
+import { getDataProviderEngineDataTypeFunctions } from '@shared/models/data-provider-engine.model';
+import type {
+  KeyboardId,
+  KeyboardServiceDataTypes,
+  KeyboardSurfaceType,
+} from '@shared/services/keyboard.service-model';
 import { osKeyboardServiceProviderName } from '@shared/services/keyboard.service-model';
 import { keyboardsByProjectSettingKey } from '@renderer/services/keyboard/keyboard-association-store';
 import type { KeyboardSwitchingDataProviderEngine } from '@renderer/services/keyboard.service-host';
@@ -190,32 +194,6 @@ async function initializeHost(): Promise<KeyboardSwitchingDataProviderEngine> {
   return registeredEngine;
 }
 
-/**
- * Replays the REAL registration validation grouping from `buildDataProvider`
- * (src/shared/services/data-provider.service.ts:680-709) with the same exported
- * `platform-bible-utils` functions the platform uses: every function name groups as 'get' / 'set' /
- * 'other' (honoring the `isIgnored` decoration), and the data-type name is the function name minus
- * its get/set prefix. KEEP IN SYNC with buildDataProvider (drift risk flagged in
- * test-writer-CAP-016.md — a refactorer could export this validation from data-provider.service).
- */
-function groupEngineDataTypeFunctions(
-  engine: KeyboardSwitchingDataProviderEngine,
-): Map<'get' | 'set' | 'other', string[]> {
-  // Same untyped function-table view the real validation takes of the engine
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const engineUntyped = engine as unknown as { [property: string]: { isIgnored?: boolean } };
-  return groupBy(
-    [...getAllObjectFunctionNames(engineUntyped)],
-    (fnName): 'get' | 'set' | 'other' => {
-      if (engineUntyped[fnName].isIgnored) return 'other';
-      if (startsWith(fnName, 'get')) return 'get';
-      if (startsWith(fnName, 'set')) return 'set';
-      return 'other';
-    },
-    (fnName, fnType) => (fnType === 'other' ? '' : fnName.substring(3)),
-  );
-}
-
 beforeEach(() => {
   localStorage.clear();
   capturedStoreOptions.length = 0;
@@ -286,18 +264,20 @@ beforeEach(() => {
 });
 
 describe('registration viability against the real buildDataProvider validation (I-8)', () => {
-  // data-provider.service.ts:704-709 throws when the get and set data-type lists differ — the
-  // engine must therefore carry a setter for EVERY data type it serves (read-only ones throw,
-  // localization.service-host precedent), or real registration crashes renderer startup
+  // buildDataProvider's getDataProviderEngineDataTypeFunctions throws when the get and set
+  // data-type lists differ — the engine must therefore carry a setter for EVERY data type it
+  // serves (read-only ones throw, localization.service-host precedent), or real registration
+  // crashes renderer startup
   it('registers an engine whose get/set data-type lists match (real registerEngine precondition)', async () => {
     const engine = await initializeHost();
 
-    const dataTypeFunctions = groupEngineDataTypeFunctions(engine);
+    // The REAL validation registration runs — throws the real registration error on any mismatch
+    const dataTypeFunctions =
+      getDataProviderEngineDataTypeFunctions<KeyboardServiceDataTypes>(engine);
+
+    // Spell the enforced condition out too (same-length + same-members) for readable diagnostics
     const getDataTypes = [...(dataTypeFunctions.get('get') ?? [])].sort();
     const setDataTypes = [...(dataTypeFunctions.get('set') ?? [])].sort();
-
-    // Same-length + same-members is exactly the condition buildDataProvider enforces before it
-    // builds the provider; sorted equality covers both directions
     expect(setDataTypes).toEqual(getDataTypes);
   });
 });
