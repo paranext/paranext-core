@@ -260,15 +260,17 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
   }
 
   private onClientConnect(webSocket: WebSocket): void {
+    const socketId = this.nextSocketId;
     const rpcServer = new RpcServer(
-      this.nextSocketId,
+      socketId,
       webSocket,
       this.propagateEvent,
       this.rpcMethodDetailsByMethodName,
     );
     rpcServer.connect();
     this.rpcServerBySocket.set(webSocket, rpcServer);
-    logger.warn(`Websocket client connected: ${webSocket.url}`);
+    // Note: `webSocket.url` is always undefined for server-side sockets, so log the socket id
+    logger.info(`Websocket client ${socketId} connected`);
     webSocket.addEventListener('close', this.onClientDisconnect);
   }
 
@@ -278,7 +280,7 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
     const webSocket = ev.target as WebSocket;
     webSocket.removeEventListener('close', this.onClientDisconnect);
     if (!this.rpcServerBySocket.delete(webSocket)) {
-      logger.warn(`Close called on socket for '${webSocket.url}' but no handler found`);
+      logger.warn('Close called on a websocket, but no rpc server handler was found for it');
     }
   }
 }
