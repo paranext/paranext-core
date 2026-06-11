@@ -1,5 +1,9 @@
 import { describe, it, expect, expectTypeOf } from 'vitest';
-import { getEmptyNotificationDocs } from '@shared/models/openrpc.model';
+import {
+  EXPERIMENTAL_OPENRPC_PREFIX,
+  getEmptyNotificationDocs,
+  withExperimentalPrefix,
+} from '@shared/models/openrpc.model';
 import type {
   Method,
   Notification,
@@ -76,5 +80,40 @@ describe('openrpc.model — experimental marker types', () => {
     const entry: Notification = { name: 'myExt.undocumented', ...docs };
     expect(entry.name).toBe('myExt.undocumented');
     expect(Object.isFrozen(docs)).toBe(true);
+  });
+
+  it('withExperimentalPrefix prepends EXPERIMENTAL: to experimental entries only', () => {
+    const experimental: Method = {
+      name: 'x',
+      params: [],
+      result: { name: 'r', schema: {} },
+      'x-experimental': true,
+      summary: 'Does the thing',
+      description: 'Long description',
+    };
+    const prefixed = withExperimentalPrefix(experimental);
+    expect(prefixed.summary).toBe(`${EXPERIMENTAL_OPENRPC_PREFIX}Does the thing`);
+    expect(prefixed.description).toBe(`${EXPERIMENTAL_OPENRPC_PREFIX}Long description`);
+    // Original is not mutated.
+    expect(experimental.summary).toBe('Does the thing');
+  });
+
+  it('withExperimentalPrefix is a no-op for non-experimental entries', () => {
+    const stable: Method = {
+      name: 'x',
+      params: [],
+      result: { name: 'r', schema: {} },
+      summary: 'Does the thing',
+    };
+    const result = withExperimentalPrefix(stable);
+    expect(result.summary).toBe('Does the thing');
+    expect(result).toBe(stable);
+  });
+
+  it('withExperimentalPrefix leaves missing summary/description untouched', () => {
+    const notification: Notification = { name: 'evt', params: [], 'x-experimental': true };
+    const prefixed = withExperimentalPrefix(notification);
+    expect(prefixed.summary).toBeUndefined();
+    expect(prefixed.description).toBeUndefined();
   });
 });

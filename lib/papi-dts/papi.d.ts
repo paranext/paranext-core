@@ -1209,6 +1209,15 @@ declare module 'shared/models/openrpc.model' {
    * document (mirroring how undocumented methods are surfaced via {@link getEmptyMethodDocs}).
    */
   export function getEmptyNotificationDocs(): Omit<MethodDocumentationWithoutName, 'result'>;
+  /** Prefix prepended to the `summary` and `description` of experimental methods and notifications. */
+  export const EXPERIMENTAL_OPENRPC_PREFIX = 'EXPERIMENTAL: ';
+  /**
+   * Returns a shallow copy of an OpenRPC {@link Method} or {@link Notification} with
+   * {@link EXPERIMENTAL_OPENRPC_PREFIX} prepended to its `summary` and `description` when the entry is
+   * marked `'x-experimental'`. Returns the entry unchanged when it is not experimental. Call this on a
+   * freshly-built entry so the prefix is applied at most once.
+   */
+  export function withExperimentalPrefix<T extends Method | Notification>(entry: T): T;
 }
 declare module 'shared/services/shared-store.service' {
   /**

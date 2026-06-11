@@ -25,6 +25,7 @@ const STORE_CHANGE_EVENT = `${SHARED_STORE_PREFIX}:change` as 'shared-store:chan
 /** OpenRPC notification documentation for the {@link STORE_CHANGE_EVENT} network event. */
 const STORE_CHANGE_EVENT_DOCS: SingleNotificationDocumentation = {
   notification: {
+    'x-experimental': true,
     summary: 'Emitted when a value in the shared store changes.',
     params: [
       {
@@ -171,6 +172,7 @@ export function initialize(networkService: NetworkService): Promise<void> {
         (key?: string) => (key === undefined ? { ...localStore } : localStore[key]?.value),
         {
           method: {
+            'x-experimental': true,
             summary: 'Get values from the shared store',
             params: [
               {

@@ -289,3 +289,22 @@ Object.freeze(emptyNotificationDocs.params);
 export function getEmptyNotificationDocs(): Omit<MethodDocumentationWithoutName, 'result'> {
   return emptyNotificationDocs;
 }
+
+/** Prefix prepended to the `summary` and `description` of experimental methods and notifications. */
+export const EXPERIMENTAL_OPENRPC_PREFIX = 'EXPERIMENTAL: ';
+
+/**
+ * Returns a shallow copy of an OpenRPC {@link Method} or {@link Notification} with
+ * {@link EXPERIMENTAL_OPENRPC_PREFIX} prepended to its `summary` and `description` when the entry is
+ * marked `'x-experimental'`. Returns the entry unchanged when it is not experimental. Call this on
+ * a freshly-built entry so the prefix is applied at most once.
+ */
+export function withExperimentalPrefix<T extends Method | Notification>(entry: T): T {
+  if (!entry['x-experimental']) return entry;
+  const prefixed = { ...entry };
+  if (prefixed.summary !== undefined)
+    prefixed.summary = `${EXPERIMENTAL_OPENRPC_PREFIX}${prefixed.summary}`;
+  if (prefixed.description !== undefined)
+    prefixed.description = `${EXPERIMENTAL_OPENRPC_PREFIX}${prefixed.description}`;
+  return prefixed;
+}
