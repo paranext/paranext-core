@@ -559,7 +559,8 @@
       "%webView_platformScripture_markersChecklist_viewColumn%": "View",
       "%webView_platformScripture_markersChecklist_settings%": "Settings",
       "%manageBooks_openMenuItem%": "Manage books",
-      "%manageBooks_sidebar_projectPlaceholder%": "Select project"
+      "%manageBooks_sidebar_projectPlaceholder%": "Select project",
+      "%keyboardSwitching_autoSwitched%": "Keyboard switched to {keyboardName}"
     },
     "es": {
       "%inventoryName_Character%": "Inventario de caracteres",
