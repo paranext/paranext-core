@@ -43,6 +43,13 @@ internal sealed class IbusKeyboardApi : IIbusKeyboardApi
     // keyboard read/activation indefinitely.
     private static readonly TimeSpan s_callTimeout = TimeSpan.FromSeconds(5);
 
+    // Where D-Bus publishes the machine id, in lookup order (matches ibusshare.c).
+    private static readonly string[] s_machineIdPaths =
+    [
+        "/var/lib/dbus/machine-id",
+        "/etc/machine-id",
+    ];
+
     public IReadOnlyList<IbusEngineDescriptor> ListEngines()
     {
         // Sync-over-async is safe here: the data-provider process has no
@@ -305,7 +312,7 @@ internal sealed class IbusKeyboardApi : IIbusKeyboardApi
 
     private static string GetMachineId()
     {
-        foreach (string path in (string[])["/var/lib/dbus/machine-id", "/etc/machine-id"])
+        foreach (string path in s_machineIdPaths)
         {
             try
             {

@@ -5,8 +5,8 @@ namespace Paranext.DataProvider.KeyboardSwitching.Keyboarding;
 // === NEW IN PT10 ===
 // Reason: PT10-only Linux OS-keyboard primitive — PT9 is Windows-only and has no Linux
 // keyboard layer; PT10 owns IBus over D-Bus directly behind IIbusKeyboardApi (FN-002;
-// library decision BA-RF-005: Tmds.DBus.Protocol, Linux-conditional — to be documented
-// in implementation/decisions/keyboarding-linux.md). PT9 behavior anchors: BHV-305 (OS
+// library decision BA-RF-005: Tmds.DBus.Protocol, referenced unconditionally — documented
+// in implementation/decisions/keyboarding-linux.md §1). PT9 behavior anchors: BHV-305 (OS
 // keyboard enumeration), BHV-450/BHV-451 (lifecycle restore-default relies on activate +
 // get-current working at the OS layer).
 // Maps to: CAP-005
