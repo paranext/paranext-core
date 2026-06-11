@@ -71,6 +71,15 @@ const SURFACE_TYPE_REQUIRES_WEB_VIEW_LOCALIZE_KEY: LocalizeKey =
 const OS_QUERY_FAILED_LOCALIZE_KEY: LocalizeKey = '%keyboardSwitching_osQueryFailed%';
 
 /**
+ * The "no project context" `CurrentKeyboard` attribution: ad-hoc activations and the state before
+ * any engine-driven set carry no project/surface pairing (frozen — only ever swapped wholesale).
+ */
+const AD_HOC_KEYBOARD_CONTEXT: Pick<CurrentKeyboard, 'projectId' | 'surfaceType'> = Object.freeze({
+  projectId: undefined,
+  surfaceType: undefined,
+});
+
+/**
  * Builds a wire-boundary {@link PlatformError}: the message is resolved through
  * `localizationService` (mandatory localization for user-facing wire errors — backend-alignment
  * §"Error Codes" TS wire pattern), optionally suffixed with a non-localized diagnostic detail.
@@ -90,14 +99,19 @@ function isKnownSurfaceType(surfaceType: KeyboardSurfaceType): boolean {
 }
 
 /**
- * True iff the given webview is the currently-focused focus subject (the engine's focus-guard
- * source — `windowService.getFocus`, NOT the CAP-014 router's tracked state: a focused WebView
- * without a `keyboardPreference` is not a project surface, so the router never tracks it, but the
- * reset 6-case table still needs to see it as focused).
+ * The currently-focused webview's id, or `undefined` when focus is not on a webview. This is the
+ * engine's focus-guard source — `windowService.getFocus`, NOT the CAP-014 router's tracked state: a
+ * focused WebView without a `keyboardPreference` is not a project surface, so the router never
+ * tracks it, but the focus guards and the reset 6-case table still need to see it as focused.
  */
-async function isWebViewFocusedAsync(webViewId: WebViewId): Promise<boolean> {
+async function getFocusedWebViewIdAsync(): Promise<WebViewId | undefined> {
   const focusSubject = await windowService.getFocus(undefined);
-  return focusSubject.focusType === 'webView' && focusSubject.id === webViewId;
+  return focusSubject.focusType === 'webView' ? focusSubject.id : undefined;
+}
+
+/** True iff the given webview is the currently-focused focus subject. */
+async function isWebViewFocusedAsync(webViewId: WebViewId): Promise<boolean> {
+  return (await getFocusedWebViewIdAsync()) === webViewId;
 }
 
 /** Construction seams for {@link KeyboardSwitchingDataProviderEngine} — wired by {@link initialize}. */
@@ -138,10 +152,7 @@ export class KeyboardSwitchingDataProviderEngine extends DataProviderEngine<Keyb
    * ({@link setCurrentKeyboard}); both `undefined` for ad-hoc activations and before any engine set.
    * Paired with the live OS keyboard id by {@link getCurrentKeyboard}.
    */
-  private currentKeyboardContext: Pick<CurrentKeyboard, 'projectId' | 'surfaceType'> = {
-    projectId: undefined,
-    surfaceType: undefined,
-  };
+  private currentKeyboardContext = AD_HOC_KEYBOARD_CONTEXT;
 
   constructor(options: KeyboardSwitchingDataProviderEngineOptions) {
     super();
@@ -285,30 +296,10 @@ export class KeyboardSwitchingDataProviderEngine extends DataProviderEngine<Keyb
     if (selector !== undefined && !(await isWebViewFocusedAsync(selector)))
       throw await createWireErrorAsync(WEBVIEW_NOT_FOCUSED_LOCALIZE_KEY, NOT_FOUND, selector);
 
-    let keyboardIdToActivate: KeyboardId | undefined;
-    let nextContext: Pick<CurrentKeyboard, 'projectId' | 'surfaceType'> = {
-      projectId: undefined,
-      surfaceType: undefined,
-    };
-
-    if ('keyboardId' in value) {
-      keyboardIdToActivate = value.keyboardId;
-    } else {
-      if (selector === undefined)
-        throw await createWireErrorAsync(
-          SURFACE_TYPE_REQUIRES_WEB_VIEW_LOCALIZE_KEY,
-          INVALID_ARGUMENT,
-          value.surfaceType,
-        );
-      // The VALUE's surfaceType drives the lookup (not the webview's own keyboardPreference)
-      const webViewDefinition = await webViewService.getOpenWebViewDefinition(selector);
-      const projectId = webViewDefinition?.projectId;
-      keyboardIdToActivate =
-        projectId !== undefined
-          ? await this.options.associationStore.get(projectId, value.surfaceType)
-          : undefined;
-      nextContext = { projectId, surfaceType: value.surfaceType };
-    }
+    const { keyboardIdToActivate, nextContext } = await this.resolveSetCurrentKeyboardTargetAsync(
+      selector,
+      value,
+    );
 
     // CAP-010 chokepoint (plan decision I-2): records the id pre-write so the CAP-014 detector
     // never misattributes this engine write as a user switch; a no-resolution `undefined` target
@@ -337,8 +328,7 @@ export class KeyboardSwitchingDataProviderEngine extends DataProviderEngine<Keyb
    * @returns `true` when a keyboard activation was performed.
    */
   async resetCurrentKeyboard(webViewId: WebViewId | undefined): Promise<boolean> {
-    const focusSubject = await windowService.getFocus(undefined);
-    const focusedWebViewId = focusSubject.focusType === 'webView' ? focusSubject.id : undefined;
+    const focusedWebViewId = await getFocusedWebViewIdAsync();
 
     // Case 6: a specified webview that is not currently focused — reject before any OS write
     if (webViewId !== undefined && webViewId !== focusedWebViewId)
@@ -346,6 +336,41 @@ export class KeyboardSwitchingDataProviderEngine extends DataProviderEngine<Keyb
 
     const keyboardIdToActivate = await this.resolveResetTargetAsync(webViewId ?? focusedWebViewId);
     return this.options.activationService.activateAsync(keyboardIdToActivate);
+  }
+
+  /**
+   * Resolves the activation target and the next {@link CurrentKeyboard} attribution for
+   * {@link setCurrentKeyboard} (the BA-RF-002 value kinds, after the focus guard): a `keyboardId`
+   * value is an ad-hoc direct activation (no project context); a `surfaceType` value requires a
+   * webview selector (else `KEYBOARDING_INVALID_ARGUMENT`) and resolves that webview's project
+   * default for the VALUE's surfaceType (not the webview's own `keyboardPreference`).
+   */
+  private async resolveSetCurrentKeyboardTargetAsync(
+    selector: WebViewId | undefined,
+    value: SetCurrentKeyboardValue,
+  ): Promise<{
+    keyboardIdToActivate: KeyboardId | undefined;
+    nextContext: Pick<CurrentKeyboard, 'projectId' | 'surfaceType'>;
+  }> {
+    if ('keyboardId' in value)
+      return { keyboardIdToActivate: value.keyboardId, nextContext: AD_HOC_KEYBOARD_CONTEXT };
+
+    if (selector === undefined)
+      throw await createWireErrorAsync(
+        SURFACE_TYPE_REQUIRES_WEB_VIEW_LOCALIZE_KEY,
+        INVALID_ARGUMENT,
+        value.surfaceType,
+      );
+
+    const webViewDefinition = await webViewService.getOpenWebViewDefinition(selector);
+    const projectId = webViewDefinition?.projectId;
+    return {
+      keyboardIdToActivate:
+        projectId !== undefined
+          ? await this.options.associationStore.get(projectId, value.surfaceType)
+          : undefined,
+      nextContext: { projectId, surfaceType: value.surfaceType },
+    };
   }
 
   /**
