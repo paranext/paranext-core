@@ -45,10 +45,18 @@ export class BiblicalTermsFilterKeyboardMap {
    * @param projectId The project whose Biblical Terms filter input gained focus.
    * @returns The keyboard target — see {@link BiblicalTermsKeyboardResolution}.
    */
+  // === PORTED FROM PT9 ===
+  // Source: PT9/Paratext/BiblicalTerms/Internal/Filters/BiblicalTermsTextFilterAdapter.cs:63-73
+  // Method: BiblicalTermsTextFilterAdapter..ctor (GotFocus lambda)
+  // Maps to: EXT-153 / BHV-356
   static resolve(filterType: string, projectId: ProjectId): BiblicalTermsKeyboardResolution {
-    // RED stub (CAP-013): contracted surface only — implementer replaces this body
-    throw new Error(
-      `Not implemented (CAP-013 RED stub) — resolve('${filterType}', '${projectId}')`,
-    );
+    // PT9: `filterType == Glossary || filterType == Renderings → GetKeyboard(scrText, false)`
+    if (filterType === 'Glossary' || filterType === 'Renderings')
+      return { projectId, surfaceType: 'vernacular' };
+    // PT9: `filterType == Notes → GetKeyboard(scrText, true)` — PT9 "notes" ≙ PT10 'comments'
+    // (data-contracts §2.5 naming note)
+    if (filterType === 'Notes') return { projectId, surfaceType: 'comments' };
+    // PT9: `else → ActivateDefaultKeyboard(scrText)` — also the unknown/future-string fallback
+    return { systemDefault: true };
   }
 }
