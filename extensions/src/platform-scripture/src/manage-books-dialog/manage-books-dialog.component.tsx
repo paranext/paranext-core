@@ -203,8 +203,10 @@ export type ManageBooksDialogProps = {
   onMutationResult?: (result: MutationResult) => void;
 
   /**
-   * (A2) Whether the project is shared with other users. When true, the delete-confirm prompt shows
-   * enhanced "they will see this change immediately" copy. Defaults to false.
+   * (A2) Whether the project is shared with other users (PT9: `ScrText.IsProjectShared` with more
+   * than one registered user). When true, the delete-confirm prompt warns that the books will be
+   * deleted for ALL users when they next Send/Receive — in both the partial and the all-books
+   * variants. Defaults to false.
    */
   isSharedProject?: boolean;
 
@@ -1730,11 +1732,28 @@ export function ManageBooksDialog({
   })();
 
   // -- A2 Delete confirm helpers ------------------------------------------
+  // Four body variants: {all, partial} x {shared, not shared}. The shared
+  // warning takes precedence in BOTH selection shapes — PT9 always replaced
+  // the standard confirm with the shared-users warning (DeleteBooksForm.cs),
+  // and the previous PT10 branch order dropped it exactly in the
+  // highest-impact case (deleting every book of a shared project). The
+  // wording is S/R-accurate per the Manila UX follow-up: deletion is local
+  // until other users Send/Receive — the old copy falsely claimed "they will
+  // see this change immediately" (old key redirected via metadata
+  // fallbackKey).
   const deleteConfirmBody = (() => {
     if (!deleteConfirm) return '';
     const n = deleteConfirm.books.length;
     const dest = project.shortName;
     const allSelected = n === current.present.size;
+    if (allSelected && isSharedProject)
+      return fmtTemplate(
+        t(
+          '%manageBooks_delete_confirmBodyAllShared%',
+          'All books will be deleted from {0}, which is shared with other users. The books will be deleted for ALL users when they next Send/Receive. The project itself will not be deleted. This cannot be undone.',
+        ),
+        dest,
+      );
     if (allSelected)
       return fmtTemplate(
         t(
@@ -1746,8 +1765,8 @@ export function ManageBooksDialog({
     if (isSharedProject)
       return fmtTemplate(
         t(
-          '%manageBooks_delete_confirmBodyShared%',
-          '{0} book(s) will be deleted from {1}, which is shared with other users. They will see this change immediately. This cannot be undone.',
+          '%manageBooks_delete_confirmBodySharedSendReceive%',
+          '{0} book(s) will be deleted from {1}, which is shared with other users. The books will be deleted for ALL users when they next Send/Receive. This cannot be undone.',
         ),
         n,
         dest,

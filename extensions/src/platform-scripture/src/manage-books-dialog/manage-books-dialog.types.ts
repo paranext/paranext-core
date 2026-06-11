@@ -303,7 +303,8 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_delete_confirmTitle%',
   '%manageBooks_delete_confirmBodyPartial%',
   '%manageBooks_delete_confirmBodyAll%',
-  '%manageBooks_delete_confirmBodyShared%',
+  '%manageBooks_delete_confirmBodySharedSendReceive%',
+  '%manageBooks_delete_confirmBodyAllShared%',
   '%manageBooks_delete_confirmCancel%',
   '%manageBooks_delete_confirmAccept%',
   // Sebastian review item 26 (2026-05-06, FE half): runDelete refreshes the destination book set
