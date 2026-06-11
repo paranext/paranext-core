@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Paranext.DataProvider.KeyboardSwitching.Keyboarding;
 using Paranext.DataProvider.NetworkObjects;
 
@@ -31,22 +32,60 @@ internal sealed class OsKeyboardDataProvider(
     IKeyboardingPrimitive keyboardingPrimitive
 ) : NetworkObjects.DataProvider("platform.osKeyboard", papiClient, NetworkObjectType.DATA_PROVIDER)
 {
+    private const string DATA_TYPE_CURRENT_OS_KEYBOARD = "CurrentOsKeyboard";
+
     private readonly IKeyboardingPrimitive _keyboardingPrimitive = keyboardingPrimitive;
 
+    // Must provide all functions that are part of the platform.osKeyboard surface in TS
     protected override List<(string functionName, Delegate function)> GetFunctions()
     {
-        // RED-phase stub (CAP-007 TDD): the tdd-implementer replaces this with the
-        // function-tuple list for getAvailableOsKeyboards / getCurrentOsKeyboard /
-        // setCurrentOsKeyboard delegating to _keyboardingPrimitive.
-        throw new NotImplementedException(
-            $"OsKeyboardDataProvider is not implemented yet (CAP-007 RED phase); "
-                + $"wrapping {_keyboardingPrimitive.GetType().Name}"
-        );
+        return
+        [
+            ("getAvailableOsKeyboards", GetAvailableOsKeyboards),
+            ("getCurrentOsKeyboard", GetCurrentOsKeyboard),
+            ("setCurrentOsKeyboard", SetCurrentOsKeyboardAsync),
+        ];
     }
 
     protected override Task StartDataProviderAsync()
     {
-        // RED-phase stub (CAP-007 TDD).
-        throw new NotImplementedException();
+        // No startup work: every get reads the primitive live so external OS
+        // keyboard changes are always reflected (no enumeration caching).
+        return Task.CompletedTask;
+    }
+
+    private IReadOnlyList<KeyboardOption> GetAvailableOsKeyboards(JsonElement _ignore)
+    {
+        return _keyboardingPrimitive.EnumerateAvailable();
+    }
+
+    private string? GetCurrentOsKeyboard(JsonElement _ignore)
+    {
+        return _keyboardingPrimitive.GetCurrentlyActiveKeyboardId();
+    }
+
+    private async Task<bool> SetCurrentOsKeyboardAsync(JsonElement _ignore, string keyboardId)
+    {
+        try
+        {
+            if (!await _keyboardingPrimitive.ActivateAsync(keyboardId))
+                return false;
+        }
+        catch (Exception ex)
+        {
+            // VAL-B-04: OS-layer activation errors are swallowed and logged, never
+            // propagated — keyboard activation failures must never block typing.
+            // (CAP-002 primitives promise not to throw; this is wire-boundary defense.)
+            Console.WriteLine(
+                $"OsKeyboardDataProvider: failed to activate keyboard '{keyboardId}': {ex}"
+            );
+            return false;
+        }
+
+        // Broadcast ONLY on success, awaited so the update is observable as soon as
+        // the set call resolves for every PAPI subscriber (deterministic, not
+        // fire-and-forget).
+        await SendDataUpdateEventAsync(DATA_TYPE_CURRENT_OS_KEYBOARD);
+        return true;
     }
 }
