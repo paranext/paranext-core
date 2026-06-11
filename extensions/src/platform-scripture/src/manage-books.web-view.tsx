@@ -677,7 +677,8 @@ global.webViewComponent = function ManageBooksWebView({
             fullName: fullName ?? p.name,
             isEditable: p.isEditable,
             // Forward the isResource flag so the dialog can filter resources
-            // out of the Copy "From" / Create "Based on" pickers.
+            // out of the Copy "From" picker (licensing). The Create "Based on"
+            // picker includes resources (structure-only read, PT9 parity).
             isResource: p.isResource,
           };
         }),

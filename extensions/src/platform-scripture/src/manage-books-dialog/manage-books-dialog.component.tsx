@@ -659,12 +659,26 @@ export function ManageBooksDialog({
   // `ManageBooksDialogProject` to that shape — `p.fullName` (sourced from `platform.fullName`
   // upstream) becomes the secondary label, falling back to `shortName` when no fullName is
   // configured. The target project itself is filtered out (already done in `otherProjects`).
+  const allOtherProjectsAsPS = useMemo<ProjectSelectorProject[]>(
+    () =>
+      otherProjects.map((p) => ({
+        id: p.id,
+        shortName: p.shortName,
+        fullName: p.fullName ?? p.shortName,
+      })),
+    [otherProjects],
+  );
+  // The Copy "From" picker excludes resources for licensing reasons — copying
+  // text OUT of a published resource into a project is not permitted (PT9
+  // parity: CopyBooksForm only lists IsNonProtectedText() sources). Read-only
+  // non-resource projects remain valid copy sources.
   //
-  // Exclude resource projects from the Copy "From" and Create "Based on"
-  // source pickers (copyright reasons). Read-only non-resource projects
-  // remain valid sources. The header project picker continues to include
-  // resources.
-  const otherProjectsAsPS = useMemo<ProjectSelectorProject[]>(
+  // The Create "Based on" picker deliberately INCLUDES resources: it only
+  // reads the reference's book/chapter structure to scaffold empty books, no
+  // text is copied (PT9 parity: CreateBooksForm's model combobox lists all
+  // accessible scripture texts including resources; Manila UX follow-up
+  // confirmed this).
+  const copyFromProjectsAsPS = useMemo<ProjectSelectorProject[]>(
     () =>
       otherProjects
         .filter((p) => !p.isResource)
@@ -1917,7 +1931,7 @@ export function ManageBooksDialog({
                   <div id="af-source" data-testid="manage-books-copy-source-trigger">
                     <ProjectSelector
                       mode="project"
-                      projects={otherProjectsAsPS}
+                      projects={copyFromProjectsAsPS}
                       openTabs={openTabs ?? []}
                       selection={{ projectId: copySourceId }}
                       onChangeSelection={({ projectId: nextId }) =>
@@ -2192,7 +2206,7 @@ export function ManageBooksDialog({
                   <div id="af-reference" data-testid="manage-books-create-reference-trigger">
                     <ProjectSelector
                       mode="project"
-                      projects={otherProjectsAsPS}
+                      projects={allOtherProjectsAsPS}
                       openTabs={openTabs ?? []}
                       selection={{ projectId: createReferenceId }}
                       onChangeSelection={({ projectId: nextId }) =>
