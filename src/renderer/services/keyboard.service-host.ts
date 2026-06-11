@@ -300,7 +300,7 @@ export class KeyboardSwitchingDataProviderEngine extends DataProviderEngine<Keyb
     if (selector !== undefined && !(await isWebViewFocusedAsync(selector)))
       throw await createWireErrorAsync(WEBVIEW_NOT_FOCUSED_LOCALIZE_KEY, NOT_FOUND, selector);
 
-    const { keyboardIdToActivate, nextContext } = await this.resolveSetCurrentKeyboardTargetAsync(
+    const { keyboardIdToActivate, nextContext } = await this.#resolveSetCurrentKeyboardTargetAsync(
       selector,
       value,
     );
@@ -395,7 +395,7 @@ export class KeyboardSwitchingDataProviderEngine extends DataProviderEngine<Keyb
     if (webViewId !== undefined && webViewId !== focusedWebViewId)
       throw await createWireErrorAsync(WEBVIEW_NOT_FOCUSED_LOCALIZE_KEY, NOT_FOUND, webViewId);
 
-    const keyboardIdToActivate = await this.resolveResetTargetAsync(webViewId ?? focusedWebViewId);
+    const keyboardIdToActivate = await this.#resolveResetTargetAsync(webViewId ?? focusedWebViewId);
     return this.options.activationService.activateAsync(keyboardIdToActivate);
   }
 
@@ -405,8 +405,13 @@ export class KeyboardSwitchingDataProviderEngine extends DataProviderEngine<Keyb
    * value is an ad-hoc direct activation (no project context); a `surfaceType` value requires a
    * webview selector (else `KEYBOARDING_INVALID_ARGUMENT`) and resolves that webview's project
    * default for the VALUE's surfaceType (not the webview's own `keyboardPreference`).
+   *
+   * ECMAScript-private (`#`), not TS `private`: `registerEngine` shares EVERY enumerable class
+   * method on the network (TS `private` is compile-time only), so a `#` method is the established
+   * service-host way (window/theme service-host precedent) to keep internal helpers off the
+   * `object:platform.keyboard-data.*` wire surface (P3B.5 runtime-verification finding).
    */
-  private async resolveSetCurrentKeyboardTargetAsync(
+  async #resolveSetCurrentKeyboardTargetAsync(
     selector: WebViewId | undefined,
     value: SetCurrentKeyboardValue,
   ): Promise<{
@@ -439,8 +444,11 @@ export class KeyboardSwitchingDataProviderEngine extends DataProviderEngine<Keyb
    * BOTH a `keyboardPreference` and a `projectId` resolves to that project's per-surface default
    * keyboard (cases 2/4); everything else — no webview focused, no `keyboardPreference`,
    * destroyed/unresolvable definition — falls back to the captured system default (cases 1/3/5).
+   *
+   * ECMAScript-private (`#`) to stay off the network wire surface — see
+   * {@link #resolveSetCurrentKeyboardTargetAsync}.
    */
-  private async resolveResetTargetAsync(
+  async #resolveResetTargetAsync(
     webViewId: WebViewId | undefined,
   ): Promise<KeyboardId | undefined> {
     if (webViewId !== undefined) {

@@ -177,8 +177,8 @@ export class KeyboardActivationService {
    *   auto-switch notification (alignment-decision #27)
    *
    * @returns `true` when the requested keyboard is active (including chokepoint no-ops); `false`
-   *   for the `undefined` no-op or a swallowed OS failure (plan D4 — the wire-level `activated:
-   *   true` coarsening is CAP-015 scope).
+   *   for the `undefined` no-op, a swallowed OS throw, or a graceful `false` from the OS provider
+   *   (the C# wire's VAL-B-04 failure signal — P3B.5 runtime-verification finding).
    */
   async activateAsync(keyboardId: KeyboardId | undefined): Promise<boolean> {
     if (keyboardId === undefined) return false;
@@ -187,8 +187,7 @@ export class KeyboardActivationService {
     this.lastActivatedKeyboardId = keyboardId;
 
     try {
-      await this.setCurrentKeyboardOnOs(keyboardId);
-      return true;
+      return await this.setCurrentKeyboardOnOs(keyboardId);
     } catch (error) {
       // INV-C04: OS-layer failures never propagate to callers
       logger.error(
@@ -204,23 +203,33 @@ export class KeyboardActivationService {
    * non-no-op write, emits the auto-switch notification (`%keyboardSwitching_autoSwitched%` / info
    * / 3000ms / `keyboardSwitching:autoSwitched`) unless
    * {@link SetCurrentKeyboardOnOsOptions.silent}.
+   *
+   * @returns `true` when the requested keyboard is active after the call (successful write OR
+   *   chokepoint no-op); `false` when the OS provider reported the activation failed. The C#
+   *   provider signals failure by RETURNING `false`, never by throwing (VAL-B-04 swallows at the
+   *   wire) — so the boolean is the ONLY failure signal for the common graceful-failure path (P3B.5
+   *   runtime-verification finding). No notification is sent for a failed activation.
    */
   async setCurrentKeyboardOnOs(
     keyboardId: KeyboardId,
     options?: SetCurrentKeyboardOnOsOptions,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const osKeyboardDataProvider = this.getOsKeyboardDataProviderOrThrow();
 
     // PTX-24331 PT10 disposition (FN-016 #5 / alignment-decision #7 / plan D6): activating the
     // already-active keyboard is suppressed entirely — PT9's force re-activation is dropped; the
     // IME regression-watch (implementation/decisions/ime-regression-watch.md) gates this drop
     const currentOsKeyboardId = await osKeyboardDataProvider.getCurrentOsKeyboard(undefined);
-    if (currentOsKeyboardId === keyboardId) return;
+    if (currentOsKeyboardId === keyboardId) return true;
 
-    await osKeyboardDataProvider.setCurrentOsKeyboard(undefined, keyboardId);
+    // VAL-B-04 wire contract: `false` (graceful failure, no onDidUpdate broadcast) is returned
+    // rather than thrown — honor it or failed activations masquerade as successes downstream
+    // (wire `true`, CurrentKeyboard update broadcast, spurious auto-switch toast)
+    if (!(await osKeyboardDataProvider.setCurrentOsKeyboard(undefined, keyboardId))) return false;
 
-    if (options?.silent) return;
+    if (options?.silent) return true;
     await notificationService.send(AUTO_SWITCH_NOTIFICATION);
+    return true;
   }
 
   /**

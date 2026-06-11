@@ -81,6 +81,7 @@ function createFakeOsKeyboardProvider(initialKeyboardId: KeyboardId = SYSTEM_DEF
   let currentKeyboardId: KeyboardId | undefined = initialKeyboardId;
   let throwOnGet = false;
   let throwOnSet = false;
+  let reportFalseOnSet = false;
   const subscribers: ((newKeyboardId: KeyboardId | undefined) => void)[] = [];
   const unsubscribe = vi.fn(() => {
     subscribers.length = 0;
@@ -93,6 +94,9 @@ function createFakeOsKeyboardProvider(initialKeyboardId: KeyboardId = SYSTEM_DEF
     }),
     setCurrentOsKeyboard: vi.fn(async (_selector: undefined, keyboardId: KeyboardId) => {
       if (throwOnSet) throw new Error('Fake OS keyboard activation failure');
+      // VAL-B-04 wire contract: the REAL C# provider never throws on activation failure — it
+      // swallows at the wire and returns `false` (no OS state change, no onDidUpdate broadcast)
+      if (reportFalseOnSet) return false;
       currentKeyboardId = keyboardId;
       return true;
     }),
@@ -114,6 +118,9 @@ function createFakeOsKeyboardProvider(initialKeyboardId: KeyboardId = SYSTEM_DEF
     },
     setThrowOnSet(value: boolean): void {
       throwOnSet = value;
+    },
+    setReportFalseOnSet(value: boolean): void {
+      reportFalseOnSet = value;
     },
   };
 }
@@ -244,6 +251,21 @@ describe('KeyboardActivationService — activateAsync contract (spec-007 / TS-05
 
     expect(activated).toBe(false);
     expect(mockLoggerError).toHaveBeenCalled();
+    expect(mockNotificationSend).not.toHaveBeenCalled();
+  });
+
+  // P3B.5 runtime-verification finding (VAL-B-04 wire contract): the REAL C# provider reports
+  // activation failure by RETURNING `false` — it never throws (failures are swallowed at the
+  // wire). Before this was honored, a failed activation reported success up the whole chain:
+  // wire `true`, a CurrentKeyboard update broadcast, and a spurious auto-switch toast (observed
+  // live on Linux-without-IBus with a bogus keyboard id).
+  it('honors a graceful `false` from the OS provider (VAL-B-04): returns false, no notification', async () => {
+    const service = await createInitializedService();
+    fakeOsKeyboard.setReportFalseOnSet(true);
+
+    const activated = await service.activateAsync('ar-SA');
+
+    expect(activated).toBe(false);
     expect(mockNotificationSend).not.toHaveBeenCalled();
   });
 
