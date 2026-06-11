@@ -72,6 +72,12 @@ internal abstract class ParatextProjectDataProviderFactoryBase : ProjectDataProv
         ProjectDetails details
     );
 
+    /// <summary>
+    /// Returns the data provider name of the PDP that serves the given project, creating and
+    /// registering one on first request and caching it for subsequent lookups. Throws
+    /// <see cref="KeyNotFoundException"/> if the project ID is unknown or belongs to a sibling
+    /// factory (see <see cref="ShouldServeProject"/>).
+    /// </summary>
     public override string GetProjectDataProviderID(string projectID)
     {
         projectID = projectID.ToUpperInvariant();
