@@ -560,7 +560,8 @@
       "%webView_platformScripture_markersChecklist_settings%": "Settings",
       "%manageBooks_openMenuItem%": "Manage books",
       "%manageBooks_sidebar_projectPlaceholder%": "Select project",
-      "%keyboardSwitching_autoSwitched%": "Keyboard switched automatically"
+      "%keyboardSwitching_autoSwitched%": "Keyboard switched automatically",
+      "%keyboardSwitching_missingKeyboardFallback%": "The keyboard configured for this project is no longer available. Using the system default keyboard."
     },
     "es": {
       "%inventoryName_Character%": "Inventario de caracteres",
