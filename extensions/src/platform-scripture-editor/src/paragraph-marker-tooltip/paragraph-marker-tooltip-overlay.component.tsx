@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from 'platform-bible-react';
 import { LocalizeKey } from 'platform-bible-utils';
-import { blockMarkerToBlockNames } from './platform-scripture-editor.utils';
+import { blockMarkerToBlockNames } from '../platform-scripture-editor.utils';
 import { computePosition, extractMarker, TooltipPosition } from './paragraph-marker-tooltip.utils';
 
 type HoveredData = TooltipPosition & { marker: string };
@@ -34,6 +34,8 @@ export function ParagraphMarkerTooltipOverlay({ children }: Props) {
     ? blockMarkerToBlockNames[hoveredData.marker]
     : undefined;
   const localizedDescription = descriptionKey ? localizedStrings[descriptionKey] : undefined;
+  // For markers not yet in blockMarkerToBlockNames, fall back to the raw USFM marker (e.g. \sp).
+  // The \\ is intentional: it produces a single backslash so the tooltip reads as a USFM marker.
   const tooltipText =
     localizedDescription ?? (hoveredData?.marker ? `\\${hoveredData.marker}` : '');
 
@@ -141,16 +143,12 @@ export function ParagraphMarkerTooltipOverlay({ children }: Props) {
       cancelAnimationFrame(rafIdRef.current);
       rafIdRef.current = requestAnimationFrame(() => {
         const para = currentParaRef.current;
-        if (para && positionAnchorRef.current && scrollContainerRef.current) {
+        const anchor = positionAnchorRef.current;
+        const scroller = scrollContainerRef.current;
+        if (para && anchor && scroller) {
           setHoveredData((prev) => {
             if (!prev) return undefined;
-            // positionAnchorRef.current and scrollContainerRef.current confirmed by the if-guard above
-            // eslint-disable-next-line no-type-assertion/no-type-assertion
-            const newPos = computePosition(
-              para,
-              positionAnchorRef.current!,
-              scrollContainerRef.current!,
-            );
+            const newPos = computePosition(para, anchor, scroller);
             lastPositionRef.current = newPos;
             return { ...newPos, marker: prev.marker };
           });
@@ -172,7 +170,7 @@ export function ParagraphMarkerTooltipOverlay({ children }: Props) {
   return (
     <div
       ref={positionAnchorRef}
-      style={{ position: 'relative' }}
+      className="tw:relative"
       onMouseOver={handleMouseOver}
       onMouseMove={handleMouseMove}
       onFocus={handleFocus}

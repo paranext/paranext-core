@@ -4,8 +4,8 @@ import { computePosition, extractMarker } from './paragraph-marker-tooltip.utils
 // Mock element factory — avoids jsdom dependency for pure-function tests.
 // scrollContainer is treated as an ancestor of positionAnchor, so its getBoundingClientRect().top
 // determines the visible-area boundary used for clamping. No scrollTop property is needed.
-// Type assertion needed to satisfy HTMLElement interface when creating mock object without jsdom dependency
-// eslint-disable-next-line no-type-assertion/no-type-assertion
+// Cast needed: only getBoundingClientRect is implemented; jsdom is not available in this test.
+/* eslint-disable no-type-assertion/no-type-assertion */
 const makeEl = (rect: { top: number; bottom: number; left: number }): HTMLElement =>
   ({
     getBoundingClientRect: () => ({
@@ -20,6 +20,7 @@ const makeEl = (rect: { top: number; bottom: number; left: number }): HTMLElemen
       toJSON: () => ({}),
     }),
   }) as unknown as HTMLElement;
+/* eslint-enable no-type-assertion/no-type-assertion */
 
 describe('extractMarker', () => {
   it('extracts a simple marker', () => {
