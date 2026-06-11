@@ -167,11 +167,18 @@ async function openPickerFromCreateFlow(mainPage: Page, frame: FrameLocator): Pr
   // Pick the "Based on" option (renders the localized label for the fromTemplate value).
   await frame.getByRole('option', { name: /Based on|Reference text|From template/i }).click();
 
-  // Pick the first reference project. The parent dialog's createMethod=fromTemplate flow
-  // requires a model project be selected before apply is enabled (component line 807); the
-  // specific project doesn't affect picker behavior, so .first() is the simplest choice.
+  // Pick a reference project that actually CONTAINS ESG (TPTS — verified fixture). Two
+  // constraints discovered 2026-06-11: (1) the lookup must be scoped to the open Radix
+  // popper, because the book-grid pills also carry role="option" and an unscoped .first()
+  // matches a pill instead of a project row (same trap Journey 2 documents); (2) the
+  // reference must have ESG, otherwise the Sebastian-item-27 prune deselects ESG once the
+  // reference's books load and the picker never opens (apply stays gated).
   await frame.locator('#af-reference').click();
-  await frame.getByRole('option').first().click();
+  await frame
+    .locator('[data-radix-popper-content-wrapper] [role="option"]')
+    .filter({ hasText: /TPTS/ })
+    .first()
+    .click();
 
   // Click the apply button. Footer label adapts: "Create N books in PROJ".
   await frame.getByRole('button', { name: /Create .* in /i }).click();
@@ -327,7 +334,7 @@ test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
     await expect(group.getByRole('radio', { name: /Modern Scholars/i })).toBeVisible();
 
     // OK + Cancel buttons in the footer
-    await expect(picker.getByRole('button', { name: /^OK$/i })).toBeVisible();
+    await expect(picker.getByRole('button', { name: /^(OK|Choose)$/i })).toBeVisible();
     await expect(picker.getByRole('button', { name: /^Cancel$/i })).toBeVisible();
   });
 
@@ -503,7 +510,7 @@ test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
     // on a parent-dialog element. Verify by asserting at least one of the picker's interactive
     // elements has the focus. Playwright's `toBeFocused` resolves the iframe → contentFrame
     // boundary for us so we don't need to manually walk activeElement chains.
-    const okButton = picker.getByRole('button', { name: /^OK$/i });
+    const okButton = picker.getByRole('button', { name: /^(OK|Choose)$/i });
     const cancelButton = picker.getByRole('button', { name: /^Cancel$/i });
     const lxxRadio = picker.getByRole('radio', { name: /Septuagint \(LXX\)/i });
     const vulgateRadio = picker.getByRole('radio', { name: /^Vulgate/i });
@@ -615,7 +622,7 @@ test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
 
     // Click OK — the wiring layer's onSelect resolves the parent's onOpenEstherPicker promise,
     // which then drives the createBooks(...) call.
-    await picker.getByRole('button', { name: /^OK$/i }).click();
+    await picker.getByRole('button', { name: /^(OK|Choose)$/i }).click();
 
     // The picker MUST close (modal-on-modal pattern: picker dismisses, parent dialog remains).
     await expect(picker).toBeHidden({ timeout: 5_000 });
@@ -635,7 +642,7 @@ test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
     const picker = await openPickerFromCreateFlow(mainPage, frame);
 
     await picker.getByRole('radio', { name: /^Vulgate/i }).click();
-    await picker.getByRole('button', { name: /^OK$/i }).click();
+    await picker.getByRole('button', { name: /^(OK|Choose)$/i }).click();
 
     // Picker dismisses; parent dialog stays
     await expect(picker).toBeHidden({ timeout: 5_000 });

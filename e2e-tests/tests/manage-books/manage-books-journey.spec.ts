@@ -400,7 +400,9 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
     // Step 6: Click OK. The wiring layer's handlePickerSelect resolves the parent's
     // onOpenEstherPicker promise and the parent's createBooks(...) call dispatches with the
     // chosen template (`'vulgate'`). The picker dismisses; the parent dialog stays mounted.
-    await picker.getByRole('button', { name: /^OK$/i }).click();
+    // The picker's confirm button label is 'Choose' (%manageBooks_createEsther_okButton%);
+    // accept the legacy 'OK' too in case the label is revised again.
+    await picker.getByRole('button', { name: /^(OK|Choose)$/i }).click();
     await expect(picker).toBeHidden({ timeout: 5_000 });
 
     // Step 7: createBooks is now in flight — A3 acceptance requires the apply button to be
@@ -539,6 +541,18 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
     // (MIN_SUBMITTING_VISIBLE_MS=1500 guarantees observability).
     await expect(copyApply).toBeEnabled();
     await copyApply.click();
+    // If the bulk selection included books that already exist in the destination,
+    // the three-way conflict prompt ('Books already exist') intercepts the submit.
+    // Choose 'Replace entire books' — this journey asserts the destination ends up
+    // with the source's books.
+    const conflictDialog = frame.getByRole('dialog', { name: /Books already exist/i });
+    const conflictAppeared = await conflictDialog
+      .waitFor({ state: 'visible', timeout: 2_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (conflictAppeared) {
+      await conflictDialog.getByRole('button', { name: /Replace entire books/i }).click();
+    }
     await expect(copyApply).toBeDisabled({ timeout: 5_000 });
 
     // Step 6: Wait for the submit-state to clear. NOTE: we cannot assert
@@ -640,6 +654,17 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
     await waitForAppReady(mainPage);
     const frame = await openManageBooks(mainPage);
 
+    // Step 0: Switch the dialog's target to RH2. Deleting books requires the
+    // current user to be an ADMINISTRATOR of the target project
+    // (DeleteBooksOrchestrator WarnIfNotAdministrator, PT9 parity) — on the
+    // entry project (wgPIDGIN) the e2e user is only a TeamMember, so the
+    // backend correctly refuses with a toast and nothing is deleted. RH2 is a
+    // registered project where the e2e user is Administrator, which also
+    // exercises the shared-project confirmation copy.
+    await frame.locator('[data-testid="manage-books-sidebar-project-trigger"]').click();
+    await frame.locator('[cmdk-item]').filter({ hasText: /RH2/ }).first().click();
+    await mainPage.waitForTimeout(800);
+
     // Step 1: Pick the LAST present-book pill in Delete mode (Delete universe = books currently
     // present; the test asserts on the chosen ID symbolically — whatever the fixture has).
     await frame.locator('[data-testid="manage-books-sidebar-section-delete"]').click();
@@ -647,8 +672,17 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
     await expect(presentPills.first()).toBeVisible({ timeout: 10_000 });
     const presentCount = await presentPills.count();
     expect(presentCount).toBeGreaterThan(0);
-    const targetPill = presentPills.last();
-    const targetBookId = (await targetPill.getAttribute('data-book')) ?? '';
+    // Pick the LAST canonical present pill. (Earlier XX-book delete failures
+    // observed against wgPIDGIN were admin-permission refusals, not an
+    // extra-book defect — fixed by targeting RH2 above. The canonical filter
+    // stays as cheap determinism against fixture drift.)
+    const presentIds = await presentPills.evaluateAll((els) =>
+      els.map((el) => el.getAttribute('data-book')),
+    );
+    const canonicalIds = presentIds.filter((id): id is string => !!id && !id.startsWith('XX'));
+    expect(canonicalIds.length).toBeGreaterThan(0);
+    const targetBookId = canonicalIds[canonicalIds.length - 1];
+    const targetPill = frame.locator(`ul[role="listbox"] li[data-book="${targetBookId}"]`);
     expect(targetBookId).not.toBe('');
     await targetPill.click();
     await expect(targetPill).toHaveAttribute('aria-checked', 'true');

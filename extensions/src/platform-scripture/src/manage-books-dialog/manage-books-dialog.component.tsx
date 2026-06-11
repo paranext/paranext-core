@@ -704,8 +704,17 @@ export function ManageBooksDialog({
     () => (copySourceId ? toProjectBookState(booksByProjectId[copySourceId]) : undefined),
     [copySourceId, booksByProjectId],
   );
+  // Stays undefined until the reference project's books have actually LOADED
+  // (booksByProjectId[id] set — an empty array means "loaded, no books").
+  // toProjectBookState(undefined) would yield a truthy empty state, which made
+  // the Sebastian-item-27 prune effect below fire in the load gap right after
+  // picking a reference and wipe the user's entire selection (and made every
+  // pill briefly render as not-in-reference disabled).
   const createReferenceBookState = useMemo<ProjectBookState | undefined>(
-    () => (createReferenceId ? toProjectBookState(booksByProjectId[createReferenceId]) : undefined),
+    () =>
+      createReferenceId && booksByProjectId[createReferenceId]
+        ? toProjectBookState(booksByProjectId[createReferenceId])
+        : undefined,
     [createReferenceId, booksByProjectId],
   );
 
