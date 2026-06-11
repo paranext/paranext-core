@@ -24,14 +24,22 @@ import { KeyboardId } from '@shared/services/keyboard.service-model';
  * and forwards observations into this module.
  */
 export class CrossAppFocusDebounce {
+  /** The keyboard PT10 last activated — "what the platform last set" (data-contracts §4.6 item 4) */
+  private lastActivatedKeyboardId: KeyboardId | undefined;
+
+  /** Whether a blur (`isAppFocused: false`) was observed since the last completed return */
+  private hasObservedBlur = false;
+
+  /** Whether the next `shouldGateNextActivation()` query must answer `true` (one-shot) */
+  private isGateArmed = false;
+
   /**
    * Records a keyboard activation PT10 itself performed (the comparison baseline — "what the
    * platform last set" per data-contracts §4.6 item 4). CAP-014 calls this after every successful
    * focus-driven or imperative activation; VAL-B-04 no-op activations are never recorded.
    */
-  // eslint-disable-next-line @typescript-eslint/class-methods-use-this -- RED stub (CAP-011); implementation will use instance baseline/gate state
   recordActivation(keyboardId: KeyboardId): void {
-    throw new Error(`Not implemented (CAP-011 RED stub): recordActivation(${keyboardId})`);
+    this.lastActivatedKeyboardId = keyboardId;
   }
 
   /**
@@ -39,11 +47,25 @@ export class CrossAppFocusDebounce {
    * sampled at that moment. `currentOsKeyboardId === undefined` means the OS keyboard query failed
    * or timed out during the transition window.
    */
-  // eslint-disable-next-line @typescript-eslint/class-methods-use-this -- RED stub (CAP-011); implementation will use instance baseline/gate state
   observeAppFocus(isAppFocused: boolean, currentOsKeyboardId?: KeyboardId): void {
-    throw new Error(
-      `Not implemented (CAP-011 RED stub): observeAppFocus(${isAppFocused}, ${currentOsKeyboardId})`,
-    );
+    if (!isAppFocused) {
+      // Blur. Duplicate blur observations are idempotent — still one away period
+      this.hasObservedBlur = true;
+      return;
+    }
+
+    // A focus observation without a preceding blur (e.g. the startup AppFocus seed or a redundant
+    // re-emission) is NOT a cross-app return — leave the current decision untouched
+    if (!this.hasObservedBlur) return;
+
+    // Completed cross-app return: re-evaluate the gate from scratch (assignment, not OR) so the
+    // LATEST return wins during rapid focus flicker. Gate iff PT10 has set a baseline AND the OS
+    // keyboard at focus-in is unknown (fail-safe) or differs from that baseline. With no baseline
+    // there is no PT10 choice to stomp, so the first activation always fires (CONS-EX-02).
+    this.hasObservedBlur = false;
+    this.isGateArmed =
+      this.lastActivatedKeyboardId !== undefined &&
+      (currentOsKeyboardId === undefined || currentOsKeyboardId !== this.lastActivatedKeyboardId);
   }
 
   /**
@@ -54,8 +76,9 @@ export class CrossAppFocusDebounce {
    * @returns `true` when the activation must be skipped to preserve a user-initiated OS keyboard
    *   change made while PT10 was blurred; `false` when activation should proceed normally.
    */
-  // eslint-disable-next-line @typescript-eslint/class-methods-use-this -- RED stub (CAP-011); implementation will use instance baseline/gate state
   shouldGateNextActivation(): boolean {
-    throw new Error('Not implemented (CAP-011 RED stub)');
+    const shouldGate = this.isGateArmed;
+    this.isGateArmed = false;
+    return shouldGate;
   }
 }
