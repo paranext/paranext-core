@@ -234,6 +234,7 @@ export default function ResourcePickerDialog({
           isFullWidth
         />
         <MultiSelectComboBox
+          className="tw:z-600"
           entries={languageOptions}
           selected={selectedLanguages}
           onChange={setSelectedLanguages}
