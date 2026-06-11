@@ -1186,16 +1186,55 @@ describe('manual-switch detection + LastUsedKeyboards (data-contracts §5.4; ali
 });
 
 describe('wire-surface invariants + gm-009 acceptance (read-only types, inert SSF nop, pure reads, dialog OK orchestration)', () => {
-  // KeyboardServiceDataTypes pins set: never for the plural/read-only types (alignment-decisions
-  // #26/#29 §C; INV-C05) — the runtime surface must not grow setters the types forbid
-  it('exposes no set methods for the read-only data types', async () => {
+  // REVISED by CAP-016 (I-8 carried-over blocker; test-writer-CAP-016.md D4). The original
+  // CAP-015 pin asserted these members were ABSENT, but the REAL registerEngine validation
+  // (data-provider.service.ts:704-709) throws at registration when any `get<data_type>` lacks a
+  // matching `set<data_type>` — renderer startup would crash. The platform read-only convention
+  // is a THROWING setter (localization.service-host precedent). `KeyboardServiceDataTypes` still
+  // pins `set: never` at the TYPE level (alignment-decisions #26/#29 §C; INV-C05); the runtime
+  // setters exist purely for registration parity and must always reject without mutating or
+  // emitting.
+  it('read-only data types: setters exist for registration parity but always reject without mutating or emitting', async () => {
     const engine = await initializeHost();
-    const memberNames = getAllMemberNames(engine);
+    // The setters are deliberately absent from the engine's TYPE surface (set: never) — reach
+    // them through the runtime function table the registration validation sees
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const engineUntyped = engine as unknown as Record<
+      string,
+      ((...args: unknown[]) => Promise<unknown>) | undefined
+    >;
 
-    expect(memberNames).not.toContain('setProjectDefaultKeyboards');
-    expect(memberNames).not.toContain('setSystemDefaultKeyboard');
-    expect(memberNames).not.toContain('setAvailableKeyboards');
-    expect(memberNames).not.toContain('setLastUsedKeyboards');
+    const readOnlySetterNames = [
+      'setProjectDefaultKeyboards',
+      'setSystemDefaultKeyboard',
+      'setAvailableKeyboards',
+      'setLastUsedKeyboards',
+    ];
+
+    // Presence first (object-shape assertion reports WHICH setter is missing on failure)
+    const setterPresence = Object.fromEntries(
+      readOnlySetterNames.map((setterName) => [setterName, typeof engineUntyped[setterName]]),
+    );
+    expect(setterPresence).toEqual({
+      setProjectDefaultKeyboards: 'function',
+      setSystemDefaultKeyboard: 'function',
+      setAvailableKeyboards: 'function',
+      setLastUsedKeyboards: 'function',
+    });
+
+    // Every read-only setter must reject when invoked
+    await Promise.all(
+      readOnlySetterNames.map(async (setterName) => {
+        await expect(
+          engineUntyped[setterName]?.call(engine, undefined, undefined),
+        ).rejects.toThrow();
+      }),
+    );
+
+    await flushAsync();
+    expect(mockSettingsSet).not.toHaveBeenCalled();
+    expect(updateEmissions).toEqual([]);
+    expect(fakeOsKeyboard.getWrites()).toEqual([]);
   });
 
   // spec-017 / TS-068 / BHV-T140 NEGATIVE-FINDING contract: PT9's SSF AutoKeyboardSwitching is a
