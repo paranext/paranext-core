@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 
 namespace Paranext.DataProvider.KeyboardSwitching.Keyboarding;
@@ -27,7 +28,7 @@ public static class KeyboardingPrimitiveFactory
     /// </summary>
     public static IKeyboardingPrimitive Create()
     {
-        throw new NotImplementedException();
+        return Create(RuntimeInformation.IsOSPlatform);
     }
 
     /// <summary>
@@ -40,8 +41,36 @@ public static class KeyboardingPrimitiveFactory
     /// <param name="isOsPlatform">
     /// Platform predicate; production passes <see cref="RuntimeInformation.IsOSPlatform"/>.
     /// </param>
+    // CA1416: the three production ctors are [SupportedOSPlatform]-attributed and the
+    // analyzer cannot see the injected predicate as a platform guard. A
+    // [SupportedOSPlatformGuard] helper was considered and rejected — it would assert
+    // "predicate true ⇒ running on that OS", which is deliberately false under test
+    // (the factory tests construct all four products on one host). The actual safety
+    // invariant is different and weaker than what CA1416 checks: construction never
+    // touches OS interop (all three platform primitives bind their adapters lazily per
+    // call — pinned by CAP-004/005/006 tests and by
+    // Create_OnActualHostOs_NeverThrowsAndReturnsNonNull), so constructing a
+    // non-matching primitive is safe; only CALLING its members requires the matching
+    // OS, and production only ever receives the primitive matching the real host.
+    [SuppressMessage(
+        "Interoperability",
+        "CA1416:Validate platform compatibility",
+        Justification = "Construction of the platform primitives never touches OS "
+            + "interop (lazy adapters); the [SupportedOSPlatform] requirement applies "
+            + "to their members, and production dispatch hands out only the primitive "
+            + "matching the real host OS."
+    )]
     internal static IKeyboardingPrimitive Create(Func<OSPlatform, bool> isOsPlatform)
     {
-        throw new NotImplementedException();
+        // Fresh instance per call (no caching): primitive lifetime stays per-consumer.
+        // Branch order is not a contract — the real RuntimeInformation.IsOSPlatform is
+        // mutually exclusive across desktop OSes.
+        if (isOsPlatform(OSPlatform.Windows))
+            return new WindowsKeyboardingPrimitive();
+        if (isOsPlatform(OSPlatform.Linux))
+            return new LinuxKeyboardingPrimitive();
+        if (isOsPlatform(OSPlatform.OSX))
+            return new MacKeyboardingPrimitive();
+        return new NoOpKeyboardingPrimitive();
     }
 }
