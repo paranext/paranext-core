@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 import { LinkedScrRefButton } from './linked-scr-ref-button.component';
 
 const meta: Meta<typeof LinkedScrRefButton> = {
@@ -50,11 +49,9 @@ A small primitive that renders a scripture reference (or any short label) as a s
   },
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className="tw:p-4">
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className="tw:p-4">
+        <Story />
+      </div>
     ),
   ],
 };

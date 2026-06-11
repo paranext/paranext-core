@@ -11,7 +11,6 @@ import {
   type ProjectSelectorProjectPair,
   type ProjectSelectorProject,
 } from '@/components/advanced/project-selector/project-selector.component';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const sampleProjects: ProjectSelectorProject[] = [
   {
@@ -94,11 +93,9 @@ const meta: Meta<typeof ProjectSelector> = {
   tags: ['autodocs'],
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className="tw:w-[320px] tw:p-4">
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className="tw:w-[320px] tw:p-4">
+        <Story />
+      </div>
     ),
   ],
 };

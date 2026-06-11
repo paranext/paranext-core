@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 import SourceLanguageIndexedList from './source-language-indexed-list.component';
 import type { IndexedListItem } from './source-language-indexed-list.types';
 
@@ -84,11 +83,9 @@ Features:
   },
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className="tw:h-[400px] tw:max-w-2xl tw:border">
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className="tw:h-[400px] tw:max-w-2xl tw:border">
+        <Story />
+      </div>
     ),
   ],
   args: {
