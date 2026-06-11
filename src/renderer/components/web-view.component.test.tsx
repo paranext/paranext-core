@@ -114,11 +114,18 @@ beforeEach(() => {
   // Default to an immediate, successful wait so tests that don't care about it don't need their own
   // mock setup; the tests below that do care override this per case.
   mocks.waitForWebViewProviderToRegister.mockResolvedValue(undefined);
+  // The menu is an empty menu document rather than `undefined`: the web view evaluates its top
+  // menu on every render, toolbar shown or not, and the real hook always returns at least the
+  // default it is given.
   // The curried useData return type is a deeply-generic object; its shape is tested in the
   // papi-hooks tests. Replicating it here would create brittle coupling.
   // eslint-disable-next-line no-type-assertion/no-type-assertion -- necessary for mock helper flexibility
   vi.mocked(useData).mockReturnValue({
-    WebViewMenu: () => [undefined, vi.fn(), false],
+    WebViewMenu: () => [
+      { topMenu: undefined, includeDefaults: true, contextMenu: undefined },
+      vi.fn(),
+      false,
+    ],
   } as never);
 });
 

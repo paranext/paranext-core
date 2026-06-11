@@ -4,6 +4,7 @@ import { ProcessType } from '@shared/global-this.model';
 import { PlatformEventEmitter } from 'platform-bible-utils';
 import {
   initialize as initializeSharedStore,
+  onDidChangeSharedStore,
   resetForTesting,
   sharedStoreService,
   waitForInitialization,
@@ -335,6 +336,65 @@ describe('sharedStoreService', () => {
       sharedStoreService.set(testKey, 5000);
       await sharedStoreService.removeAsync(testKey);
       expect(sharedStoreService.get(testKey)).toBeUndefined();
+    });
+  });
+
+  describe('onDidChangeSharedStore', () => {
+    beforeEach(async () => {
+      await initializeSharedStore(networkService);
+    });
+
+    it('should fire for local set operations', () => {
+      const handler = vi.fn();
+      const unsubscribe = onDidChangeSharedStore(handler);
+      sharedStoreService.set(testKey, 1234);
+      expect(handler).toHaveBeenCalledWith({ key: testKey, value: 1234 });
+      unsubscribe();
+    });
+
+    it('should fire for local remove operations', () => {
+      sharedStoreService.set(testKey, 1234);
+      const handler = vi.fn();
+      const unsubscribe = onDidChangeSharedStore(handler);
+      sharedStoreService.remove(testKey);
+      expect(handler).toHaveBeenCalledWith({ key: testKey, value: undefined });
+      unsubscribe();
+    });
+
+    it('should not fire for a remove of a key that has no value', () => {
+      const handler = vi.fn();
+      const unsubscribe = onDidChangeSharedStore(handler);
+      sharedStoreService.remove(testKey);
+      expect(handler).not.toHaveBeenCalled();
+      unsubscribe();
+    });
+
+    it('should fire for remote changes that are applied', () => {
+      const handler = vi.fn();
+      const unsubscribe = onDidChangeSharedStore(handler);
+      const changeEventHandler = vi.mocked(mockEmitter.event).mock.calls[0][0];
+      changeEventHandler({
+        key: testKey,
+        value: 4321,
+        clock: { counter: 100, processId: 'other-process' },
+      });
+      expect(handler).toHaveBeenCalledWith({ key: testKey, value: 4321 });
+      unsubscribe();
+    });
+
+    it('should not fire for stale remote changes that are ignored', () => {
+      sharedStoreService.set(testKey, 1);
+      sharedStoreService.set(testKey, 2);
+      const handler = vi.fn();
+      const unsubscribe = onDidChangeSharedStore(handler);
+      const changeEventHandler = vi.mocked(mockEmitter.event).mock.calls[0][0];
+      changeEventHandler({
+        key: testKey,
+        value: 999,
+        clock: { counter: 1, processId: 'other-process' },
+      });
+      expect(handler).not.toHaveBeenCalled();
+      unsubscribe();
     });
   });
 

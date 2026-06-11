@@ -9,7 +9,9 @@ import {
   PlatformError,
   isPlatformError,
   getErrorMessage,
+  evaluateMenu,
 } from 'platform-bible-utils';
+import { contextKeysService } from '@shared/services/context-keys.service';
 import {
   macosMenubarObject,
   LocalizedMacosMenubar,
@@ -22,25 +24,38 @@ import { logger } from '@shared/services/logger.service';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 
 /**
- * Subscribe to changes in the main menu data and update the macOS menubar accordingly.
+ * Subscribe to changes in the main menu data and context keys, and update the macOS menubar
+ * accordingly.
  *
- * After subscribing, whenever the main menu data changes, this function will be called with the new
- * menu data. The new menu data will be translated and combined correctly into the structure
- * expected by the Electron Menu API, and then the macOS menubar will be updated with the new menu
- * structure.
+ * Whenever the main menu data or any context key changes, the menu data is re-evaluated
+ * (when/enabledWhen/checkedWhen expressions), translated and combined into the structure expected
+ * by the Electron Menu API, and the macOS menubar is updated.
  *
  * If there is an error during the translation and combination process, the default macOS menubar
  * will be used instead.
  */
 export async function subscribeCurrentMacosMenubar() {
-  return menuDataService.subscribeUnlocalizedMainMenu(
-    undefined,
-    async (menuContent: MultiColumnMenu | PlatformError) => {
-      let currentMacosMenubarTemplate;
+  let currentMainMenu: MultiColumnMenu | undefined;
+
+  // Reads `currentMainMenu` from the enclosing scope; falls back to the default menubar when no
+  // valid menu data is available (e.g. after a PlatformError, which is logged by the subscriber)
+  async function rebuildMacosMenubar(): Promise<void> {
+    let currentMacosMenubarTemplate;
+    if (!currentMainMenu) {
+      currentMacosMenubarTemplate = await fallbackToDefaultMacosMenubar();
+    } else {
       try {
-        if (isPlatformError(menuContent))
-          throw new Error(`PlatformError: ${getErrorMessage(menuContent)}`);
-        currentMacosMenubarTemplate = await translatePlatformMenuItemsAndCombine(menuContent);
+        // The main menu provides no template variables for when-expressions in v1
+        const evaluatedMainMenu = evaluateMenu(
+          currentMainMenu,
+          contextKeysService.get,
+          {},
+          (expression, error) =>
+            logger.warn(
+              `Error evaluating macOS menubar when-expression '${expression}': ${getErrorMessage(error)}`,
+            ),
+        );
+        currentMacosMenubarTemplate = await translatePlatformMenuItemsAndCombine(evaluatedMainMenu);
       } catch (error) {
         logger.error(
           'Failed to get current platform menus. Falling back to default macOS menubar.',
@@ -48,15 +63,39 @@ export async function subscribeCurrentMacosMenubar() {
         );
         currentMacosMenubarTemplate = await fallbackToDefaultMacosMenubar();
       }
+    }
 
-      try {
-        const coreMacosMenubar = Menu.buildFromTemplate(currentMacosMenubarTemplate);
-        Menu.setApplicationMenu(coreMacosMenubar);
-      } catch (error) {
-        logger.error('Failed to build current macOS menubar', error);
+    try {
+      const coreMacosMenubar = Menu.buildFromTemplate(currentMacosMenubarTemplate);
+      Menu.setApplicationMenu(coreMacosMenubar);
+    } catch (error) {
+      logger.error('Failed to build current macOS menubar', error);
+    }
+  }
+
+  const unsubscribeMenuData = await menuDataService.subscribeUnlocalizedMainMenu(
+    undefined,
+    async (menuContent: MultiColumnMenu | PlatformError) => {
+      if (isPlatformError(menuContent)) {
+        currentMainMenu = undefined;
+        logger.error(`PlatformError getting main menu: ${getErrorMessage(menuContent)}`);
+      } else {
+        currentMainMenu = menuContent;
       }
+      await rebuildMacosMenubar();
     },
   );
+
+  const unsubscribeContextKeys = contextKeysService.onDidChange(() => {
+    rebuildMacosMenubar().catch((error) =>
+      logger.error('Failed to rebuild macOS menubar after context key change', error),
+    );
+  });
+
+  return async () => {
+    unsubscribeContextKeys();
+    return unsubscribeMenuData();
+  };
 }
 
 function sortMenuAndRemoveAddedProps(localizedMacosMenubar: LocalizedMacosMenubar) {
@@ -165,6 +204,10 @@ function getMenubarColumnContent(
                 // eslint-disable-next-line no-type-assertion/no-type-assertion
                 click: () => handleMenuCommand(item as MenuItemContainingCommand, groupKey),
                 order: item.order,
+                enabled: !item.disabled,
+                ...(item.checked === undefined
+                  ? {}
+                  : { type: 'checkbox' as const, checked: item.checked }),
               }
             : {
                 label: item.label,
