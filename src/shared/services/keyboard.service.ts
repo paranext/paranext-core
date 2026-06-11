@@ -1,14 +1,40 @@
 // === NEW IN PT10 === (keyboard-switching CAP-008)
-// RED-state stub created by the TDD test writer: the consumer wrapper must resolve the
-// `platform.keyboard` data provider via `dataProviderService.get` and expose the ergonomic
-// `IKeyboardService` surface plus sync-proxied members (precedent: theme.service.ts).
-// The GREEN implementer replaces the throwing initializer with the real resolution.
+// Reason: PT10 consumer-wrapper pattern — thin module resolving the `platform.keyboard`
+// data provider via `dataProviderService.get` and exposing the ergonomic `IKeyboardService`
+// surface plus sync-proxied members (precedent: theme.service.ts). No PT9 equivalent.
+// Maps to: CAP-008
 
 import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
-import { IKeyboardService } from '@shared/services/keyboard.service-model';
+import {
+  IKeyboardService,
+  keyboardServiceObjectToProxy,
+  keyboardServiceProviderName,
+} from '@shared/services/keyboard.service-model';
+import { dataProviderService } from '@shared/services/data-provider.service';
+
+let dataProvider: IKeyboardService;
+let initializationPromise: Promise<void>;
+async function initialize(): Promise<void> {
+  if (!initializationPromise) {
+    initializationPromise = new Promise<void>((resolve, reject) => {
+      const executor = async () => {
+        try {
+          const provider = await dataProviderService.get(keyboardServiceProviderName);
+          if (!provider) throw new Error('Keyboard service undefined');
+          dataProvider = provider;
+          resolve();
+        } catch (error) {
+          reject(error);
+        }
+      };
+      executor();
+    });
+  }
+  return initializationPromise;
+}
 
 /** JSDOC DESTINATION keyboardService */
 export const keyboardService = createSyncProxyForAsyncObject<IKeyboardService>(async () => {
-  // RED stub — GREEN implementer (CAP-008) resolves the platform.keyboard data provider here
-  throw new Error('Not implemented (CAP-008 RED stub): keyboard.service consumer wrapper');
-});
+  await initialize();
+  return dataProvider;
+}, keyboardServiceObjectToProxy);

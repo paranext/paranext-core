@@ -1,9 +1,10 @@
 // === NEW IN PT10 === (keyboard-switching CAP-008)
-// RED-state stub created by the TDD test writer: the TYPE surface below is the
-// contracted specification (data-contracts.md §2.1/§2.2/§2.3/§2.5/§9;
+// Reason: PT10 service-model pattern — shared TS contract surface for the
+// `platform.keyboard` data provider (no PT9 equivalent; PT9 keyboarding was
+// WinForms-internal). Types per data-contracts.md §2.1/§2.2/§2.3/§2.5/§9;
 // backend-alignment.md §"Type Declaration" + §"Data Provider Data Types (PT10)";
-// alignment-decisions.md #26-#30). Runtime helpers intentionally throw — the GREEN
-// implementer replaces their bodies (and fleshes out TSDoc) without changing the types.
+// alignment-decisions.md #26-#30.
+// Maps to: CAP-008
 //
 // Cross-process safe: types + small pure helpers only (no service state).
 
@@ -232,22 +233,28 @@ declare module 'papi-shared-types' {
   }
 }
 
+// === NEW IN PT10 === (alignment-decision #30 canonical body)
+// Reason: PT10 reasons about per-project capability via projectInterfaces (interface-based),
+// not PT9's ProjectKind typology. Case-insensitive substring matching is sufficient for the
+// current PT10 namespace shape (`platformScripture.*`); this predicate is the single place to
+// update if a future projectInterface name breaks that convention.
+// Maps to: CAP-008
 /**
  * True if the projectInterface implies a writable scripture surface (alignment-decision #30 —
  * drives vernacular ComboBox enablement in the keyboard-selection dialog).
  */
 export function isScriptureInterface(projectInterface: string): boolean {
-  // RED stub — GREEN implementer (CAP-008) provides the real body
-  throw new Error(
-    `Not implemented (CAP-008 RED stub): isScriptureInterface('${projectInterface}')`,
-  );
+  return projectInterface.toLowerCase().includes('scripture');
 }
 
+// === NEW IN PT10 === (alignment-decision #30 canonical body)
+// Reason: same interface-based capability detection as isScriptureInterface; matches
+// `legacyCommentManager.comments` / `legacyCommentManager.commentsUsj`.
+// Maps to: CAP-008
 /**
  * True if the projectInterface implies a comments surface (alignment-decision #30 — drives comments
  * ComboBox visibility in the keyboard-selection dialog).
  */
 export function isCommentsInterface(projectInterface: string): boolean {
-  // RED stub — GREEN implementer (CAP-008) provides the real body
-  throw new Error(`Not implemented (CAP-008 RED stub): isCommentsInterface('${projectInterface}')`);
+  return projectInterface.toLowerCase().includes('comments');
 }
