@@ -171,7 +171,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
     'platformScripture.textConnectionSettings',
     projectId,
   );
-  const userResourceList = usePromise(
+  const [userResourceList] = usePromise(
     useCallback(
       async () => textConnectionsProvider?.getUserReferencedProjectsAndResources(),
       [textConnectionsProvider],
