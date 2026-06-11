@@ -191,10 +191,21 @@ export const testingDatabaseService = { DatabaseService };
 
 let databaseServiceNetworkObject: IDatabaseService;
 export const initialize = createCachedInitializer(async () => {
-  databaseServiceNetworkObject = await networkObjectService.set<IDatabaseService>(
-    databaseServiceNetworkObjectName,
-    new DatabaseService(),
-  );
+  const databaseService = new DatabaseService();
+  try {
+    databaseServiceNetworkObject = await networkObjectService.set<IDatabaseService>(
+      databaseServiceNetworkObjectName,
+      databaseService,
+    );
+  } catch (error) {
+    // Terminate the worker thread so a retried initialization doesn't leak it
+    await databaseService
+      .dispose()
+      .catch((disposeError) =>
+        logger.warn(`Failed to dispose database service after failed setup: ${disposeError}`),
+      );
+    throw error;
+  }
 });
 
 // This will be needed later for disposing of the network object, choosing to ignore instead of

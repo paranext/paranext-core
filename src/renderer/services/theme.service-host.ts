@@ -581,10 +581,16 @@ let dataProvider: IThemeService;
 export const initialize = createCachedInitializer(async () => {
   const systemThemeChangesInfo = listenToSystemThemeChanges();
 
-  dataProvider = await dataProviderService.registerEngine(
-    themeServiceDataProviderName,
-    themeServiceEngine,
-  );
+  try {
+    dataProvider = await dataProviderService.registerEngine(
+      themeServiceDataProviderName,
+      themeServiceEngine,
+    );
+  } catch (error) {
+    // Stop listening so a retried initialization doesn't add a duplicate listener
+    systemThemeChangesInfo.unsubscribe();
+    throw error;
+  }
 
   dataProvider.onDidDispose(() => {
     systemThemeChangesInfo.unsubscribe();
