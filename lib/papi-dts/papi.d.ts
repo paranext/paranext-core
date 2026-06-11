@@ -113,8 +113,265 @@ declare module 'shared/services/scroll-group.service-model' {
     onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo>;
   }
 }
+declare module 'shared/models/data-provider.interface' {
+  import {
+    DataProviderDataTypes,
+    DataProviderGetters,
+    DataProviderSetters,
+    DataProviderSubscribers,
+  } from 'shared/models/data-provider.model';
+  import { Dispose, OnDidDispose } from 'platform-bible-utils';
+  /**
+   * An object on the papi that manages data and has methods for interacting with that data. Created
+   * by the papi and layers over an {@link IDataProviderEngine} provided by an extension. Returned from
+   * getting a data provider with `papi.dataProviders.get`.
+   *
+   * Note: each `set<data_type>` method has a corresponding `get<data_type>` and
+   * `subscribe<data_type>` method.
+   */
+  export type IDataProvider<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
+    DataProviderSetters<TDataTypes> &
+      DataProviderGetters<TDataTypes> &
+      DataProviderSubscribers<TDataTypes> &
+      OnDidDispose;
+  export default IDataProvider;
+  /**
+   * A data provider that has control over disposing of it with dispose. Returned from registering a
+   * data provider (only the service that set it up should dispose of it) with
+   * dataProviderService.registerEngine
+   *
+   * @see {@link IDataProvider}
+   */
+  export type IDisposableDataProvider<TDataProvider extends IDataProvider<any>> = TDataProvider &
+    Dispose;
+}
+declare module 'shared/services/keyboard.service-model' {
+  import { PlatformEvent } from 'platform-bible-utils';
+  import { DataProviderDataType } from 'shared/models/data-provider.model';
+  import { IDataProvider } from 'shared/models/data-provider.interface';
+  import { WebViewId } from 'shared/models/web-view.model';
+  /**
+   * Combines a finite set of known string literals with a tolerance for unknown strings — preserving
+   * editor autocomplete on the known values AND keeping exhaustiveness pressure on `switch` consumers
+   * (because TypeScript no longer thinks the union is closed).
+   *
+   * Without the `(string & {})` branch, `T | string` collapses to just `string` and you lose both
+   * autocomplete and the requirement to handle a `default` branch in switch statements. The `& {}`
+   * intersection is identical to `string` at runtime but blocks the collapse for inference purposes.
+   *
+   * See data-contracts.md §2.5 for the full rationale (the pattern is also published in type-fest
+   * under the same name).
+   */
+  export type LiteralUnion<T extends string> = T | (string & {});
+  /**
+   * Opaque OS-supplied keyboard identifier (FN-002). Equality by string compare. Treat as opaque — do
+   * not parse, normalize, or assume a format (INV-C07).
+   */
+  export type KeyboardId = string;
+  /**
+   * Stable project identifier — the string form of a Guid. PT9 anchor: `ScrText.Guid.ToString()`
+   * (INV-C06).
+   */
+  export type ProjectId = string;
+  /**
+   * The canonical const tuple of all known surface type strings (alignment-decision #29 §D). Adding a
+   * new surface in a future release is a one-line edit here. Consumers that iterate over surfaces
+   * (the dialog, tests, etc.) import this const rather than hardcoding the list.
+   */
+  export const KEYBOARD_SURFACE_TYPES: readonly ['vernacular', 'comments'];
+  /**
+   * Keyboard surface type for a project.
+   *
+   * - `'vernacular'` : the project's scripture / text editor surface (PT9: not-isForNotes)
+   * - `'comments'` : the project's comments editor surface (PT9: NotesKeyboard)
+   *
+   * Forward-compat note: {@link LiteralUnion} preserves autocomplete on the two known surfaces AND
+   * forces any `switch (surfaceType)` consumer to handle a `default` branch — so adding a third
+   * surface type in a future release does not silently break exhaustiveness checks at existing call
+   * sites. Wire-level validation (in the data provider engine) still rejects unknown values.
+   */
+  export type KeyboardSurfaceType = LiteralUnion<(typeof KEYBOARD_SURFACE_TYPES)[number]>;
+  /**
+   * Maximum number of last-used keyboard ids retained per (project, surface) by the last-used
+   * keyboard store (alignment-decision #26; const tunable).
+   */
+  export const MAX_LAST_USED_KEYBOARDS = 1;
+  /**
+   * A single OS-installed keyboard option as enumerated by the OS-keyboard layer (data-contracts
+   * §2.3). Matches the C# `KeyboardOption` record wire shape (CAP-007).
+   */
+  export interface KeyboardOption {
+    /** Opaque OS-supplied ID — equality target for selection logic. */
+    id: KeyboardId;
+    /**
+     * Display name as enumerated by the OS. May contain RTL script (e.g., "العربية", "עברית"). PT10
+     * does NOT translate this string. Per-item bidi rendering is required (FN-012).
+     */
+    name: string;
+    /**
+     * Optional hint that the OS-supplied name is in an RTL script. May be computed by the OS-keyboard
+     * layer or by a Unicode bidi heuristic. Absent means "unknown".
+     */
+    isRtlScript?: boolean;
+  }
+  /** The currently-active keyboard plus the project/surface context that activated it (if any). */
+  export type CurrentKeyboard = {
+    /** The active OS keyboard id. */
+    keyboardId: KeyboardId;
+    /** Project whose preference drove the activation; `undefined` for ad-hoc activations. */
+    projectId: ProjectId | undefined;
+    /** Surface whose preference drove the activation; `undefined` for ad-hoc activations. */
+    surfaceType: KeyboardSurfaceType | undefined;
+  };
+  /**
+   * Payload of {@link IKeyboardService.onDidDetectManualKeyboardSwitch} (alignment-decision #28) — the
+   * user manually switched the OS keyboard while focused on a project editor surface that has no
+   * configured keyboard.
+   */
+  export type ManualKeyboardSwitchDetection = {
+    projectId: ProjectId;
+    surfaceType: KeyboardSurfaceType;
+    manuallyChosenKeyboardId: KeyboardId;
+  };
+  /**
+   * Per-surface default keyboard map for one project (alignment-decision #29 §D). Known surfaces are
+   * strongly typed from {@link KEYBOARD_SURFACE_TYPES}; the index signature allows tolerant reading of
+   * unknown keys a future PT10 might persist.
+   */
+  export type SurfaceKeyboardMap = {
+    [Surface in (typeof KEYBOARD_SURFACE_TYPES)[number]]?: KeyboardId;
+  } & {
+    [surface: string]: KeyboardId | undefined;
+  };
+  /**
+   * Per-surface arrays of last-used keyboard ids for one project (most-recent first; length
+   * 0..{@link MAX_LAST_USED_KEYBOARDS}). Same known-key + tolerant-index shape as
+   * {@link SurfaceKeyboardMap}.
+   */
+  export type SurfaceKeyboardArrayMap = {
+    [Surface in (typeof KEYBOARD_SURFACE_TYPES)[number]]?: KeyboardId[];
+  } & {
+    [surface: string]: KeyboardId[] | undefined;
+  };
+  /** Selector for the per-surface `ProjectDefaultKeyboard` data type. */
+  export type ProjectDefaultKeyboardSelector = {
+    projectId: ProjectId;
+    surfaceType: KeyboardSurfaceType;
+  };
+  /**
+   * Set value for the `CurrentKeyboard` data type — discriminated; never `undefined` (`undefined`
+   * would conflict with `resetCurrentKeyboard` semantics; see backend-alignment.md set-semantics
+   * table).
+   */
+  export type SetCurrentKeyboardValue =
+    | {
+        surfaceType: KeyboardSurfaceType;
+      }
+    | {
+        keyboardId: KeyboardId;
+      };
+  /**
+   *
+   * This name is used to register the keyboard service data provider on the papi. You can use this
+   * name to find the data provider when accessing it using the useData hook
+   */
+  export const keyboardServiceProviderName = 'platform.keyboard';
+  export const keyboardServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * This name is used to register the keyboard service data provider on the papi. You can use this
+     * name to find the data provider when accessing it using the useData hook
+     */
+    dataProviderName: 'platform.keyboard';
+  }>;
+  /** Name of the C# OS-keyboard primitive data provider (CAP-007; alignment-decision #25). */
+  export const osKeyboardServiceProviderName = 'platform.osKeyboard';
+  /**
+   * The six data types served by the `platform.keyboard` data provider engine (CAP-015). See
+   * backend-alignment.md §"Data Provider Data Types (PT10)" for full get/set semantics.
+   */
+  export type KeyboardServiceDataTypes = {
+    /** Per-(project, surface) default keyboard. `undefined` set value = sentinel = remove. */
+    ProjectDefaultKeyboard: DataProviderDataType<
+      ProjectDefaultKeyboardSelector,
+      KeyboardId | undefined,
+      KeyboardId | undefined
+    >;
+    /**
+     * Plural read-only view of one project's per-surface defaults (alignment-decision #29 §C). Writes
+     * go through `ProjectDefaultKeyboard` (singular).
+     */
+    ProjectDefaultKeyboards: DataProviderDataType<ProjectId, SurfaceKeyboardMap, never>;
+    /** OS-level default keyboard captured once at startup (INV-C05). Read-only. */
+    SystemDefaultKeyboard: DataProviderDataType<undefined, KeyboardId | undefined, never>;
+    /** OS-enumerated keyboard options. Read-only. */
+    AvailableKeyboards: DataProviderDataType<undefined, KeyboardOption[], never>;
+    /** The globally-active keyboard (selector `undefined`) or focused-webview guard (selector id). */
+    CurrentKeyboard: DataProviderDataType<
+      WebViewId | undefined,
+      CurrentKeyboard | undefined,
+      SetCurrentKeyboardValue
+    >;
+    /** Last-used keyboards per (project, surface) (alignment-decisions #26, #29 §C). Read-only. */
+    LastUsedKeyboards: DataProviderDataType<ProjectId, SurfaceKeyboardArrayMap, never>;
+  };
+  /**
+   * The two data types served by the C# `platform.osKeyboard` data provider (CAP-007) — the OS
+   * primitive layer consumed by the TS `KeyboardActivationService` (CAP-010).
+   */
+  export type OsKeyboardServiceDataTypes = {
+    /** Currently-active OS keyboard id. `set` activates at the OS layer (VAL-B-04 inside). */
+    CurrentOsKeyboard: DataProviderDataType<undefined, KeyboardId | undefined, KeyboardId>;
+    /** OS-enumerated keyboard options. Read-only. */
+    AvailableOsKeyboards: DataProviderDataType<undefined, KeyboardOption[], never>;
+  };
+  /**
+   *
+   * Service that allows to interact with per-project keyboard preferences and the active OS keyboard.
+   * The shape `papi.keyboard` exposes (registered by CAP-016).
+   */
+  export type IKeyboardService = {
+    /**
+     * Event that fires when a manual OS-keyboard switch is detected on an unconfigured project editor
+     * surface (alignment-decision #28).
+     */
+    onDidDetectManualKeyboardSwitch: PlatformEvent<ManualKeyboardSwitchDetection>;
+    /**
+     * Resets the current OS keyboard per the 6-case table in backend-alignment.md: resolve the
+     * focused (or specified, must-be-focused) webview's `keyboardPreference` to the project default
+     * keyboard, falling back to the system default keyboard.
+     *
+     * @param webViewId The webview to reset for, or `undefined` to resolve from current focus
+     * @returns Promise that resolves `true` if a keyboard activation was performed
+     */
+    resetCurrentKeyboard(webViewId: WebViewId | undefined): Promise<boolean>;
+  } & IDataProvider<KeyboardServiceDataTypes> &
+    typeof keyboardServiceObjectToProxy;
+  /**
+   * TS view of the C# `platform.osKeyboard` data provider (CAP-007). Consumers obtain it via
+   * `papi.dataProviders.get(osKeyboardServiceProviderName)`.
+   */
+  export type IOsKeyboardDataProvider = IDataProvider<OsKeyboardServiceDataTypes>;
+  module 'papi-shared-types' {
+    interface DataProviders {
+      [keyboardServiceProviderName]: IKeyboardService;
+      [osKeyboardServiceProviderName]: IOsKeyboardDataProvider;
+    }
+  }
+  /**
+   * True if the projectInterface implies a writable scripture surface (alignment-decision #30 —
+   * drives vernacular ComboBox enablement in the keyboard-selection dialog).
+   */
+  export function isScriptureInterface(projectInterface: string): boolean;
+  /**
+   * True if the projectInterface implies a comments surface (alignment-decision #30 — drives comments
+   * ComboBox visibility in the keyboard-selection dialog).
+   */
+  export function isCommentsInterface(projectInterface: string): boolean;
+}
 declare module 'shared/models/web-view.model' {
   import type { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
+  import type { KeyboardSurfaceType } from 'shared/services/keyboard.service-model';
   import { SerializedVerseRef } from '@sillsdev/scripture';
   import { LocalizeKey, ScrollGroupId } from 'platform-bible-utils';
   /**
@@ -332,6 +589,15 @@ declare module 'shared/models/web-view.model' {
      * @default false
      */
     shouldShowToolbar?: boolean;
+    /**
+     * Which keyboard surface this WebView wants active while it has focus. When the WebView gains
+     * focus, the keyboard service activates the focused project's default keyboard for this surface
+     * (if one is configured); when focus leaves, the system default keyboard is restored.
+     *
+     * `undefined` (default) means this WebView does not participate in focus-driven keyboard
+     * switching. Never `null`.
+     */
+    keyboardPreference?: KeyboardSurfaceType;
   };
   /** WebView representation using React */
   export type WebViewDefinitionReact = WebViewDefinitionBase & {
@@ -399,6 +665,7 @@ declare module 'shared/models/web-view.model' {
     'projectId',
     'scrollGroupScrRef',
     'state',
+    'keyboardPreference',
   ];
   /** The properties on a WebViewDefinition that may be updated when that webview is already displayed */
   export type WebViewDefinitionUpdatableProperties = Pick<
@@ -2854,38 +3121,6 @@ declare module 'shared/models/project-data-provider.model' {
     ): Promise<DataProviderUpdateInstructions<TProjectDataTypes>>;
   };
 }
-declare module 'shared/models/data-provider.interface' {
-  import {
-    DataProviderDataTypes,
-    DataProviderGetters,
-    DataProviderSetters,
-    DataProviderSubscribers,
-  } from 'shared/models/data-provider.model';
-  import { Dispose, OnDidDispose } from 'platform-bible-utils';
-  /**
-   * An object on the papi that manages data and has methods for interacting with that data. Created
-   * by the papi and layers over an {@link IDataProviderEngine} provided by an extension. Returned from
-   * getting a data provider with `papi.dataProviders.get`.
-   *
-   * Note: each `set<data_type>` method has a corresponding `get<data_type>` and
-   * `subscribe<data_type>` method.
-   */
-  export type IDataProvider<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
-    DataProviderSetters<TDataTypes> &
-      DataProviderGetters<TDataTypes> &
-      DataProviderSubscribers<TDataTypes> &
-      OnDidDispose;
-  export default IDataProvider;
-  /**
-   * A data provider that has control over disposing of it with dispose. Returned from registering a
-   * data provider (only the service that set it up should dispose of it) with
-   * dataProviderService.registerEngine
-   *
-   * @see {@link IDataProvider}
-   */
-  export type IDisposableDataProvider<TDataProvider extends IDataProvider<any>> = TDataProvider &
-    Dispose;
-}
 declare module 'shared/models/data-provider-engine.model' {
   import {
     DataProviderDataTypes,
@@ -3702,6 +3937,14 @@ declare module 'shared/services/web-view.service-model' {
      */
     getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]>;
     /**
+     * Closes the WebView with the specified ID, removing its tab from the dock layout.
+     *
+     * @param webViewId The ID of the WebView to close
+     * @returns Promise that resolves to `true` if a WebView with the specified ID was found and
+     *   closed; `false` if no WebView with that ID was found (does not throw in that case)
+     */
+    closeWebView(webViewId: WebViewId): Promise<boolean>;
+    /**
      * Get an existing web view controller for an open web view.
      *
      * A Web View Controller is a network object that represents a web view and whose methods
@@ -4120,6 +4363,7 @@ declare module 'papi-shared-types' {
     UpdateWebViewEvent,
   } from 'shared/services/web-view.service-model';
   import { WebViewId } from 'shared/models/web-view.model';
+  import { SurfaceKeyboardMap } from 'shared/services/keyboard.service-model';
   import { SerializedVerseRef } from '@sillsdev/scripture';
   /**
    * Function types for each command available on the papi. Each extension can extend this interface
@@ -4265,6 +4509,15 @@ declare module 'papi-shared-types' {
      * 0.5 to 3.0.
      */
     'platform.zoomFactor': number;
+    /**
+     * Per-project keyboard associations, keyed by project id (`ScrText.Guid` string form) with one
+     * optional keyboard id per editing surface (keyboard-switching CAP-009 / EXT-100). User-scoped
+     * and machine-local — matches Paratext 9 `Settings.Default.ProjectKeyboards` semantics; NOT
+     * Send/Receive synced. Managed by `KeyboardAssociationStore`; not intended for direct editing.
+     */
+    'platform.keyboardsByProject': {
+      [projectId: string]: SurfaceKeyboardMap;
+    };
     /**
      * The interface mode for the application. `simple` provides a streamlined experience, while
      * `power` exposes advanced features.
@@ -9636,8 +9889,19 @@ declare module 'shared/services/window.service-model' {
   export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
   /** Instructions that indicate how to change the app window focus */
   export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | undefined;
+  /** Whether the main application window itself currently has OS-level focus */
+  export type AppFocusSubject = {
+    isAppFocused: boolean;
+  };
   export type WindowDataTypes = {
     Focus: DataProviderDataType<undefined, FocusSubject | undefined, SetFocusSpecifier>;
+    /**
+     * Whether the main application window has OS-level focus (`get` + `subscribe`; `set` data type is
+     * `never` — PAPI consumers cannot push arbitrary data through the generic set path. Only the
+     * main-process focus/blur emitter mutates this via the {@link IWindowService.setAppFocus} proxy
+     * method)
+     */
+    AppFocus: DataProviderDataType<undefined, AppFocusSubject, never>;
   };
   module 'papi-shared-types' {
     interface DataProviders {
@@ -9711,6 +9975,61 @@ declare module 'shared/services/window.service-model' {
     subscribeFocus(
       selector: undefined,
       callback: (focusSubject: FocusSubject | PlatformError) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+    /**
+     *
+     * Get whether the main application window currently has OS-level focus
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Whether the main app window is focused
+     */
+    getAppFocus(selector: undefined): Promise<AppFocusSubject>;
+    /**
+     *
+     * Get whether the main application window currently has OS-level focus
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Whether the main app window is focused
+     */
+    getAppFocus(): Promise<AppFocusSubject>;
+    /**
+     * Sets whether the main application window has OS-level focus.
+     *
+     * Note: this is an internal proxy method for the main process's window `focus`/`blur` emitter
+     * (mirror of `setFocus('detect')`). Setting the same value twice in a row does not emit a second
+     * `AppFocus` update.
+     *
+     * @param isAppFocused Whether the main app window is focused
+     * @returns `true` or an array of strings if the app focus state changed; `false` otherwise
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setAppFocus(isAppFocused: boolean): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
+    /**
+     * Sets whether the main application window has OS-level focus.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @param isAppFocused Whether the main app window is focused
+     * @returns `true` or an array of strings if the app focus state changed; `false` otherwise
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setAppFocus(
+      selector: undefined,
+      isAppFocused: boolean,
+    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
+    /**
+     * Subscribe to run a callback function when the main app window gains or loses OS-level focus
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @param callback Function to run with the updated app focus state. If there is an error while
+     *   retrieving the updated data, the function will run with a {@link PlatformError} instead of the
+     *   data. You can call {@link isPlatformError} on this value to check if it is an error.
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+     */
+    subscribeAppFocus(
+      selector: undefined,
+      callback: (appFocus: AppFocusSubject | PlatformError) => void,
       options?: DataProviderSubscriberOptions,
     ): Promise<UnsubscriberAsync>;
   } & OnDidDispose &
@@ -10446,6 +10765,15 @@ declare module 'shared/services/app.service' {
    */
   export const appService: IAppService;
 }
+declare module 'shared/services/keyboard.service' {
+  import { IKeyboardService } from 'shared/services/keyboard.service-model';
+  /**
+   *
+   * Service that allows to interact with per-project keyboard preferences and the active OS keyboard.
+   * The shape `papi.keyboard` exposes (registered by CAP-016).
+   */
+  export const keyboardService: IKeyboardService;
+}
 declare module '@papi/backend' {
   /**
    * Unified module for accessing API features in the extension host.
@@ -10478,6 +10806,7 @@ declare module '@papi/backend' {
   import { IProjectSettingsService } from 'shared/services/project-settings.service-model';
   import { WebViewFactory as PapiWebViewFactory } from 'shared/models/web-view-factory.model';
   import { INotificationService } from 'shared/models/notification.service-model';
+  import { IKeyboardService } from 'shared/services/keyboard.service-model';
   const papi: {
     /**
      *
@@ -10730,6 +11059,12 @@ declare module '@papi/backend' {
      * Service that sends notifications to users in the UI
      */
     notifications: INotificationService;
+    /**
+     *
+     * Service that allows to interact with per-project keyboard preferences and the active OS keyboard.
+     * The shape `papi.keyboard` exposes (registered by CAP-016).
+     */
+    keyboard: IKeyboardService;
     /**
      *
      * Service that allows to interact with the main application window
@@ -10988,6 +11323,12 @@ declare module '@papi/backend' {
    * Service that sends notifications to users in the UI
    */
   export const notifications: INotificationService;
+  /**
+   *
+   * Service that allows to interact with per-project keyboard preferences and the active OS keyboard.
+   * The shape `papi.keyboard` exposes (registered by CAP-016).
+   */
+  export const keyboard: IKeyboardService;
   /**
    *
    * Service that allows to interact with the main application window
@@ -11416,6 +11757,7 @@ declare module '@papi/frontend' {
   import { DataProviderService } from 'shared/services/data-provider.service';
   import { DialogService } from 'shared/services/dialog.service-model';
   import { InternetService } from 'shared/services/internet.service';
+  import { IKeyboardService } from 'shared/services/keyboard.service-model';
   import { ILocalizationService } from 'shared/services/localization.service-model';
   import { IMenuDataService } from 'shared/services/menu-data.service-model';
   import { PapiNetworkService } from 'shared/services/network.service';
@@ -11576,6 +11918,12 @@ declare module '@papi/frontend' {
      * Service that sends notifications to users in the UI
      */
     notifications: INotificationService;
+    /**
+     *
+     * Service that allows to interact with per-project keyboard preferences and the active OS keyboard.
+     * The shape `papi.keyboard` exposes (registered by CAP-016).
+     */
+    keyboard: IKeyboardService;
     /**
      *
      * Service that allows to interact with the main application window
@@ -11745,6 +12093,12 @@ declare module '@papi/frontend' {
    * Service that sends notifications to users in the UI
    */
   export const notifications: INotificationService;
+  /**
+   *
+   * Service that allows to interact with per-project keyboard preferences and the active OS keyboard.
+   * The shape `papi.keyboard` exposes (registered by CAP-016).
+   */
+  export const keyboard: IKeyboardService;
   /**
    *
    * Service that allows to interact with the main application window

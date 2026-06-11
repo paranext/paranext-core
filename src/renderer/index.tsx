@@ -5,6 +5,7 @@ import '@renderer/global-this.model';
 
 import { App } from '@renderer/app.component';
 import { startDialogService } from '@renderer/services/dialog.service-host';
+import { initialize as initializeKeyboardService } from '@renderer/services/keyboard.service-host';
 import { startNotificationService } from '@renderer/services/notification.service-host';
 import { startOverlayService } from '@renderer/services/overlays/overlay.service-host';
 import { blockWebSocketsToPapiNetwork } from '@renderer/services/renderer-web-socket.service';
@@ -104,6 +105,9 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
       startOverlayService(),
       initializeThemeService(),
       initializeWindowService(),
+      // === NEW IN PT10 === (keyboard-switching CAP-016): the renderer-hosted `platform.keyboard`
+      // DataProvider engine registers at renderer-process startup
+      initializeKeyboardService(),
     );
 
     // Subscribe to updates to the current theme

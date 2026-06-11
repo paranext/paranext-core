@@ -22,13 +22,14 @@ import {
 import type { LocalizeKey, PlatformError, PlatformErrorCode } from 'platform-bible-utils';
 import type { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import { DataProviderEngine } from '@shared/models/data-provider-engine.model';
-import type { IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 import type { WebViewId } from '@shared/models/web-view.model';
 import { dataProviderService } from '@shared/services/data-provider.service';
 import { localizationService } from '@shared/services/localization.service';
 // The test/runtime seam pins this as a NAMED import (the network.service test mock provides only
 // `createNetworkEventEmitter`); do not widen to other members of that module here
 import { createNetworkEventEmitter } from '@shared/services/network.service';
+import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
+import { projectLookupService } from '@shared/services/project-lookup.service';
 import { webViewService } from '@shared/services/web-view.service';
 import { windowService } from '@shared/services/window.service';
 import {
@@ -137,8 +138,11 @@ type KeyboardSwitchingDataProviderEngineOptions = {
  * (BA-RF-011 — a verb, not a data-type CRUD method).
  *
  * The four read-only data types (`ProjectDefaultKeyboards`, `SystemDefaultKeyboard`,
- * `AvailableKeyboards`, `LastUsedKeyboards` — set type `never`) deliberately have NO runtime `set*`
- * members (alignment-decisions #26/#29 §C pin the absent-member read-only surface).
+ * `AvailableKeyboards`, `LastUsedKeyboards` — set type `never`) stay read-only at the TYPE level
+ * (alignment-decisions #26/#29 §C; INV-C05), but each carries a runtime `set*` member that ALWAYS
+ * rejects without mutating or emitting: the real `registerEngine` validation
+ * (data-provider.service.ts:704-709) throws at registration when any `get<data_type>` lacks a
+ * matching `set<data_type>` (CAP-016 I-8; localization.service-host throwing-setter precedent).
  *
  * Constructed ONLY by {@link initialize} (single shared construction site — strategic-plan CAP-015
  * scope); the class is exported for typing (tests type the engine captured from
@@ -318,6 +322,63 @@ export class KeyboardSwitchingDataProviderEngine extends DataProviderEngine<Keyb
     return this.options.lastUsedKeyboardStore.get(projectId);
   }
 
+  // === NEW IN PT10 === (keyboard-switching CAP-016)
+  // Reason: registration parity for the four read-only data types (I-8). The real
+  // `registerEngine` validation (data-provider.service.ts:704-709) throws when any
+  // `get<data_type>` lacks a matching `set<data_type>`, so each read-only type carries a runtime
+  // setter that ALWAYS rejects without mutating or emitting (localization.service-host
+  // `setLocalizedString disabled` precedent). Read-only-ness is preserved at the TYPE level
+  // (`set: never` in KeyboardServiceDataTypes — alignment-decisions #26/#29 §C; INV-C05).
+  // Maps to: CAP-016 (I-8)
+
+  /**
+   * `ProjectDefaultKeyboards` is read-only at PAPI — writes go through the singular
+   * {@link setProjectDefaultKeyboard}. Exists only for registration parity; always rejects.
+   */
+  // Doesn't use instance state but cannot be static: it implements the
+  // IDataProviderEngine<KeyboardServiceDataTypes> mapped-type member
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  async setProjectDefaultKeyboards(): Promise<
+    DataProviderUpdateInstructions<KeyboardServiceDataTypes>
+  > {
+    throw new Error('setProjectDefaultKeyboards disabled');
+  }
+
+  /**
+   * `SystemDefaultKeyboard` is the read-only startup capture (INV-C05). Exists only for
+   * registration parity; always rejects.
+   */
+  // Doesn't use instance state but cannot be static: it implements the
+  // IDataProviderEngine<KeyboardServiceDataTypes> mapped-type member
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  async setSystemDefaultKeyboard(): Promise<
+    DataProviderUpdateInstructions<KeyboardServiceDataTypes>
+  > {
+    throw new Error('setSystemDefaultKeyboard disabled');
+  }
+
+  /**
+   * `AvailableKeyboards` is a read-only OS enumeration passthrough. Exists only for registration
+   * parity; always rejects.
+   */
+  // Doesn't use instance state but cannot be static: it implements the
+  // IDataProviderEngine<KeyboardServiceDataTypes> mapped-type member
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  async setAvailableKeyboards(): Promise<DataProviderUpdateInstructions<KeyboardServiceDataTypes>> {
+    throw new Error('setAvailableKeyboards disabled');
+  }
+
+  /**
+   * `LastUsedKeyboards` is read-only at PAPI (internal writes only via the CAP-018 store from the
+   * CAP-014 router). Exists only for registration parity; always rejects.
+   */
+  // Doesn't use instance state but cannot be static: it implements the
+  // IDataProviderEngine<KeyboardServiceDataTypes> mapped-type member
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  async setLastUsedKeyboards(): Promise<DataProviderUpdateInstructions<KeyboardServiceDataTypes>> {
+    throw new Error('setLastUsedKeyboards disabled');
+  }
+
   /**
    * Resets the current OS keyboard per the 6-case table (backend-alignment §"`resetCurrentKeyboard`
    * (NEW wire method)"): resolve the focused (or specified, must-be-focused) webview's
@@ -394,6 +455,42 @@ export class KeyboardSwitchingDataProviderEngine extends DataProviderEngine<Keyb
   }
 }
 
+// === NEW IN PT10 === (keyboard-switching CAP-016)
+// Reason: the PT10 adaptation of PT9's `ScrTextCollection.Find(shortName)` lookup inside the
+// EXT-106 pre-Guid migration (KeyboardHelper.cs:44-46) — PT10 has no ScrTextCollection, so the
+// legacy short name resolves through project lookup + each project's `platform.name` project
+// setting (THE PT10 short-name setting). Wired into the CAP-009 store's D-SEAM-2 seam below (I-3).
+// Maps to: CAP-016 (I-3) / EXT-106
+
+/**
+ * Resolves a PT9 legacy project SHORT NAME (a whole pre-Guid settings key of length ≤ 20) to the
+ * {@link ProjectId} (Guid) of the project whose `platform.name` project setting matches. Returns
+ * `undefined` when no project matches — the association store then DROPS the entry (PT9
+ * KeyboardHelper.cs:44-54 removes unresolvable entries).
+ */
+async function resolveLegacyProjectKeyAsync(
+  legacyShortName: string,
+): Promise<ProjectId | undefined> {
+  const allProjectsMetadata = await projectLookupService.getMetadataForAllProjects();
+  const matchingProjectIds = await Promise.all(
+    allProjectsMetadata.map(async (projectMetadata): Promise<ProjectId | undefined> => {
+      try {
+        const projectDataProvider = await papiFrontendProjectDataProviderService.get(
+          'platform.base',
+          projectMetadata.id,
+        );
+        const shortName = await projectDataProvider.getSetting('platform.name');
+        return shortName === legacyShortName ? projectMetadata.id : undefined;
+      } catch {
+        // A project whose short name cannot be read simply cannot match this legacy key — one
+        // project's lookup failure must not break the whole migration (the entry just drops)
+        return undefined;
+      }
+    }),
+  );
+  return matchingProjectIds.find((projectId) => projectId !== undefined);
+}
+
 /** Memoized {@link initialize} promise — the host registers the engine exactly once. */
 let initializationPromise: Promise<void> | undefined;
 
@@ -424,11 +521,12 @@ async function initializeInternalAsync(): Promise<void> {
 
   // CAP-009. The store's `notifyDidChange` seam is deliberately NOT wired: `ProjectDefaultKeyboard`
   // updates are signaled exclusively through `setProjectDefaultKeyboard`'s returned update
-  // instructions (single emission channel — spec-008 exactly-once contract). NOTE: the EXT-106
-  // legacy-short-name migration seam (`resolveLegacyProjectKey`) is also not wired in this
-  // capability — legacy ≤20-char short-name entries are dropped rather than resolved; flagged in
-  // implementer plan decision I-3 for CAP-016/P3B.5 review.
-  const associationStore = new KeyboardAssociationStore();
+  // instructions (single emission channel — spec-008 exactly-once contract). The EXT-106
+  // legacy-short-name migration seam (D-SEAM-2) IS wired (CAP-016 I-3): legacy ≤20-char short-name
+  // entries resolve to project Guids via project lookup; unresolvable entries drop.
+  const associationStore = new KeyboardAssociationStore({
+    resolveLegacyProjectKey: resolveLegacyProjectKeyAsync,
+  });
 
   // CAP-010: captures the SystemDefaultKeyboard startup snapshot (a capture failure leaves it
   // undefined WITHOUT failing initialization) and subscribes to CurrentOsKeyboard (decision #25)
@@ -450,16 +548,10 @@ async function initializeInternalAsync(): Promise<void> {
     osKeyboardDataProvider,
   });
 
-  // The engine intentionally has NO `set*` members for the four read-only (`never`-set) data types
-  // (alignment-decisions #26/#29 §C pin the absent-member surface), but `IDataProviderEngine`'s
-  // mapped type demands a `set<data_type>` for every data type — assert across that structural gap
-  // at this single registration callsite
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const registrableEngine = engine as unknown as IDataProviderEngine<KeyboardServiceDataTypes>;
-
   // Register BEFORE starting the router so papi's notifyUpdate layering is live by the time any
-  // router-driven last-used append fires
-  await dataProviderService.registerEngine(keyboardServiceProviderName, registrableEngine);
+  // router-driven last-used append fires. The engine satisfies `IDataProviderEngine`'s mapped type
+  // directly (CAP-016 I-8): every data type has a `set<data_type>` — the read-only ones throw
+  await dataProviderService.registerEngine(keyboardServiceProviderName, engine);
 
   // data-contracts §5.4: the manual-switch detection is a PAPI network event with this exact name
   const onDidDetectManualKeyboardSwitchEmitter =
