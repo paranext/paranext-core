@@ -9,6 +9,7 @@
 import type { KeyboardId } from '@shared/services/keyboard.service-model';
 import { notificationService } from '@shared/services/notification.service';
 import { logger } from '@shared/services/logger.service';
+import { getErrorMessage } from 'platform-bible-utils';
 
 /**
  * Once-per-session dedup gate for the missing-keyboard notification (VAL-B-05 / INV-C09).
@@ -58,7 +59,7 @@ export class MissingKeyboardNotifier {
         // Fire-and-forget must not leak a rejection, but errors are not invisible
         // (data-contracts §3.4) — projectShortName is surfaced here as log context only
         logger.error(
-          `keyboard-switching: failed to send missing-keyboard notification for keyboard '${missingKeyboardId}' (project '${projectShortName ?? '<unknown>'}'): ${error}`,
+          `MissingKeyboardNotifier failed to send the missing-keyboard notification for keyboard '${missingKeyboardId}' (project '${projectShortName ?? '<unknown>'}'): ${getErrorMessage(error)}`,
         );
       });
   }
