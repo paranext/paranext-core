@@ -14,6 +14,7 @@ internal class ParatextProjectSendReceiveService(
     ParatextProjectDataProviderFactory pdpFactory,
     AppInfo appInfo
 )
+#pragma warning restore CS9113
 {
     #region Public properties and methods
 
