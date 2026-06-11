@@ -7,7 +7,7 @@
         "label": "%manageBooks_openMenuItem%",
         "localizeNotes": "Application main menu > Project > Manage books…",
         "group": "platform.projectResources",
-        "order": 100,
+        "order": 0,
         "command": "platformScripture.openManageBooks"
       }
     ]
