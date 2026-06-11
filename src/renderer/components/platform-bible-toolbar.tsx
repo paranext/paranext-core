@@ -1,8 +1,7 @@
 import logo from '@assets/icon.png';
 import { provideMenuData } from '@renderer/components/platform-bible-menu.data';
+import { UserProfilePopover } from '@renderer/components/user-profile-popover/user-profile-popover.component';
 import {
-  useData,
-  useDataProvider,
   useDialogCallback,
   useLocalizedStrings,
   useScrollGroupScrRef,
@@ -13,14 +12,12 @@ import { useProjectPickerData } from '@renderer/hooks/use-project-picker-data.ho
 import { PROJECT_PICKER_DIALOG_TYPE } from '@renderer/components/dialogs/dialog-definition.model';
 import { app, dataProviders } from '@renderer/services/papi-frontend.service';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
-import { localThemeService } from '@renderer/services/theme.service-host';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import { sendCommand } from '@shared/services/command.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { logger } from '@shared/services/logger.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
-import { themeServiceDataProviderName } from '@shared/services/theme.service-model';
-import { CircleCheck, CircleUserRound, HomeIcon, Moon, Network, Sun } from 'lucide-react';
+import { CircleCheck, HomeIcon } from 'lucide-react';
 import {
   Badge,
   BookChapterControl,
@@ -46,10 +43,8 @@ import {
 import {
   getErrorMessage,
   getLocalizeKeysForScrollGroupIds,
-  isPlatformError,
   LocalizeKey,
   ScrollGroupId,
-  ThemeDefinitionExpanded,
 } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -59,17 +54,6 @@ const TOOLTIP_DELAY = 300;
 // host may not be ready when the toolbar first mounts. onDidReloadExtensions handles recovery
 // after that initial window, so a single retry here is sufficient.
 const SEND_RECEIVE_AVAILABILITY_STARTUP_RETRY_MS = 2000;
-
-/** Placeholder theme to detect when we are loading */
-const DEFAULT_THEME_VALUE: ThemeDefinitionExpanded = {
-  themeFamilyId: '',
-  type: 'light',
-  id: 'light',
-  // Reference-equality sentinel only; this label is never displayed (the loading state is detected
-  // before any render uses the label). Reusing an existing key avoids needing a bogus i18n entry.
-  label: '%toolbar_theme_loading%',
-  cssVariables: {},
-};
 
 const scrollGroupIdLocalStorageKey = 'platform-bible-toolbar.scrollGroupId';
 
@@ -81,13 +65,7 @@ const availableScrollGroupIdsTop = availableScrollGroupIds.filter(
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIdsTop);
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
-  '%mainMenu_openParatextRegistration%',
-  '%mainMenu_openInternetSettings%',
   '%mainMenu_openHome%',
-  '%toolbar_theme_change_to_light%',
-  '%toolbar_theme_change_to_dark%',
-  '%toolbar_theme_loading%',
-  '%toolbar_theme_loading_error%',
   '%toolbar_sync%',
   '%toolbar_sync_open_status%',
   '%toolbar_sync_status_synced%',
@@ -249,37 +227,6 @@ export function PlatformBibleToolbar() {
   );
   useEvent(onDidReloadExtensions, checkIfSendReceiveAvailable);
 
-  const themeDataProvider = useDataProvider(themeServiceDataProviderName);
-
-  /** Get the theme on first load so we can show the right symbol on the toolbar */
-  const themeOnFirstLoad = useMemo(() => localThemeService.getCurrentThemeSync(), []);
-
-  const [theme, setTheme] = useData<typeof themeServiceDataProviderName>(
-    themeDataProvider,
-  ).CurrentTheme(undefined, DEFAULT_THEME_VALUE);
-
-  // Warn if the theme came back as a PlatformError. Will handle the PlatformError in the jsx too
-  useEffect(() => {
-    if (isPlatformError(theme))
-      logger.warn(`Error getting theme for toolbar button. ${getErrorMessage(theme)}`);
-  }, [theme]);
-
-  const isThemeLoadedNotError = theme !== DEFAULT_THEME_VALUE && !isPlatformError(theme);
-
-  let themeButtonTooltip: string;
-  if (theme === DEFAULT_THEME_VALUE) {
-    themeButtonTooltip = localizedStrings['%toolbar_theme_loading%'];
-  } else if (isPlatformError(theme)) {
-    themeButtonTooltip = localizedStrings['%toolbar_theme_loading_error%'];
-  } else if (theme.type === 'dark') {
-    themeButtonTooltip = localizedStrings['%toolbar_theme_change_to_light%'];
-  } else {
-    themeButtonTooltip = localizedStrings['%toolbar_theme_change_to_dark%'];
-  }
-
-  // Get the theme type from the first theme load or the current theme data, whichever is available
-  const themeTypeEffective = isThemeLoadedNotError ? theme.type : themeOnFirstLoad.type;
-
   return (
     <Toolbar
       menuData={menuData}
@@ -363,88 +310,7 @@ export function PlatformBibleToolbar() {
               </Tooltip>
             </TooltipProvider>
           )}
-          <TooltipProvider delayDuration={TOOLTIP_DELAY}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="pr-twp tw:h-8 tw:shrink-0"
-                  aria-label={themeButtonTooltip}
-                  data-testid="theme-toggle"
-                  onClick={() => {
-                    if (!isThemeLoadedNotError) return;
-
-                    const newThemeType = theme.type === 'dark' ? 'light' : 'dark';
-                    try {
-                      setTheme?.({ type: newThemeType });
-                    } catch (e) {
-                      logger.warn(
-                        `Toolbar caught an error while trying to set theme to ${newThemeType}: ${getErrorMessage(e)}`,
-                      );
-                    }
-                  }}
-                  disabled={!isThemeLoadedNotError}
-                >
-                  {themeTypeEffective === 'dark' ? <Moon /> : <Sun />}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="tw:font-light">{themeButtonTooltip}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          {/* This is a placeholder for the actual user menu */}
-          <TooltipProvider delayDuration={TOOLTIP_DELAY}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="pr-twp tw:h-8 tw:shrink-0"
-                  onClick={() => {
-                    // This command comes from an extension and is not typed in CommandHandlers.
-                    // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-                    (sendCommand as any)('paratextRegistration.showInternetSettings');
-                  }}
-                >
-                  <Network />
-                </Button>
-              </TooltipTrigger>
-              {localizedStrings['%mainMenu_openInternetSettings%'] && (
-                <TooltipContent>
-                  <p className="tw:font-light">
-                    {localizedStrings['%mainMenu_openInternetSettings%']}
-                  </p>
-                </TooltipContent>
-              )}
-            </Tooltip>
-          </TooltipProvider>
-          <TooltipProvider delayDuration={TOOLTIP_DELAY}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="pr-twp tw:h-8 tw:shrink-0"
-                  onClick={() => {
-                    // This command comes from an extension and is not typed in CommandHandlers.
-                    // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-                    (sendCommand as any)('paratextRegistration.showParatextRegistration');
-                  }}
-                >
-                  <CircleUserRound />
-                </Button>
-              </TooltipTrigger>
-              {localizedStrings['%mainMenu_openParatextRegistration%'] && (
-                <TooltipContent>
-                  <p className="tw:font-light">
-                    {localizedStrings['%mainMenu_openParatextRegistration%']}
-                  </p>
-                </TooltipContent>
-              )}
-            </Tooltip>
-          </TooltipProvider>
+          <UserProfilePopover />
         </>
       }
     >

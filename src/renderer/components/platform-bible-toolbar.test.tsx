@@ -14,6 +14,10 @@ vi.mock('@renderer/components/platform-bible-menu.data', () => ({
   provideMenuData: vi.fn(async () => ({ columns: {}, groups: {}, items: [] })),
 }));
 
+vi.mock('@renderer/components/user-profile-popover/user-profile-popover.component', () => ({
+  UserProfilePopover: () => <div data-testid="user-profile-popover-stub" />,
+}));
+
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
@@ -22,12 +26,6 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%toolbar_sync_status_synced%': 'Test Synced',
       '%toolbar_sync_status_syncing%': 'Test Syncing',
       '%mainMenu_openHome%': 'Home',
-      '%mainMenu_openParatextRegistration%': 'Registration',
-      '%mainMenu_openInternetSettings%': 'Internet Settings',
-      '%toolbar_theme_change_to_light%': 'Change to light',
-      '%toolbar_theme_change_to_dark%': 'Change to dark',
-      '%toolbar_theme_loading%': 'Loading theme',
-      '%toolbar_theme_loading_error%': 'Theme error',
     },
   ]),
   useScrollGroupScrRef: vi.fn(() => [{ book: 1, chapter: 1, verse: 1 }, vi.fn(), 0, vi.fn()]),
@@ -370,6 +368,14 @@ describe('PlatformBibleToolbar — Sync button', () => {
 
     // After retry returns true, button becomes visible
     expect(screen.getByRole('button', { name: 'Sync' })).toBeInTheDocument();
+  });
+
+  it('renders the UserProfilePopover stub', async () => {
+    mockSendCommand(true);
+    render(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(screen.getByTestId('user-profile-popover-stub')).toBeInTheDocument();
+    });
   });
 
   it('logs a warning when openSyncStatus command fails', async () => {
