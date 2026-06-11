@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { RpcEventRegistry } from '@main/services/rpc-websocket-listener';
+import { RpcEventRegistry, RpcWebSocketListener } from '@main/services/rpc-websocket-listener';
 
 // Mock heavy dependencies so this test can run outside the Electron main process
 vi.mock('electron', () => ({ app: { getVersion: () => '0.0.0' } }));
@@ -48,17 +48,6 @@ describe('generateOpenRpcSchema() includes notifications from the event registry
     expect(notificationEntry.name).toBe('myExt.onDidSomething');
   });
 
-  it('events without documentation are not surfaced (entries with no docs are skipped)', () => {
-    reg.tryRegister({}, 'myExt.undocumented'); // no docs
-
-    const entries = [...reg.entries()];
-    expect(entries).toHaveLength(1);
-    const [, registrants] = entries[0];
-    const foundDocs = registrants.find((r) => r.documentation)?.documentation;
-    // The production loop does `if (!docs) return;` — confirm docs is undefined here
-    expect(foundDocs).toBeUndefined();
-  });
-
   it('first registration documentation wins for multi-source events', () => {
     const firstDocs = {
       notification: { params: [], summary: 'First handler summary' },
@@ -76,5 +65,41 @@ describe('generateOpenRpcSchema() includes notifications from the event registry
     // Both registrants are present; find() returns the first with documentation
     const foundDocs = registrants.find((r) => r.documentation)?.documentation;
     expect(foundDocs?.notification.summary).toBe('First handler summary');
+  });
+});
+
+describe('generateOpenRpcSchema() surfaces every registered event', () => {
+  let listener: RpcWebSocketListener;
+
+  beforeEach(() => {
+    // The constructor only binds methods (no Electron/WebSocket startup), so a bare instance is
+    // enough to register events and generate the schema directly.
+    listener = new RpcWebSocketListener();
+  });
+
+  it('includes a documented event with its provided documentation', async () => {
+    await listener.registerEvent('myExt.onDidSomething', {
+      notification: { params: [], summary: 'Fired when something happens' },
+    });
+
+    const schema = listener.generateOpenRpcSchema();
+    const entry = schema.methods.find((m) => m.name === 'myExt.onDidSomething');
+    expect(entry).toBeDefined();
+    expect(entry?.summary).toBe('Fired when something happens');
+    // Notifications carry no `result` field.
+    expect(entry && 'result' in entry).toBe(false);
+  });
+
+  it('includes an undocumented event with placeholder documentation (not skipped)', async () => {
+    await listener.registerEvent('myExt.undocumented'); // no docs
+
+    const schema = listener.generateOpenRpcSchema();
+    const entry = schema.methods.find((m) => m.name === 'myExt.undocumented');
+    // Previously undocumented events were dropped from the document; now they are surfaced with a
+    // placeholder so the OpenRPC document lists every registered event.
+    expect(entry).toBeDefined();
+    expect(entry?.description).toBe('Notification: No documentation provided');
+    expect(entry?.params).toEqual([]);
+    expect(entry && 'result' in entry).toBe(false);
   });
 });

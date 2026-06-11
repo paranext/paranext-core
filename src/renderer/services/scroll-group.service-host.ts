@@ -145,7 +145,22 @@ const scrollGroupService: IScrollGroupRemoteService = {
 
 /** Register the network object that backs the scroll group service */
 export async function startScrollGroupService(): Promise<void> {
-  onDidUpdateScrRefEmitter = await createNetworkEventEmitterAsync(EVENT_NAME_ON_DID_UPDATE_SCR_REF);
+  onDidUpdateScrRefEmitter = await createNetworkEventEmitterAsync(
+    EVENT_NAME_ON_DID_UPDATE_SCR_REF,
+    {
+      notification: {
+        summary: 'Emitted when the Scripture reference for a scroll group changes.',
+        params: [
+          {
+            name: 'update',
+            required: true,
+            summary: 'The scroll group and its new Scripture reference.',
+            schema: { type: 'object' },
+          },
+        ],
+      },
+    },
+  );
 
   await networkObjectService.set(NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE, scrollGroupService);
 

@@ -1237,6 +1237,19 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   // Create the selection changed event emitter
   selectionChangedEventEmitter = await papi.network.createNetworkEventEmitterAsync(
     EDITOR_SELECTION_CHANGED_EVENT,
+    {
+      notification: {
+        summary: 'Emitted when the selection in a Scripture editor changes.',
+        params: [
+          {
+            name: 'selectionChange',
+            required: true,
+            summary: 'The new editor selection.',
+            schema: { type: 'object' },
+          },
+        ],
+      },
+    },
   );
 
   // Default active project picker for simple layout. Subscribes to web-view-open and

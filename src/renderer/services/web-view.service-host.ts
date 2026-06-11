@@ -1931,13 +1931,67 @@ export const initialize = () => {
     // #endregion
 
     // Create network event emitters
-    onDidAddWebViewEmitter = await createNetworkEventEmitterAsync(EVENT_NAME_ON_DID_ADD_WEB_VIEW);
-    onDidOpenWebViewEmitter = await createNetworkEventEmitterAsync(EVENT_NAME_ON_DID_OPEN_WEB_VIEW);
+    onDidAddWebViewEmitter = await createNetworkEventEmitterAsync(EVENT_NAME_ON_DID_ADD_WEB_VIEW, {
+      notification: {
+        summary: 'Emitted when a WebView is created.',
+        deprecated: true,
+        params: [
+          {
+            name: 'webView',
+            required: true,
+            summary: 'The created WebView.',
+            schema: { type: 'object' },
+          },
+        ],
+      },
+    });
+    onDidOpenWebViewEmitter = await createNetworkEventEmitterAsync(
+      EVENT_NAME_ON_DID_OPEN_WEB_VIEW,
+      {
+        notification: {
+          summary: 'Emitted when a WebView is created.',
+          params: [
+            {
+              name: 'webView',
+              required: true,
+              summary: 'The created WebView.',
+              schema: { type: 'object' },
+            },
+          ],
+        },
+      },
+    );
     onDidUpdateWebViewEmitter = await createNetworkEventEmitterAsync(
       EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
+      {
+        notification: {
+          summary: 'Emitted when a WebView is updated.',
+          params: [
+            {
+              name: 'webView',
+              required: true,
+              summary: 'The updated WebView.',
+              schema: { type: 'object' },
+            },
+          ],
+        },
+      },
     );
     onDidCloseWebViewEmitter = await createNetworkEventEmitterAsync(
       EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
+      {
+        notification: {
+          summary: 'Emitted when a WebView is closed.',
+          params: [
+            {
+              name: 'webView',
+              required: true,
+              summary: 'The closed WebView.',
+              schema: { type: 'object' },
+            },
+          ],
+        },
+      },
     );
 
     onDidCloseWebView(({ webView: { id, webViewType } }) => {

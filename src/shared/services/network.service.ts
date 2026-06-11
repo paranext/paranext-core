@@ -412,8 +412,9 @@ export const createNetworkEventEmitter = <T>(eventType: string): PlatformEventEm
   createNetworkEventEmitterInternal(eventType, true);
 
 /**
- * Create a network event emitter that participates in central registration. The returned emitter
- * appears in the OpenRPC document if `documentation` is provided.
+ * Create a network event emitter that participates in central registration. Every centrally
+ * registered event appears in the OpenRPC document; providing `documentation` fills in its summary,
+ * params, and `x-experimental` flag, otherwise it is surfaced with placeholder docs.
  *
  * If the event name is in {@link MultiSourceNetworkEvents}, the central registry uses multi-source
  * semantics: multiple processes may register the same name (each process registers once); all

@@ -460,7 +460,19 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     reactWebView2Provider,
   );
 
-  onHelloRock3Emitter = await papi.network.createNetworkEventEmitterAsync(onHelloRock3EventType);
+  onHelloRock3Emitter = await papi.network.createNetworkEventEmitterAsync(onHelloRock3EventType, {
+    notification: {
+      summary: 'Emitted each time the helloRock3.helloRock3 command is called.',
+      params: [
+        {
+          name: 'event',
+          required: true,
+          summary: 'The hello-rock3 event payload.',
+          schema: { type: 'object' },
+        },
+      ],
+    },
+  });
 
   const helloRock3Promise = papi.commands.registerCommand('helloRock3.helloRock3', helloRock3);
 

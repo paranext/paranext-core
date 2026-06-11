@@ -1565,6 +1565,19 @@ export const initialize = () => {
 
     reloadFinishedEventEmitter = await createNetworkEventEmitterAsync(
       'platform.onDidReloadExtensions',
+      {
+        notification: {
+          summary: 'Emitted when extensions finish reloading.',
+          params: [
+            {
+              name: 'success',
+              required: true,
+              summary: 'True if the reload succeeded, false if it failed.',
+              schema: { type: 'boolean' },
+            },
+          ],
+        },
+      },
     );
 
     await registerRequestHandler(HANDLE_URI_REQUEST_TYPE, handleExtensionUri);

@@ -398,6 +398,20 @@ async function initialize(): Promise<void> {
           );
           resultsInvalidatedEventEmitter = await papi.network.createNetworkEventEmitterAsync(
             CHECK_RESULTS_INVALIDATED_EVENT,
+            {
+              notification: {
+                summary:
+                  'Emitted when check results are invalidated and subscribers should refresh their data.',
+                params: [
+                  {
+                    name: 'details',
+                    required: true,
+                    summary: 'Details describing which check results were invalidated.',
+                    schema: { type: 'object' },
+                  },
+                ],
+              },
+            },
           );
           resolve();
         } catch (error) {

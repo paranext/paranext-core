@@ -1,4 +1,5 @@
 import { describe, it, expect, expectTypeOf } from 'vitest';
+import { getEmptyNotificationDocs } from '@shared/models/openrpc.model';
 import type {
   Method,
   Notification,
@@ -61,5 +62,19 @@ describe('openrpc.model — experimental marker types', () => {
       methods: [notification],
     };
     expect(bad).toBeDefined();
+  });
+
+  it('getEmptyNotificationDocs returns frozen placeholder docs with no result', () => {
+    const docs = getEmptyNotificationDocs();
+    expect(docs).toEqual({
+      summary: '',
+      description: 'Notification: No documentation provided',
+      params: [],
+    });
+    expect('result' in docs).toBe(false);
+    // Building a Notification from the placeholder yields a valid notification entry.
+    const entry: Notification = { name: 'myExt.undocumented', ...docs };
+    expect(entry.name).toBe('myExt.undocumented');
+    expect(Object.isFrozen(docs)).toBe(true);
   });
 });
