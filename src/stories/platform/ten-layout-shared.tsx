@@ -60,15 +60,13 @@ import { Editorial } from '@eten-tech-foundation/platform-editor';
 import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import 'rc-dock/dist/rc-dock.css';
 import '../../renderer/components/docking/dock-layout-wrapper.component.scss';
-// Bring in the same USJ node + nodes-menu styling used by the editorial stories
-// in platform-bible-react. We skip `editor.css` and `editor-overrides.css`
-// because they reference toolbar icon SVGs via absolute URLs (e.g.
-// `/assets/images/icons/…`) that paranext-core's webpack css-loader can't
-// resolve. Those icons are only used by the built-in editor toolbar, which we
-// aren't rendering. The minimal editor wrapper styles those files would have
-// provided are inlined below in `EDITOR_WRAPPER_STYLE`.
+// Bring in the same USJ node styling used by the editorial stories in platform-bible-react. We skip
+// `editor.css` and `editor-overrides.css` because they previously referenced toolbar icon SVGs via
+// absolute URLs (e.g. `/assets/images/icons/…`) that paranext-core's webpack css-loader
+// couldn't resolve. Those icons are only used by the built-in editor toolbar, which we aren't
+// rendering. Those files have since been cleaned up and could be used now. The minimal editor
+// wrapper styles those files would have provided are inlined below in `EDITOR_WRAPPER_STYLE`.
 import '../../../lib/platform-bible-react/src/components/demo/scripture-editor/usj-nodes.css';
-import '../../../lib/platform-bible-react/src/components/demo/scripture-editor/nodes-menu.css';
 
 /* Equivalent to the safe (icon-free) subset of editor.css copied from
  * https://github.com/eten-tech-foundation/scripture-editors/blob/platform_v0.8.1/packages/platform/src/editor/editor.css

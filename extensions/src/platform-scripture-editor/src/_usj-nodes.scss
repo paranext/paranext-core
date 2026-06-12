@@ -1,3 +1,5 @@
+/* Copied from https://github.com/eten-tech-foundation/scripture-editors/blob/ba0e846b3f11bea5720c4aa1a3486b69feb6b7e0/packages/platform/src/usj-nodes.css */
+
 /* stylelint-disable */
 
 /* Sample styles for USJ Nodes */
@@ -40,8 +42,8 @@
   font-weight: bold;
   font-style: italic;
 }
-.formatted-font .usfm {
-  font-family: 'Charis SIL', serif;
+.usfm.formatted-font {
+  font-family: 'Charis SIL', 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', Georgia, serif;
   font-size: 12pt;
 }
 
@@ -2208,11 +2210,11 @@
   color: #7777ff;
 }
 
-table {
+.usfm table {
   border-collapse: collapse;
 }
 
-td {
+.usfm td {
   border: 1px solid #000000;
   page-break-inside: avoid;
   /* FB27281 adding padding based on font size*/
@@ -2220,11 +2222,11 @@ td {
   padding-left: 0.28em;
 }
 
-td.markercell {
+.usfm td.markercell {
   border-style: none;
 }
 
-rt {
+.usfm rt {
   cursor: pointer;
 }
 
