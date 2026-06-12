@@ -419,11 +419,14 @@ interface PickerMocks {
   mockProjectDataProvidersGet: ReturnType<typeof vi.fn>;
   mockDataProvidersGet: ReturnType<typeof vi.fn>;
   mockRecordProjectOpened: ReturnType<typeof vi.fn>;
+  mockRecentProjectsGet: ReturnType<typeof vi.fn>;
   /**
    * Sets the `canUserEditScripture` mock return value for a specific project id. Values default to
    * `true` for any project id not configured. Call before triggering the picker.
    */
   setCanUserEditScripture: (projectId: string, canEdit: boolean) => void;
+  /** Sets the list of recently opened project IDs. */
+  setRecentProjects: (ids: string[]) => void;
   /** Synthesize a `webViews.onDidOpenWebView` event from within a test. */
   fireWebViewOpen: () => void;
   /**
@@ -501,10 +504,12 @@ function createPickerMocks(): PickerMocks {
     canUserEditScripture: async () => canUserEditScriptureByProjectId.get(projectId) ?? true,
   }));
 
+  const mockRecentProjects: string[] = [];
+  const mockRecentProjectsGet = vi.fn().mockImplementation(async () => [...mockRecentProjects]);
   const mockRecordProjectOpened = vi.fn().mockResolvedValue(undefined);
   const mockDataProvidersGet = vi.fn().mockImplementation(async (name: string) => {
     if (name === 'platformScripture.recentlyOpenedProjects') {
-      return { recordProjectOpened: mockRecordProjectOpened };
+      return { get: mockRecentProjectsGet, recordProjectOpened: mockRecordProjectOpened };
     }
     return undefined;
   });
@@ -536,7 +541,12 @@ function createPickerMocks(): PickerMocks {
     mockProjectDataProvidersGet,
     mockDataProvidersGet,
     mockRecordProjectOpened,
+    mockRecentProjectsGet,
     setCanUserEditScripture,
+    setRecentProjects: (ids: string[]) => {
+      mockRecentProjects.length = 0;
+      mockRecentProjects.push(...ids);
+    },
     fireWebViewOpen: () => {
       if (!webViewOpenListener) throw new Error('fireWebViewOpen: no listener captured');
       webViewOpenListener({});
