@@ -8,7 +8,6 @@ import {
   EditorRef,
   getViewOptions,
   isInsertEmbedOpOfType,
-  PARAGRAPH_STRUCTURE_VIEW_MODE,
   SelectionRange,
   TypedMarkOnClick,
   TypedMarkOnRemove,
@@ -196,8 +195,9 @@ const defaultMarkersMenuTrigger = '\\';
 // Centralizes the logic so initialization and effects can call the same helper
 // instead of duplicating the shallow-copy code.
 const getViewOptionsForType = (viewType: ScriptureEditorViewType): ViewOptions => {
+  // getViewOptions returns a partial/unknown type that TypeScript can't narrow to ViewOptions without assertion
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const paragraphStructure = getViewOptions(PARAGRAPH_STRUCTURE_VIEW_MODE) as ViewOptions;
+  const paragraphStructure = getViewOptions('paragraph-structure') as ViewOptions;
   if (viewType === 'markers') return { ...paragraphStructure, noteMode: 'expanded' };
   return paragraphStructure;
 };
