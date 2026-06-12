@@ -193,7 +193,7 @@ export function ParagraphMarkerTooltipOverlay({ children }: Props) {
               left: hoveredData?.left ?? lastPositionRef.current.left,
             }}
           />
-          <TooltipContent side="top" align="start">
+          <TooltipContent side="top" align="start" showArrow={false}>
             {tooltipText}
           </TooltipContent>
         </Tooltip>
