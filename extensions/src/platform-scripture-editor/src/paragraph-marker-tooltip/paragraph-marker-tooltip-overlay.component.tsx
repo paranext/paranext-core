@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalizedStrings } from '@papi/frontend/react';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from 'platform-bible-react';
+import { cn, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from 'platform-bible-react';
 import { LocalizeKey } from 'platform-bible-utils';
 import { blockMarkerToBlockNames } from '../platform-scripture-editor.utils';
 import { computePosition, extractMarker, TooltipPosition } from './paragraph-marker-tooltip.utils';
@@ -184,8 +184,10 @@ export function ParagraphMarkerTooltipOverlay({ children }: Props) {
           <TooltipTrigger
             aria-hidden="true"
             tabIndex={-1}
-            className="tw:absolute tw:w-px tw:h-px tw:opacity-0 tw:pointer-events-none
-            tw:p-0 tw:border-0 tw:bg-transparent tw:cursor-default tw:min-w-0 tw:min-h-0"
+            className={cn(
+              'tw:absolute tw:w-px tw:h-px tw:opacity-0 tw:pointer-events-none',
+              'tw:p-0 tw:border-0 tw:bg-transparent tw:cursor-default tw:min-w-0 tw:min-h-0',
+            )}
             style={{
               top: hoveredData?.top ?? lastPositionRef.current.top,
               left: hoveredData?.left ?? lastPositionRef.current.left,
