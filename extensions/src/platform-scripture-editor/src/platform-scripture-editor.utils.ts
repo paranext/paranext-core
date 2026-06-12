@@ -581,9 +581,27 @@ export async function openDefaultActiveProjectIfApplicable(
   }
   if (interfaceMode !== 'simple') return 'wrong-mode';
 
-  const openWebViews = await papi.webViews.getAllOpenWebViewDefinitions();
+  // On cold start the renderer (and therefore WebViewService) may not be up yet when the
+  // initial picker run fires inside platformScriptureEditor.activate(). The call waits 30 s
+  // then throws with a "wait-for-net-obj" timeout. Treat that as 'no-empty' — onDidOpenWebView
+  // fires naturally once the renderer is ready, so no extra retry wiring is needed. Any other
+  // error is unexpected and re-thrown so the caller's warn path still fires.
+  let openWebViews: Awaited<ReturnType<typeof papi.webViews.getAllOpenWebViewDefinitions>>;
+  try {
+    openWebViews = await papi.webViews.getAllOpenWebViewDefinitions();
+  } catch (e) {
+    const msg = getErrorMessage(e);
+    if (msg.includes('wait-for-net-obj')) {
+      papi.logger.debug(
+        `Default active project picker: WebViewService not ready; returning 'no-empty'. Will retry on next web-view event (${msg})`,
+      );
+      return 'no-empty';
+    }
+    throw e;
+  }
   const emptyEditor = openWebViews.find(
-    (def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && !def.projectId,
+    (def: { webViewType: string; projectId?: string }) =>
+      def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && !def.projectId,
   );
   if (!emptyEditor) return 'no-empty';
 
