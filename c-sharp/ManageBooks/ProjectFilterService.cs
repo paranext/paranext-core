@@ -94,27 +94,14 @@ public static class ProjectFilterService
         ToProjectListResult(EnumerateScriptureProjects());
 
     /// <summary>
-    /// Whether the project can be a target of mutating actions (create/copy/import/delete).
-    /// PT9 parity: <c>ProjectSettings.Editable</c> — NOT the raw <c>IsEditableText</c> flag,
-    /// whose own doc warns it "does not determine if the project is ultimately editable" —
-    /// is the canonical check; <c>ResourceScrText</c> overrides it to false even when the
-    /// flag inside an installed DBL resource is "T" (e.g. NBV21). The explicit
-    /// <c>!IsResourceProject</c> term restates that production guarantee so the contract
-    /// stays enforced for ScrText test doubles, whose plain <c>ProjectSettings</c> cannot
-    /// reproduce the resource override.
-    /// </summary>
-    private static bool IsEditableTarget(ScrText scrText) =>
-        scrText.Settings.Editable && !scrText.IsResourceProject;
-
-    /// <summary>
     /// Builds the project list for <see cref="ProjectFilterPurpose.EditableTexts"/> and
     /// <see cref="ProjectFilterPurpose.DeleteSource"/> — scripture projects further
-    /// restricted to <see cref="IsEditableTarget"/>. DeleteSource uses the same
+    /// restricted to <see cref="ProjectSummary.IsEditableTarget"/>. DeleteSource uses the same
     /// predicate; the admin-on-shared-project check is enforced separately at the
     /// wire-layer call site (see CAP-005).
     /// </summary>
     private static ProjectListResult BuildEditableScriptureProjectList() =>
-        ToProjectListResult(EnumerateScriptureProjects().Where(IsEditableTarget));
+        ToProjectListResult(EnumerateScriptureProjects().Where(ProjectSummary.IsEditableTarget));
 
     /// <summary>
     /// Delegation seam for <see cref="ProjectFilterPurpose.CopyDestination"/>. Validates
@@ -137,11 +124,11 @@ public static class ProjectFilterService
 
     /// <summary>
     /// Materialises a <see cref="ScrText"/> sequence into a <see cref="ProjectListResult"/>
-    /// by mapping each entry through <see cref="ToSummary"/>. Shared by the scripture
+    /// by mapping each entry through <see cref="ProjectSummary.FromScrText"/>. Shared by the scripture
     /// and editable-scripture build paths so the mapping shape is expressed once.
     /// </summary>
     private static ProjectListResult ToProjectListResult(IEnumerable<ScrText> scrTexts) =>
-        new(scrTexts.Select(ToSummary).ToList());
+        new(scrTexts.Select(ProjectSummary.FromScrText).ToList());
 
     /// <summary>
     /// Enumerates all scripture-type projects from <see cref="ScrTextCollection"/>.
@@ -158,23 +145,4 @@ public static class ProjectFilterService
         ScrTextCollection
             .ScrTexts(IncludeProjects.ScriptureOnly)
             .Where(scrText => scrText.Settings.TranslationInfo.Type.IsScripture());
-
-    /// <summary>
-    /// Maps a <see cref="ScrText"/> to the minimal <see cref="ProjectSummary"/>
-    /// contract shape (Section 3.8).
-    /// </summary>
-    private static ProjectSummary ToSummary(ScrText scrText) =>
-        new(
-            // Canonical papi project-id form is UPPERCASE hex (ProjectMetadata.Id
-            // applies ToUpperInvariant); the UI compares these against papi-supplied
-            // ids (e.g. the scripture editor's webview projectId) case-sensitively.
-            ProjectId: scrText.Guid.ToString().ToUpperInvariant(),
-            Name: scrText.Name,
-            ProjectType: scrText.Settings.TranslationInfo.Type.InternalValue,
-            IsEditable: IsEditableTarget(scrText),
-            // Plumb IsResourceProject through the wire so the Copy "From" /
-            // Create "Based on" pickers can filter resources out on the
-            // frontend without a separate API call.
-            IsResource: scrText.IsResourceProject
-        );
 }

@@ -10,7 +10,7 @@
       "fallbackKey": "%manageBooks_delete_confirmBodySharedSendReceive%"
     },
     "%manageBooks_copy_confirmBody%": {
-      "fallbackKey": "%manageBooks_copy_confirmBodyWithBooks%"
+      "fallbackKey": "%manageBooks_copy_confirmBodyWithBooks_other%"
     },
     "%manageBooks_view_diff_label%": {
       "fallbackKey": "%manageBooks_view_compareVersions_label%"
@@ -172,7 +172,8 @@
       "%manageBooks_bookNames_label%": "Book names",
       "%manageBooks_bookNames_subtitle%": "Edit short and long book names (TOC1–3)",
       "%manageBooks_bookNames_notYetAvailable%": "Book names editing is not yet available — coming soon.",
-      "%manageBooks_copy_confirmBodyWithBooks%": "{0} book(s) already exist in {1}: {2}",
+      "%manageBooks_copy_confirmBodyWithBooks_one%": "1 book already exists in {0}: {1}",
+      "%manageBooks_copy_confirmBodyWithBooks_other%": "{0} books already exist in {1}: {2}",
       "%manageBooks_copy_confirmCancel%": "Cancel",
       "%manageBooks_copy_onlyNonExistingChapters%": "Only copy non-existing chapters",
       "%manageBooks_copy_confirmReplace%": "Replace entire books",
@@ -205,8 +206,8 @@
       "%manageBooks_delete_confirmAccept%": "Delete",
       "%manageBooks_delete_confirmBodyAll%": "All books will be deleted from {0}. The project itself will not be deleted. This cannot be undone.",
       "%manageBooks_delete_confirmBodyPartial%": "{0} book(s) will be deleted from {1}. This cannot be undone.",
-      "%manageBooks_delete_confirmBodyAllShared%": "All books will be deleted from {0}, which is shared with other users. The books will be deleted for ALL users when they next Send/Receive. The project itself will not be deleted. This cannot be undone.",
-      "%manageBooks_delete_confirmBodySharedSendReceive%": "{0} book(s) will be deleted from {1}, which is shared with other users. The books will be deleted for ALL users when they next Send/Receive. This cannot be undone.",
+      "%manageBooks_delete_confirmBodyAllShared%": "All books will be deleted from {0}, which is shared with other users. The books will be deleted for all users when they next Send/Receive. The project itself will not be deleted. This cannot be undone.",
+      "%manageBooks_delete_confirmBodySharedSendReceive%": "{0} book(s) will be deleted from {1}, which is shared with other users. The books will be deleted for all users when they next Send/Receive. This cannot be undone.",
       "%manageBooks_delete_confirmCancel%": "Cancel",
       "%manageBooks_delete_confirmTitle%": "Delete books from {0}?",
       "%manageBooks_delete_emptyState_noBooks%": "This project has no books to delete.",
@@ -554,7 +555,7 @@
       "%markersChecklist_menu_settings%": "Settings",
       "%webView_platformScripture_markersChecklist_viewColumn%": "View",
       "%webView_platformScripture_markersChecklist_settings%": "Settings",
-      "%manageBooks_openMenuItem%": "Manage books…",
+      "%manageBooks_openMenuItem%": "Manage books",
       "%manageBooks_sidebar_projectPlaceholder%": "Select project"
     },
     "es": {
@@ -753,7 +754,7 @@
       "%webview_checksSidePanel_checkTypeFilter_setUp%": "Configuración",
       "%markersChecklist_errorInvalidMarkerPair%": "Marcadores equivalentes deben ser entrados en la forma: p/q",
       "%markersChecklist_emptyResult_identicalMarkers%": "Textos comparativos tienen marcadores idénticos.",
-      "%manageBooks_openMenuItem%": "Administrar libros…",
+      "%manageBooks_openMenuItem%": "Administrar libros",
       "%manageBooks_view_disabledStub_notYetAvailable%": "Aún no disponible — próximamente",
       "%manageBooks_grid_canonGroup_DC%": "Deuterocanónicos",
       "%manageBooks_grid_canonGroup_Extra%": "Extras",

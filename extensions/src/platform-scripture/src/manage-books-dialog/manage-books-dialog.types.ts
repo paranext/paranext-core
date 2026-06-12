@@ -226,7 +226,8 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_copy_emptyState_noBooks%',
   // Copy overwrite confirm
   '%manageBooks_copy_confirmTitle%',
-  '%manageBooks_copy_confirmBodyWithBooks%',
+  '%manageBooks_copy_confirmBodyWithBooks_one%',
+  '%manageBooks_copy_confirmBodyWithBooks_other%',
   '%manageBooks_copy_confirmReplace%',
   '%manageBooks_copy_confirmCancel%',
   // Vladimir review #16: Copy gets the same 3-way conflict prompt as Import.

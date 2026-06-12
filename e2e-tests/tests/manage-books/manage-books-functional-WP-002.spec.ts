@@ -30,7 +30,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { FrameLocator, Locator, Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/cdp.fixture';
-import { waitForAppReady } from '../../fixtures/helpers';
+import { openFromEditorHamburger, waitForAppReady } from '../../fixtures/helpers';
 
 const EVIDENCE_DIR = 'proofs/component-evidence/WP-002';
 const MANAGE_BOOKS_FRAME = 'iframe[title*="Manage Books" i]';
@@ -103,28 +103,12 @@ async function openManageBooksDialog(
 ): Promise<FrameLocator> {
   // The Manila UX follow-up moved the entry point from the application main
   // menu into the scripture editor's hamburger ("Project") menu, which renders
-  // INSIDE the editor's iframe. Open the entry project's editor first (skipped
-  // when already open), then drive the hamburger.
-  const existingEditor = mainPage.locator('.dock-tab', { hasText: ENTRY_PROJECT_NAME });
-  if ((await existingEditor.count()) === 0) {
-    // Home's Open buttons / the editor hamburger are only clickable while
-    // their tab is the visible one in its dock panel — activate first.
-    await mainPage.locator('.dock-tab', { hasText: 'Home' }).first().click();
-    const homeFrame = mainPage.frameLocator('iframe[title="Home"]');
-    await homeFrame.locator(`tr:has-text("${ENTRY_PROJECT_NAME}") button:has-text("Open")`).click();
-    await expect(mainPage.locator('.dock-tab', { hasText: ENTRY_PROJECT_NAME })).toBeVisible({
-      timeout: 15_000,
-    });
-  } else {
-    await existingEditor.first().click();
-  }
-  const editorFrame = mainPage.frameLocator(
-    `iframe[title*="${ENTRY_PROJECT_NAME}" i][title*="Editable" i]`,
-  );
-  await editorFrame.locator("button[aria-label='Project']").first().click();
-  await editorFrame.getByRole('menuitem', { name: MENU_LABEL_REGEX }).first().click();
-  await expect(mainPage.locator('.dock-tab', { hasText: /Manage Books/i })).toBeVisible({
-    timeout: 15_000,
+  // INSIDE the editor's iframe. The shared helper opens the entry project's
+  // editor first (skipped when already open), drives the hamburger, and waits
+  // for the Manage Books dock tab (tabTitle defaults to the menu-item regex).
+  await openFromEditorHamburger(mainPage, {
+    projectName: ENTRY_PROJECT_NAME,
+    menuItem: MENU_LABEL_REGEX,
   });
   const frame = mainPage.frameLocator(MANAGE_BOOKS_FRAME);
 
@@ -153,7 +137,7 @@ async function openManageBooksDialog(
  * subsequently click OK on the picker trigger the parent's `runCreate` and write ESG to the active
  * project's USFM directory; those tests run last in the file (Category 9) for that reason.
  */
-async function openPickerFromCreateFlow(mainPage: Page, frame: FrameLocator): Promise<Locator> {
+async function openPickerFromCreateFlow(frame: FrameLocator): Promise<Locator> {
   // Switch to Create mode (use data-testid — proven stable pattern from WP-001).
   await frame.locator('[data-testid="manage-books-sidebar-section-create"]').click();
 
@@ -296,7 +280,7 @@ test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
   }) => {
     await waitForAppReady(mainPage);
     const frame = await openManageBooksDialog(mainPage);
-    const picker = await openPickerFromCreateFlow(mainPage, frame);
+    const picker = await openPickerFromCreateFlow(frame);
 
     // EVD: picker initial open
     await mainPage.screenshot({
@@ -316,7 +300,7 @@ test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
   }) => {
     await waitForAppReady(mainPage);
     const frame = await openManageBooksDialog(mainPage);
-    const picker = await openPickerFromCreateFlow(mainPage, frame);
+    const picker = await openPickerFromCreateFlow(frame);
 
     // Title
     await expect(picker.getByText('Greek Esther: Choose Template')).toBeVisible();
@@ -344,7 +328,7 @@ test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
   }) => {
     await waitForAppReady(mainPage);
     const frame = await openManageBooksDialog(mainPage);
-    const picker = await openPickerFromCreateFlow(mainPage, frame);
+    const picker = await openPickerFromCreateFlow(frame);
 
     // The LXX radio MUST be the checked option on initial open. PT9 default verified
     // from CreateESGForm.Designer.cs (optLXX.Checked = true) — RF-UI-006 closed 2026-05-01.
@@ -369,7 +353,7 @@ test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
   test('should let user select Vulgate option', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
     const frame = await openManageBooksDialog(mainPage);
-    const picker = await openPickerFromCreateFlow(mainPage, frame);
+    const picker = await openPickerFromCreateFlow(frame);
 
     // Click the Vulgate radio
     const vulgate = picker.getByRole('radio', { name: /^Vulgate/i });
@@ -389,7 +373,7 @@ test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
   test('should let user select Modern Scholars option', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
     const frame = await openManageBooksDialog(mainPage);
-    const picker = await openPickerFromCreateFlow(mainPage, frame);
+    const picker = await openPickerFromCreateFlow(frame);
 
     const modernScholars = picker.getByRole('radio', { name: /Modern Scholars/i });
     await modernScholars.click();
@@ -411,7 +395,7 @@ test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
   }) => {
     await waitForAppReady(mainPage);
     const frame = await openManageBooksDialog(mainPage);
-    const picker = await openPickerFromCreateFlow(mainPage, frame);
+    const picker = await openPickerFromCreateFlow(frame);
 
     // EVD: picker visible just before Cancel
     await mainPage.screenshot({
@@ -443,7 +427,7 @@ test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
   test('should close picker when user presses Escape', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
     const frame = await openManageBooksDialog(mainPage);
-    const picker = await openPickerFromCreateFlow(mainPage, frame);
+    const picker = await openPickerFromCreateFlow(frame);
 
     await mainPage.keyboard.press('Escape');
 
@@ -462,7 +446,7 @@ test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
   test('should support arrow-key navigation through the radio group', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
     const frame = await openManageBooksDialog(mainPage);
-    const picker = await openPickerFromCreateFlow(mainPage, frame);
+    const picker = await openPickerFromCreateFlow(frame);
 
     // LXX is the default — focus the LXX radio explicitly to set a known starting point.
     const lxx = picker.getByRole('radio', { name: /Septuagint \(LXX\)/i });
@@ -496,7 +480,7 @@ test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
   }) => {
     await waitForAppReady(mainPage);
     const frame = await openManageBooksDialog(mainPage);
-    const picker = await openPickerFromCreateFlow(mainPage, frame);
+    const picker = await openPickerFromCreateFlow(frame);
 
     // Tab through every focusable inside the picker. Radix Dialog focus-trap should bounce focus
     // from the last focusable back to the first.
@@ -580,7 +564,7 @@ test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
   }) => {
     await waitForAppReady(mainPage);
     const frame = await openManageBooksDialog(mainPage);
-    let picker = await openPickerFromCreateFlow(mainPage, frame);
+    let picker = await openPickerFromCreateFlow(frame);
 
     // First open: pick Vulgate, then Cancel
     await picker.getByRole('radio', { name: /^Vulgate/i }).click();
@@ -618,7 +602,7 @@ test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
   }) => {
     await waitForAppReady(mainPage);
     const frame = await openManageBooksDialog(mainPage, 'MP1');
-    const picker = await openPickerFromCreateFlow(mainPage, frame);
+    const picker = await openPickerFromCreateFlow(frame);
 
     // Click OK — the wiring layer's onSelect resolves the parent's onOpenEstherPicker promise,
     // which then drives the createBooks(...) call.
@@ -639,7 +623,7 @@ test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
   test('should close picker when user clicks OK after selecting Vulgate', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
     const frame = await openManageBooksDialog(mainPage, 'wgPIDGIN');
-    const picker = await openPickerFromCreateFlow(mainPage, frame);
+    const picker = await openPickerFromCreateFlow(frame);
 
     await picker.getByRole('radio', { name: /^Vulgate/i }).click();
     await picker.getByRole('button', { name: /^(OK|Choose)$/i }).click();

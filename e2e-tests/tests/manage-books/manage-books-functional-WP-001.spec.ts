@@ -41,7 +41,7 @@
  */
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/cdp.fixture';
-import { waitForAppReady } from '../../fixtures/helpers';
+import { openFromEditorHamburger, waitForAppReady } from '../../fixtures/helpers';
 
 const SCREENSHOT_BASE = 'proofs/component-evidence/WP-001';
 const WEB_VIEW_TITLE_REGEX = /Manage Books/i;
@@ -55,30 +55,15 @@ const ENTRY_PROJECT_NAME = 'wgPIDGIN';
 
 /**
  * Open the `ENTRY_PROJECT_NAME` editor (skipped when already open), then click "Manage books..." in
- * the editor's hamburger ("Project") menu. The hamburger button and its Radix menu both render
- * INSIDE the editor's iframe. Callers assert on the resulting dock tab / iframe themselves.
+ * the editor's hamburger ("Project") menu and wait for the Manage Books dock tab. Thin wrapper
+ * binding the feature-specific constants to the shared {@link openFromEditorHamburger} helper.
  */
 async function openManageBooksViaEditorMenu(mainPage: Page): Promise<void> {
-  const existingEditor = mainPage.locator('.dock-tab', { hasText: ENTRY_PROJECT_NAME });
-  if ((await existingEditor.count()) === 0) {
-    // The Home iframe's Open buttons are only clickable while the Home tab is
-    // the visible tab in its dock panel — activate it first.
-    await mainPage.locator('.dock-tab', { hasText: 'Home' }).first().click();
-    const homeFrame = mainPage.frameLocator('iframe[title="Home"]');
-    await homeFrame.locator(`tr:has-text("${ENTRY_PROJECT_NAME}") button:has-text("Open")`).click();
-    await expect(mainPage.locator('.dock-tab', { hasText: ENTRY_PROJECT_NAME })).toBeVisible({
-      timeout: 15_000,
-    });
-  } else {
-    // Same constraint for the editor's hamburger: the editor iframe must be
-    // the visible tab before its in-iframe button can be clicked.
-    await existingEditor.first().click();
-  }
-  const editorFrame = mainPage.frameLocator(
-    `iframe[title*="${ENTRY_PROJECT_NAME}" i][title*="Editable" i]`,
-  );
-  await editorFrame.locator("button[aria-label='Project']").first().click();
-  await editorFrame.getByRole('menuitem', { name: MENU_LABEL_REGEX }).first().click();
+  await openFromEditorHamburger(mainPage, {
+    projectName: ENTRY_PROJECT_NAME,
+    menuItem: MENU_LABEL_REGEX,
+    tabTitle: WEB_VIEW_TITLE_REGEX,
+  });
 }
 
 test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)', () => {
@@ -128,32 +113,20 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
 
     // The Manila UX follow-up places the entry point in the scripture editor's hamburger
     // ("Project") menu — reserved `platform.manageBooks` default group, Project section.
-    const existingEditor = mainPage.locator('.dock-tab', { hasText: ENTRY_PROJECT_NAME });
-    if ((await existingEditor.count()) === 0) {
-      await mainPage.locator('.dock-tab', { hasText: 'Home' }).first().click();
-      const homeFrame = mainPage.frameLocator('iframe[title="Home"]');
-      await homeFrame
-        .locator(`tr:has-text("${ENTRY_PROJECT_NAME}") button:has-text("Open")`)
-        .click();
-      await expect(mainPage.locator('.dock-tab', { hasText: ENTRY_PROJECT_NAME })).toBeVisible({
-        timeout: 15_000,
-      });
-    } else {
-      await existingEditor.first().click();
-    }
-    const editorFrame = mainPage.frameLocator(
-      `iframe[title*="${ENTRY_PROJECT_NAME}" i][title*="Editable" i]`,
-    );
-    await editorFrame.locator("button[aria-label='Project']").first().click();
-
-    // EVD-001: editor hamburger dropdown shows the Manage Books entry.
-    await mainPage.screenshot({
-      path: `${SCREENSHOT_BASE}/EVD-001-menu-open.png`,
+    await openFromEditorHamburger(mainPage, {
+      projectName: ENTRY_PROJECT_NAME,
+      menuItem: MENU_LABEL_REGEX,
+      tabTitle: WEB_VIEW_TITLE_REGEX,
+      onMenuOpen: async (editorFrame) => {
+        // EVD-001: editor hamburger dropdown shows the Manage Books entry.
+        await mainPage.screenshot({
+          path: `${SCREENSHOT_BASE}/EVD-001-menu-open.png`,
+        });
+        await expect(
+          editorFrame.getByRole('menuitem', { name: MENU_LABEL_REGEX }).first(),
+        ).toBeVisible({ timeout: 10_000 });
+      },
     });
-
-    const manageBooksMenuItem = editorFrame.getByRole('menuitem', { name: MENU_LABEL_REGEX });
-    await expect(manageBooksMenuItem.first()).toBeVisible({ timeout: 10_000 });
-    await manageBooksMenuItem.first().click();
 
     // The dialog opens as a web view; this surfaces as a dock tab whose title matches the
     // localized "Manage Books" string.

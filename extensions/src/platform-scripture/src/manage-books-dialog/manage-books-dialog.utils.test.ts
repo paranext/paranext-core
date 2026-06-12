@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { computeCompareState, fmtTemplate } from './manage-books-dialog.utils';
+import {
+  computeCompareState,
+  deleteConfirmVariant,
+  fmtTemplate,
+} from './manage-books-dialog.utils';
 
 describe('fmtTemplate', () => {
   it('substitutes positional placeholders in order', () => {
@@ -79,5 +83,22 @@ describe('computeCompareState', () => {
   it('returns "undetermined" when one of the dates fails to parse', () => {
     expect(computeCompareState('not-a-date', '2026-05-04T10:00:00Z')).toBe('undetermined');
     expect(computeCompareState('2026-05-04T10:00:00Z', 'also-not-a-date')).toBe('undetermined');
+  });
+});
+
+describe('deleteConfirmVariant', () => {
+  it('covers the full {all, partial} x {shared, not-shared} matrix', () => {
+    expect(deleteConfirmVariant(true, true)).toBe('allShared');
+    expect(deleteConfirmVariant(true, false)).toBe('all');
+    expect(deleteConfirmVariant(false, true)).toBe('partialShared');
+    expect(deleteConfirmVariant(false, false)).toBe('partial');
+  });
+
+  it('regression: the shared warning survives the all-books case', () => {
+    // The original branch order checked allSelected before isShared, dropping the
+    // shared-project Send/Receive warning exactly when EVERY book of a shared
+    // project was about to be deleted — the highest-impact case.
+    expect(deleteConfirmVariant(true, true)).not.toBe('all');
+    expect(deleteConfirmVariant(true, true)).toBe('allShared');
   });
 });

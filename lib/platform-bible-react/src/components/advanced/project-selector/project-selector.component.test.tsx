@@ -125,6 +125,9 @@ describe('ProjectSelector — trigger label format', () => {
     const trigger = screen.getByRole('combobox', { name: 'Project' });
     expect(trigger).toHaveTextContent('ESVUS16');
     expect(trigger).not.toHaveTextContent('English Standard Version (US) 2016');
+    // No native title in any format — hover full-text reveal is the trigger's own
+    // Radix tooltip (Sebastian UX review 2026-06-12).
+    expect(trigger).not.toHaveAttribute('title');
   });
 
   it("renders 'shortName - fullName' when triggerLabelFormat is shortNameAndFullName", () => {
@@ -142,8 +145,9 @@ describe('ProjectSelector — trigger label format', () => {
     );
     const trigger = screen.getByRole('combobox', { name: 'Project' });
     expect(trigger).toHaveTextContent('ESVUS16 - English Standard Version (US) 2016');
-    // The untruncated text is available for native hover via title.
-    expect(trigger).toHaveAttribute('title', 'ESVUS16 - English Standard Version (US) 2016');
+    // The untruncated text surfaces via the trigger's own Radix tooltip (Sebastian UX
+    // review 2026-06-12), not a native title attribute.
+    expect(trigger).not.toHaveAttribute('title');
   });
 
   it('skips the fullName suffix when fullName equals shortName', () => {

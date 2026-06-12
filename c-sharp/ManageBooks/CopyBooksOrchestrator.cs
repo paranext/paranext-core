@@ -606,45 +606,11 @@ public static class CopyBooksOrchestrator
         List<ProjectSummary> summaries = ScrTextCollection
             .ScrTexts(IncludeProjects.AllAccessible)
             .Where(scrText => predicate(scrText))
-            .Select(ToSummary)
+            .Select(ProjectSummary.FromScrText)
             .ToList();
 
         return new ProjectListResult(summaries);
     }
-
-    /// <summary>
-    /// Maps a <see cref="ScrText"/> to the minimal <see cref="ProjectSummary"/>
-    /// contract shape (data-contracts.md Section 3.8).
-    ///
-    /// <para><b>Intentional duplication.</b> A byte-identical projection lives
-    /// in <c>ProjectFilterService.ToSummary</c> (CAP-011). Both capabilities
-    /// project <c>ScrText</c> to the same wire shape because Section 3.8 is
-    /// the single source of truth, and the CAP-011 delegation path runs
-    /// through <see cref="GetToProjectFilterProjects"/> so the two capabilities
-    /// always produce identical results. The duplication is retained
-    /// deliberately:
-    /// unifying the helper would require placing it in a file owned by
-    /// CAP-011 (<c>ProjectFilterService.cs</c>) or adding a static factory to
-    /// <c>ProjectSummary</c>, both of which cross capability-isolation
-    /// boundaries. Any future consolidation should happen in a dedicated
-    /// refactor pass that owns both capabilities' scopes at once.</para>
-    /// </summary>
-    private static ProjectSummary ToSummary(ScrText scrText) =>
-        new(
-            // Canonical papi project-id form is UPPERCASE hex (ProjectMetadata.Id
-            // applies ToUpperInvariant); the UI compares these against papi-supplied
-            // ids (e.g. the scripture editor's webview projectId) case-sensitively.
-            ProjectId: scrText.Guid.ToString().ToUpperInvariant(),
-            Name: scrText.Name,
-            ProjectType: scrText.Settings.TranslationInfo.Type.InternalValue,
-            // Mirrors ProjectFilterService.IsEditableTarget (see its doc comment):
-            // Settings.Editable is PT9's canonical editability check (the raw
-            // IsEditableText flag is true inside installed DBL resources);
-            // !IsResourceProject restates the resource guarantee for test doubles.
-            IsEditable: scrText.Settings.Editable && !scrText.IsResourceProject,
-            // See ProjectFilterService.ToSummary for rationale.
-            IsResource: scrText.IsResourceProject
-        );
 
     // =====================================================================
     // CAP-007: CopyBooks + M-014 CopyCustomVersification

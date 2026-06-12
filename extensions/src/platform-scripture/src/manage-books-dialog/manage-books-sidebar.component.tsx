@@ -52,7 +52,7 @@ type SectionDef = {
    * When set, this row starts a new visual group. Groups are separated by whitespace only (per the
    * Manila UX follow-up — no separator lines, no headings).
    */
-  groupStart?: 'reference';
+  startsGroup?: boolean;
   /** When true, render the row in disabled/muted state with a "not yet available" tooltip. */
   disabled?: boolean;
   /** Lucide icon to render to the left of the label. */
@@ -67,7 +67,7 @@ const SECTIONS: readonly SectionDef[] = [
   { id: 'copy', Icon: Copy },
   { id: 'import', Icon: FolderInput },
   { id: 'delete', Icon: Trash2 },
-  { id: 'progress-tracking', groupStart: 'reference', disabled: true, Icon: BarChart3 },
+  { id: 'progress-tracking', startsGroup: true, disabled: true, Icon: BarChart3 },
   { id: 'book-names', disabled: true, Icon: BookA },
 ];
 
@@ -280,63 +280,45 @@ export function ManageBooksSidebar({
             {t('%manageBooks_header_projectLabel%', 'Project')}
           </Label>
         )}
-        {/* In wide mode the trigger shows "{shortName} - {fullName}" inline
-            (Manila UX follow-up; ellipsis-truncated by the trigger itself, with
-            the untruncated text in the native title attribute), so no Radix
-            tooltip is needed. In narrow mode the sidebar is a ~56px rail and
-            the trigger is icon-only, so a tooltip surfaces the project name —
-            otherwise the user has no way to identify the active project
-            without opening the popover. */}
-        {(() => {
-          const activeProject = projects.find((p) => p.id === projectId);
-          const fullName = activeProject?.fullName;
-          const shortName = activeProject?.shortName;
-          const selectorElement = (
-            <div data-testid="manage-books-sidebar-project-trigger" className="tw:w-full">
-              <ProjectSelector
-                mode="project"
-                projects={projects}
-                openTabs={openTabs ?? []}
-                selection={{ projectId }}
-                onChangeSelection={({ projectId: nextId }) => {
-                  if (nextId) onProjectIdChange(nextId);
-                }}
-                // Narrow rail: full-width trigger, no chevron (it would consume the
-                // whole content box), tighter padding + text-xs so ~4-6 characters of
-                // the shortName stay visible — enough to identify the project. The
-                // outline variant keeps it recognizable as a control; the right-side
-                // tooltip below carries the full name.
-                buttonClassName={cn(
-                  'tw:h-8 tw:font-normal',
-                  isNarrow ? 'tw:w-full tw:px-0.5 tw:text-xs' : 'tw:w-full',
-                )}
-                hideTriggerChevron={isNarrow}
-                isDisabled={isSubmitting}
-                ariaLabel={t('%manageBooks_header_projectLabel%', 'Project')}
-                triggerLabelFormat={isNarrow ? 'shortName' : 'shortNameAndFullName'}
-                // Fallback when the project list is still loading or the active projectId hasn't
-                // landed in the list yet. We deliberately do NOT echo `projectId` here — projectIds
-                // are GUIDs and would render as a 32-char hex string in the trigger, which the
-                // verifier flagged as unreadable. The localized "Select project" string is the
-                // correct momentary fallback; once `projects` resolves and contains `projectId`,
-                // ProjectSelector renders the matching `shortName` (e.g. "ESVUS16") in the trigger.
-                buttonPlaceholder={t('%manageBooks_sidebar_projectPlaceholder%', 'Select project')}
-                localizedStrings={projectSelectorLocalizedStrings}
-              />
-            </div>
-          );
-          if (!isNarrow) return selectorElement;
-          // Narrow rail: tooltip renders to the right (no other room).
-          const narrowTooltipText = fullName || shortName || '';
-          return (
-            <Tooltip>
-              <TooltipTrigger asChild>{selectorElement}</TooltipTrigger>
-              <TooltipContent side="right">{narrowTooltipText}</TooltipContent>
-            </Tooltip>
-          );
-        })()}
+        {/* The trigger shows "{shortName} - {fullName}" inline (Manila UX
+            follow-up), ellipsis-truncated by the trigger itself; the
+            untruncated text surfaces via ProjectSelector's own trigger
+            tooltip (Sebastian UX review 2026-06-12) in both wide and narrow
+            modes, so the sidebar adds no tooltip of its own. */}
+        <div data-testid="manage-books-sidebar-project-trigger" className="tw:w-full">
+          <ProjectSelector
+            mode="project"
+            projects={projects}
+            openTabs={openTabs ?? []}
+            selection={{ projectId }}
+            onChangeSelection={({ projectId: nextId }) => {
+              if (nextId) onProjectIdChange(nextId);
+            }}
+            // Narrow rail: full-width trigger, no chevron (it would consume the
+            // whole content box), tighter padding + text-xs so the leading
+            // characters of the shortName stay visible — enough to identify the
+            // project. The outline variant keeps it recognizable as a control;
+            // the trigger's own tooltip carries the full label.
+            buttonClassName={cn(
+              'tw:h-8 tw:font-normal',
+              isNarrow ? 'tw:w-full tw:px-0.5 tw:text-xs' : 'tw:w-full',
+            )}
+            hideTriggerChevron={isNarrow}
+            isDisabled={isSubmitting}
+            ariaLabel={t('%manageBooks_header_projectLabel%', 'Project')}
+            triggerLabelFormat="shortNameAndFullName"
+            // Fallback when the project list is still loading or the active projectId hasn't
+            // landed in the list yet. We deliberately do NOT echo `projectId` here — projectIds
+            // are GUIDs and would render as a 32-char hex string in the trigger, which the
+            // verifier flagged as unreadable. The localized "Select project" string is the
+            // correct momentary fallback; once `projects` resolves and contains `projectId`,
+            // ProjectSelector renders the matching `shortName` (e.g. "ESVUS16") in the trigger.
+            buttonPlaceholder={t('%manageBooks_sidebar_projectPlaceholder%', 'Select project')}
+            localizedStrings={projectSelectorLocalizedStrings}
+          />
+        </div>
       </div>
-      {SECTIONS.map(({ id, groupStart, disabled: defDisabled, Icon }, index) => {
+      {SECTIONS.map(({ id, startsGroup: defStartsGroup, disabled: defDisabled, Icon }, index) => {
         // A section is disabled at runtime if either:
         //   (a) it's hard-coded as "future" in the SECTIONS map (the 2 reference rows), or
         //   (b) it mutates the active project but the active project is read-only.
@@ -345,7 +327,7 @@ export function ManageBooksSidebar({
         const isActive = !disabled && id === activeSectionId;
         // Groups are separated by whitespace only — no separator lines, no
         // headings (Manila UX follow-up).
-        const startsGroup = !!groupStart && index > 0;
+        const startsGroup = !!defStartsGroup && index > 0;
         const labels = getSectionLabels(id, t);
         const tooltip = labels.tooltip ?? (isReadOnlyDisabled ? readOnlyTooltip : undefined);
 

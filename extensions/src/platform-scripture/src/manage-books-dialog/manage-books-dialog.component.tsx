@@ -1,4 +1,13 @@
-import { type ReactElement, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import {
+  type ReactElement,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   BookPlus,
   Copy,
@@ -67,6 +76,7 @@ import {
 } from './manage-books-dialog.types';
 import {
   computeCompareState,
+  deleteConfirmVariant,
   fmtTemplate,
   versificationFallbackName,
   versificationLabelKey,
@@ -205,7 +215,7 @@ export type ManageBooksDialogProps = {
   /**
    * (A2) Whether the project is shared with other users (PT9: `ScrText.IsProjectShared` with more
    * than one registered user). When true, the delete-confirm prompt warns that the books will be
-   * deleted for ALL users when they next Send/Receive — in both the partial and the all-books
+   * deleted for all users when they next Send/Receive — in both the partial and the all-books
    * variants. Defaults to false.
    */
   isSharedProject?: boolean;
@@ -469,6 +479,33 @@ const toProjectBookState = (books: ManageBooksDialogBookInfo[] | undefined): Pro
  * extension layer. See `manage-books-dialog.types.ts` for the full props contract and the FN-008
  * spec in `.context/features/manage-books/` for behavior catalog references.
  */
+/**
+ * JS-driven responsive collapse flag: observes the ref'd element's width and flips when it crosses
+ * the 28rem (448px) breakpoint. Used instead of Tailwind container queries because `@md/...:`
+ * variants are not emitted into the webview bundle (only the `@container` declaration survives the
+ * extension's Tailwind build — verified at runtime 2026-06-12).
+ *
+ * React refs are typed `RefObject<HTMLDivElement | null>` (null is the canonical initial value for
+ * DOM refs).
+ */
+function useIsNarrow(ref: RefObject<HTMLDivElement | null>, open: boolean): boolean {
+  const NARROW_BREAKPOINT_PX = 448;
+  const [isNarrow, setIsNarrow] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const measure = () => {
+      const next = el.getBoundingClientRect().width < NARROW_BREAKPOINT_PX;
+      setIsNarrow((prev) => (prev === next ? prev : next));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ref, open]);
+  return isNarrow;
+}
+
 export function ManageBooksDialog({
   open,
   projectId,
@@ -495,50 +532,15 @@ export function ManageBooksDialog({
 }: ManageBooksDialogProps) {
   const allBooks = useMemo(() => bookIds ?? DEFAULT_BOOK_IDS, [bookIds]);
 
-  // JS-driven responsive collapse. We observe the dialog root's width and
-  // flip `dialogIsNarrow` when it crosses ~28rem (448px) — the breakpoint
-  // matches an `@md/dialog:` container query that doesn't reliably reach the
-  // iframe stylesheets. React refs are typed
-  // `MutableRefObject<HTMLDivElement | null>` (null is the canonical initial
-  // value for DOM refs).
+  // Dialog-root collapse drives the sidebar icon-rail + header subtitle; the
+  // filter-bar flag drives the count span. Same hook, two containers.
   // eslint-disable-next-line no-null/no-null
   const dialogRootRef = useRef<HTMLDivElement | null>(null);
-  const [dialogIsNarrow, setDialogIsNarrow] = useState(false);
-  useEffect(() => {
-    const el = dialogRootRef.current;
-    if (!el) return undefined;
-    const NARROW_BREAKPOINT_PX = 448;
-    const measure = () => {
-      const next = el.getBoundingClientRect().width < NARROW_BREAKPOINT_PX;
-      setDialogIsNarrow((prev) => (prev === next ? prev : next));
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [open]);
-
-  // Same JS-driven pattern for the filter bar: `@md/filterbar:` container-query
-  // variants are not emitted into the webview bundle (only the `@container`
-  // declaration survives the extension's Tailwind build — verified at runtime
-  // 2026-06-12), so the count span's visibility is driven by observing the bar's
-  // own width against the same 28rem breakpoint the container query intended.
+  const dialogIsNarrow = useIsNarrow(dialogRootRef, open);
+  // null is the canonical initial value for React DOM refs.
   // eslint-disable-next-line no-null/no-null
   const filterBarRef = useRef<HTMLDivElement | null>(null);
-  const [filterBarIsNarrow, setFilterBarIsNarrow] = useState(false);
-  useEffect(() => {
-    const el = filterBarRef.current;
-    if (!el) return undefined;
-    const NARROW_BREAKPOINT_PX = 448;
-    const measure = () => {
-      const next = el.getBoundingClientRect().width < NARROW_BREAKPOINT_PX;
-      setFilterBarIsNarrow((prev) => (prev === next ? prev : next));
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [open]);
+  const filterBarIsNarrow = useIsNarrow(filterBarRef, open);
 
   const t = useCallback(
     (key: keyof ManageBooksDialogLocalizedStrings, fallback: string) =>
@@ -1898,44 +1900,50 @@ export function ManageBooksDialog({
   // until other users Send/Receive — the old copy falsely claimed "they will
   // see this change immediately" (old key redirected via metadata
   // fallbackKey).
+  // Variant selection (the shared-warning precedence) is a pure function in
+  // manage-books-dialog.utils.ts so the 2x2 matrix is unit-tested; this block
+  // only maps the variant to its localized string.
   const deleteConfirmBody = (() => {
     if (!deleteConfirm) return '';
     const n = deleteConfirm.books.length;
     const dest = project.shortName;
-    const allSelected = n === current.present.size;
-    if (allSelected && isSharedProject)
-      return fmtTemplate(
-        t(
-          '%manageBooks_delete_confirmBodyAllShared%',
-          'All books will be deleted from {0}, which is shared with other users. The books will be deleted for ALL users when they next Send/Receive. The project itself will not be deleted. This cannot be undone.',
-        ),
-        dest,
-      );
-    if (allSelected)
-      return fmtTemplate(
-        t(
-          '%manageBooks_delete_confirmBodyAll%',
-          'All books will be deleted from {0}. The project itself will not be deleted. This cannot be undone.',
-        ),
-        dest,
-      );
-    if (isSharedProject)
-      return fmtTemplate(
-        t(
-          '%manageBooks_delete_confirmBodySharedSendReceive%',
-          '{0} book(s) will be deleted from {1}, which is shared with other users. The books will be deleted for ALL users when they next Send/Receive. This cannot be undone.',
-        ),
-        n,
-        dest,
-      );
-    return fmtTemplate(
-      t(
-        '%manageBooks_delete_confirmBodyPartial%',
-        '{0} book(s) will be deleted from {1}. This cannot be undone.',
-      ),
-      n,
-      dest,
-    );
+    switch (deleteConfirmVariant(n === current.present.size, isSharedProject === true)) {
+      case 'allShared':
+        return fmtTemplate(
+          t(
+            '%manageBooks_delete_confirmBodyAllShared%',
+            'All books will be deleted from {0}, which is shared with other users. The books will be deleted for all users when they next Send/Receive. The project itself will not be deleted. This cannot be undone.',
+          ),
+          dest,
+        );
+      case 'all':
+        return fmtTemplate(
+          t(
+            '%manageBooks_delete_confirmBodyAll%',
+            'All books will be deleted from {0}. The project itself will not be deleted. This cannot be undone.',
+          ),
+          dest,
+        );
+      case 'partialShared':
+        return fmtTemplate(
+          t(
+            '%manageBooks_delete_confirmBodySharedSendReceive%',
+            '{0} book(s) will be deleted from {1}, which is shared with other users. The books will be deleted for all users when they next Send/Receive. This cannot be undone.',
+          ),
+          n,
+          dest,
+        );
+      case 'partial':
+      default:
+        return fmtTemplate(
+          t(
+            '%manageBooks_delete_confirmBodyPartial%',
+            '{0} book(s) will be deleted from {1}. This cannot be undone.',
+          ),
+          n,
+          dest,
+        );
+    }
   })();
 
   if (!open) {

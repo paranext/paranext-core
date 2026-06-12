@@ -541,8 +541,8 @@ public static class ImportBooksOrchestrator
     //   require a refactor pass that owns both CAP-006 and CAP-009's scopes
     //   (capability isolation prevents cross-capability edits in this pass).
     //   A future pass can consolidate both into a shared helper on a
-    //   ScrText-extension or a common orchestrator base — mirroring the
-    //   CAP-008 `ToSummary` duplication-documentation precedent.
+    //   ScrText-extension or a common orchestrator base — the way the former
+    //   ToSummary duplication was consolidated into ProjectSummary.FromScrText.
     private static string SafeGetBookText(ScrText scrText, int bookNum)
     {
         if (!scrText.Settings.BooksPresentSet.IsSelected(bookNum))

@@ -56,7 +56,7 @@
  */
 import type { FrameLocator, Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/cdp.fixture';
-import { waitForAppReady } from '../../fixtures/helpers';
+import { openFromEditorHamburger, waitForAppReady } from '../../fixtures/helpers';
 
 const SCREENSHOT_BASE = 'proofs/component-evidence/journey';
 const WEB_VIEW_TITLE_REGEX = /Manage Books/i;
@@ -97,45 +97,21 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
   });
 
   /**
-   * Helper: open the `ENTRY_PROJECT_NAME` project from the Home tab (skipped when its editor tab is
-   * already open). Shared bootstrap pattern with the markers-checklist specs.
-   */
-  async function openEntryProject(mainPage: Page): Promise<void> {
-    const existing = mainPage.locator('.dock-tab', { hasText: ENTRY_PROJECT_NAME });
-    if ((await existing.count()) > 0) {
-      // The editor's in-iframe hamburger is only clickable while the editor
-      // tab is the visible tab in its dock panel — activate it.
-      await existing.first().click();
-      return;
-    }
-    // Same constraint for Home's Open buttons — activate Home first.
-    await mainPage.locator('.dock-tab', { hasText: 'Home' }).first().click();
-    const homeFrame = mainPage.frameLocator('iframe[title="Home"]');
-    await homeFrame.locator(`tr:has-text("${ENTRY_PROJECT_NAME}") button:has-text("Open")`).click();
-    await expect(mainPage.locator('.dock-tab', { hasText: ENTRY_PROJECT_NAME })).toBeVisible({
-      timeout: 15_000,
-    });
-  }
-
-  /**
    * Helper: open the Manage Books unified dialog via the scripture editor's hamburger ("Project")
-   * menu and return a frameLocator scoped to the dialog's web-view iframe. Mirrors the navigation
-   * pattern used by the per-WP functional tests so journey tests do not drift from the per-WP
-   * idiom.
+   * menu and return a frameLocator scoped to the dialog's web-view iframe. Uses the shared
+   * {@link openFromEditorHamburger} bootstrap (same helper the per-WP functional tests use) so
+   * journey tests do not drift from the per-WP idiom.
    *
    * The Manila UX follow-up moved the entry point from the application main menu into the editor
    * hamburger (reserved `platform.manageBooks` default group in the Project section). The hamburger
    * button and its Radix menu both render INSIDE the editor's iframe.
    */
   async function openManageBooks(mainPage: Page): Promise<FrameLocator> {
-    await openEntryProject(mainPage);
-    const editorFrame = mainPage.frameLocator(
-      `iframe[title*="${ENTRY_PROJECT_NAME}" i][title*="Editable" i]`,
-    );
-    await editorFrame.locator("button[aria-label='Project']").first().click();
-    await editorFrame.getByRole('menuitem', { name: MENU_LABEL_REGEX }).first().click();
-    const tab = mainPage.locator('.dock-tab', { hasText: WEB_VIEW_TITLE_REGEX });
-    await expect(tab).toBeVisible({ timeout: 15_000 });
+    await openFromEditorHamburger(mainPage, {
+      projectName: ENTRY_PROJECT_NAME,
+      menuItem: MENU_LABEL_REGEX,
+      tabTitle: WEB_VIEW_TITLE_REGEX,
+    });
     return mainPage.frameLocator(MANAGE_BOOKS_FRAME);
   }
 

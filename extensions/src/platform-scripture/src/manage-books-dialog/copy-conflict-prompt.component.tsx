@@ -57,21 +57,37 @@ export function CopyConflictPrompt({
             <DialogTitle>{t('%manageBooks_copy_confirmTitle%', 'Books already exist')}</DialogTitle>
             <DialogDescription>
               {conflict
-                ? fmtTemplate(
-                    // Lists the conflicting book names like the import-conflict
-                    // prompt does (Manila UX follow-up: "the message should
-                    // also list the book name(s)"). New key — the old
-                    // %manageBooks_copy_confirmBody% (count-only, 2 args) is
-                    // redirected via metadata fallbackKey since its
-                    // placeholder arity changed.
-                    t(
-                      '%manageBooks_copy_confirmBodyWithBooks%',
-                      '{0} book(s) already exist in {1}: {2}',
-                    ),
-                    conflict.existing.length,
-                    projectName,
-                    conflict.existing.join(', '),
-                  )
+                ? // Lists the conflicting book names like the import-conflict prompt
+                  // does (Manila UX follow-up: "the message should also list the book
+                  // name(s)"). Proper _one/_other pluralization (matching the import
+                  // filesMatched pair) instead of "book(s)"; the old count-only
+                  // %manageBooks_copy_confirmBody% is redirected via metadata
+                  // fallbackKey since its placeholder arity changed. The list join is
+                  // locale-aware via Intl.ListFormat.
+                  (() => {
+                    const bookList = new Intl.ListFormat(undefined, {
+                      style: 'narrow',
+                      type: 'unit',
+                    }).format(conflict.existing);
+                    return conflict.existing.length === 1
+                      ? fmtTemplate(
+                          t(
+                            '%manageBooks_copy_confirmBodyWithBooks_one%',
+                            '1 book already exists in {0}: {1}',
+                          ),
+                          projectName,
+                          bookList,
+                        )
+                      : fmtTemplate(
+                          t(
+                            '%manageBooks_copy_confirmBodyWithBooks_other%',
+                            '{0} books already exist in {1}: {2}',
+                          ),
+                          conflict.existing.length,
+                          projectName,
+                          bookList,
+                        );
+                  })()
                 : ''}
             </DialogDescription>
           </DialogHeader>
