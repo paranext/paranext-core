@@ -1,4 +1,3 @@
-import { newPlatformError } from 'platform-bible-utils';
 import type { ResourceReferenceList } from 'platform-scripture';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { DEFAULT_RESOURCE_REFERENCE_LIST, selectTextConnection } from './select-dbl-resource';
@@ -155,22 +154,6 @@ describe('selectDblResource', () => {
 
       expect(getUserList).not.toHaveBeenCalled();
       expect(setUserList).not.toHaveBeenCalled();
-    });
-
-    it('returns early without writing when adminSetting is undefined', async () => {
-      await selectTextConnection(
-        RESOURCE_A,
-        undefined,
-        setAdminSetting,
-        vi.fn().mockResolvedValue(true),
-        getUserList,
-        setUserList,
-        undefined,
-        onSelect,
-      );
-
-      expect(setAdminSetting).not.toHaveBeenCalled();
-      expect(onSelect).not.toHaveBeenCalled();
     });
 
     it('returns early without writing when adminSetting is undefined', async () => {
