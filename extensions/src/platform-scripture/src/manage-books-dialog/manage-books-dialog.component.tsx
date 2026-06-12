@@ -512,6 +512,28 @@ export function ManageBooksDialog({
     return () => observer.disconnect();
   }, [open]);
 
+  // Same JS-driven pattern for the filter bar: `@md/filterbar:` container-query
+  // variants are not emitted into the webview bundle (only the `@container`
+  // declaration survives the extension's Tailwind build — verified at runtime
+  // 2026-06-12), so the count span's visibility is driven by observing the bar's
+  // own width against the same 28rem breakpoint the container query intended.
+  // eslint-disable-next-line no-null/no-null
+  const filterBarRef = useRef<HTMLDivElement | null>(null);
+  const [filterBarIsNarrow, setFilterBarIsNarrow] = useState(false);
+  useEffect(() => {
+    const el = filterBarRef.current;
+    if (!el) return undefined;
+    const NARROW_BREAKPOINT_PX = 448;
+    const measure = () => {
+      const next = el.getBoundingClientRect().width < NARROW_BREAKPOINT_PX;
+      setFilterBarIsNarrow((prev) => (prev === next ? prev : next));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [open]);
+
   const t = useCallback(
     (key: keyof ManageBooksDialogLocalizedStrings, fallback: string) =>
       localizedStrings[key] ?? fallback,
@@ -1852,7 +1874,9 @@ export function ManageBooksDialog({
 
             <div className="tw:flex tw:flex-col tw:items-start tw:gap-2 tw:border-b tw:px-6 tw:py-3 tw:@container/actions">
               {action === 'view' && (
-                <div className="tw:flex tw:items-center tw:gap-1">
+                /* tw:flex-wrap: at narrow widths the four action buttons wrap to a
+                   second row instead of overflowing the dialog horizontally. */
+                <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-1">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1959,11 +1983,17 @@ export function ManageBooksDialog({
               )}
 
               {action === 'copy' && (
-                <div className="tw:flex tw:items-center tw:gap-2">
+                <div className="tw:flex tw:w-full tw:min-w-0 tw:items-center tw:gap-2">
                   <Label htmlFor="af-source" className="tw:text-xs tw:text-muted-foreground">
                     {t('%manageBooks_copy_fromLabel%', 'From')}
                   </Label>
-                  <div id="af-source" data-testid="manage-books-copy-source-trigger">
+                  {/* Flexible width (mirrors the create-mode method picker) so the trigger
+                      shrinks with the dialog instead of overflowing at narrow widths. */}
+                  <div
+                    id="af-source"
+                    data-testid="manage-books-copy-source-trigger"
+                    className="tw:min-w-0 tw:max-w-xs tw:flex-1 tw:basis-48"
+                  >
                     <ProjectSelector
                       mode="project"
                       projects={copyFromProjectsAsPS}
@@ -1982,7 +2012,7 @@ export function ManageBooksDialog({
                       // Mirror the prior <SelectTrigger> "primary fill while empty" affordance —
                       // the picker reads as a call-to-action until a source project is set.
                       buttonClassName={cn(
-                        'tw:h-8 tw:w-52',
+                        'tw:h-8 tw:w-full',
                         !copySourceId &&
                           'tw:border-primary tw:bg-primary tw:text-primary-foreground tw:hover:bg-primary/90',
                       )}
@@ -1992,7 +2022,9 @@ export function ManageBooksDialog({
               )}
 
               {action === 'import' && (
-                <div className="tw:flex tw:items-center tw:gap-2">
+                /* tw:flex-wrap: "N files matched" + Clear wrap under the Choose-files
+                   button at narrow widths instead of overflowing. */
+                <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
                   <input
                     ref={importFileInputRef}
                     type="file"
@@ -2044,7 +2076,14 @@ export function ManageBooksDialog({
               )}
             </div>
 
-            <div className="tw:flex tw:flex-nowrap tw:items-center tw:gap-2 tw:border-b tw:px-6 tw:py-2 tw:@container/filterbar">
+            {/* tw:flex-wrap (not nowrap): at extreme narrowness the presence-filter /
+                group-by controls wrap to a second row rather than pushing the bar into
+                horizontal overflow. The count span hides below 28rem via the
+                filterBarIsNarrow resize observer. */}
+            <div
+              ref={filterBarRef}
+              className="tw:flex tw:flex-wrap tw:items-center tw:gap-2 tw:border-b tw:px-6 tw:py-2"
+            >
               {action !== 'view' && (action !== 'import' || hasInlineFiles) && (
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -2088,20 +2127,20 @@ export function ManageBooksDialog({
                 className="tw:h-8 tw:min-w-0 tw:max-w-xs tw:flex-1 tw:basis-24 tw:[&_input]:h-8"
                 isDisabled={isSubmitting}
               />
-              <span
-                className={cn(
-                  'tw:whitespace-nowrap tw:text-xs tw:text-muted-foreground',
-                  action === 'copy' && 'tw:hidden tw:@md/filterbar:inline',
-                )}
-              >
-                {universe.length === 0
-                  ? t('%manageBooks_filter_zero%', '0 books')
-                  : fmtTemplate(
-                      t('%manageBooks_filter_count%', '{0} of {1}'),
-                      visibleBooks.length,
-                      universe.length,
-                    )}
-              </span>
+              {/* Hidden when the filter bar is narrow, in every mode — at tight widths
+                  the count is the least useful filter-bar item and its space keeps the
+                  search input usable. */}
+              {!filterBarIsNarrow && (
+                <span className="tw:whitespace-nowrap tw:text-xs tw:text-muted-foreground">
+                  {universe.length === 0
+                    ? t('%manageBooks_filter_zero%', '0 books')
+                    : fmtTemplate(
+                        t('%manageBooks_filter_count%', '{0} of {1}'),
+                        visibleBooks.length,
+                        universe.length,
+                      )}
+                </span>
+              )}
               {/* Sebastian review item 8 (2026-05-06): the View / Import presence-filter chip
                   rows were replaced with a single Filter-icon button that opens a popover
                   containing the radio choices. Mirrors the pattern in
