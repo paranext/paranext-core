@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RpcEventRegistry, RpcWebSocketListener } from '@main/services/rpc-websocket-listener';
 import { EXPERIMENTAL_OPENRPC_PREFIX } from '@shared/models/openrpc.model';
+import { logger } from '@shared/services/logger.service';
 
 // Mock heavy dependencies so this test can run outside the Electron main process
 vi.mock('electron', () => ({ app: { getVersion: () => '0.0.0' } }));
@@ -113,5 +114,46 @@ describe('generateOpenRpcSchema() surfaces every registered event', () => {
     const entry = schema.methods.find((m) => m.name === 'myExt.expEvent');
     expect(entry?.summary).toBe(`${EXPERIMENTAL_OPENRPC_PREFIX}Fires experimentally`);
     expect(entry?.['x-experimental']).toBe(true);
+  });
+});
+
+describe('emitEventOnNetwork warns about invalid event announcements', () => {
+  let listener: RpcWebSocketListener;
+
+  beforeEach(() => {
+    vi.mocked(logger.warn).mockClear();
+    // The constructor only binds methods (no Electron/WebSocket startup). There are no connected
+    // sockets, so emitEventOnNetwork only runs the announcement validation and the (empty) fan-out.
+    listener = new RpcWebSocketListener();
+  });
+
+  it('warns that announcing an unregistered single-source event is deprecated', () => {
+    listener.emitEventOnNetwork('myExt.unregistered', { foo: 1 });
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(logger.warn).mock.calls[0][0]).toMatch(
+      /not registered with the central registry.*deprecated as of 12 June 2026/s,
+    );
+  });
+
+  it('warns only once per unregistered event name (deduped)', () => {
+    listener.emitEventOnNetwork('myExt.unregistered', { foo: 1 });
+    listener.emitEventOnNetwork('myExt.unregistered', { foo: 2 });
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not warn when an unregistered multi-source event is announced', () => {
+    // Multi-source events may be emitted by any process whether or not they registered.
+    listener.emitEventOnNetwork('object:onDidCreateNetworkObject', { foo: 1 });
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it('does not warn when main announces an event it registered itself', async () => {
+    // Registering through the listener ties the event to the listener (`this`), which is the same
+    // handler emitEventOnNetwork announces under — so the announcement is valid.
+    await listener.registerEvent('myExt.mainOwned', {
+      notification: { params: [], summary: 'Owned by main' },
+    });
+    listener.emitEventOnNetwork('myExt.mainOwned', { foo: 1 });
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 });

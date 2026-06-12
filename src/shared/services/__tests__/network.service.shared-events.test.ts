@@ -1,32 +1,61 @@
 import { describe, it, expect } from 'vitest';
 import {
   MULTI_SOURCE_EVENT_NAMES,
+  createCoreMultiSourceEventEmitter,
   createNetworkEventEmitterAsync,
   getNetworkEvent,
 } from '@shared/services/network.service';
 import type { MultiSourceNetworkEvents } from 'papi-shared-types';
 import type { PlatformEvent } from 'platform-bible-utils';
 
-describe('MULTI_SOURCE_EVENT_NAMES stays in sync with MultiSourceNetworkEvents', () => {
-  it('contains every key of MultiSourceNetworkEvents', () => {
-    type RequiredKeys = keyof MultiSourceNetworkEvents;
-    const required: RequiredKeys[] = [
+describe('MULTI_SOURCE_EVENT_NAMES stays in sync with the multi-source event names', () => {
+  it('contains every public MultiSourceNetworkEvents key', () => {
+    const publicKeys: (keyof MultiSourceNetworkEvents)[] = [
+      'object:onDidCreateNetworkObject',
+      'object:onDidDisposeNetworkObject',
+    ];
+    publicKeys.forEach((name) => expect(MULTI_SOURCE_EVENT_NAMES.has(name)).toBe(true));
+  });
+
+  it('contains the platform-internal multi-source events not declared in the public types', () => {
+    expect(MULTI_SOURCE_EVENT_NAMES.has('shared-store:change')).toBe(true);
+  });
+
+  it('contains only known multi-source names', () => {
+    // The compile-time invariant (set members must be a MultiSourceNetworkEventName) is enforced
+    // where MULTI_SOURCE_EVENT_NAMES is declared; here we just guard against accidental additions.
+    const known = [
       'object:onDidCreateNetworkObject',
       'object:onDidDisposeNetworkObject',
       'shared-store:change',
     ];
-    required.forEach((name) => expect(MULTI_SOURCE_EVENT_NAMES.has(name)).toBe(true));
+    Array.from(MULTI_SOURCE_EVENT_NAMES).forEach((name) => expect(known).toContain(name));
+  });
+});
+
+describe('createCoreMultiSourceEventEmitter (synchronous)', () => {
+  it('throws synchronously for an event name that is not a pre-approved multi-source event', () => {
+    expect(() =>
+      // 'as never' bypasses the keyof MultiSourceNetworkEvents constraint to exercise the runtime
+      // guard that protects untyped/cast callers.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      createCoreMultiSourceEventEmitter('myExt.notApproved' as never),
+    ).toThrow(/not a pre-approved multi-source event/);
   });
 
-  it('contains no names absent from MultiSourceNetworkEvents', () => {
-    type AllowedKeys = keyof MultiSourceNetworkEvents;
-    Array.from(MULTI_SOURCE_EVENT_NAMES).forEach((name) => {
-      // The cast verifies the runtime constant only contains keys MultiSourceNetworkEvents declares.
-      // If a new entry is added to MULTI_SOURCE_EVENT_NAMES without adding it to
-      // MultiSourceNetworkEvents, this assignment is a type error and the test fails to compile.
-      const typed: AllowedKeys = name;
-      expect(typeof typed).toBe('string');
-    });
+  it('synchronously returns an emitter and a registeredEmitterPromise for a pre-approved event', () => {
+    const result = createCoreMultiSourceEventEmitter('object:onDidCreateNetworkObject');
+    try {
+      expect(typeof result.emitter.emit).toBe('function');
+      expect(typeof result.emitter.event).toBe('function');
+      expect(result.registeredEmitterPromise).toBeInstanceOf(Promise);
+    } finally {
+      // The background registration touches the (unavailable) network in unit mode; swallow its
+      // result so it can't surface as an unhandled rejection, and dispose the emitter so its
+      // module-level record doesn't leak into other tests.
+      result.registeredEmitterPromise.catch(() => {});
+      result.emitter.dispose();
+    }
   });
 });
 

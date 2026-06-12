@@ -45,10 +45,11 @@ const initialize = (): Promise<void> => {
     // TODO: Might be best to make a singleton or something
     await networkService.initialize();
 
-    // `initialize` is only called after module evaluation is complete, so all module-level
+    // These are pre-approved multi-source events, so create them synchronously and register them
+    // centrally in the background (we don't await registration — it isn't needed for the emitter to
+    // work). `initialize` is only called after module evaluation is complete, so all module-level
     // variables below are already defined by the time this async body runs.
-    // eslint-disable-next-line @typescript-eslint/no-use-before-define
-    onDidCreateNetworkObjectEmitter = await networkService.createNetworkEventEmitterAsync(
+    const createEmitter = networkService.createCoreMultiSourceEventEmitter(
       'object:onDidCreateNetworkObject',
       {
         notification: {
@@ -64,10 +65,12 @@ const initialize = (): Promise<void> => {
         },
       },
     );
-
-    // `initialize` runs after module evaluation; the emitter variable is defined later in the module.
+    // The emitter variable is declared later in the module; safe at runtime since initialize runs
+    // after module evaluation.
     // eslint-disable-next-line @typescript-eslint/no-use-before-define
-    onDidDisposeNetworkObjectEmitter = await networkService.createNetworkEventEmitterAsync(
+    onDidCreateNetworkObjectEmitter = createEmitter.emitter;
+
+    const disposeEmitter = networkService.createCoreMultiSourceEventEmitter(
       'object:onDidDisposeNetworkObject',
       {
         notification: {
@@ -83,6 +86,20 @@ const initialize = (): Promise<void> => {
         },
       },
     );
+    // `initialize` runs after module evaluation; the emitter variable is defined later in the module.
+    // eslint-disable-next-line @typescript-eslint/no-use-before-define
+    onDidDisposeNetworkObjectEmitter = disposeEmitter.emitter;
+
+    // Central registration runs in the background — it isn't needed for the emitters to work and we
+    // don't block startup on it. Consume the results (failures are already logged inside the network
+    // service) so a rejected registration can't surface as an unhandled rejection. allSettled never
+    // rejects, so nothing escapes this IIFE.
+    (async () => {
+      await Promise.allSettled([
+        createEmitter.registeredEmitterPromise,
+        disposeEmitter.registeredEmitterPromise,
+      ]);
+    })();
 
     // Subscribe to the dispose event to clean up local and remote network object registrations
     // eslint-disable-next-line @typescript-eslint/no-use-before-define

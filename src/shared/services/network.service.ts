@@ -28,8 +28,7 @@ import {
 import {
   RequestTimeoutSharedStoreKey,
   sharedStoreService,
-  STORE_GET_REQUEST,
-  waitForInitialization as waitForSharedStoreInitialization,
+  StoreChangeEvent,
 } from '@shared/services/shared-store.service';
 import { deserializeRequestType, SerializedRequestType } from '@shared/utils/util';
 import { PapiNetworkEventEmitter } from '@shared/models/papi-network-event-emitter.model';
@@ -42,9 +41,10 @@ import {
 } from '@shared/models/openrpc.model';
 import { JSONRPCResponse } from 'json-rpc-2.0';
 import { NetworkMethodHandlerOptions } from '@shared/models/network.model';
-import type { NetworkEvents, NetworkEventTypes } from 'papi-shared-types';
+import type { MultiSourceNetworkEvents, NetworkEvents, NetworkEventTypes } from 'papi-shared-types';
+import { MULTI_SOURCE_EVENT_NAMES } from '@shared/data/network-event-names';
 
-export { MULTI_SOURCE_EVENT_NAMES } from '@shared/data/network-event-names';
+export { MULTI_SOURCE_EVENT_NAMES };
 
 // #region Local event handling
 
@@ -58,7 +58,16 @@ export { MULTI_SOURCE_EVENT_NAMES } from '@shared/data/network-event-names';
 // TODO: sync these between processes
 const eventEmittersByEventType = new Map<
   string,
-  { emitter: PapiNetworkEventEmitter<unknown>; isRegistered: boolean }
+  {
+    emitter: PapiNetworkEventEmitter<unknown>;
+    isRegistered: boolean;
+    /**
+     * Whether this emitter's event was registered centrally with the RPC handler (via
+     * `jsonRpc.registerEvent`). When `true`, disposing the emitter also unregisters the event from
+     * the central registry.
+     */
+    isCentrallyRegistered: boolean;
+  }
 >();
 
 /**
@@ -101,13 +110,15 @@ export const shutdown = async () => {
     if (!jsonRpc) return;
 
     await jsonRpc.disconnect();
+    // Tear down the handler reference before disposing emitters so their disposers skip the
+    // now-pointless per-event unregister call — the whole connection is already going away.
+    jsonRpc = undefined;
     await Promise.all(
       [...eventEmittersByEventType.values()].map(async (emitter) => {
         await emitter.emitter.dispose();
       }),
     );
     eventEmittersByEventType.clear();
-    jsonRpc = undefined;
   });
 };
 
@@ -137,21 +148,15 @@ function sharedStoreKeyForRequestType(
 }
 
 function getTimeoutMsForRequestType(requestType: SerializedRequestType): number {
-  // Custom timeouts live in the shared store. Reading shared store before it has finished
-  // initializing would throw (and would break its Lamport-clock sync guarantee anyway). The
-  // bootstrap window can include network requests fired by React components mounted before
-  // initializeSharedStoreService() resolves, so during that window fall back to the default
-  // timeout — a small bootstrapping problem that can be improved later.
-  if (!sharedStoreService.isInitialized()) {
-    // Suppress the warning for shared-store's own internal bootstrap request — it's expected to
-    // run before initialization completes (it's part of the initialization).
-    if (requestType !== STORE_GET_REQUEST)
-      logger.warn(
-        `Shared store not initialized; using default request timeout of ${requestTimeoutMs}ms for request type ${requestType}`,
-      );
-    return requestTimeoutMs;
-  }
+  // Custom timeouts live in the shared store. The sync `get` returns undefined both when no custom
+  // timeout has been set (normal) and when the shared store has not finished initializing. Only the
+  // latter is noteworthy, so log a debug note when we read undefined before the shared store is
+  // initialized; otherwise undefined just means "no custom timeout" and we use the default silently.
   const sharedVal = sharedStoreService.get(sharedStoreKeyForRequestType(requestType));
+  if (sharedVal === undefined && !sharedStoreService.isInitialized())
+    logger.debug(
+      `Custom timeout for request type ${requestType} requested before the shared store finished initializing; using default ${requestTimeoutMs}ms`,
+    );
   return typeof sharedVal === 'number' && sharedVal >= 0 ? sharedVal : requestTimeoutMs;
 }
 
@@ -204,21 +209,6 @@ async function doRequest<TParam extends Array<unknown>, TReturn>(
 ): Promise<TReturn> {
   validateRequestTypeFormatting(requestType);
   await initialize();
-  // Ensure the shared store service is ready before this request so any custom timeout for the
-  // request type is honored. Skip the gate for shared-store's own internal requests fired during
-  // its initialization — they cannot wait for the service that fires them, or we'd deadlock.
-  // waitForSharedStoreInitialization throws if shared-store init does not start within its
-  // timeout; we catch and continue with the default timeout in that case so a missing/late
-  // shared-store init does not block all network traffic.
-  if (requestType !== STORE_GET_REQUEST) {
-    try {
-      await waitForSharedStoreInitialization();
-    } catch (e) {
-      logger.warn(
-        `Proceeding with default timeout for ${requestType} — shared store not ready: ${getErrorMessage(e)}`,
-      );
-    }
-  }
   if (!jsonRpc) throw new Error('RPC handler not set');
   const responseAsyncVariable = new AsyncVariable<JSONRPCResponse | PlatformError>(
     `response to ${requestType}`,
@@ -364,6 +354,45 @@ const emitEventOnNetwork = async <T>(eventType: string, event: T) => {
   jsonRpc.emitEventOnNetwork(eventType, event);
 };
 
+/**
+ * Cleans up the record for an event emitter when it is disposed. If the emitter had been centrally
+ * registered with the RPC handler, also unregister the (single-source) event from the central
+ * registry so it stops appearing in the OpenRPC document and frees the name for re-registration.
+ *
+ * Multi-source events are intentionally NOT unregistered here: multiple emitters for the same name
+ * can exist (even within one process), so unregistering one could disrupt the others. They are
+ * cleaned up centrally when the process disconnects (the RPC server unregisters all of a
+ * connection's events on close), the same way registered methods are.
+ *
+ * `dispose` on {@link PapiNetworkEventEmitter} is synchronous, but `unregisterEvent` is async, so we
+ * cannot await it here. We fire it from an IIFE and log a warning if it rejects.
+ */
+const disposeNetworkEventEmitter = (eventType: string) => {
+  const emitterRecord = eventEmittersByEventType.get(eventType);
+  eventEmittersByEventType.delete(eventType);
+  if (!emitterRecord?.isCentrallyRegistered || !jsonRpc) return;
+  if (MULTI_SOURCE_EVENT_NAMES.has(eventType)) return;
+  const rpc = jsonRpc;
+  (async () => {
+    try {
+      await rpc.unregisterEvent(eventType);
+    } catch (e) {
+      logger.warn(
+        `Failed to unregister event "${eventType}" from the central registry: ${getErrorMessage(e)}`,
+      );
+    }
+  })();
+};
+
+/**
+ * Marks an event emitter's record as centrally registered so that disposing it also unregisters the
+ * event from the central registry. See {@link disposeNetworkEventEmitter}.
+ */
+const markEmitterCentrallyRegistered = (eventType: string) => {
+  const emitterRecord = eventEmittersByEventType.get(eventType);
+  if (emitterRecord) emitterRecord.isCentrallyRegistered = true;
+};
+
 const createNetworkEventEmitterInternal = <T>(
   eventType: string,
   registerEmitter: boolean,
@@ -375,9 +404,10 @@ const createNetworkEventEmitterInternal = <T>(
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       emitter: new PapiNetworkEventEmitter<T>(
         (event) => emitEventOnNetwork(eventType, event),
-        () => eventEmittersByEventType.delete(eventType),
+        () => disposeNetworkEventEmitter(eventType),
       ) as PapiNetworkEventEmitter<unknown>,
       isRegistered: false,
+      isCentrallyRegistered: false,
     };
     eventEmittersByEventType.set(eventType, emitterRecord);
   }
@@ -443,7 +473,93 @@ export const createNetworkEventEmitterAsync = async <EventType extends NetworkEv
       `Event "${eventType}" was rejected by the central registry (likely already registered from another process).`,
     );
   }
-  return createNetworkEventEmitterInternal<NetworkEvents[EventType]>(eventType, true);
+  const emitter = createNetworkEventEmitterInternal<NetworkEvents[EventType]>(eventType, true);
+  // Tie the central registration to this emitter so disposing it also unregisters the event.
+  markEmitterCentrallyRegistered(eventType);
+  return emitter;
+};
+
+/**
+ * Core-internal map of multi-source network events. Extends the public
+ * {@link MultiSourceNetworkEvents} with platform-internal multi-source events that are intentionally
+ * NOT advertised on the PAPI — the shared store change event, for example, because the shared store
+ * service is not part of the public API. Used to type {@link createCoreMultiSourceEventEmitter}.
+ */
+export type InternalMultiSourceNetworkEvents = MultiSourceNetworkEvents & {
+  'shared-store:change': StoreChangeEvent;
+};
+
+/**
+ * Synchronously create a network event emitter for one of the pre-approved multi-source events —
+ * those listed in {@link MULTI_SOURCE_EVENT_NAMES}. Throws synchronously if `eventType` is not such
+ * an event.
+ *
+ * This is core-internal (not exposed on `papiNetworkService`, hence the `Core` in the name):
+ * multi-source events are platform events, not for extensions to create.
+ *
+ * Unlike {@link createNetworkEventEmitterAsync}, the emitter is returned immediately so callers can
+ * use it without awaiting. Central registration with the RPC handler is performed in the
+ * background; the returned `registeredEmitterPromise` resolves to the same emitter once
+ * registration completes. If registration fails, the promise logs a warning and rejects with the
+ * underlying error.
+ *
+ * Multi-source emitters are NOT unregistered on dispose (multiple emitters for the same name can
+ * coexist); the central registry cleans them up when the process disconnects. See
+ * {@link disposeNetworkEventEmitter}.
+ *
+ * @param eventType The name of the multi-source event to create. Must be a key of
+ *   {@link InternalMultiSourceNetworkEvents}.
+ * @param documentation Optional notification documentation. Carries
+ *   `notification['x-experimental']: true` to mark the event as experimental.
+ * @returns An object with the synchronously-created `emitter` and a `registeredEmitterPromise` that
+ *   resolves to that same emitter when central registration completes.
+ */
+export const createCoreMultiSourceEventEmitter = <
+  EventType extends keyof InternalMultiSourceNetworkEvents,
+>(
+  eventType: EventType,
+  documentation?: SingleNotificationDocumentation,
+): {
+  emitter: PlatformEventEmitter<InternalMultiSourceNetworkEvents[EventType]>;
+  registeredEmitterPromise: Promise<
+    PlatformEventEmitter<InternalMultiSourceNetworkEvents[EventType]>
+  >;
+} => {
+  if (!MULTI_SOURCE_EVENT_NAMES.has(eventType))
+    throw new Error(
+      `Event "${eventType}" is not a pre-approved multi-source event. Use createNetworkEventEmitterAsync for single-source events.`,
+    );
+
+  // Create the emitter synchronously so the caller can use it right away.
+  const emitter = createNetworkEventEmitterInternal<InternalMultiSourceNetworkEvents[EventType]>(
+    eventType,
+    true,
+  );
+
+  // Register the event centrally in the background. The returned promise resolves to the same
+  // emitter so callers can await registration completion when they need it.
+  const registeredEmitterPromise = (async () => {
+    try {
+      await initialize();
+      if (!jsonRpc) throw new Error('RPC handler not set');
+      const accepted = await jsonRpc.registerEvent(eventType, documentation);
+      if (!accepted)
+        throw new Error(
+          `Event "${eventType}" was rejected by the central registry (likely already registered from this process).`,
+        );
+      // Record that this emitter's event is registered centrally. Disposing it will NOT unregister
+      // (disposeNetworkEventEmitter skips multi-source names); the flag just reflects reality.
+      markEmitterCentrallyRegistered(eventType);
+      return emitter;
+    } catch (e) {
+      logger.warn(
+        `Failed to register multi-source event "${eventType}" with the central registry: ${getErrorMessage(e)}`,
+      );
+      throw e;
+    }
+  })();
+
+  return { emitter, registeredEmitterPromise };
 };
 
 /**

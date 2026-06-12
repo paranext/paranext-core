@@ -13,6 +13,7 @@ import {
 vi.mock('@shared/services/network.service', () => ({
   createNetworkEventEmitter: vi.fn(),
   createNetworkEventEmitterAsync: vi.fn(),
+  createCoreMultiSourceEventEmitter: vi.fn(),
   getNetworkEvent: vi.fn(),
   request: vi.fn(),
   registerRequestHandler: vi.fn(),
@@ -38,9 +39,6 @@ describe('sharedStoreService', () => {
     emitLocal: vi.fn(),
   };
 
-  // Mock network event handler function
-  const mockEventHandler = vi.fn();
-
   // Save original globalThis.processType
   const originalProcessType = globalThis.processType;
 
@@ -63,9 +61,18 @@ describe('sharedStoreService', () => {
         ReturnType<typeof networkService.createNetworkEventEmitterAsync>
       >,
     );
-
-    // Mock event handler subscription
-    vi.mocked(networkService.getNetworkEvent).mockReturnValue(mockEventHandler);
+    // Multi-source events (like 'shared-store:change') use the synchronous
+    // createCoreMultiSourceEventEmitter, which returns the emitter and a registration promise that
+    // resolves to that same emitter. The shared store subscribes to changes via the emitter's
+    // `event`, so no getNetworkEvent mock is needed.
+    vi.mocked(networkService.createCoreMultiSourceEventEmitter).mockReturnValue(
+      // Needed for testing
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      {
+        emitter: mockEmitter,
+        registeredEmitterPromise: Promise.resolve(mockEmitter),
+      } as unknown as ReturnType<typeof networkService.createCoreMultiSourceEventEmitter>,
+    );
 
     // Set process type to Main by default
     globalThis.processType = ProcessType.Main;
@@ -81,12 +88,12 @@ describe('sharedStoreService', () => {
   describe('initialize', () => {
     it('should initialize the service with a unique process ID', async () => {
       await initializeSharedStore(networkService);
-      expect(networkService.createNetworkEventEmitterAsync).toHaveBeenCalledWith(
+      expect(networkService.createCoreMultiSourceEventEmitter).toHaveBeenCalledWith(
         'shared-store:change',
         expect.objectContaining({ notification: expect.any(Object) }),
       );
-      expect(networkService.getNetworkEvent).toHaveBeenCalledWith('shared-store:change');
-      expect(mockEventHandler).toHaveBeenCalled();
+      // The store subscribes to remote changes via the emitter's `event`.
+      expect(mockEmitter.event).toHaveBeenCalled();
     });
 
     it('should register a request handler for store access in the Main process', async () => {
@@ -118,10 +125,10 @@ describe('sharedStoreService', () => {
       expect(second).toBe(first);
       await first;
       // After resolution, further calls still no-op (no second registration of handlers/emitters)
-      const createEmitterCallCount = vi.mocked(networkService.createNetworkEventEmitterAsync).mock
-        .calls.length;
+      const createEmitterCallCount = vi.mocked(networkService.createCoreMultiSourceEventEmitter)
+        .mock.calls.length;
       await initializeSharedStore(networkService);
-      expect(vi.mocked(networkService.createNetworkEventEmitterAsync).mock.calls.length).toBe(
+      expect(vi.mocked(networkService.createCoreMultiSourceEventEmitter).mock.calls.length).toBe(
         createEmitterCallCount,
       );
     });
@@ -184,7 +191,7 @@ describe('sharedStoreService', () => {
       const newValue = 6000;
 
       // Simulate receiving a remote change
-      const changeEventHandler = vi.mocked(mockEventHandler).mock.calls[0][0];
+      const changeEventHandler = vi.mocked(mockEmitter.event).mock.calls[0][0];
       changeEventHandler({
         key: testKey,
         value: testValue,
@@ -198,7 +205,7 @@ describe('sharedStoreService', () => {
       expect(sharedStoreService.get(testKey)).toBe(testValue);
     });
 
-    it('should remove a value by setting it to undefined', () => {
+    it('should remove a value, emitting a deleted change event', () => {
       const testValue = 5000;
       sharedStoreService.set(testKey, testValue);
 
@@ -210,6 +217,7 @@ describe('sharedStoreService', () => {
       expect(mockEmitter.emit).toHaveBeenCalledWith({
         key: testKey,
         value: undefined,
+        deleted: true,
         clock: expect.objectContaining({
           counter: expect.any(Number),
           processId: expect.any(String),
@@ -221,13 +229,89 @@ describe('sharedStoreService', () => {
       expect(valueAfterRemove).toBeUndefined();
     });
 
-    it('should throw if trying to use the service before initialization', async () => {
+    it('get returns undefined before initialization; set/remove throw', async () => {
       resetForTesting();
       const error = 'Shared store service is not initialized';
 
-      expect(() => sharedStoreService.get(testKey)).toThrow(error);
+      // get no longer throws before init — it returns undefined until the store is populated.
+      expect(sharedStoreService.get(testKey)).toBeUndefined();
+      // set/remove still require the service to be initialized so they can broadcast the change.
       expect(() => sharedStoreService.set(testKey, 5000)).toThrow(error);
       expect(() => sharedStoreService.remove(testKey)).toThrow(error);
+    });
+  });
+
+  describe('async get/set/remove operations', () => {
+    beforeEach(async () => {
+      await initializeSharedStore(networkService);
+    });
+
+    it('getAsync resolves to a stored value', async () => {
+      sharedStoreService.set(testKey, 5000);
+      await expect(sharedStoreService.getAsync(testKey)).resolves.toBe(5000);
+    });
+
+    it('getAsync throws when the key is absent and no default is provided', async () => {
+      await expect(sharedStoreService.getAsync(testKey)).rejects.toThrow(
+        /no default value was provided/,
+      );
+    });
+
+    it('getAsync returns the provided default when the key is absent', async () => {
+      await expect(sharedStoreService.getAsync(testKey, 1234)).resolves.toBe(1234);
+    });
+
+    it('getAsync returns an explicit undefined default when the key is absent', async () => {
+      await expect(sharedStoreService.getAsync(testKey, undefined)).resolves.toBeUndefined();
+    });
+
+    it('getAsync returns a present value that is explicitly undefined', async () => {
+      // `undefined` is a valid live value (distinct from removed); getAsync returns it without
+      // applying a default or throwing.
+      sharedStoreService.set(testKey, undefined);
+      await expect(sharedStoreService.getAsync(testKey)).resolves.toBeUndefined();
+    });
+
+    it('getAsync throws after a key is removed (removed means no value)', async () => {
+      sharedStoreService.set(testKey, 5000);
+      sharedStoreService.remove(testKey);
+      await expect(sharedStoreService.getAsync(testKey)).rejects.toThrow(
+        /no default value was provided/,
+      );
+    });
+
+    it('getAsync returns the default after a key is removed', async () => {
+      sharedStoreService.set(testKey, 5000);
+      sharedStoreService.remove(testKey);
+      await expect(sharedStoreService.getAsync(testKey, 99)).resolves.toBe(99);
+    });
+
+    it('getAsync rejects (rather than returning undefined) when the stored value cannot be cloned', async () => {
+      // Inject a value that cannot be serialized (a circular reference) via a simulated remote
+      // change. setFromRemote stores the raw entry without cloning, so the unserializable value
+      // reaches the store; cloning it on read then throws, which getAsync must surface rather than
+      // swallow as `undefined`.
+      const circular: { self?: unknown } = {};
+      circular.self = circular;
+      const changeEventHandler = vi.mocked(mockEmitter.event).mock.calls[0][0];
+      changeEventHandler({
+        key: testKey,
+        value: circular,
+        clock: { counter: 1, processId: 'other-process' },
+      });
+      await expect(sharedStoreService.getAsync(testKey)).rejects.toThrow();
+    });
+
+    it('setAsync waits for initialization, then sets and emits the change', async () => {
+      await sharedStoreService.setAsync(testKey, 5000);
+      expect(sharedStoreService.get(testKey)).toBe(5000);
+      expect(mockEmitter.emit).toHaveBeenCalled();
+    });
+
+    it('removeAsync waits for initialization, then removes the value', async () => {
+      sharedStoreService.set(testKey, 5000);
+      await sharedStoreService.removeAsync(testKey);
+      expect(sharedStoreService.get(testKey)).toBeUndefined();
     });
   });
 
@@ -243,7 +327,7 @@ describe('sharedStoreService', () => {
       sharedStoreService.set(testKey, initialValue);
 
       // Simulate receiving a remote change with higher counter
-      const changeEventHandler = vi.mocked(mockEventHandler).mock.calls[0][0];
+      const changeEventHandler = vi.mocked(mockEmitter.event).mock.calls[0][0];
       changeEventHandler({
         key: testKey,
         value: newValue,
@@ -267,7 +351,7 @@ describe('sharedStoreService', () => {
       sharedStoreService.set(testKey, initialValue + 1);
 
       // Simulate receiving a remote change with lower counter
-      const changeEventHandler = vi.mocked(mockEventHandler).mock.calls[0][0];
+      const changeEventHandler = vi.mocked(mockEmitter.event).mock.calls[0][0];
       changeEventHandler({
         key: testKey,
         value: newValue,
@@ -292,7 +376,7 @@ describe('sharedStoreService', () => {
       const currentCounter = vi.mocked(mockEmitter.emit).mock.calls[0][0].clock.counter;
 
       // Simulate receiving a remote change with same counter but alphabetically higher process ID
-      const changeEventHandler = vi.mocked(mockEventHandler).mock.calls[0][0];
+      const changeEventHandler = vi.mocked(mockEmitter.event).mock.calls[0][0];
       changeEventHandler({
         key: testKey,
         value: newValue,

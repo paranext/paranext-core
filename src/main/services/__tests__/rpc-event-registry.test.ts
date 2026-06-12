@@ -39,3 +39,44 @@ describe('RpcEventRegistry — multi-source vs single-source policy', () => {
     expect(reg.tryUnregister(fakeA, 'myExt.exclusive')).toBe(false);
   });
 });
+
+describe('RpcEventRegistry — checkAnnouncement', () => {
+  const fakeA = { id: 'A' };
+  const fakeB = { id: 'B' };
+
+  let reg: RpcEventRegistry;
+  beforeEach(() => {
+    reg = new RpcEventRegistry();
+  });
+
+  it("returns 'unregistered' when no one has registered a single-source event", () => {
+    expect(reg.checkAnnouncement(fakeA, 'myExt.neverRegistered')).toBe('unregistered');
+  });
+
+  it("returns 'ok' for an unregistered multi-source event (any process may emit it)", () => {
+    expect(reg.checkAnnouncement(fakeA, 'object:onDidCreateNetworkObject')).toBe('ok');
+  });
+
+  it("returns 'ok' when a single-source event is announced by its registrant", () => {
+    reg.tryRegister(fakeA, 'myExt.exclusive');
+    expect(reg.checkAnnouncement(fakeA, 'myExt.exclusive')).toBe('ok');
+  });
+
+  it("returns 'foreign-single-source' when a single-source event is announced by a non-registrant", () => {
+    reg.tryRegister(fakeA, 'myExt.exclusive');
+    expect(reg.checkAnnouncement(fakeB, 'myExt.exclusive')).toBe('foreign-single-source');
+  });
+
+  it("returns 'ok' for a multi-source event regardless of which registrant announces it", () => {
+    reg.tryRegister(fakeA, 'object:onDidCreateNetworkObject');
+    reg.tryRegister(fakeB, 'object:onDidCreateNetworkObject');
+    expect(reg.checkAnnouncement(fakeA, 'object:onDidCreateNetworkObject')).toBe('ok');
+    expect(reg.checkAnnouncement(fakeB, 'object:onDidCreateNetworkObject')).toBe('ok');
+  });
+
+  it("returns 'ok' for a multi-source event announced by a process that never registered it", () => {
+    reg.tryRegister(fakeA, 'object:onDidCreateNetworkObject');
+    // Multi-source semantics allow multiple sources; a non-registrant announcement is not flagged.
+    expect(reg.checkAnnouncement(fakeB, 'object:onDidCreateNetworkObject')).toBe('ok');
+  });
+});

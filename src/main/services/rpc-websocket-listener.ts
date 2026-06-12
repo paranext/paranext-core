@@ -57,6 +57,17 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
   private readonly rpcMethodDetailsByMethodName = new Map<string, RegisteredRpcMethodDetails>();
   private readonly localMethodsByMethodName = new Map<string, InternalRequestHandler>();
   private readonly rpcEventDetailsByEventName = new RpcEventRegistry();
+  /**
+   * Event names we've already warned about being announced while unregistered. Deduped so a
+   * high-frequency unregistered event does not flood the log — the deprecation notice only needs to
+   * be surfaced once per event name.
+   */
+  private readonly warnedUnregisteredAnnouncements = new Set<string>();
+  /**
+   * Event names we've already warned about being announced from a process that did not register the
+   * single-source event. Deduped for the same reason as {@link warnedUnregisteredAnnouncements}.
+   */
+  private readonly warnedForeignAnnouncements = new Set<string>();
 
   constructor() {
     bindClassMethods.call(this);
@@ -350,6 +361,8 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
   }
 
   emitEventOnNetwork<T>(eventType: string, event: T): void {
+    // Main is announcing one of its own events; `this` is the handler the event was registered under.
+    this.warnIfInvalidEventAnnouncement(this, eventType);
     // Wrap each subscriber's emit in try/catch so one broken socket cannot abort the
     // broadcast to the remaining (healthy) subscribers. See D-010: `write EPIPE`
     // unhandled exception during multi-webview scroll-group fan-out.
@@ -368,6 +381,8 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
   private propagateEvent<T>(source: RpcServer, eventType: string, event: T): void {
     if (!this.localEventHandler) throw new Error(`localEventHandler not set`);
     if (!Array.isArray(event) || event.length !== 1) throw new Error(`event not wrapped in array`);
+    // A client (`source`) is announcing this event; validate the announcement against the registry.
+    this.warnIfInvalidEventAnnouncement(source, eventType);
     this.localEventHandler(eventType, event[0]);
     this.rpcServerBySocket.forEach((rpcServer) => {
       if (rpcServer === source) return;
@@ -380,6 +395,43 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
         );
       }
     });
+  }
+
+  /**
+   * Warn (once per event name) when an event is announced (emitted) on the network that the central
+   * registry would flag as misuse:
+   *
+   * - The event is single-source and was never registered centrally — emitting an unregistered event
+   *   is deprecated and the ability to do so will be removed in a future release.
+   * - The event is single-source but is being announced from a process that did not register it,
+   *   which is also deprecated.
+   *
+   * Announcements are never blocked; this only surfaces a warning to help authors migrate to
+   * `createNetworkEventEmitterAsync` or `createCoreMultiSourceEventEmitter` for core code.
+   *
+   * @param handler The handler announcing the event (an {@link RpcServer} for a client, or `this`
+   *   for main's own emissions).
+   * @param eventType The event name being announced.
+   */
+  private warnIfInvalidEventAnnouncement(handler: unknown, eventType: string): void {
+    const status = this.rpcEventDetailsByEventName.checkAnnouncement(handler, eventType);
+    if (status === 'ok') return;
+
+    if (status === 'unregistered') {
+      if (this.warnedUnregisteredAnnouncements.has(eventType)) return;
+      this.warnedUnregisteredAnnouncements.add(eventType);
+      logger.warn(
+        `Network event '${eventType}' was announced but is not registered with the central registry. Announcing unregistered network events is deprecated as of 12 June 2026 and will be removed in a future release; create the emitter with createNetworkEventEmitterAsync.`,
+      );
+      return;
+    }
+
+    // status === 'foreign-single-source'
+    if (this.warnedForeignAnnouncements.has(eventType)) return;
+    this.warnedForeignAnnouncements.add(eventType);
+    logger.warn(
+      `Single-source network event '${eventType}' was announced from a process that did not register it. Announcing a single-source event from a different process is deprecated as of 12 June 2026; only the process that registered the event should announce it.`,
+    );
   }
 
   private onClientConnect(webSocket: WebSocket): void {

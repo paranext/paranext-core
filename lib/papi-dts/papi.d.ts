@@ -1222,13 +1222,6 @@ declare module 'shared/models/openrpc.model' {
   export function withExperimentalPrefix<T extends Method | Notification>(entry: T): T;
 }
 declare module 'shared/services/shared-store.service' {
-  /**
-   * Internal request type used by the shared store service to fetch the initial store contents during
-   * its own initialization. Exported so the network service's `doRequest` gate can identify this
-   * request and skip awaiting shared-store initialization on it (otherwise we'd deadlock: init awaits
-   * this request, the request awaits init).
-   */
-  export const STORE_GET_REQUEST = 'shared-store:get';
   type LamportClock = {
     counter: number;
     processId: string;
@@ -1236,6 +1229,7 @@ declare module 'shared/services/shared-store.service' {
   type StoreEntry = {
     value?: unknown;
     clock: LamportClock;
+    deleted?: boolean;
   };
   export type StoreChangeEvent = StoreEntry & {
     key: string;
@@ -1254,16 +1248,13 @@ declare module 'shared/services/shared-store.service' {
    *
    * - If {@link initialize} has already been called, returns the existing in-flight promise (no timeout
    *   — we wait as long as init takes).
-   * - If {@link initialize} has not been called yet, waits up to `startTimeoutMs` for it to start then
-   *   returns the resulting promise.
+   * - Otherwise waits for {@link initialize} to be called, then returns the resulting promise.
    *
-   * Throws if {@link initialize} never starts within `startTimeoutMs`. Callers that can tolerate the
-   * absence of a ready shared store should catch and fall back.
-   *
-   * @param startTimeoutMs Time to wait for initialize() to be called before throwing. Default 1000ms
-   *   — generous enough to cover normal bootstrap, short enough to avoid hanging requests when
-   *   initialize is never called.
-   * @throws If initialize() does not start within `startTimeoutMs`.
+   * @param startTimeoutMs Time to wait for initialize() to be called before throwing. A non-positive
+   *   value (the default, `0`) waits indefinitely. A positive value throws if initialize() is not
+   *   called within that many milliseconds. Callers that can tolerate the absence of a ready shared
+   *   store should pass a positive timeout and catch/fall back.
+   * @throws If `startTimeoutMs` is positive and initialize() is not called within that window.
    */
   export function waitForInitialization(startTimeoutMs?: number): Promise<void>;
   /**
@@ -1272,16 +1263,27 @@ declare module 'shared/services/shared-store.service' {
    */
   export function resetForTesting(): void;
   /**
-   * Get a value from the shared store with proper typing
+   * Get a value from the shared store with proper typing.
+   *
+   * This runs synchronously and does not wait for initialization: it may return `undefined` if the
+   * shared store service has not yet been populated (e.g. during the bootstrap window, before initial
+   * sync completes). Use {@link getAsync} if you need to wait for a populated value. Note that even
+   * after the store is populated, the returned value may not reflect the most up-to-date value, since
+   * changes from other processes arrive asynchronously.
    *
    * @param key The key of the value to retrieve
-   * @returns A cloned copy of the value associated with the key, or undefined if not found
+   * @returns A cloned copy of the value associated with the key, or `undefined` if not found, not yet
+   *   populated, or the value could not be cloned
    */
   function get<K extends SharedStoreKeys>(key: K): SharedStoreValues[K] | undefined;
   /**
    * Set a value in the shared store and notify other processes. Note that if a value with the given
    * key already exists, it can only be set again by the process that created it. This is to prevent
    * race conditions between processes setting values that don't incorporate each others' updates.
+   *
+   * This runs synchronously and throws if the shared store service has not started initializing (it
+   * must be able to broadcast the change). Use {@link setAsync} if you need to wait for initialization
+   * before setting.
    *
    * @param key The key to set
    * @param value The value to set. Note that the stored value is a cloned copy of the provided value,
@@ -1292,18 +1294,74 @@ declare module 'shared/services/shared-store.service' {
   /**
    * Remove a value from the shared store and notify other processes of the change.
    *
-   * Note that removing a key sets its value to undefined in the store. The key-value pair isn't
-   * actually deleted. This is done to avoid race conditions if a value for this key is set again
-   * quickly.
+   * After removal the key is treated as absent — reads return no value (a removed key is distinct
+   * from a key whose value is `undefined`). The entry and its Lamport clock are retained internally
+   * for conflict resolution (so the removal can win against concurrent sets and the key can be re-set
+   * quickly), but they are not exposed as a value.
+   *
+   * This runs synchronously and throws if the shared store service has not started initializing. Use
+   * {@link removeAsync} if you need to wait for initialization before removing.
    *
    * @param key The key to remove
    */
   function remove<K extends SharedStoreKeys>(key: K): void;
   /**
-   * Returns `true` once {@link initialize} has fully completed. Use this to gate optional reads of the
-   * shared store from code that may run during the bootstrap window — e.g., network-request timeout
-   * lookups that have a sensible default. Required reads of the shared store should `await
-   * initialize` instead so the value is guaranteed accurate per the Lamport-clock contract.
+   * Get a value from the shared store, waiting for the shared store service to be initialized first.
+   *
+   * Unlike {@link get}, this waits (via {@link waitForInitialization}) until the shared store service
+   * is initialized, then reads synchronously. A key with a live value returns that value — which may
+   * legitimately be `undefined`. A key that is absent or has been removed has no value: with no
+   * `defaultValue` argument this throws; with a `defaultValue` (which may itself be `undefined`) it
+   * returns that default.
+   *
+   * If the shared store service is already initialized, the awaited promise is already settled, so
+   * execution continues here on the next microtask without yielding to timers or other queued
+   * macrotasks — effectively synchronous from the caller's perspective. Note the returned value may
+   * not reflect the most up-to-date value, since changes from other processes arrive asynchronously.
+   *
+   * @param key The key of the value to retrieve
+   * @param defaultValue Returned when the key has no value. Omit to throw instead.
+   * @returns A cloned copy of the stored value, or `defaultValue` if the key has no value
+   * @throws If the key has no value and no `defaultValue` was provided
+   */
+  function getAsync<K extends SharedStoreKeys>(key: K): Promise<SharedStoreValues[K]>;
+  function getAsync<K extends SharedStoreKeys>(
+    key: K,
+    defaultValue: SharedStoreValues[K],
+  ): Promise<SharedStoreValues[K]>;
+  /**
+   * Set a value in the shared store, waiting for the shared store service to be initialized first.
+   *
+   * Unlike {@link set}, this waits (via {@link waitForInitialization}) until the shared store service
+   * has been initialized, then performs the set synchronously. See {@link set} for the per-key
+   * ownership and cloning semantics.
+   *
+   * If the shared store service is already initialized, the awaited promise is already settled, so
+   * execution continues here on the next microtask without yielding to timers or other queued
+   * macrotasks — effectively synchronous from the caller's perspective.
+   *
+   * @param key The key to set
+   * @param value The value to set
+   */
+  function setAsync<K extends SharedStoreKeys>(key: K, value?: SharedStoreValues[K]): Promise<void>;
+  /**
+   * Remove a value from the shared store, waiting for the shared store service to be initialized
+   * first.
+   *
+   * Unlike {@link remove}, this waits (via {@link waitForInitialization}) until the shared store
+   * service has been initialized, then performs the removal synchronously.
+   *
+   * If the shared store service is already initialized, the awaited promise is already settled, so
+   * execution continues here on the next microtask without yielding to timers or other queued
+   * macrotasks — effectively synchronous from the caller's perspective.
+   *
+   * @param key The key to remove
+   */
+  function removeAsync<K extends SharedStoreKeys>(key: K): Promise<void>;
+  /**
+   * Returns `true` once {@link initialize} has fully completed (process ID assigned, emitter ready,
+   * and — outside the main process — initial store data synced). Used to distinguish "value genuinely
+   * absent" from "shared store not initialized yet" for optional reads that have a sensible default.
    */
   function isInitialized(): boolean;
   /**
@@ -1338,6 +1396,9 @@ declare module 'shared/services/shared-store.service' {
     get: typeof get;
     set: typeof set;
     remove: typeof remove;
+    getAsync: typeof getAsync;
+    setAsync: typeof setAsync;
+    removeAsync: typeof removeAsync;
     isInitialized: typeof isInitialized;
   };
 }
@@ -1708,15 +1769,16 @@ declare module 'main/services/rpc-server' {
   export default RpcServer;
 }
 declare module 'shared/data/network-event-names' {
-  import type { MultiSourceNetworkEvents } from 'papi-shared-types';
   /**
    * Source of truth for which event names use multi-source semantics at the central registry. Must
-   * stay in sync with the `MultiSourceNetworkEvents` type alias in `papi-shared-types.ts` — the test
-   * `network.service.shared-events.test.ts` enforces the invariant.
+   * stay in sync with `MultiSourceNetworkEvents` (the public events) plus the platform-internal
+   * multi-source events — the test `network.service.shared-events.test.ts` checks the contents.
    *
-   * Add entries here when adding a new multi-source event to `MultiSourceNetworkEvents`.
+   * Add entries to {@link PUBLIC_MULTI_SOURCE_EVENT_NAMES} when adding a new public multi-source event
+   * to `MultiSourceNetworkEvents`, or to {@link INTERNAL_MULTI_SOURCE_EVENT_NAMES} for a new internal
+   * one.
    */
-  export const MULTI_SOURCE_EVENT_NAMES: Set<keyof MultiSourceNetworkEvents>;
+  export const MULTI_SOURCE_EVENT_NAMES: ReadonlySet<string>;
 }
 declare module 'main/services/rpc-event-registry' {
   import { SingleNotificationDocumentation } from 'shared/models/openrpc.model';
@@ -1744,6 +1806,22 @@ declare module 'main/services/rpc-event-registry' {
       eventName: string,
       documentation?: SingleNotificationDocumentation,
     ): boolean;
+    /**
+     * Classify an attempt to announce (emit) an event on the network against the registry. Used to
+     * warn about misuse without blocking the announcement.
+     *
+     * - `'ok'` — the announcement is valid: the event is multi-source (any process may announce it,
+     *   whether or not it registered), or it is single-source and announced by its registrant.
+     * - `'unregistered'` — the event is single-source and no process has registered this name
+     *   centrally. Emitting a single-source event that was never registered is deprecated (it does
+     *   not appear in the OpenRPC document).
+     * - `'foreign-single-source'` — the event is single-source but is being announced by a handler that
+     *   did not register it; only the registering process should emit a single-source event.
+     */
+    checkAnnouncement(
+      handler: unknown,
+      eventName: string,
+    ): 'ok' | 'unregistered' | 'foreign-single-source';
     /** Remove a registrant. Returns `true` if the handler had registered this event. */
     tryUnregister(handler: unknown, eventName: string): boolean;
     /** Remove all event registrations for the given handler (e.g. when a websocket closes) */
@@ -1790,6 +1868,17 @@ declare module 'main/services/rpc-websocket-listener' {
     private readonly rpcMethodDetailsByMethodName;
     private readonly localMethodsByMethodName;
     private readonly rpcEventDetailsByEventName;
+    /**
+     * Event names we've already warned about being announced while unregistered. Deduped so a
+     * high-frequency unregistered event does not flood the log — the deprecation notice only needs to
+     * be surfaced once per event name.
+     */
+    private readonly warnedUnregisteredAnnouncements;
+    /**
+     * Event names we've already warned about being announced from a process that did not register the
+     * single-source event. Deduped for the same reason as {@link warnedUnregisteredAnnouncements}.
+     */
+    private readonly warnedForeignAnnouncements;
     constructor();
     get nextSocketId(): string;
     connect(localEventHandler: EventHandler): Promise<boolean>;
@@ -1813,6 +1902,23 @@ declare module 'main/services/rpc-websocket-listener' {
     generateOpenRpcSchema(): OpenRpc;
     emitEventOnNetwork<T>(eventType: string, event: T): void;
     private propagateEvent;
+    /**
+     * Warn (once per event name) when an event is announced (emitted) on the network that the central
+     * registry would flag as misuse:
+     *
+     * - The event is single-source and was never registered centrally — emitting an unregistered event
+     *   is deprecated and the ability to do so will be removed in a future release.
+     * - The event is single-source but is being announced from a process that did not register it,
+     *   which is also deprecated.
+     *
+     * Announcements are never blocked; this only surfaces a warning to help authors migrate to
+     * `createNetworkEventEmitterAsync` or `createCoreMultiSourceEventEmitter` for core code.
+     *
+     * @param handler The handler announcing the event (an {@link RpcServer} for a client, or `this`
+     *   for main's own emissions).
+     * @param eventType The event name being announced.
+     */
+    private warnIfInvalidEventAnnouncement;
     private onClientConnect;
     private onClientDisconnect;
   }
@@ -1841,14 +1947,20 @@ declare module 'shared/services/network.service' {
    */
   import { InternalRequestHandler } from 'shared/data/rpc.model';
   import { PlatformEvent, PlatformEventEmitter, UnsubscriberAsync } from 'platform-bible-utils';
+  import { StoreChangeEvent } from 'shared/services/shared-store.service';
   import { SerializedRequestType } from 'shared/utils/util';
   import {
     SingleMethodDocumentation,
     SingleNotificationDocumentation,
   } from 'shared/models/openrpc.model';
   import { NetworkMethodHandlerOptions } from 'shared/models/network.model';
-  import type { NetworkEvents, NetworkEventTypes } from 'papi-shared-types';
-  export { MULTI_SOURCE_EVENT_NAMES } from 'shared/data/network-event-names';
+  import type {
+    MultiSourceNetworkEvents,
+    NetworkEvents,
+    NetworkEventTypes,
+  } from 'papi-shared-types';
+  import { MULTI_SOURCE_EVENT_NAMES } from 'shared/data/network-event-names';
+  export { MULTI_SOURCE_EVENT_NAMES };
   export function initialize(): Promise<void>;
   /** Closes the network services gracefully */
   export const shutdown: () => Promise<void>;
@@ -1944,6 +2056,51 @@ declare module 'shared/services/network.service' {
     eventType: EventType,
     documentation?: SingleNotificationDocumentation,
   ) => Promise<PlatformEventEmitter<NetworkEvents[EventType]>>;
+  /**
+   * Core-internal map of multi-source network events. Extends the public
+   * {@link MultiSourceNetworkEvents} with platform-internal multi-source events that are intentionally
+   * NOT advertised on the PAPI — the shared store change event, for example, because the shared store
+   * service is not part of the public API. Used to type {@link createCoreMultiSourceEventEmitter}.
+   */
+  export type InternalMultiSourceNetworkEvents = MultiSourceNetworkEvents & {
+    'shared-store:change': StoreChangeEvent;
+  };
+  /**
+   * Synchronously create a network event emitter for one of the pre-approved multi-source events —
+   * those listed in {@link MULTI_SOURCE_EVENT_NAMES}. Throws synchronously if `eventType` is not such
+   * an event.
+   *
+   * This is core-internal (not exposed on `papiNetworkService`, hence the `Core` in the name):
+   * multi-source events are platform events, not for extensions to create.
+   *
+   * Unlike {@link createNetworkEventEmitterAsync}, the emitter is returned immediately so callers can
+   * use it without awaiting. Central registration with the RPC handler is performed in the
+   * background; the returned `registeredEmitterPromise` resolves to the same emitter once
+   * registration completes. If registration fails, the promise logs a warning and rejects with the
+   * underlying error.
+   *
+   * Multi-source emitters are NOT unregistered on dispose (multiple emitters for the same name can
+   * coexist); the central registry cleans them up when the process disconnects. See
+   * {@link disposeNetworkEventEmitter}.
+   *
+   * @param eventType The name of the multi-source event to create. Must be a key of
+   *   {@link InternalMultiSourceNetworkEvents}.
+   * @param documentation Optional notification documentation. Carries
+   *   `notification['x-experimental']: true` to mark the event as experimental.
+   * @returns An object with the synchronously-created `emitter` and a `registeredEmitterPromise` that
+   *   resolves to that same emitter when central registration completes.
+   */
+  export const createCoreMultiSourceEventEmitter: <
+    EventType extends keyof InternalMultiSourceNetworkEvents,
+  >(
+    eventType: EventType,
+    documentation?: SingleNotificationDocumentation,
+  ) => {
+    emitter: PlatformEventEmitter<InternalMultiSourceNetworkEvents[EventType]>;
+    registeredEmitterPromise: Promise<
+      PlatformEventEmitter<InternalMultiSourceNetworkEvents[EventType]>
+    >;
+  };
   /**
    * Subscribe to a typed network event. The payload type is inferred from the event's declaration in
    * {@link NetworkEvents}.
@@ -3866,7 +4023,6 @@ declare module 'papi-shared-types' {
   } from 'shared/models/data-provider.interface';
   import type { ExtractDataProviderDataTypes } from 'shared/models/extract-data-provider-data-types.model';
   import type { NetworkableObject, NetworkObjectDetails } from 'shared/models/network-object.model';
-  import type { StoreChangeEvent } from 'shared/services/shared-store.service';
   import type { ScrollGroupUpdateInfo } from 'shared/services/scroll-group.service-model';
   import type {
     CloseWebViewEvent,
@@ -4600,11 +4756,6 @@ declare module 'papi-shared-types' {
      * ID.
      */
     'object:onDidDisposeNetworkObject': string;
-    /**
-     * Emitted when a value in the shared store changes. Payload includes the key and new value with
-     * Lamport timestamp.
-     */
-    'shared-store:change': StoreChangeEvent;
   };
   /**
    * Mapping of network event names to their payload types. Extensions augment this to declare their
@@ -9560,7 +9711,6 @@ declare module '@papi/core' {
     ScrollGroupUpdateInfo,
   } from 'shared/services/scroll-group.service-model';
   export type { SettingValidator } from 'shared/services/settings.service-model';
-  export type { StoreChangeEvent } from 'shared/services/shared-store.service';
   export type {
     FocusSubject,
     SetFocusSubject,

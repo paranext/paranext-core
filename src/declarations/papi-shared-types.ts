@@ -21,7 +21,6 @@ declare module 'papi-shared-types' {
     NetworkableObject,
     NetworkObjectDetails,
   } from '@shared/models/network-object.model';
-  import type { StoreChangeEvent } from '@shared/services/shared-store.service';
   import type { ScrollGroupUpdateInfo } from '@shared/services/scroll-group.service-model';
   import type {
     CloseWebViewEvent,
@@ -801,11 +800,6 @@ declare module 'papi-shared-types' {
      * ID.
      */
     'object:onDidDisposeNetworkObject': string;
-    /**
-     * Emitted when a value in the shared store changes. Payload includes the key and new value with
-     * Lamport timestamp.
-     */
-    'shared-store:change': StoreChangeEvent;
   };
 
   /**

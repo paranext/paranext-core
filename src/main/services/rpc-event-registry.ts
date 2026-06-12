@@ -1,6 +1,5 @@
 import { SingleNotificationDocumentation } from '@shared/models/openrpc.model';
 import { MULTI_SOURCE_EVENT_NAMES } from '@shared/data/network-event-names';
-import type { MultiSourceNetworkEvents } from 'papi-shared-types';
 
 interface EventRegistrant {
   handler: unknown;
@@ -28,10 +27,7 @@ export class RpcEventRegistry {
     eventName: string,
     documentation?: SingleNotificationDocumentation,
   ): boolean {
-    // Cast is needed: MULTI_SOURCE_EVENT_NAMES is typed as Set<keyof MultiSourceNetworkEvents> but
-    // we receive an arbitrary string from the caller — the cast lets Set.has() accept it.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const isMultiSource = MULTI_SOURCE_EVENT_NAMES.has(eventName as keyof MultiSourceNetworkEvents);
+    const isMultiSource = MULTI_SOURCE_EVENT_NAMES.has(eventName);
     const existing = this.byName.get(eventName);
 
     if (!existing) {
@@ -46,6 +42,30 @@ export class RpcEventRegistry {
     }
 
     return false;
+  }
+
+  /**
+   * Classify an attempt to announce (emit) an event on the network against the registry. Used to
+   * warn about misuse without blocking the announcement.
+   *
+   * - `'ok'` — the announcement is valid: the event is multi-source (any process may announce it,
+   *   whether or not it registered), or it is single-source and announced by its registrant.
+   * - `'unregistered'` — the event is single-source and no process has registered this name
+   *   centrally. Emitting a single-source event that was never registered is deprecated (it does
+   *   not appear in the OpenRPC document).
+   * - `'foreign-single-source'` — the event is single-source but is being announced by a handler that
+   *   did not register it; only the registering process should emit a single-source event.
+   */
+  checkAnnouncement(
+    handler: unknown,
+    eventName: string,
+  ): 'ok' | 'unregistered' | 'foreign-single-source' {
+    // Multi-source events may be announced by any process regardless of registration, so they are
+    // always fine to emit.
+    if (MULTI_SOURCE_EVENT_NAMES.has(eventName)) return 'ok';
+    const existing = this.byName.get(eventName);
+    if (!existing || existing.length === 0) return 'unregistered';
+    return existing.some((r) => r.handler === handler) ? 'ok' : 'foreign-single-source';
   }
 
   /** Remove a registrant. Returns `true` if the handler had registered this event. */

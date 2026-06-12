@@ -113,7 +113,6 @@ export type {
   ScrollGroupUpdateInfo,
 } from '@shared/services/scroll-group.service-model';
 export type { SettingValidator } from '@shared/services/settings.service-model';
-export type { StoreChangeEvent } from '@shared/services/shared-store.service';
 export type {
   FocusSubject,
   SetFocusSubject,
