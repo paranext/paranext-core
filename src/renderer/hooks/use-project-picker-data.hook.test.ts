@@ -131,10 +131,15 @@ describe('useProjectPickerData', () => {
 
     const { result } = renderHook(() => useProjectPickerData());
 
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false);
-      expect(result.current.currentProject?.fullName).toBe('Genesis Project');
-    });
+    await waitFor(
+      () => {
+        expect(result.current.isLoading).toBe(false);
+        expect(result.current.currentProject?.fullName).toBe('Genesis Project');
+      },
+      // Default 1000 ms is too tight for the three concurrent usePromise chains to
+      // settle on slow Windows CI runners; 3000 ms gives comfortable headroom.
+      { timeout: 3000 },
+    );
     expect(result.current.currentProject?.id).toBe('proj-abc');
   });
 
