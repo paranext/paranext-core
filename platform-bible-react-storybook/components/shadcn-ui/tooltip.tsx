@@ -63,9 +63,18 @@ function TooltipContent({
   sideOffset = 0,
   // CUSTOM: Destructure style so it can be merged with the custom z-index style object
   style,
+  // CUSTOM: Added showArrow prop to allow callers to suppress the arrow element entirely.
+  // Note: showArrow={true} (the default) does NOT guarantee the arrow is visible — Radix still
+  // hides it automatically when its computed position falls outside the content bounds (e.g. after
+  // collision-avoidance shifts the content away from a very small or edge-positioned trigger).
+  // showArrow={false} removes the element from the DOM so it can never appear.
+  showArrow = true,
   children,
   ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Content>) {
+}: React.ComponentProps<typeof TooltipPrimitive.Content> & {
+  // CUSTOM: showArrow prop — see comment above for full semantics
+  showArrow?: boolean;
+}) {
   return (
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Content
@@ -82,7 +91,10 @@ function TooltipContent({
         {...props}
       >
         {children}
-        <TooltipPrimitive.Arrow className="tw:z-50 tw:size-2.5 tw:translate-y-[calc(-50%_-_2px)] tw:rotate-45 tw:rounded-[2px] tw:bg-foreground tw:fill-foreground" />
+        {/* CUSTOM: Conditionally render arrow based on showArrow prop */}
+        {showArrow && (
+          <TooltipPrimitive.Arrow className="tw:z-50 tw:size-2.5 tw:translate-y-[calc(-50%_-_2px)] tw:rotate-45 tw:rounded-[2px] tw:bg-foreground tw:fill-foreground" />
+        )}
       </TooltipPrimitive.Content>
     </TooltipPrimitive.Portal>
   );
