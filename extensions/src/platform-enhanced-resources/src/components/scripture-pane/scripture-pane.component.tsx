@@ -109,7 +109,6 @@ export type EnhancedScripturePaneProps = {
 const ANNOTATION_TYPE_MARBLE_WORD = 'marble-word';
 const ANNOTATION_TYPE_MARBLE_NOTE = 'marble-note';
 const ANNOTATION_TYPE_FILTER = 'marble-filter';
-const ANNOTATION_TYPE_HIGHLIGHT = 'marble-highlight';
 // Hover-match used to be an editor.setAnnotation type ('marble-hover-match'), but D-15
 // proved that path causes a flicker storm (AnnotationPlugin's wrap-merge-replace cycle
 // destroys+recreates the <mark> DOM element on every overlapping setAnnotation). The
@@ -124,29 +123,63 @@ const RIGHT_MOUSE_BUTTON = 2;
  * `.editor-typed-mark-external-${type}`. Editorial itself provides no visual treatment for these
  * classes - that's the host extension's responsibility (see Editorial README "Annotation Styles").
  *
- * - Marble-word: linked research term (BHV-301/302). Click to filter the dictionary / open tooltip.
- * - Marble-note: linked study/cross-ref note. Renders as a footnote-style affordance.
- * - Highlight and filter states are layered via secondary `editor.setAnnotation` calls using
- *   `marble-highlight` and `marble-filter` types. Lemma-match (hover) state is applied as a direct
- *   CSS class (`er-marble-hover-match`) on the existing marble-word marks - see
- *   handleMarbleMouseEnter for the D-15 rationale. See the `_marble-overrides.scss` partial for
- *   visual treatment of all three overlay states.
+ * - `marble-word`: linked research term (BHV-301/302). Click to filter the dictionary / open tooltip.
+ *   Carries no background of its own - see the equal-specificity note below.
+ * - `marble-note`: linked study/cross-ref note. Renders as a footnote-style affordance.
+ * - `er-marble-highlight-all` (Color A): direct CSS class on existing marble-word mark DOM elements,
+ *   applied when the "Highlight all research terms" toolbar toggle is on. Pale blue so the page
+ *   doesn't become visually noisy. NOT applied via `editor.setAnnotation`: doing so triggers the
+ *   wrap-merge-replace cycle that destroys+recreates the marble-word mark element, which loses the
+ *   original mouseenter/mouseleave bindings (verified in Storybook: hover stopped firing after
+ *   toggling highlight-all off again). Same workaround pattern as the hover-match class (D-15).
+ * - `marble-filter`: per-mark filter overlay applied via `editor.setAnnotation` to the one
+ *   marble-word mark whose `annotationId` matches the active filter token.
+ * - `er-marble-hover-match` (Color B): direct CSS class on existing marble-word mark DOM elements
+ *   (not a setAnnotation type - see handleMarbleMouseEnter for the D-15 rationale). Applied to
+ *   every word in the lemma group of the currently-hovered word, including the hovered word itself,
+ *   so the entire matching expression reads as one visually unified group. Deeper blue than Color
+ *   A. Has higher CSS specificity (two classes vs. one) than `er-marble-highlight-all`, so it wins
+ *   over Color A while the highlight-all toggle is also on.
+ *
+ * These styles ship with the component (injected via `useStylesheet`) rather than in the
+ * web-view-level SCSS bundle so the component renders the same in Storybook, in extracted
+ * snapshots, or anywhere else it's mounted standalone. The `mark { background-color: initial }`
+ * element-selector rule resets the user-agent `<mark>` yellow default - without it the editor's
+ * marble-word marks would show yellow by default in any surrounding-CSS-free environment.
+ *
+ * Marble-word intentionally sets no `background-color`: when Editorial layers multiple annotation
+ * types on the same range (e.g. marble-word + marble-highlight), they collapse onto a single
+ * `<mark>` element with both classes (see `editor.css` lines 167-173 for the editor's own
+ * combined-class pattern). A `background-color` set on marble-word at this layer would win
+ * equal-specificity source-order ties against marble-highlight, silently suppressing the "Highlight
+ * all research terms" overlay and the hover-match overlay.
  */
 const MARBLE_ANNOTATION_STYLES = `
+mark {
+  background-color: initial;
+  color: inherit;
+}
 .editor-typed-mark-external-marble-word {
   cursor: pointer;
-  /* Override <mark> user-agent default (background: yellow, color: black) so marble-words
-     have no visual treatment by default. Per G5 PT9 fidelity: visible affordance is opt-in
-     via the "Highlight all research terms" toggle, hovers, or filter state. */
-  background-color: transparent;
   color: inherit;
 }
 .editor-typed-mark-external-marble-note {
   cursor: pointer;
-  background-color: transparent;
   /* Marble-note keeps the primary color (footnote-style affordance) - it intentionally
      stands out, unlike marble-word. */
   color: hsl(var(--primary));
+}
+.editor-typed-mark-external-marble-word.er-marble-highlight-all {
+  background-color: hsl(210 100% 90%);
+  border-radius: 2px;
+}
+.editor-typed-mark-external-marble-filter {
+  background-color: hsl(45 100% 75%);
+  border-radius: 2px;
+}
+.editor-typed-mark-external-marble-word.er-marble-hover-match {
+  background-color: hsl(210 100% 75%);
+  border-radius: 2px;
 }
 `;
 
@@ -592,11 +625,15 @@ export function EnhancedScripturePane({
   //      than the existing `cancelled` flag, which only flips on effect cleanup.
   //   2. usjJustChangedRef tells the annotation-apply effects to defer their first chunk by one
   //      requestAnimationFrame, giving the editor's setUsj-driven re-render time to commit the new
-  //      Lexical tree before we hit it with setAnnotation. Mount-time application stays
-  //      synchronous (no deferral) because Editorial consumed `defaultUsj` and the tree is ready.
+  //      Lexical tree before we hit it with setAnnotation. Initialized to `true` so the very first
+  //      run of Effect A also defers - although Editorial consumed `defaultUsj` at mount, the
+  //      Lexical tree it builds is committed inside React effects that haven't run yet when our
+  //      first Effect A fires (verified in Storybook: without this deferral, every setAnnotation
+  //      call silently fails to resolve and no `<mark>` elements wrap the wg spans). The cost is
+  //      one RAF wait at mount, which is imperceptible.
   const lastSyncedUsjRef = useRef<Usj | undefined>(usj);
   const usjEpochRef = useRef(0);
-  const usjJustChangedRef = useRef(false);
+  const usjJustChangedRef = useRef(true);
   useEffect(() => {
     // First-mount: Editorial consumed `defaultUsj`. Record the value and skip the imperative push.
     if (lastSyncedUsjRef.current === usj) return;
@@ -842,15 +879,15 @@ export function EnhancedScripturePane({
       // purely cosmetic - hover-match has no click handlers, no persistence, no Lexical-tree
       // role. Filter + highlight-all stay on setAnnotation (no flicker there: filter is a
       // single annotation; highlight-all is chunked across RAFs at mount time, not on hover).
-      // The hovered word itself is excluded - PT9 leaves it unhighlighted (it's the focal
-      // point; only siblings get the match-color background). See D-15 in
+      // The hovered word itself is included in the match set so it shares the lemma-match
+      // overlay color with its siblings - users expect the entire matching expression to be
+      // visually unified, including the word their cursor is on. See D-15 in
       // working-docs/2026-05-15-er-editor-integration-audit.md.
       // `target.ownerDocument` resolves to the iframe document the marble-word marks live in
       // (the component runs inside the same webview iframe, but using ownerDocument is the
       // more robust pattern).
       const { ownerDocument } = target;
       matchingIds.forEach((matchingId) => {
-        if (matchingId === id) return;
         const markElements = ownerDocument.querySelectorAll(
           `[class~="annotationId-${matchingId}"]`,
         );
@@ -1012,59 +1049,65 @@ export function EnhancedScripturePane({
     };
   }, [usj, annotations, filteredTokenId]);
 
-  // Effect C - per-annotation marble-highlight overlays via editor.setAnnotation.
-  // Chunked RAF apply matches Effect A's pattern; running this un-chunked produced a
-  // multi-second click-handler stall (Chrome `[Violation] 'click' handler took >8000ms`)
-  // because ~64 synchronous setAnnotation calls executed end-to-end on the click thread.
+  // Effect C - "Highlight all research terms" overlay applied as a direct CSS class on the
+  // existing marble-word mark DOM elements. NOT via editor.setAnnotation.
+  //
+  // History: this used to be a `marble-highlight` editor annotation layered over each marble-word
+  // range. That path triggered AnnotationPlugin's wrap-merge-replace cycle every time the toggle
+  // flipped — fine for the first apply, but the cleanup `editor.removeAnnotation` on toggle-off
+  // destroyed+recreated each marble-word `<mark>` element WITHOUT re-binding the mouseenter /
+  // mouseleave handlers Effect A had registered, so hover stopped working after a toggle ON/OFF
+  // cycle (verified in Storybook). The CSS-class approach is the same workaround D-15 introduced
+  // for hover-match: bypass the editor entirely for purely-cosmetic overlays (no click handlers
+  // are attached to highlight-all). `marble-filter` keeps setAnnotation because it's a single
+  // annotation and the wrap-merge cycle doesn't compound there.
   useEffect(() => {
-    const editor = editorRef.current;
-    if (!editor || !usj || !highlightAllResearchTerms) return undefined;
-    const wordAnnotations = annotations.filter((a) => a.kind === 'word');
+    if (!highlightAllResearchTerms) return undefined;
+    // The set of marble-word annotation ids the editor has currently emitted. Captured at effect
+    // run so cleanup removes the class from the same elements (the editor MAY have recreated some
+    // marks in between, but we always query by class selector so we still find the live elements).
+    const wordAnnotationIds = annotations
+      .filter((a) => a.kind === 'word')
+      .map((a) => a.annotationId);
+
+    // querySelectorAll runs synchronously against the document at the moment the effect fires. On
+    // first toggle-on, the marble-word marks should already be in the DOM (Effect A has applied
+    // them by the time the user can click the toggle); on a usj swap that happens to also flip the
+    // toggle the marble-word marks are committed by the time Effect A's RAF resolves, but this
+    // effect doesn't wait — so do a short RAF wait first to mirror Effect A's mount-time
+    // deferral. The cost is one frame; the alternative is the toggle silently no-oping when it
+    // races a chapter change.
     let cancelled = false;
-    const CHUNK_SIZE = 50;
-    // D-013: same epoch+RAF coordination as Effect A. Note this effect does NOT consume
-    // `usjJustChangedRef` (Effect A claims it once per usj swap to avoid double-deferring on a
-    // single swap that happens to also enable highlight-all). Effect C still aborts via the epoch
-    // guard if usj swaps mid-apply, which is the load-bearing safety property.
-    const myEpoch = usjEpochRef.current;
-    const applyChunked = async () => {
-      for (let i = 0; i < wordAnnotations.length; i += CHUNK_SIZE) {
-        if (cancelled || myEpoch !== usjEpochRef.current) return;
-        const slice = wordAnnotations.slice(i, i + CHUNK_SIZE);
-        // D-013: per-item abort (same rationale as Effect A) - tightens the abort window from
-        // CHUNK_SIZE setAnnotation calls down to 1. `if (range)` instead of `if (!range) continue`
-        // to satisfy the no-continue style rule.
-        for (let j = 0; j < slice.length; j += 1) {
-          if (cancelled || myEpoch !== usjEpochRef.current) return;
-          const a = slice[j];
-          const range = annotationToRange(a, usj);
-          if (range) {
-            editor.setAnnotation(range, ANNOTATION_TYPE_HIGHLIGHT, a.annotationId, {});
-          }
-        }
-        if (i + CHUNK_SIZE < wordAnnotations.length) {
-          // Yield to the event loop so mousedown / setFocus / paint can run between chunks.
-          // eslint-disable-next-line no-await-in-loop
-          await new Promise<void>((resolve) => {
-            requestAnimationFrame(() => resolve());
-          });
-        }
-      }
+    const applyHighlightAll = async () => {
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve());
+      });
+      if (cancelled) return;
+      wordAnnotationIds.forEach((id) => {
+        const markElements = globalThis.document.querySelectorAll(`[class~="annotationId-${id}"]`);
+        markElements.forEach((markElement) => {
+          markElement.classList.add('er-marble-highlight-all');
+        });
+      });
     };
-    applyChunked().catch((err) => {
+    applyHighlightAll().catch((err) => {
       logger.warn(
-        `EnhancedScripturePane: highlight-all chunked apply failed: ${
+        `EnhancedScripturePane: highlight-all class apply failed: ${
           err instanceof Error ? err.message : String(err)
         }`,
       );
     });
+
     return () => {
       cancelled = true;
-      wordAnnotations.forEach((a) => {
-        editor.removeAnnotation(ANNOTATION_TYPE_HIGHLIGHT, a.annotationId);
+      wordAnnotationIds.forEach((id) => {
+        const markElements = globalThis.document.querySelectorAll(`[class~="annotationId-${id}"]`);
+        markElements.forEach((markElement) => {
+          markElement.classList.remove('er-marble-highlight-all');
+        });
       });
     };
-  }, [usj, annotations, highlightAllResearchTerms]);
+  }, [annotations, highlightAllResearchTerms]);
 
   if (errorMessage) {
     return (

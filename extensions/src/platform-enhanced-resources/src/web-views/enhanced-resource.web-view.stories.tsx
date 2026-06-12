@@ -3,6 +3,16 @@ import { useCallback, useMemo, useState } from 'react';
 import type { SemanticDomain } from 'platform-bible-react';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
+// The Lexical editor's USJ-node styles (verse numbers, paragraph treatment, etc). The real app
+// loads these globally via `enhanced-resource.web-view.scss`; Storybook doesn't load that bundle.
+// `nodes-menu.css` is deliberately NOT imported (it only styles the built-in autocomplete menu
+// which never renders when `hasExternalUI: true`; upstream PR paranext/paranext-core#2376 deletes
+// that file).
+/* eslint-disable import/no-relative-packages -- the demo `usj-nodes.css` is not part of
+   platform-bible-react's package exports (only `.` → dist is exported), so it can only be pulled
+   in by relative path. */
+import '../../../../../lib/platform-bible-react/src/components/demo/scripture-editor/usj-nodes.css';
+/* eslint-enable import/no-relative-packages */
 import {
   MOCK_FILTERED_TOKEN_ID,
   MOCK_RIBBONS_ALL,
