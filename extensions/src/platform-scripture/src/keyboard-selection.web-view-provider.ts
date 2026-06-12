@@ -14,6 +14,7 @@ import {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
+import { formatReplacementString } from 'platform-bible-utils';
 import keyboardSelectionWebView from './keyboard-selection.web-view?inline';
 import tailwindStyles from './tailwind.css?inline';
 
@@ -42,9 +43,30 @@ export const keyboardSelectionWebViewProvider: IWebViewProvider = {
 
     const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
 
-    const title = await papi.localization.getLocalizedString({
+    // BHV-302: resolve the project's short name so the tab title reads
+    // "Keyboard: {projectShortName}" — same PDP chain as the web view body and the
+    // manage-books.web-view-provider.ts reference pattern.
+    let projectName: string | undefined;
+    if (projectId) {
+      try {
+        const pdp = await papi.projectDataProviders.get('platform.base', projectId);
+        projectName = (await pdp.getSetting('platform.name')) ?? projectId;
+      } catch {
+        // Best-effort: fall back to the raw project id as the display name (same fallback
+        // chain as keyboard-selection.web-view.tsx).
+        projectName = projectId;
+      }
+    }
+
+    const titleTemplate = await papi.localization.getLocalizedString({
       localizeKey: '%keyboardSelection_title%',
     });
+    // RF-006: bidi-isolate the (possibly RTL vernacular) short name within the plain-text
+    // tab title using FSI (U+2068) / PDI (U+2069). When no project is bound, fall back to
+    // the bare localized title.
+    const title = projectName
+      ? formatReplacementString(`${titleTemplate}: \u2068{projectName}\u2069`, { projectName })
+      : titleTemplate;
 
     return {
       ...savedWebView,

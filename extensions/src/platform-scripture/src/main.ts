@@ -290,6 +290,22 @@ async function openKeyboardSelection(
   }
 
   const options: KeyboardSelectionWebViewOptions = { projectId };
+
+  // BHV-602: reuse the existing keyboard-selection tab if one is already open — PT9's dialog
+  // was modal (one at a time). `existingId: '?'` matches any open instance of this web-view
+  // type; if none is found we fall through and create a new one (same pattern as
+  // `openManageBooks` above).
+  const existingId = await papi.webViews.openWebView(KEYBOARD_SELECTION_WEB_VIEW_TYPE, undefined, {
+    ...options,
+    existingId: '?',
+    createNewIfNotFound: false,
+  });
+  if (existingId) {
+    // Bring the existing tab to the front and retarget it to the new project context (the
+    // provider re-runs with the new `options.projectId` and re-interpolates the title).
+    await papi.webViews.reloadWebView(KEYBOARD_SELECTION_WEB_VIEW_TYPE, existingId, options);
+    return existingId;
+  }
   return papi.webViews.openWebView(KEYBOARD_SELECTION_WEB_VIEW_TYPE, undefined, options);
 }
 
