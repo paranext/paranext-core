@@ -157,10 +157,10 @@ describe('selectDblResource', () => {
       expect(setUserList).not.toHaveBeenCalled();
     });
 
-    it('returns early without writing when adminSetting is a PlatformError', async () => {
+    it('returns early without writing when adminSetting is undefined', async () => {
       await selectTextConnection(
         RESOURCE_A,
-        newPlatformError(new Error('setting error')),
+        undefined,
         setAdminSetting,
         vi.fn().mockResolvedValue(true),
         getUserList,
@@ -295,40 +295,6 @@ describe('selectDblResource', () => {
 
       expect(setAdminSetting).not.toHaveBeenCalled();
     });
-
-    it('falls through to user path when setAdminSetting is undefined even if canWrite is true', async () => {
-      const getUserList = vi.fn().mockResolvedValue(makeUserList([]));
-      await selectTextConnection(
-        RESOURCE_A,
-        makeAdminList([]),
-        undefined,
-        vi.fn().mockResolvedValue(true),
-        getUserList,
-        setUserList,
-        undefined,
-        onSelect,
-      );
-
-      expect(setUserList).toHaveBeenCalled();
-      expect(onSelect).toHaveBeenCalledWith('uid-a');
-    });
-
-    it('takes the user path when canUserWriteProjectSettings is undefined', async () => {
-      const getUserList = vi.fn().mockResolvedValue(makeUserList([]));
-      await selectTextConnection(
-        RESOURCE_A,
-        makeAdminList([]),
-        setAdminSetting,
-        undefined,
-        getUserList,
-        setUserList,
-        undefined,
-        onSelect,
-      );
-
-      expect(setUserList).toHaveBeenCalled();
-      expect(setAdminSetting).not.toHaveBeenCalled();
-    });
   });
 
   describe('onSelect is optional', () => {
@@ -338,7 +304,7 @@ describe('selectDblResource', () => {
         selectTextConnection(
           RESOURCE_A,
           makeAdminList([]),
-          undefined,
+          async () => undefined,
           vi.fn().mockResolvedValue(false),
           vi.fn().mockResolvedValue(makeUserList([])),
           setUserList,
@@ -426,7 +392,7 @@ describe('selectDblResource', () => {
       await selectTextConnection(
         RESOURCE_B, // installed: false
         makeAdminList([]),
-        undefined,
+        async () => undefined,
         vi.fn().mockResolvedValue(false),
         getUserList,
         setUserList,

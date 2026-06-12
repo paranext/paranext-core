@@ -52,7 +52,7 @@ export async function selectTextConnection(
 
   const canWrite = await canUserWriteProjectSettings();
 
-  if (canWrite && setAdminTextConnections) {
+  if (canWrite) {
     if (adminTextConnections === undefined) return;
     // Use the exact current admin setting as the base so the write is a precise update —
     // deduplicate the incoming resource and prepend it, preserving all other admin items.
