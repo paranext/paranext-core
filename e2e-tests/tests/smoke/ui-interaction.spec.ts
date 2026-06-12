@@ -2,7 +2,6 @@
 // Per-feature E2E tests MUST use cdp.fixture instead. See e2e-tests/tests/_example/.
 import { test, expect } from '../../fixtures/papi.fixture';
 import {
-  PROCESS_READY_TIMEOUT,
   sendPapiRequestOnce,
   waitForAppReady,
   waitForPapiMethodRegistered,
