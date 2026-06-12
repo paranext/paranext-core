@@ -2083,6 +2083,64 @@ declare module 'shared/services/network.service' {
     documentation?: SingleNotificationDocumentation,
   ) => Promise<PlatformEventEmitter<NetworkEvents[EventType]>>;
   /**
+   * How to buffer emits made before a buffered network event finishes registering.
+   *
+   * - `'queue'` — keep every buffered event and flush them in emit order.
+   * - `{ latestByKey }` — keep only the most recent buffered event per key, flushed in first-seen key
+   *   order. Use for "only the latest matters" events (e.g. a scroll reference per scroll group, or a
+   *   web view update per web view id).
+   */
+  export type NetworkEventBufferStrategy<T> =
+    | 'queue'
+    | {
+        latestByKey: (event: T) => string;
+      };
+  /**
+   * Buffers network events emitted before their emitter is ready, per a
+   * {@link NetworkEventBufferStrategy}. Exported only for unit testing.
+   *
+   * @internal
+   */
+  export class NetworkEventBuffer<T> {
+    private readonly strategy;
+    private readonly queued;
+    private readonly latest;
+    constructor(strategy: NetworkEventBufferStrategy<T>);
+    add(event: T): void;
+    /** Returns the buffered events in flush order and empties the buffer. */
+    drain(): T[];
+    clear(): void;
+  }
+  /**
+   * Synchronously create a buffered emitter for a single-source network event. Use this for events
+   * that may be emitted before the network emitter finishes registering — e.g. from a UI handler or a
+   * command that can fire during extension activation, where the eager
+   * {@link createNetworkEventEmitterAsync} would leave a module-level emitter `undefined`.
+   *
+   * The returned `emit` is usable immediately. Emits made before central registration completes are
+   * buffered per `options.bufferStrategy` and flushed once registration succeeds; after that `emit`
+   * passes straight through. If registration fails, buffered events are dropped (with a warning) and
+   * `registeredEmitter` rejects so the caller can respond.
+   *
+   * @param eventType A key of {@link NetworkEvents}.
+   * @param documentation Optional notification documentation. Carries
+   *   `notification['x-experimental']: true` to mark the event as experimental.
+   * @param options.bufferStrategy How to buffer pre-registration emits. Defaults to `'queue'`.
+   * @returns `emit` (usable immediately), `registeredEmitter` (resolves to the underlying emitter, or
+   *   rejects if registration failed), and `dispose`.
+   */
+  export const createBufferedNetworkEventEmitter: <EventType extends NetworkEventTypes>(
+    eventType: EventType,
+    documentation?: SingleNotificationDocumentation,
+    options?: {
+      bufferStrategy?: NetworkEventBufferStrategy<NetworkEvents[EventType]>;
+    },
+  ) => {
+    emit: (event: NetworkEvents[EventType]) => void;
+    registeredEmitter: Promise<PlatformEventEmitter<NetworkEvents[EventType]>>;
+    dispose: () => void;
+  };
+  /**
    * Core-internal map of multi-source network events. Extends the public
    * {@link MultiSourceNetworkEvents} with platform-internal multi-source events that are intentionally
    * NOT advertised on the PAPI — the shared store change event, for example, because the shared store
@@ -2149,6 +2207,7 @@ declare module 'shared/services/network.service' {
   export interface PapiNetworkService {
     createNetworkEventEmitter: typeof createNetworkEventEmitter;
     createNetworkEventEmitterAsync: typeof createNetworkEventEmitterAsync;
+    createBufferedNetworkEventEmitter: typeof createBufferedNetworkEventEmitter;
     getNetworkEvent: typeof getNetworkEvent;
   }
   /**

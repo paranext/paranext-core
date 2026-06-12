@@ -1,12 +1,46 @@
 import { describe, it, expect } from 'vitest';
 import {
   MULTI_SOURCE_EVENT_NAMES,
+  NetworkEventBuffer,
   createCoreMultiSourceEventEmitter,
   createNetworkEventEmitterAsync,
   getNetworkEvent,
 } from '@shared/services/network.service';
 import type { MultiSourceNetworkEvents } from 'papi-shared-types';
 import type { PlatformEvent } from 'platform-bible-utils';
+
+describe('NetworkEventBuffer', () => {
+  it("'queue' keeps every event and flushes them in emit order", () => {
+    const buffer = new NetworkEventBuffer<number>('queue');
+    buffer.add(1);
+    buffer.add(2);
+    buffer.add(2);
+    expect(buffer.drain()).toEqual([1, 2, 2]);
+    // Draining empties the buffer.
+    expect(buffer.drain()).toEqual([]);
+  });
+
+  it("'latestByKey' keeps only the latest event per key, in first-seen key order", () => {
+    const buffer = new NetworkEventBuffer<{ id: string; n: number }>({
+      latestByKey: (e) => e.id,
+    });
+    buffer.add({ id: 'a', n: 1 });
+    buffer.add({ id: 'b', n: 1 });
+    buffer.add({ id: 'a', n: 2 }); // updates 'a', keeps its first-seen position
+    expect(buffer.drain()).toEqual([
+      { id: 'a', n: 2 },
+      { id: 'b', n: 1 },
+    ]);
+    expect(buffer.drain()).toEqual([]);
+  });
+
+  it('clear() empties the buffer', () => {
+    const buffer = new NetworkEventBuffer<number>('queue');
+    buffer.add(1);
+    buffer.clear();
+    expect(buffer.drain()).toEqual([]);
+  });
+});
 
 describe('MULTI_SOURCE_EVENT_NAMES stays in sync with the multi-source event names', () => {
   it('contains every public MultiSourceNetworkEvents key', () => {

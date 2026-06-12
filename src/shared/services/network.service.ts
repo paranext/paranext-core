@@ -482,6 +482,140 @@ export const createNetworkEventEmitterAsync = async <EventType extends NetworkEv
 };
 
 /**
+ * How to buffer emits made before a buffered network event finishes registering.
+ *
+ * - `'queue'` — keep every buffered event and flush them in emit order.
+ * - `{ latestByKey }` — keep only the most recent buffered event per key, flushed in first-seen key
+ *   order. Use for "only the latest matters" events (e.g. a scroll reference per scroll group, or a
+ *   web view update per web view id).
+ */
+export type NetworkEventBufferStrategy<T> = 'queue' | { latestByKey: (event: T) => string };
+
+/**
+ * Buffers network events emitted before their emitter is ready, per a
+ * {@link NetworkEventBufferStrategy}. Exported only for unit testing.
+ *
+ * @internal
+ */
+export class NetworkEventBuffer<T> {
+  private readonly queued: T[] = [];
+
+  private readonly latest = new Map<string, T>();
+
+  constructor(private readonly strategy: NetworkEventBufferStrategy<T>) {}
+
+  add(event: T): void {
+    if (this.strategy === 'queue') {
+      this.queued.push(event);
+      return;
+    }
+    // `Map.set` on an existing key updates the value but keeps the original insertion position, so
+    // the latest value per key flushes in first-seen key order.
+    this.latest.set(this.strategy.latestByKey(event), event);
+  }
+
+  /** Returns the buffered events in flush order and empties the buffer. */
+  drain(): T[] {
+    if (this.strategy === 'queue') return this.queued.splice(0);
+    const events = [...this.latest.values()];
+    this.latest.clear();
+    return events;
+  }
+
+  clear(): void {
+    this.queued.length = 0;
+    this.latest.clear();
+  }
+}
+
+/**
+ * Synchronously create a buffered emitter for a single-source network event. Use this for events
+ * that may be emitted before the network emitter finishes registering — e.g. from a UI handler or a
+ * command that can fire during extension activation, where the eager
+ * {@link createNetworkEventEmitterAsync} would leave a module-level emitter `undefined`.
+ *
+ * The returned `emit` is usable immediately. Emits made before central registration completes are
+ * buffered per `options.bufferStrategy` and flushed once registration succeeds; after that `emit`
+ * passes straight through. If registration fails, buffered events are dropped (with a warning) and
+ * `registeredEmitter` rejects so the caller can respond.
+ *
+ * @param eventType A key of {@link NetworkEvents}.
+ * @param documentation Optional notification documentation. Carries
+ *   `notification['x-experimental']: true` to mark the event as experimental.
+ * @param options.bufferStrategy How to buffer pre-registration emits. Defaults to `'queue'`.
+ * @returns `emit` (usable immediately), `registeredEmitter` (resolves to the underlying emitter, or
+ *   rejects if registration failed), and `dispose`.
+ */
+export const createBufferedNetworkEventEmitter = <EventType extends NetworkEventTypes>(
+  eventType: EventType,
+  documentation?: SingleNotificationDocumentation,
+  options?: { bufferStrategy?: NetworkEventBufferStrategy<NetworkEvents[EventType]> },
+): {
+  emit: (event: NetworkEvents[EventType]) => void;
+  registeredEmitter: Promise<PlatformEventEmitter<NetworkEvents[EventType]>>;
+  dispose: () => void;
+} => {
+  const buffer = new NetworkEventBuffer<NetworkEvents[EventType]>(
+    options?.bufferStrategy ?? 'queue',
+  );
+  let readyEmitter: PlatformEventEmitter<NetworkEvents[EventType]> | undefined;
+  let failed = false;
+  let disposed = false;
+
+  const registeredEmitter = (async () => {
+    let emitter: PlatformEventEmitter<NetworkEvents[EventType]>;
+    try {
+      emitter = await createNetworkEventEmitterAsync(eventType, documentation);
+    } catch (e) {
+      failed = true;
+      buffer.clear();
+      logger.warn(
+        `Buffered network event "${eventType}" failed to register; dropping buffered events: ${getErrorMessage(e)}`,
+      );
+      throw e;
+    }
+    if (disposed) {
+      // Disposed before registration finished — tear down the emitter we just created.
+      emitter.dispose();
+      return emitter;
+    }
+    readyEmitter = emitter;
+    buffer.drain().forEach((event) => emitter.emit(event));
+    return emitter;
+  })();
+  // Consume the rejection internally so a caller that ignores `registeredEmitter` doesn't surface an
+  // unhandled rejection (the failure is already logged above). Callers that want to respond can
+  // still await/catch `registeredEmitter` independently.
+  (async () => {
+    try {
+      await registeredEmitter;
+    } catch {
+      // Already handled above.
+    }
+  })();
+
+  const emit = (event: NetworkEvents[EventType]) => {
+    if (readyEmitter) {
+      readyEmitter.emit(event);
+      return;
+    }
+    if (failed) {
+      logger.warn(`Network event "${eventType}" emit dropped — its emitter failed to register`);
+      return;
+    }
+    buffer.add(event);
+  };
+
+  const dispose = () => {
+    disposed = true;
+    buffer.clear();
+    readyEmitter?.dispose();
+  };
+
+  return { emit, registeredEmitter, dispose };
+};
+
+/**
  * Core-internal map of multi-source network events. Extends the public
  * {@link MultiSourceNetworkEvents} with platform-internal multi-source events that are intentionally
  * NOT advertised on the PAPI — the shared store change event, for example, because the shared store
@@ -593,6 +727,7 @@ export function getNetworkEvent(eventType: string): PlatformEvent<unknown> {
 export interface PapiNetworkService {
   createNetworkEventEmitter: typeof createNetworkEventEmitter;
   createNetworkEventEmitterAsync: typeof createNetworkEventEmitterAsync;
+  createBufferedNetworkEventEmitter: typeof createBufferedNetworkEventEmitter;
   getNetworkEvent: typeof getNetworkEvent;
 }
 
@@ -604,5 +739,6 @@ export interface PapiNetworkService {
 export const papiNetworkService: PapiNetworkService = {
   createNetworkEventEmitter,
   createNetworkEventEmitterAsync,
+  createBufferedNetworkEventEmitter,
   getNetworkEvent,
 };
