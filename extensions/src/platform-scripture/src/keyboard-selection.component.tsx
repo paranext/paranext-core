@@ -359,6 +359,10 @@ export function KeyboardSelection({
     if (event.defaultPrevented) return;
     if (event.target instanceof HTMLElement && event.target.closest('[role="listbox"]')) return;
     if (event.key === 'Enter' && !isLoadingKeyboards) {
+      // Native button activation wins: Enter on OK/Cancel must click THAT button, not submit
+      // dialog-wide. (Closed select triggers never reach here — Radix prevents default on Enter
+      // to open the dropdown, which the defaultPrevented guard above catches.)
+      if (event.target instanceof HTMLElement && event.target.closest('button')) return;
       event.preventDefault();
       handleOk();
     } else if (event.key === 'Escape') {
