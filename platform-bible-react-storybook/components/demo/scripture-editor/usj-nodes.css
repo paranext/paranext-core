@@ -1,4 +1,4 @@
-/* Copied from https://github.com/eten-tech-foundation/scripture-editors/blob/platform_v0.8.1/packages/platform/src/usj-nodes.css */
+/* Copied from https://github.com/eten-tech-foundation/scripture-editors/blob/ba0e846b3f11bea5720c4aa1a3486b69feb6b7e0/packages/platform/src/usj-nodes.css */
 
 /* stylelint-disable */
 
@@ -42,8 +42,8 @@
   font-weight: bold;
   font-style: italic;
 }
-.formatted-font .usfm {
-  font-family: 'Charis SIL', serif;
+.usfm.formatted-font {
+  font-family: 'Charis SIL', 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', Georgia, serif;
   font-size: 12pt;
 }
 
@@ -2210,10 +2210,6 @@
   color: #7777ff;
 }
 
-/* Scope these to the editor's `.usfm` content root. As bare element selectors they styled every
-   <table>/<td>/<rt> on the page once this stylesheet loaded, leaking into unrelated UI — e.g.
-   giving Storybook tables (Get Resources / Home) a solid black border after an editor story had
-   been viewed. The upstream editor package ships the same unscoped rules. */
 .usfm table {
   border-collapse: collapse;
 }

@@ -1,4 +1,4 @@
-var ut=Object.defineProperty;var ht=(e,t,n)=>t in e?ut(e,t,{enumerable:!0,configurable:!0,writable:!0,value:n}):e[t]=n;var S=(e,t,n)=>ht(e,typeof t!="symbol"?t+"":t,n);import{_ as vt}from"./assets/preload-helper-CTOgD26E.js";class st{constructor(){S(this,"registryByUrl",new Map);S(this,"registryById",new Map)}clear(){this.registryByUrl.clear(),this.registryById.clear()}keys(){return this.registryByUrl.keys()}add(t){this.registryByUrl.set(t.url,t),this.registryById.set(t.id,t)}register(t,n,r,a,i){const c=typeof t=="object"?t.type:t;if(typeof t=="object"){const o=t;if(o instanceof O||o instanceof A||o instanceof F||o instanceof $)throw new TypeError(`[vitest] Cannot register a mock that is already defined. Expected a JSON representation from \`MockedModule.toJSON\`, instead got "${o.type}". Use "registry.add()" to update a mock instead.`);if(o.type==="automock"){const l=O.fromJSON(o);return this.add(l),l}else if(o.type==="autospy"){const l=A.fromJSON(o);return this.add(l),l}else if(o.type==="redirect"){const l=$.fromJSON(o);return this.add(l),l}else throw o.type==="manual"?new Error("Cannot set serialized manual mock. Define a factory function manually with `ManualMockedModule.fromJSON()`."):new Error(`Unknown mock type: ${o.type}`)}if(typeof n!="string")throw new TypeError("[vitest] Mocks require a raw string.");if(typeof a!="string")throw new TypeError("[vitest] Mocks require a url string.");if(typeof r!="string")throw new TypeError("[vitest] Mocks require an id string.");if(c==="manual"){if(typeof i!="function")throw new TypeError("[vitest] Manual mocks require a factory function.");const o=new F(n,r,a,i);return this.add(o),o}else if(c==="automock"||c==="autospy"){const o=c==="automock"?new O(n,r,a):new A(n,r,a);return this.add(o),o}else if(c==="redirect"){if(typeof i!="string")throw new TypeError("[vitest] Redirect mocks require a redirect string.");const o=new $(n,r,a,i);return this.add(o),o}else throw new Error(`[vitest] Unknown mock type: ${c}`)}delete(t){this.registryByUrl.delete(t)}get(t){return this.registryByUrl.get(t)}getById(t){return this.registryById.get(t)}has(t){return this.registryByUrl.has(t)}}class O{constructor(t,n,r){S(this,"type","automock");this.raw=t,this.id=n,this.url=r}static fromJSON(t){return new A(t.raw,t.id,t.url)}toJSON(){return{type:this.type,url:this.url,raw:this.raw,id:this.id}}}class A{constructor(t,n,r){S(this,"type","autospy");this.raw=t,this.id=n,this.url=r}static fromJSON(t){return new A(t.raw,t.id,t.url)}toJSON(){return{type:this.type,url:this.url,id:this.id,raw:this.raw}}}class ${constructor(t,n,r,a){S(this,"type","redirect");this.raw=t,this.id=n,this.url=r,this.redirect=a}static fromJSON(t){return new $(t.raw,t.id,t.url,t.redirect)}toJSON(){return{type:this.type,url:this.url,raw:this.raw,id:this.id,redirect:this.redirect}}}class F{constructor(t,n,r,a){S(this,"cache");S(this,"type","manual");this.raw=t,this.id=n,this.url=r,this.factory=a}async resolve(){if(this.cache)return this.cache;let t;try{t=await this.factory()}catch(n){const r=new Error('[vitest] There was an error when mocking a module. If you are using "vi.mock" factory, make sure there are no top level variables inside, since this call is hoisted to top of the file. Read more: https://vitest.dev/api/vi.html#vi-mock');throw r.cause=n,r}if(t===null||typeof t!="object"||Array.isArray(t))throw new TypeError(`[vitest] vi.mock("${this.raw}", factory?: () => unknown) is not returning an object. Did you mean to return an object with a "default" key?`);return this.cache=t}static fromJSON(t,n){return new F(t.raw,t.id,t.url,n)}toJSON(){return{type:this.type,url:this.url,id:this.id,raw:this.raw}}}function bt(e,t,n={}){const r=new Array,a=new xt,i=(l,w,f)=>{try{return l[w]=f,!0}catch{return!1}},c=(l,w)=>{const f=H(l),h=f==="Module"||!!l.__esModule;for(const{key:b,descriptor:z}of Y(l,h,e.globalConstructors)){if(!h&&z.get){try{Object.defineProperty(w,b,z)}catch{}continue}if(kt(b,f))continue;const u=l[b],s=a.getId(u);if(s!==void 0){r.push(()=>i(w,b,a.getMockedValue(s)));continue}const d=H(u);if(Array.isArray(u)){i(w,b,[]);continue}const C=d.includes("Function")&&typeof u=="function";if((!C||u._isMockFunction)&&d!=="Object"&&d!=="Module"){i(w,b,u);continue}if(i(w,b,C?u:{})){if(C){let y=function(){if(this instanceof w[b])for(const{key:q,descriptor:T}of Y(this,!1,e.globalConstructors)){if(T.get)continue;const L=this[q];if(H(L).includes("Function")&&typeof L=="function"){const B=this[q],p=P(this,q).mockImplementation(B),E=p.mockReset;p.mockRestore=p.mockReset=()=>(E.call(p),p.mockImplementation(B),p)}}};if(!e.spyOn)throw new Error("[@vitest/mocker] `spyOn` is not defined. This is a Vitest error. Please open a new issue with reproduction.");const P=e.spyOn,M=P(w,b);if(e.type==="automock"){M.mockImplementation(y);const q=M.mockReset;M.mockRestore=M.mockReset=()=>(q.call(M),M.mockImplementation(y),M)}Object.defineProperty(w[b],"length",{value:0})}a.track(u,w[b]),c(u,w[b])}}},o=n;c(t,o);for(const l of r)l();return o}class xt{constructor(){S(this,"idMap",new Map);S(this,"mockedValueMap",new Map)}getId(t){return this.idMap.get(t)}getMockedValue(t){return this.mockedValueMap.get(t)}track(t,n){const r=this.idMap.size;return this.idMap.set(t,r),this.mockedValueMap.set(r,n),r}}function H(e){return Object.prototype.toString.apply(e).slice(8,-1)}function kt(e,t){return t.includes("Function")&&typeof e=="string"&&["arguments","callee","caller","length","name"].includes(e)}function Y(e,t,n){const{Map:r,Object:a,Function:i,RegExp:c,Array:o}=n,l=new r;let w=e;do{if(w===a.prototype||w===i.prototype||w===c.prototype)break;yt(w,f=>{const h=a.getOwnPropertyDescriptor(w,f);h&&l.set(f,{key:f,descriptor:h})})}while(w=a.getPrototypeOf(w));if(t&&!l.has("default")&&"default"in e){const f=a.getOwnPropertyDescriptor(e,"default");f&&l.set("default",{key:"default",descriptor:f})}return o.from(l.values())}function yt(e,t){const n=typeof t=="function"?t:r=>t.add(r);Object.getOwnPropertyNames(e).forEach(n),Object.getOwnPropertySymbols(e).forEach(n)}const _t=/^[A-Za-z]:\//;function ct(e=""){return e&&e.replace(/\\/g,"/").replace(_t,t=>t.toUpperCase())}const zt=/^[/\\]{2}/,qt=/^[/\\](?![/\\])|^[/\\]{2}(?!\.)|^[A-Za-z]:[/\\]/,St=/^[A-Za-z]:$/,Ct=/.(\.[^./]+|\.)$/,It=function(e){if(e.length===0)return".";e=ct(e);const t=e.match(zt),n=K(e),r=e[e.length-1]==="/";return e=Mt(e,!n),e.length===0?n?"/":r?"./":".":(r&&(e+="/"),St.test(e)&&(e+="/"),t?n?`//${e}`:`//./${e}`:n&&!K(e)?`/${e}`:e)},Et=function(...e){let t="";for(const n of e)if(n)if(t.length>0){const r=t[t.length-1]==="/",a=n[0]==="/";r&&a?t+=n.slice(1):t+=r||a?n:`/${n}`}else t+=n;return It(t)};function Mt(e,t){let n="",r=0,a=-1,i=0,c=null;for(let o=0;o<=e.length;++o){if(o<e.length)c=e[o];else{if(c==="/")break;c="/"}if(c==="/"){if(!(a===o-1||i===1))if(i===2){if(n.length<2||r!==2||n[n.length-1]!=="."||n[n.length-2]!=="."){if(n.length>2){const l=n.lastIndexOf("/");l===-1?(n="",r=0):(n=n.slice(0,l),r=n.length-1-n.lastIndexOf("/")),a=o,i=0;continue}else if(n.length>0){n="",r=0,a=o,i=0;continue}}t&&(n+=n.length>0?"/..":"..",r=2)}else n.length>0?n+=`/${e.slice(a+1,o)}`:n=e.slice(a+1,o),r=o-a-1;a=o,i=0}else c==="."&&i!==-1?++i:i=-1}return n}const K=function(e){return qt.test(e)},Pt=function(e){if(e==="..")return"";const t=Ct.exec(ct(e));return t&&t[1]||""};var Tt={reset:[0,0],bold:[1,22,"\x1B[22m\x1B[1m"],dim:[2,22,"\x1B[22m\x1B[2m"],italic:[3,23],underline:[4,24],inverse:[7,27],hidden:[8,28],strikethrough:[9,29],black:[30,39],red:[31,39],green:[32,39],yellow:[33,39],blue:[34,39],magenta:[35,39],cyan:[36,39],white:[37,39],gray:[90,39],bgBlack:[40,49],bgRed:[41,49],bgGreen:[42,49],bgYellow:[43,49],bgBlue:[44,49],bgMagenta:[45,49],bgCyan:[46,49],bgWhite:[47,49],blackBright:[90,39],redBright:[91,39],greenBright:[92,39],yellowBright:[93,39],blueBright:[94,39],magentaBright:[95,39],cyanBright:[96,39],whiteBright:[97,39],bgBlackBright:[100,49],bgRedBright:[101,49],bgGreenBright:[102,49],bgYellowBright:[103,49],bgBlueBright:[104,49],bgMagentaBright:[105,49],bgCyanBright:[106,49],bgWhiteBright:[107,49]},Nt=Object.entries(Tt);function Z(e){return String(e)}Z.open="";Z.close="";function At(e=!1){let t=typeof process<"u"?process:void 0,n=(t==null?void 0:t.env)||{},r=(t==null?void 0:t.argv)||[];return!("NO_COLOR"in n||r.includes("--no-color"))&&("FORCE_COLOR"in n||r.includes("--color")||(t==null?void 0:t.platform)==="win32"||e&&n.TERM!=="dumb"||"CI"in n)||typeof window<"u"&&!!window.chrome}function $t(e=!1){let t=At(e),n=(c,o,l,w)=>{let f="",h=0;do f+=c.substring(h,w)+l,h=w+o.length,w=c.indexOf(o,h);while(~w);return f+c.substring(h)},r=(c,o,l=c)=>{let w=f=>{let h=String(f),b=h.indexOf(o,c.length);return~b?c+n(h,o,l,b)+o:c+h+o};return w.open=c,w.close=o,w},a={isColorSupported:t},i=c=>`\x1B[${c}m`;for(let[c,o]of Nt)a[c]=t?r(i(o[0]),i(o[1]),o[2]):Z;return a}$t();function lt(e,t){return t.forEach(function(n){n&&typeof n!="string"&&!Array.isArray(n)&&Object.keys(n).forEach(function(r){if(r!=="default"&&!(r in e)){var a=Object.getOwnPropertyDescriptor(n,r);Object.defineProperty(e,r,a.get?a:{enumerable:!0,get:function(){return n[r]}})}})}),Object.freeze(e)}function dt(e){return e&&e.__esModule&&Object.prototype.hasOwnProperty.call(e,"default")?e.default:e}var D={exports:{}},x={};/**
+var ut=Object.defineProperty;var ht=(e,t,n)=>t in e?ut(e,t,{enumerable:!0,configurable:!0,writable:!0,value:n}):e[t]=n;var q=(e,t,n)=>ht(e,typeof t!="symbol"?t+"":t,n);import{_ as vt}from"./assets/preload-helper-CTOgD26E.js";class st{constructor(){q(this,"registryByUrl",new Map);q(this,"registryById",new Map)}clear(){this.registryByUrl.clear(),this.registryById.clear()}keys(){return this.registryByUrl.keys()}add(t){this.registryByUrl.set(t.url,t),this.registryById.set(t.id,t)}register(t,n,r,a,i){const c=typeof t=="object"?t.type:t;if(typeof t=="object"){const o=t;if(o instanceof F||o instanceof $||o instanceof D||o instanceof R)throw new TypeError(`[vitest] Cannot register a mock that is already defined. Expected a JSON representation from \`MockedModule.toJSON\`, instead got "${o.type}". Use "registry.add()" to update a mock instead.`);if(o.type==="automock"){const l=F.fromJSON(o);return this.add(l),l}else if(o.type==="autospy"){const l=$.fromJSON(o);return this.add(l),l}else if(o.type==="redirect"){const l=R.fromJSON(o);return this.add(l),l}else throw o.type==="manual"?new Error("Cannot set serialized manual mock. Define a factory function manually with `ManualMockedModule.fromJSON()`."):new Error(`Unknown mock type: ${o.type}`)}if(typeof n!="string")throw new TypeError("[vitest] Mocks require a raw string.");if(typeof a!="string")throw new TypeError("[vitest] Mocks require a url string.");if(typeof r!="string")throw new TypeError("[vitest] Mocks require an id string.");if(c==="manual"){if(typeof i!="function")throw new TypeError("[vitest] Manual mocks require a factory function.");const o=new D(n,r,a,i);return this.add(o),o}else if(c==="automock"||c==="autospy"){const o=c==="automock"?new F(n,r,a):new $(n,r,a);return this.add(o),o}else if(c==="redirect"){if(typeof i!="string")throw new TypeError("[vitest] Redirect mocks require a redirect string.");const o=new R(n,r,a,i);return this.add(o),o}else throw new Error(`[vitest] Unknown mock type: ${c}`)}delete(t){this.registryByUrl.delete(t)}get(t){return this.registryByUrl.get(t)}getById(t){return this.registryById.get(t)}has(t){return this.registryByUrl.has(t)}}class F{constructor(t,n,r){q(this,"type","automock");this.raw=t,this.id=n,this.url=r}static fromJSON(t){return new $(t.raw,t.id,t.url)}toJSON(){return{type:this.type,url:this.url,raw:this.raw,id:this.id}}}class ${constructor(t,n,r){q(this,"type","autospy");this.raw=t,this.id=n,this.url=r}static fromJSON(t){return new $(t.raw,t.id,t.url)}toJSON(){return{type:this.type,url:this.url,id:this.id,raw:this.raw}}}class R{constructor(t,n,r,a){q(this,"type","redirect");this.raw=t,this.id=n,this.url=r,this.redirect=a}static fromJSON(t){return new R(t.raw,t.id,t.url,t.redirect)}toJSON(){return{type:this.type,url:this.url,raw:this.raw,id:this.id,redirect:this.redirect}}}class D{constructor(t,n,r,a){q(this,"cache");q(this,"type","manual");this.raw=t,this.id=n,this.url=r,this.factory=a}async resolve(){if(this.cache)return this.cache;let t;try{t=await this.factory()}catch(n){const r=new Error('[vitest] There was an error when mocking a module. If you are using "vi.mock" factory, make sure there are no top level variables inside, since this call is hoisted to top of the file. Read more: https://vitest.dev/api/vi.html#vi-mock');throw r.cause=n,r}if(t===null||typeof t!="object"||Array.isArray(t))throw new TypeError(`[vitest] vi.mock("${this.raw}", factory?: () => unknown) is not returning an object. Did you mean to return an object with a "default" key?`);return this.cache=t}static fromJSON(t,n){return new D(t.raw,t.id,t.url,n)}toJSON(){return{type:this.type,url:this.url,id:this.id,raw:this.raw}}}function bt(e,t,n={}){const r=new Array,a=new xt,i=(l,w,g)=>{try{return l[w]=g,!0}catch{return!1}},c=(l,w)=>{const g=j(l),h=g==="Module"||!!l.__esModule;for(const{key:b,descriptor:z}of K(l,h,e.globalConstructors)){if(!h&&z.get){try{Object.defineProperty(w,b,z)}catch{}continue}if(yt(b,g))continue;const u=l[b],s=a.getId(u);if(s!==void 0){r.push(()=>i(w,b,a.getMockedValue(s)));continue}const d=j(u);if(Array.isArray(u)){i(w,b,[]);continue}const C=d.includes("Function")&&typeof u=="function";if((!C||u._isMockFunction)&&d!=="Object"&&d!=="Module"){i(w,b,u);continue}if(i(w,b,C?u:{})){if(C){let k=function(){if(this instanceof w[b])for(const{key:S,descriptor:N}of K(this,!1,e.globalConstructors)){if(N.get)continue;const B=this[S];if(j(B).includes("Function")&&typeof B=="function"){const A=this[S],p=T(this,S).mockImplementation(A),E=p.mockReset;p.mockRestore=p.mockReset=()=>(E.call(p),p.mockImplementation(A),p)}}};if(!e.spyOn)throw new Error("[@vitest/mocker] `spyOn` is not defined. This is a Vitest error. Please open a new issue with reproduction.");const T=e.spyOn,P=T(w,b);if(e.type==="automock"){P.mockImplementation(k);const S=P.mockReset;P.mockRestore=P.mockReset=()=>(S.call(P),P.mockImplementation(k),P)}Object.defineProperty(w[b],"length",{value:0})}a.track(u,w[b]),c(u,w[b])}}},o=n;c(t,o);for(const l of r)l();return o}class xt{constructor(){q(this,"idMap",new Map);q(this,"mockedValueMap",new Map)}getId(t){return this.idMap.get(t)}getMockedValue(t){return this.mockedValueMap.get(t)}track(t,n){const r=this.idMap.size;return this.idMap.set(t,r),this.mockedValueMap.set(r,n),r}}function j(e){return Object.prototype.toString.apply(e).slice(8,-1)}function yt(e,t){return t.includes("Function")&&typeof e=="string"&&["arguments","callee","caller","length","name"].includes(e)}function K(e,t,n){const{Map:r,Object:a,Function:i,RegExp:c,Array:o}=n,l=new r;let w=e;do{if(w===a.prototype||w===i.prototype||w===c.prototype)break;kt(w,g=>{const h=a.getOwnPropertyDescriptor(w,g);h&&l.set(g,{key:g,descriptor:h})})}while(w=a.getPrototypeOf(w));if(t&&!l.has("default")&&"default"in e){const g=a.getOwnPropertyDescriptor(e,"default");g&&l.set("default",{key:"default",descriptor:g})}return o.from(l.values())}function kt(e,t){const n=typeof t=="function"?t:r=>t.add(r);Object.getOwnPropertyNames(e).forEach(n),Object.getOwnPropertySymbols(e).forEach(n)}const _t=/^[A-Za-z]:\//;function ct(e=""){return e&&e.replace(/\\/g,"/").replace(_t,t=>t.toUpperCase())}const zt=/^[/\\]{2}/,St=/^[/\\](?![/\\])|^[/\\]{2}(?!\.)|^[A-Za-z]:[/\\]/,qt=/^[A-Za-z]:$/,Ct=/.(\.[^./]+|\.)$/,It=function(e){if(e.length===0)return".";e=ct(e);const t=e.match(zt),n=G(e),r=e[e.length-1]==="/";return e=Pt(e,!n),e.length===0?n?"/":r?"./":".":(r&&(e+="/"),qt.test(e)&&(e+="/"),t?n?`//${e}`:`//./${e}`:n&&!G(e)?`/${e}`:e)},Et=function(...e){let t="";for(const n of e)if(n)if(t.length>0){const r=t[t.length-1]==="/",a=n[0]==="/";r&&a?t+=n.slice(1):t+=r||a?n:`/${n}`}else t+=n;return It(t)};function Pt(e,t){let n="",r=0,a=-1,i=0,c=null;for(let o=0;o<=e.length;++o){if(o<e.length)c=e[o];else{if(c==="/")break;c="/"}if(c==="/"){if(!(a===o-1||i===1))if(i===2){if(n.length<2||r!==2||n[n.length-1]!=="."||n[n.length-2]!=="."){if(n.length>2){const l=n.lastIndexOf("/");l===-1?(n="",r=0):(n=n.slice(0,l),r=n.length-1-n.lastIndexOf("/")),a=o,i=0;continue}else if(n.length>0){n="",r=0,a=o,i=0;continue}}t&&(n+=n.length>0?"/..":"..",r=2)}else n.length>0?n+=`/${e.slice(a+1,o)}`:n=e.slice(a+1,o),r=o-a-1;a=o,i=0}else c==="."&&i!==-1?++i:i=-1}return n}const G=function(e){return St.test(e)},Tt=function(e){if(e==="..")return"";const t=Ct.exec(ct(e));return t&&t[1]||""};var Nt={reset:[0,0],bold:[1,22,"\x1B[22m\x1B[1m"],dim:[2,22,"\x1B[22m\x1B[2m"],italic:[3,23],underline:[4,24],inverse:[7,27],hidden:[8,28],strikethrough:[9,29],black:[30,39],red:[31,39],green:[32,39],yellow:[33,39],blue:[34,39],magenta:[35,39],cyan:[36,39],white:[37,39],gray:[90,39],bgBlack:[40,49],bgRed:[41,49],bgGreen:[42,49],bgYellow:[43,49],bgBlue:[44,49],bgMagenta:[45,49],bgCyan:[46,49],bgWhite:[47,49],blackBright:[90,39],redBright:[91,39],greenBright:[92,39],yellowBright:[93,39],blueBright:[94,39],magentaBright:[95,39],cyanBright:[96,39],whiteBright:[97,39],bgBlackBright:[100,49],bgRedBright:[101,49],bgGreenBright:[102,49],bgYellowBright:[103,49],bgBlueBright:[104,49],bgMagentaBright:[105,49],bgCyanBright:[106,49],bgWhiteBright:[107,49]},Mt=Object.entries(Nt);function Y(e){return String(e)}Y.open="";Y.close="";function $t(e=!1){let t=typeof process<"u"?process:void 0,n=(t==null?void 0:t.env)||{},r=(t==null?void 0:t.argv)||[];return!("NO_COLOR"in n||r.includes("--no-color"))&&("FORCE_COLOR"in n||r.includes("--color")||(t==null?void 0:t.platform)==="win32"||e&&n.TERM!=="dumb"||"CI"in n)||typeof window<"u"&&!!window.chrome}function Rt(e=!1){let t=$t(e),n=(c,o,l,w)=>{let g="",h=0;do g+=c.substring(h,w)+l,h=w+o.length,w=c.indexOf(o,h);while(~w);return g+c.substring(h)},r=(c,o,l=c)=>{let w=g=>{let h=String(g),b=h.indexOf(o,c.length);return~b?c+n(h,o,l,b)+o:c+h+o};return w.open=c,w.close=o,w},a={isColorSupported:t},i=c=>`\x1B[${c}m`;for(let[c,o]of Mt)a[c]=t?r(i(o[0]),i(o[1]),o[2]):Y;return a}Rt();function lt(e,t){return t.forEach(function(n){n&&typeof n!="string"&&!Array.isArray(n)&&Object.keys(n).forEach(function(r){if(r!=="default"&&!(r in e)){var a=Object.getOwnPropertyDescriptor(n,r);Object.defineProperty(e,r,a.get?a:{enumerable:!0,get:function(){return n[r]}})}})}),Object.freeze(e)}function dt(e){return e&&e.__esModule&&Object.prototype.hasOwnProperty.call(e,"default")?e.default:e}var J={exports:{}},x={};/**
 * @license React
 * react-is.production.js
 *
@@ -6,7 +6,7 @@ var ut=Object.defineProperty;var ht=(e,t,n)=>t in e?ut(e,t,{enumerable:!0,config
 *
 * This source code is licensed under the MIT license found in the
 * LICENSE file in the root directory of this source tree.
-*/var G;function Lt(){if(G)return x;G=1;var e=Symbol.for("react.transitional.element"),t=Symbol.for("react.portal"),n=Symbol.for("react.fragment"),r=Symbol.for("react.strict_mode"),a=Symbol.for("react.profiler"),i=Symbol.for("react.consumer"),c=Symbol.for("react.context"),o=Symbol.for("react.forward_ref"),l=Symbol.for("react.suspense"),w=Symbol.for("react.suspense_list"),f=Symbol.for("react.memo"),h=Symbol.for("react.lazy"),b=Symbol.for("react.view_transition"),z=Symbol.for("react.client.reference");function u(s){if(typeof s=="object"&&s!==null){var d=s.$$typeof;switch(d){case e:switch(s=s.type,s){case n:case a:case r:case l:case w:case b:return s;default:switch(s=s&&s.$$typeof,s){case c:case o:case h:case f:return s;case i:return s;default:return d}}case t:return d}}}return x.ContextConsumer=i,x.ContextProvider=c,x.Element=e,x.ForwardRef=o,x.Fragment=n,x.Lazy=h,x.Memo=f,x.Portal=t,x.Profiler=a,x.StrictMode=r,x.Suspense=l,x.SuspenseList=w,x.isContextConsumer=function(s){return u(s)===i},x.isContextProvider=function(s){return u(s)===c},x.isElement=function(s){return typeof s=="object"&&s!==null&&s.$$typeof===e},x.isForwardRef=function(s){return u(s)===o},x.isFragment=function(s){return u(s)===n},x.isLazy=function(s){return u(s)===h},x.isMemo=function(s){return u(s)===f},x.isPortal=function(s){return u(s)===t},x.isProfiler=function(s){return u(s)===a},x.isStrictMode=function(s){return u(s)===r},x.isSuspense=function(s){return u(s)===l},x.isSuspenseList=function(s){return u(s)===w},x.isValidElementType=function(s){return typeof s=="string"||typeof s=="function"||s===n||s===a||s===r||s===l||s===w||typeof s=="object"&&s!==null&&(s.$$typeof===h||s.$$typeof===f||s.$$typeof===c||s.$$typeof===i||s.$$typeof===o||s.$$typeof===z||s.getModuleId!==void 0)},x.typeOf=u,x}var Q;function Bt(){return Q||(Q=1,D.exports=Lt()),D.exports}var pt=Bt(),Rt=dt(pt),Vt=lt({__proto__:null,default:Rt},[pt]),j={exports:{}},v={};/**
+*/var Z;function Bt(){if(Z)return x;Z=1;var e=Symbol.for("react.transitional.element"),t=Symbol.for("react.portal"),n=Symbol.for("react.fragment"),r=Symbol.for("react.strict_mode"),a=Symbol.for("react.profiler"),i=Symbol.for("react.consumer"),c=Symbol.for("react.context"),o=Symbol.for("react.forward_ref"),l=Symbol.for("react.suspense"),w=Symbol.for("react.suspense_list"),g=Symbol.for("react.memo"),h=Symbol.for("react.lazy"),b=Symbol.for("react.view_transition"),z=Symbol.for("react.client.reference");function u(s){if(typeof s=="object"&&s!==null){var d=s.$$typeof;switch(d){case e:switch(s=s.type,s){case n:case a:case r:case l:case w:case b:return s;default:switch(s=s&&s.$$typeof,s){case c:case o:case h:case g:return s;case i:return s;default:return d}}case t:return d}}}return x.ContextConsumer=i,x.ContextProvider=c,x.Element=e,x.ForwardRef=o,x.Fragment=n,x.Lazy=h,x.Memo=g,x.Portal=t,x.Profiler=a,x.StrictMode=r,x.Suspense=l,x.SuspenseList=w,x.isContextConsumer=function(s){return u(s)===i},x.isContextProvider=function(s){return u(s)===c},x.isElement=function(s){return typeof s=="object"&&s!==null&&s.$$typeof===e},x.isForwardRef=function(s){return u(s)===o},x.isFragment=function(s){return u(s)===n},x.isLazy=function(s){return u(s)===h},x.isMemo=function(s){return u(s)===g},x.isPortal=function(s){return u(s)===t},x.isProfiler=function(s){return u(s)===a},x.isStrictMode=function(s){return u(s)===r},x.isSuspense=function(s){return u(s)===l},x.isSuspenseList=function(s){return u(s)===w},x.isValidElementType=function(s){return typeof s=="string"||typeof s=="function"||s===n||s===a||s===r||s===l||s===w||typeof s=="object"&&s!==null&&(s.$$typeof===h||s.$$typeof===g||s.$$typeof===c||s.$$typeof===i||s.$$typeof===o||s.$$typeof===z||s.getModuleId!==void 0)},x.typeOf=u,x}var Q;function At(){return Q||(Q=1,J.exports=Bt()),J.exports}var pt=At(),Lt=dt(pt),Ut=lt({__proto__:null,default:Lt},[pt]),V={exports:{}},v={};/**
 * @license React
 * react-is.production.min.js
 *
@@ -14,8 +14,8 @@ var ut=Object.defineProperty;var ht=(e,t,n)=>t in e?ut(e,t,{enumerable:!0,config
 *
 * This source code is licensed under the MIT license found in the
 * LICENSE file in the root directory of this source tree.
-*/var tt;function Ut(){if(tt)return v;tt=1;var e=Symbol.for("react.element"),t=Symbol.for("react.portal"),n=Symbol.for("react.fragment"),r=Symbol.for("react.strict_mode"),a=Symbol.for("react.profiler"),i=Symbol.for("react.provider"),c=Symbol.for("react.context"),o=Symbol.for("react.server_context"),l=Symbol.for("react.forward_ref"),w=Symbol.for("react.suspense"),f=Symbol.for("react.suspense_list"),h=Symbol.for("react.memo"),b=Symbol.for("react.lazy"),z=Symbol.for("react.offscreen"),u;u=Symbol.for("react.module.reference");function s(d){if(typeof d=="object"&&d!==null){var C=d.$$typeof;switch(C){case e:switch(d=d.type,d){case n:case a:case r:case w:case f:return d;default:switch(d=d&&d.$$typeof,d){case o:case c:case l:case b:case h:case i:return d;default:return C}}case t:return C}}}return v.ContextConsumer=c,v.ContextProvider=i,v.Element=e,v.ForwardRef=l,v.Fragment=n,v.Lazy=b,v.Memo=h,v.Portal=t,v.Profiler=a,v.StrictMode=r,v.Suspense=w,v.SuspenseList=f,v.isAsyncMode=function(){return!1},v.isConcurrentMode=function(){return!1},v.isContextConsumer=function(d){return s(d)===c},v.isContextProvider=function(d){return s(d)===i},v.isElement=function(d){return typeof d=="object"&&d!==null&&d.$$typeof===e},v.isForwardRef=function(d){return s(d)===l},v.isFragment=function(d){return s(d)===n},v.isLazy=function(d){return s(d)===b},v.isMemo=function(d){return s(d)===h},v.isPortal=function(d){return s(d)===t},v.isProfiler=function(d){return s(d)===a},v.isStrictMode=function(d){return s(d)===r},v.isSuspense=function(d){return s(d)===w},v.isSuspenseList=function(d){return s(d)===f},v.isValidElementType=function(d){return typeof d=="string"||typeof d=="function"||d===n||d===a||d===r||d===w||d===f||d===z||typeof d=="object"&&d!==null&&(d.$$typeof===b||d.$$typeof===h||d.$$typeof===i||d.$$typeof===c||d.$$typeof===l||d.$$typeof===u||d.getModuleId!==void 0)},v.typeOf=s,v}var nt;function Ot(){return nt||(nt=1,j.exports=Ut()),j.exports}var wt=Ot(),Ft=dt(wt),Ht=lt({__proto__:null,default:Ft},[wt]);const Dt=["isAsyncMode","isConcurrentMode","isContextConsumer","isContextProvider","isElement","isForwardRef","isFragment","isLazy","isMemo","isPortal","isProfiler","isStrictMode","isSuspense","isSuspenseList","isValidElementType"];Object.fromEntries(Dt.map(e=>[e,t=>Ht[e](t)||Vt[e](t)]));let jt=()=>"Promise{…}";try{const{getPromiseDetails:e,kPending:t,kRejected:n}=process.binding("util");Array.isArray(e(Promise.resolve()))&&(jt=(r,a)=>{const[i,c]=e(r);return i===t?"Promise{<pending>}":`Promise${i===n?"!":""}{${a.inspect(c,a)}}`})}catch{}function Jt(e){const{message:t="$$stack trace error",stackTraceLimit:n=1}=e||{},r=Error.stackTraceLimit,a=Error.prepareStackTrace;Error.stackTraceLimit=n,Error.prepareStackTrace=o=>o.stack;const c=new Error(t).stack||"";return Error.prepareStackTrace=a,Error.stackTraceLimit=r,c}var J,et;function Xt(){if(et)return J;et=1;var e,t,n,r,a,i,c,o,l,w,f,h,b,z,u,s,d,C,P;return b=/\/(?![*\/])(?:\[(?:(?![\]\\]).|\\.)*\]|(?![\/\\]).|\\.)*(\/[$_\u200C\u200D\p{ID_Continue}]*|\\)?/uy,h=/--|\+\+|=>|\.{3}|\??\.(?!\d)|(?:&&|\|\||\?\?|[+\-%&|^]|\*{1,2}|<{1,2}|>{1,3}|!=?|={1,2}|\/(?![\/*]))=?|[?~,:;[\](){}]/y,e=/(\x23?)(?=[$_\p{ID_Start}\\])(?:[$_\u200C\u200D\p{ID_Continue}]|\\u[\da-fA-F]{4}|\\u\{[\da-fA-F]+\})+/uy,u=/(['"])(?:(?!\1)[^\\\n\r]|\\(?:\r\n|[^]))*(\1)?/y,f=/(?:0[xX][\da-fA-F](?:_?[\da-fA-F])*|0[oO][0-7](?:_?[0-7])*|0[bB][01](?:_?[01])*)n?|0n|[1-9](?:_?\d)*n|(?:(?:0(?!\d)|0\d*[89]\d*|[1-9](?:_?\d)*)(?:\.(?:\d(?:_?\d)*)?)?|\.\d(?:_?\d)*)(?:[eE][+-]?\d(?:_?\d)*)?|0[0-7]+/y,s=/[`}](?:[^`\\$]|\\[^]|\$(?!\{))*(`|\$\{)?/y,P=/[\t\v\f\ufeff\p{Zs}]+/uy,o=/\r?\n|[\r\u2028\u2029]/y,l=/\/\*(?:[^*]|\*(?!\/))*(\*\/)?/y,z=/\/\/.*/y,n=/[<>.:={}]|\/(?![\/*])/y,t=/[$_\p{ID_Start}][$_\u200C\u200D\p{ID_Continue}-]*/uy,r=/(['"])(?:(?!\1)[^])*(\1)?/y,a=/[^<>{}]+/y,C=/^(?:[\/+-]|\.{3}|\?(?:InterpolationIn(?:JSX|Template)|NoLineTerminatorHere|NonExpressionParenEnd|UnaryIncDec))?$|[{}([,;<>=*%&|^!~?:]$/,d=/^(?:=>|[;\]){}]|else|\?(?:NoLineTerminatorHere|NonExpressionParenEnd))?$/,i=/^(?:await|case|default|delete|do|else|instanceof|new|return|throw|typeof|void|yield)$/,c=/^(?:return|throw|yield)$/,w=RegExp(o.source),J=function*(y,{jsx:M=!1}={}){var q,T,L,g,m,B,p,E,W,I,R,k,V,_;for({length:B}=y,g=0,m="",_=[{tag:"JS"}],q=[],R=0,k=!1;g<B;){switch(E=_[_.length-1],E.tag){case"JS":case"JSNonExpressionParen":case"InterpolationInTemplate":case"InterpolationInJSX":if(y[g]==="/"&&(C.test(m)||i.test(m))&&(b.lastIndex=g,p=b.exec(y))){g=b.lastIndex,m=p[0],k=!0,yield{type:"RegularExpressionLiteral",value:p[0],closed:p[1]!==void 0&&p[1]!=="\\"};continue}if(h.lastIndex=g,p=h.exec(y)){switch(V=p[0],W=h.lastIndex,I=V,V){case"(":m==="?NonExpressionParenKeyword"&&_.push({tag:"JSNonExpressionParen",nesting:R}),R++,k=!1;break;case")":R--,k=!0,E.tag==="JSNonExpressionParen"&&R===E.nesting&&(_.pop(),I="?NonExpressionParenEnd",k=!1);break;case"{":h.lastIndex=0,L=!d.test(m)&&(C.test(m)||i.test(m)),q.push(L),k=!1;break;case"}":switch(E.tag){case"InterpolationInTemplate":if(q.length===E.nesting){s.lastIndex=g,p=s.exec(y),g=s.lastIndex,m=p[0],p[1]==="${"?(m="?InterpolationInTemplate",k=!1,yield{type:"TemplateMiddle",value:p[0]}):(_.pop(),k=!0,yield{type:"TemplateTail",value:p[0],closed:p[1]==="`"});continue}break;case"InterpolationInJSX":if(q.length===E.nesting){_.pop(),g+=1,m="}",yield{type:"JSXPunctuator",value:"}"};continue}}k=q.pop(),I=k?"?ExpressionBraceEnd":"}";break;case"]":k=!0;break;case"++":case"--":I=k?"?PostfixIncDec":"?UnaryIncDec";break;case"<":if(M&&(C.test(m)||i.test(m))){_.push({tag:"JSXTag"}),g+=1,m="<",yield{type:"JSXPunctuator",value:V};continue}k=!1;break;default:k=!1}g=W,m=I,yield{type:"Punctuator",value:V};continue}if(e.lastIndex=g,p=e.exec(y)){switch(g=e.lastIndex,I=p[0],p[0]){case"for":case"if":case"while":case"with":m!=="."&&m!=="?."&&(I="?NonExpressionParenKeyword")}m=I,k=!i.test(p[0]),yield{type:p[1]==="#"?"PrivateIdentifier":"IdentifierName",value:p[0]};continue}if(u.lastIndex=g,p=u.exec(y)){g=u.lastIndex,m=p[0],k=!0,yield{type:"StringLiteral",value:p[0],closed:p[2]!==void 0};continue}if(f.lastIndex=g,p=f.exec(y)){g=f.lastIndex,m=p[0],k=!0,yield{type:"NumericLiteral",value:p[0]};continue}if(s.lastIndex=g,p=s.exec(y)){g=s.lastIndex,m=p[0],p[1]==="${"?(m="?InterpolationInTemplate",_.push({tag:"InterpolationInTemplate",nesting:q.length}),k=!1,yield{type:"TemplateHead",value:p[0]}):(k=!0,yield{type:"NoSubstitutionTemplate",value:p[0],closed:p[1]==="`"});continue}break;case"JSXTag":case"JSXTagEnd":if(n.lastIndex=g,p=n.exec(y)){switch(g=n.lastIndex,I=p[0],p[0]){case"<":_.push({tag:"JSXTag"});break;case">":_.pop(),m==="/"||E.tag==="JSXTagEnd"?(I="?JSX",k=!0):_.push({tag:"JSXChildren"});break;case"{":_.push({tag:"InterpolationInJSX",nesting:q.length}),I="?InterpolationInJSX",k=!1;break;case"/":m==="<"&&(_.pop(),_[_.length-1].tag==="JSXChildren"&&_.pop(),_.push({tag:"JSXTagEnd"}))}m=I,yield{type:"JSXPunctuator",value:p[0]};continue}if(t.lastIndex=g,p=t.exec(y)){g=t.lastIndex,m=p[0],yield{type:"JSXIdentifier",value:p[0]};continue}if(r.lastIndex=g,p=r.exec(y)){g=r.lastIndex,m=p[0],yield{type:"JSXString",value:p[0],closed:p[2]!==void 0};continue}break;case"JSXChildren":if(a.lastIndex=g,p=a.exec(y)){g=a.lastIndex,m=p[0],yield{type:"JSXText",value:p[0]};continue}switch(y[g]){case"<":_.push({tag:"JSXTag"}),g++,m="<",yield{type:"JSXPunctuator",value:"<"};continue;case"{":_.push({tag:"InterpolationInJSX",nesting:q.length}),g++,m="?InterpolationInJSX",k=!1,yield{type:"JSXPunctuator",value:"{"};continue}}if(P.lastIndex=g,p=P.exec(y)){g=P.lastIndex,yield{type:"WhiteSpace",value:p[0]};continue}if(o.lastIndex=g,p=o.exec(y)){g=o.lastIndex,k=!1,c.test(m)&&(m="?NoLineTerminatorHere"),yield{type:"LineTerminatorSequence",value:p[0]};continue}if(l.lastIndex=g,p=l.exec(y)){g=l.lastIndex,w.test(p[0])&&(k=!1,c.test(m)&&(m="?NoLineTerminatorHere")),yield{type:"MultiLineComment",value:p[0],closed:p[1]!==void 0};continue}if(z.lastIndex=g,p=z.exec(y)){g=z.lastIndex,k=!1,yield{type:"SingleLineComment",value:p[0]};continue}T=String.fromCodePoint(y.codePointAt(g)),g+=T.length,m=T,k=!1,yield{type:E.tag.startsWith("JSX")?"JSXInvalid":"Invalid",value:T}}},J}Xt();var gt={keyword:["break","case","catch","continue","debugger","default","do","else","finally","for","function","if","return","switch","throw","try","var","const","while","with","new","this","super","class","extends","export","import","null","true","false","in","instanceof","typeof","void","delete"],strict:["implements","interface","let","package","private","protected","public","static","yield"]};new Set(gt.keyword);new Set(gt.strict);const rt="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",Zt=new Uint8Array(64),Wt=new Uint8Array(128);for(let e=0;e<rt.length;e++){const t=rt.charCodeAt(e);Zt[e]=t,Wt[t]=e}var at;(function(e){e[e.Empty=1]="Empty",e[e.Hash=2]="Hash",e[e.Query=3]="Query",e[e.RelativePath=4]="RelativePath",e[e.AbsolutePath=5]="AbsolutePath",e[e.SchemeRelative=6]="SchemeRelative",e[e.Absolute=7]="Absolute"})(at||(at={}));const Yt=/^[A-Za-z]:\//;function Kt(e=""){return e&&e.replace(/\\/g,"/").replace(Yt,t=>t.toUpperCase())}const Gt=/^[/\\](?![/\\])|^[/\\]{2}(?!\.)|^[A-Za-z]:[/\\]/;function Qt(){return typeof process<"u"&&typeof process.cwd=="function"?process.cwd().replace(/\\/g,"/"):"/"}const tn=function(...e){e=e.map(r=>Kt(r));let t="",n=!1;for(let r=e.length-1;r>=-1&&!n;r--){const a=r>=0?e[r]:Qt();!a||a.length===0||(t=`${a}/${t}`,n=ot(a))}return t=nn(t,!n),n&&!ot(t)?`/${t}`:t.length>0?t:"."};function nn(e,t){let n="",r=0,a=-1,i=0,c=null;for(let o=0;o<=e.length;++o){if(o<e.length)c=e[o];else{if(c==="/")break;c="/"}if(c==="/"){if(!(a===o-1||i===1))if(i===2){if(n.length<2||r!==2||n[n.length-1]!=="."||n[n.length-2]!=="."){if(n.length>2){const l=n.lastIndexOf("/");l===-1?(n="",r=0):(n=n.slice(0,l),r=n.length-1-n.lastIndexOf("/")),a=o,i=0;continue}else if(n.length>0){n="",r=0,a=o,i=0;continue}}t&&(n+=n.length>0?"/..":"..",r=2)}else n.length>0?n+=`/${e.slice(a+1,o)}`:n=e.slice(a+1,o),r=o-a-1;a=o,i=0}else c==="."&&i!==-1?++i:i=-1}return n}const ot=function(e){return Gt.test(e)},ft=/^\s*at .*(?:\S:\d+|\(native\))/m,en=/^(?:eval@)?(?:\[native code\])?$/;function mt(e){if(!e.includes(":"))return[e];const n=/(.+?)(?::(\d+))?(?::(\d+))?$/.exec(e.replace(/^\(|\)$/g,""));if(!n)return[e];let r=n[1];if(r.startsWith("async ")&&(r=r.slice(6)),r.startsWith("http:")||r.startsWith("https:")){const a=new URL(r);a.searchParams.delete("import"),a.searchParams.delete("browserv"),r=a.pathname+a.hash+a.search}if(r.startsWith("/@fs/")){const a=/^\/@fs\/[a-zA-Z]:\//.test(r);r=r.slice(a?5:4)}return[r,n[2]||void 0,n[3]||void 0]}function rn(e){let t=e.trim();if(en.test(t)||(t.includes(" > eval")&&(t=t.replace(/ line (\d+)(?: > eval line \d+)* > eval:\d+:\d+/g,":$1")),!t.includes("@")&&!t.includes(":")))return null;const n=/((.*".+"[^@]*)?[^@]*)(@)/,r=t.match(n),a=r&&r[1]?r[1]:void 0,[i,c,o]=mt(t.replace(n,""));return!i||!c||!o?null:{file:i,method:a||"",line:Number.parseInt(c),column:Number.parseInt(o)}}function an(e){const t=e.trim();return ft.test(t)?on(t):rn(t)}function on(e){let t=e.trim();if(!ft.test(t))return null;t.includes("(eval ")&&(t=t.replace(/eval code/g,"eval").replace(/(\(eval at [^()]*)|(,.*$)/g,""));let n=t.replace(/^\s+/,"").replace(/\(eval code/g,"(").replace(/^.*?\s+/,"");const r=n.match(/ (\(.+\)$)/);n=r?n.replace(r[0],""):n;const[a,i,c]=mt(r?r[1]:n);let o=r&&n||"",l=a&&["eval","<anonymous>"].includes(a)?void 0:a;return!l||!i||!c?null:(o.startsWith("async ")&&(o=o.slice(6)),l.startsWith("file://")&&(l=l.slice(7)),l=l.startsWith("node:")||l.startsWith("internal:")?l:tn(l),o&&(o=o.replace(/__vite_ssr_import_\d+__\./g,"")),{method:o,file:l,line:Number.parseInt(i),column:Number.parseInt(c)})}function sn(e){const t=(e==null?void 0:e.globalThisKey)||"__vitest_mocker__";function n(){return typeof globalThis[t]<"u"?globalThis[t]:new Proxy({},{get(r,a){throw new Error(`Vitest mocker was not initialized in this environment. vi.${String(a)}() is forbidden.`)}})}return{hoisted(r){if(typeof r!="function")throw new TypeError(`vi.hoisted() expects a function, but received a ${typeof r}`);return r()},mock(r,a){if(typeof r!="string")throw new TypeError(`vi.mock() expects a string path, but received a ${typeof r}`);const i=N("mock");n().queueMock(r,i,typeof a=="function"?()=>a(()=>n().importActual(r,i)):a)},unmock(r){if(typeof r!="string")throw new TypeError(`vi.unmock() expects a string path, but received a ${typeof r}`);n().queueUnmock(r,N("unmock"))},doMock(r,a){if(typeof r!="string")throw new TypeError(`vi.doMock() expects a string path, but received a ${typeof r}`);const i=N("doMock");n().queueMock(r,i,typeof a=="function"?()=>a(()=>n().importActual(r,i)):a)},doUnmock(r){if(typeof r!="string")throw new TypeError(`vi.doUnmock() expects a string path, but received a ${typeof r}`);n().queueUnmock(r,N("doUnmock"))},async importActual(r){return n().importActual(r,N("importActual"))},async importMock(r){return n().importMock(r,N("importMock"))}}}function N(e){const n=Jt({stackTraceLimit:5}).split(`
-`),r=n.findIndex(i=>i.includes(` at Object.${e}`)||i.includes(`${e}@`)),a=an(n[r+1]);return(a==null?void 0:a.file)||""}const{now:it}=Date;class cn{constructor(t,n,r,a){S(this,"registry",new st);S(this,"queue",new Set);S(this,"mockedIds",new Set);this.interceptor=t,this.rpc=n,this.spyOn=r,this.config=a}async prepare(){this.queue.size&&await Promise.all([...this.queue.values()])}async resolveFactoryModule(t){const n=this.registry.get(t);if(!n||n.type!=="manual")throw new Error(`Mock ${t} wasn't registered. This is probably a Vitest error. Please, open a new issue with reproduction.`);return await n.resolve()}getFactoryModule(t){const n=this.registry.get(t);if(!n||n.type!=="manual")throw new Error(`Mock ${t} wasn't registered. This is probably a Vitest error. Please, open a new issue with reproduction.`);if(!n.cache)throw new Error(`Mock ${t} wasn't resolved. This is probably a Vitest error. Please, open a new issue with reproduction.`);return n.cache}async invalidate(){const t=Array.from(this.mockedIds);t.length&&(await this.rpc.invalidate(t),await this.interceptor.invalidate(),this.registry.clear())}async importActual(t,n){const r=await this.rpc.resolveId(t,n);if(r==null)throw new Error(`[vitest] Cannot resolve "${t}" imported from "${n}"`);const a=Pt(r.id),i=new URL(r.url,location.href),c=`_vitest_original&ext${a}`,o=`${i.pathname}${i.search?`${i.search}&${c}`:`?${c}`}${i.hash}`;return this.wrapDynamicImport(()=>import(o)).then(l=>{if(!r.optimized||typeof l.default>"u")return l;const w=l.default;return w!=null&&w.__esModule?w:{...typeof w=="object"&&!Array.isArray(w)||typeof w=="function"?w:{},default:w}})}async importMock(t,n){await this.prepare();const{resolvedId:r,resolvedUrl:a,redirectUrl:i}=await this.rpc.resolveMock(t,n,{mock:"auto"}),c=this.resolveMockPath(U(a));let o=this.registry.get(c);if(!o)if(i){const l=new URL(this.resolveMockPath(U(i)),location.href).toString();o=new $(t,r,c,l)}else o=new O(t,r,c);if(o.type==="manual")return await o.resolve();if(o.type==="automock"||o.type==="autospy"){const l=new URL(`/@id/${r}`,location.href),w=l.search?`${l.search}&t=${it()}`:`?t=${it()}`,f=await vt(()=>import(`${l.pathname}${w}&mock=${o.type}${l.hash}`),[],import.meta.url);return this.mockObject(f,o.type)}return import(o.redirect)}mockObject(t,n="automock"){return bt({globalConstructors:{Object,Function,Array,Map,RegExp},spyOn:this.spyOn,type:n},t)}queueMock(t,n,r){const a=this.rpc.resolveMock(t,n,{mock:typeof r=="function"?"factory":r!=null&&r.spy?"spy":"auto"}).then(async({redirectUrl:i,resolvedId:c,resolvedUrl:o,needsInterop:l,mockType:w})=>{const f=this.resolveMockPath(U(o));this.mockedIds.add(c);const h=typeof r=="function"?async()=>{const u=await r();return l?{default:u}:u}:void 0,b=typeof i=="string"?new URL(this.resolveMockPath(U(i)),location.href).toString():null;let z;w==="manual"?z=this.registry.register("manual",t,c,f,h):w==="autospy"?z=this.registry.register("autospy",t,c,f):w==="redirect"?z=this.registry.register("redirect",t,c,f,b):z=this.registry.register("automock",t,c,f),await this.interceptor.register(z)}).finally(()=>{this.queue.delete(a)});this.queue.add(a)}queueUnmock(t,n){const r=this.rpc.resolveId(t,n).then(async a=>{if(!a)return;const i=this.resolveMockPath(U(a.url));this.mockedIds.add(a.id),this.registry.delete(i),await this.interceptor.delete(i)}).finally(()=>{this.queue.delete(r)});this.queue.add(r)}wrapDynamicImport(t){return typeof t=="function"?new Promise((r,a)=>{this.prepare().finally(()=>{t().then(r,a)})}):t}resolveMockPath(t){const n=this.config,r=Et("/@fs/",n.root);return t.startsWith(n.root)?t.slice(n.root.length):t.startsWith(r)?t.slice(r.length):t}}const ln=/(\?|&)v=\w{8}/;function U(e){return e.replace(ln,"")}class dn{constructor(){S(this,"mocks",new st)}async register(t){this.mocks.add(t)}async delete(t){this.mocks.delete(t)}async invalidate(){this.mocks.clear()}}const X=e=>{switch(e){case"resolveId":return Promise.resolve({id:"",url:"",optimized:!1});case"resolveMock":return Promise.resolve({mockType:"dummy",resolvedId:"",resolvedUrl:"",redirectUrl:"",needsInterop:!1});case"invalidate":return Promise.resolve()}};class pn extends cn{queueMock(){}}function wn(e){const t=new pn(e("__vitest_mocker__"),{resolveId(n,r){return X("resolveId")},resolveMock(n,r,a){return X("resolveMock")},async invalidate(n){return X("invalidate")}},(...n)=>globalThis.__STORYBOOK_MODULE_TEST__.spyOn(...n),{root:""});return globalThis.__vitest_mocker__=t,sn({globalThisKey:"__vitest_mocker__"})}globalThis.__STORYBOOK_MOCKER__=wn(()=>new dn);function gn(e,t="top"){if(!e||typeof document>"u")return;const n=document.head||document.querySelector("head"),r=n.querySelector(":first-child"),a=document.createElement("style");a.appendChild(document.createTextNode(e)),t==="top"&&r?n.insertBefore(a,r):n.appendChild(a)}gn(`
+*/var tt;function Ot(){if(tt)return v;tt=1;var e=Symbol.for("react.element"),t=Symbol.for("react.portal"),n=Symbol.for("react.fragment"),r=Symbol.for("react.strict_mode"),a=Symbol.for("react.profiler"),i=Symbol.for("react.provider"),c=Symbol.for("react.context"),o=Symbol.for("react.server_context"),l=Symbol.for("react.forward_ref"),w=Symbol.for("react.suspense"),g=Symbol.for("react.suspense_list"),h=Symbol.for("react.memo"),b=Symbol.for("react.lazy"),z=Symbol.for("react.offscreen"),u;u=Symbol.for("react.module.reference");function s(d){if(typeof d=="object"&&d!==null){var C=d.$$typeof;switch(C){case e:switch(d=d.type,d){case n:case a:case r:case w:case g:return d;default:switch(d=d&&d.$$typeof,d){case o:case c:case l:case b:case h:case i:return d;default:return C}}case t:return C}}}return v.ContextConsumer=c,v.ContextProvider=i,v.Element=e,v.ForwardRef=l,v.Fragment=n,v.Lazy=b,v.Memo=h,v.Portal=t,v.Profiler=a,v.StrictMode=r,v.Suspense=w,v.SuspenseList=g,v.isAsyncMode=function(){return!1},v.isConcurrentMode=function(){return!1},v.isContextConsumer=function(d){return s(d)===c},v.isContextProvider=function(d){return s(d)===i},v.isElement=function(d){return typeof d=="object"&&d!==null&&d.$$typeof===e},v.isForwardRef=function(d){return s(d)===l},v.isFragment=function(d){return s(d)===n},v.isLazy=function(d){return s(d)===b},v.isMemo=function(d){return s(d)===h},v.isPortal=function(d){return s(d)===t},v.isProfiler=function(d){return s(d)===a},v.isStrictMode=function(d){return s(d)===r},v.isSuspense=function(d){return s(d)===w},v.isSuspenseList=function(d){return s(d)===g},v.isValidElementType=function(d){return typeof d=="string"||typeof d=="function"||d===n||d===a||d===r||d===w||d===g||d===z||typeof d=="object"&&d!==null&&(d.$$typeof===b||d.$$typeof===h||d.$$typeof===i||d.$$typeof===c||d.$$typeof===l||d.$$typeof===u||d.getModuleId!==void 0)},v.typeOf=s,v}var nt;function Ft(){return nt||(nt=1,V.exports=Ot()),V.exports}var wt=Ft(),Dt=dt(wt),jt=lt({__proto__:null,default:Dt},[wt]);const Jt=["isAsyncMode","isConcurrentMode","isContextConsumer","isContextProvider","isElement","isForwardRef","isFragment","isLazy","isMemo","isPortal","isProfiler","isStrictMode","isSuspense","isSuspenseList","isValidElementType"];Object.fromEntries(Jt.map(e=>[e,t=>jt[e](t)||Ut[e](t)]));let Vt=()=>"Promise{…}";try{const{getPromiseDetails:e,kPending:t,kRejected:n}=process.binding("util");Array.isArray(e(Promise.resolve()))&&(Vt=(r,a)=>{const[i,c]=e(r);return i===t?"Promise{<pending>}":`Promise${i===n?"!":""}{${a.inspect(c,a)}}`})}catch{}function Xt(e){const{message:t="$$stack trace error",stackTraceLimit:n=1}=e||{},r=Error.stackTraceLimit,a=Error.prepareStackTrace;Error.stackTraceLimit=n,Error.prepareStackTrace=o=>o.stack;const c=new Error(t).stack||"";return Error.prepareStackTrace=a,Error.stackTraceLimit=r,c}var X,et;function Wt(){if(et)return X;et=1;var e,t,n,r,a,i,c,o,l,w,g,h,b,z,u,s,d,C,T;return b=/\/(?![*\/])(?:\[(?:(?![\]\\]).|\\.)*\]|(?![\/\\]).|\\.)*(\/[$_\u200C\u200D\p{ID_Continue}]*|\\)?/uy,h=/--|\+\+|=>|\.{3}|\??\.(?!\d)|(?:&&|\|\||\?\?|[+\-%&|^]|\*{1,2}|<{1,2}|>{1,3}|!=?|={1,2}|\/(?![\/*]))=?|[?~,:;[\](){}]/y,e=/(\x23?)(?=[$_\p{ID_Start}\\])(?:[$_\u200C\u200D\p{ID_Continue}]|\\u[\da-fA-F]{4}|\\u\{[\da-fA-F]+\})+/uy,u=/(['"])(?:(?!\1)[^\\\n\r]|\\(?:\r\n|[^]))*(\1)?/y,g=/(?:0[xX][\da-fA-F](?:_?[\da-fA-F])*|0[oO][0-7](?:_?[0-7])*|0[bB][01](?:_?[01])*)n?|0n|[1-9](?:_?\d)*n|(?:(?:0(?!\d)|0\d*[89]\d*|[1-9](?:_?\d)*)(?:\.(?:\d(?:_?\d)*)?)?|\.\d(?:_?\d)*)(?:[eE][+-]?\d(?:_?\d)*)?|0[0-7]+/y,s=/[`}](?:[^`\\$]|\\[^]|\$(?!\{))*(`|\$\{)?/y,T=/[\t\v\f\ufeff\p{Zs}]+/uy,o=/\r?\n|[\r\u2028\u2029]/y,l=/\/\*(?:[^*]|\*(?!\/))*(\*\/)?/y,z=/\/\/.*/y,n=/[<>.:={}]|\/(?![\/*])/y,t=/[$_\p{ID_Start}][$_\u200C\u200D\p{ID_Continue}-]*/uy,r=/(['"])(?:(?!\1)[^])*(\1)?/y,a=/[^<>{}]+/y,C=/^(?:[\/+-]|\.{3}|\?(?:InterpolationIn(?:JSX|Template)|NoLineTerminatorHere|NonExpressionParenEnd|UnaryIncDec))?$|[{}([,;<>=*%&|^!~?:]$/,d=/^(?:=>|[;\]){}]|else|\?(?:NoLineTerminatorHere|NonExpressionParenEnd))?$/,i=/^(?:await|case|default|delete|do|else|instanceof|new|return|throw|typeof|void|yield)$/,c=/^(?:return|throw|yield)$/,w=RegExp(o.source),X=function*(k,{jsx:P=!1}={}){var S,N,B,f,m,A,p,E,H,I,L,y,U,_;for({length:A}=k,f=0,m="",_=[{tag:"JS"}],S=[],L=0,y=!1;f<A;){switch(E=_[_.length-1],E.tag){case"JS":case"JSNonExpressionParen":case"InterpolationInTemplate":case"InterpolationInJSX":if(k[f]==="/"&&(C.test(m)||i.test(m))&&(b.lastIndex=f,p=b.exec(k))){f=b.lastIndex,m=p[0],y=!0,yield{type:"RegularExpressionLiteral",value:p[0],closed:p[1]!==void 0&&p[1]!=="\\"};continue}if(h.lastIndex=f,p=h.exec(k)){switch(U=p[0],H=h.lastIndex,I=U,U){case"(":m==="?NonExpressionParenKeyword"&&_.push({tag:"JSNonExpressionParen",nesting:L}),L++,y=!1;break;case")":L--,y=!0,E.tag==="JSNonExpressionParen"&&L===E.nesting&&(_.pop(),I="?NonExpressionParenEnd",y=!1);break;case"{":h.lastIndex=0,B=!d.test(m)&&(C.test(m)||i.test(m)),S.push(B),y=!1;break;case"}":switch(E.tag){case"InterpolationInTemplate":if(S.length===E.nesting){s.lastIndex=f,p=s.exec(k),f=s.lastIndex,m=p[0],p[1]==="${"?(m="?InterpolationInTemplate",y=!1,yield{type:"TemplateMiddle",value:p[0]}):(_.pop(),y=!0,yield{type:"TemplateTail",value:p[0],closed:p[1]==="`"});continue}break;case"InterpolationInJSX":if(S.length===E.nesting){_.pop(),f+=1,m="}",yield{type:"JSXPunctuator",value:"}"};continue}}y=S.pop(),I=y?"?ExpressionBraceEnd":"}";break;case"]":y=!0;break;case"++":case"--":I=y?"?PostfixIncDec":"?UnaryIncDec";break;case"<":if(P&&(C.test(m)||i.test(m))){_.push({tag:"JSXTag"}),f+=1,m="<",yield{type:"JSXPunctuator",value:U};continue}y=!1;break;default:y=!1}f=H,m=I,yield{type:"Punctuator",value:U};continue}if(e.lastIndex=f,p=e.exec(k)){switch(f=e.lastIndex,I=p[0],p[0]){case"for":case"if":case"while":case"with":m!=="."&&m!=="?."&&(I="?NonExpressionParenKeyword")}m=I,y=!i.test(p[0]),yield{type:p[1]==="#"?"PrivateIdentifier":"IdentifierName",value:p[0]};continue}if(u.lastIndex=f,p=u.exec(k)){f=u.lastIndex,m=p[0],y=!0,yield{type:"StringLiteral",value:p[0],closed:p[2]!==void 0};continue}if(g.lastIndex=f,p=g.exec(k)){f=g.lastIndex,m=p[0],y=!0,yield{type:"NumericLiteral",value:p[0]};continue}if(s.lastIndex=f,p=s.exec(k)){f=s.lastIndex,m=p[0],p[1]==="${"?(m="?InterpolationInTemplate",_.push({tag:"InterpolationInTemplate",nesting:S.length}),y=!1,yield{type:"TemplateHead",value:p[0]}):(y=!0,yield{type:"NoSubstitutionTemplate",value:p[0],closed:p[1]==="`"});continue}break;case"JSXTag":case"JSXTagEnd":if(n.lastIndex=f,p=n.exec(k)){switch(f=n.lastIndex,I=p[0],p[0]){case"<":_.push({tag:"JSXTag"});break;case">":_.pop(),m==="/"||E.tag==="JSXTagEnd"?(I="?JSX",y=!0):_.push({tag:"JSXChildren"});break;case"{":_.push({tag:"InterpolationInJSX",nesting:S.length}),I="?InterpolationInJSX",y=!1;break;case"/":m==="<"&&(_.pop(),_[_.length-1].tag==="JSXChildren"&&_.pop(),_.push({tag:"JSXTagEnd"}))}m=I,yield{type:"JSXPunctuator",value:p[0]};continue}if(t.lastIndex=f,p=t.exec(k)){f=t.lastIndex,m=p[0],yield{type:"JSXIdentifier",value:p[0]};continue}if(r.lastIndex=f,p=r.exec(k)){f=r.lastIndex,m=p[0],yield{type:"JSXString",value:p[0],closed:p[2]!==void 0};continue}break;case"JSXChildren":if(a.lastIndex=f,p=a.exec(k)){f=a.lastIndex,m=p[0],yield{type:"JSXText",value:p[0]};continue}switch(k[f]){case"<":_.push({tag:"JSXTag"}),f++,m="<",yield{type:"JSXPunctuator",value:"<"};continue;case"{":_.push({tag:"InterpolationInJSX",nesting:S.length}),f++,m="?InterpolationInJSX",y=!1,yield{type:"JSXPunctuator",value:"{"};continue}}if(T.lastIndex=f,p=T.exec(k)){f=T.lastIndex,yield{type:"WhiteSpace",value:p[0]};continue}if(o.lastIndex=f,p=o.exec(k)){f=o.lastIndex,y=!1,c.test(m)&&(m="?NoLineTerminatorHere"),yield{type:"LineTerminatorSequence",value:p[0]};continue}if(l.lastIndex=f,p=l.exec(k)){f=l.lastIndex,w.test(p[0])&&(y=!1,c.test(m)&&(m="?NoLineTerminatorHere")),yield{type:"MultiLineComment",value:p[0],closed:p[1]!==void 0};continue}if(z.lastIndex=f,p=z.exec(k)){f=z.lastIndex,y=!1,yield{type:"SingleLineComment",value:p[0]};continue}N=String.fromCodePoint(k.codePointAt(f)),f+=N.length,m=N,y=!1,yield{type:E.tag.startsWith("JSX")?"JSXInvalid":"Invalid",value:N}}},X}Wt();var ft={keyword:["break","case","catch","continue","debugger","default","do","else","finally","for","function","if","return","switch","throw","try","var","const","while","with","new","this","super","class","extends","export","import","null","true","false","in","instanceof","typeof","void","delete"],strict:["implements","interface","let","package","private","protected","public","static","yield"]};new Set(ft.keyword);new Set(ft.strict);const rt="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",Yt=new Uint8Array(64),Ht=new Uint8Array(128);for(let e=0;e<rt.length;e++){const t=rt.charCodeAt(e);Yt[e]=t,Ht[t]=e}var at;(function(e){e[e.Empty=1]="Empty",e[e.Hash=2]="Hash",e[e.Query=3]="Query",e[e.RelativePath=4]="RelativePath",e[e.AbsolutePath=5]="AbsolutePath",e[e.SchemeRelative=6]="SchemeRelative",e[e.Absolute=7]="Absolute"})(at||(at={}));const Kt=/^[A-Za-z]:\//;function Gt(e=""){return e&&e.replace(/\\/g,"/").replace(Kt,t=>t.toUpperCase())}const Zt=/^[/\\](?![/\\])|^[/\\]{2}(?!\.)|^[A-Za-z]:[/\\]/;function Qt(){return typeof process<"u"&&typeof process.cwd=="function"?process.cwd().replace(/\\/g,"/"):"/"}const tn=function(...e){e=e.map(r=>Gt(r));let t="",n=!1;for(let r=e.length-1;r>=-1&&!n;r--){const a=r>=0?e[r]:Qt();!a||a.length===0||(t=`${a}/${t}`,n=ot(a))}return t=nn(t,!n),n&&!ot(t)?`/${t}`:t.length>0?t:"."};function nn(e,t){let n="",r=0,a=-1,i=0,c=null;for(let o=0;o<=e.length;++o){if(o<e.length)c=e[o];else{if(c==="/")break;c="/"}if(c==="/"){if(!(a===o-1||i===1))if(i===2){if(n.length<2||r!==2||n[n.length-1]!=="."||n[n.length-2]!=="."){if(n.length>2){const l=n.lastIndexOf("/");l===-1?(n="",r=0):(n=n.slice(0,l),r=n.length-1-n.lastIndexOf("/")),a=o,i=0;continue}else if(n.length>0){n="",r=0,a=o,i=0;continue}}t&&(n+=n.length>0?"/..":"..",r=2)}else n.length>0?n+=`/${e.slice(a+1,o)}`:n=e.slice(a+1,o),r=o-a-1;a=o,i=0}else c==="."&&i!==-1?++i:i=-1}return n}const ot=function(e){return Zt.test(e)},gt=/^\s*at .*(?:\S:\d+|\(native\))/m,en=/^(?:eval@)?(?:\[native code\])?$/;function mt(e){if(!e.includes(":"))return[e];const n=/(.+?)(?::(\d+))?(?::(\d+))?$/.exec(e.replace(/^\(|\)$/g,""));if(!n)return[e];let r=n[1];if(r.startsWith("async ")&&(r=r.slice(6)),r.startsWith("http:")||r.startsWith("https:")){const a=new URL(r);a.searchParams.delete("import"),a.searchParams.delete("browserv"),r=a.pathname+a.hash+a.search}if(r.startsWith("/@fs/")){const a=/^\/@fs\/[a-zA-Z]:\//.test(r);r=r.slice(a?5:4)}return[r,n[2]||void 0,n[3]||void 0]}function rn(e){let t=e.trim();if(en.test(t)||(t.includes(" > eval")&&(t=t.replace(/ line (\d+)(?: > eval line \d+)* > eval:\d+:\d+/g,":$1")),!t.includes("@")&&!t.includes(":")))return null;const n=/((.*".+"[^@]*)?[^@]*)(@)/,r=t.match(n),a=r&&r[1]?r[1]:void 0,[i,c,o]=mt(t.replace(n,""));return!i||!c||!o?null:{file:i,method:a||"",line:Number.parseInt(c),column:Number.parseInt(o)}}function an(e){const t=e.trim();return gt.test(t)?on(t):rn(t)}function on(e){let t=e.trim();if(!gt.test(t))return null;t.includes("(eval ")&&(t=t.replace(/eval code/g,"eval").replace(/(\(eval at [^()]*)|(,.*$)/g,""));let n=t.replace(/^\s+/,"").replace(/\(eval code/g,"(").replace(/^.*?\s+/,"");const r=n.match(/ (\(.+\)$)/);n=r?n.replace(r[0],""):n;const[a,i,c]=mt(r?r[1]:n);let o=r&&n||"",l=a&&["eval","<anonymous>"].includes(a)?void 0:a;return!l||!i||!c?null:(o.startsWith("async ")&&(o=o.slice(6)),l.startsWith("file://")&&(l=l.slice(7)),l=l.startsWith("node:")||l.startsWith("internal:")?l:tn(l),o&&(o=o.replace(/__vite_ssr_import_\d+__\./g,"")),{method:o,file:l,line:Number.parseInt(i),column:Number.parseInt(c)})}function sn(e){const t=(e==null?void 0:e.globalThisKey)||"__vitest_mocker__";function n(){return typeof globalThis[t]<"u"?globalThis[t]:new Proxy({},{get(r,a){throw new Error(`Vitest mocker was not initialized in this environment. vi.${String(a)}() is forbidden.`)}})}return{hoisted(r){if(typeof r!="function")throw new TypeError(`vi.hoisted() expects a function, but received a ${typeof r}`);return r()},mock(r,a){if(typeof r!="string")throw new TypeError(`vi.mock() expects a string path, but received a ${typeof r}`);const i=M("mock");n().queueMock(r,i,typeof a=="function"?()=>a(()=>n().importActual(r,i)):a)},unmock(r){if(typeof r!="string")throw new TypeError(`vi.unmock() expects a string path, but received a ${typeof r}`);n().queueUnmock(r,M("unmock"))},doMock(r,a){if(typeof r!="string")throw new TypeError(`vi.doMock() expects a string path, but received a ${typeof r}`);const i=M("doMock");n().queueMock(r,i,typeof a=="function"?()=>a(()=>n().importActual(r,i)):a)},doUnmock(r){if(typeof r!="string")throw new TypeError(`vi.doUnmock() expects a string path, but received a ${typeof r}`);n().queueUnmock(r,M("doUnmock"))},async importActual(r){return n().importActual(r,M("importActual"))},async importMock(r){return n().importMock(r,M("importMock"))}}}function M(e){const n=Xt({stackTraceLimit:5}).split(`
+`),r=n.findIndex(i=>i.includes(` at Object.${e}`)||i.includes(`${e}@`)),a=an(n[r+1]);return(a==null?void 0:a.file)||""}const{now:it}=Date;class cn{constructor(t,n,r,a){q(this,"registry",new st);q(this,"queue",new Set);q(this,"mockedIds",new Set);this.interceptor=t,this.rpc=n,this.spyOn=r,this.config=a}async prepare(){this.queue.size&&await Promise.all([...this.queue.values()])}async resolveFactoryModule(t){const n=this.registry.get(t);if(!n||n.type!=="manual")throw new Error(`Mock ${t} wasn't registered. This is probably a Vitest error. Please, open a new issue with reproduction.`);return await n.resolve()}getFactoryModule(t){const n=this.registry.get(t);if(!n||n.type!=="manual")throw new Error(`Mock ${t} wasn't registered. This is probably a Vitest error. Please, open a new issue with reproduction.`);if(!n.cache)throw new Error(`Mock ${t} wasn't resolved. This is probably a Vitest error. Please, open a new issue with reproduction.`);return n.cache}async invalidate(){const t=Array.from(this.mockedIds);t.length&&(await this.rpc.invalidate(t),await this.interceptor.invalidate(),this.registry.clear())}async importActual(t,n){const r=await this.rpc.resolveId(t,n);if(r==null)throw new Error(`[vitest] Cannot resolve "${t}" imported from "${n}"`);const a=Tt(r.id),i=new URL(r.url,location.href),c=`_vitest_original&ext${a}`,o=`${i.pathname}${i.search?`${i.search}&${c}`:`?${c}`}${i.hash}`;return this.wrapDynamicImport(()=>import(o)).then(l=>{if(!r.optimized||typeof l.default>"u")return l;const w=l.default;return w!=null&&w.__esModule?w:{...typeof w=="object"&&!Array.isArray(w)||typeof w=="function"?w:{},default:w}})}async importMock(t,n){await this.prepare();const{resolvedId:r,resolvedUrl:a,redirectUrl:i}=await this.rpc.resolveMock(t,n,{mock:"auto"}),c=this.resolveMockPath(O(a));let o=this.registry.get(c);if(!o)if(i){const l=new URL(this.resolveMockPath(O(i)),location.href).toString();o=new R(t,r,c,l)}else o=new F(t,r,c);if(o.type==="manual")return await o.resolve();if(o.type==="automock"||o.type==="autospy"){const l=new URL(`/@id/${r}`,location.href),w=l.search?`${l.search}&t=${it()}`:`?t=${it()}`,g=await vt(()=>import(`${l.pathname}${w}&mock=${o.type}${l.hash}`),[],import.meta.url);return this.mockObject(g,o.type)}return import(o.redirect)}mockObject(t,n="automock"){return bt({globalConstructors:{Object,Function,Array,Map,RegExp},spyOn:this.spyOn,type:n},t)}queueMock(t,n,r){const a=this.rpc.resolveMock(t,n,{mock:typeof r=="function"?"factory":r!=null&&r.spy?"spy":"auto"}).then(async({redirectUrl:i,resolvedId:c,resolvedUrl:o,needsInterop:l,mockType:w})=>{const g=this.resolveMockPath(O(o));this.mockedIds.add(c);const h=typeof r=="function"?async()=>{const u=await r();return l?{default:u}:u}:void 0,b=typeof i=="string"?new URL(this.resolveMockPath(O(i)),location.href).toString():null;let z;w==="manual"?z=this.registry.register("manual",t,c,g,h):w==="autospy"?z=this.registry.register("autospy",t,c,g):w==="redirect"?z=this.registry.register("redirect",t,c,g,b):z=this.registry.register("automock",t,c,g),await this.interceptor.register(z)}).finally(()=>{this.queue.delete(a)});this.queue.add(a)}queueUnmock(t,n){const r=this.rpc.resolveId(t,n).then(async a=>{if(!a)return;const i=this.resolveMockPath(O(a.url));this.mockedIds.add(a.id),this.registry.delete(i),await this.interceptor.delete(i)}).finally(()=>{this.queue.delete(r)});this.queue.add(r)}wrapDynamicImport(t){return typeof t=="function"?new Promise((r,a)=>{this.prepare().finally(()=>{t().then(r,a)})}):t}resolveMockPath(t){const n=this.config,r=Et("/@fs/",n.root);return t.startsWith(n.root)?t.slice(n.root.length):t.startsWith(r)?t.slice(r.length):t}}const ln=/(\?|&)v=\w{8}/;function O(e){return e.replace(ln,"")}class dn{constructor(){q(this,"mocks",new st)}async register(t){this.mocks.add(t)}async delete(t){this.mocks.delete(t)}async invalidate(){this.mocks.clear()}}const W=e=>{switch(e){case"resolveId":return Promise.resolve({id:"",url:"",optimized:!1});case"resolveMock":return Promise.resolve({mockType:"dummy",resolvedId:"",resolvedUrl:"",redirectUrl:"",needsInterop:!1});case"invalidate":return Promise.resolve()}};class pn extends cn{queueMock(){}}function wn(e){const t=new pn(e("__vitest_mocker__"),{resolveId(n,r){return W("resolveId")},resolveMock(n,r,a){return W("resolveMock")},async invalidate(n){return W("invalidate")}},(...n)=>globalThis.__STORYBOOK_MODULE_TEST__.spyOn(...n),{root:""});return globalThis.__vitest_mocker__=t,sn({globalThisKey:"__vitest_mocker__"})}globalThis.__STORYBOOK_MOCKER__=wn(()=>new dn);function fn(e,t="top"){if(!e||typeof document>"u")return;const n=document.head||document.querySelector("head"),r=n.querySelector(":first-child"),a=document.createElement("style");a.appendChild(document.createTextNode(e)),t==="top"&&r?n.insertBefore(a,r):n.appendChild(a)}fn(`
       @font-face {
         font-family: 'Nunito Sans';
         font-style: normal;
@@ -185,7 +185,7 @@ body {
   --sidebar-border: hsl(0 0% 100% / 0.1);
   --sidebar-ring: hsl(0 0% 45.2%);
 }
-/* Copied from https://github.com/eten-tech-foundation/scripture-editors/blob/platform_v0.8.1/packages/platform/src/usj-nodes.css */
+/* Copied from https://github.com/eten-tech-foundation/scripture-editors/blob/ba0e846b3f11bea5720c4aa1a3486b69feb6b7e0/packages/platform/src/usj-nodes.css */
 
 /* stylelint-disable */
 
@@ -229,8 +229,8 @@ body {
   font-weight: bold;
   font-style: italic;
 }
-.formatted-font .usfm {
-  font-family: 'Charis SIL', serif;
+.usfm.formatted-font {
+  font-family: 'Charis SIL', 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', Georgia, serif;
   font-size: 12pt;
 }
 
@@ -2397,10 +2397,6 @@ body {
   color: #7777ff;
 }
 
-/* Scope these to the editor's \`.usfm\` content root. As bare element selectors they styled every
-   <table>/<td>/<rt> on the page once this stylesheet loaded, leaking into unrelated UI — e.g.
-   giving Storybook tables (Get Resources / Home) a solid black border after an editor story had
-   been viewed. The upstream editor package ships the same unscoped rules. */
 .usfm table {
   border-collapse: collapse;
 }
@@ -2595,7 +2591,7 @@ span.read img {
  * Copied from paranext-core/extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.scss
  */
 
-/* Copied from https://github.com/eten-tech-foundation/scripture-editors/blob/platform_v0.8.1/packages/platform/src/usj-nodes.css */
+/* Copied from https://github.com/eten-tech-foundation/scripture-editors/blob/ba0e846b3f11bea5720c4aa1a3486b69feb6b7e0/packages/platform/src/usj-nodes.css */
 
 /* stylelint-disable */
 
@@ -2648,8 +2644,8 @@ span.read img {
   font-style: italic;
 }
 
-.formatted-font .usfm {
-  font-family: 'Charis SIL', serif;
+.usfm.formatted-font {
+  font-family: 'Charis SIL', 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', Georgia, serif;
   font-size: 12pt;
 }
 
@@ -5045,11 +5041,6 @@ span.read img {
   color: #7777ff;
 }
 
-/* Scope these to the editor's \`.usfm\` content root. As bare element selectors they styled every
-   <table>/<td>/<rt> on the page once this stylesheet loaded, leaking into unrelated UI — e.g.
-   giving Storybook tables (Get Resources / Home) a solid black border after an editor story had
-   been viewed. The upstream editor package ships the same unscoped rules. */
-
 .usfm table {
   border-collapse: collapse;
 }
@@ -5240,16 +5231,17 @@ span.read img {
   background-color: rgba(255, 204, 204, 0.5);
 }
 
-/* Copied from https://github.com/eten-tech-foundation/scripture-editors/blob/platform_v0.8.1/packages/platform/src/editor/editor.css */
+/* Copied from https://github.com/eten-tech-foundation/scripture-editors/blob/ba0e846b3f11bea5720c4aa1a3486b69feb6b7e0/packages/platform/src/editor/editor.css */
+
+/* So make local changes in \`./_editor-overrides.css\` */
 
 /* stylelint-disable selector-no-qualifying-type */
 
 /* Lexical */
 
 .editor-container {
-  margin: 0 auto 20px;
+  margin: 0 0 20px;
   border-radius: 2px;
-  max-width: 600px;
   color: #000;
   position: relative;
   line-height: 20px;
@@ -5302,7 +5294,7 @@ span.read img {
   pointer-events: none;
   margin-block-start: 1em;
   margin-inline-start: calc(10px + 2.5vw);
-  width: -webkit-fill-available;
+  width: stretch;
 }
 
 .editor-text-bold {
@@ -5325,82 +5317,6 @@ span.read img {
 
 .editor-text-underlineStrikethrough {
   text-decoration: underline line-through;
-}
-
-.editor-text-code {
-  background-color: rgb(240, 242, 245);
-  padding: 1px 0.25rem;
-  font-family: Menlo, Consolas, Monaco, monospace;
-  font-size: 94%;
-}
-
-.editor-link {
-  color: rgb(33, 111, 219);
-  text-decoration: none;
-}
-
-.tree-view-output {
-  display: block;
-  background: #222;
-  color: #fff;
-  padding: 5px;
-  font-size: 12px;
-  white-space: pre-wrap;
-  margin: 1px auto 10px;
-  max-height: 250px;
-  position: relative;
-  border-bottom-left-radius: 10px;
-  border-bottom-right-radius: 10px;
-  overflow: auto;
-  line-height: 14px;
-}
-
-/* stylelint-disable-next-line selector-class-pattern */
-
-.editor-tokenComment {
-  color: slategray;
-}
-
-/* stylelint-disable-next-line selector-class-pattern */
-
-.editor-tokenPunctuation {
-  color: #999;
-}
-
-/* stylelint-disable-next-line selector-class-pattern */
-
-.editor-tokenProperty {
-  color: #905;
-}
-
-/* stylelint-disable-next-line selector-class-pattern */
-
-.editor-tokenSelector {
-  color: #690;
-}
-
-/* stylelint-disable-next-line selector-class-pattern */
-
-.editor-tokenOperator {
-  color: #9a6e3a;
-}
-
-/* stylelint-disable-next-line selector-class-pattern */
-
-.editor-tokenAttr {
-  color: #07a;
-}
-
-/* stylelint-disable-next-line selector-class-pattern */
-
-.editor-tokenVariable {
-  color: #e90;
-}
-
-/* stylelint-disable-next-line selector-class-pattern */
-
-.editor-tokenFunction {
-  color: #dd4a68;
 }
 
 .editor-typed-mark-external-spelling {
@@ -5451,19 +5367,22 @@ span.read img {
   border-bottom: 2px solid rgba(255, 212, 0, 0.7);
 }
 
-.marker-editable [class^='editor-typed-mark'] {
-  background: none;
-  border-bottom: 0;
-}
+/* TreeView (only used if \`debug=true\`) */
 
-.editor-paragraph {
-  margin: 0;
-  margin-bottom: 8px;
+.tree-view-output {
+  display: block;
+  background: #222;
+  color: #fff;
+  padding: 5px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  margin: 1px auto 10px;
+  max-height: 250px;
   position: relative;
-}
-
-.editor-paragraph:last-child {
-  margin-bottom: 0;
+  border-bottom-left-radius: 10px;
+  border-bottom-right-radius: 10px;
+  overflow: auto;
+  line-height: 14px;
 }
 
 pre::-webkit-scrollbar {
@@ -5473,347 +5392,6 @@ pre::-webkit-scrollbar {
 
 pre::-webkit-scrollbar-thumb {
   background: #999;
-}
-
-.link-editor {
-  position: absolute;
-  z-index: 100;
-  top: -10000px;
-  left: -10000px;
-  margin-top: -6px;
-  max-width: 300px;
-  width: 100%;
-  opacity: 0;
-  background-color: #fff;
-  box-shadow: 0 5px 10px rgba(0, 0, 0, 0.3);
-  border-radius: 8px;
-  transition: opacity 0.5s;
-}
-
-.link-editor .link-input {
-  display: block;
-  width: calc(100% - 24px);
-  box-sizing: border-box;
-  margin: 8px 12px;
-  padding: 8px 12px;
-  border-radius: 15px;
-  background-color: #eee;
-  font-size: 15px;
-  color: rgb(5, 5, 5);
-  border: 0;
-  outline: 0;
-  position: relative;
-  font-family: inherit;
-}
-
-.link-editor div.link-edit {
-  background-image: url('/assets/images/icons/pencil-fill.svg');
-  background-size: 16px;
-  background-position: center;
-  background-repeat: no-repeat;
-  width: 35px;
-  vertical-align: -0.25em;
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  cursor: pointer;
-}
-
-.link-editor[dir='ltr'] div.link-edit {
-  right: 0;
-}
-
-.link-editor[dir='rtl'] div.link-edit {
-  left: 0;
-}
-
-.link-editor .link-input a {
-  color: rgb(33, 111, 219);
-  text-decoration: none;
-  display: block;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.link-editor[dir='ltr'] .link-input a {
-  margin-right: 30px;
-}
-
-.link-editor[dir='rtl'] .link-input a {
-  margin-left: 30px;
-}
-
-.link-editor .link-input a:hover {
-  text-decoration: underline;
-}
-
-.link-editor .button {
-  width: 20px;
-  height: 20px;
-  display: inline-block;
-  padding: 6px;
-  border-radius: 8px;
-  cursor: pointer;
-  margin: 0 2px;
-}
-
-.link-editor .button.hovered {
-  width: 20px;
-  height: 20px;
-  display: inline-block;
-  background-color: #eee;
-}
-
-.dropdown {
-  z-index: 100;
-  display: block;
-  position: fixed;
-  box-shadow:
-    0 12px 28px 0 rgba(0, 0, 0, 0.2),
-    0 2px 4px 0 rgba(0, 0, 0, 0.1),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.5);
-  border-radius: 8px;
-  min-height: 40px;
-  background-color: #fff;
-}
-
-.dropdown .item {
-  margin: 0 8px;
-  padding: 8px;
-  color: #050505;
-  cursor: pointer;
-  line-height: 16px;
-  font-size: 15px;
-  display: flex;
-  align-content: center;
-  flex-direction: row;
-  flex-shrink: 0;
-  justify-content: space-between;
-  background-color: #fff;
-  border-radius: 8px;
-  border: 0;
-  max-width: 250px;
-}
-
-.dropdown .item.block-marker {
-  min-width: 420px;
-}
-
-.dropdown .item.fontsize-item,
-.dropdown .item.fontsize-item .text {
-  min-width: unset;
-}
-
-.dropdown .item .active {
-  display: flex;
-  width: 20px;
-  height: 20px;
-  background-size: contain;
-}
-
-.dropdown .item:first-child {
-  margin-top: 8px;
-}
-
-.dropdown .item:last-child {
-  margin-bottom: 8px;
-}
-
-.dropdown .item:hover {
-  background-color: #eee;
-}
-
-.dropdown .item .text {
-  display: flex;
-  line-height: 20px;
-  flex-grow: 1;
-  min-width: 150px;
-  margin: 0;
-  text-indent: 0;
-}
-
-.dropdown .item .icon {
-  display: flex;
-  width: 20px;
-  height: 20px;
-  user-select: none;
-  margin-right: 12px;
-  line-height: 16px;
-  background-size: contain;
-  background-position: center;
-  background-repeat: no-repeat;
-}
-
-.dropdown .divider {
-  width: auto;
-  background-color: #eee;
-  margin: 4px 8px;
-  height: 1px;
-}
-
-button.item.dropdown-item-active {
-  background-color: rgba(223, 232, 250, 0.3);
-}
-
-button.item.dropdown-item-active i {
-  opacity: 1;
-}
-
-i.undo {
-  background-image: url('/assets/images/icons/arrow-counterclockwise.svg');
-}
-
-i.redo {
-  background-image: url('/assets/images/icons/arrow-clockwise.svg');
-}
-
-.icon.m,
-.icon.nb,
-.icon.p,
-.icon.pi,
-.icon.paragraph {
-  background-image: url('/assets/images/icons/text-paragraph.svg');
-}
-
-.icon.ms,
-.icon.ms1,
-.icon.r,
-.icon.s,
-.icon.large-heading,
-.icon.h1 {
-  background-image: url('/assets/images/icons/type-h1.svg');
-}
-
-.icon.ms2,
-.icon.small-heading,
-.icon.h2 {
-  background-image: url('/assets/images/icons/type-h2.svg');
-}
-
-.icon.ms3,
-.icon.h3 {
-  background-image: url('/assets/images/icons/type-h3.svg');
-}
-
-.icon.mt,
-.icon.mt1,
-.icon.square-1 {
-  background-image: url('/assets/images/icons/1-square.svg');
-}
-
-.icon.mt2,
-.icon.square-2 {
-  background-image: url('/assets/images/icons/2-square.svg');
-}
-
-.icon.mt3,
-.icon.square-3 {
-  background-image: url('/assets/images/icons/3-square.svg');
-}
-
-.icon.mt4,
-.icon.square-4 {
-  background-image: url('/assets/images/icons/4-square.svg');
-}
-
-.icon.cl,
-.icon.bookmark {
-  background-image: url('/assets/images/icons/bookmark.svg');
-}
-
-.icon.ide,
-.icon.h,
-.icon.h1,
-.icon.h2,
-.icon.h3,
-.icon.toc1,
-.icon.toc2,
-.icon.toc3,
-.icon.file-earmark {
-  background-image: url('/assets/images/icons/file-earmark.svg');
-}
-
-.icon.bullet-list,
-.icon.ul {
-  background-image: url('/assets/images/icons/list-ul.svg');
-}
-
-.icon.numbered-list,
-.icon.ol {
-  background-image: url('/assets/images/icons/list-ol.svg');
-}
-
-.icon.b,
-.icon.q1,
-.icon.q2,
-.icon.quote {
-  background-image: url('/assets/images/icons/chat-square-quote.svg');
-}
-
-.icon.ban {
-  background-image: url('/assets/images/icons/ban.svg');
-}
-
-.icon.code {
-  background-image: url('/assets/images/icons/code.svg');
-}
-
-i.bold {
-  background-image: url('/assets/images/icons/type-bold.svg');
-}
-
-i.italic {
-  background-image: url('/assets/images/icons/type-italic.svg');
-}
-
-i.underline {
-  background-image: url('/assets/images/icons/type-underline.svg');
-}
-
-i.strikethrough {
-  background-image: url('/assets/images/icons/type-strikethrough.svg');
-}
-
-i.code {
-  background-image: url('/assets/images/icons/code.svg');
-}
-
-i.link {
-  background-image: url('/assets/images/icons/link.svg');
-}
-
-i.left-align {
-  background-image: url('/assets/images/icons/text-left.svg');
-}
-
-i.center-align {
-  background-image: url('/assets/images/icons/text-center.svg');
-}
-
-i.right-align {
-  background-image: url('/assets/images/icons/text-right.svg');
-}
-
-i.justify-align {
-  background-image: url('/assets/images/icons/justify.svg');
-}
-
-.actions i {
-  background-size: contain;
-  display: inline-block;
-  height: 15px;
-  width: 5px;
-  vertical-align: -0.25em;
-}
-
-i.chevron-down {
-  background-color: transparent;
-  background-size: contain;
-  display: inline-block;
-  height: 8px;
-  width: 8px;
-  background-image: url('/assets/images/icons/chevron-down.svg');
 }
 
 .debug-timetravel-panel {
@@ -5854,129 +5432,6 @@ i.chevron-down {
 
 .debug-timetravel-button:hover {
   text-decoration: underline;
-}
-
-.toolbar {
-  display: flex;
-  margin-bottom: 1px;
-  background: #fff;
-  padding: 4px;
-  border-top-left-radius: 10px;
-  border-top-right-radius: 10px;
-  vertical-align: middle;
-  overflow: auto;
-  height: 36px;
-  position: sticky;
-  top: 0;
-  z-index: 2;
-}
-
-button.toolbar-item {
-  border: 0;
-  display: flex;
-  background: none;
-  border-radius: 10px;
-  padding: 8px;
-  cursor: pointer;
-  vertical-align: middle;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: space-between;
-}
-
-button.toolbar-item:disabled {
-  cursor: not-allowed;
-}
-
-button.toolbar-item.spaced {
-  margin-right: 2px;
-}
-
-button.toolbar-item i.format {
-  background-size: contain;
-  height: 18px;
-  width: 18px;
-  vertical-align: -0.25em;
-  display: flex;
-  opacity: 0.6;
-}
-
-button.toolbar-item:disabled .icon,
-button.toolbar-item:disabled .text,
-button.toolbar-item:disabled i.format,
-button.toolbar-item:disabled .chevron-down {
-  opacity: 0.2;
-}
-
-button.toolbar-item.active {
-  background-color: rgba(223, 232, 250, 0.3);
-}
-
-button.toolbar-item.active i {
-  opacity: 1;
-}
-
-.toolbar-item:hover:not([disabled]) {
-  background-color: #eee;
-}
-
-.toolbar-item.font-family .text {
-  display: block;
-  max-width: 40px;
-}
-
-.toolbar .code-language {
-  width: 150px;
-}
-
-.toolbar .toolbar-item .text {
-  line-height: 20px;
-  vertical-align: middle;
-  font-size: 14px;
-  color: #777;
-  text-overflow: ellipsis;
-  overflow: hidden;
-  width: 170px;
-  white-space: nowrap;
-  display: inline-block;
-  height: 20px;
-  text-align: start;
-  padding-right: 10px;
-}
-
-.toolbar .toolbar-item .icon {
-  display: flex;
-  width: 20px;
-  height: 20px;
-  user-select: none;
-  margin-right: 8px;
-  line-height: 16px;
-  background-size: contain;
-}
-
-.toolbar i.chevron-down,
-.toolbar-item i.chevron-down {
-  margin-top: 3px;
-  width: 16px;
-  height: 16px;
-  display: flex;
-  user-select: none;
-}
-
-.toolbar i.chevron-down.inside {
-  width: 16px;
-  height: 16px;
-  display: flex;
-  margin-left: -25px;
-  margin-top: 11px;
-  margin-right: 10px;
-  pointer-events: none;
-}
-
-.toolbar .divider {
-  width: 1px;
-  background-color: #eee;
-  margin: 0 4px;
 }
 
 /* ContextMenuPlugin */
@@ -6076,88 +5531,6 @@ button.toolbar-item.active i {
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
-}
-
-/* Copied from https://github.com/eten-tech-foundation/scripture-editors/blob/platform_v0.8.0/libs/shared/src/styles/nodes-menu.css */
-
-/* Floating Menu Styles */
-
-.floating-box:has(> .autocomplete-menu-container) {
-  background: #f1f1f1;
-  border: 1px solid #ccc;
-}
-
-.floating-box .autocomplete-menu-options {
-  display: block;
-  text-align: left;
-  width: fit-content;
-  overflow-x: clip;
-  text-overflow: ellipsis;
-  overflow-y: auto;
-  max-height: 200px;
-}
-
-.autocomplete-menu-options button {
-  background: transparent;
-  color: inherit;
-  display: grid;
-  grid-template-columns: min-content minmax(0, 90vw);
-  align-items: baseline;
-  max-width: 400px;
-  gap: 1rem;
-  width: 100%;
-  white-space: nowrap;
-  font-size: 0.9rem;
-  border-radius: 0;
-  border: 0;
-}
-
-/* stylelint-disable-next-line selector-no-qualifying-type */
-
-.autocomplete-menu-options button[aria-selected='true'] {
-  background: rgb(0 0 0 / 5%);
-}
-
-/* stylelint-disable-next-line selector-no-qualifying-type */
-
-.autocomplete-menu-options button.active {
-  background: rgb(189, 232, 255);
-}
-
-.autocomplete-menu-options button .description {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-wrap: nowrap;
-  white-space: nowrap;
-  text-align: right;
-  align-items: baseline;
-  font-size: 0.7rem;
-  opacity: 0.8;
-}
-
-/* stylelint-disable-next-line selector-no-qualifying-type */
-
-.autocomplete-menu-container input[type='text'] {
-  width: auto;
-  padding: 0.5rem;
-  box-sizing: border-box;
-  background: #e9e9e9;
-  border: 0;
-  outline: none;
-  color: #222;
-  font-size: 1rem;
-  margin: 0.4rem;
-  border-radius: 0.2rem;
-  font-family: inherit;
-}
-
-.autocomplete-menu-container {
-  display: flex;
-  flex-direction: column;
-}
-
-.autocomplete-menu-container.inverse {
-  flex-direction: column-reverse;
 }
 
 /* @import './tailwind.css'; */
@@ -6443,220 +5816,6 @@ button {
     mask-position: center;
     background-color: currentColor;
   }
-}
-
-i.add-comment {
-  /*  could be replaced with lucid icon message-square-text */
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-chat-left-text'%3e%3cpath%20d='M14%201a1%201%200%200%201%201%201v8a1%201%200%200%201-1%201H4.414A2%202%200%200%200%203%2011.586l-2%202V2a1%201%200%200%201%201-1h12zM2%200a2%202%200%200%200-2%202v12.793a.5.5%200%200%200%20.854.353l2.853-2.853A1%201%200%200%201%204.414%2012H14a2%202%200%200%200%202-2V2a2%202%200%200%200-2-2H2z'/%3e%3cpath%20d='M3%203.5a.5.5%200%200%201%20.5-.5h9a.5.5%200%200%201%200%201h-9a.5.5%200%200%201-.5-.5zM3%206a.5.5%200%200%201%20.5-.5h9a.5.5%200%200%201%200%201h-9A.5.5%200%200%201%203%206zm0%202.5a.5.5%200%200%201%20.5-.5h5a.5.5%200%200%201%200%201h-5a.5.5%200%200%201-.5-.5z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-i.comments {
-  /*  could be replaced with lucid icon messages-square */
-  mask-image: url("data:image/svg+xml,%3csvg%20width='16'%20height='16'%20fill='none'%20xmlns='http://www.w3.org/2000/svg'%3e%3cpath%20fill-rule='evenodd'%20clip-rule='evenodd'%20d='M13%205.885v1.166a3.95%203.95%200%200%201-3.949%203.95H6.917a.748.748%200%200%200-.45.15l-1.345%201.007a.752.752%200%200%200-.032%201.181A2.933%202.933%200%200%200%206.95%2014h2.716l2.534%201.901a.506.506%200%200%200%20.524.047A.501.501%200%200%200%2013%2015.5V14h.051a2.949%202.949%200%200%200%202.95-2.949v-3.05a3.002%203.002%200%200%200-2.002-2.83.756.756%200%200%200-.999.714'%20fill='%23050505'/%3e%3cpath%20fill-rule='evenodd'%20clip-rule='evenodd'%20d='M9.05%201H2.95A2.952%202.952%200%200%200%200%203.949v3.102A2.952%202.952%200%200%200%202.949%2010H3v1.5a.502.502%200%200%200%20.8.4L6.334%2010H9.05A2.952%202.952%200%200%200%2012%207.05V3.95A2.952%202.952%200%200%200%209.05%201'%20fill='%23050505'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-i.send {
-  /*  could be replaced with lucid icon send */
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-send'%3e%3cpath%20d='M15.854.146a.5.5%200%200%201%20.11.54l-5.819%2014.547a.75.75%200%200%201-1.329.124l-3.178-4.995L.643%207.184a.75.75%200%200%201%20.124-1.33L15.314.037a.5.5%200%200%201%20.54.11ZM6.636%2010.07l2.761%204.338L14.13%202.576%206.636%2010.07Zm6.787-8.201L1.591%206.602l4.339%202.76%207.494-7.493Z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-.CommentPlugin_CommentsPanel_List_DeleteButton i.delete {
-  /*  could be replaced with lucid icon trash-2 */
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-trash3'%3e%3cpath%20d='M6.5%201h3a.5.5%200%200%201%20.5.5v1H6v-1a.5.5%200%200%201%20.5-.5ZM11%202.5v-1A1.5%201.5%200%200%200%209.5%200h-3A1.5%201.5%200%200%200%205%201.5v1H2.506a.58.58%200%200%200-.01%200H1.5a.5.5%200%200%200%200%201h.538l.853%2010.66A2%202%200%200%200%204.885%2016h6.23a2%202%200%200%200%201.994-1.84l.853-10.66h.538a.5.5%200%200%200%200-1h-.995a.59.59%200%200%200-.01%200H11Zm1.958%201-.846%2010.58a1%201%200%200%201-.997.92h-6.23a1%201%200%200%201-.997-.92L3.042%203.5h9.916Zm-7.487%201a.5.5%200%200%201%20.528.47l.5%208.5a.5.5%200%200%201-.998.06L5%205.03a.5.5%200%200%201%20.47-.53Zm5.058%200a.5.5%200%200%201%20.47.53l-.5%208.5a.5.5%200%201%201-.998-.06l.5-8.5a.5.5%200%200%201%20.528-.47ZM8%204.5a.5.5%200%200%201%20.5.5v8.5a.5.5%200%200%201-1%200V5a.5.5%200%200%201%20.5-.5Z'/%3e%3c/svg%3e");
-  background-image: none;
-  /*  linting does not like a duplicate rule, therefore putting it in here. */
-  /*  overwriting requires this exact selector (or a more specific one) */
-  left: 8px;
-  top: 8px;
-}
-
-/*  _editor.scss */
-
-.link-editor div.link-edit {
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-pencil-fill'%3e%3cpath%20d='M12.854.146a.5.5%200%200%200-.707%200L10.5%201.793%2014.207%205.5l1.647-1.646a.5.5%200%200%200%200-.708l-3-3zm.646%206.061L9.793%202.5%203.293%209H3.5a.5.5%200%200%201%20.5.5v.5h.5a.5.5%200%200%201%20.5.5v.5h.5a.5.5%200%200%201%20.5.5v.5h.5a.5.5%200%200%201%20.5.5v.207l6.5-6.5zm-7.468%207.468A.5.5%200%200%201%206%2013.5V13h-.5a.5.5%200%200%201-.5-.5V12h-.5a.5.5%200%200%201-.5-.5V11h-.5a.5.5%200%200%201-.5-.5V10h-.5a.499.499%200%200%201-.175-.032l-.179.178a.5.5%200%200%200-.11.168l-2%205a.5.5%200%200%200%20.65.65l5-2a.5.5%200%200%200%20.168-.11l.178-.178z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-i.undo {
-  /*  could be replaced with lucid icon rotate-ccw */
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-arrow-counterclockwise'%3e%3cpath%20fill-rule='evenodd'%20d='M8%203a5%205%200%201%201-4.546%202.914.5.5%200%200%200-.908-.417A6%206%200%201%200%208%202v1z'/%3e%3cpath%20d='M8%204.466V.534a.25.25%200%200%200-.41-.192L5.23%202.308a.25.25%200%200%200%200%20.384l2.36%201.966A.25.25%200%200%200%208%204.466z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-i.redo {
-  /*  could be replaced with lucid icon rotate-cw */
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-arrow-clockwise'%3e%3cpath%20fill-rule='evenodd'%20d='M8%203a5%205%200%201%200%204.546%202.914.5.5%200%200%201%20.908-.417A6%206%200%201%201%208%202v1z'/%3e%3cpath%20d='M8%204.466V.534a.25.25%200%200%201%20.41-.192l2.36%201.966c.12.1.12.284%200%20.384L8.41%204.658A.25.25%200%200%201%208%204.466z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-.icon.m,
-.icon.nb,
-.icon.p,
-.icon.pi,
-.icon.paragraph {
-  /*  could be replaced with lucid icon text */
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-text-paragraph'%3e%3cpath%20fill-rule='evenodd'%20d='M2%2012.5a.5.5%200%200%201%20.5-.5h7a.5.5%200%200%201%200%201h-7a.5.5%200%200%201-.5-.5zm0-3a.5.5%200%200%201%20.5-.5h11a.5.5%200%200%201%200%201h-11a.5.5%200%200%201-.5-.5zm0-3a.5.5%200%200%201%20.5-.5h11a.5.5%200%200%201%200%201h-11a.5.5%200%200%201-.5-.5zm4-3a.5.5%200%200%201%20.5-.5h7a.5.5%200%200%201%200%201h-7a.5.5%200%200%201-.5-.5z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-.icon.ms,
-.icon.ms1,
-.icon.r,
-.icon.s,
-.icon.large-heading,
-.icon.h1 {
-  /*  could be replaced with lucid icon heading-1 */
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-type-h1'%3e%3cpath%20d='M8.637%2013V3.669H7.379V7.62H2.758V3.67H1.5V13h1.258V8.728h4.62V13h1.259zm5.329%200V3.669h-1.244L10.5%205.316v1.265l2.16-1.565h.062V13h1.244z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-.icon.ms2,
-.icon.small-heading,
-.icon.h2 {
-  /*  could be replaced with lucid icon heading-2 */
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-type-h2'%3e%3cpath%20d='M7.638%2013V3.669H6.38V7.62H1.759V3.67H.5V13h1.258V8.728h4.62V13h1.259zm3.022-6.733v-.048c0-.889.63-1.668%201.716-1.668.957%200%201.675.608%201.675%201.572%200%20.855-.554%201.504-1.067%202.085l-3.513%203.999V13H15.5v-1.094h-4.245v-.075l2.481-2.844c.875-.998%201.586-1.784%201.586-2.953%200-1.463-1.155-2.556-2.919-2.556-1.941%200-2.966%201.326-2.966%202.74v.049h1.223z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-.icon.ms3,
-.icon.h3 {
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-type-h3'%20viewBox='0%200%2016%2016'%3e%3cpath%20d='M11.07%208.4h1.049c1.174%200%201.99.69%202.004%201.724.014%201.034-.802%201.786-2.068%201.779-1.11-.007-1.905-.605-1.99-1.357h-1.21C8.926%2011.91%2010.116%2013%2012.028%2013c1.99%200%203.439-1.188%203.404-2.87-.028-1.553-1.287-2.221-2.096-2.313v-.07c.724-.127%201.814-.935%201.772-2.293-.035-1.392-1.21-2.468-3.038-2.454-1.927.007-2.94%201.196-2.981%202.426h1.23c.064-.71.732-1.336%201.744-1.336%201.027%200%201.744.64%201.744%201.568.007.95-.738%201.639-1.744%201.639h-.991V8.4ZM7.495%2013V3.201H6.174v4.15H1.32V3.2H0V13h1.32V8.513h4.854V13h1.32Z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-.icon.mt,
-.icon.mt1,
-.icon.square-1 {
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-1-square'%20viewBox='0%200%2016%2016'%3e%3cpath%20d='M9.283%204.002V12H7.971V5.338h-.065L6.072%206.656V5.385l1.899-1.383h1.312Z'/%3e%3cpath%20d='M0%202a2%202%200%200%201%202-2h12a2%202%200%200%201%202%202v12a2%202%200%200%201-2%202H2a2%202%200%200%201-2-2V2Zm15%200a1%201%200%200%200-1-1H2a1%201%200%200%200-1%201v12a1%201%200%200%200%201%201h12a1%201%200%200%200%201-1V2Z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-.icon.mt2,
-.icon.square-2 {
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-2-square'%20viewBox='0%200%2016%2016'%3e%3cpath%20d='M6.646%206.24v.07H5.375v-.064c0-1.213.879-2.402%202.637-2.402%201.582%200%202.613.949%202.613%202.215%200%201.002-.6%201.667-1.287%202.43l-.096.107-1.974%202.22v.077h3.498V12H5.422v-.832l2.97-3.293c.434-.475.903-1.008.903-1.705%200-.744-.557-1.236-1.313-1.236-.843%200-1.336.615-1.336%201.306Z'/%3e%3cpath%20d='M0%202a2%202%200%200%201%202-2h12a2%202%200%200%201%202%202v12a2%202%200%200%201-2%202H2a2%202%200%200%201-2-2V2Zm15%200a1%201%200%200%200-1-1H2a1%201%200%200%200-1%201v12a1%201%200%200%200%201%201h12a1%201%200%200%200%201-1V2Z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-.icon.mt3,
-.icon.square-3 {
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-3-square'%20viewBox='0%200%2016%2016'%3e%3cpath%20d='M7.918%208.414h-.879V7.342h.838c.78%200%201.348-.522%201.342-1.237%200-.709-.563-1.195-1.348-1.195-.79%200-1.312.498-1.348%201.055H5.275c.036-1.137.95-2.115%202.625-2.121%201.594-.012%202.608.885%202.637%202.062.023%201.137-.885%201.776-1.482%201.875v.07c.703.07%201.71.64%201.734%201.917.024%201.459-1.277%202.396-2.93%202.396-1.705%200-2.707-.967-2.754-2.144H6.33c.059.597.68%201.06%201.541%201.066.973.006%201.6-.563%201.588-1.354-.006-.779-.621-1.318-1.541-1.318Z'/%3e%3cpath%20d='M0%202a2%202%200%200%201%202-2h12a2%202%200%200%201%202%202v12a2%202%200%200%201-2%202H2a2%202%200%200%201-2-2V2Zm15%200a1%201%200%200%200-1-1H2a1%201%200%200%200-1%201v12a1%201%200%200%200%201%201h12a1%201%200%200%200%201-1V2Z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-.icon.mt4,
-.icon.square-4 {
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-4-square'%20viewBox='0%200%2016%2016'%3e%3cpath%20d='M7.519%205.057c.22-.352.439-.703.657-1.055h1.933v5.332h1.008v1.107H10.11V12H8.85v-1.559H4.978V9.322c.77-1.427%201.656-2.847%202.542-4.265ZM6.225%209.281v.053H8.85V5.063h-.065c-.867%201.33-1.787%202.806-2.56%204.218Z'/%3e%3cpath%20d='M0%202a2%202%200%200%201%202-2h12a2%202%200%200%201%202%202v12a2%202%200%200%201-2%202H2a2%202%200%200%201-2-2V2Zm15%200a1%201%200%200%200-1-1H2a1%201%200%200%200-1%201v12a1%201%200%200%200%201%201h12a1%201%200%200%200%201-1V2Z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-.icon.cl,
-.icon.bookmark {
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-bookmark'%20viewBox='0%200%2016%2016'%3e%3cpath%20d='M2%202a2%202%200%200%201%202-2h8a2%202%200%200%201%202%202v13.5a.5.5%200%200%201-.777.416L8%2013.101l-5.223%202.815A.5.5%200%200%201%202%2015.5V2zm2-1a1%201%200%200%200-1%201v12.566l4.723-2.482a.5.5%200%200%201%20.554%200L13%2014.566V2a1%201%200%200%200-1-1H4z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-.icon.ide,
-.icon.h,
-.icon.h1,
-.icon.h2,
-.icon.h3,
-.icon.toc1,
-.icon.toc2,
-.icon.toc3,
-.icon.file-earmark {
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-file-earmark'%20viewBox='0%200%2016%2016'%3e%3cpath%20d='M14%204.5V14a2%202%200%200%201-2%202H4a2%202%200%200%201-2-2V2a2%202%200%200%201%202-2h5.5L14%204.5zm-3%200A1.5%201.5%200%200%201%209.5%203V1H4a1%201%200%200%200-1%201v12a1%201%200%200%200%201%201h8a1%201%200%200%200%201-1V4.5h-2z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-.icon.bullet-list,
-.icon.ul {
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-list-ul'%3e%3cpath%20fill-rule='evenodd'%20d='M5%2011.5a.5.5%200%200%201%20.5-.5h9a.5.5%200%200%201%200%201h-9a.5.5%200%200%201-.5-.5zm0-4a.5.5%200%200%201%20.5-.5h9a.5.5%200%200%201%200%201h-9a.5.5%200%200%201-.5-.5zm0-4a.5.5%200%200%201%20.5-.5h9a.5.5%200%200%201%200%201h-9a.5.5%200%200%201-.5-.5zm-3%201a1%201%200%201%200%200-2%201%201%200%200%200%200%202zm0%204a1%201%200%201%200%200-2%201%201%200%200%200%200%202zm0%204a1%201%200%201%200%200-2%201%201%200%200%200%200%202z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-.icon.numbered-list,
-.icon.ol {
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-list-ol'%3e%3cpath%20fill-rule='evenodd'%20d='M5%2011.5a.5.5%200%200%201%20.5-.5h9a.5.5%200%200%201%200%201h-9a.5.5%200%200%201-.5-.5zm0-4a.5.5%200%200%201%20.5-.5h9a.5.5%200%200%201%200%201h-9a.5.5%200%200%201-.5-.5zm0-4a.5.5%200%200%201%20.5-.5h9a.5.5%200%200%201%200%201h-9a.5.5%200%200%201-.5-.5z'/%3e%3cpath%20d='M1.713%2011.865v-.474H2c.217%200%20.363-.137.363-.317%200-.185-.158-.31-.361-.31-.223%200-.367.152-.373.31h-.59c.016-.467.373-.787.986-.787.588-.002.954.291.957.703a.595.595%200%200%201-.492.594v.033a.615.615%200%200%201%20.569.631c.003.533-.502.8-1.051.8-.656%200-1-.37-1.008-.794h.582c.008.178.186.306.422.309.254%200%20.424-.145.422-.35-.002-.195-.155-.348-.414-.348h-.3zm-.004-4.699h-.604v-.035c0-.408.295-.844.958-.844.583%200%20.96.326.96.756%200%20.389-.257.617-.476.848l-.537.572v.03h1.054V9H1.143v-.395l.957-.99c.138-.142.293-.304.293-.508%200-.18-.147-.32-.342-.32a.33.33%200%200%200-.342.338v.041zM2.564%205h-.635V2.924h-.031l-.598.42v-.567l.629-.443h.635V5z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-.icon.b,
-.icon.q1,
-.icon.q2,
-.icon.quote {
-  /*  could be replaced with lucid icon message-square-quote */
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-chat-square-quote'%3e%3cpath%20d='M14%201a1%201%200%200%201%201%201v8a1%201%200%200%201-1%201h-2.5a2%202%200%200%200-1.6.8L8%2014.333%206.1%2011.8a2%202%200%200%200-1.6-.8H2a1%201%200%200%201-1-1V2a1%201%200%200%201%201-1h12zM2%200a2%202%200%200%200-2%202v8a2%202%200%200%200%202%202h2.5a1%201%200%200%201%20.8.4l1.9%202.533a1%201%200%200%200%201.6%200l1.9-2.533a1%201%200%200%201%20.8-.4H14a2%202%200%200%200%202-2V2a2%202%200%200%200-2-2H2z'/%3e%3cpath%20d='M7.066%204.76A1.665%201.665%200%200%200%204%205.668a1.667%201.667%200%200%200%202.561%201.406c-.131.389-.375.804-.777%201.22a.417.417%200%201%200%20.6.58c1.486-1.54%201.293-3.214.682-4.112zm4%200A1.665%201.665%200%200%200%208%205.668a1.667%201.667%200%200%200%202.561%201.406c-.131.389-.375.804-.777%201.22a.417.417%200%201%200%20.6.58c1.486-1.54%201.293-3.214.682-4.112z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-.icon.ban {
-  /*  could be replaced with lucid icon lucide-ban */
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-ban'%20viewBox='0%200%2016%2016'%3e%3cpath%20d='M15%208a6.973%206.973%200%200%200-1.71-4.584l-9.874%209.875A7%207%200%200%200%2015%208ZM2.71%2012.584l9.874-9.875a7%207%200%200%200-9.874%209.874ZM16%208A8%208%200%201%201%200%208a8%208%200%200%201%2016%200Z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-.icon.code {
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-code'%3e%3cpath%20d='M5.854%204.854a.5.5%200%201%200-.708-.708l-3.5%203.5a.5.5%200%200%200%200%20.708l3.5%203.5a.5.5%200%200%200%20.708-.708L2.707%208l3.147-3.146zm4.292%200a.5.5%200%200%201%20.708-.708l3.5%203.5a.5.5%200%200%201%200%20.708l-3.5%203.5a.5.5%200%200%201-.708-.708L13.293%208l-3.147-3.146z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-i.bold {
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-type-bold'%3e%3cpath%20d='M8.21%2013c2.106%200%203.412-1.087%203.412-2.823%200-1.306-.984-2.283-2.324-2.386v-.055a2.176%202.176%200%200%200%201.852-2.14c0-1.51-1.162-2.46-3.014-2.46H3.843V13H8.21zM5.908%204.674h1.696c.963%200%201.517.451%201.517%201.244%200%20.834-.629%201.32-1.73%201.32H5.908V4.673zm0%206.788V8.598h1.73c1.217%200%201.88.492%201.88%201.415%200%20.943-.643%201.449-1.832%201.449H5.907z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-i.italic {
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-type-italic'%3e%3cpath%20d='M7.991%2011.674%209.53%204.455c.123-.595.246-.71%201.347-.807l.11-.52H7.211l-.11.52c1.06.096%201.128.212%201.005.807L6.57%2011.674c-.123.595-.246.71-1.346.806l-.11.52h3.774l.11-.52c-1.06-.095-1.129-.211-1.006-.806z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-i.underline {
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-type-underline'%3e%3cpath%20d='M5.313%203.136h-1.23V9.54c0%202.105%201.47%203.623%203.917%203.623s3.917-1.518%203.917-3.623V3.136h-1.23v6.323c0%201.49-.978%202.57-2.687%202.57-1.709%200-2.687-1.08-2.687-2.57V3.136zM12.5%2015h-9v-1h9v1z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-i.strikethrough {
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-type-strikethrough'%3e%3cpath%20d='M6.333%205.686c0%20.31.083.581.27.814H5.166a2.776%202.776%200%200%201-.099-.76c0-1.627%201.436-2.768%203.48-2.768%201.969%200%203.39%201.175%203.445%202.85h-1.23c-.11-1.08-.964-1.743-2.25-1.743-1.23%200-2.18.602-2.18%201.607zm2.194%207.478c-2.153%200-3.589-1.107-3.705-2.81h1.23c.144%201.06%201.129%201.703%202.544%201.703%201.34%200%202.31-.705%202.31-1.675%200-.827-.547-1.374-1.914-1.675L8.046%208.5H1v-1h14v1h-3.504c.468.437.675.994.675%201.697%200%201.826-1.436%202.967-3.644%202.967z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-i.code {
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-code'%3e%3cpath%20d='M5.854%204.854a.5.5%200%201%200-.708-.708l-3.5%203.5a.5.5%200%200%200%200%20.708l3.5%203.5a.5.5%200%200%200%20.708-.708L2.707%208l3.147-3.146zm4.292%200a.5.5%200%200%201%20.708-.708l3.5%203.5a.5.5%200%200%201%200%20.708l-3.5%203.5a.5.5%200%200%201-.708-.708L13.293%208l-3.147-3.146z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-i.link {
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-link'%3e%3cpath%20d='M6.354%205.5H4a3%203%200%200%200%200%206h3a3%203%200%200%200%202.83-4H9c-.086%200-.17.01-.25.031A2%202%200%200%201%207%2010.5H4a2%202%200%201%201%200-4h1.535c.218-.376.495-.714.82-1z'/%3e%3cpath%20d='M9%205.5a3%203%200%200%200-2.83%204h1.098A2%202%200%200%201%209%206.5h3a2%202%200%201%201%200%204h-1.535a4.02%204.02%200%200%201-.82%201H12a3%203%200%201%200%200-6H9z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-i.left-align {
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-text-left'%3e%3cpath%20fill-rule='evenodd'%20d='M2%2012.5a.5.5%200%200%201%20.5-.5h7a.5.5%200%200%201%200%201h-7a.5.5%200%200%201-.5-.5zm0-3a.5.5%200%200%201%20.5-.5h11a.5.5%200%200%201%200%201h-11a.5.5%200%200%201-.5-.5zm0-3a.5.5%200%200%201%20.5-.5h7a.5.5%200%200%201%200%201h-7a.5.5%200%200%201-.5-.5zm0-3a.5.5%200%200%201%20.5-.5h11a.5.5%200%200%201%200%201h-11a.5.5%200%200%201-.5-.5z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-i.center-align {
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-text-center'%3e%3cpath%20fill-rule='evenodd'%20d='M4%2012.5a.5.5%200%200%201%20.5-.5h7a.5.5%200%200%201%200%201h-7a.5.5%200%200%201-.5-.5zm-2-3a.5.5%200%200%201%20.5-.5h11a.5.5%200%200%201%200%201h-11a.5.5%200%200%201-.5-.5zm2-3a.5.5%200%200%201%20.5-.5h7a.5.5%200%200%201%200%201h-7a.5.5%200%200%201-.5-.5zm-2-3a.5.5%200%200%201%20.5-.5h11a.5.5%200%200%201%200%201h-11a.5.5%200%200%201-.5-.5z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-i.right-align {
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-text-right'%3e%3cpath%20fill-rule='evenodd'%20d='M6%2012.5a.5.5%200%200%201%20.5-.5h7a.5.5%200%200%201%200%201h-7a.5.5%200%200%201-.5-.5zm-4-3a.5.5%200%200%201%20.5-.5h11a.5.5%200%200%201%200%201h-11a.5.5%200%200%201-.5-.5zm4-3a.5.5%200%200%201%20.5-.5h7a.5.5%200%200%201%200%201h-7a.5.5%200%200%201-.5-.5zm-4-3a.5.5%200%200%201%20.5-.5h11a.5.5%200%200%201%200%201h-11a.5.5%200%200%201-.5-.5z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-i.justify-align {
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-justify'%3e%3cpath%20fill-rule='evenodd'%20d='M2%2012.5a.5.5%200%200%201%20.5-.5h11a.5.5%200%200%201%200%201h-11a.5.5%200%200%201-.5-.5zm0-3a.5.5%200%200%201%20.5-.5h11a.5.5%200%200%201%200%201h-11a.5.5%200%200%201-.5-.5zm0-3a.5.5%200%200%201%20.5-.5h11a.5.5%200%200%201%200%201h-11a.5.5%200%200%201-.5-.5zm0-3a.5.5%200%200%201%20.5-.5h11a.5.5%200%200%201%200%201h-11a.5.5%200%200%201-.5-.5z'/%3e%3c/svg%3e");
-  background-image: none;
-}
-
-i.chevron-down {
-  /*  could be replaced with lucid icon chevron-down */
-  mask-image: url("data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20fill='currentColor'%20class='bi%20bi-chevron-down'%3e%3cpath%20fill-rule='evenodd'%20d='M1.646%204.646a.5.5%200%200%201%20.708%200L8%2010.293l5.646-5.647a.5.5%200%200%201%20.708.708l-6%206a.5.5%200%200%201-.708%200l-6-6a.5.5%200%200%201%200-.708z'/%3e%3c/svg%3e");
-  background-image: none;
 }
 
 /* This was needed after introducing the story description and the \`CanvasWithDescription\` item. */
