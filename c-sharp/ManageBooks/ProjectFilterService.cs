@@ -16,7 +16,8 @@ namespace Paranext.DataProvider.ManageBooks;
 // ScrTextCollection projects. The five purposes are:
 //
 //   AllScripture    -> scripture projects (any editability)
-//   EditableTexts   -> scripture projects with IsEditableText = true
+//   EditableTexts   -> scripture projects that are editable targets
+//                      (Settings.Editable, excluding resources)
 //   ModelProject    -> all scripture projects (same as AllScripture; read-only
 //                      access is sufficient for a "model" project)
 //   DeleteSource    -> editable scripture projects (same predicate as
@@ -93,16 +94,27 @@ public static class ProjectFilterService
         ToProjectListResult(EnumerateScriptureProjects());
 
     /// <summary>
+    /// Whether the project can be a target of mutating actions (create/copy/import/delete).
+    /// PT9 parity: <c>ProjectSettings.Editable</c> — NOT the raw <c>IsEditableText</c> flag,
+    /// whose own doc warns it "does not determine if the project is ultimately editable" —
+    /// is the canonical check; <c>ResourceScrText</c> overrides it to false even when the
+    /// flag inside an installed DBL resource is "T" (e.g. NBV21). The explicit
+    /// <c>!IsResourceProject</c> term restates that production guarantee so the contract
+    /// stays enforced for ScrText test doubles, whose plain <c>ProjectSettings</c> cannot
+    /// reproduce the resource override.
+    /// </summary>
+    private static bool IsEditableTarget(ScrText scrText) =>
+        scrText.Settings.Editable && !scrText.IsResourceProject;
+
+    /// <summary>
     /// Builds the project list for <see cref="ProjectFilterPurpose.EditableTexts"/> and
     /// <see cref="ProjectFilterPurpose.DeleteSource"/> — scripture projects further
-    /// restricted to <c>Settings.IsEditableText</c>. DeleteSource uses the same
+    /// restricted to <see cref="IsEditableTarget"/>. DeleteSource uses the same
     /// predicate; the admin-on-shared-project check is enforced separately at the
     /// wire-layer call site (see CAP-005).
     /// </summary>
     private static ProjectListResult BuildEditableScriptureProjectList() =>
-        ToProjectListResult(
-            EnumerateScriptureProjects().Where(scrText => scrText.Settings.IsEditableText)
-        );
+        ToProjectListResult(EnumerateScriptureProjects().Where(IsEditableTarget));
 
     /// <summary>
     /// Delegation seam for <see cref="ProjectFilterPurpose.CopyDestination"/>. Validates
@@ -159,7 +171,7 @@ public static class ProjectFilterService
             ProjectId: scrText.Guid.ToString().ToUpperInvariant(),
             Name: scrText.Name,
             ProjectType: scrText.Settings.TranslationInfo.Type.InternalValue,
-            IsEditable: scrText.Settings.IsEditableText,
+            IsEditable: IsEditableTarget(scrText),
             // Plumb IsResourceProject through the wire so the Copy "From" /
             // Create "Based on" pickers can filter resources out on the
             // frontend without a separate API call.

@@ -51,6 +51,7 @@ namespace TestParanextDataProvider.ManageBooks
         private DummyScrText _notes = null!;
         private DummyScrText _marble = null!;
         private ResourceDummyScrText _resource = null!;
+        private ResourceDummyScrText _editableFlaggedResource = null!;
 
         [SetUp]
         public override async Task TestSetupAsync()
@@ -90,12 +91,24 @@ namespace TestParanextDataProvider.ManageBooks
                 editable: false
             );
 
+            // The NBV21 shape: an installed DBL resource whose raw settings
+            // Editable flag is "T". PT9's ResourceScrText.Settings.Editable
+            // overrides to false regardless of the flag; ProjectSummary must
+            // mirror that (UX Manila follow-up: read-only targets get disabled
+            // mutating actions, not enabled ones).
+            _editableFlaggedResource = CreateResourceScrText(
+                name: "EditableFlaggedResource",
+                type: ProjectType.Standard,
+                editable: true
+            );
+
             AddProject(_std);
             AddProject(_stdReadOnly);
             AddProject(_bt);
             AddProject(_notes);
             AddProject(_marble);
             AddProject(_resource);
+            AddProject(_editableFlaggedResource);
         }
 
         [TearDown]
@@ -107,6 +120,7 @@ namespace TestParanextDataProvider.ManageBooks
             _notes?.Dispose();
             _marble?.Dispose();
             _resource?.Dispose();
+            _editableFlaggedResource?.Dispose();
         }
 
         // -------------------------------------------------------------------
@@ -469,6 +483,64 @@ namespace TestParanextDataProvider.ManageBooks
                 resourceSummary!.IsResource,
                 Is.True,
                 "ScrText.IsResourceProject == true must flow through to ProjectSummary.IsResource"
+            );
+        }
+
+        // -------------------------------------------------------------------
+        // ACCEPTANCE: resources are never editable targets (UX Manila follow-up)
+        // PT9 parity: ProjectSettings.IsEditableText is only the raw settings
+        // flag (its own doc warns it "does not determine if the project is
+        // ultimately editable"); ResourceScrText overrides Settings.Editable to
+        // false even when the flag inside the resource is "T". Installed DBL
+        // resources (e.g. NBV21) carry Editable=T in their settings, so keying
+        // IsEditable off the raw flag wrongly enabled Create/Copy/Import/Delete.
+        // -------------------------------------------------------------------
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-011")]
+        [Property("BehaviorId", "BHV-411")]
+        [Description(
+            "A resource project must surface ProjectSummary.IsEditable = false even when its raw settings Editable flag is true, so the dialog disables mutating actions with the read-only tooltip."
+        )]
+        public void FilterProjects_Summary_ResourceProject_IsEditableFalse()
+        {
+            var input = new ProjectFilterInput(ProjectFilterPurpose.AllScripture, null);
+
+            ProjectListResult result = ProjectFilterService.FilterProjects(input);
+
+            var resourceSummary = result.Projects.FirstOrDefault(p =>
+                p.Name == _editableFlaggedResource.Name
+            );
+            Assert.That(
+                resourceSummary,
+                Is.Not.Null,
+                "scripture-typed resource project must appear in AllScripture filter result"
+            );
+            Assert.That(
+                resourceSummary!.IsEditable,
+                Is.False,
+                "a resource is never an editable target, regardless of its raw settings Editable flag"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-011")]
+        [Property("BehaviorId", "BHV-411")]
+        [Description(
+            "EditableTexts purpose must exclude resource projects even when their raw settings Editable flag is true."
+        )]
+        public void FilterProjects_EditableTexts_ExcludesResources()
+        {
+            var input = new ProjectFilterInput(ProjectFilterPurpose.EditableTexts, null);
+
+            ProjectListResult result = ProjectFilterService.FilterProjects(input);
+
+            Assert.That(
+                result.Projects.Select(p => p.Name),
+                Does.Not.Contain(_editableFlaggedResource.Name),
+                "resources must never be offered as editable/mutation targets"
             );
         }
 

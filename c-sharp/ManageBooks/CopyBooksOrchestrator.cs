@@ -637,7 +637,11 @@ public static class CopyBooksOrchestrator
             ProjectId: scrText.Guid.ToString().ToUpperInvariant(),
             Name: scrText.Name,
             ProjectType: scrText.Settings.TranslationInfo.Type.InternalValue,
-            IsEditable: scrText.Settings.IsEditableText,
+            // Mirrors ProjectFilterService.IsEditableTarget (see its doc comment):
+            // Settings.Editable is PT9's canonical editability check (the raw
+            // IsEditableText flag is true inside installed DBL resources);
+            // !IsResourceProject restates the resource guarantee for test doubles.
+            IsEditable: scrText.Settings.Editable && !scrText.IsResourceProject,
             // See ProjectFilterService.ToSummary for rationale.
             IsResource: scrText.IsResourceProject
         );
