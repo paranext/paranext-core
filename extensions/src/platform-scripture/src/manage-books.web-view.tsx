@@ -443,6 +443,10 @@ global.webViewComponent = function ManageBooksWebView({
         '%manageBooks_projectSelector_otherProjectsSectionHeading%',
         'Your projects & resources',
       ),
+      versificationUnknownSectionHeading: resolve(
+        '%manageBooks_projectSelector_versificationUnknownSectionHeading%',
+        'Unknown versification',
+      ),
       boundButClosedTooltip: resolve(
         '%manageBooks_projectSelector_boundButClosedTooltip%',
         'Bound to {group} · not currently open',
@@ -548,6 +552,47 @@ global.webViewComponent = function ManageBooksWebView({
         const bp = await pdp.getSetting('platformScripture.booksPresent');
         const decoded = decodeBooksPresent(typeof bp === 'string' ? bp : BOOKS_PRESENT_DEFAULT);
         setBookCache((prev) => ({ ...prev, [pid]: decoded }));
+        // Sebastian UX review item 7 (2026-06-12): historically the
+        // comparison dates were fetched in a side-effect after this function
+        // returned, so the first render showed the books with no status
+        // badges, then a second render (triggered by datesByProject updating
+        // the decorate ref) repainted them with status. The user perceived
+        // that as "books load → status flickers in". We now fetch the
+        // comparison synchronously alongside the booksPresent fetch and
+        // bake the source dates into the returned books so the first
+        // render is already final.
+        if (manageBooksApi && projectId) {
+          try {
+            const cmp = await manageBooksApi.getBookComparison({
+              fromProjectId: pid,
+              toProjectId: projectId,
+            });
+            const fromDates: Record<string, string> = {};
+            const toDates: Record<string, string> = {};
+            cmp.entries.forEach((e) => {
+              const bookId = Canon.bookNumberToId(e.bookNum);
+              if (!bookId) return;
+              if (e.sourceLastModified) fromDates[bookId] = e.sourceLastModified;
+              if (e.destLastModified) toDates[bookId] = e.destLastModified;
+            });
+            setDatesByProject((prev) => ({
+              ...prev,
+              [pid]: { ...(prev[pid] ?? {}), ...fromDates },
+              [projectId]: { ...(prev[projectId] ?? {}), ...toDates },
+            }));
+            return decoded.map((b) =>
+              fromDates[b.id] ? { ...b, lastModified: fromDates[b.id] } : b,
+            );
+          } catch (cmpErr) {
+            logger.warn(
+              `manage-books: getBookComparison(${pid}, ${projectId}) inline failed: ${
+                cmpErr instanceof Error ? cmpErr.message : String(cmpErr)
+              }`,
+            );
+            // Fall through to undecorated below; the side-channel will fill
+            // in dates on a later tick.
+          }
+        }
         return decorateWithDates(pid, decoded);
       } catch (e) {
         logger.warn(
@@ -556,7 +601,7 @@ global.webViewComponent = function ManageBooksWebView({
         return [];
       }
     },
-    [projectId, activeBooks, bookCache, decorateWithDates],
+    [projectId, activeBooks, bookCache, decorateWithDates, manageBooksApi],
   );
 
   // Side-channel: whenever the dialog asks about a non-active project (Copy
@@ -662,17 +707,28 @@ global.webViewComponent = function ManageBooksWebView({
           //                         Version 2016"). Both fall back to the wire short name.
           let displayName = p.name;
           let fullName: string | undefined;
+          // Sebastian UX new-requirement 3 (2026-06-12): also surface the
+          // project's versification setting so the dialog can pass it to the
+          // Create "Based on" `<ProjectSelector>` for versification grouping.
+          // The third pdp.getSetting fan-out is parallelised alongside the
+          // existing name/fullName calls so this adds zero serial latency
+          // relative to the existing two-call shape.
+          let versificationId: string | undefined;
           try {
             const pdp = await papi.projectDataProviders.get('platform.base', p.projectId);
-            const [nameSetting, fullNameSetting] = await Promise.all([
+            const [nameSetting, fullNameSetting, vrsSetting] = await Promise.all([
               pdp.getSetting('platform.name'),
               pdp.getSetting('platform.fullName'),
+              pdp.getSetting('platformScripture.versification'),
             ]);
             // pdp.getSetting can return undefined (or null at runtime) when the setting is not
             // configured on the project; fall back to the wire short name.
             displayName = typeof nameSetting === 'string' ? nameSetting : p.name;
             if (typeof fullNameSetting === 'string' && fullNameSetting.length > 0) {
               fullName = fullNameSetting;
+            }
+            if (vrsSetting !== undefined) {
+              versificationId = String(vrsSetting);
             }
           } catch {
             // best-effort; fall through with wire-name as both display + fullName
@@ -687,6 +743,15 @@ global.webViewComponent = function ManageBooksWebView({
             // out of the Copy "From" picker (licensing). The Create "Based on"
             // picker includes resources (structure-only read, PT9 parity).
             isResource: p.isResource,
+            // Sebastian UX new-requirement 4 (2026-06-12): commentaries
+            // ("CommentaryResource" — PT-3964) are excluded from both Copy
+            // "From" and Create "Based on" pickers. The matching is on the
+            // wire string the C# `ProjectSummary.ProjectType` field returns.
+            isCommentary: p.projectType === 'CommentaryResource',
+            // The localized versification name is resolved on the dialog side
+            // (it owns the localizedStrings → versificationLabelKey map);
+            // here we just forward the raw id.
+            versificationId,
           };
         }),
       );

@@ -46,12 +46,33 @@ export function useOpenProjectTabs(filter?: WebViewFilter): OpenProjectTabWithWe
     const upsert = (webView: WebViewEventLike) => {
       const { id, projectId, scrollGroupScrRef, webViewType } = webView;
       const passesFilter = !filter || (webViewType !== undefined && filter({ webViewType }));
-      // See JSDoc above: undefined → default group 0; numeric → as-is; anything else → reject.
+      // See JSDoc above: undefined → default group 0; numeric → as-is.
+      //
+      // Sebastian UX review item 12 (2026-06-12): `ScrollGroupScrRef` widened
+      // from `ScrollGroupId` to `ScrollGroupId | SerializedVerseRef` upstream
+      // — a tab that's "unsynced" from any scroll group now stores a
+      // SerializedVerseRef object instead of a number. The previous strict
+      // "anything-non-numeric → reject" branch dropped those tabs entirely,
+      // making Open Tabs grouping in the manage-books project picker (and
+      // any other consumer) empty. Object (SerializedVerseRef) values are
+      // now surfaced under group 0 so the tab still appears in the Open
+      // Tabs section; string/null and other unexpected primitives are still
+      // rejected defensively (PAPI quirk: legacy WebViews can carry null).
       let scrollGroup: ScrollGroupId | undefined;
       if (scrollGroupScrRef === undefined) {
         scrollGroup = 0;
       } else if (typeof scrollGroupScrRef === 'number') {
         scrollGroup = scrollGroupScrRef;
+      } else if (
+        typeof scrollGroupScrRef === 'object' &&
+        // PAPI's WebView definitions can legitimately carry `null` here for legacy WebViews —
+        // the no-null lint rule otherwise wants us to use `undefined`, but the value comes from
+        // the wire so we have to handle it explicitly. Block null from sneaking into the
+        // SerializedVerseRef branch (would crash downstream).
+        // eslint-disable-next-line no-null/no-null
+        scrollGroupScrRef !== null
+      ) {
+        scrollGroup = 0;
       }
       const passes =
         typeof projectId === 'string' &&

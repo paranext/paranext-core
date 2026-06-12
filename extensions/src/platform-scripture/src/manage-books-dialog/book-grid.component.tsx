@@ -151,9 +151,14 @@ const bookPillClasses = (present: boolean, disabled = false): string => {
       BOOK_PILL_BASE_CLASS,
       'tw:cursor-not-allowed tw:bg-muted/40 tw:text-muted-foreground/70',
     );
+  // Sebastian UX review item 8 (2026-06-12): the prior hover style swapped
+  // background + foreground (`bg-primary/90` + `text-primary-foreground`)
+  // which jarred against the at-rest pill look. Hover now keeps the same
+  // fill/text and instead emphasises the border — solid + ring color — so
+  // the pill reads as "interactive" without a color flash.
   return cn(
     BOOK_PILL_BASE_CLASS,
-    'tw:transition-colors tw:hover:bg-primary/90 tw:hover:text-primary-foreground',
+    'tw:transition-colors tw:hover:border-solid tw:hover:border-ring',
     present
       ? 'tw:border-primary/40 tw:bg-accent'
       : 'tw:border-dashed tw:border-primary/40 tw:text-muted-foreground',
@@ -601,12 +606,19 @@ export function BookGridSelector({
       </Badge>
     ) : undefined;
 
+    // The slashless `tw:bg-primary` / `tw:bg-muted` variants are NOT emitted by
+    // the extension's Tailwind build pipeline — only slash variants (/10, /70,
+    // /80, /90 etc.) land in the bundled stylesheet, so without an opacity
+    // suffix the dot rendered invisibly in the app (visible in Storybook
+    // because Storybook's Tailwind has full coverage). Use `/90` for the
+    // present state to match the surrounding pill hover/border tones and
+    // `/80` for the absent state so the dot still reads as muted.
     const dot = (
       <span
         aria-hidden
         className={cn(
           'tw:inline-block tw:h-2.5 tw:w-2.5 tw:shrink-0 tw:rounded-full',
-          item.present ? 'tw:bg-primary' : 'tw:bg-muted',
+          item.present ? 'tw:bg-primary/90' : 'tw:bg-muted/80',
         )}
       />
     );
@@ -777,7 +789,13 @@ export function BookGridSelector({
   return (
     <div
       className={cn(
-        'tw:flex tw:min-h-0 tw:flex-1 tw:flex-col tw:overflow-auto tw:p-1',
+        // Sebastian UX review item 14 (2026-06-12): the prior `overflow-auto`
+        // produced a permanent vertical scrollbar in Import mode because the
+        // grid's intrinsic height (badges + section headers) was a few
+        // pixels taller than the flex slot. `overflow-y-auto` only renders
+        // when actually needed and overflow-x is suppressed to prevent
+        // horizontal scrollbars from appearing during dialog resize.
+        'tw:flex tw:min-h-0 tw:flex-1 tw:flex-col tw:overflow-x-hidden tw:overflow-y-auto tw:p-1',
         contentClassName,
       )}
     >

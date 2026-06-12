@@ -49,6 +49,7 @@ import {
 import {
   computeRows,
   partitionAndSort,
+  partitionByVersification,
   type ProjectSelectorOpenTab,
   type ProjectMultiSelection,
   type ProjectSelectorProjectPair,
@@ -91,6 +92,12 @@ export type ProjectSelectorLocalizedStrings = {
   /** Section heading for the Other projects section. Defaults to `"Your projects & resources"`. */
   otherProjectsSectionHeading?: string;
   /**
+   * Section heading rendered for the "Unknown versification" bucket in versification-grouping mode
+   * (Sebastian UX new-requirement 3, 2026-06-12) — covers projects whose versification can't be
+   * resolved at load time. Defaults to `"Unknown versification"`.
+   */
+  versificationUnknownSectionHeading?: string;
+  /**
    * Tooltip on the bound-but-closed chip. `{group}` is replaced with the scroll-group letter.
    * Defaults to `"Bound to {group} · not currently open"`.
    */
@@ -112,6 +119,7 @@ const DEFAULT_STRINGS: Required<ProjectSelectorLocalizedStrings> = {
   filterShowSelectedOnly: 'Show selected only',
   openTabsSectionHeading: 'Opened project & resource tabs',
   otherProjectsSectionHeading: 'Your projects & resources',
+  versificationUnknownSectionHeading: 'Unknown versification',
   boundButClosedTooltip: 'Bound to {group} · not currently open',
   openButtonLabel: 'Open',
   selectAll: 'Select all',
@@ -164,6 +172,20 @@ type CommonProps = {
    * to `false`.
    */
   hideTriggerChevron?: boolean;
+  /**
+   * When true, rows are grouped by `versificationId` (with the `priorityVersificationId` bucket
+   * pinned to the top). The "Group by open tabs" toggle is hidden — the two grouping modes are
+   * mutually exclusive in the same picker. Sebastian UX new-requirement 3 (2026-06-12). When
+   * `groupByVersification` is enabled, the consumer should ensure each
+   * {@link ProjectSelectorProject} carries `versificationId` and `versificationName`.
+   */
+  groupByVersification?: boolean;
+  /**
+   * Versification id whose bucket should render first in versification grouping mode (typically the
+   * caller's active project's versification). Optional — when absent, all buckets sort
+   * alphabetically by `versificationName`.
+   */
+  priorityVersificationId?: string;
 };
 
 export type ProjectSelectorProps =
@@ -360,15 +382,23 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen, selectedRowRef }:
       {/* Row label uses a 2-line layout — shortName on top, fullName muted
           below. Each line truncates independently. Tooltip-on-clip still
           works because the wrapping span is what scrollWidth/clientWidth is
-          measured on (truncation in EITHER child contributes to overflow). */}
+          measured on (truncation in EITHER child contributes to overflow).
+          Sebastian UX review item 3 (2026-06-12): when `fullName` is missing
+          or equal to `shortName` the second line would render the same
+          string the user already sees above (e.g. consumers that fall back
+          `fullName ?? shortName` upstream and forward an unset project
+          fullName). Suppress the muted line in that case so the row reads
+          as a single name. */}
       <span
         ref={labelRef}
         className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:items-start tw:overflow-hidden tw:text-start"
       >
         <span className="tw:w-full tw:truncate tw:font-medium">{row.shortName}</span>
-        <span className="tw:w-full tw:truncate tw:text-xs tw:text-muted-foreground">
-          {row.fullName}
-        </span>
+        {row.fullName && row.fullName !== row.shortName && (
+          <span className="tw:w-full tw:truncate tw:text-xs tw:text-muted-foreground">
+            {row.fullName}
+          </span>
+        )}
       </span>
       {rightContent}
     </CommandItem>
@@ -584,9 +614,28 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     return result;
   }, [rows, query, props.mode, showSelectedOnly]);
 
+  // Sebastian UX new-requirement 3 (2026-06-12): when the caller opts into
+  // versification grouping (`groupByVersification`), sections are partitioned
+  // by versificationId with the priority bucket pinned to the top. The
+  // "Group by open tabs" toggle is intentionally hidden in this mode (see
+  // FilterMenu below) — the two grouping schemes don't compose meaningfully
+  // in the same picker.
   const sections = useMemo(
-    () => partitionAndSort(filteredRows, groupByOpenTabs),
-    [filteredRows, groupByOpenTabs],
+    () =>
+      props.groupByVersification
+        ? partitionByVersification(
+            filteredRows,
+            props.priorityVersificationId,
+            strings.versificationUnknownSectionHeading,
+          )
+        : partitionAndSort(filteredRows, groupByOpenTabs),
+    [
+      filteredRows,
+      groupByOpenTabs,
+      props.groupByVersification,
+      props.priorityVersificationId,
+      strings.versificationUnknownSectionHeading,
+    ],
   );
 
   // Every (project, scrollGroupId) pair available for selection — independent of the current
@@ -778,33 +827,56 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       ? handleOpenProjectInGroup
       : undefined;
 
+  // Sebastian UX review item 5 (2026-06-12): the trigger used to expose its
+  // untruncated label via the native `title` attribute, which surfaces a
+  // browser-default yellow tooltip — inconsistent with the rest of the app's
+  // shadcn tooltip styling. We now wrap the PopoverTrigger in a shadcn
+  // Tooltip so the surrounding consumer's TooltipProvider (e.g. manage-books
+  // dialog at line ~1944) styles the popup. The native `title` is dropped
+  // unconditionally; if the consumer hasn't installed a TooltipProvider the
+  // tooltip simply doesn't render.
+  const triggerButton = (
+    <Button
+      variant={props.buttonVariant ?? 'outline'}
+      role="combobox"
+      aria-expanded={open}
+      aria-label={props.ariaLabel}
+      disabled={props.isDisabled ?? false}
+      className={cn(
+        'tw:flex tw:w-[180px] tw:items-center tw:justify-between tw:overflow-hidden',
+        props.buttonClassName,
+      )}
+    >
+      <span className="tw:flex tw:min-w-0 tw:flex-1 tw:items-baseline tw:gap-2 tw:overflow-hidden tw:whitespace-nowrap tw:text-start">
+        {typeof triggerContent.node === 'string' ? (
+          <span className="tw:min-w-0 tw:truncate">{triggerContent.node}</span>
+        ) : (
+          triggerContent.node
+        )}
+      </span>
+      {triggerIcon}
+    </Button>
+  );
+  // Wrap the trigger tooltip in its own local TooltipProvider so the selector renders standalone
+  // (in stories, tests, and consumers that haven't installed a TooltipProvider). Consumers that
+  // DO install one — like the manage-books dialog — see no behavioural difference: Radix nests
+  // providers fine.
+  const triggerWithTooltip = triggerContent.title ? (
+    <TooltipProvider delayDuration={400}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>{triggerButton}</PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent>{triggerContent.title}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  ) : (
+    <PopoverTrigger asChild>{triggerButton}</PopoverTrigger>
+  );
+
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
-      <PopoverTrigger asChild>
-        <Button
-          variant={props.buttonVariant ?? 'outline'}
-          role="combobox"
-          aria-expanded={open}
-          aria-label={props.ariaLabel}
-          disabled={props.isDisabled ?? false}
-          // Native hover surfaces the untruncated label when the trigger
-          // ellipsis-truncates it (e.g. triggerLabelFormat='shortNameAndFullName').
-          title={triggerContent.title}
-          className={cn(
-            'tw:flex tw:w-[180px] tw:items-center tw:justify-between tw:overflow-hidden',
-            props.buttonClassName,
-          )}
-        >
-          <span className="tw:flex tw:min-w-0 tw:flex-1 tw:items-baseline tw:gap-2 tw:overflow-hidden tw:whitespace-nowrap tw:text-start">
-            {typeof triggerContent.node === 'string' ? (
-              <span className="tw:min-w-0 tw:truncate">{triggerContent.node}</span>
-            ) : (
-              triggerContent.node
-            )}
-          </span>
-          {triggerIcon}
-        </Button>
-      </PopoverTrigger>
+      {triggerWithTooltip}
       <PopoverContent
         align={props.alignDropDown ?? 'start'}
         collisionPadding={16}
@@ -822,15 +894,17 @@ export function ProjectSelector(props: ProjectSelectorProps) {
                   className="tw:border-0"
                 />
               </div>
-              <FilterMenu
-                groupByOpenTabs={groupByOpenTabs}
-                onChangeGroupByOpenTabs={setGroupByOpenTabs}
-                showSelectedOnly={props.mode === 'project-multi' ? showSelectedOnly : undefined}
-                onChangeShowSelectedOnly={
-                  props.mode === 'project-multi' ? setShowSelectedOnly : undefined
-                }
-                strings={strings}
-              />
+              {!props.groupByVersification && (
+                <FilterMenu
+                  groupByOpenTabs={groupByOpenTabs}
+                  onChangeGroupByOpenTabs={setGroupByOpenTabs}
+                  showSelectedOnly={props.mode === 'project-multi' ? showSelectedOnly : undefined}
+                  onChangeShowSelectedOnly={
+                    props.mode === 'project-multi' ? setShowSelectedOnly : undefined
+                  }
+                  strings={strings}
+                />
+              )}
             </div>
             {props.mode === 'project-multi' && (
               <div className="tw:flex tw:justify-between tw:border-b tw:py-2 tw:pe-4 tw:ps-2">
@@ -845,7 +919,10 @@ export function ProjectSelector(props: ProjectSelectorProps) {
             <CommandList>
               <CommandEmpty>{props.commandEmptyMessage ?? 'No projects found'}</CommandEmpty>
               {sections.map((section, index) => (
-                <Fragment key={section.kind}>
+                // Versification grouping yields multiple sections of the
+                // same `kind` ('versification'), so the section key must
+                // include the heading label to stay stable across re-orders.
+                <Fragment key={`${section.kind}:${section.label ?? ''}`}>
                   <CommandGroup heading={sectionHeading(section, strings)}>
                     {section.rows.map((row) => (
                       <ProjectRowView
@@ -879,6 +956,8 @@ function sectionHeading(
       return strings.openTabsSectionHeading;
     case 'other':
       return strings.otherProjectsSectionHeading;
+    case 'versification':
+      return section.label;
     case 'flat':
     default:
       return undefined;

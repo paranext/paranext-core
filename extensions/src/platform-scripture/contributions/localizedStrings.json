@@ -225,6 +225,7 @@
       "%manageBooks_projectSelector_otherProjectsSectionHeading%": "Your projects & resources",
       "%manageBooks_projectSelector_searchPlaceholder%": "Search projects & resources",
       "%manageBooks_projectSelector_selectAll%": "Select all",
+      "%manageBooks_projectSelector_versificationUnknownSectionHeading%": "Unknown versification",
       "%manageBooks_filter_buttonAriaLabel%": "Filter",
       "%manageBooks_filter_clearButton%": "Clear filter",
       "%manageBooks_filter_menuLabel%": "Show",

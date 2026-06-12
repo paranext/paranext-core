@@ -75,18 +75,26 @@ export function CopyConflictPrompt({
                 : ''}
             </DialogDescription>
           </DialogHeader>
-          {/* Bug 2 mirror — wrap on narrow widths so multiple long-label buttons fit the dialog.
-              Per-button tw:h-auto + tw:whitespace-normal overrides the shadcn
-              Button base's whitespace-nowrap/fixed height so a long label wraps
-              INSIDE its button instead of growing past the dialog bounds
-              (Manila UX follow-up). */}
-          <div className="tw:flex tw:flex-col tw:gap-2 tw:sm:flex-row tw:sm:flex-wrap tw:sm:justify-end">
-            <Button variant="ghost" className="tw:h-auto tw:whitespace-normal" onClick={onCancel}>
+          {/* Sebastian UX review item 10 (2026-06-12): the prior layout
+              stacked the three buttons in a column at narrow widths
+              (`flex-col → sm:flex-row`), which pushed them past the dialog's
+              bottom edge. Buttons now stay in a single row and individually
+              shrink + wrap their text inside the button. `tw:flex-1
+              tw:min-w-0` lets them share width fairly; `tw:h-auto
+              tw:whitespace-normal tw:text-center` re-enables intra-button
+              wrapping (the shadcn Button base hard-codes
+              whitespace-nowrap/fixed height). */}
+          <div className="tw:flex tw:flex-row tw:gap-2 tw:justify-end">
+            <Button
+              variant="ghost"
+              className="tw:h-auto tw:min-w-0 tw:flex-1 tw:whitespace-normal tw:text-center"
+              onClick={onCancel}
+            >
               {t('%manageBooks_copy_confirmCancel%', 'Cancel')}
             </Button>
             <Button
               variant="destructive"
-              className="tw:h-auto tw:whitespace-normal"
+              className="tw:h-auto tw:min-w-0 tw:flex-1 tw:whitespace-normal tw:text-center"
               onClick={() => {
                 if (!conflict) return;
                 onChoose('replaceEntireBooks', conflict.books);
@@ -96,7 +104,7 @@ export function CopyConflictPrompt({
             </Button>
             <Button
               variant="outline"
-              className="tw:h-auto tw:whitespace-normal"
+              className="tw:h-auto tw:min-w-0 tw:flex-1 tw:whitespace-normal tw:text-center"
               onClick={() => {
                 if (!conflict) return;
                 onChoose('nonExistingChapters', conflict.books);

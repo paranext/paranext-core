@@ -23,6 +23,19 @@ export type ProjectSelectorProject = {
   isDisabled?: boolean;
   /** Human-readable explanation surfaced in the row tooltip when `isDisabled` is true. */
   disabledReason?: string;
+  /**
+   * Locale-stable versification identifier (e.g. the numeric `ScrVersType` enum as a string). Used
+   * by the selector's optional versification-grouping mode to bucket projects by canon, and to pin
+   * the consumer-supplied "priority" versification group to the top. Pair with `versificationName`
+   * for display (Sebastian UX new-requirement 3, 2026-06-12).
+   */
+  versificationId?: string;
+  /**
+   * Human-readable versification name (e.g. "English", "Vulgate"). Used as the section header in
+   * versification-grouping mode. Defaults to a "Unknown" bucket when a project has a
+   * `versificationId` but no `versificationName`. Pair with `versificationId`.
+   */
+  versificationName?: string;
 };
 
 /** A project that is currently open in a specific scroll group. */
@@ -105,6 +118,10 @@ export type ProjectRow = {
   isDisabled: boolean;
   /** Mirrors {@link ProjectSelectorProject.disabledReason}. Surfaced in the row tooltip. */
   disabledReason?: string;
+  /** Mirrors {@link ProjectSelectorProject.versificationId}. */
+  versificationId?: string;
+  /** Mirrors {@link ProjectSelectorProject.versificationName}. */
+  versificationName?: string;
 };
 
 export type ComputeRowsArgs =
@@ -195,6 +212,8 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
         isBoundButClosed: false,
         isDisabled: project.isDisabled === true,
         disabledReason: project.disabledReason,
+        versificationId: project.versificationId,
+        versificationName: project.versificationName,
       };
     });
   }
@@ -233,6 +252,8 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
         isBoundButClosed: false,
         isDisabled: project.isDisabled === true,
         disabledReason: project.disabledReason,
+        versificationId: project.versificationId,
+        versificationName: project.versificationName,
       });
       return;
     }
@@ -252,6 +273,8 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
         isBoundButClosed: false,
         isDisabled: project.isDisabled === true,
         disabledReason: project.disabledReason,
+        versificationId: project.versificationId,
+        versificationName: project.versificationName,
       });
     });
   });
@@ -283,6 +306,8 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
       isBoundButClosed: true,
       isDisabled: project.isDisabled === true,
       disabledReason: project.disabledReason,
+      versificationId: project.versificationId,
+      versificationName: project.versificationName,
     });
   });
 
@@ -294,9 +319,20 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
 // #region partitionAndSort
 
 export type RowSection = {
-  /** 'flat' means no section header (grouping toggle off). */
-  kind: 'openTabs' | 'other' | 'flat';
+  /**
+   * 'flat' means no section header (grouping toggle off). 'versification' is a custom-labeled
+   * section that surfaces the versification name; the priority versification group (typically the
+   * active project's versification) is pinned to the top by `partitionByVersification`.
+   */
+  kind: 'openTabs' | 'other' | 'flat' | 'versification';
   rows: ProjectRow[];
+  /**
+   * Set on `versification` sections — the localized versification name to render as the section
+   * header. `undefined` for other section kinds.
+   */
+  label?: string;
+  /** Set on `versification` sections — true for the consumer-supplied priority bucket. */
+  isPriority?: boolean;
 };
 
 function belongsToOpenTabsSection(row: ProjectRow): boolean {
@@ -349,6 +385,68 @@ export function partitionAndSort(
   }
   const sections: RowSection[] = [{ kind: 'openTabs', rows: open }];
   if (other.length > 0) sections.push({ kind: 'other', rows: other });
+  return sections;
+}
+
+/**
+ * Group rows by their `versificationId`, render the priority group first, and then the other groups
+ * sorted alphabetically by `versificationName`. Within each group rows are sorted by
+ * {@link compareRows}. Sebastian UX new-requirement 3 (2026-06-12).
+ *
+ * Rows without a `versificationId` are collected into a single trailing "Unknown" section labeled
+ * by `unknownLabel`. When `priorityVersificationId` is undefined, no group is pinned.
+ */
+export function partitionByVersification(
+  rows: readonly ProjectRow[],
+  priorityVersificationId: string | undefined,
+  unknownLabel: string,
+): RowSection[] {
+  // Bucket by versificationId. Maps preserve insertion order which we exploit for stable section
+  // sorting below (alphabetical on the localized name, with the priority group lifted to index 0).
+  const buckets = new Map<string, { label: string; rows: ProjectRow[] }>();
+  const unknownRows: ProjectRow[] = [];
+  rows.forEach((row) => {
+    const id = row.versificationId;
+    if (id === undefined || id === '') {
+      unknownRows.push(row);
+      return;
+    }
+    const label = row.versificationName ?? id;
+    const existing = buckets.get(id);
+    if (existing) {
+      existing.rows.push(row);
+      // Adopt the first non-empty label observed — protects against a row missing
+      // versificationName while siblings have it.
+      if (!existing.label && row.versificationName) existing.label = row.versificationName;
+    } else {
+      buckets.set(id, { label, rows: [row] });
+    }
+  });
+  // Sort each bucket and emit sections in priority-first / alphabetical order.
+  const entries = [...buckets.entries()].map(([id, { label, rows: groupRows }]) => ({
+    id,
+    label,
+    rows: [...groupRows].sort(compareRows),
+  }));
+  entries.sort((a, b) => {
+    if (a.id === priorityVersificationId) return -1;
+    if (b.id === priorityVersificationId) return 1;
+    return a.label.localeCompare(b.label, undefined, { sensitivity: 'base' });
+  });
+  const sections: RowSection[] = entries.map(({ id, label, rows: groupRows }) => ({
+    kind: 'versification' as const,
+    rows: groupRows,
+    label,
+    isPriority: id === priorityVersificationId,
+  }));
+  if (unknownRows.length > 0) {
+    sections.push({
+      kind: 'versification',
+      rows: [...unknownRows].sort(compareRows),
+      label: unknownLabel,
+      isPriority: false,
+    });
+  }
   return sections;
 }
 
