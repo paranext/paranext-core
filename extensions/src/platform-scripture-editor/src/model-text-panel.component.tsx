@@ -212,16 +212,19 @@ export function ModelTextPanel({
   const handleResourceSelect = useCallback(
     async (resource: DblResourceData) => {
       setIsSelecting(true);
-      await selectTextConnection(
-        resource,
-        adminModelTexts,
-        setAdminModelTexts,
-        getCanWriteProjectSettings,
-        getUserModelTexts,
-        setUserModelTexts,
-        async () => installResource(resource.dblEntryUid),
-      );
-      setIsSelecting(false);
+      try {
+        await selectTextConnection(
+          resource,
+          adminModelTexts,
+          setAdminModelTexts,
+          getCanWriteProjectSettings,
+          getUserModelTexts,
+          setUserModelTexts,
+          async () => installResource(resource.dblEntryUid),
+        );
+      } finally {
+        setIsSelecting(false);
+      }
     },
     [
       adminModelTexts,

@@ -160,7 +160,7 @@ export function MultiSelectComboBox({
             <ChevronsUpDown className="tw:ml-2 tw:h-4 tw:w-4 tw:shrink-0 tw:opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="tw:z-600 tw:w-full tw:p-0">
+        <PopoverContent align="start" className="tw:w-full tw:p-0">
           <Command>
             <CommandInput placeholder={`Search ${placeholder.toLowerCase()}...`} />
             {hasToggleAllFeature && (

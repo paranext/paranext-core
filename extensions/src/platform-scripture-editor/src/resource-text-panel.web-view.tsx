@@ -375,33 +375,36 @@ globalThis.webViewComponent = function ResourceTextPanel({
   const handleResourceSelect = useCallback(
     async (resource: DblResourceData) => {
       setIsSelecting(true);
-      await selectTextConnection(
-        resource,
-        adminResourceList,
-        setAdminResourceTexts,
-        getCanWriteProjectSettings,
-        getUserResourceTexts,
-        setUserResourceTexts,
-        dblResourcesProvider
-          ? async (dblEntryUid) => {
-              try {
-                await dblResourcesProvider.installDblResource(dblEntryUid);
-                setFetchResources(true);
-              } catch (e: unknown) {
-                papi.notifications.send({
-                  message: '%webView_selectDblResource_installFailed%',
-                  severity: 'error',
-                });
-                logger.warn(
-                  `Error installing dbl resource for resource text panel: ${getErrorMessage(e)}`,
-                );
-                throw e;
+      try {
+        await selectTextConnection(
+          resource,
+          adminResourceList,
+          setAdminResourceTexts,
+          getCanWriteProjectSettings,
+          getUserResourceTexts,
+          setUserResourceTexts,
+          dblResourcesProvider
+            ? async (dblEntryUid) => {
+                try {
+                  await dblResourcesProvider.installDblResource(dblEntryUid);
+                  setFetchResources(true);
+                } catch (e: unknown) {
+                  papi.notifications.send({
+                    message: '%webView_selectDblResource_installFailed%',
+                    severity: 'error',
+                  });
+                  logger.warn(
+                    `Error installing dbl resource for resource text panel: ${getErrorMessage(e)}`,
+                  );
+                  throw e;
+                }
               }
-            }
-          : undefined,
-        (dblEntryUid: string) => setPendingResourceId(dblEntryUid),
-      );
-      setIsSelecting(false);
+            : undefined,
+          (dblEntryUid: string) => setPendingResourceId(dblEntryUid),
+        );
+      } finally {
+        setIsSelecting(false);
+      }
     },
     [
       adminResourceList,
