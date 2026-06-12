@@ -109,6 +109,7 @@ function createFakeDockLayout(initialWebViews: WebViewDefinition[]): PapiDockLay
         : undefined,
     focusTab: (tabId) => webViewsById.has(tabId),
     testLayout: {},
+    simpleLayout: {},
   };
 }
 
