@@ -1,6 +1,9 @@
 import { logger } from '@shared/services/logger.service';
 import { networkObjectService } from '@shared/services/network-object.service';
-import { createNetworkEventEmitterAsync, getNetworkEvent } from '@shared/services/network.service';
+import {
+  createBufferedNetworkEventEmitter,
+  getNetworkEvent,
+} from '@shared/services/network.service';
 import {
   EVENT_NAME_ON_DID_UPDATE_SCR_REF,
   IScrollGroupRemoteService,
@@ -15,10 +18,34 @@ import {
   deserialize,
   isPlatformError,
   type PlatformEvent,
-  type PlatformEventEmitter,
   ScrollGroupId,
   serialize,
 } from 'platform-bible-utils';
+
+/**
+ * Buffered emitter for changing the Scripture reference on a scroll group. Buffered (and created at
+ * module load, before the scrRefs migration below which can call `setScrRefSync`) so a verse-ref
+ * change from a UI handler that fires before central registration completes is kept — the latest
+ * per scroll group — and flushed once registration finishes, rather than throwing after the local
+ * state was already mutated and persisted.
+ */
+const onDidUpdateScrRefBufferedEmitter = createBufferedNetworkEventEmitter(
+  EVENT_NAME_ON_DID_UPDATE_SCR_REF,
+  {
+    notification: {
+      summary: 'Emitted when the Scripture reference for a scroll group changes.',
+      params: [
+        {
+          name: 'update',
+          required: true,
+          summary: 'The scroll group and its new Scripture reference.',
+          schema: { type: 'object' },
+        },
+      ],
+    },
+  },
+  { bufferStrategy: { latestByKey: (update) => String(update.scrollGroupId) } },
+);
 
 const DEFAULT_SCR_REF: SerializedVerseRef = Object.freeze({
   book: 'GEN',
@@ -56,9 +83,6 @@ Object.entries(scrRefs).forEach(([key, value]) => {
 function saveScrRefs() {
   localStorage.setItem(SCR_REFS_STORAGE_KEY, serialize(scrRefs));
 }
-
-/** Emitter for changing Scripture reference on a scroll group */
-let onDidUpdateScrRefEmitter: PlatformEventEmitter<ScrollGroupUpdateInfo> | undefined;
 
 /**
  * All Scroll Group IDs that are intended to be shown in scroll group selectors. This is a
@@ -108,14 +132,14 @@ export function setScrRefSync(
   if (compareScrRefs(scrRefs[scrollGroupIdDefaulted] ?? DEFAULT_SCR_REF, scrRefClone) === 0)
     return false;
 
-  // Update the scr ref and send out an event
+  // Update the scr ref and send out an event. The buffered emitter is usable immediately; if it
+  // hasn't finished registering yet, the latest update per scroll group is buffered and flushed.
   scrRefs[scrollGroupIdDefaulted] = scrRefClone;
   saveScrRefs();
-  if (!onDidUpdateScrRefEmitter)
-    throw new Error(
-      'scroll-group.service-host not initialized — call startScrollGroupService() before emitting onDidUpdateScrRef',
-    );
-  onDidUpdateScrRefEmitter.emit({ scrollGroupId: scrollGroupIdDefaulted, scrRef: scrRefClone });
+  onDidUpdateScrRefBufferedEmitter.emit({
+    scrollGroupId: scrollGroupIdDefaulted,
+    scrRef: scrRefClone,
+  });
 
   if (shouldSetVerseRefSetting && scrollGroupIdDefaulted === 0)
     (async () => {
@@ -145,23 +169,8 @@ const scrollGroupService: IScrollGroupRemoteService = {
 
 /** Register the network object that backs the scroll group service */
 export async function startScrollGroupService(): Promise<void> {
-  onDidUpdateScrRefEmitter = await createNetworkEventEmitterAsync(
-    EVENT_NAME_ON_DID_UPDATE_SCR_REF,
-    {
-      notification: {
-        summary: 'Emitted when the Scripture reference for a scroll group changes.',
-        params: [
-          {
-            name: 'update',
-            required: true,
-            summary: 'The scroll group and its new Scripture reference.',
-            schema: { type: 'object' },
-          },
-        ],
-      },
-    },
-  );
-
+  // The `onDidUpdateScrRef` emitter is created at module load (buffered), so there's nothing to set
+  // up for it here.
   await networkObjectService.set(NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE, scrollGroupService);
 
   // Keep scroll group 0 in sync with the verse ref setting for backwards compatibility

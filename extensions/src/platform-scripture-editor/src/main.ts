@@ -16,7 +16,6 @@ import {
 } from 'platform-bible-utils';
 import {
   EditorDecorations,
-  SelectionChangeEvent,
   EditorWebViewMessage,
   OpenEditorOptions,
   PlatformScriptureEditorWebViewController,
@@ -57,8 +56,28 @@ const COMMENTARIES_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.commentaries';
  */
 const EDITOR_SELECTION_CHANGED_EVENT = 'platformScriptureEditor.onDidSelectionChange' as const;
 
-/** Event emitter for selection change events. Created in activate() */
-let selectionChangedEventEmitter: PlatformEventEmitter<SelectionChangeEvent> | undefined;
+/**
+ * Buffered emitter for editor selection changes. Created at module load so a restored editor that
+ * pushes its first selection on mount — before `activate()` finishes registering the emitter — is
+ * not lost: the latest selection per web view is buffered and flushed once registration completes.
+ */
+const selectionChangedEventEmitter = papi.network.createBufferedNetworkEventEmitter(
+  EDITOR_SELECTION_CHANGED_EVENT,
+  {
+    notification: {
+      summary: 'Emitted when the selection in a Scripture editor changes.',
+      params: [
+        {
+          name: 'selectionChange',
+          required: true,
+          summary: 'The new editor selection.',
+          schema: { type: 'object' },
+        },
+      ],
+    },
+  },
+  { bufferStrategy: { latestByKey: (event) => event.webViewId } },
+);
 
 // Selection is stored per-WebViewController instance in createWebViewController.
 
@@ -811,10 +830,8 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
         if (firstSelectionAsync && !firstSelectionAsync.hasSettled) {
           firstSelectionAsync.resolveToValue(selection);
         }
-        if (!selectionChangedEventEmitter)
-          throw new Error(
-            'platform-scripture-editor not initialized — call activate() before emitting selectionChanged',
-          );
+        // Buffered emit — if a restored editor pushes a selection before the emitter has registered,
+        // the latest selection per web view is buffered and flushed rather than thrown away.
         selectionChangedEventEmitter.emit({ webViewId, selection });
       },
       async dispose() {
@@ -1234,23 +1251,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
-  // Create the selection changed event emitter
-  selectionChangedEventEmitter = await papi.network.createNetworkEventEmitterAsync(
-    EDITOR_SELECTION_CHANGED_EVENT,
-    {
-      notification: {
-        summary: 'Emitted when the selection in a Scripture editor changes.',
-        params: [
-          {
-            name: 'selectionChange',
-            required: true,
-            summary: 'The new editor selection.',
-            schema: { type: 'object' },
-          },
-        ],
-      },
-    },
-  );
+  // The selection-changed emitter is created at module load (buffered); nothing to set up here.
 
   // Default active project picker for simple layout. Subscribes to web-view-open and
   // sync-completion events and attempts to fill the empty Scripture Editor with the
@@ -1278,7 +1279,12 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await bibleTextsPanelWebViewProviderPromise,
     await commentariesPanelWebViewProviderPromise,
     await openResourceTextPromise,
-    selectionChangedEventEmitter,
+    {
+      dispose: async () => {
+        selectionChangedEventEmitter.dispose();
+        return true;
+      },
+    },
     {
       dispose: async () => {
         projectSwitchWillStartEmitter?.dispose();

@@ -43,11 +43,13 @@ import {
 import { registerCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { networkObjectService } from '@shared/services/network-object.service';
-import { createNetworkEventEmitterAsync, getNetworkEvent } from '@shared/services/network.service';
+import {
+  createBufferedNetworkEventEmitter,
+  getNetworkEvent,
+} from '@shared/services/network.service';
 import { settingsService } from '@shared/services/settings.service';
 import { webViewProviderService } from '@shared/services/web-view-provider.service';
 import {
-  CloseWebViewEvent,
   EVENT_NAME_ON_DID_ADD_WEB_VIEW,
   EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
   EVENT_NAME_ON_DID_OPEN_WEB_VIEW,
@@ -55,7 +57,6 @@ import {
   getWebViewController,
   NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
   OpenWebViewEvent,
-  UpdateWebViewEvent,
   WebViewServiceType,
 } from '@shared/services/web-view.service-model';
 import { newNonce } from '@shared/utils/util';
@@ -71,7 +72,6 @@ import {
   isSerializable,
   isString,
   newGuid,
-  type PlatformEventEmitter,
   serialize,
   split,
   startsWith,
@@ -92,38 +92,97 @@ import {
   transformLegacyColorVars,
 } from './web-views/web-view-legacy-color-vars.util';
 
+// These web view lifecycle emitters are created at module load as buffered emitters so they're
+// usable immediately. Sync paths like `onLayoutChange` and `updateWebViewDefinitionSync` can run
+// before the websocket finishes connecting; buffered emits are queued and flushed once each event
+// registers (and the four register concurrently in the background rather than sequentially).
+
 /**
- * @deprecated 13 November 2024. Changed to {@link onDidOpenWebViewEmitter}. This remains for now to
- *   support anyone listening to this event over websocket
+ * @deprecated 13 November 2024. Changed to {@link onDidOpenWebViewBufferedEmitter}. This remains for
+ *   now to support anyone listening to this event over websocket
  */
-let onDidAddWebViewEmitter: PlatformEventEmitter<OpenWebViewEvent> | undefined;
+const onDidAddWebViewBufferedEmitter = createBufferedNetworkEventEmitter(
+  EVENT_NAME_ON_DID_ADD_WEB_VIEW,
+  {
+    notification: {
+      summary: 'Emitted when a WebView is created.',
+      deprecated: true,
+      params: [
+        {
+          name: 'webView',
+          required: true,
+          summary: 'The created WebView.',
+          schema: { type: 'object' },
+        },
+      ],
+    },
+  },
+);
 
-/** Emitter for when a webview is created */
-let onDidOpenWebViewEmitter: PlatformEventEmitter<OpenWebViewEvent> | undefined;
+/** Buffered emitter for when a webview is created */
+const onDidOpenWebViewBufferedEmitter = createBufferedNetworkEventEmitter(
+  EVENT_NAME_ON_DID_OPEN_WEB_VIEW,
+  {
+    notification: {
+      summary: 'Emitted when a WebView is created.',
+      params: [
+        {
+          name: 'webView',
+          required: true,
+          summary: 'The created WebView.',
+          schema: { type: 'object' },
+        },
+      ],
+    },
+  },
+);
 
-/** Emitter for when a webview is updated */
-let onDidUpdateWebViewEmitter: PlatformEventEmitter<UpdateWebViewEvent> | undefined;
+/** Buffered emitter for when a webview is updated. Only the latest update per webview matters. */
+const onDidUpdateWebViewBufferedEmitter = createBufferedNetworkEventEmitter(
+  EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
+  {
+    notification: {
+      summary: 'Emitted when a WebView is updated.',
+      params: [
+        {
+          name: 'webView',
+          required: true,
+          summary: 'The updated WebView.',
+          schema: { type: 'object' },
+        },
+      ],
+    },
+  },
+  { bufferStrategy: { latestByKey: (event) => event.webView.id } },
+);
 
-/** Emitter for when a webview is removed */
-let onDidCloseWebViewEmitter: PlatformEventEmitter<CloseWebViewEvent> | undefined;
+/** Buffered emitter for when a webview is removed */
+const onDidCloseWebViewBufferedEmitter = createBufferedNetworkEventEmitter(
+  EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
+  {
+    notification: {
+      summary: 'Emitted when a WebView is closed.',
+      params: [
+        {
+          name: 'webView',
+          required: true,
+          summary: 'The closed WebView.',
+          schema: { type: 'object' },
+        },
+      ],
+    },
+  },
+);
 
 /**
  * Emits an event for when a web view is created
  *
  * Actually emits two updates to support backwards compatibility with deprecated
- * {@link onDidAddWebViewEmitter}, but this will likely be removed at some point
+ * {@link onDidAddWebViewBufferedEmitter}, but this will likely be removed at some point
  */
 function emitOnDidOpenWebView(event: OpenWebViewEvent) {
-  if (!onDidAddWebViewEmitter)
-    throw new Error(
-      'web-view.service-host not initialized — call initialize() before emitting onDidAddWebView',
-    );
-  if (!onDidOpenWebViewEmitter)
-    throw new Error(
-      'web-view.service-host not initialized — call initialize() before emitting onDidOpenWebView',
-    );
-  onDidAddWebViewEmitter.emit(event);
-  onDidOpenWebViewEmitter.emit(event);
+  onDidAddWebViewBufferedEmitter.emit(event);
+  onDidOpenWebViewBufferedEmitter.emit(event);
 }
 
 /** Event that emits with webView info when a webView is created */
@@ -641,11 +700,8 @@ function setDockLayout(dockLayout: PapiDockLayout | undefined): void {
 // TODO: We could short-circuit saveLayout when no meaningful change happened. - IJH 2023-05-1
 const onLayoutChange: OnLayoutChange = async (newLayout, _currentTabId, changeInfo) => {
   if (changeInfo?.didCloseWebView && changeInfo.webViewDefinition) {
-    if (!onDidCloseWebViewEmitter)
-      throw new Error(
-        'web-view.service-host not initialized — call initialize() before emitting onDidCloseWebView',
-      );
-    onDidCloseWebViewEmitter.emit({
+    // Buffered emit — usable even if a restored tab is closed before the websocket connects.
+    onDidCloseWebViewBufferedEmitter.emit({
       webView: convertWebViewDefinitionToSaved(changeInfo.webViewDefinition),
     });
   }
@@ -950,12 +1006,8 @@ export function updateWebViewDefinitionSync(
         else deleteFullWebViewStateById(webViewId);
       }
 
-      // Emit the update event
-      if (!onDidUpdateWebViewEmitter)
-        throw new Error(
-          'web-view.service-host not initialized — call initialize() before emitting onDidUpdateWebView',
-        );
-      onDidUpdateWebViewEmitter.emit({
+      // Emit the update event (buffered — usable before the websocket connects).
+      onDidUpdateWebViewBufferedEmitter.emit({
         webView,
       });
     }
@@ -1700,11 +1752,7 @@ async function openOrReloadWebView(
       layout: finalLayout,
     });
   else {
-    if (!onDidUpdateWebViewEmitter)
-      throw new Error(
-        'web-view.service-host not initialized — call initialize() before emitting onDidUpdateWebView',
-      );
-    onDidUpdateWebViewEmitter.emit({
+    onDidUpdateWebViewBufferedEmitter.emit({
       webView: convertWebViewDefinitionToSaved(finalWebView),
     });
   }
@@ -1930,70 +1978,7 @@ export const initialize = () => {
 
     // #endregion
 
-    // Create network event emitters
-    onDidAddWebViewEmitter = await createNetworkEventEmitterAsync(EVENT_NAME_ON_DID_ADD_WEB_VIEW, {
-      notification: {
-        summary: 'Emitted when a WebView is created.',
-        deprecated: true,
-        params: [
-          {
-            name: 'webView',
-            required: true,
-            summary: 'The created WebView.',
-            schema: { type: 'object' },
-          },
-        ],
-      },
-    });
-    onDidOpenWebViewEmitter = await createNetworkEventEmitterAsync(
-      EVENT_NAME_ON_DID_OPEN_WEB_VIEW,
-      {
-        notification: {
-          summary: 'Emitted when a WebView is created.',
-          params: [
-            {
-              name: 'webView',
-              required: true,
-              summary: 'The created WebView.',
-              schema: { type: 'object' },
-            },
-          ],
-        },
-      },
-    );
-    onDidUpdateWebViewEmitter = await createNetworkEventEmitterAsync(
-      EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
-      {
-        notification: {
-          summary: 'Emitted when a WebView is updated.',
-          params: [
-            {
-              name: 'webView',
-              required: true,
-              summary: 'The updated WebView.',
-              schema: { type: 'object' },
-            },
-          ],
-        },
-      },
-    );
-    onDidCloseWebViewEmitter = await createNetworkEventEmitterAsync(
-      EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
-      {
-        notification: {
-          summary: 'Emitted when a WebView is closed.',
-          params: [
-            {
-              name: 'webView',
-              required: true,
-              summary: 'The closed WebView.',
-              schema: { type: 'object' },
-            },
-          ],
-        },
-      },
-    );
-
+    // The web view lifecycle emitters are created at module load (buffered); nothing to set up here.
     onDidCloseWebView(({ webView: { id, webViewType } }) => {
       if (!deleteWebViewNonce(id))
         logger.warn(

@@ -1,7 +1,7 @@
 import papi, { DataProviderEngine, logger } from '@papi/backend';
 import { DataProviderUpdateInstructions, IDisposableDataProvider } from '@papi/core';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { createSyncProxyForAsyncObject, newGuid, PlatformEventEmitter } from 'platform-bible-utils';
+import { createSyncProxyForAsyncObject, newGuid } from 'platform-bible-utils';
 import {
   CheckJobRunner,
   CheckJobScope,
@@ -386,7 +386,28 @@ const checkAggregatorServiceProviderName = 'platformScripture.checkAggregator';
 
 let initializationPromise: Promise<void> | undefined;
 let dataProvider: IDisposableDataProvider<ICheckAggregatorService>;
-let resultsInvalidatedEventEmitter: PlatformEventEmitter<CheckResultsInvalidated> | undefined;
+/**
+ * Buffered emitter for check-results-invalidated events. Created at module load so a
+ * `platformScripture.invalidateCheckResults` command invocation (C# fires this) that arrives before
+ * `initialize()` finishes registering the emitter is queued and flushed, rather than thrown away.
+ */
+const resultsInvalidatedEventEmitter = papi.network.createBufferedNetworkEventEmitter(
+  CHECK_RESULTS_INVALIDATED_EVENT,
+  {
+    notification: {
+      summary:
+        'Emitted when check results are invalidated and subscribers should refresh their data.',
+      params: [
+        {
+          name: 'details',
+          required: true,
+          summary: 'Details describing which check results were invalidated.',
+          schema: { type: 'object' },
+        },
+      ],
+    },
+  },
+);
 async function initialize(): Promise<void> {
   if (!initializationPromise) {
     initializationPromise = new Promise<void>((resolve, reject) => {
@@ -395,23 +416,6 @@ async function initialize(): Promise<void> {
           dataProvider = await papi.dataProviders.registerEngine(
             checkAggregatorServiceProviderName,
             new CheckAggregatorDataProviderEngine(),
-          );
-          resultsInvalidatedEventEmitter = await papi.network.createNetworkEventEmitterAsync(
-            CHECK_RESULTS_INVALIDATED_EVENT,
-            {
-              notification: {
-                summary:
-                  'Emitted when check results are invalidated and subscribers should refresh their data.',
-                params: [
-                  {
-                    name: 'details',
-                    required: true,
-                    summary: 'Details describing which check results were invalidated.',
-                    schema: { type: 'object' },
-                  },
-                ],
-              },
-            },
           );
           resolve();
         } catch (error) {
@@ -426,10 +430,8 @@ async function initialize(): Promise<void> {
 
 /** Notify all listeners that check results have been invalidated and should be refreshed */
 export function notifyCheckResultsInvalidated(e: CheckResultsInvalidated): void {
-  if (!resultsInvalidatedEventEmitter)
-    throw new Error(
-      'check-aggregator.service not initialized — call initialize() before emitting checkResultsInvalidated',
-    );
+  // Buffered emit — usable immediately. If the C#-invoked `invalidateCheckResults` command fires
+  // before registration completes, the event is queued and flushed rather than thrown away.
   resultsInvalidatedEventEmitter.emit(e);
 }
 
@@ -441,10 +443,8 @@ const serviceObject = createSyncProxyForAsyncObject<ICheckAggregatorService>(asy
 }, checkAggregatorServiceObjectToProxy);
 
 async function dispose(): Promise<boolean> {
-  const disposalResults: boolean[] = await Promise.all([
-    dataProvider.dispose(),
-    ...(resultsInvalidatedEventEmitter ? [resultsInvalidatedEventEmitter.dispose()] : []),
-  ]);
+  resultsInvalidatedEventEmitter.dispose();
+  const disposalResults: boolean[] = await Promise.all([dataProvider.dispose()]);
   return disposalResults.every((result) => result);
 }
 

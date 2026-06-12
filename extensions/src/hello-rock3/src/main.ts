@@ -7,7 +7,7 @@ import type {
   WebViewDefinition,
 } from '@papi/core';
 import type { HelloRock3Event, HelloRock3ProjectWebViewController } from 'hello-rock3';
-import { getErrorMessage, isPlatformError, PlatformEventEmitter } from 'platform-bible-utils';
+import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { checkDetails, createHelloCheck } from './checks';
 import { HelloRock3ProjectDataProviderEngineFactory } from './models/hello-rock3-project-data-provider-engine-factory.model';
 import { HELLO_ROCK3_PROJECT_INTERFACES } from './models/hello-rock3-project-data-provider-engine.model';
@@ -238,8 +238,13 @@ const helloRock3ProjectViewerProvider: IWebViewProviderWithType = {
 
 /** Number of times the `helloRock3` function has been called */
 let helloRock3Count = 0;
-/** Emitter to inform subscribers when `helloRock3` is called */
-let onHelloRock3Emitter: PlatformEventEmitter<HelloRock3Event> | undefined;
+/**
+ * Buffered emitter to inform subscribers when `helloRock3` is called. Buffered so a call that
+ * happens before the emitter finishes registering is queued and flushed, not thrown away.
+ */
+let onHelloRock3Emitter:
+  | { emit: (event: HelloRock3Event) => void; dispose: () => void }
+  | undefined;
 const onHelloRock3EventType = 'helloRock3.onHelloRock3' as const;
 
 /**
@@ -250,9 +255,9 @@ const onHelloRock3EventType = 'helloRock3.onHelloRock3' as const;
  */
 function helloRock3() {
   helloRock3Count += 1;
-  if (!onHelloRock3Emitter)
-    throw new Error('hello-rock3 not initialized — call activate() before emitting onHelloRock3');
-  onHelloRock3Emitter.emit({ times: helloRock3Count });
+  // Buffered emit — if this runs before the emitter has registered, the event is queued and flushed
+  // once registration completes (rather than throwing).
+  onHelloRock3Emitter?.emit({ times: helloRock3Count });
   return 'Hello Third Rock!';
 }
 
@@ -460,7 +465,9 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     reactWebView2Provider,
   );
 
-  onHelloRock3Emitter = await papi.network.createNetworkEventEmitterAsync(onHelloRock3EventType, {
+  // Created synchronously (buffered) so a `helloRock3` call can't outrun registration. Buffered
+  // emits are flushed once registration completes.
+  onHelloRock3Emitter = papi.network.createBufferedNetworkEventEmitter(onHelloRock3EventType, {
     notification: {
       summary: 'Emitted each time the helloRock3.helloRock3 command is called.',
       params: [
@@ -512,7 +519,12 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await htmlWebViewProviderPromise,
     await reactWebViewProviderPromise,
     await reactWebView2ProviderPromise,
-    onHelloRock3Emitter,
+    {
+      dispose: async () => {
+        onHelloRock3Emitter?.dispose();
+        return true;
+      },
+    },
     await helloRock3Promise,
     await showContextMenuAlertPromise,
     await helloExceptionPromise,
