@@ -21,6 +21,15 @@ const DEFAULT_FLOAT_SIZE: FloatSize = { width: 300, height: 150 };
 const DEFAULT_PANEL_DIRECTION: PanelDirection = 'right';
 
 const DOCK_FLOAT_OFFSET = 28;
+/**
+ * Maximum fraction of the dock layout a newly created float window may occupy. Requested
+ * `floatSize`s are an ideal for large screens; on smaller windows we clamp the initial size so the
+ * float never opens wider/taller than the workspace (the user can still resize it afterward).
+ * Height gets a slightly larger fraction since vertical space is usually the scarcer dimension and
+ * dialogs tend to scroll vertically.
+ */
+const MAX_FLOAT_WIDTH_FRACTION = 0.8;
+const MAX_FLOAT_HEIGHT_FRACTION = 0.85;
 // NOTE: 'card' is a built-in style. We can likely remove it when we create a full theme for
 // Platform.
 // Appears in DOM as `dock-style-card` and `dock-style-platform-bible`.
@@ -72,9 +81,18 @@ export function getFloatPosition(
   previousPosition: FloatPosition,
   layoutSize: LayoutSize,
 ): FloatPosition {
-  // Defaults are added in `layoutDefaults`.
+  // Defaults are added in `layoutDefaults`. Clamp the requested size to the layout so oversized
+  // floats (sized for large screens) open fitting the current window instead of overflowing it.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const { width, height } = layout.floatSize!;
+  const requestedSize = layout.floatSize!;
+  const width = Math.min(
+    requestedSize.width,
+    Math.floor(layoutSize.width * MAX_FLOAT_WIDTH_FRACTION),
+  );
+  const height = Math.min(
+    requestedSize.height,
+    Math.floor(layoutSize.height * MAX_FLOAT_HEIGHT_FRACTION),
+  );
 
   let { left, top } = previousPosition;
 
