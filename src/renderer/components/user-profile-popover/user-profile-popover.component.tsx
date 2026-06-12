@@ -7,6 +7,7 @@ import {
   PopoverHeader,
   PopoverTitle,
   PopoverTrigger,
+  Separator,
   Skeleton,
   ToggleGroup,
   ToggleGroupItem,
@@ -251,7 +252,7 @@ export function UserProfilePopover() {
         </Tooltip>
       </TooltipProvider>
       <PopoverContent align="end" className={cn('tw:w-80 tw:gap-1.5')}>
-        <PopoverHeader className="tw:gap-0 tw:border-b tw:px-2 tw:pb-1.5">
+        <PopoverHeader className="tw:gap-0 tw:px-2">
           {isRegistrationLoading ? (
             <>
               <Skeleton data-testid="user-profile-name-skeleton" className="tw:h-4 tw:w-32" />
@@ -279,12 +280,13 @@ export function UserProfilePopover() {
             </>
           )}
         </PopoverHeader>
+        <Separator />
         <ToggleGroup
           type="single"
           value={safeInterfaceMode}
           onValueChange={handleInterfaceModeChange}
           spacing={2}
-          className="tw:w-full tw:items-stretch tw:px-2"
+          className="tw:mb-0.5 tw:w-full tw:items-stretch tw:px-2"
         >
           <ToggleGroupItem
             value="simple"
@@ -331,7 +333,8 @@ export function UserProfilePopover() {
             </span>
           </ToggleGroupItem>
         </ToggleGroup>
-        <div className="tw:flex tw:flex-col tw:gap-0 tw:border-t tw:pt-1">
+        <Separator />
+        <div className="tw:flex tw:flex-col tw:gap-0">
           <Button
             variant="ghost"
             size="sm"
@@ -363,7 +366,6 @@ export function UserProfilePopover() {
             value={primaryLanguage}
             onValueChange={handleLanguageChange}
             size="sm"
-            spacing={2}
             className="tw:min-w-0 tw:flex-1 tw:flex-wrap tw:justify-end"
           >
             {sortedLanguageEntries.map(([tag, info]) => (
@@ -389,7 +391,6 @@ export function UserProfilePopover() {
             value={appearanceValue}
             onValueChange={handleAppearanceChange}
             size="sm"
-            spacing={2}
           >
             <ToggleGroupItem
               value="light"
