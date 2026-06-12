@@ -21,6 +21,11 @@ import {
 import { checkHostingService } from './checks/extension-host-check-runner.service';
 import { InventoryWebViewOptions, InventoryWebViewProvider } from './inventory.web-view-provider';
 import {
+  KEYBOARD_SELECTION_WEB_VIEW_TYPE,
+  KeyboardSelectionWebViewOptions,
+  keyboardSelectionWebViewProvider,
+} from './keyboard-selection.web-view-provider';
+import {
   MANAGE_BOOKS_WEB_VIEW_TYPE,
   ManageBooksWebViewOptions,
   ManageBooksWebViewProvider,
@@ -261,6 +266,31 @@ async function openManageBooks(
     return existingId;
   }
   return papi.webViews.openWebView(MANAGE_BOOKS_WEB_VIEW_TYPE, floatingLayout, options);
+}
+
+/**
+ * === NEW IN PT10 === keyboard-switching UI-PKG-003 (CAP-UI-002): Open the per-project
+ * keyboard-selection dialog. The optional argument is either an editor's `webViewId` (from the
+ * scripture-editor project tab menu) or a literal project id — we probe with
+ * `papi.webViews.getOpenWebViewDefinition` and fall back to treating the value as a project id when
+ * the probe fails (same probe→fallback pattern as `openManageBooks` above).
+ */
+async function openKeyboardSelection(
+  webViewIdOrProjectId: string | undefined,
+): Promise<string | undefined> {
+  let projectId: string | undefined;
+
+  if (webViewIdOrProjectId) {
+    try {
+      const def = await papi.webViews.getOpenWebViewDefinition(webViewIdOrProjectId);
+      projectId = def?.projectId ?? webViewIdOrProjectId;
+    } catch {
+      projectId = webViewIdOrProjectId;
+    }
+  }
+
+  const options: KeyboardSelectionWebViewOptions = { projectId };
+  return papi.webViews.openWebView(KEYBOARD_SELECTION_WEB_VIEW_TYPE, undefined, options);
 }
 
 async function openFind(editorWebViewId: string | undefined): Promise<string | undefined> {
@@ -613,6 +643,35 @@ export async function activate(context: ExecutionActivationContext) {
     { 'x-experimental': true },
   );
 
+  const openKeyboardSelectionPromise = papi.commands.registerCommand(
+    'platform.openKeyboardSelection',
+    openKeyboardSelection,
+    {
+      method: {
+        summary: 'Open the per-project keyboard-selection dialog (keyboard-switching CAP-UI-002)',
+        params: [
+          {
+            name: 'webViewIdOrProjectId',
+            required: false,
+            summary:
+              'Either the invoking editor web view id (probed to resolve its project) or a ' +
+              'literal project id; omit to open without project context.',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The id of the opened keyboard-selection web view, or undefined',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+  const keyboardSelectionWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    KEYBOARD_SELECTION_WEB_VIEW_TYPE,
+    keyboardSelectionWebViewProvider,
+  );
+
   const openFindPromise = papi.commands.registerCommand('platformScripture.openFind', openFind, {
     method: {
       summary: 'Open the find UI',
@@ -722,6 +781,8 @@ export async function activate(context: ExecutionActivationContext) {
     await openFindWebViewProviderPromise,
     await openManageBooksPromise,
     await manageBooksWebViewProviderPromise,
+    await openKeyboardSelectionPromise,
+    await keyboardSelectionWebViewProviderPromise,
     await invalidateResultsPromise,
     checkHostingService.dispose,
     checkAggregatorService.dispose,
