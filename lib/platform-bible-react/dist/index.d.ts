@@ -548,12 +548,12 @@ type ProjectSelectorProps = (CommonProps & {
 		projectId: string;
 	}) => void;
 	/**
-	 * Trigger label format. `'shortName'` (the default) renders just the selected project's
-	 * short name. `'shortNameAndFullName'` renders `"{shortName} - {fullName}"` (skipping the
-	 * suffix when the full name is absent or equal to the short name); since the short name
-	 * leads the string, the trigger's existing ellipsis truncation produces e.g.
-	 * `"arb - True Meaning Ar…"` when space is short, and the trigger's `title` still carries
-	 * the untruncated text for native hover.
+	 * Trigger label format. `'shortName'` (the default) renders just the selected project's short
+	 * name. `'shortNameAndFullName'` renders `"{shortName} - {fullName}"` (skipping the suffix
+	 * when the full name is absent or equal to the short name); since the short name leads the
+	 * string, the trigger's existing ellipsis truncation produces e.g. `"arb - True Meaning Ar…"`
+	 * when space is short, and the trigger's `title` still carries the untruncated text for
+	 * native hover.
 	 */
 	triggerLabelFormat?: "shortName" | "shortNameAndFullName";
 }) | (CommonProps & {
