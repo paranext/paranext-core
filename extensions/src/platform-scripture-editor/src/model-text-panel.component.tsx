@@ -58,10 +58,13 @@ export type ModelTextPanelProps = {
   isLoadingResources: boolean;
   /** The project's admin-level model-text setting (used when writing an admin choice). */
   adminModelTexts: ResourceReferenceList | undefined;
-  /** The user-level model-text setting (used when writing a user choice). */
-  userModelTexts: ResourceReferenceList | undefined;
-  /** Whether the user may write project (admin) settings; decides admin vs. user persistence. */
-  canWriteProjectSettings: boolean;
+  /** The function to get the user-level model-text setting (used when writing a user choice). */
+  getUserModelTexts: () => Promise<ResourceReferenceList | undefined>;
+  /**
+   * Function to get whether the user may write project (admin) settings; decides admin vs. user
+   * persistence.
+   */
+  getCanWriteProjectSettings: () => Promise<boolean | undefined>;
   /** Current Scripture reference for the editor. */
   scrRef?: SerializedVerseRef;
   /** Called when the editor changes the Scripture reference. */
@@ -108,8 +111,8 @@ export function ModelTextPanel({
   dblResources,
   isLoadingResources,
   adminModelTexts,
-  userModelTexts,
-  canWriteProjectSettings,
+  getUserModelTexts,
+  getCanWriteProjectSettings,
   scrRef = DEFAULT_SCR_REF,
   onScrRefChange = () => {},
   installResource,
@@ -216,16 +219,16 @@ export function ModelTextPanel({
         resource,
         adminModelTexts,
         setAdminModelTexts,
-        canWriteProjectSettings,
-        userModelTexts,
+        getCanWriteProjectSettings,
+        getUserModelTexts,
         setUserModelTexts,
         async () => installResource(resource.dblEntryUid),
       ),
     [
       adminModelTexts,
-      canWriteProjectSettings,
+      getCanWriteProjectSettings,
       setAdminModelTexts,
-      userModelTexts,
+      getUserModelTexts,
       setUserModelTexts,
       installResource,
     ],

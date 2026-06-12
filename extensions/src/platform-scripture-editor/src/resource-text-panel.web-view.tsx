@@ -31,7 +31,11 @@ import {
 } from 'platform-bible-utils';
 import { ChevronDown } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { DblResourceReference, EffectiveResourceReference } from 'platform-scripture';
+import type {
+  DblResourceReference,
+  EffectiveResourceReference,
+  ResourceReferenceList,
+} from 'platform-scripture';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
 import { DEFAULT_RESOURCE_REFERENCE_LIST, selectTextConnection } from './select-dbl-resource';
@@ -161,22 +165,18 @@ globalThis.webViewComponent = function ResourceTextPanel({
     'platformScripture.referencedProjectsAndResources',
   );
 
-  const [adminResourceList, setAdminResourceList] = useProjectSetting(
+  const [adminResourceListSetting, setAdminResourceTextsRaw] = useProjectSetting(
     projectId,
     'platformScripture.referencedProjectsAndResources',
     DEFAULT_RESOURCE_REFERENCE_LIST,
   );
+  const adminResourceList = isPlatformError(adminResourceListSetting)
+    ? undefined
+    : adminResourceListSetting;
 
   const textConnectionsProvider = useProjectDataProvider(
     'platformScripture.textConnectionSettings',
     projectId,
-  );
-  const [userResourceList] = usePromise(
-    useCallback(
-      async () => textConnectionsProvider?.getUserReferencedProjectsAndResources(),
-      [textConnectionsProvider],
-    ),
-    undefined,
   );
 
   const [fetchResources, setFetchResources] = useState(true);
@@ -198,13 +198,24 @@ globalThis.webViewComponent = function ResourceTextPanel({
     () => resourcesPossiblyUndefined ?? [],
     [resourcesPossiblyUndefined],
   );
-  const [canWriteProjectSettings] = usePromise(
-    useCallback(
-      async () =>
-        (await textConnectionsProvider?.canUserWriteProjectTextConnectionSettings()) ?? false,
-      [textConnectionsProvider],
-    ),
-    false,
+  const getCanWriteProjectSettings = useCallback(
+    async () => textConnectionsProvider?.canUserWriteProjectTextConnectionSettings(),
+    [textConnectionsProvider],
+  );
+  const setAdminResourceTexts = useCallback(
+    (resources: ResourceReferenceList) => {
+      setAdminResourceTextsRaw?.(resources);
+    },
+    [setAdminResourceTextsRaw],
+  );
+  const getUserResourceTexts = useCallback(
+    async () => textConnectionsProvider?.getUserReferencedProjectsAndResources(),
+    [textConnectionsProvider],
+  );
+  const setUserResourceTexts = useCallback(
+    async (resources: ResourceReferenceList) =>
+      textConnectionsProvider?.setUserReferencedProjectsAndResources(resources),
+    [textConnectionsProvider],
   );
 
   // #endregion
@@ -367,12 +378,10 @@ globalThis.webViewComponent = function ResourceTextPanel({
       selectTextConnection(
         resource,
         adminResourceList,
-        setAdminResourceList,
-        canWriteProjectSettings,
-        userResourceList,
-        textConnectionsProvider
-          ? (list) => textConnectionsProvider.setUserReferencedProjectsAndResources(list)
-          : undefined,
+        setAdminResourceTexts,
+        getCanWriteProjectSettings,
+        getUserResourceTexts,
+        setUserResourceTexts,
         dblResourcesProvider
           ? async (dblEntryUid) => {
               try {
@@ -394,11 +403,11 @@ globalThis.webViewComponent = function ResourceTextPanel({
       ),
     [
       adminResourceList,
-      setAdminResourceList,
-      textConnectionsProvider,
       dblResourcesProvider,
-      canWriteProjectSettings,
-      userResourceList,
+      setAdminResourceTexts,
+      getCanWriteProjectSettings,
+      getUserResourceTexts,
+      setUserResourceTexts,
     ],
   );
 

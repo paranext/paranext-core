@@ -76,13 +76,6 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     'platformScripture.textConnectionSettings',
     projectId,
   );
-  const [userModelTexts] = usePromise(
-    useCallback(
-      async () => textConnectionsProvider?.getUserModelTexts(),
-      [textConnectionsProvider],
-    ),
-    undefined,
-  );
 
   const [fetchResources, setFetchResources] = useState(true);
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
@@ -102,15 +95,6 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
   const dblResources = useMemo(
     () => resourcesPossiblyUndefined ?? [],
     [resourcesPossiblyUndefined],
-  );
-
-  const [canWriteProjectSettings] = usePromise(
-    useCallback(
-      async () =>
-        (await textConnectionsProvider?.canUserWriteProjectTextConnectionSettings()) ?? false,
-      [textConnectionsProvider],
-    ),
-    false,
   );
 
   // --- Dynamic title: "Model text: {displayName}" when a resource is loaded ---
@@ -172,6 +156,16 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     [textConnectionsProvider],
   );
 
+  const getUserModelTexts = useCallback(
+    async () => textConnectionsProvider?.getUserModelTexts(),
+    [textConnectionsProvider],
+  );
+
+  const getCanWriteProjectSettings = useCallback(
+    async () => textConnectionsProvider?.canUserWriteProjectTextConnectionSettings(),
+    [textConnectionsProvider],
+  );
+
   const showResourcePicker = useCallback(
     (selectedResourceIds: string[]) =>
       papi.dialogs.showDialog('platform.resourcePicker', {
@@ -219,8 +213,8 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
       dblResources={dblResources}
       isLoadingResources={isLoadingResources}
       adminModelTexts={adminModelTexts}
-      userModelTexts={userModelTexts}
-      canWriteProjectSettings={canWriteProjectSettings}
+      getUserModelTexts={getUserModelTexts}
+      getCanWriteProjectSettings={getCanWriteProjectSettings}
       scrRef={scrRef}
       onScrRefChange={setScrRef}
       installResource={installResource}

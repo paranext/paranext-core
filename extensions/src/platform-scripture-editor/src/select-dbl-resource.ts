@@ -1,5 +1,5 @@
 import type { DblResourceReference, ResourceReferenceList } from 'platform-scripture';
-import { DblResourceData, isPlatformError, PlatformError } from 'platform-bible-utils';
+import { DblResourceData } from 'platform-bible-utils';
 import { isDblResourceReference } from './resource-reference.utils';
 
 export const CURRENT_DATA_VERSION = '1.0.0';
@@ -19,21 +19,21 @@ export const DEFAULT_RESOURCE_REFERENCE_LIST: ResourceReferenceList = {
  * (tagged 'admin'), causing data loss if the admin later removes their copy.
  *
  * @param resource The DBL resource to select and to update the project's resource list
- * @param adminTextConnections The admin's selected text connections
+ * @param getAdminTextConnections The admin's selected text connections
  * @param setAdminTextConnections Function to update the admin's text connections if the current
  *   user can update them
  * @param canUserWriteProjectSettings Whether the user is able to write to the global text
  *   connection project settings
- * @param userTextConnections Function to retrieve the local user's text connections
+ * @param getUserTextConnections Function to retrieve the local user's text connections
  * @param setUserTextConnections Function to set the local user's text connections
  */
 export async function selectTextConnection(
   resource: DblResourceData,
-  adminTextConnections: ResourceReferenceList | PlatformError | undefined,
-  setAdminTextConnections: ((value: ResourceReferenceList) => void) | undefined,
-  canUserWriteProjectSettings: boolean,
-  userTextConnections: ResourceReferenceList | undefined,
-  setUserTextConnections: ((list: ResourceReferenceList) => Promise<unknown>) | undefined,
+  adminTextConnections: ResourceReferenceList | undefined,
+  setAdminTextConnections: (value: ResourceReferenceList) => void,
+  canUserWriteProjectSettings: () => Promise<boolean | undefined>,
+  getUserTextConnections: () => Promise<ResourceReferenceList | undefined>,
+  setUserTextConnections: (list: ResourceReferenceList) => Promise<unknown>,
   installResource?: (dblEntryUid: string) => Promise<void>,
   onSelect?: (dblEntryUid: string) => void,
 ): Promise<void> {
@@ -50,8 +50,10 @@ export async function selectTextConnection(
     id: resource.dblEntryUid,
   };
 
-  if (canUserWriteProjectSettings && setAdminTextConnections) {
-    if (isPlatformError(adminTextConnections) || adminTextConnections === undefined) return;
+  const canWrite = await canUserWriteProjectSettings();
+
+  if (canWrite && setAdminTextConnections) {
+    if (adminTextConnections === undefined) return;
     // Use the exact current admin setting as the base so the write is a precise update —
     // deduplicate the incoming resource and prepend it, preserving all other admin items.
     const existingItems = adminTextConnections.items.filter(
@@ -62,9 +64,10 @@ export async function selectTextConnection(
       items: [newRef, ...existingItems],
     });
   } else {
-    const rawUserItems = userTextConnections?.items ?? [];
-    await setUserTextConnections?.({
-      dataVersion: userTextConnections?.dataVersion ?? DEFAULT_RESOURCE_REFERENCE_LIST.dataVersion,
+    const rawUserList = await getUserTextConnections();
+    const rawUserItems = rawUserList?.items ?? [];
+    await setUserTextConnections({
+      dataVersion: rawUserList?.dataVersion ?? DEFAULT_RESOURCE_REFERENCE_LIST.dataVersion,
       items: [
         newRef,
         ...rawUserItems.filter(
