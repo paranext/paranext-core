@@ -9,6 +9,7 @@ import {
   syncOnProjectSwitch,
   type OpenEditorDispatch,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+  WEBVIEW_SERVICE_NOT_READY_ERROR_SUBSTRING,
   selectProjectIdsForOpenMode,
   startDefaultProjectPicker,
 } from './platform-scripture-editor.utils';
@@ -620,7 +621,7 @@ describe('openDefaultActiveProjectIfApplicable', () => {
     mockGetSetting.mockResolvedValue('simple');
     mockGetAllOpenWebViewDefinitions.mockRejectedValue(
       new Error(
-        'Timeout reached when waiting for wait-for-net-obj with details {"id":"WebViewService"} to settle',
+        `Timeout reached when waiting for ${WEBVIEW_SERVICE_NOT_READY_ERROR_SUBSTRING} with details {"id":"WebViewService"} to settle`,
       ),
     );
 
@@ -632,6 +633,16 @@ describe('openDefaultActiveProjectIfApplicable', () => {
     // Cold-start timing is expected — logged at debug, not warn.
     expect(mockDebug).toHaveBeenCalled();
     expect(mockWarn).not.toHaveBeenCalled();
+  });
+
+  it('re-throws unexpected errors from getAllOpenWebViewDefinitions so the caller warn path still fires', async () => {
+    const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockRejectedValue(new Error('Something entirely unexpected'));
+
+    await expect(openDefaultActiveProjectIfApplicable(papi)).rejects.toThrow(
+      'Something entirely unexpected',
+    );
   });
 
   it("returns 'no-send-receive' when getSharedProjects rejects (S/R not registered yet)", async () => {

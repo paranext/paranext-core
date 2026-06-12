@@ -28,6 +28,11 @@ import { MarkerMenuItem } from 'platform-bible-react';
 // Note: src/main/shutdown-tasks.ts has a copy of this value — keep them in sync.
 export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 
+// Substring present in the error thrown by the network-object layer when a service hasn't
+// registered yet (30-second cold-start timeout). Used to distinguish expected timing errors
+// from unexpected failures in getAllOpenWebViewDefinitions.
+export const WEBVIEW_SERVICE_NOT_READY_ERROR_SUBSTRING = 'wait-for-net-obj';
+
 /**
  * Check deep equality of two values such that two equal objects or arrays created in two different
  * iframes successfully test as equal
@@ -591,7 +596,7 @@ export async function openDefaultActiveProjectIfApplicable(
     openWebViews = await papi.webViews.getAllOpenWebViewDefinitions();
   } catch (e) {
     const msg = getErrorMessage(e);
-    if (msg.includes('wait-for-net-obj')) {
+    if (msg.includes(WEBVIEW_SERVICE_NOT_READY_ERROR_SUBSTRING)) {
       papi.logger.debug(
         `Default active project picker: WebViewService not ready; returning 'no-empty'. Will retry on next web-view event (${msg})`,
       );
