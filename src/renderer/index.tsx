@@ -96,6 +96,19 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
     // an iframe for the Usersnap feedback forms
     await initializeUsersnapApi();
 
+    // === NEW IN PT10 === (keyboard-switching CAP-016): the renderer-hosted `platform.keyboard`
+    // DataProvider engine registers at renderer-process startup. Deliberately fire-and-forget and
+    // NOT inside `runPromisesAndThrowIfRejected` below: keyboard init awaits the C# process's
+    // `platform.osKeyboard` provider, which can take many seconds to register — keyboard
+    // switching is non-critical and must not delay or break the critical startup path (web views,
+    // dialogs, and especially the theme subscription below). A failure logs and degrades
+    // gracefully; `papi.keyboard` consumers retry until the engine registers.
+    initializeKeyboardService().catch((e) =>
+      logger.warn(
+        `Keyboard service failed to initialize! Keyboard switching is unavailable. Error: ${getErrorMessage(e)}`,
+      ),
+    );
+
     await runPromisesAndThrowIfRejected(
       webViewProviderService.initialize(),
       startWebViewService(),
@@ -105,9 +118,6 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
       startOverlayService(),
       initializeThemeService(),
       initializeWindowService(),
-      // === NEW IN PT10 === (keyboard-switching CAP-016): the renderer-hosted `platform.keyboard`
-      // DataProvider engine registers at renderer-process startup
-      initializeKeyboardService(),
     );
 
     // Subscribe to updates to the current theme
