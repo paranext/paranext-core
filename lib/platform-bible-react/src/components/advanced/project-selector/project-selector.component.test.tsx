@@ -92,6 +92,33 @@ function setupUser() {
   return userEvent.setup({ pointerEventsCheck: 0 });
 }
 
+describe('ProjectSelector — trigger chevron', () => {
+  it('renders a chevron icon in the trigger by default', () => {
+    render(<ProjectSelectorHarness initialSelected="esvus16" />);
+    const trigger = screen.getByRole('combobox', { name: 'Project' });
+    expect(trigger.querySelector('svg')).not.toBeNull();
+  });
+
+  it('hides the chevron icon when hideTriggerChevron is set', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ projectId: 'esvus16' }}
+        onChangeSelection={() => {}}
+        buttonPlaceholder="Select a project"
+        ariaLabel="Project"
+        hideTriggerChevron
+      />,
+    );
+    const trigger = screen.getByRole('combobox', { name: 'Project' });
+    expect(trigger.querySelector('svg')).toBeNull();
+    // The label still renders so a narrow trigger shows the project name.
+    expect(trigger).toHaveTextContent('ESVUS16');
+  });
+});
+
 describe('ProjectSelector — trigger label format', () => {
   it('renders only the shortName by default', () => {
     render(<ProjectSelectorHarness initialSelected="esvus16" />);

@@ -540,6 +540,14 @@ type CommonProps = {
 	localizedStrings?: ProjectSelectorLocalizedStrings;
 	/** Initial state of the "Group by open tabs" toggle. Defaults to `true`. */
 	defaultGroupByOpenTabs?: boolean;
+	/**
+	 * Hide the chevron icon in the trigger button. For very narrow triggers (e.g. an icon-rail
+	 * sidebar ~56px wide) the chevron plus its margin consumes the entire content box and the label
+	 * truncates to nothing; hiding it leaves room for a few characters of the project name. Keep the
+	 * trigger visually recognizable as a control through its button variant when using this.
+	 * Defaults to `false`.
+	 */
+	hideTriggerChevron?: boolean;
 };
 type ProjectSelectorProps = (CommonProps & {
 	mode: "project";

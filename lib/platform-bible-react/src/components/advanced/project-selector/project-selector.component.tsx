@@ -156,6 +156,14 @@ type CommonProps = {
   localizedStrings?: ProjectSelectorLocalizedStrings;
   /** Initial state of the "Group by open tabs" toggle. Defaults to `true`. */
   defaultGroupByOpenTabs?: boolean;
+  /**
+   * Hide the chevron icon in the trigger button. For very narrow triggers (e.g. an icon-rail
+   * sidebar ~56px wide) the chevron plus its margin consumes the entire content box and the label
+   * truncates to nothing; hiding it leaves room for a few characters of the project name. Keep the
+   * trigger visually recognizable as a control through its button variant when using this. Defaults
+   * to `false`.
+   */
+  hideTriggerChevron?: boolean;
 };
 
 export type ProjectSelectorProps =
@@ -758,12 +766,11 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     }
   }, [props]);
 
-  const triggerIcon =
-    props.mode === 'project-multi' ? (
-      <ChevronsUpDown className="tw:ms-2 tw:h-4 tw:w-4 tw:shrink-0 tw:opacity-50" />
-    ) : (
-      <ChevronDown className="tw:ms-2 tw:h-4 tw:w-4 tw:shrink-0 tw:opacity-50" />
-    );
+  let triggerIcon;
+  if (props.hideTriggerChevron) triggerIcon = undefined;
+  else if (props.mode === 'project-multi')
+    triggerIcon = <ChevronsUpDown className="tw:ms-2 tw:h-4 tw:w-4 tw:shrink-0 tw:opacity-50" />;
+  else triggerIcon = <ChevronDown className="tw:ms-2 tw:h-4 tw:w-4 tw:shrink-0 tw:opacity-50" />;
 
   const openButtonHandler =
     props.mode === 'projectScrollGroup' ||
