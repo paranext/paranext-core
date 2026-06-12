@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RpcEventRegistry, RpcWebSocketListener } from '@main/services/rpc-websocket-listener';
-import { EXPERIMENTAL_OPENRPC_PREFIX } from '@shared/models/openrpc.model';
+import {
+  EXPERIMENTAL_OPENRPC_PREFIX,
+  NOTIFICATION_OPENRPC_PREFIX,
+} from '@shared/models/openrpc.model';
 import { logger } from '@shared/services/logger.service';
 
 // Mock heavy dependencies so this test can run outside the Electron main process
@@ -87,7 +90,9 @@ describe('generateOpenRpcSchema() surfaces every registered event', () => {
     const schema = listener.generateOpenRpcSchema();
     const entry = schema.methods.find((m) => m.name === 'myExt.onDidSomething');
     expect(entry).toBeDefined();
-    expect(entry?.summary).toBe('Fired when something happens');
+    // Notification summaries get the `(Notification) ` prefix so they're distinguishable from
+    // methods in tooling that lists both together.
+    expect(entry?.summary).toBe(`${NOTIFICATION_OPENRPC_PREFIX}Fired when something happens`);
     // Notifications carry no `result` field.
     expect(entry && 'result' in entry).toBe(false);
   });
@@ -105,14 +110,16 @@ describe('generateOpenRpcSchema() surfaces every registered event', () => {
     expect(entry && 'result' in entry).toBe(false);
   });
 
-  it('prepends EXPERIMENTAL: to the summary of an experimental event', async () => {
+  it('prepends (Notification) and [EXPERIMENTAL] to the summary of an experimental event', async () => {
     await listener.registerEvent('myExt.expEvent', {
       notification: { params: [], summary: 'Fires experimentally', 'x-experimental': true },
     });
 
     const schema = listener.generateOpenRpcSchema();
     const entry = schema.methods.find((m) => m.name === 'myExt.expEvent');
-    expect(entry?.summary).toBe(`${EXPERIMENTAL_OPENRPC_PREFIX}Fires experimentally`);
+    expect(entry?.summary).toBe(
+      `${NOTIFICATION_OPENRPC_PREFIX}${EXPERIMENTAL_OPENRPC_PREFIX}Fires experimentally`,
+    );
     expect(entry?.['x-experimental']).toBe(true);
   });
 });

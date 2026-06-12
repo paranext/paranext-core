@@ -2,11 +2,13 @@ import { describe, it, expect, expectTypeOf } from 'vitest';
 import {
   EXPERIMENTAL_OPENRPC_PREFIX,
   getEmptyNotificationDocs,
+  NOTIFICATION_OPENRPC_PREFIX,
   withExperimentalPrefix,
+  withNotificationPrefix,
 } from '@shared/models/openrpc.model';
 import type {
   Method,
-  Notification,
+  OpenRpcNotification,
   NetworkObjectDocumentation,
   OpenRpc,
   SingleNotificationDocumentation,
@@ -24,13 +26,13 @@ describe('openrpc.model — experimental marker types', () => {
   });
 
   it('Notification has no result field', () => {
-    const n: Notification = {
+    const n: OpenRpcNotification = {
       name: 'x',
       params: [],
       'x-experimental': true,
     };
     // @ts-expect-error — Notification cannot have a result
-    const bad: Notification = { name: 'x', params: [], result: { name: 'r', schema: {} } };
+    const bad: OpenRpcNotification = { name: 'x', params: [], result: { name: 'r', schema: {} } };
     expect(bad).toBeDefined();
     expectTypeOf(n.name).toEqualTypeOf<string>();
   });
@@ -49,18 +51,18 @@ describe('openrpc.model — experimental marker types', () => {
         { name: 'b', params: [] }, // notification
       ],
     };
-    expectTypeOf(doc.methods).toEqualTypeOf<(Method | Notification)[]>();
+    expectTypeOf(doc.methods).toEqualTypeOf<(Method | OpenRpcNotification)[]>();
   });
 
   it('SingleNotificationDocumentation has notification omitting name and result', () => {
     const d: SingleNotificationDocumentation = {
       notification: { params: [], 'x-experimental': true },
     };
-    expectTypeOf(d.notification).toEqualTypeOf<Omit<Notification, 'name'>>();
+    expectTypeOf(d.notification).toEqualTypeOf<Omit<OpenRpcNotification, 'name'>>();
   });
 
   it('NetworkObjectDocumentation.methods rejects notifications', () => {
-    const notification: Notification = { name: 'evt', params: [] };
+    const notification: OpenRpcNotification = { name: 'evt', params: [] };
     const bad: NetworkObjectDocumentation = {
       // @ts-expect-error — NetworkObjectDocumentation.methods only accepts Method[], not Notification[]
       methods: [notification],
@@ -77,7 +79,7 @@ describe('openrpc.model — experimental marker types', () => {
     });
     expect('result' in docs).toBe(false);
     // Building a Notification from the placeholder yields a valid notification entry.
-    const entry: Notification = { name: 'myExt.undocumented', ...docs };
+    const entry: OpenRpcNotification = { name: 'myExt.undocumented', ...docs };
     expect(entry.name).toBe('myExt.undocumented');
     expect(Object.isFrozen(docs)).toBe(true);
   });
@@ -111,7 +113,7 @@ describe('openrpc.model — experimental marker types', () => {
   });
 
   it('withExperimentalPrefix fills missing summary/description with the bare prefix', () => {
-    const notification: Notification = { name: 'evt', params: [], 'x-experimental': true };
+    const notification: OpenRpcNotification = { name: 'evt', params: [], 'x-experimental': true };
     const prefixed = withExperimentalPrefix(notification);
     // Even with no text, an experimental entry is marked so the flag is never lost.
     expect(prefixed.summary).toBe(EXPERIMENTAL_OPENRPC_PREFIX);
@@ -119,7 +121,7 @@ describe('openrpc.model — experimental marker types', () => {
   });
 
   it('withExperimentalPrefix does not double-prefix an already-prefixed entry', () => {
-    const notification: Notification = {
+    const notification: OpenRpcNotification = {
       name: 'evt',
       params: [],
       'x-experimental': true,
@@ -127,5 +129,33 @@ describe('openrpc.model — experimental marker types', () => {
     };
     const prefixed = withExperimentalPrefix(notification);
     expect(prefixed.summary).toBe(`${EXPERIMENTAL_OPENRPC_PREFIX}Already marked`);
+  });
+
+  it('withNotificationPrefix prepends (Notification) to a notification summary', () => {
+    const notification: OpenRpcNotification = { name: 'evt', params: [], summary: 'Fires' };
+    const prefixed = withNotificationPrefix(notification);
+    expect(prefixed.summary).toBe(`${NOTIFICATION_OPENRPC_PREFIX}Fires`);
+    // Original is not mutated.
+    expect(notification.summary).toBe('Fires');
+  });
+
+  it('withNotificationPrefix marks a notification even with no summary, and is idempotent', () => {
+    const notification: OpenRpcNotification = { name: 'evt', params: [] };
+    const once = withNotificationPrefix(notification);
+    expect(once.summary).toBe(NOTIFICATION_OPENRPC_PREFIX);
+    expect(withNotificationPrefix(once).summary).toBe(NOTIFICATION_OPENRPC_PREFIX);
+  });
+
+  it('notification + experimental prefixes compose as "(Notification) [EXPERIMENTAL] ..."', () => {
+    const notification: OpenRpcNotification = {
+      name: 'evt',
+      params: [],
+      'x-experimental': true,
+      summary: 'Fires',
+    };
+    const prefixed = withNotificationPrefix(withExperimentalPrefix(notification));
+    expect(prefixed.summary).toBe(
+      `${NOTIFICATION_OPENRPC_PREFIX}${EXPERIMENTAL_OPENRPC_PREFIX}Fires`,
+    );
   });
 });

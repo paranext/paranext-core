@@ -12,8 +12,12 @@ import type { JSONSchema7 } from 'json-schema';
  * See https://github.com/open-rpc/meta-schema/releases - Release 1.14.2 aligns with OpenRPC 1.2.6.
  * https://github.com/open-rpc/meta-schema/releases/download/1.14.2/open-rpc-meta-schema.json
  *
- * We don't want to go past 1.2.6 because https://playground.open-rpc.org/ doesn't support anything
- * past 1.2.6 for now. See https://github.com/open-rpc/playground/issues/606.
+ * We declare OpenRPC `1.3.0` because notifications (a method with no `result`) were introduced in
+ * 1.3.0 — `result` was required in 1.2.6, so a document with notifications is invalid under the
+ * 1.2.6 meta-schema. The OpenRPC playground (https://playground.open-rpc.org/) is still capped at
+ * 1.2.6 (https://github.com/open-rpc/playground/issues/606), but it renders a 1.3.0 document fine
+ * in practice; it just lists notifications under the same "Methods" heading, which we mitigate by
+ * prefixing notification summaries with {@link NOTIFICATION_OPENRPC_PREFIX}.
  *
  * Note that the types from https://www.npmjs.com/package/@open-rpc/meta-schema/v/1.14.2 are not
  * very good. For example, all the properties of `Components` are of type `any` instead of the
@@ -24,7 +28,7 @@ export type OpenRpc = {
   openrpc: string;
   info: Info;
   servers?: Server[];
-  methods: (Method | Notification)[];
+  methods: (Method | OpenRpcNotification)[];
   components?: Components;
   externalDocs?: ExternalDocumentation;
 };
@@ -180,17 +184,21 @@ export type SingleMethodDocumentation = {
  *
  * Set `'x-experimental': true` on the notification object to mark it as experimental. Informational
  * only; appears in the generated OpenRPC document.
+ *
+ * Named `OpenRpcNotification` (rather than `Notification`) to avoid shadowing the DOM global
+ * `Notification` type — a file that forgot to import this would otherwise silently typecheck
+ * against the wrong type.
  */
-export type Notification = Omit<Method, 'result'>;
+export type OpenRpcNotification = Omit<Method, 'result'>;
 
 /**
- * Documentation about a single {@link Notification}.
+ * Documentation about a single {@link OpenRpcNotification}.
  *
  * Set `notification['x-experimental']: true` to mark this notification as experimental.
  * Informational only; appears in the generated OpenRPC document.
  */
 export type SingleNotificationDocumentation = {
-  notification: Omit<Notification, 'name'>;
+  notification: Omit<OpenRpcNotification, 'name'>;
   components?: Components;
 };
 
@@ -214,7 +222,7 @@ export type NetworkObjectDocumentation = {
 /** Create an object of type {@link OpenRpc} to hold documentation for PAPI websocket methods */
 export function createEmptyOpenRpc(papiVersion: string): OpenRpc {
   return {
-    openrpc: '1.2.6',
+    openrpc: '1.3.0',
     info: {
       version: papiVersion,
       title: 'Live PAPI documentation',
@@ -282,9 +290,10 @@ Object.freeze(emptyNotificationDocs);
 Object.freeze(emptyNotificationDocs.params);
 
 /**
- * Get an empty {@link Notification} documentation object. Useful for surfacing events that didn't
- * have their own documentation provided so that every registered event still appears in the OpenRPC
- * document (mirroring how undocumented methods are surfaced via {@link getEmptyMethodDocs}).
+ * Get an empty {@link OpenRpcNotification} documentation object. Useful for surfacing events that
+ * didn't have their own documentation provided so that every registered event still appears in the
+ * OpenRPC document (mirroring how undocumented methods are surfaced via
+ * {@link getEmptyMethodDocs}).
  */
 export function getEmptyNotificationDocs(): Omit<MethodDocumentationWithoutName, 'result'> {
   return emptyNotificationDocs;
@@ -304,17 +313,37 @@ function prependExperimental(text: string | undefined): string {
 }
 
 /**
- * Returns a shallow copy of an OpenRPC {@link Method} or {@link Notification} with
+ * Returns a shallow copy of an OpenRPC {@link Method} or {@link OpenRpcNotification} with
  * {@link EXPERIMENTAL_OPENRPC_PREFIX} prepended to its `summary` and `description` when the entry is
  * marked `'x-experimental'`. Both fields are always set on an experimental entry — even a missing
  * or empty summary/description becomes the bare prefix so the marker is never lost. Idempotent: an
  * entry already starting with the prefix is left unchanged. Returns the entry untouched when it is
  * not experimental.
  */
-export function withExperimentalPrefix<T extends Method | Notification>(entry: T): T {
+export function withExperimentalPrefix<T extends Method | OpenRpcNotification>(entry: T): T {
   if (!entry['x-experimental']) return entry;
   const prefixed = { ...entry };
   prefixed.summary = prependExperimental(prefixed.summary);
   prefixed.description = prependExperimental(prefixed.description);
   return prefixed;
+}
+
+/**
+ * Prefix prepended to a notification's `summary`. OpenRPC carries notifications in the same root
+ * `methods` array as methods, so tooling that lists both together (e.g. the OpenRPC playground)
+ * shows them under one "Methods" heading. This prefix makes notifications distinguishable at a
+ * glance, the same way {@link EXPERIMENTAL_OPENRPC_PREFIX} marks experimental entries.
+ */
+export const NOTIFICATION_OPENRPC_PREFIX = '(Notification) ';
+
+/**
+ * Returns a shallow copy of an OpenRPC {@link OpenRpcNotification} with
+ * {@link NOTIFICATION_OPENRPC_PREFIX} prepended to its `summary` so it is distinguishable from
+ * methods in tooling that lists both together. Applied to every notification (unlike the
+ * experimental prefix). Idempotent: an entry whose summary already starts with the prefix is left
+ * unchanged.
+ */
+export function withNotificationPrefix(entry: OpenRpcNotification): OpenRpcNotification {
+  if (entry.summary?.startsWith(NOTIFICATION_OPENRPC_PREFIX)) return entry;
+  return { ...entry, summary: `${NOTIFICATION_OPENRPC_PREFIX}${entry.summary ?? ''}` };
 }

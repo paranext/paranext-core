@@ -19,11 +19,12 @@ import {
   createEmptyOpenRpc,
   getEmptyMethodDocs,
   getEmptyNotificationDocs,
-  Notification,
+  OpenRpcNotification,
   OpenRpc,
   SingleMethodDocumentation,
   SingleNotificationDocumentation,
   withExperimentalPrefix,
+  withNotificationPrefix,
 } from '@shared/models/openrpc.model';
 import { getErrorMessage, Mutex } from 'platform-bible-utils';
 import { WebSocketServer } from 'ws';
@@ -322,16 +323,17 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
       // Surface every registered event, mirroring how undocumented methods are surfaced above:
       // events without their own documentation get a placeholder entry so the OpenRPC document
       // lists all events, not just documented ones.
-      const notificationEntry: Notification = docs
+      const notificationEntry: OpenRpcNotification = docs
         ? { name: eventName, ...docs.notification }
         : { name: eventName, ...getEmptyNotificationDocs() };
       // Overwrite the name after the spread (mirrors the method path above). `docs.notification`
       // arrives as untyped JSON over the websocket, so without this a client could list its event
       // under a different name.
       notificationEntry.name = eventName;
-      // Prepend the experimental prefix ([EXPERIMENTAL] ) to the summary/description when the event
-      // is experimental.
-      openRpcSchema.methods.push(withExperimentalPrefix(notificationEntry));
+      // Mark it as a notification — OpenRPC lists notifications alongside methods, so the
+      // `(Notification) ` summary prefix distinguishes them. Then prepend the experimental prefix
+      // ([EXPERIMENTAL] ) to the summary/description when the event is experimental.
+      openRpcSchema.methods.push(withNotificationPrefix(withExperimentalPrefix(notificationEntry)));
 
       if (docs?.components) {
         openRpcSchema.components = {
