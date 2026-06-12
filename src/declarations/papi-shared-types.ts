@@ -817,15 +817,15 @@ declare module 'papi-shared-types' {
    * }
    * ```
    *
-   * Mark a single event as experimental by adding `\/** @experimental *\/` directly above its
-   * entry.
+   * Mark a single event as experimental by adding an `@experimental` JSDoc tag in a doc comment
+   * directly above its entry.
    */
   export interface NetworkEvents extends MultiSourceNetworkEvents {
     /** Emitted when extensions finish reloading. `true` if reload succeeded, `false` if it failed. */
     'platform.onDidReloadExtensions': boolean;
     /** Emitted when the Scripture reference for a scroll group changes. */
     'scrollGroup:onDidUpdateScrRef': ScrollGroupUpdateInfo;
-    /** @deprecated 13 November 2024. Use {@link NetworkEvents.'webView:onDidOpenWebView'} instead. */
+    /** @deprecated 13 November 2024. Use the `webView:onDidOpenWebView` event instead. */
     'webView:onDidAddWebView': OpenWebViewEvent;
     /** Emitted when a WebView is created. */
     'webView:onDidOpenWebView': OpenWebViewEvent;

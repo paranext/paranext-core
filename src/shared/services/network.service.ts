@@ -429,9 +429,11 @@ const createNetworkEventEmitterInternal = <T>(
  *
  * @deprecated 8 June 2026. Use `createNetworkEventEmitterAsync`. Events created via the sync API
  *   are not centrally registered and do not appear in the OpenRPC document. The async version
- *   properly restricts event registration to prevent multiple sources from emitting the same
- *   network event (unless the event is declared in {@link MultiSourceNetworkEvents}, in which case
- *   it accepts multiple registrants by design).
+ *   restricts central _registration_ of an event name to a single source (unless the event is
+ *   declared in {@link MultiSourceNetworkEvents}, in which case it accepts multiple registrants by
+ *   design). Note this restricts registration only — emission itself is not gated by the registry;
+ *   the central registry instead warns when an event is announced unregistered or from a process
+ *   that did not register it.
  *
  *   WARNING: You can only create a network event emitter once per eventType to prevent hijacked event
  *   emitters.

@@ -79,8 +79,12 @@ class ProjectDataProviderFactory<SupportedProjectInterfaces extends ProjectInter
       if (!pdpId) {
         const factoryReturn =
           await this.pdpEngineFactory.createProjectDataProviderEngine(projectId);
+        // `!!factoryReturn` guards against `typeof null === 'object'`, which would otherwise throw
+        // `Cannot use 'in' operator` for a factory that returns null.
         const isEnvelope =
-          typeof factoryReturn === 'object' && 'projectDataProviderEngine' in factoryReturn;
+          !!factoryReturn &&
+          typeof factoryReturn === 'object' &&
+          'projectDataProviderEngine' in factoryReturn;
         const projectDataProviderEngine = isEnvelope
           ? factoryReturn.projectDataProviderEngine
           : factoryReturn;

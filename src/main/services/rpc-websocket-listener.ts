@@ -276,7 +276,8 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
         const newDocs = { name: methodName, ...details.methodDocs.method };
         // Overwrite the name with `methodName` in case `details.methodDocs.method` included a name
         newDocs.name = methodName;
-        // Prepend "EXPERIMENTAL: " to the summary/description when the method is experimental.
+        // Prepend the experimental prefix ([EXPERIMENTAL] ) to the summary/description when the
+        // method is experimental.
         openRpcSchema.methods.push(withExperimentalPrefix(newDocs));
         if (details.methodDocs.components) {
           openRpcSchema.components = {
@@ -324,7 +325,12 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
       const notificationEntry: Notification = docs
         ? { name: eventName, ...docs.notification }
         : { name: eventName, ...getEmptyNotificationDocs() };
-      // Prepend "EXPERIMENTAL: " to the summary/description when the event is experimental.
+      // Overwrite the name after the spread (mirrors the method path above). `docs.notification`
+      // arrives as untyped JSON over the websocket, so without this a client could list its event
+      // under a different name.
+      notificationEntry.name = eventName;
+      // Prepend the experimental prefix ([EXPERIMENTAL] ) to the summary/description when the event
+      // is experimental.
       openRpcSchema.methods.push(withExperimentalPrefix(notificationEntry));
 
       if (docs?.components) {
