@@ -68,7 +68,7 @@ export function ParagraphMarkerTooltipOverlay({ children }: Props) {
     const leavingPara = (e.target as Element).closest<HTMLElement>('.para[class*="usfm_"]');
     // e.relatedTarget is EventTarget; cast to Element for DOM traversal via .closest()
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const enteringPara = (e.relatedTarget as Element | undefined)?.closest<HTMLElement>(
+    const enteringPara = (e.relatedTarget as Element | null)?.closest<HTMLElement>(
       '.para[class*="usfm_"]',
     );
     if (leavingPara && !enteringPara) {
@@ -184,20 +184,11 @@ export function ParagraphMarkerTooltipOverlay({ children }: Props) {
           <TooltipTrigger
             aria-hidden="true"
             tabIndex={-1}
+            className="tw:absolute tw:w-px tw:h-px tw:opacity-0 tw:pointer-events-none
+            tw:p-0 tw:border-0 tw:bg-transparent tw:cursor-default tw:min-w-0 tw:min-h-0"
             style={{
-              position: 'absolute',
               top: hoveredData?.top ?? lastPositionRef.current.top,
               left: hoveredData?.left ?? lastPositionRef.current.left,
-              width: 1,
-              height: 1,
-              opacity: 0,
-              pointerEvents: 'none',
-              padding: 0,
-              border: 'none',
-              background: 'transparent',
-              cursor: 'default',
-              minWidth: 0,
-              minHeight: 0,
             }}
           />
           <TooltipContent side="top" align="start">
