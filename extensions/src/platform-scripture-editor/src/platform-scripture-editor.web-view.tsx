@@ -6,8 +6,9 @@ import {
   Editorial,
   EditorOptions,
   EditorRef,
-  getDefaultViewOptions,
+  getViewOptions,
   isInsertEmbedOpOfType,
+  PARAGRAPH_STRUCTURE_VIEW_MODE,
   SelectionRange,
   TypedMarkOnClick,
   TypedMarkOnRemove,
@@ -191,15 +192,14 @@ const defaultTextDirection = 'ltr';
 
 const defaultMarkersMenuTrigger = '\\';
 
-const defaultView: ViewOptions = getDefaultViewOptions();
-
 // Return the appropriate ViewOptions for the given webview `viewType`.
 // Centralizes the logic so initialization and effects can call the same helper
 // instead of duplicating the shallow-copy code.
 const getViewOptionsForType = (viewType: ScriptureEditorViewType): ViewOptions => {
-  const base = { ...defaultView };
-  if (viewType === 'markers') return { ...base, markerMode: 'visible', noteMode: 'expanded' };
-  return { ...base, markerMode: 'visible', showParagraphStructure: true };
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const paragraphStructure = getViewOptions(PARAGRAPH_STRUCTURE_VIEW_MODE) as ViewOptions;
+  if (viewType === 'markers') return { ...paragraphStructure, noteMode: 'expanded' };
+  return paragraphStructure;
 };
 
 // This regex is connected directly to the exception message within MissingBookException.cs

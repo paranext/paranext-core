@@ -56,7 +56,11 @@ import {
   ScrollGroupId,
 } from 'platform-bible-utils';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { Editorial } from '@eten-tech-foundation/platform-editor';
+import {
+  Editorial,
+  getViewOptions,
+  PARAGRAPH_STRUCTURE_VIEW_MODE,
+} from '@eten-tech-foundation/platform-editor';
 import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import 'rc-dock/dist/rc-dock.css';
 import '../../renderer/components/docking/dock-layout-wrapper.component.scss';
@@ -1091,8 +1095,10 @@ const SAMPLE_USJ: Usj = {
   ],
 };
 
+const paragraphStructureView = getViewOptions(PARAGRAPH_STRUCTURE_VIEW_MODE);
+
 const EDITOR_READONLY = { isReadonly: true };
-const EDITOR_EDITABLE = { isReadonly: false };
+const EDITOR_EDITABLE = { isReadonly: false, view: paragraphStructureView };
 
 function useInteractiveOrThrow(): InteractiveState {
   const ctx = useContext(InteractiveContext);

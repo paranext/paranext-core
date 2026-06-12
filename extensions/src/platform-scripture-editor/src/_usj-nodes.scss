@@ -2386,19 +2386,23 @@ span.read img {
   background-color: rgba(255, 204, 204, 0.5);
 }
 
+/* ── Gutter markers ───────────────────────────────────────────────────────────
+   Applied via .psc-gutter-markers when viewOptions.hasGutterParaMarkers is true.
+   Shows paragraph-level USFM markers in a fixed-width gutter, styles verse and
+   chapter numbers, and sets --para-indent / --verse-text-start for each paragraph
+   type (the latter is also consumed by the active focus box for alignment). */
 
-/* â”€â”€ Paragraph structure styling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   All rules scoped to .psc-paragraph-structure so toggling the class fully
-   reverts. Applied to the editor-input element via viewOptions.showParagraphStructure. */
-
-.psc-paragraph-structure {
+.psc-gutter-markers {
   --scripture-accent: #c4956a;
   --scripture-accent-chapter: rgba(196, 149, 106, 0.55);
   --scripture-accent-marker: rgba(196, 149, 106, 0.45);
+  /* Gutter width. The marker left offset uses calc(-(--psc-gutter-width) + 0.5em),
+     so both values must be updated together if the gutter size changes. */
+  --psc-gutter-width: 4em;
 }
 
-.psc-paragraph-structure .usfm_v,
-.psc-paragraph-structure span.verse {
+.psc-gutter-markers .usfm_v,
+.psc-gutter-markers span.verse {
   font-size: 13px;
   font-weight: 700;
   color: var(--scripture-accent);
@@ -2410,15 +2414,17 @@ span.read img {
 }
 
 /* Chapter number: hide raw text (\c 1 in visible mode, or just 1 in hidden mode)
-   and render a large decorative number via ::after using the data-number attribute. */
-.psc-paragraph-structure .usfm_c {
+   and render a large decorative number via ::after using the data-number attribute.
+   font-size: 0 suppresses the raw marker text; screen readers may still announce it,
+   which is acceptable since the ::after content duplicates it as a number. */
+.psc-gutter-markers .usfm_c {
   display: block;
   font-size: 0;
   line-height: 0;
   padding: 0.5rem 0 0.25rem;
 }
 
-.psc-paragraph-structure .usfm_c::after {
+.psc-gutter-markers .usfm_c::after {
   content: attr(data-number);
   display: block;
   font-size: 5rem;
@@ -2427,14 +2433,201 @@ span.read img {
   color: var(--scripture-accent-chapter);
 }
 
-/* Active text box: a ::before pseudo-element anchored to the paragraph's
-   visual text start. Poetry paragraphs use margin-left + negative text-indent,
-   so the text hangs left of the element's border edge; --verse-text-start
-   mirrors that offset so the box aligns with the first character. */
-.psc-paragraph-structure .psc-active-text {
+.psc-gutter-markers .psc-empty-text::after {
+  content: '…';
+  color: var(--muted-foreground, #6b7280);
+  font-style: italic;
+}
+
+.psc-gutter-markers .usfm_s,
+.psc-gutter-markers .usfm_s1,
+.psc-gutter-markers .usfm_s2,
+.psc-gutter-markers .usfm_s3 {
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--muted-foreground, #6b7280);
+  border-top: none;
+  margin-top: 1rem;
+}
+
+/* The .editor-input left padding creates the gutter space; each .para > .marker
+   span is pulled into it with absolute positioning. */
+.usfm.psc-gutter-markers {
+  padding-left: var(--psc-gutter-width);
+}
+
+/* position: relative gives absolutely-positioned gutter markers the right
+   containing block. --para-indent and --verse-text-start default to 0;
+   paragraph-specific overrides follow below. */
+.psc-gutter-markers .para {
+  position: relative;
+  --para-indent: 0px;
+  --verse-text-start: 0px;
+}
+
+/* Hide non-verse marker spans and milestone attribute spans (|sid=, |eid= text).
+   In markerMode 'visible', the adaptor creates:
+     - class 'marker' nodes for \zmsc-s and \* text
+     - class 'attribute' nodes for |sid='...' and |eid='...' text
+   Both are invisible here; the paragraph's own marker goes in the gutter.
+   :not(.chapter) exempts ImmutableChapterNode which also gets class 'marker' when
+   showMarker=true — the chapter number is shown via its own ::after rule above. */
+.psc-gutter-markers .marker:not(.verse):not(.chapter),
+.psc-gutter-markers .attribute {
+  display: none;
+}
+
+/* Only the :first-child .marker is the paragraph's own type identifier (e.g. \p, \q1).
+   Milestone and character markers that appear later in the paragraph are NOT shown in the
+   gutter — they are already hidden by the .marker:not(.verse):not(.chapter) rule above.
+   :not(.verse) excludes ImmutableVerseNode; :not(.chapter) excludes ImmutableChapterNode. */
+.psc-gutter-markers .para > .marker:not(.verse):not(.chapter):first-child {
+  display: block;
+  position: absolute;
+  /* left = -(gutter-width) + 0.5em-gap + para-indent-compensation */
+  left: calc(-1 * (var(--psc-gutter-width) - 0.5em) - var(--para-indent));
+  top: 0;
+  width: 3em;
+  text-align: right;
+  white-space: nowrap;
+  color: var(--scripture-accent-marker);
+  font-size: 0.75em;
+  font-family: monospace;
+}
+
+/* When markerMode is 'visible' the verse span includes '\v N' as a single text
+   node. Hide that text (font-size: 0) and re-render just the number from
+   data-number so the verse number stays visible without the '\v' prefix.
+   Screen readers may still announce the zero-sized text, but the content is
+   redundant with the ::after number so this is an acceptable tradeoff. */
+.psc-gutter-markers .verse.marker > span {
+  font-size: 0;
+}
+.psc-gutter-markers .verse.marker::after {
+  content: attr(data-number);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--scripture-accent);
+  vertical-align: unset;
+  position: relative;
+  top: -1px;
+  background: none;
+}
+
+/* Indent compensation — mirrors the margin-left values above.
+   Only active when .text-spacing is present (same condition as the source rules). */
+.psc-gutter-markers.text-spacing .usfm_io,
+.psc-gutter-markers.text-spacing .usfm_io1,
+.psc-gutter-markers.text-spacing .usfm_ili,
+.psc-gutter-markers.text-spacing .usfm_ili1,
+.psc-gutter-markers.text-spacing[dir='ltr'] .usfm_pi2 {
+  --para-indent: 10vw;
+}
+.psc-gutter-markers.text-spacing .usfm_q,
+.psc-gutter-markers.text-spacing .usfm_q1,
+.psc-gutter-markers.text-spacing .usfm_q2,
+.psc-gutter-markers.text-spacing .usfm_q3,
+.psc-gutter-markers.text-spacing .usfm_q4,
+.psc-gutter-markers.text-spacing .usfm_io2,
+.psc-gutter-markers.text-spacing .usfm_ili2,
+.psc-gutter-markers.text-spacing[dir='ltr'] .usfm_pi3 {
+  --para-indent: 15vw;
+}
+.psc-gutter-markers.text-spacing .usfm_qm,
+.psc-gutter-markers.text-spacing .usfm_qm1,
+.psc-gutter-markers.text-spacing .usfm_io3 {
+  --para-indent: 20vw;
+}
+.psc-gutter-markers.text-spacing .usfm_io4 {
+  --para-indent: 25vw;
+}
+.psc-gutter-markers.text-spacing .usfm_ipi,
+.psc-gutter-markers.text-spacing .usfm_imi,
+.psc-gutter-markers.text-spacing .usfm_pmo,
+.psc-gutter-markers.text-spacing .usfm_pm,
+.psc-gutter-markers.text-spacing .usfm_pmc,
+.psc-gutter-markers.text-spacing .usfm_pmr,
+.psc-gutter-markers.text-spacing .usfm_pi,
+.psc-gutter-markers.text-spacing .usfm_pi1,
+.psc-gutter-markers.text-spacing .usfm_mi {
+  --para-indent: 5vw;
+}
+
+/* --verse-text-start mirrors the text-indent values for paragraphs with a
+   negative text-indent (hanging indent). These paragraphs render their first
+   line to the LEFT of the element's border edge, so the active focus box
+   ::before must start at text-indent to align with the text. */
+.psc-gutter-markers.text-spacing .usfm_q,
+.psc-gutter-markers.text-spacing .usfm_q1 {
+  --verse-text-start: -10vw;
+}
+.psc-gutter-markers.text-spacing .usfm_q2 {
+  --verse-text-start: -7.5vw;
+}
+.psc-gutter-markers.text-spacing .usfm_q3 {
+  --verse-text-start: -5vw;
+}
+.psc-gutter-markers.text-spacing .usfm_q4 {
+  --verse-text-start: -2.5vw;
+}
+.psc-gutter-markers.text-spacing .usfm_qm,
+.psc-gutter-markers.text-spacing .usfm_qm1 {
+  --verse-text-start: -15vw;
+}
+.psc-gutter-markers.text-spacing .usfm_qm2 {
+  --verse-text-start: -10vw;
+}
+.psc-gutter-markers.text-spacing .usfm_qm3 {
+  --verse-text-start: -5vw;
+}
+.psc-gutter-markers.text-spacing .usfm_ili,
+.psc-gutter-markers.text-spacing .usfm_ili1,
+.psc-gutter-markers.text-spacing .usfm_ili2 {
+  --verse-text-start: -7.5vw;
+}
+.psc-gutter-markers.text-spacing .usfm_iq,
+.psc-gutter-markers.text-spacing .usfm_iq1 {
+  --verse-text-start: -15vw;
+}
+.psc-gutter-markers.text-spacing .usfm_iq2 {
+  --verse-text-start: -10vw;
+}
+.psc-gutter-markers.text-spacing .usfm_iq3 {
+  --verse-text-start: -5vw;
+}
+
+/* RTL: move gutter to the right */
+.usfm.psc-gutter-markers[dir='rtl'] {
+  padding-right: 4em;
+  padding-left: 10px; /* restore base value */
+}
+
+.psc-gutter-markers[dir='rtl'] .para > .marker:not(.verse):not(.chapter):first-child {
+  left: auto;
+  right: calc(-1 * (var(--psc-gutter-width) - 0.5em) - var(--para-indent));
+  text-align: left;
+}
+
+/* ── Active text focus box ────────────────────────────────────────────────────
+   Applied via .psc-active-focus when viewOptions.hasActiveTextFocusBox is true.
+   Shows an outline box around the verse range under the cursor. When used
+   alongside .psc-gutter-markers, the --verse-text-start variable aligns the box
+   with the hanging-indent text start of poetry paragraphs. Without the gutter
+   class that variable defaults to 0px, so poetry alignment is approximate. */
+
+.psc-active-focus {
+  --scripture-accent: #c4956a;
+}
+
+/* position: relative on the active paragraph is the containing block for ::before. */
+.psc-active-focus .psc-active-text {
   position: relative;
 }
-.psc-paragraph-structure .psc-active-text::before {
+
+.psc-active-focus .psc-active-text::before {
   content: '';
   position: absolute;
   left: var(--verse-text-start, 0px);
@@ -2446,192 +2639,8 @@ span.read img {
   pointer-events: none;
 }
 
-.psc-paragraph-structure .psc-empty-text::after {
-  content: 'â€¦';
-  color: var(--muted-foreground, #6b7280);
-  font-style: italic;
-}
-
-.psc-paragraph-structure .usfm_s,
-.psc-paragraph-structure .usfm_s1,
-.psc-paragraph-structure .usfm_s2,
-.psc-paragraph-structure .usfm_s3 {
-  text-align: center;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-size: 0.8rem;
-  font-weight: 400;
-  color: var(--muted-foreground, #6b7280);
-  border-top: none;
-  margin-top: 1rem;
-}
-
-/* â”€â”€ Marker column â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   Paragraph-level markers appear in a fixed-width gutter to the left of the
-   content area. The .editor-input left padding creates the gutter space;
-   each .para > .marker span is pulled into it with absolute positioning.
-
-   --para-indent tracks each paragraph type's margin-left so the marker is
-   always anchored at the same gutter position regardless of indent level.
-   Only overridden when .text-spacing is also present (same condition as the
-   margin-left rules above). */
-
-.usfm.psc-paragraph-structure {
-  padding-left: 4em;
-}
-
-/* Generalize position: relative to all .para elements (not just psc-active-text)
-   so the absolutely-positioned .marker span has the right containing block. */
-.psc-paragraph-structure .para {
-  position: relative;
-  --para-indent: 0px;
-  --verse-text-start: 0px;
-}
-
-/* Hide non-verse marker spans and milestone attribute spans (|sid=, |eid= text).
-   In markerMode "visible", the adaptor creates:
-     - class "marker" nodes for \zmsc-s and \* text
-     - class "attribute" nodes for |sid="..." and |eid="..." text
-   Both are invisible here; the paragraph's own marker goes in the gutter.
-   :not(.chapter) exempts ImmutableChapterNode which also gets class "marker" when
-   showMarker=true â€” the chapter number is shown via its own ::after rule above. */
-.psc-paragraph-structure .marker:not(.verse):not(.chapter),
-.psc-paragraph-structure .attribute {
-  display: none;
-}
-
-/* Only the :first-child .marker is the paragraph's own type identifier (e.g. \p, \q1).
-   Milestone and character markers that appear later in the paragraph are NOT shown in the
-   gutter â€” they are already hidden by the .marker:not(.verse):not(.chapter) rule above.
-   :not(.verse) excludes ImmutableVerseNode; :not(.chapter) excludes ImmutableChapterNode. */
-.psc-paragraph-structure .para > .marker:not(.verse):not(.chapter):first-child {
-  display: block;
-  position: absolute;
-  /* left = -(gutter-width) + 0.5em-gap + para-indent-compensation
-     = -(3em + 0.5em) - var(--para-indent) relative to the para's left edge */
-  left: calc(-3.5em - var(--para-indent));
-  top: 0;
-  width: 3em;
-  text-align: right;
-  white-space: nowrap;
-  color: var(--scripture-accent-marker);
-  font-size: 0.75em;
-  font-family: monospace;
-}
-
-/* When markerMode is "visible" the verse span includes "\v N" as a single text
-   node. Hide that text and re-render just the number from data-number so the
-   verse number stays visible without the "\v" prefix cluttering the line. */
-.psc-paragraph-structure .verse.marker > span {
-  font-size: 0;
-}
-.psc-paragraph-structure .verse.marker::after {
-  content: attr(data-number);
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--scripture-accent);
-  vertical-align: unset;
-  position: relative;
-  top: -1px;
-  background: none;
-}
-
-/* Indent compensation â€” mirrors the margin-left values above.
-   Only active when .text-spacing is present (same condition as the source rules). */
-.psc-paragraph-structure.text-spacing .usfm_io,
-.psc-paragraph-structure.text-spacing .usfm_io1,
-.psc-paragraph-structure.text-spacing .usfm_ili,
-.psc-paragraph-structure.text-spacing .usfm_ili1,
-.psc-paragraph-structure.text-spacing[dir='ltr'] .usfm_pi2 {
-  --para-indent: 10vw;
-}
-.psc-paragraph-structure.text-spacing .usfm_q,
-.psc-paragraph-structure.text-spacing .usfm_q1,
-.psc-paragraph-structure.text-spacing .usfm_q2,
-.psc-paragraph-structure.text-spacing .usfm_q3,
-.psc-paragraph-structure.text-spacing .usfm_q4,
-.psc-paragraph-structure.text-spacing .usfm_io2,
-.psc-paragraph-structure.text-spacing .usfm_ili2,
-.psc-paragraph-structure.text-spacing[dir='ltr'] .usfm_pi3 {
-  --para-indent: 15vw;
-}
-.psc-paragraph-structure.text-spacing .usfm_qm,
-.psc-paragraph-structure.text-spacing .usfm_qm1,
-.psc-paragraph-structure.text-spacing .usfm_io3 {
-  --para-indent: 20vw;
-}
-.psc-paragraph-structure.text-spacing .usfm_io4 {
-  --para-indent: 25vw;
-}
-.psc-paragraph-structure.text-spacing .usfm_ipi,
-.psc-paragraph-structure.text-spacing .usfm_imi,
-.psc-paragraph-structure.text-spacing .usfm_pmo,
-.psc-paragraph-structure.text-spacing .usfm_pm,
-.psc-paragraph-structure.text-spacing .usfm_pmc,
-.psc-paragraph-structure.text-spacing .usfm_pmr,
-.psc-paragraph-structure.text-spacing .usfm_pi,
-.psc-paragraph-structure.text-spacing .usfm_pi1,
-.psc-paragraph-structure.text-spacing .usfm_mi {
-  --para-indent: 5vw;
-}
-
-/* --verse-text-start mirrors the text-indent values for paragraphs with a
-   negative text-indent (hanging indent). These paragraphs render their first
-   line to the LEFT of the element's border edge, so the active text ::before
-   must start at text-indent to align with the text. */
-.psc-paragraph-structure.text-spacing .usfm_q,
-.psc-paragraph-structure.text-spacing .usfm_q1 {
-  --verse-text-start: -10vw;
-}
-.psc-paragraph-structure.text-spacing .usfm_q2 {
-  --verse-text-start: -7.5vw;
-}
-.psc-paragraph-structure.text-spacing .usfm_q3 {
-  --verse-text-start: -5vw;
-}
-.psc-paragraph-structure.text-spacing .usfm_q4 {
-  --verse-text-start: -2.5vw;
-}
-.psc-paragraph-structure.text-spacing .usfm_qm,
-.psc-paragraph-structure.text-spacing .usfm_qm1 {
-  --verse-text-start: -15vw;
-}
-.psc-paragraph-structure.text-spacing .usfm_qm2 {
-  --verse-text-start: -10vw;
-}
-.psc-paragraph-structure.text-spacing .usfm_qm3 {
-  --verse-text-start: -5vw;
-}
-.psc-paragraph-structure.text-spacing .usfm_ili,
-.psc-paragraph-structure.text-spacing .usfm_ili1,
-.psc-paragraph-structure.text-spacing .usfm_ili2 {
-  --verse-text-start: -7.5vw;
-}
-.psc-paragraph-structure.text-spacing .usfm_iq,
-.psc-paragraph-structure.text-spacing .usfm_iq1 {
-  --verse-text-start: -15vw;
-}
-.psc-paragraph-structure.text-spacing .usfm_iq2 {
-  --verse-text-start: -10vw;
-}
-.psc-paragraph-structure.text-spacing .usfm_iq3 {
-  --verse-text-start: -5vw;
-}
-
-/* RTL: move gutter to the right */
-.usfm.psc-paragraph-structure[dir='rtl'] {
-  padding-right: 4em;
-  padding-left: 10px; /* restore base value */
-}
-
-.psc-paragraph-structure[dir='rtl'] .para > .marker:not(.verse):not(.chapter):first-child {
-  left: auto;
-  right: calc(-3.5em - var(--para-indent));
-  text-align: left;
-}
-
 /* RTL: active text box mirrors the hanging indent to the right side */
-.psc-paragraph-structure[dir='rtl'] .psc-active-text::before {
+.psc-active-focus[dir='rtl'] .psc-active-text::before {
   left: 0;
   right: var(--verse-text-start, 0px);
 }
