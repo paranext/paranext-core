@@ -533,12 +533,9 @@ export function selectProjectIdsForOpenMode(
  * - `'wrong-mode'` — `platform.interfaceMode` is not `'simple'`; the picker does nothing until it is.
  * - `'no-empty'` — no empty Scripture Editor (no `projectId`) is currently open. The driver may retry
  *   when a new web view opens.
- * - `'no-send-receive'` — `paratextBibleSendReceive.getSharedProjects` was unavailable (command not
- *   registered yet, or the extension is absent). Expected steady state on Platform.Bible; expected
- *   transiently on paratext-10-studio during the window between platform-scripture-editor's
- *   activation and paratextBibleSendReceive's activation. The driver retries on subsequent
- *   web-view-open and sync-completion events. Logged at debug, not warn — silent on
- *   Platform.Bible.
+ * - `'no-send-receive'` — `recentlyOpenedProjects` was empty or all entries failed to open, and S/R
+ *   is unavailable or hasn't activated yet. Expected on Platform.Bible on first launch (no recents
+ *   yet, no S/R). Logged at debug.
  * - `'failed'` — the open command rejected; logged at warn. The driver may retry on the next trigger.
  * - `'no-candidate'` — S/R was reachable, but no shared project passed the activity / `editedStatus`
  *   filter. Projects with `editedStatus` of `'new'` (not yet downloaded locally) or
@@ -599,11 +596,12 @@ async function tryOpenFromRecentlyOpened(
 
 /**
  * Attempt to fill the empty Scripture Editor in the simple layout with the most-recently-active
- * shared project. Candidates come from `paratextBibleSendReceive.getSharedProjects` (internet S/R
- * excludes Observer-only projects upstream; local-repository S/R does not). The picker partitions
- * remaining candidates by `canUserEditScripture` and prefers editable projects, falling back to the
- * most-recently-S/R'd Observer-only project so an Observer-only user is not stranded with an empty
- * editor (Observer projects are otherwise reachable via the project switcher).
+ * project. Candidates come first from `recentlyOpenedProjects` (tried in order, most-recent first);
+ * `paratextBibleSendReceive.getSharedProjects` is the fallback when recents is empty or all entries
+ * fail to open. The picker partitions remaining candidates by `canUserEditScripture` and prefers
+ * editable projects, falling back to the most-recently-S/R'd Observer-only project so an
+ * Observer-only user is not stranded with an empty editor (Observer projects are otherwise
+ * reachable via the project switcher).
  *
  * Idempotent: each invocation re-reads the dock and the shared-projects list. The driver in
  * {@link startDefaultProjectPicker} is responsible for re-invoking on events that change those
