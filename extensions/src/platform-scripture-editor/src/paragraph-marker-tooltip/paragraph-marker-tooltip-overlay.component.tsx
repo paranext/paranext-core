@@ -180,7 +180,8 @@ export function ParagraphMarkerTooltipOverlay({ children }: Props) {
     >
       {children}
       <TooltipProvider>
-        <Tooltip open={!!hoveredData}>
+        {/* onOpenChange no-op satisfies Radix controlled-component contract and silences dev warning */}
+        <Tooltip open={!!hoveredData} onOpenChange={() => {}}>
           <TooltipTrigger
             aria-hidden="true"
             tabIndex={-1}

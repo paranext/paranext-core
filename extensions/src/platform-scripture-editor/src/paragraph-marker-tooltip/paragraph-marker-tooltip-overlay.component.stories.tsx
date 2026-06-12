@@ -75,6 +75,22 @@ export const Default: Story = {
         <p className="para usfm_sp" style={{ ...PARA_STYLE, color: 'gray', fontSize: '0.875em' }}>
           (Unknown marker &mdash; hover to see raw USFM fallback: \sp)
         </p>
+        {/* contentEditable lets keydown events reach the overlay's capture listener,
+            so the tooltip dismisses on typing — the same as Lexical provides at runtime. */}
+        <div
+          contentEditable
+          suppressContentEditableWarning
+          style={{
+            marginTop: '8px',
+            padding: '4px 6px',
+            borderTop: '1px dashed hsl(var(--border))',
+            color: 'gray',
+            fontSize: '0.8em',
+            outline: 'none',
+          }}
+        >
+          Click here and type to dismiss the tooltip (simulates typing in the real editor)
+        </div>
       </ParagraphMarkerTooltipOverlay>
     </div>
   ),
