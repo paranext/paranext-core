@@ -100,6 +100,7 @@ import {
   openCommentListAndSelectThreadSafe,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
 } from './platform-scripture-editor.utils';
+import { ParagraphMarkerTooltipOverlay } from './paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component';
 
 /**
  * Pass-through wrapper for the editor inside {@link InPortal}. `react-reverse-portal`'s `InPortal`
@@ -1636,23 +1637,25 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return (
       <>
         {workaround}
-        <EditorKeyboardShortcuts editorRef={editorRef}>
-          <Editorial
-            ref={editorRef}
-            scrRef={scrRef}
-            onScrRefChange={setScrRefNoScroll}
-            options={options}
-            logger={logger}
-            onUsjChange={isReadOnly ? undefined : handleEditorialUsjChange}
-            onSelectionChange={handleSelectionChange}
-            onStateChange={(state) => {
-              setCanUndo(state.canUndo);
-              setCanRedo(state.canRedo);
-              setBlockMarker(state.blockMarker);
-              setContextMarker(state.contextMarker);
-            }}
-          />
-        </EditorKeyboardShortcuts>
+        <ParagraphMarkerTooltipOverlay>
+          <EditorKeyboardShortcuts editorRef={editorRef}>
+            <Editorial
+              ref={editorRef}
+              scrRef={scrRef}
+              onScrRefChange={setScrRefNoScroll}
+              options={options}
+              logger={logger}
+              onUsjChange={isReadOnly ? undefined : handleEditorialUsjChange}
+              onSelectionChange={handleSelectionChange}
+              onStateChange={(state) => {
+                setCanUndo(state.canUndo);
+                setCanRedo(state.canRedo);
+                setBlockMarker(state.blockMarker);
+                setContextMarker(state.contextMarker);
+              }}
+            />
+          </EditorKeyboardShortcuts>
+        </ParagraphMarkerTooltipOverlay>
       </>
     );
   }

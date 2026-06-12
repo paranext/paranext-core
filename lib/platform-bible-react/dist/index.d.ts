@@ -2635,7 +2635,9 @@ export declare function Tooltip({ ...props }: React$1.ComponentProps<typeof Tool
 /** @inheritdoc Tooltip */
 export declare function TooltipTrigger({ className, variant, ...props }: React$1.ComponentProps<typeof TooltipPrimitive.Trigger> & ButtonProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Tooltip */
-export declare function TooltipContent({ className, sideOffset, style, children, ...props }: React$1.ComponentProps<typeof TooltipPrimitive.Content>): import("react/jsx-runtime").JSX.Element;
+export declare function TooltipContent({ className, sideOffset, style, showArrow, children, ...props }: React$1.ComponentProps<typeof TooltipPrimitive.Content> & {
+	showArrow?: boolean;
+}): import("react/jsx-runtime").JSX.Element;
 type Side = "primary" | "secondary";
 type SidebarContextProps = {
 	state: "expanded" | "collapsed";
