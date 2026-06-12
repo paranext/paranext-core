@@ -509,7 +509,10 @@ function createPickerMocks(): PickerMocks {
   const mockRecordProjectOpened = vi.fn().mockResolvedValue(undefined);
   const mockDataProvidersGet = vi.fn().mockImplementation(async (name: string) => {
     if (name === 'platformScripture.recentlyOpenedProjects') {
-      return { get: mockRecentProjectsGet, recordProjectOpened: mockRecordProjectOpened };
+      return {
+        getRecentProjects: mockRecentProjectsGet,
+        recordProjectOpened: mockRecordProjectOpened,
+      };
     }
     return undefined;
   });

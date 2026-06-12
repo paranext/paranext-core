@@ -565,7 +565,7 @@ async function tryOpenFromRecentlyOpened(
   try {
     const service = await papi.dataProviders.get('platformScripture.recentlyOpenedProjects');
     if (!service) return undefined;
-    recentProjects = (await service.get('RecentProjects', undefined)) ?? [];
+    recentProjects = (await service.getRecentProjects(undefined)) ?? [];
     recordOpened = (projectId: string) => service.recordProjectOpened(projectId);
   } catch (e) {
     papi.logger.debug(
