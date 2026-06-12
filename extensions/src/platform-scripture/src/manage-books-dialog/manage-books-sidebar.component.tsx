@@ -52,7 +52,7 @@ type SectionDef = {
    * When set, this row starts a new visual group. Groups are separated by whitespace only (per the
    * Manila UX follow-up — no separator lines, no headings).
    */
-  groupStart?: 'manage' | 'reference';
+  groupStart?: 'reference';
   /** When true, render the row in disabled/muted state with a "not yet available" tooltip. */
   disabled?: boolean;
   /** Lucide icon to render to the left of the label. */
@@ -60,8 +60,10 @@ type SectionDef = {
 };
 
 const SECTIONS: readonly SectionDef[] = [
+  // 'show' and the four mutating sections render as ONE contiguous group (UX
+  // follow-up 2026-06-12); only the reference group below keeps its gap.
   { id: 'show', Icon: BookOpenCheck },
-  { id: 'create', groupStart: 'manage', Icon: BookPlus },
+  { id: 'create', Icon: BookPlus },
   { id: 'copy', Icon: Copy },
   { id: 'import', Icon: FolderInput },
   { id: 'delete', Icon: Trash2 },
@@ -267,7 +269,7 @@ export function ManageBooksSidebar({
       <div
         className={cn(
           'tw:flex tw:flex-col tw:gap-1 tw:pt-2 tw:pb-3',
-          isNarrow ? 'tw:px-0' : 'tw:px-2',
+          isNarrow ? 'tw:px-0.5' : 'tw:px-2',
         )}
       >
         {!isNarrow && (
@@ -290,7 +292,7 @@ export function ManageBooksSidebar({
           const fullName = activeProject?.fullName;
           const shortName = activeProject?.shortName;
           const selectorElement = (
-            <div data-testid="manage-books-sidebar-project-trigger">
+            <div data-testid="manage-books-sidebar-project-trigger" className="tw:w-full">
               <ProjectSelector
                 mode="project"
                 projects={projects}
@@ -299,10 +301,16 @@ export function ManageBooksSidebar({
                 onChangeSelection={({ projectId: nextId }) => {
                   if (nextId) onProjectIdChange(nextId);
                 }}
+                // Narrow rail: full-width trigger, no chevron (it would consume the
+                // whole content box), tighter padding + text-xs so ~4-6 characters of
+                // the shortName stay visible — enough to identify the project. The
+                // outline variant keeps it recognizable as a control; the right-side
+                // tooltip below carries the full name.
                 buttonClassName={cn(
                   'tw:h-8 tw:font-normal',
-                  isNarrow ? 'tw:w-10 tw:justify-center tw:px-2' : 'tw:w-full',
+                  isNarrow ? 'tw:w-full tw:px-0.5 tw:text-xs' : 'tw:w-full',
                 )}
+                hideTriggerChevron={isNarrow}
                 isDisabled={isSubmitting}
                 ariaLabel={t('%manageBooks_header_projectLabel%', 'Project')}
                 triggerLabelFormat={isNarrow ? 'shortName' : 'shortNameAndFullName'}

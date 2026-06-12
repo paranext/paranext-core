@@ -573,16 +573,15 @@ export function BookGridSelector({
   const anyUnplanned = items.some((it) => it.unplanned);
   const needsWiderPills = anyBadges || anyUnplanned;
   // Minimum column widths track actual pill content (checkbox + dot + 3-char
-  // book code ≈ 90px; + comparison badge / warning glyph ≈ 170px) instead of
-  // the original 200px/260px floors, which left large dead space between the
-  // book code and the right-aligned badge and meant a full canon never fit on
-  // screen at once (Manila UX follow-up: "make book name columns more narrow
-  // ... so that all books can be viewed at once"). auto-fill+minmax then packs
-  // 6-8 columns at typical dialog widths instead of 4-5. The badge floor was
-  // sized against the longest current localized badge label ("Newer"/"Older"
-  // variants) — revisit if a longer translation lands.
+  // book code ≈ 90px; + comparison badge / warning glyph ≈ 170px). Floors sit
+  // just above the content minimum (UX follow-up round 2: the earlier
+  // 140px/190px floors still left visible dead space inside the pills) so a
+  // full canon fits on screen at once; auto-fill+minmax packs as many columns
+  // as the width allows. The badge floor was sized against the longest current
+  // localized badge label ("Newer"/"Older" variants) — revisit if a longer
+  // translation lands.
   const gridStyle: CSSProperties = {
-    gridTemplateColumns: `repeat(auto-fill, minmax(${needsWiderPills ? 190 : 140}px, 1fr))`,
+    gridTemplateColumns: `repeat(auto-fill, minmax(${needsWiderPills ? 170 : 100}px, 1fr))`,
   };
 
   const outOfScopeText = localizedStrings?.outOfScope ?? 'Out of scope';
@@ -698,9 +697,10 @@ export function BookGridSelector({
         <Tooltip>
           <TooltipTrigger asChild>{plain}</TooltipTrigger>
           {/* Tooltip renders bottom-CENTER so it stays near the cursor on
-              wide pills (Manila UX follow-up: "tooltip should be a bit closer
-              to the item"). */}
-          <TooltipContent side="bottom" align="center">
+              wide pills, and pulls 4px closer than the platform tooltip's
+              default arrow gap (UX follow-up round 2: "move the tooltip on
+              the pill closer to the pill"). */}
+          <TooltipContent side="bottom" align="center" sideOffset={-4}>
             {tooltipContent}
           </TooltipContent>
         </Tooltip>
@@ -767,7 +767,7 @@ export function BookGridSelector({
         <TooltipTrigger asChild>{button}</TooltipTrigger>
         {/* Tooltip renders bottom-CENTER so it stays near the cursor on wide
             pills (Manila UX follow-up). */}
-        <TooltipContent side="bottom" align="center">
+        <TooltipContent side="bottom" align="center" sideOffset={-4}>
           {tooltipContent}
         </TooltipContent>
       </Tooltip>
