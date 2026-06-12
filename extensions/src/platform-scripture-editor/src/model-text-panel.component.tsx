@@ -26,7 +26,9 @@ const DEFAULT_TEXT_DIRECTION = 'ltr';
  * prop.
  */
 export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
+  /** @deprecated Use `%webView_modelTextPanel_selecting%` instead. */
   '%webView_modelTextPanel_installing%',
+  '%webView_modelTextPanel_selecting%',
   '%webView_modelTextPanel_noProject%',
   '%webView_modelTextPanel_pickModelText%',
   '%webView_modelTextPanel_unknownResource%',
@@ -132,15 +134,9 @@ export function ModelTextPanel({
     dblRef = effectiveModelText as EffectiveResourceReference & DblResourceReference;
   }
   const match = dblRef ? dblResources.find((r) => r.dblEntryUid === dblRef.id) : undefined;
-
-  // Auto-install when the resource exists but isn't installed yet
-  const isInstalling = dblRef !== undefined && match !== undefined && !match.installed;
-  const matchDblEntryUid = match?.dblEntryUid;
-  useEffect(() => {
-    if (isInstalling && matchDblEntryUid !== undefined) installResource(matchDblEntryUid);
-  }, [isInstalling, matchDblEntryUid, installResource]);
-
   const resourceProjectId = match?.installed ? match.projectId : undefined;
+
+  const [isSelecting, setIsSelecting] = useState(false);
 
   // --- Load the resolved resource's chapter USJ (re-fetch on resource/reference change) ---
 
@@ -214,8 +210,9 @@ export function ModelTextPanel({
   }, [effectiveModelTexts]);
 
   const handleResourceSelect = useCallback(
-    async (resource: DblResourceData) =>
-      selectTextConnection(
+    async (resource: DblResourceData) => {
+      setIsSelecting(true);
+      await selectTextConnection(
         resource,
         adminModelTexts,
         setAdminModelTexts,
@@ -223,7 +220,9 @@ export function ModelTextPanel({
         getUserModelTexts,
         setUserModelTexts,
         async () => installResource(resource.dblEntryUid),
-      ),
+      );
+      setIsSelecting(false);
+    },
     [
       adminModelTexts,
       getCanWriteProjectSettings,
@@ -281,11 +280,11 @@ export function ModelTextPanel({
   }
 
   // Installing: resource found but not yet installed.
-  if (isInstalling) {
+  if (isSelecting) {
     return (
       <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:gap-2 tw:p-8 tw:text-center">
         <Spinner />
-        <span>{localizedStrings['%webView_modelTextPanel_installing%']}</span>
+        <span>{localizedStrings['%webView_modelTextPanel_selecting%']}</span>
       </div>
     );
   }

@@ -44,7 +44,7 @@ const DEFAULT_TEXT_DIRECTION = 'ltr';
 
 const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
   '%webView_resourcePanel_noProject%',
-  '%webView_resourcePanel_installing%',
+  '%webView_resourcePanel_selecting%',
   '%webView_resourcePanel_downloadResources%',
   '%webView_resourcePanel_bibleTexts_emptyState_prompt%',
   '%webView_resourcePanel_bibleTexts_pick%',
@@ -268,12 +268,11 @@ globalThis.webViewComponent = function ResourceTextPanel({
     filteredResources.find((r) => getRefId(r) === selectedResourceId) ?? filteredResources[0];
 
   let resourceProjectId: string | undefined;
-  let isInstalling = false;
   let dblMatch: (typeof dblResources)[number] | undefined;
+  const [isSelecting, setIsSelecting] = useState(false);
 
   if (isDblResourceReference(selectedRef)) {
     dblMatch = dblResources.find((r) => r.dblEntryUid === selectedRef.id);
-    isInstalling = dblMatch !== undefined && !dblMatch.installed;
     resourceProjectId = dblMatch?.installed ? dblMatch.projectId : undefined;
   } else if (isProjectReference(selectedRef)) {
     resourceProjectId = selectedRef.id;
@@ -374,8 +373,9 @@ globalThis.webViewComponent = function ResourceTextPanel({
   }, [filteredResources]);
 
   const handleResourceSelect = useCallback(
-    (resource: DblResourceData) =>
-      selectTextConnection(
+    async (resource: DblResourceData) => {
+      setIsSelecting(true);
+      await selectTextConnection(
         resource,
         adminResourceList,
         setAdminResourceTexts,
@@ -400,7 +400,9 @@ globalThis.webViewComponent = function ResourceTextPanel({
             }
           : undefined,
         (dblEntryUid: string) => setPendingResourceId(dblEntryUid),
-      ),
+      );
+      setIsSelecting(false);
+    },
     [
       adminResourceList,
       dblResourcesProvider,
@@ -491,11 +493,11 @@ globalThis.webViewComponent = function ResourceTextPanel({
   }
 
   // Installing state: selected DblResource found but not yet installed
-  if (isInstalling) {
+  if (isSelecting) {
     return (
       <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:gap-2 tw:p-8 tw:text-center">
         <Spinner />
-        <span>{localizedStrings['%webView_resourcePanel_installing%']}</span>
+        <span>{localizedStrings['%webView_resourcePanel_selecting%']}</span>
       </div>
     );
   }

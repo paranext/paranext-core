@@ -11,6 +11,18 @@
     },
     "%webView_platformScriptureEditor_switchScriptureView%": {
       "fallbackKey": "%Paratext.TextForm.nextViewToolStripMenuItem.Text%"
+    },
+    "%webView_modelTextPanel_installing%": {
+      "deprecationInfo": {
+        "date": "2026-06-12",
+        "message": "The model text panel now uses the %webView_modelTextPanel_selecting%"
+      }
+    },
+    "%webView_resourcePanel_installing%": {
+      "deprecationInfo": {
+        "date": "2026-06-12",
+        "message": "The resource panel now uses the %webView_resourcePanel_selecting%"
+      }
     }
   },
   "localizedStrings": {
@@ -90,6 +102,7 @@
       "%webView_platformScriptureEditor_title_readonly_no_project%": "Resource Viewer",
       "%webView_platformScriptureEditor_tools%": "Tools",
       "%webView_modelTextPanel_installing%": "Installing resource…",
+      "%webView_modelTextPanel_selecting%": "Selecting resource…",
       "%webView_modelTextPanel_noProject%": "No project selected.",
       "%webView_modelTextPanel_pickModelText%": "Pick model text…",
       "%webView_modelTextPanel_title%": "Model text",
@@ -106,6 +119,7 @@
       "%webView_resourcePanel_commentaries_title_withResource%": "Commentary: {textName}",
       "%webView_resourcePanel_downloadResources%": "Download resources…",
       "%webView_resourcePanel_installing%": "Installing resource…",
+      "%webView_resourcePanel_selecting%": "Selecting resource…",
       "%webView_resourcePanel_noProject%": "No project selected.",
       "%webView_selectDblResource_installFailed%": "Failed to install resource. Please try again."
     },
@@ -183,6 +197,7 @@
       "%webView_platformScriptureEditor_title_readonly_no_project%": "Visor de recursos",
       "%webView_platformScriptureEditor_tools%": "Herramientas",
       "%webView_modelTextPanel_installing%": "Instalando recurso…",
+      "%webView_modelTextPanel_selecting%": "Seleccionando recurso…",
       "%webView_modelTextPanel_noProject%": "Ningún proyecto seleccionado.",
       "%webView_modelTextPanel_pickModelText%": "Elegir texto modelo…",
       "%webView_modelTextPanel_title%": "Texto modelo",
@@ -199,6 +214,7 @@
       "%webView_resourcePanel_commentaries_title_withResource%": "Comentario bíblico: {textName}",
       "%webView_resourcePanel_downloadResources%": "Descargar recursos…",
       "%webView_resourcePanel_installing%": "Instalando recurso…",
+      "%webView_resourcePanel_selecting%": "Seleccionando recurso…",
       "%webView_resourcePanel_noProject%": "Ningún proyecto seleccionado."
     }
   }
