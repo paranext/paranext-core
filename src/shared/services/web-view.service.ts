@@ -49,6 +49,8 @@ async function initialize(): Promise<void> {
           networkObject = localWebViewService;
           resolve();
         } catch (error) {
+          // Reset so the next caller gets a fresh attempt rather than the cached rejection
+          initializationPromise = undefined;
           reject(error);
         }
       };

@@ -199,7 +199,7 @@ const defaultView: ViewOptions = getDefaultViewOptions();
 const getViewOptionsForType = (viewType: ScriptureEditorViewType): ViewOptions => {
   const base = { ...defaultView };
   if (viewType === 'markers') return { ...base, markerMode: 'visible', noteMode: 'expanded' };
-  return base;
+  return { ...base, markerMode: 'visible', showParagraphStructure: true };
 };
 
 // This regex is connected directly to the exception message within MissingBookException.cs
@@ -1086,10 +1086,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const setScrRefNoScroll = useCallback(
     (newVerseLocation: SerializedVerseRef) => {
-      internalVerseLocationRef.current = newVerseLocation;
-      setScrRefWithScroll(newVerseLocation);
+      // Preserve versificationStr: ScriptureReferencePlugin returns {book, chapterNum, verseNum}
+      // without versificationStr, so falling back to scrRef keeps the versification consistent and
+      // prevents the PDP selector from changing on every click.
+      const preservedLocation: SerializedVerseRef = {
+        ...newVerseLocation,
+        versificationStr: newVerseLocation.versificationStr ?? scrRef.versificationStr,
+      };
+      internalVerseLocationRef.current = preservedLocation;
+      setScrRefWithScroll(preservedLocation);
     },
-    [setScrRefWithScroll],
+    [setScrRefWithScroll, scrRef.versificationStr],
   );
 
   /**
