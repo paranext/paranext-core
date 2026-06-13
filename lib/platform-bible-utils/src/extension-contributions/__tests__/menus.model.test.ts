@@ -28,19 +28,57 @@ describe('menus.model — isExperimental field', () => {
     expect(m.isExperimental).toBe(true);
   });
 
+  // Builds a minimal valid menu document, optionally overriding the `mainMenu`.
+  const makeDoc = (mainMenu: object) => ({
+    mainMenu,
+    defaultWebViewTopMenu: { columns: {}, groups: {}, items: [] },
+    defaultWebViewContextMenu: { groups: {}, items: [] },
+    webViewMenus: {},
+  });
+
+  const compileValidator = () => new Ajv2019({ allErrors: true }).compile(menuDocumentSchema);
+
   it('JSON schema accepts isExperimental on column entries', () => {
-    const ajv = new Ajv2019({ allErrors: true });
-    const validate = ajv.compile(menuDocumentSchema);
+    const validate = compileValidator();
+    const doc = makeDoc({
+      columns: { 'a.b': { label: '%x%', order: 1, isExtensible: true, isExperimental: true } },
+      groups: {},
+      items: [],
+    });
+    expect(validate(doc)).toBe(true);
+  });
+
+  it('JSON schema accepts isExperimental at the columns-collection level', () => {
+    const validate = compileValidator();
+    const doc = makeDoc({ columns: { isExperimental: true }, groups: {}, items: [] });
+    expect(validate(doc)).toBe(true);
+  });
+
+  it('JSON schema rejects a non-boolean isExperimental', () => {
+    const validate = compileValidator();
+    const doc = makeDoc({
+      columns: { 'a.b': { label: '%x%', order: 1, isExperimental: 'true' } },
+      groups: {},
+      items: [],
+    });
+    expect(validate(doc)).toBe(false);
+  });
+
+  it('JSON schema rejects a typo at the columns-collection level (additionalProperties: false)', () => {
+    const validate = compileValidator();
+    // `isExperimentl` is neither a column key (no dot) nor a known property.
+    const doc = makeDoc({ columns: { isExperimentl: true }, groups: {}, items: [] });
+    expect(validate(doc)).toBe(false);
+  });
+
+  it('JSON schema rejects a typo on a webViewMenus entry (additionalProperties: false)', () => {
+    const validate = compileValidator();
     const doc = {
-      mainMenu: {
-        columns: { 'a.b': { label: '%x%', order: 1, isExtensible: true, isExperimental: true } },
-        groups: {},
-        items: [],
-      },
+      mainMenu: { columns: {}, groups: {}, items: [] },
       defaultWebViewTopMenu: { columns: {}, groups: {}, items: [] },
       defaultWebViewContextMenu: { groups: {}, items: [] },
-      webViewMenus: {},
+      webViewMenus: { 'a.b': { isExperimentl: true } },
     };
-    expect(validate(doc)).toBe(true);
+    expect(validate(doc)).toBe(false);
   });
 });

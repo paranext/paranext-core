@@ -266,6 +266,9 @@ export const menuDocumentSchema = {
           type: 'boolean',
         },
       },
+      // Reject unknown keys at the collection level (e.g. a typo'd `isExperimentl`). Column entries
+      // are still allowed via `patternProperties` above.
+      additionalProperties: false,
     },
     menuGroups: {
       description:
