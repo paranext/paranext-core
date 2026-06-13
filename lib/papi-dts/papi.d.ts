@@ -5728,6 +5728,36 @@ declare module 'shared/models/project-data-provider-engine-factory.model' {
   import type { NetworkObjectDocumentation } from 'shared/models/openrpc.model';
   import { ProjectInterfaces } from 'papi-shared-types';
   /**
+   * Envelope that {@link IProjectDataProviderEngineFactory.createProjectDataProviderEngine} may return
+   * instead of the engine directly, carrying per-PDP network object metadata alongside the engine.
+   *
+   * WARNING: `projectDataProviderEngine` is a reserved discriminating property — do not expose a
+   * property by that name on a raw engine, or the platform will treat the engine as an envelope.
+   */
+  export interface ProjectDataProviderEngineEnvelope<
+    SupportedProjectInterfaces extends ProjectInterfaces[],
+  > {
+    projectDataProviderEngine: IProjectDataProviderEngine<SupportedProjectInterfaces>;
+    attributes?: {
+      [property: string]: unknown;
+    };
+    documentation?: NetworkObjectDocumentation;
+  }
+  /**
+   * Type guard: whether a `createProjectDataProviderEngine` return value is a
+   * {@link ProjectDataProviderEngineEnvelope} rather than a raw engine. Guards against
+   * `typeof null === 'object'` and against a raw engine that merely exposes a
+   * `projectDataProviderEngine` property of a non-object type. Written as a user-defined type guard so
+   * the value check doesn't defeat the narrowing at call sites.
+   */
+  export function isProjectDataProviderEngineEnvelope<
+    SupportedProjectInterfaces extends ProjectInterfaces[],
+  >(
+    value:
+      | IProjectDataProviderEngine<SupportedProjectInterfaces>
+      | ProjectDataProviderEngineEnvelope<SupportedProjectInterfaces>,
+  ): value is ProjectDataProviderEngineEnvelope<SupportedProjectInterfaces>;
+  /**
    * A factory object registered with the papi that creates a Project Data Provider Engine for each
    * project with the factory's specified `projectInterface`s when the papi requests. Used by the papi
    * to create {@link IProjectDataProviderEngine}s for a specific project and `projectInterface` when
@@ -5800,15 +5830,11 @@ declare module 'shared/models/project-data-provider-engine-factory.model' {
      * @returns Either the {@link IProjectDataProviderEngine} or an envelope containing the engine and
      *   per-PDP network object metadata (attributes and documentation).
      */
-    createProjectDataProviderEngine(projectId: string): Promise<
+    createProjectDataProviderEngine(
+      projectId: string,
+    ): Promise<
       | IProjectDataProviderEngine<SupportedProjectInterfaces>
-      | {
-          projectDataProviderEngine: IProjectDataProviderEngine<SupportedProjectInterfaces>;
-          attributes?: {
-            [property: string]: unknown;
-          };
-          documentation?: NetworkObjectDocumentation;
-        }
+      | ProjectDataProviderEngineEnvelope<SupportedProjectInterfaces>
     >;
   }
   /**

@@ -827,6 +827,22 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
   /* eslint-disable no-type-assertion/no-type-assertion */
   const onDidUpdateEmitter = (await networkService.createNetworkEventEmitterAsync(
     dynamicEventName as NetworkEventTypes,
+    {
+      notification: {
+        // Mark the update event experimental in lockstep with the provider's methods, so an
+        // experimental provider's `<id>:onDidUpdate` isn't surfaced as non-experimental.
+        'x-experimental': documentation?.['x-experimental'],
+        summary: 'Emitted when the data served by this data provider changes.',
+        params: [
+          {
+            name: 'updateInstructions',
+            required: true,
+            summary: 'Which data types changed (or all/none).',
+            schema: {},
+          },
+        ],
+      },
+    },
   )) as unknown as PlatformEventEmitter<
     DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>
   >;

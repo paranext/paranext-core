@@ -330,6 +330,10 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
       // arrives as untyped JSON over the websocket, so without this a client could list its event
       // under a different name.
       notificationEntry.name = eventName;
+      // A notification is identified by having no `result`; strip any `result` smuggled in over the
+      // websocket so an event can't masquerade as a method.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      delete (notificationEntry as { result?: unknown }).result;
       // Mark it as a notification — OpenRPC lists notifications alongside methods, so the
       // `(Notification) ` summary prefix distinguishes them. Then prepend the experimental prefix
       // ([EXPERIMENTAL] ) to the summary/description when the event is experimental.

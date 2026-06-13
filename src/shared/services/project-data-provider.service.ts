@@ -22,7 +22,10 @@ import { projectLookupService } from '@shared/services/project-lookup.service';
 import { ProjectMetadataWithoutFactoryInfo } from '@shared/models/project-metadata.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import { getPDPFactoryNetworkObjectNameFromId } from '@shared/models/project-lookup.service-model';
-import { IProjectDataProviderEngineFactory } from '@shared/models/project-data-provider-engine-factory.model';
+import {
+  IProjectDataProviderEngineFactory,
+  isProjectDataProviderEngineEnvelope,
+} from '@shared/models/project-data-provider-engine-factory.model';
 import type { NetworkObjectDocumentation } from '@shared/models/openrpc.model';
 
 /**
@@ -79,12 +82,7 @@ class ProjectDataProviderFactory<SupportedProjectInterfaces extends ProjectInter
       if (!pdpId) {
         const factoryReturn =
           await this.pdpEngineFactory.createProjectDataProviderEngine(projectId);
-        // `!!factoryReturn` guards against `typeof null === 'object'`, which would otherwise throw
-        // `Cannot use 'in' operator` for a factory that returns null.
-        const isEnvelope =
-          !!factoryReturn &&
-          typeof factoryReturn === 'object' &&
-          'projectDataProviderEngine' in factoryReturn;
+        const isEnvelope = isProjectDataProviderEngineEnvelope(factoryReturn);
         const projectDataProviderEngine = isEnvelope
           ? factoryReturn.projectDataProviderEngine
           : factoryReturn;

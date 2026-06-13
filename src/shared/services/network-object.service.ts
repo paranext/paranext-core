@@ -508,6 +508,10 @@ const set = async <T extends NetworkableObject>(
         () => Promise.resolve(true),
         {
           method: {
+            // The existence method (`object:{id}`) carries the object's own summary, so it must also
+            // carry the object-level experimental marker — otherwise it would render unmarked while
+            // every `object:{id}.method` is `[EXPERIMENTAL]`.
+            'x-experimental': objectDocumentation['x-experimental'],
             summary: objectDocumentation.summary ?? '',
             description: objectDocumentation.description ?? '',
             params: [],
@@ -556,6 +560,16 @@ const set = async <T extends NetworkableObject>(
         { method: methodDocs },
       );
       unsubPromises.push(unsub);
+    });
+
+    // Warn about documentation entries for methods that don't match any exposed function name
+    // (typos, or names filtered out such as on*/dispose) — those entries are otherwise silently
+    // discarded and the method falls back to placeholder docs.
+    objectDocumentation.methods?.forEach((method) => {
+      if (!netObjDetails.functionNames.includes(method.name))
+        logger.warn(
+          `Network object "${id}" documentation includes method "${method.name}" that matches no exposed function name; the entry is ignored.`,
+        );
     });
 
     // Await all of the registrations finishing, successful or not
