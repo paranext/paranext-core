@@ -7,7 +7,7 @@ The human developer working in this session is the author of all commits and pul
 - Attribute commits and PRs to the human developer, not to yourself.
 - Use `git config user.name` and `git config user.email` to identify the author. If both are unset or look like placeholders (e.g. `noreply@`), ask the developer their name before making any commit.
 - Always append a `Co-Authored-By: Claude <noreply@anthropic.com>` trailer to commits where Claude generated or substantially rewrote code.
-- PR bodies may include an "AI-assisted" label or a session link, but the PR *author* field must name the human.
+- PR bodies may include an "AI-assisted" label or a session link, but the PR _author_ field must name the human.
 
 ## Why this file exists
 
