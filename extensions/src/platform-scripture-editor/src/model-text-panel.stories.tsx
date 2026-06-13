@@ -170,10 +170,11 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
         dblResources={resources}
         isLoadingResources={false}
         adminModelTexts={{ dataVersion: DATA_VERSION, items: adminItems }}
-        canWriteProjectSettings={config.canWriteProjectSettings ?? true}
+        getCanWriteProjectSettings={async () => config.canWriteProjectSettings ?? true}
+        getUserModelTexts={async () => undefined}
         scrRef={scrRef}
         onScrRefChange={setScrRef}
-        installResource={(uid) => {
+        installResource={async (uid) => {
           if (config.disableInstall) return;
           setResources((rs) =>
             rs.map((r) => (r.dblEntryUid === uid ? { ...r, installed: true } : r)),
@@ -187,7 +188,7 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
             list.items.filter((i): i is DblResourceReference => i.type === 'dblResource'),
           );
         }}
-        setUserModelTexts={(list) => {
+        setUserModelTexts={async (list) => {
           // Settings write — log it, then reflect it so the panel updates (thin CRUD).
           // eslint-disable-next-line no-console
           console.log('setUserModelTexts', list);

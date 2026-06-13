@@ -31,7 +31,11 @@ import {
 } from 'platform-bible-utils';
 import { ChevronDown } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { DblResourceReference, EffectiveResourceReference } from 'platform-scripture';
+import type {
+  DblResourceReference,
+  EffectiveResourceReference,
+  ResourceReferenceList,
+} from 'platform-scripture';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
 import { DEFAULT_RESOURCE_REFERENCE_LIST, selectTextConnection } from './select-dbl-resource';
@@ -40,7 +44,7 @@ const DEFAULT_TEXT_DIRECTION = 'ltr';
 
 const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
   '%webView_resourcePanel_noProject%',
-  '%webView_resourcePanel_installing%',
+  '%webView_resourcePanel_selecting%',
   '%webView_resourcePanel_downloadResources%',
   '%webView_resourcePanel_bibleTexts_emptyState_prompt%',
   '%webView_resourcePanel_bibleTexts_pick%',
@@ -161,11 +165,14 @@ globalThis.webViewComponent = function ResourceTextPanel({
     'platformScripture.referencedProjectsAndResources',
   );
 
-  const [adminResourceList, setAdminResourceList] = useProjectSetting(
+  const [adminResourceListSetting, setAdminResourceTextsRaw] = useProjectSetting(
     projectId,
     'platformScripture.referencedProjectsAndResources',
     DEFAULT_RESOURCE_REFERENCE_LIST,
   );
+  const adminResourceList = isPlatformError(adminResourceListSetting)
+    ? undefined
+    : adminResourceListSetting;
 
   const textConnectionsProvider = useProjectDataProvider(
     'platformScripture.textConnectionSettings',
@@ -191,6 +198,25 @@ globalThis.webViewComponent = function ResourceTextPanel({
     () => resourcesPossiblyUndefined ?? [],
     [resourcesPossiblyUndefined],
   );
+  const getCanWriteProjectSettings = useCallback(
+    async () => textConnectionsProvider?.canUserWriteProjectTextConnectionSettings(),
+    [textConnectionsProvider],
+  );
+  const setAdminResourceTexts = useCallback(
+    (resources: ResourceReferenceList) => {
+      setAdminResourceTextsRaw?.(resources);
+    },
+    [setAdminResourceTextsRaw],
+  );
+  const getUserResourceTexts = useCallback(
+    async () => textConnectionsProvider?.getUserReferencedProjectsAndResources(),
+    [textConnectionsProvider],
+  );
+  const setUserResourceTexts = useCallback(
+    async (resources: ResourceReferenceList) =>
+      textConnectionsProvider?.setUserReferencedProjectsAndResources(resources),
+    [textConnectionsProvider],
+  );
 
   // #endregion
 
@@ -214,39 +240,43 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // #region Selection management
 
-  // Auto-correct selectedResourceId when the selected item leaves the filtered list
+  // Holds the ID of a resource just selected from the picker while it propagates through the
+  // reactive settings chain and into filteredResources. Prevents the auto-correct below from
+  // resetting the selection before the new resource has arrived in the list.
+  const [pendingResourceId, setPendingResourceId] = useState<string | undefined>(undefined);
+
+  // Once the pending resource appears in filteredResources, commit it as the active selection.
+  useEffect(() => {
+    if (!pendingResourceId) return;
+    const found = filteredResources.find((r) => getRefId(r) === pendingResourceId);
+    if (found) {
+      setSelectedResourceId(pendingResourceId);
+      setPendingResourceId(undefined);
+    }
+  }, [filteredResources, pendingResourceId, setSelectedResourceId]);
+
+  // Auto-correct selectedResourceId when the selected item leaves the filtered list.
+  // Skipped while a pending selection is in-flight to avoid overriding it prematurely.
   useEffect(() => {
     if (filteredResources.length === 0) return;
+    if (pendingResourceId) return;
     const currentId = filteredResources.find((r) => getRefId(r) === selectedResourceId);
     if (!currentId) setSelectedResourceId(getRefId(filteredResources[0]));
-  }, [filteredResources, selectedResourceId, setSelectedResourceId]);
+  }, [filteredResources, selectedResourceId, setSelectedResourceId, pendingResourceId]);
 
   const selectedRef =
     filteredResources.find((r) => getRefId(r) === selectedResourceId) ?? filteredResources[0];
 
   let resourceProjectId: string | undefined;
-  let isInstalling = false;
   let dblMatch: (typeof dblResources)[number] | undefined;
+  const [isSelecting, setIsSelecting] = useState(false);
 
   if (isDblResourceReference(selectedRef)) {
     dblMatch = dblResources.find((r) => r.dblEntryUid === selectedRef.id);
-    isInstalling = dblMatch !== undefined && !dblMatch.installed;
     resourceProjectId = dblMatch?.installed ? dblMatch.projectId : undefined;
   } else if (isProjectReference(selectedRef)) {
     resourceProjectId = selectedRef.id;
   }
-
-  // Auto-install when the selected DblResource exists but isn't installed
-  const matchDblEntryUid = dblMatch?.dblEntryUid;
-  useEffect(() => {
-    if (isInstalling && dblResourcesProvider && matchDblEntryUid !== undefined) {
-      dblResourcesProvider
-        .installDblResource(matchDblEntryUid)
-        .catch((e: unknown) =>
-          logger.error(`Resource panel auto-install failed: ${getErrorMessage(e)}`),
-        );
-    }
-  }, [isInstalling, dblResourcesProvider, matchDblEntryUid]);
 
   // #endregion
 
@@ -343,23 +373,47 @@ globalThis.webViewComponent = function ResourceTextPanel({
   }, [filteredResources]);
 
   const handleResourceSelect = useCallback(
-    (resource: DblResourceData) =>
-      selectTextConnection(
-        resource,
-        adminResourceList,
-        setAdminResourceList,
-        textConnectionsProvider
-          ? () => textConnectionsProvider.canUserWriteProjectTextConnectionSettings()
-          : undefined,
-        textConnectionsProvider
-          ? () => textConnectionsProvider.getUserReferencedProjectsAndResources()
-          : undefined,
-        textConnectionsProvider
-          ? (list) => textConnectionsProvider.setUserReferencedProjectsAndResources(list)
-          : undefined,
-        setSelectedResourceId,
-      ),
-    [adminResourceList, setAdminResourceList, textConnectionsProvider, setSelectedResourceId],
+    async (resource: DblResourceData) => {
+      setIsSelecting(true);
+      try {
+        await selectTextConnection(
+          resource,
+          adminResourceList,
+          setAdminResourceTexts,
+          getCanWriteProjectSettings,
+          getUserResourceTexts,
+          setUserResourceTexts,
+          dblResourcesProvider
+            ? async (dblEntryUid) => {
+                try {
+                  await dblResourcesProvider.installDblResource(dblEntryUid);
+                  setFetchResources(true);
+                } catch (e: unknown) {
+                  papi.notifications.send({
+                    message: '%webView_selectDblResource_installFailed%',
+                    severity: 'error',
+                  });
+                  logger.warn(
+                    `Error installing dbl resource for resource text panel: ${getErrorMessage(e)}`,
+                  );
+                  throw e;
+                }
+              }
+            : undefined,
+          (dblEntryUid: string) => setPendingResourceId(dblEntryUid),
+        );
+      } finally {
+        setIsSelecting(false);
+      }
+    },
+    [
+      adminResourceList,
+      dblResourcesProvider,
+      setAdminResourceTexts,
+      getCanWriteProjectSettings,
+      getUserResourceTexts,
+      setUserResourceTexts,
+    ],
   );
 
   const showResourcePicker = useDialogCallback(
@@ -442,11 +496,11 @@ globalThis.webViewComponent = function ResourceTextPanel({
   }
 
   // Installing state: selected DblResource found but not yet installed
-  if (isInstalling) {
+  if (isSelecting) {
     return (
       <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:gap-2 tw:p-8 tw:text-center">
         <Spinner />
-        <span>{localizedStrings['%webView_resourcePanel_installing%']}</span>
+        <span>{localizedStrings['%webView_resourcePanel_selecting%']}</span>
       </div>
     );
   }

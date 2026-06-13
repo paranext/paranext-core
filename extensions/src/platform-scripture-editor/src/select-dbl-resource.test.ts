@@ -1,4 +1,3 @@
-import { newPlatformError } from 'platform-bible-utils';
 import type { ResourceReferenceList } from 'platform-scripture';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { DEFAULT_RESOURCE_REFERENCE_LIST, selectTextConnection } from './select-dbl-resource';
@@ -63,6 +62,7 @@ describe('selectDblResource', () => {
         vi.fn().mockResolvedValue(true),
         getUserList,
         setUserList,
+        undefined,
         onSelect,
       );
 
@@ -83,6 +83,7 @@ describe('selectDblResource', () => {
         vi.fn().mockResolvedValue(true),
         getUserList,
         setUserList,
+        undefined,
         onSelect,
       );
 
@@ -113,6 +114,7 @@ describe('selectDblResource', () => {
         vi.fn().mockResolvedValue(true),
         getUserList,
         setUserList,
+        undefined,
         onSelect,
       );
 
@@ -131,6 +133,7 @@ describe('selectDblResource', () => {
         vi.fn().mockResolvedValue(true),
         getUserList,
         setUserList,
+        undefined,
         onSelect,
       );
 
@@ -145,26 +148,12 @@ describe('selectDblResource', () => {
         vi.fn().mockResolvedValue(true),
         getUserList,
         setUserList,
+        undefined,
         onSelect,
       );
 
       expect(getUserList).not.toHaveBeenCalled();
       expect(setUserList).not.toHaveBeenCalled();
-    });
-
-    it('returns early without writing when adminSetting is a PlatformError', async () => {
-      await selectTextConnection(
-        RESOURCE_A,
-        newPlatformError(new Error('setting error')),
-        setAdminSetting,
-        vi.fn().mockResolvedValue(true),
-        getUserList,
-        setUserList,
-        onSelect,
-      );
-
-      expect(setAdminSetting).not.toHaveBeenCalled();
-      expect(onSelect).not.toHaveBeenCalled();
     });
 
     it('returns early without writing when adminSetting is undefined', async () => {
@@ -175,6 +164,7 @@ describe('selectDblResource', () => {
         vi.fn().mockResolvedValue(true),
         getUserList,
         setUserList,
+        undefined,
         onSelect,
       );
 
@@ -203,6 +193,7 @@ describe('selectDblResource', () => {
         vi.fn().mockResolvedValue(false),
         getUserList,
         setUserList,
+        undefined,
         onSelect,
       );
 
@@ -224,6 +215,7 @@ describe('selectDblResource', () => {
         vi.fn().mockResolvedValue(false),
         getUserList,
         setUserList,
+        undefined,
         onSelect,
       );
 
@@ -245,6 +237,7 @@ describe('selectDblResource', () => {
         vi.fn().mockResolvedValue(false),
         getUserList,
         setUserList,
+        undefined,
         onSelect,
       );
 
@@ -263,6 +256,7 @@ describe('selectDblResource', () => {
         vi.fn().mockResolvedValue(false),
         getUserList,
         setUserList,
+        undefined,
         onSelect,
       );
 
@@ -278,41 +272,10 @@ describe('selectDblResource', () => {
         vi.fn().mockResolvedValue(false),
         getUserList,
         setUserList,
-        onSelect,
-      );
-
-      expect(setAdminSetting).not.toHaveBeenCalled();
-    });
-
-    it('falls through to user path when setAdminSetting is undefined even if canWrite is true', async () => {
-      const getUserList = vi.fn().mockResolvedValue(makeUserList([]));
-      await selectTextConnection(
-        RESOURCE_A,
-        makeAdminList([]),
         undefined,
-        vi.fn().mockResolvedValue(true),
-        getUserList,
-        setUserList,
         onSelect,
       );
 
-      expect(setUserList).toHaveBeenCalled();
-      expect(onSelect).toHaveBeenCalledWith('uid-a');
-    });
-
-    it('takes the user path when canUserWriteProjectSettings is undefined', async () => {
-      const getUserList = vi.fn().mockResolvedValue(makeUserList([]));
-      await selectTextConnection(
-        RESOURCE_A,
-        makeAdminList([]),
-        setAdminSetting,
-        undefined,
-        getUserList,
-        setUserList,
-        onSelect,
-      );
-
-      expect(setUserList).toHaveBeenCalled();
       expect(setAdminSetting).not.toHaveBeenCalled();
     });
   });
@@ -324,12 +287,104 @@ describe('selectDblResource', () => {
         selectTextConnection(
           RESOURCE_A,
           makeAdminList([]),
-          undefined,
+          async () => undefined,
           vi.fn().mockResolvedValue(false),
           vi.fn().mockResolvedValue(makeUserList([])),
           setUserList,
         ),
       ).resolves.toBeUndefined();
+    });
+  });
+
+  describe('installResource parameter', () => {
+    let setAdminSetting: ReturnType<typeof vi.fn>;
+    let setUserList: ReturnType<typeof vi.fn>;
+    let getUserList: ReturnType<typeof vi.fn>;
+    let onSelect: ReturnType<typeof vi.fn>;
+    let installResource: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      setAdminSetting = vi.fn();
+      setUserList = vi.fn().mockResolvedValue(undefined);
+      getUserList = vi.fn().mockResolvedValue(makeUserList([]));
+      onSelect = vi.fn();
+      installResource = vi.fn().mockResolvedValue(undefined);
+    });
+
+    it('skips installResource when the resource is already installed', async () => {
+      await selectTextConnection(
+        RESOURCE_A, // installed: true
+        makeAdminList([]),
+        setAdminSetting,
+        vi.fn().mockResolvedValue(true),
+        getUserList,
+        setUserList,
+        installResource,
+        onSelect,
+      );
+
+      expect(installResource).not.toHaveBeenCalled();
+      expect(setAdminSetting).toHaveBeenCalled();
+      expect(onSelect).toHaveBeenCalledWith('uid-a');
+    });
+
+    it('calls installResource with the dblEntryUid before writing settings when not installed', async () => {
+      const callOrder: string[] = [];
+      installResource = vi.fn().mockImplementation(async () => {
+        callOrder.push('install');
+      });
+      setUserList = vi.fn().mockImplementation(async () => {
+        callOrder.push('write');
+      });
+
+      await selectTextConnection(
+        RESOURCE_B, // installed: false
+        makeAdminList([]),
+        setAdminSetting,
+        vi.fn().mockResolvedValue(false),
+        getUserList,
+        setUserList,
+        installResource,
+        onSelect,
+      );
+
+      expect(installResource).toHaveBeenCalledWith('uid-b');
+      expect(callOrder).toEqual(['install', 'write']);
+    });
+
+    it('cancels the settings write and does not call onSelect when installResource throws', async () => {
+      installResource = vi.fn().mockRejectedValue(new Error('install failed'));
+
+      await selectTextConnection(
+        RESOURCE_B, // installed: false
+        makeAdminList([]),
+        setAdminSetting,
+        vi.fn().mockResolvedValue(false),
+        getUserList,
+        setUserList,
+        installResource,
+        onSelect,
+      );
+
+      expect(setUserList).not.toHaveBeenCalled();
+      expect(setAdminSetting).not.toHaveBeenCalled();
+      expect(onSelect).not.toHaveBeenCalled();
+    });
+
+    it('proceeds without installing when installResource is not provided and resource is not installed', async () => {
+      await selectTextConnection(
+        RESOURCE_B, // installed: false
+        makeAdminList([]),
+        async () => undefined,
+        vi.fn().mockResolvedValue(false),
+        getUserList,
+        setUserList,
+        undefined, // no installResource
+        onSelect,
+      );
+
+      expect(setUserList).toHaveBeenCalled();
+      expect(onSelect).toHaveBeenCalledWith('uid-b');
     });
   });
 });
