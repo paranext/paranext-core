@@ -1,0 +1,15 @@
+import{r as m,b as u,j as e}from"./iframe-Brzqyw1u.js";import{B as f}from"./button-Z3MOYtHC.js";import{I as w}from"./input-BgbizB7E.js";import{c as a}from"./utils-BPbySc-g.js";import{S as y}from"./search-_YasyH30.js";import{X as b}from"./x-DHa_5RCJ.js";const n=m.forwardRef(({value:r,onSearch:s,placeholder:o,isFullWidth:i,className:l,isDisabled:p=!1,id:c},h)=>{const t=u();return e.jsxs("div",{id:c,className:a("tw:relative tw:@container/search",{"tw:w-full":i},l),children:[e.jsx(y,{className:a("tw:absolute tw:top-1/2 tw:h-4 tw:w-4 tw:-translate-y-1/2 tw:transform tw:opacity-50 tw:@max-[7rem]/search:hidden",{"tw:right-3":t==="rtl"},{"tw:left-3":t==="ltr"})}),e.jsx(w,{ref:h,className:a("tw:w-full tw:overflow-hidden tw:text-ellipsis tw:text-sm tw:ps-9 tw:@max-[7rem]/search:ps-3",{"tw:pe-8":r}),placeholder:o,value:r,onChange:d=>s(d.target.value),disabled:p}),r&&e.jsxs(f,{variant:"ghost",size:"icon",className:a("tw:absolute tw:inset-y-0 tw:my-auto tw:h-7",{"tw:left-0":t==="rtl"},{"tw:right-0":t==="ltr"}),onClick:()=>{s("")},children:[e.jsx(b,{className:"tw:h-4 tw:w-4"}),e.jsx("span",{className:"tw:sr-only",children:"Clear"})]})]})});n.displayName="SearchBar";n.__docgenInfo={description:`A search bar component with a search icon and a clear button when the search query is not empty.
+
+@param {SearchBarProps} props - The props for the component.
+@param {string} props.value - The search query for the search bar
+@param {(searchQuery: string) => void} props.onSearch - Callback fired to handle the search query
+  is updated
+@param {string} [props.placeholder] - Optional string that appears in the search bar without a
+  search string
+@param {boolean} [props.isFullWidth] - Optional boolean to set the input base to full width
+@param {string} [props.className] - Additional css classes to help with unique styling of the
+  search bar
+@param {boolean} [props.isDisabled] - Optional boolean to disable the search bar
+@param {string} [props.id] - Optional id for the root element`,methods:[],displayName:"SearchBar",props:{value:{required:!0,tsType:{name:"string"},description:"Search query for the search bar"},onSearch:{required:!0,tsType:{name:"signature",type:"function",raw:"(searchQuery: string) => void",signature:{arguments:[{type:{name:"string"},name:"searchQuery"}],return:{name:"void"}}},description:`Callback fired to handle the search query is updated
+
+@param searchQuery`},placeholder:{required:!1,tsType:{name:"string"},description:"Optional string that appears in the search bar without a search string"},isFullWidth:{required:!1,tsType:{name:"boolean"},description:"Optional boolean to set the input base to full width"},className:{required:!1,tsType:{name:"string"},description:"Additional css classes to help with unique styling of the search bar"},isDisabled:{required:!1,tsType:{name:"boolean"},description:"Optional boolean to disable the search bar",defaultValue:{value:"false",computed:!1}},id:{required:!1,tsType:{name:"string"},description:"Optional id for the root element"}}};export{n as S};
