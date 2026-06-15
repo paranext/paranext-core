@@ -9,17 +9,17 @@ import type { JSONSchema7 } from 'json-schema';
 /**
  * Describes APIs available to call using JSON-RPC 2.0
  *
- * See https://github.com/open-rpc/meta-schema/releases - Release 1.14.2 aligns with OpenRPC 1.2.6.
- * https://github.com/open-rpc/meta-schema/releases/download/1.14.2/open-rpc-meta-schema.json
+ * See https://github.com/open-rpc/meta-schema/releases - Release 1.14.3 aligns with OpenRPC 1.3.0.
+ * https://github.com/open-rpc/meta-schema/releases/download/1.14.3/open-rpc-meta-schema.json
  *
  * We declare OpenRPC `1.3.0` because notifications (a method with no `result`) were introduced in
  * 1.3.0 — `result` was required in 1.2.6, so a document with notifications is invalid under the
  * 1.2.6 meta-schema. The OpenRPC playground (https://playground.open-rpc.org/) is still capped at
  * 1.2.6 (https://github.com/open-rpc/playground/issues/606), but it renders a 1.3.0 document fine
- * in practice; it just lists notifications under the same "Methods" heading, which we mitigate by
- * prefixing notification summaries with {@link NOTIFICATION_OPENRPC_PREFIX}.
+ * in practice; it lists notifications under the same "Methods" heading (without a results field),
+ * which we mitigate by prefixing notification summaries with {@link NOTIFICATION_OPENRPC_PREFIX}.
  *
- * Note that the types from https://www.npmjs.com/package/@open-rpc/meta-schema/v/1.14.2 are not
+ * Note that the types from https://www.npmjs.com/package/@open-rpc/meta-schema/v/1.14.3 are not
  * very good. For example, all the properties of `Components` are of type `any` instead of the
  * specific types they should be, and they redefine types for JSON Schema. So we're using our own
  * types here instead.
@@ -184,10 +184,6 @@ export type SingleMethodDocumentation = {
  *
  * Set `'x-experimental': true` on the notification object to mark it as experimental. Informational
  * only; appears in the generated OpenRPC document.
- *
- * Named `OpenRpcNotification` (rather than `Notification`) to avoid shadowing the DOM global
- * `Notification` type — a file that forgot to import this would otherwise silently typecheck
- * against the wrong type.
  */
 export type OpenRpcNotification = Omit<Method, 'result'>;
 
