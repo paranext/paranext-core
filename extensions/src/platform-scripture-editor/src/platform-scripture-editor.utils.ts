@@ -565,6 +565,11 @@ async function tryOpenFromRecentlyOpened(
     if (!service) return undefined;
     // Data-provider getter requires an explicit selector argument, even though the value is ignored.
     const recentProjects = (await service.getRecentProjects(undefined)) ?? [];
+    // Try each recent project in order until one opens successfully — in almost all cases the first
+    // entry opens and the loop exits immediately. `reduce` with a Promise accumulator is used instead
+    // of `for...of + await` to satisfy the no-await-in-loop ESLint rule; each callback awaits the
+    // previous result before deciding whether to attempt the next project, so entries are tried
+    // sequentially (not in parallel) and the chain short-circuits as soon as one succeeds.
     return recentProjects.reduce(
       async (prev: Promise<DefaultProjectPickerOutcome | undefined>, projectId: string) => {
         const earlier = await prev;
