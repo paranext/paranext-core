@@ -169,9 +169,22 @@ jobs:
         if: ${{ matrix.os == env.OS_LINUX }}
         run: xvfb-run --auto-servernum npm run test:e2e:smoke
 
+      # Non-blocking on Windows AND macOS: the smoke suite is chronically flaky on the
+      # smaller macOS runners (extension host fails to start under load; see #2336,
+      # #2338, #2357 for failed timeout-based fixes), and Windows has occasional E2E
+      # flakes of its own (e.g. the theme-toggle failure on 2026-06-12). Linux remains
+      # blocking; it passed every run in the prior 30 days. Failures still upload
+      # Playwright artifacts below and surface as a warning annotation.
+      # Remove continue-on-error once the macOS startup failure is resolved.
       - name: E2E tests (Windows/macOS)
+        id: e2e-win-mac
         if: ${{ matrix.os != env.OS_LINUX }}
+        continue-on-error: true
         run: npm run test:e2e:smoke
+
+      - name: Warn on non-blocking E2E failure (Windows/macOS)
+        if: ${{ steps.e2e-win-mac.outcome == 'failure' }}
+        run: echo "::warning title=E2E smoke tests failed (non-blocking)::E2E smoke tests failed on ${{ matrix.os }} but did not fail the build. See the playwright-results-${{ matrix.os }} artifact."
 
       - name: Upload Playwright test results
         if: ${{ !cancelled() }}
