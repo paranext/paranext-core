@@ -124,12 +124,15 @@ const config: StorybookConfig = {
       });
     }
 
-    // Add path mapping for platform-bible-react's @/ alias and resolve the package from source
+    // Add path mapping for platform-bible-react's @/ alias and resolve the package from source.
+    // @papi/frontend/react is a virtual runtime module (provided by globalThis in the app); the
+    // mock gives stories a static hook implementation without needing a live PAPI backend.
     if (webpackConfig.resolve) {
       webpackConfig.resolve.alias = {
         ...webpackConfig.resolve.alias,
         '@': join(__dirname, '../lib/platform-bible-react/src'),
         'platform-bible-react': join(__dirname, '../lib/platform-bible-react/src/index.ts'),
+        '@papi/frontend/react': join(__dirname, 'mocks/papi-frontend-react'),
       };
     }
 

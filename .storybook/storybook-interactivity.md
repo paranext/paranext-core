@@ -96,13 +96,13 @@ The `@eten-tech-foundation/platform-editor` editor needs styling the app loads g
 Storybook does not. Without it the context menu is unstyled and the read-only marker toolbar shows
 as a stray inline label (e.g. "p - Paragraph - Normal - First Line Indent"). In a story:
 
-- Import `lib/platform-bible-react/src/components/demo/scripture-editor/usj-nodes.css` and
-  `nodes-menu.css`.
+- Import `lib/platform-bible-react/src/components/demo/scripture-editor/usj-nodes.css`.
 - Inject the icon-free wrapper style (see `model-text-panel.stories.tsx` and
   `src/stories/platform/ten-layout-shared.tsx`); in particular `.editor-toolbar-container-readonly {
 display: none; }`.
-- **Do not** import `editor.css` / `editor-overrides.css` — they reference toolbar icon SVGs by
-  absolute URL that the css-loader can't resolve, breaking the build.
+- Previously we did not import `editor.css` / `editor-overrides.css` because they referenced toolbar
+  icon SVGs by absolute URL that the css-loader couldn't resolve, breaking the build. Those files
+  have been cleaned up and could now be used.
 
 Note: `usj-nodes.css` bare `table`/`td`/`rt` selectors are scoped to `.usfm` to avoid leaking table
 borders into other stories — keep them scoped if you touch that file.

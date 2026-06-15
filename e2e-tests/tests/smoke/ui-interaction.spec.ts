@@ -89,7 +89,7 @@ test.describe('UI Interaction', () => {
     await expect(aboutTab).not.toBeVisible({ timeout: 10_000 });
   });
 
-  test('should toggle theme via toolbar button', async ({ mainPage }) => {
+  test('should toggle theme via user profile popover', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
 
     await expect(mainPage.locator('#theme-styles')).toHaveCount(1, { timeout: 10_000 });
@@ -103,11 +103,24 @@ test.describe('UI Interaction', () => {
     const initialThemeId = await getThemeId();
     expect(initialThemeId).toBeTruthy();
 
-    const themeButton = mainPage.getByTestId('theme-toggle');
-    await expect(themeButton).toBeVisible({ timeout: 10_000 });
-    await expect(themeButton).toBeEnabled({ timeout: 10_000 });
-    await themeButton.scrollIntoViewIfNeeded();
-    await themeButton.click();
+    // The standalone theme toggle button was replaced by the appearance toggle inside the
+    // User Profile popover. Open the popover, pick the opposite appearance, then restore.
+    const popoverTrigger = mainPage.getByTestId('user-profile-popover-trigger');
+    await expect(popoverTrigger).toBeVisible({ timeout: 10_000 });
+    await expect(popoverTrigger).toBeEnabled({ timeout: 10_000 });
+    await popoverTrigger.scrollIntoViewIfNeeded();
+    await popoverTrigger.click();
+
+    // Choose the appearance opposite the current theme. Theme ids are derived from the theme
+    // family + type (e.g. 'platform-light' / 'platform-dark'); fall back to flipping to dark
+    // when we can't infer from the id.
+    const initiallyLight = !(initialThemeId ?? '').toLowerCase().includes('dark');
+    const flipTarget = initiallyLight ? 'dark' : 'light';
+    const restoreTarget = initiallyLight ? 'light' : 'dark';
+
+    const flipButton = mainPage.getByTestId(`user-profile-appearance-${flipTarget}`);
+    await expect(flipButton).toBeVisible({ timeout: 10_000 });
+    await flipButton.click();
 
     // Wait for theme data provider to update the stylesheet
     await expect(async () => {
@@ -115,8 +128,11 @@ test.describe('UI Interaction', () => {
       expect(newThemeId).not.toBe(initialThemeId);
     }).toPass({ timeout: 5_000 });
 
-    // Toggle back to restore the original theme for subsequent tests
-    await themeButton.click();
+    // The popover stays open after an appearance click (the handler doesn't close it), so we
+    // can click the restore target without re-opening the popover.
+    const restoreButton = mainPage.getByTestId(`user-profile-appearance-${restoreTarget}`);
+    await expect(restoreButton).toBeVisible({ timeout: 10_000 });
+    await restoreButton.click();
     await expect(async () => {
       const restoredThemeId = await getThemeId();
       expect(restoredThemeId).toBe(initialThemeId);

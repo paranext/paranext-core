@@ -24,6 +24,9 @@ internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
     protected override Task StartFactoryAsync()
     {
         _paratextProjects.Initialize();
+        // Settings validators are global (not per-project), so register them exactly once here
+        // rather than in each ParatextProjectDataProvider instance
+        ParatextProjectDataProvider.RegisterSettingsValidators(PapiClient);
         return Task.CompletedTask;
     }
 

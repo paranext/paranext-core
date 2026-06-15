@@ -15,17 +15,16 @@ import type {
 } from 'platform-scripture';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
-// The editor's nodes/context menu + USJ node styling. The real app loads these globally; Storybook
-// doesn't, so without them the editor's context menu is unstyled and its read-only marker toolbar
-// renders as a stray inline label. We import the same icon-free subset the editorial layout stories
-// use (editor.css/editor-overrides.css are skipped — they reference toolbar icon SVGs by absolute
-// URL that the css-loader can't resolve; the minimal wrapper styles are inlined in
-// EDITOR_WRAPPER_STYLE below).
+// The editor's USJ node styling. The real app loads these globally; Storybook doesn't, so without
+// them the editor's context menu is unstyled and its read-only marker toolbar renders as a stray
+// inline label. We import the same icon-free subset the editorial layout stories used
+// (editor.css/editor-overrides.css were skipped because they previously referenced toolbar icon
+// SVGs by absolute URL that the css-loader couldn't resolve but have now been cleaned up and can be
+// used; the minimal wrapper styles are inlined in EDITOR_WRAPPER_STYLE below).
 /* eslint-disable import/no-relative-packages -- these editor demo CSS files are not part of
    platform-bible-react's package exports (only `.` → dist is exported), so they can only be pulled
    in by relative path; this mirrors src/stories/platform/ten-layout-shared.tsx. */
 import '../../../../lib/platform-bible-react/src/components/demo/scripture-editor/usj-nodes.css';
-import '../../../../lib/platform-bible-react/src/components/demo/scripture-editor/nodes-menu.css';
 /* eslint-enable import/no-relative-packages */
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
 
@@ -171,10 +170,11 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
         dblResources={resources}
         isLoadingResources={false}
         adminModelTexts={{ dataVersion: DATA_VERSION, items: adminItems }}
-        canWriteProjectSettings={config.canWriteProjectSettings ?? true}
+        getCanWriteProjectSettings={async () => config.canWriteProjectSettings ?? true}
+        getUserModelTexts={async () => undefined}
         scrRef={scrRef}
         onScrRefChange={setScrRef}
-        installResource={(uid) => {
+        installResource={async (uid) => {
           if (config.disableInstall) return;
           setResources((rs) =>
             rs.map((r) => (r.dblEntryUid === uid ? { ...r, installed: true } : r)),
@@ -188,7 +188,7 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
             list.items.filter((i): i is DblResourceReference => i.type === 'dblResource'),
           );
         }}
-        setUserModelTexts={(list) => {
+        setUserModelTexts={async (list) => {
           // Settings write — log it, then reflect it so the panel updates (thin CRUD).
           // eslint-disable-next-line no-console
           console.log('setUserModelTexts', list);

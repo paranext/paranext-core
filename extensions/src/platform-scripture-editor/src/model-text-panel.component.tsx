@@ -16,8 +16,8 @@ import type {
   ResourceReferenceList,
 } from 'platform-scripture';
 import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { selectTextConnection } from './select-dbl-resource';
 
-const CURRENT_DATA_VERSION = '1.0.0';
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
 /**
@@ -26,7 +26,9 @@ const DEFAULT_TEXT_DIRECTION = 'ltr';
  * prop.
  */
 export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
+  /** @deprecated Use `%webView_modelTextPanel_selecting%` instead. */
   '%webView_modelTextPanel_installing%',
+  '%webView_modelTextPanel_selecting%',
   '%webView_modelTextPanel_noProject%',
   '%webView_modelTextPanel_pickModelText%',
   '%webView_modelTextPanel_unknownResource%',
@@ -58,8 +60,13 @@ export type ModelTextPanelProps = {
   isLoadingResources: boolean;
   /** The project's admin-level model-text setting (used when writing an admin choice). */
   adminModelTexts: ResourceReferenceList | undefined;
-  /** Whether the user may write project (admin) settings; decides admin vs. user persistence. */
-  canWriteProjectSettings: boolean;
+  /** The function to get the user-level model-text setting (used when writing a user choice). */
+  getUserModelTexts: () => Promise<ResourceReferenceList | undefined>;
+  /**
+   * Function to get whether the user may write project (admin) settings; decides admin vs. user
+   * persistence.
+   */
+  getCanWriteProjectSettings: () => Promise<boolean | undefined>;
   /** Current Scripture reference for the editor. */
   scrRef?: SerializedVerseRef;
   /** Called when the editor changes the Scripture reference. */
@@ -68,11 +75,11 @@ export type ModelTextPanelProps = {
    * Install a DBL resource by its entry uid (fire-and-forget; the panel re-resolves once
    * installed).
    */
-  installResource: (dblEntryUid: string) => void;
+  installResource: (dblEntryUid: string) => Promise<void>;
   /** Persist an admin-level model-text list. */
   setAdminModelTexts: (list: ResourceReferenceList) => void;
   /** Persist a user-level model-text list. */
-  setUserModelTexts: (list: ResourceReferenceList) => void | Promise<void>;
+  setUserModelTexts: (list: ResourceReferenceList) => Promise<void>;
   /**
    * Open the resource picker for the user to choose a model text. Resolves with the chosen
    * resource, or `undefined` if the picker was cancelled. In the app this opens the
@@ -106,7 +113,8 @@ export function ModelTextPanel({
   dblResources,
   isLoadingResources,
   adminModelTexts,
-  canWriteProjectSettings,
+  getUserModelTexts,
+  getCanWriteProjectSettings,
   scrRef = DEFAULT_SCR_REF,
   onScrRefChange = () => {},
   installResource,
@@ -126,15 +134,9 @@ export function ModelTextPanel({
     dblRef = effectiveModelText as EffectiveResourceReference & DblResourceReference;
   }
   const match = dblRef ? dblResources.find((r) => r.dblEntryUid === dblRef.id) : undefined;
-
-  // Auto-install when the resource exists but isn't installed yet
-  const isInstalling = dblRef !== undefined && match !== undefined && !match.installed;
-  const matchDblEntryUid = match?.dblEntryUid;
-  useEffect(() => {
-    if (isInstalling && matchDblEntryUid !== undefined) installResource(matchDblEntryUid);
-  }, [isInstalling, matchDblEntryUid, installResource]);
-
   const resourceProjectId = match?.installed ? match.projectId : undefined;
+
+  const [isSelecting, setIsSelecting] = useState(false);
 
   // --- Load the resolved resource's chapter USJ (re-fetch on resource/reference change) ---
 
@@ -209,42 +211,28 @@ export function ModelTextPanel({
 
   const handleResourceSelect = useCallback(
     async (resource: DblResourceData) => {
-      const newRef: DblResourceReference = {
-        type: 'dblResource',
-        name: resource.displayName,
-        id: resource.dblEntryUid,
-      };
-
-      if (canWriteProjectSettings && adminModelTexts) {
-        const existingItems = adminModelTexts.items.filter((item): item is DblResourceReference => {
-          if (item.type !== 'dblResource') return false;
-          // DblResourceReference.id exists after .type check; the union still requires a cast
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          return (item as DblResourceReference).id !== resource.dblEntryUid;
-        });
-        setAdminModelTexts({
-          dataVersion: adminModelTexts.dataVersion,
-          items: [newRef, ...existingItems],
-        });
-      } else {
-        const currentUserDblItems = (effectiveModelTexts?.items ?? [])
-          .filter((r) => r.source === 'user')
-          .filter(
-            (r): r is EffectiveResourceReference & DblResourceReference =>
-              r.type === 'dblResource' && r.id !== resource.dblEntryUid,
-          );
-        await setUserModelTexts({
-          dataVersion: CURRENT_DATA_VERSION,
-          items: [newRef, ...currentUserDblItems],
-        });
+      setIsSelecting(true);
+      try {
+        await selectTextConnection(
+          resource,
+          adminModelTexts,
+          setAdminModelTexts,
+          getCanWriteProjectSettings,
+          getUserModelTexts,
+          setUserModelTexts,
+          async () => installResource(resource.dblEntryUid),
+        );
+      } finally {
+        setIsSelecting(false);
       }
     },
     [
       adminModelTexts,
-      canWriteProjectSettings,
-      effectiveModelTexts,
+      getCanWriteProjectSettings,
       setAdminModelTexts,
+      getUserModelTexts,
       setUserModelTexts,
+      installResource,
     ],
   );
 
@@ -295,11 +283,11 @@ export function ModelTextPanel({
   }
 
   // Installing: resource found but not yet installed.
-  if (isInstalling) {
+  if (isSelecting) {
     return (
       <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:gap-2 tw:p-8 tw:text-center">
         <Spinner />
-        <span>{localizedStrings['%webView_modelTextPanel_installing%']}</span>
+        <span>{localizedStrings['%webView_modelTextPanel_selecting%']}</span>
       </div>
     );
   }

@@ -68,7 +68,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         _commentManager = CommentManager.Get(
             LocalParatextProjects.GetParatextProject(projectDetails.Metadata.Id)
         );
-        RegisterSettingsValidators();
     }
 
     #endregion
@@ -1012,10 +1011,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public static string VisibilitySettingName => Setting.Visibility.ToString();
 
-    private void RegisterSettingsValidators()
+    internal static void RegisterSettingsValidators(PapiClient papiClient)
     {
         ProjectSettingsService.RegisterValidator(
-            PapiClient,
+            papiClient,
             VisibilitySettingName,
             VisibilityValidator
         );

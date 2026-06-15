@@ -97,15 +97,6 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     [resourcesPossiblyUndefined],
   );
 
-  const [canWriteProjectSettings] = usePromise(
-    useCallback(
-      async () =>
-        (await textConnectionsProvider?.canUserWriteProjectTextConnectionSettings()) ?? false,
-      [textConnectionsProvider],
-    ),
-    false,
-  );
-
   // --- Dynamic title: "Model text: {displayName}" when a resource is loaded ---
   // Computed inline (rather than in the presentational component) because updateWebViewDefinition
   // is a webview-only API.
@@ -135,12 +126,18 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
   // --- Operation callbacks ---
 
   const installResource = useCallback(
-    (dblEntryUid: string) => {
-      dblResourcesProvider
-        ?.installDblResource(dblEntryUid)
-        .catch((e: unknown) =>
-          logger.error(`Model text auto-install failed: ${getErrorMessage(e)}`),
-        );
+    async (dblEntryUid: string) => {
+      try {
+        await dblResourcesProvider?.installDblResource(dblEntryUid);
+        setFetchResources(true);
+      } catch (e: unknown) {
+        papi.notifications.send({
+          message: '%webView_selectDblResource_installFailed%',
+          severity: 'error',
+        });
+        logger.warn(`Error installing dbl resource for model text panel: ${getErrorMessage(e)}`);
+        throw e;
+      }
     },
     [dblResourcesProvider],
   );
@@ -156,6 +153,16 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     async (list: ResourceReferenceList) => {
       await textConnectionsProvider?.setUserModelTexts(list);
     },
+    [textConnectionsProvider],
+  );
+
+  const getUserModelTexts = useCallback(
+    async () => textConnectionsProvider?.getUserModelTexts(),
+    [textConnectionsProvider],
+  );
+
+  const getCanWriteProjectSettings = useCallback(
+    async () => textConnectionsProvider?.canUserWriteProjectTextConnectionSettings(),
     [textConnectionsProvider],
   );
 
@@ -206,7 +213,8 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
       dblResources={dblResources}
       isLoadingResources={isLoadingResources}
       adminModelTexts={adminModelTexts}
-      canWriteProjectSettings={canWriteProjectSettings}
+      getUserModelTexts={getUserModelTexts}
+      getCanWriteProjectSettings={getCanWriteProjectSettings}
       scrRef={scrRef}
       onScrRefChange={setScrRef}
       installResource={installResource}

@@ -5,11 +5,16 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// <summary>
 /// Commands on the papi that handle Send/Receive-related operations
 /// </summary>
+// pdpFactory and appInfo are unread in this open-source implementation, but the closed-source
+// Paratext 10 Studio overlay patch binds them into properties, so the constructor signature must
+// keep them. Suppress the unread-parameter warning rather than removing the parameters.
+#pragma warning disable CS9113
 internal class ParatextProjectSendReceiveService(
     PapiClient papiClient,
     ParatextProjectDataProviderFactory pdpFactory,
     AppInfo appInfo
 )
+#pragma warning restore CS9113
 {
     #region Public properties and methods
 

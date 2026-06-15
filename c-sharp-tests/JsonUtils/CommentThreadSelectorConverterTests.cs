@@ -154,11 +154,12 @@ internal class CommentThreadSelectorConverterTests
         Assert.That(selector, Is.Not.Null);
         Assert.That(selector!.ScriptureRanges, Is.Not.Null);
         Assert.That(selector.ScriptureRanges!, Has.Count.EqualTo(1));
-        Assert.That(selector.ScriptureRanges[0].Start.BookNum, Is.EqualTo(1));
-        Assert.That(selector.ScriptureRanges[0].Start.ChapterNum, Is.EqualTo(1));
-        Assert.That(selector.ScriptureRanges[0].Start.VerseNum, Is.EqualTo(1));
-        Assert.That(selector.ScriptureRanges[0].End.VerseNum, Is.EqualTo(31));
-        Assert.That(selector.ScriptureRanges[0].Granularity, Is.EqualTo("verse"));
+        var range = selector.ScriptureRanges![0];
+        Assert.That(range.Start.BookNum, Is.EqualTo(1));
+        Assert.That(range.Start.ChapterNum, Is.EqualTo(1));
+        Assert.That(range.Start.VerseNum, Is.EqualTo(1));
+        Assert.That(range.End.VerseNum, Is.EqualTo(31));
+        Assert.That(range.Granularity, Is.EqualTo("verse"));
     }
 
     [Test]

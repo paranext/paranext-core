@@ -2635,7 +2635,9 @@ export declare function Tooltip({ ...props }: React$1.ComponentProps<typeof Tool
 /** @inheritdoc Tooltip */
 export declare function TooltipTrigger({ className, variant, ...props }: React$1.ComponentProps<typeof TooltipPrimitive.Trigger> & ButtonProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Tooltip */
-export declare function TooltipContent({ className, sideOffset, style, children, ...props }: React$1.ComponentProps<typeof TooltipPrimitive.Content>): import("react/jsx-runtime").JSX.Element;
+export declare function TooltipContent({ className, sideOffset, style, showArrow, children, ...props }: React$1.ComponentProps<typeof TooltipPrimitive.Content> & {
+	showArrow?: boolean;
+}): import("react/jsx-runtime").JSX.Element;
 type Side = "primary" | "secondary";
 type SidebarContextProps = {
 	state: "expanded" | "collapsed";
@@ -2978,8 +2980,8 @@ export declare const useListbox: ({ options, onFocusChange, onOptionSelect, onCh
 	/** Focus an option by its ID */
 	focusOption: (id: string) => void;
 };
-/** Z-index for elements that need to appear above rc-dock floating tabs (~200) */
-export declare const Z_INDEX_ABOVE_DOCK = 250;
+/** Z-index for elements that need to appear above rc-dock floating tabs and potential modals (~200) */
+export declare const Z_INDEX_ABOVE_DOCK = 600;
 /** Z-index for the footnote editor layer */
 export declare const Z_INDEX_FOOTNOTE_EDITOR = 300;
 /** Z-index for overlay popovers and context menus */

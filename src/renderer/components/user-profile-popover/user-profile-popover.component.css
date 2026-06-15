@@ -1,0 +1,14 @@
+/* Tailwind utilities are not processed for core renderer code (the root tailwind.config.ts is
+   Storybook-only, and the renderer webpack pipeline has no postcss/tailwind loaders). Arbitrary
+   tw:text-[Npx] sizes therefore cannot be used here, so the two sub-`tw:text-xs` steps that the
+   design calls for are defined as raw CSS classes. They extend Tailwind's `xs`/`sm`/… ramp downward
+   (`2xs` < `xs`, `3xs` < `2xs`) rather than being named for their exact pixel values, so they keep
+   communicating their place in the scale even if the precise sizes are later nudged. */
+
+.user-profile-popover-text-2xs {
+  font-size: 11px;
+}
+
+.user-profile-popover-text-3xs {
+  font-size: 10px;
+}
