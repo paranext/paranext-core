@@ -2,23 +2,13 @@ import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { useCallback, useState } from 'react';
 import { Button } from 'platform-bible-react';
 import { getLocalizedStrings } from '../../../../../../.storybook/localization.utils';
+// Single source of truth for the extension-local `--er-*` color tokens. Side-effect import so
+// Storybook (which doesn't load the extension's web-view SCSS bundle) injects the same
+// `:root { --er-* }` declarations via style-loader.
+import '../../_er-tokens.scss';
 import { MarbleGuide, MARBLE_GUIDE_STRING_KEYS } from './marble-guide.component';
 
 const localizedStrings = getLocalizedStrings([...MARBLE_GUIDE_STRING_KEYS]);
-
-/**
- * Storybook fallback for the central extension-local color tokens defined in
- * `extensions/src/platform-enhanced-resources/src/_tokens.scss`. The story doesn't load the
- * extension's web-view bundle, so the chip backgrounds would resolve to `initial` here without
- * these declarations. Grep `--er-` to find every site if you add or change a token.
- */
-const MARBLE_TOKEN_FALLBACK_STYLE = `
-  :root {
-    --er-marble-hover-match-bg: hsl(210 100% 75%);
-    --er-marble-rendering-found-bg: hsl(210 8% 75%);
-    --er-marble-rendering-missing-bg: hsl(25 100% 75%);
-  }
-`;
 
 const meta: Meta<typeof MarbleGuide> = {
   title: 'Bundled Extensions/platform-enhanced-resources/MarbleGuide',
@@ -32,7 +22,6 @@ const meta: Meta<typeof MarbleGuide> = {
       // The Dialog renders into a portal at document.body, so the surrounding container exists
       // mostly to provide a stable backdrop in the Storybook canvas.
       <div className="tw:relative tw:h-[720px] tw:w-[1024px] tw:border tw:border-border tw:bg-muted/40">
-        <style>{MARBLE_TOKEN_FALLBACK_STYLE}</style>
         <div className="tw:p-4 tw:text-sm tw:text-muted-foreground">
           MarbleGuide Dialog renders in a portal - look at the centred modal.
         </div>
