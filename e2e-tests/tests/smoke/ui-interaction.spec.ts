@@ -18,7 +18,7 @@ test.describe('UI Interaction', () => {
   // host. On slow CI that can exceed the default 10s PAPI request timeout.
   const SLOW_CI_PAPI_TIMEOUT_MS = 30_000;
   // On slow macOS CI runners the settings data provider can take longer than the
-  // default 60 s to appear in rpc.discover. Use PROCESS_READY_TIMEOUT(120 s) as
+  // default 60 s to appear in rpc.discover. Use PROCESS_READY_TIMEOUT (120 s) as
   // the upper bound; the beforeAll timeout is extended below to fit both this wait
   // and the subsequent sendPapiRequestOnce call.
   const SETTINGS_REGISTRATION_TIMEOUT_MS = PROCESS_READY_TIMEOUT;
