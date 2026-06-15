@@ -591,7 +591,15 @@ export const initialize = createCachedInitializer(async () => {
   // registerEngine mutates the engine it receives (layering over notifyUpdate, set, and dispose),
   // which is not idempotent. Since createCachedInitializer retries after a failure, use a fresh
   // instance each attempt so a retry after a post-mutation failure doesn't double-layer the engine.
+  // Dispose the instance being replaced — the eager module-scope one on the first attempt, or a
+  // failed prior attempt's — so its constructor's timer and theme subscriptions don't leak. Build
+  // the replacement first so themeServiceEngine never points at a disposed engine (getCurrentThemeSync
+  // reads it synchronously). dispose() is idempotent, so re-disposing a failed attempt is harmless.
+  const previousEngine = themeServiceEngine;
   themeServiceEngine = createThemeServiceEngine();
+  await previousEngine
+    .dispose()
+    .catch((e) => logger.warn(`Failed to dispose previous ThemeDataProviderEngine: ${e}`));
 
   try {
     dataProvider = await dataProviderService.registerEngine(
@@ -599,8 +607,14 @@ export const initialize = createCachedInitializer(async () => {
       themeServiceEngine,
     );
   } catch (error) {
-    // Stop listening so a retried initialization doesn't add a duplicate listener
+    // Stop listening so a retried initialization doesn't add a duplicate listener, and dispose the
+    // engine so its constructor's timer and theme subscriptions don't leak on a retry
     systemThemeChangesInfo.unsubscribe();
+    await themeServiceEngine
+      .dispose()
+      .catch((e) =>
+        logger.warn(`Failed to dispose ThemeDataProviderEngine after failed init: ${e}`),
+      );
     throw error;
   }
 

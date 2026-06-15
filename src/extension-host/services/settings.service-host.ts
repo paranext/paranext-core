@@ -14,6 +14,7 @@ import {
   settingsServiceObjectToProxy,
 } from '@shared/services/settings.service-model';
 import { coreSettingsValidators } from '@extension-host/data/core-settings-info.data';
+import { logger } from '@shared/services/logger.service';
 import { SettingNames, SettingTypes } from 'papi-shared-types';
 import {
   Unsubscriber,
@@ -223,10 +224,21 @@ class SettingDataProviderEngine
 /** Need to run initialize before using this */
 let dataProvider: ISettingsService;
 export const initialize = createCachedInitializer(async () => {
-  dataProvider = await dataProviderService.registerEngine(
-    settingsServiceDataProviderName,
-    new SettingDataProviderEngine(await getSettingsDataFromFile()),
-  );
+  const engine = new SettingDataProviderEngine(await getSettingsDataFromFile());
+  try {
+    dataProvider = await dataProviderService.registerEngine(
+      settingsServiceDataProviderName,
+      engine,
+    );
+  } catch (error) {
+    // Dispose so the engine's onDidRebuild subscription doesn't leak on a retry
+    await engine
+      .dispose()
+      .catch((e) =>
+        logger.warn(`Failed to dispose SettingDataProviderEngine after failed init: ${e}`),
+      );
+    throw error;
+  }
 });
 
 /** This is an internal-only export for testing purposes and should not be used in development */

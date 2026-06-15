@@ -13,6 +13,7 @@ import {
   Unsubscriber,
   ThemeFamiliesByIdExpanded,
 } from 'platform-bible-utils';
+import { logger } from '@shared/services/logger.service';
 import { themesDocumentCombiner, onDidResyncContributions } from './contribution.service';
 
 class ThemeDataDataProviderEngine
@@ -24,7 +25,7 @@ class ThemeDataDataProviderEngine
   /** @param allThemeFamiliesById All Theme Data available to the application. */
   constructor(public allThemeFamiliesById: ThemeFamiliesByIdExpanded) {
     super();
-    onDidResyncContributions(() => this.rebuildThemes());
+    this.unsubscribeOnDidResyncContributions = onDidResyncContributions(() => this.rebuildThemes());
   }
 
   async rebuildThemes(): Promise<void> {
@@ -63,10 +64,18 @@ export const initialize = createCachedInitializer(async () => {
     throw new Error(
       'Theme data service host initialization error: Themes Document Combiner output was null!',
     );
-  dataProvider = await dataProviderService.registerEngine(
-    themeDataServiceProviderName,
-    new ThemeDataDataProviderEngine(currentThemes),
-  );
+  const engine = new ThemeDataDataProviderEngine(currentThemes);
+  try {
+    dataProvider = await dataProviderService.registerEngine(themeDataServiceProviderName, engine);
+  } catch (error) {
+    // Dispose so the engine's onDidResyncContributions subscription doesn't leak on a retry
+    await engine
+      .dispose()
+      .catch((e) =>
+        logger.warn(`Failed to dispose ThemeDataDataProviderEngine after failed init: ${e}`),
+      );
+    throw error;
+  }
 });
 
 /** This is an internal-only export for testing purposes and should not be used in development */

@@ -10,6 +10,7 @@ import {
   FocusSubjectTab,
 } from '@shared/services/window.service-model';
 import { dataProviderService } from '@shared/services/data-provider.service';
+import { logger } from '@shared/services/logger.service';
 import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import {
@@ -248,10 +249,18 @@ async function detectFocus(): Promise<FocusSubject | FocusSubjectElement | undef
 /** Need to run initialize before using this */
 let dataProvider: IWindowService;
 export const initialize = createCachedInitializer(async () => {
-  dataProvider = await dataProviderService.registerEngine(
-    windowServiceProviderName,
-    new WindowDataProviderEngine(),
-  );
+  const engine = new WindowDataProviderEngine();
+  try {
+    dataProvider = await dataProviderService.registerEngine(windowServiceProviderName, engine);
+  } catch (error) {
+    // Dispose so the engine's window focus listeners don't leak if initialization is retried
+    await engine
+      .dispose()
+      .catch((e) =>
+        logger.warn(`Failed to dispose WindowDataProviderEngine after failed init: ${e}`),
+      );
+    throw error;
+  }
 });
 
 /** This is an internal-only export for testing purposes and should not be used in development */

@@ -125,10 +125,18 @@ export const initialize = createCachedInitializer(async () => {
     throw new Error(
       'Menu data service host initialization error: Menu Document Combiner output was null!',
     );
-  dataProvider = await dataProviderService.registerEngine(
-    menuDataServiceProviderName,
-    new MenuDataDataProviderEngine(menuDocumentCombiner.rawOutput),
-  );
+  const engine = new MenuDataDataProviderEngine(menuDocumentCombiner.rawOutput);
+  try {
+    dataProvider = await dataProviderService.registerEngine(menuDataServiceProviderName, engine);
+  } catch (error) {
+    // Dispose so the engine's onDidResyncContributions subscription doesn't leak on a retry
+    await engine
+      .dispose()
+      .catch((e) =>
+        logger.warn(`Failed to dispose MenuDataDataProviderEngine after failed init: ${e}`),
+      );
+    throw error;
+  }
 });
 
 /** This is an internal-only export for testing purposes and should not be used in development */
