@@ -11,6 +11,12 @@ export const BOOK_CHAPTER_CONTROL_STRING_KEYS = Object.freeze([
   '%scripture_section_nt_long%',
   '%scripture_section_dc_long%',
   '%scripture_section_extra_long%',
+  // Locale-specific scripture-reference separators. Defaults (used when the
+  // active locale does not define a value) are " " between book and chapter
+  // and ":" between chapter and verse. Locales such as French set the
+  // chapter/verse separator to ".".
+  '%scripture_book_chapter_separator%',
+  '%scripture_chapter_verse_separator%',
   '%history_recent%',
   '%history_recentSearches_ariaLabel%',
 ] as const);
@@ -48,4 +54,15 @@ export type BookChapterControlProps = {
   onAddRecentSearch?: (scrRef: SerializedVerseRef) => void;
   /** Optional ID for the popover content for accessibility */
   id?: string;
+  /**
+   * If true, the trigger button's label will display the book and chapter only (e.g. "1 John 3"),
+   * omitting the verse part (":1"). The popover-driven selection still operates on
+   * `SerializedVerseRef` values internally; only the displayed label is affected.
+   *
+   * Useful for chapter-level workflows (e.g. exports or scopes that operate on whole chapters)
+   * where surfacing a verse number is misleading.
+   *
+   * @default false
+   */
+  hideVerse?: boolean;
 };

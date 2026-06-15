@@ -12,7 +12,7 @@ import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
-import { formatScrRef, getSectionForBook, Section } from 'platform-bible-utils';
+import { formatScrRef, formatScrRefRange, getSectionForBook, Section } from 'platform-bible-utils';
 import {
   getSectionLongName,
   getLocalizedBookName,
@@ -51,6 +51,7 @@ export function BookChapterControl({
   recentSearches,
   onAddRecentSearch,
   id,
+  hideVerse = false,
 }: BookChapterControlProps) {
   const direction: Direction = readDirection();
 
@@ -214,7 +215,13 @@ export function BookChapterControl({
   // #region Navigation and view changes
 
   // Hook that provides navigation buttons for quick chapter/verse navigation
-  const quickNavButtons = useQuickNavButtons(scrRef, availableBooks, direction, handleSubmit);
+  const quickNavButtons = useQuickNavButtons(
+    scrRef,
+    availableBooks,
+    direction,
+    handleSubmit,
+    hideVerse,
+  );
 
   const handleBackToBooks = useCallback(() => {
     setViewMode('books');
@@ -260,6 +267,19 @@ export function BookChapterControl({
     extraLong: localizedStrings?.['%scripture_section_extra_long%'],
   };
 
+  // Locale-aware reference separators. useLocalizedStrings echoes the key
+  // back when a locale lacks an entry (e.g. '%scripture_..._separator%'),
+  // so we drop any value that still looks like a placeholder and let the
+  // util's own defaults (' ' / ':') kick in.
+  const resolveSeparator = (value: string | undefined): string | undefined =>
+    value && !(value.startsWith('%') && value.endsWith('%')) ? value : undefined;
+  const bookChapterSeparator = resolveSeparator(
+    localizedStrings?.['%scripture_book_chapter_separator%'],
+  );
+  const chapterVerseSeparator = resolveSeparator(
+    localizedStrings?.['%scripture_chapter_verse_separator%'],
+  );
+
   const getSectionLabel = useCallback(
     (section: Section): string => {
       return getSectionLongName(section, otLong, ntLong, dcLong, extraLong);
@@ -275,14 +295,23 @@ export function BookChapterControl({
     [topMatch],
   );
 
-  const currentDisplayValue = useMemo(
-    () =>
-      formatScrRef(
-        scrRef,
-        localizedBookNames ? getLocalizedBookName(scrRef.book, localizedBookNames) : 'English',
-      ),
-    [scrRef, localizedBookNames],
-  );
+  const currentDisplayValue = useMemo(() => {
+    const bookName = localizedBookNames
+      ? getLocalizedBookName(scrRef.book, localizedBookNames)
+      : 'English';
+    if (hideVerse) {
+      // formatScrRefRange omits the verse part when verseNum is negative, and collapses
+      // start==end into a single ref. Using it with verseNum: -1 yields "<book> <chapter>"
+      // in a locale-safe way (no regex on the formatted string).
+      const refWithoutVerse: SerializedVerseRef = { ...scrRef, verseNum: -1 };
+      return formatScrRefRange(refWithoutVerse, refWithoutVerse, {
+        optionOrLocalizedBookName: bookName,
+        bookChapterSeparator,
+        chapterVerseSeparator,
+      });
+    }
+    return formatScrRef(scrRef, bookName, chapterVerseSeparator, bookChapterSeparator);
+  }, [scrRef, localizedBookNames, hideVerse, bookChapterSeparator, chapterVerseSeparator]);
 
   const setChapterRef = useCallback((chapter: number) => {
     return (element: HTMLDivElement | null) => {
@@ -539,7 +568,9 @@ export function BookChapterControl({
                   <RecentSearches
                     recentSearches={recentSearches}
                     onSearchItemSelect={handleRecentItemSelect}
-                    renderItem={(verseRef) => formatScrRef(verseRef, 'English')}
+                    renderItem={(verseRef) =>
+                      formatScrRef(verseRef, 'English', chapterVerseSeparator, bookChapterSeparator)
+                    }
                     getItemKey={(verseRef) =>
                       `${verseRef.book}-${verseRef.chapterNum}-${verseRef.verseNum}`
                     }
@@ -644,6 +675,8 @@ export function BookChapterControl({
                           localizedBookNames
                             ? getLocalizedBookId(topMatch.book, localizedBookNames)
                             : undefined,
+                          chapterVerseSeparator,
+                          bookChapterSeparator,
                         )}
                       </CommandItem>
                     </CommandGroup>

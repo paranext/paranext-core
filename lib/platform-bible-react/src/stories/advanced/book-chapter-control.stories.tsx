@@ -125,6 +125,29 @@ export const WithCustomTrigger: Story = {
   },
 };
 
+export const HideVerse: Story = {
+  args: {
+    scrRef: {
+      book: 'PSA',
+      chapterNum: 23,
+      verseNum: 1,
+    },
+    hideVerse: true,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'When `hideVerse` is true, the trigger button label shows the book and chapter only ' +
+          '(e.g. "Psalms 23"), omitting ":1". Useful for chapter-level workflows such as ' +
+          'whole-chapter exports where surfacing a verse number is misleading. The popover and ' +
+          'submitted reference still operate on `SerializedVerseRef` values internally; only the ' +
+          'displayed label is affected.',
+      },
+    },
+  },
+};
+
 export const EmptyBookList: Story = {
   args: {
     scrRef: defaultScrRef,
