@@ -41,21 +41,19 @@ internal abstract class DataProvider : NetworkObject
             DataProviderName,
             GetFunctions(),
             GetDataProviderCreatedDetails(),
-            GetFunctionDocumentation()
+            GetNetworkObjectDocumentation()
         );
         await StartDataProviderAsync();
     }
 
     /// <summary>
-    /// Optional per-function OpenRPC documentation keyed by function name, threaded into
-    /// registration. Override to document specific functions — e.g. to mark one projectInterface's
-    /// methods experimental (<c>x-experimental: true</c>) without affecting the others a PDP exposes.
-    /// Defaults to <c>null</c> (no documentation).
+    /// Optional documentation for this data provider, threaded into registration. Override to mark
+    /// the whole provider experimental (set <see cref="NetworkObjectDocumentation.Experimental"/>) or
+    /// to document/mark only specific functions via <see cref="NetworkObjectDocumentation.Methods"/> —
+    /// e.g. one experimental projectInterface on a PDP that also exposes stable ones. Defaults to
+    /// <c>null</c> (no documentation).
     /// </summary>
-    protected virtual IReadOnlyDictionary<
-        string,
-        OpenRpcSingleMethodDocumentation
-    >? GetFunctionDocumentation() => null;
+    protected virtual NetworkObjectDocumentation? GetNetworkObjectDocumentation() => null;
 
     /// <summary>
     /// Create an event that tells the network details about the data provider that is being created

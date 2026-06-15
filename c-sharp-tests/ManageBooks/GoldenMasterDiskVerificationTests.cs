@@ -601,16 +601,16 @@ namespace TestParanextDataProvider.ManageBooks
             {
                 return keyOrText switch
                 {
-                    CopyBooksOrchestrator.FilesAreSameTooltipKey
-                        => CopyBooksOrchestrator.FilesAreSameTooltipFallback,
-                    CopyBooksOrchestrator.SourceDoesNotExistTooltipKey
-                        => CopyBooksOrchestrator.SourceDoesNotExistTooltipFallback,
-                    CopyBooksOrchestrator.DestDoesNotExistTooltipKey
-                        => CopyBooksOrchestrator.DestDoesNotExistTooltipFallback,
-                    CopyBooksOrchestrator.SourceIsNewerTooltipKey
-                        => CopyBooksOrchestrator.SourceIsNewerTooltipFallback,
-                    CopyBooksOrchestrator.SourceIsOlderTooltipKey
-                        => CopyBooksOrchestrator.SourceIsOlderTooltipFallback,
+                    CopyBooksOrchestrator.FilesAreSameTooltipKey =>
+                        CopyBooksOrchestrator.FilesAreSameTooltipFallback,
+                    CopyBooksOrchestrator.SourceDoesNotExistTooltipKey =>
+                        CopyBooksOrchestrator.SourceDoesNotExistTooltipFallback,
+                    CopyBooksOrchestrator.DestDoesNotExistTooltipKey =>
+                        CopyBooksOrchestrator.DestDoesNotExistTooltipFallback,
+                    CopyBooksOrchestrator.SourceIsNewerTooltipKey =>
+                        CopyBooksOrchestrator.SourceIsNewerTooltipFallback,
+                    CopyBooksOrchestrator.SourceIsOlderTooltipKey =>
+                        CopyBooksOrchestrator.SourceIsOlderTooltipFallback,
                     _ => keyOrText,
                 };
             }

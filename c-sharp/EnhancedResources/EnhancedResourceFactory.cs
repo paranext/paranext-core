@@ -68,11 +68,14 @@ internal sealed class EnhancedResourceFactory : NetworkObject
                 ObjectType = NetworkObjectType.OBJECT,
                 FunctionNames = [.. functions.Select(f => f.functionName)],
             },
-            // EXPERIMENTAL: the entire platform.enhancedResources network object is experimental —
-            // every method is marked x-experimental so it surfaces as such in the live OpenRPC doc.
-            BuildExperimentalDocumentation(),
-            // Mark the object:{name} existence method experimental too (object-wide).
-            ExistenceMarker(NetworkObjectName)
+            // EXPERIMENTAL: the entire platform.enhancedResources network object is experimental.
+            // Experimental = true cascades x-experimental to the object:{name} existence method and
+            // every function; Methods supplies the richer per-method docs.
+            new NetworkObjectDocumentation
+            {
+                Experimental = true,
+                Methods = BuildExperimentalDocumentation(),
+            }
         );
     }
 

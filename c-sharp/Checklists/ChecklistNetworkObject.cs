@@ -99,36 +99,43 @@ internal sealed class ChecklistNetworkObject : NetworkObject
                 FunctionNames = [BuildMethodName, ResolveMethodName, ValidateMethodName],
             },
             // EXPERIMENTAL: the entire platformScripture.checklistService network object is
-            // experimental — every method is marked x-experimental in the live OpenRPC doc.
-            new Dictionary<string, OpenRpcSingleMethodDocumentation>
+            // experimental. Experimental = true cascades x-experimental to the object:{name}
+            // existence method and every function; Methods supplies the richer per-method docs.
+            new NetworkObjectDocumentation
             {
-                [BuildMethodName] = Create(
-                    "Build checklist data for the supplied request.",
-                    [Param("request", "Checklist request.")],
-                    ResultOf("object", "Checklist result response")
-                ),
-                [ResolveMethodName] = Create(
-                    "Resolve comparative-text references for the active project.",
-                    [
-                        Param("activeProjectId", "Active project id.", "string"),
-                        Param("requestedTexts", "Comparative-text references to resolve.", "array"),
-                    ],
-                    ResultOf("object", "Resolved comparative texts")
-                ),
-                [ValidateMethodName] = Create(
-                    "Validate an equivalent-markers settings string.",
-                    [
-                        Param(
-                            "equivalentMarkers",
-                            "Equivalent-markers string to validate.",
-                            "string"
-                        ),
-                    ],
-                    ResultOf("object", "Marker settings validation result")
-                ),
-            },
-            // Mark the object:{name} existence method experimental too (object-wide).
-            ExistenceMarker(NetworkObjectName)
+                Experimental = true,
+                Methods = new Dictionary<string, OpenRpcSingleMethodDocumentation>
+                {
+                    [BuildMethodName] = Create(
+                        "Build checklist data for the supplied request.",
+                        [Param("request", "Checklist request.")],
+                        ResultOf("object", "Checklist result response")
+                    ),
+                    [ResolveMethodName] = Create(
+                        "Resolve comparative-text references for the active project.",
+                        [
+                            Param("activeProjectId", "Active project id.", "string"),
+                            Param(
+                                "requestedTexts",
+                                "Comparative-text references to resolve.",
+                                "array"
+                            ),
+                        ],
+                        ResultOf("object", "Resolved comparative texts")
+                    ),
+                    [ValidateMethodName] = Create(
+                        "Validate an equivalent-markers settings string.",
+                        [
+                            Param(
+                                "equivalentMarkers",
+                                "Equivalent-markers string to validate.",
+                                "string"
+                            ),
+                        ],
+                        ResultOf("object", "Marker settings validation result")
+                    ),
+                },
+            }
         );
     }
 

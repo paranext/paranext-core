@@ -152,101 +152,111 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     }
 
     /// <summary>
-    /// Per-function documentation marking ONLY the versification projectInterface's methods
-    /// experimental (<c>x-experimental: true</c>). This PDP exposes many projectInterfaces (USFM,
-    /// USJ, comments, settings, versification, …) on a single network object, so the versification
-    /// functions are marked individually rather than object-wide — the stable interfaces stay
-    /// unmarked. Mirrors the <c>@experimental</c> tag on <c>platformScripture.Versification</c> /
+    /// Documentation marking ONLY the versification projectInterface's methods experimental
+    /// (<c>x-experimental: true</c>). This PDP exposes many projectInterfaces (USFM, USJ, comments,
+    /// settings, versification, …) on a single network object, so only the versification functions
+    /// are listed in <c>Methods</c> and the object-level <c>Experimental</c> flag is left unset — the
+    /// stable interfaces and the <c>object:{name}</c> existence method stay unmarked. Mirrors the
+    /// <c>@experimental</c> tag on <c>platformScripture.Versification</c> /
     /// <c>IVersificationProjectDataProvider</c> in <c>platform-scripture.d.ts</c>.
     /// </summary>
-    protected override IReadOnlyDictionary<
-        string,
-        OpenRpcSingleMethodDocumentation
-    > GetFunctionDocumentation() =>
-        new Dictionary<string, OpenRpcSingleMethodDocumentation>
+    protected override NetworkObjectDocumentation GetNetworkObjectDocumentation() =>
+        new()
         {
-            ["getFinalVerseNumber"] = ExperimentalMethodDocumentation.Create(
-                "Get the final verse number in a book + chapter, per the project's versification.",
-                [
-                    ExperimentalMethodDocumentation.Param(
-                        "bookNum",
-                        "1-based book number.",
-                        "number"
-                    ),
-                    ExperimentalMethodDocumentation.Param(
-                        "chapterNum",
-                        "1-based chapter number.",
-                        "number"
-                    ),
-                ],
-                ExperimentalMethodDocumentation.ResultOf("number", "Final verse number")
-            ),
-            ["setFinalVerseNumber"] = ExperimentalMethodDocumentation.Create(
-                "Read-only — throws. Versification is owned by the platformScripture.versification project setting.",
-                [
-                    ExperimentalMethodDocumentation.Param(
-                        "bookNum",
-                        "1-based book number.",
-                        "number"
-                    ),
-                    ExperimentalMethodDocumentation.Param(
-                        "chapterNum",
-                        "1-based chapter number.",
-                        "number"
-                    ),
-                    ExperimentalMethodDocumentation.Param("value", "Ignored.", "number"),
-                ],
-                ExperimentalMethodDocumentation.ResultOf("boolean", "Never returns; always throws")
-            ),
-            ["getFinalChapter"] = ExperimentalMethodDocumentation.Create(
-                "Get the final chapter number in a book, per the project's versification.",
-                [
-                    ExperimentalMethodDocumentation.Param(
-                        "bookNum",
-                        "1-based book number.",
-                        "number"
-                    ),
-                ],
-                ExperimentalMethodDocumentation.ResultOf("number", "Final chapter number")
-            ),
-            ["setFinalChapter"] = ExperimentalMethodDocumentation.Create(
-                "Read-only — throws. Versification is owned by the platformScripture.versification project setting.",
-                [
-                    ExperimentalMethodDocumentation.Param(
-                        "bookNum",
-                        "1-based book number.",
-                        "number"
-                    ),
-                    ExperimentalMethodDocumentation.Param("value", "Ignored.", "number"),
-                ],
-                ExperimentalMethodDocumentation.ResultOf("boolean", "Never returns; always throws")
-            ),
-            ["getFinalVerseNumbersInBook"] = ExperimentalMethodDocumentation.Create(
-                "Get the final verse number for every chapter in a book as a 1-based-indexable array.",
-                [
-                    ExperimentalMethodDocumentation.Param(
-                        "bookNum",
-                        "1-based book number.",
-                        "number"
-                    ),
-                ],
-                ExperimentalMethodDocumentation.ResultOf(
-                    "array",
-                    "Final verse numbers, indexed by chapter (index 0 is a filler 0)"
-                )
-            ),
-            ["setFinalVerseNumbersInBook"] = ExperimentalMethodDocumentation.Create(
-                "Read-only — throws. Versification is owned by the platformScripture.versification project setting.",
-                [
-                    ExperimentalMethodDocumentation.Param(
-                        "bookNum",
-                        "1-based book number.",
-                        "number"
-                    ),
-                    ExperimentalMethodDocumentation.Param("value", "Ignored.", "array"),
-                ],
-                ExperimentalMethodDocumentation.ResultOf("boolean", "Never returns; always throws")
-            ),
+            Methods = new Dictionary<string, OpenRpcSingleMethodDocumentation>
+            {
+                ["getFinalVerseNumber"] = ExperimentalMethodDocumentation.Create(
+                    "Get the final verse number in a book + chapter, per the project's versification.",
+                    [
+                        ExperimentalMethodDocumentation.Param(
+                            "bookNum",
+                            "1-based book number.",
+                            "number"
+                        ),
+                        ExperimentalMethodDocumentation.Param(
+                            "chapterNum",
+                            "1-based chapter number.",
+                            "number"
+                        ),
+                    ],
+                    ExperimentalMethodDocumentation.ResultOf("number", "Final verse number")
+                ),
+                ["setFinalVerseNumber"] = ExperimentalMethodDocumentation.Create(
+                    "Read-only — throws. Versification is owned by the platformScripture.versification project setting.",
+                    [
+                        ExperimentalMethodDocumentation.Param(
+                            "bookNum",
+                            "1-based book number.",
+                            "number"
+                        ),
+                        ExperimentalMethodDocumentation.Param(
+                            "chapterNum",
+                            "1-based chapter number.",
+                            "number"
+                        ),
+                        ExperimentalMethodDocumentation.Param("value", "Ignored.", "number"),
+                    ],
+                    ExperimentalMethodDocumentation.ResultOf(
+                        "boolean",
+                        "Never returns; always throws"
+                    )
+                ),
+                ["getFinalChapter"] = ExperimentalMethodDocumentation.Create(
+                    "Get the final chapter number in a book, per the project's versification.",
+                    [
+                        ExperimentalMethodDocumentation.Param(
+                            "bookNum",
+                            "1-based book number.",
+                            "number"
+                        ),
+                    ],
+                    ExperimentalMethodDocumentation.ResultOf("number", "Final chapter number")
+                ),
+                ["setFinalChapter"] = ExperimentalMethodDocumentation.Create(
+                    "Read-only — throws. Versification is owned by the platformScripture.versification project setting.",
+                    [
+                        ExperimentalMethodDocumentation.Param(
+                            "bookNum",
+                            "1-based book number.",
+                            "number"
+                        ),
+                        ExperimentalMethodDocumentation.Param("value", "Ignored.", "number"),
+                    ],
+                    ExperimentalMethodDocumentation.ResultOf(
+                        "boolean",
+                        "Never returns; always throws"
+                    )
+                ),
+                ["getFinalVerseNumbersInBook"] = ExperimentalMethodDocumentation.Create(
+                    "Get the final verse number for every chapter in a book as a 1-based-indexable array.",
+                    [
+                        ExperimentalMethodDocumentation.Param(
+                            "bookNum",
+                            "1-based book number.",
+                            "number"
+                        ),
+                    ],
+                    ExperimentalMethodDocumentation.ResultOf(
+                        "array",
+                        "Final verse numbers, indexed by chapter (index 0 is a filler 0)"
+                    )
+                ),
+                ["setFinalVerseNumbersInBook"] = ExperimentalMethodDocumentation.Create(
+                    "Read-only — throws. Versification is owned by the platformScripture.versification project setting.",
+                    [
+                        ExperimentalMethodDocumentation.Param(
+                            "bookNum",
+                            "1-based book number.",
+                            "number"
+                        ),
+                        ExperimentalMethodDocumentation.Param("value", "Ignored.", "array"),
+                    ],
+                    ExperimentalMethodDocumentation.ResultOf(
+                        "boolean",
+                        "Never returns; always throws"
+                    )
+                ),
+            },
         };
 
     protected override Task StartDataProviderAsync()

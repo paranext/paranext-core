@@ -49,10 +49,19 @@ public static class ExperimentalMethodDocumentation
         };
 
     /// <summary>
+    /// A bare experimental marker — <c>x-experimental: true</c> with no summary and default
+    /// (empty params, untyped object result) docs. Used by the object-wide
+    /// <see cref="NetworkObjectDocumentation.Experimental"/> fanout for functions that have no richer
+    /// per-method documentation of their own.
+    /// </summary>
+    public static OpenRpcSingleMethodDocumentation Marker() =>
+        new() { Method = new() { Experimental = true } };
+
+    /// <summary>
     /// Builds an experimental documentation entry for a network object's <c>object:{name}</c>
     /// existence-check method (registered by <see cref="NetworkObject.RegisterNetworkObjectAsync"/>),
-    /// which takes no parameters and returns a boolean. Pass this as the object-wide documentation so
-    /// the existence method is marked experimental alongside the object's functions.
+    /// which takes no parameters and returns a boolean. Used by the object-wide
+    /// <see cref="NetworkObjectDocumentation.Experimental"/> fanout to mark the existence method.
     /// </summary>
     public static OpenRpcSingleMethodDocumentation ExistenceMarker(string networkObjectName) =>
         Create(

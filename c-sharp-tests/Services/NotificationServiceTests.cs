@@ -145,10 +145,8 @@ public class NotificationServiceTests
     public void PlatformNotification_WithStringNotificationId_SerializesIdAsString()
     {
         NotificationId existingId = NotificationId.FromString("existing-toast");
-        PlatformNotification notification = new("Updated message", NotificationSeverity.Info)
-        {
-            NotificationId = existingId,
-        };
+        PlatformNotification notification =
+            new("Updated message", NotificationSeverity.Info) { NotificationId = existingId };
         string json = JsonSerializer.Serialize(notification, _options);
 
         using JsonDocument doc = JsonDocument.Parse(json);
@@ -161,10 +159,8 @@ public class NotificationServiceTests
     public void PlatformNotification_WithNumericNotificationId_SerializesIdAsNumber()
     {
         NotificationId existingId = NotificationId.FromNumber(7L);
-        PlatformNotification notification = new("Updated message", NotificationSeverity.Error)
-        {
-            NotificationId = existingId,
-        };
+        PlatformNotification notification =
+            new("Updated message", NotificationSeverity.Error) { NotificationId = existingId };
         string json = JsonSerializer.Serialize(notification, _options);
 
         using JsonDocument doc = JsonDocument.Parse(json);
@@ -176,18 +172,22 @@ public class NotificationServiceTests
     [Test]
     public void PlatformNotification_WithOptionalFields_SerializesAllFields()
     {
-        PlatformNotification notification = new("Test", NotificationSeverity.Info)
-        {
-            ClickCommandLabel = "View details",
-            ClickCommand = "myExtension.viewDetails",
-            Duration = 5000,
-        };
+        PlatformNotification notification =
+            new("Test", NotificationSeverity.Info)
+            {
+                ClickCommandLabel = "View details",
+                ClickCommand = "myExtension.viewDetails",
+                Duration = 5000,
+            };
         string json = JsonSerializer.Serialize(notification, _options);
 
         using JsonDocument doc = JsonDocument.Parse(json);
         JsonElement root = doc.RootElement;
         Assert.That(root.GetProperty("clickCommandLabel").GetString(), Is.EqualTo("View details"));
-        Assert.That(root.GetProperty("clickCommand").GetString(), Is.EqualTo("myExtension.viewDetails"));
+        Assert.That(
+            root.GetProperty("clickCommand").GetString(),
+            Is.EqualTo("myExtension.viewDetails")
+        );
         Assert.That(root.GetProperty("duration").GetInt32(), Is.EqualTo(5000));
     }
 
@@ -201,7 +201,10 @@ public class NotificationServiceTests
             JsonDocument.Parse($@"""{expectedId}""").RootElement;
         await _client.RegisterRequestHandlerAsync("object:NotificationService.send", handler, null);
 
-        NotificationId id = NotificationService.Send(_client, new PlatformNotification("Hello", NotificationSeverity.Info));
+        NotificationId id = NotificationService.Send(
+            _client,
+            new PlatformNotification("Hello", NotificationSeverity.Info)
+        );
 
         Assert.That(id.ToString(), Is.EqualTo(expectedId));
         Assert.That(id.ToSerializable(), Is.InstanceOf<string>());
@@ -213,7 +216,10 @@ public class NotificationServiceTests
         Func<object?, JsonElement> handler = (_) => JsonDocument.Parse("55").RootElement;
         await _client.RegisterRequestHandlerAsync("object:NotificationService.send", handler, null);
 
-        NotificationId id = NotificationService.Send(_client, new PlatformNotification("Hello", NotificationSeverity.Warning));
+        NotificationId id = NotificationService.Send(
+            _client,
+            new PlatformNotification("Hello", NotificationSeverity.Warning)
+        );
 
         Assert.That(id.ToString(), Is.EqualTo("55"));
         Assert.That(id.ToSerializable(), Is.InstanceOf<long>());
@@ -228,7 +234,11 @@ public class NotificationServiceTests
         {
             receivedArg = arg;
         };
-        await _client.RegisterRequestHandlerAsync("object:NotificationService.dismiss", handler, null);
+        await _client.RegisterRequestHandlerAsync(
+            "object:NotificationService.dismiss",
+            handler,
+            null
+        );
 
         NotificationService.Dismiss(_client, NotificationId.FromString("my-toast"));
 
@@ -244,7 +254,11 @@ public class NotificationServiceTests
         {
             receivedArg = arg;
         };
-        await _client.RegisterRequestHandlerAsync("object:NotificationService.dismiss", handler, null);
+        await _client.RegisterRequestHandlerAsync(
+            "object:NotificationService.dismiss",
+            handler,
+            null
+        );
 
         NotificationService.Dismiss(_client, NotificationId.FromNumber(42L));
 
