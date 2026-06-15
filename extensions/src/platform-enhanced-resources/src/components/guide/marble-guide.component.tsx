@@ -15,7 +15,7 @@ import {
   TooltipTrigger,
 } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
-import { Book, BookOpen, Image as ImageIcon, Info, MapPin } from 'lucide-react';
+import { BookA, Image as ImageIcon, Info, LibraryBig, MapPin } from 'lucide-react';
 
 /**
  * Object containing all keys used for localization in this component. Mirrors the 19 strings from
@@ -330,11 +330,11 @@ export function MarbleGuide({
             data-testid="marble-guide-tab-grid"
           >
             <div className="tw:flex tw:flex-col tw:items-center tw:gap-1">
-              <BookOpen className="tw:h-6 tw:w-6 tw:text-foreground" aria-hidden />
+              <BookA className="tw:h-6 tw:w-6 tw:text-foreground" aria-hidden />
               <span className="tw:text-xs">{tabDictionary}</span>
             </div>
             <div className="tw:flex tw:flex-col tw:items-center tw:gap-1">
-              <Book className="tw:h-6 tw:w-6 tw:text-foreground" aria-hidden />
+              <LibraryBig className="tw:h-6 tw:w-6 tw:text-foreground" aria-hidden />
               <span className="tw:text-xs">{tabEncyclopedia}</span>
             </div>
             <div className="tw:flex tw:flex-col tw:items-center tw:gap-1">
