@@ -15,7 +15,7 @@ import {
   type MouseEvent,
   type RefObject,
 } from 'react';
-import { ArrowRight, Check, ChevronDown, ChevronsUpDown, Filter } from 'lucide-react';
+import { ArrowRight, Check, ChevronDown, ChevronsUpDown, Filter, Loader2 } from 'lucide-react';
 import { getLocalizeKeyForScrollGroupId, type ScrollGroupId } from 'platform-bible-utils';
 import { DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS } from 'platform-bible-utils/internal';
 import { cn } from '@/utils/shadcn-ui/utils';
@@ -48,6 +48,7 @@ import {
 } from '@/components/shadcn-ui/tooltip';
 import {
   computeRows,
+  normalizeProjectId,
   partitionAndSort,
   partitionByVersification,
   type ProjectSelectorOpenTab,
@@ -161,6 +162,12 @@ type CommonProps = {
   popoverContentStyle?: CSSProperties;
   alignDropDown?: 'start' | 'center' | 'end';
   isDisabled?: boolean;
+  /**
+   * When true, the trigger shows a spinner (instead of the chevron) and is disabled, signalling
+   * that the project list is still loading. Distinct from `isDisabled`, which conveys a generic
+   * busy/blocked state with no spinner.
+   */
+  isLoading?: boolean;
   localizedStrings?: ProjectSelectorLocalizedStrings;
   /** Initial state of the "Group by open tabs" toggle. Defaults to `true`. */
   defaultGroupByOpenTabs?: boolean;
@@ -645,7 +652,11 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     if (props.mode !== 'project-multi') return [];
     const result: ProjectSelectorProjectPair[] = [];
     props.projects.forEach((project) => {
-      const tabs = props.openTabs.filter((t) => t.projectId === project.id);
+      // Case-insensitive match: open-tab projectIds may be lowercased while project ids are
+      // canonical UPPERCASE. See normalizeProjectId / I12.
+      const tabs = props.openTabs.filter(
+        (t) => normalizeProjectId(t.projectId) === normalizeProjectId(project.id),
+      );
       if (tabs.length === 0) {
         result.push({ projectId: project.id });
         return;
@@ -816,7 +827,13 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   }, [props]);
 
   let triggerIcon;
-  if (props.hideTriggerChevron) triggerIcon = undefined;
+  // While the project list is loading, show a spinner in place of the chevron (even in
+  // hideTriggerChevron mode) so the user sees the selector is not ready yet. See I1.
+  if (props.isLoading)
+    triggerIcon = (
+      <Loader2 className="tw:ms-2 tw:h-4 tw:w-4 tw:shrink-0 tw:animate-spin tw:opacity-50" />
+    );
+  else if (props.hideTriggerChevron) triggerIcon = undefined;
   else if (props.mode === 'project-multi')
     triggerIcon = <ChevronsUpDown className="tw:ms-2 tw:h-4 tw:w-4 tw:shrink-0 tw:opacity-50" />;
   else triggerIcon = <ChevronDown className="tw:ms-2 tw:h-4 tw:w-4 tw:shrink-0 tw:opacity-50" />;
@@ -841,7 +858,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       role="combobox"
       aria-expanded={open}
       aria-label={props.ariaLabel}
-      disabled={props.isDisabled ?? false}
+      disabled={(props.isDisabled ?? false) || (props.isLoading ?? false)}
       className={cn(
         'tw:flex tw:w-[180px] tw:items-center tw:justify-between tw:overflow-hidden',
         props.buttonClassName,

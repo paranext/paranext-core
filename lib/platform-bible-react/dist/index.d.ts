@@ -556,6 +556,12 @@ type CommonProps = {
 	popoverContentStyle?: React$1.CSSProperties;
 	alignDropDown?: "start" | "center" | "end";
 	isDisabled?: boolean;
+	/**
+	 * When true, the trigger shows a spinner (instead of the chevron) and is disabled, signalling that
+	 * the project list is still loading. Distinct from `isDisabled`, which conveys a generic
+	 * busy/blocked state with no spinner.
+	 */
+	isLoading?: boolean;
 	localizedStrings?: ProjectSelectorLocalizedStrings;
 	/** Initial state of the "Group by open tabs" toggle. Defaults to `true`. */
 	defaultGroupByOpenTabs?: boolean;

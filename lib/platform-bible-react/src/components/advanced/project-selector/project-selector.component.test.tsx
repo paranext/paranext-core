@@ -119,6 +119,48 @@ describe('ProjectSelector — trigger chevron', () => {
   });
 });
 
+describe('ProjectSelector — loading state (I1)', () => {
+  it('disables the trigger and shows a spinner when isLoading', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ projectId: undefined }}
+        onChangeSelection={() => {}}
+        buttonPlaceholder="Select a project"
+        ariaLabel="Project"
+        isLoading
+      />,
+    );
+    const trigger = screen.getByRole('combobox', { name: 'Project' });
+    expect(trigger).toBeDisabled();
+    const icon = trigger.querySelector('svg');
+    expect(icon).not.toBeNull();
+    expect(icon?.getAttribute('class') ?? '').toContain('animate-spin');
+  });
+
+  it('shows the loading spinner even when hideTriggerChevron is set (narrow rail)', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ projectId: undefined }}
+        onChangeSelection={() => {}}
+        buttonPlaceholder="Select a project"
+        ariaLabel="Project"
+        hideTriggerChevron
+        isLoading
+      />,
+    );
+    const trigger = screen.getByRole('combobox', { name: 'Project' });
+    const icon = trigger.querySelector('svg');
+    expect(icon).not.toBeNull();
+    expect(icon?.getAttribute('class') ?? '').toContain('animate-spin');
+  });
+});
+
 describe('ProjectSelector — trigger label format', () => {
   it('renders only the shortName by default', () => {
     render(<ProjectSelectorHarness initialSelected="esvus16" />);
