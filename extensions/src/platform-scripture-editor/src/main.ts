@@ -16,7 +16,6 @@ import {
 } from 'platform-bible-utils';
 import {
   EditorDecorations,
-  SelectionChangeEvent,
   EditorWebViewMessage,
   OpenEditorOptions,
   PlatformScriptureEditorWebViewController,
@@ -55,10 +54,39 @@ const COMMENTARIES_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.commentaries';
  * Network event name for editor selection change events. Use
  * `papi.network.getNetworkEvent('platformScriptureEditor.onDidSelectionChange')` to subscribe.
  */
-const EDITOR_SELECTION_CHANGED_EVENT = 'platformScriptureEditor.onDidSelectionChange';
+const EDITOR_SELECTION_CHANGED_EVENT = 'platformScriptureEditor.onDidSelectionChange' as const;
 
-/** Event emitter for selection change events. Created in activate() */
-let selectionChangedEventEmitter: PlatformEventEmitter<SelectionChangeEvent> | undefined;
+/**
+ * Creates the buffered emitter for editor selection changes. Buffered so a restored editor that
+ * pushes its first selection on mount — before the emitter finishes registering — is not lost: the
+ * latest selection per web view is buffered and flushed once registration completes.
+ */
+function createSelectionChangedEventEmitter() {
+  return papi.network.createBufferedNetworkEventEmitter(
+    EDITOR_SELECTION_CHANGED_EVENT,
+    {
+      notification: {
+        summary: 'Emitted when the selection in a Scripture editor changes.',
+        params: [
+          {
+            name: 'selectionChange',
+            required: true,
+            summary: 'The new editor selection.',
+            schema: { type: 'object' },
+          },
+        ],
+      },
+    },
+    { bufferStrategy: { latestByKey: (event) => event.webViewId } },
+  );
+}
+
+/**
+ * Buffered emitter for editor selection changes. Created in `activate` (not at module load) so it
+ * is re-created on re-activation after a `deactivate` disposed it. Stays `undefined` until
+ * `activate` runs; emit sites guard with `?.`.
+ */
+let selectionChangedEventEmitter: ReturnType<typeof createSelectionChangedEventEmitter> | undefined;
 
 // Selection is stored per-WebViewController instance in createWebViewController.
 
@@ -811,6 +839,9 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
         if (firstSelectionAsync && !firstSelectionAsync.hasSettled) {
           firstSelectionAsync.resolveToValue(selection);
         }
+        // Buffered emit — if a restored editor pushes a selection before the emitter has registered,
+        // the latest selection per web view is buffered and flushed rather than thrown away. Guarded
+        // with `?.` since the emitter only exists between activate and deactivate.
         selectionChangedEventEmitter?.emit({ webViewId, selection });
       },
       async dispose() {
@@ -944,6 +975,10 @@ async function openResourceText(
 
 export async function activate(context: ExecutionActivationContext): Promise<void> {
   logger.debug('Scripture editor is activating!');
+
+  // Create the buffered selection-changed emitter early so a restored editor's first selection
+  // (pushed before registration completes) is buffered rather than lost. Recreated each activation.
+  selectionChangedEventEmitter = createSelectionChangedEventEmitter();
 
   const openPlatformScriptureEditorPromise = papi.commands.registerCommand(
     'platformScriptureEditor.openScriptureEditor',
@@ -1230,11 +1265,6 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
-  // Create the selection changed event emitter
-  selectionChangedEventEmitter = papi.network.createNetworkEventEmitter<SelectionChangeEvent>(
-    EDITOR_SELECTION_CHANGED_EVENT,
-  );
-
   // Default active project picker for simple layout. Subscribes to web-view-open and
   // sync-completion events and attempts to fill the empty Scripture Editor with the
   // most-recently-active editable project. Re-runs on each subscribed event; concurrent
@@ -1261,7 +1291,13 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await bibleTextsPanelWebViewProviderPromise,
     await commentariesPanelWebViewProviderPromise,
     await openResourceTextPromise,
-    selectionChangedEventEmitter,
+    {
+      dispose: async () => {
+        selectionChangedEventEmitter?.dispose();
+        selectionChangedEventEmitter = undefined;
+        return true;
+      },
+    },
     {
       dispose: async () => {
         projectSwitchWillStartEmitter?.dispose();

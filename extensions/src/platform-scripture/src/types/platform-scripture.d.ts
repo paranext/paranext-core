@@ -2304,4 +2304,14 @@ declare module 'papi-shared-types' {
      */
     'platformScripture.allowInvisibleCharacters': boolean;
   }
+
+  export interface NetworkEvents {
+    /** Emitted when check results are invalidated and subscribers should refresh their data. */
+    checkResultsInvalidated: CheckResultsInvalidated;
+    /**
+     * Emitted by the tab menu when the user opens the markers-checklist settings. The web view
+     * subscribes to flip its internal settings panel open.
+     */
+    'platformScripture.openMarkersChecklistSettings': undefined;
+  }
 }

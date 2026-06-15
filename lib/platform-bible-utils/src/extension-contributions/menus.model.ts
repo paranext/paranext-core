@@ -19,6 +19,12 @@ export type OrderedItem = {
 export type OrderedExtensibleContainer = OrderedItem & {
   /** Determines whether other items can be added to this after it has been defined */
   isExtensible?: boolean;
+  /**
+   * Set to `true` to mark this extension point as experimental. Experimental menu content may
+   * change or be removed without notice. Extensions reading this should treat the marker as
+   * informational.
+   */
+  isExperimental?: boolean;
 };
 
 /** Group of menu items that belongs in a column */
@@ -98,6 +104,12 @@ export type ColumnsWithHeaders = {
   [property: ReferencedItem]: MenuColumnWithHeader;
   /** Defines whether columns can be added to this multi-column menu */
   isExtensible?: boolean;
+  /**
+   * Set to `true` to mark this columns collection as experimental. Experimental menu content may
+   * change or be removed without notice. Extensions reading this should treat the marker as
+   * informational.
+   */
+  isExperimental?: boolean;
 };
 
 /** Menu that contains a column without a header */
@@ -126,6 +138,12 @@ export type WebViewMenu = {
   topMenu: MultiColumnMenu | undefined;
   /** Menu that opens when you right click on the main body/area of a tab */
   contextMenu: SingleColumnMenu | undefined;
+  /**
+   * Set to `true` to mark this WebView menu as experimental. Experimental menu content may change
+   * or be removed without notice. Extensions reading this should treat the marker as
+   * informational.
+   */
+  isExperimental?: boolean;
 };
 
 /** Menus for all web views */
@@ -226,6 +244,11 @@ export const menuDocumentSchema = {
                 'Defines whether contributions are allowed to add menu groups to this column',
               type: 'boolean',
             },
+            isExperimental: {
+              description:
+                'Set to `true` to mark this extension point as experimental. Experimental menu content may change or be removed without notice.',
+              type: 'boolean',
+            },
           },
           required: ['label', 'order'],
           additionalProperties: false,
@@ -237,7 +260,15 @@ export const menuDocumentSchema = {
             'Defines whether contributions are allowed to add columns to this multi-column menu',
           type: 'boolean',
         },
+        isExperimental: {
+          description:
+            'Set to `true` to mark this columns collection as experimental. Experimental menu content may change or be removed without notice.',
+          type: 'boolean',
+        },
       },
+      // Reject unknown keys at the collection level (e.g. a typo'd `isExperimentl`). Column entries
+      // are still allowed via `patternProperties` above.
+      additionalProperties: false,
     },
     menuGroups: {
       description:
@@ -265,6 +296,11 @@ export const menuDocumentSchema = {
                     'Defines whether contributions are allowed to add menu items to this menu group',
                   type: 'boolean',
                 },
+                isExperimental: {
+                  description:
+                    'Set to `true` to mark this extension point as experimental. Experimental menu content may change or be removed without notice.',
+                  type: 'boolean',
+                },
               },
               required: ['order'],
               additionalProperties: false,
@@ -283,6 +319,11 @@ export const menuDocumentSchema = {
                 isExtensible: {
                   description:
                     'Defines whether contributions are allowed to add menu items to this menu group',
+                  type: 'boolean',
+                },
+                isExperimental: {
+                  description:
+                    'Set to `true` to mark this extension point as experimental. Experimental menu content may change or be removed without notice.',
                   type: 'boolean',
                 },
               },
@@ -417,6 +458,11 @@ export const menuDocumentSchema = {
         contextMenu: {
           description: 'Menu that opens when you right click on the main body/area of a tab',
           $ref: '#/$defs/singleColumnMenu',
+        },
+        isExperimental: {
+          description:
+            'Set to `true` to mark this WebView menu as experimental. Experimental menu content may change or be removed without notice.',
+          type: 'boolean',
         },
       },
       additionalProperties: false,

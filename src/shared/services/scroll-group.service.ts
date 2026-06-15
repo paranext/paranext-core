@@ -3,13 +3,12 @@ import {
   EVENT_NAME_ON_DID_UPDATE_SCR_REF,
   NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
   IScrollGroupService,
-  ScrollGroupUpdateInfo,
 } from '@shared/services/scroll-group.service-model';
 import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
 import { networkObjectStatusService } from '@shared/services/network-object-status.service';
 import { networkObjectService } from '@shared/services/network-object.service';
 
-const onDidUpdateScrRef = getNetworkEvent<ScrollGroupUpdateInfo>(EVENT_NAME_ON_DID_UPDATE_SCR_REF);
+const onDidUpdateScrRef = getNetworkEvent(EVENT_NAME_ON_DID_UPDATE_SCR_REF);
 
 let networkObject: IScrollGroupService;
 let initializationPromise: Promise<void>;
