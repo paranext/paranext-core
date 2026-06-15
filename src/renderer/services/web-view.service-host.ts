@@ -1978,7 +1978,6 @@ export const initialize = () => {
 
     // #endregion
 
-    // The web view lifecycle emitters are created at module load (buffered); nothing to set up here.
     onDidCloseWebView(({ webView: { id, webViewType } }) => {
       if (!deleteWebViewNonce(id))
         logger.warn(

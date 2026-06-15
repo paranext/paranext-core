@@ -163,24 +163,10 @@ function getTimeoutMsForRequestType(requestType: SerializedRequestType): number 
 function setTimeoutMsForRequestType(requestType: SerializedRequestType, timeoutMs: number) {
   if (timeoutMs < 0)
     throw new Error(`Invalid request timeout ${timeoutMs}: must be a non-negative number`);
-  // The sync `set` throws if the shared store has not initialized. This runs from
-  // registerRequestHandler *after* the method has already been registered with the RPC handler, so a
-  // throw here would leak that registration. Custom timeouts are non-critical (the default applies
-  // when one is absent), so when the store isn't ready yet we debug-log and skip rather than throw.
-  if (!sharedStoreService.isInitialized()) {
-    logger.debug(
-      `Custom timeout for request type ${requestType} set before the shared store finished initializing; using default ${requestTimeoutMs}ms instead`,
-    );
-    return;
-  }
   sharedStoreService.set(sharedStoreKeyForRequestType(requestType), timeoutMs);
 }
 
 function removeTimeoutMsForRequestType(requestType: SerializedRequestType) {
-  // Mirror setTimeoutMsForRequestType: skip (rather than throw) if the shared store isn't ready, so
-  // the unsubscriber returned by registerRequestHandler can't throw mid-teardown. If the store never
-  // initialized then no custom timeout was ever stored, so there is nothing to remove.
-  if (!sharedStoreService.isInitialized()) return;
   sharedStoreService.remove(sharedStoreKeyForRequestType(requestType));
 }
 
@@ -445,9 +431,12 @@ const createNetworkEventEmitterInternal = <T>(
  *   are not centrally registered and do not appear in the OpenRPC document. The async version
  *   restricts central _registration_ of an event name to a single source (unless the event is
  *   declared in {@link MultiSourceNetworkEvents}, in which case it accepts multiple registrants by
- *   design). Note this restricts registration only — emission itself is not gated by the registry;
- *   the central registry instead warns when an event is announced unregistered or from a process
- *   that did not register it.
+ *   design). Note this restricts central _registration_, not emission: the registry does not block
+ *   emits today, but it warns when an event is announced without a matching registration or from a
+ *   process that did not register it. That tolerance is transitional — announcing an unregistered
+ *   or cross-process single-source event is deprecated and is expected to become an error (with the
+ *   registry gating emission) in a future release, so treat the warning as something to fix, not as
+ *   the permanent behavior.
  *
  *   WARNING: You can only create a network event emitter once per eventType to prevent hijacked event
  *   emitters.

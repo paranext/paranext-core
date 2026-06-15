@@ -64,7 +64,10 @@ export type {
   MandatoryProjectDataTypes,
 } from '@shared/models/project-data-provider.model';
 export type { IProjectDataProviderEngine } from '@shared/models/project-data-provider-engine.model';
-export type { IProjectDataProviderEngineFactory } from '@shared/models/project-data-provider-engine-factory.model.ts';
+export type {
+  IProjectDataProviderEngineFactory,
+  ProjectDataProviderEngineEnvelope,
+} from '@shared/models/project-data-provider-engine-factory.model.ts';
 export type {
   IProjectDataProviderFactory,
   ProjectMetadataFilterOptions,

@@ -135,44 +135,51 @@ resetInitializationStartedSignal();
 export function initialize(networkService: NetworkService): Promise<void> {
   if (initializationPromise) return initializationPromise;
   initializationStartedResolve();
+
+  // Synchronous setup. `processId` and `storeChangeEmitter` MUST be assigned synchronously here —
+  // before this function yields — so that `set` and `remove` work synchronously as soon as
+  // initialize() has been called, without callers having to await initialization first. (The
+  // `shared-store:change` emitter is created synchronously via createCoreMultiSourceEventEmitter; its
+  // central registration runs in the background and isn't needed for the emitter to work.) Only the
+  // cross-process initial data sync below is asynchronous.
+  try {
+    // Generate a unique process ID for this process that still includes the process type
+    processId = `${globalThis.processType}-${Math.random().toString(36).substring(2, 10)}`;
+    logger.debug(`Initializing shared store service`);
+
+    const { emitter, registeredEmitterPromise } = networkService.createCoreMultiSourceEventEmitter(
+      STORE_CHANGE_EVENT,
+      STORE_CHANGE_EVENT_DOCS,
+    );
+    storeChangeEmitter = emitter;
+    // Consume the registration result in the background (failures are already logged inside the
+    // network service) so a rejection can't surface as an unhandled rejection.
+    (async () => {
+      try {
+        await registeredEmitterPromise;
+      } catch {
+        // Registration failure is already logged inside createCoreMultiSourceEventEmitter.
+      }
+    })();
+
+    // Listen for changes from other processes to update the local store.
+    storeChangeEmitter.event((event) => {
+      if (event.clock.processId !== processId) setFromRemote(event.key, event);
+    });
+  } catch (error) {
+    // Synchronous setup failed before initializationPromise was assigned. Reset the partial state and
+    // the started signal so a later initialize()/waitForInitialization() can retry from scratch.
+    // Surface the failure as a rejected promise rather than throwing synchronously, so initialize()
+    // always returns a promise. initializationPromise stays undefined, so the retry path is open.
+    storeChangeEmitter?.dispose();
+    storeChangeEmitter = undefined;
+    processId = '';
+    resetInitializationStartedSignal();
+    return Promise.reject(error instanceof Error ? error : new Error(getErrorMessage(error)));
+  }
+
   initializationPromise = (async () => {
     try {
-      // Defer the rest of init to a microtask so the synchronous part of initialize() (the
-      // `initializationPromise = ...` assignment below) completes first. Otherwise a synchronous
-      // throw in the body (e.g. from createCoreMultiSourceEventEmitter) would run the catch's
-      // `initializationPromise = undefined` reset *before* the outer assignment, which would then
-      // clobber it back to the rejected promise — permanently stuck. Yielding first guarantees the
-      // catch runs after the assignment, so a failed init can be retried.
-      await Promise.resolve();
-      // Generate a unique process ID for this process that still includes the process type
-      processId = `${globalThis.processType}-${Math.random().toString(36).substring(2, 10)}`;
-      logger.debug(`Initializing shared store service`);
-
-      // Create the multi-source emitter for `shared-store:change` synchronously and assign it
-      // immediately so the store can emit and subscribe right away. Central registration with the RPC
-      // handler runs in the background — we don't await it (it isn't needed for the emitter to work),
-      // keeping startup simple.
-      const { emitter, registeredEmitterPromise } =
-        networkService.createCoreMultiSourceEventEmitter(
-          STORE_CHANGE_EVENT,
-          STORE_CHANGE_EVENT_DOCS,
-        );
-      storeChangeEmitter = emitter;
-      // Consume the registration result in the background (failures are already logged inside the
-      // network service) so a rejection can't surface as an unhandled rejection.
-      (async () => {
-        try {
-          await registeredEmitterPromise;
-        } catch {
-          // Registration failure is already logged inside createCoreMultiSourceEventEmitter.
-        }
-      })();
-
-      // Listen for changes from other processes to update the local store.
-      storeChangeEmitter.event((event) => {
-        if (event.clock.processId !== processId) setFromRemote(event.key, event);
-      });
-
       if (globalThis.processType !== ProcessType.Main) {
         // Outside the main process, sync the local store to the main store's data initially.
         try {

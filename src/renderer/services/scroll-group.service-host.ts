@@ -169,8 +169,6 @@ const scrollGroupService: IScrollGroupRemoteService = {
 
 /** Register the network object that backs the scroll group service */
 export async function startScrollGroupService(): Promise<void> {
-  // The `onDidUpdateScrRef` emitter is created at module load (buffered), so there's nothing to set
-  // up for it here.
   await networkObjectService.set(NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE, scrollGroupService);
 
   // Keep scroll group 0 in sync with the verse ref setting for backwards compatibility
