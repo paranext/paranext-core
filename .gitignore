@@ -73,3 +73,7 @@ docs/superpowers/
 
 # cursor
 .cursor/
+
+# agent skills (managed in paranext/ai-prompts, symlinked locally)
+.agents/
+skills-lock.json
