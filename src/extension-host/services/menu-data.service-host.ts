@@ -8,6 +8,7 @@ import { dataProviderService } from '@shared/services/data-provider.service';
 import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import {
+  createCachedInitializer,
   createSyncProxyForAsyncObject,
   PlatformMenus,
   MultiColumnMenu,
@@ -117,32 +118,26 @@ class MenuDataDataProviderEngine
   }
 }
 
-let initializationPromise: Promise<void>;
 /** Need to run initialize before using this */
 let dataProvider: IMenuDataService;
-export async function initialize(): Promise<void> {
-  if (!initializationPromise) {
-    initializationPromise = new Promise<void>((resolve, reject) => {
-      const executor = async () => {
-        try {
-          if (!menuDocumentCombiner.rawOutput)
-            throw new Error(
-              'Menu data service host initialization error: Menu Document Combiner output was null!',
-            );
-          dataProvider = await dataProviderService.registerEngine(
-            menuDataServiceProviderName,
-            new MenuDataDataProviderEngine(menuDocumentCombiner.rawOutput),
-          );
-          resolve();
-        } catch (error) {
-          reject(error);
-        }
-      };
-      executor();
-    });
+export const initialize = createCachedInitializer(async () => {
+  if (!menuDocumentCombiner.rawOutput)
+    throw new Error(
+      'Menu data service host initialization error: Menu Document Combiner output was null!',
+    );
+  const engine = new MenuDataDataProviderEngine(menuDocumentCombiner.rawOutput);
+  try {
+    dataProvider = await dataProviderService.registerEngine(menuDataServiceProviderName, engine);
+  } catch (error) {
+    // Dispose so the engine's onDidResyncContributions subscription doesn't leak on a retry
+    await engine
+      .dispose()
+      .catch((e) =>
+        logger.warn(`Failed to dispose MenuDataDataProviderEngine after failed init: ${e}`),
+      );
+    throw error;
   }
-  return initializationPromise;
-}
+});
 
 /** This is an internal-only export for testing purposes and should not be used in development */
 export const testingMenuDataService = {

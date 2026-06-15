@@ -1,7 +1,11 @@
 import papi, { DataProviderEngine, logger } from '@papi/backend';
 import { DataProviderUpdateInstructions, IDisposableDataProvider } from '@papi/core';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { createSyncProxyForAsyncObject, newGuid } from 'platform-bible-utils';
+import {
+  createCachedInitializer,
+  createSyncProxyForAsyncObject,
+  newGuid,
+} from 'platform-bible-utils';
 import {
   CheckJobRunner,
   CheckJobScope,
@@ -384,27 +388,13 @@ class CheckAggregatorDataProviderEngine
  */
 const checkAggregatorServiceProviderName = 'platformScripture.checkAggregator';
 
-let initializationPromise: Promise<void> | undefined;
 let dataProvider: IDisposableDataProvider<ICheckAggregatorService>;
-async function initialize(): Promise<void> {
-  if (!initializationPromise) {
-    initializationPromise = new Promise<void>((resolve, reject) => {
-      const executor = async () => {
-        try {
-          dataProvider = await papi.dataProviders.registerEngine(
-            checkAggregatorServiceProviderName,
-            new CheckAggregatorDataProviderEngine(),
-          );
-          resolve();
-        } catch (error) {
-          reject(error);
-        }
-      };
-      executor();
-    });
-  }
-  return initializationPromise;
-}
+const initialize = createCachedInitializer(async () => {
+  dataProvider = await papi.dataProviders.registerEngine(
+    checkAggregatorServiceProviderName,
+    new CheckAggregatorDataProviderEngine(),
+  );
+});
 
 const resultsInvalidatedEventEmitter =
   papi.network.createNetworkEventEmitter<CheckResultsInvalidated>(CHECK_RESULTS_INVALIDATED_EVENT);

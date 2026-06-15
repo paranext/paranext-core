@@ -58,6 +58,7 @@ export { usfmMarkers } from './markers/usfm-markers';
 export { Section } from './scripture/scripture-util';
 
 // Functions
+export { default as createCachedInitializer } from './promises/cached-initializer';
 export {
   createSyncProxyForAsyncObject,
   debounce,

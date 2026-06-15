@@ -115,7 +115,11 @@ async function initialize(
       RECENTLY_OPENED_PROJECTS_DATA_PROVIDER_NAME,
       new RecentlyOpenedProjectsDataProviderEngine(readRaw, writeRaw),
     );
-  })();
+  })().catch((error) => {
+    // Clear the cached promise so the next call retries instead of failing forever
+    initializationPromise = undefined;
+    throw error;
+  });
   return initializationPromise;
 }
 

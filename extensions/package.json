@@ -27,6 +27,7 @@
     "lint-fix:scripts": "prettier --write \"**/*.{ts,tsx,js,jsx,cjs}\" && npm run lint:scripts -- --fix",
     "lint-fix:styles": "npm run lint:styles -- --fix",
     "lint:staged": "lint-staged -q",
+    "test": "vitest",
     "postinstall": "tsx ./lib/add-remotes.ts",
     "create-extension": "tsx ./lib/create-extension.ts",
     "update-from-templates": "tsx ./lib/update-from-templates.ts",

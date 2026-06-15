@@ -1,5 +1,5 @@
 import { dataProviderService } from '@shared/services/data-provider.service';
-import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
+import { createCachedInitializer, createSyncProxyForAsyncObject } from 'platform-bible-utils';
 import {
   IMenuDataService,
   menuDataServiceObjectToProxy,
@@ -7,25 +7,11 @@ import {
 } from '@shared/services/menu-data.service-model';
 
 let dataProvider: IMenuDataService;
-let initializationPromise: Promise<void>;
-async function initialize(): Promise<void> {
-  if (!initializationPromise) {
-    initializationPromise = new Promise<void>((resolve, reject) => {
-      const executor = async () => {
-        try {
-          const provider = await dataProviderService.get(menuDataServiceProviderName);
-          if (!provider) throw new Error('Menu data service undefined');
-          dataProvider = provider;
-          resolve();
-        } catch (error) {
-          reject(error);
-        }
-      };
-      executor();
-    });
-  }
-  return initializationPromise;
-}
+const initialize = createCachedInitializer(async () => {
+  const provider = await dataProviderService.get(menuDataServiceProviderName);
+  if (!provider) throw new Error('Menu data service undefined');
+  dataProvider = provider;
+});
 
 export const menuDataService = createSyncProxyForAsyncObject<IMenuDataService>(async () => {
   await initialize();

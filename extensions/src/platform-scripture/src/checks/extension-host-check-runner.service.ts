@@ -8,6 +8,7 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { ProjectDataProviderInterfaces } from 'papi-shared-types';
 import {
   AsyncVariable,
+  createCachedInitializer,
   getErrorMessage,
   Mutex,
   MutexMap,
@@ -354,7 +355,10 @@ class CheckRunnerEngine
 // #region Allow extensions to register checks with this check runner
 
 let dataProvider: IDisposableDataProvider<ICheckRunner>;
-const checkRunnerEngine = new CheckRunnerEngine();
+// Recreated on each initialization attempt (see initializeCheckRunner): registerEngine mutates the
+// engine and doesn't revert that on dispose, so a retry must register a fresh instance. registerCheck
+// and unregisterCheck read this only after awaiting initialize(), so they see the latest engine.
+let checkRunnerEngine!: CheckRunnerEngine;
 const registrationLock = new Mutex();
 
 /** Unregister a type of check that had been previously registered using {@link registerCheck} */
@@ -409,42 +413,43 @@ const registerCheck = async (
 
 // #region Initialize the check runner
 
-let initializationPromise: Promise<void> | undefined;
 const unsubscribers = new UnsubscriberAsyncList();
-async function initialize(): Promise<void> {
-  if (!initializationPromise) {
-    initializationPromise = new Promise<void>((resolve, reject) => {
-      const executor = async () => {
-        try {
-          dataProvider = await dataProviders.registerEngine(
-            'platformScripture.extensionHostCheckRunner',
-            checkRunnerEngine,
-            CHECK_RUNNER_NETWORK_OBJECT_TYPE,
-          );
-          unsubscribers.add(dataProvider.dispose);
-          unsubscribers.add(
-            await papi.commands.registerCommand('platformScripture.registerCheck', registerCheck, {
-              method: {
-                summary: 'Register a new check to run on the platform',
-                description:
-                  'This will only run properly within the extension host. Do not call this from the websocket. Instead implement a check runner.',
-                params: [],
-                result: {
-                  name: 'return value',
-                  schema: {},
-                },
-              },
-            }),
-          );
-          resolve();
-        } catch (error) {
-          reject(error);
-        }
-      };
-      executor();
-    });
+const initializeCheckRunner = createCachedInitializer(async () => {
+  // Fresh engine per attempt so a retry after a partial failure registers a clean instance rather
+  // than the previous one that registerEngine mutated (and whose update emitter was disposed).
+  checkRunnerEngine = new CheckRunnerEngine();
+  try {
+    dataProvider = await dataProviders.registerEngine(
+      'platformScripture.extensionHostCheckRunner',
+      checkRunnerEngine,
+      CHECK_RUNNER_NETWORK_OBJECT_TYPE,
+    );
+    unsubscribers.add(dataProvider.dispose);
+    unsubscribers.add(
+      await papi.commands.registerCommand('platformScripture.registerCheck', registerCheck, {
+        method: {
+          summary: 'Register a new check to run on the platform',
+          description:
+            'This will only run properly within the extension host. Do not call this from the websocket. Instead implement a check runner.',
+          params: [],
+          result: { name: 'return value', schema: {} },
+        },
+      }),
+    );
+  } catch (error) {
+    // Undo whatever registered so a retried initialization doesn't register the engine twice
+    await unsubscribers.runAllUnsubscribers();
+    throw error;
   }
-  return initializationPromise;
+});
+
+/**
+ * Runs the cached check-runner initializer.
+ *
+ * Hoisted wrapper because initialize and registerCheck reference each other.
+ */
+async function initialize(): Promise<void> {
+  return initializeCheckRunner();
 }
 
 // #endregion

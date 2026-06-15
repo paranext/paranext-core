@@ -12,6 +12,7 @@ import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-pro
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import * as nodeFS from '@node/services/node-file-system.service';
 import {
+  createCachedInitializer,
   deserialize,
   createSyncProxyForAsyncObject,
   LocalizedStringDataContribution,
@@ -393,29 +394,15 @@ class LocalizationDataProviderEngine
   }
 }
 
-let initializationPromise: Promise<void>;
 /** Need to run initialize before using this */
 let dataProvider: ILocalizationService;
-export async function initialize(): Promise<void> {
-  if (!initializationPromise) {
-    initializationPromise = new Promise<void>((resolve, reject) => {
-      const executor = async () => {
-        try {
-          await loadAllLocalizationData();
-          dataProvider = await dataProviderService.registerEngine(
-            localizationServiceProviderName,
-            new LocalizationDataProviderEngine(),
-          );
-          resolve();
-        } catch (error) {
-          reject(error);
-        }
-      };
-      executor();
-    });
-  }
-  return initializationPromise;
-}
+export const initialize = createCachedInitializer(async () => {
+  await loadAllLocalizationData();
+  dataProvider = await dataProviderService.registerEngine(
+    localizationServiceProviderName,
+    new LocalizationDataProviderEngine(),
+  );
+});
 
 /** This is an internal-only export for testing purposes and should not be used in development */
 export const testingLocalizationService = {

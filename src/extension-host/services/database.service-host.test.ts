@@ -15,14 +15,41 @@ const {
   mockWorkerPostMessage,
   mockWorkerTerminate,
   mockWorkerOn,
-} = vi.hoisted(() => ({
-  mockGetUriFromExtensionUri: vi.fn(),
-  mockGetPathFromUri: vi.fn(),
-  mockNewNonce: vi.fn(),
-  mockWorkerPostMessage: vi.fn(),
-  mockWorkerTerminate: vi.fn(),
-  mockWorkerOn: vi.fn(),
-}));
+  mockNetworkObjectSet,
+  mockDefaultWorkerTerminate,
+  DefaultFakeWorker,
+} = vi.hoisted(() => {
+  const defaultWorkerTerminate = vi.fn();
+  // Fake worker returned by the mocked node:worker_threads Worker constructor. This is only used
+  // when `initialize` builds a DatabaseService with the default (non-injected) worker factory; the
+  // class tests below inject their own mockWorker and never hit this.
+  class FakeWorker {
+    terminate = defaultWorkerTerminate;
+
+    private handlers: Record<string, (...args: unknown[]) => void> = {};
+
+    on(event: string, handler: (...args: unknown[]) => void) {
+      this.handlers[event] = handler;
+    }
+
+    postMessage(message: { id: string }) {
+      // Acknowledge every request so #sendRequest (e.g. the dispose sent during failed-setup
+      // cleanup) resolves without a real worker thread.
+      queueMicrotask(() => this.handlers.message?.({ id: message.id }));
+    }
+  }
+  return {
+    mockGetUriFromExtensionUri: vi.fn(),
+    mockGetPathFromUri: vi.fn(),
+    mockNewNonce: vi.fn(),
+    mockWorkerPostMessage: vi.fn(),
+    mockWorkerTerminate: vi.fn(),
+    mockWorkerOn: vi.fn(),
+    mockNetworkObjectSet: vi.fn(),
+    mockDefaultWorkerTerminate: defaultWorkerTerminate,
+    DefaultFakeWorker: FakeWorker,
+  };
+});
 
 vi.mock('@extension-host/services/asset-retrieval.service', () => ({
   getUriFromExtensionUri: mockGetUriFromExtensionUri,
@@ -37,7 +64,12 @@ vi.mock('@shared/utils/util', () => ({
 }));
 
 vi.mock('@shared/services/network-object.service', () => ({
-  networkObjectService: { set: vi.fn() },
+  networkObjectService: { set: mockNetworkObjectSet },
+}));
+
+vi.mock('node:worker_threads', () => ({
+  Worker: DefaultFakeWorker,
+  default: { Worker: DefaultFakeWorker },
 }));
 
 const { DatabaseService } = testingDatabaseService;
@@ -115,6 +147,7 @@ beforeEach(() => {
   mockGetUriFromExtensionUri.mockReturnValue(FAKE_URI);
   mockGetPathFromUri.mockReturnValue(FAKE_PATH);
   mockWorkerTerminate.mockResolvedValue(0);
+  mockDefaultWorkerTerminate.mockResolvedValue(0);
 });
 
 describe('openDatabase', () => {
@@ -515,5 +548,47 @@ describe('worker exit event', () => {
     // terminate() should still be called via the finally block.
     await expect(disposePromise).rejects.toThrow('Database worker exited with code 1');
     expect(mockWorkerTerminate).toHaveBeenCalledOnce();
+  });
+});
+
+describe('initialize (cleanup on failed setup)', () => {
+  /**
+   * Re-imports the database service host fresh and returns its `initialize` function.
+   *
+   * `initialize` is a cached initializer with module-level state, so re-import a fresh module per
+   * test to start from an uninitialized state (mocks persist across `vi.resetModules`).
+   */
+  async function importInitialize(): Promise<() => Promise<void>> {
+    vi.resetModules();
+    const module = await import('@extension-host/services/database.service-host');
+    return module.initialize;
+  }
+
+  it('terminates the worker when networkObjectService.set fails so a retry is not leaked', async () => {
+    const initialize = await importInitialize();
+    mockNetworkObjectSet.mockRejectedValueOnce(new Error('network object set failed'));
+
+    await expect(initialize()).rejects.toThrow('network object set failed');
+
+    // The DatabaseService built for the failed attempt was disposed (worker terminated) before the
+    // error propagated, so the worker thread is not leaked.
+    expect(mockDefaultWorkerTerminate).toHaveBeenCalledOnce();
+  });
+
+  it('builds a fresh service and succeeds when a retry after failure can register', async () => {
+    const initialize = await importInitialize();
+    const fakeNetworkObject = {};
+    mockNetworkObjectSet
+      .mockRejectedValueOnce(new Error('network object set failed'))
+      .mockResolvedValueOnce(fakeNetworkObject);
+
+    // First attempt fails and clears the cached rejection
+    await expect(initialize()).rejects.toThrow('network object set failed');
+    // Retry runs the initializer again with a fresh DatabaseService and succeeds
+    await expect(initialize()).resolves.toBeUndefined();
+
+    expect(mockNetworkObjectSet).toHaveBeenCalledTimes(2);
+    // Only the failed attempt's worker was terminated; the successful service's worker stays alive
+    expect(mockDefaultWorkerTerminate).toHaveBeenCalledOnce();
   });
 });

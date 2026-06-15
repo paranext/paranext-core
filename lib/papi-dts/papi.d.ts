@@ -10635,7 +10635,7 @@ declare module 'renderer/services/theme.service-host' {
     ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
     dispose(): Promise<boolean>;
   }
-  export function initialize(): Promise<void>;
+  export const initialize: () => Promise<void>;
   /** This is an internal-only export for testing purposes and should not be used in development */
   export const testingThemeService: {
     implementThemeDataProviderEngine: (

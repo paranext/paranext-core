@@ -30,7 +30,22 @@ export class DataProviderEngine {
   notifyUpdate = vi.fn();
 }
 
+export const dataProviders = {
+  registerEngine: vi.fn(),
+};
+
 const papi = {
+  dataProviders,
+  commands: {
+    registerCommand: vi.fn(),
+  },
+  network: {
+    createNetworkEventEmitter: vi.fn(() => ({
+      dispose: vi.fn(),
+      emit: vi.fn(),
+      event: vi.fn(),
+    })),
+  },
   projectDataProviders: {
     get: vi.fn().mockResolvedValue({
       getSetting: vi.fn().mockResolvedValue(undefined),

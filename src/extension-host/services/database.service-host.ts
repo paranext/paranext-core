@@ -10,7 +10,11 @@ import {
   SqlOutputRow,
   NamedSqlParameters,
 } from '@shared/services/database.service-model';
-import { createSyncProxyForAsyncObject, startsWith } from 'platform-bible-utils';
+import {
+  createCachedInitializer,
+  createSyncProxyForAsyncObject,
+  startsWith,
+} from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
 import { newNonce } from '@shared/utils/util';
 import { getUriFromExtensionUri } from '@extension-host/services/asset-retrieval.service';
@@ -185,27 +189,24 @@ class DatabaseService implements IDatabaseService {
 /** This is an internal-only export for testing purposes and should not be used in development */
 export const testingDatabaseService = { DatabaseService };
 
-let initializationPromise: Promise<void>;
 let databaseServiceNetworkObject: IDatabaseService;
-export async function initialize(): Promise<void> {
-  if (!initializationPromise) {
-    initializationPromise = new Promise<void>((resolve, reject) => {
-      const executor = async () => {
-        try {
-          databaseServiceNetworkObject = await networkObjectService.set<IDatabaseService>(
-            databaseServiceNetworkObjectName,
-            new DatabaseService(),
-          );
-          resolve();
-        } catch (error) {
-          reject(error);
-        }
-      };
-      executor();
-    });
+export const initialize = createCachedInitializer(async () => {
+  const databaseService = new DatabaseService();
+  try {
+    databaseServiceNetworkObject = await networkObjectService.set<IDatabaseService>(
+      databaseServiceNetworkObjectName,
+      databaseService,
+    );
+  } catch (error) {
+    // Terminate the worker thread so a retried initialization doesn't leak it
+    await databaseService
+      .dispose()
+      .catch((disposeError) =>
+        logger.warn(`Failed to dispose database service after failed setup: ${disposeError}`),
+      );
+    throw error;
   }
-  return initializationPromise;
-}
+});
 
 // This will be needed later for disposing of the network object, choosing to ignore instead of
 // remove code that will be used later

@@ -1,5 +1,6 @@
 import { vi } from 'vitest';
-import { testingSettingService } from '@extension-host/services/settings.service-host';
+import { initialize, testingSettingService } from '@extension-host/services/settings.service-host';
+import { dataProviderService } from '@shared/services/data-provider.service';
 import { LocalizationSelectors } from '@shared/services/localization.service-model';
 import { SettingNames } from 'papi-shared-types';
 import { slice } from 'platform-bible-utils';
@@ -22,6 +23,9 @@ beforeEach(() => {
 });
 
 vi.mock('@node/services/node-file-system.service', () => ({
+  getStats: () => {
+    return Promise.resolve();
+  },
   readFileText: () => {
     return JSON.stringify(VERSE_REF_DEFAULT);
   },
@@ -76,6 +80,23 @@ vi.mock('@extension-host/services/contribution.service', async () => ({
   // Don't actually wait because we're not syncing any contributions in these tests
   waitForResyncContributions: async () => {},
 }));
+vi.mock('@shared/services/data-provider.service', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@shared/services/data-provider.service')>();
+  return {
+    ...actual,
+    dataProviderService: { ...actual.dataProviderService, registerEngine: vi.fn() },
+  };
+});
+
+test('initialize retries registerEngine after a failed initialization', async () => {
+  vi.mocked(dataProviderService.registerEngine)
+    .mockRejectedValueOnce(new Error('transient failure'))
+    .mockResolvedValue(settingsProviderEngine);
+
+  await expect(initialize()).rejects.toThrow('transient failure');
+  await expect(initialize()).resolves.toBeUndefined();
+  expect(dataProviderService.registerEngine).toHaveBeenCalledTimes(2);
+});
 
 test('Get verseRef returns default value', async () => {
   const result = await settingsProviderEngine.get('platform.verseRef');
