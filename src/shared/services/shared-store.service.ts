@@ -136,86 +136,107 @@ export function initialize(networkService: NetworkService): Promise<void> {
   if (initializationPromise) return initializationPromise;
   initializationStartedResolve();
   initializationPromise = (async () => {
-    // Generate a unique process ID for this process that still includes the process type
-    processId = `${globalThis.processType}-${Math.random().toString(36).substring(2, 10)}`;
-    logger.debug(`Initializing shared store service`);
+    try {
+      // Defer the rest of init to a microtask so the synchronous part of initialize() (the
+      // `initializationPromise = ...` assignment below) completes first. Otherwise a synchronous
+      // throw in the body (e.g. from createCoreMultiSourceEventEmitter) would run the catch's
+      // `initializationPromise = undefined` reset *before* the outer assignment, which would then
+      // clobber it back to the rejected promise — permanently stuck. Yielding first guarantees the
+      // catch runs after the assignment, so a failed init can be retried.
+      await Promise.resolve();
+      // Generate a unique process ID for this process that still includes the process type
+      processId = `${globalThis.processType}-${Math.random().toString(36).substring(2, 10)}`;
+      logger.debug(`Initializing shared store service`);
 
-    // Create the multi-source emitter for `shared-store:change` synchronously and assign it
-    // immediately so the store can emit and subscribe right away. Central registration with the RPC
-    // handler runs in the background — we don't await it (it isn't needed for the emitter to work),
-    // keeping startup simple.
-    const { emitter, registeredEmitterPromise } = networkService.createCoreMultiSourceEventEmitter(
-      STORE_CHANGE_EVENT,
-      STORE_CHANGE_EVENT_DOCS,
-    );
-    storeChangeEmitter = emitter;
-    // Consume the registration result in the background (failures are already logged inside the
-    // network service) so a rejection can't surface as an unhandled rejection.
-    (async () => {
-      try {
-        await registeredEmitterPromise;
-      } catch {
-        // Registration failure is already logged inside createCoreMultiSourceEventEmitter.
-      }
-    })();
-
-    // Listen for changes from other processes to update the local store.
-    storeChangeEmitter.event((event) => {
-      if (event.clock.processId !== processId) setFromRemote(event.key, event);
-    });
-
-    if (globalThis.processType !== ProcessType.Main) {
-      // Outside the main process, sync the local store to the main store's data initially.
-      try {
-        const initial = await networkService.request<[], Record<string, StoreEntry>>(
-          STORE_GET_REQUEST,
+      // Create the multi-source emitter for `shared-store:change` synchronously and assign it
+      // immediately so the store can emit and subscribe right away. Central registration with the RPC
+      // handler runs in the background — we don't await it (it isn't needed for the emitter to work),
+      // keeping startup simple.
+      const { emitter, registeredEmitterPromise } =
+        networkService.createCoreMultiSourceEventEmitter(
+          STORE_CHANGE_EVENT,
+          STORE_CHANGE_EVENT_DOCS,
         );
-        if (initial) Object.entries(initial).forEach(([key, entry]) => setFromRemote(key, entry));
-      } catch (error) {
-        logger.warn(`Error initializing local store: ${getErrorMessage(error)}`);
-      }
-    } else {
-      // Inside the main process, register the handler that serves the other processes' initial-fetch
-      // requests.
-      await networkService.registerRequestHandler(
-        STORE_GET_REQUEST,
-        (key?: string) => (key === undefined ? { ...localStore } : localStore[key]?.value),
-        {
-          method: {
-            'x-experimental': true,
-            summary: 'Get values from the shared store',
-            params: [
-              {
-                name: 'key',
-                required: false,
+      storeChangeEmitter = emitter;
+      // Consume the registration result in the background (failures are already logged inside the
+      // network service) so a rejection can't surface as an unhandled rejection.
+      (async () => {
+        try {
+          await registeredEmitterPromise;
+        } catch {
+          // Registration failure is already logged inside createCoreMultiSourceEventEmitter.
+        }
+      })();
+
+      // Listen for changes from other processes to update the local store.
+      storeChangeEmitter.event((event) => {
+        if (event.clock.processId !== processId) setFromRemote(event.key, event);
+      });
+
+      if (globalThis.processType !== ProcessType.Main) {
+        // Outside the main process, sync the local store to the main store's data initially.
+        try {
+          const initial = await networkService.request<[], Record<string, StoreEntry>>(
+            STORE_GET_REQUEST,
+          );
+          if (initial) Object.entries(initial).forEach(([key, entry]) => setFromRemote(key, entry));
+        } catch (error) {
+          logger.warn(`Error initializing local store: ${getErrorMessage(error)}`);
+        }
+      } else {
+        // Inside the main process, register the handler that serves the other processes' initial-fetch
+        // requests.
+        await networkService.registerRequestHandler(
+          STORE_GET_REQUEST,
+          (key?: string) => (key === undefined ? { ...localStore } : localStore[key]?.value),
+          {
+            method: {
+              'x-experimental': true,
+              summary: 'Get values from the shared store',
+              params: [
+                {
+                  name: 'key',
+                  required: false,
+                  summary:
+                    'The key of the value to retrieve (leave undefined to get the entire store)',
+                  schema: { type: 'string' },
+                },
+              ],
+              result: {
+                name: 'return value',
                 summary:
-                  'The key of the value to retrieve (leave undefined to get the entire store)',
-                schema: { type: 'string' },
-              },
-            ],
-            result: {
-              name: 'return value',
-              summary:
-                'The value associated with the key, or the entire store if no key is provided',
-              schema: {
-                oneOf: [
-                  { type: 'string' },
-                  { type: 'number' },
-                  { type: 'boolean' },
-                  { type: 'object' },
-                  { type: 'array' },
-                  { type: 'null' },
-                ],
+                  'The value associated with the key, or the entire store if no key is provided',
+                schema: {
+                  oneOf: [
+                    { type: 'string' },
+                    { type: 'number' },
+                    { type: 'boolean' },
+                    { type: 'object' },
+                    { type: 'array' },
+                    { type: 'null' },
+                  ],
+                },
               },
             },
           },
-        },
-      );
-    }
+        );
+      }
 
-    // The store is now fully initialized (process ID assigned, emitter ready, and — outside main —
-    // initial data synced).
-    isFullyInitialized = true;
+      // The store is now fully initialized (process ID assigned, emitter ready, and — outside main —
+      // initial data synced).
+      isFullyInitialized = true;
+    } catch (error) {
+      // Initialization failed. Tear down any partial state and clear the cached promise so a later
+      // initialize()/waitForInitialization() can retry from scratch instead of being permanently
+      // stuck on this rejected promise.
+      storeChangeEmitter?.dispose();
+      storeChangeEmitter = undefined;
+      processId = '';
+      isFullyInitialized = false;
+      initializationPromise = undefined;
+      resetInitializationStartedSignal();
+      throw error;
+    }
   })();
   return initializationPromise;
 }

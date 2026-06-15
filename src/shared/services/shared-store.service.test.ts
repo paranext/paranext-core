@@ -132,6 +132,24 @@ describe('sharedStoreService', () => {
         createEmitterCallCount,
       );
     });
+
+    it('clears the cached promise on failure so a later call can retry', async () => {
+      globalThis.processType = ProcessType.ExtensionHost;
+      // First initialize() fails while fetching the initial store snapshot.
+      vi.mocked(networkService.request).mockRejectedValueOnce(new Error('boom'));
+      // The non-Main initial fetch swallows request errors, so force a hard failure by making the
+      // emitter creation throw on the first attempt instead.
+      vi.mocked(networkService.createCoreMultiSourceEventEmitter).mockImplementationOnce(() => {
+        throw new Error('emitter boom');
+      });
+
+      await expect(initializeSharedStore(networkService)).rejects.toThrow('emitter boom');
+      expect(sharedStoreService.isInitialized()).toBe(false);
+
+      // A subsequent call must re-run initialization rather than return the rejected promise forever.
+      await expect(initializeSharedStore(networkService)).resolves.toBeUndefined();
+      expect(sharedStoreService.isInitialized()).toBe(true);
+    });
   });
 
   describe('waitForInitialization', () => {

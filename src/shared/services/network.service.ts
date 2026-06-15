@@ -163,10 +163,24 @@ function getTimeoutMsForRequestType(requestType: SerializedRequestType): number 
 function setTimeoutMsForRequestType(requestType: SerializedRequestType, timeoutMs: number) {
   if (timeoutMs < 0)
     throw new Error(`Invalid request timeout ${timeoutMs}: must be a non-negative number`);
+  // The sync `set` throws if the shared store has not initialized. This runs from
+  // registerRequestHandler *after* the method has already been registered with the RPC handler, so a
+  // throw here would leak that registration. Custom timeouts are non-critical (the default applies
+  // when one is absent), so when the store isn't ready yet we debug-log and skip rather than throw.
+  if (!sharedStoreService.isInitialized()) {
+    logger.debug(
+      `Custom timeout for request type ${requestType} set before the shared store finished initializing; using default ${requestTimeoutMs}ms instead`,
+    );
+    return;
+  }
   sharedStoreService.set(sharedStoreKeyForRequestType(requestType), timeoutMs);
 }
 
 function removeTimeoutMsForRequestType(requestType: SerializedRequestType) {
+  // Mirror setTimeoutMsForRequestType: skip (rather than throw) if the shared store isn't ready, so
+  // the unsubscriber returned by registerRequestHandler can't throw mid-teardown. If the store never
+  // initialized then no custom timeout was ever stored, so there is nothing to remove.
+  if (!sharedStoreService.isInitialized()) return;
   sharedStoreService.remove(sharedStoreKeyForRequestType(requestType));
 }
 
