@@ -4,6 +4,7 @@ using Paranext.DataProvider.ManageBooks;
 using Paratext.Data;
 using Paratext.Data.ProjectSettingsAccess;
 using PtxUtils;
+using SIL.Scripture;
 using ProjectType = Paratext.Data.ProjectType;
 
 namespace TestParanextDataProvider.ManageBooks
@@ -189,6 +190,68 @@ namespace TestParanextDataProvider.ManageBooks
                     $"ProjectId for '{summary.Name}' must be uppercase (canonical papi form)"
                 );
             }
+        }
+
+        // -------------------------------------------------------------------
+        // I2 — FullName + Versification projection (so the frontend drops its
+        // per-project getSetting fan-out)
+        // -------------------------------------------------------------------
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-011")]
+        [Property("BehaviorId", "BHV-411")]
+        [Description(
+            "I2: ProjectSummary.FromScrText surfaces FullName and Versification on the wire so the "
+                + "frontend no longer needs a per-project pdp.getSetting fan-out. FullName comes from "
+                + "the project's FullName setting; Versification is the numeric ScrVersType code as a "
+                + "string (matching what platformScripture.versification getSetting returns)."
+        )]
+        public void FromScrText_PopulatesFullNameAndVersification()
+        {
+            DummyScrText scrText = CreateScrText("VrsProj", ProjectType.Standard, editable: true);
+            // DummyScrText defaults FullName to "Test ScrText"; set a non-default versification.
+            scrText.Settings.Versification = new ScrVers(ScrVersType.English);
+
+            ProjectSummary summary = ProjectSummary.FromScrText(scrText);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(
+                    summary.FullName,
+                    Is.EqualTo("Test ScrText"),
+                    "FullName flows from the project's FullName setting."
+                );
+                Assert.That(
+                    summary.Versification,
+                    Is.EqualTo(((int)ScrVersType.English).ToString()),
+                    "Versification is the numeric ScrVersType code (English = 4) as a string."
+                );
+            });
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-011")]
+        [Property("BehaviorId", "BHV-411")]
+        [Description(
+            "I2: Versification defaults to \"4\" (English) when the project has no stored "
+                + "versification setting — matching BOTH the platformScripture.versification "
+                + "contribution default the frontend's old getSetting path returned AND PT9's "
+                + "absent-versification == English semantics. Defaulting to \"0\" (Unknown) would "
+                + "regress such projects from the English group to the Unknown group in the picker."
+        )]
+        public void FromScrText_DefaultsVersificationToEnglishWhenUnset()
+        {
+            DummyScrText scrText = CreateScrText("NoVrsProj", ProjectType.Standard, editable: true);
+
+            ProjectSummary summary = ProjectSummary.FromScrText(scrText);
+
+            Assert.That(
+                summary.Versification,
+                Is.EqualTo(((int)ScrVersType.English).ToString()),
+                "Unset versification defaults to English (4), matching the old getSetting default."
+            );
         }
 
         // -------------------------------------------------------------------

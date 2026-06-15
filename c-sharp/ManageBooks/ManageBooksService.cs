@@ -290,6 +290,10 @@ internal sealed class ManageBooksService : NetworkObject
                 "getBookComparison",
                 new Func<BookComparisonInput, Task<BookComparisonResult>>(GetBookComparisonAsync)
             ),
+            (
+                "getProjectBookDates",
+                new Func<string, Task<BookComparisonResult>>(GetProjectBookDatesAsync)
+            ),
             ("copyBooks", new Func<CopyBooksRequest, Task<CopyBooksResult>>(CopyBooksAsync)),
             (
                 "copyCustomVersification",
@@ -828,6 +832,38 @@ internal sealed class ManageBooksService : NetworkObject
         List<BookComparisonEntry> entries = CopyBooksOrchestrator.LoadBooks(fromScrText, toScrText);
         // Wire-boundary resolution: TooltipInfo carries localize keys; resolve
         // them via LocalizationService before sending over PAPI.
+        List<BookComparisonEntry> resolved = ResolveTooltipEntries(entries);
+        return Task.FromResult(new BookComparisonResult(resolved));
+    }
+
+    /// <summary>
+    /// Return a single project's own per-book last-modified dates (I9). Used by the Import grid:
+    /// in pure Import mode no second project is involved, so the regular two-project
+    /// <see cref="GetBookComparisonAsync"/> side-channel never populates the destination project's
+    /// dates and every imported book would otherwise compare against an unknown date and read as
+    /// "New". This compares the project against itself (which <see cref="GetBookComparisonAsync"/>
+    /// forbids via <see cref="EnsureDifferentProjects"/>, since that is a copy-comparison guard);
+    /// the <c>destLastModified</c> on each returned entry is the real
+    /// <c>FileManager.GetLastWriteTime</c> value for the project's books. Read-only.
+    ///
+    /// SCOPE: reuses <see cref="CopyBooksOrchestrator.LoadBooks"/>, so the returned set is the same
+    /// "books the user can edit (or, as admin, create)" universe the copy comparison uses. For a
+    /// normal editable target every present book is editable, so all get a date. In the uncommon
+    /// case of a per-book-restricted target, a present-but-non-editable book is omitted and would
+    /// still read as "New" in the grid — a strict improvement over the prior all-"New" behavior, and
+    /// harmless because a non-editable book can't be an Import target anyway. (LoadBooks also reads
+    /// each book's USFM for its eligibility comparison, which is more work than dates alone strictly
+    /// need; acceptable as a one-time, cached-per-open cost in exchange for reusing the proven
+    /// date/eligibility logic rather than duplicating it.)
+    /// </summary>
+    public Task<BookComparisonResult> GetProjectBookDatesAsync(string projectId)
+    {
+        ScrText scrText = ResolveProjectOrThrow(
+            projectId,
+            PlatformErrorCodes.NotFound,
+            $"Project not found: {projectId}"
+        );
+        List<BookComparisonEntry> entries = CopyBooksOrchestrator.LoadBooks(scrText, scrText);
         List<BookComparisonEntry> resolved = ResolveTooltipEntries(entries);
         return Task.FromResult(new BookComparisonResult(resolved));
     }

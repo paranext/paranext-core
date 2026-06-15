@@ -102,6 +102,87 @@ namespace TestParanextDataProvider.ManageBooks
         [Test]
         [Category("Acceptance")]
         [Property("CapabilityId", "CAP-006")]
+        [Property("BehaviorId", "BHV-313")]
+        [Description(
+            "I9: GetProjectBookDatesAsync returns a single project's own per-book dates by comparing "
+                + "the project against itself — a path the two-project getBookComparison forbids. A "
+                + "book present in the project reports a non-null DestLastModified (its real file "
+                + "date), which the Import grid uses so existing books aren't mislabeled \"New\"."
+        )]
+        public async Task GetProjectBookDatesAsync_ProjectWithBook_ReturnsRealDestDate()
+        {
+            _fromScrText.PutText(1, 0, false, "\\id GEN\r\n\\c 1\r\n\\v 1 content\r\n", null);
+
+            BookComparisonResult result = await _service.GetProjectBookDatesAsync(_fromProjectId);
+
+            Assert.That(result, Is.Not.Null);
+            BookComparisonEntry? gen = result.Entries.FirstOrDefault(e => e.BookNum == 1);
+            Assert.That(gen, Is.Not.Null, "GEN must appear in the project's own book-dates result");
+            Assert.That(
+                gen!.DestLastModified,
+                Is.Not.Null.And.Not.Empty,
+                "A book present in the project must report its real DestLastModified date"
+            );
+        }
+
+        [Test]
+        [Category("Acceptance")]
+        [Property("CapabilityId", "CAP-006")]
+        [Property("BehaviorId", "BHV-313")]
+        [Description(
+            "I9: a book NOT present in the project reports a null DestLastModified, so the Import "
+                + "grid leaves it as \"New\" (computeImportCompareState(date, undefined)) rather than "
+                + "over-populating a bogus date. Guards against the absent-book edge."
+        )]
+        public async Task GetProjectBookDatesAsync_AbsentBook_ReportsNullDestDate()
+        {
+            // Only GEN (1) exists; EXO (2) is absent.
+            _fromScrText.PutText(1, 0, false, "\\id GEN\r\n", null);
+
+            BookComparisonResult result = await _service.GetProjectBookDatesAsync(_fromProjectId);
+
+            BookComparisonEntry? exo = result.Entries.FirstOrDefault(e => e.BookNum == 2);
+            Assert.That(
+                exo,
+                Is.Not.Null,
+                "Absent books are still listed (admin-can-create), so EXO appears in the result"
+            );
+            Assert.That(
+                exo!.DestLastModified,
+                Is.Null,
+                "An absent book has no real file date → null, so the Import grid keeps it \"New\""
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-006")]
+        [Description(
+            "I9: getProjectBookDates on an unregistered project id throws NOT_FOUND, matching "
+                + "getBookComparison's project resolution (Theme 7 maps INVALID_PROJECT to NOT_FOUND)."
+        )]
+        public void GetProjectBookDatesAsync_UnknownProject_ThrowsNotFound()
+        {
+            Exception? caught = null;
+            try
+            {
+                _service
+                    .GetProjectBookDatesAsync("ffffffffffffffffffffffffffffffffffffffff")
+                    .GetAwaiter()
+                    .GetResult();
+            }
+            catch (Exception ex)
+            {
+                caught = ex;
+            }
+
+            Assert.That(caught, Is.Not.Null);
+            Assert.That(caught!.Data["platformErrorCode"], Is.EqualTo(PlatformErrorCodes.NotFound));
+        }
+
+        [Test]
+        [Category("Acceptance")]
+        [Property("CapabilityId", "CAP-006")]
         [Property("ScenarioId", "TS-023")]
         [Property("BehaviorId", "BHV-313")]
         [Property("InvariantId", "INV-C07")]
