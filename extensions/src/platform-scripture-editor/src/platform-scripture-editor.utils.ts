@@ -560,46 +560,43 @@ export type DefaultProjectPickerOutcome =
 async function tryOpenFromRecentlyOpened(
   papi: typeof PapiBackend,
 ): Promise<DefaultProjectPickerOutcome | undefined> {
-  let recentProjects: string[];
-  let recordOpened: (projectId: string) => Promise<void>;
   try {
     const service = await papi.dataProviders.get('platformScripture.recentlyOpenedProjects');
     if (!service) return undefined;
     // Data-provider getter requires an explicit selector argument, even though the value is ignored.
-    recentProjects = (await service.getRecentProjects(undefined)) ?? [];
-    recordOpened = (projectId: string) => service.recordProjectOpened(projectId);
+    const recentProjects = (await service.getRecentProjects(undefined)) ?? [];
+    return recentProjects.reduce(
+      async (prev: Promise<DefaultProjectPickerOutcome | undefined>, projectId: string) => {
+        const earlier = await prev;
+        if (earlier !== undefined) return earlier;
+        try {
+          await papi.commands.sendCommand('platformScriptureEditor.openScriptureEditor', projectId);
+          papi.logger.info(
+            `Default active project picker: opened recently-used project=${projectId}`,
+          );
+          try {
+            await service.recordProjectOpened(projectId);
+          } catch (e) {
+            papi.logger.warn(
+              `Default active project picker: failed to record recently-opened project ${projectId}: ${getErrorMessage(e)}`,
+            );
+          }
+          return 'filled' as const;
+        } catch (e) {
+          papi.logger.debug(
+            `Default active project picker: recent project ${projectId} failed to open, trying next (${getErrorMessage(e)})`,
+          );
+          return undefined;
+        }
+      },
+      Promise.resolve<DefaultProjectPickerOutcome | undefined>(undefined),
+    );
   } catch (e) {
     papi.logger.debug(
       `Default active project picker: recentlyOpenedProjects unavailable; skipping recents (${getErrorMessage(e)})`,
     );
     return undefined;
   }
-  return recentProjects.reduce(
-    async (prev: Promise<DefaultProjectPickerOutcome | undefined>, projectId: string) => {
-      const earlier = await prev;
-      if (earlier !== undefined) return earlier;
-      try {
-        await papi.commands.sendCommand('platformScriptureEditor.openScriptureEditor', projectId);
-        papi.logger.info(
-          `Default active project picker: opened recently-used project=${projectId}`,
-        );
-        try {
-          await recordOpened(projectId);
-        } catch (e) {
-          papi.logger.warn(
-            `Default active project picker: failed to record recently-opened project ${projectId}: ${getErrorMessage(e)}`,
-          );
-        }
-        return 'filled' as const;
-      } catch (e) {
-        papi.logger.debug(
-          `Default active project picker: recent project ${projectId} failed to open, trying next (${getErrorMessage(e)})`,
-        );
-        return undefined;
-      }
-    },
-    Promise.resolve<DefaultProjectPickerOutcome | undefined>(undefined),
-  );
 }
 
 /**
