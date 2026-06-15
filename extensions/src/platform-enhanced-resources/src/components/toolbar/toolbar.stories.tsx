@@ -16,6 +16,21 @@ import {
 const localizedStrings = getLocalizedStrings([...TOOLBAR_STRING_KEYS]);
 
 /**
+ * Storybook fallback for the central extension-local color tokens declared in
+ * `extensions/src/platform-enhanced-resources/src/_tokens.scss`. The story doesn't load the
+ * extension's web-view bundle, so without this block the toolbar's filter-input tint
+ * (`bg-[var(--er-filter-input-match-bg)]` / `--no-match-bg`) would resolve to `initial` and the
+ * green / orange signal would disappear. Grep `--er-` to find every site if you add or change a
+ * token.
+ */
+const TOOLBAR_TOKEN_FALLBACK_STYLE = `
+  :root {
+    --er-filter-input-match-bg: hsl(149 80% 90%);
+    --er-filter-input-no-match-bg: hsl(34 100% 92%);
+  }
+`;
+
+/**
  * Story-only placeholder for handlers that phase-3-ui will wire to real PAPI commands or webView
  * APIs. We use `alert` (not console.log) so reviewers exercising the Storybook flow get visible
  * confirmation that the design-layer handler fired, without needing the dev tools panel.
@@ -30,6 +45,16 @@ const meta: Meta<typeof Toolbar> = {
   args: {
     localizedStringsWithLoadingState: [localizedStrings, false],
   },
+  // Inject the central `_tokens.scss` fallback once so every story below resolves the
+  // `--er-filter-input-*` variables (Storybook doesn't load the extension's web-view SCSS bundle).
+  decorators: [
+    (Story) => (
+      <>
+        <style>{TOOLBAR_TOKEN_FALLBACK_STYLE}</style>
+        <Story />
+      </>
+    ),
+  ],
 };
 export default meta;
 

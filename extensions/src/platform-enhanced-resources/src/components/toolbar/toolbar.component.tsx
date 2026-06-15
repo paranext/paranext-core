@@ -532,12 +532,15 @@ export function EnhancedResourceTabBar({
   // there's something to clear so the empty input visually matches an idle search bar. The tint
   // (green when there are matches, orange when no matches) only fires when a filter is active so
   // the empty state stays visually neutral. (BT integration may consume `hasMatches` later — see
-  // SB#2 / Theme 9 origin notes.)
+  // SB#2 / Theme 9 origin notes.) The two tint colors are sourced from extension-local CSS
+  // custom properties declared centrally in `extensions/src/platform-enhanced-resources/src/
+  // _tokens.scss` (`--er-filter-input-match-bg` / `--er-filter-input-no-match-bg`); the `.dark`
+  // selector in that file handles dark-mode contrast.
   let filterTintClass = 'tw:bg-background';
   if (filterActive) {
     filterTintClass = hasMatches
-      ? 'tw:bg-emerald-100 tw:dark:bg-emerald-900/40'
-      : 'tw:bg-orange-100 tw:dark:bg-orange-900/40';
+      ? 'tw:bg-[var(--er-filter-input-match-bg)]'
+      : 'tw:bg-[var(--er-filter-input-no-match-bg)]';
   }
 
   return (

@@ -127,29 +127,29 @@ const RIGHT_MOUSE_BUTTON = 2;
  *   Carries no background of its own - see the equal-specificity note below.
  * - `marble-note`: linked study/cross-ref note. Renders as a footnote-style affordance.
  * - `er-marble-highlight-all` (Color A): direct CSS class on existing marble-word mark DOM elements,
- *   applied when the "Highlight all research terms" toolbar toggle is on. Subtle background tint so
- *   the page doesn't become visually noisy. NOT applied via `editor.setAnnotation`: doing so
- *   triggers the wrap-merge-replace cycle that destroys+recreates the marble-word mark element,
- *   which loses the original mouseenter/mouseleave bindings (verified in Storybook: hover stopped
- *   firing after toggling highlight-all off again). Same workaround pattern as the hover-match
- *   class (D-15).
+ *   applied when the "Highlight all research terms" toolbar toggle is on. Pale blue so the page
+ *   doesn't become visually noisy. NOT applied via `editor.setAnnotation`: doing so triggers the
+ *   wrap-merge-replace cycle that destroys+recreates the marble-word mark element, which loses the
+ *   original mouseenter/mouseleave bindings (verified in Storybook: hover stopped firing after
+ *   toggling highlight-all off again). Same workaround pattern as the hover-match class (D-15).
  * - `marble-filter`: per-mark filter overlay applied via `editor.setAnnotation` to the one
  *   marble-word mark whose `annotationId` matches the active filter token.
  * - `er-marble-hover-match` (Color B): direct CSS class on existing marble-word mark DOM elements
  *   (not a setAnnotation type - see handleMarbleMouseEnter for the D-15 rationale). Applied to
  *   every word in the lemma group of the currently-hovered word, including the hovered word itself,
- *   so the entire matching expression reads as one visually unified group. Same hue as Color A but
- *   more opaque - so the two states stay related ("highlight" vs "hovered group highlight") while
- *   reading as distinct intensities. Has higher CSS specificity (two classes vs. one) than
- *   `er-marble-highlight-all`, so it wins over Color A while the highlight-all toggle is also on.
+ *   so the entire matching expression reads as one visually unified group. Deeper blue than Color
+ *   A. Has higher CSS specificity (two classes vs. one) than `er-marble-highlight-all`, so it wins
+ *   over Color A while the highlight-all toggle is also on.
  *
- * Color choice: each overlay uses `color-mix(in oklab, var(--<token>) N%, transparent)` rather than
- * a literal `hsl(...)`. This adapts to the light / dark / paratext-light / paratext-dark themes
- * defined in `lib/platform-bible-react/src/index.css`: in light mode `--primary` is dark slate so
- * the overlay reads as a subtle dark tint over light text; in dark mode `--primary` is light slate
- * so the overlay reads as a subtle light tint over dark text. The same shape applies to `--warning`
- * (amber-400 in light, amber-900 in dark) for the filter overlay - it stays semantically "filter is
- * active" but adapts contrast across themes.
+ * Color tokens: each overlay color is referenced through a named extension-local CSS custom
+ * property (prefixed `--er-` for Enhanced Resources) declared centrally in
+ * `extensions/src/platform-enhanced-resources/src/_tokens.scss`. The selectors below read as
+ * semantic intent ("the highlight-all overlay color") rather than as a magic color, and a future
+ * accessibility tweak only has to edit `_tokens.scss`. The tokens are NOT theme-driven (they do not
+ * derive from Platform.Bible's `--primary` / `--accent` / `--warning` system) because the marble
+ * overlay colors are fixed brand colors for the research-term UI. The Storybook story re-declares
+ * the same tokens inline since it doesn't load the extension bundle - see
+ * `scripture-pane.stories.tsx` `MARBLE_TOKEN_FALLBACK_STYLE`.
  *
  * These styles ship with the component (injected via `useStylesheet`) rather than in the
  * web-view-level SCSS bundle so the component renders the same in Storybook, in extracted
@@ -175,20 +175,20 @@ mark {
 }
 .editor-typed-mark-external-marble-note {
   cursor: pointer;
-  /* Marble-note keeps the primary color (footnote-style affordance) - it intentionally
+  /* Marble-note keeps a distinct color (footnote-style affordance) - it intentionally
      stands out, unlike marble-word. */
-  color: var(--primary);
+  color: var(--er-marble-note-color);
 }
 .editor-typed-mark-external-marble-word.er-marble-highlight-all {
-  background-color: color-mix(in oklab, var(--primary) 18%, transparent);
+  background-color: var(--er-marble-highlight-all-bg);
   border-radius: 2px;
 }
 .editor-typed-mark-external-marble-filter {
-  background-color: color-mix(in oklab, var(--warning) 70%, transparent);
+  background-color: var(--er-marble-filter-bg);
   border-radius: 2px;
 }
 .editor-typed-mark-external-marble-word.er-marble-hover-match {
-  background-color: color-mix(in oklab, var(--primary) 38%, transparent);
+  background-color: var(--er-marble-hover-match-bg);
   border-radius: 2px;
 }
 `;

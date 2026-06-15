@@ -7,7 +7,12 @@
 // `mark { background-color: initial }` reset ship with the EnhancedScripturePane component via
 // `useStylesheet` so the component renders identically in Storybook, in the live web view, or
 // anywhere else it's mounted - see MARBLE_ANNOTATION_STYLES in scripture-pane.component.tsx.
+// The named `--er-*` color tokens those rules reference are declared centrally in `_tokens.scss`
+// (loaded via the @use below) so every extension-local color lives in one place; the Storybook
+// story re-declares the same tokens inline since it doesn't load this bundle (see the story for
+// the duplication marker).
 
+@use './tokens';
 @use './usj-nodes';
 @use './editor';
 @use './editor-overrides';
