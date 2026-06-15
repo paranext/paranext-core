@@ -355,7 +355,10 @@ class CheckRunnerEngine
 // #region Allow extensions to register checks with this check runner
 
 let dataProvider: IDisposableDataProvider<ICheckRunner>;
-const checkRunnerEngine = new CheckRunnerEngine();
+// Recreated on each initialization attempt (see initializeCheckRunner): registerEngine mutates the
+// engine and doesn't revert that on dispose, so a retry must register a fresh instance. registerCheck
+// and unregisterCheck read this only after awaiting initialize(), so they see the latest engine.
+let checkRunnerEngine!: CheckRunnerEngine;
 const registrationLock = new Mutex();
 
 /** Unregister a type of check that had been previously registered using {@link registerCheck} */
@@ -412,6 +415,9 @@ const registerCheck = async (
 
 const unsubscribers = new UnsubscriberAsyncList();
 const initializeCheckRunner = createCachedInitializer(async () => {
+  // Fresh engine per attempt so a retry after a partial failure registers a clean instance rather
+  // than the previous one that registerEngine mutated (and whose update emitter was disposed).
+  checkRunnerEngine = new CheckRunnerEngine();
   try {
     dataProvider = await dataProviders.registerEngine(
       'platformScripture.extensionHostCheckRunner',
