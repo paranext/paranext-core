@@ -1842,6 +1842,8 @@ declare module 'main/services/rpc-event-registry' {
       handler: unknown,
       eventName: string,
     ): 'ok' | 'unregistered' | 'foreign-single-source';
+    /** Whether any handler has centrally registered this event name. */
+    has(eventName: string): boolean;
     /** Remove a registrant. Returns `true` if the handler had registered this event. */
     tryUnregister(handler: unknown, eventName: string): boolean;
     /** Remove all event registrations for the given handler (e.g. when a websocket closes) */
@@ -2044,9 +2046,12 @@ declare module 'shared/services/network.service' {
    *   are not centrally registered and do not appear in the OpenRPC document. The async version
    *   restricts central _registration_ of an event name to a single source (unless the event is
    *   declared in {@link MultiSourceNetworkEvents}, in which case it accepts multiple registrants by
-   *   design). Note this restricts registration only — emission itself is not gated by the registry;
-   *   the central registry instead warns when an event is announced unregistered or from a process
-   *   that did not register it.
+   *   design). Note this restricts central _registration_, not emission: the registry does not block
+   *   emits today, but it warns when an event is announced without a matching registration or from a
+   *   process that did not register it. That tolerance is transitional — announcing an unregistered
+   *   or cross-process single-source event is deprecated and is expected to become an error (with the
+   *   registry gating emission) in a future release, so treat the warning as something to fix, not as
+   *   the permanent behavior.
    *
    *   WARNING: You can only create a network event emitter once per eventType to prevent hijacked event
    *   emitters.
@@ -9769,7 +9774,10 @@ declare module '@papi/core' {
     MandatoryProjectDataTypes,
   } from 'shared/models/project-data-provider.model';
   export type { IProjectDataProviderEngine } from 'shared/models/project-data-provider-engine.model';
-  export type { IProjectDataProviderEngineFactory } from 'shared/models/project-data-provider-engine-factory.model';
+  export type {
+    IProjectDataProviderEngineFactory,
+    ProjectDataProviderEngineEnvelope,
+  } from 'shared/models/project-data-provider-engine-factory.model';
   export type {
     IProjectDataProviderFactory,
     ProjectMetadataFilterOptions,

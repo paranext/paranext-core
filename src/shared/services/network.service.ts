@@ -462,11 +462,6 @@ export const createNetworkEventEmitter = <T>(eventType: string): PlatformEventEm
  *
  * See {@link MultiSourceNetworkEvents} for multi-source vs single-source semantics.
  *
- * An event name must also not collide with a registered method name: both appear in the OpenRPC
- * document's `methods` array, where names must be unique, so the registry rejects an event whose
- * name is already a method (and vice versa). By convention events are `on*`-prefixed and methods
- * are not, so this should not happen in practice.
- *
  * @param eventType The name of the event to register. Must be a key of {@link NetworkEvents}.
  * @param documentation Optional notification documentation. Carries
  *   `notification['x-experimental']: true` to mark the event as experimental.
