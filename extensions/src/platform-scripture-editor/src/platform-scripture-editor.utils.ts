@@ -572,8 +572,8 @@ async function tryOpenFromRecentlyOpened(
     // sequentially (not in parallel) and the chain short-circuits as soon as one succeeds.
     return recentProjects.reduce(
       async (prev: Promise<DefaultProjectPickerOutcome | undefined>, projectId: string) => {
-        const earlier = await prev;
-        if (earlier !== undefined) return earlier;
+        const outcome = await prev;
+        if (outcome !== undefined) return outcome;
         try {
           await papi.commands.sendCommand('platformScriptureEditor.openScriptureEditor', projectId);
           papi.logger.info(
