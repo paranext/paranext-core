@@ -2090,6 +2090,8 @@ declare module 'shared/services/network.service' {
    * - `{ latestByKey }` — keep only the most recent buffered event per key, flushed in first-seen key
    *   order. Use for "only the latest matters" events (e.g. a scroll reference per scroll group, or a
    *   web view update per web view id).
+   *
+   * @experimental
    */
   export type NetworkEventBufferStrategy<T> =
     | 'queue'
@@ -2100,6 +2102,7 @@ declare module 'shared/services/network.service' {
    * Buffers network events emitted before their emitter is ready, per a
    * {@link NetworkEventBufferStrategy}. Exported only for unit testing.
    *
+   * @experimental
    * @internal
    */
   export class NetworkEventBuffer<T> {
@@ -2129,6 +2132,8 @@ declare module 'shared/services/network.service' {
    * @param options.bufferStrategy How to buffer pre-registration emits. Defaults to `'queue'`.
    * @returns `emit` (usable immediately), `registeredEmitter` (resolves to the underlying emitter, or
    *   rejects if registration failed), and `dispose`.
+   *
+   * @experimental
    */
   export const createBufferedNetworkEventEmitter: <EventType extends NetworkEventTypes>(
     eventType: EventType,
