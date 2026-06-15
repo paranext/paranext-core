@@ -124,6 +124,66 @@ describe('generateOpenRpcSchema() surfaces every registered event', () => {
   });
 });
 
+describe('method/notification name collisions are rejected (names must be unique across both)', () => {
+  let listener: RpcWebSocketListener;
+
+  beforeEach(() => {
+    vi.mocked(logger.warn).mockClear();
+    listener = new RpcWebSocketListener();
+  });
+
+  it('rejects registering an event whose name is already a method, and warns', async () => {
+    const registeredMethod = await listener.registerMethod('myExt.sharedName', vi.fn(), {
+      method: { params: [], result: { name: 'r', schema: {} }, summary: 'A method' },
+    });
+    expect(registeredMethod).toBe(true);
+
+    const registeredEvent = await listener.registerEvent('myExt.sharedName', {
+      notification: { params: [], summary: 'An event' },
+    });
+    expect(registeredEvent).toBe(false);
+    expect(vi.mocked(logger.warn).mock.calls[0][0]).toMatch(
+      /Cannot register network event "myExt\.sharedName".*method with this name is already registered/s,
+    );
+
+    // The document carries exactly one entry for the name (the method), so it stays valid.
+    const schema = listener.generateOpenRpcSchema();
+    expect(schema.methods.filter((m) => m.name === 'myExt.sharedName')).toHaveLength(1);
+  });
+
+  it('rejects registering a method whose name is already an event, and warns', async () => {
+    const registeredEvent = await listener.registerEvent('myExt.sharedName', {
+      notification: { params: [], summary: 'An event' },
+    });
+    expect(registeredEvent).toBe(true);
+
+    const registeredMethod = await listener.registerMethod('myExt.sharedName', vi.fn(), {
+      method: { params: [], result: { name: 'r', schema: {} }, summary: 'A method' },
+    });
+    expect(registeredMethod).toBe(false);
+    expect(vi.mocked(logger.warn).mock.calls[0][0]).toMatch(
+      /Cannot register method "myExt\.sharedName".*notification\) with this name is already registered/s,
+    );
+
+    const schema = listener.generateOpenRpcSchema();
+    expect(schema.methods.filter((m) => m.name === 'myExt.sharedName')).toHaveLength(1);
+  });
+
+  it('allows a method and an event with distinct names (both surface in the document)', async () => {
+    await listener.registerMethod('myExt.doThing', vi.fn(), {
+      method: { params: [], result: { name: 'r', schema: {} }, summary: 'A method' },
+    });
+    await listener.registerEvent('myExt.onDidThing', {
+      notification: { params: [], summary: 'An event' },
+    });
+
+    const schema = listener.generateOpenRpcSchema();
+    expect(schema.methods.find((m) => m.name === 'myExt.doThing')).toBeDefined();
+    expect(schema.methods.find((m) => m.name === 'myExt.onDidThing')).toBeDefined();
+    expect(vi.mocked(logger.warn)).not.toHaveBeenCalled();
+  });
+});
+
 describe('emitEventOnNetwork warns about invalid event announcements', () => {
   let listener: RpcWebSocketListener;
 

@@ -68,6 +68,12 @@ export class RpcEventRegistry {
     return existing.some((r) => r.handler === handler) ? 'ok' : 'foreign-single-source';
   }
 
+  /** Whether any handler has centrally registered this event name. */
+  has(eventName: string): boolean {
+    const existing = this.byName.get(eventName);
+    return existing !== undefined && existing.length > 0;
+  }
+
   /** Remove a registrant. Returns `true` if the handler had registered this event. */
   tryUnregister(handler: unknown, eventName: string): boolean {
     const existing = this.byName.get(eventName);

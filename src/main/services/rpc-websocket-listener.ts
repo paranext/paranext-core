@@ -164,6 +164,17 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
     )
       return false;
 
+    // A method and a network event (notification) must not share a name: both surface in the OpenRPC
+    // document's `methods` array, where names must be unique. By convention events are `on*`-prefixed
+    // and methods are not, so this realistically never collides — reject loudly if it somehow does
+    // rather than emit a malformed document.
+    if (this.rpcEventDetailsByEventName.has(methodName)) {
+      logger.warn(
+        `Cannot register method "${methodName}": a network event (notification) with this name is already registered. Method and notification names must be unique across both.`,
+      );
+      return false;
+    }
+
     this.rpcMethodDetailsByMethodName.set(methodName, { handler: this, methodDocs });
     this.localMethodsByMethodName.set(methodName, method);
     return true;
@@ -181,6 +192,17 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
     eventName: string,
     documentation?: SingleNotificationDocumentation,
   ): Promise<boolean> {
+    // Mirror of registerMethod's cross-kind guard: a network event must not share a name with a
+    // method, since both land in the OpenRPC `methods` array where names must be unique.
+    if (
+      this.rpcMethodDetailsByMethodName.has(eventName) ||
+      this.localMethodsByMethodName.has(eventName)
+    ) {
+      logger.warn(
+        `Cannot register network event "${eventName}": a method with this name is already registered. Method and notification names must be unique across both.`,
+      );
+      return false;
+    }
     return this.rpcEventDetailsByEventName.tryRegister(this, eventName, documentation);
   }
 

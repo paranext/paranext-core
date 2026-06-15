@@ -38,6 +38,15 @@ describe('RpcEventRegistry — multi-source vs single-source policy', () => {
   it('tryUnregister returns false for a never-registered handler', () => {
     expect(reg.tryUnregister(fakeA, 'myExt.exclusive')).toBe(false);
   });
+
+  it('has() reports whether any handler has registered a name', () => {
+    expect(reg.has('myExt.exclusive')).toBe(false);
+    reg.tryRegister(fakeA, 'myExt.exclusive');
+    expect(reg.has('myExt.exclusive')).toBe(true);
+    // Still registered while any registrant remains; false once the last one unregisters.
+    reg.tryUnregister(fakeA, 'myExt.exclusive');
+    expect(reg.has('myExt.exclusive')).toBe(false);
+  });
 });
 
 describe('RpcEventRegistry — checkAnnouncement', () => {
