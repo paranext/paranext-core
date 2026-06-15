@@ -93,13 +93,6 @@ export type ManageBooksDialogProject = {
    */
   isResource?: boolean;
   /**
-   * Whether the project is a commentary (PT-3964's `CommentaryResource` project type). Sourced from
-   * `ProjectSummary.ProjectType === 'CommentaryResource'`. Used by Copy "From" and Create "Based
-   * on" pickers to exclude commentaries from the picker list — neither flow has a useful outcome
-   * when the source/reference is a commentary (Sebastian UX new-requirement 4, 2026-06-12).
-   */
-  isCommentary?: boolean;
-  /**
    * Locale-stable versification id for the project (the numeric `ScrVersType` as a string).
    * Sebastian UX new-requirement 3 (2026-06-12): forwarded to the Create "Based on"
    * `<ProjectSelector>` so it can group projects by versification with the target's versification
@@ -223,6 +216,8 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_copy_fromLabel%',
   '%manageBooks_copy_sourcePlaceholder%',
   '%manageBooks_copy_emptyState_chooseSource%',
+  '%manageBooks_copy_emptyState_loading%',
+  '%manageBooks_copy_emptyState_loadingSource%',
   '%manageBooks_copy_emptyState_noBooks%',
   // Copy overwrite confirm
   '%manageBooks_copy_confirmTitle%',
@@ -252,6 +247,7 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_projectSelector_openTabsSectionHeading%',
   '%manageBooks_projectSelector_otherProjectsSectionHeading%',
   '%manageBooks_projectSelector_searchPlaceholder%',
+  '%manageBooks_projectSelector_versificationSectionHeading%',
   '%manageBooks_projectSelector_versificationUnknownSectionHeading%',
   '%manageBooks_projectSelector_selectAll%',
   '%manageBooks_filter_count%',

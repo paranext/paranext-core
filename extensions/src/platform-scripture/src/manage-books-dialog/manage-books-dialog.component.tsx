@@ -76,6 +76,7 @@ import {
 } from './manage-books-dialog.types';
 import {
   computeCompareState,
+  computeImportCompareState,
   deleteConfirmVariant,
   fmtTemplate,
   versificationFallbackName,
@@ -726,11 +727,16 @@ export function ManageBooksDialog({
   // `ManageBooksDialogProject` to that shape — `p.fullName` (sourced from `platform.fullName`
   // upstream) becomes the secondary label, falling back to `shortName` when no fullName is
   // configured. The target project itself is filtered out (already done in `otherProjects`).
-  // Sebastian UX new-requirement 4 (2026-06-12): commentaries are excluded
-  // from both the Copy "From" and Create "Based on" pickers — neither flow
-  // benefits from sourcing/referencing a commentary. The flag is set in the
-  // wiring layer's `loadProjects` from `ProjectSummary.ProjectType ===
-  // 'CommentaryResource'`.
+  // Sebastian UX new-requirement 4 (2026-06-12): commentaries should be excluded from both the
+  // Copy "From" and Create "Based on" pickers. DEFERRED — there is no reliable commentary signal in
+  // the current data model: DBL classifies resources only by medium (text/audio/print), ParatextData
+  // has no commentary concept, and the only marker is a hardcoded 3-UID whitelist in
+  // DblDownloadableDataProvider that never reaches ProjectSummary. The previous `isCommentary` filter
+  // keyed off `projectType === 'CommentaryResource'`, which is a ResourceType value that the
+  // ProjectType-derived wire field can never equal, so it excluded nothing. Removed rather than left
+  // as dead code; re-add once an upstream commentary flag exists (DBL/ParatextData). Note Copy "From"
+  // already excludes all resources for licensing reasons, so commentaries (being resources) stay out
+  // of Copy regardless.
   //
   // Sebastian UX new-requirement 3 (2026-06-12): the picker is also enriched
   // with versification id + localized name so the consumer can opt into
@@ -739,20 +745,25 @@ export function ManageBooksDialog({
   // the `t()` + `versificationLabelKey` map.
   const allOtherProjectsAsPS = useMemo<ProjectSelectorProject[]>(
     () =>
-      otherProjects
-        .filter((p) => !p.isCommentary)
-        .map((p) => ({
-          id: p.id,
-          shortName: p.shortName,
-          fullName: p.fullName ?? p.shortName,
-          versificationId: p.versificationId,
-          versificationName: p.versificationId
-            ? t(
+      otherProjects.map((p) => ({
+        id: p.id,
+        shortName: p.shortName,
+        fullName: p.fullName ?? p.shortName,
+        versificationId: p.versificationId,
+        // Group header reads "{name} versification" (lowercase, per Sebastian N3 follow-up),
+        // localized via a template so word order can vary by language. The "Unknown
+        // versification" bucket is labeled separately (versificationUnknownSectionHeading) and is
+        // unaffected, so no double "versification" suffix.
+        versificationName: p.versificationId
+          ? fmtTemplate(
+              t('%manageBooks_projectSelector_versificationSectionHeading%', '{0} versification'),
+              t(
                 versificationLabelKey(p.versificationId),
                 versificationFallbackName(p.versificationId),
-              )
-            : undefined,
-        })),
+              ),
+            )
+          : undefined,
+      })),
     [otherProjects, t],
   );
   // The Copy "From" picker excludes resources for licensing reasons — copying
@@ -768,7 +779,7 @@ export function ManageBooksDialog({
   const copyFromProjectsAsPS = useMemo<ProjectSelectorProject[]>(
     () =>
       otherProjects
-        .filter((p) => !p.isResource && !p.isCommentary)
+        .filter((p) => !p.isResource)
         .map((p) => ({
           id: p.id,
           shortName: p.shortName,
@@ -1547,6 +1558,18 @@ export function ManageBooksDialog({
         '%manageBooks_copy_emptyState_chooseSource%',
         'Choose a source project to see books available to copy.',
       );
+    // Sebastian I7 follow-up (2026-06-12): copy mode with a source picked but its books not yet
+    // fetched (the brief load gap). Without this branch it falls through to the misleading "...has
+    // no books to copy" message below. Show a loading hint instead.
+    if (action === 'copy' && copySourceId && !booksByProjectId[copySourceId]) {
+      const sourceName = copySourceProject?.shortName ?? copySourceProject?.fullName;
+      return sourceName
+        ? fmtTemplate(
+            t('%manageBooks_copy_emptyState_loadingSource%', 'Loading books from {0}…'),
+            sourceName,
+          )
+        : t('%manageBooks_copy_emptyState_loading%', 'Loading books…');
+    }
     // Sebastian review item 22 (2026-05-06): Import mode renders an empty grid until the user
     // attaches files. The "Add files…" / "Choose files…" affordance lives in the per-action
     // header just above; this empty-state message gives the otherwise-blank grid area a hint.
@@ -1655,7 +1678,9 @@ export function ManageBooksDialog({
       } else if (action === 'import') {
         const pick = importFiles[book];
         if (pick) {
-          const compState = computeCompareState(pick.date, present ? destDate : undefined);
+          // Day-granular comparison: pick.date is YYYY-MM-DD, destDate is a full ISO timestamp.
+          // See computeImportCompareState / I9.
+          const compState = computeImportCompareState(pick.date, present ? destDate : undefined);
           const t1 = toneForComparisonState(compState);
           if (t1 !== 'hidden') tone = t1;
           const group = compStateToGroup(compState, present);
@@ -1985,6 +2010,7 @@ export function ManageBooksDialog({
             // yet. Once `hasLoadedProjects` flips true the usual `isSubmitting`
             // gating takes over.
             isSubmitting={isSubmitting || !hasLoadedProjects}
+            isLoadingProjects={!hasLoadedProjects}
             isTargetEditable={project.isEditable}
             targetShortName={project.shortName}
             t={t}

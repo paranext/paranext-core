@@ -33,10 +33,14 @@ interface WebViewEventLike {
  *   freshly-opened editors return no `scrollGroupScrRef` field. Treating "missing" as group 0
  *   matches what the editor itself shows. Non-numeric, non-undefined values (string, null) are
  *   still rejected defensively.
- * - **Lowercase projectId**: WebView definitions store `projectId` in upper-case while
- *   PDP/Manage-Books APIs return lower-case. The hook lowercases on the way out so consumer-side
- *   string comparisons (e.g. `collectOpenTabsByProject`) succeed regardless of which side wrote the
- *   casing.
+ * - **Lowercase projectId**: the hook lowercases the outgoing `projectId`. NOTE: an earlier comment
+ *   claimed this lines the casing up with "PDP/Manage-Books APIs that return lower-case" — that was
+ *   wrong. Canonical project ids are actually UPPERCASE (C# `ProjectSummary` →
+ *   `Guid.ToUpperInvariant()`, `ProjectMetadata` → `id.ToUpperInvariant()`), so lowercasing here
+ *   does NOT match those APIs. Consumers must therefore compare project ids CASE-INSENSITIVELY; the
+ *   project-selector does so via `normalizeProjectId` (see I12). The lowercasing is retained
+ *   because the other consumers (checklist, checks-side-panel) key off this shape; removing it is a
+ *   separate cleanup tracked outside this change.
  */
 export function useOpenProjectTabs(filter?: WebViewFilter): OpenProjectTabWithWebView[] {
   const [tabsMap, setTabsMap] = useState<Map<string, OpenProjectTabWithWebView>>(() => new Map());
@@ -88,8 +92,9 @@ export function useOpenProjectTabs(filter?: WebViewFilter): OpenProjectTabWithWe
         }
         const tab: OpenProjectTabWithWebView = {
           webViewId: id,
-          // Normalize to lowercase so consumer-side comparisons against PDP/manage-books
-          // projectIds (which are lowercase) succeed regardless of WebView casing.
+          // Lowercased for backward-compatibility with existing consumers. This casing is NOT
+          // authoritative — canonical project ids are UPPERCASE — so consumers must match
+          // case-insensitively (see normalizeProjectId / I12).
           projectId: projectId.toLowerCase(),
           scrollGroupId: scrollGroup,
           webViewType: webViewType ?? '',

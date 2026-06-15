@@ -155,6 +155,12 @@ export type ManageBooksSidebarProps = {
   isSubmitting?: boolean;
 
   /**
+   * Whether the project list is still loading. When true, the ProjectSelector trigger shows a
+   * spinner (and stays disabled) so the user sees the picker is not ready yet. See I1.
+   */
+  isLoadingProjects?: boolean;
+
+  /**
    * Whether the active project is editable. When `false`, the four mutation sections (Create / Copy
    * / Import / Delete) are disabled and surface a "{shortName} is read-only" tooltip. `undefined`
    * (the default) leaves the sections enabled — used during initial load before the editability
@@ -237,6 +243,7 @@ export function ManageBooksSidebar({
   projectId,
   onProjectIdChange,
   isSubmitting = false,
+  isLoadingProjects = false,
   isTargetEditable,
   targetShortName,
   t,
@@ -305,6 +312,7 @@ export function ManageBooksSidebar({
             )}
             hideTriggerChevron={isNarrow}
             isDisabled={isSubmitting}
+            isLoading={isLoadingProjects}
             ariaLabel={t('%manageBooks_header_projectLabel%', 'Project')}
             triggerLabelFormat="shortNameAndFullName"
             // Fallback when the project list is still loading or the active projectId hasn't

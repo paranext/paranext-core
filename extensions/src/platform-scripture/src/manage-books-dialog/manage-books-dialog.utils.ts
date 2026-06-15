@@ -77,6 +77,20 @@ export const computeCompareState = (
 };
 
 /**
+ * Compare state for the Import grid. The picked file's date is day-granular (`YYYY-MM-DD`, derived
+ * from `File.lastModified`), whereas the destination's date is a full ISO timestamp (the project
+ * book's `GetLastWriteTime`). Comparing those directly biases a same-day import toward
+ * `sourceIsOlder` — the day-only pick parses as midnight and loses to the dest's intra-day time. We
+ * normalize the destination to the same day granularity so a file imported the same day a book was
+ * last written reads as `filesAreSame`, not `sourceIsOlder`. See I9.
+ */
+export const computeImportCompareState = (
+  pickDate: string | undefined,
+  destDate: string | undefined,
+): ManageBooksComparisonState =>
+  computeCompareState(pickDate, destDate ? destDate.slice(0, 10) : undefined);
+
+/**
  * Map a versification value (numeric `ScrVersType` enum or its stringified form, as returned by
  * `pdp.getSetting('platformScripture.versification')`) to the localization key for its display
  * name. Per Vladimir review item 21 (2026-05-06), the dialog's header subtitle previously rendered
