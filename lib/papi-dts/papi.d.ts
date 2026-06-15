@@ -2132,7 +2132,6 @@ declare module 'shared/services/network.service' {
    * @param options.bufferStrategy How to buffer pre-registration emits. Defaults to `'queue'`.
    * @returns `emit` (usable immediately), `registeredEmitter` (resolves to the underlying emitter, or
    *   rejects if registration failed), and `dispose`.
-   *
    * @experimental
    */
   export const createBufferedNetworkEventEmitter: <EventType extends NetworkEventTypes>(
