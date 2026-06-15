@@ -1,3 +1,5 @@
+using Paranext.DataProvider.NetworkObjects.Documentation;
+
 namespace Paranext.DataProvider.NetworkObjects;
 
 internal abstract class DataProvider : NetworkObject
@@ -38,10 +40,22 @@ internal abstract class DataProvider : NetworkObject
         await RegisterNetworkObjectAsync(
             DataProviderName,
             GetFunctions(),
-            GetDataProviderCreatedDetails()
+            GetDataProviderCreatedDetails(),
+            GetFunctionDocumentation()
         );
         await StartDataProviderAsync();
     }
+
+    /// <summary>
+    /// Optional per-function OpenRPC documentation keyed by function name, threaded into
+    /// registration. Override to document specific functions — e.g. to mark one projectInterface's
+    /// methods experimental (<c>x-experimental: true</c>) without affecting the others a PDP exposes.
+    /// Defaults to <c>null</c> (no documentation).
+    /// </summary>
+    protected virtual IReadOnlyDictionary<
+        string,
+        OpenRpcSingleMethodDocumentation
+    >? GetFunctionDocumentation() => null;
 
     /// <summary>
     /// Create an event that tells the network details about the data provider that is being created

@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider;
+using Paranext.DataProvider.NetworkObjects.Documentation;
 
 namespace TestParanextDataProvider
 {
@@ -25,7 +26,8 @@ namespace TestParanextDataProvider
         public override Task<bool> RegisterRequestHandlerAsync(
             string requestType,
             Delegate requestHandler,
-            TimeSpan? timeout
+            TimeSpan? timeout = null,
+            OpenRpcSingleMethodDocumentation? documentation = null
         )
         {
             return Task.FromResult(_localMethods.TryAdd(requestType, requestHandler));

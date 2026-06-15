@@ -1,4 +1,5 @@
 using System.Reflection;
+using Paranext.DataProvider.NetworkObjects.Documentation;
 
 namespace Paranext.DataProvider.NetworkObjects;
 
@@ -19,11 +20,19 @@ internal abstract class NetworkObject
     /// <param name="networkObjectName">Services access this network object using this name</param>
     /// <param name="functionsToRegister">List of functions to register on the network with their corresponding function names</param>
     /// <param name="registrationParameters">Details about a network object to send onto the network after it finishes registering</param>
+    /// <param name="documentationByFunctionName">Optional per-function OpenRPC documentation keyed
+    /// by function name. A function whose name is present (e.g. carrying <c>x-experimental: true</c>)
+    /// is registered with that documentation; functions absent from the map register undocumented as
+    /// before. Provide an entry for every function to mark a whole object experimental (object-wide
+    /// fanout), or only specific functions for per-method marking (e.g. one projectInterface on a
+    /// PDP that exposes several).</param>
     /// <exception cref="Exception">Throws if the network object could not be registered properly</exception>
     protected async Task RegisterNetworkObjectAsync(
         string networkObjectName,
         List<(string functionName, Delegate function)> functionsToRegister,
-        NetworkObjectCreatedDetails registrationParameters
+        NetworkObjectCreatedDetails registrationParameters,
+        IReadOnlyDictionary<string, OpenRpcSingleMethodDocumentation>? documentationByFunctionName =
+            null
     )
     {
         if (_registrationParameters != null)
@@ -37,7 +46,11 @@ internal abstract class NetworkObject
         {
             var req = $"{objPrefix}.{functionName}";
             TimeSpan? timeout = GetTimeoutFromDelegate(function);
-            requests.Add(PapiClient.RegisterRequestHandlerAsync(req, function, timeout));
+            OpenRpcSingleMethodDocumentation? documentation = null;
+            documentationByFunctionName?.TryGetValue(functionName, out documentation);
+            requests.Add(
+                PapiClient.RegisterRequestHandlerAsync(req, function, timeout, documentation)
+            );
         }
         await Task.WhenAll(requests);
 

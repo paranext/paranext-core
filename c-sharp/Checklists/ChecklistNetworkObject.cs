@@ -4,9 +4,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using Paranext.DataProvider.Checklists.Markers;
 using Paranext.DataProvider.NetworkObjects;
+using Paranext.DataProvider.NetworkObjects.Documentation;
 using Paranext.DataProvider.Projects;
 using Paranext.DataProvider.Services;
 using Paratext.Data;
+using static Paranext.DataProvider.NetworkObjects.Documentation.ExperimentalMethodDocumentation;
 
 namespace Paranext.DataProvider.Checklists;
 
@@ -95,6 +97,35 @@ internal sealed class ChecklistNetworkObject : NetworkObject
                 Id = NetworkObjectName,
                 ObjectType = NetworkObjectType.OBJECT,
                 FunctionNames = [BuildMethodName, ResolveMethodName, ValidateMethodName],
+            },
+            // EXPERIMENTAL: the entire platformScripture.checklistService network object is
+            // experimental — every method is marked x-experimental in the live OpenRPC doc.
+            new Dictionary<string, OpenRpcSingleMethodDocumentation>
+            {
+                [BuildMethodName] = Create(
+                    "Build checklist data for the supplied request.",
+                    [Param("request", "Checklist request.")],
+                    ResultOf("object", "Checklist result response")
+                ),
+                [ResolveMethodName] = Create(
+                    "Resolve comparative-text references for the active project.",
+                    [
+                        Param("activeProjectId", "Active project id.", "string"),
+                        Param("requestedTexts", "Comparative-text references to resolve.", "array"),
+                    ],
+                    ResultOf("object", "Resolved comparative texts")
+                ),
+                [ValidateMethodName] = Create(
+                    "Validate an equivalent-markers settings string.",
+                    [
+                        Param(
+                            "equivalentMarkers",
+                            "Equivalent-markers string to validate.",
+                            "string"
+                        ),
+                    ],
+                    ResultOf("object", "Marker settings validation result")
+                ),
             }
         );
     }
