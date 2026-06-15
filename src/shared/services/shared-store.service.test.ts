@@ -109,13 +109,18 @@ describe('sharedStoreService', () => {
 
     it('should fetch initial store data in non-Main processes', async () => {
       globalThis.processType = ProcessType.ExtensionHost;
+      // Entries must be full StoreEntry shapes (value + Lamport clock); otherwise setFromRemote
+      // throws on `entry.clock.counter` and the error is swallowed, so the fetched data would never
+      // actually land in the local store.
       const mockStoreData = {
-        'platform.customNetworkTimeouts': { 'test.request': 5000 },
+        [testKey]: { value: 5000, clock: { counter: 1, processId: 'remote-process' } },
       };
       vi.mocked(networkService.request).mockResolvedValue(mockStoreData);
 
       await initializeSharedStore(networkService);
       expect(networkService.request).toHaveBeenCalledWith('shared-store:get');
+      // The fetched entry actually populated the local store.
+      expect(sharedStoreService.get(testKey)).toBe(5000);
     });
 
     it('should be idempotent — subsequent initialize calls return the same promise', async () => {
