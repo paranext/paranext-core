@@ -23,11 +23,21 @@ export const MANAGE_BOOKS_WEB_VIEW_TYPE = 'platformScripture.manageBooks';
  * Options accepted when opening the Manage Books web view. The optional `projectId` lets a caller
  * (e.g. the openManageBooks command) pre-target a specific project; when omitted the dialog
  * defaults to whatever was last persisted in the saved web view state.
+ *
+ * @experimental
  */
 export interface ManageBooksWebViewOptions extends GetWebViewOptions {
   projectId: string | undefined;
 }
 
+/**
+ * Web view provider for the unified Manage Books dialog (FN-008).
+ *
+ * @experimental This web view provider, its WebView state shape, and its options
+ *   ({@link ManageBooksWebViewOptions}) are not yet a stable contract and may change without
+ *   notice. The provider is also marked experimental at registration via `x-experimental` (see
+ *   `main.ts`).
+ */
 export class ManageBooksWebViewProvider implements IWebViewProvider {
   /**
    * Title key used for the localized dialog window title. Held on the instance so the lint rule

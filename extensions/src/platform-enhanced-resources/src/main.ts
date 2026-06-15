@@ -27,6 +27,11 @@ const HARDCODED_DEFAULT_RESOURCE_ID = 'ESV16UK+';
  * `resolveResourceObjectId` validation is intentionally omitted at provider time - the UI shell
  * renders an empty state when `tokens === undefined`, which is what TS-043 expects when no Enhanced
  * Resource is selected or when the factory has no marble data installed.
+ *
+ * @experimental This web view provider, its WebView state shape, and its options
+ *   ({@link EnhancedResourceWebViewOptions}) are not yet a stable contract and may change without
+ *   notice. The provider is also marked experimental at registration via `x-experimental` (see
+ *   `activate`).
  */
 const enhancedResourceWebViewProvider: IWebViewProvider = {
   async getWebView(
