@@ -833,7 +833,7 @@ const scriptureEditorWebViewProvider: IWebViewProvider = new ScriptureEditorWebV
  *
  * Used to pass a new projectId through reloadWebView, which has no options for extra data.
  */
-let modelTextPendingProjectId: string | undefined;
+let currentModelTextProjectId: string | undefined;
 
 const modelTextPanelWebViewProvider: IWebViewProvider = {
   async getWebView(
@@ -846,10 +846,9 @@ const modelTextPanelWebViewProvider: IWebViewProvider = {
       );
     // Priority: pending (reload path) > options (new-panel path) > saved (existing panel reload)
     const projectId =
-      modelTextPendingProjectId !== undefined
-        ? modelTextPendingProjectId
+      currentModelTextProjectId !== undefined
+        ? currentModelTextProjectId
         : (openWebViewOptions.projectId ?? savedWebView.projectId);
-    modelTextPendingProjectId = undefined;
     return {
       ...savedWebView,
       title: '%webView_modelTextPanel_title%',
@@ -867,7 +866,7 @@ const modelTextPanelWebViewProvider: IWebViewProvider = {
  *
  * Used to pass a new projectId through reloadWebView, which has no options for extra data.
  */
-const resourceTextPanelPendingProjectIds = new Map<string, string | undefined>();
+const currentResourceTextPanelProjectIds = new Map<string, string | undefined>();
 
 /**
  * Creates a resource panel web view provider that injects the given resourceType into web view
@@ -890,10 +889,9 @@ function createResourceTextPanelProvider(
           } web view`,
         );
       // Priority: pending (reload path) > options (new-panel path) > saved (existing panel reload)
-      const projectId = resourceTextPanelPendingProjectIds.has(webViewType)
-        ? resourceTextPanelPendingProjectIds.get(webViewType)
+      const projectId = currentResourceTextPanelProjectIds.has(webViewType)
+        ? currentResourceTextPanelProjectIds.get(webViewType)
         : (openWebViewOptions.projectId ?? savedWebView.projectId);
-      resourceTextPanelPendingProjectIds.delete(webViewType);
       return {
         ...savedWebView,
         title,
@@ -934,7 +932,7 @@ async function openResourceText(
   const existingPanel = allOpenDefs.find((def) => def.webViewType === webViewType);
 
   if (existingPanel) {
-    resourceTextPanelPendingProjectIds.set(webViewType, projectId);
+    currentResourceTextPanelProjectIds.set(webViewType, projectId);
     return papi.webViews.reloadWebView(webViewType, existingPanel.id, { bringToFront: true });
   }
 
@@ -1201,7 +1199,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
       );
 
       if (existingPanel) {
-        modelTextPendingProjectId = projectId;
+        currentModelTextProjectId = projectId;
         return papi.webViews.reloadWebView(MODEL_TEXT_PANEL_WEBVIEW_TYPE, existingPanel.id, {
           bringToFront: true,
         });
