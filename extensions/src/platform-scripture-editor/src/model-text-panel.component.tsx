@@ -17,8 +17,12 @@ import type {
 } from 'platform-scripture';
 import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { selectTextConnection } from './select-dbl-resource';
+import { scrollToVerse } from './editor-dom.util';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
+
+/** Ms to wait after a scrRef change before scrolling, to give the editor time to render */
+const VERSE_SCROLL_DELAY_MS = 200;
 
 /**
  * Object containing all keys used for localization in this component. Pass these keys into the
@@ -170,7 +174,22 @@ export function ModelTextPanel({
     return () => {
       isActive = false;
     };
-  }, [resourceProjectId, scrRef, getResourceChapter]);
+    // Intentionally excludes scrRef.verseNum: chapter data only changes with book or chapter, not verse.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    resourceProjectId,
+    scrRef.book,
+    scrRef.chapterNum,
+    scrRef.versificationStr,
+    getResourceChapter,
+  ]);
+
+  // Scroll to the current verse whenever the scrRef changes (book, chapter, or verse).
+  // A short delay lets the editor finish rendering new content before we scroll.
+  useEffect(() => {
+    const timeout = setTimeout(() => scrollToVerse(scrRef), VERSE_SCROLL_DELAY_MS);
+    return () => clearTimeout(timeout);
+  }, [scrRef]);
 
   // --- Editor ---
 
