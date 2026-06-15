@@ -26,13 +26,20 @@ internal abstract class NetworkObject
     /// before. Provide an entry for every function to mark a whole object experimental (object-wide
     /// fanout), or only specific functions for per-method marking (e.g. one projectInterface on a
     /// PDP that exposes several).</param>
+    /// <param name="objectDocumentation">Optional OpenRPC documentation for the object's
+    /// <c>object:{name}</c> existence-check method itself. Set this (e.g. via
+    /// <see cref="Documentation.ExperimentalMethodDocumentation.ExistenceMarker"/>) when the WHOLE
+    /// object is experimental so the existence method is marked alongside its functions. Leave null
+    /// for objects that are only partially experimental (e.g. a PDP exposing one experimental
+    /// projectInterface among several stable ones).</param>
     /// <exception cref="Exception">Throws if the network object could not be registered properly</exception>
     protected async Task RegisterNetworkObjectAsync(
         string networkObjectName,
         List<(string functionName, Delegate function)> functionsToRegister,
         NetworkObjectCreatedDetails registrationParameters,
         IReadOnlyDictionary<string, OpenRpcSingleMethodDocumentation>? documentationByFunctionName =
-            null
+            null,
+        OpenRpcSingleMethodDocumentation? objectDocumentation = null
     )
     {
         if (_registrationParameters != null)
@@ -41,7 +48,13 @@ internal abstract class NetworkObject
         // Register the network object and all functions the object will expose
         List<Task<bool>> requests = [];
         var objPrefix = $"object:{networkObjectName}";
-        requests.Add(PapiClient.RegisterRequestHandlerAsync(objPrefix, new Func<bool>(() => true)));
+        requests.Add(
+            PapiClient.RegisterRequestHandlerAsync(
+                objPrefix,
+                new Func<bool>(() => true),
+                documentation: objectDocumentation
+            )
+        );
         foreach (var (functionName, function) in functionsToRegister)
         {
             var req = $"{objPrefix}.{functionName}";

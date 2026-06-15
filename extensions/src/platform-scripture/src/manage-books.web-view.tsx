@@ -129,6 +129,14 @@ type BookComparisonEntry = {
 
 type BookComparisonResult = { entries: BookComparisonEntry[] };
 
+/**
+ * Local typing for the `platformScripture.manageBooks` NetworkObject proxy. The backing C# network
+ * object is marked experimental at registration (every method carries `x-experimental` in the live
+ * OpenRPC document); this web-view-local interface mirrors that, since there is no shared
+ * `papi-shared-types` interface for it.
+ *
+ * @experimental
+ */
 interface ManageBooksNetworkObject {
   filterProjects: (input: {
     purpose: string;

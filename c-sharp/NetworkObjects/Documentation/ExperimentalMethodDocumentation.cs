@@ -48,6 +48,18 @@ public static class ExperimentalMethodDocumentation
             Schema = new() { Type = type },
         };
 
+    /// <summary>
+    /// Builds an experimental documentation entry for a network object's <c>object:{name}</c>
+    /// existence-check method (registered by <see cref="NetworkObject.RegisterNetworkObjectAsync"/>),
+    /// which takes no parameters and returns a boolean. Pass this as the object-wide documentation so
+    /// the existence method is marked experimental alongside the object's functions.
+    /// </summary>
+    public static OpenRpcSingleMethodDocumentation ExistenceMarker(string networkObjectName) =>
+        Create(
+            $"Whether the {networkObjectName} network object exists.",
+            result: ResultOf("boolean", "True if the network object exists")
+        );
+
     /// <summary>Builds the result content descriptor.</summary>
     public static OpenRpcContentDescriptor ResultOf(string type, string summary) =>
         new()

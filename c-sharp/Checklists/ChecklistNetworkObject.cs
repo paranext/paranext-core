@@ -126,7 +126,9 @@ internal sealed class ChecklistNetworkObject : NetworkObject
                     ],
                     ResultOf("object", "Marker settings validation result")
                 ),
-            }
+            },
+            // Mark the object:{name} existence method experimental too (object-wide).
+            ExistenceMarker(NetworkObjectName)
         );
     }
 

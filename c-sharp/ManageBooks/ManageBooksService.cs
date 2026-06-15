@@ -1,10 +1,12 @@
 using Paranext.DataProvider.NetworkObjects;
+using Paranext.DataProvider.NetworkObjects.Documentation;
 using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Projects;
 using Paranext.DataProvider.Services;
 using Paratext.Data;
 using PtxUtils;
 using SIL.Scripture;
+using static Paranext.DataProvider.NetworkObjects.Documentation.ExperimentalMethodDocumentation;
 
 namespace Paranext.DataProvider.ManageBooks;
 
@@ -161,9 +163,95 @@ internal sealed class ManageBooksService : NetworkObject
                 Id = NetworkObjectName,
                 ObjectType = NetworkObjectType.OBJECT,
                 FunctionNames = [.. functions.Select(f => f.functionName)],
-            }
+            },
+            // EXPERIMENTAL: the entire platformScripture.manageBooks network object is experimental —
+            // every method is marked x-experimental in the live OpenRPC doc.
+            BuildExperimentalDocumentation(),
+            // Mark the object:{name} existence method experimental too (object-wide).
+            ExistenceMarker(NetworkObjectName)
         );
     }
+
+    /// <summary>
+    /// Per-function OpenRPC documentation for every method on this network object, each marked
+    /// experimental (<c>x-experimental: true</c>). Object-wide fanout: keys must match the function
+    /// names registered in <see cref="RegisterNetworkObjectAsync()"/>.
+    /// </summary>
+    private static Dictionary<
+        string,
+        OpenRpcSingleMethodDocumentation
+    > BuildExperimentalDocumentation() =>
+        new()
+        {
+            ["deleteBooks"] = Create(
+                "Delete books from a project.",
+                [Param("request", "Delete-books request.")],
+                ResultOf("object", "Delete-books result")
+            ),
+            ["createBooks"] = Create(
+                "Create books in a project.",
+                [Param("request", "Create-books request.")],
+                ResultOf("object", "Create-books result")
+            ),
+            ["getAvailableBooksForCreation"] = Create(
+                "Get the book numbers available to create in a project.",
+                [Param("projectId", "Project id.", "string")],
+                ResultOf("array", "Available book numbers")
+            ),
+            ["validateCreateBooks"] = Create(
+                "Validate a create-books request before committing.",
+                [Param("request", "Validate-create-books request.")],
+                ResultOf("object", "Validation result")
+            ),
+            ["getBookComparison"] = Create(
+                "Compare books between a source and destination project (copy pre-flight).",
+                [Param("input", "Book-comparison input.")],
+                ResultOf("object", "Book-comparison result")
+            ),
+            ["copyBooks"] = Create(
+                "Copy books from a source project to a destination project.",
+                [Param("request", "Copy-books request.")],
+                ResultOf("object", "Copy-books result")
+            ),
+            ["copyCustomVersification"] = Create(
+                "Copy a custom versification from a source project to a destination project.",
+                [
+                    Param("sourceProjectId", "Source project id.", "string"),
+                    Param("destinationProjectId", "Destination project id.", "string"),
+                ],
+                ResultOf("null", "No return value")
+            ),
+            ["getToProjectFilter"] = Create(
+                "Filter destination projects for the copy dropdown by source type.",
+                [Param("input", "Project filter input.")],
+                ResultOf("object", "Project list result")
+            ),
+            ["parseImportFiles"] = Create(
+                "Parse import files into a book comparison (import pre-flight, read-only).",
+                [Param("input", "Import-books input.")],
+                ResultOf("object", "Book-comparison result")
+            ),
+            ["checkOverlappingFiles"] = Create(
+                "Check import files for overlapping books.",
+                [Param("entries", "Overlap-check entries.", "array")],
+                ResultOf("object", "Validation result")
+            ),
+            ["importBooks"] = Create(
+                "Import books into a project from files.",
+                [Param("input", "Import-books input.")],
+                ResultOf("object", "Import-books result")
+            ),
+            ["filterProjects"] = Create(
+                "Filter projects for the Manage Books dialogs (unified read-only facade).",
+                [Param("input", "Project filter input.")],
+                ResultOf("object", "Project list result")
+            ),
+            ["isProjectShared"] = Create(
+                "Whether a project is shared (used to enable shared-project delete-confirm behavior).",
+                [Param("projectId", "Project id.", "string")],
+                ResultOf("boolean", "True if the project is shared")
+            ),
+        };
 
     // CAP-005: DeleteBooks wire registration (single mutation method).
     private List<(string, Delegate)> CreateDeleteFunctions() =>

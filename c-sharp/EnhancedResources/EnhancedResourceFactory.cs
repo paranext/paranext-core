@@ -70,7 +70,9 @@ internal sealed class EnhancedResourceFactory : NetworkObject
             },
             // EXPERIMENTAL: the entire platform.enhancedResources network object is experimental —
             // every method is marked x-experimental so it surfaces as such in the live OpenRPC doc.
-            BuildExperimentalDocumentation()
+            BuildExperimentalDocumentation(),
+            // Mark the object:{name} existence method experimental too (object-wide).
+            ExistenceMarker(NetworkObjectName)
         );
     }
 

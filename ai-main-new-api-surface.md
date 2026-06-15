@@ -27,8 +27,12 @@ additions. Everything below is brand-new on `ai/main` unless noted otherwise.
 | **`platform.enhancedResources`**                                        | C# `EnhancedResourceFactory` | `readInitializeResult`, `resolveResourceObjectId`, `findLinksForScope`, `findImagesForReference`, `readDictionaryEntry`, `readArticle`, `buildTooltipData`, `buildNoteData`, `loadDictionary`, `loadEncyclopedia`, `loadMedia`, `findLocalizedGlosses`, `translatePartOfSpeech`, `executeSourceLanguageSearch`, `fetchImageBytes`, `loadMarbleChapterXml` (16 methods) |
 | **`platformScripture.checklistService`** (typed as `IChecklistService`) | C# `ChecklistNetworkObject`  | `buildChecklistData`, `validateMarkerSettings`, `resolveComparativeTexts` (3 methods)                                                                                                                                                                                                                                                                                  |
 
-Both are plain network objects (intentionally **not** in `papi-shared-types`
-`DataProviders`); acquired via `papi.networkObjects.get(...)`.
+| **`platformScripture.manageBooks`** (web-view-local `ManageBooksNetworkObject`) | C# `ManageBooksService` | `deleteBooks`, `createBooks`, `getAvailableBooksForCreation`, `validateCreateBooks`, `getBookComparison`, `copyBooks`, `copyCustomVersification`, `getToProjectFilter`, `parseImportFiles`, `checkOverlappingFiles`, `importBooks`, `filterProjects`, `isProjectShared` (13 methods) |
+
+All three are plain network objects (intentionally **not** in `papi-shared-types`
+`DataProviders`); acquired via `papi.networkObjects.get(...)`. (The
+`platformScripture.manageBooks` service object was missed in the first scan — it was
+caught during live `rpc.discover` verification and is now marked experimental.)
 
 ---
 
