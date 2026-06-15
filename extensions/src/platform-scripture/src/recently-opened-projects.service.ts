@@ -59,6 +59,9 @@ export class RecentlyOpenedProjectsDataProviderEngine
     super();
   }
 
+  // REVIEW: Does the get/set data-provider pattern make sense here? The setter always
+  // throws and the getter's selector is structurally required but always ignored — no foreseeable
+  // future use. Consider whether a plain PAPI command or a custom interface would be cleaner.
   async getRecentProjects(): Promise<string[]> {
     // Return a copy so callers cannot mutate the engine's internal cache by reference.
     return [...(await this.loadCache())];

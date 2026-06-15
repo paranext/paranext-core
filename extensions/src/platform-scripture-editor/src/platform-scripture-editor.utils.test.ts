@@ -1792,6 +1792,31 @@ describe('openDefaultActiveProjectIfApplicable', () => {
     expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.getSharedProjects');
   });
 
+  it('falls through to S/R when getRecentProjects throws after service is obtained', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      mockRecentProjectsGet,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockRecentProjectsGet.mockRejectedValueOnce(new Error('Storage read failed'));
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects')
+        throw new Error('S/R not registered');
+      throw new Error(`Unexpected command in test: ${commandName}`);
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('no-send-receive');
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.getSharedProjects');
+  });
+
   it("returns 'filled' even when recordProjectOpened throws in the recents path", async () => {
     const {
       papi,

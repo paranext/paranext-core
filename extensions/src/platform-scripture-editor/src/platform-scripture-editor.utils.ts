@@ -565,6 +565,7 @@ async function tryOpenFromRecentlyOpened(
   try {
     const service = await papi.dataProviders.get('platformScripture.recentlyOpenedProjects');
     if (!service) return undefined;
+    // Data-provider getter requires an explicit selector argument, even though the value is ignored.
     recentProjects = (await service.getRecentProjects(undefined)) ?? [];
     recordOpened = (projectId: string) => service.recordProjectOpened(projectId);
   } catch (e) {
