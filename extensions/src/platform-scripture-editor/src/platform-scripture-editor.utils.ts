@@ -533,12 +533,9 @@ export function selectProjectIdsForOpenMode(
  * - `'wrong-mode'` — `platform.interfaceMode` is not `'simple'`; the picker does nothing until it is.
  * - `'no-empty'` — no empty Scripture Editor (no `projectId`) is currently open. The driver may retry
  *   when a new web view opens.
- * - `'no-send-receive'` — `paratextBibleSendReceive.getSharedProjects` was unavailable (command not
- *   registered yet, or the extension is absent). Expected steady state on Platform.Bible; expected
- *   transiently on paratext-10-studio during the window between platform-scripture-editor's
- *   activation and paratextBibleSendReceive's activation. The driver retries on subsequent
- *   web-view-open and sync-completion events. Logged at debug, not warn — silent on
- *   Platform.Bible.
+ * - `'no-send-receive'` — `recentlyOpenedProjects` was empty or all entries failed to open, and S/R
+ *   is unavailable or hasn't activated yet. Expected on Platform.Bible on first launch (no recents
+ *   yet, no S/R). Logged at debug.
  * - `'failed'` — the open command rejected; logged at warn. The driver may retry on the next trigger.
  * - `'no-candidate'` — S/R was reachable, but no shared project passed the activity / `editedStatus`
  *   filter. Projects with `editedStatus` of `'new'` (not yet downloaded locally) or
@@ -555,12 +552,66 @@ export type DefaultProjectPickerOutcome =
   | 'filled';
 
 /**
+ * Try to open the most-recently-used project from the `platformScripture.recentlyOpenedProjects`
+ * data provider. Returns `'filled'` if a recent project was successfully opened, or `undefined` if
+ * the service is unavailable, the recents list is empty, or every recent project fails to open (in
+ * which case the caller should fall through to the S/R-based picker).
+ */
+async function tryOpenFromRecentlyOpened(
+  papi: typeof PapiBackend,
+): Promise<DefaultProjectPickerOutcome | undefined> {
+  try {
+    const service = await papi.dataProviders.get('platformScripture.recentlyOpenedProjects');
+    if (!service) return undefined;
+    // Data-provider getter requires an explicit selector argument, even though the value is ignored.
+    const recentProjects = (await service.getRecentProjects(undefined)) ?? [];
+    // Try each recent project in order until one opens successfully — in almost all cases the first
+    // entry opens and the loop exits immediately. `reduce` with a Promise accumulator is used instead
+    // of `for...of + await` to satisfy the no-await-in-loop ESLint rule; each callback awaits the
+    // previous result before deciding whether to attempt the next project, so entries are tried
+    // sequentially (not in parallel) and the chain short-circuits as soon as one succeeds.
+    return recentProjects.reduce(
+      async (prev: Promise<DefaultProjectPickerOutcome | undefined>, projectId: string) => {
+        const outcome = await prev;
+        if (outcome !== undefined) return outcome;
+        try {
+          await papi.commands.sendCommand('platformScriptureEditor.openScriptureEditor', projectId);
+          papi.logger.info(
+            `Default active project picker: opened recently-used project=${projectId}`,
+          );
+          try {
+            await service.recordProjectOpened(projectId);
+          } catch (e) {
+            papi.logger.warn(
+              `Default active project picker: failed to record recently-opened project ${projectId}: ${getErrorMessage(e)}`,
+            );
+          }
+          return 'filled' as const;
+        } catch (e) {
+          papi.logger.debug(
+            `Default active project picker: recent project ${projectId} failed to open, trying next (${getErrorMessage(e)})`,
+          );
+          return undefined;
+        }
+      },
+      Promise.resolve<DefaultProjectPickerOutcome | undefined>(undefined),
+    );
+  } catch (e) {
+    papi.logger.debug(
+      `Default active project picker: recentlyOpenedProjects unavailable; skipping recents (${getErrorMessage(e)})`,
+    );
+    return undefined;
+  }
+}
+
+/**
  * Attempt to fill the empty Scripture Editor in the simple layout with the most-recently-active
- * shared project. Candidates come from `paratextBibleSendReceive.getSharedProjects` (internet S/R
- * excludes Observer-only projects upstream; local-repository S/R does not). The picker partitions
- * remaining candidates by `canUserEditScripture` and prefers editable projects, falling back to the
- * most-recently-S/R'd Observer-only project so an Observer-only user is not stranded with an empty
- * editor (Observer projects are otherwise reachable via the project switcher).
+ * project. Candidates come first from `recentlyOpenedProjects` (tried in order, most-recent first);
+ * `paratextBibleSendReceive.getSharedProjects` is the fallback when recents is empty or all entries
+ * fail to open. The picker partitions remaining candidates by `canUserEditScripture` and prefers
+ * editable projects, falling back to the most-recently-S/R'd Observer-only project so an
+ * Observer-only user is not stranded with an empty editor (Observer projects are otherwise
+ * reachable via the project switcher).
  *
  * Idempotent: each invocation re-reads the dock and the shared-projects list. The driver in
  * {@link startDefaultProjectPicker} is responsible for re-invoking on events that change those
@@ -586,6 +637,11 @@ export async function openDefaultActiveProjectIfApplicable(
     (def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && !def.projectId,
   );
   if (!emptyEditor) return 'no-empty';
+
+  // Before consulting S/R, try the recently-opened-projects list. If a recent project opens
+  // successfully, return immediately without touching the S/R service at all.
+  const recentsOutcome = await tryOpenFromRecentlyOpened(papi);
+  if (recentsOutcome !== undefined) return recentsOutcome;
 
   // Try `paratextBibleSendReceive.getSharedProjects` directly. If S/R hasn't activated yet (cold
   // start, picker fires inside `platformScriptureEditor.activate()` before `paratextBibleSendReceive`
