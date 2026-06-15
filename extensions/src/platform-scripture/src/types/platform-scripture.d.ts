@@ -955,12 +955,16 @@ declare module 'platform-scripture' {
       /**
        * Returns the final verse number in the specified book and chapter using the project's
        * versification.
+       *
+       * @experimental
        */
       getFinalVerseNumber(bookNum: number, chapterNum: number): Promise<number>;
       /**
        * Read-only — throws if called. The authoritative writer for versification data is the
        * `'platformScripture.versification'` project setting; set it through the standard
        * setting-write API on the same PDP instead.
+       *
+       * @experimental
        */
       setFinalVerseNumber(
         newValue: never,
@@ -968,6 +972,8 @@ declare module 'platform-scripture' {
       /**
        * Subscribe to changes in the final verse number for a given book + chapter. The callback
        * fires when the project's versification setting changes.
+       *
+       * @experimental
        */
       subscribeFinalVerseNumber(
         selector: FinalVerseNumberSelector,
@@ -975,15 +981,25 @@ declare module 'platform-scripture' {
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
 
-      /** Returns the final chapter number in the specified book using the project's versification. */
+      /**
+       * Returns the final chapter number in the specified book using the project's versification.
+       *
+       * @experimental
+       */
       getFinalChapter(bookNum: number): Promise<number>;
-      /** Read-only — throws if called. See {@link setFinalVerseNumber} for the canonical writer. */
+      /**
+       * Read-only — throws if called. See {@link setFinalVerseNumber} for the canonical writer.
+       *
+       * @experimental
+       */
       setFinalChapter(
         newValue: never,
       ): Promise<DataProviderUpdateInstructions<VersificationProjectInterfaceDataTypes>>;
       /**
        * Subscribe to changes in the final chapter number for a given book. The callback fires when
        * the project's versification setting changes.
+       *
+       * @experimental
        */
       subscribeFinalChapter(
         bookNum: number,
@@ -1007,15 +1023,23 @@ declare module 'platform-scripture' {
        * finalVerses[50]; // → 26 (last verse of Genesis 50)
        * finalVerses[0]; // → 0 (filler; chapter 0 does not exist)
        * ```
+       *
+       * @experimental
        */
       getFinalVerseNumbersInBook(bookNum: number): Promise<number[]>;
-      /** Read-only — throws if called. See {@link setFinalVerseNumber} for the canonical writer. */
+      /**
+       * Read-only — throws if called. See {@link setFinalVerseNumber} for the canonical writer.
+       *
+       * @experimental
+       */
       setFinalVerseNumbersInBook(
         newValue: never,
       ): Promise<DataProviderUpdateInstructions<VersificationProjectInterfaceDataTypes>>;
       /**
        * Subscribe to changes in the per-chapter final verse numbers for a book. The callback fires
        * when the project's versification setting changes.
+       *
+       * @experimental
        */
       subscribeFinalVerseNumbersInBook(
         bookNum: number,
@@ -2066,11 +2090,23 @@ declare module 'platform-scripture' {
    * @experimental
    */
   export interface IChecklistService {
-    /** Generate checklist data for the supplied request (data-contracts.md §4.1). */
+    /**
+     * Generate checklist data for the supplied request (data-contracts.md §4.1).
+     *
+     * @experimental
+     */
     buildChecklistData(request: ChecklistRequest): Promise<ChecklistResultResponse>;
-    /** Validate an equivalent-markers string (data-contracts.md §4.2). */
+    /**
+     * Validate an equivalent-markers string (data-contracts.md §4.2).
+     *
+     * @experimental
+     */
     validateMarkerSettings(equivalentMarkers: string): Promise<MarkerSettingsValidationResult>;
-    /** Resolve comparative-text references (data-contracts.md §4.5). */
+    /**
+     * Resolve comparative-text references (data-contracts.md §4.5).
+     *
+     * @experimental
+     */
     resolveComparativeTexts(
       activeProjectId: string,
       requestedTexts: ChecklistComparativeTextRef[],

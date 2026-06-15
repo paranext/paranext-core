@@ -1,12 +1,13 @@
 namespace Paranext.DataProvider.NetworkObjects.Documentation;
 
 /// <summary>
-/// Minimal OpenRPC JSON Schema descriptor used when documenting a network object method's
-/// parameters and result. Only the <c>type</c> keyword is modeled; complex record shapes use
+/// A minimal JSON Schema value, used to describe a network object method's parameters and result in
+/// OpenRPC documentation. Only the <c>type</c> keyword is modeled; complex record shapes use
 /// <c>"object"</c> rather than a fully-expanded schema (matching the convention used by TypeScript
-/// registrations such as <c>platformScripture.invalidateCheckResults</c>).
+/// registrations such as <c>platformScripture.invalidateCheckResults</c>). The TypeScript OpenRPC
+/// model calls the equivalent type <c>Schema</c> (an alias for <c>JSONSchema7</c>).
 /// </summary>
-public record OpenRpcSchema
+public record JsonSchema
 {
     /// <summary>
     /// JSON Schema type keyword, e.g. <c>"object"</c>, <c>"string"</c>, <c>"number"</c>,

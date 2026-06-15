@@ -20,5 +20,5 @@ public record OpenRpcContentDescriptor
     public bool? Required { get; set; }
 
     /// <summary>JSON Schema for the parameter or result.</summary>
-    public OpenRpcSchema Schema { get; set; } = new();
+    public JsonSchema Schema { get; set; } = new();
 }

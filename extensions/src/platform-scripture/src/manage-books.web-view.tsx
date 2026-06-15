@@ -138,11 +138,14 @@ type BookComparisonResult = { entries: BookComparisonEntry[] };
  * @experimental
  */
 interface ManageBooksNetworkObject {
+  /** @experimental */
   filterProjects: (input: {
     purpose: string;
     sourceProjectType?: string;
   }) => Promise<ProjectListResult>;
+  /** @experimental */
   isProjectShared: (projectId: string) => Promise<boolean>;
+  /** @experimental */
   createBooks: (request: {
     projectId: string;
     bookNumbers: number[];
@@ -150,7 +153,9 @@ interface ManageBooksNetworkObject {
     modelProjectId?: string;
     estherTemplate?: string;
   }) => Promise<MutationResult>;
+  /** @experimental */
   deleteBooks: (request: { projectId: string; bookNumbers: number[] }) => Promise<MutationResult>;
+  /** @experimental */
   copyBooks: (request: {
     fromProjectId: string;
     toProjectId: string;
@@ -163,17 +168,26 @@ interface ManageBooksNetworkObject {
      */
     replaceEntireBook?: boolean;
   }) => Promise<MutationResult>;
+  /** @experimental */
   importBooks: (input: {
     projectId: string;
     files: ImportFileEntry[];
     replaceEntireBook: boolean;
   }) => Promise<MutationResult>;
-  /** Per-book Copy comparison. */
+  /**
+   * Per-book Copy comparison.
+   *
+   * @experimental
+   */
   getBookComparison: (input: {
     fromProjectId: string;
     toProjectId: string;
   }) => Promise<BookComparisonResult>;
-  /** Per-book Import comparison; same wire shape as `getBookComparison`. */
+  /**
+   * Per-book Import comparison; same wire shape as `getBookComparison`.
+   *
+   * @experimental
+   */
   parseImportFiles: (input: {
     projectId: string;
     files: ImportFileEntry[];
