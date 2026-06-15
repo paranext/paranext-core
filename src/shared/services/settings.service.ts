@@ -14,16 +14,16 @@ import {
 } from '@shared/services/settings.service-model';
 
 let dataProvider: ISettingsService;
-let hasSubscribedToRequestTimeout = false;
 const initialize = createCachedInitializer(async () => {
   const provider = await dataProviderService.get(settingsServiceDataProviderName);
   if (!provider) throw new Error('Settings service undefined');
   dataProvider = provider;
   // Inject the network timeout into every JS process once the settings service is available.
   // We can't pull from within the network service as it would create a dependency loop.
-  // Guard so a retried initialization (after an earlier failure) doesn't add a duplicate subscription.
-  if (!hasSubscribedToRequestTimeout) {
-    dataProvider.subscribe('platform.requestTimeout', (newTimeout: number | PlatformError) => {
+  // Fire-and-forget: subscribing is a side effect, not part of providing the service, so a failure
+  // here is logged rather than failing (and retrying) the whole settings-service initialization.
+  dataProvider
+    .subscribe('platform.requestTimeout', (newTimeout: number | PlatformError) => {
       if (isPlatformError(newTimeout)) {
         logger.warn(
           `Settings service error while retrieving value for setting platform.requestTimeout: ${newTimeout}`,
@@ -36,9 +36,8 @@ const initialize = createCachedInitializer(async () => {
         return;
       }
       networkService.setRequestTimeout(newTimeout);
-    });
-    hasSubscribedToRequestTimeout = true;
-  }
+    })
+    .catch((error) => logger.warn(`Failed to subscribe to platform.requestTimeout: ${error}`));
 });
 
 export const settingsService = createSyncProxyForAsyncObject<ISettingsService>(async () => {
