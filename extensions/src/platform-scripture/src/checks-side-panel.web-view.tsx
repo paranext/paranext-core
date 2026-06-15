@@ -7,7 +7,8 @@ import {
   useWebViewController,
 } from '@papi/frontend/react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { ProjectSelectorOpenTab, useEvent, usePromise } from 'platform-bible-react';
+import { useEvent, usePromise } from 'platform-bible-react';
+import { ProjectSelectorOpenTab } from 'platform-bible-react/internal';
 import {
   deepEqual,
   getChaptersForBook,

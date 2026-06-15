@@ -898,7 +898,11 @@ declare module 'platform-scripture' {
 
   // #region Versification Types
 
-  /** Selector for {@link VersificationProjectInterfaceDataTypes.FinalVerseNumber}. */
+  /**
+   * Selector for {@link VersificationProjectInterfaceDataTypes.FinalVerseNumber}.
+   *
+   * @experimental
+   */
   export type FinalVerseNumberSelector = {
     /** 1-based book number. */
     bookNum: number;
@@ -912,6 +916,8 @@ declare module 'platform-scripture' {
    * `'platformScripture.versification'` setting; `set*` is not supported and will throw if called.
    * Consumers that need to react to versification changes can use the `subscribe*` methods, which
    * emit when the underlying versification setting changes.
+   *
+   * @experimental
    */
   export type VersificationProjectInterfaceDataTypes = {
     /** Final verse number in a given book + chapter, per the project's versification. */
@@ -941,6 +947,8 @@ declare module 'platform-scripture' {
    * Acquire via `papi.projectDataProviders.get('platformScripture.Versification', projectId)`
    * (backend) or the `useProjectDataProvider('platformScripture.Versification', projectId)` React
    * hook (frontend).
+   *
+   * @experimental
    */
   export type IVersificationProjectDataProvider =
     IProjectDataProvider<VersificationProjectInterfaceDataTypes> & {
@@ -1964,7 +1972,11 @@ declare module 'platform-scripture' {
   // Connection"). The web view acquires a typed proxy via
   // `papi.networkObjects.get<IChecklistService>('platformScripture.checklistService')`.
 
-  /** Configuration for equivalent marker pairs and marker filter (data-contracts.md §2.2). */
+  /**
+   * Configuration for equivalent marker pairs and marker filter (data-contracts.md §2.2).
+   *
+   * @experimental
+   */
   export type ChecklistMarkerSettings = {
     /** Space-separated marker pairs in "marker1/marker2" format. */
     equivalentMarkers: string;
@@ -1972,7 +1984,11 @@ declare module 'platform-scripture' {
     markerFilter: string;
   };
 
-  /** Identifies a comparative text for resolution (data-contracts.md §2.4). */
+  /**
+   * Identifies a comparative text for resolution (data-contracts.md §2.4).
+   *
+   * @experimental
+   */
   export type ChecklistComparativeTextRef = {
     /** GUID of the comparative text (preferred resolution method). */
     id: string;
@@ -1980,7 +1996,11 @@ declare module 'platform-scripture' {
     name: string;
   };
 
-  /** Primary input for `buildChecklistData` (data-contracts.md §2.1). */
+  /**
+   * Primary input for `buildChecklistData` (data-contracts.md §2.1).
+   *
+   * @experimental
+   */
   export type ChecklistRequest = {
     projectId: string;
     comparativeTextIds: string[];
@@ -1991,7 +2011,11 @@ declare module 'platform-scripture' {
     showVerseText: boolean;
   };
 
-  /** Discriminated-union response wrapper for `buildChecklistData` (data-contracts.md §3.1). */
+  /**
+   * Discriminated-union response wrapper for `buildChecklistData` (data-contracts.md §3.1).
+   *
+   * @experimental
+   */
   export type ChecklistResultResponse =
     | {
         success: true;
@@ -2009,14 +2033,22 @@ declare module 'platform-scripture' {
         message: string;
       };
 
-  /** Parsed/validated equivalent-marker settings (data-contracts.md §4.2). */
+  /**
+   * Parsed/validated equivalent-marker settings (data-contracts.md §4.2).
+   *
+   * @experimental
+   */
   export type MarkerSettingsValidationResult = {
     valid: boolean;
     parsedPairs: { marker1: string; marker2: string }[] | undefined;
     errorMessage: string | undefined;
   };
 
-  /** Resolved comparative-text payload (data-contracts.md §4.5). */
+  /**
+   * Resolved comparative-text payload (data-contracts.md §4.5).
+   *
+   * @experimental
+   */
   export type ResolvedComparativeTexts = {
     texts: {
       id: string;
@@ -2030,6 +2062,8 @@ declare module 'platform-scripture' {
    * Typed proxy for the `platformScripture.checklistService` NetworkObject. Methods mirror
    * data-contracts.md §§4.1 / 4.2 / 4.5. Acquired via
    * `papi.networkObjects.get<IChecklistService>(...)`.
+   *
+   * @experimental
    */
   export interface IChecklistService {
     /** Generate checklist data for the supplied request (data-contracts.md §4.1). */
@@ -2088,6 +2122,7 @@ declare module 'papi-shared-types' {
     'platformScripture.USJ_Verse': IUSJVerseProjectDataProvider;
     'platformScripture.PlainText_Verse': IPlainTextVerseProjectDataProvider;
     'platformScripture.MarkerNames': IMarkerNamesProjectDataProvider;
+    /** @experimental */
     'platformScripture.Versification': IVersificationProjectDataProvider;
     'platformScripture.findInScripture': IFindInScriptureProjectDataProvider;
     'platformScripture.replaceWithUsfm': IReplaceWithUsfmProjectDataProvider;
@@ -2164,6 +2199,8 @@ declare module 'papi-shared-types' {
     /**
      * Open the Markers Checklist web view. Resolves the target project from the supplied
      * `webViewId` (of an editor tab) when provided.
+     *
+     * @experimental
      */
     'platformScripture.openMarkersChecklist': (
       webViewId?: string | undefined,
@@ -2172,6 +2209,8 @@ declare module 'papi-shared-types' {
     /**
      * Open the Marker Settings dialog for the Markers Checklist. Wired as a stub in UI-PKG-001 and
      * replaced with the real dialog launcher in UI-PKG-003.
+     *
+     * @experimental
      */
     'platformScripture.openMarkersChecklistSettings': () => Promise<void>;
 
@@ -2187,6 +2226,8 @@ declare module 'papi-shared-types' {
      * that web view's project; otherwise the value is treated as a project id and the dialog opens
      * for that project directly. Pass `undefined` to open the dialog with the project picker
      * visible.
+     *
+     * @experimental
      */
     'platformScripture.openManageBooks': (
       webViewIdOrProjectId?: string | undefined,
@@ -2311,6 +2352,8 @@ declare module 'papi-shared-types' {
     /**
      * Emitted by the tab menu when the user opens the markers-checklist settings. The web view
      * subscribes to flip its internal settings panel open.
+     *
+     * @experimental
      */
     'platformScripture.openMarkersChecklistSettings': undefined;
   }

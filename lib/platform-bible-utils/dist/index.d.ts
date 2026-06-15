@@ -1106,6 +1106,12 @@ export type OrderedItem = {
 export type OrderedExtensibleContainer = OrderedItem & {
 	/** Determines whether other items can be added to this after it has been defined */
 	isExtensible?: boolean;
+	/**
+	 * Set to `true` to mark this extension point as experimental. Experimental menu content may
+	 * change or be removed without notice. Extensions reading this should treat the marker as
+	 * informational.
+	 */
+	isExperimental?: boolean;
 };
 /** Group of menu items that belongs in a column */
 export type MenuGroupDetailsInColumn = OrderedExtensibleContainer & {
@@ -1176,6 +1182,12 @@ export type ColumnsWithHeaders = {
 	[property: ReferencedItem]: MenuColumnWithHeader;
 	/** Defines whether columns can be added to this multi-column menu */
 	isExtensible?: boolean;
+	/**
+	 * Set to `true` to mark this columns collection as experimental. Experimental menu content may
+	 * change or be removed without notice. Extensions reading this should treat the marker as
+	 * informational.
+	 */
+	isExperimental?: boolean;
 };
 /** Menu that contains a column without a header */
 export type SingleColumnMenu = {
@@ -1201,6 +1213,12 @@ export type WebViewMenu = {
 	topMenu: MultiColumnMenu | undefined;
 	/** Menu that opens when you right click on the main body/area of a tab */
 	contextMenu: SingleColumnMenu | undefined;
+	/**
+	 * Set to `true` to mark this WebView menu as experimental. Experimental menu content may change
+	 * or be removed without notice. Extensions reading this should treat the marker as
+	 * informational.
+	 */
+	isExperimental?: boolean;
 };
 /** Menus for all web views */
 export type WebViewMenus = {
@@ -1288,6 +1306,10 @@ export declare const menuDocumentSchema: {
 							description: string;
 							type: string;
 						};
+						isExperimental: {
+							description: string;
+							type: string;
+						};
 					};
 					required: string[];
 					additionalProperties: boolean;
@@ -1298,7 +1320,12 @@ export declare const menuDocumentSchema: {
 					description: string;
 					type: string;
 				};
+				isExperimental: {
+					description: string;
+					type: string;
+				};
 			};
+			additionalProperties: boolean;
 		};
 		menuGroups: {
 			description: string;
@@ -1321,6 +1348,10 @@ export declare const menuDocumentSchema: {
 								description: string;
 								type: string;
 							};
+							isExperimental: {
+								description: string;
+								type: string;
+							};
 							menuItem?: undefined;
 						};
 						required: string[];
@@ -1336,6 +1367,10 @@ export declare const menuDocumentSchema: {
 								type: string;
 							};
 							isExtensible: {
+								description: string;
+								type: string;
+							};
+							isExperimental: {
 								description: string;
 								type: string;
 							};
@@ -1471,6 +1506,10 @@ export declare const menuDocumentSchema: {
 					description: string;
 					$ref: string;
 				};
+				isExperimental: {
+					description: string;
+					type: string;
+				};
 			};
 			additionalProperties: boolean;
 		};
@@ -1571,15 +1610,6 @@ export declare function scrRefToBBBCCCVVV(scrRef: SerializedVerseRef): number;
 export declare function compareScrRefs(scrRef1: SerializedVerseRef, scrRef2: SerializedVerseRef): number;
 /** Get the localized string key for a given scroll group Id (or no scroll group if `undefined`) */
 export declare function getLocalizeKeyForScrollGroupId(scrollGroupId: ScrollGroupId | undefined | "undefined"): LocalizeKey;
-/**
- * Default English localizations for scroll group ids: `'Ø'` for `undefined` and `'A'`–`'Z'` for ids
- * 0–25. Keyed by {@link getLocalizeKeyForScrollGroupId}. Used as the fallback map for
- * scroll-group-aware UI (selectors, badges, chips) before user-supplied localized strings load and
- * as a stable lookup table for code that only needs the letter representation.
- */
-export declare const DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS: {
-	[x: string]: string;
-};
 /**
  * Gets a list of localized string keys for provided scroll group Ids. Uses
  * {@link getLocalizeKeyForScrollGroupId} internally
