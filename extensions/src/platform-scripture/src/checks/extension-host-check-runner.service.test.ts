@@ -6,6 +6,7 @@ import type { ICheckRunner } from 'platform-scripture';
 // extensions/vitest.config.ts). vi.resetModules() is used per test because the service caches its
 // initialization (createCachedInitializer) and the engine instance at module scope, so each test
 // re-imports both the service and the mock to start from a clean slate.
+/** Re-imports the check-runner service fresh with its mocked dependencies. */
 async function loadService() {
   vi.resetModules();
   const { default: papi, dataProviders } = await import('@papi/backend');

@@ -208,7 +208,11 @@ describe('recentlyOpenedProjectsService initialization', () => {
     getRecentProjects: vi.fn(),
   } as unknown as IDisposableDataProvider<IRecentlyOpenedProjectsService>;
 
-  // initialize caches module-level state, so load a fresh copy for each test
+  /**
+   * Re-imports the service fresh and returns it with the mocked `registerEngine`.
+   *
+   * `initialize` caches module-level state, so load a fresh copy for each test.
+   */
   async function importFreshService() {
     vi.resetModules();
     const { default: papi } = await import('@papi/backend');

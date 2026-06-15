@@ -6,6 +6,7 @@ import type { ICheckAggregatorService } from 'platform-scripture';
 // extensions/vitest.config.ts). vi.resetModules() is used per test because the service caches its
 // initialization (createCachedInitializer), so each test re-imports a fresh copy. initialize() is
 // what the serviceObject proxy awaits on every use, so testing it directly covers proxy access too.
+/** Re-imports the aggregator service fresh and returns it with the mocked registerEngine. */
 async function loadService() {
   vi.resetModules();
   const { default: papi } = await import('@papi/backend');

@@ -552,8 +552,12 @@ describe('worker exit event', () => {
 });
 
 describe('initialize (cleanup on failed setup)', () => {
-  // initialize is a cached initializer with module-level state, so re-import a fresh module per
-  // test to start from an uninitialized state (mocks persist across vi.resetModules).
+  /**
+   * Re-imports the database service host fresh and returns its `initialize` function.
+   *
+   * `initialize` is a cached initializer with module-level state, so re-import a fresh module per
+   * test to start from an uninitialized state (mocks persist across `vi.resetModules`).
+   */
   async function importInitialize(): Promise<() => Promise<void>> {
     vi.resetModules();
     const module = await import('@extension-host/services/database.service-host');

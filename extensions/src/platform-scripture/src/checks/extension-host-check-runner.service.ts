@@ -443,7 +443,11 @@ const initializeCheckRunner = createCachedInitializer(async () => {
   }
 });
 
-// Hoisted wrapper because initialize and registerCheck reference each other
+/**
+ * Runs the cached check-runner initializer.
+ *
+ * Hoisted wrapper because initialize and registerCheck reference each other.
+ */
 async function initialize(): Promise<void> {
   return initializeCheckRunner();
 }
