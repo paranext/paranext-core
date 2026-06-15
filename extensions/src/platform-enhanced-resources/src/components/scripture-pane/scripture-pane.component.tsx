@@ -127,19 +127,29 @@ const RIGHT_MOUSE_BUTTON = 2;
  *   Carries no background of its own - see the equal-specificity note below.
  * - `marble-note`: linked study/cross-ref note. Renders as a footnote-style affordance.
  * - `er-marble-highlight-all` (Color A): direct CSS class on existing marble-word mark DOM elements,
- *   applied when the "Highlight all research terms" toolbar toggle is on. Pale blue so the page
- *   doesn't become visually noisy. NOT applied via `editor.setAnnotation`: doing so triggers the
- *   wrap-merge-replace cycle that destroys+recreates the marble-word mark element, which loses the
- *   original mouseenter/mouseleave bindings (verified in Storybook: hover stopped firing after
- *   toggling highlight-all off again). Same workaround pattern as the hover-match class (D-15).
+ *   applied when the "Highlight all research terms" toolbar toggle is on. Subtle background tint so
+ *   the page doesn't become visually noisy. NOT applied via `editor.setAnnotation`: doing so
+ *   triggers the wrap-merge-replace cycle that destroys+recreates the marble-word mark element,
+ *   which loses the original mouseenter/mouseleave bindings (verified in Storybook: hover stopped
+ *   firing after toggling highlight-all off again). Same workaround pattern as the hover-match
+ *   class (D-15).
  * - `marble-filter`: per-mark filter overlay applied via `editor.setAnnotation` to the one
  *   marble-word mark whose `annotationId` matches the active filter token.
  * - `er-marble-hover-match` (Color B): direct CSS class on existing marble-word mark DOM elements
  *   (not a setAnnotation type - see handleMarbleMouseEnter for the D-15 rationale). Applied to
  *   every word in the lemma group of the currently-hovered word, including the hovered word itself,
- *   so the entire matching expression reads as one visually unified group. Deeper blue than Color
- *   A. Has higher CSS specificity (two classes vs. one) than `er-marble-highlight-all`, so it wins
- *   over Color A while the highlight-all toggle is also on.
+ *   so the entire matching expression reads as one visually unified group. Same hue as Color A but
+ *   more opaque - so the two states stay related ("highlight" vs "hovered group highlight") while
+ *   reading as distinct intensities. Has higher CSS specificity (two classes vs. one) than
+ *   `er-marble-highlight-all`, so it wins over Color A while the highlight-all toggle is also on.
+ *
+ * Color choice: each overlay uses `color-mix(in oklab, var(--<token>) N%, transparent)` rather than
+ * a literal `hsl(...)`. This adapts to the light / dark / paratext-light / paratext-dark themes
+ * defined in `lib/platform-bible-react/src/index.css`: in light mode `--primary` is dark slate so
+ * the overlay reads as a subtle dark tint over light text; in dark mode `--primary` is light slate
+ * so the overlay reads as a subtle light tint over dark text. The same shape applies to `--warning`
+ * (amber-400 in light, amber-900 in dark) for the filter overlay - it stays semantically "filter is
+ * active" but adapts contrast across themes.
  *
  * These styles ship with the component (injected via `useStylesheet`) rather than in the
  * web-view-level SCSS bundle so the component renders the same in Storybook, in extracted
@@ -167,18 +177,18 @@ mark {
   cursor: pointer;
   /* Marble-note keeps the primary color (footnote-style affordance) - it intentionally
      stands out, unlike marble-word. */
-  color: hsl(var(--primary));
+  color: var(--primary);
 }
 .editor-typed-mark-external-marble-word.er-marble-highlight-all {
-  background-color: hsl(210 100% 90%);
+  background-color: color-mix(in oklab, var(--primary) 18%, transparent);
   border-radius: 2px;
 }
 .editor-typed-mark-external-marble-filter {
-  background-color: hsl(45 100% 75%);
+  background-color: color-mix(in oklab, var(--warning) 70%, transparent);
   border-radius: 2px;
 }
 .editor-typed-mark-external-marble-word.er-marble-hover-match {
-  background-color: hsl(210 100% 75%);
+  background-color: color-mix(in oklab, var(--primary) 38%, transparent);
   border-radius: 2px;
 }
 `;
@@ -479,6 +489,29 @@ function makeEditorialLogger(): {
 // follow the stable-reference pattern (EDITORIAL_OPTIONS) to avoid forcing reconciliations.
 const EDITORIAL_LOGGER = makeEditorialLogger();
 
+/**
+ * Toggle a CSS class on every `<mark>` element Editorial emitted for the given annotation id. The
+ * marble-word marks carry a `annotationId-${id}` class as part of their `className`, so this is the
+ * canonical pattern for the two purely-cosmetic overlays (hover-match + highlight-all) - see the
+ * Effect C and `handleMarbleMouseEnter` rationale comments for why we don't go through
+ * `editor.setAnnotation`. The caller passes the document the marks live in so every call-site is
+ * explicit about which document tree it's querying (the marks live inside Editorial's render tree -
+ * `target.ownerDocument` for handlers wired via Editorial, the component's container ownerDocument
+ * for effect-level cleanup. These resolve to the same document today, but the helper enforces a
+ * single consistent reference for any future refactor that breaks that assumption).
+ */
+function toggleMarkClassByAnnotationId(
+  ownerDoc: Document,
+  annotationId: string,
+  className: string,
+  action: 'add' | 'remove',
+): void {
+  const markElements = ownerDoc.querySelectorAll(`[class~="annotationId-${annotationId}"]`);
+  markElements.forEach((markElement) => {
+    markElement.classList[action](className);
+  });
+}
+
 // Module-level no-op defaults so omitting the callbacks does not generate a fresh
 // function identity on every render (which would falsely invalidate the annotation
 // effect's dependency array). Identity-stable defaults are the cheapest way to
@@ -508,6 +541,14 @@ export function EnhancedScripturePane({
   // Editorial's forwarded ref is typed `EditorRef | null`; we match that to satisfy the prop type.
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | null>(null);
+  // Container ref used as the single source-of-truth for `ownerDocument` when querying for
+  // marble-word marks (see `toggleMarkClassByAnnotationId`). The component, the Editorial editor,
+  // and the marks it emits all live in the same document today, but routing every queried document
+  // through this ref means a future refactor that mounts the editor in a separate frame would break
+  // here in one place (the hover-match / highlight-all classes would no-op) rather than divergently
+  // across five call-sites.
+  // eslint-disable-next-line no-null/no-null
+  const containerRef = useRef<HTMLDivElement | null>(null);
   // Inject the marble annotation stylesheet so the `<mark>` elements Editorial creates have a
   // visible treatment. The stylesheet is static; useStylesheet adds a single `<style>` tag for
   // the lifetime of this component.
@@ -634,6 +675,22 @@ export function EnhancedScripturePane({
   const lastSyncedUsjRef = useRef<Usj | undefined>(usj);
   const usjEpochRef = useRef(0);
   const usjJustChangedRef = useRef(true);
+  // D-013 (cont.) — coordination between Effect A (applies marble-word marks via the editor's
+  // async update queue) and Effect C (toggles the highlight-all CSS class on those marks). Effect A
+  // sets this ref to its captured epoch after the first chunk's setAnnotation calls have been
+  // committed; Effect C reads it before applying so a usj-swap-triggered re-run waits for Effect
+  // A's marks to land in the DOM instead of running querySelectorAll against the previous chapter's
+  // marks (or nothing, if Effect A is still mid-deferral). Initialized to -1 so the first epoch (0)
+  // is correctly observed as "not yet committed."
+  const marksAppliedForEpochRef = useRef(-1);
+
+  // Shared subset of word-kind annotations used by both Effect A (apply marble-word marks) and
+  // Effect C (toggle highlight-all class). Computed once per `annotations` change so the two
+  // effects observe an identical list and we don't re-filter on every render.
+  const wordAnnotations = useMemo(
+    () => annotations.filter((a) => a.kind === 'word'),
+    [annotations],
+  );
   useEffect(() => {
     // First-mount: Editorial consumed `defaultUsj`. Record the value and skip the imperative push.
     if (lastSyncedUsjRef.current === usj) return;
@@ -667,8 +724,8 @@ export function EnhancedScripturePane({
     // Notes are excluded from setAnnotation: in readonly mode the editor renders note callers as
     // ImmutableNoteCallerNode (DecoratorNode) whose content children don't exist in the Lexical tree,
     // so any USJ path into note content silently fails to resolve. Notes remain clickable via the
-    // editor's caller node rendering; we just don't add a mark overlay for them.
-    const wordAnnotations = annotations.filter((a) => a.kind === 'word');
+    // editor's caller node rendering; we just don't add a mark overlay for them. `wordAnnotations`
+    // is the component-scope memoized list shared with Effect C.
     let cancelled = false;
     const CHUNK_SIZE = 50;
 
@@ -810,14 +867,14 @@ export function EnhancedScripturePane({
       }
 
       // D-15 final fix: remove the CSS class instead of removing an editor annotation.
-      // See handleMarbleMouseEnter for the full rationale.
+      // See handleMarbleMouseEnter for the full rationale. The document we query against is the
+      // component container's ownerDocument (single source of truth across all five toggle
+      // call-sites - see `toggleMarkClassByAnnotationId`); falling back to globalThis.document
+      // before the container ref is populated is harmless because cleanup only runs after at
+      // least one render commit.
+      const ownerDoc = containerRef.current?.ownerDocument ?? globalThis.document;
       activeMatchSetRef.current.forEach((matchId) => {
-        const markElements = globalThis.document.querySelectorAll(
-          `[class~="annotationId-${matchId}"]`,
-        );
-        markElements.forEach((markElement) => {
-          markElement.classList.remove('er-marble-hover-match');
-        });
+        toggleMarkClassByAnnotationId(ownerDoc, matchId, 'er-marble-hover-match', 'remove');
       });
       activeMatchSetRef.current.clear();
     };
@@ -885,15 +942,11 @@ export function EnhancedScripturePane({
       // working-docs/2026-05-15-er-editor-integration-audit.md.
       // `target.ownerDocument` resolves to the iframe document the marble-word marks live in
       // (the component runs inside the same webview iframe, but using ownerDocument is the
-      // more robust pattern).
+      // more robust pattern). It also matches `containerRef.current?.ownerDocument` used by the
+      // four cleanup call-sites, so all five paths agree on a single document reference.
       const { ownerDocument } = target;
       matchingIds.forEach((matchingId) => {
-        const markElements = ownerDocument.querySelectorAll(
-          `[class~="annotationId-${matchingId}"]`,
-        );
-        markElements.forEach((markElement) => {
-          markElement.classList.add('er-marble-hover-match');
-        });
+        toggleMarkClassByAnnotationId(ownerDocument, matchingId, 'er-marble-hover-match', 'add');
         activeMatchSetRef.current.add(matchingId);
       });
     };
@@ -916,10 +969,13 @@ export function EnhancedScripturePane({
     // D-013: capture the epoch at effect-run start. If the USJ changes again before we finish,
     // usjEpochRef.current advances and we abort the rest of this run.
     const myEpoch = usjEpochRef.current;
-    // D-013: when usj just changed, defer the first chunk by one RAF so the editor's
-    // setUsj-driven Lexical re-render has a chance to commit before we apply setAnnotation calls
-    // against the new tree. On first mount Editorial consumed `defaultUsj` synchronously and the
-    // tree is already ready, so no deferral is needed there.
+    // D-013: defer the first chunk by one RAF whenever usj just changed - the editor's
+    // setUsj-driven Lexical re-render needs a chance to commit before we apply setAnnotation calls
+    // against the new tree. `usjJustChangedRef` is initialized to `true` (see ref declaration
+    // comment above) so the very first Effect A run on mount also defers; although Editorial
+    // consumes `defaultUsj` synchronously, the Lexical tree it builds is committed inside React
+    // effects that haven't run yet when this effect first fires, and without this deferral every
+    // setAnnotation call silently fails to resolve (verified in Storybook).
     const shouldDeferFirstChunk = usjJustChangedRef.current;
     usjJustChangedRef.current = false;
     const applyChunked = async () => {
@@ -928,6 +984,11 @@ export function EnhancedScripturePane({
           requestAnimationFrame(() => resolve());
         });
         if (cancelled || myEpoch !== usjEpochRef.current) return;
+      }
+      // No word annotations to apply: signal "ready" for this epoch immediately so Effect C
+      // doesn't wait pointlessly when the only annotations are notes.
+      if (wordAnnotations.length === 0) {
+        marksAppliedForEpochRef.current = myEpoch;
       }
       for (let i = 0; i < wordAnnotations.length; i += CHUNK_SIZE) {
         if (cancelled || myEpoch !== usjEpochRef.current) return;
@@ -968,6 +1029,12 @@ export function EnhancedScripturePane({
             });
           }
         }
+        // After each chunk's setAnnotation calls are made, signal that Effect A has committed
+        // marks for this epoch so Effect C (highlight-all) can stop waiting. Setting it every
+        // chunk is harmless (the value only goes up), but the load-bearing case is the first
+        // chunk - that's when Effect C is allowed to proceed. See `marksAppliedForEpochRef`
+        // declaration for the coordination contract.
+        marksAppliedForEpochRef.current = myEpoch;
         if (i + CHUNK_SIZE < wordAnnotations.length) {
           // Yield to the event loop so mousedown / setFocus / paint can run.
           // eslint-disable-next-line no-await-in-loop
@@ -992,6 +1059,11 @@ export function EnhancedScripturePane({
     // populated. The ref object itself never changes identity (useRef), but the lint rule can't
     // prove that - capturing here also makes intent explicit.
     const matchSet = activeMatchSetRef.current;
+    // Capture the container's ownerDocument at effect-run time. react-hooks/exhaustive-deps
+    // (correctly) warns that reading `containerRef.current` inside the cleanup function risks
+    // observing a stale value - capturing here makes the cleanup deterministic against the
+    // document the effect saw at apply-time.
+    const ownerDocAtEffectRun = containerRef.current?.ownerDocument ?? globalThis.document;
 
     return () => {
       cancelled = true;
@@ -1008,15 +1080,15 @@ export function EnhancedScripturePane({
         // eslint-disable-next-line no-null/no-null
         activePopoverIdRef.current = null;
       }
-      // D-15 final fix: hover-match is a CSS class on the marble-word marks (not an
-      // editor annotation), so cleanup removes the class via querySelectorAll.
+      // D-15 final fix: hover-match is a CSS class on the marble-word marks (not an editor
+      // annotation), so cleanup removes the class via the shared helper.
       matchSet.forEach((matchId) => {
-        const markElements = globalThis.document.querySelectorAll(
-          `[class~="annotationId-${matchId}"]`,
+        toggleMarkClassByAnnotationId(
+          ownerDocAtEffectRun,
+          matchId,
+          'er-marble-hover-match',
+          'remove',
         );
-        markElements.forEach((markElement) => {
-          markElement.classList.remove('er-marble-hover-match');
-        });
       });
       matchSet.clear();
       currentlyHoveredIdRef.current = undefined;
@@ -1066,28 +1138,49 @@ export function EnhancedScripturePane({
     // The set of marble-word annotation ids the editor has currently emitted. Captured at effect
     // run so cleanup removes the class from the same elements (the editor MAY have recreated some
     // marks in between, but we always query by class selector so we still find the live elements).
-    const wordAnnotationIds = annotations
-      .filter((a) => a.kind === 'word')
-      .map((a) => a.annotationId);
+    const wordAnnotationIds = wordAnnotations.map((a) => a.annotationId);
 
     // querySelectorAll runs synchronously against the document at the moment the effect fires. On
     // first toggle-on, the marble-word marks should already be in the DOM (Effect A has applied
-    // them by the time the user can click the toggle); on a usj swap that happens to also flip the
-    // toggle the marble-word marks are committed by the time Effect A's RAF resolves, but this
-    // effect doesn't wait — so do a short RAF wait first to mirror Effect A's mount-time
-    // deferral. The cost is one frame; the alternative is the toggle silently no-oping when it
-    // races a chapter change.
+    // them by the time the user can click the toggle).
+    //
+    // On a chapter swap (usj changes) Effect A and Effect C both re-run in the same React commit,
+    // and Effect A's first setAnnotation calls go through Lexical's async editor.update queue -
+    // the <mark> DOM elements are NOT guaranteed to exist when our RAF callback fires in the same
+    // frame. Without coordination, querySelectorAll would find zero matches and the highlight-all
+    // toggle would silently no-op for that chapter (lyonsil PR feedback).
+    //
+    // Coordination: Effect A sets `marksAppliedForEpochRef.current = myEpoch` after its first
+    // chunk's setAnnotation calls complete; we capture the same epoch here and wait (RAF-polling,
+    // bounded by a defensive max-retry) until Effect A signals it has caught up. Then one
+    // additional RAF lets Lexical's update queue flush to the DOM before we toggle classes.
     let cancelled = false;
+    const myEpoch = usjEpochRef.current;
+    const MAX_RAF_RETRIES = 30; // ≈500ms at 60fps - defensive bound, normal path hits 1-2 retries.
+    // Capture the container's ownerDocument at effect-run time so cleanup uses the same document
+    // the apply ran against (see Effect A for the same pattern + react-hooks/exhaustive-deps
+    // rationale).
+    const ownerDocAtEffectRun = containerRef.current?.ownerDocument ?? globalThis.document;
     const applyHighlightAll = async () => {
+      for (let attempt = 0; attempt < MAX_RAF_RETRIES; attempt += 1) {
+        if (marksAppliedForEpochRef.current >= myEpoch) break;
+        // Sequential RAF polling is required here: we need to re-check the epoch + cancellation
+        // flag between each frame and bail early if either changes. Promise.all/race wouldn't
+        // give us per-iteration abort semantics.
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => resolve());
+        });
+        if (cancelled || usjEpochRef.current !== myEpoch) return;
+      }
+      // One more RAF after Effect A's signal so the editor.update queue has time to commit the
+      // marks to the DOM before we query for them.
       await new Promise<void>((resolve) => {
         requestAnimationFrame(() => resolve());
       });
-      if (cancelled) return;
+      if (cancelled || usjEpochRef.current !== myEpoch) return;
       wordAnnotationIds.forEach((id) => {
-        const markElements = globalThis.document.querySelectorAll(`[class~="annotationId-${id}"]`);
-        markElements.forEach((markElement) => {
-          markElement.classList.add('er-marble-highlight-all');
-        });
+        toggleMarkClassByAnnotationId(ownerDocAtEffectRun, id, 'er-marble-highlight-all', 'add');
       });
     };
     applyHighlightAll().catch((err) => {
@@ -1101,13 +1194,10 @@ export function EnhancedScripturePane({
     return () => {
       cancelled = true;
       wordAnnotationIds.forEach((id) => {
-        const markElements = globalThis.document.querySelectorAll(`[class~="annotationId-${id}"]`);
-        markElements.forEach((markElement) => {
-          markElement.classList.remove('er-marble-highlight-all');
-        });
+        toggleMarkClassByAnnotationId(ownerDocAtEffectRun, id, 'er-marble-highlight-all', 'remove');
       });
     };
-  }, [annotations, highlightAllResearchTerms]);
+  }, [wordAnnotations, highlightAllResearchTerms]);
 
   if (errorMessage) {
     return (
@@ -1148,6 +1238,7 @@ export function EnhancedScripturePane({
 
   return (
     <div
+      ref={containerRef}
       className="tw:flex tw:h-full tw:flex-col tw:overflow-hidden"
       data-testid="er-scripture-pane"
     >
