@@ -44,12 +44,27 @@ test.describe('UI Interaction', () => {
       undefined,
       SETTINGS_REGISTRATION_TIMEOUT_MS,
     );
-    await sendPapiRequestOnce(
-      SETTINGS_SET_METHOD,
-      ['platform.interfaceLanguage', ['en']],
-      undefined,
-      SLOW_CI_PAPI_TIMEOUT_MS,
-    );
+    // The PAPI server sometimes responds with "Web socket N has closed" when the
+    // extension host's internal connection is briefly reset during startup. This
+    // is transient: re-confirm the method is still registered and retry the call.
+    for (let attempt = 1; ; attempt++) {
+      try {
+        await sendPapiRequestOnce(
+          SETTINGS_SET_METHOD,
+          ['platform.interfaceLanguage', ['en']],
+          undefined,
+          SLOW_CI_PAPI_TIMEOUT_MS,
+        );
+        break;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (attempt >= 3 || !msg.includes('Web socket')) throw err;
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 2_000);
+        });
+        await waitForPapiMethodRegistered(SETTINGS_SET_METHOD, undefined, 30_000);
+      }
+    }
   });
 
   test('should open the About dialog from the Help menu', async ({ mainPage }) => {
