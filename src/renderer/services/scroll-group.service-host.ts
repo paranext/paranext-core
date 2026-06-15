@@ -1,6 +1,9 @@
 import { logger } from '@shared/services/logger.service';
 import { networkObjectService } from '@shared/services/network-object.service';
-import { createNetworkEventEmitter } from '@shared/services/network.service';
+import {
+  createBufferedNetworkEventEmitter,
+  getNetworkEvent,
+} from '@shared/services/network.service';
 import {
   EVENT_NAME_ON_DID_UPDATE_SCR_REF,
   IScrollGroupRemoteService,
@@ -14,9 +17,35 @@ import {
   deepClone,
   deserialize,
   isPlatformError,
+  type PlatformEvent,
   ScrollGroupId,
   serialize,
 } from 'platform-bible-utils';
+
+/**
+ * Buffered emitter for changing the Scripture reference on a scroll group. Buffered (and created at
+ * module load, before the scrRefs migration below which can call `setScrRefSync`) so a verse-ref
+ * change from a UI handler that fires before central registration completes is kept — the latest
+ * per scroll group — and flushed once registration finishes, rather than throwing after the local
+ * state was already mutated and persisted.
+ */
+const onDidUpdateScrRefBufferedEmitter = createBufferedNetworkEventEmitter(
+  EVENT_NAME_ON_DID_UPDATE_SCR_REF,
+  {
+    notification: {
+      summary: 'Emitted when the Scripture reference for a scroll group changes.',
+      params: [
+        {
+          name: 'update',
+          required: true,
+          summary: 'The scroll group and its new Scripture reference.',
+          schema: { type: 'object' },
+        },
+      ],
+    },
+  },
+  { bufferStrategy: { latestByKey: (update) => String(update.scrollGroupId) } },
+);
 
 const DEFAULT_SCR_REF: SerializedVerseRef = Object.freeze({
   book: 'GEN',
@@ -55,11 +84,6 @@ function saveScrRefs() {
   localStorage.setItem(SCR_REFS_STORAGE_KEY, serialize(scrRefs));
 }
 
-/** Emitter for changing Scripture reference on a scroll group */
-const onDidUpdateScrRefEmitter = createNetworkEventEmitter<ScrollGroupUpdateInfo>(
-  EVENT_NAME_ON_DID_UPDATE_SCR_REF,
-);
-
 /**
  * All Scroll Group IDs that are intended to be shown in scroll group selectors. This is a
  * placeholder and will be refactored significantly in
@@ -68,7 +92,9 @@ const onDidUpdateScrRefEmitter = createNetworkEventEmitter<ScrollGroupUpdateInfo
 export const availableScrollGroupIds = [undefined, ...Array(5).keys()];
 
 /** Event that emits with information about a changed Scripture Reference for a scroll group */
-export const onDidUpdateScrRef = onDidUpdateScrRefEmitter.event;
+export const onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo> = getNetworkEvent(
+  EVENT_NAME_ON_DID_UPDATE_SCR_REF,
+);
 
 /** See {@link IScrollGroupRemoteService.getScrRef} */
 export function getScrRefSync(scrollGroupId: ScrollGroupId = 0): SerializedVerseRef {
@@ -106,10 +132,14 @@ export function setScrRefSync(
   if (compareScrRefs(scrRefs[scrollGroupIdDefaulted] ?? DEFAULT_SCR_REF, scrRefClone) === 0)
     return false;
 
-  // Update the scr ref and send out an event
+  // Update the scr ref and send out an event. The buffered emitter is usable immediately; if it
+  // hasn't finished registering yet, the latest update per scroll group is buffered and flushed.
   scrRefs[scrollGroupIdDefaulted] = scrRefClone;
   saveScrRefs();
-  onDidUpdateScrRefEmitter.emit({ scrollGroupId: scrollGroupIdDefaulted, scrRef: scrRefClone });
+  onDidUpdateScrRefBufferedEmitter.emit({
+    scrollGroupId: scrollGroupIdDefaulted,
+    scrRef: scrRefClone,
+  });
 
   if (shouldSetVerseRefSetting && scrollGroupIdDefaulted === 0)
     (async () => {

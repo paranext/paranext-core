@@ -1,5 +1,6 @@
 import papi, { logger } from '@papi/backend';
 import { ExecutionActivationContext, ProjectSettingValidator } from '@papi/core';
+import { PlatformEventEmitter } from 'platform-bible-utils';
 import { CheckResultsInvalidated } from 'platform-scripture';
 import {
   ChecksSidePanelWebViewOptions,
@@ -197,9 +198,7 @@ async function openMarkersChecklist(webViewId: string | undefined): Promise<stri
  * still succeed (no-op) if the emitter hasn't been initialized yet (e.g. in tests that stub out
  * activation).
  */
-let openSettingsEventEmitter:
-  | ReturnType<typeof papi.network.createNetworkEventEmitter<undefined>>
-  | undefined;
+let openSettingsEventEmitter: PlatformEventEmitter<undefined> | undefined;
 
 async function openMarkersChecklistSettings(): Promise<void> {
   if (!openSettingsEventEmitter) {
@@ -324,8 +323,14 @@ export async function activate(context: ExecutionActivationContext) {
   // command handler is exposed. The web-view subscribes to this event (via `useEvent`) and flips
   // its local `isSettingsOpen` state when it fires. The emitter is disposed through
   // `context.registrations` below so re-activation gets a fresh channel.
-  openSettingsEventEmitter = papi.network.createNetworkEventEmitter<undefined>(
+  openSettingsEventEmitter = await papi.network.createNetworkEventEmitterAsync(
     CHECKLIST_OPEN_SETTINGS_EVENT,
+    {
+      notification: {
+        summary: 'Asks any mounted Markers Checklist web view to open its Marker Settings dialog.',
+        params: [],
+      },
+    },
   );
 
   const scriptureExtenderPdpefPromise =

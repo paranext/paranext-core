@@ -57,13 +57,17 @@ export type {
   MethodDocumentationWithoutName,
   NetworkObjectDocumentation,
   SingleMethodDocumentation,
+  SingleNotificationDocumentation,
 } from '@shared/models/openrpc.model';
 export type {
   ExtensionDataScope,
   MandatoryProjectDataTypes,
 } from '@shared/models/project-data-provider.model';
 export type { IProjectDataProviderEngine } from '@shared/models/project-data-provider-engine.model';
-export type { IProjectDataProviderEngineFactory } from '@shared/models/project-data-provider-engine-factory.model.ts';
+export type {
+  IProjectDataProviderEngineFactory,
+  ProjectDataProviderEngineEnvelope,
+} from '@shared/models/project-data-provider-engine-factory.model.ts';
 export type {
   IProjectDataProviderFactory,
   ProjectMetadataFilterOptions,
@@ -87,6 +91,11 @@ export type {
   IDisposableWebViewProvider,
   IWebViewProvider,
 } from '@shared/models/web-view-provider.model';
+export type {
+  CloseWebViewEvent,
+  OpenWebViewEvent,
+  UpdateWebViewEvent,
+} from '@shared/services/web-view.service-model';
 export type { AppInfo } from '@shared/services/app.service-model';
 export type {
   NamedSqlParameters,
@@ -102,7 +111,10 @@ export type {
   SimultaneousProjectSettingsChanges,
   ProjectSettingValidator,
 } from '@shared/services/project-settings.service-model';
-export type { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
+export type {
+  ScrollGroupScrRef,
+  ScrollGroupUpdateInfo,
+} from '@shared/services/scroll-group.service-model';
 export type { SettingValidator } from '@shared/services/settings.service-model';
 export type {
   FocusSubject,

@@ -517,10 +517,7 @@ global.webViewComponent = function ChecklistWebView({
   const handleOpenSettingsEvent = useCallback(() => {
     setIsSettingsOpen(true);
   }, []);
-  useEvent(
-    network.getNetworkEvent<undefined>(CHECKLIST_OPEN_SETTINGS_EVENT),
-    handleOpenSettingsEvent,
-  );
+  useEvent(network.getNetworkEvent(CHECKLIST_OPEN_SETTINGS_EVENT), handleOpenSettingsEvent);
 
   // ─── Project-menu item selection handler ──────────────────────────────────
   //

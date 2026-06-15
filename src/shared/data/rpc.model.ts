@@ -236,6 +236,19 @@ export const REGISTER_METHOD = 'network:registerMethod';
 export const UNREGISTER_METHOD = 'network:unregisterMethod';
 
 /**
+ * Register a network event emitter with the main process so that the event is tracked centrally.
+ * Multi-source vs. single-source semantics are determined by looking up the event name in
+ * `MULTI_SOURCE_EVENT_NAMES`.
+ */
+export const REGISTER_EVENT = 'network:registerEvent';
+
+/**
+ * Unregister a network event emitter from the main process so that the event is no longer tracked
+ * centrally.
+ */
+export const UNREGISTER_EVENT = 'network:unregisterEvent';
+
+/**
  * Get all methods that are currently registered on the network. Required to be 'rpc.discover' by
  * the OpenRPC specification.
  */

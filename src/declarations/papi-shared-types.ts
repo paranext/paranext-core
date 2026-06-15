@@ -17,7 +17,16 @@ declare module 'papi-shared-types' {
     IDisposableDataProvider,
   } from '@shared/models/data-provider.interface';
   import type { ExtractDataProviderDataTypes } from '@shared/models/extract-data-provider-data-types.model';
-  import type { NetworkableObject } from '@shared/models/network-object.model';
+  import type {
+    NetworkableObject,
+    NetworkObjectDetails,
+  } from '@shared/models/network-object.model';
+  import type { ScrollGroupUpdateInfo } from '@shared/services/scroll-group.service-model';
+  import type {
+    CloseWebViewEvent,
+    OpenWebViewEvent,
+    UpdateWebViewEvent,
+  } from '@shared/services/web-view.service-model';
   // Used in JSDocs
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import type { WebViewFactory } from '@shared/models/web-view-factory.model';
@@ -761,6 +770,73 @@ declare module 'papi-shared-types' {
    * @example 'platform.placeholderWebView'
    */
   export type WebViewControllerTypes = keyof WebViewControllers;
+
+  // #endregion
+
+  // #region Network Events
+
+  /**
+   * Network events emitted from multiple processes (each process emits its own local event under
+   * the same name). Declared by the platform; not extensible by extensions.
+   *
+   * The names listed here are the source of truth for which event names use multi-source semantics
+   * at the central registry. An event name in this type allows registration from multiple processes
+   * (each process registers once, all emitters are valid sources). Any other event name uses
+   * single-source semantics (one registrant ever).
+   *
+   * Subscribers do not need to know which events are multi-source — `getNetworkEvent` handles both
+   * kinds identically.
+   *
+   * See {@link NetworkEvents} for the full registry of known event names.
+   */
+  export type MultiSourceNetworkEvents = {
+    /**
+     * Emitted when a network object is created in any process. Payload includes the new object's
+     * details.
+     */
+    'object:onDidCreateNetworkObject': NetworkObjectDetails;
+    /**
+     * Emitted when a network object is disposed in any process. Payload is the disposed object's
+     * ID.
+     */
+    'object:onDidDisposeNetworkObject': string;
+  };
+
+  /**
+   * Mapping of network event names to their payload types. Extensions augment this to declare their
+   * own events. Inherits the platform's multi-source events from {@link MultiSourceNetworkEvents}
+   * automatically.
+   *
+   * To declare a new event for use with `createNetworkEventEmitterAsync`:
+   *
+   * ```ts
+   * declare module 'papi-shared-types' {
+   *   export interface NetworkEvents {
+   *     'myExt.somethingHappened': { foo: string };
+   *   }
+   * }
+   * ```
+   *
+   * Mark a single event as experimental by adding an `@experimental` JSDoc tag in a doc comment
+   * directly above its entry.
+   */
+  export interface NetworkEvents extends MultiSourceNetworkEvents {
+    /** Emitted when extensions finish reloading. `true` if reload succeeded, `false` if it failed. */
+    'platform.onDidReloadExtensions': boolean;
+    /** Emitted when the Scripture reference for a scroll group changes. */
+    'scrollGroup:onDidUpdateScrRef': ScrollGroupUpdateInfo;
+    /** @deprecated 13 November 2024. Use the `webView:onDidOpenWebView` event instead. */
+    'webView:onDidAddWebView': OpenWebViewEvent;
+    /** Emitted when a WebView is created. */
+    'webView:onDidOpenWebView': OpenWebViewEvent;
+    /** Emitted when a WebView is updated. */
+    'webView:onDidUpdateWebView': UpdateWebViewEvent;
+    /** Emitted when a WebView is closed. */
+    'webView:onDidCloseWebView': CloseWebViewEvent;
+  }
+
+  /** Union of all known network event names (keys of {@link NetworkEvents}). */
+  export type NetworkEventTypes = keyof NetworkEvents;
 
   // #endregion
 }
