@@ -17,6 +17,10 @@ import { getLocalizedStrings } from '../../../../../../.storybook/localization.u
    src/stories/platform/ten-layout-shared.tsx and platform-scripture-editor's stories. */
 import '../../../../../../lib/platform-bible-react/src/components/demo/scripture-editor/usj-nodes.css';
 /* eslint-enable import/no-relative-packages */
+// Single source of truth for the extension-local `--er-*` color tokens. Side-effect import so
+// Storybook (which doesn't load the extension's web-view SCSS bundle) injects the same
+// `:root { --er-* }` declarations via style-loader.
+import '../../_er-tokens.scss';
 import {
   EnhancedScripturePane,
   ENHANCED_SCRIPTURE_PANE_STRING_KEYS,
@@ -27,23 +31,6 @@ import {
   MATTHEW_2_ANNOTATIONS,
 } from '../../data/scripture.story-data';
 import { convertMarbleChapterXml } from '../../lib/marble-converter';
-
-/**
- * Storybook fallback for the central extension-local color tokens defined in
- * `extensions/src/platform-enhanced-resources/src/_tokens.scss`. The story doesn't load the
- * extension's web-view bundle, so `var(--er-marble-*)` lookups inside `MARBLE_ANNOTATION_STYLES`
- * would resolve to `initial` here and the overlay backgrounds would disappear. Keeping the values
- * in sync is the cost of giving Storybook standalone rendering; grep for `--er-` to find both sites
- * if you add or change a token.
- */
-const MARBLE_TOKEN_FALLBACK_STYLE = `
-  :root {
-    --er-marble-note-color: hsl(210 100% 25%);
-    --er-marble-highlight-all-bg: hsl(210 100% 90%);
-    --er-marble-hover-match-bg: hsl(210 100% 75%);
-    --er-marble-filter-bg: hsl(45 100% 75%);
-  }
-`;
 
 /**
  * Icon-free subset of the editor's wrapper styles (from the platform scripture-editor
@@ -135,11 +122,6 @@ const meta: Meta<typeof EnhancedScripturePane> = {
             them scoped to the stories file (no global side-effects) and ensures they load before
             the editor mounts. */}
         <style>{EDITOR_WRAPPER_STYLE}</style>
-        {/* Fallback declarations for the central extension-local `--er-marble-*` color tokens
-            (canonical home: `_tokens.scss`). Storybook doesn't load the extension's web-view
-            bundle, so without this block the marble overlay backgrounds would render as
-            `initial`. */}
-        <style>{MARBLE_TOKEN_FALLBACK_STYLE}</style>
         <Story />
       </div>
     ),

@@ -1,6 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { useState } from 'react';
 import { getLocalizedStrings } from '../../../../../../.storybook/localization.utils';
+// Single source of truth for the extension-local `--er-*` color tokens. Side-effect import so
+// Storybook (which doesn't load the extension's web-view SCSS bundle) injects the same `:root {
+// --er-* }` declarations via style-loader. The web-view bundle consumes the same partial through
+// `@use` in enhanced-resource.web-view.scss.
+import '../../_er-tokens.scss';
 import {
   EnhancedResourceTabBar,
   EnhancedResourceTopToolbar,
@@ -14,21 +19,6 @@ import {
 } from './toolbar.component';
 
 const localizedStrings = getLocalizedStrings([...TOOLBAR_STRING_KEYS]);
-
-/**
- * Storybook fallback for the central extension-local color tokens declared in
- * `extensions/src/platform-enhanced-resources/src/_tokens.scss`. The story doesn't load the
- * extension's web-view bundle, so without this block the toolbar's filter-input tint
- * (`bg-[var(--er-filter-input-match-bg)]` / `--no-match-bg`) would resolve to `initial` and the
- * green / orange signal would disappear. Grep `--er-` to find every site if you add or change a
- * token.
- */
-const TOOLBAR_TOKEN_FALLBACK_STYLE = `
-  :root {
-    --er-filter-input-match-bg: hsl(149 80% 90%);
-    --er-filter-input-no-match-bg: hsl(34 100% 92%);
-  }
-`;
 
 /**
  * Story-only placeholder for handlers that phase-3-ui will wire to real PAPI commands or webView
@@ -45,16 +35,8 @@ const meta: Meta<typeof Toolbar> = {
   args: {
     localizedStringsWithLoadingState: [localizedStrings, false],
   },
-  // Inject the central `_tokens.scss` fallback once so every story below resolves the
-  // `--er-filter-input-*` variables (Storybook doesn't load the extension's web-view SCSS bundle).
-  decorators: [
-    (Story) => (
-      <>
-        <style>{TOOLBAR_TOKEN_FALLBACK_STYLE}</style>
-        <Story />
-      </>
-    ),
-  ],
+  // The side-effect `_er-tokens.scss` import above registers the `--er-*` tokens globally for
+  // every story in this file (Storybook doesn't load the extension's web-view SCSS bundle).
 };
 export default meta;
 

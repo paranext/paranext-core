@@ -28,6 +28,7 @@ import {
   TooltipTrigger,
   cn,
 } from 'platform-bible-react';
+import { useEffect, useRef, useState } from 'react';
 import { BookA, LibraryBig, Image as ImageIcon, Info, MapPin, Menu, X } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
 import type { LocalizedStringValue, ScrollGroupId } from 'platform-bible-utils';
@@ -543,22 +544,46 @@ export function EnhancedResourceTabBar({
       : 'tw:bg-[var(--er-filter-input-no-match-bg)]';
   }
 
+  // Track whether the toolbar's container query is below `@sm/toolbar` (24rem = 384px in Tailwind 4)
+  // so the four tab tooltips only fire when the inline label is hidden. Per the Tooltips design
+  // guideline ("If the tooltip would only repeat the visible label, omit it"), the tooltip is locked
+  // closed via `open={false}` at wider widths where the label is visible alongside the icon.
+  const TOOLBAR_COMPACT_BREAKPOINT_PX = 384;
+  // React's `ref` prop on a DOM element expects `Ref<HTMLDivElement>`, which under the hood is
+  // `RefObject<HTMLDivElement | null>`. Initialize with `null` to match that contract; the lint
+  // rule's preferred `undefined` is incompatible with React's ref types.
+  // eslint-disable-next-line no-null/no-null
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [isCompact, setIsCompact] = useState(false);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return undefined;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      setIsCompact(entry.contentRect.width < TOOLBAR_COMPACT_BREAKPOINT_PX);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     // FN-024: `tw-@container/toolbar` establishes a named container-query context so the
     // `@sm:` variants below resolve against this element's inline-size, not the viewport.
     // The named form (`tw-@container/toolbar`) is necessary if other ancestors also declare
     // containers; using a name makes the resolution deterministic.
-    <div className="tw-@container/toolbar tw:w-full">
+    <div ref={containerRef} className="tw-@container/toolbar tw:w-full">
       <div className="tw:flex tw:flex-nowrap tw:items-center tw:gap-2 tw:overflow-hidden tw:border-b tw:px-2 tw:py-1.5">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="tw:shrink-0">
           <TabsList>
-            {/* Each trigger is wrapped in a Tooltip so the label surfaces on hover when the
-                toolbar is narrow enough that the inline text (`tw:hidden tw:@sm/toolbar:inline`)
-                collapses to icon-only. At @sm+ the visible label and the tooltip text are
-                redundant by design - the tooltip stays harmless (same text) and we don't need
-                container-aware JS to suppress it. */}
+            {/* Each trigger is wrapped in a Tooltip whose `open` prop is locked to `false` when
+                the toolbar is wide enough to show the inline label (`isCompact === false`). Per
+                the Tooltips design guideline ("If the tooltip would only repeat the visible
+                label, omit it"), this gives the tooltip only when the label is collapsed to icon-
+                only. A single TooltipProvider wraps all four triggers so the provider context is
+                shared (vs. one per trigger). */}
             <TooltipProvider>
-              <Tooltip>
+              <Tooltip open={isCompact ? undefined : false}>
                 <TooltipTrigger asChild>
                   <TabsTrigger value="dictionary" aria-label={tabDictLabel}>
                     <BookA className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
@@ -567,9 +592,7 @@ export function EnhancedResourceTabBar({
                 </TooltipTrigger>
                 <TooltipContent>{tabDictLabel}</TooltipContent>
               </Tooltip>
-            </TooltipProvider>
-            <TooltipProvider>
-              <Tooltip>
+              <Tooltip open={isCompact ? undefined : false}>
                 <TooltipTrigger asChild>
                   <TabsTrigger value="encyclopedia" aria-label={tabEncycLabel}>
                     <LibraryBig className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
@@ -578,9 +601,7 @@ export function EnhancedResourceTabBar({
                 </TooltipTrigger>
                 <TooltipContent>{tabEncycLabel}</TooltipContent>
               </Tooltip>
-            </TooltipProvider>
-            <TooltipProvider>
-              <Tooltip>
+              <Tooltip open={isCompact ? undefined : false}>
                 <TooltipTrigger asChild>
                   <TabsTrigger value="media" aria-label={tabMediaLabel}>
                     <ImageIcon className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
@@ -589,9 +610,7 @@ export function EnhancedResourceTabBar({
                 </TooltipTrigger>
                 <TooltipContent>{tabMediaLabel}</TooltipContent>
               </Tooltip>
-            </TooltipProvider>
-            <TooltipProvider>
-              <Tooltip>
+              <Tooltip open={isCompact ? undefined : false}>
                 <TooltipTrigger asChild>
                   <TabsTrigger value="maps" aria-label={tabMapsLabel}>
                     <MapPin className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
