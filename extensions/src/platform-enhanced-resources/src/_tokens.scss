@@ -29,6 +29,14 @@
   // --er-filter-input-* below). Warm yellow to read as semantically distinct from the blue
   // highlight family.
   --er-marble-filter-bg: hsl(45 100% 75%);
+  // Rendering-status colors described by the marble-guide chips. PT9 painted these on scripture
+  // words to signal rendering state; PT10's scripture-pane has NOT yet wired them up but the
+  // marble-guide help dialog labels them by color name ("gray", "orange") so the chip swatches
+  // need a real gray / orange to match the label. When the rendering-status overlays land in the
+  // scripture-pane, they should consume these same tokens (rename the chip wiring then if a more
+  // semantic name fits the new state).
+  --er-marble-rendering-found-bg: hsl(210 8% 75%);
+  --er-marble-rendering-missing-bg: hsl(25 100% 75%);
   // Toolbar filter-input background tint. Green when the filter text matches at least one
   // dictionary entry, warm orange when there are no matches. FN-024 / SB#2.
   --er-filter-input-match-bg: hsl(149 80% 90%);

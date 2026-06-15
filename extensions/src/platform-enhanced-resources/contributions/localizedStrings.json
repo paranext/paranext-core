@@ -427,6 +427,9 @@
     "%enhancedResources_marbleGuide_neverShowAgain%": {
       "notes": "Label for the 'Don't show this again' checkbox in the MarbleGuide dialog footer."
     },
+    "%enhancedResources_marbleGuide_notYetImplemented%": {
+      "notes": "Inline note placed next to the marble-guide paragraphs that describe rendering-status colors (gray + orange) that PT9 painted on scripture words but PT10 has not yet wired up. The surrounding paragraphs are also dimmed via text-muted-foreground so users know those visual states are coming, not currently visible."
+    },
     "%settings_platformEnhancedResources_group_label%": {
       "notes": "Settings UI group heading for Enhanced Resources extension settings."
     },
@@ -601,7 +604,8 @@
       "%enhancedResources_marbleGuide_aboutOrangeHighlight%": "A word highlighted in {colorWord} needs your attention because an approved rendering for this term is \"missing\" in this verse (though Paratext may have found a guessed rendering). For details, see {helpLink}.",
       "%enhancedResources_marbleGuide_orangeWordTitle%": "orange",
       "%enhancedResources_marbleGuide_thisHelpTopic%": "this help topic",
-      "%enhancedResources_marbleGuide_tabsHeader%": "Tabs: Tabs with black icons in the Research pane contain information about words in the current scope:",
+      "%enhancedResources_marbleGuide_tabsHeader%": "Tabs: Tabs with icons in the Research pane contain information about words in the current scope:",
+      "%enhancedResources_marbleGuide_notYetImplemented%": "Not yet implemented in this version",
       "%enhancedResources_marbleGuide_tab_dictionary%": "Dictionary",
       "%enhancedResources_marbleGuide_tab_encyclopedia%": "Encyclopedia",
       "%enhancedResources_marbleGuide_tab_media%": "Media",
