@@ -562,24 +562,36 @@ class ThemeDataProviderEngine
   }
 }
 
-const themeServiceEngine = new ThemeDataProviderEngine(
-  currentThemeFromLocalStorage,
-  saveCurrentThemeToLocalStorage,
-  shouldMatchSystemFromLocalStorage,
-  saveShouldMatchSystemToLocalStorage,
-  async (allThemesHandler) => {
-    return themeDataService.subscribeAllThemes(undefined, allThemesHandler);
-  },
-  getSystemDarkThemeMediaQuery().matches ? 'dark' : 'light',
-  onDidChangeSystemThemeEmitter.event,
-  userThemesFromLocalStorage,
-  saveUserThemesToLocalStorage,
-);
+/** Builds a fresh theme data provider engine seeded from the current local-storage values. */
+function createThemeServiceEngine(): ThemeDataProviderEngine {
+  return new ThemeDataProviderEngine(
+    currentThemeFromLocalStorage,
+    saveCurrentThemeToLocalStorage,
+    shouldMatchSystemFromLocalStorage,
+    saveShouldMatchSystemToLocalStorage,
+    async (allThemesHandler) => {
+      return themeDataService.subscribeAllThemes(undefined, allThemesHandler);
+    },
+    getSystemDarkThemeMediaQuery().matches ? 'dark' : 'light',
+    onDidChangeSystemThemeEmitter.event,
+    userThemesFromLocalStorage,
+    saveUserThemesToLocalStorage,
+  );
+}
+
+// Constructed eagerly so getCurrentThemeSync works before (or without) initialization. Reassigned
+// to a fresh instance on each initialize attempt below.
+let themeServiceEngine = createThemeServiceEngine();
 
 /** Need to run initialize before using this */
 let dataProvider: IThemeService;
 export const initialize = createCachedInitializer(async () => {
   const systemThemeChangesInfo = listenToSystemThemeChanges();
+
+  // registerEngine mutates the engine it receives (layering over notifyUpdate, set, and dispose),
+  // which is not idempotent. Since createCachedInitializer retries after a failure, use a fresh
+  // instance each attempt so a retry after a post-mutation failure doesn't double-layer the engine.
+  themeServiceEngine = createThemeServiceEngine();
 
   try {
     dataProvider = await dataProviderService.registerEngine(
