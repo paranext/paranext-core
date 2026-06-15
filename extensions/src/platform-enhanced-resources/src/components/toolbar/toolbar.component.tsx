@@ -28,7 +28,7 @@ import {
   TooltipTrigger,
   cn,
 } from 'platform-bible-react';
-import { BookOpen, Book, Image as ImageIcon, Info, MapPin, Menu, X } from 'lucide-react';
+import { BookA, LibraryBig, Image as ImageIcon, Info, MapPin, Menu, X } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
 import type { LocalizedStringValue, ScrollGroupId } from 'platform-bible-utils';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
@@ -552,22 +552,55 @@ export function EnhancedResourceTabBar({
       <div className="tw:flex tw:flex-nowrap tw:items-center tw:gap-2 tw:overflow-hidden tw:border-b tw:px-2 tw:py-1.5">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="tw:shrink-0">
           <TabsList>
-            <TabsTrigger value="dictionary" aria-label={tabDictLabel}>
-              <BookOpen className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
-              <span className="tw:hidden tw:@sm/toolbar:inline">{tabDictLabel}</span>
-            </TabsTrigger>
-            <TabsTrigger value="encyclopedia" aria-label={tabEncycLabel}>
-              <Book className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
-              <span className="tw:hidden tw:@sm/toolbar:inline">{tabEncycLabel}</span>
-            </TabsTrigger>
-            <TabsTrigger value="media" aria-label={tabMediaLabel}>
-              <ImageIcon className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
-              <span className="tw:hidden tw:@sm/toolbar:inline">{tabMediaLabel}</span>
-            </TabsTrigger>
-            <TabsTrigger value="maps" aria-label={tabMapsLabel}>
-              <MapPin className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
-              <span className="tw:hidden tw:@sm/toolbar:inline">{tabMapsLabel}</span>
-            </TabsTrigger>
+            {/* Each trigger is wrapped in a Tooltip so the label surfaces on hover when the
+                toolbar is narrow enough that the inline text (`tw:hidden tw:@sm/toolbar:inline`)
+                collapses to icon-only. At @sm+ the visible label and the tooltip text are
+                redundant by design - the tooltip stays harmless (same text) and we don't need
+                container-aware JS to suppress it. */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <TabsTrigger value="dictionary" aria-label={tabDictLabel}>
+                    <BookA className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
+                    <span className="tw:hidden tw:@sm/toolbar:inline">{tabDictLabel}</span>
+                  </TabsTrigger>
+                </TooltipTrigger>
+                <TooltipContent>{tabDictLabel}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <TabsTrigger value="encyclopedia" aria-label={tabEncycLabel}>
+                    <LibraryBig className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
+                    <span className="tw:hidden tw:@sm/toolbar:inline">{tabEncycLabel}</span>
+                  </TabsTrigger>
+                </TooltipTrigger>
+                <TooltipContent>{tabEncycLabel}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <TabsTrigger value="media" aria-label={tabMediaLabel}>
+                    <ImageIcon className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
+                    <span className="tw:hidden tw:@sm/toolbar:inline">{tabMediaLabel}</span>
+                  </TabsTrigger>
+                </TooltipTrigger>
+                <TooltipContent>{tabMediaLabel}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <TabsTrigger value="maps" aria-label={tabMapsLabel}>
+                    <MapPin className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
+                    <span className="tw:hidden tw:@sm/toolbar:inline">{tabMapsLabel}</span>
+                  </TabsTrigger>
+                </TooltipTrigger>
+                <TooltipContent>{tabMapsLabel}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </TabsList>
         </Tabs>
 
