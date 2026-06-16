@@ -26,6 +26,7 @@ import {
   ENHANCED_SCRIPTURE_PANE_STRING_KEYS,
 } from './scripture-pane.component';
 import {
+  GENESIS_OVERLAY_DEMO_MARBLE_XML,
   MATTHEW_2_USJ,
   MATTHEW_2_ANNOTATED_USJ,
   MATTHEW_2_ANNOTATIONS,
@@ -225,42 +226,7 @@ export const WithFilterBanner: Story = {
  * color change is observable here. Tooltip rendering is covered by
  * `scripture-pane-tooltip.stories.tsx` + `scripture-pane.test.tsx`.
  */
-// Marble chapter XML for a Genesis 1:1-3 excerpt with six <wg> linked-research-term tokens:
-//
-//   - Group "rēšīṯ-bāraʾ" (4 words sharing the SDBH:creation:001 lemma): "beginning", "created",
-//     "heavens", "earth". Hovering any of the four lights up all four.
-//   - Group "laylāh" (2 words sharing SDBH:darkness:002): "darkness", "night". Hovering either
-//     lights up both.
-//   - Independents (each with its own lemma): "Spirit" (SDBH:rûaḥ:003), "light" (SDBH:ʾôr:004).
-//     Hovering either only lights up that single word.
-const OVERLAY_DEMO_MARBLE_XML = `
-  <usx_book code="GEN">
-    <chapter style="c" code="GEN" chapter="1"/>
-    <para style="p">
-      <verse style="v" code="GEN" pubnumber="1"/>
-      In the
-      <wg id="1001" strong="H7225" lexical_links="SDBH:creation:001">beginning</wg>
-      God
-      <wg id="1002" strong="H1254" lexical_links="SDBH:creation:001">created</wg>
-      the
-      <wg id="1003" strong="H8064" lexical_links="SDBH:creation:001">heavens</wg>
-      and the
-      <wg id="1004" strong="H0776" lexical_links="SDBH:creation:001">earth</wg>.
-      <verse style="v" code="GEN" pubnumber="2"/>
-      And
-      <wg id="1005" strong="H2822" lexical_links="SDBH:darkness:002">darkness</wg>
-      was upon the face of the deep, and the
-      <wg id="1006" strong="H7307" lexical_links="SDBH:ruah:003">Spirit</wg>
-      of God moved upon the face of the waters.
-      <verse style="v" code="GEN" pubnumber="3"/>
-      And God said, Let there be
-      <wg id="1007" strong="H0216" lexical_links="SDBH:or:004">light</wg>,
-      and God called the
-      <wg id="1008" strong="H3915" lexical_links="SDBH:darkness:002">night</wg>.
-    </para>
-  </usx_book>`;
-
-const overlayDemo = convertMarbleChapterXml(OVERLAY_DEMO_MARBLE_XML);
+const overlayDemo = convertMarbleChapterXml(GENESIS_OVERLAY_DEMO_MARBLE_XML);
 
 /**
  * Render function that pairs the pane with a visible "Highlight all" button so reviewers can toggle

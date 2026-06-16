@@ -15,13 +15,26 @@ import {
   TooltipTrigger,
 } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
-import { BookA, Image as ImageIcon, Info, LibraryBig, MapPin } from 'lucide-react';
+import {
+  BookA,
+  ChevronDown,
+  ChevronRight,
+  Image as ImageIcon,
+  Info,
+  LibraryBig,
+  MapPin,
+} from 'lucide-react';
 
 /**
  * Object containing all keys used for localization in this component. Sourced from PT9's
  * `MarbleGuideForm.cs` (the `MarbleGuideForm_*` body strings) plus the chrome strings the shadcn
  * Dialog needs — title (reused for the dialog title), close-button label, checkbox label, and an
  * sr-only description.
+ *
+ * The array is exported as an `as const` tuple so the localized-strings hook can narrow its return
+ * shape. Consumers should iterate the tuple (e.g. `useLocalizedStrings(MARBLE_GUIDE_STRING_KEYS)`)
+ * rather than index into it — the order is not stable across edits and adding/removing entries
+ * shifts every subsequent index.
  */
 export const MARBLE_GUIDE_STRING_KEYS = Object.freeze([
   '%enhancedResources_marbleGuide_title%',
@@ -295,7 +308,7 @@ export function MarbleGuide({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="tw:flex tw:max-h-[80vh] tw:flex-col tw:gap-0 tw:p-0 tw:sm:w-[80vw] tw:sm:max-w-[800px]"
+        className="tw:flex tw:max-h-[80vh] tw:flex-col tw:gap-0 tw:p-0 tw:sm:w-[80vw] tw:sm:max-w-3xl"
         data-testid="marble-guide"
       >
         <DialogHeader className="tw:border-b tw:border-border tw:px-6 tw:py-4">
@@ -331,10 +344,15 @@ export function MarbleGuide({
                 aria-expanded={biblicalTermsExpanded}
                 aria-controls="marble-guide-biblical-terms-content"
                 onClick={() => setBiblicalTermsExpanded((prev) => !prev)}
-                className="tw:inline-flex tw:cursor-pointer tw:items-center tw:gap-1 tw:text-foreground tw:underline tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
+                className="tw:inline-flex tw:cursor-pointer tw:items-center tw:gap-1 tw:text-foreground tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
                 data-testid="marble-guide-biblical-terms-trigger"
               >
-                {biblicalTermsHeadline}
+                {biblicalTermsExpanded ? (
+                  <ChevronDown className="tw:h-4 tw:w-4" aria-hidden />
+                ) : (
+                  <ChevronRight className="tw:h-4 tw:w-4" aria-hidden />
+                )}
+                <span className="tw:underline">{biblicalTermsHeadline}</span>
               </button>{' '}
               <span className="tw:text-muted-foreground">{notYetImplemented}</span>
             </p>

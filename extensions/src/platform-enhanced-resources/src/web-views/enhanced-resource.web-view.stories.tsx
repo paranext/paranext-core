@@ -27,6 +27,7 @@ import {
   MOCK_RIBBONS_NONE,
   MOCK_COPYRIGHT_TEXT,
 } from '../data/marble-form.story-data';
+import { GENESIS_OVERLAY_DEMO_WITH_EXTRA_LINKS_XML } from '../data/scripture.story-data';
 import { ENHANCED_SCRIPTURE_PANE_STRING_KEYS } from '../components/scripture-pane/scripture-pane.component';
 import {
   TOOLBAR_STRING_KEYS,
@@ -98,11 +99,10 @@ const allKeys = [
 const localizedStrings = getLocalizedStrings(allKeys);
 
 /**
- * Marble chapter XML for a Genesis 1:1-3 excerpt with linked-research-term `<wg>` tokens. Run
- * through `convertMarbleChapterXml` (the same production data path the live web view uses) so the
- * resulting USJ paths line up with the editor's annotation resolver. Mirrors the `OverlayStates`
- * fixture in `scripture-pane.stories.tsx`; reused here so the shell story actually exercises marble
- * hover / click / "Highlight all research terms" instead of rendering plain prose.
+ * Marble chapter XML for the shell story is the shared Genesis 1:1-3 fixture extended with two
+ * additional tokens that exercise non-lexical link types. The shared base lives in
+ * `scripture.story-data.ts` so both this story and the scripture-pane `OverlayStates` story stay in
+ * lockstep on the lexical-linked tokens.
  *
  * Three behaviors are observable in this story:
  *
@@ -115,38 +115,7 @@ const localizedStrings = getLocalizedStrings(allKeys);
  * baseline overlay (Color A); hover-match (Color B) still wins on the hovered group, and the orange
  * filter color wins on the focal word the "Simulate word click" button sets.
  */
-const MOCK_MARBLE_XML = `
-  <usx_book code="GEN">
-    <chapter style="c" code="GEN" chapter="1"/>
-    <para style="p">
-      <verse style="v" code="GEN" pubnumber="1"/>
-      In the
-      <wg id="1001" strong="H7225" lexical_links="SDBH:creation:001">beginning</wg>
-      God
-      <wg id="1002" strong="H1254" lexical_links="SDBH:creation:001">created</wg>
-      the
-      <wg id="1003" strong="H8064" lexical_links="SDBH:creation:001">heavens</wg>
-      and the
-      <wg id="1004" strong="H0776" lexical_links="SDBH:creation:001">earth</wg>.
-      <verse style="v" code="GEN" pubnumber="2"/>
-      And
-      <wg id="1005" strong="H2822" lexical_links="SDBH:darkness:002">darkness</wg>
-      was upon the face of the deep, and the
-      <wg id="1006" strong="H7307" lexical_links="SDBH:ruah:003">Spirit</wg>
-      of God moved upon the face of the waters.
-      <verse style="v" code="GEN" pubnumber="3"/>
-      And God said, Let there be
-      <wg id="1007" strong="H0216" lexical_links="SDBH:or:004">light</wg>,
-      and God called the
-      <wg id="1008" strong="H3915" lexical_links="SDBH:darkness:002">night</wg>.
-      Behold a
-      <wg id="1009" strong="H0935" thematic_links="Realia:1.2.3">vessel</wg>
-      on the
-      <wg id="1010" strong="H0123" image_links="img:reuben">altar</wg>.
-    </para>
-  </usx_book>`;
-
-const MOCK_MARBLE = convertMarbleChapterXml(MOCK_MARBLE_XML);
+const MOCK_MARBLE = convertMarbleChapterXml(GENESIS_OVERLAY_DEMO_WITH_EXTRA_LINKS_XML);
 const MOCK_USJ = MOCK_MARBLE.usj;
 const MOCK_ANNOTATIONS = MOCK_MARBLE.annotations;
 /**
@@ -349,7 +318,7 @@ export const Default: Story = {
           </label>
           <span style={{ color: '#666' }}>
             Hover linked words in the scripture pane to see lemma-group highlighting; toggle
-            "Highlight all research terms" in the toolbar to paint every annotated word.
+            &quot;Highlight all research terms&quot; in the toolbar to paint every annotated word.
           </span>
         </div>
 

@@ -28,7 +28,6 @@ import {
   TooltipTrigger,
   cn,
 } from 'platform-bible-react';
-import { useRef } from 'react';
 import { BookA, LibraryBig, Image as ImageIcon, Info, MapPin, Menu, X } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
 import type { LocalizedStringValue, ScrollGroupId } from 'platform-bible-utils';
@@ -549,20 +548,12 @@ export function EnhancedResourceTabBar({
   // stroke (which uses `currentColor`) matches the foreground color of the typed text.
   const filterInputTextClass = filterActive ? 'er-filter-input-on-pastel' : '';
 
-  // The container ref is retained here in case future tab-bar behavior needs to react to its own
-  // inline size (the FN-024 `tw-@container/toolbar` already drives label collapse via CSS alone).
-  // React's `ref` prop on a DOM element expects `Ref<HTMLDivElement>`, which under the hood is
-  // `RefObject<HTMLDivElement | null>`. Initialize with `null` to match that contract; the lint
-  // rule's preferred `undefined` is incompatible with React's ref types.
-  // eslint-disable-next-line no-null/no-null
-  const containerRef = useRef<HTMLDivElement | null>(null);
-
   return (
     // FN-024: `tw-@container/toolbar` establishes a named container-query context so the
     // `@sm:` variants below resolve against this element's inline-size, not the viewport.
     // The named form (`tw-@container/toolbar`) is necessary if other ancestors also declare
     // containers; using a name makes the resolution deterministic.
-    <div ref={containerRef} className="tw-@container/toolbar tw:w-full">
+    <div className="tw-@container/toolbar tw:w-full">
       <div className="tw:flex tw:flex-nowrap tw:items-center tw:gap-2 tw:overflow-hidden tw:border-b tw:px-2 tw:py-1.5">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="tw:shrink-0">
           <TabsList>

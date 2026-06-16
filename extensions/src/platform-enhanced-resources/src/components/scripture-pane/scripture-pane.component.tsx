@@ -111,6 +111,19 @@ const ANNOTATION_TYPE_MARBLE_NOTE = 'marble-note';
 const RIGHT_MOUSE_BUTTON = 2;
 
 /**
+ * This component holds marble CSS in two stylesheets, deliberately using two different mechanisms:
+ *
+ * - The STATIC base sheet (`MARBLE_ANNOTATION_STYLES`) ships via the platform's `useStylesheet` hook.
+ *   Its content never changes per state, so a hook that mounts the sheet on mount and tears it down
+ *   on unmount is the right contract.
+ * - The DYNAMIC overlay sheet (built by `buildMarbleOverlayCss`) is mounted imperatively as a single
+ *   `<style data-er-marble-overlays>` element whose `textContent` is reassigned on every
+ *   overlay-state change. `useStylesheet` tears the element down and rebuilds it on every input
+ *   change (`useEffect` depends on `[stylesheet]`), which would churn the DOM on every hover /
+ *   filter / highlight-all transition. Reassigning `textContent` on a single persistent element
+ *   keeps the dynamic path zero-DOM-mutation per state change. Both paths work identically in
+ *   Storybook and the live app — only perf and DOM churn differ.
+ *
  * Data attribute marking the dynamic overlay stylesheet so tests (and any future dev tooling) can
  * find it without depending on textContent fingerprints. The component creates exactly one element
  * per mounted instance.

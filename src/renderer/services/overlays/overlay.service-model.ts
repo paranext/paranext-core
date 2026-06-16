@@ -82,6 +82,11 @@ export interface PopoverRequest {
   dismissAfterMs?: number;
   /** Maximum width of the popover in pixels. If omitted, uses a default max width. */
   maxWidth?: number;
+  /**
+   * Maximum height of the popover in pixels. Content taller than this scrolls inside the popover.
+   * If omitted, uses a default max height.
+   */
+  maxHeight?: number;
   /** Whether to display an arrow pointing from the popover toward the anchor. Defaults to `true`. */
   showArrow?: boolean;
 }

@@ -1289,14 +1289,6 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
             err instanceof Error ? err.message : String(err)
           }`,
         );
-        console.warn(
-          '[ER] chapter load failed — tab bar will disappear. book:',
-          scrRef.book,
-          'chapter:',
-          scrRef.chapterNum,
-          'error:',
-          err,
-        );
         setUsj(undefined);
         setAnnotations([]);
         // Surface a user-visible error only for unexpected failures - missing-book / missing-data
@@ -1645,8 +1637,6 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       userLanguage: glossLanguage,
       resourceId,
     };
-
-    console.log('[ER] encyclopedia filter:', JSON.stringify(filter));
 
     if (!erProxy) {
       setEncyclopediaItems([]);
