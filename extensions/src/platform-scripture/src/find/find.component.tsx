@@ -25,7 +25,6 @@ import {
   Scope,
   SCOPE_SELECTOR_STRING_KEYS,
   ScopeSelector,
-  ScopeWithRange,
   Skeleton,
   Sonner,
   ToggleGroup,
@@ -35,6 +34,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
+import { ScopeWithRange } from 'platform-bible-react/internal';
 import {
   formatReplacementString,
   LanguageStrings,

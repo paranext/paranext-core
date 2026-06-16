@@ -1,5 +1,5 @@
 import type { SerializedVerseRef } from '@sillsdev/scripture';
-import type { ScopeWithRange } from 'platform-bible-react';
+import type { ScopeWithRange } from 'platform-bible-react/internal';
 import type { ScriptureRange } from 'platform-scripture';
 
 // 999 is the documented "end of chapter / end of book" sentinel for ScriptureRange (see platform-scripture.d.ts).

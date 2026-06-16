@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
-import { Button, SourceLanguageIndexedList, type IndexedListItem } from 'platform-bible-react';
+import { Button } from 'platform-bible-react';
+import { SourceLanguageIndexedList, type IndexedListItem } from 'platform-bible-react/internal';
 import type { LocalizedStringValue } from 'platform-bible-utils';
 import { formatReplacementString } from 'platform-bible-utils';
 import {

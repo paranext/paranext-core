@@ -39,15 +39,6 @@ export type {
   SortDirection,
   TableContents,
 } from './components/advanced/data-table/data-table.component';
-// ManageBooksDialog moved to extensions/src/platform-scripture/src/manage-books-dialog/ (FN-009).
-// The unified Paratext-specific dialog is no longer part of the platform-bible-react surface.
-export {
-  default as ProjectSelector,
-  type ProjectSelectorProject,
-  type ProjectSelectorOpenTab,
-  type ProjectSelectorProjectPair,
-  type ProjectSelectorLocalizedStrings,
-} from './components/advanced/project-selector/project-selector.component';
 export { default as MarkdownRenderer } from './components/advanced/extension-marketplace/markdown-renderer.component';
 export {
   ErrorPopover,
@@ -138,10 +129,7 @@ export type {
 } from './components/advanced/scripture-results-viewer/scripture-results-viewer.component';
 export { default as ScopeSelector } from './components/advanced/scope-selector/scope-selector.component';
 export { SCOPE_SELECTOR_STRING_KEYS } from './components/advanced/scope-selector/scope-selector.component';
-export type {
-  ScopeSelectorLocalizedStrings,
-  ScopeSelectorVariant,
-} from './components/advanced/scope-selector/scope-selector.component';
+export type { ScopeSelectorLocalizedStrings } from './components/advanced/scope-selector/scope-selector.component';
 export { SelectBooks } from './components/advanced/scope-selector/select-books.component';
 export { SelectBooksPicker } from './components/advanced/scope-selector/select-books-picker.component';
 export {
@@ -172,14 +160,6 @@ export {
   type LanguageInfo,
   type UiLanguageSelectorProps,
 } from './components/advanced/ui-language-selector.component';
-export { default as SourceLanguageIndexedList } from './components/advanced/source-language-indexed-list/source-language-indexed-list.component';
-export type {
-  IndexedListItem,
-  SourceLanguageIndexedListProps,
-  SemanticDomain,
-  SourceLanguageIndexedListLocalizedStrings,
-} from './components/advanced/source-language-indexed-list/source-language-indexed-list.types';
-export { SOURCE_LANGUAGE_INDEXED_LIST_STRING_KEYS } from './components/advanced/source-language-indexed-list/source-language-indexed-list.types';
 
 export { default as ChapterRangeSelector } from './components/basics/chapter-range-selector.component';
 export type { ChapterRangeSelectorProps } from './components/basics/chapter-range-selector.component';
@@ -202,10 +182,6 @@ export type {
 } from './components/basics/combo-box.component';
 export { EditorKeyboardShortcuts } from './components/basics/editor-keyboard-shortcuts.component';
 export { ErrorDump } from './components/basics/error-dump.component';
-export {
-  default as LinkedScrRefButton,
-  type LinkedScrRefButtonProps,
-} from './components/basics/linked-scr-ref-button.component';
 export { ERROR_DUMP_STRING_KEYS } from './components/basics/error-dump.component';
 export type { ErrorDumpLocalizedStrings } from './components/basics/error-dump.component';
 export { default as CancelAcceptButtons } from './components/basics/cancel-accept-buttons.component';
@@ -294,7 +270,7 @@ export {
   TooltipProvider,
   TooltipTrigger,
 } from './components/shadcn-ui/tooltip';
-export type { Scope, ScopeWithRange } from './components/utils/scripture.util';
+export type { Scope } from './components/utils/scripture.util';
 
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';
@@ -315,7 +291,6 @@ export {
   Z_INDEX_OVERLAY,
   Z_INDEX_MODAL_BACKDROP,
   Z_INDEX_MODAL,
-  Z_INDEX_TOOLTIP,
 } from './components/z-index';
 
 // Utils

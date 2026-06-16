@@ -121,10 +121,7 @@ internal class ResourceReferenceListSettingTests : PapiTestBase
             ProjectSettingsNames.GetParatextSettingNameFromPlatformBibleSettingName(pbSettingName)!;
 
         string jsonBody = new ResourceReferenceList().SerializeToJson();
-        SetRawSetting(
-            ptSettingName,
-            $"{ResourceReferenceList.CurrentFormatVersion} {jsonBody}"
-        );
+        SetRawSetting(ptSettingName, $"{ResourceReferenceList.CurrentFormatVersion} {jsonBody}");
 
         var result = _provider.GetProjectSetting(pbSettingName);
 
@@ -152,10 +149,7 @@ internal class ResourceReferenceListSettingTests : PapiTestBase
             ],
         };
         string jsonBody = originalList.SerializeToJson();
-        SetRawSetting(
-            ptSettingName,
-            $"{ResourceReferenceList.CurrentFormatVersion} {jsonBody}"
-        );
+        SetRawSetting(ptSettingName, $"{ResourceReferenceList.CurrentFormatVersion} {jsonBody}");
 
         var result = _provider.GetProjectSetting(pbSettingName);
 
@@ -272,10 +266,7 @@ internal class ResourceReferenceListSettingTests : PapiTestBase
         var roundTripped = jsonBody.DeserializeFromJson<ResourceReferenceList>();
         Assert.That(roundTripped, Is.Not.Null);
         Assert.That(roundTripped!.Items, Is.Empty);
-        Assert.That(
-            roundTripped.DataVersion,
-            Is.EqualTo(ResourceReferenceList.CurrentDataVersion)
-        );
+        Assert.That(roundTripped.DataVersion, Is.EqualTo(ResourceReferenceList.CurrentDataVersion));
     }
 
     [TestCase(ProjectSettingsNames.PB_MODEL_TEXTS)]

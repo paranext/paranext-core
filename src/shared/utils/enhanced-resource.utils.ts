@@ -2,9 +2,23 @@
 // Reason: URL parser and MIME-type lookup for the papi-er:// Electron custom
 // protocol. Lives in src/shared so both the main-process handler and any future
 // renderer-side URL builders can import from the same module. Spec Section 10.
+//
+// EXPERIMENTAL: The `papi-er://` protocol and everything in this module are
+// experimental and not yet a stable contract — the scheme, URL shape, and these
+// helpers may change or be removed without notice. Unlike PAPI commands /
+// network objects / events, a custom Electron protocol has no TypeScript-type or
+// OpenRPC surface where the standard `@experimental` / `x-experimental` markers
+// can be announced, so this comment is the canonical experimental notice for it.
+// Do not depend on `papi-er://` as a stable URL scheme. See the experimental APIs
+// wiki page for what "experimental" means.
 import { startsWith, stringLength, substring } from 'platform-bible-utils';
 
-/** Protocol scheme for Enhanced Resources binary assets. */
+/**
+ * Protocol scheme for Enhanced Resources binary assets.
+ *
+ * @experimental The `papi-er://` protocol is not yet a stable contract. (TSDoc tag included for
+ *   discoverability even though a URL scheme has no OpenRPC representation — see the module header.)
+ */
 export const ENHANCED_RESOURCE_PROTOCOL_NAME = 'papi-er';
 
 /** Image size variant requested by the renderer. */

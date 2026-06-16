@@ -24,7 +24,11 @@ const config = {
       outFile: './dist/internal.d.ts',
       noCheck: false,
       libraries: {
-        inlinedLibraries: ['class-variance-authority'],
+        // `clsx` is inlined here (unlike the index entry) because the internal entry surfaces
+        // cva-typed components (e.g. ProjectSelector/LinkedScrRefButton) without also exporting a
+        // symbol that references `clsx`'s `ClassValue` directly. Without inlining clsx, the bundler
+        // emits a dangling `CLSX.ClassValue` reference and the generated-bundle check fails.
+        inlinedLibraries: ['class-variance-authority', 'clsx'],
       },
       output: {
         exportReferencedTypes: false,
