@@ -64,6 +64,13 @@
    `paratext-dark`, `platform-dark`) and depends on the user's selected theme family — pinning
    black unconditionally is bulletproof and matches the chip + marble-overlay strategy: in light
    mode the inherited foreground was already near-black, so this is a visual no-op there. */
-.er-filter-input-on-pastel {
+// Rest-state only. The `:not(:hover)` scope is essential: this rule is unlayered, while Tailwind
+// utilities (including the shadcn `ghost` variant's `tw:hover:text-foreground`) live in the
+// `utilities` cascade layer. Unlayered rules always beat layered ones regardless of specificity,
+// so a plain `.er-filter-input-on-pastel { color: black }` would override shadcn's hover treatment
+// and leave the X clear button stuck in black on hover. Scoping to `:not(:hover)` means this rule
+// stops matching the moment the cursor is over the element, letting the layered shadcn hover rule
+// take effect — black-on-pastel while idle, regular accent treatment on hover.
+.er-filter-input-on-pastel:not(:hover) {
   color: black;
 }

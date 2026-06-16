@@ -543,10 +543,10 @@ export function EnhancedResourceTabBar({
       ? 'tw:bg-[var(--er-filter-input-match-bg)]'
       : 'tw:bg-[var(--er-filter-input-no-match-bg)]';
   }
-  // Dark-mode legibility on the pastel tint. The actual `.dark .er-filter-input-on-pastel { color:
+  // Dark-mode legibility on the pastel tint. The actual `.er-filter-input-on-pastel { color:
   // black }` rule lives in `_er-tokens.scss` alongside the bg tokens themselves; here we just
-  // toggle the class. Writing it as raw CSS sidesteps Tailwind v4 scanner edge cases around
-  // dark variants on dynamically-toggled classes.
+  // toggle the class. Applied to both the typed-text Input AND the X clear Button so the icon
+  // stroke (which uses `currentColor`) matches the foreground color of the typed text.
   const filterInputTextClass = filterActive ? 'er-filter-input-on-pastel' : '';
 
   // The container ref is retained here in case future tab-bar behavior needs to react to its own
@@ -661,7 +661,7 @@ export function EnhancedResourceTabBar({
               size="icon"
               aria-label={filterClearLabel}
               onClick={() => onSearchChange('')}
-              className="tw:h-6 tw:w-6 tw:shrink-0"
+              className={cn('tw:h-6 tw:w-6 tw:shrink-0', filterInputTextClass)}
             >
               <X className="tw:h-3.5 tw:w-3.5" />
             </Button>

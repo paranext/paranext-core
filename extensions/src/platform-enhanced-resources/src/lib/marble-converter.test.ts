@@ -145,6 +145,36 @@ describe('marble-converter', () => {
         expect(wg).toBeTruthy();
       });
 
+      it('does NOT record an annotation for a <wg> with only strong (no research links)', () => {
+        // Locks in PT9-matching behavior (Matt review #5): a Strong's number alone does not make
+        // a word a "research term". The dictionary/encyclopedia/media tabs key off the four
+        // research-link attrs; without one of them there's no surface to point at, even if a
+        // Strong's lookup could resolve a gloss in principle. If a future backend wants to expose
+        // strong-only words as research terms, flip the gate AND update this test together.
+        const xml = wrapChapter(`
+          <para style="p">
+            <wg id="100" strong="H7225">strongOnly</wg>
+          </para>
+        `);
+        const result = convertMarbleChapterXml(xml);
+        expect(result.annotations.filter((a) => a.kind === 'word')).toHaveLength(0);
+      });
+
+      it('does NOT record an annotation for a <wg> with only textual_links', () => {
+        // `textual_links` is preserved on the char marker node (via WG_LINK_ATTRS) so any
+        // downstream consumer can see it, but it has no MarbleAnnotationMetadata slot and no
+        // research surface in PT10 today (Matt review #5). A textual_links-only <wg> is inert
+        // by design; flipping this gate would require adding a metadata field + a research
+        // surface that actually consumes textual variants.
+        const xml = wrapChapter(`
+          <para style="p">
+            <wg id="200" textual_links="some-variant-pointer">textualOnly</wg>
+          </para>
+        `);
+        const result = convertMarbleChapterXml(xml);
+        expect(result.annotations.filter((a) => a.kind === 'word')).toHaveLength(0);
+      });
+
       it('records semicolon-delimited link attributes as string arrays in annotation metadata', () => {
         const xml = wrapChapter(`
           <para style="p">

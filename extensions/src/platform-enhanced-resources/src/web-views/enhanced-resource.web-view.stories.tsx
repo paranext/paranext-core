@@ -139,6 +139,10 @@ const MOCK_MARBLE_XML = `
       <wg id="1007" strong="H0216" lexical_links="SDBH:or:004">light</wg>,
       and God called the
       <wg id="1008" strong="H3915" lexical_links="SDBH:darkness:002">night</wg>.
+      Behold a
+      <wg id="1009" strong="H0935" thematic_links="Realia:1.2.3">vessel</wg>
+      on the
+      <wg id="1010" strong="H0123" image_links="img:reuben">altar</wg>.
     </para>
   </usx_book>`;
 

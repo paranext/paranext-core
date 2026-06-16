@@ -128,9 +128,14 @@ const OVERLAY_STYLESHEET_DATA_ATTR = 'data-er-marble-overlays';
  * to high precedence:
  *
  * 1. Highlight-all - every marble-word mark, when the toolbar toggle is on
- * 2. Filter-match - lemma-siblings of the filtered word
- * 3. Hover-match - lemma-group of the currently-hovered word (transient feedback)
+ * 2. Hover-match - lemma-group of the currently-hovered word (transient feedback)
+ * 3. Filter-match - lemma-siblings of the filtered word
  * 4. Filter - the single focal word the user clicked (strongest signal, focal point)
+ *
+ * Filter-match sits ABOVE hover-match (Matt review #4): while a filter is active, hovering a
+ * lemma-sibling of the filtered word must keep its filter-match tint, not flip to hover-match, so
+ * the "I'm part of the filtered group" cue isn't lost mid-hover. A hovered word that is NOT a
+ * filter-match sibling falls through to hover-match unchanged.
  *
  * Color tokens (`--er-marble-*`) are declared centrally in `_er-tokens.scss` and are fixed brand
  * colors for the research-term UI, not derived from Platform.Bible's theme tokens.
@@ -154,14 +159,14 @@ function buildMarbleOverlayCss(state: {
       '.editor-typed-mark-external-marble-word { background-color: var(--er-marble-highlight-all-bg); color: black; border-radius: 2px; }',
     );
   }
-  if (state.filterMatchIds.size > 0) {
-    parts.push(
-      `${selectorForAnnotationIds(state.filterMatchIds)} { background-color: var(--er-marble-filter-match-bg); color: black; border-radius: 2px; }`,
-    );
-  }
   if (state.hoverMatchIds.size > 0) {
     parts.push(
       `${selectorForAnnotationIds(state.hoverMatchIds)} { background-color: var(--er-marble-hover-match-bg); color: black; border-radius: 2px; }`,
+    );
+  }
+  if (state.filterMatchIds.size > 0) {
+    parts.push(
+      `${selectorForAnnotationIds(state.filterMatchIds)} { background-color: var(--er-marble-filter-match-bg); color: black; border-radius: 2px; }`,
     );
   }
   if (state.filteredTokenId !== undefined) {
@@ -992,9 +997,17 @@ export function EnhancedScripturePane({
       // The hovered word itself is included in the match set so it shares the lemma-match
       // overlay color with its siblings - users expect the entire matching expression to read as
       // one visually unified group, including the word their cursor is on.
+      // Fallback (Matt review #1): the lemma index is built only from `lexicalLinks`, so a word
+      // whose annotation comes from `thematic_links` / `image_links` / `map_links` alone has no
+      // entry → `matchingIds` would be empty and NO overlay paints, not even on the hovered word.
+      // Seed the set with the hovered id so at least the hovered word always lights up, matching
+      // the comment above and the renamed unit test.
+      if (matchingIds.size === 0) matchingIds.add(id);
       // The CSS source order in `buildMarbleOverlayCss` makes filter (the focal-word color) win
       // over hover-match, so hovering the currently-filtered word still shows the strong filter
-      // color rather than the transient hover overlay.
+      // color rather than the transient hover overlay. Filter-match also beats hover-match by
+      // source order, so lemma-siblings of the filtered word keep their filter-match tint while
+      // the user is hovering them (Matt review #4).
       hoverMatchIdsRef.current = matchingIds;
       rebuildOverlayStyle();
     };
@@ -1168,9 +1181,13 @@ export function EnhancedScripturePane({
       data-testid="er-scripture-pane"
     >
       <div
-        className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col"
+        className="tw:flex tw:h-auto tw:min-h-0 tw:flex-1 tw:flex-col tw:overflow-auto"
         // Inline style is the appropriate primitive for a continuous numeric zoom factor that the
         // user can drive from the View menu - Tailwind classes can't express arbitrary scales.
+        // `overflow-auto` + `min-h-0` + `flex-1` is the same triple the platform-scripture-editor
+        // uses on its scrolling region so the editor content scrolls vertically when it exceeds
+        // the available pane height; without this the outer `overflow-hidden` simply clips long
+        // chapters.
         style={{ fontSize: `${scripturePaneZoom}rem` }}
       >
         <Editorial
