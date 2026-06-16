@@ -28,7 +28,7 @@ import {
   TooltipTrigger,
   cn,
 } from 'platform-bible-react';
-import { useEffect, useRef, useState } from 'react';
+import { useRef } from 'react';
 import { BookA, LibraryBig, Image as ImageIcon, Info, MapPin, Menu, X } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
 import type { LocalizedStringValue, ScrollGroupId } from 'platform-bible-utils';
@@ -544,28 +544,13 @@ export function EnhancedResourceTabBar({
       : 'tw:bg-[var(--er-filter-input-no-match-bg)]';
   }
 
-  // Track whether the toolbar's container query is below `@sm/toolbar` (24rem = 384px in Tailwind 4)
-  // so the four tab tooltips only fire when the inline label is hidden. Per the Tooltips design
-  // guideline ("If the tooltip would only repeat the visible label, omit it"), the tooltip is locked
-  // closed via `open={false}` at wider widths where the label is visible alongside the icon.
-  const TOOLBAR_COMPACT_BREAKPOINT_PX = 384;
+  // The container ref is retained here in case future tab-bar behavior needs to react to its own
+  // inline size (the FN-024 `tw-@container/toolbar` already drives label collapse via CSS alone).
   // React's `ref` prop on a DOM element expects `Ref<HTMLDivElement>`, which under the hood is
   // `RefObject<HTMLDivElement | null>`. Initialize with `null` to match that contract; the lint
   // rule's preferred `undefined` is incompatible with React's ref types.
   // eslint-disable-next-line no-null/no-null
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [isCompact, setIsCompact] = useState(false);
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return undefined;
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (!entry) return;
-      setIsCompact(entry.contentRect.width < TOOLBAR_COMPACT_BREAKPOINT_PX);
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
 
   return (
     // FN-024: `tw-@container/toolbar` establishes a named container-query context so the
@@ -576,49 +561,69 @@ export function EnhancedResourceTabBar({
       <div className="tw:flex tw:flex-nowrap tw:items-center tw:gap-2 tw:overflow-hidden tw:border-b tw:px-2 tw:py-1.5">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="tw:shrink-0">
           <TabsList>
-            {/* Each trigger is wrapped in a Tooltip whose `open` prop is locked to `false` when
-                the toolbar is wide enough to show the inline label (`isCompact === false`). Per
-                the Tooltips design guideline ("If the tooltip would only repeat the visible
-                label, omit it"), this gives the tooltip only when the label is collapsed to icon-
-                only. A single TooltipProvider wraps all four triggers so the provider context is
-                shared (vs. one per trigger). */}
+            {/* Each TabsTrigger nests the Tooltip INSIDE itself (rather than the more natural
+                `<TooltipTrigger asChild><TabsTrigger ...></TabsTrigger></TooltipTrigger>`
+                composition) so the tooltip surfaces the label on hover at narrow widths where the
+                inline text (`tw:hidden tw:@sm/toolbar:inline`) collapses to icon-only.
+
+                Why nested, not wrapped: Radix Tooltip sets `data-state="closed|delayed-open|
+                instant-open"` on its trigger element, and Radix Tabs sets
+                `data-state="active|inactive"` on its trigger. When `<TooltipTrigger asChild>`
+                wraps `<TabsTrigger>` directly, the Tooltip's `data-state` is merged onto the
+                TabsTrigger via Radix Slot - and the Tabs primitive's render order spreads user
+                props AFTER its own `data-state`, so Tooltip's value wins. The active tab's
+                `data-state="active"` never reaches the DOM, and the shadcn-ui
+                `tw:data-active:bg-background` selector (which maps to `[data-state="active"]` via
+                `shadcn/tailwind.css`'s `@custom-variant data-active`) never fires. Nesting the
+                Tooltip inside the TabsTrigger puts the Tooltip's `data-state` on the inner
+                `<span>` instead, leaving the TabsTrigger button's `data-state="active"` intact.
+                A single TooltipProvider wraps all four triggers so the provider context is
+                shared. */}
             <TooltipProvider>
-              <Tooltip open={isCompact ? undefined : false}>
-                <TooltipTrigger asChild>
-                  <TabsTrigger value="dictionary" aria-label={tabDictLabel}>
-                    <BookA className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
-                    <span className="tw:hidden tw:@sm/toolbar:inline">{tabDictLabel}</span>
-                  </TabsTrigger>
-                </TooltipTrigger>
-                <TooltipContent>{tabDictLabel}</TooltipContent>
-              </Tooltip>
-              <Tooltip open={isCompact ? undefined : false}>
-                <TooltipTrigger asChild>
-                  <TabsTrigger value="encyclopedia" aria-label={tabEncycLabel}>
-                    <LibraryBig className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
-                    <span className="tw:hidden tw:@sm/toolbar:inline">{tabEncycLabel}</span>
-                  </TabsTrigger>
-                </TooltipTrigger>
-                <TooltipContent>{tabEncycLabel}</TooltipContent>
-              </Tooltip>
-              <Tooltip open={isCompact ? undefined : false}>
-                <TooltipTrigger asChild>
-                  <TabsTrigger value="media" aria-label={tabMediaLabel}>
-                    <ImageIcon className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
-                    <span className="tw:hidden tw:@sm/toolbar:inline">{tabMediaLabel}</span>
-                  </TabsTrigger>
-                </TooltipTrigger>
-                <TooltipContent>{tabMediaLabel}</TooltipContent>
-              </Tooltip>
-              <Tooltip open={isCompact ? undefined : false}>
-                <TooltipTrigger asChild>
-                  <TabsTrigger value="maps" aria-label={tabMapsLabel}>
-                    <MapPin className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
-                    <span className="tw:hidden tw:@sm/toolbar:inline">{tabMapsLabel}</span>
-                  </TabsTrigger>
-                </TooltipTrigger>
-                <TooltipContent>{tabMapsLabel}</TooltipContent>
-              </Tooltip>
+              <TabsTrigger value="dictionary" aria-label={tabDictLabel}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="tw:inline-flex tw:items-center">
+                      <BookA className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
+                      <span className="tw:hidden tw:@sm/toolbar:inline">{tabDictLabel}</span>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{tabDictLabel}</TooltipContent>
+                </Tooltip>
+              </TabsTrigger>
+              <TabsTrigger value="encyclopedia" aria-label={tabEncycLabel}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="tw:inline-flex tw:items-center">
+                      <LibraryBig className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
+                      <span className="tw:hidden tw:@sm/toolbar:inline">{tabEncycLabel}</span>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{tabEncycLabel}</TooltipContent>
+                </Tooltip>
+              </TabsTrigger>
+              <TabsTrigger value="media" aria-label={tabMediaLabel}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="tw:inline-flex tw:items-center">
+                      <ImageIcon className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
+                      <span className="tw:hidden tw:@sm/toolbar:inline">{tabMediaLabel}</span>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{tabMediaLabel}</TooltipContent>
+                </Tooltip>
+              </TabsTrigger>
+              <TabsTrigger value="maps" aria-label={tabMapsLabel}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="tw:inline-flex tw:items-center">
+                      <MapPin className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
+                      <span className="tw:hidden tw:@sm/toolbar:inline">{tabMapsLabel}</span>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{tabMapsLabel}</TooltipContent>
+                </Tooltip>
+              </TabsTrigger>
             </TooltipProvider>
           </TabsList>
         </Tabs>
