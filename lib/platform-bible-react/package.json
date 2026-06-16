@@ -27,7 +27,7 @@
   "types": "dist/index.d.ts",
   "typesVersions": {
     "*": {
-      "internal": ["./dist/internal.d.ts"]
+      "experimental": ["./dist/experimental.d.ts"]
     }
   },
   "exports": {
@@ -36,10 +36,10 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
-    "./internal": {
-      "types": "./dist/internal.d.ts",
-      "import": "./dist/internal.js",
-      "require": "./dist/internal.cjs"
+    "./experimental": {
+      "types": "./dist/experimental.d.ts",
+      "import": "./dist/experimental.js",
+      "require": "./dist/experimental.cjs"
     }
   },
   "files": ["dist"],

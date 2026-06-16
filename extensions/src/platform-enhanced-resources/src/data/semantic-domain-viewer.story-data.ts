@@ -10,7 +10,7 @@
  * tests.
  */
 
-import type { SemanticDomain } from 'platform-bible-react/internal';
+import type { SemanticDomain } from 'platform-bible-react/experimental';
 import type { SemanticDomainFilteredItem } from '../components/semantic-domain-viewer/semantic-domain-viewer.component';
 
 /** Communication branch from gm-024 (logos / rhema / aggelia / euangelion). */

@@ -30,7 +30,7 @@ const config = defineConfig({
     lib: {
       entry: {
         index: path.resolve(__dirname, 'src/index.ts'),
-        internal: path.resolve(__dirname, 'src/internal.ts'),
+        experimental: path.resolve(__dirname, 'src/experimental.ts'),
       },
       formats: ['es', 'cjs'],
       fileName: (format, entryName) => `${entryName}.${format === 'es' ? 'js' : format}`,

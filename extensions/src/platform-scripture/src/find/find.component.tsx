@@ -34,7 +34,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { ScopeWithRange } from 'platform-bible-react/internal';
+import { ScopeWithRange } from 'platform-bible-react/experimental';
 import {
   formatReplacementString,
   LanguageStrings,

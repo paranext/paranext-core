@@ -23,7 +23,7 @@ import {
   ProjectSelector,
   ProjectSelectorProject,
   type ProjectSelectorLocalizedStrings,
-} from 'platform-bible-react/internal';
+} from 'platform-bible-react/experimental';
 import type {
   ManageBooksAction,
   ManageBooksDialogLocalizedStrings,

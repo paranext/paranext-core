@@ -8,7 +8,7 @@ import {
 } from '@papi/frontend/react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { useEvent, usePromise } from 'platform-bible-react';
-import { ProjectSelectorOpenTab } from 'platform-bible-react/internal';
+import { ProjectSelectorOpenTab } from 'platform-bible-react/experimental';
 import {
   deepEqual,
   getChaptersForBook,

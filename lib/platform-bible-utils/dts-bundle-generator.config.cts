@@ -14,8 +14,8 @@ const config = {
       noCheck: false,
     },
     {
-      filePath: './src/internal.ts',
-      outFile: './dist/internal.d.ts',
+      filePath: './src/experimental.ts',
+      outFile: './dist/experimental.d.ts',
       noCheck: false,
     },
   ],

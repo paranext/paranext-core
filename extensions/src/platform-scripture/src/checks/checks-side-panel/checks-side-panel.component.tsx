@@ -14,7 +14,7 @@ import {
   ProjectSelector,
   ProjectSelectorOpenTab,
   ProjectSelectorProject,
-} from 'platform-bible-react/internal';
+} from 'platform-bible-react/experimental';
 import { formatReplacementString, LanguageStrings } from 'platform-bible-utils';
 import { CheckJobStatusReport, CheckRunResult } from 'platform-scripture';
 import { useCallback, useMemo, useState } from 'react';

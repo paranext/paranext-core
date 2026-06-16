@@ -13,7 +13,7 @@ import {
   Tabs,
   cn,
 } from 'platform-bible-react';
-import { type SemanticDomain } from 'platform-bible-react/internal';
+import { type SemanticDomain } from 'platform-bible-react/experimental';
 import type { LocalizeKey, LocalizedStringValue, ScrollGroupId } from 'platform-bible-utils';
 import {
   formatScrRef,

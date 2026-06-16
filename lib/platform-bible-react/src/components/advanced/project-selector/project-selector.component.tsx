@@ -17,7 +17,7 @@ import {
 } from 'react';
 import { ArrowRight, Check, ChevronDown, ChevronsUpDown, Filter, Loader2 } from 'lucide-react';
 import { getLocalizeKeyForScrollGroupId, type ScrollGroupId } from 'platform-bible-utils';
-import { DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS } from 'platform-bible-utils/internal';
+import { DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS } from 'platform-bible-utils/experimental';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Z_INDEX_OVERLAY } from '@/components/z-index';
 import { Badge } from '@/components/shadcn-ui/badge';

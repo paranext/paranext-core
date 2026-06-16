@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { useCallback, useMemo, useState } from 'react';
 import { Button } from 'platform-bible-react';
-import type { SemanticDomain } from 'platform-bible-react/internal';
+import type { SemanticDomain } from 'platform-bible-react/experimental';
 import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
 import { convertMarbleChapterXml } from '../lib/marble-converter';
 // The Lexical editor's USJ-node styles (verse numbers, paragraph treatment, etc). The real app
