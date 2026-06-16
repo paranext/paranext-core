@@ -96,31 +96,64 @@ export async function startProjectLookupService(): Promise<void> {
                 type: 'object',
                 description: 'Information about the PDP Factories associated with the project.',
               },
+              settingsSnapshot: {
+                type: 'object',
+                additionalProperties: true,
+                description:
+                  'EXPERIMENTAL. Opt-in batch of project setting values, keyed by setting name, present only when metadata was requested with `includeSettings`. Best-effort: a setting absent from the snapshot should be fetched with `getSetting`.',
+              },
             },
           },
           ProjectMetadataFilterOptions: {
             type: 'object',
             properties: {
+              includeProjectIds: {
+                oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }],
+                description: 'Project Id or Ids to include in the metadata retrieval.',
+              },
+              excludeProjectIds: {
+                oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }],
+                description: 'Project Id or Ids to exclude from the metadata retrieval.',
+              },
+              includeProjectInterfaces: {
+                oneOf: [
+                  { type: 'string' },
+                  {
+                    type: 'array',
+                    items: {
+                      oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }],
+                    },
+                  },
+                ],
+                description:
+                  '`projectInterface`(s) to include (matched as RegExp). A nested array requires all of its entries to match.',
+              },
+              excludeProjectInterfaces: {
+                oneOf: [
+                  { type: 'string' },
+                  {
+                    type: 'array',
+                    items: {
+                      oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }],
+                    },
+                  },
+                ],
+                description:
+                  '`projectInterface`(s) to exclude (matched as RegExp). A nested array requires all of its entries to match.',
+              },
               includePdpFactoryIds: {
-                type: 'array',
-                items: {
-                  type: 'string',
-                },
-                description: 'List of PDP Factory Ids to include in the metadata retrieval.',
+                oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }],
+                description: 'PDP Factory Id or Ids to include in the metadata retrieval.',
               },
               excludePdpFactoryIds: {
-                type: 'array',
-                items: {
-                  type: 'string',
-                },
-                description: 'List of PDP Factory Ids to exclude from the metadata retrieval.',
+                oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }],
+                description: 'PDP Factory Id or Ids to exclude from the metadata retrieval.',
               },
-              projectIds: {
+              includeSettings: {
                 type: 'array',
-                items: {
-                  type: 'string',
-                },
-                description: 'List of project Ids to filter the metadata retrieval.',
+                items: { type: 'string' },
+                description:
+                  'EXPERIMENTAL. Names of project settings (e.g. `platform.name`, `platform.fullName`) to request as a batch. A supporting PDP factory fills each project’s `settingsSnapshot` server-side, letting callers avoid a per-project `getSetting` fan-out. Settings a factory cannot cheaply provide are omitted; fall back to `getSetting` for any setting missing from `settingsSnapshot`.',
               },
             },
             additionalProperties: false,

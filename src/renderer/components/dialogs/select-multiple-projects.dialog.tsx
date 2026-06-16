@@ -30,6 +30,12 @@ function SelectMultipleProjectsDialog({
 }: DialogTypes[typeof SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE]['props']) {
   const [projects, isLoadingProjects] = usePromise(
     useCallback(async () => {
+      // PERF-FANOUT-FOLLOWUP: this still fans out a per-project `getSetting('platform.name')` after
+      // `getMetadataForAllProjects`. Migrate to the batched `includeSettings`/`settingsSnapshot`
+      // path used by the Home tab (extensions/src/platform-get-resources/src/get-local-projects.util.ts)
+      // and the project picker (src/renderer/hooks/use-project-picker-data.hook.ts). This consumer
+      // takes configurable `includeProjectInterfaces`, so the base Paratext factory fills the
+      // snapshot directly — no layering threading needed.
       const projectsMetadata = await projectLookupService.getMetadataForAllProjects({
         excludeProjectIds,
         includeProjectIds,

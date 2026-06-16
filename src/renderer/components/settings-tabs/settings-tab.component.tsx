@@ -31,6 +31,12 @@ async function getAllProjectIdsFromMetadata() {
   return allMetadata.flatMap((metadata) => metadata.id);
 }
 
+// PERF-FANOUT-FOLLOWUP: `getProjectName` below is called per project after
+// `getAllProjectIdsFromMetadata`, fanning out a `getSetting('platform.name')` per project. Migrate
+// to a single `getMetadataForAllProjects({ includeSettings: ['platform.name'] })` and read each
+// name from `settingsSnapshot` — see the Home tab
+// (extensions/src/platform-get-resources/src/get-local-projects.util.ts) and the project picker
+// (src/renderer/hooks/use-project-picker-data.hook.ts) for the pattern.
 async function getProjectName(projectIdToGetName: string) {
   const pdp = await projectDataProviders.get('platform.base', projectIdToGetName);
   const projectName = await pdp.getSetting('platform.name');

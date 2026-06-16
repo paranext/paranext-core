@@ -113,6 +113,11 @@ global.webViewComponent = function ChecksSidePanelWebView({
     useCallback(async () => {
       const projectDict: { [projectId: string]: ProjectOption } = {};
 
+      // PERF-FANOUT-FOLLOWUP: `getProjectNames` below is called per project after
+      // `getMetadataForAllProjects`, fanning out per-project `getSetting` calls. Migrate to the
+      // batched `includeSettings`/`settingsSnapshot` path used by the Home tab
+      // (extensions/src/platform-get-resources/src/get-local-projects.util.ts) and the project
+      // picker (src/renderer/hooks/use-project-picker-data.hook.ts) to remove the round-trips.
       // Fetch only scripture projects metadata - those with Scripture or Paratext interfaces
       const allMetadata = await papi.projectLookup.getMetadataForAllProjects({
         includeProjectInterfaces: ['Scripture', 'Paratext'],

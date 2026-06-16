@@ -8,6 +8,18 @@ export type ProjectMetadataFilterOptions = ModifierProject & {
   includeProjectIds?: string | string[];
   /** Project IDs to exclude */
   excludeProjectIds?: string | string[];
+  /**
+   * Names of project settings (e.g. `platform.name`, `platform.fullName`, `platform.language`,
+   * `platform.isPublished`) to request as a batch alongside the metadata. A Project Data Provider
+   * Factory that supports this hint populates {@link ProjectMetadata.settingsSnapshot} with these
+   * settings, read server-side in a single pass — letting callers avoid a per-project `getSetting`
+   * fan-out. Factories that do not support the hint, and individual settings they cannot cheaply
+   * provide, are simply omitted from the snapshot; callers should fall back to `getSetting` for any
+   * setting missing from {@link ProjectMetadata.settingsSnapshot}.
+   *
+   * @experimental This option is experimental and may change or be removed.
+   */
+  includeSettings?: string[];
 };
 
 /**

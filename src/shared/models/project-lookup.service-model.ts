@@ -348,6 +348,18 @@ export const projectLookupServiceBase: ProjectLookupServiceType = {
         ]),
       ];
 
+    // Union the opt-in settings requests. This is what threads `includeSettings` through a Layering
+    // PDPF: the layering factory merges the filters it was called with (which carry `includeSettings`)
+    // into the filters it passes back to `getMetadataForAllProjectsWithoutRetries`, so the base
+    // factory it layers over still receives the hint and fills each project's `settingsSnapshot`.
+    if (metadataFilter1?.includeSettings || metadataFilter2?.includeSettings)
+      mergedFilter.includeSettings = [
+        ...new Set([
+          ...ensureArray(metadataFilter1?.includeSettings),
+          ...ensureArray(metadataFilter2?.includeSettings),
+        ]),
+      ];
+
     return mergedFilter;
   },
   getMinimalMatchPdpFactoryId(
@@ -449,6 +461,11 @@ async function internalGetMetadata(
           ...ensureArray(options.excludePdpFactoryIds),
           escapeStringRegexp(pdpFactoryId),
         ],
+        // Forward the opt-in settings request so a supporting PDP factory can fill each project's
+        // `settingsSnapshot` server-side in this same call (and so Layering PDPFs re-merge it into
+        // the filters they pass to the base factory they layer over). Built fresh here, not spread
+        // from `options`, so this must be added explicitly.
+        includeSettings: options.includeSettings,
       });
       if (projectsMetadata) {
         const clonedProjectsMetadata = deepClone(projectsMetadata);
@@ -483,6 +500,21 @@ async function internalGetMetadata(
           enrichedMd.pdpFactoryInfo[pdpFactoryId] = {
             projectInterfaces: [...md.projectInterfaces],
           };
+          // Carry the opt-in settings snapshot onto the aggregated metadata with
+          // first-writer-wins-per-key semantics, independent of the order PDP factories resolve in
+          // (the surrounding Promise.all order is non-deterministic). Without this explicit merge,
+          // only the first-processed factory's snapshot would survive — a later factory's
+          // `settingsSnapshot` would be silently dropped, since the loop otherwise only merges
+          // `projectInterfaces` onto `enrichedMd`. Settings are a base-PDP concept, so when multiple
+          // factories report the same project the base factory's values win for the keys it
+          // provides; a layering factory only contributes keys the base did not.
+          if (md.settingsSnapshot) {
+            const mergedSnapshot = enrichedMd.settingsSnapshot ?? {};
+            Object.entries(md.settingsSnapshot).forEach(([settingName, value]) => {
+              if (!(settingName in mergedSnapshot)) mergedSnapshot[settingName] = value;
+            });
+            enrichedMd.settingsSnapshot = mergedSnapshot;
+          }
           // If there is metadata already in the map, add the new `projectInterface`s
           if (allProjectsMetadata.has(md.id)) {
             md.projectInterfaces.forEach((newProjectInterface) => {

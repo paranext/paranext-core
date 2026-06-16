@@ -51,9 +51,16 @@ internal abstract class ProjectDataProviderFactory : NetworkObject
     protected abstract Task StartFactoryAsync();
 
     /// <summary>
-    /// Return project metadata for all projects available through this PDP factory
+    /// Return project metadata for all projects available through this PDP factory.
     /// </summary>
-    protected abstract List<ProjectMetadata>? GetAvailableProjects(JsonElement _ignore);
+    /// <param name="options">
+    /// The deserialized <c>getAvailableProjects</c> options object the project lookup service passes
+    /// through (e.g. <c>includePdpFactoryIds</c>/<c>excludePdpFactoryIds</c>). It may also carry the
+    /// optional, EXPERIMENTAL <c>includeSettings</c> string array; a factory that supports it may
+    /// populate <see cref="ProjectMetadata.SettingsSnapshot"/> for the requested
+    /// <c>platform.*</c> settings. Factories that ignore it simply return no snapshot.
+    /// </param>
+    protected abstract List<ProjectMetadata>? GetAvailableProjects(JsonElement options);
 
     /// <summary>
     /// Return the name of the PDP network object that corresponds to the given project ID

@@ -30,9 +30,39 @@ internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
         return Task.CompletedTask;
     }
 
-    protected override List<ProjectMetadata>? GetAvailableProjects(JsonElement _ignore)
+    protected override List<ProjectMetadata>? GetAvailableProjects(JsonElement options)
     {
-        return _paratextProjects.GetAllProjectDetails().Select(pd => pd.Metadata).ToList();
+        var includeSettings = TryReadIncludeSettings(options);
+        return _paratextProjects
+            .GetAllProjectDetails(includeSettings)
+            .Select(pd => pd.Metadata)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Reads the optional, EXPERIMENTAL <c>includeSettings</c> string array out of the
+    /// <c>getAvailableProjects</c> options argument. Returns null when the argument is absent or
+    /// malformed so the default (no settings snapshot) path runs.
+    /// </summary>
+    private static List<string>? TryReadIncludeSettings(JsonElement options)
+    {
+        if (
+            options.ValueKind != JsonValueKind.Object
+            || !options.TryGetProperty("includeSettings", out var includeSettingsElement)
+            || includeSettingsElement.ValueKind != JsonValueKind.Array
+        )
+            return null;
+
+        var settings = new List<string>();
+        foreach (var element in includeSettingsElement.EnumerateArray())
+        {
+            if (element.ValueKind != JsonValueKind.String)
+                continue;
+            var value = element.GetString();
+            if (!string.IsNullOrEmpty(value))
+                settings.Add(value);
+        }
+        return settings.Count > 0 ? settings : null;
     }
 
     public override string GetProjectDataProviderID(string projectID)
