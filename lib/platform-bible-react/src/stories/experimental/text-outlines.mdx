@@ -1,0 +1,135 @@
+import { Meta, Canvas } from '@storybook/addon-docs/blocks';
+import * as TextOutlines from './text-outlines.stories';
+
+<Meta of={TextOutlines} />
+
+# Text Outlines (Multiline) — experimental sketches
+
+> **Status: experimental / demo-only.** These are not components, not part of the design system,
+> and not wired to design tokens. They are two self-contained sketches exploring how to draw a
+> non-rectangular outline or highlight that **hugs the ragged-right shape of a multiline text
+> block** — the "staircase" shape a text selection makes across lines. Copy ideas out of them;
+> don't import them.
+
+## The problem
+
+A normal border or background draws a rectangle around the text's bounding box. We wanted the
+opposite: an outline that follows each line's actual right edge, so the last (short) line doesn't
+get a big empty rectangle of highlight to its right. Two approaches below get there in very
+different ways.
+
+Both demos are **editable** — click into the text in the canvas and type to watch the outline
+re-fit. Sliders adjust padding and (depending on technique) border width or corner radius.
+
+---
+
+## Technique 1 — CSS `clip-path` pseudo-element
+
+<Canvas of={TextOutlines.Technique1ClipPath} />
+
+A wrapper element gets two stacked pseudo-elements behind the text: `::before` painted in the
+border colour and `::after` painted as the fill. JavaScript measures each line and writes a ragged
+staircase `polygon()` into each `clip-path`. The fill is clipped to a **slightly smaller (inset)**
+polygon than the border layer, so the exposed rim of the layer below reads as a true outline that
+hugs every line.
+
+The key trick is the outline. You can't just add a CSS `border`: `clip-path` clips the border away
+along with everything else. Instead, the same staircase is computed twice — once at `pad` (border
+layer) and once at `pad - borderWidth` (fill layer) — and the difference between them is the
+visible rim.
+
+```tsx
+// Two staircases from the same line rects, the inner one inset by the border width.
+const outer = staircasePoints(el, pad); // border layer  -> ::before
+const inner = staircasePoints(el, pad - borderWidth); // fill layer -> ::after
+```
+
+```css
+.wrap {
+  position: relative;
+  display: inline-block;
+  padding: 8px 14px;
+}
+.wrap::before,
+.wrap::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+}
+.wrap::before {
+  background: #ff5d8f;
+} /* outer = border colour */
+.wrap::after {
+  background: linear-gradient(120deg, #ffe08a, #ffb86c);
+} /* fill, inset */
+/* clip-path: polygon(...) for ::before and ::after written from JS measurements */
+```
+
+Set border width to `0` and it collapses to a plain highlight fill.
+
+---
+
+## Technique 4 — `Range.getClientRects()` → SVG path
+
+<Canvas of={TextOutlines.Technique4SvgPath} />
+
+JavaScript builds a `Range` over the text and reads **one rectangle per visual line** via
+`getClientRects()`. Those rectangles are stitched into a single connected SVG `<path>` that traces
+a ragged staircase around the whole block — like a selection marquee. Because the outline is a real
+stroked vector, it can be filled, dashed, animated, or exported.
+
+```tsx
+function staircasePoints(el, pad) {
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const rows = mergeRectsPerLine(range.getClientRects());
+  const pts = [];
+  for (const r of rows) {
+    // down the right edge
+    pts.push([r.right + pad, r.top - pad]);
+    pts.push([r.right + pad, r.bottom + pad]);
+  }
+  for (let i = rows.length - 1; i >= 0; i--) {
+    // up the left edge
+    pts.push([rows[i].left - pad, rows[i].bottom + pad]);
+    pts.push([rows[i].left - pad, rows[i].top - pad]);
+  }
+  return pts;
+}
+path.setAttribute('d', roundedPath(staircasePoints(text, 6), 8));
+```
+
+The SVG sits in an absolutely-positioned overlay (`inset: 0`, `pointer-events: none`) over the text,
+with no `viewBox`, so 1 user unit = 1 CSS px and the path's element-local coordinates line up with
+the text.
+
+---
+
+## Which one?
+
+| | Technique 1 — `clip-path` | Technique 4 — SVG path |
+| --- | --- | --- |
+| Outline is a… | filled rim between two clipped layers | real stroked vector |
+| Rounded corners | no (polygon only) | yes (quadratic corners) |
+| Dashed / animated stroke | no | yes |
+| DOM cost | 2 pseudo-elements, no extra nodes | 1 SVG + 1 path overlay |
+| Both need JS to measure lines | yes | yes |
+
+Use **Technique 1** when you want a solid marker-style highlight with a coloured rim and don't need
+rounded corners or stroke effects. Use **Technique 4** when you want an actual outline you can
+stroke, round, dash, or animate.
+
+## Caveats (why these stay experimental)
+
+- **Both require JS measurement.** The outline is recomputed from `getClientRects()` on edit,
+  resize, and after web fonts load (a font swap re-wraps lines). There is no pure-CSS version that
+  follows ragged text on the right edge.
+- **Not RTL-aware** and not tested against bidi text, vertical writing modes, or `text-align: justify`.
+- **No theming.** Colours are hard-coded so the sketches read the same regardless of the selected
+  Storybook theme; a real component would pull from tokens.
+- **Accessibility:** the editable surfaces are a demo affordance only (a11y checks are turned off
+  for these stories). A shipped version would not make the text contentEditable.
+
+If we decide to productionize one of these, it should be rebuilt as a proper component with tokens,
+RTL handling, and tests — at which point it leaves this Experimental section.
