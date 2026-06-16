@@ -1,12 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NetworkObjectDetails } from '@shared/models/network-object.model';
 
-// network-object-status.service caches its initialization via createCachedInitializer and holds the
-// resolved status network object at module scope, so each test re-imports a fresh copy via
-// vi.resetModules() (see loadService). The real AsyncVariable and isSubset (platform-bible-utils)
-// are exercised; only network-object.service is mocked so a test can drive both the snapshot
-// (getAllNetworkObjectDetails) and the onDidCreateNetworkObject event stream that
-// waitForNetworkObject races against.
+// Each test re-imports the service (vi.resetModules, see loadService) because it caches init and
+// holds the resolved network object at module scope. Only network-object.service is mocked, so a
+// test can drive the snapshot (getAllNetworkObjectDetails) and the onDidCreateNetworkObject event
+// stream, while the real AsyncVariable and isSubset run.
 
 const { mockGet, mockUnsub, event } = vi.hoisted(() => {
   // Holds the latest waitForNetworkObject subscriber so a test can emit "object created" events

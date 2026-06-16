@@ -21,7 +21,8 @@ const initialize = createCachedInitializer(async () => {
   // Inject the network timeout into every JS process once the settings service is available.
   // We can't pull from within the network service as it would create a dependency loop.
   // Fire-and-forget: subscribing is a side effect, not part of providing the service, so a failure
-  // here is logged rather than failing (and retrying) the whole settings-service initialization.
+  // here is logged rather than rejecting the whole settings-service initialization (which
+  // createCachedInitializer would then retry).
   dataProvider
     .subscribe('platform.requestTimeout', (newTimeout: number | PlatformError) => {
       if (isPlatformError(newTimeout)) {

@@ -16,7 +16,8 @@
 export function createCachedInitializer<T = void>(initializer: () => Promise<T>): () => Promise<T> {
   let cachedPromise: Promise<T> | undefined;
   return () => {
-    // Wrap in an async IIFE so an initializer that throws synchronously rejects instead of throwing
+    // Wrap in an async IIFE so this always returns a promise: a synchronous throw from the
+    // initializer becomes a rejected promise instead of throwing at the call site.
     cachedPromise ??= (async () => initializer())().catch((error) => {
       cachedPromise = undefined;
       throw error;
