@@ -56,11 +56,14 @@
   --er-filter-input-no-match-bg: hsl(34 100% 92%);
 }
 
-.dark {
-  /* Darker, partially-transparent variants of the toolbar filter-input tint so the green /
-     orange signal still reads against dark scripture-pane backgrounds. Matches the original
-     `dark:bg-emerald-900/40` and `dark:bg-orange-900/40` Tailwind classes in
-     toolbar.component.tsx. */
-  --er-filter-input-match-bg: hsl(165 84% 16% / 0.4);
-  --er-filter-input-no-match-bg: hsl(15 75% 28% / 0.4);
+/* The `--er-filter-input-*` tokens above are fixed pastels in both light and dark mode (earlier
+   `.dark` overrides on these tokens never reached the input in practice). To keep the typed filter
+   text legible on the pastel bg, the toolbar component adds `er-filter-input-on-pastel` to the
+   active input and we force black text below. We do NOT scope this rule to a theme class (`.dark`,
+   `[class*="-dark"]`, etc.) because the body class is the active theme's id (e.g. `dark`,
+   `paratext-dark`, `platform-dark`) and depends on the user's selected theme family — pinning
+   black unconditionally is bulletproof and matches the chip + marble-overlay strategy: in light
+   mode the inherited foreground was already near-black, so this is a visual no-op there. */
+.er-filter-input-on-pastel {
+  color: black;
 }

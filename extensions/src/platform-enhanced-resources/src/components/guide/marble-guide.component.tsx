@@ -18,10 +18,10 @@ import type { LocalizedStringValue } from 'platform-bible-utils';
 import { BookA, Image as ImageIcon, Info, LibraryBig, MapPin } from 'lucide-react';
 
 /**
- * Object containing all keys used for localization in this component. Mirrors the 19 strings from
- * PT9's `MarbleGuideForm.cs` (MarbleGuideForm_1 .. MarbleGuideForm_19) plus 3 chrome strings the
- * shadcn Dialog needs (title is reused for the dialog title, plus close-button label, checkbox
- * label, and an sr-only description).
+ * Object containing all keys used for localization in this component. Sourced from PT9's
+ * `MarbleGuideForm.cs` (the `MarbleGuideForm_*` body strings) plus the chrome strings the shadcn
+ * Dialog needs — title (reused for the dialog title), close-button label, checkbox label, and an
+ * sr-only description.
  */
 export const MARBLE_GUIDE_STRING_KEYS = Object.freeze([
   '%enhancedResources_marbleGuide_title%',
@@ -210,7 +210,7 @@ export function MarbleGuide({
   // Color chips. The localized color word ("blue", "gray", "orange") is the visible label so the
   // text names the color users actually see (or will see) in the scripture pane. All three chips
   // pull their background from extension-local CSS custom properties declared centrally in
-  // `extensions/src/platform-enhanced-resources/src/_tokens.scss`:
+  // `extensions/src/platform-enhanced-resources/src/_er-tokens.scss`:
   //
   // - Blue (`--er-marble-hover-match-bg`): SAME token the scripture-pane uses to paint linked
   //   research terms on hover, so the help-dialog swatch and the on-screen overlay match.
@@ -219,9 +219,13 @@ export function MarbleGuide({
   //   paragraphs are dimmed via text-muted-foreground and live inside the collapsed Biblical
   //   Terms section so users aren't promised a visual signal they can't currently see. When the
   //   rendering-status overlays land, the scripture-pane will consume these same tokens.
+  // Chip backgrounds are fixed light pastels in both light and dark mode (the `--er-marble-*`
+  // tokens have no `.dark` overrides — the swatches must visually match the scripture-pane
+  // overlay colors which are also fixed). In dark mode `--foreground` is near-white, which
+  // gives illegible contrast on the pastel; force near-black text under `.dark` instead.
   const blueChip = (
     <span
-      className="tw:rounded tw:bg-[var(--er-marble-hover-match-bg)] tw:px-1.5 tw:py-0.5 tw:font-medium tw:text-foreground"
+      className="tw:rounded tw:bg-[var(--er-marble-hover-match-bg)] tw:px-1.5 tw:py-0.5 tw:font-medium tw:text-foreground tw:dark:text-black"
       data-testid="marble-guide-color-chip-blue"
     >
       {blueWord}
@@ -229,7 +233,7 @@ export function MarbleGuide({
   );
   const grayChip = (
     <span
-      className="tw:rounded tw:bg-[var(--er-marble-rendering-found-bg)] tw:px-1.5 tw:py-0.5 tw:font-medium tw:text-foreground"
+      className="tw:rounded tw:bg-[var(--er-marble-rendering-found-bg)] tw:px-1.5 tw:py-0.5 tw:font-medium tw:text-foreground tw:dark:text-black"
       data-testid="marble-guide-color-chip-gray"
     >
       {grayWord}
@@ -237,7 +241,7 @@ export function MarbleGuide({
   );
   const orangeChip = (
     <span
-      className="tw:rounded tw:bg-[var(--er-marble-rendering-missing-bg)] tw:px-1.5 tw:py-0.5 tw:font-medium tw:text-foreground"
+      className="tw:rounded tw:bg-[var(--er-marble-rendering-missing-bg)] tw:px-1.5 tw:py-0.5 tw:font-medium tw:text-foreground tw:dark:text-black"
       data-testid="marble-guide-color-chip-orange"
     >
       {orangeWord}

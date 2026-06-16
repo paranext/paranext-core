@@ -532,17 +532,22 @@ export function EnhancedResourceTabBar({
   // the input until clicked. We render the filter box at all times; the X button only shows when
   // there's something to clear so the empty input visually matches an idle search bar. The tint
   // (green when there are matches, orange when no matches) only fires when a filter is active so
-  // the empty state stays visually neutral. (BT integration may consume `hasMatches` later — see
-  // SB#2 / Theme 9 origin notes.) The two tint colors are sourced from extension-local CSS
-  // custom properties declared centrally in `extensions/src/platform-enhanced-resources/src/
-  // _tokens.scss` (`--er-filter-input-match-bg` / `--er-filter-input-no-match-bg`); the `.dark`
-  // selector in that file handles dark-mode contrast.
+  // the empty state stays visually neutral. The two tint colors are sourced from
+  // `--er-filter-input-match-bg` / `--er-filter-input-no-match-bg` declared in `_er-tokens.scss`;
+  // those are fixed light pastels in both light and dark mode, so we pair them with
+  // `tw:dark:text-black` to keep the typed filter text legible (mirrors the chip + marble-overlay
+  // pattern in `marble-guide.component.tsx` and `scripture-pane.component.tsx`).
   let filterTintClass = 'tw:bg-background';
   if (filterActive) {
     filterTintClass = hasMatches
       ? 'tw:bg-[var(--er-filter-input-match-bg)]'
       : 'tw:bg-[var(--er-filter-input-no-match-bg)]';
   }
+  // Dark-mode legibility on the pastel tint. The actual `.dark .er-filter-input-on-pastel { color:
+  // black }` rule lives in `_er-tokens.scss` alongside the bg tokens themselves; here we just
+  // toggle the class. Writing it as raw CSS sidesteps Tailwind v4 scanner edge cases around
+  // dark variants on dynamically-toggled classes.
+  const filterInputTextClass = filterActive ? 'er-filter-input-on-pastel' : '';
 
   // The container ref is retained here in case future tab-bar behavior needs to react to its own
   // inline size (the FN-024 `tw-@container/toolbar` already drives label collapse via CSS alone).
@@ -645,7 +650,10 @@ export function EnhancedResourceTabBar({
             value={searchValue}
             readOnly
             aria-label={filterAriaLabel}
-            className="tw:h-7 tw:min-w-0 tw:flex-1 tw:border-0 tw:bg-transparent tw:text-xs tw:focus-visible:ring-0"
+            className={cn(
+              'tw:h-7 tw:min-w-0 tw:flex-1 tw:border-0 tw:bg-transparent tw:text-xs tw:focus-visible:ring-0',
+              filterInputTextClass,
+            )}
           />
           {filterActive && (
             <Button

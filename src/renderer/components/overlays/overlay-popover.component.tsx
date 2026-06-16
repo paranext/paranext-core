@@ -52,9 +52,6 @@ export type OverlayPopoverPresentationalProps = {
 /** Default max width for popovers */
 const DEFAULT_MAX_WIDTH = 320;
 
-/** Default max height for popovers */
-const MAX_HEIGHT = 400;
-
 // ── Internal Components ──
 
 /** Renders the title if present */
@@ -196,14 +193,12 @@ export function OverlayPopoverPresentational({
       </PopoverAnchor>
       <PopoverContent
         data-overlay-popover
-        className="tw:overflow-y-auto"
         side={side}
         align="start"
         sideOffset={showArrow ? 8 : 4}
         style={{
           zIndex: Z_INDEX_OVERLAY,
           maxWidth,
-          maxHeight: MAX_HEIGHT,
         }}
         onKeyDown={handleKeyDown}
         onOpenAutoFocus={(e) => e.preventDefault()}

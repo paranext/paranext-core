@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { useState } from 'react';
+import { Button } from 'platform-bible-react';
 import { getLocalizedStrings } from '../../../../../../.storybook/localization.utils';
 // Single source of truth for the extension-local `--er-*` color tokens. Side-effect import so
 // Storybook (which doesn't load the extension's web-view SCSS bundle) injects the same `:root {
@@ -114,10 +115,16 @@ export const Default: Story = {
           }}
         />
 
+        {/* Story-only controls. Wrap in `pr-twp` so platform `Button` styles resolve (Tailwind
+            preflight scope) — without it the shadcn Button renders unstyled. Using the platform
+            Button instead of a raw `<button>` so the trigger reads as a real, clickable affordance
+            to reviewers. */}
         <div
+          className="pr-twp"
           style={{
             display: 'flex',
             flexWrap: 'wrap',
+            alignItems: 'center',
             gap: 12,
             padding: 8,
             borderTop: '1px solid #ccc',
@@ -125,13 +132,14 @@ export const Default: Story = {
           }}
         >
           <strong>Filter input controls (Theme 9):</strong>
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             onClick={() => setFilterText('begin·ning')}
-            style={{ fontSize: 12 }}
           >
             Simulate word click → set filter
-          </button>
+          </Button>
           <label>
             <input
               type="checkbox"

@@ -134,6 +134,13 @@ const OVERLAY_STYLESHEET_DATA_ATTR = 'data-er-marble-overlays';
  *
  * Color tokens (`--er-marble-*`) are declared centrally in `_er-tokens.scss` and are fixed brand
  * colors for the research-term UI, not derived from Platform.Bible's theme tokens.
+ *
+ * Each rule also pins `color: black`. The pastel backgrounds are fixed in both light and dark mode
+ * (the marble overlays must visually match the chip swatches in `marble-guide.component.tsx`), but
+ * the underlying scripture text inherits the theme `--foreground`, which is near-white in dark mode
+ * and would render illegibly on the pastel. Forcing dark text on the marked word only is scoped
+ * tight enough not to bleed into the rest of the scripture text. In light mode the inherited
+ * foreground was already near-black, so this is visually a no-op.
  */
 function buildMarbleOverlayCss(state: {
   highlightAllOn: boolean;
@@ -144,22 +151,22 @@ function buildMarbleOverlayCss(state: {
   const parts: string[] = [];
   if (state.highlightAllOn) {
     parts.push(
-      '.editor-typed-mark-external-marble-word { background-color: var(--er-marble-highlight-all-bg); border-radius: 2px; }',
+      '.editor-typed-mark-external-marble-word { background-color: var(--er-marble-highlight-all-bg); color: black; border-radius: 2px; }',
     );
   }
   if (state.filterMatchIds.size > 0) {
     parts.push(
-      `${selectorForAnnotationIds(state.filterMatchIds)} { background-color: var(--er-marble-filter-match-bg); border-radius: 2px; }`,
+      `${selectorForAnnotationIds(state.filterMatchIds)} { background-color: var(--er-marble-filter-match-bg); color: black; border-radius: 2px; }`,
     );
   }
   if (state.hoverMatchIds.size > 0) {
     parts.push(
-      `${selectorForAnnotationIds(state.hoverMatchIds)} { background-color: var(--er-marble-hover-match-bg); border-radius: 2px; }`,
+      `${selectorForAnnotationIds(state.hoverMatchIds)} { background-color: var(--er-marble-hover-match-bg); color: black; border-radius: 2px; }`,
     );
   }
   if (state.filteredTokenId !== undefined) {
     parts.push(
-      `${selectorForAnnotationIds([state.filteredTokenId])} { background-color: var(--er-marble-filter-bg); border-radius: 2px; }`,
+      `${selectorForAnnotationIds([state.filteredTokenId])} { background-color: var(--er-marble-filter-bg); color: black; border-radius: 2px; }`,
     );
   }
   return parts.join('\n');
@@ -207,7 +214,12 @@ mark {
 }
 .editor-typed-mark-external-marble-word {
   cursor: pointer;
-  color: inherit;
+  /* No 'color: inherit' here — it ties on specificity with the dynamic highlight-all rule in
+     buildMarbleOverlayCss (single class selector), and depending on stylesheet mount order can
+     beat the overlay's 'color: black', leaving dark-mode text near-white on the pastel
+     background. Without an explicit color here, marks naturally inherit the surrounding
+     scripture color when no overlay is active, and the overlay's 'color: black' wins by being
+     the only color rule when an overlay applies. */
 }
 .editor-typed-mark-external-marble-note {
   cursor: pointer;
@@ -542,10 +554,6 @@ export function EnhancedScripturePane({
   // Editorial's forwarded ref is typed `EditorRef | null`; we match that to satisfy the prop type.
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | null>(null);
-  // Container ref attached to the component's root div. Kept for possible future use; the
-  // overlay rules no longer query through it because they're CSS, not per-element DOM mutations.
-  // eslint-disable-next-line no-null/no-null
-  const containerRef = useRef<HTMLDivElement | null>(null);
   // Inject the marble annotation stylesheet so the `<mark>` elements Editorial creates have a
   // visible treatment. The stylesheet is static; useStylesheet adds a single `<style>` tag for
   // the lifetime of this component.
@@ -1156,7 +1164,6 @@ export function EnhancedScripturePane({
 
   return (
     <div
-      ref={containerRef}
       className="tw:flex tw:h-full tw:flex-col tw:overflow-hidden"
       data-testid="er-scripture-pane"
     >
