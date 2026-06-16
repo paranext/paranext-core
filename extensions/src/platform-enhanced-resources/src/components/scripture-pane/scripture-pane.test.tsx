@@ -794,9 +794,12 @@ describe('EnhancedScripturePane', () => {
     expect(onTokenClick).not.toHaveBeenCalled();
   });
 
-  it('calls editor.setAnnotation with marble-filter when filteredTokenId matches a known annotation', () => {
-    // Effect B layers a single marble-filter overlay via editor.setAnnotation on the
-    // already-marked marble-word range.
+  it('adds the er-marble-filter class to the marble-word mark when filteredTokenId matches a known annotation', async () => {
+    // Effect B applies the filter overlay as a direct CSS class on the marble-word mark DOM
+    // element. NOT via editor.setAnnotation — that path triggered AnnotationPlugin's
+    // wrap-merge-replace cycle, which destroyed and recreated the affected mark and stripped any
+    // direct CSS classes attached by Effect C / hover-match.
+    const mark = createMarkFixture('wg-001');
     const annotations: MarbleAnnotation[] = [
       {
         usjPath: '$.content[0].content[1]',
@@ -815,14 +818,13 @@ describe('EnhancedScripturePane', () => {
       />,
     );
 
+    await vi.waitFor(() => {
+      expect(mark.classList.contains('er-marble-filter')).toBe(true);
+    });
+    // setAnnotation was NOT called for any filter type — the whole point of the CSS-class path
+    // is to bypass the editor for purely cosmetic overlays.
     const filterCalls = setAnnotationSpy.mock.calls.filter(([, type]) => type === 'marble-filter');
-    expect(filterCalls).toHaveLength(1);
-    expect(filterCalls[0][2]).toBe('wg-001');
-    expect(filterCalls[0][0]).toEqual(
-      expect.objectContaining({
-        start: expect.objectContaining({ jsonPath: '$.content[0].content[1]' }),
-      }),
-    );
+    expect(filterCalls).toHaveLength(0);
   });
 
   it('adds the er-marble-highlight-all class to every word-annotation mark when highlightAllResearchTerms is true', async () => {
@@ -906,7 +908,8 @@ describe('EnhancedScripturePane', () => {
     expect(removeAnnotationSpy).not.toHaveBeenCalled();
   });
 
-  it('toggling filteredTokenId only adds the filter overlay, not a fresh base annotation', async () => {
+  it('toggling filteredTokenId adds/removes the filter class without re-firing base annotations', async () => {
+    const mark = createMarkFixture('wg-001');
     const annotation: MarbleAnnotation = {
       usjPath: '$.content[0].content[1]',
       kind: 'word',
@@ -938,15 +941,12 @@ describe('EnhancedScripturePane', () => {
         localizedStringsWithLoadingState={localized}
       />,
     );
-    await flushMountEffects();
-    // Effect B fires: a single marble-filter overlay. Base annotation is NOT re-applied
-    // (Effect A's deps haven't changed).
-    const filterCalls = setAnnotationSpy.mock.calls.filter(([, type]) => type === 'marble-filter');
-    const wordCalls = setAnnotationSpy.mock.calls.filter(([, type]) => type === 'marble-word');
-    expect(filterCalls).toHaveLength(1);
-    expect(filterCalls[0][2]).toBe('wg-001');
-    expect(wordCalls).toHaveLength(0);
-    setAnnotationSpy.mockClear();
+    // Effect B applies the filter as a CSS class on the marble-word mark. No setAnnotation
+    // calls at all - filter does not go through the editor.
+    await vi.waitFor(() => {
+      expect(mark.classList.contains('er-marble-filter')).toBe(true);
+    });
+    expect(setAnnotationSpy).not.toHaveBeenCalled();
     removeAnnotationSpy.mockClear();
 
     rerender(
@@ -956,9 +956,69 @@ describe('EnhancedScripturePane', () => {
         localizedStringsWithLoadingState={localized}
       />,
     );
-    // Filter overlay removed; base annotation not touched.
-    expect(removeAnnotationSpy).toHaveBeenCalledWith('marble-filter', 'wg-001');
+    // Filter class removed; base annotation not touched, no removeAnnotation calls.
+    expect(mark.classList.contains('er-marble-filter')).toBe(false);
+    expect(removeAnnotationSpy).not.toHaveBeenCalled();
     expect(setAnnotationSpy).not.toHaveBeenCalled();
+  });
+
+  it('keeps the highlight-all class on the previously-filtered word when filteredTokenId changes', async () => {
+    // Regression: clicking word A then word B (with highlight-all on) used to leave word A with
+    // no overlay because Effect B's old setAnnotation('marble-filter', ...) cleanup destroyed
+    // and recreated the <mark> DOM element, stripping the direct-DOM `er-marble-highlight-all`
+    // class. Effect C only re-applies that class when its own deps change. With filter on the
+    // CSS-class path, neither A's nor B's mark is ever recreated.
+    const markA = createMarkFixture('wg-A');
+    const markB = createMarkFixture('wg-B');
+    const annotations: MarbleAnnotation[] = [
+      {
+        usjPath: '$.content[0].content[1]',
+        kind: 'word',
+        annotationId: 'wg-A',
+        metadata: {},
+      },
+      {
+        usjPath: '$.content[0].content[2]',
+        kind: 'word',
+        annotationId: 'wg-B',
+        metadata: {},
+      },
+    ];
+    const localized: [Record<string, string>, boolean] = [STRINGS_BAG, false];
+    const usj = makeTestUsj(3);
+
+    const { rerender } = render(
+      <EnhancedScripturePane
+        usj={usj}
+        annotations={annotations}
+        filteredTokenId="wg-A"
+        highlightAllResearchTerms
+        localizedStringsWithLoadingState={localized}
+      />,
+    );
+    await vi.waitFor(() => {
+      expect(markA.classList.contains('er-marble-highlight-all')).toBe(true);
+      expect(markB.classList.contains('er-marble-highlight-all')).toBe(true);
+      expect(markA.classList.contains('er-marble-filter')).toBe(true);
+    });
+
+    rerender(
+      <EnhancedScripturePane
+        usj={usj}
+        annotations={annotations}
+        filteredTokenId="wg-B"
+        highlightAllResearchTerms
+        localizedStringsWithLoadingState={localized}
+      />,
+    );
+    await vi.waitFor(() => {
+      expect(markB.classList.contains('er-marble-filter')).toBe(true);
+    });
+    // Word A keeps highlight-all even though the filter moved away.
+    expect(markA.classList.contains('er-marble-highlight-all')).toBe(true);
+    expect(markA.classList.contains('er-marble-filter')).toBe(false);
+    // Word B also keeps highlight-all alongside the new filter overlay.
+    expect(markB.classList.contains('er-marble-highlight-all')).toBe(true);
   });
 
   it('toggling highlightAllResearchTerms adds the highlight-all class without re-firing base or filter setAnnotation calls', async () => {
@@ -981,10 +1041,11 @@ describe('EnhancedScripturePane', () => {
       />,
     );
     await flushMountEffects();
-    // First render: 1 base + 1 filter overlay.
+    // First render: 1 base marble-word annotation. Filter is now a CSS-class overlay (Effect B
+    // bypasses the editor) so it does NOT show up in setAnnotation calls.
     const initialCalls = setAnnotationSpy.mock.calls;
     expect(initialCalls.filter(([, type]) => type === 'marble-word')).toHaveLength(1);
-    expect(initialCalls.filter(([, type]) => type === 'marble-filter')).toHaveLength(1);
+    expect(initialCalls.filter(([, type]) => type === 'marble-filter')).toHaveLength(0);
     setAnnotationSpy.mockClear();
     removeAnnotationSpy.mockClear();
 
@@ -1126,13 +1187,14 @@ describe('EnhancedScripturePane', () => {
     removeAnnotationSpy.mockClear();
     unmount();
 
-    // Effect A + B cleanups call removeAnnotation for their setAnnotation-managed types. Effect C
-    // is now a CSS-class path so its cleanup is the class removal on `mark` (asserted next).
+    // Effect A's cleanup calls removeAnnotation for its setAnnotation-managed marble-word type.
+    // Effects B and C are now CSS-class paths so their cleanup removes the classes from `mark`.
     expect(removeAnnotationSpy).toHaveBeenCalledWith('marble-word', 'wg-001');
-    expect(removeAnnotationSpy).toHaveBeenCalledWith('marble-filter', 'wg-001');
     expect(mark.classList.contains('er-marble-highlight-all')).toBe(false);
-    // And the highlight overlay is NOT routed through removeAnnotation any more.
+    expect(mark.classList.contains('er-marble-filter')).toBe(false);
+    // Neither the highlight nor filter overlay is routed through removeAnnotation any more.
     expect(removeAnnotationSpy).not.toHaveBeenCalledWith('marble-highlight', 'wg-001');
+    expect(removeAnnotationSpy).not.toHaveBeenCalledWith('marble-filter', 'wg-001');
   });
 });
 

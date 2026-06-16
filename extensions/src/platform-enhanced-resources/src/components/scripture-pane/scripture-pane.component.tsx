@@ -108,7 +108,6 @@ export type EnhancedScripturePaneProps = {
 
 const ANNOTATION_TYPE_MARBLE_WORD = 'marble-word';
 const ANNOTATION_TYPE_MARBLE_NOTE = 'marble-note';
-const ANNOTATION_TYPE_FILTER = 'marble-filter';
 // Hover-match used to be an editor.setAnnotation type ('marble-hover-match'), but D-15
 // proved that path causes a flicker storm (AnnotationPlugin's wrap-merge-replace cycle
 // destroys+recreates the <mark> DOM element on every overlapping setAnnotation). The
@@ -132,14 +131,22 @@ const RIGHT_MOUSE_BUTTON = 2;
  *   wrap-merge-replace cycle that destroys+recreates the marble-word mark element, which loses the
  *   original mouseenter/mouseleave bindings (verified in Storybook: hover stopped firing after
  *   toggling highlight-all off again). Same workaround pattern as the hover-match class (D-15).
- * - `marble-filter`: per-mark filter overlay applied via `editor.setAnnotation` to the one
- *   marble-word mark whose `annotationId` matches the active filter token.
  * - `er-marble-hover-match` (Color B): direct CSS class on existing marble-word mark DOM elements
  *   (not a setAnnotation type - see handleMarbleMouseEnter for the D-15 rationale). Applied to
  *   every word in the lemma group of the currently-hovered word, including the hovered word itself,
  *   so the entire matching expression reads as one visually unified group. Deeper blue than Color
- *   A. Has higher CSS specificity (two classes vs. one) than `er-marble-highlight-all`, so it wins
- *   over Color A while the highlight-all toggle is also on.
+ *   A. Equal CSS specificity with `er-marble-highlight-all` (two classes); declared later in source
+ *   so the source-order tie-break makes it win over Color A while the highlight-all toggle is on.
+ * - `er-marble-filter` (Color C): direct CSS class on the single marble-word mark whose
+ *   `annotationId` matches the active filter token (set by clicking a word). Yellow - the strongest
+ *   signal in the marble overlay stack. Used to be a `marble-filter` annotation applied via
+ *   `editor.setAnnotation`, but that triggered AnnotationPlugin's wrap-merge-replace cycle which
+ *   destroys and recreates the affected `<mark>` DOM element. Recreated marks lose any direct CSS
+ *   classes (`er-marble-highlight-all`, `er-marble-hover-match`) - manifested as: with the
+ *   highlight-all toggle on, clicking word A turned A yellow, then clicking word B left A with no
+ *   overlay (recreated mark dropped the highlight-all class). Same workaround pattern as
+ *   hover-match and highlight-all. Declared last so the source-order tie-break wins over Colors A
+ *   and B.
  *
  * Color tokens: each overlay color is referenced through a named extension-local CSS custom
  * property (prefixed `--er-` for Enhanced Resources) declared centrally in
@@ -183,12 +190,12 @@ mark {
   background-color: var(--er-marble-highlight-all-bg);
   border-radius: 2px;
 }
-.editor-typed-mark-external-marble-filter {
-  background-color: var(--er-marble-filter-bg);
-  border-radius: 2px;
-}
 .editor-typed-mark-external-marble-word.er-marble-hover-match {
   background-color: var(--er-marble-hover-match-bg);
+  border-radius: 2px;
+}
+.editor-typed-mark-external-marble-word.er-marble-filter {
+  background-color: var(--er-marble-filter-bg);
   border-radius: 2px;
 }
 `;
@@ -1106,18 +1113,68 @@ export function EnhancedScripturePane({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usj, annotations, lemmaIndex]);
 
-  // Effect B - single marble-filter overlay via editor.setAnnotation.
-  // Re-runs when the filtered-token id or annotation set changes.
+  // Effect B - single filter overlay applied as a direct CSS class on the matching marble-word
+  // mark DOM element. NOT via editor.setAnnotation.
+  //
+  // History: filter used to be a `marble-filter` annotation applied via `editor.setAnnotation`.
+  // That path triggered AnnotationPlugin's wrap-merge-replace cycle on every filter change -
+  // Lexical destroyed+recreated the `<mark>` for both the previously-filtered word (during
+  // cleanup) and the newly-filtered word (during apply). The recreated marks dropped any direct
+  // CSS classes (`er-marble-highlight-all`, `er-marble-hover-match`) the cosmetic effects had
+  // attached. User-visible symptom: with the highlight-all toggle on, clicking word A turned A
+  // yellow but stripped its highlight-all overlay; clicking word B then stripped A's filter too,
+  // leaving A with no overlay at all. Same workaround pattern as Effect C / hover-match: bypass
+  // the editor for purely cosmetic overlays (filter has no click handlers, no Lexical role).
   useEffect(() => {
-    const editor = editorRef.current;
-    if (!editor || !usj || !filteredTokenId) return undefined;
+    if (!filteredTokenId) return undefined;
     const target = annotations.find((a) => a.annotationId === filteredTokenId);
     if (!target || target.kind !== 'word') return undefined;
-    const range = annotationToRange(target, usj);
-    if (!range) return undefined;
-    editor.setAnnotation(range, ANNOTATION_TYPE_FILTER, filteredTokenId, {});
+    // Same epoch-coordination dance as Effect C: on a chapter swap the marble-word marks may
+    // not be in the DOM yet (Effect A's setAnnotation calls go through Lexical's async update
+    // queue). Wait until Effect A signals it has committed marks for this epoch, then one
+    // additional RAF for the editor.update queue to flush to the DOM.
+    let cancelled = false;
+    const myEpoch = usjEpochRef.current;
+    const MAX_RAF_RETRIES = 30;
+    const ownerDocAtEffectRun = containerRef.current?.ownerDocument ?? globalThis.document;
+    const applyFilter = async () => {
+      for (let attempt = 0; attempt < MAX_RAF_RETRIES; attempt += 1) {
+        if (marksAppliedForEpochRef.current >= myEpoch) break;
+        // Sequential RAF polling so we can re-check epoch + cancellation between frames and
+        // bail early; Promise.all/race wouldn't give per-iteration abort semantics.
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => resolve());
+        });
+        if (cancelled || usjEpochRef.current !== myEpoch) return;
+      }
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve());
+      });
+      if (cancelled || usjEpochRef.current !== myEpoch) return;
+      toggleMarkClassByAnnotationId(
+        ownerDocAtEffectRun,
+        filteredTokenId,
+        'er-marble-filter',
+        'add',
+      );
+    };
+    applyFilter().catch((err) => {
+      logger.warn(
+        `EnhancedScripturePane: filter class apply failed: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    });
+
     return () => {
-      editor.removeAnnotation(ANNOTATION_TYPE_FILTER, filteredTokenId);
+      cancelled = true;
+      toggleMarkClassByAnnotationId(
+        ownerDocAtEffectRun,
+        filteredTokenId,
+        'er-marble-filter',
+        'remove',
+      );
     };
   }, [usj, annotations, filteredTokenId]);
 
@@ -1131,8 +1188,8 @@ export function EnhancedScripturePane({
   // mouseleave handlers Effect A had registered, so hover stopped working after a toggle ON/OFF
   // cycle (verified in Storybook). The CSS-class approach is the same workaround D-15 introduced
   // for hover-match: bypass the editor entirely for purely-cosmetic overlays (no click handlers
-  // are attached to highlight-all). `marble-filter` keeps setAnnotation because it's a single
-  // annotation and the wrap-merge cycle doesn't compound there.
+  // are attached to highlight-all). Filter also uses the CSS-class path now — see Effect B for
+  // the bug that motivated converting it off setAnnotation.
   useEffect(() => {
     if (!highlightAllResearchTerms) return undefined;
     // The set of marble-word annotation ids the editor has currently emitted. Captured at effect
