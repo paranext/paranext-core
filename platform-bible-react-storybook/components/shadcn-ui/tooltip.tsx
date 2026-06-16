@@ -6,9 +6,10 @@ import { Tooltip as TooltipPrimitive } from 'radix-ui';
 import { cn } from '@/utils/shadcn-ui/utils';
 // CUSTOM: Import ButtonProps and buttonVariants to allow TooltipTrigger to accept button variants
 import { ButtonProps, buttonVariants } from '@/components/shadcn-ui/button';
-// CUSTOM: Import Z_INDEX_ABOVE_DOCK to replace the default tw:z-50 with a shared constant that
-// ensures tooltips stack correctly above the dock
-import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
+// CUSTOM: Use Z_INDEX_TOOLTIP (above Z_INDEX_MODAL=500) so tooltips triggered from
+// inside a modal dialog (e.g. help icons in form fields) render above the modal instead
+// of behind it. The prior Z_INDEX_ABOVE_DOCK=250 was below the modal layer.
+import { Z_INDEX_TOOLTIP } from '@/components/z-index';
 
 // CUSTOM: Added @inheritdoc TSDoc pointing to Tooltip for documentation inheritance
 /** @inheritdoc Tooltip */
@@ -80,9 +81,10 @@ function TooltipContent({
       <TooltipPrimitive.Content
         data-slot="tooltip-content"
         sideOffset={sideOffset}
-        // CUSTOM: Replace default tw:z-50 with a shared constant so tooltips always stack above
-        // the dock and other overlay layers consistently across the application
-        style={{ zIndex: Z_INDEX_ABOVE_DOCK, ...style }}
+        // CUSTOM: Use Z_INDEX_TOOLTIP (above Z_INDEX_MODAL=500) so tooltips triggered from
+        // inside a modal dialog (e.g. help icons in form fields) render above the modal instead
+        // of behind it. The prior Z_INDEX_ABOVE_DOCK=250 was below the modal layer.
+        style={{ zIndex: Z_INDEX_TOOLTIP, ...style }}
         className={cn(
           // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
           'pr-twp tw:inline-flex tw:w-fit tw:max-w-xs tw:origin-(--radix-tooltip-content-transform-origin) tw:items-center tw:gap-1.5 tw:rounded-md tw:bg-foreground tw:px-3 tw:py-1.5 tw:text-xs tw:text-background tw:has-data-[slot=kbd]:pe-1.5 tw:data-[side=bottom]:slide-in-from-top-2 tw:data-[side=left]:slide-in-from-right-2 tw:data-[side=right]:slide-in-from-left-2 tw:data-[side=top]:slide-in-from-bottom-2 tw:**:data-[slot=kbd]:relative tw:**:data-[slot=kbd]:isolate tw:**:data-[slot=kbd]:z-50 tw:**:data-[slot=kbd]:rounded-sm tw:data-[state=delayed-open]:animate-in tw:data-[state=delayed-open]:fade-in-0 tw:data-[state=delayed-open]:zoom-in-95 tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-open:zoom-in-95 tw:data-closed:animate-out tw:data-closed:fade-out-0 tw:data-closed:zoom-out-95',

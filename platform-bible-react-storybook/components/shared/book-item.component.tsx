@@ -4,9 +4,11 @@ import { cn } from '@/utils/shadcn-ui/utils';
 import { Canon } from '@sillsdev/scripture';
 import { Check } from 'lucide-react';
 import { Section } from 'platform-bible-utils';
-import { forwardRef, MouseEvent, useMemo, useRef } from 'react';
+import { MouseEvent, Ref, useMemo, useRef } from 'react';
 
 type BookItemProps = {
+  /** Forwarded to the underlying CommandItem (a `<div>` rendered by cmdk). */
+  ref?: Ref<HTMLDivElement>;
   /** The book ID (e.g., 'GEN', 'EXO') */
   bookId: string;
   /** Whether this book is currently selected */
@@ -28,6 +30,8 @@ type BookItemProps = {
   localizedBookNames?: Map<string, { localizedId: string; localizedName: string }>;
   /** Value to use for Command component matching */
   commandValue?: string;
+  /** When true, renders the item as disabled: suppresses onSelect and dims the visuals. */
+  disabled?: boolean;
 };
 
 /**
@@ -39,90 +43,94 @@ type BookItemProps = {
  * selection), implement custom `onSelect` and `onMouseDown` handlers that manage the logic
  * externally.
  */
-export const BookItem = forwardRef<HTMLDivElement, BookItemProps>(
-  (
-    {
-      bookId,
-      isSelected,
-      onSelect,
-      onMouseDown,
-      section,
-      className,
-      showCheck = false,
-      localizedBookNames,
-      commandValue,
-    },
-    ref,
-  ) => {
-    const isMouseClick = useRef(false);
+export function BookItem({
+  ref,
+  bookId,
+  isSelected,
+  onSelect,
+  onMouseDown,
+  section,
+  className,
+  showCheck = false,
+  localizedBookNames,
+  commandValue,
+  disabled = false,
+}: BookItemProps) {
+  const isMouseClick = useRef(false);
 
-    const handleSelect = () => {
-      if (!isMouseClick.current) {
-        onSelect?.(bookId);
-      }
-      // Reset the mouse flag after a short delay
-      setTimeout(() => {
-        isMouseClick.current = false;
-      }, 100);
-    };
+  const handleSelect = () => {
+    if (disabled) return;
+    if (!isMouseClick.current) {
+      onSelect?.(bookId);
+    }
+    // Reset the mouse flag after a short delay
+    setTimeout(() => {
+      isMouseClick.current = false;
+    }, 100);
+  };
 
-    const handleMouseDown = (e: MouseEvent) => {
-      isMouseClick.current = true;
+  const handleMouseDown = (e: MouseEvent) => {
+    if (disabled) {
+      e.preventDefault();
+      return;
+    }
+    isMouseClick.current = true;
 
-      if (onMouseDown) {
-        onMouseDown(e);
-      } else {
-        // If no custom mouse handler, fall back to calling onSelect
-        onSelect?.(bookId);
-      }
-    };
+    if (onMouseDown) {
+      onMouseDown(e);
+    } else {
+      // If no custom mouse handler, fall back to calling onSelect
+      onSelect?.(bookId);
+    }
+  };
 
-    const bookDisplayName = useMemo(
-      () => getLocalizedBookName(bookId, localizedBookNames),
-      [bookId, localizedBookNames],
-    );
+  const bookDisplayName = useMemo(
+    () => getLocalizedBookName(bookId, localizedBookNames),
+    [bookId, localizedBookNames],
+  );
 
-    const bookDisplayId = useMemo(
-      () => getLocalizedBookId(bookId, localizedBookNames),
-      [bookId, localizedBookNames],
-    );
+  const bookDisplayId = useMemo(
+    () => getLocalizedBookId(bookId, localizedBookNames),
+    [bookId, localizedBookNames],
+  );
 
-    return (
-      <div
-        className={cn(
-          'tw:mx-1 tw:my-1 tw:border-b-0 tw:border-e-0 tw:border-s-2 tw:border-t-0 tw:border-solid',
-          {
-            'tw:border-s-red-200': section === Section.OT,
-            'tw:border-s-purple-200': section === Section.NT,
-            'tw:border-s-indigo-200': section === Section.DC,
-            'tw:border-s-amber-200': section === Section.Extra,
-          },
-        )}
+  return (
+    <div
+      className={cn(
+        'tw:mx-1 tw:my-1 tw:border-b-0 tw:border-e-0 tw:border-s-2 tw:border-t-0 tw:border-solid',
+        {
+          'tw:border-s-red-200': section === Section.OT,
+          'tw:border-s-purple-200': section === Section.NT,
+          'tw:border-s-indigo-200': section === Section.DC,
+          'tw:border-s-amber-200': section === Section.Extra,
+        },
+      )}
+    >
+      <CommandItem
+        ref={ref}
+        value={commandValue || `${bookId} ${Canon.bookIdToEnglishName(bookId)}`}
+        onSelect={handleSelect}
+        onMouseDown={handleMouseDown}
+        role="option"
+        aria-selected={isSelected}
+        aria-disabled={disabled || undefined}
+        aria-label={`${Canon.bookIdToEnglishName(bookId)} (${bookId.toLocaleUpperCase()})`}
+        disabled={disabled}
+        className={cn(className, disabled && 'tw:cursor-not-allowed tw:opacity-50')}
       >
-        <CommandItem
-          ref={ref}
-          value={commandValue || `${bookId} ${Canon.bookIdToEnglishName(bookId)}`}
-          onSelect={handleSelect}
-          onMouseDown={handleMouseDown}
-          role="option"
-          aria-selected={isSelected}
-          aria-label={`${Canon.bookIdToEnglishName(bookId)} (${bookId.toLocaleUpperCase()})`}
-          className={className}
-        >
-          {showCheck && (
-            <Check
-              className={cn(
-                'tw:me-2 tw:h-4 tw:w-4 tw:shrink-0',
-                isSelected ? 'tw:opacity-100' : 'tw:opacity-0',
-              )}
-            />
-          )}
-          <span className="tw:min-w-0 tw:flex-1">{bookDisplayName}</span>
-          <span className="tw:ms-2 tw:shrink-0 tw:text-xs tw:text-muted-foreground">
-            {bookDisplayId}
-          </span>
-        </CommandItem>
-      </div>
-    );
-  },
-);
+        {showCheck && (
+          <Check
+            className={cn(
+              'tw:me-2 tw:h-4 tw:w-4 tw:shrink-0',
+              isSelected ? 'tw:opacity-100' : 'tw:opacity-0',
+            )}
+          />
+        )}
+        <span className="tw:min-w-0 tw:flex-1">{bookDisplayName}</span>
+        <span className="tw:ms-2 tw:shrink-0 tw:text-xs tw:text-muted-foreground">
+          {bookDisplayId}
+        </span>
+      </CommandItem>
+    </div>
+  );
+}

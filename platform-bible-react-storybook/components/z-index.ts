@@ -11,3 +11,8 @@ export const Z_INDEX_OVERLAY = 400;
 export const Z_INDEX_MODAL_BACKDROP = 450;
 /** Z-index for modal dialog content */
 export const Z_INDEX_MODAL = 500;
+/**
+ * Z-index for tooltips — must render above modal dialogs since tooltips can be triggered from
+ * elements inside a modal (e.g. help icons in form fields).
+ */
+export const Z_INDEX_TOOLTIP = 550;

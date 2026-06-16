@@ -10,4 +10,27 @@
 
 import './index.css';
 
-export {};
+// ManageBooksDialog moved to extensions/src/platform-scripture/src/manage-books-dialog/ (FN-009).
+// The unified Paratext-specific dialog is no longer part of the platform-bible-react surface.
+export {
+  default as ProjectSelector,
+  type ProjectSelectorProject,
+  type ProjectSelectorOpenTab,
+  type ProjectSelectorProjectPair,
+  type ProjectSelectorLocalizedStrings,
+} from './components/advanced/project-selector/project-selector.component';
+export type { ScopeSelectorVariant } from './components/advanced/scope-selector/scope-selector.component';
+export { default as SourceLanguageIndexedList } from './components/advanced/source-language-indexed-list/source-language-indexed-list.component';
+export type {
+  IndexedListItem,
+  SourceLanguageIndexedListProps,
+  SemanticDomain,
+  SourceLanguageIndexedListLocalizedStrings,
+} from './components/advanced/source-language-indexed-list/source-language-indexed-list.types';
+export { SOURCE_LANGUAGE_INDEXED_LIST_STRING_KEYS } from './components/advanced/source-language-indexed-list/source-language-indexed-list.types';
+export {
+  default as LinkedScrRefButton,
+  type LinkedScrRefButtonProps,
+} from './components/basics/linked-scr-ref-button.component';
+export type { ScopeWithRange } from './components/utils/scripture.util';
+export { Z_INDEX_TOOLTIP } from './components/z-index';
