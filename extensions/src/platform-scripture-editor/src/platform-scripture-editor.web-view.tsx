@@ -6,8 +6,10 @@ import {
   Editorial,
   EditorOptions,
   EditorRef,
+  getDefaultViewOptions,
   getViewOptions,
   isInsertEmbedOpOfType,
+  PARAGRAPH_STRUCTURE_VIEW_MODE,
   SelectionRange,
   TypedMarkOnClick,
   TypedMarkOnRemove,
@@ -194,10 +196,20 @@ const defaultMarkersMenuTrigger = '\\';
 // Return the appropriate ViewOptions for the given webview `viewType`.
 // Centralizes the logic so initialization and effects can call the same helper
 // instead of duplicating the shallow-copy code.
-const getViewOptionsForType = (viewType: ScriptureEditorViewType): ViewOptions => {
-  // getViewOptions returns a partial/unknown type that TypeScript can't narrow to ViewOptions without assertion
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const paragraphStructure = getViewOptions('paragraph-structure') as ViewOptions;
+const getViewOptionsForType = (
+  viewType: ScriptureEditorViewType,
+  isPowerMode: boolean,
+): ViewOptions => {
+  // Power users get to choose their own view options, so don't force the paragraph-structure
+  // preset on them. The markers tweaks below predate this and are required to keep the read-only
+  // markers view working.
+  if (isPowerMode) {
+    const base = getDefaultViewOptions();
+    if (viewType === 'markers') return { ...base, markerMode: 'visible', noteMode: 'expanded' };
+    return base;
+  }
+  const paragraphStructure =
+    getViewOptions(PARAGRAPH_STRUCTURE_VIEW_MODE) ?? getDefaultViewOptions();
   if (viewType === 'markers') return { ...paragraphStructure, noteMode: 'expanded' };
   return paragraphStructure;
 };
@@ -448,8 +460,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [newTitleIfUpdated, updateWebViewDefinition]);
 
   const viewOptions = useMemo<ViewOptions>(() => {
-    return getViewOptionsForType(viewType);
-  }, [viewType]);
+    return getViewOptionsForType(viewType, isPowerMode);
+  }, [viewType, isPowerMode]);
 
   const [footnotesPaneVisible, setFootnotesPaneVisible] = useWebViewState<boolean>(
     'footnotesPaneVisible',
