@@ -962,6 +962,112 @@ describe('EnhancedScripturePane', () => {
     expect(setAnnotationSpy).not.toHaveBeenCalled();
   });
 
+  it('adds the er-marble-filter-match class to lemma-siblings of the filtered word, but not to the focal word itself', async () => {
+    // Two-fold click highlight: the clicked word wears the strong filter color, every lemma-
+    // sibling wears the lighter filter-match color, and unrelated words get neither.
+    const markA = createMarkFixture('wg-A');
+    const markB = createMarkFixture('wg-B');
+    const markC = createMarkFixture('wg-C');
+    const annotations: MarbleAnnotation[] = [
+      {
+        usjPath: '$.content[0].content[1]',
+        kind: 'word',
+        annotationId: 'wg-A',
+        metadata: { lexicalLinks: ['SDBH:logos:001'] },
+      },
+      {
+        usjPath: '$.content[0].content[2]',
+        kind: 'word',
+        annotationId: 'wg-B',
+        metadata: { lexicalLinks: ['SDBH:logos:002'] },
+      },
+      {
+        usjPath: '$.content[0].content[3]',
+        kind: 'word',
+        annotationId: 'wg-C',
+        metadata: { lexicalLinks: ['SDBH:theos:003'] },
+      },
+    ];
+    render(
+      <EnhancedScripturePane
+        usj={makeTestUsj(4)}
+        annotations={annotations}
+        filteredTokenId="wg-A"
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    await vi.waitFor(() => {
+      // Focal word: strong filter overlay, NOT the lighter filter-match.
+      expect(markA.classList.contains('er-marble-filter')).toBe(true);
+      expect(markA.classList.contains('er-marble-filter-match')).toBe(false);
+      // Lemma-sibling: lighter filter-match overlay only.
+      expect(markB.classList.contains('er-marble-filter-match')).toBe(true);
+      expect(markB.classList.contains('er-marble-filter')).toBe(false);
+      // Unrelated lemma: neither overlay.
+      expect(markC.classList.contains('er-marble-filter')).toBe(false);
+      expect(markC.classList.contains('er-marble-filter-match')).toBe(false);
+    });
+  });
+
+  it('removes filter-match from old siblings and adds it to new siblings when filteredTokenId moves between lemma groups', async () => {
+    const markA = createMarkFixture('wg-A');
+    const markB = createMarkFixture('wg-B');
+    const markC = createMarkFixture('wg-C');
+    const annotations: MarbleAnnotation[] = [
+      {
+        usjPath: '$.content[0].content[1]',
+        kind: 'word',
+        annotationId: 'wg-A',
+        metadata: { lexicalLinks: ['SDBH:logos:001'] },
+      },
+      {
+        usjPath: '$.content[0].content[2]',
+        kind: 'word',
+        annotationId: 'wg-B',
+        metadata: { lexicalLinks: ['SDBH:logos:002'] },
+      },
+      {
+        usjPath: '$.content[0].content[3]',
+        kind: 'word',
+        annotationId: 'wg-C',
+        metadata: { lexicalLinks: ['SDBH:theos:003'] },
+      },
+    ];
+    const localized: [Record<string, string>, boolean] = [STRINGS_BAG, false];
+    const usj = makeTestUsj(4);
+
+    const { rerender } = render(
+      <EnhancedScripturePane
+        usj={usj}
+        annotations={annotations}
+        filteredTokenId="wg-A"
+        localizedStringsWithLoadingState={localized}
+      />,
+    );
+    await vi.waitFor(() => {
+      expect(markB.classList.contains('er-marble-filter-match')).toBe(true);
+    });
+
+    rerender(
+      <EnhancedScripturePane
+        usj={usj}
+        annotations={annotations}
+        filteredTokenId="wg-C"
+        localizedStringsWithLoadingState={localized}
+      />,
+    );
+    await vi.waitFor(() => {
+      // New focal word.
+      expect(markC.classList.contains('er-marble-filter')).toBe(true);
+    });
+    // Previous focal word no longer wears the filter overlay.
+    expect(markA.classList.contains('er-marble-filter')).toBe(false);
+    // Previous lemma-sibling no longer wears the filter-match overlay.
+    expect(markB.classList.contains('er-marble-filter-match')).toBe(false);
+    // theos has no other members, so no new filter-match siblings.
+    expect(markA.classList.contains('er-marble-filter-match')).toBe(false);
+  });
+
   it('keeps the highlight-all class on the previously-filtered word when filteredTokenId changes', async () => {
     // Regression: clicking word A then word B (with highlight-all on) used to leave word A with
     // no overlay because Effect B's old setAnnotation('marble-filter', ...) cleanup destroyed

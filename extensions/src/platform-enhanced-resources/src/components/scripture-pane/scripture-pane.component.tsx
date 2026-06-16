@@ -137,16 +137,22 @@ const RIGHT_MOUSE_BUTTON = 2;
  *   so the entire matching expression reads as one visually unified group. Deeper blue than Color
  *   A. Equal CSS specificity with `er-marble-highlight-all` (two classes); declared later in source
  *   so the source-order tie-break makes it win over Color A while the highlight-all toggle is on.
- * - `er-marble-filter` (Color C): direct CSS class on the single marble-word mark whose
- *   `annotationId` matches the active filter token (set by clicking a word). Yellow - the strongest
- *   signal in the marble overlay stack. Used to be a `marble-filter` annotation applied via
- *   `editor.setAnnotation`, but that triggered AnnotationPlugin's wrap-merge-replace cycle which
- *   destroys and recreates the affected `<mark>` DOM element. Recreated marks lose any direct CSS
- *   classes (`er-marble-highlight-all`, `er-marble-hover-match`) - manifested as: with the
+ * - `er-marble-filter-match` (Color C): direct CSS class on every lemma-sibling of the filtered word
+ *   (the focal word itself wears `er-marble-filter` below). Pale yellow - the lighter companion to
+ *   Color D, mirroring how Color A relates to Color B in the blue family, so the filtered word
+ *   reads as the focal point while the rest of its matching expression stays visually grouped.
+ *   Declared after `er-marble-hover-match` in source order so that hovering a word that is also a
+ *   filter-match sibling still surfaces the transient hover overlay.
+ * - `er-marble-filter` (Color D): direct CSS class on the single marble-word mark whose
+ *   `annotationId` matches the active filter token (set by clicking a word). Strong yellow - the
+ *   strongest signal in the marble overlay stack. Used to be a `marble-filter` annotation applied
+ *   via `editor.setAnnotation`, but that triggered AnnotationPlugin's wrap-merge-replace cycle
+ *   which destroys and recreates the affected `<mark>` DOM element. Recreated marks lose any direct
+ *   CSS classes (`er-marble-highlight-all`, `er-marble-hover-match`) - manifested as: with the
  *   highlight-all toggle on, clicking word A turned A yellow, then clicking word B left A with no
  *   overlay (recreated mark dropped the highlight-all class). Same workaround pattern as
- *   hover-match and highlight-all. Declared last so the source-order tie-break wins over Colors A
- *   and B.
+ *   hover-match and highlight-all. Declared last so the source-order tie-break wins over every
+ *   other overlay color.
  *
  * Color tokens: each overlay color is referenced through a named extension-local CSS custom
  * property (prefixed `--er-` for Enhanced Resources) declared centrally in
@@ -192,6 +198,10 @@ mark {
 }
 .editor-typed-mark-external-marble-word.er-marble-hover-match {
   background-color: var(--er-marble-hover-match-bg);
+  border-radius: 2px;
+}
+.editor-typed-mark-external-marble-word.er-marble-filter-match {
+  background-color: var(--er-marble-filter-match-bg);
   border-radius: 2px;
 }
 .editor-typed-mark-external-marble-word.er-marble-filter {
@@ -1129,6 +1139,21 @@ export function EnhancedScripturePane({
     if (!filteredTokenId) return undefined;
     const target = annotations.find((a) => a.annotationId === filteredTokenId);
     if (!target || target.kind !== 'word') return undefined;
+    // Compute lemma-siblings of the filtered word so they can get the lighter filter-match
+    // overlay. Mirrors handleMarbleMouseEnter's lemma lookup against `lemmaIndex`. The focal
+    // word itself is excluded - it wears the stronger `er-marble-filter` class instead.
+    const matchIds = new Set<string>();
+    const lemmas = lemmaIndex.annotationIdToLemmas.get(filteredTokenId);
+    if (lemmas) {
+      lemmas.forEach((lemma) => {
+        const ids = lemmaIndex.lemmaToAnnotationIds.get(lemma);
+        if (ids) {
+          ids.forEach((id) => {
+            if (id !== filteredTokenId) matchIds.add(id);
+          });
+        }
+      });
+    }
     // Same epoch-coordination dance as Effect C: on a chapter swap the marble-word marks may
     // not be in the DOM yet (Effect A's setAnnotation calls go through Lexical's async update
     // queue). Wait until Effect A signals it has committed marks for this epoch, then one
@@ -1158,6 +1183,9 @@ export function EnhancedScripturePane({
         'er-marble-filter',
         'add',
       );
+      matchIds.forEach((id) => {
+        toggleMarkClassByAnnotationId(ownerDocAtEffectRun, id, 'er-marble-filter-match', 'add');
+      });
     };
     applyFilter().catch((err) => {
       logger.warn(
@@ -1175,8 +1203,11 @@ export function EnhancedScripturePane({
         'er-marble-filter',
         'remove',
       );
+      matchIds.forEach((id) => {
+        toggleMarkClassByAnnotationId(ownerDocAtEffectRun, id, 'er-marble-filter-match', 'remove');
+      });
     };
-  }, [usj, annotations, filteredTokenId]);
+  }, [usj, annotations, filteredTokenId, lemmaIndex]);
 
   // Effect C - "Highlight all research terms" overlay applied as a direct CSS class on the
   // existing marble-word mark DOM elements. NOT via editor.setAnnotation.

@@ -37,6 +37,11 @@
      --er-filter-input-* below). Warm yellow to read as semantically distinct from the blue
      highlight family. */
   --er-marble-filter-bg: hsl(45 100% 75%);
+  /* Paler companion to --er-marble-filter-bg, applied to every lemma-sibling of the filtered
+     token. Same hue, lighter so the filtered word itself reads as the focal point while the rest
+     of its matching expression is visually grouped with it. Same lightness relationship as
+     highlight-all (90%) to hover-match (75%). */
+  --er-marble-filter-match-bg: hsl(45 100% 90%);
   /* Rendering-status colors described by the marble-guide chips. PT9 painted these on scripture
      words to signal rendering state; PT10's scripture-pane has NOT yet wired them up but the
      marble-guide help dialog labels them by color name ("gray", "orange") so the chip swatches
