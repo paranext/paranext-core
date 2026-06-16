@@ -71,6 +71,13 @@
         },
         "items": [
           {
+            "label": "%manageBooks_openMenuItem%",
+            "localizeNotes": "Scripture editor top menu > Project > Manage books… (opens Manage Books targeting the editor's active project; the reserved platform.manageBooks default group places it in the Project section)",
+            "group": "platform.manageBooks",
+            "order": 1,
+            "command": "platformScripture.openManageBooks"
+          },
+          {
             "label": "%webView_platformScriptureEditor_openFind%",
             "group": "platformScriptureEditor.find",
             "order": 3,

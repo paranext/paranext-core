@@ -57,24 +57,60 @@ export function CopyConflictPrompt({
             <DialogTitle>{t('%manageBooks_copy_confirmTitle%', 'Books already exist')}</DialogTitle>
             <DialogDescription>
               {conflict
-                ? fmtTemplate(
-                    t(
-                      '%manageBooks_copy_confirmBody%',
-                      '{0} of the books you are copying already exist in {1}.',
-                    ),
-                    conflict.existing.length,
-                    projectName,
-                  )
+                ? // Lists the conflicting book names like the import-conflict prompt
+                  // does (Manila UX follow-up: "the message should also list the book
+                  // name(s)"). Proper _one/_other pluralization (matching the import
+                  // filesMatched pair) instead of "book(s)"; the old count-only
+                  // %manageBooks_copy_confirmBody% is redirected via metadata
+                  // fallbackKey since its placeholder arity changed. The list join is
+                  // locale-aware via Intl.ListFormat.
+                  (() => {
+                    const bookList = new Intl.ListFormat(undefined, {
+                      style: 'narrow',
+                      type: 'unit',
+                    }).format(conflict.existing);
+                    return conflict.existing.length === 1
+                      ? fmtTemplate(
+                          t(
+                            '%manageBooks_copy_confirmBodyWithBooks_one%',
+                            '1 book already exists in {0}: {1}',
+                          ),
+                          projectName,
+                          bookList,
+                        )
+                      : fmtTemplate(
+                          t(
+                            '%manageBooks_copy_confirmBodyWithBooks_other%',
+                            '{0} books already exist in {1}: {2}',
+                          ),
+                          conflict.existing.length,
+                          projectName,
+                          bookList,
+                        );
+                  })()
                 : ''}
             </DialogDescription>
           </DialogHeader>
-          {/* Bug 2 mirror — wrap on narrow widths so multiple long-label buttons fit the dialog. */}
-          <div className="tw:flex tw:flex-col tw:gap-2 tw:sm:flex-row tw:sm:flex-wrap tw:sm:justify-end">
-            <Button variant="ghost" onClick={onCancel}>
+          {/* Sebastian UX review item 10 (2026-06-12): the prior layout
+              stacked the three buttons in a column at narrow widths
+              (`flex-col → sm:flex-row`), which pushed them past the dialog's
+              bottom edge. Buttons now stay in a single row and individually
+              shrink + wrap their text inside the button. `tw:flex-1
+              tw:min-w-0` lets them share width fairly; `tw:h-auto
+              tw:whitespace-normal tw:text-center` re-enables intra-button
+              wrapping (the shadcn Button base hard-codes
+              whitespace-nowrap/fixed height). */}
+          <div className="tw:flex tw:flex-row tw:gap-2 tw:justify-end">
+            <Button
+              variant="ghost"
+              className="tw:h-auto tw:min-w-0 tw:flex-1 tw:whitespace-normal tw:text-center"
+              onClick={onCancel}
+            >
               {t('%manageBooks_copy_confirmCancel%', 'Cancel')}
             </Button>
             <Button
               variant="destructive"
+              className="tw:h-auto tw:min-w-0 tw:flex-1 tw:whitespace-normal tw:text-center"
               onClick={() => {
                 if (!conflict) return;
                 onChoose('replaceEntireBooks', conflict.books);
@@ -84,19 +120,20 @@ export function CopyConflictPrompt({
             </Button>
             <Button
               variant="outline"
+              className="tw:h-auto tw:min-w-0 tw:flex-1 tw:whitespace-normal tw:text-center"
               onClick={() => {
                 if (!conflict) return;
                 onChoose('nonExistingChapters', conflict.books);
               }}
             >
-              {/* Label honestly describes the PT9 WriteChaptersToBook semantic;
-                  see import-conflict-prompt for the rationale. The localize key
-                  is %manageBooks_copy_confirmMergeFromSource% — the prior
-                  "confirmNonExistingChapters" key promised a behavior the wire
-                  never implemented, so the key was renamed along with the
-                  English copy so existing translations don't silently
-                  mis-apply to the new semantic. */}
-              {t('%manageBooks_copy_confirmMergeFromSource%', 'Merge from source')}
+              {/* The backend now implements exactly what this label promises:
+                  only chapters missing/empty/scaffolding-only in the
+                  destination are written (CopyBooksOrchestrator
+                  TryCopyChaptersFromSource + UsfmChapterScaffolding). The key
+                  was renamed from %manageBooks_copy_confirmMergeFromSource%
+                  when the Manila UX follow-up changed the wire behavior from
+                  PT9's chapter-overwrite merge to skip-existing-chapters. */}
+              {t('%manageBooks_copy_onlyNonExistingChapters%', 'Only copy non-existing chapters')}
             </Button>
           </div>
         </div>

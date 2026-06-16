@@ -43,6 +43,24 @@ const parseDateForCompare = (value: string): number => Date.parse(value);
  * dates were strict ISO-8601 (lexically sortable); a non-ISO format leaked in via a custom loader
  * would silently misorder. Parsing to numeric timestamps avoids that pitfall.
  */
+/**
+ * Which of the four delete-confirmation bodies applies, given whether the user selected every
+ * present book and whether the project is shared (Send/Receive).
+ *
+ * Precedence rule (UX Manila follow-up): the shared-project warning must survive in EVERY shared
+ * case — the original branch order dropped it exactly in the highest-impact case (deleting ALL
+ * books of a shared project). Pure function so the 2x2 precedence is unit-testable.
+ */
+export type DeleteConfirmVariant = 'allShared' | 'all' | 'partialShared' | 'partial';
+
+export const deleteConfirmVariant = (
+  allSelected: boolean,
+  isShared: boolean,
+): DeleteConfirmVariant => {
+  if (allSelected) return isShared ? 'allShared' : 'all';
+  return isShared ? 'partialShared' : 'partial';
+};
+
 export const computeCompareState = (
   sourceDate: string | undefined,
   destDate: string | undefined,
@@ -57,6 +75,20 @@ export const computeCompareState = (
   if (sourceMs === destMs) return 'filesAreSame';
   return sourceMs > destMs ? 'sourceIsNewer' : 'sourceIsOlder';
 };
+
+/**
+ * Compare state for the Import grid. The picked file's date is day-granular (`YYYY-MM-DD`, derived
+ * from `File.lastModified`), whereas the destination's date is a full ISO timestamp (the project
+ * book's `GetLastWriteTime`). Comparing those directly biases a same-day import toward
+ * `sourceIsOlder` — the day-only pick parses as midnight and loses to the dest's intra-day time. We
+ * normalize the destination to the same day granularity so a file imported the same day a book was
+ * last written reads as `filesAreSame`, not `sourceIsOlder`. See I9.
+ */
+export const computeImportCompareState = (
+  pickDate: string | undefined,
+  destDate: string | undefined,
+): ManageBooksComparisonState =>
+  computeCompareState(pickDate, destDate ? destDate.slice(0, 10) : undefined);
 
 /**
  * Map a versification value (numeric `ScrVersType` enum or its stringified form, as returned by

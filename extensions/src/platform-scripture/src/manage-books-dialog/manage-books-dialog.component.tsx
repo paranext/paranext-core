@@ -1,4 +1,13 @@
-import { type ReactElement, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import {
+  type ReactElement,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   BookPlus,
   Copy,
@@ -67,6 +76,8 @@ import {
 } from './manage-books-dialog.types';
 import {
   computeCompareState,
+  computeImportCompareState,
+  deleteConfirmVariant,
   fmtTemplate,
   versificationFallbackName,
   versificationLabelKey,
@@ -203,8 +214,10 @@ export type ManageBooksDialogProps = {
   onMutationResult?: (result: MutationResult) => void;
 
   /**
-   * (A2) Whether the project is shared with other users. When true, the delete-confirm prompt shows
-   * enhanced "they will see this change immediately" copy. Defaults to false.
+   * (A2) Whether the project is shared with other users (PT9: `ScrText.IsProjectShared` with more
+   * than one registered user). When true, the delete-confirm prompt warns that the books will be
+   * deleted for all users when they next Send/Receive — in both the partial and the all-books
+   * variants. Defaults to false.
    */
   isSharedProject?: boolean;
 
@@ -225,8 +238,14 @@ export type ManageBooksDialogProps = {
    * Project list passed to the sidebar's `<ProjectSelector>`. The wiring layer typically derives
    * this from `papi.projectLookup.getMetadataForAllProjects` and filters to scripture projects.
    * Defaults to an empty array, which makes the ProjectSelector render an empty popover.
+   *
+   * Entries may optionally carry `isEditable` (sourced from `ProjectSummary.IsEditable`). When
+   * supplied, the dialog uses it as a fast-path for the read-only-target gating decision so the
+   * Create / Copy / Import / Delete sections lock immediately on project switch even before the
+   * dialog's slower internal `projects` fetch (which does extra per-project pdp.getSetting calls)
+   * has caught up. Sebastian UX review item 6 (2026-06-12).
    */
-  sidebarProjects?: readonly ProjectSelectorProject[];
+  sidebarProjects?: readonly (ProjectSelectorProject & { isEditable?: boolean })[];
 
   /**
    * Currently-open project-bound tabs across the app. Forwarded straight through to the sidebar
@@ -461,6 +480,33 @@ const toProjectBookState = (books: ManageBooksDialogBookInfo[] | undefined): Pro
  * extension layer. See `manage-books-dialog.types.ts` for the full props contract and the FN-008
  * spec in `.context/features/manage-books/` for behavior catalog references.
  */
+/**
+ * JS-driven responsive collapse flag: observes the ref'd element's width and flips when it crosses
+ * the 28rem (448px) breakpoint. Used instead of Tailwind container queries because `@md/...:`
+ * variants are not emitted into the webview bundle (only the `@container` declaration survives the
+ * extension's Tailwind build — verified at runtime 2026-06-12).
+ *
+ * React refs are typed `RefObject<HTMLDivElement | null>` (null is the canonical initial value for
+ * DOM refs).
+ */
+function useIsNarrow(ref: RefObject<HTMLDivElement | null>, open: boolean): boolean {
+  const NARROW_BREAKPOINT_PX = 448;
+  const [isNarrow, setIsNarrow] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const measure = () => {
+      const next = el.getBoundingClientRect().width < NARROW_BREAKPOINT_PX;
+      setIsNarrow((prev) => (prev === next ? prev : next));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ref, open]);
+  return isNarrow;
+}
+
 export function ManageBooksDialog({
   open,
   projectId,
@@ -487,28 +533,15 @@ export function ManageBooksDialog({
 }: ManageBooksDialogProps) {
   const allBooks = useMemo(() => bookIds ?? DEFAULT_BOOK_IDS, [bookIds]);
 
-  // JS-driven responsive collapse. We observe the dialog root's width and
-  // flip `dialogIsNarrow` when it crosses ~28rem (448px) — the breakpoint
-  // matches an `@md/dialog:` container query that doesn't reliably reach the
-  // iframe stylesheets. React refs are typed
-  // `MutableRefObject<HTMLDivElement | null>` (null is the canonical initial
-  // value for DOM refs).
+  // Dialog-root collapse drives the sidebar icon-rail + header subtitle; the
+  // filter-bar flag drives the count span. Same hook, two containers.
   // eslint-disable-next-line no-null/no-null
   const dialogRootRef = useRef<HTMLDivElement | null>(null);
-  const [dialogIsNarrow, setDialogIsNarrow] = useState(false);
-  useEffect(() => {
-    const el = dialogRootRef.current;
-    if (!el) return undefined;
-    const NARROW_BREAKPOINT_PX = 448;
-    const measure = () => {
-      const next = el.getBoundingClientRect().width < NARROW_BREAKPOINT_PX;
-      setDialogIsNarrow((prev) => (prev === next ? prev : next));
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [open]);
+  const dialogIsNarrow = useIsNarrow(dialogRootRef, open);
+  // null is the canonical initial value for React DOM refs.
+  // eslint-disable-next-line no-null/no-null
+  const filterBarRef = useRef<HTMLDivElement | null>(null);
+  const filterBarIsNarrow = useIsNarrow(filterBarRef, open);
 
   const t = useCallback(
     (key: keyof ManageBooksDialogLocalizedStrings, fallback: string) =>
@@ -525,6 +558,13 @@ export function ManageBooksDialog({
 
   // -- Loaded data ---------------------------------------------------------
   const [projects, setProjects] = useState<ManageBooksDialogProject[]>([]);
+  // Sebastian UX review item 1 (2026-06-12): track whether the initial
+  // `loadProjects` fetch has completed at least once. Used to drive the
+  // project-trigger disabled state and the right-pane skeleton placeholder
+  // so the user doesn't see the projectId GUID render in the header subtitle
+  // ("random number" — the fallback projectDisplayName) or a half-rendered
+  // body before the project list has resolved.
+  const [hasLoadedProjects, setHasLoadedProjects] = useState(false);
   const [booksByProjectId, setBooksByProjectId] = useState<
     Record<string, ManageBooksDialogBookInfo[]>
   >({});
@@ -538,13 +578,22 @@ export function ManageBooksDialog({
   );
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setHasLoadedProjects(false);
+      return;
+    }
     Promise.resolve(loadProjects())
       .then((next) => {
         setProjects(next);
+        setHasLoadedProjects(true);
         return undefined;
       })
-      .catch(() => undefined);
+      .catch(() => {
+        // Mark as loaded even on failure so the UI stops blocking on a fetch
+        // that will never resolve; the user sees the empty-projects body
+        // rather than an indefinite skeleton.
+        setHasLoadedProjects(true);
+      });
   }, [open, loadProjects]);
 
   useEffect(() => {
@@ -647,10 +696,29 @@ export function ManageBooksDialog({
   }, [open, projectId, loadVersification]);
 
   // -- Derived state -------------------------------------------------------
+  // Sebastian UX review item 6 (2026-06-12): the gating decision used to read
+  // `isEditable` only from the dialog's slower internal `projects` array
+  // (loaded via the `loadProjects` prop, which awaits two pdp.getSetting
+  // calls per project for display names). When the user switched projects
+  // before that fetch finished — easy to do because `sidebarProjects` arrives
+  // much faster — `projects.find` returned undefined and the fallback's
+  // `isEditable` was undefined, so the sidebar treated the project as
+  // potentially editable and kept Create / Copy / Import / Delete enabled.
+  //
+  // We now consult the sidebar list first (which carries `isEditable` from
+  // the wire) and treat its value as authoritative for the gating decision.
+  // The full `projects` entry, if available, still wins because it carries
+  // every field the dialog body needs; sidebarProjects is the fast fallback.
+  const sidebarProjectForGating = useMemo(
+    () => sidebarProjects.find((p) => p.id === projectId),
+    [sidebarProjects, projectId],
+  );
   const fallbackProject: ManageBooksDialogProject = {
     id: projectId,
-    shortName: projectId,
-    name: projectId,
+    shortName: sidebarProjectForGating?.shortName ?? projectId,
+    name: sidebarProjectForGating?.shortName ?? projectId,
+    fullName: sidebarProjectForGating?.fullName,
+    isEditable: sidebarProjectForGating?.isEditable,
   };
   const project = projects.find((p) => p.id === projectId) ?? fallbackProject;
   const otherProjects = projects.filter((p) => p.id !== projectId);
@@ -659,12 +727,56 @@ export function ManageBooksDialog({
   // `ManageBooksDialogProject` to that shape — `p.fullName` (sourced from `platform.fullName`
   // upstream) becomes the secondary label, falling back to `shortName` when no fullName is
   // configured. The target project itself is filtered out (already done in `otherProjects`).
+  // Sebastian UX new-requirement 4 (2026-06-12): commentaries should be excluded from both the
+  // Copy "From" and Create "Based on" pickers. DEFERRED — there is no reliable commentary signal in
+  // the current data model: DBL classifies resources only by medium (text/audio/print), ParatextData
+  // has no commentary concept, and the only marker is a hardcoded 3-UID whitelist in
+  // DblDownloadableDataProvider that never reaches ProjectSummary. The previous `isCommentary` filter
+  // keyed off `projectType === 'CommentaryResource'`, which is a ResourceType value that the
+  // ProjectType-derived wire field can never equal, so it excluded nothing. Removed rather than left
+  // as dead code; re-add once an upstream commentary flag exists (DBL/ParatextData). Note Copy "From"
+  // already excludes all resources for licensing reasons, so commentaries (being resources) stay out
+  // of Copy regardless.
   //
-  // Exclude resource projects from the Copy "From" and Create "Based on"
-  // source pickers (copyright reasons). Read-only non-resource projects
-  // remain valid sources. The header project picker continues to include
-  // resources.
-  const otherProjectsAsPS = useMemo<ProjectSelectorProject[]>(
+  // Sebastian UX new-requirement 3 (2026-06-12): the picker is also enriched
+  // with versification id + localized name so the consumer can opt into
+  // versification-grouping (Create "Based on" does; Copy "From" leaves it
+  // off). The name resolution lives here on the dialog side because we own
+  // the `t()` + `versificationLabelKey` map.
+  const allOtherProjectsAsPS = useMemo<ProjectSelectorProject[]>(
+    () =>
+      otherProjects.map((p) => ({
+        id: p.id,
+        shortName: p.shortName,
+        fullName: p.fullName ?? p.shortName,
+        versificationId: p.versificationId,
+        // Group header reads "{name} versification" (lowercase, per Sebastian N3 follow-up),
+        // localized via a template so word order can vary by language. The "Unknown
+        // versification" bucket is labeled separately (versificationUnknownSectionHeading) and is
+        // unaffected, so no double "versification" suffix.
+        versificationName: p.versificationId
+          ? fmtTemplate(
+              t('%manageBooks_projectSelector_versificationSectionHeading%', '{0} versification'),
+              t(
+                versificationLabelKey(p.versificationId),
+                versificationFallbackName(p.versificationId),
+              ),
+            )
+          : undefined,
+      })),
+    [otherProjects, t],
+  );
+  // The Copy "From" picker excludes resources for licensing reasons — copying
+  // text OUT of a published resource into a project is not permitted (PT9
+  // parity: CopyBooksForm only lists IsNonProtectedText() sources). Read-only
+  // non-resource projects remain valid copy sources.
+  //
+  // The Create "Based on" picker deliberately INCLUDES resources: it only
+  // reads the reference's book/chapter structure to scaffold empty books, no
+  // text is copied (PT9 parity: CreateBooksForm's model combobox lists all
+  // accessible scripture texts including resources; Manila UX follow-up
+  // confirmed this).
+  const copyFromProjectsAsPS = useMemo<ProjectSelectorProject[]>(
     () =>
       otherProjects
         .filter((p) => !p.isResource)
@@ -684,12 +796,27 @@ export function ManageBooksDialog({
     () => toProjectBookState(booksByProjectId[projectId]),
     [booksByProjectId, projectId],
   );
+  // Both pickers below stay undefined until the picked project's books have
+  // actually LOADED (booksByProjectId[id] set — an empty array means "loaded,
+  // no books"). toProjectBookState(undefined) would yield a truthy empty
+  // state, which made the Sebastian-item-27 prune effect below fire in the
+  // load gap right after picking a reference and wipe the user's entire
+  // selection (and made every pill briefly render as not-in-reference
+  // disabled). The copy-source picker gets the same guard so the A7
+  // selection-seed effect can't churn on an empty universe during its load
+  // gap.
   const copySource = useMemo<ProjectBookState | undefined>(
-    () => (copySourceId ? toProjectBookState(booksByProjectId[copySourceId]) : undefined),
+    () =>
+      copySourceId && booksByProjectId[copySourceId]
+        ? toProjectBookState(booksByProjectId[copySourceId])
+        : undefined,
     [copySourceId, booksByProjectId],
   );
   const createReferenceBookState = useMemo<ProjectBookState | undefined>(
-    () => (createReferenceId ? toProjectBookState(booksByProjectId[createReferenceId]) : undefined),
+    () =>
+      createReferenceId && booksByProjectId[createReferenceId]
+        ? toProjectBookState(booksByProjectId[createReferenceId])
+        : undefined,
     [createReferenceId, booksByProjectId],
   );
 
@@ -839,8 +966,21 @@ export function ManageBooksDialog({
     });
   }, [action, copySource, copySourceId, universe, current]);
 
+  // Sebastian UX review item 11 (2026-06-12): book-id detection must rely on
+  // the `\id` marker in the file content, not the filename. A filename like
+  // `38ZECCUNP89T.SFM` contains "ECC" before "ZEC", so the old filename-only
+  // substring scan misidentified the book. We now read the first `\id`
+  // marker and only fall back to a filename match when the content is missing
+  // or carries no usable id (story decorators / unreadable files).
   const detectBookId = useCallback(
-    (filename: string): string | undefined => {
+    (filename: string, content?: string): string | undefined => {
+      if (content) {
+        const idMatch = content.match(/^\s*\\id\s+([A-Za-z0-9]{2,4})/m);
+        if (idMatch) {
+          const candidate = idMatch[1].toUpperCase();
+          if (allBooks.includes(candidate)) return candidate;
+        }
+      }
       const upper = filename.toUpperCase();
       return allBooks.find((b) => upper.includes(b));
     },
@@ -878,7 +1018,7 @@ export function ManageBooksDialog({
       let aborted = false;
       picked.forEach((f, idx) => {
         if (aborted) return;
-        const book = detectBookId(f.name);
+        const book = detectBookId(f.name, contents[idx]);
         if (!book) {
           unmatched.push(f.name);
           return;
@@ -896,7 +1036,21 @@ export function ManageBooksDialog({
           return;
         }
         seenInBatch[book] = f.name;
-        additions[book] = { file: f.name, date: todayISO(), content: contents[idx] };
+        // Sebastian UX review item 9 (2026-06-12): the import grid must show
+        // the file's last-modified date so the newer/older comparison reflects
+        // the real source date. `File.lastModified` is always populated for
+        // real File objects coming from the browser picker or
+        // `onPickImportFiles`; story decorators that pass `{name}` shapes
+        // still get a date but without `lastModified` it would always read 0
+        // — for those we keep `todayISO()` to avoid an epoch-zero "1970"
+        // pill in the grid, but production paths never hit that branch.
+        const lastModified =
+          'lastModified' in f && typeof f.lastModified === 'number' ? f.lastModified : undefined;
+        const date =
+          lastModified !== undefined
+            ? new Date(lastModified).toISOString().slice(0, 10)
+            : todayISO();
+        additions[book] = { file: f.name, date, content: contents[idx] };
         addedBooks.push(book);
         if (isUsxFileName(f.name)) usxFiles.push(f.name);
       });
@@ -1271,10 +1425,14 @@ export function ManageBooksDialog({
       const destVrs = versification ?? '';
       const modelVrs = await Promise.resolve(loadVersification(createReferenceId)).catch(() => '');
       if (destVrs && modelVrs && destVrs !== modelVrs) {
+        // Sebastian UX new-requirement 2 (2026-06-12): the prompt body must
+        // show the localized versification NAME (e.g. "English", "Vulgate"),
+        // not the numeric ScrVersType id (e.g. "0", "4"). Resolve here so the
+        // prompt component stays presentational.
         setCreatePrompt({
           kind: 'versification',
-          destVrs,
-          modelVrs,
+          destVrs: t(versificationLabelKey(destVrs), versificationFallbackName(destVrs)),
+          modelVrs: t(versificationLabelKey(modelVrs), versificationFallbackName(modelVrs)),
           books: selectedArr,
         });
         pendingEstherRef.current = estherTemplate;
@@ -1347,6 +1505,27 @@ export function ManageBooksDialog({
     ? fmtTemplate(subtitleTemplate, totalPresent, projectDisplayName, versificationName)
     : fmtTemplate(subtitleTemplate, totalPresent, projectDisplayName);
 
+  // Sebastian UX new-requirement 1 (2026-06-12): the right-pane headline now
+  // tracks the active section ("Show books", "Create books", …) instead of the
+  // static "Manage books". We reuse the existing sidebar localized labels —
+  // they're already translated and exactly match the desired text, so no new
+  // localize keys are needed.
+  const headerTitle = (() => {
+    switch (action) {
+      case 'create':
+        return t('%manageBooks_sidebar_create_label%', 'Create books');
+      case 'copy':
+        return t('%manageBooks_sidebar_copy_label%', 'Copy books');
+      case 'import':
+        return t('%manageBooks_sidebar_import_label%', 'Import books');
+      case 'delete':
+        return t('%manageBooks_sidebar_delete_label%', 'Delete books');
+      case 'view':
+      default:
+        return t('%manageBooks_sidebar_show_label%', 'Show books');
+    }
+  })();
+
   // Per Sebastian review item 8 (2026-05-06): only the All/New/Existing presence-filter labels
   // are used now that the Copy comparison-state filter has been removed. The remaining
   // newer/older/same/undetermined chip-label localized strings are still consumed by the per-row
@@ -1379,6 +1558,18 @@ export function ManageBooksDialog({
         '%manageBooks_copy_emptyState_chooseSource%',
         'Choose a source project to see books available to copy.',
       );
+    // Sebastian I7 follow-up (2026-06-12): copy mode with a source picked but its books not yet
+    // fetched (the brief load gap). Without this branch it falls through to the misleading "...has
+    // no books to copy" message below. Show a loading hint instead.
+    if (action === 'copy' && copySourceId && !booksByProjectId[copySourceId]) {
+      const sourceName = copySourceProject?.shortName ?? copySourceProject?.fullName;
+      return sourceName
+        ? fmtTemplate(
+            t('%manageBooks_copy_emptyState_loadingSource%', 'Loading books from {0}…'),
+            sourceName,
+          )
+        : t('%manageBooks_copy_emptyState_loading%', 'Loading books…');
+    }
     // Sebastian review item 22 (2026-05-06): Import mode renders an empty grid until the user
     // attaches files. The "Add files…" / "Choose files…" affordance lives in the per-action
     // header just above; this empty-state message gives the otherwise-blank grid area a hint.
@@ -1487,7 +1678,9 @@ export function ManageBooksDialog({
       } else if (action === 'import') {
         const pick = importFiles[book];
         if (pick) {
-          const compState = computeCompareState(pick.date, present ? destDate : undefined);
+          // Day-granular comparison: pick.date is YYYY-MM-DD, destDate is a full ISO timestamp.
+          // See computeImportCompareState / I9.
+          const compState = computeImportCompareState(pick.date, present ? destDate : undefined);
           const t1 = toneForComparisonState(compState);
           if (t1 !== 'hidden') tone = t1;
           const group = compStateToGroup(compState, present);
@@ -1527,6 +1720,13 @@ export function ManageBooksDialog({
           t('%manageBooks_create_book_notInReference%', 'Not in {0}'),
           createReferenceProject.shortName,
         );
+        // Manila UX follow-up ("disabled vs not in project is too subtle"):
+        // cluster the non-creatable books in their own status group at the
+        // bottom (notInProject sorts last via STATUS_GROUP_PRIORITY) instead
+        // of interleaving them with creatable "New" books. Pairs with the
+        // inert-gray disabled pill styling in book-grid.component.tsx.
+        statusGroupKey = 'notInProject';
+        statusLabel = disabledReason;
       }
 
       return {
@@ -1716,36 +1916,59 @@ export function ManageBooksDialog({
   })();
 
   // -- A2 Delete confirm helpers ------------------------------------------
+  // Four body variants: {all, partial} x {shared, not shared}. The shared
+  // warning takes precedence in BOTH selection shapes — PT9 always replaced
+  // the standard confirm with the shared-users warning (DeleteBooksForm.cs),
+  // and the previous PT10 branch order dropped it exactly in the
+  // highest-impact case (deleting every book of a shared project). The
+  // wording is S/R-accurate per the Manila UX follow-up: deletion is local
+  // until other users Send/Receive — the old copy falsely claimed "they will
+  // see this change immediately" (old key redirected via metadata
+  // fallbackKey).
+  // Variant selection (the shared-warning precedence) is a pure function in
+  // manage-books-dialog.utils.ts so the 2x2 matrix is unit-tested; this block
+  // only maps the variant to its localized string.
   const deleteConfirmBody = (() => {
     if (!deleteConfirm) return '';
     const n = deleteConfirm.books.length;
     const dest = project.shortName;
-    const allSelected = n === current.present.size;
-    if (allSelected)
-      return fmtTemplate(
-        t(
-          '%manageBooks_delete_confirmBodyAll%',
-          'All books will be deleted from {0}. The project itself will not be deleted. This cannot be undone.',
-        ),
-        dest,
-      );
-    if (isSharedProject)
-      return fmtTemplate(
-        t(
-          '%manageBooks_delete_confirmBodyShared%',
-          '{0} book(s) will be deleted from {1}, which is shared with other users. They will see this change immediately. This cannot be undone.',
-        ),
-        n,
-        dest,
-      );
-    return fmtTemplate(
-      t(
-        '%manageBooks_delete_confirmBodyPartial%',
-        '{0} book(s) will be deleted from {1}. This cannot be undone.',
-      ),
-      n,
-      dest,
-    );
+    switch (deleteConfirmVariant(n === current.present.size, isSharedProject === true)) {
+      case 'allShared':
+        return fmtTemplate(
+          t(
+            '%manageBooks_delete_confirmBodyAllShared%',
+            'All books will be deleted from {0}, which is shared with other users. The books will be deleted for all users when they next Send/Receive. The project itself will not be deleted. This cannot be undone.',
+          ),
+          dest,
+        );
+      case 'all':
+        return fmtTemplate(
+          t(
+            '%manageBooks_delete_confirmBodyAll%',
+            'All books will be deleted from {0}. The project itself will not be deleted. This cannot be undone.',
+          ),
+          dest,
+        );
+      case 'partialShared':
+        return fmtTemplate(
+          t(
+            '%manageBooks_delete_confirmBodySharedSendReceive%',
+            '{0} book(s) will be deleted from {1}, which is shared with other users. The books will be deleted for all users when they next Send/Receive. This cannot be undone.',
+          ),
+          n,
+          dest,
+        );
+      case 'partial':
+      default:
+        return fmtTemplate(
+          t(
+            '%manageBooks_delete_confirmBodyPartial%',
+            '{0} book(s) will be deleted from {1}. This cannot be undone.',
+          ),
+          n,
+          dest,
+        );
+    }
   })();
 
   if (!open) {
@@ -1780,7 +2003,14 @@ export function ManageBooksDialog({
             openTabs={openTabs}
             projectId={projectId}
             onProjectIdChange={onProjectIdChange}
-            isSubmitting={isSubmitting}
+            // Sebastian UX review item 1 (2026-06-12): during the initial
+            // `loadProjects` fetch the sidebar is fully locked — the
+            // ProjectSelector disables (no clicks until the list is ready)
+            // and the action rows disable because there's nothing actionable
+            // yet. Once `hasLoadedProjects` flips true the usual `isSubmitting`
+            // gating takes over.
+            isSubmitting={isSubmitting || !hasLoadedProjects}
+            isLoadingProjects={!hasLoadedProjects}
             isTargetEditable={project.isEditable}
             targetShortName={project.shortName}
             t={t}
@@ -1790,29 +2020,82 @@ export function ManageBooksDialog({
           <div className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col">
             <header className="tw:flex tw:items-center tw:gap-3 tw:border-b tw:px-6 tw:py-4">
               <div className="tw:flex tw:flex-col">
-                <h2 className="tw:text-lg tw:font-semibold">
-                  {t('%manageBooks_dialog_title%', 'Manage books')}
-                </h2>
+                <h2 className="tw:text-lg tw:font-semibold">{headerTitle}</h2>
                 {/* Header subtitle hides when the dialog is narrow. Driven by
-                    the JS-resize-observer flag on the dialog root. */}
-                {!dialogIsNarrow && (
+                    the JS-resize-observer flag on the dialog root.
+                    Sebastian UX review item 1 (2026-06-12): while the initial
+                    `loadProjects` fetch is in flight we render a placeholder
+                    skeleton bar instead of the subtitle template, otherwise
+                    the user briefly sees the projectId GUID render in place
+                    of the project name ("random number") and a book count of
+                    zero before the real data arrives. */}
+                {!dialogIsNarrow && hasLoadedProjects && (
                   <p className="tw:text-xs tw:text-muted-foreground">{headerSubtitle}</p>
+                )}
+                {!dialogIsNarrow && !hasLoadedProjects && (
+                  <div
+                    className="tw:mt-1 tw:h-3 tw:w-48 tw:animate-pulse tw:rounded tw:bg-muted"
+                    aria-hidden
+                  />
                 )}
               </div>
             </header>
-
-            <div className="tw:flex tw:flex-col tw:items-start tw:gap-2 tw:border-b tw:px-6 tw:py-3 tw:@container/actions">
-              {action === 'view' && (
-                <div className="tw:flex tw:items-center tw:gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="tw:h-8 tw:px-2 tw:text-xs"
-                    onClick={() => onOpenScriptureReferenceSettings(projectId)}
-                  >
-                    {t('%manageBooks_view_openScrRefSettings%', 'Scripture reference settings…')}
-                  </Button>
-                  {/*
+            {/* Sebastian UX review item 1 (2026-06-12): while projects are
+                loading the action body / filter bar / grid / footer below
+                are replaced with a skeleton placeholder so the user doesn't
+                see real-but-stale content (book pills against a different
+                project's data, "0 of 0 books" counts, empty grouping etc.)
+                bleed through. Once the project list resolves the real body
+                renders normally. */}
+            {!hasLoadedProjects && (
+              <div
+                className="tw:flex tw:flex-1 tw:flex-col tw:gap-4 tw:px-6 tw:py-6"
+                aria-busy="true"
+                aria-live="polite"
+                data-testid="manage-books-dialog-loading"
+              >
+                <div className="tw:flex tw:gap-2">
+                  <div className="tw:h-8 tw:w-32 tw:animate-pulse tw:rounded tw:bg-muted" />
+                  <div className="tw:h-8 tw:w-24 tw:animate-pulse tw:rounded tw:bg-muted" />
+                  <div className="tw:h-8 tw:w-28 tw:animate-pulse tw:rounded tw:bg-muted" />
+                </div>
+                <div className="tw:grid tw:grid-cols-2 tw:gap-2 tw:sm:grid-cols-3 tw:md:grid-cols-4 tw:lg:grid-cols-6">
+                  {Array.from({ length: 18 }).map((_, i) => (
+                    <div
+                      // The skeleton pills have no identity beyond their position; the array
+                      // index IS the stable key for them. The no-array-index-key rule guards
+                      // against using indices for reorderable data — irrelevant here.
+                      // eslint-disable-next-line react/no-array-index-key
+                      key={`mb-loading-pill-${i}`}
+                      className="tw:h-12 tw:animate-pulse tw:rounded tw:bg-muted"
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+            {hasLoadedProjects && (
+              <>
+                <div className="tw:flex tw:flex-col tw:items-start tw:gap-2 tw:border-b tw:px-6 tw:py-3 tw:@container/actions">
+                  {action === 'view' && (
+                    /* Sebastian UX review item 4 (2026-06-12): the row used to wrap
+                   (tw:flex-wrap) which ate two extra rows of vertical real
+                   estate. It now stays single-line and overflows horizontally
+                   with a hidden scrollbar — the user can shift+scroll if a
+                   button is off-screen, and the buttons keep their compact
+                   layout at the narrowest reasonable widths. */
+                    <div className="tw:flex tw:items-center tw:gap-1 tw:overflow-x-auto tw:whitespace-nowrap">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="tw:h-8 tw:px-2 tw:text-xs"
+                        onClick={() => onOpenScriptureReferenceSettings(projectId)}
+                      >
+                        {t(
+                          '%manageBooks_view_openScrRefSettings%',
+                          'Scripture reference settings…',
+                        )}
+                      </Button>
+                      {/*
                     DEF-UI-007 / DEF-UI-008 / DEF-UI-001 stub buttons (Phase 3 UI Decision 13,
                     2026-05-04): Project canons, Registry, and View differences are not yet
                     implemented in PT10. We render each as a disabled Button wrapped in a Tooltip
@@ -1822,238 +2105,255 @@ export function ManageBooksDialog({
                     eventually supplied, the corresponding button auto-enables and wires the
                     real cross-launch.
                   */}
-                  {(() => {
-                    const stubTooltip = t(
-                      '%manageBooks_view_disabledStub_notYetAvailable%',
-                      'Not yet available — coming soon',
-                    );
-                    const enableProjectCanons = Boolean(onOpenProjectCanons);
-                    const enableRegistry = Boolean(onOpenRegistry);
-                    const projectCanonsButton = (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="tw:h-8 tw:px-2 tw:text-xs"
-                        disabled={!enableProjectCanons}
-                        aria-disabled={!enableProjectCanons}
-                        aria-describedby={
-                          !enableProjectCanons ? projectCanonsDisabledHintId : undefined
-                        }
-                        onClick={
-                          enableProjectCanons ? () => onOpenProjectCanons?.(projectId) : undefined
-                        }
-                      >
-                        {t('%manageBooks_view_openProjectCanons%', 'Project canons…')}
-                      </Button>
-                    );
-                    const registryButton = (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="tw:h-8 tw:gap-1.5 tw:px-2 tw:text-xs"
-                        disabled={!enableRegistry}
-                        aria-disabled={!enableRegistry}
-                        aria-describedby={!enableRegistry ? registryDisabledHintId : undefined}
-                        onClick={enableRegistry ? () => onOpenRegistry?.(projectId) : undefined}
-                      >
-                        {t('%manageBooks_view_openRegistry%', 'Registry')}
-                        <ExternalLink
-                          className="tw:h-3 tw:w-3 tw:text-muted-foreground"
-                          aria-hidden
-                        />
-                      </Button>
-                    );
-                    const viewDiffButton = (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="tw:h-8 tw:px-2 tw:text-xs"
-                        disabled
-                        aria-disabled
-                        aria-describedby={viewDiffDisabledHintId}
-                      >
-                        {t('%manageBooks_view_diff_label%', 'View differences')}
-                      </Button>
-                    );
-                    return (
-                      <>
-                        {!enableProjectCanons ? (
-                          <DisabledStubButtonTooltip
-                            hintId={projectCanonsDisabledHintId}
-                            tooltipText={stubTooltip}
+                      {(() => {
+                        const stubTooltip = t(
+                          '%manageBooks_view_disabledStub_notYetAvailable%',
+                          'Not yet available — coming soon',
+                        );
+                        const enableProjectCanons = Boolean(onOpenProjectCanons);
+                        const enableRegistry = Boolean(onOpenRegistry);
+                        const projectCanonsButton = (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="tw:h-8 tw:px-2 tw:text-xs"
+                            disabled={!enableProjectCanons}
+                            aria-disabled={!enableProjectCanons}
+                            aria-describedby={
+                              !enableProjectCanons ? projectCanonsDisabledHintId : undefined
+                            }
+                            onClick={
+                              enableProjectCanons
+                                ? () => onOpenProjectCanons?.(projectId)
+                                : undefined
+                            }
                           >
-                            {projectCanonsButton}
-                          </DisabledStubButtonTooltip>
-                        ) : (
-                          projectCanonsButton
-                        )}
-                        {!enableRegistry ? (
-                          <DisabledStubButtonTooltip
-                            hintId={registryDisabledHintId}
-                            tooltipText={stubTooltip}
+                            {t('%manageBooks_view_openProjectCanons%', 'Project canons…')}
+                          </Button>
+                        );
+                        const registryButton = (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="tw:h-8 tw:gap-1.5 tw:px-2 tw:text-xs"
+                            disabled={!enableRegistry}
+                            aria-disabled={!enableRegistry}
+                            aria-describedby={!enableRegistry ? registryDisabledHintId : undefined}
+                            onClick={enableRegistry ? () => onOpenRegistry?.(projectId) : undefined}
                           >
-                            {registryButton}
-                          </DisabledStubButtonTooltip>
-                        ) : (
-                          registryButton
-                        )}
-                        <DisabledStubButtonTooltip
-                          hintId={viewDiffDisabledHintId}
-                          tooltipText={stubTooltip}
-                        >
-                          {viewDiffButton}
-                        </DisabledStubButtonTooltip>
-                      </>
-                    );
-                  })()}
-                </div>
-              )}
-
-              {action === 'copy' && (
-                <div className="tw:flex tw:items-center tw:gap-2">
-                  <Label htmlFor="af-source" className="tw:text-xs tw:text-muted-foreground">
-                    {t('%manageBooks_copy_fromLabel%', 'From')}
-                  </Label>
-                  <div id="af-source" data-testid="manage-books-copy-source-trigger">
-                    <ProjectSelector
-                      mode="project"
-                      projects={otherProjectsAsPS}
-                      openTabs={openTabs ?? []}
-                      selection={{ projectId: copySourceId }}
-                      onChangeSelection={({ projectId: nextId }) =>
-                        setCopySourceId(nextId || undefined)
-                      }
-                      isDisabled={isSubmitting}
-                      ariaLabel={t('%manageBooks_copy_sourcePlaceholder%', 'Select project')}
-                      buttonPlaceholder={t(
-                        '%manageBooks_copy_sourcePlaceholder%',
-                        'Select project',
-                      )}
-                      localizedStrings={projectSelectorLocalizedStrings}
-                      // Mirror the prior <SelectTrigger> "primary fill while empty" affordance —
-                      // the picker reads as a call-to-action until a source project is set.
-                      buttonClassName={cn(
-                        'tw:h-8 tw:w-52',
-                        !copySourceId &&
-                          'tw:border-primary tw:bg-primary tw:text-primary-foreground tw:hover:bg-primary/90',
-                      )}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {action === 'import' && (
-                <div className="tw:flex tw:items-center tw:gap-2">
-                  <input
-                    ref={importFileInputRef}
-                    type="file"
-                    multiple
-                    accept=".sfm,.usfm,.usx,.xml"
-                    className="tw:hidden"
-                    onChange={(e) => {
-                      handleImportFilesPicked(e.target.files);
-                      e.target.value = '';
-                    }}
-                    aria-hidden
-                  />
-                  <Button
-                    variant={hasInlineFiles ? 'outline' : 'default'}
-                    size="sm"
-                    className="tw:h-8"
-                    onClick={() => {
-                      triggerFileBrowser().catch(() => undefined);
-                    }}
-                    disabled={isSubmitting}
-                  >
-                    <FolderOpen className="tw:mr-1.5 tw:h-3.5 tw:w-3.5" aria-hidden />
-                    {hasInlineFiles
-                      ? t('%manageBooks_import_addMore%', 'Add files…')
-                      : t('%manageBooks_import_choose%', 'Choose files…')}
-                  </Button>
-                  {hasInlineFiles && (
-                    <>
-                      <span className="tw:text-xs tw:text-muted-foreground">
-                        {Object.keys(importFiles).length === 1
-                          ? t('%manageBooks_import_filesMatched_one%', '1 file matched')
-                          : fmtTemplate(
-                              t('%manageBooks_import_filesMatched_other%', '{0} files matched'),
-                              Object.keys(importFiles).length,
+                            {t('%manageBooks_view_openRegistry%', 'Registry')}
+                            <ExternalLink
+                              className="tw:h-3 tw:w-3 tw:text-muted-foreground"
+                              aria-hidden
+                            />
+                          </Button>
+                        );
+                        const viewDiffButton = (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="tw:h-8 tw:px-2 tw:text-xs"
+                            disabled
+                            aria-disabled
+                            aria-describedby={viewDiffDisabledHintId}
+                          >
+                            {t('%manageBooks_view_compareVersions_label%', 'Compare versions…')}
+                          </Button>
+                        );
+                        return (
+                          <>
+                            {!enableProjectCanons ? (
+                              <DisabledStubButtonTooltip
+                                hintId={projectCanonsDisabledHintId}
+                                tooltipText={stubTooltip}
+                              >
+                                {projectCanonsButton}
+                              </DisabledStubButtonTooltip>
+                            ) : (
+                              projectCanonsButton
                             )}
-                      </span>
+                            {!enableRegistry ? (
+                              <DisabledStubButtonTooltip
+                                hintId={registryDisabledHintId}
+                                tooltipText={stubTooltip}
+                              >
+                                {registryButton}
+                              </DisabledStubButtonTooltip>
+                            ) : (
+                              registryButton
+                            )}
+                            <DisabledStubButtonTooltip
+                              hintId={viewDiffDisabledHintId}
+                              tooltipText={stubTooltip}
+                            >
+                              {viewDiffButton}
+                            </DisabledStubButtonTooltip>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {action === 'copy' && (
+                    <div className="tw:flex tw:w-full tw:min-w-0 tw:items-center tw:gap-2">
+                      <Label htmlFor="af-source" className="tw:text-xs tw:text-muted-foreground">
+                        {t('%manageBooks_copy_fromLabel%', 'From')}
+                      </Label>
+                      {/* Flexible width (mirrors the create-mode method picker) so the trigger
+                      shrinks with the dialog instead of overflowing at narrow widths. */}
+                      <div
+                        id="af-source"
+                        data-testid="manage-books-copy-source-trigger"
+                        className="tw:min-w-0 tw:max-w-xs tw:flex-1 tw:basis-48"
+                      >
+                        <ProjectSelector
+                          mode="project"
+                          projects={copyFromProjectsAsPS}
+                          openTabs={openTabs ?? []}
+                          selection={{ projectId: copySourceId }}
+                          onChangeSelection={({ projectId: nextId }) =>
+                            setCopySourceId(nextId || undefined)
+                          }
+                          isDisabled={isSubmitting}
+                          ariaLabel={t('%manageBooks_copy_sourcePlaceholder%', 'Select project')}
+                          buttonPlaceholder={t(
+                            '%manageBooks_copy_sourcePlaceholder%',
+                            'Select project',
+                          )}
+                          localizedStrings={projectSelectorLocalizedStrings}
+                          // Mirror the prior <SelectTrigger> "primary fill while empty" affordance —
+                          // the picker reads as a call-to-action until a source project is set.
+                          buttonClassName={cn(
+                            'tw:h-8 tw:w-full',
+                            !copySourceId &&
+                              'tw:border-primary tw:bg-primary tw:text-primary-foreground tw:hover:bg-primary/90',
+                          )}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {action === 'import' && (
+                    /* tw:flex-wrap: "N files matched" + Clear wrap under the Choose-files
+                   button at narrow widths instead of overflowing. */
+                    <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+                      <input
+                        ref={importFileInputRef}
+                        type="file"
+                        multiple
+                        accept=".sfm,.usfm,.usx,.xml"
+                        className="tw:hidden"
+                        onChange={(e) => {
+                          handleImportFilesPicked(e.target.files);
+                          e.target.value = '';
+                        }}
+                        aria-hidden
+                      />
                       <Button
-                        variant="ghost"
+                        variant={hasInlineFiles ? 'outline' : 'default'}
                         size="sm"
                         className="tw:h-8"
-                        onClick={() => setImportFiles({})}
+                        onClick={() => {
+                          triggerFileBrowser().catch(() => undefined);
+                        }}
                         disabled={isSubmitting}
                       >
-                        {t('%manageBooks_import_clearFiles%', 'Clear')}
+                        <FolderOpen className="tw:mr-1.5 tw:h-3.5 tw:w-3.5" aria-hidden />
+                        {hasInlineFiles
+                          ? t('%manageBooks_import_addMore%', 'Add files…')
+                          : t('%manageBooks_import_choose%', 'Choose files…')}
                       </Button>
-                    </>
+                      {hasInlineFiles && (
+                        <>
+                          <span className="tw:text-xs tw:text-muted-foreground">
+                            {Object.keys(importFiles).length === 1
+                              ? t('%manageBooks_import_filesMatched_one%', '1 file matched')
+                              : fmtTemplate(
+                                  t('%manageBooks_import_filesMatched_other%', '{0} files matched'),
+                                  Object.keys(importFiles).length,
+                                )}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="tw:h-8"
+                            onClick={() => setImportFiles({})}
+                            disabled={isSubmitting}
+                          >
+                            {t('%manageBooks_import_clearFiles%', 'Clear')}
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   )}
                 </div>
-              )}
-            </div>
 
-            <div className="tw:flex tw:flex-nowrap tw:items-center tw:gap-2 tw:border-b tw:px-6 tw:py-2 tw:@container/filterbar">
-              {action !== 'view' && (action !== 'import' || hasInlineFiles) && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span>
-                      <Checkbox
-                        id="af-sel-all"
-                        checked={headerSelectState}
-                        disabled={selectableVisibleBooks.length === 0 || isSubmitting}
-                        onCheckedChange={toggleAllVisible}
-                        aria-label={
-                          visibleSelectedCount > 0
-                            ? fmtTemplate(
-                                t('%manageBooks_selection_xSelected%', '{0} selected'),
-                                visibleSelectedCount,
-                              )
-                            : t('%manageBooks_selection_selectAll%', 'Select all')
-                        }
-                      />
+                {/* tw:flex-wrap (not nowrap): at extreme narrowness the presence-filter /
+                group-by controls wrap to a second row rather than pushing the bar into
+                horizontal overflow. The count span hides below 28rem via the
+                filterBarIsNarrow resize observer. */}
+                <div
+                  ref={filterBarRef}
+                  className="tw:flex tw:flex-wrap tw:items-center tw:gap-2 tw:border-b tw:px-6 tw:py-2"
+                >
+                  {action !== 'view' && (action !== 'import' || hasInlineFiles) && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span>
+                          <Checkbox
+                            id="af-sel-all"
+                            checked={headerSelectState}
+                            disabled={selectableVisibleBooks.length === 0 || isSubmitting}
+                            onCheckedChange={toggleAllVisible}
+                            aria-label={
+                              visibleSelectedCount > 0
+                                ? fmtTemplate(
+                                    t('%manageBooks_selection_xSelected%', '{0} selected'),
+                                    visibleSelectedCount,
+                                  )
+                                : t('%manageBooks_selection_selectAll%', 'Select all')
+                            }
+                          />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {visibleSelectedCount > 0
+                          ? fmtTemplate(
+                              t('%manageBooks_selection_xSelected%', '{0} selected'),
+                              visibleSelectedCount,
+                            )
+                          : t('%manageBooks_selection_selectAll%', 'Select all')}
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                  <SearchBar
+                    value={filter}
+                    onSearch={setFilter}
+                    placeholder={t('%manageBooks_filter_placeholder%', 'Filter books…')}
+                    // SearchBar's inner shadcn Input defaults to tw:h-10, making
+                    // the search component visibly taller than its siblings
+                    // (BookGridGroupByToggle, PresenceFilterMenu — all tw:h-8).
+                    // The wrapper className already sets tw:h-8 but the Input's
+                    // intrinsic height wins; use Tailwind's arbitrary descendant
+                    // selector to push the height into the Input itself.
+                    className="tw:h-8 tw:min-w-0 tw:max-w-xs tw:flex-1 tw:basis-24 tw:[&_input]:h-8"
+                    isDisabled={isSubmitting}
+                  />
+                  {/* Hidden when the filter bar is narrow, in every mode — at tight widths
+                  the count is the least useful filter-bar item and its space keeps the
+                  search input usable. */}
+                  {!filterBarIsNarrow && (
+                    <span className="tw:whitespace-nowrap tw:text-xs tw:text-muted-foreground">
+                      {universe.length === 0
+                        ? t('%manageBooks_filter_zero%', '0 books')
+                        : fmtTemplate(
+                            t('%manageBooks_filter_count%', '{0} of {1}'),
+                            visibleBooks.length,
+                            universe.length,
+                          )}
                     </span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {visibleSelectedCount > 0
-                      ? fmtTemplate(
-                          t('%manageBooks_selection_xSelected%', '{0} selected'),
-                          visibleSelectedCount,
-                        )
-                      : t('%manageBooks_selection_selectAll%', 'Select all')}
-                  </TooltipContent>
-                </Tooltip>
-              )}
-              <SearchBar
-                value={filter}
-                onSearch={setFilter}
-                placeholder={t('%manageBooks_filter_placeholder%', 'Filter books…')}
-                // SearchBar's inner shadcn Input defaults to tw:h-10, making
-                // the search component visibly taller than its siblings
-                // (BookGridGroupByToggle, PresenceFilterMenu — all tw:h-8).
-                // The wrapper className already sets tw:h-8 but the Input's
-                // intrinsic height wins; use Tailwind's arbitrary descendant
-                // selector to push the height into the Input itself.
-                className="tw:h-8 tw:min-w-0 tw:max-w-xs tw:flex-1 tw:basis-24 tw:[&_input]:h-8"
-                isDisabled={isSubmitting}
-              />
-              <span
-                className={cn(
-                  'tw:whitespace-nowrap tw:text-xs tw:text-muted-foreground',
-                  action === 'copy' && 'tw:hidden tw:@md/filterbar:inline',
-                )}
-              >
-                {universe.length === 0
-                  ? t('%manageBooks_filter_zero%', '0 books')
-                  : fmtTemplate(
-                      t('%manageBooks_filter_count%', '{0} of {1}'),
-                      visibleBooks.length,
-                      universe.length,
-                    )}
-              </span>
-              {/* Sebastian review item 8 (2026-05-06): the View / Import presence-filter chip
+                  )}
+                  {/* Sebastian review item 8 (2026-05-06): the View / Import presence-filter chip
                   rows were replaced with a single Filter-icon button that opens a popover
                   containing the radio choices. Mirrors the pattern in
                   `lib/platform-bible-react/src/components/advanced/project-selector/
@@ -2062,272 +2362,284 @@ export function ManageBooksDialog({
                   "filter applied" without dragging the user's eye to a chip row. The Copy-
                   mode comparison-state filter (New/Newer/Older/Same/Undetermined) was
                   removed entirely — see comment block on `ViewPresenceFilter` declaration. */}
-              {action === 'view' && (
-                <PresenceFilterMenu
-                  testIdPrefix="presence-filter"
-                  value={viewPresenceFilter}
-                  onValueChange={setViewPresenceFilter}
-                  ariaLabel={t('%manageBooks_filter_buttonAriaLabel%', 'Filter')}
-                  menuLabel={t('%manageBooks_filter_menuLabel%', 'Show')}
-                  presenceFilterLabel={presenceFilterLabel}
-                />
-              )}
-              {action === 'import' && (
-                <PresenceFilterMenu
-                  testIdPrefix="import-presence-filter"
-                  value={importPresenceFilter}
-                  onValueChange={setImportPresenceFilter}
-                  ariaLabel={t('%manageBooks_filter_buttonAriaLabel%', 'Filter')}
-                  menuLabel={t('%manageBooks_filter_menuLabel%', 'Show')}
-                  presenceFilterLabel={presenceFilterLabel}
-                />
-              )}
-              <BookGridGroupByToggle
-                value={gridGroupBy}
-                onChange={setGridGroupBy}
-                localizedStrings={bookGridStrings}
-              />
-            </div>
+                  {action === 'view' && (
+                    <PresenceFilterMenu
+                      testIdPrefix="presence-filter"
+                      value={viewPresenceFilter}
+                      onValueChange={setViewPresenceFilter}
+                      ariaLabel={t('%manageBooks_filter_buttonAriaLabel%', 'Filter')}
+                      menuLabel={t('%manageBooks_filter_menuLabel%', 'Show')}
+                      presenceFilterLabel={presenceFilterLabel}
+                    />
+                  )}
+                  {action === 'import' && (
+                    <PresenceFilterMenu
+                      testIdPrefix="import-presence-filter"
+                      value={importPresenceFilter}
+                      onValueChange={setImportPresenceFilter}
+                      ariaLabel={t('%manageBooks_filter_buttonAriaLabel%', 'Filter')}
+                      menuLabel={t('%manageBooks_filter_menuLabel%', 'Show')}
+                      presenceFilterLabel={presenceFilterLabel}
+                    />
+                  )}
+                  <BookGridGroupByToggle
+                    value={gridGroupBy}
+                    onChange={setGridGroupBy}
+                    localizedStrings={bookGridStrings}
+                  />
+                </div>
 
-            <div className="tw:min-h-0 tw:flex-1 tw:overflow-auto tw:px-3 tw:py-2">
-              {visibleBooks.length === 0 ? (
-                <div className="tw:flex tw:min-h-40 tw:flex-col tw:items-center tw:justify-center tw:gap-3 tw:text-center tw:text-sm tw:text-muted-foreground">
-                  <span>{emptyStateMessage}</span>
-                  {isFilterEmptyState && (
-                    <Button variant="outline" size="sm" onClick={clearActiveFilters}>
-                      {t('%manageBooks_filter_clearButton%', 'Clear filter')}
-                    </Button>
+                <div className="tw:min-h-0 tw:flex-1 tw:overflow-auto tw:px-3 tw:py-2">
+                  {visibleBooks.length === 0 ? (
+                    <div className="tw:flex tw:min-h-40 tw:flex-col tw:items-center tw:justify-center tw:gap-3 tw:text-center tw:text-sm tw:text-muted-foreground">
+                      <span>{emptyStateMessage}</span>
+                      {isFilterEmptyState && (
+                        <Button variant="outline" size="sm" onClick={clearActiveFilters}>
+                          {t('%manageBooks_filter_clearButton%', 'Clear filter')}
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <BookGridSelector
+                      items={gridItems}
+                      selected={selected}
+                      onToggle={(book) => {
+                        const showCheckbox =
+                          action === 'create' ||
+                          action === 'delete' ||
+                          action === 'copy' ||
+                          (action === 'import' && !!importFiles[book]);
+                        if (showCheckbox) toggleOne(book);
+                      }}
+                      groupBy={gridGroupBy}
+                      ariaLabel={fmtTemplate(
+                        t('%manageBooks_grid_label%', 'Books in {0}'),
+                        project.shortName,
+                      )}
+                      ariaMultiselectable={action !== 'view'}
+                      primaryDateLabel={primaryDateLabel}
+                      secondaryDateLabel={secondaryDateLabel}
+                      interactive={action !== 'view'}
+                      localizedStrings={bookGridStrings}
+                      getRowAriaLabel={gridRowAriaLabel}
+                      // Leave BookGridSelector's default tw:p-1 in place so the
+                      // first pill checkbox horizontally aligns with the
+                      // toolbar's select-all checkbox. A `tw:px-0` override would
+                      // move the grid 4px left of the toolbar items.
+                    />
                   )}
                 </div>
-              ) : (
-                <BookGridSelector
-                  items={gridItems}
-                  selected={selected}
-                  onToggle={(book) => {
-                    const showCheckbox =
-                      action === 'create' ||
-                      action === 'delete' ||
-                      action === 'copy' ||
-                      (action === 'import' && !!importFiles[book]);
-                    if (showCheckbox) toggleOne(book);
-                  }}
-                  groupBy={gridGroupBy}
-                  ariaLabel={fmtTemplate(
-                    t('%manageBooks_grid_label%', 'Books in {0}'),
-                    project.shortName,
-                  )}
-                  ariaMultiselectable={action !== 'view'}
-                  primaryDateLabel={primaryDateLabel}
-                  secondaryDateLabel={secondaryDateLabel}
-                  interactive={action !== 'view'}
-                  localizedStrings={bookGridStrings}
-                  getRowAriaLabel={gridRowAriaLabel}
-                  // Leave BookGridSelector's default tw:p-1 in place so the
-                  // first pill checkbox horizontally aligns with the
-                  // toolbar's select-all checkbox. A `tw:px-0` override would
-                  // move the grid 4px left of the toolbar items.
-                />
-              )}
-            </div>
 
-            {/* The create-mode method picker + reference-project picker live
+                {/* The create-mode method picker + reference-project picker live
                 between the book grid and the footer so the user sees the grid
                 first and configures the create method just before applying. */}
-            {action === 'create' && (
-              <div className="tw:flex tw:w-full tw:min-w-0 tw:flex-wrap tw:items-center tw:gap-2 tw:border-t tw:px-6 tw:py-2">
-                <Select
-                  value={createMethod}
-                  onValueChange={(v) => {
-                    if (isCreateMethod(v)) setCreateMethod(v);
-                  }}
-                  disabled={isSubmitting}
-                >
-                  <SelectTrigger id="af-method" className="tw:h-8 tw:min-w-0 tw:flex-1 tw:basis-48">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="empty">
-                      {t('%manageBooks_create_method_empty%', 'Create empty book')}
-                    </SelectItem>
-                    <SelectItem
-                      value="chapterVerse"
-                      disabled={!cvAllowed}
-                      aria-describedby={!cvAllowed ? cvDisabledHintId : undefined}
+                {action === 'create' && (
+                  <div className="tw:flex tw:w-full tw:min-w-0 tw:flex-wrap tw:items-center tw:gap-2 tw:border-t tw:px-6 tw:py-2">
+                    <Select
+                      value={createMethod}
+                      onValueChange={(v) => {
+                        if (isCreateMethod(v)) setCreateMethod(v);
+                      }}
+                      disabled={isSubmitting}
                     >
-                      {t(
-                        '%manageBooks_create_method_chapterVerse%',
-                        'Create with all chapter and verse numbers',
-                      )}
-                    </SelectItem>
-                    <SelectItem value="fromTemplate">
-                      {t('%manageBooks_create_method_referenceText%', 'Create based on')}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                {!cvAllowed && (
-                  <span id={cvDisabledHintId} className="tw:sr-only">
-                    {t(
-                      '%manageBooks_create_method_chapterVerse_disabledTooltip%',
-                      'Disabled because the selection contains only non-canonical books.',
+                      <SelectTrigger
+                        id="af-method"
+                        className="tw:h-8 tw:min-w-0 tw:flex-1 tw:basis-48"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="empty">
+                          {t('%manageBooks_create_method_empty%', 'Create empty book')}
+                        </SelectItem>
+                        <SelectItem
+                          value="chapterVerse"
+                          disabled={!cvAllowed}
+                          aria-describedby={!cvAllowed ? cvDisabledHintId : undefined}
+                        >
+                          {t(
+                            '%manageBooks_create_method_chapterVerse%',
+                            'Create with all chapter and verse numbers',
+                          )}
+                        </SelectItem>
+                        <SelectItem value="fromTemplate">
+                          {t('%manageBooks_create_method_referenceText%', 'Create based on')}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {!cvAllowed && (
+                      <span id={cvDisabledHintId} className="tw:sr-only">
+                        {t(
+                          '%manageBooks_create_method_chapterVerse_disabledTooltip%',
+                          'Disabled because the selection contains only non-canonical books.',
+                        )}
+                      </span>
                     )}
-                  </span>
-                )}
-                {createMethod === 'fromTemplate' && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Info
-                        className="tw:h-4 tw:w-4 tw:shrink-0 tw:text-muted-foreground"
-                        aria-label={t('%manageBooks_create_basedOnInfo%', 'Based on info')}
-                      />
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {t(
-                        '%manageBooks_create_basedOnInfo%',
-                        'Prefill with the same markers as a selected project',
-                      )}
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-                {createMethod === 'fromTemplate' && (
-                  <div id="af-reference" data-testid="manage-books-create-reference-trigger">
-                    <ProjectSelector
-                      mode="project"
-                      projects={otherProjectsAsPS}
-                      openTabs={openTabs ?? []}
-                      selection={{ projectId: createReferenceId }}
-                      onChangeSelection={({ projectId: nextId }) =>
-                        setCreateReferenceId(nextId || undefined)
-                      }
-                      isDisabled={isSubmitting}
-                      ariaLabel={t(
-                        '%manageBooks_create_referenceProjectPlaceholder%',
-                        'Select reference project',
-                      )}
-                      buttonPlaceholder={t(
-                        '%manageBooks_create_referenceProjectPlaceholder%',
-                        'Select reference project',
-                      )}
-                      localizedStrings={projectSelectorLocalizedStrings}
-                      // Mirror the prior <SelectTrigger> "primary fill while empty" affordance —
-                      // the picker reads as a call-to-action until a reference project is set.
-                      buttonClassName={cn(
-                        'tw:h-8 tw:min-w-0 tw:flex-1 tw:basis-48',
-                        !createReferenceId &&
-                          'tw:border-primary tw:bg-primary tw:text-primary-foreground tw:hover:bg-primary/90',
-                      )}
-                    />
+                    {createMethod === 'fromTemplate' && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info
+                            className="tw:h-4 tw:w-4 tw:shrink-0 tw:text-muted-foreground"
+                            aria-label={t('%manageBooks_create_basedOnInfo%', 'Based on info')}
+                          />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {t(
+                            '%manageBooks_create_basedOnInfo%',
+                            'Prefill with the same markers as a selected project',
+                          )}
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+                    {createMethod === 'fromTemplate' && (
+                      <div id="af-reference" data-testid="manage-books-create-reference-trigger">
+                        <ProjectSelector
+                          mode="project"
+                          projects={allOtherProjectsAsPS}
+                          openTabs={openTabs ?? []}
+                          selection={{ projectId: createReferenceId }}
+                          onChangeSelection={({ projectId: nextId }) =>
+                            setCreateReferenceId(nextId || undefined)
+                          }
+                          isDisabled={isSubmitting}
+                          ariaLabel={t(
+                            '%manageBooks_create_referenceProjectPlaceholder%',
+                            'Select reference project',
+                          )}
+                          buttonPlaceholder={t(
+                            '%manageBooks_create_referenceProjectPlaceholder%',
+                            'Select reference project',
+                          )}
+                          localizedStrings={projectSelectorLocalizedStrings}
+                          // Sebastian UX new-requirement 3 (2026-06-12): group
+                          // reference candidates by versification so the user
+                          // can pick one whose canon matches the destination
+                          // project. The destination's own versification group
+                          // is pinned to the top.
+                          groupByVersification
+                          priorityVersificationId={versification}
+                          // Mirror the prior <SelectTrigger> "primary fill while empty" affordance —
+                          // the picker reads as a call-to-action until a reference project is set.
+                          buttonClassName={cn(
+                            'tw:h-8 tw:min-w-0 tw:flex-1 tw:basis-48',
+                            !createReferenceId &&
+                              'tw:border-primary tw:bg-primary tw:text-primary-foreground tw:hover:bg-primary/90',
+                          )}
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
-            )}
 
-            {/* Theme C1 (FN-008 v2.6.0+, 2026-05-01): the in-dialog
+                {/* Theme C1 (FN-008 v2.6.0+, 2026-05-01): the in-dialog
                   role="alert" result panel was removed. AlertEntry warnings
                   and errors now flow through the `onMutationResult` callback
                   prop and are surfaced as toasts by the wiring layer. */}
 
-            <footer className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:border-t tw:px-6 tw:py-3">
-              <span className="tw:text-xs tw:text-muted-foreground">{summaryText}</span>
-              {/* C4: aria-live region for selection-count + status */}
-              <span id={liveRegionId} aria-live="polite" className="tw:sr-only">
-                {liveAnnouncement}
-              </span>
-              <div className="tw:flex tw:items-center tw:gap-2">
-                {isSubmitting && (
-                  <span className="tw:flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-muted-foreground">
-                    <Loader2 className="tw:h-3.5 tw:w-3.5 tw:animate-spin" aria-hidden />
+                <footer className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:border-t tw:px-6 tw:py-3">
+                  <span className="tw:text-xs tw:text-muted-foreground">{summaryText}</span>
+                  {/* C4: aria-live region for selection-count + status */}
+                  <span id={liveRegionId} aria-live="polite" className="tw:sr-only">
                     {liveAnnouncement}
                   </span>
-                )}
-                {action !== 'view' &&
-                  (() => {
-                    const disabled = !canApply;
-                    const renderActionIcon = () => {
-                      if (isSubmitting)
+                  <div className="tw:flex tw:items-center tw:gap-2">
+                    {isSubmitting && (
+                      <span className="tw:flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-muted-foreground">
+                        <Loader2 className="tw:h-3.5 tw:w-3.5 tw:animate-spin" aria-hidden />
+                        {liveAnnouncement}
+                      </span>
+                    )}
+                    {action !== 'view' &&
+                      (() => {
+                        const disabled = !canApply;
+                        const renderActionIcon = () => {
+                          if (isSubmitting)
+                            return (
+                              <Loader2
+                                className="tw:mr-1.5 tw:h-4 tw:w-4 tw:animate-spin"
+                                aria-hidden
+                              />
+                            );
+                          if (action === 'create')
+                            return <BookPlus className="tw:mr-1.5 tw:h-4 tw:w-4" aria-hidden />;
+                          if (action === 'delete')
+                            return <Trash2 className="tw:mr-1.5 tw:h-4 tw:w-4" aria-hidden />;
+                          if (action === 'copy')
+                            return <Copy className="tw:mr-1.5 tw:h-4 tw:w-4" aria-hidden />;
+                          if (action === 'import')
+                            return <Download className="tw:mr-1.5 tw:h-4 tw:w-4" aria-hidden />;
+                          return undefined;
+                        };
+                        const actionButton = (
+                          <Button
+                            variant={action === 'delete' ? 'destructive' : 'default'}
+                            aria-disabled={disabled}
+                            aria-describedby={disabled ? applyDisabledHintId : undefined}
+                            disabled={disabled}
+                            onClick={apply}
+                          >
+                            {renderActionIcon()}
+                            {applyButtonLabel}
+                          </Button>
+                        );
+                        // Tooltip body: when disabled use disabledTooltip; when enabled, only Create
+                        // and Copy have defined enabled-state tooltips per Sebastian item 20
+                        // (2026-05-06). Delete and Import fall through with no enabled tooltip and
+                        // render the bare button.
+                        let tooltipBody: string | undefined;
+                        if (disabled) {
+                          tooltipBody = disabledTooltip;
+                        } else if (action === 'create') {
+                          if (createMethod === 'empty') {
+                            tooltipBody = t(
+                              '%manageBooks_footer_enabledTooltip_create_empty%',
+                              'Create empty',
+                            );
+                          } else if (createMethod === 'chapterVerse') {
+                            tooltipBody = t(
+                              '%manageBooks_footer_enabledTooltip_create_chapterVerse%',
+                              'Create with all chapters and verses',
+                            );
+                          } else {
+                            // fromTemplate — prefer the picked reference project's short name; fall
+                            // back to a single ellipsis (U+2026) when no project is picked yet (the
+                            // disabled-state tooltip has already kicked in by then, but defend
+                            // against the case anyway).
+                            tooltipBody = fmtTemplate(
+                              t(
+                                '%manageBooks_footer_enabledTooltip_create_fromTemplate%',
+                                'Create based on {0}',
+                              ),
+                              createReferenceProject?.shortName ?? '…',
+                            );
+                          }
+                        } else if (action === 'copy') {
+                          tooltipBody = fmtTemplate(
+                            t('%manageBooks_footer_enabledTooltip_copy%', 'Copy from {0}'),
+                            copySourceProject?.shortName ?? '…',
+                          );
+                        }
+                        if (!tooltipBody) return actionButton;
                         return (
-                          <Loader2
-                            className="tw:mr-1.5 tw:h-4 tw:w-4 tw:animate-spin"
-                            aria-hidden
-                          />
+                          <>
+                            {disabled && (
+                              <span id={applyDisabledHintId} className="tw:sr-only">
+                                {tooltipBody}
+                              </span>
+                            )}
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span>{actionButton}</span>
+                              </TooltipTrigger>
+                              <TooltipContent>{tooltipBody}</TooltipContent>
+                            </Tooltip>
+                          </>
                         );
-                      if (action === 'create')
-                        return <BookPlus className="tw:mr-1.5 tw:h-4 tw:w-4" aria-hidden />;
-                      if (action === 'delete')
-                        return <Trash2 className="tw:mr-1.5 tw:h-4 tw:w-4" aria-hidden />;
-                      if (action === 'copy')
-                        return <Copy className="tw:mr-1.5 tw:h-4 tw:w-4" aria-hidden />;
-                      if (action === 'import')
-                        return <Download className="tw:mr-1.5 tw:h-4 tw:w-4" aria-hidden />;
-                      return undefined;
-                    };
-                    const actionButton = (
-                      <Button
-                        variant={action === 'delete' ? 'destructive' : 'default'}
-                        aria-disabled={disabled}
-                        aria-describedby={disabled ? applyDisabledHintId : undefined}
-                        disabled={disabled}
-                        onClick={apply}
-                      >
-                        {renderActionIcon()}
-                        {applyButtonLabel}
-                      </Button>
-                    );
-                    // Tooltip body: when disabled use disabledTooltip; when enabled, only Create
-                    // and Copy have defined enabled-state tooltips per Sebastian item 20
-                    // (2026-05-06). Delete and Import fall through with no enabled tooltip and
-                    // render the bare button.
-                    let tooltipBody: string | undefined;
-                    if (disabled) {
-                      tooltipBody = disabledTooltip;
-                    } else if (action === 'create') {
-                      if (createMethod === 'empty') {
-                        tooltipBody = t(
-                          '%manageBooks_footer_enabledTooltip_create_empty%',
-                          'Create empty',
-                        );
-                      } else if (createMethod === 'chapterVerse') {
-                        tooltipBody = t(
-                          '%manageBooks_footer_enabledTooltip_create_chapterVerse%',
-                          'Create with all chapters and verses',
-                        );
-                      } else {
-                        // fromTemplate — prefer the picked reference project's short name; fall
-                        // back to a single ellipsis (U+2026) when no project is picked yet (the
-                        // disabled-state tooltip has already kicked in by then, but defend
-                        // against the case anyway).
-                        tooltipBody = fmtTemplate(
-                          t(
-                            '%manageBooks_footer_enabledTooltip_create_fromTemplate%',
-                            'Create based on {0}',
-                          ),
-                          createReferenceProject?.shortName ?? '…',
-                        );
-                      }
-                    } else if (action === 'copy') {
-                      tooltipBody = fmtTemplate(
-                        t('%manageBooks_footer_enabledTooltip_copy%', 'Copy from {0}'),
-                        copySourceProject?.shortName ?? '…',
-                      );
-                    }
-                    if (!tooltipBody) return actionButton;
-                    return (
-                      <>
-                        {disabled && (
-                          <span id={applyDisabledHintId} className="tw:sr-only">
-                            {tooltipBody}
-                          </span>
-                        )}
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span>{actionButton}</span>
-                          </TooltipTrigger>
-                          <TooltipContent>{tooltipBody}</TooltipContent>
-                        </Tooltip>
-                      </>
-                    );
-                  })()}
-              </div>
-            </footer>
+                      })()}
+                  </div>
+                </footer>
+              </>
+            )}
           </div>
         </TooltipProvider>
       </div>
@@ -2362,10 +2674,12 @@ export function ManageBooksDialog({
               ? await Promise.resolve(loadVersification(createReferenceId)).catch(() => '')
               : '';
             if (destVrs && modelVrs && destVrs !== modelVrs) {
+              // Sebastian UX new-requirement 2 (2026-06-12): same name (not
+              // number) treatment as the primary apply path above.
               setCreatePrompt({
                 kind: 'versification',
-                destVrs,
-                modelVrs,
+                destVrs: t(versificationLabelKey(destVrs), versificationFallbackName(destVrs)),
+                modelVrs: t(versificationLabelKey(modelVrs), versificationFallbackName(modelVrs)),
                 books: prompt.available,
               });
               return;

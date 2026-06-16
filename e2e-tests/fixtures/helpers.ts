@@ -1,4 +1,10 @@
-import { _electron as electron, ElectronApplication, Page } from '@playwright/test';
+import {
+  _electron as electron,
+  ElectronApplication,
+  expect,
+  FrameLocator,
+  Page,
+} from '@playwright/test';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -43,6 +49,9 @@ async function waitForWebSocketReady(port: number, timeout: number): Promise<voi
 
   while (Date.now() - startTime < timeout) {
     try {
+      // Sequential polling: each attempt must finish (or time out) before the next;
+      // parallelizing would defeat the retry/backoff.
+      // eslint-disable-next-line no-await-in-loop
       await new Promise<void>((resolve, reject) => {
         const ws = new WebSocket(`ws://localhost:${port}`);
         const timer = setTimeout(() => {
@@ -63,6 +72,9 @@ async function waitForWebSocketReady(port: number, timeout: number): Promise<voi
       });
       return;
     } catch {
+      // Sequential polling: each attempt must finish (or time out) before the next;
+      // parallelizing would defeat the retry/backoff.
+      // eslint-disable-next-line no-await-in-loop
       await new Promise<void>((resolve) => {
         setTimeout(resolve, 500);
       });
@@ -183,6 +195,9 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
   // write-ends of Electron's stdout/stderr pipes; killing only the Electron PID
   // leaves those write-ends open forever. The fix is to kill the ENTIRE process
   // group (-pid).
+  // NodeJS is the ambient @types/node namespace; the strict staged-file lint
+  // config has no node environment, so it cannot see the global.
+  // eslint-disable-next-line no-undef
   const killGroup = (sig: NodeJS.Signals) => {
     if (!electronProcess?.pid) return;
     try {
@@ -343,6 +358,9 @@ export async function waitForPapiMethodRegistered(
   while (Date.now() - start < timeoutMs) {
     const remaining = timeoutMs - (Date.now() - start);
     try {
+      // Sequential polling: each attempt must finish (or time out) before the next;
+      // parallelizing would defeat the retry/backoff.
+      // eslint-disable-next-line no-await-in-loop
       const result = await sendPapiRequestOnce<RpcDiscoverResult>(
         GET_METHODS,
         [],
@@ -355,6 +373,9 @@ export async function waitForPapiMethodRegistered(
     }
     const sleepMs = Math.min(RPC_DISCOVER_POLL_INTERVAL_MS, timeoutMs - (Date.now() - start));
     if (sleepMs <= 0) break;
+    // Sequential polling: each attempt must finish (or time out) before the next;
+    // parallelizing would defeat the retry/backoff.
+    // eslint-disable-next-line no-await-in-loop
     await new Promise<void>((resolve) => {
       setTimeout(resolve, sleepMs);
     });
@@ -381,6 +402,9 @@ export async function waitForAtLeastOneProjectMetadata(
   while (Date.now() - start < timeoutMs) {
     const remaining = timeoutMs - (Date.now() - start);
     try {
+      // Sequential polling: each attempt must finish (or time out) before the next;
+      // parallelizing would defeat the retry/backoff.
+      // eslint-disable-next-line no-await-in-loop
       const result = await sendPapiRequestOnce<unknown[]>(
         PROJECT_LOOKUP_GET_ALL_PROJECTS_METHOD,
         [],
@@ -393,6 +417,9 @@ export async function waitForAtLeastOneProjectMetadata(
     }
     const sleepMs = Math.min(RPC_DISCOVER_POLL_INTERVAL_MS, timeoutMs - (Date.now() - start));
     if (sleepMs <= 0) break;
+    // Sequential polling: each attempt must finish (or time out) before the next;
+    // parallelizing would defeat the retry/backoff.
+    // eslint-disable-next-line no-await-in-loop
     await new Promise<void>((resolve) => {
       setTimeout(resolve, sleepMs);
     });
@@ -451,4 +478,76 @@ export async function waitForAppReady(page: Page, timeout = 60_000): Promise<voi
   });
   const remaining = Math.max(0, timeout - (Date.now() - start));
   await waitForPapiMethodRegistered(PLATFORM_ABOUT_COMMAND, DEFAULT_WEBSOCKET_PORT, remaining);
+}
+
+/** Options accepted by {@link openFromEditorHamburger}. */
+export interface OpenFromEditorHamburgerOptions {
+  /**
+   * Short name of the project whose scripture editor hosts the hamburger ("Project") menu entry
+   * point. When its editor dock tab is not already open, the project is opened from the Home tab
+   * first.
+   */
+  projectName: string;
+  /** Accessible name of the menu item to click inside the editor hamburger menu. */
+  menuItem: string | RegExp;
+  /**
+   * Dock-tab title (at MAIN-PAGE level) expected to appear after the menu item is clicked. Defaults
+   * to {@link OpenFromEditorHamburgerOptions.menuItem}.
+   */
+  tabTitle?: string | RegExp;
+  /**
+   * Optional callback awaited while the hamburger menu is open, BEFORE the menu item is clicked
+   * (e.g. to capture a mid-flow evidence screenshot of the open menu). Receives the editor iframe's
+   * FrameLocator — the menu items render INSIDE the editor's iframe (Radix portals to the iframe
+   * body), so assertions on them must go through this frame, not the main page.
+   */
+  onMenuOpen?: (editorFrame: FrameLocator) => Promise<void>;
+}
+
+/**
+ * Open a tool (e.g. "Manage books…") from the scripture editor's hamburger ("Project") menu.
+ *
+ * The Manila UX follow-up moved tool entry points from the application main menu into the scripture
+ * editor's hamburger menu. The hamburger button (`button[aria-label='Project']`) and its Radix menu
+ * both render INSIDE the editor's iframe, while the resulting tool web view surfaces as a dock tab
+ * at MAIN-PAGE level.
+ *
+ * Steps:
+ *
+ * 1. Open `projectName`'s editor from the Home tab (skipped when its dock tab already exists). The
+ *    relevant dock tab is activated first — in-iframe elements (Home's Open buttons, the editor's
+ *    hamburger) are only clickable while their tab is the visible one in its dock panel.
+ * 2. Enter the editor iframe and click the hamburger.
+ * 3. Optionally await `onMenuOpen(editorFrame)` while the menu is open.
+ * 4. Click the menu item, then wait for the target dock tab to appear at main-page level.
+ */
+export async function openFromEditorHamburger(
+  page: Page,
+  options: OpenFromEditorHamburgerOptions,
+): Promise<void> {
+  const { projectName, menuItem, tabTitle = menuItem, onMenuOpen } = options;
+
+  const existingEditor = page.locator('.dock-tab', { hasText: projectName });
+  if ((await existingEditor.count()) === 0) {
+    // The Home iframe's Open buttons are only clickable while the Home tab is
+    // the visible tab in its dock panel — activate it first.
+    await page.locator('.dock-tab', { hasText: 'Home' }).first().click();
+    const homeFrame = page.frameLocator('iframe[title="Home"]');
+    await homeFrame.locator(`tr:has-text("${projectName}") button:has-text("Open")`).click();
+    await expect(page.locator('.dock-tab', { hasText: projectName })).toBeVisible({
+      timeout: 15_000,
+    });
+  } else {
+    // Same constraint for the editor's hamburger: the editor iframe must be
+    // the visible tab before its in-iframe button can be clicked.
+    await existingEditor.first().click();
+  }
+
+  const editorFrame = page.frameLocator(`iframe[title*="${projectName}" i][title*="Editable" i]`);
+  await editorFrame.locator("button[aria-label='Project']").first().click();
+  if (onMenuOpen) await onMenuOpen(editorFrame);
+  await editorFrame.getByRole('menuitem', { name: menuItem }).first().click();
+
+  // The tool's web view appears as a dock tab at MAIN-PAGE level (not inside the editor iframe).
+  await expect(page.locator('.dock-tab', { hasText: tabTitle })).toBeVisible({ timeout: 15_000 });
 }

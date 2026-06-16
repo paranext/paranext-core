@@ -39,12 +39,32 @@
  *   multi-select native file-picker spike (FN-010) must land before these wiring tests can be
  *   activated. Tests for those flows remain .fixme until that spike completes.
  */
+import type { Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/cdp.fixture';
-import { waitForAppReady } from '../../fixtures/helpers';
+import { openFromEditorHamburger, waitForAppReady } from '../../fixtures/helpers';
 
 const SCREENSHOT_BASE = 'proofs/component-evidence/WP-001';
 const WEB_VIEW_TITLE_REGEX = /Manage Books/i;
 const MENU_LABEL_REGEX = /Manage Books/i;
+/**
+ * Project whose editor hosts the Manage Books entry point (the Manila UX follow-up moved the menu
+ * item from the application main menu into the scripture editor's hamburger menu, reserved
+ * `platform.manageBooks` default group in the Project section).
+ */
+const ENTRY_PROJECT_NAME = 'wgPIDGIN';
+
+/**
+ * Open the `ENTRY_PROJECT_NAME` editor (skipped when already open), then click "Manage books..." in
+ * the editor's hamburger ("Project") menu and wait for the Manage Books dock tab. Thin wrapper
+ * binding the feature-specific constants to the shared {@link openFromEditorHamburger} helper.
+ */
+async function openManageBooksViaEditorMenu(mainPage: Page): Promise<void> {
+  await openFromEditorHamburger(mainPage, {
+    projectName: ENTRY_PROJECT_NAME,
+    menuItem: MENU_LABEL_REGEX,
+    tabTitle: WEB_VIEW_TITLE_REGEX,
+  });
+}
 
 test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)', () => {
   // Close all tabs except Home to start from a clean state. Platform.Bible persists the dock
@@ -86,47 +106,49 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
   // ═══════════════════════════════════════════════════════════════════════════════════════
 
   // @scenario TS-067, TS-072
-  test('should open Manage Books unified dialog from the Project menu', async ({ mainPage }) => {
+  test('should open Manage Books unified dialog from the scripture editor hamburger menu', async ({
+    mainPage,
+  }) => {
     await waitForAppReady(mainPage);
 
-    // The wiring phase adds an entry-point menu item under the Project menu (per
-    // ui-spec-manage-books.md "Trigger" section: "Tools > Manage books..." — final placement
-    // is decided in phase-3-ui when wiring menus.json). The test accepts either a top-level
-    // "Project" or "Tools" menu trigger to remain stable across that decision.
-    const projectMenu = mainPage.getByRole('menuitem', { name: /Project|Tools/i }).first();
-    await projectMenu.click();
-
-    // EVD-001: menu dropdown shows the Manage Books entry.
-    await mainPage.screenshot({
-      path: `${SCREENSHOT_BASE}/EVD-001-menu-open.png`,
+    // The Manila UX follow-up places the entry point in the scripture editor's hamburger
+    // ("Project") menu — reserved `platform.manageBooks` default group, Project section.
+    await openFromEditorHamburger(mainPage, {
+      projectName: ENTRY_PROJECT_NAME,
+      menuItem: MENU_LABEL_REGEX,
+      tabTitle: WEB_VIEW_TITLE_REGEX,
+      onMenuOpen: async (editorFrame) => {
+        // EVD-001: editor hamburger dropdown shows the Manage Books entry.
+        await mainPage.screenshot({
+          path: `${SCREENSHOT_BASE}/EVD-001-menu-open.png`,
+        });
+        await expect(
+          editorFrame.getByRole('menuitem', { name: MENU_LABEL_REGEX }).first(),
+        ).toBeVisible({ timeout: 10_000 });
+      },
     });
 
-    const manageBooksMenuItem = mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX });
-    await expect(manageBooksMenuItem).toBeVisible({ timeout: 10_000 });
-    await manageBooksMenuItem.click();
-
-    // The wiring phase opens the dialog as a float web view (per ui-alignment.md
-    // "Dialog Opening Pattern"); this surfaces as a dock tab whose title matches the
+    // The dialog opens as a web view; this surfaces as a dock tab whose title matches the
     // localized "Manage Books" string.
     const tab = mainPage.locator('.dock-tab', { hasText: WEB_VIEW_TITLE_REGEX });
     await expect(tab).toBeVisible({ timeout: 15_000 });
   });
 
   // @scenario TS-067, TS-068
-  test('should expose Manage Books only when a scripture project is the active context (BHV-400/412)', async ({
+  test('should NOT expose Manage Books in the application main menu (entry point moved to editor)', async ({
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
 
-    // BHV-400: Manage Books menu visible for Default window category. BHV-412: hidden for
-    // Tool / Resource / ConsultantNotes contexts. The wiring phase must respect the
-    // platform menu-contribution gating; this test verifies the menu item shows up under
-    // the project-context entry path (the test environment's default scripture project is
-    // the active editor on app boot).
-    const projectMenu = mainPage.getByRole('menuitem', { name: /Project|Tools/i }).first();
+    // Regression guard for the Manila UX follow-up: the main-menu entry was removed — the
+    // editor hamburger is the only entry point. Open the first main-menu dropdown (the
+    // product/Project column) and assert Manage Books is absent.
+    const projectMenu = mainPage.getByRole('menuitem', { name: /Project|Tools|Platform/i }).first();
     await projectMenu.click();
     const manageBooksMenuItem = mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX });
-    await expect(manageBooksMenuItem).toBeVisible({ timeout: 10_000 });
+    await expect(manageBooksMenuItem).toHaveCount(0);
+    // Close the menu so the next test starts clean.
+    await mainPage.keyboard.press('Escape');
   });
 
   // ═══════════════════════════════════════════════════════════════════════════════════════
@@ -140,11 +162,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     await waitForAppReady(mainPage);
 
     // Open the dialog via menu.
-    await mainPage
-      .getByRole('menuitem', { name: /Project|Tools/i })
-      .first()
-      .click();
-    await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+    await openManageBooksViaEditorMenu(mainPage);
     await expect(mainPage.locator('.dock-tab', { hasText: WEB_VIEW_TITLE_REGEX })).toBeVisible({
       timeout: 15_000,
     });
@@ -201,11 +219,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
-    await mainPage
-      .getByRole('menuitem', { name: /Project|Tools/i })
-      .first()
-      .click();
-    await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+    await openManageBooksViaEditorMenu(mainPage);
     await expect(mainPage.locator('.dock-tab', { hasText: WEB_VIEW_TITLE_REGEX })).toBeVisible({
       timeout: 15_000,
     });
@@ -236,11 +250,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
-    await mainPage
-      .getByRole('menuitem', { name: /Project|Tools/i })
-      .first()
-      .click();
-    await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+    await openManageBooksViaEditorMenu(mainPage);
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
     // The header project Select renders the ShortName of the active project as its
@@ -275,11 +285,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
       timeout: 15_000,
     });
 
-    await mainPage
-      .getByRole('menuitem', { name: /Project|Tools/i })
-      .first()
-      .click();
-    await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+    await openManageBooksViaEditorMenu(mainPage);
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
     // Header project select should display a non-empty short name.
@@ -298,11 +304,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
-    await mainPage
-      .getByRole('menuitem', { name: /Project|Tools/i })
-      .first()
-      .click();
-    await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+    await openManageBooksViaEditorMenu(mainPage);
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
     await frame.locator('[data-testid="manage-books-sidebar-section-delete"]').first().click();
@@ -321,11 +323,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
-    await mainPage
-      .getByRole('menuitem', { name: /Project|Tools/i })
-      .first()
-      .click();
-    await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+    await openManageBooksViaEditorMenu(mainPage);
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
     // Switch to Delete mode (universe = present books, so GEN is selectable in any project
@@ -355,11 +353,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
-    await mainPage
-      .getByRole('menuitem', { name: /Project|Tools/i })
-      .first()
-      .click();
-    await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+    await openManageBooksViaEditorMenu(mainPage);
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
     // Switch to Delete mode and select GEN.
@@ -401,11 +395,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
-    await mainPage
-      .getByRole('menuitem', { name: /Project|Tools/i })
-      .first()
-      .click();
-    await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+    await openManageBooksViaEditorMenu(mainPage);
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
     await frame.locator('[data-testid="manage-books-sidebar-section-delete"]').first().click();
@@ -436,11 +426,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
-    await mainPage
-      .getByRole('menuitem', { name: /Project|Tools/i })
-      .first()
-      .click();
-    await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+    await openManageBooksViaEditorMenu(mainPage);
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
     await frame.locator('[data-testid="manage-books-sidebar-section-create"]').first().click();
@@ -460,14 +446,17 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
-    await mainPage
-      .getByRole('menuitem', { name: /Project|Tools/i })
-      .first()
-      .click();
-    await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+    await openManageBooksViaEditorMenu(mainPage);
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
     await frame.locator('[data-testid="manage-books-sidebar-section-create"]').first().click();
+
+    // The designed default creation method is 'Create based on' (fromTemplate), which
+    // gates apply on a reference project being chosen. This test's contract is
+    // "selecting books enables apply", so pick the self-contained 'Create empty book'
+    // method explicitly first.
+    await frame.locator('#af-method').click();
+    await frame.getByRole('option', { name: /Create empty book/i }).click();
 
     // Universe in Create mode is books NOT yet present. We click the first selectable
     // pill instead of hard-coding GEN (which may already exist in every test project).
@@ -492,11 +481,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
-    await mainPage
-      .getByRole('menuitem', { name: /Project|Tools/i })
-      .first()
-      .click();
-    await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+    await openManageBooksViaEditorMenu(mainPage);
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
     await frame.locator('[data-testid="manage-books-sidebar-section-create"]').first().click();
@@ -523,11 +508,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
-    await mainPage
-      .getByRole('menuitem', { name: /Project|Tools/i })
-      .first()
-      .click();
-    await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+    await openManageBooksViaEditorMenu(mainPage);
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
     await frame.locator('[data-testid="manage-books-sidebar-section-copy"]').click();
@@ -553,11 +534,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
-    await mainPage
-      .getByRole('menuitem', { name: /Project|Tools/i })
-      .first()
-      .click();
-    await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+    await openManageBooksViaEditorMenu(mainPage);
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
     await frame.locator('[data-testid="manage-books-sidebar-section-copy"]').click();
@@ -591,11 +568,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
-    await mainPage
-      .getByRole('menuitem', { name: /Project|Tools/i })
-      .first()
-      .click();
-    await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+    await openManageBooksViaEditorMenu(mainPage);
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
     await frame.locator('[data-testid="manage-books-sidebar-section-copy"]').click();
@@ -631,11 +604,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
-    await mainPage
-      .getByRole('menuitem', { name: /Project|Tools/i })
-      .first()
-      .click();
-    await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+    await openManageBooksViaEditorMenu(mainPage);
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
     // FN-010 spike: native multi-select file picker. Until that lands, the wiring layer
@@ -664,11 +633,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     'should clear the import file list when a "Clear" affordance is exercised (BHV-320)',
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
-      await mainPage
-        .getByRole('menuitem', { name: /Project|Tools/i })
-        .first()
-        .click();
-      await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+      await openManageBooksViaEditorMenu(mainPage);
       const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
       await frame.locator('[data-testid="manage-books-sidebar-section-import"]').first().click();
@@ -692,11 +657,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
-    await mainPage
-      .getByRole('menuitem', { name: /Project|Tools/i })
-      .first()
-      .click();
-    await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+    await openManageBooksViaEditorMenu(mainPage);
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
     // Switch to Delete and pick whatever the first present-book pill is.
@@ -740,11 +701,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
-    await mainPage
-      .getByRole('menuitem', { name: /Project|Tools/i })
-      .first()
-      .click();
-    await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+    await openManageBooksViaEditorMenu(mainPage);
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
     await frame.locator('[data-testid="manage-books-sidebar-section-create"]').first().click();
@@ -776,11 +733,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
-    await mainPage
-      .getByRole('menuitem', { name: /Project|Tools/i })
-      .first()
-      .click();
-    await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+    await openManageBooksViaEditorMenu(mainPage);
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
     await frame.locator('[data-testid="manage-books-sidebar-section-create"]').first().click();
@@ -829,11 +782,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     'EXT-102: should show missing-model-books prompt when not all selected books are in the model (A4)',
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
-      await mainPage
-        .getByRole('menuitem', { name: /Project|Tools/i })
-        .first()
-        .click();
-      await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+      await openManageBooksViaEditorMenu(mainPage);
       const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
       await frame.locator('[data-testid="manage-books-sidebar-section-create"]').first().click();
@@ -889,11 +838,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     'EXT-103: should show versification-mismatch prompt when model uses different versification (A4)',
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
-      await mainPage
-        .getByRole('menuitem', { name: /Project|Tools/i })
-        .first()
-        .click();
-      await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+      await openManageBooksViaEditorMenu(mainPage);
       const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
       await frame.locator('[data-testid="manage-books-sidebar-section-create"]').first().click();
@@ -937,11 +882,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     'VAL-105 / VAL-012: should surface an overlap-error dialog when two import files map to the same book (A10)',
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
-      await mainPage
-        .getByRole('menuitem', { name: /Project|Tools/i })
-        .first()
-        .click();
-      await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+      await openManageBooksViaEditorMenu(mainPage);
       const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
       await frame.locator('[data-testid="manage-books-sidebar-section-import"]').first().click();
@@ -967,11 +908,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     'VAL-104 / BHV-112: should show the USX confirmation prompt before importing .usx files (A9)',
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
-      await mainPage
-        .getByRole('menuitem', { name: /Project|Tools/i })
-        .first()
-        .click();
-      await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+      await openManageBooksViaEditorMenu(mainPage);
       const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
       await frame.locator('[data-testid="manage-books-sidebar-section-import"]').first().click();
@@ -997,11 +934,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     'VAL-013 / Theme 6: should surface AlertEntry permission errors via a result panel after import',
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
-      await mainPage
-        .getByRole('menuitem', { name: /Project|Tools/i })
-        .first()
-        .click();
-      await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+      await openManageBooksViaEditorMenu(mainPage);
       const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
       await frame.locator('[data-testid="manage-books-sidebar-section-import"]').first().click();
@@ -1027,11 +960,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
-    await mainPage
-      .getByRole('menuitem', { name: /Project|Tools/i })
-      .first()
-      .click();
-    await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+    await openManageBooksViaEditorMenu(mainPage);
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
     // Type a guaranteed-no-match filter into the always-present filter input.
@@ -1054,11 +983,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
-    await mainPage
-      .getByRole('menuitem', { name: /Project|Tools/i })
-      .first()
-      .click();
-    await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+    await openManageBooksViaEditorMenu(mainPage);
     const tab = mainPage.locator('.dock-tab', { hasText: WEB_VIEW_TITLE_REGEX });
     await expect(tab).toBeVisible({ timeout: 15_000 });
 
@@ -1083,14 +1008,14 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
-    await mainPage
-      .getByRole('menuitem', { name: /Project|Tools/i })
-      .first()
-      .click();
-    await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+    await openManageBooksViaEditorMenu(mainPage);
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
     await frame.locator('[data-testid="manage-books-sidebar-section-create"]').first().click();
+    // Pick the self-contained 'Create empty book' method — the designed default
+    // ('Create based on') gates apply on a reference project (see EVD-012).
+    await frame.locator('#af-method').click();
+    await frame.getByRole('option', { name: /Create empty book/i }).click();
     const firstCreatablePill = frame.locator('ul[role="listbox"] li[data-book]').first();
     await firstCreatablePill.click();
     const createApply = frame
@@ -1122,11 +1047,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
-    await mainPage
-      .getByRole('menuitem', { name: /Project|Tools/i })
-      .first()
-      .click();
-    await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
+    await openManageBooksViaEditorMenu(mainPage);
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
     // The header subtitle from ui-spec-manage-books.md Header section reads e.g.

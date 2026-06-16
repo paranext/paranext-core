@@ -123,10 +123,21 @@ const BOOK_PILL_BASE_CLASS =
   'tw:flex tw:w-full tw:items-center tw:gap-2 tw:rounded tw:border tw:border-border tw:px-2 tw:py-1 tw:text-start';
 
 /**
- * Compose the pill's color/border classes for a given `present` flag. In-project (`present`) books
- * use the accent tone at rest and shift to primary on hover; absent books get a dashed primary
- * outline plus muted text and the same primary hover treatment. Per Sebastian item 24
- * (2026-05-06).
+ * Compose the pill's color/border classes for a given `present`/`disabled` state pair.
+ *
+ * - In-project (`present`) books use the accent tone at rest and shift to primary on hover.
+ * - Absent (addable) books get a dashed primary outline plus muted text and the same hover treatment
+ *   — dashed-primary uniquely means "available to act on". Per Sebastian item 24 (2026-05-06).
+ * - Disabled books (e.g. Create mode's not-in-reference books) render as "inert gray": solid
+ *   `border-border`, faint muted fill, slightly-muted FULL-OPACITY text so the book code stays
+ *   legible, no hover, no addable affordance. This replaces the former `opacity-50`-only treatment,
+ *   which was nearly indistinguishable from the enabled absent state (Manila UX follow-up:
+ *   "Difference between disabled and not in project is too subtle").
+ *
+ * The hover treatment is the original `bg-primary/90` + `text-primary-foreground` the UX team
+ * signed off in the original port; PR #2296 downgraded it to a `/20` tint that is visually
+ * indistinguishable from the at-rest accent color, which UX reported as "hover effect has been
+ * removed". Selection is conveyed by the checkbox glyph, not the hover color.
  *
  * NOTE on `tw:hover:bg-primary/90` vs `tw:hover:bg-primary`: the slashless `tw:hover:bg-primary`
  * does not get JIT-compiled in this build pipeline (only the slash variants `/10`, `/70`, `/80`,
@@ -134,18 +145,25 @@ const BOOK_PILL_BASE_CLASS =
  * actually exists in the stylesheet — without it the hover background falls back to the at-rest
  * accent color and the white `text-primary-foreground` becomes unreadable on the light background.
  */
-const bookPillClasses = (present: boolean): string =>
-  cn(
+const bookPillClasses = (present: boolean, disabled = false): string => {
+  if (disabled)
+    return cn(
+      BOOK_PILL_BASE_CLASS,
+      'tw:cursor-not-allowed tw:bg-muted/40 tw:text-muted-foreground/70',
+    );
+  // Sebastian UX review item 8 (2026-06-12): the prior hover style swapped
+  // background + foreground (`bg-primary/90` + `text-primary-foreground`)
+  // which jarred against the at-rest pill look. Hover now keeps the same
+  // fill/text and instead emphasises the border — solid + ring color — so
+  // the pill reads as "interactive" without a color flash.
+  return cn(
     BOOK_PILL_BASE_CLASS,
-    // Use a 20%-opacity primary tint on hover and leave the text foreground
-    // untouched. A higher-contrast treatment (`bg-primary/90` +
-    // `text-primary-foreground`) makes hovered pills look "selected" and
-    // confuses users about which pills are actually selected.
-    'tw:transition-colors tw:hover:bg-primary/20',
+    'tw:transition-colors tw:hover:border-solid tw:hover:border-ring',
     present
       ? 'tw:border-primary/40 tw:bg-accent'
       : 'tw:border-dashed tw:border-primary/40 tw:text-muted-foreground',
   );
+};
 
 /* ------------------------------------------------------------------ */
 /* Tone / status mapping                                              */
@@ -559,16 +577,16 @@ export function BookGridSelector({
   const anyBadges = items.some((it) => it.tone !== 'neutral');
   const anyUnplanned = items.some((it) => it.unplanned);
   const needsWiderPills = anyBadges || anyUnplanned;
-  // Minimum-width thresholds chosen to roughly match the source story's
-  // breakpoint table at common Manage Books widths:
-  //   • narrow (<560px) → 2 cols
-  //   • mid (~720px)    → 3 cols
-  //   • wide (~900px)   → 4 cols
-  //   • full (~1200px+) → 5 cols
-  // 200px / 260px minimums hit those targets via auto-fill+minmax without
-  // needing media queries the extension's Tailwind compile pass doesn't emit.
+  // Minimum column widths track actual pill content (checkbox + dot + 3-char
+  // book code ≈ 90px; + comparison badge / warning glyph ≈ 170px). Floors sit
+  // just above the content minimum (UX follow-up round 2: the earlier
+  // 140px/190px floors still left visible dead space inside the pills) so a
+  // full canon fits on screen at once; auto-fill+minmax packs as many columns
+  // as the width allows. The badge floor was sized against the longest current
+  // localized badge label ("Newer"/"Older" variants) — revisit if a longer
+  // translation lands.
   const gridStyle: CSSProperties = {
-    gridTemplateColumns: `repeat(auto-fill, minmax(${needsWiderPills ? 260 : 200}px, 1fr))`,
+    gridTemplateColumns: `repeat(auto-fill, minmax(${needsWiderPills ? 170 : 100}px, 1fr))`,
   };
 
   const outOfScopeText = localizedStrings?.outOfScope ?? 'Out of scope';
@@ -588,12 +606,19 @@ export function BookGridSelector({
       </Badge>
     ) : undefined;
 
+    // The slashless `tw:bg-primary` / `tw:bg-muted` variants are NOT emitted by
+    // the extension's Tailwind build pipeline — only slash variants (/10, /70,
+    // /80, /90 etc.) land in the bundled stylesheet, so without an opacity
+    // suffix the dot rendered invisibly in the app (visible in Storybook
+    // because Storybook's Tailwind has full coverage). Use `/90` for the
+    // present state to match the surrounding pill hover/border tones and
+    // `/80` for the absent state so the dot still reads as muted.
     const dot = (
       <span
         aria-hidden
         className={cn(
           'tw:inline-block tw:h-2.5 tw:w-2.5 tw:shrink-0 tw:rounded-full',
-          item.present ? 'tw:bg-primary' : 'tw:bg-muted',
+          item.present ? 'tw:bg-primary/90' : 'tw:bg-muted/80',
         )}
       />
     );
@@ -609,7 +634,7 @@ export function BookGridSelector({
 
     const body = (
       <>
-        {interactive && (
+        {interactive && !item.disabled && (
           // The pill is an outer <button> (further below). Using shadcn's
           // <Checkbox> here renders a Radix Checkbox.Root <button>, which
           // triggers the "<button> cannot appear as a descendant of <button>"
@@ -679,12 +704,15 @@ export function BookGridSelector({
     );
 
     if (!interactive) {
-      const plain = <div className={bookPillClasses(item.present)}>{body}</div>;
+      const plain = <div className={bookPillClasses(item.present, item.disabled)}>{body}</div>;
       return (
         <Tooltip>
           <TooltipTrigger asChild>{plain}</TooltipTrigger>
-          {/* Tooltip renders bottom-LEFT (align="start"). */}
-          <TooltipContent side="bottom" align="start">
+          {/* Tooltip renders bottom-CENTER so it stays near the cursor on
+              wide pills, and pulls 4px closer than the platform tooltip's
+              default arrow gap (UX follow-up round 2: "move the tooltip on
+              the pill closer to the pill"). */}
+          <TooltipContent side="bottom" align="center" sideOffset={-4}>
             {tooltipContent}
           </TooltipContent>
         </Tooltip>
@@ -738,10 +766,9 @@ export function BookGridSelector({
         }}
         onFocus={() => setFocusedIndex(flatIndex)}
         className={cn(
-          bookPillClasses(item.present),
+          bookPillClasses(item.present, item.disabled),
           'tw:outline-hidden tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:ring-offset-1',
           isSelected && 'tw:text-accent-foreground',
-          item.disabled && 'tw:cursor-not-allowed tw:opacity-50',
         )}
       >
         {body}
@@ -750,8 +777,9 @@ export function BookGridSelector({
     return (
       <Tooltip>
         <TooltipTrigger asChild>{button}</TooltipTrigger>
-        {/* Tooltip renders bottom-LEFT alignment. */}
-        <TooltipContent side="bottom" align="start">
+        {/* Tooltip renders bottom-CENTER so it stays near the cursor on wide
+            pills (Manila UX follow-up). */}
+        <TooltipContent side="bottom" align="center" sideOffset={-4}>
           {tooltipContent}
         </TooltipContent>
       </Tooltip>
@@ -761,7 +789,13 @@ export function BookGridSelector({
   return (
     <div
       className={cn(
-        'tw:flex tw:min-h-0 tw:flex-1 tw:flex-col tw:overflow-auto tw:p-1',
+        // Sebastian UX review item 14 (2026-06-12): the prior `overflow-auto`
+        // produced a permanent vertical scrollbar in Import mode because the
+        // grid's intrinsic height (badges + section headers) was a few
+        // pixels taller than the flex slot. `overflow-y-auto` only renders
+        // when actually needed and overflow-x is suppressed to prevent
+        // horizontal scrollbars from appearing during dialog resize.
+        'tw:flex tw:min-h-0 tw:flex-1 tw:flex-col tw:overflow-x-hidden tw:overflow-y-auto tw:p-1',
         contentClassName,
       )}
     >
@@ -833,7 +867,15 @@ export function BookGridSelector({
                     size="sm"
                     onClick={() => group.label && toggleCollapsed(group.label)}
                     aria-expanded={!collapsed}
-                    className="tw:h-6 tw:flex-1 tw:justify-start tw:gap-1 tw:px-2 tw:text-[11px] tw:font-semibold tw:uppercase tw:tracking-wider tw:text-muted-foreground tw:hover:text-foreground"
+                    // The shadcn ghost variant gained `aria-expanded:bg-muted`
+                    // in the preset upgrade, which painted every EXPANDED
+                    // group header with a persistent background bar. Neutralize
+                    // it here so headers are plain text with background on
+                    // hover only (Manila UX follow-up), while keeping
+                    // aria-expanded for accessibility. Other ghost dropdown
+                    // triggers still rely on the variant default, so this is a
+                    // per-usage override, not a button.tsx change.
+                    className="tw:h-6 tw:flex-1 tw:justify-start tw:gap-1 tw:px-2 tw:text-[11px] tw:font-semibold tw:uppercase tw:tracking-wider tw:text-muted-foreground tw:hover:text-foreground tw:aria-expanded:bg-transparent tw:aria-expanded:text-muted-foreground tw:hover:aria-expanded:bg-muted tw:hover:aria-expanded:text-foreground"
                   >
                     <Chevron className="tw:h-3.5 tw:w-3.5" aria-hidden />
                     <span>{group.label}</span>

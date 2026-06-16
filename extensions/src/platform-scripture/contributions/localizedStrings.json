@@ -1,5 +1,20 @@
 {
   "metadata": {
+    "%manageBooks_copy_confirmMergeFromSource%": {
+      "fallbackKey": "%manageBooks_copy_onlyNonExistingChapters%"
+    },
+    "%manageBooks_import_mergeFromFiles%": {
+      "fallbackKey": "%manageBooks_import_onlyNonExistingChapters%"
+    },
+    "%manageBooks_delete_confirmBodyShared%": {
+      "fallbackKey": "%manageBooks_delete_confirmBodySharedSendReceive%"
+    },
+    "%manageBooks_copy_confirmBody%": {
+      "fallbackKey": "%manageBooks_copy_confirmBodyWithBooks_other%"
+    },
+    "%manageBooks_view_diff_label%": {
+      "fallbackKey": "%manageBooks_view_compareVersions_label%"
+    },
     "%inventoryName_Character%": {
       "fallbackKey": "%CheckType_3%"
     },
@@ -140,8 +155,6 @@
       "%manageBooks_param_projectNotFound%": "Project not found: {0}",
       "%manageBooks_param_sourceProjectNotFound%": "Source project not found: {0}",
       "%manageBooks_sidebar_heading%": "Manage books",
-      "%manageBooks_sidebar_group_manage%": "Manage project books",
-      "%manageBooks_sidebar_group_reference%": "Reference",
       "%manageBooks_sidebar_show_label%": "Show books",
       "%manageBooks_sidebar_show_subtitle%": "View books in this project",
       "%manageBooks_sidebar_create_label%": "Create books",
@@ -159,15 +172,15 @@
       "%manageBooks_bookNames_label%": "Book names",
       "%manageBooks_bookNames_subtitle%": "Edit short and long book names (TOC1–3)",
       "%manageBooks_bookNames_notYetAvailable%": "Book names editing is not yet available — coming soon.",
-      "%manageBooks_introductions_label%": "Introductions",
-      "%manageBooks_introductions_subtitle%": "Compare introductory USFM across projects",
-      "%manageBooks_introductions_notYetAvailable%": "Introductions are not yet available — coming soon.",
-      "%manageBooks_copy_confirmBody%": "{0} of the books you are copying already exist in {1}.",
+      "%manageBooks_copy_confirmBodyWithBooks_one%": "1 book already exists in {0}: {1}",
+      "%manageBooks_copy_confirmBodyWithBooks_other%": "{0} books already exist in {1}: {2}",
       "%manageBooks_copy_confirmCancel%": "Cancel",
-      "%manageBooks_copy_confirmMergeFromSource%": "Merge from source",
+      "%manageBooks_copy_onlyNonExistingChapters%": "Only copy non-existing chapters",
       "%manageBooks_copy_confirmReplace%": "Replace entire books",
       "%manageBooks_copy_confirmTitle%": "Books already exist",
       "%manageBooks_copy_emptyState_chooseSource%": "Choose a source project to see books available to copy.",
+      "%manageBooks_copy_emptyState_loading%": "Loading books…",
+      "%manageBooks_copy_emptyState_loadingSource%": "Loading books from {0}…",
       "%manageBooks_copy_emptyState_noBooks%": "The chosen source project has no books to copy.",
       "%manageBooks_copy_fromLabel%": "From",
       "%manageBooks_copy_sourcePlaceholder%": "Select project",
@@ -195,7 +208,8 @@
       "%manageBooks_delete_confirmAccept%": "Delete",
       "%manageBooks_delete_confirmBodyAll%": "All books will be deleted from {0}. The project itself will not be deleted. This cannot be undone.",
       "%manageBooks_delete_confirmBodyPartial%": "{0} book(s) will be deleted from {1}. This cannot be undone.",
-      "%manageBooks_delete_confirmBodyShared%": "{0} book(s) will be deleted from {1}, which is shared with other users. They will see this change immediately. This cannot be undone.",
+      "%manageBooks_delete_confirmBodyAllShared%": "All books will be deleted from {0}, which is shared with other users. The books will be deleted for all users when they next Send/Receive. The project itself will not be deleted. This cannot be undone.",
+      "%manageBooks_delete_confirmBodySharedSendReceive%": "{0} book(s) will be deleted from {1}, which is shared with other users. The books will be deleted for all users when they next Send/Receive. This cannot be undone.",
       "%manageBooks_delete_confirmCancel%": "Cancel",
       "%manageBooks_delete_confirmTitle%": "Delete books from {0}?",
       "%manageBooks_delete_emptyState_noBooks%": "This project has no books to delete.",
@@ -214,6 +228,8 @@
       "%manageBooks_projectSelector_otherProjectsSectionHeading%": "Your projects & resources",
       "%manageBooks_projectSelector_searchPlaceholder%": "Search projects & resources",
       "%manageBooks_projectSelector_selectAll%": "Select all",
+      "%manageBooks_projectSelector_versificationSectionHeading%": "{0} versification",
+      "%manageBooks_projectSelector_versificationUnknownSectionHeading%": "Unknown versification",
       "%manageBooks_filter_buttonAriaLabel%": "Filter",
       "%manageBooks_filter_clearButton%": "Clear filter",
       "%manageBooks_filter_menuLabel%": "Show",
@@ -293,7 +309,7 @@
       "%manageBooks_import_emptyState_addFiles%": "Add files to begin importing.",
       "%manageBooks_import_filesMatched_one%": "1 file matched",
       "%manageBooks_import_filesMatched_other%": "{0} files matched",
-      "%manageBooks_import_mergeFromFiles%": "Merge from files",
+      "%manageBooks_import_onlyNonExistingChapters%": "Only import non-existing chapters",
       "%manageBooks_import_overlapBody%": "Cannot import: {0} would be supplied by both \"{1}\" and \"{2}\".",
       "%manageBooks_import_overlapDismiss%": "Got it",
       "%manageBooks_import_overlapTitle%": "Two files map to the same book",
@@ -317,7 +333,7 @@
       "%manageBooks_versification_septuagint%": "Septuagint",
       "%manageBooks_versification_unknown%": "Unknown",
       "%manageBooks_versification_vulgate%": "Vulgate",
-      "%manageBooks_view_diff_label%": "View differences",
+      "%manageBooks_view_compareVersions_label%": "Compare versions…",
       "%manageBooks_view_disabledStub_notYetAvailable%": "Not yet available — coming soon",
       "%manageBooks_view_openProjectCanons%": "Project canons…",
       "%manageBooks_view_openRegistry%": "Registry",
@@ -542,7 +558,7 @@
       "%markersChecklist_menu_settings%": "Settings",
       "%webView_platformScripture_markersChecklist_viewColumn%": "View",
       "%webView_platformScripture_markersChecklist_settings%": "Settings",
-      "%manageBooks_openMenuItem%": "Manage books…",
+      "%manageBooks_openMenuItem%": "Manage books",
       "%manageBooks_sidebar_projectPlaceholder%": "Select project"
     },
     "es": {
@@ -741,7 +757,7 @@
       "%webview_checksSidePanel_checkTypeFilter_setUp%": "Configuración",
       "%markersChecklist_errorInvalidMarkerPair%": "Marcadores equivalentes deben ser entrados en la forma: p/q",
       "%markersChecklist_emptyResult_identicalMarkers%": "Textos comparativos tienen marcadores idénticos.",
-      "%manageBooks_openMenuItem%": "Administrar libros…",
+      "%manageBooks_openMenuItem%": "Administrar libros",
       "%manageBooks_view_disabledStub_notYetAvailable%": "Aún no disponible — próximamente",
       "%manageBooks_grid_canonGroup_DC%": "Deuterocanónicos",
       "%manageBooks_grid_canonGroup_Extra%": "Extras",

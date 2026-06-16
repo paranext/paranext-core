@@ -101,7 +101,7 @@
     },
     "groups": {
       "platform.projectTop": { "column": "platform.app", "order": 1, "isExtensible": true },
-      "platform.manageBooks": { "column": "platform.app", "order": 2 },
+      "platform.manageBooks": { "column": "platform.app", "order": 2, "isExtensible": true },
       "platform.deleteProject": { "column": "platform.app", "order": 3 },
       "platform.projectDetails": { "column": "platform.app", "order": 4, "isExtensible": true }
     },

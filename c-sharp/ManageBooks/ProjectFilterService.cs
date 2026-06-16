@@ -16,7 +16,8 @@ namespace Paranext.DataProvider.ManageBooks;
 // ScrTextCollection projects. The five purposes are:
 //
 //   AllScripture    -> scripture projects (any editability)
-//   EditableTexts   -> scripture projects with IsEditableText = true
+//   EditableTexts   -> scripture projects that are editable targets
+//                      (Settings.Editable, excluding resources)
 //   ModelProject    -> all scripture projects (same as AllScripture; read-only
 //                      access is sufficient for a "model" project)
 //   DeleteSource    -> editable scripture projects (same predicate as
@@ -95,14 +96,12 @@ public static class ProjectFilterService
     /// <summary>
     /// Builds the project list for <see cref="ProjectFilterPurpose.EditableTexts"/> and
     /// <see cref="ProjectFilterPurpose.DeleteSource"/> — scripture projects further
-    /// restricted to <c>Settings.IsEditableText</c>. DeleteSource uses the same
+    /// restricted to <see cref="ProjectSummary.IsEditableTarget"/>. DeleteSource uses the same
     /// predicate; the admin-on-shared-project check is enforced separately at the
     /// wire-layer call site (see CAP-005).
     /// </summary>
     private static ProjectListResult BuildEditableScriptureProjectList() =>
-        ToProjectListResult(
-            EnumerateScriptureProjects().Where(scrText => scrText.Settings.IsEditableText)
-        );
+        ToProjectListResult(EnumerateScriptureProjects().Where(ProjectSummary.IsEditableTarget));
 
     /// <summary>
     /// Delegation seam for <see cref="ProjectFilterPurpose.CopyDestination"/>. Validates
@@ -125,11 +124,11 @@ public static class ProjectFilterService
 
     /// <summary>
     /// Materialises a <see cref="ScrText"/> sequence into a <see cref="ProjectListResult"/>
-    /// by mapping each entry through <see cref="ToSummary"/>. Shared by the scripture
+    /// by mapping each entry through <see cref="ProjectSummary.FromScrText"/>. Shared by the scripture
     /// and editable-scripture build paths so the mapping shape is expressed once.
     /// </summary>
     private static ProjectListResult ToProjectListResult(IEnumerable<ScrText> scrTexts) =>
-        new(scrTexts.Select(ToSummary).ToList());
+        new(scrTexts.Select(ProjectSummary.FromScrText).ToList());
 
     /// <summary>
     /// Enumerates all scripture-type projects from <see cref="ScrTextCollection"/>.
@@ -146,20 +145,4 @@ public static class ProjectFilterService
         ScrTextCollection
             .ScrTexts(IncludeProjects.ScriptureOnly)
             .Where(scrText => scrText.Settings.TranslationInfo.Type.IsScripture());
-
-    /// <summary>
-    /// Maps a <see cref="ScrText"/> to the minimal <see cref="ProjectSummary"/>
-    /// contract shape (Section 3.8).
-    /// </summary>
-    private static ProjectSummary ToSummary(ScrText scrText) =>
-        new(
-            ProjectId: scrText.Guid.ToString(),
-            Name: scrText.Name,
-            ProjectType: scrText.Settings.TranslationInfo.Type.InternalValue,
-            IsEditable: scrText.Settings.IsEditableText,
-            // Plumb IsResourceProject through the wire so the Copy "From" /
-            // Create "Based on" pickers can filter resources out on the
-            // frontend without a separate API call.
-            IsResource: scrText.IsResourceProject
-        );
 }

@@ -84,10 +84,26 @@ type ProjectListResult = {
   projects: {
     projectId: string;
     name: string;
+    /**
+     * PT9 `ProjectType` enum value (e.g. "Standard"). Mirrors the C# `ProjectSummary.ProjectType`
+     * wire field. Currently unread on the client (the former commentary filter that consumed it was
+     * removed — N4); kept to document the wire shape and for future use.
+     */
     projectType: string;
     isEditable: boolean;
     /** Whether the project is a resource (read-only published text). */
     isResource: boolean;
+    /**
+     * Long human-readable name (e.g. "English Standard Version 2016"). I2: returned on the list so
+     * the frontend no longer fetches `platform.fullName` per project. Empty when unset — fall back
+     * to the short `name`.
+     */
+    fullName: string;
+    /**
+     * Versification as the numeric `ScrVersType` code in string form (e.g. "4"). I2: returned on
+     * the list so the frontend no longer fetches `platformScripture.versification` per project.
+     */
+    versification: string;
   }[];
 };
 
@@ -183,6 +199,14 @@ interface ManageBooksNetworkObject {
     fromProjectId: string;
     toProjectId: string;
   }) => Promise<BookComparisonResult>;
+  /**
+   * A single project's own per-book last-modified dates (I9). Used to populate the destination
+   * project's dates in Import mode, where no second project is involved. The `destLastModified` on
+   * each entry is the real file date.
+   *
+   * @experimental
+   */
+  getProjectBookDates: (projectId: string) => Promise<BookComparisonResult>;
   /**
    * Per-book Import comparison; same wire shape as `getBookComparison`.
    *
@@ -295,8 +319,15 @@ global.webViewComponent = function ManageBooksWebView({
     initialProjectId ?? '',
   );
 
+  // The EXPLICIT open context wins over persisted state: since the Manila UX
+  // follow-up the dialog is only opened from a scripture editor's hamburger
+  // menu, so a fresh `initialProjectId` means "the user asked to manage THIS
+  // project's books" — a previously-persisted choice (possibly stale, or even
+  // a project id that no longer resolves) must not override it. Persistence
+  // still covers dock-layout session restores, where the definition carries
+  // no fresh option.
   const [projectId, setProjectIdLocal] = useState<string>(
-    () => persistedProjectId || initialProjectId || '',
+    () => initialProjectId || persistedProjectId || '',
   );
 
   // Pull all the localization strings the dialog + picker need in one batch. Including the
@@ -436,6 +467,10 @@ global.webViewComponent = function ManageBooksWebView({
         '%manageBooks_projectSelector_otherProjectsSectionHeading%',
         'Your projects & resources',
       ),
+      versificationUnknownSectionHeading: resolve(
+        '%manageBooks_projectSelector_versificationUnknownSectionHeading%',
+        'Unknown versification',
+      ),
       boundButClosedTooltip: resolve(
         '%manageBooks_projectSelector_boundButClosedTooltip%',
         'Bound to {group} · not currently open',
@@ -541,6 +576,47 @@ global.webViewComponent = function ManageBooksWebView({
         const bp = await pdp.getSetting('platformScripture.booksPresent');
         const decoded = decodeBooksPresent(typeof bp === 'string' ? bp : BOOKS_PRESENT_DEFAULT);
         setBookCache((prev) => ({ ...prev, [pid]: decoded }));
+        // Sebastian UX review item 7 (2026-06-12): historically the
+        // comparison dates were fetched in a side-effect after this function
+        // returned, so the first render showed the books with no status
+        // badges, then a second render (triggered by datesByProject updating
+        // the decorate ref) repainted them with status. The user perceived
+        // that as "books load → status flickers in". We now fetch the
+        // comparison synchronously alongside the booksPresent fetch and
+        // bake the source dates into the returned books so the first
+        // render is already final.
+        if (manageBooksApi && projectId) {
+          try {
+            const cmp = await manageBooksApi.getBookComparison({
+              fromProjectId: pid,
+              toProjectId: projectId,
+            });
+            const fromDates: Record<string, string> = {};
+            const toDates: Record<string, string> = {};
+            cmp.entries.forEach((e) => {
+              const bookId = Canon.bookNumberToId(e.bookNum);
+              if (!bookId) return;
+              if (e.sourceLastModified) fromDates[bookId] = e.sourceLastModified;
+              if (e.destLastModified) toDates[bookId] = e.destLastModified;
+            });
+            setDatesByProject((prev) => ({
+              ...prev,
+              [pid]: { ...(prev[pid] ?? {}), ...fromDates },
+              [projectId]: { ...(prev[projectId] ?? {}), ...toDates },
+            }));
+            return decoded.map((b) =>
+              fromDates[b.id] ? { ...b, lastModified: fromDates[b.id] } : b,
+            );
+          } catch (cmpErr) {
+            logger.warn(
+              `manage-books: getBookComparison(${pid}, ${projectId}) inline failed: ${
+                cmpErr instanceof Error ? cmpErr.message : String(cmpErr)
+              }`,
+            );
+            // Fall through to undecorated below; the side-channel will fill
+            // in dates on a later tick.
+          }
+        }
         return decorateWithDates(pid, decoded);
       } catch (e) {
         logger.warn(
@@ -549,7 +625,7 @@ global.webViewComponent = function ManageBooksWebView({
         return [];
       }
     },
-    [projectId, activeBooks, bookCache, decorateWithDates],
+    [projectId, activeBooks, bookCache, decorateWithDates, manageBooksApi],
   );
 
   // Side-channel: whenever the dialog asks about a non-active project (Copy
@@ -621,6 +697,51 @@ global.webViewComponent = function ManageBooksWebView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [manageBooksApi, projectId, bookCache]);
 
+  // I9: populate the ACTIVE/destination project's own book dates. In pure Import mode no other
+  // project is involved, so the side-channel above never fires and datesByProject[projectId] stays
+  // empty — leaving the Import grid to compare every file against an `undefined` dest date and
+  // label them all "New". We fetch the active project's real file dates via the dedicated
+  // getProjectBookDates method: its destLastModified is the real GetLastWriteTime date (unlike
+  // parseImportFiles, which stamps UtcNow), and books absent from the project map to null (so they
+  // correctly stay "New"). A two-project getBookComparison(active, active) can't be used here — the
+  // backend rejects same-project comparisons. Fires once per active project (deps are
+  // [manageBooksApi, projectId]); it writes datesByProject via the functional setter without
+  // reading it, so there's no need to depend on it and no re-fire loop.
+  useEffect(() => {
+    if (!manageBooksApi || !projectId) return undefined;
+    let cancelled = false;
+    manageBooksApi
+      .getProjectBookDates(projectId)
+      .then((result) => {
+        if (cancelled) return undefined;
+        const selfDates: Record<string, string> = {};
+        result.entries.forEach((e) => {
+          const bookId = Canon.bookNumberToId(e.bookNum);
+          if (!bookId) return;
+          // from===to, so both timestamps are the active project's own real file date.
+          const date = e.destLastModified ?? e.sourceLastModified;
+          if (date) selfDates[bookId] = date;
+        });
+        if (Object.keys(selfDates).length === 0) return undefined;
+        setDatesByProject((prev) => ({
+          ...prev,
+          [projectId]: { ...(prev[projectId] ?? {}), ...selfDates },
+        }));
+        return undefined;
+      })
+      .catch((err) => {
+        logger.warn(
+          `manage-books: getProjectBookDates(${projectId}) failed: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+        return undefined;
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [manageBooksApi, projectId]);
+
   // ===== Versification (per-project) =========================================
   const loadVersification = useCallback(
     async (pid: string): Promise<string> => {
@@ -645,43 +766,27 @@ global.webViewComponent = function ManageBooksWebView({
     if (!manageBooksApi) return [];
     try {
       const result = await manageBooksApi.filterProjects({ purpose: 'AllScripture' });
-      return Promise.all(
-        result.projects.map(async (p) => {
-          // The C# `ProjectSummary.Name` is `ScrText.Name` — the project's short name (e.g.
-          // "ESVUS16", "MP1", 3-8 chars in practice). For display we fetch two pdp settings:
-          //   `platform.name`     → user-friendly display label (used by footer summaries)
-          //   `platform.fullName` → long human-readable name shown as the secondary label in the
-          //                         <ProjectSelector> popover rows (e.g. "English Standard
-          //                         Version 2016"). Both fall back to the wire short name.
-          let displayName = p.name;
-          let fullName: string | undefined;
-          try {
-            const pdp = await papi.projectDataProviders.get('platform.base', p.projectId);
-            const [nameSetting, fullNameSetting] = await Promise.all([
-              pdp.getSetting('platform.name'),
-              pdp.getSetting('platform.fullName'),
-            ]);
-            // pdp.getSetting can return undefined (or null at runtime) when the setting is not
-            // configured on the project; fall back to the wire short name.
-            displayName = typeof nameSetting === 'string' ? nameSetting : p.name;
-            if (typeof fullNameSetting === 'string' && fullNameSetting.length > 0) {
-              fullName = fullNameSetting;
-            }
-          } catch {
-            // best-effort; fall through with wire-name as both display + fullName
-          }
-          return {
-            id: p.projectId,
-            shortName: p.name,
-            name: displayName,
-            fullName: fullName ?? p.name,
-            isEditable: p.isEditable,
-            // Forward the isResource flag so the dialog can filter resources
-            // out of the Copy "From" / Create "Based on" pickers.
-            isResource: p.isResource,
-          };
-        }),
-      );
+      // I2: the C# `ProjectSummary` now carries name (short), fullName and versification directly,
+      // so this is a single round-trip — no per-project `projectDataProviders.get` + `getSetting`
+      // fan-out (which scaled linearly with project count and was the cause of the slow initial
+      // load). `platform.name` resolves to `ScrText.Name` server-side, i.e. the same short `name`
+      // already on the wire, so there is no separate display name to fetch.
+      return result.projects.map((p) => ({
+        id: p.projectId,
+        shortName: p.name,
+        name: p.name,
+        // fullName is empty when unset server-side; fall back to the short name.
+        fullName: p.fullName.length > 0 ? p.fullName : p.name,
+        isEditable: p.isEditable,
+        // Forward the isResource flag so the dialog can filter resources out of the Copy "From"
+        // picker (licensing). The Create "Based on" picker includes resources (structure-only
+        // read, PT9 parity).
+        isResource: p.isResource,
+        // Versification id (numeric ScrVersType as a string) for the Create "Based on" picker's
+        // versification grouping. The localized name is resolved on the dialog side (it owns the
+        // localizedStrings → versificationLabelKey map); here we forward the raw id.
+        versificationId: p.versification,
+      }));
     } catch (e) {
       logger.warn(
         `manage-books: filterProjects failed: ${e instanceof Error ? e.message : String(e)}`,
@@ -726,26 +831,13 @@ global.webViewComponent = function ManageBooksWebView({
     (async () => {
       try {
         const result = await manageBooksApi.filterProjects({ purpose: 'AllScripture' });
-        const enriched: SidebarProject[] = await Promise.all(
-          result.projects.map(async (p) => {
-            // Mirror loadProjects: try platform.fullName for the human-friendly long name; fall
-            // back to the wire short name when unavailable.
-            let fullName = p.name;
-            try {
-              const pdp = await papi.projectDataProviders.get('platform.base', p.projectId);
-              const fnSetting = await pdp.getSetting('platform.fullName');
-              if (typeof fnSetting === 'string' && fnSetting.length > 0) fullName = fnSetting;
-            } catch {
-              // best-effort; fall through with wire-name as full name
-            }
-            return {
-              id: p.projectId,
-              shortName: p.name,
-              fullName,
-              isEditable: p.isEditable,
-            };
-          }),
-        );
+        // I2: fullName comes straight off the wire now — no per-project getSetting fan-out.
+        const enriched: SidebarProject[] = result.projects.map((p) => ({
+          id: p.projectId,
+          shortName: p.name,
+          fullName: p.fullName.length > 0 ? p.fullName : p.name,
+          isEditable: p.isEditable,
+        }));
         if (!cancelled) setSidebarProjects(enriched);
       } catch (err) {
         logger.warn(`manage-books: sidebarProjects fetch failed: ${getErrorMessage(err)}`);
@@ -835,9 +927,9 @@ global.webViewComponent = function ManageBooksWebView({
     }): Promise<MutationResult | undefined> => {
       if (!manageBooksApi) return undefined;
       // The backend honors `replaceEntireBook`.
-      // `strategy === 'nonExistingChapters'` routes through PT9's
-      // WriteChaptersToBook semantic (chapter-by-chapter merge, source
-      // overwrites collisions, dest chapters not in source survive). The
+      // `strategy === 'nonExistingChapters'` → only chapters that are
+      // missing, empty, or scaffolding-only in the destination are written
+      // (CopyBooksOrchestrator merge path + UsfmChapterScaffolding). The
       // default + `replaceEntireBooks` route through whole-book replacement.
       return manageBooksApi.copyBooks({
         fromProjectId: args.sourceProjectId,

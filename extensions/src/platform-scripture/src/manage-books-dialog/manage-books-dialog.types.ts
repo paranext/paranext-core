@@ -86,11 +86,24 @@ export type ManageBooksDialogProject = {
   /**
    * Whether the project is a resource (published read-only text). Sourced from PT9
    * `ScrText.IsResourceProject` via the C# `ProjectSummary.IsResource` field. Used by the Copy
-   * "From" / Create "Based on" pickers to exclude resources for copyright reasons. The header
-   * project picker continues to include resources — they get the read-only treatment via
-   * `isEditable === false`.
+   * "From" picker to exclude resources for licensing reasons (no text may be copied out of a
+   * resource). The Create "Based on" picker INCLUDES resources — it only reads book/chapter
+   * structure, matching PT9's CreateBooksForm. The header project picker also includes resources —
+   * they get the read-only treatment via `isEditable === false`.
    */
   isResource?: boolean;
+  /**
+   * Locale-stable versification id for the project (the numeric `ScrVersType` as a string).
+   * Sebastian UX new-requirement 3 (2026-06-12): forwarded to the Create "Based on"
+   * `<ProjectSelector>` so it can group projects by versification with the target's versification
+   * pinned to the top.
+   */
+  versificationId?: string;
+  /**
+   * Localized versification display name (e.g. "English", "Vulgate"). Pair with `versificationId`;
+   * surfaced as the section header in versification-grouping mode.
+   */
+  versificationName?: string;
 };
 
 /**
@@ -203,14 +216,17 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_copy_fromLabel%',
   '%manageBooks_copy_sourcePlaceholder%',
   '%manageBooks_copy_emptyState_chooseSource%',
+  '%manageBooks_copy_emptyState_loading%',
+  '%manageBooks_copy_emptyState_loadingSource%',
   '%manageBooks_copy_emptyState_noBooks%',
   // Copy overwrite confirm
   '%manageBooks_copy_confirmTitle%',
-  '%manageBooks_copy_confirmBody%',
+  '%manageBooks_copy_confirmBodyWithBooks_one%',
+  '%manageBooks_copy_confirmBodyWithBooks_other%',
   '%manageBooks_copy_confirmReplace%',
   '%manageBooks_copy_confirmCancel%',
   // Vladimir review #16: Copy gets the same 3-way conflict prompt as Import.
-  '%manageBooks_copy_confirmMergeFromSource%',
+  '%manageBooks_copy_onlyNonExistingChapters%',
   // Per-action empty states
   '%manageBooks_create_emptyState_allPresent%',
   '%manageBooks_delete_emptyState_noBooks%',
@@ -231,6 +247,8 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_projectSelector_openTabsSectionHeading%',
   '%manageBooks_projectSelector_otherProjectsSectionHeading%',
   '%manageBooks_projectSelector_searchPlaceholder%',
+  '%manageBooks_projectSelector_versificationSectionHeading%',
+  '%manageBooks_projectSelector_versificationUnknownSectionHeading%',
   '%manageBooks_projectSelector_selectAll%',
   '%manageBooks_filter_count%',
   '%manageBooks_filter_zero%',
@@ -271,7 +289,7 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_grid_untracked%',
   '%manageBooks_grid_selectAll%',
   // View-mode shared stub label
-  '%manageBooks_view_diff_label%',
+  '%manageBooks_view_compareVersions_label%',
   '%manageBooks_view_disabledStub_notYetAvailable%',
   // Import flow
   '%manageBooks_import_choose%',
@@ -286,7 +304,7 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_import_conflictBody2%',
   '%manageBooks_import_conflictCancel%',
   '%manageBooks_import_replaceEntireBooks%',
-  '%manageBooks_import_mergeFromFiles%',
+  '%manageBooks_import_onlyNonExistingChapters%',
   '%manageBooks_import_usxConfirmTitle%',
   '%manageBooks_import_usxConfirmBody%',
   '%manageBooks_import_usxConfirmAccept%',
@@ -302,7 +320,8 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_delete_confirmTitle%',
   '%manageBooks_delete_confirmBodyPartial%',
   '%manageBooks_delete_confirmBodyAll%',
-  '%manageBooks_delete_confirmBodyShared%',
+  '%manageBooks_delete_confirmBodySharedSendReceive%',
+  '%manageBooks_delete_confirmBodyAllShared%',
   '%manageBooks_delete_confirmCancel%',
   '%manageBooks_delete_confirmAccept%',
   // Sebastian review item 26 (2026-05-06, FE half): runDelete refreshes the destination book set
@@ -363,8 +382,6 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   // Sidebar (rebuild — ViewListSelect layout, 2026-05-02)
   '%manageBooks_sidebar_heading%',
   '%manageBooks_sidebar_projectPlaceholder%',
-  '%manageBooks_sidebar_group_manage%',
-  '%manageBooks_sidebar_group_reference%',
   '%manageBooks_sidebar_show_label%',
   '%manageBooks_sidebar_show_subtitle%',
   '%manageBooks_sidebar_create_label%',
@@ -386,9 +403,6 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_bookNames_label%',
   '%manageBooks_bookNames_subtitle%',
   '%manageBooks_bookNames_notYetAvailable%',
-  '%manageBooks_introductions_label%',
-  '%manageBooks_introductions_subtitle%',
-  '%manageBooks_introductions_notYetAvailable%',
 ] as const);
 
 /** Localized strings consumed by `ManageBooksDialog`. */

@@ -64,12 +64,26 @@ export function ImportConflictPrompt({
           <p className="tw:text-sm tw:text-muted-foreground">
             {t('%manageBooks_import_conflictBody2%', 'Choose how to proceed with the import.')}
           </p>
-          <div className="tw:flex tw:flex-col tw:gap-2 tw:sm:flex-row tw:sm:flex-wrap tw:sm:justify-end">
-            <Button variant="ghost" onClick={onCancel}>
+          {/* Sebastian UX review item 10 (2026-06-12): the prior layout
+              stacked the three buttons in a column at narrow widths
+              (`flex-col → sm:flex-row`), which pushed them past the dialog's
+              bottom edge. Buttons now stay in a single row and individually
+              shrink + wrap their text inside the button. `tw:flex-1
+              tw:min-w-0` lets them share width fairly; `tw:h-auto
+              tw:whitespace-normal tw:text-center` re-enables intra-button
+              wrapping (the shadcn Button base hard-codes
+              whitespace-nowrap/fixed height). */}
+          <div className="tw:flex tw:flex-row tw:gap-2 tw:justify-end">
+            <Button
+              variant="ghost"
+              className="tw:h-auto tw:min-w-0 tw:flex-1 tw:whitespace-normal tw:text-center"
+              onClick={onCancel}
+            >
               {t('%manageBooks_import_conflictCancel%', 'Cancel')}
             </Button>
             <Button
               variant="destructive"
+              className="tw:h-auto tw:min-w-0 tw:flex-1 tw:whitespace-normal tw:text-center"
               onClick={() => {
                 if (!conflict) return;
                 onChoose('replaceEntireBooks', conflict.books);
@@ -79,22 +93,24 @@ export function ImportConflictPrompt({
             </Button>
             <Button
               variant="outline"
+              className="tw:h-auto tw:min-w-0 tw:flex-1 tw:whitespace-normal tw:text-center"
               onClick={() => {
                 if (!conflict) return;
                 onChoose('nonExistingChapters', conflict.books);
               }}
             >
-              {/* Label honestly describes PT9's WriteChaptersToBook semantic:
-                  source chapters overwrite their dest counterparts; dest
-                  chapters not in source survive. "Merge from files" parallels
-                  the Copy prompt's "Merge from source" and names what is
-                  being merged. The localize key is
-                  %manageBooks_import_mergeFromFiles% — the prior
-                  "nonExistingChapters" key promised a behavior the wire never
-                  implemented, so the key was renamed along with the English
-                  copy so existing translations don't silently mis-apply to
-                  the changed semantic. */}
-              {t('%manageBooks_import_mergeFromFiles%', 'Merge from files')}
+              {/* The backend now implements exactly what this label promises:
+                  only chapters missing/empty/scaffolding-only in the
+                  destination are written (ImportBooksOrchestrator
+                  TryMergeChaptersFromSource + UsfmChapterScaffolding). The key
+                  was renamed from %manageBooks_import_mergeFromFiles% (per the
+                  semantic-change-renames-the-key convention) when the Manila
+                  UX follow-up changed the wire behavior from PT9's
+                  chapter-overwrite merge to skip-existing-chapters. */}
+              {t(
+                '%manageBooks_import_onlyNonExistingChapters%',
+                'Only import non-existing chapters',
+              )}
             </Button>
           </div>
         </div>

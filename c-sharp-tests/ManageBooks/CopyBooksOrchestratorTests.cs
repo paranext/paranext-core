@@ -1026,11 +1026,13 @@ namespace TestParanextDataProvider.ManageBooks
         [Property("CapabilityId", "CAP-007")]
         [Property("BehaviorId", "BHV-110")]
         [Description(
-            "Merge mode: source chapters overwrite their dest counterparts; dest "
-                + "chapters NOT present in source survive (PT9 WriteChaptersToBook "
-                + "semantic — ImportSfmText.cs:270-285)."
+            "Merge mode ('Only copy non-existing chapters'): dest chapters with "
+                + "real text are NEVER overwritten; only chapters missing from dest "
+                + "are copied. Deliberate PT10 deviation from PT9 WriteChaptersToBook "
+                + "(Manila UX follow-up — the old semantic amounted to 'merge "
+                + "overwrites everything' for complete source books)."
         )]
-        public void CopyBooks_MergeMode_OverwritesOverlapping_PreservesNonOverlap()
+        public void CopyBooks_MergeMode_DestChaptersWithText_SurviveUnchanged()
         {
             // Source has GEN chapters 1-2 with source content
             _fromScrText.PutText(
@@ -1062,33 +1064,142 @@ namespace TestParanextDataProvider.ManageBooks
             Assert.That(result.CopiedCount, Is.EqualTo(1));
 
             string finalText = _toScrText.GetText(1);
-            // Source content replaces dest where they overlap
+            // Every dest chapter has real text → all survive untouched
             Assert.That(
                 finalText,
-                Does.Contain("source-ch1"),
-                "Chapter 1 source must replace dest content"
+                Does.Contain("dest-ch1"),
+                "Chapter 1 exists in dest with text and must survive the merge"
             );
             Assert.That(
                 finalText,
-                Does.Contain("source-ch2"),
-                "Chapter 2 source must replace dest content"
+                Does.Contain("dest-ch2"),
+                "Chapter 2 exists in dest with text and must survive the merge"
             );
-            // Dest chapter 3 was not in source — must survive
             Assert.That(
                 finalText,
                 Does.Contain("dest-ch3"),
                 "Chapter 3 was not in source and must survive the merge"
             );
+            // Source content must NOT have been written anywhere
             Assert.That(
                 finalText,
-                Does.Not.Contain("dest-ch1"),
-                "Chapter 1 dest content must NOT survive — source overwrites collisions"
+                Does.Not.Contain("source-ch1"),
+                "Chapter 1 source content must be skipped — dest chapter exists"
             );
             Assert.That(
                 finalText,
-                Does.Not.Contain("dest-ch2"),
-                "Chapter 2 dest content must NOT survive — source overwrites collisions"
+                Does.Not.Contain("source-ch2"),
+                "Chapter 2 source content must be skipped — dest chapter exists"
             );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-007")]
+        [Property("BehaviorId", "BHV-110")]
+        [Description(
+            "Merge mode ('Only copy non-existing chapters'): chapters missing "
+                + "from dest are copied from the source; dest chapters with text stay "
+                + "untouched."
+        )]
+        public void CopyBooks_MergeMode_WritesOnlyChaptersMissingFromDest()
+        {
+            _fromScrText.PutText(
+                1,
+                0,
+                false,
+                "\\id GEN\n\\c 1\n\\v 1 source-ch1\n\\c 2\n\\v 1 source-ch2\n\\c 3\n\\v 1 source-ch3",
+                null
+            );
+            // Dest has chapter 1 only
+            _toScrText.PutText(1, 0, false, "\\id GEN\n\\c 1\n\\v 1 dest-ch1", null);
+            var selected = new BookSet();
+            selected.Add(1);
+
+            CopyBooksResult result = CopyBooksOrchestrator.CopyBooks(
+                _fromScrText,
+                _toScrText,
+                selected,
+                replaceEntireBook: false
+            );
+
+            Assert.That(result.Success, Is.True);
+            string finalText = _toScrText.GetText(1);
+            Assert.That(
+                finalText,
+                Does.Contain("dest-ch1"),
+                "Chapter 1 exists in dest with text and must survive"
+            );
+            Assert.That(
+                finalText,
+                Does.Not.Contain("source-ch1"),
+                "Chapter 1 source content must be skipped"
+            );
+            Assert.That(
+                finalText,
+                Does.Contain("source-ch2"),
+                "Chapter 2 is missing from dest and must be copied"
+            );
+            Assert.That(
+                finalText,
+                Does.Contain("source-ch3"),
+                "Chapter 3 is missing from dest and must be copied"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-007")]
+        [Property("BehaviorId", "BHV-110")]
+        [Description(
+            "Merge mode ('Only copy non-existing chapters'): dest chapters that "
+                + "are empty (bare \\c) or contain only create-books scaffolding "
+                + "(verse numbers without text, bare paragraph markers, book-name "
+                + "headers) count as non-existing and are filled from the source."
+        )]
+        public void CopyBooks_MergeMode_EmptyAndScaffoldedDestChapters_AreFilled()
+        {
+            _fromScrText.PutText(
+                1,
+                0,
+                false,
+                "\\id GEN\n\\c 1\n\\v 1 source-ch1\n\\c 2\n\\v 1 source-ch2\n\\c 3\n\\v 1 source-ch3",
+                null
+            );
+            // Dest GEN: ch1 = chapter/verse scaffold with headers, ch2 = bare \c,
+            // ch3 = real text.
+            _toScrText.PutText(
+                1,
+                0,
+                false,
+                "\\id GEN - Test Project\n\\h Genesis\n\\toc1 Genesis\n"
+                    + "\\c 1 \n\\p\n\\v 1 \n\\v 2 \n\\c 2 \n\\c 3\n\\v 1 dest-ch3",
+                null
+            );
+            var selected = new BookSet();
+            selected.Add(1);
+
+            CopyBooksResult result = CopyBooksOrchestrator.CopyBooks(
+                _fromScrText,
+                _toScrText,
+                selected,
+                replaceEntireBook: false
+            );
+
+            Assert.That(result.Success, Is.True);
+            string finalText = _toScrText.GetText(1);
+            Assert.That(
+                finalText,
+                Does.Contain("source-ch1"),
+                "Scaffold-only chapter 1 counts as non-existing — filled from source"
+            );
+            Assert.That(
+                finalText,
+                Does.Contain("source-ch2"),
+                "Empty chapter 2 counts as non-existing — filled from source"
+            );
+            Assert.That(finalText, Does.Contain("dest-ch3"), "ch3 has text — survives");
+            Assert.That(finalText, Does.Not.Contain("source-ch3"), "ch3 source skipped");
         }
 
         [Test]
