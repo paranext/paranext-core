@@ -142,5 +142,6 @@
   cursor: default;
 }
 
+:root{--er-marble-note-color: hsl(210 100% 25%);--er-marble-highlight-all-bg: hsl(210 100% 90%);--er-marble-hover-match-bg: hsl(210 100% 75%);--er-marble-filter-bg: hsl(45 100% 75%);--er-marble-filter-match-bg: hsl(45 100% 90%);--er-marble-rendering-found-bg: hsl(210 8% 75%);--er-marble-rendering-missing-bg: hsl(25 100% 75%);--er-filter-input-match-bg: hsl(149 80% 90%);--er-filter-input-no-match-bg: hsl(34 100% 92%)}.er-filter-input-on-pastel:not(:hover){color:#000}
 
 /*# sourceMappingURL=1087.style.css.map*/
