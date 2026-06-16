@@ -8,7 +8,7 @@ import {
   JSONRPCResponse,
   JSONRPCSuccessResponse,
 } from 'json-rpc-2.0';
-import { deserialize, serialize, wait } from 'platform-bible-utils';
+import { deserialize, getErrorMessage, serialize, wait } from 'platform-bible-utils';
 
 /** Port to use for the WebSocket */
 export const WEBSOCKET_PORT = 8876;
@@ -105,15 +105,38 @@ export function createErrorResponse(
 /** Serialize a payload, if needed, and send it over the provided WebSocket */
 export function sendPayloadToWebSocket(ws: WebSocket | undefined, payload: unknown): void {
   if (!ws) throw new Error(`Tried to send payload while not connected`);
-  if (
-    typeof payload === 'string' ||
-    payload instanceof ArrayBuffer ||
-    payload instanceof Blob ||
-    ArrayBuffer.isView(payload)
-  ) {
-    ws.send(payload);
-  } else {
-    ws.send(serialize(payload));
+
+  // Skip if the socket is already closing/closed. This avoids `ws.send` throwing
+  // synchronously with "WebSocket is not open" or queuing a write that will fail.
+  // 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED
+  if (ws.readyState !== 1) {
+    logger.debug(
+      `sendPayloadToWebSocket: skipping send to non-OPEN socket (readyState=${ws.readyState})`,
+    );
+    return;
+  }
+
+  // Wrap ws.send in try/catch so a broken pipe / closed-socket error cannot bubble
+  // up as an uncaught exception in the main process. EPIPE is observed in the broadcast
+  // fan-out when one subscriber's underlying TCP socket has been torn down but the
+  // WebSocket's readyState transition has not yet propagated (see D-010).
+  try {
+    if (
+      typeof payload === 'string' ||
+      payload instanceof ArrayBuffer ||
+      payload instanceof Blob ||
+      ArrayBuffer.isView(payload)
+    ) {
+      ws.send(payload);
+    } else {
+      ws.send(serialize(payload));
+    }
+  } catch (error) {
+    // Log at warn (not error) — this is recoverable and very chatty on disconnects.
+    // The owning RpcServer will get the WebSocket 'close' event and clean up shortly.
+    logger.warn(
+      `sendPayloadToWebSocket: send failed (likely closed peer); dropping payload. ${getErrorMessage(error)}`,
+    );
   }
 }
 
@@ -211,6 +234,19 @@ export const REGISTER_METHOD = 'network:registerMethod';
  * your request handler.
  */
 export const UNREGISTER_METHOD = 'network:unregisterMethod';
+
+/**
+ * Register a network event emitter with the main process so that the event is tracked centrally.
+ * Multi-source vs. single-source semantics are determined by looking up the event name in
+ * `MULTI_SOURCE_EVENT_NAMES`.
+ */
+export const REGISTER_EVENT = 'network:registerEvent';
+
+/**
+ * Unregister a network event emitter from the main process so that the event is no longer tracked
+ * centrally.
+ */
+export const UNREGISTER_EVENT = 'network:unregisterEvent';
 
 /**
  * Get all methods that are currently registered on the network. Required to be 'rpc.discover' by

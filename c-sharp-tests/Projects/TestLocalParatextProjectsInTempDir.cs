@@ -40,7 +40,7 @@ namespace TestParanextDataProvider.Projects
                 LanguageIsoCode = "en:::",
                 // Baked-in functional Paratext version. Just needed something that worked for ScrText
                 // to load. Feel free to change this for testing purposes
-                MinParatextVersion = "8.0.100.76"
+                MinParatextVersion = "8.0.100.76",
             };
             var settingsPath = Path.Join(folderPath, "Settings.xml");
             XmlSerializationHelper.SerializeToFileWithWriteThrough(settingsPath, settings);

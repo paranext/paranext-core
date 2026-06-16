@@ -1,0 +1,27 @@
+{
+  "mainMenu": {
+    "columns": {},
+    "groups": {},
+    "items": [
+      {
+        "label": "%platformEnhancedResources_mainMenu_openEnhancedResource%",
+        "localizeNotes": "Application main menu > Platform.bible > Open Enhanced Resource",
+        "group": "platform.projectResources",
+        "order": 200,
+        "command": "platformEnhancedResources.openEnhancedResource"
+      }
+    ]
+  },
+  "defaultWebViewTopMenu": {
+    "columns": {},
+    "groups": {},
+    "items": []
+  },
+  "defaultWebViewContextMenu": {
+    "groups": {},
+    "items": []
+  },
+  "webViewMenus": {
+    "platformEnhancedResources.enhancedResource": {}
+  }
+}

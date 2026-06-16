@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider;
+using Paranext.DataProvider.NetworkObjects.Documentation;
 
 namespace TestParanextDataProvider
 {
@@ -7,6 +8,11 @@ namespace TestParanextDataProvider
     internal class DummyPapiClient : PapiClient
     {
         private readonly Queue<(string eventType, object? eventParameters)> _sentEvents = [];
+
+        private readonly Dictionary<
+            string,
+            OpenRpcSingleMethodDocumentation?
+        > _documentationByRequestType = [];
 
         #region Overrides of PapiClient
 
@@ -25,11 +31,21 @@ namespace TestParanextDataProvider
         public override Task<bool> RegisterRequestHandlerAsync(
             string requestType,
             Delegate requestHandler,
-            TimeSpan? timeout
+            TimeSpan? timeout = null,
+            OpenRpcSingleMethodDocumentation? documentation = null
         )
         {
+            _documentationByRequestType[requestType] = documentation;
             return Task.FromResult(_localMethods.TryAdd(requestType, requestHandler));
         }
+
+        /// <summary>
+        /// Test-only accessor for the OpenRPC documentation a request type was registered with
+        /// (null when registered without docs, or when not registered at all). Lets tests assert the
+        /// <c>NetworkObjectDocumentation</c> experimental cascade onto each method's wire docs.
+        /// </summary>
+        public OpenRpcSingleMethodDocumentation? GetDocumentationFor(string requestType) =>
+            _documentationByRequestType.GetValueOrDefault(requestType);
 
         public override Task SendEventAsync(string eventType, object? eventParameters)
         {
@@ -47,6 +63,16 @@ namespace TestParanextDataProvider
             get { return _sentEvents.Dequeue(); }
         }
 
+        /// <summary>
+        /// Test-only read-only view of the request-type keys currently registered
+        /// on this client. Used by CAP-012 <c>ManageBooksServiceRegistrationTests</c>
+        /// to assert the Theme-1 single-NetworkObject registration constraint:
+        /// every manage-books wire method dispatches via
+        /// <c>object:platformScripture.manageBooks.{method}</c> and no individual
+        /// <c>command:</c> handlers are registered for manage-books.
+        /// </summary>
+        public IReadOnlyCollection<string> RegisteredRequestTypes => _localMethods.Keys.ToArray();
+
         public override Task<T?> SendRequestAsync<T>(
             string requestType,
             IReadOnlyList<object?>? requestContents
@@ -57,6 +83,16 @@ namespace TestParanextDataProvider
                 return base.SendRequestAsync<T>(requestType, requestContents);
             return Task.FromResult<T?>(default);
         }
+
+        /// <summary>
+        /// Test-only accessor that reports whether a handler is registered in
+        /// <c>_localMethods</c> for the given wire name. Exposes the protected
+        /// dictionary directly so tests can verify registration without the
+        /// fragile "probe by invocation" pattern (which conflates "handler
+        /// present" with "handler threw on bad args").
+        /// </summary>
+        public bool IsHandlerRegistered(string requestType) =>
+            _localMethods.ContainsKey(requestType);
 
         #endregion
     }

@@ -132,7 +132,13 @@ const config: StorybookConfig = {
         ...webpackConfig.resolve.alias,
         '@': join(__dirname, '../lib/platform-bible-react/src'),
         'platform-bible-react': join(__dirname, '../lib/platform-bible-react/src/index.ts'),
-        '@papi/frontend/react': join(__dirname, 'mocks/papi-frontend-react'),
+        // `@papi/*` are runtime externals injected by the extension host - there is no npm package
+        // for webpack to resolve. Extension components/web-views that use PAPI at runtime get pulled
+        // into Storybook via their stories, so alias these to inert stubs. Exact-match ($) keys keep
+        // the more specific `@papi/frontend/react` from being captured by the `@papi/frontend` rule.
+        '@papi/frontend/react$': join(__dirname, 'papi-stubs/frontend-react.ts'),
+        '@papi/frontend$': join(__dirname, 'papi-stubs/frontend.ts'),
+        '@papi/core$': join(__dirname, 'papi-stubs/core.ts'),
       };
     }
 

@@ -4,7 +4,10 @@ import {
   InternalRequestHandler,
   RequestParams,
 } from '@shared/data/rpc.model';
-import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
+import {
+  SingleMethodDocumentation,
+  SingleNotificationDocumentation,
+} from '@shared/models/openrpc.model';
 import { SerializedRequestType } from '@shared/utils/util';
 import { JSONRPCResponse } from 'json-rpc-2.0';
 
@@ -84,9 +87,41 @@ export interface IRpcMethodRegistrar extends IRpcHandler {
   ) => Promise<boolean>;
   /** Unregister a method so it is no longer available to RPC requests */
   unregisterMethod: (methodName: string) => Promise<boolean>;
+  /**
+   * Register a centrally-tracked network event with the main process. Multi-source vs single-source
+   * semantics is determined by looking up the event name in `MULTI_SOURCE_EVENT_NAMES`. See
+   * {@link MultiSourceNetworkEvents} for multi-source vs single-source semantics.
+   *
+   * Returns `true` if the registration was accepted, `false` otherwise. Used by
+   * `createNetworkEventEmitterAsync`; not for direct caller use.
+   */
+  registerEvent: (
+    eventName: string,
+    documentation?: SingleNotificationDocumentation,
+  ) => Promise<boolean>;
+  /** Unregister a network event emitter so it is no longer tracked centrally */
+  unregisterEvent: (eventName: string) => Promise<boolean>;
 }
 
 export type RegisteredRpcMethodDetails = {
   handler: IRpcHandler;
   methodDocs?: SingleMethodDocumentation;
 };
+
+/**
+ * Minimal interface for event registries so that {@link RpcServer} can participate in event
+ * registration without importing from `rpc-websocket-listener.ts` (which would create a circular
+ * dependency).
+ *
+ * @internal
+ */
+export interface IRpcEventRegistry {
+  tryRegister(
+    handler: unknown,
+    eventName: string,
+    documentation?: SingleNotificationDocumentation,
+  ): boolean;
+  tryUnregister(handler: unknown, eventName: string): boolean;
+  /** Remove all event registrations for the given handler (e.g. when a websocket closes) */
+  unregisterAll(handler: unknown): void;
+}

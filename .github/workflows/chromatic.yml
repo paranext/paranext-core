@@ -1,0 +1,128 @@
+name: Chromatic
+
+on:
+  pull_request:
+    types: [labeled, synchronize]
+    branches: [ai/main]
+
+jobs:
+  chromatic:
+    name: Publish to Chromatic
+    # Only run when the 'storybook-review' label is present
+    if: contains(github.event.pull_request.labels.*.name, 'storybook-review')
+    runs-on: ubuntu-latest
+    # Needs write access to post the chromatic-urls sticky comment back onto the PR.
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read package.json
+        id: package_json
+        uses: zoexx/github-action-json-file-properties@1.0.6
+        with:
+          file_path: 'package.json'
+
+      - name: Checkout scripture-editors
+        uses: actions/checkout@v4
+        with:
+          repository: eten-tech-foundation/scripture-editors
+          ref: platform-yalc
+          path: dev-packages/scripture-editors
+
+      - name: Install Volta and toolchain
+        uses: volta-cli/action@v4
+
+      - name: Install scripture-editors dependencies
+        env:
+          VOLTA_FEATURE_PNPM: '1'
+        run: |
+          cd dev-packages/scripture-editors
+          pnpm install
+
+      - name: Install Node.js and NPM
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
+          cache: npm
+
+      - name: Install packages and build
+        run: |
+          npm ci
+          npm run build
+
+      - name: Read story filter
+        id: story_filter
+        run: |
+          # .chromatic-story-filter may contain one glob per line for
+          # readability; join lines with spaces so the value stays a valid
+          # single-line GITHUB_OUTPUT entry. Chromatic's --only-story-files
+          # is variadic and accepts whitespace-separated filespecs, so the
+          # joined string passes through chromaui/action correctly.
+          if [ -f .chromatic-story-filter ]; then
+            glob=$(tr '\n' ' ' < .chromatic-story-filter | sed -e 's/  */ /g' -e 's/^ //' -e 's/ $//')
+          else
+            glob="extensions/src/**/*.stories.tsx"
+          fi
+          echo "glob=$glob" >> "$GITHUB_OUTPUT"
+
+      - name: Run Chromatic
+        id: chromatic
+        uses: chromaui/action@v16
+        with:
+          projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN_10_POWER }}
+          buildScriptName: storybook:build
+          # onlyStoryFiles and onlyChanged are mutually exclusive in Chromatic CLI v16.
+          # The story filter (from .chromatic-story-filter or the default) is what scopes
+          # the review to the relevant feature; onlyChanged was redundant and caused the
+          # CLI to reject the flags combination.
+          onlyStoryFiles: ${{ steps.story_filter.outputs.glob }}
+          exitZeroOnChanges: true
+        env:
+          CHROMATIC_BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          CHROMATIC_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          CHROMATIC_SLUG: ${{ github.repository }}
+
+      # Post the AUTHORITATIVE Chromatic URLs back onto the PR as a sticky comment so humans (and
+      # the porting pr-updater agent) get a link that actually resolves. We do NOT reconstruct the
+      # URL from the branch name: Chromatic slugifies + truncates the branch to 37 chars
+      # (https://www.chromatic.com/docs/permalinks/), so long AI branch names produce ambiguous or
+      # non-resolving permalinks. chromaui/action exposes verified outputs — storybookUrl (the
+      # per-branch/PR preview) and buildUrl — which we surface verbatim.
+      - name: Post Chromatic URLs to PR
+        if: ${{ github.event_name == 'pull_request' && steps.chromatic.outputs.storybookUrl }}
+        uses: actions/github-script@v7
+        # Pass the action outputs through env (NOT inline ${{ }} in the script body) so nothing is
+        # string-interpolated into the JS — the safe pattern for github-script. These are
+        # chromaui/action outputs (Chromatic-generated URLs), but env + process.env keeps it
+        # injection-proof regardless.
+        env:
+          STORYBOOK_URL: ${{ steps.chromatic.outputs.storybookUrl }}
+          BUILD_URL: ${{ steps.chromatic.outputs.buildUrl }}
+        with:
+          script: |
+            const storybookUrl = process.env.STORYBOOK_URL;
+            const buildUrl = process.env.BUILD_URL;
+            const marker = '<!-- chromatic-urls -->';
+            const body = [
+              marker,
+              '## 🎨 Chromatic — Storybook Visual Review',
+              '',
+              `Storybook: ${storybookUrl}`,
+              `Build: ${buildUrl}`,
+              '',
+              '_Posted automatically by the Chromatic workflow on each publish (latest build wins)._',
+            ].join('\n');
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number });
+            const existing = comments.find((c) => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }

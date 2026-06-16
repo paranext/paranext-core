@@ -134,12 +134,12 @@ public class CommentThreadSelectorConverter : JsonConverter<CommentThreadSelecto
         return dateFilter;
     }
 
-    private static List<ScriptureRange> ReadScriptureRanges(
+    private static List<CommentScriptureRange> ReadScriptureRanges(
         JsonElement element,
         JsonSerializerOptions options
     )
     {
-        var ranges = new List<ScriptureRange>();
+        var ranges = new List<CommentScriptureRange>();
 
         foreach (JsonElement rangeEl in element.EnumerateArray())
         {
@@ -155,14 +155,7 @@ public class CommentThreadSelectorConverter : JsonConverter<CommentThreadSelecto
                 ? granEl.GetString()
                 : null;
 
-            ranges.Add(
-                new ScriptureRange
-                {
-                    Start = start,
-                    End = end,
-                    Granularity = granularity,
-                }
-            );
+            ranges.Add(new CommentScriptureRange(start, end, granularity));
         }
 
         return ranges;

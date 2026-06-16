@@ -1,7 +1,5 @@
 import {
   Button,
-  ComboBox,
-  ComboBoxGroup,
   MultiSelectComboBox,
   MultiSelectComboBoxEntry,
   Progress,
@@ -12,6 +10,11 @@ import {
   SelectValue,
   Spinner,
 } from 'platform-bible-react';
+import {
+  ProjectSelector,
+  ProjectSelectorOpenTab,
+  ProjectSelectorProject,
+} from 'platform-bible-react/internal';
 import { formatReplacementString, LanguageStrings } from 'platform-bible-utils';
 import { CheckJobStatusReport, CheckRunResult } from 'platform-scripture';
 import { useCallback, useMemo, useState } from 'react';
@@ -70,7 +73,12 @@ export type ChecksSidePanelProps = {
    * result type when no check id is present.
    */
   getLocalizedCheckDescription: (checkId: string) => string;
-  /** Called when the user selects a different project. Navigates the panel to that project. */
+  /**
+   * Currently-open scripture editor tabs, surfaced in the project picker's "Open Tabs" grouping.
+   * Empty array is fine — the section just won't render.
+   */
+  openTabs: ProjectSelectorOpenTab[];
+  /** Called when the user picks a different project to run checks against. */
   onSelectProject: (projectId: string) => void;
   /** Called when the user selects a different scope. */
   onSelectScope: (scope: CheckScopes) => void;
@@ -89,15 +97,6 @@ export type ChecksSidePanelProps = {
   onNavigateToResult: (resultId: string) => void;
   /** Called when the user cancels the in-progress check job. */
   onCancelOperation: () => void;
-};
-
-/** A project entry shaped for the project ComboBox. */
-type ProjectEntry = {
-  id: string;
-  fullName: string;
-  shortName: string;
-  label: string;
-  secondaryLabel?: string;
 };
 
 /**
@@ -120,6 +119,7 @@ export function ChecksSidePanel({
   hasActiveJob,
   isResultLoadingCancelled,
   getLocalizedCheckDescription,
+  openTabs,
   onSelectProject,
   onSelectScope,
   onSelectCheckTypes,
@@ -157,31 +157,16 @@ export function ChecksSidePanel({
     [onSelectScope],
   );
 
-  const projectOptionsGrouped = useMemo<ComboBoxGroup<ProjectEntry>[]>(() => {
-    const allProjects = [...projects]
-      .sort((a, b) => a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }))
-      .map((project) => ({
-        id: project.id,
-        fullName: project.fullName,
-        shortName: project.shortName,
-        label: project.shortName,
-        secondaryLabel: project.fullName,
-      }));
-    return [
-      {
-        groupHeading:
-          localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%'],
-        options: allProjects,
-      },
-    ];
-  }, [projects, localizedStrings]);
-
-  const selectedProjectOption = useMemo(
+  const sortedProjects = useMemo<ProjectSelectorProject[]>(
     () =>
-      projectOptionsGrouped
-        .flatMap((group) => group.options)
-        .find((option) => option.id === selectedProjectId),
-    [projectOptionsGrouped, selectedProjectId],
+      [...projects]
+        .sort((a, b) => a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }))
+        .map((project) => ({
+          id: project.id,
+          shortName: project.shortName,
+          fullName: project.fullName,
+        })),
+    [projects],
   );
 
   const getScopeLabel = useCallback(
@@ -228,29 +213,34 @@ export function ChecksSidePanel({
   }
 
   return (
-    <div className="pr-twp tw:mx-auto tw:flex tw:flex-col tw:max-h-screen tw:gap-6 tw:p-4 tw:min-w-[10rem]">
+    <div className="pr-twp tw:container tw:mx-auto tw:flex tw:flex-col tw:max-h-screen tw:gap-6 tw:p-4 tw:min-w-[10rem]">
       {/* Check configuration */}
       <div className="tw:flex tw:flex-row tw:flex-wrap tw:gap-1 tw:items-center tw:pb-2 tw:w-full">
         {/* Project Filter */}
-        <ComboBox<ProjectEntry>
-          options={projectOptionsGrouped}
-          value={selectedProjectOption}
-          onChange={(newProject) => onSelectProject(newProject.id)}
-          getButtonLabel={(project) => project.shortName}
-          buttonPlaceholder={
-            localizedStrings['%webView_checksSidePanel_projectFilter_noProjectSelected%']
-          }
-          commandEmptyMessage={
-            localizedStrings['%webView_checksSidePanel_projectFilter_noProjectsFound%']
-          }
-          ariaLabel={
-            localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%']
-          }
-          buttonVariant="outline"
-          buttonClassName="tw:flex-1 tw:min-w-32 tw:font-normal"
-          popoverContentClassName="tw:w-[300px]"
-          alignDropDown="start"
-        />
+        <div data-testid="checks-side-panel-project-trigger" className="tw:flex-1 tw:min-w-32">
+          <ProjectSelector
+            mode="project"
+            projects={sortedProjects}
+            openTabs={openTabs}
+            selection={{ projectId: selectedProjectId ?? '' }}
+            onChangeSelection={({ projectId: nextId }) => {
+              if (nextId) onSelectProject(nextId);
+            }}
+            buttonPlaceholder={
+              localizedStrings['%webView_checksSidePanel_projectFilter_noProjectSelected%']
+            }
+            commandEmptyMessage={
+              localizedStrings['%webView_checksSidePanel_projectFilter_noProjectsFound%']
+            }
+            ariaLabel={
+              localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%']
+            }
+            buttonVariant="outline"
+            buttonClassName="tw:w-full tw:font-normal"
+            popoverContentClassName="tw:w-[300px]"
+            alignDropDown="start"
+          />
+        </div>
 
         {/* Scope Filter */}
         <Select value={scope} onValueChange={handleSelectScope}>

@@ -896,6 +896,160 @@ declare module 'platform-scripture' {
 
   // #endregion Marker Types
 
+  // #region Versification Types
+
+  /**
+   * Selector for {@link VersificationProjectInterfaceDataTypes.FinalVerseNumber}.
+   *
+   * @experimental
+   */
+  export type FinalVerseNumberSelector = {
+    /** 1-based book number. */
+    bookNum: number;
+    /** 1-based chapter number within {@link bookNum}. */
+    chapterNum: number;
+  };
+
+  /**
+   * Data types the versification projectInterface exposes via its base {@link IProjectDataProvider}.
+   * All three are read-only — the underlying value is owned by the project's
+   * `'platformScripture.versification'` setting; `set*` is not supported and will throw if called.
+   * Consumers that need to react to versification changes can use the `subscribe*` methods, which
+   * emit when the underlying versification setting changes.
+   *
+   * @experimental
+   */
+  export type VersificationProjectInterfaceDataTypes = {
+    /** Final verse number in a given book + chapter, per the project's versification. */
+    FinalVerseNumber: DataProviderDataType<FinalVerseNumberSelector, number, never>;
+    /** Final chapter number in a given book, per the project's versification. */
+    FinalChapter: DataProviderDataType<number, number, never>;
+    /**
+     * Final verse number for every chapter in a book, returned as a 1-based-indexable array. Index
+     * 0 is a filler `0`; index `n` is the last verse of chapter `n`.
+     */
+    FinalVerseNumbersInBook: DataProviderDataType<number, number[], never>;
+  };
+
+  /**
+   * Project-scoped read-only versification lookups — final chapter per book, final verse per
+   * chapter. Consumers (e.g. reference pickers, range validators) use these to constrain selection
+   * to valid references for the project.
+   *
+   * Each call reads the project's _current_ versification fresh, so results reflect any in-session
+   * changes to the `'platformScripture.versification'` project setting. Consumers that cache
+   * results across calls should subscribe (via the `subscribe*` methods below, which emit when the
+   * underlying versification setting changes) and invalidate accordingly.
+   *
+   * All three data types are read-only — `set*` is unsupported and will throw if called. The
+   * authoritative writer is the project setting, not this projectInterface.
+   *
+   * Acquire via `papi.projectDataProviders.get('platformScripture.Versification', projectId)`
+   * (backend) or the `useProjectDataProvider('platformScripture.Versification', projectId)` React
+   * hook (frontend).
+   *
+   * @experimental
+   */
+  export type IVersificationProjectDataProvider =
+    IProjectDataProvider<VersificationProjectInterfaceDataTypes> & {
+      /**
+       * Returns the final verse number in the specified book and chapter using the project's
+       * versification.
+       *
+       * @experimental
+       */
+      getFinalVerseNumber(bookNum: number, chapterNum: number): Promise<number>;
+      /**
+       * Read-only — throws if called. The authoritative writer for versification data is the
+       * `'platformScripture.versification'` project setting; set it through the standard
+       * setting-write API on the same PDP instead.
+       *
+       * @experimental
+       */
+      setFinalVerseNumber(
+        newValue: never,
+      ): Promise<DataProviderUpdateInstructions<VersificationProjectInterfaceDataTypes>>;
+      /**
+       * Subscribe to changes in the final verse number for a given book + chapter. The callback
+       * fires when the project's versification setting changes.
+       *
+       * @experimental
+       */
+      subscribeFinalVerseNumber(
+        selector: FinalVerseNumberSelector,
+        callback: (finalVerseNumber: number | PlatformError) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+
+      /**
+       * Returns the final chapter number in the specified book using the project's versification.
+       *
+       * @experimental
+       */
+      getFinalChapter(bookNum: number): Promise<number>;
+      /**
+       * Read-only — throws if called. See {@link setFinalVerseNumber} for the canonical writer.
+       *
+       * @experimental
+       */
+      setFinalChapter(
+        newValue: never,
+      ): Promise<DataProviderUpdateInstructions<VersificationProjectInterfaceDataTypes>>;
+      /**
+       * Subscribe to changes in the final chapter number for a given book. The callback fires when
+       * the project's versification setting changes.
+       *
+       * @experimental
+       */
+      subscribeFinalChapter(
+        bookNum: number,
+        callback: (finalChapter: number | PlatformError) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+
+      /**
+       * Returns an array of final verse numbers for every chapter in a book, indexed 1-based for
+       * ergonomic `result[chapterNum]` access (no off-by-one). Index 0 is a filler `0` — it is not
+       * a valid chapter. The returned array has length `lastChapter + 1`.
+       *
+       * Useful for pre-fetching all verse counts for a book in a single round trip — preferable to
+       * `getFinalVerseNumber` in a loop when the caller needs many chapters of the same book.
+       *
+       * @example
+       *
+       * ```typescript
+       * const finalVerses = await pdp.getFinalVerseNumbersInBook(1); // Genesis
+       * finalVerses[1]; // → 31 (last verse of Genesis 1)
+       * finalVerses[50]; // → 26 (last verse of Genesis 50)
+       * finalVerses[0]; // → 0 (filler; chapter 0 does not exist)
+       * ```
+       *
+       * @experimental
+       */
+      getFinalVerseNumbersInBook(bookNum: number): Promise<number[]>;
+      /**
+       * Read-only — throws if called. See {@link setFinalVerseNumber} for the canonical writer.
+       *
+       * @experimental
+       */
+      setFinalVerseNumbersInBook(
+        newValue: never,
+      ): Promise<DataProviderUpdateInstructions<VersificationProjectInterfaceDataTypes>>;
+      /**
+       * Subscribe to changes in the per-chapter final verse numbers for a book. The callback fires
+       * when the project's versification setting changes.
+       *
+       * @experimental
+       */
+      subscribeFinalVerseNumbersInBook(
+        bookNum: number,
+        callback: (finalVerseNumbers: number[] | PlatformError) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+    };
+
+  // #endregion Versification Types
+
   // #region Check Types
 
   /** Details about a check provided by the check itself */
@@ -1054,7 +1208,7 @@ declare module 'platform-scripture' {
      *
      * @example Not a known name "{name}"
      *
-     * @example %extensionName.unknownName%
+     * @example %manageBooks_param_bookNotInProject%
      */
     messageFormatString: LocalizeKey | string;
     /**
@@ -1833,6 +1987,133 @@ declare module 'platform-scripture' {
   };
 
   // #endregion Recently Opened Projects Types
+
+  // #region Markers Checklist Types
+  //
+  // Surface mirrors `data-contracts.md` §§2.1/2.2/2.4/4.1/4.2/4.5. `IChecklistService` is a plain
+  // NetworkObject interface — NOT added to `papi-shared-types` `DataProviders` (see
+  // `.context/features/markers-checklist/implementation/ui-alignment.md` §"Network Object
+  // Connection"). The web view acquires a typed proxy via
+  // `papi.networkObjects.get<IChecklistService>('platformScripture.checklistService')`.
+
+  /**
+   * Configuration for equivalent marker pairs and marker filter (data-contracts.md §2.2).
+   *
+   * @experimental
+   */
+  export type ChecklistMarkerSettings = {
+    /** Space-separated marker pairs in "marker1/marker2" format. */
+    equivalentMarkers: string;
+    /** Space-separated marker names to include; empty means all paragraph markers. */
+    markerFilter: string;
+  };
+
+  /**
+   * Identifies a comparative text for resolution (data-contracts.md §2.4).
+   *
+   * @experimental
+   */
+  export type ChecklistComparativeTextRef = {
+    /** GUID of the comparative text (preferred resolution method). */
+    id: string;
+    /** Display name of the comparative text (fallback resolution method). */
+    name: string;
+  };
+
+  /**
+   * Primary input for `buildChecklistData` (data-contracts.md §2.1).
+   *
+   * @experimental
+   */
+  export type ChecklistRequest = {
+    projectId: string;
+    comparativeTextIds: string[];
+    markerSettings: ChecklistMarkerSettings;
+    /** Optional verse-range filter, as the platform's canonical {@link ScriptureRange}. */
+    verseRange: ScriptureRange | undefined;
+    hideMatches: boolean;
+    showVerseText: boolean;
+  };
+
+  /**
+   * Discriminated-union response wrapper for `buildChecklistData` (data-contracts.md §3.1).
+   *
+   * @experimental
+   */
+  export type ChecklistResultResponse =
+    | {
+        success: true;
+        rows: unknown[];
+        columnHeaders: string[];
+        columnProjectIds: string[];
+        excludedCount: number;
+        helpText: string | undefined;
+        truncated: boolean;
+        emptyResultMessage: unknown | undefined;
+      }
+    | {
+        success: false;
+        code: string;
+        message: string;
+      };
+
+  /**
+   * Parsed/validated equivalent-marker settings (data-contracts.md §4.2).
+   *
+   * @experimental
+   */
+  export type MarkerSettingsValidationResult = {
+    valid: boolean;
+    parsedPairs: { marker1: string; marker2: string }[] | undefined;
+    errorMessage: string | undefined;
+  };
+
+  /**
+   * Resolved comparative-text payload (data-contracts.md §4.5).
+   *
+   * @experimental
+   */
+  export type ResolvedComparativeTexts = {
+    texts: {
+      id: string;
+      name: string;
+      fullName: string;
+      available: boolean;
+    }[];
+  };
+
+  /**
+   * Typed proxy for the `platformScripture.checklistService` NetworkObject. Methods mirror
+   * data-contracts.md §§4.1 / 4.2 / 4.5. Acquired via
+   * `papi.networkObjects.get<IChecklistService>(...)`.
+   *
+   * @experimental
+   */
+  export interface IChecklistService {
+    /**
+     * Generate checklist data for the supplied request (data-contracts.md §4.1).
+     *
+     * @experimental
+     */
+    buildChecklistData(request: ChecklistRequest): Promise<ChecklistResultResponse>;
+    /**
+     * Validate an equivalent-markers string (data-contracts.md §4.2).
+     *
+     * @experimental
+     */
+    validateMarkerSettings(equivalentMarkers: string): Promise<MarkerSettingsValidationResult>;
+    /**
+     * Resolve comparative-text references (data-contracts.md §4.5).
+     *
+     * @experimental
+     */
+    resolveComparativeTexts(
+      activeProjectId: string,
+      requestedTexts: ChecklistComparativeTextRef[],
+    ): Promise<ResolvedComparativeTexts>;
+  }
+
+  // #endregion Markers Checklist Types
 }
 
 declare module 'papi-shared-types' {
@@ -1850,6 +2131,7 @@ declare module 'papi-shared-types' {
     IUSJVerseProjectDataProvider,
     IPlainTextVerseProjectDataProvider,
     IMarkerNamesProjectDataProvider,
+    IVersificationProjectDataProvider,
     IFindInScriptureProjectDataProvider,
     IReplaceWithUsfmProjectDataProvider,
     ITextConnectionSettingsProjectDataProvider,
@@ -1876,6 +2158,8 @@ declare module 'papi-shared-types' {
     'platformScripture.USJ_Verse': IUSJVerseProjectDataProvider;
     'platformScripture.PlainText_Verse': IPlainTextVerseProjectDataProvider;
     'platformScripture.MarkerNames': IMarkerNamesProjectDataProvider;
+    /** @experimental */
+    'platformScripture.Versification': IVersificationProjectDataProvider;
     'platformScripture.findInScripture': IFindInScriptureProjectDataProvider;
     'platformScripture.replaceWithUsfm': IReplaceWithUsfmProjectDataProvider;
     'platformScripture.textConnectionSettings': ITextConnectionSettingsProjectDataProvider;
@@ -1939,7 +2223,51 @@ declare module 'papi-shared-types' {
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
 
-    'platformScripture.openFind': (projectId?: string | undefined) => Promise<string | undefined>;
+    /**
+     * Open the Find / Replace UI for a project. The single optional argument is the calling
+     * editor's `webViewId` (when invoked from an editor's menu, so the Find UI can inherit the
+     * editor's project + scroll group). Pass `undefined` to open without an editor context.
+     */
+    'platformScripture.openFind': (
+      editorWebViewId?: string | undefined,
+    ) => Promise<string | undefined>;
+
+    /**
+     * Open the Markers Checklist web view. Resolves the target project from the supplied
+     * `webViewId` (of an editor tab) when provided.
+     *
+     * @experimental
+     */
+    'platformScripture.openMarkersChecklist': (
+      webViewId?: string | undefined,
+    ) => Promise<string | undefined>;
+
+    /**
+     * Open the Marker Settings dialog for the Markers Checklist. Wired as a stub in UI-PKG-001 and
+     * replaced with the real dialog launcher in UI-PKG-003.
+     *
+     * @experimental
+     */
+    'platformScripture.openMarkersChecklistSettings': () => Promise<void>;
+
+    /**
+     * Open the unified Manage Books dialog (FN-008, 2026-05-01) for the active scripture project.
+     * Opens the dialog as a tab web view; the dialog itself supports View / Create / Delete / Copy
+     * / Import action modes and an inline book-chooser grid.
+     *
+     * The single optional argument is either an editor's `webViewId` (when invoked from a
+     * scripture-editor menu) or a literal project id (when invoked from the main menu or from
+     * another extension). The handler probes the value with
+     * `papi.webViews.getOpenWebViewDefinition` — if it resolves, the dialog opens pre-targeted at
+     * that web view's project; otherwise the value is treated as a project id and the dialog opens
+     * for that project directly. Pass `undefined` to open the dialog with the project picker
+     * visible.
+     *
+     * @experimental
+     */
+    'platformScripture.openManageBooks': (
+      webViewIdOrProjectId?: string | undefined,
+    ) => Promise<string | undefined>;
   }
 
   export interface ProjectSettingTypes {
@@ -2052,5 +2380,17 @@ declare module 'papi-shared-types' {
      * tilde character, not a whitespace substitute.
      */
     'platformScripture.allowInvisibleCharacters': boolean;
+  }
+
+  export interface NetworkEvents {
+    /** Emitted when check results are invalidated and subscribers should refresh their data. */
+    checkResultsInvalidated: CheckResultsInvalidated;
+    /**
+     * Emitted by the tab menu when the user opens the markers-checklist settings. The web view
+     * subscribes to flip its internal settings panel open.
+     *
+     * @experimental
+     */
+    'platformScripture.openMarkersChecklistSettings': undefined;
   }
 }

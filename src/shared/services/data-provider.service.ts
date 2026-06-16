@@ -40,10 +40,12 @@ import {
   DataProviderTypes,
   DataProviders,
   DisposableDataProviders,
+  NetworkEventTypes,
 } from 'papi-shared-types';
 import { IDataProvider, IDisposableDataProvider } from '@shared/models/data-provider.interface';
 import { notificationService } from '@shared/services/notification.service';
 import { PlatformNotification } from '@shared/models/notification.service-model';
+import type { NetworkObjectDocumentation } from '@shared/models/openrpc.model';
 
 /** Suffix on network objects that indicates that the network object is a data provider */
 const DATA_PROVIDER_LABEL = 'data';
@@ -782,6 +784,9 @@ function buildDataProvider<DataProviderName extends DataProviderNames>(
  *   providers), a unique type name should be used to distinguish from generic data providers.
  * @param dataProviderAttributes Optional object that will be sent in a network event to provide
  *   additional metadata about the data provider represented by this engine.
+ * @param documentation Optional OpenRPC-style documentation for the data provider network object.
+ *   When `documentation['x-experimental']` is `true`, the provider's methods will be automatically
+ *   tagged as experimental in the OpenRPC document.
  *
  *   WARNING: registering a dataProviderEngine mutates the provided object. Its `notifyUpdate` and
  *   `set` methods are layered over to facilitate data provider subscriptions.
@@ -793,6 +798,7 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
   dataProviderEngine: IDataProviderEngine<DataProviderTypes[DataProviderName]>,
   dataProviderType: string = 'dataProvider',
   dataProviderAttributes: { [property: string]: unknown } | undefined = undefined,
+  documentation: NetworkObjectDocumentation | undefined = undefined,
 ): Promise<DisposableDataProviders[DataProviderName]> {
   await initialize();
 
@@ -814,9 +820,33 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
   );
 
   // Create a networked update event
-  const onDidUpdateEmitter = networkService.createNetworkEventEmitter<
+  const dynamicEventName = serializeRequestType(dataProviderObjectId, ON_DID_UPDATE);
+  // Per-instance data provider events have dynamic names that can't be declared in
+  // NetworkEvents. Cast the name to satisfy the constraint; the payload type is recovered
+  // from the surrounding function's generic context.
+  /* eslint-disable no-type-assertion/no-type-assertion */
+  const onDidUpdateEmitter = (await networkService.createNetworkEventEmitterAsync(
+    dynamicEventName as NetworkEventTypes,
+    {
+      notification: {
+        // Mark the update event experimental in lockstep with the provider's methods, so an
+        // experimental provider's `<id>:onDidUpdate` isn't surfaced as non-experimental.
+        'x-experimental': documentation?.['x-experimental'],
+        summary: 'Emitted when the data served by this data provider changes.',
+        params: [
+          {
+            name: 'updateInstructions',
+            required: true,
+            summary: 'Which data types changed (or all/none).',
+            schema: {},
+          },
+        ],
+      },
+    },
+  )) as unknown as PlatformEventEmitter<
     DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>
-  >(serializeRequestType(dataProviderObjectId, ON_DID_UPDATE));
+  >;
+  /* eslint-enable no-type-assertion/no-type-assertion */
 
   // Build the data provider
   const dataProviderInternal = buildDataProvider(
@@ -835,6 +865,7 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
     dataProviderInternal,
     dataProviderType,
     dataProviderAttributes,
+    documentation,
   )) as unknown as DisposableDataProviders[DataProviderName];
 
   // Get the local network object proxy for the data provider so the provider can't be disposed
@@ -869,6 +900,9 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
  *   providers), a unique type name should be used to distinguish from generic data providers.
  * @param dataProviderAttributes Optional object that will be sent in a network event to provide
  *   additional metadata about the data provider represented by this engine.
+ * @param documentation Optional OpenRPC-style documentation for the data provider network object.
+ *   When `documentation['x-experimental']` is `true`, the provider's methods will be automatically
+ *   tagged as experimental in the OpenRPC document.
  *
  *   WARNING: registering a dataProviderEngine mutates the provided object. Its `notifyUpdate` and
  *   `set` methods are layered over to facilitate data provider subscriptions.
@@ -882,6 +916,7 @@ export async function registerEngineByType<TDataTypes extends DataProviderDataTy
   dataProviderEngine: IDataProviderEngine<TDataTypes>,
   dataProviderType: string = 'dataProvider',
   dataProviderAttributes: { [property: string]: unknown } | undefined = undefined,
+  documentation: NetworkObjectDocumentation | undefined = undefined,
 ): Promise<IDisposableDataProvider<IDataProvider<TDataTypes>>> {
   // All the types on this function and `registerEngine` are just TypeScript helpers. They do not
   // serve us well in this particular case, so we're ignoring the types and using our own since we
@@ -892,6 +927,7 @@ export async function registerEngineByType<TDataTypes extends DataProviderDataTy
     dataProviderEngine as any,
     dataProviderType,
     dataProviderAttributes,
+    documentation,
   );
   /* eslint-enable no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any */
 }
@@ -912,10 +948,18 @@ function createLocalDataProviderToProxy<DataProviderName extends DataProviderNam
   dataProviderObjectId: DataProviderName,
   dataProviderPromise: Promise<DataProviders[DataProviderName]>,
 ): Partial<DataProviderInternal<DataProviderTypes[DataProviderName]>> {
-  // Create a networked update event
-  const onDidUpdate = networkService.getNetworkEvent<boolean>(
-    serializeRequestType(dataProviderObjectId, ON_DID_UPDATE),
-  );
+  // Create a networked update event. Per-instance data provider events have dynamic names that
+  // can't be declared in NetworkEvents, so we use the documented escape hatch: cast the name to
+  // satisfy the typed overload's constraint, then assert the result type.
+  const dynamicEventName = serializeRequestType(dataProviderObjectId, ON_DID_UPDATE);
+  // Two unavoidable type assertions for the dynamic-name escape hatch — see comment above.
+  /* eslint-disable no-type-assertion/no-type-assertion */
+  const onDidUpdate = networkService.getNetworkEvent(
+    dynamicEventName as NetworkEventTypes,
+  ) as unknown as PlatformEvent<
+    DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>
+  >;
+  /* eslint-enable no-type-assertion/no-type-assertion */
 
   return createDataProviderProxy(undefined, dataProviderPromise, onDidUpdate);
 }

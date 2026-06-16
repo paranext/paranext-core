@@ -8,6 +8,7 @@ import {
 } from '@papi/frontend/react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { useEvent, usePromise } from 'platform-bible-react';
+import { ProjectSelectorOpenTab } from 'platform-bible-react/internal';
 import {
   deepEqual,
   getChaptersForBook,
@@ -32,6 +33,7 @@ import {
   ChecksSidePanelProject,
   CHECKS_SIDE_PANEL_STRING_KEYS,
 } from './checks/checks-side-panel/checks-side-panel.component';
+import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 
 /**
  * Gets the short and full names of a project from its ID. Kept in the webview (not the shared,
@@ -43,6 +45,14 @@ async function getProjectNames(projectId: string): Promise<ProjectOption> {
   const projectFullName = await pdp.getSetting('platform.fullName');
   return { shortName: projectShortName, fullName: projectFullName };
 }
+
+/**
+ * Web-view types that should count as "open" project tabs for the picker's "Open Tabs" grouping.
+ * Mirrors `manage-books.web-view.tsx`: only the scripture editor binds a project to a scroll group
+ * in a user-meaningful way. Without this filter, every project-bound web view (including the checks
+ * side panel itself) would falsely mark a project as open.
+ */
+const SCRIPTURE_EDITOR_WEB_VIEW_TYPES = new Set<string>(['platformScriptureEditor.react']);
 
 const defaultCheckRunnerCheckDetails: CheckRunnerCheckDetails = {
   checkDescription: '',
@@ -661,6 +671,23 @@ global.webViewComponent = function ChecksSidePanelWebView({
     [setSelectedCheckTypeIds],
   );
 
+  // Filter to scripture editor tabs only — without this filter, every project-bound web view
+  // (e.g. the checks side panel itself) would falsely mark a project as "open" in the popover's
+  // "Open Tabs" grouping.
+  const editorWebViewFilter = useCallback(
+    (webView: { webViewType: string }) => SCRIPTURE_EDITOR_WEB_VIEW_TYPES.has(webView.webViewType),
+    [],
+  );
+  const allOpenProjectTabs = useOpenProjectTabs(editorWebViewFilter);
+  const projectSelectorOpenTabs = useMemo<ProjectSelectorOpenTab[]>(
+    () =>
+      allOpenProjectTabs.map((tab) => ({
+        projectId: tab.projectId,
+        scrollGroupId: tab.scrollGroupId,
+      })),
+    [allOpenProjectTabs],
+  );
+
   const handleCancelOperation = useCallback(async () => {
     await stopActiveJob();
     if (!isMountedRef.current) return;
@@ -701,6 +728,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
       hasActiveJob={activeJobStatusReport !== defaultJobStatusReport}
       isResultLoadingCancelled={isResultLoadingCancelled}
       getLocalizedCheckDescription={getLocalizedCheckDescription}
+      openTabs={projectSelectorOpenTabs}
       onSelectProject={handleSelectProject}
       onSelectScope={handleSelectScope}
       onSelectCheckTypes={handleSelectCheckType}

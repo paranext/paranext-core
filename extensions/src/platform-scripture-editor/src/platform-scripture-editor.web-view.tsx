@@ -368,6 +368,34 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const commentsPdp = useProjectDataProvider('legacyCommentManager.comments', projectId);
 
+  // Pre-fetch this project's verse counts for the current book so the BookChapterControl can offer
+  // verse selection. When the book changes we refetch; for books other than the current one we do
+  // not offer verse selection (the picker falls back to chapter-level submission).
+  const currentBookNum = useMemo(() => Canon.bookIdToNumber(scrRef.book), [scrRef.book]);
+  const versificationPdp = useProjectDataProvider('platformScripture.Versification', projectId);
+  const fetchLastVersesInCurrentBook = useCallback(async (): Promise<number[] | undefined> => {
+    if (!versificationPdp || currentBookNum <= 0) return undefined;
+    try {
+      return await versificationPdp.getFinalVerseNumbersInBook(currentBookNum);
+    } catch (err) {
+      logger.debug(
+        `Failed to fetch verse counts for book ${currentBookNum}: ${getErrorMessage(err)}`,
+      );
+      return undefined;
+    }
+  }, [versificationPdp, currentBookNum]);
+  const [lastVersesInCurrentBook] = usePromise(fetchLastVersesInCurrentBook, undefined);
+  const getEndVerse = useCallback(
+    (bookId: string, chapterNum: number): number => {
+      // Only serve verse counts for the current book. Other books (e.g. when the user types a
+      // different reference into the search input) would require their own fetch/cache; returning
+      // 0 here makes the control skip the verse grid for them.
+      if (Canon.bookIdToNumber(bookId) !== currentBookNum) return 0;
+      return lastVersesInCurrentBook?.[chapterNum] ?? 0;
+    },
+    [currentBookNum, lastVersesInCurrentBook],
+  );
+
   const fetchAssignableUsers = useCallback(async () => {
     if (!commentsPdp) {
       logger.debug('Comments PDP is not yet available for fetchAssignableUsers');
@@ -1665,6 +1693,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       scrRef={scrRef}
       handleSubmit={setScrRefWithScroll}
       getActiveBookIds={booksPresent ? fetchActiveBooks : undefined}
+      getEndVerse={getEndVerse}
       recentSearches={recentScriptureRefs}
       onAddRecentSearch={addRecentScriptureRef}
     />

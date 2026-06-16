@@ -249,6 +249,7 @@ function ChecksSidePanelHarness({ config }: { config: HarnessConfig }) {
       hasActiveJob={config.hasActiveJob ?? true}
       isResultLoadingCancelled={false}
       getLocalizedCheckDescription={getLocalizedCheckDescription}
+      openTabs={[]}
       onSelectProject={setSelectedProjectId}
       onSelectScope={setScope}
       onSelectCheckTypes={setSelectedCheckTypeIds}

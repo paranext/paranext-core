@@ -10,7 +10,11 @@ import {
   JSONRPCServer,
 } from 'json-rpc-2.0';
 import { logger } from '@shared/services/logger.service';
-import { IRpcHandler, RegisteredRpcMethodDetails } from '@shared/models/rpc.interface';
+import {
+  IRpcEventRegistry,
+  IRpcHandler,
+  RegisteredRpcMethodDetails,
+} from '@shared/models/rpc.interface';
 import {
   ConnectionStatus,
   createErrorResponse,
@@ -18,14 +22,19 @@ import {
   createSuccessResponse,
   deserializeMessage,
   InternalRequestHandler,
+  REGISTER_EVENT,
   REGISTER_METHOD,
   RequestParams,
   requestWithRetry,
   sendPayloadToWebSocket,
+  UNREGISTER_EVENT,
   UNREGISTER_METHOD,
 } from '@shared/data/rpc.model';
 import { bindClassMethods, SerializedRequestType } from '@shared/utils/util';
-import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
+import {
+  SingleMethodDocumentation,
+  SingleNotificationDocumentation,
+} from '@shared/models/openrpc.model';
 import { getErrorMessage } from 'platform-bible-utils';
 
 type PropagateEventMethod = <T>(source: RpcServer, eventType: string, event: T) => void;
@@ -48,6 +57,7 @@ export class RpcServer implements IRpcHandler {
   /** Refers to any process that connected to main over the websocket */
   private readonly jsonRpcClient: JSONRPCClient;
   private readonly rpcMethodDetailsByMethodName: Map<string, RegisteredRpcMethodDetails>;
+  private readonly rpcEventDetailsByEventName: IRpcEventRegistry;
   /** Called by an RpcServer when all other RpcServers should emit an event over the network */
   private readonly propagateEventMethod: PropagateEventMethod;
 
@@ -56,6 +66,7 @@ export class RpcServer implements IRpcHandler {
     webSocket: WebSocket,
     propagateEventMethod: PropagateEventMethod,
     rpcMethodDetailsByMethodName: Map<string, RegisteredRpcMethodDetails>,
+    rpcEventDetailsByEventName: IRpcEventRegistry,
   ) {
     bindClassMethods.call(this);
     this.name = name;
@@ -77,9 +88,12 @@ export class RpcServer implements IRpcHandler {
       this.createNextRequestId,
     );
     this.rpcMethodDetailsByMethodName = rpcMethodDetailsByMethodName;
+    this.rpcEventDetailsByEventName = rpcEventDetailsByEventName;
 
     this.addMethodToRpcServer(REGISTER_METHOD, this.registerRemoteMethod);
     this.addMethodToRpcServer(UNREGISTER_METHOD, this.unregisterRemoteMethod);
+    this.addMethodToRpcServer(REGISTER_EVENT, this.registerRemoteEvent);
+    this.addMethodToRpcServer(UNREGISTER_EVENT, this.unregisterRemoteEvent);
   }
 
   async connect(): Promise<boolean> {
@@ -135,7 +149,16 @@ export class RpcServer implements IRpcHandler {
 
   // Outgoing event from this server to the client it is connected to
   emitEventOnNetwork<T>(eventType: string, event: T): void {
-    this.jsonRpcClient.notify(eventType, [event]);
+    // Wrap notify so any synchronous throw inside the JSON-RPC client / underlying
+    // WebSocket cannot bubble up as an uncaught exception when the peer socket is
+    // half-closed. See D-010.
+    try {
+      this.jsonRpcClient.notify(eventType, [event]);
+    } catch (error) {
+      logger.warn(
+        `RpcServer ${this.name}: notify('${eventType}') threw; dropping. ${getErrorMessage(error)}`,
+      );
+    }
   }
 
   registerRemoteMethod(methodName: string, methodDocs?: SingleMethodDocumentation): boolean {
@@ -150,6 +173,14 @@ export class RpcServer implements IRpcHandler {
     const handlersMatch = !!methodDetails && methodDetails.handler === this;
     if (handlersMatch) this.rpcMethodDetailsByMethodName.delete(methodName);
     return handlersMatch;
+  }
+
+  registerRemoteEvent(eventName: string, documentation?: SingleNotificationDocumentation): boolean {
+    return this.rpcEventDetailsByEventName.tryRegister(this, eventName, documentation);
+  }
+
+  unregisterRemoteEvent(eventName: string): boolean {
+    return this.rpcEventDetailsByEventName.tryUnregister(this, eventName);
   }
 
   private createNextRequestId(): number {
@@ -198,10 +229,25 @@ export class RpcServer implements IRpcHandler {
       logger.debug(`Method '${methodName}' removed since websocket ${this.name} closed`);
       this.rpcMethodDetailsByMethodName.delete(methodName);
     });
+    this.rpcEventDetailsByEventName.unregisterAll(this);
   }
 
   private onWebSocketError(ev: Event): void {
-    this.handleError('Server websocket error event occurred', ev);
+    // The ws `ErrorEvent` carries the real reason on `.error` / `.message`; `JSON.stringify(ev)`
+    // collapses to "{}" because those properties are non-enumerable. Surface them explicitly so
+    // the actual transport failure (invalid UTF-8 frame, max-payload, ECONNRESET, ...) is logged.
+    // Narrow with `in`/`instanceof` (no type assertions) since `Event` does not declare these.
+    let message = 'unknown';
+    let code = 'n/a';
+    let stack = '';
+    if ('message' in ev && typeof ev.message === 'string') message = ev.message;
+    if ('error' in ev && ev.error instanceof Error) {
+      message = ev.error.message;
+      stack = ev.error.stack ?? '';
+      if ('code' in ev.error && typeof ev.error.code === 'string') code = ev.error.code;
+    }
+    const detail = `message=${message} code=${code}${stack ? `\nstack: ${stack}` : ''}`;
+    this.handleError(`Server websocket error event occurred: ${detail}`, detail);
   }
 
   private async onMessageReceivedByWebSocket(ev: MessageEvent) {

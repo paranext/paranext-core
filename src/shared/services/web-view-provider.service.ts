@@ -8,6 +8,7 @@ import {
   IWebViewProvider,
   IRegisteredWebViewProvider,
 } from '@shared/models/web-view-provider.model';
+import type { NetworkObjectDocumentation } from '@shared/models/openrpc.model';
 import { networkObjectService, overrideDispose } from '@shared/services/network-object.service';
 import * as networkService from '@shared/services/network.service';
 import { logger } from '@shared/services/logger.service';
@@ -98,11 +99,18 @@ function hasKnownWebViewProvider(webViewType: string): boolean {
  *   of it.
  *
  *   WARNING: setting a webView provider mutates the provided object.
+ * @param attributes Optional additional attributes to attach to the network object. The platform
+ *   overwrites the `webViewType` field — that field is always the platform-canonical value.
+ * @param documentation Optional {@link NetworkObjectDocumentation} for this web view provider. Set
+ *   `documentation['x-experimental']: true` to mark all methods on this web view provider as
+ *   experimental.
  * @returns `webViewProvider` modified to be a network object and able to be disposed with `dispose`
  */
 async function registerWebViewProvider(
   webViewType: string,
   webViewProvider: IWebViewProvider,
+  attributes?: { [property: string]: unknown },
+  documentation?: NetworkObjectDocumentation,
 ): Promise<IDisposableWebViewProvider> {
   await initialize();
 
@@ -139,7 +147,9 @@ async function registerWebViewProvider(
     webViewProviderObjectId,
     webViewProvider,
     WEB_VIEW_PROVIDER_OBJECT_TYPE,
-    { webViewType },
+    // Spread caller attributes first, then overlay canonical webViewType (platform always wins).
+    { ...attributes, webViewType },
+    documentation,
   );
 
   return disposableWebViewProvider;

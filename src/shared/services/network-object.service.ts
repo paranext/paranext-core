@@ -45,6 +45,85 @@ const initialize = (): Promise<void> => {
     // TODO: Might be best to make a singleton or something
     await networkService.initialize();
 
+    // These are pre-approved multi-source events, so create them synchronously and register them
+    // centrally in the background (we don't await registration — it isn't needed for the emitter to
+    // work). `initialize` is only called after module evaluation is complete, so all module-level
+    // variables below are already defined by the time this async body runs.
+    const createEmitter = networkService.createCoreMultiSourceEventEmitter(
+      'object:onDidCreateNetworkObject',
+      {
+        notification: {
+          summary: 'Emitted when a network object is created in any process.',
+          params: [
+            {
+              name: 'networkObjectDetails',
+              required: true,
+              summary: "The new network object's details.",
+              schema: { type: 'object' },
+            },
+          ],
+        },
+      },
+    );
+    // The emitter variable is declared later in the module; safe at runtime since initialize runs
+    // after module evaluation.
+    // eslint-disable-next-line @typescript-eslint/no-use-before-define
+    onDidCreateNetworkObjectEmitter = createEmitter.emitter;
+
+    const disposeEmitter = networkService.createCoreMultiSourceEventEmitter(
+      'object:onDidDisposeNetworkObject',
+      {
+        notification: {
+          summary: 'Emitted when a network object is disposed in any process.',
+          params: [
+            {
+              name: 'id',
+              required: true,
+              summary: "The disposed network object's ID.",
+              schema: { type: 'string' },
+            },
+          ],
+        },
+      },
+    );
+    // `initialize` runs after module evaluation; the emitter variable is defined later in the module.
+    // eslint-disable-next-line @typescript-eslint/no-use-before-define
+    onDidDisposeNetworkObjectEmitter = disposeEmitter.emitter;
+
+    // Central registration runs in the background — it isn't needed for the emitters to work and we
+    // don't block startup on it. Consume the results (failures are already logged inside the network
+    // service) so a rejected registration can't surface as an unhandled rejection. allSettled never
+    // rejects, so nothing escapes this IIFE.
+    (async () => {
+      await Promise.allSettled([
+        createEmitter.registeredEmitterPromise,
+        disposeEmitter.registeredEmitterPromise,
+      ]);
+    })();
+
+    // Subscribe to the dispose event to clean up local and remote network object registrations
+    // eslint-disable-next-line @typescript-eslint/no-use-before-define
+    onDidDisposeNetworkObject((id: string) => {
+      // networkObjectRegistrations is defined later in the module; safe at runtime since initialize runs after module eval.
+      // eslint-disable-next-line @typescript-eslint/no-use-before-define
+      const networkObjectRegistration = networkObjectRegistrations.get(id);
+
+      if (networkObjectRegistration) {
+        // Alert users of this specific network object that it was disposed
+        networkObjectRegistration.onDidDisposeEmitter.emit();
+
+        // Dispose of the network object registration itself
+        networkObjectRegistration.onDidDisposeEmitter.dispose();
+
+        // Dispose of the proxy
+        networkObjectRegistration.revokeProxy();
+
+        // Dispose of the network object registration
+        // eslint-disable-next-line @typescript-eslint/no-use-before-define
+        networkObjectRegistrations.delete(id);
+      }
+    });
+
     isInitialized = true;
   })();
 
@@ -119,51 +198,31 @@ const hasKnown = (id: string): boolean => networkObjectRegistrations.has(id);
 
 /**
  * Emitter for when a network object is created. Includes the list of functions exposed by the
- * network object.
+ * network object. Initialized inside `initialize()`.
  */
-const onDidCreateNetworkObjectEmitter =
-  networkService.createNetworkEventEmitter<NetworkObjectDetails>(
-    serializeRequestType(CATEGORY_NETWORK_OBJECT, 'onDidCreateNetworkObject'),
-  );
+let onDidCreateNetworkObjectEmitter: PlatformEventEmitter<NetworkObjectDetails> | undefined;
 
 /**
  * Event that fires when a new object has been created on the network (locally or remotely). The
  * event contains information about the new network object.
  */
-export const onDidCreateNetworkObject = onDidCreateNetworkObjectEmitter.event;
+export const onDidCreateNetworkObject = networkService.getNetworkEvent(
+  'object:onDidCreateNetworkObject',
+);
 
 /**
  * Emitter for when a network object is disposed. Provides the ID so that the local emitter specific
  * to that object can be run.
  *
  * Only run on local network object registration! Processes should only dispose their own network
- * objects
+ * objects. Initialized inside `initialize()`.
  */
-const onDidDisposeNetworkObjectEmitter = networkService.createNetworkEventEmitter<string>(
-  serializeRequestType(CATEGORY_NETWORK_OBJECT, 'onDidDisposeNetworkObject'),
-);
+let onDidDisposeNetworkObjectEmitter: PlatformEventEmitter<string> | undefined;
 
 /** Event that fires with a network object ID when that object is disposed locally or remotely */
-export const onDidDisposeNetworkObject = onDidDisposeNetworkObjectEmitter.event;
-
-/** Runs to dispose of local and remote network objects when we receive events telling us to do so */
-onDidDisposeNetworkObject((id: string) => {
-  const networkObjectRegistration = networkObjectRegistrations.get(id);
-
-  if (networkObjectRegistration) {
-    // Alert users of this specific network object that it was disposed
-    networkObjectRegistration.onDidDisposeEmitter.emit();
-
-    // Dispose of the network object registration itself
-    networkObjectRegistration.onDidDisposeEmitter.dispose();
-
-    // Dispose of the proxy
-    networkObjectRegistration.revokeProxy();
-
-    // Dispose of the network object registration
-    networkObjectRegistrations.delete(id);
-  }
-});
+export const onDidDisposeNetworkObject = networkService.getNetworkEvent(
+  'object:onDidDisposeNetworkObject',
+);
 
 // #endregion
 
@@ -418,6 +477,12 @@ const get = async <T extends object>(
  *   object did not already define a `dispose` function, one will be added.
  *
  *   WARNING: setting a network object mutates the provided object.
+ * @param objectType String identifier for the network object type (e.g. `'object'`,
+ *   `'dataProvider'`)
+ * @param objectAttributes Optional key-value metadata attached to the network object registration.
+ * @param objectDocumentation Optional {@link NetworkObjectDocumentation} for this network object.
+ *   Set `objectDocumentation['x-experimental']: true` to mark all methods on this network object as
+ *   experimental.
  * @returns `objectToShare` modified to be a network object
  */
 
@@ -443,6 +508,10 @@ const set = async <T extends NetworkableObject>(
         () => Promise.resolve(true),
         {
           method: {
+            // The existence method (`object:{id}`) carries the object's own summary, so it must also
+            // carry the object-level experimental marker — otherwise it would render unmarked while
+            // every `object:{id}.method` is `[EXPERIMENTAL]`.
+            'x-experimental': objectDocumentation['x-experimental'],
             summary: objectDocumentation.summary ?? '',
             description: objectDocumentation.description ?? '',
             params: [],
@@ -470,11 +539,19 @@ const set = async <T extends NetworkableObject>(
       objectAttributes,
     );
 
+    const objectIsExperimental = objectDocumentation['x-experimental'] === true;
+
     netObjDetails.functionNames.forEach((functionName) => {
       const requestType = getNetworkObjectRequestType(id, functionName);
-      const methodDocs =
+      const baseMethodDocs =
         objectDocumentation.methods?.find((method) => method.name === functionName) ??
         getEmptyMethodDocs();
+      // Fan out the object-level experimental marker onto each method's docs. A per-method explicit
+      // 'x-experimental' wins; absent that, the object-level value propagates.
+      const methodDocs =
+        objectIsExperimental && baseMethodDocs['x-experimental'] === undefined
+          ? { ...baseMethodDocs, 'x-experimental': true as const }
+          : baseMethodDocs;
       const unsub = networkService.registerRequestHandler(
         requestType,
         // Assert as any to allow indexing on the function name
@@ -483,6 +560,16 @@ const set = async <T extends NetworkableObject>(
         { method: methodDocs },
       );
       unsubPromises.push(unsub);
+    });
+
+    // Warn about documentation entries for methods that don't match any exposed function name
+    // (typos, or names filtered out such as on*/dispose) — those entries are otherwise silently
+    // discarded and the method falls back to placeholder docs.
+    objectDocumentation.methods?.forEach((method) => {
+      if (!netObjDetails.functionNames.includes(method.name))
+        logger.warn(
+          `Network object "${id}" documentation includes method "${method.name}" that matches no exposed function name; the entry is ignored.`,
+        );
     });
 
     // Await all of the registrations finishing, successful or not
@@ -530,6 +617,10 @@ const set = async <T extends NetworkableObject>(
 
       // Send an event notifying everyone that this network object is no longer available
       // The event listener removes the network object from the registration map
+      if (!onDidDisposeNetworkObjectEmitter)
+        throw new Error(
+          'network-object.service not initialized — call initialize() before emitting onDidDisposeNetworkObject',
+        );
       onDidDisposeNetworkObjectEmitter.emit(id);
       return true;
     });
@@ -546,6 +637,10 @@ const set = async <T extends NetworkableObject>(
 
     // Notify that the network object was successfully registered
     logger.debug(`Network object registered: ${serialize(netObjDetails)}`);
+    if (!onDidCreateNetworkObjectEmitter)
+      throw new Error(
+        'network-object.service not initialized — call initialize() before emitting onDidCreateNetworkObject',
+      );
     onDidCreateNetworkObjectEmitter.emit(netObjDetails);
 
     // Override objectToShare's type's force-undefined onDidDispose to DisposableNetworkObject's

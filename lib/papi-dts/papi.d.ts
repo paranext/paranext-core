@@ -66,7 +66,7 @@ declare module 'shared/services/scroll-group.service-model' {
   import { PlatformEvent, ScrollGroupId } from 'platform-bible-utils';
   export const NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE = 'ScrollGroupService';
   /** Name to use when creating a network event that is fired when webViews are updated */
-  export const EVENT_NAME_ON_DID_UPDATE_SCR_REF: `${string}:${string}`;
+  export const EVENT_NAME_ON_DID_UPDATE_SCR_REF: 'scrollGroup:onDidUpdateScrRef';
   /**
    * Combination of a {@link ScrollGroupId} and a SerializedVerseRef. If this value is a number, that
    * means this should be synced with the scroll group sharing that number. If this value is an
@@ -980,6 +980,17 @@ declare module 'shared/data/rpc.model' {
    */
   export const UNREGISTER_METHOD = 'network:unregisterMethod';
   /**
+   * Register a network event emitter with the main process so that the event is tracked centrally.
+   * Multi-source vs. single-source semantics are determined by looking up the event name in
+   * `MULTI_SOURCE_EVENT_NAMES`.
+   */
+  export const REGISTER_EVENT = 'network:registerEvent';
+  /**
+   * Unregister a network event emitter from the main process so that the event is no longer tracked
+   * centrally.
+   */
+  export const UNREGISTER_EVENT = 'network:unregisterEvent';
+  /**
    * Get all methods that are currently registered on the network. Required to be 'rpc.discover' by
    * the OpenRPC specification.
    */
@@ -987,138 +998,22 @@ declare module 'shared/data/rpc.model' {
   /** Prefix on requests that indicates that the request is a command */
   export const CATEGORY_COMMAND = 'command';
 }
-declare module 'shared/services/shared-store.service' {
-  type NetworkService = typeof import('shared/services/network.service');
-  /**
-   * Initialize the shared store service, setting up request handlers and event listeners. This
-   * function should be called by each of our JS processes early during start up.
-   *
-   * @param networkService The network service to use for communication between processes
-   * @returns A promise that resolves when the service is initialized
-   */
-  export function initialize(networkService: NetworkService): Promise<void>;
-  /**
-   * Reset the shared store service state for testing. This function is only exported for testing
-   * purposes and should not be used in production code.
-   */
-  export function resetForTesting(): void;
-  /**
-   * Get a value from the shared store with proper typing
-   *
-   * @param key The key of the value to retrieve
-   * @returns A cloned copy of the value associated with the key, or undefined if not found
-   */
-  function get<K extends SharedStoreKeys>(key: K): SharedStoreValues[K] | undefined;
-  /**
-   * Set a value in the shared store and notify other processes. Note that if a value with the given
-   * key already exists, it can only be set again by the process that created it. This is to prevent
-   * race conditions between processes setting values that don't incorporate each others' updates.
-   *
-   * @param key The key to set
-   * @param value The value to set. Note that the stored value is a cloned copy of the provided value,
-   *   so changes to the original value will not affect the stored value. Also, any non-serializable
-   *   data will removed from the value during the cloning process.
-   */
-  function set<K extends SharedStoreKeys>(key: K, value?: SharedStoreValues[K]): void;
-  /**
-   * Remove a value from the shared store and notify other processes of the change.
-   *
-   * Note that removing a key sets its value to undefined in the store. The key-value pair isn't
-   * actually deleted. This is done to avoid race conditions if a value for this key is set again
-   * quickly.
-   *
-   * @param key The key to remove
-   */
-  function remove<K extends SharedStoreKeys>(key: K): void;
-  /**
-   * Keys for timeout lengths for network requests. Keys are dynamically constructed by adding this
-   * prefix to the `requestType`.
-   */
-  export type RequestTimeoutSharedStoreKey = `platform.customNetworkTimeoutMs.${string}`;
-  /**
-   * Defines the keys and types of values held in key-value pairs within the shared store service.
-   * Since this service is not part of the public API, the keys and types are not included in
-   * `papi-shared-types.ts`. If the platform needs more key-value pairs, they should be added here.
-   */
-  export interface SharedStoreValues {
-    [timeoutKey: RequestTimeoutSharedStoreKey]: number | undefined;
-  }
-  export type SharedStoreKeys = keyof SharedStoreValues;
-  /**
-   * This provides an in-memory, key-value store that can be read without a network call but updates
-   * automatically in the background using network events. This allows synchronous reading of shared,
-   * non-persisted key-value pairs between processes. It can be thought of as a distributed key-value
-   * store. It relies only on the network service, not other services like network objects or
-   * settings.
-   *
-   * This uses {@link https://en.wikipedia.org/wiki/Lamport_timestamp | Lamport logical clocks} for
-   * conflict resolution to ensure consistency across processes.
-   *
-   * This service is not intended to be accessed directly by extensions. It was created as a utility
-   * for the platform and is not part of the public API. Extensions should use settings and other data
-   * providers for sharing data.
-   */
-  export const sharedStoreService: {
-    get: typeof get;
-    set: typeof set;
-    remove: typeof remove;
-  };
-}
-declare module 'shared/models/papi-network-event-emitter.model' {
-  import { PlatformEventHandler, PlatformEventEmitter } from 'platform-bible-utils';
-  /**
-   * Networked version of EventEmitter - accepts subscriptions to an event and runs the subscription
-   * callbacks when the event is emitted. Events on NetworkEventEmitters can be emitted across
-   * processes. They are coordinated between processes by their type. Use eventEmitter.event(callback)
-   * to subscribe to the event. Use eventEmitter.emit(event) to run the subscriptions. Generally, this
-   * EventEmitter should be private, and its event should be public. That way, the emitter is not
-   * publicized, but anyone can subscribe to the event.
-   *
-   * WARNING: Do not use this class directly outside of NetworkService, or it will not do what you
-   * expect. Use NetworkService.createNetworkEventEmitter.
-   *
-   * WARNING: You cannot emit events with complex types on the network.
-   */
-  export class PapiNetworkEventEmitter<T> extends PlatformEventEmitter<T> {
-    /** Callback that sends the event to other processes on the network when it is emitted */
-    private networkSubscriber;
-    /** Callback that runs when the emitter is disposed - should handle unlinking from the network */
-    private networkDisposer;
-    /**
-     * Creates a NetworkEventEmitter
-     *
-     * @param networkSubscriber Callback that accepts the event and emits it to other processes
-     * @param networkDisposer Callback that unlinks this emitter from the network
-     */
-    constructor(
-      /** Callback that sends the event to other processes on the network when it is emitted */
-      networkSubscriber: PlatformEventHandler<T>,
-      /** Callback that runs when the emitter is disposed - should handle unlinking from the network */
-      networkDisposer: () => void,
-    );
-    emit: (event: T) => void;
-    /**
-     * Runs only the subscriptions for the event that are on this process. Does not send over network
-     *
-     * @param event Event data to provide to subscribed callbacks
-     */
-    emitLocal(event: T): void;
-    dispose: () => Promise<boolean>;
-  }
-  export default PapiNetworkEventEmitter;
-}
 declare module 'shared/models/openrpc.model' {
   import type { JSONSchema7 } from 'json-schema';
   /**
    * Describes APIs available to call using JSON-RPC 2.0
    *
-   * See https://github.com/open-rpc/meta-schema/releases - Release 1.14.2 aligns with OpenRPC 1.2.6.
-   * https://github.com/open-rpc/meta-schema/releases/download/1.14.2/open-rpc-meta-schema.json
+   * See https://github.com/open-rpc/meta-schema/releases - Release 1.14.3 aligns with OpenRPC 1.3.0.
+   * https://github.com/open-rpc/meta-schema/releases/download/1.14.3/open-rpc-meta-schema.json
    *
-   * We don't want to go past 1.2.6 because https://playground.open-rpc.org/ doesn't support anything
-   * past 1.2.6 for now. See https://github.com/open-rpc/playground/issues/606.
+   * We declare OpenRPC `1.3.0` because notifications (a method with no `result`) were introduced in
+   * 1.3.0 — `result` was required in 1.2.6, so a document with notifications is invalid under the
+   * 1.2.6 meta-schema. The OpenRPC playground (https://playground.open-rpc.org/) is still capped at
+   * 1.2.6 (https://github.com/open-rpc/playground/issues/606), but it renders a 1.3.0 document fine
+   * in practice; it lists notifications under the same "Methods" heading (without a results field),
+   * which we mitigate by prefixing notification summaries with {@link NOTIFICATION_OPENRPC_PREFIX}.
    *
-   * Note that the types from https://www.npmjs.com/package/@open-rpc/meta-schema/v/1.14.2 are not
+   * Note that the types from https://www.npmjs.com/package/@open-rpc/meta-schema/v/1.14.3 are not
    * very good. For example, all the properties of `Components` are of type `any` instead of the
    * specific types they should be, and they redefine types for JSON Schema. So we're using our own
    * types here instead.
@@ -1127,7 +1022,7 @@ declare module 'shared/models/openrpc.model' {
     openrpc: string;
     info: Info;
     servers?: Server[];
-    methods: Method[];
+    methods: (Method | OpenRpcNotification)[];
     components?: Components;
     externalDocs?: ExternalDocumentation;
   };
@@ -1213,6 +1108,12 @@ declare module 'shared/models/openrpc.model' {
     name: string;
     params: (ContentDescriptor | Reference)[];
     result: ContentDescriptor | Reference;
+    /**
+     * Set to `true` to mark this method as experimental — its shape may change without notice.
+     * Informational only; does not affect runtime behavior. See the
+     * {@link https://github.com/paranext/paranext-extension-template/wiki/Experimental-APIs | experimental APIs wiki page}.
+     */
+    'x-experimental'?: boolean;
     /** A short summary of what the method does. */
     summary?: string;
     /**
@@ -1254,17 +1155,50 @@ declare module 'shared/models/openrpc.model' {
     externalDocs?: ExternalDocumentation;
   };
   export type MethodDocumentationWithoutName = Omit<Method, 'name'>;
-  /** Documentation about a single method */
+  /**
+   * Documentation about a single {@link Method}.
+   *
+   * Set `method['x-experimental']: true` to mark this method as experimental. Informational only;
+   * appears in the generated OpenRPC document.
+   */
   export type SingleMethodDocumentation = {
     method: MethodDocumentationWithoutName;
     components?: Components;
   };
-  /** Documentation about all methods on a network object */
+  /**
+   * An OpenRPC notification — same shape as a {@link Method}, but without `result`. Used for events /
+   * one-way messages from server to client. Per the OpenRPC convention (no `result` ⇒ notification),
+   * these are serialized into the same root `methods` array as Methods on the wire.
+   *
+   * Set `'x-experimental': true` on the notification object to mark it as experimental. Informational
+   * only; appears in the generated OpenRPC document.
+   */
+  export type OpenRpcNotification = Omit<Method, 'result'>;
+  /**
+   * Documentation about a single {@link OpenRpcNotification}.
+   *
+   * Set `notification['x-experimental']: true` to mark this notification as experimental.
+   * Informational only; appears in the generated OpenRPC document.
+   */
+  export type SingleNotificationDocumentation = {
+    notification: Omit<OpenRpcNotification, 'name'>;
+    components?: Components;
+  };
+  /**
+   * Documentation about a network object — what it is, and OpenRPC documentation for each of its
+   * methods.
+   */
   export type NetworkObjectDocumentation = {
     summary?: string;
     description?: string;
     methods?: Method[];
     components?: Components;
+    /**
+     * Set to `true` to mark every {@link Method} registered for this network object as experimental.
+     * The marker is fanned out onto each method's `'x-experimental'` field inside
+     * `networkObjectService.set`.
+     */
+    'x-experimental'?: boolean;
   };
   /** Create an object of type {@link OpenRpc} to hold documentation for PAPI websocket methods */
   export function createEmptyOpenRpc(papiVersion: string): OpenRpc;
@@ -1273,6 +1207,263 @@ declare module 'shared/models/openrpc.model' {
    * methods that didn't have their own documentation provided.
    */
   export function getEmptyMethodDocs(): MethodDocumentationWithoutName;
+  /**
+   * Get an empty {@link OpenRpcNotification} documentation object. Useful for surfacing events that
+   * didn't have their own documentation provided so that every registered event still appears in the
+   * OpenRPC document (mirroring how undocumented methods are surfaced via
+   * {@link getEmptyMethodDocs}).
+   */
+  export function getEmptyNotificationDocs(): Omit<MethodDocumentationWithoutName, 'result'>;
+  /** Prefix prepended to the `summary` and `description` of experimental methods and notifications. */
+  export const EXPERIMENTAL_OPENRPC_PREFIX = '[EXPERIMENTAL] ';
+  /**
+   * Returns a shallow copy of an OpenRPC {@link Method} or {@link OpenRpcNotification} with
+   * {@link EXPERIMENTAL_OPENRPC_PREFIX} prepended to its `summary` and `description` when the entry is
+   * marked `'x-experimental'`. Both fields are always set on an experimental entry — even a missing
+   * or empty summary/description becomes the bare prefix so the marker is never lost. Idempotent: an
+   * entry already starting with the prefix is left unchanged. Returns the entry untouched when it is
+   * not experimental.
+   */
+  export function withExperimentalPrefix<T extends Method | OpenRpcNotification>(entry: T): T;
+  /**
+   * Prefix prepended to a notification's `summary`. OpenRPC carries notifications in the same root
+   * `methods` array as methods, so tooling that lists both together (e.g. the OpenRPC playground)
+   * shows them under one "Methods" heading. This prefix makes notifications distinguishable at a
+   * glance, the same way {@link EXPERIMENTAL_OPENRPC_PREFIX} marks experimental entries.
+   */
+  export const NOTIFICATION_OPENRPC_PREFIX = '(Notification) ';
+  /**
+   * Returns a shallow copy of an OpenRPC {@link OpenRpcNotification} with
+   * {@link NOTIFICATION_OPENRPC_PREFIX} prepended to its `summary` so it is distinguishable from
+   * methods in tooling that lists both together. Applied to every notification (unlike the
+   * experimental prefix). Idempotent: an entry whose summary already starts with the prefix is left
+   * unchanged.
+   */
+  export function withNotificationPrefix(entry: OpenRpcNotification): OpenRpcNotification;
+}
+declare module 'shared/services/shared-store.service' {
+  type LamportClock = {
+    counter: number;
+    processId: string;
+  };
+  type StoreEntry = {
+    value?: unknown;
+    clock: LamportClock;
+    deleted?: boolean;
+  };
+  export type StoreChangeEvent = StoreEntry & {
+    key: string;
+  };
+  type NetworkService = typeof import('shared/services/network.service');
+  /**
+   * Initialize the shared store service, setting up request handlers and event listeners. Idempotent:
+   * subsequent calls return the same promise as the first call.
+   *
+   * @param networkService The network service module.
+   * @returns A promise that resolves when the service is initialized
+   */
+  export function initialize(networkService: NetworkService): Promise<void>;
+  /**
+   * Wait for the shared store service to be ready.
+   *
+   * - If {@link initialize} has already been called, returns the existing in-flight promise (no timeout
+   *   — we wait as long as init takes).
+   * - Otherwise waits for {@link initialize} to be called, then returns the resulting promise.
+   *
+   * @param startTimeoutMs Time to wait for initialize() to be called before throwing. A non-positive
+   *   value (the default, `0`) waits indefinitely. A positive value throws if initialize() is not
+   *   called within that many milliseconds. Callers that can tolerate the absence of a ready shared
+   *   store should pass a positive timeout and catch/fall back.
+   * @throws If `startTimeoutMs` is positive and initialize() is not called within that window.
+   */
+  export function waitForInitialization(startTimeoutMs?: number): Promise<void>;
+  /**
+   * Reset the shared store service state for testing. This function is only exported for testing
+   * purposes and should not be used in production code.
+   */
+  export function resetForTesting(): void;
+  /**
+   * Get a value from the shared store with proper typing.
+   *
+   * This runs synchronously and does not wait for initialization: it may return `undefined` if the
+   * shared store service has not yet been populated (e.g. during the bootstrap window, before initial
+   * sync completes). Use {@link getAsync} if you need to wait for a populated value. Note that even
+   * after the store is populated, the returned value may not reflect the most up-to-date value, since
+   * changes from other processes arrive asynchronously.
+   *
+   * @param key The key of the value to retrieve
+   * @returns A cloned copy of the value associated with the key, or `undefined` if not found, not yet
+   *   populated, or the value could not be cloned
+   */
+  function get<K extends SharedStoreKeys>(key: K): SharedStoreValues[K] | undefined;
+  /**
+   * Set a value in the shared store and notify other processes. Note that if a value with the given
+   * key already exists, it can only be set again by the process that created it. This is to prevent
+   * race conditions between processes setting values that don't incorporate each others' updates.
+   *
+   * This runs synchronously and throws if the shared store service has not started initializing (it
+   * must be able to broadcast the change). Use {@link setAsync} if you need to wait for initialization
+   * before setting.
+   *
+   * @param key The key to set
+   * @param value The value to set. Note that the stored value is a cloned copy of the provided value,
+   *   so changes to the original value will not affect the stored value. Also, any non-serializable
+   *   data will removed from the value during the cloning process.
+   */
+  function set<K extends SharedStoreKeys>(key: K, value?: SharedStoreValues[K]): void;
+  /**
+   * Remove a value from the shared store and notify other processes of the change.
+   *
+   * After removal the key is treated as absent — reads return no value (a removed key is distinct
+   * from a key whose value is `undefined`). The entry and its Lamport clock are retained internally
+   * for conflict resolution (so the removal can win against concurrent sets and the key can be re-set
+   * quickly), but they are not exposed as a value.
+   *
+   * This runs synchronously and throws if the shared store service has not started initializing. Use
+   * {@link removeAsync} if you need to wait for initialization before removing.
+   *
+   * @param key The key to remove
+   */
+  function remove<K extends SharedStoreKeys>(key: K): void;
+  /**
+   * Get a value from the shared store, waiting for the shared store service to be initialized first.
+   *
+   * Unlike {@link get}, this waits (via {@link waitForInitialization}) until the shared store service
+   * is initialized, then reads synchronously. A key with a live value returns that value — which may
+   * legitimately be `undefined`. A key that is absent or has been removed has no value: with no
+   * `defaultValue` argument this throws; with a `defaultValue` (which may itself be `undefined`) it
+   * returns that default.
+   *
+   * If the shared store service is already initialized, the awaited promise is already settled, so
+   * execution continues here on the next microtask without yielding to timers or other queued
+   * macrotasks — effectively synchronous from the caller's perspective. Note the returned value may
+   * not reflect the most up-to-date value, since changes from other processes arrive asynchronously.
+   *
+   * @param key The key of the value to retrieve
+   * @param defaultValue Returned when the key has no value. Omit to throw instead.
+   * @returns A cloned copy of the stored value, or `defaultValue` if the key has no value
+   * @throws If the key has no value and no `defaultValue` was provided
+   */
+  function getAsync<K extends SharedStoreKeys>(key: K): Promise<SharedStoreValues[K]>;
+  function getAsync<K extends SharedStoreKeys>(
+    key: K,
+    defaultValue: SharedStoreValues[K],
+  ): Promise<SharedStoreValues[K]>;
+  /**
+   * Set a value in the shared store, waiting for the shared store service to be initialized first.
+   *
+   * Unlike {@link set}, this waits (via {@link waitForInitialization}) until the shared store service
+   * has been initialized, then performs the set synchronously. See {@link set} for the per-key
+   * ownership and cloning semantics.
+   *
+   * If the shared store service is already initialized, the awaited promise is already settled, so
+   * execution continues here on the next microtask without yielding to timers or other queued
+   * macrotasks — effectively synchronous from the caller's perspective.
+   *
+   * @param key The key to set
+   * @param value The value to set
+   */
+  function setAsync<K extends SharedStoreKeys>(key: K, value?: SharedStoreValues[K]): Promise<void>;
+  /**
+   * Remove a value from the shared store, waiting for the shared store service to be initialized
+   * first.
+   *
+   * Unlike {@link remove}, this waits (via {@link waitForInitialization}) until the shared store
+   * service has been initialized, then performs the removal synchronously.
+   *
+   * If the shared store service is already initialized, the awaited promise is already settled, so
+   * execution continues here on the next microtask without yielding to timers or other queued
+   * macrotasks — effectively synchronous from the caller's perspective.
+   *
+   * @param key The key to remove
+   */
+  function removeAsync<K extends SharedStoreKeys>(key: K): Promise<void>;
+  /**
+   * Returns `true` once {@link initialize} has fully completed (process ID assigned, emitter ready,
+   * and — outside the main process — initial store data synced). Used to distinguish "value genuinely
+   * absent" from "shared store not initialized yet" for optional reads that have a sensible default.
+   */
+  function isInitialized(): boolean;
+  /**
+   * Keys for timeout lengths for network requests. Keys are dynamically constructed by adding this
+   * prefix to the `requestType`.
+   */
+  export type RequestTimeoutSharedStoreKey = `platform.customNetworkTimeoutMs.${string}`;
+  /**
+   * Defines the keys and types of values held in key-value pairs within the shared store service.
+   * Since this service is not part of the public API, the keys and types are not included in
+   * `papi-shared-types.ts`. If the platform needs more key-value pairs, they should be added here.
+   */
+  export interface SharedStoreValues {
+    [timeoutKey: RequestTimeoutSharedStoreKey]: number | undefined;
+  }
+  export type SharedStoreKeys = keyof SharedStoreValues;
+  /**
+   * This provides an in-memory, key-value store that can be read without a network call but updates
+   * automatically in the background using network events. This allows synchronous reading of shared,
+   * non-persisted key-value pairs between processes. It can be thought of as a distributed key-value
+   * store. It relies only on the network service, not other services like network objects or
+   * settings.
+   *
+   * This uses {@link https://en.wikipedia.org/wiki/Lamport_timestamp | Lamport logical clocks} for
+   * conflict resolution to ensure consistency across processes.
+   *
+   * This service is not intended to be accessed directly by extensions. It was created as a utility
+   * for the platform and is not part of the public API. Extensions should use settings and other data
+   * providers for sharing data.
+   */
+  export const sharedStoreService: {
+    get: typeof get;
+    set: typeof set;
+    remove: typeof remove;
+    getAsync: typeof getAsync;
+    setAsync: typeof setAsync;
+    removeAsync: typeof removeAsync;
+    isInitialized: typeof isInitialized;
+  };
+}
+declare module 'shared/models/papi-network-event-emitter.model' {
+  import { PlatformEventHandler, PlatformEventEmitter } from 'platform-bible-utils';
+  /**
+   * Networked version of EventEmitter - accepts subscriptions to an event and runs the subscription
+   * callbacks when the event is emitted. Events on NetworkEventEmitters can be emitted across
+   * processes. They are coordinated between processes by their type. Use eventEmitter.event(callback)
+   * to subscribe to the event. Use eventEmitter.emit(event) to run the subscriptions. Generally, this
+   * EventEmitter should be private, and its event should be public. That way, the emitter is not
+   * publicized, but anyone can subscribe to the event.
+   *
+   * WARNING: Do not use this class directly outside of NetworkService, or it will not do what you
+   * expect. Use NetworkService.createNetworkEventEmitter.
+   *
+   * WARNING: You cannot emit events with complex types on the network.
+   */
+  export class PapiNetworkEventEmitter<T> extends PlatformEventEmitter<T> {
+    /** Callback that sends the event to other processes on the network when it is emitted */
+    private networkSubscriber;
+    /** Callback that runs when the emitter is disposed - should handle unlinking from the network */
+    private networkDisposer;
+    /**
+     * Creates a NetworkEventEmitter
+     *
+     * @param networkSubscriber Callback that accepts the event and emits it to other processes
+     * @param networkDisposer Callback that unlinks this emitter from the network
+     */
+    constructor(
+      /** Callback that sends the event to other processes on the network when it is emitted */
+      networkSubscriber: PlatformEventHandler<T>,
+      /** Callback that runs when the emitter is disposed - should handle unlinking from the network */
+      networkDisposer: () => void,
+    );
+    emit: (event: T) => void;
+    /**
+     * Runs only the subscriptions for the event that are on this process. Does not send over network
+     *
+     * @param event Event data to provide to subscribed callbacks
+     */
+    emitLocal(event: T): void;
+    dispose: () => Promise<boolean>;
+  }
+  export default PapiNetworkEventEmitter;
 }
 declare module 'shared/models/rpc.interface' {
   import {
@@ -1281,7 +1472,10 @@ declare module 'shared/models/rpc.interface' {
     InternalRequestHandler,
     RequestParams,
   } from 'shared/data/rpc.model';
-  import { SingleMethodDocumentation } from 'shared/models/openrpc.model';
+  import {
+    SingleMethodDocumentation,
+    SingleNotificationDocumentation,
+  } from 'shared/models/openrpc.model';
   import { SerializedRequestType } from 'shared/utils/util';
   import { JSONRPCResponse } from 'json-rpc-2.0';
   /**
@@ -1359,11 +1553,42 @@ declare module 'shared/models/rpc.interface' {
     ) => Promise<boolean>;
     /** Unregister a method so it is no longer available to RPC requests */
     unregisterMethod: (methodName: string) => Promise<boolean>;
+    /**
+     * Register a centrally-tracked network event with the main process. Multi-source vs single-source
+     * semantics is determined by looking up the event name in `MULTI_SOURCE_EVENT_NAMES`. See
+     * {@link MultiSourceNetworkEvents} for multi-source vs single-source semantics.
+     *
+     * Returns `true` if the registration was accepted, `false` otherwise. Used by
+     * `createNetworkEventEmitterAsync`; not for direct caller use.
+     */
+    registerEvent: (
+      eventName: string,
+      documentation?: SingleNotificationDocumentation,
+    ) => Promise<boolean>;
+    /** Unregister a network event emitter so it is no longer tracked centrally */
+    unregisterEvent: (eventName: string) => Promise<boolean>;
   }
   export type RegisteredRpcMethodDetails = {
     handler: IRpcHandler;
     methodDocs?: SingleMethodDocumentation;
   };
+  /**
+   * Minimal interface for event registries so that {@link RpcServer} can participate in event
+   * registration without importing from `rpc-websocket-listener.ts` (which would create a circular
+   * dependency).
+   *
+   * @internal
+   */
+  export interface IRpcEventRegistry {
+    tryRegister(
+      handler: unknown,
+      eventName: string,
+      documentation?: SingleNotificationDocumentation,
+    ): boolean;
+    tryUnregister(handler: unknown, eventName: string): boolean;
+    /** Remove all event registrations for the given handler (e.g. when a websocket closes) */
+    unregisterAll(handler: unknown): void;
+  }
 }
 declare module 'client/services/web-socket.interface' {
   /**
@@ -1443,7 +1668,10 @@ declare module 'client/services/rpc-client' {
     RequestParams,
   } from 'shared/data/rpc.model';
   import { SerializedRequestType } from 'shared/utils/util';
-  import { SingleMethodDocumentation } from 'shared/models/openrpc.model';
+  import {
+    SingleMethodDocumentation,
+    SingleNotificationDocumentation,
+  } from 'shared/models/openrpc.model';
   /**
    * Manages the JSON-RPC protocol on the client end of a websocket that connects to main
    *
@@ -1477,6 +1705,11 @@ declare module 'client/services/rpc-client' {
       methodDocs?: SingleMethodDocumentation,
     ): Promise<boolean>;
     unregisterMethod(methodName: string): Promise<boolean>;
+    registerEvent(
+      eventName: string,
+      documentation?: SingleNotificationDocumentation,
+    ): Promise<boolean>;
+    unregisterEvent(eventName: string): Promise<boolean>;
     private createNextRequestId;
     private addEventListenersToWebSocket;
     private removeEventListenersFromWebSocket;
@@ -1488,10 +1721,17 @@ declare module 'client/services/rpc-client' {
 }
 declare module 'main/services/rpc-server' {
   import { JSONRPCResponse } from 'json-rpc-2.0';
-  import { IRpcHandler, RegisteredRpcMethodDetails } from 'shared/models/rpc.interface';
+  import {
+    IRpcEventRegistry,
+    IRpcHandler,
+    RegisteredRpcMethodDetails,
+  } from 'shared/models/rpc.interface';
   import { ConnectionStatus, RequestParams } from 'shared/data/rpc.model';
   import { SerializedRequestType } from 'shared/utils/util';
-  import { SingleMethodDocumentation } from 'shared/models/openrpc.model';
+  import {
+    SingleMethodDocumentation,
+    SingleNotificationDocumentation,
+  } from 'shared/models/openrpc.model';
   type PropagateEventMethod = <T>(source: RpcServer, eventType: string, event: T) => void;
   /**
    * Manages the JSON-RPC protocol on the server end of a websocket owned by main. This class is not
@@ -1511,6 +1751,7 @@ declare module 'main/services/rpc-server' {
     /** Refers to any process that connected to main over the websocket */
     private readonly jsonRpcClient;
     private readonly rpcMethodDetailsByMethodName;
+    private readonly rpcEventDetailsByEventName;
     /** Called by an RpcServer when all other RpcServers should emit an event over the network */
     private readonly propagateEventMethod;
     constructor(
@@ -1518,6 +1759,7 @@ declare module 'main/services/rpc-server' {
       webSocket: WebSocket,
       propagateEventMethod: PropagateEventMethod,
       rpcMethodDetailsByMethodName: Map<string, RegisteredRpcMethodDetails>,
+      rpcEventDetailsByEventName: IRpcEventRegistry,
     );
     connect(): Promise<boolean>;
     disconnect(): Promise<void>;
@@ -1529,6 +1771,11 @@ declare module 'main/services/rpc-server' {
     emitEventOnNetwork<T>(eventType: string, event: T): void;
     registerRemoteMethod(methodName: string, methodDocs?: SingleMethodDocumentation): boolean;
     unregisterRemoteMethod(methodName: string): boolean;
+    registerRemoteEvent(
+      eventName: string,
+      documentation?: SingleNotificationDocumentation,
+    ): boolean;
+    unregisterRemoteEvent(eventName: string): boolean;
     private createNextRequestId;
     private addMethodToRpcServer;
     private handleError;
@@ -1541,6 +1788,70 @@ declare module 'main/services/rpc-server' {
   }
   export default RpcServer;
 }
+declare module 'shared/data/network-event-names' {
+  /**
+   * Source of truth for which event names use multi-source semantics at the central registry. Must
+   * stay in sync with `MultiSourceNetworkEvents` (the public events) plus the platform-internal
+   * multi-source events — the test `network.service.shared-events.test.ts` checks the contents.
+   *
+   * Add entries to {@link PUBLIC_MULTI_SOURCE_EVENT_NAMES} when adding a new public multi-source event
+   * to `MultiSourceNetworkEvents`, or to {@link INTERNAL_MULTI_SOURCE_EVENT_NAMES} for a new internal
+   * one.
+   */
+  export const MULTI_SOURCE_EVENT_NAMES: ReadonlySet<string>;
+}
+declare module 'main/services/rpc-event-registry' {
+  import { SingleNotificationDocumentation } from 'shared/models/openrpc.model';
+  interface EventRegistrant {
+    handler: unknown;
+    documentation?: SingleNotificationDocumentation;
+  }
+  /**
+   * Tracks registered network event emitters, enforcing shared vs. exclusive ownership policy.
+   *
+   * @internal Exported for unit-testing only; not part of the public API.
+   */
+  export class RpcEventRegistry {
+    private byName;
+    /**
+     * Try to register an event. Returns `true` if accepted, `false` if rejected.
+     *
+     * - Name in `MULTI_SOURCE_EVENT_NAMES` (multi-source): multiple handlers may register; same handler
+     *   twice rejected.
+     * - Name not in `MULTI_SOURCE_EVENT_NAMES` (single-source): first registrant wins; any subsequent
+     *   registration from any handler is rejected.
+     */
+    tryRegister(
+      handler: unknown,
+      eventName: string,
+      documentation?: SingleNotificationDocumentation,
+    ): boolean;
+    /**
+     * Classify an attempt to announce (emit) an event on the network against the registry. Used to
+     * warn about misuse without blocking the announcement.
+     *
+     * - `'ok'` — the announcement is valid: the event is multi-source (any process may announce it,
+     *   whether or not it registered), or it is single-source and announced by its registrant.
+     * - `'unregistered'` — the event is single-source and no process has registered this name
+     *   centrally. Emitting a single-source event that was never registered is deprecated (it does
+     *   not appear in the OpenRPC document).
+     * - `'foreign-single-source'` — the event is single-source but is being announced by a handler that
+     *   did not register it; only the registering process should emit a single-source event.
+     */
+    checkAnnouncement(
+      handler: unknown,
+      eventName: string,
+    ): 'ok' | 'unregistered' | 'foreign-single-source';
+    /** Whether any handler has centrally registered this event name. */
+    has(eventName: string): boolean;
+    /** Remove a registrant. Returns `true` if the handler had registered this event. */
+    tryUnregister(handler: unknown, eventName: string): boolean;
+    /** Remove all event registrations for the given handler (e.g. when a websocket closes) */
+    unregisterAll(handler: unknown): void;
+    entries(): IterableIterator<[string, EventRegistrant[]]>;
+  }
+  export default RpcEventRegistry;
+}
 declare module 'main/services/rpc-websocket-listener' {
   import {
     ConnectionStatus,
@@ -1549,9 +1860,15 @@ declare module 'main/services/rpc-websocket-listener' {
     RequestParams,
   } from 'shared/data/rpc.model';
   import { IRpcMethodRegistrar } from 'shared/models/rpc.interface';
+  import {
+    OpenRpc,
+    SingleMethodDocumentation,
+    SingleNotificationDocumentation,
+  } from 'shared/models/openrpc.model';
   import { JSONRPCResponse } from 'json-rpc-2.0';
   import { SerializedRequestType } from 'shared/utils/util';
-  import { OpenRpc, SingleMethodDocumentation } from 'shared/models/openrpc.model';
+  import { RpcEventRegistry } from 'main/services/rpc-event-registry';
+  export { RpcEventRegistry };
   /**
    * Owns the WebSocketServer that listens for clients to connect to the web socket. When a client
    * connects, an RpcServer is created in this same process to service that connection.
@@ -1572,6 +1889,18 @@ declare module 'main/services/rpc-websocket-listener' {
     private readonly rpcServerBySocket;
     private readonly rpcMethodDetailsByMethodName;
     private readonly localMethodsByMethodName;
+    private readonly rpcEventDetailsByEventName;
+    /**
+     * Event names we've already warned about being announced while unregistered. Deduped so a
+     * high-frequency unregistered event does not flood the log — the deprecation notice only needs to
+     * be surfaced once per event name.
+     */
+    private readonly warnedUnregisteredAnnouncements;
+    /**
+     * Event names we've already warned about being announced from a process that did not register the
+     * single-source event. Deduped for the same reason as {@link warnedUnregisteredAnnouncements}.
+     */
+    private readonly warnedForeignAnnouncements;
     constructor();
     get nextSocketId(): string;
     connect(localEventHandler: EventHandler): Promise<boolean>;
@@ -1587,9 +1916,31 @@ declare module 'main/services/rpc-websocket-listener' {
       methodDocs?: SingleMethodDocumentation,
     ): Promise<boolean>;
     unregisterMethod(methodName: string): Promise<boolean>;
+    registerEvent(
+      eventName: string,
+      documentation?: SingleNotificationDocumentation,
+    ): Promise<boolean>;
+    unregisterEvent(eventName: string): Promise<boolean>;
     generateOpenRpcSchema(): OpenRpc;
     emitEventOnNetwork<T>(eventType: string, event: T): void;
     private propagateEvent;
+    /**
+     * Warn (once per event name) when an event is announced (emitted) on the network that the central
+     * registry would flag as misuse:
+     *
+     * - The event is single-source and was never registered centrally — emitting an unregistered event
+     *   is deprecated and the ability to do so will be removed in a future release.
+     * - The event is single-source but is being announced from a process that did not register it,
+     *   which is also deprecated.
+     *
+     * Announcements are never blocked; this only surfaces a warning to help authors migrate to
+     * `createNetworkEventEmitterAsync` or `createCoreMultiSourceEventEmitter` for core code.
+     *
+     * @param handler The handler announcing the event (an {@link RpcServer} for a client, or `this`
+     *   for main's own emissions).
+     * @param eventType The event name being announced.
+     */
+    private warnIfInvalidEventAnnouncement;
     private onClientConnect;
     private onClientDisconnect;
   }
@@ -1618,9 +1969,20 @@ declare module 'shared/services/network.service' {
    */
   import { InternalRequestHandler } from 'shared/data/rpc.model';
   import { PlatformEvent, PlatformEventEmitter, UnsubscriberAsync } from 'platform-bible-utils';
+  import { StoreChangeEvent } from 'shared/services/shared-store.service';
   import { SerializedRequestType } from 'shared/utils/util';
-  import { SingleMethodDocumentation } from 'shared/models/openrpc.model';
+  import {
+    SingleMethodDocumentation,
+    SingleNotificationDocumentation,
+  } from 'shared/models/openrpc.model';
   import { NetworkMethodHandlerOptions } from 'shared/models/network.model';
+  import type {
+    MultiSourceNetworkEvents,
+    NetworkEvents,
+    NetworkEventTypes,
+  } from 'papi-shared-types';
+  import { MULTI_SOURCE_EVENT_NAMES } from 'shared/data/network-event-names';
+  export { MULTI_SOURCE_EVENT_NAMES };
   export function initialize(): Promise<void>;
   /** Closes the network services gracefully */
   export const shutdown: () => Promise<void>;
@@ -1678,25 +2040,179 @@ declare module 'shared/services/network.service' {
     requestType: SerializedRequestType,
   ) => (...args: TParam) => Promise<TReturn>;
   /**
-   * Creates an event emitter that works properly over the network. Other connections receive this
-   * event when it is emitted.
+   * Creates an event emitter that works properly over the network.
    *
-   * WARNING: You can only create a network event emitter once per eventType to prevent hijacked event
-   * emitters.
+   * @deprecated 8 June 2026. Use `createNetworkEventEmitterAsync`. Events created via the sync API
+   *   are not centrally registered and do not appear in the OpenRPC document. The async version
+   *   restricts central _registration_ of an event name to a single source (unless the event is
+   *   declared in {@link MultiSourceNetworkEvents}, in which case it accepts multiple registrants by
+   *   design). Note this restricts central _registration_, not emission: the registry does not block
+   *   emits today, but it warns when an event is announced without a matching registration or from a
+   *   process that did not register it. That tolerance is transitional — announcing an unregistered
+   *   or cross-process single-source event is deprecated and is expected to become an error (with the
+   *   registry gating emission) in a future release, so treat the warning as something to fix, not as
+   *   the permanent behavior.
    *
+   *   WARNING: You can only create a network event emitter once per eventType to prevent hijacked event
+   *   emitters.
    * @param eventType Unique network event type for coordinating between connections
    * @returns Event emitter whose event works between connections
    */
   export const createNetworkEventEmitter: <T>(eventType: string) => PlatformEventEmitter<T>;
   /**
-   * Gets the network event with the specified type. Creates the emitter if it does not exist
+   * Create a network event emitter that participates in central registration. Every centrally
+   * registered event appears in the OpenRPC document; providing `documentation` fills in its summary,
+   * params, and `x-experimental` flag, otherwise it is surfaced with placeholder docs.
    *
+   * If the event name is in {@link MultiSourceNetworkEvents}, the central registry uses multi-source
+   * semantics: multiple processes may register the same name (each process registers once); all
+   * corresponding emitters are valid sources.
+   *
+   * Otherwise the registry uses single-source semantics: only one process may register a given name;
+   * subsequent registrations from any process are rejected.
+   *
+   * Intra-process duplicate registration is always rejected regardless of the event's domain.
+   *
+   * See {@link MultiSourceNetworkEvents} for multi-source vs single-source semantics.
+   *
+   * @param eventType The name of the event to register. Must be a key of {@link NetworkEvents}.
+   * @param documentation Optional notification documentation. Carries
+   *   `notification['x-experimental']: true` to mark the event as experimental.
+   */
+  export const createNetworkEventEmitterAsync: <EventType extends NetworkEventTypes>(
+    eventType: EventType,
+    documentation?: SingleNotificationDocumentation,
+  ) => Promise<PlatformEventEmitter<NetworkEvents[EventType]>>;
+  /**
+   * How to buffer emits made before a buffered network event finishes registering.
+   *
+   * - `'queue'` — keep every buffered event and flush them in emit order.
+   * - `{ latestByKey }` — keep only the most recent buffered event per key, flushed in first-seen key
+   *   order. Use for "only the latest matters" events (e.g. a scroll reference per scroll group, or a
+   *   web view update per web view id).
+   *
+   * @experimental
+   */
+  export type NetworkEventBufferStrategy<T> =
+    | 'queue'
+    | {
+        latestByKey: (event: T) => string;
+      };
+  /**
+   * Buffers network events emitted before their emitter is ready, per a
+   * {@link NetworkEventBufferStrategy}. Exported only for unit testing.
+   *
+   * @experimental
+   * @internal
+   */
+  export class NetworkEventBuffer<T> {
+    private readonly strategy;
+    private readonly queued;
+    private readonly latest;
+    constructor(strategy: NetworkEventBufferStrategy<T>);
+    add(event: T): void;
+    /** Returns the buffered events in flush order and empties the buffer. */
+    drain(): T[];
+    clear(): void;
+  }
+  /**
+   * Synchronously create a buffered emitter for a single-source network event. Use this for events
+   * that may be emitted before the network emitter finishes registering — e.g. from a UI handler or a
+   * command that can fire during extension activation, where the eager
+   * {@link createNetworkEventEmitterAsync} would leave a module-level emitter `undefined`.
+   *
+   * The returned `emit` is usable immediately. Emits made before central registration completes are
+   * buffered per `options.bufferStrategy` and flushed once registration succeeds; after that `emit`
+   * passes straight through. If registration fails, buffered events are dropped (with a warning) and
+   * `registeredEmitter` rejects so the caller can respond.
+   *
+   * @param eventType A key of {@link NetworkEvents}.
+   * @param documentation Optional notification documentation. Carries
+   *   `notification['x-experimental']: true` to mark the event as experimental.
+   * @param options.bufferStrategy How to buffer pre-registration emits. Defaults to `'queue'`.
+   * @returns `emit` (usable immediately), `registeredEmitter` (resolves to the underlying emitter, or
+   *   rejects if registration failed), and `dispose`.
+   * @experimental
+   */
+  export const createBufferedNetworkEventEmitter: <EventType extends NetworkEventTypes>(
+    eventType: EventType,
+    documentation?: SingleNotificationDocumentation,
+    options?: {
+      bufferStrategy?: NetworkEventBufferStrategy<NetworkEvents[EventType]>;
+    },
+  ) => {
+    emit: (event: NetworkEvents[EventType]) => void;
+    registeredEmitter: Promise<PlatformEventEmitter<NetworkEvents[EventType]>>;
+    dispose: () => void;
+  };
+  /**
+   * Core-internal map of multi-source network events. Extends the public
+   * {@link MultiSourceNetworkEvents} with platform-internal multi-source events that are intentionally
+   * NOT advertised on the PAPI — the shared store change event, for example, because the shared store
+   * service is not part of the public API. Used to type {@link createCoreMultiSourceEventEmitter}.
+   */
+  export type InternalMultiSourceNetworkEvents = MultiSourceNetworkEvents & {
+    'shared-store:change': StoreChangeEvent;
+  };
+  /**
+   * Synchronously create a network event emitter for one of the pre-approved multi-source events —
+   * those listed in {@link MULTI_SOURCE_EVENT_NAMES}. Throws synchronously if `eventType` is not such
+   * an event.
+   *
+   * This is core-internal (not exposed on `papiNetworkService`, hence the `Core` in the name):
+   * multi-source events are platform events, not for extensions to create.
+   *
+   * Unlike {@link createNetworkEventEmitterAsync}, the emitter is returned immediately so callers can
+   * use it without awaiting. Central registration with the RPC handler is performed in the
+   * background; the returned `registeredEmitterPromise` resolves to the same emitter once
+   * registration completes. If registration fails, the promise logs a warning and rejects with the
+   * underlying error.
+   *
+   * Multi-source emitters are NOT unregistered on dispose (multiple emitters for the same name can
+   * coexist); the central registry cleans them up when the process disconnects. See
+   * {@link disposeNetworkEventEmitter}.
+   *
+   * @param eventType The name of the multi-source event to create. Must be a key of
+   *   {@link InternalMultiSourceNetworkEvents}.
+   * @param documentation Optional notification documentation. Carries
+   *   `notification['x-experimental']: true` to mark the event as experimental.
+   * @returns An object with the synchronously-created `emitter` and a `registeredEmitterPromise` that
+   *   resolves to that same emitter when central registration completes.
+   */
+  export const createCoreMultiSourceEventEmitter: <
+    EventType extends keyof InternalMultiSourceNetworkEvents,
+  >(
+    eventType: EventType,
+    documentation?: SingleNotificationDocumentation,
+  ) => {
+    emitter: PlatformEventEmitter<InternalMultiSourceNetworkEvents[EventType]>;
+    registeredEmitterPromise: Promise<
+      PlatformEventEmitter<InternalMultiSourceNetworkEvents[EventType]>
+    >;
+  };
+  /**
+   * Subscribe to a typed network event. The payload type is inferred from the event's declaration in
+   * {@link NetworkEvents}.
+   *
+   * @param eventType The name of the event to subscribe to. Must be a key of {@link NetworkEvents}.
+   * @returns Event for the event type that runs the callback provided when the event is emitted
+   */
+  export function getNetworkEvent<EventType extends NetworkEventTypes>(
+    eventType: EventType,
+  ): PlatformEvent<NetworkEvents[EventType]>;
+  /**
+   * Subscribe to a network event with an explicit payload type.
+   *
+   * @deprecated 8 June 2026. Use the typed signature: declare the event in {@link NetworkEvents} and
+   *   call `getNetworkEvent('your.event.name')` without an explicit type parameter.
    * @param eventType Unique network event type for coordinating between connections
    * @returns Event for the event type that runs the callback provided when the event is emitted
    */
-  export const getNetworkEvent: <T>(eventType: string) => PlatformEvent<T>;
+  export function getNetworkEvent<T>(eventType: string): PlatformEvent<T>;
   export interface PapiNetworkService {
     createNetworkEventEmitter: typeof createNetworkEventEmitter;
+    createNetworkEventEmitterAsync: typeof createNetworkEventEmitterAsync;
+    createBufferedNetworkEventEmitter: typeof createBufferedNetworkEventEmitter;
     getNetworkEvent: typeof getNetworkEvent;
   }
   /**
@@ -1768,6 +2284,12 @@ declare module 'shared/services/network-object.service' {
    *   object did not already define a `dispose` function, one will be added.
    *
    *   WARNING: setting a network object mutates the provided object.
+   * @param objectType String identifier for the network object type (e.g. `'object'`,
+   *   `'dataProvider'`)
+   * @param objectAttributes Optional key-value metadata attached to the network object registration.
+   * @param objectDocumentation Optional {@link NetworkObjectDocumentation} for this network object.
+   *   Set `objectDocumentation['x-experimental']: true` to mark all methods on this network object as
+   *   experimental.
    * @returns `objectToShare` modified to be a network object
    */
   const set: <T extends NetworkableObject>(
@@ -2576,128 +3098,6 @@ declare module 'shared/models/extract-data-provider-data-types.model' {
             : never;
   export default ExtractDataProviderDataTypes;
 }
-declare module 'shared/models/web-view-provider.model' {
-  import {
-    WebViewDefinition,
-    SavedWebViewDefinition,
-    OpenWebViewOptions,
-  } from 'shared/models/web-view.model';
-  import {
-    DisposableNetworkObject,
-    NetworkObject,
-    NetworkableObject,
-  } from 'shared/models/network-object.model';
-  /**
-   * An object associated with a specific `webViewType` that provides a {@link WebViewDefinition} when
-   * the PAPI wants to open a web view with that `webViewType`. An extension registers a web view
-   * provider with `papi.webViewProviders.register`.
-   *
-   * Web View Providers provide the contents of all web views in Platform.Bible.
-   *
-   * If you want to provide {@link WebViewControllers} to facilitate interaction between your web views
-   * and extensions, you can extend the abstract class {@link WebViewFactory} to make the process
-   * easier. Alternatively, if you want to manage web view controllers manually, you can register them
-   * in {@link IWebViewProvider.getWebView}.
-   */
-  export interface IWebViewProvider extends NetworkableObject {
-    /**
-     * Receives a {@link SavedWebViewDefinition} and fills it out into a full {@link WebViewDefinition},
-     * providing the contents of the web view and other properties that are important for displaying
-     * the web view.
-     *
-     * The PAPI calls this method as part of opening a new web view or (re)loading an existing web
-     * view. If you want to create {@link WebViewControllers} for the web views the PAPI creates from
-     * this method, you should register it using `papi.webViewProviders.registerWebViewController`
-     * before returning from this method (resolving the returned promise). The {@link WebViewFactory}
-     * abstract class handles this for you, so please consider extending it.
-     *
-     * @param savedWebViewDefinition The saved web view information from which to build a complete web
-     *   view definition. Filled out with all {@link SavedWebViewDefinition} properties of the existing
-     *   web view if an existing webview is being called for (matched by ID). Just provides the
-     *   minimal properties required on {@link SavedWebViewDefinition} if this is a new request or if
-     *   the web view with the existing ID was not found.
-     * @param openWebViewOptions Various options that affect what calling `papi.webViews.openWebView`
-     *   should do. When options are passed to `papi.webViews.openWebView`, some defaults are set up
-     *   on the options, then those options are passed directly through to this method. That way, if
-     *   you want to adjust what this method does based on the contents of the options passed to
-     *   `papi.WebViews.openWebView`, you can. You can even read other properties on these options if
-     *   someone passes options with other properties to `papi.webViews.openWebView`.
-     * @param webViewNonce Nonce used to perform privileged interactions with the web view created
-     *   from this method's returned {@link WebViewDefinition} such as
-     *   `papi.webViewProviders.postMessageToWebView`. The web view service generates this nonce and
-     *   sends it _only here_ to this web view provider that creates the web view with this id. It is
-     *   generally recommended that this web view provider not share this nonce with anyone else but
-     *   only use it within itself and in the web view controller created for this web view if
-     *   applicable (See `papi.webViewProviders.registerWebViewController`).
-     * @returns Full {@link WebViewDefinition} including the content and other important display
-     *   properties based on the {@link SavedWebViewDefinition} provided
-     */
-    getWebView(
-      savedWebViewDefinition: SavedWebViewDefinition,
-      openWebViewOptions: OpenWebViewOptions,
-      webViewNonce: string,
-    ): Promise<WebViewDefinition | undefined>;
-  }
-  /**
-   * A web view provider that has been registered with the PAPI.
-   *
-   * This is what the papi gives on `webViewProviderService.get` (not exposed on the PAPI). Basically
-   * a layer over NetworkObject
-   *
-   * This type is internal to core and is not used by extensions
-   */
-  export interface IRegisteredWebViewProvider extends NetworkObject<IWebViewProvider> {}
-  /**
-   * A web view provider that has been registered with the PAPI and returned to the extension that
-   * registered it. It is able to be disposed with `dispose`.
-   *
-   * The PAPI returns this type from `papi.webViewProviders.register`.
-   */
-  export interface IDisposableWebViewProvider extends DisposableNetworkObject<IWebViewProvider> {}
-}
-declare module 'shared/models/network-object-status.service-model' {
-  import { NetworkObjectDetails } from 'shared/models/network-object.model';
-  export interface NetworkObjectStatusRemoteServiceType {
-    /**
-     * Get details about all available network objects
-     *
-     * @returns Object whose keys are the names of the network objects and whose values are the
-     *   {@link NetworkObjectDetails} for each network object
-     */
-    getAllNetworkObjectDetails: () => Promise<Record<string, NetworkObjectDetails>>;
-  }
-  /**
-   *
-   * Provides functions related to the set of available network objects
-   */
-  export interface NetworkObjectStatusServiceType extends NetworkObjectStatusRemoteServiceType {
-    /**
-     * Get a promise that resolves when a network object is registered or rejects if a timeout is hit
-     *
-     * @param objectDetailsToMatch Subset of object details on the network object to wait for.
-     *   Compared to object details using {@link isSubset}
-     * @param timeoutInMS Max duration to wait for the network object. If not provided, it will wait
-     *   indefinitely
-     * @returns Promise that either resolves to the {@link NetworkObjectDetails} for a network object
-     *   once the network object is registered, or rejects if a timeout is provided and the timeout is
-     *   reached before the network object is registered
-     */
-    waitForNetworkObject: (
-      objectDetailsToMatch: Partial<NetworkObjectDetails>,
-      timeoutInMS?: number,
-    ) => Promise<NetworkObjectDetails>;
-  }
-  export const networkObjectStatusServiceNetworkObjectName = 'NetworkObjectStatusService';
-}
-declare module 'shared/services/network-object-status.service' {
-  import { NetworkObjectStatusServiceType } from 'shared/models/network-object-status.service-model';
-  /**
-   *
-   * Provides functions related to the set of available network objects
-   */
-  export const networkObjectStatusService: NetworkObjectStatusServiceType;
-  export default networkObjectStatusService;
-}
 declare module 'shared/models/docking-framework.model' {
   import { MutableRefObject, ReactNode } from 'react';
   import { WebViewDefinition, WebViewDefinitionUpdateInfo } from 'shared/models/web-view.model';
@@ -3035,9 +3435,14 @@ declare module 'shared/models/docking-framework.model' {
      */
     floatTabById: (tabId: string) => void;
     /**
-     * Gets all WebView definitions for all currently open web view tabs
+     * Get the WebView definitions for every open WebView tab across the dock layout.
      *
-     * @returns Array of WebView definitions for all open web view tabs
+     * Used by consumers (e.g. ProjectSelector) that need to seed initial state at mount time.
+     * `papi.webViews.onDidOpenWebView` does not replay for tabs already open at subscription time, so
+     * subscribers that mount after some tabs are already open need this enumeration to bootstrap.
+     *
+     * @returns Array of WebView definitions, one per currently-open WebView tab. Empty array when the
+     *   dock layout has no WebView tabs.
      */
     getAllWebViewDefinitions: () => WebViewDefinition[];
     /**
@@ -3139,6 +3544,49 @@ declare module 'shared/models/docking-framework.model' {
     simpleLayout: LayoutInfo;
   };
 }
+declare module 'shared/models/network-object-status.service-model' {
+  import { NetworkObjectDetails } from 'shared/models/network-object.model';
+  export interface NetworkObjectStatusRemoteServiceType {
+    /**
+     * Get details about all available network objects
+     *
+     * @returns Object whose keys are the names of the network objects and whose values are the
+     *   {@link NetworkObjectDetails} for each network object
+     */
+    getAllNetworkObjectDetails: () => Promise<Record<string, NetworkObjectDetails>>;
+  }
+  /**
+   *
+   * Provides functions related to the set of available network objects
+   */
+  export interface NetworkObjectStatusServiceType extends NetworkObjectStatusRemoteServiceType {
+    /**
+     * Get a promise that resolves when a network object is registered or rejects if a timeout is hit
+     *
+     * @param objectDetailsToMatch Subset of object details on the network object to wait for.
+     *   Compared to object details using {@link isSubset}
+     * @param timeoutInMS Max duration to wait for the network object. If not provided, it will wait
+     *   indefinitely
+     * @returns Promise that either resolves to the {@link NetworkObjectDetails} for a network object
+     *   once the network object is registered, or rejects if a timeout is provided and the timeout is
+     *   reached before the network object is registered
+     */
+    waitForNetworkObject: (
+      objectDetailsToMatch: Partial<NetworkObjectDetails>,
+      timeoutInMS?: number,
+    ) => Promise<NetworkObjectDetails>;
+  }
+  export const networkObjectStatusServiceNetworkObjectName = 'NetworkObjectStatusService';
+}
+declare module 'shared/services/network-object-status.service' {
+  import { NetworkObjectStatusServiceType } from 'shared/models/network-object-status.service-model';
+  /**
+   *
+   * Provides functions related to the set of available network objects
+   */
+  export const networkObjectStatusService: NetworkObjectStatusServiceType;
+  export default networkObjectStatusService;
+}
 declare module 'shared/services/web-view.service-model' {
   import {
     GetWebViewOptions,
@@ -3238,13 +3686,19 @@ declare module 'shared/services/web-view.service-model' {
      */
     getOpenWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
     /**
-     * Gets the saved properties on all currently open WebView definitions
+     * Get the saved properties on every currently-open WebView definition. Returns the same
+     * representation `getOpenWebViewDefinition` does, just for every open WebView in one call.
+     *
+     * Use this at mount time to seed initial state for subscribers of `onDidOpenWebView` /
+     * `onDidUpdateWebView` / `onDidCloseWebView` — those events do not replay for tabs already open
+     * at subscription time. Combined with the live event stream, this gives a complete picture of the
+     * WebView landscape from any point in the app's lifetime.
      *
      * Note: this only returns a representation of the current WebView definitions, not the actual web
-     * view definitions themselves. Changing properties on the returned definitions does not affect
-     * the actual WebView definitions.
+     * view definitions themselves. Changing properties on returned definitions does not affect the
+     * actual WebView definitions.
      *
-     * @returns Promise that resolves to an array of saved properties for all open WebView definitions
+     * @returns Saved properties of every open WebView. Empty array if no WebViews are open.
      */
     getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]>;
     /**
@@ -3290,27 +3744,106 @@ declare module 'shared/services/web-view.service-model' {
     webViewId: WebViewId,
   ): Promise<NetworkObject<WebViewControllers[WebViewType]> | undefined>;
   /** @deprecated 13 November 2024. Renamed to {@link EVENT_NAME_ON_DID_OPEN_WEB_VIEW} */
-  export const EVENT_NAME_ON_DID_ADD_WEB_VIEW: `${string}:${string}`;
+  export const EVENT_NAME_ON_DID_ADD_WEB_VIEW: 'webView:onDidAddWebView';
   /** Name to use when creating a network event that is fired when webViews are created */
-  export const EVENT_NAME_ON_DID_OPEN_WEB_VIEW: `${string}:${string}`;
+  export const EVENT_NAME_ON_DID_OPEN_WEB_VIEW: 'webView:onDidOpenWebView';
   /** Event emitted when webViews are created */
   export type OpenWebViewEvent = {
     webView: SavedWebViewDefinition;
     layout: Layout;
   };
   /** Name to use when creating a network event that is fired when webViews are updated */
-  export const EVENT_NAME_ON_DID_UPDATE_WEB_VIEW: `${string}:${string}`;
+  export const EVENT_NAME_ON_DID_UPDATE_WEB_VIEW: 'webView:onDidUpdateWebView';
   /** Event emitted when webViews are updated */
   export type UpdateWebViewEvent = {
     webView: SavedWebViewDefinition;
   };
   /** Name to use when creating a network event that is fired when webViews are closed */
-  export const EVENT_NAME_ON_DID_CLOSE_WEB_VIEW: `${string}:${string}`;
+  export const EVENT_NAME_ON_DID_CLOSE_WEB_VIEW: 'webView:onDidCloseWebView';
   /** Event emitted when webViews are closed */
   export type CloseWebViewEvent = {
     webView: SavedWebViewDefinition;
   };
   export const NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE = 'WebViewService';
+}
+declare module 'shared/models/web-view-provider.model' {
+  import {
+    WebViewDefinition,
+    SavedWebViewDefinition,
+    OpenWebViewOptions,
+  } from 'shared/models/web-view.model';
+  import {
+    DisposableNetworkObject,
+    NetworkObject,
+    NetworkableObject,
+  } from 'shared/models/network-object.model';
+  /**
+   * An object associated with a specific `webViewType` that provides a {@link WebViewDefinition} when
+   * the PAPI wants to open a web view with that `webViewType`. An extension registers a web view
+   * provider with `papi.webViewProviders.register`.
+   *
+   * Web View Providers provide the contents of all web views in Platform.Bible.
+   *
+   * If you want to provide {@link WebViewControllers} to facilitate interaction between your web views
+   * and extensions, you can extend the abstract class {@link WebViewFactory} to make the process
+   * easier. Alternatively, if you want to manage web view controllers manually, you can register them
+   * in {@link IWebViewProvider.getWebView}.
+   */
+  export interface IWebViewProvider extends NetworkableObject {
+    /**
+     * Receives a {@link SavedWebViewDefinition} and fills it out into a full {@link WebViewDefinition},
+     * providing the contents of the web view and other properties that are important for displaying
+     * the web view.
+     *
+     * The PAPI calls this method as part of opening a new web view or (re)loading an existing web
+     * view. If you want to create {@link WebViewControllers} for the web views the PAPI creates from
+     * this method, you should register it using `papi.webViewProviders.registerWebViewController`
+     * before returning from this method (resolving the returned promise). The {@link WebViewFactory}
+     * abstract class handles this for you, so please consider extending it.
+     *
+     * @param savedWebViewDefinition The saved web view information from which to build a complete web
+     *   view definition. Filled out with all {@link SavedWebViewDefinition} properties of the existing
+     *   web view if an existing webview is being called for (matched by ID). Just provides the
+     *   minimal properties required on {@link SavedWebViewDefinition} if this is a new request or if
+     *   the web view with the existing ID was not found.
+     * @param openWebViewOptions Various options that affect what calling `papi.webViews.openWebView`
+     *   should do. When options are passed to `papi.webViews.openWebView`, some defaults are set up
+     *   on the options, then those options are passed directly through to this method. That way, if
+     *   you want to adjust what this method does based on the contents of the options passed to
+     *   `papi.WebViews.openWebView`, you can. You can even read other properties on these options if
+     *   someone passes options with other properties to `papi.webViews.openWebView`.
+     * @param webViewNonce Nonce used to perform privileged interactions with the web view created
+     *   from this method's returned {@link WebViewDefinition} such as
+     *   `papi.webViewProviders.postMessageToWebView`. The web view service generates this nonce and
+     *   sends it _only here_ to this web view provider that creates the web view with this id. It is
+     *   generally recommended that this web view provider not share this nonce with anyone else but
+     *   only use it within itself and in the web view controller created for this web view if
+     *   applicable (See `papi.webViewProviders.registerWebViewController`).
+     * @returns Full {@link WebViewDefinition} including the content and other important display
+     *   properties based on the {@link SavedWebViewDefinition} provided
+     */
+    getWebView(
+      savedWebViewDefinition: SavedWebViewDefinition,
+      openWebViewOptions: OpenWebViewOptions,
+      webViewNonce: string,
+    ): Promise<WebViewDefinition | undefined>;
+  }
+  /**
+   * A web view provider that has been registered with the PAPI.
+   *
+   * This is what the papi gives on `webViewProviderService.get` (not exposed on the PAPI). Basically
+   * a layer over NetworkObject
+   *
+   * This type is internal to core and is not used by extensions
+   */
+  export interface IRegisteredWebViewProvider extends NetworkObject<IWebViewProvider> {}
+  /**
+   * A web view provider that has been registered with the PAPI and returned to the extension that
+   * registered it. It is able to be disposed with `dispose`.
+   *
+   * The PAPI returns this type from `papi.webViewProviders.register`.
+   */
+  export interface IDisposableWebViewProvider extends DisposableNetworkObject<IWebViewProvider> {}
 }
 declare module 'shared/services/web-view.service' {
   import { WebViewServiceType } from 'shared/services/web-view.service-model';
@@ -3327,6 +3860,7 @@ declare module 'shared/services/web-view-provider.service' {
     IWebViewProvider,
     IRegisteredWebViewProvider,
   } from 'shared/models/web-view-provider.model';
+  import type { NetworkObjectDocumentation } from 'shared/models/openrpc.model';
   import { WebViewControllers, WebViewControllerTypes } from 'papi-shared-types';
   import { DisposableNetworkObject } from 'shared/models/network-object.model';
   import { WebViewId } from 'shared/models/web-view.model';
@@ -3340,11 +3874,20 @@ declare module 'shared/services/web-view-provider.service' {
    *   of it.
    *
    *   WARNING: setting a webView provider mutates the provided object.
+   * @param attributes Optional additional attributes to attach to the network object. The platform
+   *   overwrites the `webViewType` field — that field is always the platform-canonical value.
+   * @param documentation Optional {@link NetworkObjectDocumentation} for this web view provider. Set
+   *   `documentation['x-experimental']: true` to mark all methods on this web view provider as
+   *   experimental.
    * @returns `webViewProvider` modified to be a network object and able to be disposed with `dispose`
    */
   function registerWebViewProvider(
     webViewType: string,
     webViewProvider: IWebViewProvider,
+    attributes?: {
+      [property: string]: unknown;
+    },
+    documentation?: NetworkObjectDocumentation,
   ): Promise<IDisposableWebViewProvider>;
   /**
    * Get a web view provider that has previously been set up
@@ -3569,7 +4112,13 @@ declare module 'papi-shared-types' {
     IDisposableDataProvider,
   } from 'shared/models/data-provider.interface';
   import type { ExtractDataProviderDataTypes } from 'shared/models/extract-data-provider-data-types.model';
-  import type { NetworkableObject } from 'shared/models/network-object.model';
+  import type { NetworkableObject, NetworkObjectDetails } from 'shared/models/network-object.model';
+  import type { ScrollGroupUpdateInfo } from 'shared/services/scroll-group.service-model';
+  import type {
+    CloseWebViewEvent,
+    OpenWebViewEvent,
+    UpdateWebViewEvent,
+  } from 'shared/services/web-view.service-model';
   import { WebViewId } from 'shared/models/web-view.model';
   import { SerializedVerseRef } from '@sillsdev/scripture';
   /**
@@ -4272,6 +4821,66 @@ declare module 'papi-shared-types' {
    * @example 'platform.placeholderWebView'
    */
   type WebViewControllerTypes = keyof WebViewControllers;
+  /**
+   * Network events emitted from multiple processes (each process emits its own local event under
+   * the same name). Declared by the platform; not extensible by extensions.
+   *
+   * The names listed here are the source of truth for which event names use multi-source semantics
+   * at the central registry. An event name in this type allows registration from multiple processes
+   * (each process registers once, all emitters are valid sources). Any other event name uses
+   * single-source semantics (one registrant ever).
+   *
+   * Subscribers do not need to know which events are multi-source — `getNetworkEvent` handles both
+   * kinds identically.
+   *
+   * See {@link NetworkEvents} for the full registry of known event names.
+   */
+  type MultiSourceNetworkEvents = {
+    /**
+     * Emitted when a network object is created in any process. Payload includes the new object's
+     * details.
+     */
+    'object:onDidCreateNetworkObject': NetworkObjectDetails;
+    /**
+     * Emitted when a network object is disposed in any process. Payload is the disposed object's
+     * ID.
+     */
+    'object:onDidDisposeNetworkObject': string;
+  };
+  /**
+   * Mapping of network event names to their payload types. Extensions augment this to declare their
+   * own events. Inherits the platform's multi-source events from {@link MultiSourceNetworkEvents}
+   * automatically.
+   *
+   * To declare a new event for use with `createNetworkEventEmitterAsync`:
+   *
+   * ```ts
+   * declare module 'papi-shared-types' {
+   *   export interface NetworkEvents {
+   *     'myExt.somethingHappened': { foo: string };
+   *   }
+   * }
+   * ```
+   *
+   * Mark a single event as experimental by adding an `@experimental` JSDoc tag in a doc comment
+   * directly above its entry.
+   */
+  interface NetworkEvents extends MultiSourceNetworkEvents {
+    /** Emitted when extensions finish reloading. `true` if reload succeeded, `false` if it failed. */
+    'platform.onDidReloadExtensions': boolean;
+    /** Emitted when the Scripture reference for a scroll group changes. */
+    'scrollGroup:onDidUpdateScrRef': ScrollGroupUpdateInfo;
+    /** @deprecated 13 November 2024. Use the `webView:onDidOpenWebView` event instead. */
+    'webView:onDidAddWebView': OpenWebViewEvent;
+    /** Emitted when a WebView is created. */
+    'webView:onDidOpenWebView': OpenWebViewEvent;
+    /** Emitted when a WebView is updated. */
+    'webView:onDidUpdateWebView': UpdateWebViewEvent;
+    /** Emitted when a WebView is closed. */
+    'webView:onDidCloseWebView': CloseWebViewEvent;
+  }
+  /** Union of all known network event names (keys of {@link NetworkEvents}). */
+  type NetworkEventTypes = keyof NetworkEvents;
 }
 declare module 'shared/services/command.service' {
   import { UnsubscriberAsync } from 'platform-bible-utils';
@@ -4432,6 +5041,7 @@ declare module 'shared/services/data-provider.service' {
     DisposableDataProviders,
   } from 'papi-shared-types';
   import { IDataProvider, IDisposableDataProvider } from 'shared/models/data-provider.interface';
+  import type { NetworkObjectDocumentation } from 'shared/models/openrpc.model';
   /**
    *
    * Indicate if we are aware of an existing data provider with the given name. If a data provider
@@ -4632,6 +5242,9 @@ declare module 'shared/services/data-provider.service' {
    *   providers), a unique type name should be used to distinguish from generic data providers.
    * @param dataProviderAttributes Optional object that will be sent in a network event to provide
    *   additional metadata about the data provider represented by this engine.
+   * @param documentation Optional OpenRPC-style documentation for the data provider network object.
+   *   When `documentation['x-experimental']` is `true`, the provider's methods will be automatically
+   *   tagged as experimental in the OpenRPC document.
    *
    *   WARNING: registering a dataProviderEngine mutates the provided object. Its `notifyUpdate` and
    *   `set` methods are layered over to facilitate data provider subscriptions.
@@ -4647,6 +5260,7 @@ declare module 'shared/services/data-provider.service' {
           [property: string]: unknown;
         }
       | undefined,
+    documentation?: NetworkObjectDocumentation | undefined,
   ): Promise<DisposableDataProviders[DataProviderName]>;
   /**
    * Creates a data provider to be shared on the network layering over the provided data provider
@@ -4665,6 +5279,9 @@ declare module 'shared/services/data-provider.service' {
    *   providers), a unique type name should be used to distinguish from generic data providers.
    * @param dataProviderAttributes Optional object that will be sent in a network event to provide
    *   additional metadata about the data provider represented by this engine.
+   * @param documentation Optional OpenRPC-style documentation for the data provider network object.
+   *   When `documentation['x-experimental']` is `true`, the provider's methods will be automatically
+   *   tagged as experimental in the OpenRPC document.
    *
    *   WARNING: registering a dataProviderEngine mutates the provided object. Its `notifyUpdate` and
    *   `set` methods are layered over to facilitate data provider subscriptions.
@@ -4680,6 +5297,7 @@ declare module 'shared/services/data-provider.service' {
           [property: string]: unknown;
         }
       | undefined,
+    documentation?: NetworkObjectDocumentation | undefined,
   ): Promise<IDisposableDataProvider<IDataProvider<TDataTypes>>>;
   /**
    *
@@ -4727,6 +5345,9 @@ declare module 'shared/services/data-provider.service' {
      *   providers), a unique type name should be used to distinguish from generic data providers.
      * @param dataProviderAttributes Optional object that will be sent in a network event to provide
      *   additional metadata about the data provider represented by this engine.
+     * @param documentation Optional OpenRPC-style documentation for the data provider network object.
+     *   When `documentation['x-experimental']` is `true`, the provider's methods will be automatically
+     *   tagged as experimental in the OpenRPC document.
      *
      *   WARNING: registering a dataProviderEngine mutates the provided object. Its `notifyUpdate` and
      *   `set` methods are layered over to facilitate data provider subscriptions.
@@ -5109,7 +5730,38 @@ declare module 'shared/models/project-data-provider-engine-factory.model' {
   import { IProjectDataProviderEngine } from 'shared/models/project-data-provider-engine.model';
   import { ProjectMetadataFilterOptions } from 'shared/models/project-data-provider-factory.interface';
   import { ProjectMetadataWithoutFactoryInfo } from 'shared/models/project-metadata.model';
+  import type { NetworkObjectDocumentation } from 'shared/models/openrpc.model';
   import { ProjectInterfaces } from 'papi-shared-types';
+  /**
+   * Envelope that {@link IProjectDataProviderEngineFactory.createProjectDataProviderEngine} may return
+   * instead of the engine directly, carrying per-PDP network object metadata alongside the engine.
+   *
+   * WARNING: `projectDataProviderEngine` is a reserved discriminating property — do not expose a
+   * property by that name on a raw engine, or the platform will treat the engine as an envelope.
+   */
+  export interface ProjectDataProviderEngineEnvelope<
+    SupportedProjectInterfaces extends ProjectInterfaces[],
+  > {
+    projectDataProviderEngine: IProjectDataProviderEngine<SupportedProjectInterfaces>;
+    attributes?: {
+      [property: string]: unknown;
+    };
+    documentation?: NetworkObjectDocumentation;
+  }
+  /**
+   * Type guard: whether a `createProjectDataProviderEngine` return value is a
+   * {@link ProjectDataProviderEngineEnvelope} rather than a raw engine. Guards against `typeof null
+   * === 'object'` and against a raw engine that merely exposes a `projectDataProviderEngine` property
+   * of a non-object type. Written as a user-defined type guard so the value check doesn't defeat the
+   * narrowing at call sites.
+   */
+  export function isProjectDataProviderEngineEnvelope<
+    SupportedProjectInterfaces extends ProjectInterfaces[],
+  >(
+    value:
+      | IProjectDataProviderEngine<SupportedProjectInterfaces>
+      | ProjectDataProviderEngineEnvelope<SupportedProjectInterfaces>,
+  ): value is ProjectDataProviderEngineEnvelope<SupportedProjectInterfaces>;
   /**
    * A factory object registered with the papi that creates a Project Data Provider Engine for each
    * project with the factory's specified `projectInterface`s when the papi requests. Used by the papi
@@ -5170,17 +5822,25 @@ declare module 'shared/models/project-data-provider-engine-factory.model' {
       layeringFilters?: ProjectMetadataFilterOptions,
     ): Promise<ProjectMetadataWithoutFactoryInfo[]>;
     /**
-     * Create a {@link IProjectDataProviderEngine} for the project requested so the papi can create an
-     * {@link IProjectDataProvider} for the project. This project will have the same
-     * `projectInterface`s as this Project Data Provider Engine Factory
+     * Create an {@link IProjectDataProviderEngine} for the project requested so the papi can create an
+     * {@link IProjectDataProvider} for the project.
      *
-     * @param projectId Id of the project for which to create a {@link IProjectDataProviderEngine}
-     * @returns A promise that resolves to a {@link IProjectDataProviderEngine} for the project passed
-     *   in
+     * The return value may be either the engine directly, or an envelope containing the engine and
+     * PDP network metadata (per-PDP attributes and documentation).
+     *
+     * The platform overwrites `projectId` and `projectInterfaces` in any supplied per-PDP attributes
+     * — those fields are always the platform-canonical values.
+     *
+     * @param projectId Id of the project for which to create an {@link IProjectDataProviderEngine}
+     * @returns Either the {@link IProjectDataProviderEngine} or an envelope containing the engine and
+     *   per-PDP network object metadata (attributes and documentation).
      */
     createProjectDataProviderEngine(
       projectId: string,
-    ): Promise<IProjectDataProviderEngine<SupportedProjectInterfaces>>;
+    ): Promise<
+      | IProjectDataProviderEngine<SupportedProjectInterfaces>
+      | ProjectDataProviderEngineEnvelope<SupportedProjectInterfaces>
+    >;
   }
   /**
    *
@@ -5439,15 +6099,20 @@ declare module 'shared/services/project-data-provider.service' {
   import { ProjectInterfaces, ProjectDataProviderInterfaces } from 'papi-shared-types';
   import { Dispose } from 'platform-bible-utils';
   import { IProjectDataProviderEngineFactory } from 'shared/models/project-data-provider-engine-factory.model';
+  import type { NetworkObjectDocumentation } from 'shared/models/openrpc.model';
   /**
    * Add a new Project Data Provider Factory to PAPI that uses the given engine.
    *
-   * @param pdpFactoryId Unique id for this PDP factory
+   * @param pdpFactoryId Unique id for this PDP factory.
    * @param projectInterfaces The standardized sets of methods (`projectInterface`s) supported by the
    *   Project Data Provider Engines produced by this factory. Indicates what sort of project data
    *   should be available on the PDPEs created by this factory.
-   * @param pdpEngineFactory Used in a ProjectDataProviderFactory to create ProjectDataProviders
-   * @returns Promise that resolves to a disposable object when the registration operation completes
+   * @param pdpEngineFactory Used in a ProjectDataProviderFactory to create ProjectDataProviders.
+   * @param attributes Optional registration-level attributes. The platform overwrites the
+   *   `projectInterfaces` field — that field is always the platform-canonical value.
+   * @param documentation Optional {@link NetworkObjectDocumentation} for the factory itself. Set
+   *   `documentation['x-experimental']: true` to mark all methods on this factory as experimental.
+   * @returns Promise that resolves to a disposable object when the registration operation completes.
    */
   export function registerProjectDataProviderEngineFactory<
     SupportedProjectInterfaces extends ProjectInterfaces[],
@@ -5455,6 +6120,10 @@ declare module 'shared/services/project-data-provider.service' {
     pdpFactoryId: string,
     projectInterfaces: SupportedProjectInterfaces,
     pdpEngineFactory: IProjectDataProviderEngineFactory<SupportedProjectInterfaces>,
+    attributes?: {
+      [property: string]: unknown;
+    },
+    documentation?: NetworkObjectDocumentation,
   ): Promise<Dispose>;
   /**
    * Get a Project Data Provider for the given project ID.
@@ -7415,7 +8084,7 @@ declare module 'shared/services/settings.service' {
 declare module 'renderer/services/scroll-group.service-host' {
   import { ScrollGroupUpdateInfo } from 'shared/services/scroll-group.service-model';
   import { SerializedVerseRef } from '@sillsdev/scripture';
-  import { ScrollGroupId } from 'platform-bible-utils';
+  import { type PlatformEvent, ScrollGroupId } from 'platform-bible-utils';
   /**
    * All Scroll Group IDs that are intended to be shown in scroll group selectors. This is a
    * placeholder and will be refactored significantly in
@@ -7423,7 +8092,7 @@ declare module 'renderer/services/scroll-group.service-host' {
    */
   export const availableScrollGroupIds: (number | undefined)[];
   /** Event that emits with information about a changed Scripture Reference for a scroll group */
-  export const onDidUpdateScrRef: import('platform-bible-utils').PlatformEvent<ScrollGroupUpdateInfo>;
+  export const onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo>;
   /** See {@link IScrollGroupRemoteService.getScrRef} */
   export function getScrRefSync(scrollGroupId?: ScrollGroupId): SerializedVerseRef;
   /**
@@ -9102,13 +9771,17 @@ declare module '@papi/core' {
     MethodDocumentationWithoutName,
     NetworkObjectDocumentation,
     SingleMethodDocumentation,
+    SingleNotificationDocumentation,
   } from 'shared/models/openrpc.model';
   export type {
     ExtensionDataScope,
     MandatoryProjectDataTypes,
   } from 'shared/models/project-data-provider.model';
   export type { IProjectDataProviderEngine } from 'shared/models/project-data-provider-engine.model';
-  export type { IProjectDataProviderEngineFactory } from 'shared/models/project-data-provider-engine-factory.model';
+  export type {
+    IProjectDataProviderEngineFactory,
+    ProjectDataProviderEngineEnvelope,
+  } from 'shared/models/project-data-provider-engine-factory.model';
   export type {
     IProjectDataProviderFactory,
     ProjectMetadataFilterOptions,
@@ -9132,6 +9805,11 @@ declare module '@papi/core' {
     IDisposableWebViewProvider,
     IWebViewProvider,
   } from 'shared/models/web-view-provider.model';
+  export type {
+    CloseWebViewEvent,
+    OpenWebViewEvent,
+    UpdateWebViewEvent,
+  } from 'shared/services/web-view.service-model';
   export type { AppInfo } from 'shared/services/app.service-model';
   export type {
     NamedSqlParameters,
@@ -9147,7 +9825,10 @@ declare module '@papi/core' {
     SimultaneousProjectSettingsChanges,
     ProjectSettingValidator,
   } from 'shared/services/project-settings.service-model';
-  export type { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
+  export type {
+    ScrollGroupScrRef,
+    ScrollGroupUpdateInfo,
+  } from 'shared/services/scroll-group.service-model';
   export type { SettingValidator } from 'shared/services/settings.service-model';
   export type {
     FocusSubject,

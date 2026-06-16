@@ -43,11 +43,13 @@ import {
 import { registerCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { networkObjectService } from '@shared/services/network-object.service';
-import { createNetworkEventEmitter } from '@shared/services/network.service';
+import {
+  createBufferedNetworkEventEmitter,
+  getNetworkEvent,
+} from '@shared/services/network.service';
 import { settingsService } from '@shared/services/settings.service';
 import { webViewProviderService } from '@shared/services/web-view-provider.service';
 import {
-  CloseWebViewEvent,
   EVENT_NAME_ON_DID_ADD_WEB_VIEW,
   EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
   EVENT_NAME_ON_DID_OPEN_WEB_VIEW,
@@ -55,7 +57,6 @@ import {
   getWebViewController,
   NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
   OpenWebViewEvent,
-  UpdateWebViewEvent,
   WebViewServiceType,
 } from '@shared/services/web-view.service-model';
 import { newNonce } from '@shared/utils/util';
@@ -91,48 +92,107 @@ import {
   transformLegacyColorVars,
 } from './web-views/web-view-legacy-color-vars.util';
 
+// These web view lifecycle emitters are created at module load as buffered emitters so they're
+// usable immediately. Sync paths like `onLayoutChange` and `updateWebViewDefinitionSync` can run
+// before the websocket finishes connecting; buffered emits are queued and flushed once each event
+// registers (and the four register concurrently in the background rather than sequentially).
+
 /**
- * @deprecated 13 November 2024. Changed to {@link onDidOpenWebViewEmitter}. This remains for now to
- *   support anyone listening to this event over websocket
+ * @deprecated 13 November 2024. Changed to {@link onDidOpenWebViewBufferedEmitter}. This remains for
+ *   now to support anyone listening to this event over websocket
  */
-const onDidAddWebViewEmitter = createNetworkEventEmitter<OpenWebViewEvent>(
+const onDidAddWebViewBufferedEmitter = createBufferedNetworkEventEmitter(
   EVENT_NAME_ON_DID_ADD_WEB_VIEW,
+  {
+    notification: {
+      summary: 'Emitted when a WebView is created.',
+      deprecated: true,
+      params: [
+        {
+          name: 'webView',
+          required: true,
+          summary: 'The created WebView.',
+          schema: { type: 'object' },
+        },
+      ],
+    },
+  },
 );
 
-/** Emitter for when a webview is created */
-const onDidOpenWebViewEmitter = createNetworkEventEmitter<OpenWebViewEvent>(
+/** Buffered emitter for when a webview is created */
+const onDidOpenWebViewBufferedEmitter = createBufferedNetworkEventEmitter(
   EVENT_NAME_ON_DID_OPEN_WEB_VIEW,
+  {
+    notification: {
+      summary: 'Emitted when a WebView is created.',
+      params: [
+        {
+          name: 'webView',
+          required: true,
+          summary: 'The created WebView.',
+          schema: { type: 'object' },
+        },
+      ],
+    },
+  },
+);
+
+/** Buffered emitter for when a webview is updated. Only the latest update per webview matters. */
+const onDidUpdateWebViewBufferedEmitter = createBufferedNetworkEventEmitter(
+  EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
+  {
+    notification: {
+      summary: 'Emitted when a WebView is updated.',
+      params: [
+        {
+          name: 'webView',
+          required: true,
+          summary: 'The updated WebView.',
+          schema: { type: 'object' },
+        },
+      ],
+    },
+  },
+  { bufferStrategy: { latestByKey: (event) => event.webView.id } },
+);
+
+/** Buffered emitter for when a webview is removed */
+const onDidCloseWebViewBufferedEmitter = createBufferedNetworkEventEmitter(
+  EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
+  {
+    notification: {
+      summary: 'Emitted when a WebView is closed.',
+      params: [
+        {
+          name: 'webView',
+          required: true,
+          summary: 'The closed WebView.',
+          schema: { type: 'object' },
+        },
+      ],
+    },
+  },
 );
 
 /**
  * Emits an event for when a web view is created
  *
  * Actually emits two updates to support backwards compatibility with deprecated
- * {@link onDidAddWebViewEmitter}, but this will likely be removed at some point
+ * {@link onDidAddWebViewBufferedEmitter}, but this will likely be removed at some point
  */
 function emitOnDidOpenWebView(event: OpenWebViewEvent) {
-  onDidAddWebViewEmitter.emit(event);
-  onDidOpenWebViewEmitter.emit(event);
+  onDidAddWebViewBufferedEmitter.emit(event);
+  onDidOpenWebViewBufferedEmitter.emit(event);
 }
 
 /** Event that emits with webView info when a webView is created */
-export const onDidOpenWebView = onDidOpenWebViewEmitter.event;
-
-/** Emitter for when a webview is updated */
-const onDidUpdateWebViewEmitter = createNetworkEventEmitter<UpdateWebViewEvent>(
-  EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
-);
+export const onDidOpenWebView = getNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW);
 
 /** Event that emits with webView info when a webView is updated */
-export const onDidUpdateWebView = onDidUpdateWebViewEmitter.event;
-
-/** Emitter for when a webview is removed */
-const onDidCloseWebViewEmitter = createNetworkEventEmitter<CloseWebViewEvent>(
-  EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
-);
+export const onDidUpdateWebView = getNetworkEvent(EVENT_NAME_ON_DID_UPDATE_WEB_VIEW);
 
 /** Event that emits with webView info when a webView is removed */
-export const onDidCloseWebView = onDidCloseWebViewEmitter.event;
+export const onDidCloseWebView = getNetworkEvent(EVENT_NAME_ON_DID_CLOSE_WEB_VIEW);
 
 /**
  * Alias for `window.open` because `window.open` is deleted to prevent web views from accessing it.
@@ -639,10 +699,12 @@ function setDockLayout(dockLayout: PapiDockLayout | undefined): void {
  */
 // TODO: We could short-circuit saveLayout when no meaningful change happened. - IJH 2023-05-1
 const onLayoutChange: OnLayoutChange = async (newLayout, _currentTabId, changeInfo) => {
-  if (changeInfo?.didCloseWebView && changeInfo.webViewDefinition)
-    onDidCloseWebViewEmitter.emit({
+  if (changeInfo?.didCloseWebView && changeInfo.webViewDefinition) {
+    // Buffered emit — usable even if a restored tab is closed before the websocket connects.
+    onDidCloseWebViewBufferedEmitter.emit({
       webView: convertWebViewDefinitionToSaved(changeInfo.webViewDefinition),
     });
+  }
 
   return saveLayout(newLayout);
 };
@@ -944,8 +1006,8 @@ export function updateWebViewDefinitionSync(
         else deleteFullWebViewStateById(webViewId);
       }
 
-      // Emit the update event
-      onDidUpdateWebViewEmitter.emit({
+      // Emit the update event (buffered — usable before the websocket connects).
+      onDidUpdateWebViewBufferedEmitter.emit({
         webView,
       });
     }
@@ -1229,13 +1291,6 @@ export function isWebViewNonceCorrect(id: WebViewId, webViewNonce: string) {
 function deleteWebViewNonce(id: WebViewId) {
   return webViewNoncesById.delete(id);
 }
-
-onDidCloseWebView(({ webView: { id, webViewType } }) => {
-  if (!deleteWebViewNonce(id))
-    logger.warn(
-      `Tried to delete webViewNonce for web view with id ${id} (type ${webViewType}), but a nonce was not found. May not be an issue, but worth investigating`,
-    );
-});
 
 // #endregion webViewNonce
 
@@ -1609,14 +1664,24 @@ async function openOrReloadWebView(
   //   internet access. We must essentially assume they can find a way to access the internet
   //   through the same connect-src as index.ejs. However, it is probably best for them to use only
   //   things we give them from parent, so might as well keep it restricted here.
+  //   Note: `papi-er:` is intentionally NOT in connect-src even though it appears in img-src and
+  //   media-src below. Enhanced Resources image bytes are renderable (the <img> tag works) but
+  //   not fetchable from WebView JS - this prevents WebView code from reading raw image bytes
+  //   via fetch() / XHR. The scheme is served via protocol.handle in
+  //   enhanced-resource-protocol.service.ts (same mechanism as papi-extension:); the
+  //   renderable-not-fetchable posture is enforced here by omitting it from connect-src.
   // img-src load images
   //   'self' so images can be loaded from us
   //   papi-extension: so images can be loaded from installed extensions
+  //   papi-er: so images can be loaded from the enhanced resources protocol (e.g. Marble images).
+  //     Renderable only - see connect-src note above for why this is NOT in connect-src.
   //   https: so they can load images over secure connections
   //   data: so they can load data urls
   // media-src load audio, video, etc
   //   'self' so media can be loaded from us
   //   papi-extension: so media can be loaded from installed extensions
+  //   papi-er: so media can be loaded from the enhanced resources protocol.
+  //     Renderable only - see connect-src note above for why this is NOT in connect-src.
   //   https: so media can be loaded over secure connections
   //   data: so they can load data urls
   // font-src load fonts
@@ -1636,8 +1701,8 @@ async function openOrReloadWebView(
       object-src 'none';
       worker-src 'none';
       connect-src 'self';
-      img-src 'self' papi-extension: https: data:;
-      media-src 'self' papi-extension: https: data:;
+      img-src 'self' papi-extension: papi-er: https: data:;
+      media-src 'self' papi-extension: papi-er: https: data:;
       font-src 'self' papi-extension: https: data:;
       form-action 'self';
     ">`;
@@ -1686,10 +1751,11 @@ async function openOrReloadWebView(
       webView: convertWebViewDefinitionToSaved(finalWebView),
       layout: finalLayout,
     });
-  else
-    onDidUpdateWebViewEmitter.emit({
+  else {
+    onDidUpdateWebViewBufferedEmitter.emit({
       webView: convertWebViewDefinitionToSaved(finalWebView),
     });
+  }
 
   return webView.id;
 }
@@ -1911,6 +1977,13 @@ export const initialize = () => {
     };
 
     // #endregion
+
+    onDidCloseWebView(({ webView: { id, webViewType } }) => {
+      if (!deleteWebViewNonce(id))
+        logger.warn(
+          `Tried to delete webViewNonce for web view with id ${id} (type ${webViewType}), but a nonce was not found. May not be an issue, but worth investigating`,
+        );
+    });
 
     isInitialized = true;
 

@@ -34,6 +34,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
+import { ScopeWithRange } from 'platform-bible-react/internal';
 import {
   formatReplacementString,
   LanguageStrings,
@@ -607,7 +608,14 @@ export function Find({
               <ScopeSelector
                 scope={scope}
                 availableScopes={['chapter', 'book', 'selectedBooks']}
-                onScopeChange={setScope}
+                // ScopeSelector's onScopeChange takes the wider ScopeWithRange (the
+                // markers-checklist work added a 'range' scope). Find never enables
+                // 'range' (not in availableScopes), so this narrowing wrapper just
+                // guards that contract before forwarding to the narrow setScope.
+                onScopeChange={(newScope: ScopeWithRange) => {
+                  if (newScope === 'range') return;
+                  setScope(newScope);
+                }}
                 availableBookInfo={booksPresent}
                 selectedBookIds={selectedBookIds}
                 onSelectedBookIdsChange={onSelectedBookIdsChange}

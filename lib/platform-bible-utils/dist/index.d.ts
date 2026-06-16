@@ -1106,6 +1106,12 @@ export type OrderedItem = {
 export type OrderedExtensibleContainer = OrderedItem & {
 	/** Determines whether other items can be added to this after it has been defined */
 	isExtensible?: boolean;
+	/**
+	 * Set to `true` to mark this extension point as experimental. Experimental menu content may
+	 * change or be removed without notice. Extensions reading this should treat the marker as
+	 * informational.
+	 */
+	isExperimental?: boolean;
 };
 /** Group of menu items that belongs in a column */
 export type MenuGroupDetailsInColumn = OrderedExtensibleContainer & {
@@ -1176,6 +1182,12 @@ export type ColumnsWithHeaders = {
 	[property: ReferencedItem]: MenuColumnWithHeader;
 	/** Defines whether columns can be added to this multi-column menu */
 	isExtensible?: boolean;
+	/**
+	 * Set to `true` to mark this columns collection as experimental. Experimental menu content may
+	 * change or be removed without notice. Extensions reading this should treat the marker as
+	 * informational.
+	 */
+	isExperimental?: boolean;
 };
 /** Menu that contains a column without a header */
 export type SingleColumnMenu = {
@@ -1201,6 +1213,12 @@ export type WebViewMenu = {
 	topMenu: MultiColumnMenu | undefined;
 	/** Menu that opens when you right click on the main body/area of a tab */
 	contextMenu: SingleColumnMenu | undefined;
+	/**
+	 * Set to `true` to mark this WebView menu as experimental. Experimental menu content may change
+	 * or be removed without notice. Extensions reading this should treat the marker as
+	 * informational.
+	 */
+	isExperimental?: boolean;
 };
 /** Menus for all web views */
 export type WebViewMenus = {
@@ -1288,6 +1306,10 @@ export declare const menuDocumentSchema: {
 							description: string;
 							type: string;
 						};
+						isExperimental: {
+							description: string;
+							type: string;
+						};
 					};
 					required: string[];
 					additionalProperties: boolean;
@@ -1298,7 +1320,12 @@ export declare const menuDocumentSchema: {
 					description: string;
 					type: string;
 				};
+				isExperimental: {
+					description: string;
+					type: string;
+				};
 			};
+			additionalProperties: boolean;
 		};
 		menuGroups: {
 			description: string;
@@ -1321,6 +1348,10 @@ export declare const menuDocumentSchema: {
 								description: string;
 								type: string;
 							};
+							isExperimental: {
+								description: string;
+								type: string;
+							};
 							menuItem?: undefined;
 						};
 						required: string[];
@@ -1336,6 +1367,10 @@ export declare const menuDocumentSchema: {
 								type: string;
 							};
 							isExtensible: {
+								description: string;
+								type: string;
+							};
+							isExperimental: {
 								description: string;
 								type: string;
 							};
@@ -1470,6 +1505,10 @@ export declare const menuDocumentSchema: {
 				contextMenu: {
 					description: string;
 					$ref: string;
+				};
+				isExperimental: {
+					description: string;
+					type: string;
 				};
 			};
 			additionalProperties: boolean;

@@ -7,7 +7,7 @@ const config = defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'lib/**/*.test.ts', 'lib/**/*.test.tsx'],
   },
   resolve: {
     alias: {
@@ -15,6 +15,8 @@ const config = defineConfig({
       '@papi/backend': path.resolve(__dirname, '__test-mocks__/@papi/backend.ts'),
       // Mock @papi/frontend/react for tests
       '@papi/frontend/react': path.resolve(__dirname, '__test-mocks__/@papi/frontend-react.ts'),
+      // Mock @papi/frontend for tests
+      '@papi/frontend': path.resolve(__dirname, '__test-mocks__/@papi/frontend.ts'),
     },
   },
 });
