@@ -112,17 +112,37 @@ describe('marble-converter', () => {
         expect((wg as Record<string, unknown>).target_links).toBe('00100100100004');
       });
 
-      it('records a word-kind annotation for each <wg> with the id verbatim', () => {
+      it('records a word-kind annotation for each <wg> with the id verbatim and at least one research-link attr', () => {
         const xml = wrapChapter(`
           <para style="p">
-            <wg id="7" strong="H7225">beginning</wg>
-            <wg id="9" strong="H0430">God</wg>
+            <wg id="7" strong="H7225" lexical_links="SDBH:beginning:001001000">beginning</wg>
+            <wg id="9" strong="H0430" thematic_links="Realia:1.2.3">God</wg>
           </para>
         `);
         const result = convertMarbleChapterXml(xml);
         const wordAnns = result.annotations.filter((a) => a.kind === 'word');
         expect(wordAnns).toHaveLength(2);
         expect(wordAnns.map((a) => a.annotationId)).toEqual(['7', '9']);
+      });
+
+      it('does NOT record an annotation for a <wg> with no research-link attrs - target_links alone does not qualify', () => {
+        // Research-link attrs: lexical_links, thematic_links, image_links, map_links. These are
+        // what drive the tooltip / dictionary / encyclopedia / media tabs. `target_links` alone
+        // is a cross-reference pointer to other verses (no gloss, no dictionary entry), so a
+        // <wg> with only target_links + strong gets no marble-word overlay, no hover, no click
+        // filter - matching PT9. Real-world case: Gen 26:8 "When" carries only target_links.
+        // The <wg> MarkerObject is still emitted so text renders.
+        const xml = wrapChapter(`
+          <para style="p">
+            <wg id="24321" target_links="00102600800006">When</wg>
+            <wg id="7" strong="H7225">beginning</wg>
+          </para>
+        `);
+        const result = convertMarbleChapterXml(xml);
+        expect(result.annotations.filter((a) => a.kind === 'word')).toHaveLength(0);
+        // The <wg> MarkerObjects are still emitted so the text renders.
+        const wg = findFirst(result, (m) => m.type === 'char' && m.marker === 'wg');
+        expect(wg).toBeTruthy();
       });
 
       it('records semicolon-delimited link attributes as string arrays in annotation metadata', () => {
@@ -151,7 +171,7 @@ describe('marble-converter', () => {
         const xml = wrapChapter(`
           <para style="p">
             <verse pubnumber="1"/>
-            <wg id="7" strong="H7225">beginning</wg>
+            <wg id="7" strong="H7225" lexical_links="SDBH:beginning:001001000">beginning</wg>
           </para>
         `);
         const result = convertMarbleChapterXml(xml);
@@ -248,13 +268,13 @@ describe('marble-converter', () => {
           <para style="s1">The Creation</para>
           <para style="p">
             <verse pubnumber="1"/>
-            In the <wg id="7" strong="H7225">beginning</wg>
-            <wg id="9" strong="H0430">God</wg>
-            <wg id="11" strong="H1254">created</wg>
+            In the <wg id="7" strong="H7225" lexical_links="SDBH:beginning:001001000">beginning</wg>
+            <wg id="9" strong="H0430" lexical_links="SDBH:god:001001001">God</wg>
+            <wg id="11" strong="H1254" lexical_links="SDBH:created:001001002">created</wg>
             the
-            <wg id="13" strong="H8064">heavens</wg>
+            <wg id="13" strong="H8064" lexical_links="SDBH:heavens:001001003">heavens</wg>
             and the
-            <wg id="15" strong="H0776">earth.</wg>
+            <wg id="15" strong="H0776" lexical_links="SDBH:earth:001001004">earth.</wg>
           </para>
         `);
         const result = convertMarbleChapterXml(xml);

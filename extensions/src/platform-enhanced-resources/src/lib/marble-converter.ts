@@ -291,20 +291,40 @@ function emitWg(
   const id = el.getAttribute('id');
   if (id.length > 0) {
     node.id = id;
-    annotations.push({
-      usjPath: path,
-      kind: 'word',
-      annotationId: id,
-      metadata: {
-        strong: strong.length > 0 ? strong : undefined,
-        targetLinks: splitLinks(el.getAttribute('target_links')),
-        thematicLinks: splitLinks(el.getAttribute('thematic_links')),
-        lexicalLinks: splitLinks(el.getAttribute('lexical_links')),
-        imageLinks: splitLinks(el.getAttribute('image_links')),
-        mapLinks: splitLinks(el.getAttribute('map_links')),
-        verseNum: verseNum > 0 ? verseNum : undefined,
-      },
-    });
+    // A <wg> is treated as a research term only when it carries at least one link attribute
+    // that drives a user-visible research surface: `lexical_links` (gloss / dictionary),
+    // `thematic_links` (thematic categories), `image_links` (media tab), or `map_links` (maps).
+    // `target_links` alone does NOT qualify - those are cross-reference pointers to other
+    // verses (no gloss, no dictionary entry, nothing to render in any research tab), so PT9
+    // leaves target-only words unhighlighted. The <wg> MarkerObject is still emitted so the
+    // text content displays; only the annotation is skipped, which gates all overlays, hover,
+    // and click filter behavior for this word. (See Gen 26:8 "When" - target_links only.)
+    const targetLinks = splitLinks(el.getAttribute('target_links'));
+    const thematicLinks = splitLinks(el.getAttribute('thematic_links'));
+    const lexicalLinks = splitLinks(el.getAttribute('lexical_links'));
+    const imageLinks = splitLinks(el.getAttribute('image_links'));
+    const mapLinks = splitLinks(el.getAttribute('map_links'));
+    const hasResearchLink =
+      lexicalLinks.length > 0 ||
+      thematicLinks.length > 0 ||
+      imageLinks.length > 0 ||
+      mapLinks.length > 0;
+    if (hasResearchLink) {
+      annotations.push({
+        usjPath: path,
+        kind: 'word',
+        annotationId: id,
+        metadata: {
+          strong: strong.length > 0 ? strong : undefined,
+          targetLinks,
+          thematicLinks,
+          lexicalLinks,
+          imageLinks,
+          mapLinks,
+          verseNum: verseNum > 0 ? verseNum : undefined,
+        },
+      });
+    }
   }
 
   return node;
