@@ -2,21 +2,21 @@
 // Mirrors extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.scss's
 // pattern; see _usj-nodes.scss / _editor.scss / _editor-overrides.scss header comments for
 // the duplication TODO.
+//
+// Marble overlay rules (marble-word/note/filter/highlight + er-marble-hover-match) and the
+// `mark { background-color: initial }` reset ship with the EnhancedScripturePane component via
+// `useStylesheet` so the component renders identically in Storybook, in the live web view, or
+// anywhere else it's mounted - see MARBLE_ANNOTATION_STYLES in scripture-pane.component.tsx.
+// The named `--er-*` color tokens those rules reference live in `_er-tokens.scss`, the single
+// source of truth for every extension-local color (loaded via the @use below). The three
+// Storybook stories that need the tokens standalone side-effect-import the same partial.
 
+@use './er-tokens';
 @use './usj-nodes';
 @use './editor';
 @use './editor-overrides';
-@use './marble-overrides';
 
 body {
   // Remove margins added by the electron browser user-agent style sheet.
   margin: 0;
-}
-
-// Reset mark styles to unstyled. The editor uses <mark> elements for annotations
-// (marble-word, marble-note, marble-filter, marble-highlight); the visual treatment for
-// those classes is handled inline in scripture-pane.component.tsx via useStylesheet.
-mark {
-  background-color: initial;
-  color: inherit;
 }

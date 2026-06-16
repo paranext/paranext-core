@@ -2,6 +2,10 @@ import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { useCallback, useState } from 'react';
 import { Button } from 'platform-bible-react';
 import { getLocalizedStrings } from '../../../../../../.storybook/localization.utils';
+// Single source of truth for the extension-local `--er-*` color tokens. Side-effect import so
+// Storybook (which doesn't load the extension's web-view SCSS bundle) injects the same
+// `:root { --er-* }` declarations via style-loader.
+import '../../_er-tokens.scss';
 import { MarbleGuide, MARBLE_GUIDE_STRING_KEYS } from './marble-guide.component';
 
 const localizedStrings = getLocalizedStrings([...MARBLE_GUIDE_STRING_KEYS]);

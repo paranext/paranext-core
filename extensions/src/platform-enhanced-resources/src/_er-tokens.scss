@@ -1,0 +1,86 @@
+// Central declaration of extension-local CSS custom properties for the Enhanced Resources web
+// view. These are NOT theme-driven (they do not derive from Platform.Bible's `--primary` /
+// `--accent` / `--warning` token system) - they are fixed brand colors for the marble research-
+// term UI. Keep every color used by extension-owned CSS in this file so a future tweak (or
+// accessibility audit) only has to look in one place.
+//
+// Deviation from the design-system theming guideline: the platform's theming guide
+// (lib/platform-bible-react/src/stories/guidelines/theming.mdx) discourages "manual colors on
+// primitives" because they don't follow the active theme. We deviate intentionally here because
+// the marble research-term overlays carry SEMANTIC meaning ("this word is researchable" / "this
+// is a lemma sibling" / "this is the focal point of your filter") whose color identity must
+// remain stable across light and dark mode AND match between the on-page overlays and the
+// chip swatches in marble-guide.component.tsx. Token name is the contract; the theme switcher
+// is the wrong axis to vary these colors along. Foreground pinning (`color: black` here and at
+// each consumer site) follows from the same reasoning - the pastel bgs are themselves fixed.
+//
+// Naming convention: `--er-*` prefix (Enhanced Resources) so these never collide with the global
+// Platform.Bible token namespace, and scope is `:root` so any extension stylesheet (including the
+// component-local block injected via `useStylesheet` in scripture-pane.component.tsx) can resolve
+// them.
+//
+// Why this is an .scss partial (not a `.css` file): sass-loader inlines `@use`/`@import` of SCSS
+// files at compile time, but passes `@import 'something.css'` through as a runtime CSS @import
+// the web-view's bundled style string can't resolve. The contents below are plain CSS so the
+// partial reads identically to a CSS file - the .scss extension exists only to let sass inline
+// it into the extension's web-view bundle AND let the three Storybook story files load it
+// through the standard SCSS rule (style-loader + sass-loader).
+//
+// Single source of truth for tokens. It is:
+//   - bundled into the extension SCSS via `@use './er-tokens';` in `enhanced-resource.web-view.scss`
+//   - side-effect-imported into the three Storybook stories so the `:root { --er-* }` block is
+//     registered in the document. Grep `_er-tokens.scss` / `er-tokens` to find every site.
+
+:root {
+  /* Marble note caller text color. Footnote-style affordance that intentionally stands out from
+     surrounding scripture text. */
+  --er-marble-note-color: hsl(210 100% 25%);
+  /* Color A - subtle background for the "Highlight all research terms" toolbar toggle. Pale so
+     the page doesn't read as visually noisy when every linked term is marked. */
+  --er-marble-highlight-all-bg: hsl(210 100% 90%);
+  /* Color B - deeper variant of Color A applied to every word in the currently-hovered lemma
+     group. Same hue so the two states read as related; darker so the matching expression pops
+     through the highlight-all overlay. */
+  --er-marble-hover-match-bg: hsl(210 100% 75%);
+  /* Marble-filter overlay color - applied as a `<mark>` background to the SINGLE scripture
+     token the user has filtered the dictionary to (NOT the toolbar filter input - that's
+     --er-filter-input-* below). Warm yellow to read as semantically distinct from the blue
+     highlight family. */
+  --er-marble-filter-bg: hsl(45 100% 75%);
+  /* Paler companion to --er-marble-filter-bg, applied to every lemma-sibling of the filtered
+     token. Same hue, lighter so the filtered word itself reads as the focal point while the rest
+     of its matching expression is visually grouped with it. Same lightness relationship as
+     highlight-all (90%) to hover-match (75%). */
+  --er-marble-filter-match-bg: hsl(45 100% 90%);
+  /* Rendering-status colors described by the marble-guide chips. PT9 painted these on scripture
+     words to signal rendering state; PT10's scripture-pane has NOT yet wired them up but the
+     marble-guide help dialog labels them by color name ("gray", "orange") so the chip swatches
+     need a real gray / orange to match the label. When the rendering-status overlays land in the
+     scripture-pane, they should consume these same tokens (rename the chip wiring then if a
+     more semantic name fits the new state). */
+  --er-marble-rendering-found-bg: hsl(210 8% 75%);
+  --er-marble-rendering-missing-bg: hsl(25 100% 75%);
+  /* Toolbar filter-input background tint. Green when the filter text matches at least one
+     dictionary entry, warm orange when there are no matches. FN-024 / SB#2. */
+  --er-filter-input-match-bg: hsl(149 80% 90%);
+  --er-filter-input-no-match-bg: hsl(34 100% 92%);
+}
+
+/* The `--er-filter-input-*` tokens above are fixed pastels in both light and dark mode (earlier
+   `.dark` overrides on these tokens never reached the input in practice). To keep the typed filter
+   text legible on the pastel bg, the toolbar component adds `er-filter-input-on-pastel` to the
+   active input and we force black text below. We do NOT scope this rule to a theme class (`.dark`,
+   `[class*="-dark"]`, etc.) because the body class is the active theme's id (e.g. `dark`,
+   `paratext-dark`, `platform-dark`) and depends on the user's selected theme family — pinning
+   black unconditionally is bulletproof and matches the chip + marble-overlay strategy: in light
+   mode the inherited foreground was already near-black, so this is a visual no-op there. */
+// Rest-state only. The `:not(:hover)` scope is essential: this rule is unlayered, while Tailwind
+// utilities (including the shadcn `ghost` variant's `tw:hover:text-foreground`) live in the
+// `utilities` cascade layer. Unlayered rules always beat layered ones regardless of specificity,
+// so a plain `.er-filter-input-on-pastel { color: black }` would override shadcn's hover treatment
+// and leave the X clear button stuck in black on hover. Scoping to `:not(:hover)` means this rule
+// stops matching the moment the cursor is over the element, letting the layered shadcn hover rule
+// take effect — black-on-pastel while idle, regular accent treatment on hover.
+.er-filter-input-on-pastel:not(:hover) {
+  color: black;
+}

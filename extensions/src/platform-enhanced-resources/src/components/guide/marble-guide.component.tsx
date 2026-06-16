@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import {
   Button,
   Checkbox,
@@ -9,15 +9,32 @@ import {
   DialogHeader,
   DialogTitle,
   Label,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
 } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
-import { Book, BookOpen, Image as ImageIcon, Info, MapPin } from 'lucide-react';
+import {
+  BookA,
+  ChevronDown,
+  ChevronRight,
+  Image as ImageIcon,
+  Info,
+  LibraryBig,
+  MapPin,
+} from 'lucide-react';
 
 /**
- * Object containing all keys used for localization in this component. Mirrors the 19 strings from
- * PT9's `MarbleGuideForm.cs` (MarbleGuideForm_1 .. MarbleGuideForm_19) plus 3 chrome strings the
- * shadcn Dialog needs (title is reused for the dialog title, plus close-button label, checkbox
- * label, and an sr-only description).
+ * Object containing all keys used for localization in this component. Sourced from PT9's
+ * `MarbleGuideForm.cs` (the `MarbleGuideForm_*` body strings) plus the chrome strings the shadcn
+ * Dialog needs — title (reused for the dialog title), close-button label, checkbox label, and an
+ * sr-only description.
+ *
+ * The array is exported as an `as const` tuple so the localized-strings hook can narrow its return
+ * shape. Consumers should iterate the tuple (e.g. `useLocalizedStrings(MARBLE_GUIDE_STRING_KEYS)`)
+ * rather than index into it — the order is not stable across edits and adding/removing entries
+ * shifts every subsequent index.
  */
 export const MARBLE_GUIDE_STRING_KEYS = Object.freeze([
   '%enhancedResources_marbleGuide_title%',
@@ -27,6 +44,7 @@ export const MARBLE_GUIDE_STRING_KEYS = Object.freeze([
   '%enhancedResources_marbleGuide_aboutBlueHighlight%',
   '%enhancedResources_marbleGuide_blueWordTitle%',
   '%enhancedResources_marbleGuide_aboutBiblicalTerms%',
+  '%enhancedResources_marbleGuide_biblicalTermsHeadline%',
   '%enhancedResources_marbleGuide_aboutGrayHighlight%',
   '%enhancedResources_marbleGuide_grayWordTitle%',
   '%enhancedResources_marbleGuide_aboutOrangeHighlight%',
@@ -42,6 +60,7 @@ export const MARBLE_GUIDE_STRING_KEYS = Object.freeze([
   '%enhancedResources_marbleGuide_moreHelp%',
   '%enhancedResources_marbleGuide_close%',
   '%enhancedResources_marbleGuide_neverShowAgain%',
+  '%enhancedResources_marbleGuide_notYetImplemented%',
 ] as const);
 
 type MarbleGuideLocalizedStringKey = (typeof MARBLE_GUIDE_STRING_KEYS)[number];
@@ -165,6 +184,9 @@ export function MarbleGuide({
   const aboutBiblicalTerms = String(
     getLocalizedString('%enhancedResources_marbleGuide_aboutBiblicalTerms%'),
   );
+  const biblicalTermsHeadline = String(
+    getLocalizedString('%enhancedResources_marbleGuide_biblicalTermsHeadline%'),
+  );
   const aboutGrayTemplate = String(
     getLocalizedString('%enhancedResources_marbleGuide_aboutGrayHighlight%'),
   );
@@ -194,14 +216,29 @@ export function MarbleGuide({
   const neverShowAgainLabel = String(
     getLocalizedString('%enhancedResources_marbleGuide_neverShowAgain%'),
   );
+  const notYetImplemented = String(
+    getLocalizedString('%enhancedResources_marbleGuide_notYetImplemented%'),
+  );
 
   // Color chips. The localized color word ("blue", "gray", "orange") is the visible label so the
-  // text still names the color users see in the actual ER. The chip background uses semantic
-  // theme tokens because the lint rule blocks hardcoded blue/gray/orange Tailwind classes and
-  // there are no blue/gray/orange theme tokens in the current design system.
+  // text names the color users actually see (or will see) in the scripture pane. All three chips
+  // pull their background from extension-local CSS custom properties declared centrally in
+  // `extensions/src/platform-enhanced-resources/src/_er-tokens.scss`:
+  //
+  // - Blue (`--er-marble-hover-match-bg`): SAME token the scripture-pane uses to paint linked
+  //   research terms on hover, so the help-dialog swatch and the on-screen overlay match.
+  // - Gray (`--er-marble-rendering-found-bg`) / Orange (`--er-marble-rendering-missing-bg`): PT9
+  //   rendering-status colors that the scripture-pane does NOT yet wire up. The surrounding
+  //   paragraphs are dimmed via text-muted-foreground and live inside the collapsed Biblical
+  //   Terms section so users aren't promised a visual signal they can't currently see. When the
+  //   rendering-status overlays land, the scripture-pane will consume these same tokens.
+  // Chip backgrounds are fixed light pastels in both light and dark mode (the `--er-marble-*`
+  // tokens have no `.dark` overrides — the swatches must visually match the scripture-pane
+  // overlay colors which are also fixed). In dark mode `--foreground` is near-white, which
+  // gives illegible contrast on the pastel; force near-black text under `.dark` instead.
   const blueChip = (
     <span
-      className="tw:rounded tw:bg-primary tw:px-1.5 tw:py-0.5 tw:font-medium tw:text-primary-foreground"
+      className="tw:rounded tw:bg-[var(--er-marble-hover-match-bg)] tw:px-1.5 tw:py-0.5 tw:font-medium tw:text-foreground tw:dark:text-black"
       data-testid="marble-guide-color-chip-blue"
     >
       {blueWord}
@@ -209,7 +246,7 @@ export function MarbleGuide({
   );
   const grayChip = (
     <span
-      className="tw:rounded tw:bg-muted tw:px-1.5 tw:py-0.5 tw:font-medium tw:text-muted-foreground"
+      className="tw:rounded tw:bg-[var(--er-marble-rendering-found-bg)] tw:px-1.5 tw:py-0.5 tw:font-medium tw:text-foreground tw:dark:text-black"
       data-testid="marble-guide-color-chip-gray"
     >
       {grayWord}
@@ -217,7 +254,7 @@ export function MarbleGuide({
   );
   const orangeChip = (
     <span
-      className="tw:rounded tw:bg-destructive tw:px-1.5 tw:py-0.5 tw:font-medium tw:text-destructive-foreground"
+      className="tw:rounded tw:bg-[var(--er-marble-rendering-missing-bg)] tw:px-1.5 tw:py-0.5 tw:font-medium tw:text-foreground tw:dark:text-black"
       data-testid="marble-guide-color-chip-orange"
     >
       {orangeWord}
@@ -225,16 +262,27 @@ export function MarbleGuide({
   );
   const helpLink = (
     // PT9 used a `help:055de6ffc352` URI handler. Phase-3-ui wiring will resolve the help target;
-    // for the design phase the link is rendered visually but does not navigate (button-as-link
-    // with no-op handler).
-    <button
-      type="button"
-      className="tw:cursor-pointer tw:text-primary tw:underline tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
-      onClick={() => {}}
-      data-testid="marble-guide-help-link"
-    >
-      {thisHelpTopic}
-    </button>
+    // until then the link is rendered visually but does not navigate. `cursor-not-allowed` +
+    // muted text + `aria-disabled` communicate the disabled state to sighted and assistive-tech
+    // users; the wrapping Tooltip surfaces the localized "(Not yet implemented...)" message on
+    // hover so the reason is explicit without removing the element from tab order or duplicating
+    // the explanatory text inline.
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-disabled
+            className="tw:inline-flex tw:cursor-not-allowed tw:items-center tw:gap-1 tw:text-muted-foreground tw:underline tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
+            onClick={() => {}}
+            data-testid="marble-guide-help-link"
+          >
+            {thisHelpTopic}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>{notYetImplemented}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
   const infoIconChip = (
     <span
@@ -245,6 +293,12 @@ export function MarbleGuide({
     </span>
   );
 
+  // Biblical Terms section is collapsed by default — its contents describe behavior the
+  // scripture-pane does not yet paint (rendering-status overlays), so we don't want to promise
+  // visual signals users can't currently see. State is local because the collapse is a
+  // presentation detail of the guide dialog; it does not need to round-trip via PAPI memento.
+  const [biblicalTermsExpanded, setBiblicalTermsExpanded] = useState(false);
+
   // shadcn Dialog's `onOpenChange` fires for Escape, click-outside, and the built-in close button.
   // Forward `false` through `onClose` so the parent can persist the never-show-again preference.
   const handleOpenChange = (next: boolean) => {
@@ -254,7 +308,7 @@ export function MarbleGuide({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="tw:flex tw:max-h-[80vh] tw:max-w-2xl tw:flex-col tw:gap-0 tw:p-0"
+        className="tw:flex tw:max-h-[80vh] tw:flex-col tw:gap-0 tw:p-0 tw:sm:w-[80vw] tw:sm:max-w-3xl"
         data-testid="marble-guide"
       >
         <DialogHeader className="tw:border-b tw:border-border tw:px-6 tw:py-4">
@@ -276,16 +330,50 @@ export function MarbleGuide({
             <strong>{interleavePlaceholders(aboutBlueTemplate, { colorWord: blueChip })}</strong>
           </p>
 
-          <p>{aboutBiblicalTerms}</p>
+          {/* The Biblical Terms section + gray/orange rendering-status paragraphs describe
+              behavior the scripture-pane does not yet paint. Collapsed by default so the guide
+              doesn't promise visual signals users can't currently see; a button-link trigger
+              expands the content on demand. */}
+          <div
+            className="tw:flex tw:flex-col tw:gap-3 tw:rounded tw:border tw:border-border tw:p-3"
+            data-testid="marble-guide-biblical-terms"
+          >
+            <p>
+              <button
+                type="button"
+                aria-expanded={biblicalTermsExpanded}
+                aria-controls="marble-guide-biblical-terms-content"
+                onClick={() => setBiblicalTermsExpanded((prev) => !prev)}
+                className="tw:inline-flex tw:cursor-pointer tw:items-center tw:gap-1 tw:text-foreground tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
+                data-testid="marble-guide-biblical-terms-trigger"
+              >
+                {biblicalTermsExpanded ? (
+                  <ChevronDown className="tw:h-4 tw:w-4" aria-hidden />
+                ) : (
+                  <ChevronRight className="tw:h-4 tw:w-4" aria-hidden />
+                )}
+                <span className="tw:underline">{biblicalTermsHeadline}</span>
+              </button>{' '}
+              <span className="tw:text-muted-foreground">{notYetImplemented}</span>
+            </p>
+            {biblicalTermsExpanded && (
+              <div
+                id="marble-guide-biblical-terms-content"
+                className="tw:flex tw:flex-col tw:gap-3 tw:text-muted-foreground"
+              >
+                <p>{aboutBiblicalTerms}</p>
 
-          <p>{interleavePlaceholders(aboutGrayTemplate, { colorWord: grayChip })}</p>
+                <p>{interleavePlaceholders(aboutGrayTemplate, { colorWord: grayChip })}</p>
 
-          <p>
-            {interleavePlaceholders(aboutOrangeTemplate, {
-              colorWord: orangeChip,
-              helpLink,
-            })}
-          </p>
+                <p>
+                  {interleavePlaceholders(aboutOrangeTemplate, {
+                    colorWord: orangeChip,
+                    helpLink,
+                  })}
+                </p>
+              </div>
+            )}
+          </div>
 
           <p className="tw:pt-2 tw:font-semibold">{tabsHeader}</p>
           <div
@@ -293,11 +381,11 @@ export function MarbleGuide({
             data-testid="marble-guide-tab-grid"
           >
             <div className="tw:flex tw:flex-col tw:items-center tw:gap-1">
-              <BookOpen className="tw:h-6 tw:w-6 tw:text-foreground" aria-hidden />
+              <BookA className="tw:h-6 tw:w-6 tw:text-foreground" aria-hidden />
               <span className="tw:text-xs">{tabDictionary}</span>
             </div>
             <div className="tw:flex tw:flex-col tw:items-center tw:gap-1">
-              <Book className="tw:h-6 tw:w-6 tw:text-foreground" aria-hidden />
+              <LibraryBig className="tw:h-6 tw:w-6 tw:text-foreground" aria-hidden />
               <span className="tw:text-xs">{tabEncyclopedia}</span>
             </div>
             <div className="tw:flex tw:flex-col tw:items-center tw:gap-1">
@@ -315,18 +403,33 @@ export function MarbleGuide({
           <p>{interleavePlaceholders(howToOpenGuideTemplate, { infoIcon: infoIconChip })}</p>
 
           <p>
-            <button
-              type="button"
-              className="tw:cursor-pointer tw:text-primary tw:underline tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
-              onClick={() => {}}
-              data-testid="marble-guide-more-help-link"
-            >
-              {moreHelp}
-            </button>
+            {/* "More help" is also unimplemented until phase-3-ui wires the help URI handler.
+                Matches the disabled-state styling + tooltip pattern of `helpLink` above. */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-disabled
+                    className="tw:inline-flex tw:cursor-not-allowed tw:items-center tw:gap-1 tw:text-muted-foreground tw:underline tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
+                    onClick={() => {}}
+                    data-testid="marble-guide-more-help-link"
+                  >
+                    {moreHelp}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>{notYetImplemented}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </p>
         </div>
 
-        <DialogFooter className="tw:flex tw:flex-row tw:items-center tw:justify-between tw:gap-3 tw:border-t tw:border-border tw:px-6 tw:py-3 tw:sm:justify-between">
+        {/* `tw:mx-0 tw:mb-0` neutralizes shadcn DialogFooter's default `-mx-4 -mb-4` negative
+            margins. Those negatives are designed to bleed into a DialogContent that uses `p-4`;
+            this dialog uses `tw:p-0` (header / body / footer manage their own padding), so without
+            the override the footer slips ~16px past the dialog's bottom + side edges and overlaps
+            the surrounding chrome. */}
+        <DialogFooter className="tw:mx-0 tw:mb-0 tw:flex tw:flex-row tw:items-center tw:justify-between tw:gap-3 tw:border-t tw:border-border tw:px-6 tw:py-3 tw:sm:justify-between">
           <Button
             type="button"
             variant="default"
@@ -336,11 +439,15 @@ export function MarbleGuide({
             {closeLabel}
           </Button>
           <div className="tw:flex tw:items-center tw:gap-2">
+            {/* `bg-background` keeps the unchecked checkbox visually distinct against the
+                DialogFooter's `bg-muted/50` chrome - without it the transparent shadcn default
+                blends into the muted footer and reads as disabled. */}
             <Checkbox
               id="marble-guide-never-show-again"
               checked={neverShowAgain}
               onCheckedChange={(next) => onNeverShowAgainChange(next === true)}
               data-testid="marble-guide-never-show-again"
+              className="tw:cursor-pointer tw:bg-background"
             />
             <Label
               htmlFor="marble-guide-never-show-again"

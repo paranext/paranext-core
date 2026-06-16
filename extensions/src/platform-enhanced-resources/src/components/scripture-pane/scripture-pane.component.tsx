@@ -108,45 +108,142 @@ export type EnhancedScripturePaneProps = {
 
 const ANNOTATION_TYPE_MARBLE_WORD = 'marble-word';
 const ANNOTATION_TYPE_MARBLE_NOTE = 'marble-note';
-const ANNOTATION_TYPE_FILTER = 'marble-filter';
-const ANNOTATION_TYPE_HIGHLIGHT = 'marble-highlight';
-// Hover-match used to be an editor.setAnnotation type ('marble-hover-match'), but D-15
-// proved that path causes a flicker storm (AnnotationPlugin's wrap-merge-replace cycle
-// destroys+recreates the <mark> DOM element on every overlapping setAnnotation). The
-// hover-match overlay is now applied as a direct CSS class on the existing marble-word
-// marks (`er-marble-hover-match`) - see handleMarbleMouseEnter for the rationale.
 const RIGHT_MOUSE_BUTTON = 2;
 
 /**
- * CSS for marble annotation marks.
+ * This component holds marble CSS in two stylesheets, deliberately using two different mechanisms:
+ *
+ * - The STATIC base sheet (`MARBLE_ANNOTATION_STYLES`) ships via the platform's `useStylesheet` hook.
+ *   Its content never changes per state, so a hook that mounts the sheet on mount and tears it down
+ *   on unmount is the right contract.
+ * - The DYNAMIC overlay sheet (built by `buildMarbleOverlayCss`) is mounted imperatively as a single
+ *   `<style data-er-marble-overlays>` element whose `textContent` is reassigned on every
+ *   overlay-state change. `useStylesheet` tears the element down and rebuilds it on every input
+ *   change (`useEffect` depends on `[stylesheet]`), which would churn the DOM on every hover /
+ *   filter / highlight-all transition. Reassigning `textContent` on a single persistent element
+ *   keeps the dynamic path zero-DOM-mutation per state change. Both paths work identically in
+ *   Storybook and the live app — only perf and DOM churn differ.
+ *
+ * Data attribute marking the dynamic overlay stylesheet so tests (and any future dev tooling) can
+ * find it without depending on textContent fingerprints. The component creates exactly one element
+ * per mounted instance.
+ */
+const OVERLAY_STYLESHEET_DATA_ATTR = 'data-er-marble-overlays';
+
+/**
+ * Build the marble overlay stylesheet content from the current overlay state. Emits CSS rules keyed
+ * off the `annotationId-X` class Editorial automatically attaches to every mark, so the browser
+ * matches them against current AND future marks - which solves both the chunked-apply race (Effect
+ * A emits marks across multiple RAFs) and any scroll-driven mark recreation without a
+ * MutationObserver or per-chunk reapply loop.
+ *
+ * Source order = precedence when specificity ties (every overlay rule uses two classes). Stack, low
+ * to high precedence:
+ *
+ * 1. Highlight-all - every marble-word mark, when the toolbar toggle is on
+ * 2. Hover-match - lemma-group of the currently-hovered word (transient feedback)
+ * 3. Filter-match - lemma-siblings of the filtered word
+ * 4. Filter - the single focal word the user clicked (strongest signal, focal point)
+ *
+ * Filter-match sits ABOVE hover-match (Matt review #4): while a filter is active, hovering a
+ * lemma-sibling of the filtered word must keep its filter-match tint, not flip to hover-match, so
+ * the "I'm part of the filtered group" cue isn't lost mid-hover. A hovered word that is NOT a
+ * filter-match sibling falls through to hover-match unchanged.
+ *
+ * Color tokens (`--er-marble-*`) are declared centrally in `_er-tokens.scss` and are fixed brand
+ * colors for the research-term UI, not derived from Platform.Bible's theme tokens.
+ *
+ * Each rule also pins `color: black`. The pastel backgrounds are fixed in both light and dark mode
+ * (the marble overlays must visually match the chip swatches in `marble-guide.component.tsx`), but
+ * the underlying scripture text inherits the theme `--foreground`, which is near-white in dark mode
+ * and would render illegibly on the pastel. Forcing dark text on the marked word only is scoped
+ * tight enough not to bleed into the rest of the scripture text. In light mode the inherited
+ * foreground was already near-black, so this is visually a no-op.
+ */
+function buildMarbleOverlayCss(state: {
+  highlightAllOn: boolean;
+  filteredTokenId: string | undefined;
+  filterMatchIds: ReadonlySet<string>;
+  hoverMatchIds: ReadonlySet<string>;
+}): string {
+  const parts: string[] = [];
+  if (state.highlightAllOn) {
+    parts.push(
+      '.editor-typed-mark-external-marble-word { background-color: var(--er-marble-highlight-all-bg); color: black; border-radius: 2px; }',
+    );
+  }
+  if (state.hoverMatchIds.size > 0) {
+    parts.push(
+      `${selectorForAnnotationIds(state.hoverMatchIds)} { background-color: var(--er-marble-hover-match-bg); color: black; border-radius: 2px; }`,
+    );
+  }
+  if (state.filterMatchIds.size > 0) {
+    parts.push(
+      `${selectorForAnnotationIds(state.filterMatchIds)} { background-color: var(--er-marble-filter-match-bg); color: black; border-radius: 2px; }`,
+    );
+  }
+  if (state.filteredTokenId !== undefined) {
+    parts.push(
+      `${selectorForAnnotationIds([state.filteredTokenId])} { background-color: var(--er-marble-filter-bg); color: black; border-radius: 2px; }`,
+    );
+  }
+  return parts.join('\n');
+}
+
+/**
+ * Compose a selector list matching marble-word marks whose annotationId class is in the given set.
+ * Editorial emits each mark with `class="editor-typed-mark-external-marble-word
+ * annotationId-${id}"`. We escape the id portion via `CSS.escape` so annotation ids containing
+ * CSS-meta characters (dots, colons, etc.) produce valid selectors; in practice marble ids are
+ * numeric or `wg-N` but a future id scheme could include anything.
+ */
+function selectorForAnnotationIds(ids: Iterable<string>): string {
+  return Array.from(ids, (id) => {
+    const escapedClass = CSS.escape(`annotationId-${id}`);
+    return `.editor-typed-mark-external-marble-word.${escapedClass}`;
+  }).join(', ');
+}
+
+/**
+ * Static base CSS for marble annotation marks.
  *
  * Editorial renders `setAnnotation(range, type, id)` calls as `<mark>` elements with class
- * `.editor-typed-mark-external-${type}`. Editorial itself provides no visual treatment for these
- * classes - that's the host extension's responsibility (see Editorial README "Annotation Styles").
+ * `.editor-typed-mark-external-${type}` and an `annotationId-${id}` class on each mark. Editorial
+ * provides no visual treatment - that's the host extension's responsibility.
  *
- * - Marble-word: linked research term (BHV-301/302). Click to filter the dictionary / open tooltip.
- * - Marble-note: linked study/cross-ref note. Renders as a footnote-style affordance.
- * - Highlight and filter states are layered via secondary `editor.setAnnotation` calls using
- *   `marble-highlight` and `marble-filter` types. Lemma-match (hover) state is applied as a direct
- *   CSS class (`er-marble-hover-match`) on the existing marble-word marks - see
- *   handleMarbleMouseEnter for the D-15 rationale. See the `_marble-overrides.scss` partial for
- *   visual treatment of all three overlay states.
+ * The four overlay colors (highlight-all, hover-match, filter-match, filter) are NOT in this static
+ * sheet: they're emitted dynamically into a separate `<style>` element by `buildMarbleOverlayCss`,
+ * keyed off the existing `annotationId-X` class. Doing it as CSS rules (not per-element classList
+ * mutations) means the browser handles selector matching for current AND future marks - that solves
+ * both the chunked-apply race in Effect A and any scroll-driven mark recreation, with zero JS work
+ * per scroll/mutation.
+ *
+ * Color tokens (`--er-marble-*`) are declared centrally in `_er-tokens.scss`. The Storybook story
+ * re-declares the same tokens inline since it doesn't load the extension bundle - see
+ * `scripture-pane.stories.tsx` `MARBLE_TOKEN_FALLBACK_STYLE`.
+ *
+ * The `mark { background-color: initial }` rule resets the user-agent `<mark>` yellow default so
+ * marble-word marks don't show yellow in any surrounding-CSS-free environment.
  */
 const MARBLE_ANNOTATION_STYLES = `
+mark {
+  background-color: initial;
+  color: inherit;
+}
 .editor-typed-mark-external-marble-word {
   cursor: pointer;
-  /* Override <mark> user-agent default (background: yellow, color: black) so marble-words
-     have no visual treatment by default. Per G5 PT9 fidelity: visible affordance is opt-in
-     via the "Highlight all research terms" toggle, hovers, or filter state. */
-  background-color: transparent;
-  color: inherit;
+  /* No 'color: inherit' here — it ties on specificity with the dynamic highlight-all rule in
+     buildMarbleOverlayCss (single class selector), and depending on stylesheet mount order can
+     beat the overlay's 'color: black', leaving dark-mode text near-white on the pastel
+     background. Without an explicit color here, marks naturally inherit the surrounding
+     scripture color when no overlay is active, and the overlay's 'color: black' wins by being
+     the only color rule when an overlay applies. */
 }
 .editor-typed-mark-external-marble-note {
   cursor: pointer;
-  background-color: transparent;
-  /* Marble-note keeps the primary color (footnote-style affordance) - it intentionally
+  /* Marble-note keeps a distinct color (footnote-style affordance) - it intentionally
      stands out, unlike marble-word. */
-  color: hsl(var(--primary));
+  color: var(--er-marble-note-color);
 }
 `;
 
@@ -522,16 +619,13 @@ export function EnhancedScripturePane({
 
   // Hover lifecycle bookkeeping. fetchGenRef is bumped on every mouseenter/mouseleave so
   // late-arriving showPopover / buildTooltipData promises can detect they are stale and
-  // self-cancel. activePopoverIdRef tracks the currently-rendered popover for dismissal;
-  // activeMatchSetRef tracks the annotationIds whose marks we tagged with the hover-match
-  // class so they can be cleared on mouseleave or component unmount.
+  // self-cancel. activePopoverIdRef tracks the currently-rendered popover for dismissal.
   const fetchGenRef = useRef(0);
   // The popover-id ref is initially null because no popover is open. Using `undefined` would be
   // technically possible but conflates "absent" with "uninitialized" given React's useRef contract;
   // null is the canonical sentinel.
   // eslint-disable-next-line no-null/no-null
   const activePopoverIdRef = useRef<string | null>(null);
-  const activeMatchSetRef = useRef<Set<string>>(new Set());
   // Fix D-14: track the currently-hovered annotation id so re-fires of mouseenter from any
   // editor-induced mark re-renders are no-oped. Without this guard, the popover-fetch race
   // kicks in: every re-fire bumps fetchGenRef, so most in-flight buildTooltipData calls abort
@@ -544,6 +638,15 @@ export function EnhancedScripturePane({
   // state. A mouseenter for the same id within the debounce window cancels the pending leave.
   // See handleMarbleMouseLeave for the cancel/cleanup flow.
   const pendingLeaveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // Refs mirroring current overlay state, read by `rebuildOverlayStyle` whenever any of the four
+  // overlay inputs changes. Persistent state (highlight-all + filter) is React-driven via
+  // `useLatestRef` so the rebuild effect picks it up via the regular prop dep list; hover state
+  // lives in `hoverMatchIdsRef` (mutated by the hover handlers inside Effect A) so a hover
+  // update doesn't force a re-render.
+  const highlightAllOnRef = useLatestRef(highlightAllResearchTerms);
+  const filteredTokenIdRef = useLatestRef(filteredTokenId);
+  const hoverMatchIdsRef = useRef<ReadonlySet<string>>(new Set());
 
   // Build per-lemma annotation index from `lexicalLinks` metadata. Used by hover handlers
   // to compute matching vs non-matching annotations on each mouseenter without iterating
@@ -572,6 +675,77 @@ export function EnhancedScripturePane({
     return { lemmaToAnnotationIds, annotationIdToLemmas };
   }, [annotations]);
 
+  // Lemma-siblings of the currently-filtered word. Memoized so the rebuild trigger effect and
+  // hover handlers see an identical set, and recomputed only when filteredTokenId or the
+  // annotation set changes. The focal word itself is excluded - it wears `er-marble-filter`
+  // (stronger color); siblings wear the lighter `er-marble-filter-match`.
+  const filterMatchIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (!filteredTokenId) return ids;
+    const lemmas = lemmaIndex.annotationIdToLemmas.get(filteredTokenId);
+    if (!lemmas) return ids;
+    lemmas.forEach((lemma) => {
+      const annIds = lemmaIndex.lemmaToAnnotationIds.get(lemma);
+      if (!annIds) return;
+      annIds.forEach((id) => {
+        if (id !== filteredTokenId) ids.add(id);
+      });
+    });
+    return ids;
+  }, [filteredTokenId, lemmaIndex]);
+  const filterMatchIdsRef = useLatestRef(filterMatchIds);
+
+  // ----- Dynamic overlay stylesheet ----------------------------------------------------------
+  // Single `<style>` element that carries all four marble overlay rules (highlight-all, filter,
+  // filter-match, hover-match) as CSS keyed off the `annotationId-X` class Editorial attaches to
+  // every mark. The browser handles selector matching for current AND future marks - no per-mark
+  // classList mutation, no MutationObserver, no epoch coordination. See `buildMarbleOverlayCss`.
+
+  // Initial null is the sentinel for "style element not mounted yet"; the mount effect below
+  // creates and assigns it. useRef requires us to declare the union with `null` explicitly.
+  // eslint-disable-next-line no-null/no-null
+  const overlayStyleRef = useRef<HTMLStyleElement | null>(null);
+
+  const rebuildOverlayStyle = useCallback(() => {
+    const el = overlayStyleRef.current;
+    if (!el) return;
+    el.textContent = buildMarbleOverlayCss({
+      highlightAllOn: highlightAllOnRef.current,
+      filteredTokenId: filteredTokenIdRef.current,
+      filterMatchIds: filterMatchIdsRef.current,
+      hoverMatchIds: hoverMatchIdsRef.current,
+    });
+    // The refs used here (useLatestRef return values + plain useRef) are identity-stable, so the
+    // callback identity itself never needs to change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Mount the overlay <style> element once. Inserted into document.head (not the component's
+  // own container) so the static stylesheet from `useStylesheet` and the dynamic one resolve at
+  // the same DOM scope. The mount effect also performs the first rebuild so the initial paint
+  // already has the right rules.
+  useEffect(() => {
+    const styleEl = document.createElement('style');
+    styleEl.setAttribute(OVERLAY_STYLESHEET_DATA_ATTR, '');
+    document.head.appendChild(styleEl);
+    overlayStyleRef.current = styleEl;
+    rebuildOverlayStyle();
+    return () => {
+      styleEl.remove();
+      // Reset to the null sentinel - useRef is `T | null` here so rebuildOverlayStyle can
+      // detect "not mounted yet" cleanly.
+      // eslint-disable-next-line no-null/no-null
+      overlayStyleRef.current = null;
+    };
+  }, [rebuildOverlayStyle]);
+
+  // Trigger a rebuild whenever any of the persistent overlay inputs change. Hover inputs are
+  // applied imperatively from the hover handlers via `rebuildOverlayStyle()` so they bypass
+  // React's render cycle entirely.
+  useEffect(() => {
+    rebuildOverlayStyle();
+  }, [highlightAllResearchTerms, filteredTokenId, filterMatchIds, rebuildOverlayStyle]);
+
   // D-012 (2026-05-16): Editorial accepts the chapter USJ via `defaultUsj` at mount only - it does
   // NOT re-read that prop on subsequent renders. When the wiring layer reloads a new chapter (BCV
   // nav after the ER pane is open), the scripture pane was stuck on the originally-mounted USJ
@@ -582,27 +756,38 @@ export function EnhancedScripturePane({
   //
   // D-013 (2026-05-16): The setUsj call schedules an asynchronous Lexical-tree rebuild inside the
   // editor (it calls a React state setter; the rebuild lands on the editor's next render). Effect A
-  // / Effect C run synchronously after this effect in declaration order, so without coordination
-  // they begin applying setAnnotation calls against the OLD Lexical tree while the new tree is
-  // still mounting. ~50-200 annotations per chapter then fail their node lookups in rapid burst
+  // runs synchronously after this effect in declaration order, so without coordination it would
+  // begin applying setAnnotation calls against the OLD Lexical tree while the new tree is still
+  // mounting. ~50-200 annotations per chapter then fail their node lookups in rapid burst
   // (D-008 warns), and the race intermittently crashes the renderer when setAnnotation's queued
   // editor.update overlaps the LoadStatePlugin's tree-rebuild commit. The fix has two parts:
-  //   1. usjEpochRef increments on every USJ swap. The annotation-apply effects capture the epoch
-  //      at the start of each run and abort (per-chunk and per-item) if it changes — even faster
-  //      than the existing `cancelled` flag, which only flips on effect cleanup.
-  //   2. usjJustChangedRef tells the annotation-apply effects to defer their first chunk by one
-  //      requestAnimationFrame, giving the editor's setUsj-driven re-render time to commit the new
-  //      Lexical tree before we hit it with setAnnotation. Mount-time application stays
-  //      synchronous (no deferral) because Editorial consumed `defaultUsj` and the tree is ready.
+  //   1. usjEpochRef increments on every USJ swap. Effect A captures the epoch at the start of
+  //      each run and aborts (per-chunk and per-item) if it changes — even faster than the
+  //      existing `cancelled` flag, which only flips on effect cleanup.
+  //   2. usjJustChangedRef tells Effect A to defer its first chunk by one requestAnimationFrame,
+  //      giving the editor's setUsj-driven re-render time to commit the new Lexical tree before we
+  //      hit it with setAnnotation. Initialized to `true` so the very first run of Effect A also
+  //      defers - although Editorial consumed `defaultUsj` at mount, the Lexical tree it builds is
+  //      committed inside React effects that haven't run yet when our first Effect A fires
+  //      (verified in Storybook: without this deferral, every setAnnotation call silently fails to
+  //      resolve and no `<mark>` elements wrap the wg spans). The cost is one RAF wait at mount,
+  //      which is imperceptible.
   const lastSyncedUsjRef = useRef<Usj | undefined>(usj);
   const usjEpochRef = useRef(0);
-  const usjJustChangedRef = useRef(false);
+  const usjJustChangedRef = useRef(true);
+
+  // Word-kind annotation list, memoized so Effect A's chunked apply doesn't re-filter on every
+  // render.
+  const wordAnnotations = useMemo(
+    () => annotations.filter((a) => a.kind === 'word'),
+    [annotations],
+  );
   useEffect(() => {
     // First-mount: Editorial consumed `defaultUsj`. Record the value and skip the imperative push.
     if (lastSyncedUsjRef.current === usj) return;
     lastSyncedUsjRef.current = usj;
-    // D-013: bump the epoch so Effect A / Effect C runs from the prior chapter abort immediately,
-    // and signal that the next Effect A / Effect C run should defer its first chunk by one RAF.
+    // D-013: bump the epoch so Effect A runs from the prior chapter abort immediately, and
+    // signal that the next Effect A run should defer its first chunk by one RAF.
     usjEpochRef.current += 1;
     usjJustChangedRef.current = true;
     const editor = editorRef.current;
@@ -612,16 +797,15 @@ export function EnhancedScripturePane({
     editor.setUsj(usj);
   }, [usj]);
 
-  // FN-027 / FN-028 / FN-029 wired in Session 2 (2026-05-05). Effect A registers
+  // FN-027 / FN-028 / FN-029 wired in Session 2 (2026-05-05). The annotation effect registers
   // onMouseEnter / onMouseLeave alongside onClick to drive the marble-dictionary popover
-  // (via papi.overlays) and lemma-match / lemma-dim annotations. CharNode title
-  // suppression is set at the <Editorial> mount via view.showCharMarkerTitles=false.
+  // (via papi.overlays) and the hover-match overlay. CharNode title suppression is set at the
+  // <Editorial> mount via view.showCharMarkerTitles=false.
   // See working-docs/2026-05-05-pt9-fidelity-session-2-design.md.
 
-  // Effect A — base marble-word / marble-note annotations.
-  // Chunked apply: 50 annotations per RAF tick so mousedown / setFocus and
-  // other UI events can be serviced between batches. The cancellation flag
-  // protects against stale applies if the chapter changes mid-loop.
+  // Marble-word base annotations applied via Editorial's setAnnotation. Chunked: 50 annotations
+  // per RAF tick so mousedown / setFocus and other UI events can be serviced between batches.
+  // The cancellation flag protects against stale applies if the chapter changes mid-loop.
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor || !usj) return undefined;
@@ -631,7 +815,6 @@ export function EnhancedScripturePane({
     // ImmutableNoteCallerNode (DecoratorNode) whose content children don't exist in the Lexical tree,
     // so any USJ path into note content silently fails to resolve. Notes remain clickable via the
     // editor's caller node rendering; we just don't add a mark overlay for them.
-    const wordAnnotations = annotations.filter((a) => a.kind === 'word');
     let cancelled = false;
     const CHUNK_SIZE = 50;
 
@@ -756,9 +939,8 @@ export function EnhancedScripturePane({
     };
 
     // Hover handlers - declared inside the effect so they close over `annotationsById`
-    // and `editor` from this run. The activePopoverIdRef / activeMatchSetRef bookkeeping
-    // is component-lifetime so a delayed mouseleave from a previous render still
-    // dismisses correctly.
+    // and `editor` from this run. The activePopoverIdRef / hoverMatchIdsRef bookkeeping is
+    // component-lifetime so a delayed mouseleave from a previous render still dismisses correctly.
     // D-15: extracted so both the debounced leave timer and the synchronous "switching
     // words" branch in handleMarbleMouseEnter can invoke the same teardown path.
     const performLeaveCleanup = () => {
@@ -772,17 +954,10 @@ export function EnhancedScripturePane({
         activePopoverIdRef.current = null;
       }
 
-      // D-15 final fix: remove the CSS class instead of removing an editor annotation.
-      // See handleMarbleMouseEnter for the full rationale.
-      activeMatchSetRef.current.forEach((matchId) => {
-        const markElements = globalThis.document.querySelectorAll(
-          `[class~="annotationId-${matchId}"]`,
-        );
-        markElements.forEach((markElement) => {
-          markElement.classList.remove('er-marble-hover-match');
-        });
-      });
-      activeMatchSetRef.current.clear();
+      // Clear the hover-match overlay by emptying the id set and rebuilding the stylesheet.
+      // CSS handles the rest - the browser drops the rule's selector matches automatically.
+      hoverMatchIdsRef.current = new Set();
+      rebuildOverlayStyle();
     };
 
     const handleMarbleMouseEnter = (event: MouseEvent, _type: string, id: string) => {
@@ -832,33 +1007,22 @@ export function EnhancedScripturePane({
         });
       }
 
-      // D-15 final fix: toggle a CSS class on the existing marble-word mark elements
-      // instead of layering a marble-hover-match annotation via editor.setAnnotation.
-      // Reason: setAnnotation on a range already inside a marble-word TypedMarkNode triggers
-      // AnnotationPlugin's wrap-merge-replace cycle - registerNestedElementResolver replaces
-      // the parent, Lexical destroys+recreates the <mark> DOM element. Multiple sibling words
-      // = multiple replacements = visible flicker burst on the first session-application for
-      // each lemma group. Direct DOM-class manipulation bypasses the editor entirely and is
-      // purely cosmetic - hover-match has no click handlers, no persistence, no Lexical-tree
-      // role. Filter + highlight-all stay on setAnnotation (no flicker there: filter is a
-      // single annotation; highlight-all is chunked across RAFs at mount time, not on hover).
-      // The hovered word itself is excluded - PT9 leaves it unhighlighted (it's the focal
-      // point; only siblings get the match-color background). See D-15 in
-      // working-docs/2026-05-15-er-editor-integration-audit.md.
-      // `target.ownerDocument` resolves to the iframe document the marble-word marks live in
-      // (the component runs inside the same webview iframe, but using ownerDocument is the
-      // more robust pattern).
-      const { ownerDocument } = target;
-      matchingIds.forEach((matchingId) => {
-        if (matchingId === id) return;
-        const markElements = ownerDocument.querySelectorAll(
-          `[class~="annotationId-${matchingId}"]`,
-        );
-        markElements.forEach((markElement) => {
-          markElement.classList.add('er-marble-hover-match');
-        });
-        activeMatchSetRef.current.add(matchingId);
-      });
+      // The hovered word itself is included in the match set so it shares the lemma-match
+      // overlay color with its siblings - users expect the entire matching expression to read as
+      // one visually unified group, including the word their cursor is on.
+      // Fallback (Matt review #1): the lemma index is built only from `lexicalLinks`, so a word
+      // whose annotation comes from `thematic_links` / `image_links` / `map_links` alone has no
+      // entry → `matchingIds` would be empty and NO overlay paints, not even on the hovered word.
+      // Seed the set with the hovered id so at least the hovered word always lights up, matching
+      // the comment above and the renamed unit test.
+      if (matchingIds.size === 0) matchingIds.add(id);
+      // The CSS source order in `buildMarbleOverlayCss` makes filter (the focal-word color) win
+      // over hover-match, so hovering the currently-filtered word still shows the strong filter
+      // color rather than the transient hover overlay. Filter-match also beats hover-match by
+      // source order, so lemma-siblings of the filtered word keep their filter-match tint while
+      // the user is hovering them (Matt review #4).
+      hoverMatchIdsRef.current = matchingIds;
+      rebuildOverlayStyle();
     };
 
     const handleMarbleMouseLeave = () => {
@@ -879,10 +1043,13 @@ export function EnhancedScripturePane({
     // D-013: capture the epoch at effect-run start. If the USJ changes again before we finish,
     // usjEpochRef.current advances and we abort the rest of this run.
     const myEpoch = usjEpochRef.current;
-    // D-013: when usj just changed, defer the first chunk by one RAF so the editor's
-    // setUsj-driven Lexical re-render has a chance to commit before we apply setAnnotation calls
-    // against the new tree. On first mount Editorial consumed `defaultUsj` synchronously and the
-    // tree is already ready, so no deferral is needed there.
+    // D-013: defer the first chunk by one RAF whenever usj just changed - the editor's
+    // setUsj-driven Lexical re-render needs a chance to commit before we apply setAnnotation calls
+    // against the new tree. `usjJustChangedRef` is initialized to `true` (see ref declaration
+    // comment above) so the very first Effect A run on mount also defers; although Editorial
+    // consumes `defaultUsj` synchronously, the Lexical tree it builds is committed inside React
+    // effects that haven't run yet when this effect first fires, and without this deferral every
+    // setAnnotation call silently fails to resolve (verified in Storybook).
     const shouldDeferFirstChunk = usjJustChangedRef.current;
     usjJustChangedRef.current = false;
     const applyChunked = async () => {
@@ -951,11 +1118,6 @@ export function EnhancedScripturePane({
       );
     });
 
-    // Capture the ref-stored Set instance so the cleanup function uses the same Set the effect
-    // populated. The ref object itself never changes identity (useRef), but the lint rule can't
-    // prove that - capturing here also makes intent explicit.
-    const matchSet = activeMatchSetRef.current;
-
     return () => {
       cancelled = true;
       // D-15: clear any pending leave-debounce timer so it doesn't fire after unmount
@@ -971,17 +1133,9 @@ export function EnhancedScripturePane({
         // eslint-disable-next-line no-null/no-null
         activePopoverIdRef.current = null;
       }
-      // D-15 final fix: hover-match is a CSS class on the marble-word marks (not an
-      // editor annotation), so cleanup removes the class via querySelectorAll.
-      matchSet.forEach((matchId) => {
-        const markElements = globalThis.document.querySelectorAll(
-          `[class~="annotationId-${matchId}"]`,
-        );
-        markElements.forEach((markElement) => {
-          markElement.classList.remove('er-marble-hover-match');
-        });
-      });
-      matchSet.clear();
+      // Drop the hover-match overlay by clearing the id set and rebuilding the stylesheet.
+      hoverMatchIdsRef.current = new Set();
+      rebuildOverlayStyle();
       currentlyHoveredIdRef.current = undefined;
       wordAnnotations.forEach((a) => {
         editor.removeAnnotation(annotationTypeFor(a.kind), a.annotationId);
@@ -996,75 +1150,6 @@ export function EnhancedScripturePane({
     // suppression here is correct.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usj, annotations, lemmaIndex]);
-
-  // Effect B - single marble-filter overlay via editor.setAnnotation.
-  // Re-runs when the filtered-token id or annotation set changes.
-  useEffect(() => {
-    const editor = editorRef.current;
-    if (!editor || !usj || !filteredTokenId) return undefined;
-    const target = annotations.find((a) => a.annotationId === filteredTokenId);
-    if (!target || target.kind !== 'word') return undefined;
-    const range = annotationToRange(target, usj);
-    if (!range) return undefined;
-    editor.setAnnotation(range, ANNOTATION_TYPE_FILTER, filteredTokenId, {});
-    return () => {
-      editor.removeAnnotation(ANNOTATION_TYPE_FILTER, filteredTokenId);
-    };
-  }, [usj, annotations, filteredTokenId]);
-
-  // Effect C - per-annotation marble-highlight overlays via editor.setAnnotation.
-  // Chunked RAF apply matches Effect A's pattern; running this un-chunked produced a
-  // multi-second click-handler stall (Chrome `[Violation] 'click' handler took >8000ms`)
-  // because ~64 synchronous setAnnotation calls executed end-to-end on the click thread.
-  useEffect(() => {
-    const editor = editorRef.current;
-    if (!editor || !usj || !highlightAllResearchTerms) return undefined;
-    const wordAnnotations = annotations.filter((a) => a.kind === 'word');
-    let cancelled = false;
-    const CHUNK_SIZE = 50;
-    // D-013: same epoch+RAF coordination as Effect A. Note this effect does NOT consume
-    // `usjJustChangedRef` (Effect A claims it once per usj swap to avoid double-deferring on a
-    // single swap that happens to also enable highlight-all). Effect C still aborts via the epoch
-    // guard if usj swaps mid-apply, which is the load-bearing safety property.
-    const myEpoch = usjEpochRef.current;
-    const applyChunked = async () => {
-      for (let i = 0; i < wordAnnotations.length; i += CHUNK_SIZE) {
-        if (cancelled || myEpoch !== usjEpochRef.current) return;
-        const slice = wordAnnotations.slice(i, i + CHUNK_SIZE);
-        // D-013: per-item abort (same rationale as Effect A) - tightens the abort window from
-        // CHUNK_SIZE setAnnotation calls down to 1. `if (range)` instead of `if (!range) continue`
-        // to satisfy the no-continue style rule.
-        for (let j = 0; j < slice.length; j += 1) {
-          if (cancelled || myEpoch !== usjEpochRef.current) return;
-          const a = slice[j];
-          const range = annotationToRange(a, usj);
-          if (range) {
-            editor.setAnnotation(range, ANNOTATION_TYPE_HIGHLIGHT, a.annotationId, {});
-          }
-        }
-        if (i + CHUNK_SIZE < wordAnnotations.length) {
-          // Yield to the event loop so mousedown / setFocus / paint can run between chunks.
-          // eslint-disable-next-line no-await-in-loop
-          await new Promise<void>((resolve) => {
-            requestAnimationFrame(() => resolve());
-          });
-        }
-      }
-    };
-    applyChunked().catch((err) => {
-      logger.warn(
-        `EnhancedScripturePane: highlight-all chunked apply failed: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
-    });
-    return () => {
-      cancelled = true;
-      wordAnnotations.forEach((a) => {
-        editor.removeAnnotation(ANNOTATION_TYPE_HIGHLIGHT, a.annotationId);
-      });
-    };
-  }, [usj, annotations, highlightAllResearchTerms]);
 
   if (errorMessage) {
     return (
@@ -1109,9 +1194,13 @@ export function EnhancedScripturePane({
       data-testid="er-scripture-pane"
     >
       <div
-        className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col"
+        className="tw:flex tw:h-auto tw:min-h-0 tw:flex-1 tw:flex-col tw:overflow-auto"
         // Inline style is the appropriate primitive for a continuous numeric zoom factor that the
         // user can drive from the View menu - Tailwind classes can't express arbitrary scales.
+        // `overflow-auto` + `min-h-0` + `flex-1` is the same triple the platform-scripture-editor
+        // uses on its scrolling region so the editor content scrolls vertically when it exceeds
+        // the available pane height; without this the outer `overflow-hidden` simply clips long
+        // chapters.
         style={{ fontSize: `${scripturePaneZoom}rem` }}
       >
         <Editorial

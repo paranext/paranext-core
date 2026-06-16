@@ -291,20 +291,46 @@ function emitWg(
   const id = el.getAttribute('id');
   if (id.length > 0) {
     node.id = id;
-    annotations.push({
-      usjPath: path,
-      kind: 'word',
-      annotationId: id,
-      metadata: {
-        strong: strong.length > 0 ? strong : undefined,
-        targetLinks: splitLinks(el.getAttribute('target_links')),
-        thematicLinks: splitLinks(el.getAttribute('thematic_links')),
-        lexicalLinks: splitLinks(el.getAttribute('lexical_links')),
-        imageLinks: splitLinks(el.getAttribute('image_links')),
-        mapLinks: splitLinks(el.getAttribute('map_links')),
-        verseNum: verseNum > 0 ? verseNum : undefined,
-      },
-    });
+    // A <wg> is treated as a research term only when it carries at least one link attribute
+    // that drives a user-visible research surface: `lexical_links` (gloss / dictionary),
+    // `thematic_links` (thematic categories), `image_links` (media tab), or `map_links` (maps).
+    //
+    // Deliberately excluded from the gate (regression test in marble-converter.test.ts locks
+    // these in):
+    //   - `target_links` only: cross-reference pointer to other verses, no research surface.
+    //     PT9 leaves these unhighlighted. (Real-world case: Gen 26:8 "When".)
+    //   - `strong` only: a Strong's number alone doesn't make a word a research term in PT10
+    //     today - none of the four research tabs key off it without a `lexical_links` peer.
+    //   - `textual_links` only: preserved on the char marker node (via WG_LINK_ATTRS) but has
+    //     no MarbleAnnotationMetadata slot and no surface that consumes textual variants today.
+    // The <wg> MarkerObject is still emitted in every case so the text content displays; only
+    // the annotation is skipped, which gates all overlays, hover, and click filter behavior.
+    const targetLinks = splitLinks(el.getAttribute('target_links'));
+    const thematicLinks = splitLinks(el.getAttribute('thematic_links'));
+    const lexicalLinks = splitLinks(el.getAttribute('lexical_links'));
+    const imageLinks = splitLinks(el.getAttribute('image_links'));
+    const mapLinks = splitLinks(el.getAttribute('map_links'));
+    const hasResearchLink =
+      lexicalLinks.length > 0 ||
+      thematicLinks.length > 0 ||
+      imageLinks.length > 0 ||
+      mapLinks.length > 0;
+    if (hasResearchLink) {
+      annotations.push({
+        usjPath: path,
+        kind: 'word',
+        annotationId: id,
+        metadata: {
+          strong: strong.length > 0 ? strong : undefined,
+          targetLinks,
+          thematicLinks,
+          lexicalLinks,
+          imageLinks,
+          mapLinks,
+          verseNum: verseNum > 0 ? verseNum : undefined,
+        },
+      });
+    }
   }
 
   return node;

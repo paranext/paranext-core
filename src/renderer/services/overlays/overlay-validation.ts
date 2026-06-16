@@ -107,6 +107,10 @@ export function validatePopoverRequest(request: PopoverRequest): void {
     throwValidationError('maxWidth must be greater than 0');
   }
 
+  if (request.maxHeight !== undefined && request.maxHeight <= 0) {
+    throwValidationError('maxHeight must be greater than 0');
+  }
+
   if (request.dismissAfterMs !== undefined && request.dismissAfterMs <= 0) {
     throwValidationError('dismissAfterMs must be greater than 0');
   }
