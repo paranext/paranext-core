@@ -119,6 +119,84 @@ const STRINGS_BAG = {
   '%enhancedResources_scripturePane_filterActive%': 'Filter',
 };
 
+// Most tests in this file rely on `setAnnotation` having been called by the time the test queries
+// the spy. Effect A / Effect C defer their first chunk by one `requestAnimationFrame` (so the
+// editor's Lexical tree has a frame to commit before annotations are applied — see
+// `usjJustChangedRef` in scripture-pane.component.tsx); jsdom doesn't drain those frames inside an
+// `await Promise.resolve()`, so without intervention every test would have to manually schedule a
+// RAF flush. Replace `requestAnimationFrame` with a synchronous shim that invokes the callback
+// immediately, plus `flushMountEffects()` resolves the chained microtasks the async applyChunked
+// helper hits so spy assertions become observable.
+//
+// Tests that specifically exercise the RAF deferral (the D-013 suite) override this via
+// `vi.spyOn(globalThis, 'requestAnimationFrame')`; their `mockRestore()` returns us to the
+// synchronous shim, which is the right baseline for the surrounding tests.
+beforeEach(() => {
+  globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+    cb(0);
+    return 0;
+  }) as typeof globalThis.requestAnimationFrame;
+});
+
+/**
+ * Flush the microtask chain that `applyChunked` schedules: the function awaits one `Promise<void>`
+ * resolved by the (now-synchronous) RAF callback, then optionally awaits another `Promise<void>`
+ * between chunks. Two `await Promise.resolve()`s reliably let it run through the first chunk's
+ * setAnnotation calls before the test queries the spy.
+ */
+async function flushMountEffects(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
+/**
+ * Create a fake `<mark>` element with the `annotationId-${id}` class that the editor would normally
+ * emit, append it to document.body, and return it. The marble overlay rules in production are
+ * CSS-only (see `buildMarbleOverlayCss`), so tests can verify behavior either by asserting on the
+ * dynamic stylesheet content (`getOverlayCss` / `overlayHasRuleFor`) - which is the canonical path
+ *
+ * - Or by relying on jsdom's CSS matching against this fixture for end-to-end-style cases.
+ *   Module-scope so both the EnhancedScripturePane and marble-hover-lifecycle suites can share it.
+ */
+function createMarkFixture(id: string): HTMLElement {
+  const mark = globalThis.document.createElement('mark');
+  mark.className = `editor-typed-mark-external-marble-word annotationId-${id}`;
+  globalThis.document.body.appendChild(mark);
+  return mark;
+}
+
+/**
+ * Read the textContent of the dynamic overlay stylesheet the component installs in document.head.
+ * Returns an empty string if no overlay stylesheet is mounted (which is the case before any
+ * EnhancedScripturePane has been rendered).
+ */
+function getOverlayCss(): string {
+  return document.querySelector('style[data-er-marble-overlays]')?.textContent ?? '';
+}
+
+/**
+ * Check whether the dynamic overlay stylesheet contains a rule that targets `annotationId-${id}`
+ * AND sets the given background-color CSS variable. Parses the stylesheet by splitting on `}` and
+ * matching each rule's selector list against the id; precise enough to distinguish filter (one
+ * specific id) from filter-match (the lemma siblings) from hover-match.
+ */
+function overlayHasRuleFor(annotationId: string, bgCssVar: string): boolean {
+  const css = getOverlayCss();
+  const ruleBlocks = css.split('}').filter((block) => block.includes('{'));
+  return ruleBlocks.some((block) => {
+    const [selectorList, declarations] = block.split('{');
+    return (
+      selectorList.includes(`annotationId-${annotationId}`) &&
+      declarations.includes(`var(${bgCssVar})`)
+    );
+  });
+}
+
+/** True when the global highlight-all rule (no annotation-id selector) is present. */
+function overlayHasHighlightAllRule(): boolean {
+  return getOverlayCss().includes('var(--er-marble-highlight-all-bg)');
+}
+
 /**
  * D-013: drain a queue of stubbed requestAnimationFrame callbacks sequentially, yielding to
  * microtasks twice between each. Callers stub `globalThis.requestAnimationFrame` with a push to the
@@ -168,11 +246,16 @@ beforeEach(() => {
   // Clear any leftover hover/mark fixtures from previous tests. createMarkFixture in the
   // hover-lifecycle suite appends <mark> elements to document.body, and makeFakeMouseEvent
   // appends a <span> for the hover event's currentTarget.ownerDocument scope. Leaking
-  // these would cross-contaminate querySelectorAll('[class~="annotationId-{id}"]') results.
+  // these would cross-contaminate getOverlayCss results across tests.
   // Only remove the fixtures (mark+span at the body root), NOT testing-library's render
   // containers (which @testing-library/react cleans up via its own auto-cleanup).
   document
     .querySelectorAll('body > mark, body > span')
+    .forEach((node) => node.parentNode?.removeChild(node));
+  // Also remove any stale overlay stylesheet from a previous test (testing-library's auto-
+  // unmount handles this in practice, but a hard sweep guards against partial cleanup).
+  document
+    .querySelectorAll('style[data-er-marble-overlays]')
     .forEach((node) => node.parentNode?.removeChild(node));
   setAnnotationSpy.mockClear();
   removeAnnotationSpy.mockClear();
@@ -350,35 +433,55 @@ describe('EnhancedScripturePane', () => {
   // immediately (per-chunk and per-item) rather than waiting for the effect cleanup to flip
   // `cancelled`.
   describe('D-013 chunked-RAF apply coordination with setUsj', () => {
-    it('applies annotations synchronously on first mount (no RAF deferral)', () => {
-      // First mount: Editorial consumed `defaultUsj` synchronously, so the Lexical tree is
-      // already there. We must NOT defer the initial setAnnotation pass — that would regress
-      // first-paint latency for every ER pane open.
-      const annotations: MarbleAnnotation[] = [
-        {
-          usjPath: '$.content[0].content[1]',
-          kind: 'word',
-          annotationId: 'wg-mount-1',
-          metadata: {},
-        },
-      ];
-      render(
-        <EnhancedScripturePane
-          usj={makeTestUsj(3)}
-          annotations={annotations}
-          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
-        />,
-      );
-      // setAnnotation must fire synchronously inside the effect (no RAF wait) for the first
-      // chunk on mount — otherwise the test runs before the async applyChunked() reaches the
-      // setAnnotation call.
-      expect(setAnnotationSpy).toHaveBeenCalledTimes(1);
-      expect(setAnnotationSpy).toHaveBeenCalledWith(
-        expect.anything(),
-        'marble-word',
-        'wg-mount-1',
-        expect.any(Object),
-      );
+    it('defers the first chunk by one RAF on first mount (Lexical tree not yet committed)', async () => {
+      // Although Editorial consumed `defaultUsj` synchronously, the Lexical tree it builds is
+      // committed inside React effects that haven't fired by the time our Effect A first runs.
+      // Storybook verified the race: without first-mount RAF deferral, every setAnnotation call
+      // silently fails to resolve and no <mark> elements wrap the wg spans. The cost is one frame
+      // of latency at mount, which is imperceptible compared to the (otherwise) total failure.
+      const rafSpy = vi.spyOn(globalThis, 'requestAnimationFrame');
+      const rafCallbacks: FrameRequestCallback[] = [];
+      rafSpy.mockImplementation((cb) => {
+        rafCallbacks.push(cb);
+        return rafCallbacks.length;
+      });
+
+      try {
+        const annotations: MarbleAnnotation[] = [
+          {
+            usjPath: '$.content[0].content[1]',
+            kind: 'word',
+            annotationId: 'wg-mount-1',
+            metadata: {},
+          },
+        ];
+        render(
+          <EnhancedScripturePane
+            usj={makeTestUsj(3)}
+            annotations={annotations}
+            localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+          />,
+        );
+
+        // Synchronously, setAnnotation must NOT have fired — Effect A scheduled a RAF and is
+        // waiting for it.
+        expect(setAnnotationSpy).not.toHaveBeenCalled();
+        expect(rafCallbacks.length).toBeGreaterThanOrEqual(1);
+
+        // Flush the deferred RAF and yield to microtasks so applyChunked resumes past
+        // `await new Promise(RAF)`.
+        await drainRafQueue(rafCallbacks);
+
+        expect(setAnnotationSpy).toHaveBeenCalledTimes(1);
+        expect(setAnnotationSpy).toHaveBeenCalledWith(
+          expect.anything(),
+          'marble-word',
+          'wg-mount-1',
+          expect.any(Object),
+        );
+      } finally {
+        rafSpy.mockRestore();
+      }
     });
 
     it('defers the first chunk by one RAF when usj changes after mount', async () => {
@@ -408,7 +511,10 @@ describe('EnhancedScripturePane', () => {
           localizedStringsWithLoadingState={[STRINGS_BAG, false]}
         />,
       );
-      // Mount-time chunk: synchronous, no RAF needed.
+      // Mount-time chunk also defers by one RAF (see the "defers the first chunk by one RAF on
+      // first mount" test). Drain the mount-time RAF so subsequent assertions about the
+      // post-mount swap see a clean spy state.
+      await drainRafQueue(rafCallbacks);
       expect(setAnnotationSpy).toHaveBeenCalledTimes(1);
       setAnnotationSpy.mockClear();
 
@@ -476,7 +582,9 @@ describe('EnhancedScripturePane', () => {
           localizedStringsWithLoadingState={[STRINGS_BAG, false]}
         />,
       );
-      // Mount: synchronous chunk fires for all 3 (one CHUNK_SIZE).
+      // Mount: chunk is RAF-deferred (see the "defers the first chunk by one RAF on first mount"
+      // test). Drain that RAF, then assert + clear the spy state before exercising the swap path.
+      await drainRafQueue(rafCallbacks);
       expect(setAnnotationSpy).toHaveBeenCalledTimes(3);
       setAnnotationSpy.mockClear();
 
@@ -630,7 +738,7 @@ describe('EnhancedScripturePane', () => {
     });
   });
 
-  it('calls setAnnotation for each marble annotation when usj + annotations are supplied', () => {
+  it('calls setAnnotation for each marble annotation when usj + annotations are supplied', async () => {
     const annotations: MarbleAnnotation[] = [
       {
         usjPath: '$.content[0].content[1]',
@@ -652,6 +760,7 @@ describe('EnhancedScripturePane', () => {
         localizedStringsWithLoadingState={[STRINGS_BAG, false]}
       />,
     );
+    await flushMountEffects();
     // setAnnotation should be called only for word annotations; notes are skipped because in
     // readonly mode the editor renders note callers as ImmutableNoteCallerNode whose content
     // children don't exist in the Lexical tree, causing path resolution to silently fail.
@@ -668,7 +777,7 @@ describe('EnhancedScripturePane', () => {
     );
   });
 
-  it('routes a left-click on an annotation to onTokenClick (not onTokenContextMenu)', () => {
+  it('routes a left-click on an annotation to onTokenClick (not onTokenContextMenu)', async () => {
     const onTokenClick = vi.fn();
     const onTokenContextMenu = vi.fn();
     const annotation: MarbleAnnotation = {
@@ -686,6 +795,7 @@ describe('EnhancedScripturePane', () => {
         localizedStringsWithLoadingState={[STRINGS_BAG, false]}
       />,
     );
+    await flushMountEffects();
     // Grab the onClick callback the component registered with the editor.
     const callbacks = setAnnotationSpy.mock.calls[0][3] as {
       onClick: (event: { button: number }, type: string, id: string, textContent: string) => void;
@@ -696,7 +806,7 @@ describe('EnhancedScripturePane', () => {
     expect(onTokenContextMenu).not.toHaveBeenCalled();
   });
 
-  it('routes a right-click (button 2) on an annotation to onTokenContextMenu', () => {
+  it('routes a right-click (button 2) on an annotation to onTokenContextMenu', async () => {
     const onTokenClick = vi.fn();
     const onTokenContextMenu = vi.fn();
     const annotation: MarbleAnnotation = {
@@ -714,6 +824,7 @@ describe('EnhancedScripturePane', () => {
         localizedStringsWithLoadingState={[STRINGS_BAG, false]}
       />,
     );
+    await flushMountEffects();
     const callbacks = setAnnotationSpy.mock.calls[0][3] as {
       onClick: (event: { button: number }, type: string, id: string, textContent: string) => void;
     };
@@ -723,9 +834,10 @@ describe('EnhancedScripturePane', () => {
     expect(onTokenClick).not.toHaveBeenCalled();
   });
 
-  it('calls editor.setAnnotation with marble-filter when filteredTokenId matches a known annotation', () => {
-    // Effect B layers a single marble-filter overlay via editor.setAnnotation on the
-    // already-marked marble-word range.
+  it('emits a filter CSS rule for the filtered annotation id (and does NOT go through setAnnotation)', async () => {
+    // The filter overlay is emitted as a CSS rule keyed off the `annotationId-X` class Editorial
+    // attaches to every mark, not via editor.setAnnotation. The rule applies to current AND future
+    // marks - no per-element classList mutation, no race with Effect A's chunked apply.
     const annotations: MarbleAnnotation[] = [
       {
         usjPath: '$.content[0].content[1]',
@@ -744,19 +856,19 @@ describe('EnhancedScripturePane', () => {
       />,
     );
 
+    await vi.waitFor(() => {
+      expect(overlayHasRuleFor('wg-001', '--er-marble-filter-bg')).toBe(true);
+    });
+    // setAnnotation was NOT called for any filter type — the whole point of the CSS-rule path is
+    // to bypass the editor for purely cosmetic overlays.
     const filterCalls = setAnnotationSpy.mock.calls.filter(([, type]) => type === 'marble-filter');
-    expect(filterCalls).toHaveLength(1);
-    expect(filterCalls[0][2]).toBe('wg-001');
-    expect(filterCalls[0][0]).toEqual(
-      expect.objectContaining({
-        start: expect.objectContaining({ jsonPath: '$.content[0].content[1]' }),
-      }),
-    );
+    expect(filterCalls).toHaveLength(0);
   });
 
-  it('calls editor.setAnnotation with marble-highlight for each word annotation when highlightAllResearchTerms is true', async () => {
-    // Effect C layers per-annotation marble-highlight overlays via editor.setAnnotation,
-    // chunked across RAF ticks to avoid blocking the click handler.
+  it('emits the global highlight-all CSS rule when highlightAllResearchTerms is true', async () => {
+    // Highlight-all is a single universal CSS rule (`.editor-typed-mark-external-marble-word { ... }`)
+    // that the browser matches against every current AND future marble-word mark. No per-mark
+    // classList mutation, no MutationObserver, no race with Effect A's chunked apply.
     const annotations: MarbleAnnotation[] = [
       {
         usjPath: '$.content[0].content[1]',
@@ -780,16 +892,20 @@ describe('EnhancedScripturePane', () => {
       />,
     );
     await vi.waitFor(() => {
-      const highlightCalls = setAnnotationSpy.mock.calls.filter(
-        ([, type]) => type === 'marble-highlight',
-      );
-      // Only word annotations get highlight overlays; notes are skipped.
-      expect(highlightCalls).toHaveLength(1);
-      expect(highlightCalls[0][2]).toBe('wg-001');
+      expect(overlayHasHighlightAllRule()).toBe(true);
     });
+    // The rule targets `.editor-typed-mark-external-marble-word`, not marble-note - notes are
+    // styled with the marble-note color, not the highlight overlay.
+    expect(getOverlayCss()).toContain('.editor-typed-mark-external-marble-word ');
+    // setAnnotation was NOT called for any highlight type — the whole point of the CSS-rule path is
+    // to bypass the editor for purely cosmetic overlays.
+    const highlightSetAnnotationCalls = setAnnotationSpy.mock.calls.filter(
+      ([, type]) => type === 'marble-highlight',
+    );
+    expect(highlightSetAnnotationCalls).toHaveLength(0);
   });
 
-  it('does not re-run the annotation effect when re-rendered with the same props (no fake-dep churn)', () => {
+  it('does not re-run the annotation effect when re-rendered with the same props (no fake-dep churn)', async () => {
     const annotation: MarbleAnnotation = {
       usjPath: '$.content[0].content[1]',
       kind: 'word',
@@ -808,6 +924,7 @@ describe('EnhancedScripturePane', () => {
         localizedStringsWithLoadingState={localized}
       />,
     );
+    await flushMountEffects();
     expect(setAnnotationSpy).toHaveBeenCalledTimes(1);
     setAnnotationSpy.mockClear();
     removeAnnotationSpy.mockClear();
@@ -821,11 +938,12 @@ describe('EnhancedScripturePane', () => {
         localizedStringsWithLoadingState={localized}
       />,
     );
+    await flushMountEffects();
     expect(setAnnotationSpy).not.toHaveBeenCalled();
     expect(removeAnnotationSpy).not.toHaveBeenCalled();
   });
 
-  it('toggling filteredTokenId only adds the filter overlay, not a fresh base annotation', () => {
+  it('toggling filteredTokenId adds/removes the filter CSS rule without re-firing base annotations', async () => {
     const annotation: MarbleAnnotation = {
       usjPath: '$.content[0].content[1]',
       kind: 'word',
@@ -843,6 +961,7 @@ describe('EnhancedScripturePane', () => {
         localizedStringsWithLoadingState={localized}
       />,
     );
+    await flushMountEffects();
     // First render: base marble-word annotation only.
     expect(setAnnotationSpy).toHaveBeenCalledTimes(1);
     expect(setAnnotationSpy.mock.calls[0][1]).toBe('marble-word');
@@ -856,14 +975,12 @@ describe('EnhancedScripturePane', () => {
         localizedStringsWithLoadingState={localized}
       />,
     );
-    // Effect B fires: a single marble-filter overlay. Base annotation is NOT re-applied
-    // (Effect A's deps haven't changed).
-    const filterCalls = setAnnotationSpy.mock.calls.filter(([, type]) => type === 'marble-filter');
-    const wordCalls = setAnnotationSpy.mock.calls.filter(([, type]) => type === 'marble-word');
-    expect(filterCalls).toHaveLength(1);
-    expect(filterCalls[0][2]).toBe('wg-001');
-    expect(wordCalls).toHaveLength(0);
-    setAnnotationSpy.mockClear();
+    // Filter is now an entry in the dynamic stylesheet. No setAnnotation calls at all - filter
+    // does not go through the editor.
+    await vi.waitFor(() => {
+      expect(overlayHasRuleFor('wg-001', '--er-marble-filter-bg')).toBe(true);
+    });
+    expect(setAnnotationSpy).not.toHaveBeenCalled();
     removeAnnotationSpy.mockClear();
 
     rerender(
@@ -873,12 +990,202 @@ describe('EnhancedScripturePane', () => {
         localizedStringsWithLoadingState={localized}
       />,
     );
-    // Filter overlay removed; base annotation not touched.
-    expect(removeAnnotationSpy).toHaveBeenCalledWith('marble-filter', 'wg-001');
+    // Filter rule removed from the stylesheet; base annotation untouched, no removeAnnotation.
+    expect(overlayHasRuleFor('wg-001', '--er-marble-filter-bg')).toBe(false);
+    expect(removeAnnotationSpy).not.toHaveBeenCalled();
     expect(setAnnotationSpy).not.toHaveBeenCalled();
   });
 
-  it('toggling highlightAllResearchTerms only adds highlight overlays, not fresh base annotations', async () => {
+  it('emits filter-match rules for lemma-siblings of the filtered word, but not for the focal word itself', async () => {
+    // Two-fold click highlight: the clicked word wears the strong filter color (filter-bg), every
+    // lemma-sibling wears the lighter filter-match color (filter-match-bg), and unrelated words
+    // get neither.
+    const annotations: MarbleAnnotation[] = [
+      {
+        usjPath: '$.content[0].content[1]',
+        kind: 'word',
+        annotationId: 'wg-A',
+        metadata: { lexicalLinks: ['SDBH:logos:001'] },
+      },
+      {
+        usjPath: '$.content[0].content[2]',
+        kind: 'word',
+        annotationId: 'wg-B',
+        metadata: { lexicalLinks: ['SDBH:logos:002'] },
+      },
+      {
+        usjPath: '$.content[0].content[3]',
+        kind: 'word',
+        annotationId: 'wg-C',
+        metadata: { lexicalLinks: ['SDBH:theos:003'] },
+      },
+    ];
+    render(
+      <EnhancedScripturePane
+        usj={makeTestUsj(4)}
+        annotations={annotations}
+        filteredTokenId="wg-A"
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    await vi.waitFor(() => {
+      // Focal word: strong filter rule, NOT the lighter filter-match.
+      expect(overlayHasRuleFor('wg-A', '--er-marble-filter-bg')).toBe(true);
+      expect(overlayHasRuleFor('wg-A', '--er-marble-filter-match-bg')).toBe(false);
+      // Lemma-sibling: lighter filter-match rule only.
+      expect(overlayHasRuleFor('wg-B', '--er-marble-filter-match-bg')).toBe(true);
+      expect(overlayHasRuleFor('wg-B', '--er-marble-filter-bg')).toBe(false);
+      // Unrelated lemma: neither rule.
+      expect(overlayHasRuleFor('wg-C', '--er-marble-filter-bg')).toBe(false);
+      expect(overlayHasRuleFor('wg-C', '--er-marble-filter-match-bg')).toBe(false);
+    });
+  });
+
+  it('moves filter / filter-match rules when filteredTokenId moves between lemma groups', async () => {
+    const annotations: MarbleAnnotation[] = [
+      {
+        usjPath: '$.content[0].content[1]',
+        kind: 'word',
+        annotationId: 'wg-A',
+        metadata: { lexicalLinks: ['SDBH:logos:001'] },
+      },
+      {
+        usjPath: '$.content[0].content[2]',
+        kind: 'word',
+        annotationId: 'wg-B',
+        metadata: { lexicalLinks: ['SDBH:logos:002'] },
+      },
+      {
+        usjPath: '$.content[0].content[3]',
+        kind: 'word',
+        annotationId: 'wg-C',
+        metadata: { lexicalLinks: ['SDBH:theos:003'] },
+      },
+    ];
+    const localized: [Record<string, string>, boolean] = [STRINGS_BAG, false];
+    const usj = makeTestUsj(4);
+
+    const { rerender } = render(
+      <EnhancedScripturePane
+        usj={usj}
+        annotations={annotations}
+        filteredTokenId="wg-A"
+        localizedStringsWithLoadingState={localized}
+      />,
+    );
+    await vi.waitFor(() => {
+      expect(overlayHasRuleFor('wg-B', '--er-marble-filter-match-bg')).toBe(true);
+    });
+
+    rerender(
+      <EnhancedScripturePane
+        usj={usj}
+        annotations={annotations}
+        filteredTokenId="wg-C"
+        localizedStringsWithLoadingState={localized}
+      />,
+    );
+    await vi.waitFor(() => {
+      // New focal word's filter rule is present.
+      expect(overlayHasRuleFor('wg-C', '--er-marble-filter-bg')).toBe(true);
+    });
+    // Previous focal word no longer carries a filter rule.
+    expect(overlayHasRuleFor('wg-A', '--er-marble-filter-bg')).toBe(false);
+    // Previous lemma-sibling no longer carries a filter-match rule.
+    expect(overlayHasRuleFor('wg-B', '--er-marble-filter-match-bg')).toBe(false);
+    // theos has no other members, so no new filter-match siblings.
+    expect(overlayHasRuleFor('wg-A', '--er-marble-filter-match-bg')).toBe(false);
+  });
+
+  it('overlays apply to marks regardless of when they appear in the DOM (CSS handles virtualization for free)', async () => {
+    // Regression: the previous classList-mutation path required iterating live marks at apply
+    // time. Marks added later (Effect A's chunked apply emits ~50/RAF; future editor-side
+    // virtualization on scroll would also lazy-mount marks) were missed. With the dynamic
+    // stylesheet, the rule is in document.head as soon as the persistent inputs change, and the
+    // browser matches it against any current OR future marble-word mark. This test demonstrates
+    // the property by creating a mark AFTER mount and verifying the rule is already present.
+    const annotations: MarbleAnnotation[] = [
+      {
+        usjPath: '$.content[0].content[1]',
+        kind: 'word',
+        annotationId: 'wg-A',
+        metadata: {},
+      },
+    ];
+    render(
+      <EnhancedScripturePane
+        usj={makeTestUsj(2)}
+        annotations={annotations}
+        highlightAllResearchTerms
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    await vi.waitFor(() => {
+      expect(overlayHasHighlightAllRule()).toBe(true);
+    });
+    // Add a mark for `wg-B` AFTER the persistent overlay rules are in place. No mutation is
+    // needed - the rule's selector already matches `wg-B` (since highlight-all is universal).
+    createMarkFixture('wg-B');
+    expect(overlayHasHighlightAllRule()).toBe(true);
+  });
+
+  it('keeps highlight-all active for the previously-filtered word when filteredTokenId changes', async () => {
+    // Regression: clicking word A then word B (with highlight-all on) used to leave word A with
+    // no overlay because the old filter-via-setAnnotation cleanup destroyed and recreated the
+    // <mark> DOM element, stripping the direct-DOM `er-marble-highlight-all` class. With CSS
+    // rules, both the highlight-all rule and the filter rule are in the dynamic stylesheet and
+    // the browser handles selector matching - nothing is ever stripped off marks.
+    const annotations: MarbleAnnotation[] = [
+      {
+        usjPath: '$.content[0].content[1]',
+        kind: 'word',
+        annotationId: 'wg-A',
+        metadata: {},
+      },
+      {
+        usjPath: '$.content[0].content[2]',
+        kind: 'word',
+        annotationId: 'wg-B',
+        metadata: {},
+      },
+    ];
+    const localized: [Record<string, string>, boolean] = [STRINGS_BAG, false];
+    const usj = makeTestUsj(3);
+
+    const { rerender } = render(
+      <EnhancedScripturePane
+        usj={usj}
+        annotations={annotations}
+        filteredTokenId="wg-A"
+        highlightAllResearchTerms
+        localizedStringsWithLoadingState={localized}
+      />,
+    );
+    await vi.waitFor(() => {
+      expect(overlayHasHighlightAllRule()).toBe(true);
+      expect(overlayHasRuleFor('wg-A', '--er-marble-filter-bg')).toBe(true);
+    });
+
+    rerender(
+      <EnhancedScripturePane
+        usj={usj}
+        annotations={annotations}
+        filteredTokenId="wg-B"
+        highlightAllResearchTerms
+        localizedStringsWithLoadingState={localized}
+      />,
+    );
+    await vi.waitFor(() => {
+      expect(overlayHasRuleFor('wg-B', '--er-marble-filter-bg')).toBe(true);
+    });
+    // The universal highlight-all rule is still in the stylesheet (it applies to ALL marble-word
+    // marks regardless of which one is the filter focal, so word A keeps its blue overlay).
+    expect(overlayHasHighlightAllRule()).toBe(true);
+    // Word A no longer has its own filter rule.
+    expect(overlayHasRuleFor('wg-A', '--er-marble-filter-bg')).toBe(false);
+  });
+
+  it('toggling highlightAllResearchTerms adds the highlight-all rule without re-firing base or filter setAnnotation calls', async () => {
     const annotation: MarbleAnnotation = {
       usjPath: '$.content[0].content[1]',
       kind: 'word',
@@ -896,10 +1203,12 @@ describe('EnhancedScripturePane', () => {
         localizedStringsWithLoadingState={localized}
       />,
     );
-    // First render: 1 base + 1 filter overlay.
+    await flushMountEffects();
+    // First render: 1 base marble-word annotation. Filter is now a CSS rule, not a setAnnotation
+    // call, so it does NOT show up in the setAnnotation spy.
     const initialCalls = setAnnotationSpy.mock.calls;
     expect(initialCalls.filter(([, type]) => type === 'marble-word')).toHaveLength(1);
-    expect(initialCalls.filter(([, type]) => type === 'marble-filter')).toHaveLength(1);
+    expect(initialCalls.filter(([, type]) => type === 'marble-filter')).toHaveLength(0);
     setAnnotationSpy.mockClear();
     removeAnnotationSpy.mockClear();
 
@@ -912,20 +1221,11 @@ describe('EnhancedScripturePane', () => {
         localizedStringsWithLoadingState={localized}
       />,
     );
-    // Effect C fires: a single marble-highlight overlay. Base + filter are NOT re-applied.
+    // The highlight-all rule lands in the dynamic stylesheet. No setAnnotation involved.
     await vi.waitFor(() => {
-      const highlightCalls = setAnnotationSpy.mock.calls.filter(
-        ([, type]) => type === 'marble-highlight',
-      );
-      expect(highlightCalls).toHaveLength(1);
-      expect(highlightCalls[0][2]).toBe('wg-001');
+      expect(overlayHasHighlightAllRule()).toBe(true);
     });
-    expect(setAnnotationSpy.mock.calls.filter(([, type]) => type === 'marble-word')).toHaveLength(
-      0,
-    );
-    expect(setAnnotationSpy.mock.calls.filter(([, type]) => type === 'marble-filter')).toHaveLength(
-      0,
-    );
+    expect(setAnnotationSpy).not.toHaveBeenCalled();
   });
 
   it('chunks setAnnotation calls across animation frames so the JS thread can service other work', async () => {
@@ -958,11 +1258,14 @@ describe('EnhancedScripturePane', () => {
       annotationId: `wg-${i}`,
       metadata: {},
     }));
-    // Stub requestAnimationFrame so we can intercept the first yield and unmount before chunk 2.
-    let rafCallback: FrameRequestCallback | undefined;
+    // Stub requestAnimationFrame so we can intercept each yield and unmount before chunk 2.
+    // Effect A defers its very first chunk by one RAF (see the "defers the first chunk by one RAF
+    // on first mount" test), so the first registered callback releases chunk 1, then the next
+    // registered callback gates chunk 2.
+    const rafCallbacks: FrameRequestCallback[] = [];
     vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((cb) => {
-      rafCallback = cb;
-      return 0;
+      rafCallbacks.push(cb);
+      return rafCallbacks.length;
     });
     const { unmount } = render(
       <EnhancedScripturePane
@@ -971,14 +1274,20 @@ describe('EnhancedScripturePane', () => {
         localizedStringsWithLoadingState={[STRINGS_BAG, false]}
       />,
     );
-    // First chunk applied synchronously (50 calls), then RAF was registered.
+    // Release the first-chunk RAF (the mount-time deferral) and wait for chunk 1 to apply +
+    // schedule chunk 2's RAF.
+    await vi.waitFor(() => {
+      expect(rafCallbacks.length).toBeGreaterThanOrEqual(1);
+    });
+    rafCallbacks[0](performance.now());
     await vi.waitFor(() => {
       expect(setAnnotationSpy).toHaveBeenCalledTimes(50);
-      expect(rafCallback).toBeDefined();
+      // Chunk 1's between-chunks yield queued the next RAF.
+      expect(rafCallbacks.length).toBeGreaterThanOrEqual(2);
     });
     unmount();
-    // Now release the RAF gate. Cancellation should short-circuit before chunk 2 runs.
-    if (rafCallback) rafCallback(performance.now());
+    // Now release the second RAF gate. Cancellation should short-circuit before chunk 2 runs.
+    rafCallbacks[1](performance.now());
     await new Promise<void>((resolve) => {
       setTimeout(resolve, 0);
     });
@@ -1011,7 +1320,7 @@ describe('EnhancedScripturePane', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Filter: 453');
   });
 
-  it('removes all applied annotations on unmount', async () => {
+  it('removes editor-applied annotations and tears down the overlay stylesheet on unmount', async () => {
     const { unmount } = render(
       <EnhancedScripturePane
         usj={makeTestUsj(2)}
@@ -1028,21 +1337,24 @@ describe('EnhancedScripturePane', () => {
         localizedStringsWithLoadingState={[STRINGS_BAG, false]}
       />,
     );
-    // Wait for Effect C's chunked apply to register the highlight overlay before unmount,
-    // otherwise the cleanup loop has nothing to remove for marble-highlight.
+    // The dynamic overlay stylesheet is mounted with both rules present.
     await vi.waitFor(() => {
-      expect(
-        setAnnotationSpy.mock.calls.filter(([, type]) => type === 'marble-highlight'),
-      ).toHaveLength(1);
+      expect(overlayHasHighlightAllRule()).toBe(true);
+      expect(overlayHasRuleFor('wg-001', '--er-marble-filter-bg')).toBe(true);
     });
 
     removeAnnotationSpy.mockClear();
     unmount();
 
-    // Each effect's cleanup calls removeAnnotation for its overlay type.
+    // The annotation effect's cleanup removes the setAnnotation-managed marble-word type via
+    // editor.removeAnnotation. The overlay stylesheet's own mount-effect cleanup removes the
+    // `<style data-er-marble-overlays>` element from document.head, so no overlay rules linger.
     expect(removeAnnotationSpy).toHaveBeenCalledWith('marble-word', 'wg-001');
-    expect(removeAnnotationSpy).toHaveBeenCalledWith('marble-filter', 'wg-001');
-    expect(removeAnnotationSpy).toHaveBeenCalledWith('marble-highlight', 'wg-001');
+    expect(document.querySelector('style[data-er-marble-overlays]')).toBeNull();
+    // Neither the highlight nor filter overlay is routed through removeAnnotation - they were
+    // CSS rules, gone with the stylesheet.
+    expect(removeAnnotationSpy).not.toHaveBeenCalledWith('marble-highlight', 'wg-001');
+    expect(removeAnnotationSpy).not.toHaveBeenCalledWith('marble-filter', 'wg-001');
   });
 });
 
@@ -1077,18 +1389,6 @@ describe('marble hover lifecycle', () => {
     const event = new MouseEvent('mouseenter');
     Object.defineProperty(event, 'currentTarget', { value: target });
     return event;
-  }
-
-  /**
-   * Create a fake `<mark>` element with the `annotationId-${id}` class that the editor would
-   * normally emit, append it to document.body, and return it so a test can assert on classList
-   * changes after the D-15 CSS-class hover-match path runs.
-   */
-  function createMarkFixture(id: string): HTMLElement {
-    const mark = document.createElement('mark');
-    mark.className = `editor-typed-mark-external-marble-word annotationId-${id}`;
-    document.body.appendChild(mark);
-    return mark;
   }
 
   // lexicalLinks shape is `NAMESPACE:LEMMA:ID`; the consumer extracts the middle segment as the
@@ -1145,8 +1445,7 @@ describe('marble hover lifecycle', () => {
   // `renderTooltipMarkdown` describe block at the bottom of this file, which is the right
   // unit-of-test boundary for the emitter. See Task 3a.10.
 
-  it('mouseleave dismisses the popover and removes hover-match CSS class (after debounce window)', async () => {
-    const markB = createMarkFixture('wg-B');
+  it('mouseleave dismisses the popover and removes the hover-match CSS rule (after debounce window)', async () => {
     render(
       <EnhancedScripturePane
         usj={makeTestUsj(4)}
@@ -1158,8 +1457,8 @@ describe('marble hover lifecycle', () => {
     const handlers = getHoverHandlersForCall(0);
     handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-A', 'logos');
     await Promise.resolve();
-    // Sanity: enter applied the hover-match class to the lemma-matching sibling.
-    expect(markB.classList.contains('er-marble-hover-match')).toBe(true);
+    // Sanity: enter inserted the hover-match rule for the lemma-matching sibling.
+    expect(overlayHasRuleFor('wg-B', '--er-marble-hover-match-bg')).toBe(true);
 
     removeAnnotationSpy.mockClear();
     handlers.onMouseLeave!(new MouseEvent('mouseleave'), 'marble-word', 'wg-A', 'logos');
@@ -1168,16 +1467,15 @@ describe('marble hover lifecycle', () => {
     // any editor-induced mark re-render briefly taking the cursor off the hovered <mark>)
     // doesn't tear down the popover. Synchronously after leave, cleanup has NOT yet run.
     expect(mockDismissPopover).not.toHaveBeenCalled();
-    expect(markB.classList.contains('er-marble-hover-match')).toBe(true);
+    expect(overlayHasRuleFor('wg-B', '--er-marble-hover-match-bg')).toBe(true);
 
     // After the debounce window elapses, cleanup runs.
     await vi.waitFor(() => {
       expect(mockDismissPopover).toHaveBeenCalledWith('overlay-1');
     });
-    // D-15 final fix: hover-match is a CSS class, not an editor annotation. Cleanup
-    // removes the class from the marble-word mark via querySelectorAll - it does NOT
-    // call editor.removeAnnotation('marble-hover-match', ...).
-    expect(markB.classList.contains('er-marble-hover-match')).toBe(false);
+    // Hover-match is a CSS rule, not an editor annotation. Cleanup drops the rule from the
+    // dynamic stylesheet - it does NOT call editor.removeAnnotation('marble-hover-match', ...).
+    expect(overlayHasRuleFor('wg-B', '--er-marble-hover-match-bg')).toBe(false);
     expect(removeAnnotationSpy).not.toHaveBeenCalledWith('marble-hover-match', expect.anything());
   });
 
@@ -1280,20 +1578,12 @@ describe('marble hover lifecycle', () => {
     expect(updateCall[1].markdown).toContain('word, speech, reason');
   });
 
-  it('lemma-matching annotations sharing the hovered lemma get the er-marble-hover-match class (excluding the hovered word itself)', async () => {
-    // D-15 final fix: hover-match is applied as a direct CSS class on the existing
-    // marble-word marks via querySelectorAll('[class~="annotationId-{id}"]'), NOT via
-    // editor.setAnnotation. Reason: setAnnotation on a range already inside a marble-word
-    // TypedMarkNode triggers AnnotationPlugin's wrap-merge-replace cycle, which destroys
-    // and re-creates the <mark> DOM element - visible flicker burst on first hover after
-    // fresh launch. CSS-class manipulation bypasses the editor entirely; hover-match has
-    // no Lexical-tree role (no click handler, no persistence). Filter + highlight-all
-    // still use setAnnotation - they don't exhibit the flicker.
-    //
-    // Stand up fake <mark> fixtures so the querySelectorAll path has something to match.
-    const markA = createMarkFixture('wg-A');
-    const markB = createMarkFixture('wg-B');
-    const markC = createMarkFixture('wg-C');
+  it('every annotation sharing the hovered lemma - including the hovered word itself - is selected by the hover-match CSS rule', async () => {
+    // Hover-match is now emitted as a CSS rule keyed off the `annotationId-X` class Editorial
+    // attaches to every mark. The hovered word IS included in the match set so the entire
+    // matching expression reads as one visually unified group. (Users expect the word under
+    // their cursor to look like part of the group, not a transparent gap in the middle of a
+    // highlighted phrase.) wordA and wordB share 'logos' lemma; wordC has 'theos' (non-matching).
     render(
       <EnhancedScripturePane
         usj={makeTestUsj(4)}
@@ -1307,15 +1597,13 @@ describe('marble hover lifecycle', () => {
 
     handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-A', 'logos');
 
-    // wordA and wordB share 'logos' lemma; wordC has 'theos' (non-matching).
-    // PT9 fidelity: the hovered word itself is excluded - it's the focal point. Only
-    // siblings receive the match-color background.
-    expect(markB.classList.contains('er-marble-hover-match')).toBe(true);
-    expect(markA.classList.contains('er-marble-hover-match')).toBe(false);
-    expect(markC.classList.contains('er-marble-hover-match')).toBe(false);
+    // Hover-match rule selects both wg-A (hovered) and wg-B (lemma-sibling); wg-C is excluded.
+    expect(overlayHasRuleFor('wg-A', '--er-marble-hover-match-bg')).toBe(true);
+    expect(overlayHasRuleFor('wg-B', '--er-marble-hover-match-bg')).toBe(true);
+    expect(overlayHasRuleFor('wg-C', '--er-marble-hover-match-bg')).toBe(false);
 
-    // And no marble-hover-match editor annotation was ever applied (this is the whole
-    // point of the D-15 final fix - bypass setAnnotation for the hover-match overlay).
+    // And no marble-hover-match editor annotation was ever applied (the whole point of the
+    // CSS-rule path is to bypass setAnnotation for purely-cosmetic overlays).
     const matchCalls = setAnnotationSpy.mock.calls.filter(
       ([, type]) => type === 'marble-hover-match',
     );

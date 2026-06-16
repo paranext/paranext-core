@@ -39,6 +39,12 @@ export type OverlayPopoverPresentationalProps = {
   side?: 'top' | 'bottom' | 'left' | 'right';
   /** Maximum width in pixels. Defaults to 320. */
   maxWidth?: number;
+  /**
+   * Maximum height in pixels. Defaults to 400. Content taller than this scrolls inside the popover
+   * (`overflow-y: auto`); pass a larger value to lift the cap for callers whose content is vetted
+   * to fit on screen.
+   */
+  maxHeight?: number;
   /** Whether to display an arrow pointing toward the anchor. Defaults to true. */
   showArrow?: boolean;
   /** Called when the user clicks an action button (card content) */
@@ -52,8 +58,8 @@ export type OverlayPopoverPresentationalProps = {
 /** Default max width for popovers */
 const DEFAULT_MAX_WIDTH = 320;
 
-/** Default max height for popovers */
-const MAX_HEIGHT = 400;
+/** Default max height for popovers — content beyond this scrolls inside the popover. */
+const DEFAULT_MAX_HEIGHT = 400;
 
 // ── Internal Components ──
 
@@ -151,6 +157,7 @@ export function OverlayPopoverPresentational({
   anchor,
   side = 'bottom',
   maxWidth = DEFAULT_MAX_WIDTH,
+  maxHeight = DEFAULT_MAX_HEIGHT,
   showArrow = true,
   onAction,
   onDismiss,
@@ -203,7 +210,7 @@ export function OverlayPopoverPresentational({
         style={{
           zIndex: Z_INDEX_OVERLAY,
           maxWidth,
-          maxHeight: MAX_HEIGHT,
+          maxHeight,
         }}
         onKeyDown={handleKeyDown}
         onOpenAutoFocus={(e) => e.preventDefault()}
@@ -345,6 +352,7 @@ export function OverlayPopover({ overlay }: OverlayPopoverProps) {
       }}
       side={overlay.request.side}
       maxWidth={overlay.request.maxWidth}
+      maxHeight={overlay.request.maxHeight}
       showArrow={overlay.request.showArrow}
       onAction={handleAction}
       onDismiss={handleDismiss}

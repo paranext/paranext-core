@@ -28,7 +28,7 @@ import {
   TooltipTrigger,
   cn,
 } from 'platform-bible-react';
-import { BookOpen, Book, Image as ImageIcon, Info, MapPin, Menu, X } from 'lucide-react';
+import { BookA, LibraryBig, Image as ImageIcon, Info, MapPin, Menu, X } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
 import type { LocalizedStringValue, ScrollGroupId } from 'platform-bible-utils';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
@@ -531,14 +531,22 @@ export function EnhancedResourceTabBar({
   // the input until clicked. We render the filter box at all times; the X button only shows when
   // there's something to clear so the empty input visually matches an idle search bar. The tint
   // (green when there are matches, orange when no matches) only fires when a filter is active so
-  // the empty state stays visually neutral. (BT integration may consume `hasMatches` later — see
-  // SB#2 / Theme 9 origin notes.)
+  // the empty state stays visually neutral. The two tint colors are sourced from
+  // `--er-filter-input-match-bg` / `--er-filter-input-no-match-bg` declared in `_er-tokens.scss`;
+  // those are fixed light pastels in both light and dark mode, so we pair them with
+  // `tw:dark:text-black` to keep the typed filter text legible (mirrors the chip + marble-overlay
+  // pattern in `marble-guide.component.tsx` and `scripture-pane.component.tsx`).
   let filterTintClass = 'tw:bg-background';
   if (filterActive) {
     filterTintClass = hasMatches
-      ? 'tw:bg-emerald-100 tw:dark:bg-emerald-900/40'
-      : 'tw:bg-orange-100 tw:dark:bg-orange-900/40';
+      ? 'tw:bg-[var(--er-filter-input-match-bg)]'
+      : 'tw:bg-[var(--er-filter-input-no-match-bg)]';
   }
+  // Dark-mode legibility on the pastel tint. The actual `.er-filter-input-on-pastel { color:
+  // black }` rule lives in `_er-tokens.scss` alongside the bg tokens themselves; here we just
+  // toggle the class. Applied to both the typed-text Input AND the X clear Button so the icon
+  // stroke (which uses `currentColor`) matches the foreground color of the typed text.
+  const filterInputTextClass = filterActive ? 'er-filter-input-on-pastel' : '';
 
   return (
     // FN-024: `tw-@container/toolbar` establishes a named container-query context so the
@@ -549,22 +557,70 @@ export function EnhancedResourceTabBar({
       <div className="tw:flex tw:flex-nowrap tw:items-center tw:gap-2 tw:overflow-hidden tw:border-b tw:px-2 tw:py-1.5">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="tw:shrink-0">
           <TabsList>
-            <TabsTrigger value="dictionary" aria-label={tabDictLabel}>
-              <BookOpen className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
-              <span className="tw:hidden tw:@sm/toolbar:inline">{tabDictLabel}</span>
-            </TabsTrigger>
-            <TabsTrigger value="encyclopedia" aria-label={tabEncycLabel}>
-              <Book className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
-              <span className="tw:hidden tw:@sm/toolbar:inline">{tabEncycLabel}</span>
-            </TabsTrigger>
-            <TabsTrigger value="media" aria-label={tabMediaLabel}>
-              <ImageIcon className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
-              <span className="tw:hidden tw:@sm/toolbar:inline">{tabMediaLabel}</span>
-            </TabsTrigger>
-            <TabsTrigger value="maps" aria-label={tabMapsLabel}>
-              <MapPin className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
-              <span className="tw:hidden tw:@sm/toolbar:inline">{tabMapsLabel}</span>
-            </TabsTrigger>
+            {/* Each TabsTrigger nests the Tooltip INSIDE itself (rather than the more natural
+                `<TooltipTrigger asChild><TabsTrigger ...></TabsTrigger></TooltipTrigger>`
+                composition) so the tooltip surfaces the label on hover at narrow widths where the
+                inline text (`tw:hidden tw:@sm/toolbar:inline`) collapses to icon-only.
+
+                Why nested, not wrapped: Radix Tooltip sets `data-state="closed|delayed-open|
+                instant-open"` on its trigger element, and Radix Tabs sets
+                `data-state="active|inactive"` on its trigger. When `<TooltipTrigger asChild>`
+                wraps `<TabsTrigger>` directly, the Tooltip's `data-state` is merged onto the
+                TabsTrigger via Radix Slot - and the Tabs primitive's render order spreads user
+                props AFTER its own `data-state`, so Tooltip's value wins. The active tab's
+                `data-state="active"` never reaches the DOM, and the shadcn-ui
+                `tw:data-active:bg-background` selector (which maps to `[data-state="active"]` via
+                `shadcn/tailwind.css`'s `@custom-variant data-active`) never fires. Nesting the
+                Tooltip inside the TabsTrigger puts the Tooltip's `data-state` on the inner
+                `<span>` instead, leaving the TabsTrigger button's `data-state="active"` intact.
+                A single TooltipProvider wraps all four triggers so the provider context is
+                shared. */}
+            <TooltipProvider>
+              <TabsTrigger value="dictionary" aria-label={tabDictLabel}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="tw:inline-flex tw:items-center">
+                      <BookA className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
+                      <span className="tw:hidden tw:@sm/toolbar:inline">{tabDictLabel}</span>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{tabDictLabel}</TooltipContent>
+                </Tooltip>
+              </TabsTrigger>
+              <TabsTrigger value="encyclopedia" aria-label={tabEncycLabel}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="tw:inline-flex tw:items-center">
+                      <LibraryBig className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
+                      <span className="tw:hidden tw:@sm/toolbar:inline">{tabEncycLabel}</span>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{tabEncycLabel}</TooltipContent>
+                </Tooltip>
+              </TabsTrigger>
+              <TabsTrigger value="media" aria-label={tabMediaLabel}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="tw:inline-flex tw:items-center">
+                      <ImageIcon className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
+                      <span className="tw:hidden tw:@sm/toolbar:inline">{tabMediaLabel}</span>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{tabMediaLabel}</TooltipContent>
+                </Tooltip>
+              </TabsTrigger>
+              <TabsTrigger value="maps" aria-label={tabMapsLabel}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="tw:inline-flex tw:items-center">
+                      <MapPin className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
+                      <span className="tw:hidden tw:@sm/toolbar:inline">{tabMapsLabel}</span>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{tabMapsLabel}</TooltipContent>
+                </Tooltip>
+              </TabsTrigger>
+            </TooltipProvider>
           </TabsList>
         </Tabs>
 
@@ -585,7 +641,10 @@ export function EnhancedResourceTabBar({
             value={searchValue}
             readOnly
             aria-label={filterAriaLabel}
-            className="tw:h-7 tw:min-w-0 tw:flex-1 tw:border-0 tw:bg-transparent tw:text-xs tw:focus-visible:ring-0"
+            className={cn(
+              'tw:h-7 tw:min-w-0 tw:flex-1 tw:border-0 tw:bg-transparent tw:text-xs tw:focus-visible:ring-0',
+              filterInputTextClass,
+            )}
           />
           {filterActive && (
             <Button
@@ -593,7 +652,7 @@ export function EnhancedResourceTabBar({
               size="icon"
               aria-label={filterClearLabel}
               onClick={() => onSearchChange('')}
-              className="tw:h-6 tw:w-6 tw:shrink-0"
+              className={cn('tw:h-6 tw:w-6 tw:shrink-0', filterInputTextClass)}
             >
               <X className="tw:h-3.5 tw:w-3.5" />
             </Button>

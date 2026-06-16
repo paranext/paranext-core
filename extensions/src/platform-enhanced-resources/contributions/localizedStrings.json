@@ -382,6 +382,9 @@
     "%enhancedResources_marbleGuide_aboutBiblicalTerms%": {
       "notes": "Paragraph describing how to research Biblical Terms in the user's project. PT9 MarbleGuideForm_6."
     },
+    "%enhancedResources_marbleGuide_biblicalTermsHeadline%": {
+      "notes": "Headline shown on the collapsible 'Biblical Terms' section in the guide. The section is collapsed by default and contains the Biblical Terms / gray-rendering / orange-rendering paragraphs, none of which are wired up yet."
+    },
     "%enhancedResources_marbleGuide_aboutGrayHighlight%": {
       "notes": "Paragraph describing found-rendering highlighting. Contains the {colorWord} placeholder. PT9 MarbleGuideForm_7."
     },
@@ -426,6 +429,9 @@
     },
     "%enhancedResources_marbleGuide_neverShowAgain%": {
       "notes": "Label for the 'Don't show this again' checkbox in the MarbleGuide dialog footer."
+    },
+    "%enhancedResources_marbleGuide_notYetImplemented%": {
+      "notes": "Inline note placed next to the marble-guide paragraphs that describe rendering-status colors (gray + orange) that PT9 painted on scripture words but PT10 has not yet wired up. The surrounding paragraphs are also dimmed via text-muted-foreground so users know those visual states are coming, not currently visible."
     },
     "%settings_platformEnhancedResources_group_label%": {
       "notes": "Settings UI group heading for Enhanced Resources extension settings."
@@ -596,12 +602,13 @@
       "%enhancedResources_marbleGuide_aboutBlueHighlight%": "Research Terms: A word highlighted in {colorWord} indicates that it can be researched. It may or may not also be in the Biblical terms list associated with your project.",
       "%enhancedResources_marbleGuide_blueWordTitle%": "blue",
       "%enhancedResources_marbleGuide_aboutBiblicalTerms%": "Biblical Terms: To research Biblical Terms in your project, first open your project and then choose it from the drop-down at the top of the Scripture pane. This enables the Found and Problem buttons. Open a Biblical Terms Renderings window to track and edit renderings.",
+      "%enhancedResources_marbleGuide_biblicalTermsHeadline%": "Biblical Terms",
       "%enhancedResources_marbleGuide_aboutGrayHighlight%": "A word highlighted in {colorWord} indicates that a valid rendering for this term has been found in this verse, in your project.",
       "%enhancedResources_marbleGuide_grayWordTitle%": "gray",
       "%enhancedResources_marbleGuide_aboutOrangeHighlight%": "A word highlighted in {colorWord} needs your attention because an approved rendering for this term is \"missing\" in this verse (though Paratext may have found a guessed rendering). For details, see {helpLink}.",
       "%enhancedResources_marbleGuide_orangeWordTitle%": "orange",
       "%enhancedResources_marbleGuide_thisHelpTopic%": "this help topic",
-      "%enhancedResources_marbleGuide_tabsHeader%": "Tabs: Tabs with black icons in the Research pane contain information about words in the current scope:",
+      "%enhancedResources_marbleGuide_tabsHeader%": "Tabs: Tabs with icons in the Research pane contain information about words in the current scope:",
       "%enhancedResources_marbleGuide_tab_dictionary%": "Dictionary",
       "%enhancedResources_marbleGuide_tab_encyclopedia%": "Encyclopedia",
       "%enhancedResources_marbleGuide_tab_media%": "Media",
@@ -611,6 +618,7 @@
       "%enhancedResources_marbleGuide_moreHelp%": "More help...",
       "%enhancedResources_marbleGuide_close%": "Close",
       "%enhancedResources_marbleGuide_neverShowAgain%": "Don't show this again",
+      "%enhancedResources_marbleGuide_notYetImplemented%": "Not yet implemented in this version",
       "%settings_platformEnhancedResources_group_label%": "Enhanced resources",
       "%settings_platformEnhancedResources_group_description%": "Settings for the enhanced resources extension.",
       "%settings_platformEnhancedResources_showMarbleGuide_label%": "Show \"Getting started\" guide for enhanced resources",

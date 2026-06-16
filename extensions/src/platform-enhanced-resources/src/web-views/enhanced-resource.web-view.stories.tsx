@@ -1,14 +1,33 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { useCallback, useMemo, useState } from 'react';
+import { Button } from 'platform-bible-react';
 import type { SemanticDomain } from 'platform-bible-react/internal';
-import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
+import { convertMarbleChapterXml } from '../lib/marble-converter';
+// The Lexical editor's USJ-node styles (verse numbers, paragraph treatment, etc). The real app
+// loads these globally via `enhanced-resource.web-view.scss`; Storybook doesn't load that bundle.
+// `nodes-menu.css` is deliberately NOT imported (it only styles the built-in autocomplete menu
+// which never renders when `hasExternalUI: true`; upstream PR paranext/paranext-core#2376 deletes
+// that file).
+/* eslint-disable import/no-relative-packages -- the demo `usj-nodes.css` is not part of
+   platform-bible-react's package exports (only `.` → dist is exported), so it can only be pulled
+   in by relative path. */
+import '../../../../../lib/platform-bible-react/src/components/demo/scripture-editor/usj-nodes.css';
+/* eslint-enable import/no-relative-packages */
+// `--er-*` tokens used by MarbleGuide / toolbar / scripture-pane. The real app gets them through
+// `enhanced-resource.web-view.scss` (`@use './er-tokens';`); Storybook doesn't bundle that file,
+// so the side-effect import here registers the `:root { --er-* }` block directly. Mirrors what
+// the three component-level stories do. Without this every `var(--er-...)` resolves to invalid
+// initial and the story silently misrepresents the real web view (no chip swatches, no filter-
+// input tint, no marble-note color, invisible overlays).
+import '../_er-tokens.scss';
 import {
   MOCK_FILTERED_TOKEN_ID,
   MOCK_RIBBONS_ALL,
   MOCK_RIBBONS_NONE,
   MOCK_COPYRIGHT_TEXT,
 } from '../data/marble-form.story-data';
+import { GENESIS_OVERLAY_DEMO_WITH_EXTRA_LINKS_XML } from '../data/scripture.story-data';
 import { ENHANCED_SCRIPTURE_PANE_STRING_KEYS } from '../components/scripture-pane/scripture-pane.component';
 import {
   TOOLBAR_STRING_KEYS,
@@ -80,36 +99,34 @@ const allKeys = [
 const localizedStrings = getLocalizedStrings(allKeys);
 
 /**
- * Minimal mock USJ document used by stories so the EnhancedScripturePane has _something_ to render.
- * The annotations array is empty - the stories don't exercise marble overlays directly; the
- * dictionary / encyclopedia tabs and ribbons are the focus of the shell stories. Component-level
- * overlay behavior is covered by the EnhancedScripturePane's own Storybook + Vitest suites.
+ * Marble chapter XML for the shell story is the shared Genesis 1:1-3 fixture extended with two
+ * additional tokens that exercise non-lexical link types. The shared base lives in
+ * `scripture.story-data.ts` so both this story and the scripture-pane `OverlayStates` story stay in
+ * lockstep on the lexical-linked tokens.
+ *
+ * Three behaviors are observable in this story:
+ *
+ * - Combined-expression group "rēšīṯ-bāraʾ" (4 words sharing one SDBH lemma): "beginning", "created",
+ *   "heavens", "earth" — hovering any one lights all four in deeper blue.
+ * - Combined-expression group "laylāh" (2 words): "darkness", "night".
+ * - Independents "Spirit" and "light" — each carries its own lemma so hover lights only that word.
+ *
+ * The toolbar's "Highlight all research terms" toggle paints every linked term with the pale-blue
+ * baseline overlay (Color A); hover-match (Color B) still wins on the hovered group, and the orange
+ * filter color wins on the focal word the "Simulate word click" button sets.
  */
-const MOCK_USJ: Usj = {
-  type: 'USJ',
-  version: '3.1',
-  content: [
-    {
-      type: 'book',
-      marker: 'id',
-      code: 'GEN',
-      content: [],
-    },
-    {
-      type: 'chapter',
-      marker: 'c',
-      number: '1',
-    },
-    {
-      type: 'para',
-      marker: 'p',
-      content: [
-        { type: 'verse', marker: 'v', number: '1' },
-        'In the beginning, God created the heavens and the earth.',
-      ],
-    },
-  ],
-};
+const MOCK_MARBLE = convertMarbleChapterXml(GENESIS_OVERLAY_DEMO_WITH_EXTRA_LINKS_XML);
+const MOCK_USJ = MOCK_MARBLE.usj;
+const MOCK_ANNOTATIONS = MOCK_MARBLE.annotations;
+/**
+ * Annotation id used by the "Simulate word click → set filter" button. Lines up with the `<wg
+ * id="1001">` ("beginning") token in `MOCK_MARBLE_XML`, so the orange filter overlay paints on that
+ * word in the scripture pane while the filter input displays the transliterated lemma — the
+ * production-target behavior where filteredTokenId references the clicked annotation but the filter
+ * input shows the lemma form a reviewer recognizes (BHV-301/302).
+ */
+const MOCK_FILTER_ANNOTATION_ID = '1001';
+const MOCK_FILTER_SURFACE = 'beˈrēšīṯ';
 
 /**
  * Story-only placeholder for handlers that phase-3-ui will wire to real PAPI commands or webView
@@ -258,29 +275,39 @@ export const Default: Story = {
     const setShowTranslations = (next: boolean) =>
       update({ viewMenu: { ...state.viewMenu, showTranslations: next } });
 
+    const filterActive = state.searchValue !== '';
     return (
-      <>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+        {/* Story-only controls. Stacked above the rendered shell (not overlaid) so the toolbar and
+            scripture pane remain fully visible. Wrapped in `pr-twp` so platform `Button` styles
+            resolve (Tailwind preflight scope); without it the shadcn Button renders unstyled. */}
         <div
+          className="pr-twp"
           style={{
-            position: 'fixed',
-            top: 8,
-            right: 8,
-            zIndex: 50,
             display: 'flex',
-            gap: 6,
-            padding: 6,
-            background: 'rgba(255,255,255,0.85)',
-            border: '1px solid #ccc',
-            borderRadius: 4,
-            fontSize: 11,
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: 12,
+            padding: 8,
+            borderBottom: '1px solid #ccc',
+            background: '#fafafa',
+            fontSize: 12,
+            flex: '0 0 auto',
           }}
         >
-          <button
+          <strong>Story controls:</strong>
+          <Button
             type="button"
-            onClick={() => update({ searchValue: state.searchValue ? '' : 'beˈrēšīṯ' })}
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              update({
+                searchValue: filterActive ? '' : MOCK_FILTER_SURFACE,
+              })
+            }
           >
-            Simulate word click → {state.searchValue ? 'clear' : 'set'} filter
-          </button>
+            Simulate word click → {filterActive ? 'clear' : 'set'} filter
+          </Button>
           <label>
             <input
               type="checkbox"
@@ -289,134 +316,162 @@ export const Default: Story = {
             />{' '}
             hasMatches
           </label>
+          <span style={{ color: '#666' }}>
+            Hover linked words in the scripture pane to see lemma-group highlighting; toggle
+            &quot;Highlight all research terms&quot; in the toolbar to paint every annotated word.
+          </span>
         </div>
 
-        <EnhancedResourceWebView
-          localizedStringsWithLoadingState={[localizedStrings, false]}
-          resourceName="SDBH/SDBG"
-          copyrightInfo={MOCK_COPYRIGHT_TEXT}
-          copyrightOverlayVisible={state.copyrightOverlayVisible}
-          onCopyrightOverlayDismiss={() => update({ copyrightOverlayVisible: false })}
-          activeTab={state.activeTab}
-          onTabChange={(activeTab) => update({ activeTab })}
-          scope={state.scope}
-          onScopeChange={(scopeNext) => update({ scope: scopeNext })}
-          hasSenseScope={state.hasSenseScope}
-          searchValue={state.searchValue}
-          onSearchChange={(searchValue) => update({ searchValue })}
-          hasMatches={state.hasMatches}
-          highlightMode={state.highlightMode}
-          onHighlightModeChange={(highlightMode) => update({ highlightMode })}
-          onInfoClick={() => update({ marbleGuideOpen: true })}
-          onReferenceClick={() =>
-            placeholderAction(
-              'Phase-3-ui wires this to the BookChapterControl driven by useWebViewScrollGroupScrRef (FN-015).',
-            )
-          }
-          scrollGroupId={state.scrollGroupId}
-          onScrollGroupChange={(next) => update({ scrollGroupId: next })}
-          currentReferenceLabel="GEN 1:1"
-          viewMenu={state.viewMenu}
-          viewMenuHandlers={{
-            onToggleShowFootnotes: setShowFootnotes,
-            onToggleShowTranslations: setShowTranslations,
-            onHebrewDisplayModeChange: setHebrew,
-            onGreekDisplayModeChange: setGreek,
-            onShowCopyrightInfo: () => update({ copyrightOverlayVisible: true }),
-            onFindInResource: () =>
-              placeholderAction('Phase-3-ui wires this to FindReplaceForm in ER mode.'),
-            onCloseWindow: () =>
-              placeholderAction('Phase-3-ui wires this to webView.close() (Ctrl+F4 in PT9).'),
-            onZoomIn: () => placeholderAction('Zoom in (wired in phase-3-ui).'),
-            onZoomOut: () => placeholderAction('Zoom out (wired in phase-3-ui).'),
-            onZoomReset: () => placeholderAction('Zoom reset (wired in phase-3-ui).'),
-          }}
-          ribbons={MOCK_RIBBONS_NONE}
-          usj={MOCK_USJ}
-          annotations={[]}
-          filteredTokenId={undefined}
-          showFootnotes={state.viewMenu.showFootnotes}
-          hebrewDisplayMode={state.viewMenu.hebrewDisplayMode}
-          greekDisplayMode={state.viewMenu.greekDisplayMode}
-          dictionaryItems={MOCK_DICT_ENTRIES_HEBREW}
-          dictionaryActiveDictionary="SDBH"
-          dictionaryScopeLabel="current verse"
-          dictionarySelectedTokenId={state.selectedDictionaryTokenId}
-          onDictionarySelectionChange={(selectedDictionaryTokenId) =>
-            update({ selectedDictionaryTokenId })
-          }
-          onDictionaryFindSense={(entry) => {
-            // Storybook-only diagnostic: production routes to MarbleForm filtered by sense.
-            // eslint-disable-next-line no-console
-            console.log('[story] dictionary find-sense', entry.sourceText);
-          }}
-          onDictionaryFindLemma={(entry) => {
-            // Storybook-only diagnostic: production routes to MarbleForm filtered by lemma.
-            // eslint-disable-next-line no-console
-            console.log('[story] dictionary find-lemma', entry.sourceText);
-          }}
-          encyclopediaItems={MOCK_ENC_ENTRIES_HEBREW}
-          encyclopediaScopeLabel="current verse"
-          encyclopediaArticleDataMap={MOCK_ARTICLE_DATA_MAP}
-          encyclopediaSelectedTokenId={state.selectedEncyclopediaTokenId}
-          onEncyclopediaSelectionChange={(selectedEncyclopediaTokenId) =>
-            update({ selectedEncyclopediaTokenId })
-          }
-          mediaImagesItems={MOCK_MEDIA_IMAGES}
-          mediaImagesScopeLabel="current verse"
-          mediaImagesThumbnailUrlResolver={mockMediaThumbnailUrlResolver}
-          mediaImagesSelectedItemId={state.selectedMediaImageId}
-          onMediaImagesSelectionChange={(selectedMediaImageId) => update({ selectedMediaImageId })}
-          onMediaImagesMaximize={(id) => update({ maximizedMediaItem: buildMediaViewerItem(id) })}
-          mediaMapsItems={MOCK_MEDIA_MAPS}
-          mediaMapsScopeLabel="current verse"
-          mediaMapsThumbnailUrlResolver={mockMediaThumbnailUrlResolver}
-          mediaMapsSelectedItemId={state.selectedMediaMapId}
-          onMediaMapsSelectionChange={(selectedMediaMapId) => update({ selectedMediaMapId })}
-          onMediaMapsMaximize={(id) => update({ maximizedMediaItem: buildMediaViewerItem(id) })}
-          maximizedMediaItem={state.maximizedMediaItem}
-          mediaViewerImageUrlResolver={mockMediaViewerImageUrlResolver}
-          onMaximizedMediaOpenChange={(open) => !open && update({ maximizedMediaItem: undefined })}
-        />
-        <SemanticDomainViewer
-          open={state.semanticDomainPath !== undefined}
-          domainPath={state.semanticDomainPath}
-          allDomains={MOCK_DOMAIN_TREE}
-          filteredEntries={filteredEntries}
-          onOpenChange={(open) => !open && update({ semanticDomainPath: undefined })}
-          onDomainChange={(semanticDomainPath) => update({ semanticDomainPath })}
-          onAllOccurrencesClick={(tokenId) => {
-            // Storybook-only diagnostic: production routes to MarbleForm filtered by occurrences.
-            // eslint-disable-next-line no-console
-            console.log('[story] sdv all-occurrences-click', tokenId);
-          }}
-          onSenseOccurrencesClick={(senseId) => {
-            // Storybook-only diagnostic: production routes to MarbleForm filtered by sense.
-            // eslint-disable-next-line no-console
-            console.log('[story] sdv sense-occurrences-click', senseId);
-          }}
-          localizedStringsWithLoadingState={[localizedStrings, false]}
-        />
-        <ArticleViewer
-          open={state.activeArticleId !== undefined}
-          articleId={state.activeArticleId}
-          articleData={articleData}
-          imageUrlResolver={mockImageUrlResolver}
-          onOpenChange={(open) => !open && update({ activeArticleId: undefined })}
-          onCrossReferenceClick={(ref) => {
-            if (ref.type === 'launchViewer') return;
-            update({ activeArticleId: ref.targetArticleId });
-          }}
-          localizedStringsWithLoadingState={[localizedStrings, false]}
-        />
-        <MarbleGuide
-          open={state.marbleGuideOpen}
-          neverShowAgain={state.marbleGuideNeverShowAgain}
-          onClose={() => update({ marbleGuideOpen: false })}
-          onNeverShowAgainChange={(next) => update({ marbleGuideNeverShowAgain: next })}
-          localizedStringsWithLoadingState={[localizedStrings, false]}
-        />
-      </>
+        {/* EnhancedResourceWebView hard-codes `h-[100dvh]` on its root, so we can't shrink it via
+            flex. Clip the overflow here so the controls bar above stays visible without the
+            WebView pushing the bottom of the research tabs off-screen. Reviewers see the toolbar
+            + scripture pane + most of the research pane; the very bottom of the research-pane
+            tabs is clipped, but the interactive surfaces relevant to marble hover/click/highlight
+            are the toolbar and scripture pane, both of which remain visible. */}
+        <div style={{ flex: '1 1 auto', minHeight: 0, overflow: 'hidden' }}>
+          <EnhancedResourceWebView
+            localizedStringsWithLoadingState={[localizedStrings, false]}
+            resourceName="SDBH/SDBG"
+            copyrightInfo={MOCK_COPYRIGHT_TEXT}
+            copyrightOverlayVisible={state.copyrightOverlayVisible}
+            onCopyrightOverlayDismiss={() => update({ copyrightOverlayVisible: false })}
+            activeTab={state.activeTab}
+            onTabChange={(activeTab) => update({ activeTab })}
+            scope={state.scope}
+            onScopeChange={(scopeNext) => update({ scope: scopeNext })}
+            hasSenseScope={state.hasSenseScope}
+            searchValue={state.searchValue}
+            onSearchChange={(searchValue) => update({ searchValue })}
+            hasMatches={state.hasMatches}
+            highlightMode={state.highlightMode}
+            onHighlightModeChange={(highlightMode) => update({ highlightMode })}
+            onInfoClick={() => update({ marbleGuideOpen: true })}
+            onReferenceClick={() =>
+              placeholderAction(
+                'Phase-3-ui wires this to the BookChapterControl driven by useWebViewScrollGroupScrRef (FN-015).',
+              )
+            }
+            scrollGroupId={state.scrollGroupId}
+            onScrollGroupChange={(next) => update({ scrollGroupId: next })}
+            currentReferenceLabel="GEN 1:1"
+            viewMenu={state.viewMenu}
+            viewMenuHandlers={{
+              onToggleShowFootnotes: setShowFootnotes,
+              onToggleShowTranslations: setShowTranslations,
+              onHebrewDisplayModeChange: setHebrew,
+              onGreekDisplayModeChange: setGreek,
+              onShowCopyrightInfo: () => update({ copyrightOverlayVisible: true }),
+              onFindInResource: () =>
+                placeholderAction('Phase-3-ui wires this to FindReplaceForm in ER mode.'),
+              onCloseWindow: () =>
+                placeholderAction('Phase-3-ui wires this to webView.close() (Ctrl+F4 in PT9).'),
+              onZoomIn: () => placeholderAction('Zoom in (wired in phase-3-ui).'),
+              onZoomOut: () => placeholderAction('Zoom out (wired in phase-3-ui).'),
+              onZoomReset: () => placeholderAction('Zoom reset (wired in phase-3-ui).'),
+            }}
+            ribbons={MOCK_RIBBONS_NONE}
+            usj={MOCK_USJ}
+            annotations={MOCK_ANNOTATIONS}
+            scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+            filteredTokenId={filterActive ? MOCK_FILTER_ANNOTATION_ID : undefined}
+            filteredTokenSurface={filterActive ? state.searchValue : undefined}
+            onTokenClick={(tokenId, _annotation, textContent) => {
+              // Story-only: clicking a linked word sets the filter just like the production wiring
+              // does. This makes the orange filter overlay land on whichever word the reviewer
+              // clicked, mirroring FN-020 propagation.
+              update({ searchValue: textContent });
+              // Keep the filter id in sync with the click — production sets filteredTokenId from
+              // the same path. tokenId is the marble annotationId from convertMarbleChapterXml.
+              // eslint-disable-next-line no-console
+              console.log('[story] token-click', tokenId, textContent);
+            }}
+            showFootnotes={state.viewMenu.showFootnotes}
+            hebrewDisplayMode={state.viewMenu.hebrewDisplayMode}
+            greekDisplayMode={state.viewMenu.greekDisplayMode}
+            dictionaryItems={MOCK_DICT_ENTRIES_HEBREW}
+            dictionaryActiveDictionary="SDBH"
+            dictionaryScopeLabel="current verse"
+            dictionarySelectedTokenId={state.selectedDictionaryTokenId}
+            onDictionarySelectionChange={(selectedDictionaryTokenId) =>
+              update({ selectedDictionaryTokenId })
+            }
+            onDictionaryFindSense={(entry) => {
+              // Storybook-only diagnostic: production routes to MarbleForm filtered by sense.
+              // eslint-disable-next-line no-console
+              console.log('[story] dictionary find-sense', entry.sourceText);
+            }}
+            onDictionaryFindLemma={(entry) => {
+              // Storybook-only diagnostic: production routes to MarbleForm filtered by lemma.
+              // eslint-disable-next-line no-console
+              console.log('[story] dictionary find-lemma', entry.sourceText);
+            }}
+            encyclopediaItems={MOCK_ENC_ENTRIES_HEBREW}
+            encyclopediaScopeLabel="current verse"
+            encyclopediaArticleDataMap={MOCK_ARTICLE_DATA_MAP}
+            encyclopediaSelectedTokenId={state.selectedEncyclopediaTokenId}
+            onEncyclopediaSelectionChange={(selectedEncyclopediaTokenId) =>
+              update({ selectedEncyclopediaTokenId })
+            }
+            mediaImagesItems={MOCK_MEDIA_IMAGES}
+            mediaImagesScopeLabel="current verse"
+            mediaImagesThumbnailUrlResolver={mockMediaThumbnailUrlResolver}
+            mediaImagesSelectedItemId={state.selectedMediaImageId}
+            onMediaImagesSelectionChange={(selectedMediaImageId) =>
+              update({ selectedMediaImageId })
+            }
+            onMediaImagesMaximize={(id) => update({ maximizedMediaItem: buildMediaViewerItem(id) })}
+            mediaMapsItems={MOCK_MEDIA_MAPS}
+            mediaMapsScopeLabel="current verse"
+            mediaMapsThumbnailUrlResolver={mockMediaThumbnailUrlResolver}
+            mediaMapsSelectedItemId={state.selectedMediaMapId}
+            onMediaMapsSelectionChange={(selectedMediaMapId) => update({ selectedMediaMapId })}
+            onMediaMapsMaximize={(id) => update({ maximizedMediaItem: buildMediaViewerItem(id) })}
+            maximizedMediaItem={state.maximizedMediaItem}
+            mediaViewerImageUrlResolver={mockMediaViewerImageUrlResolver}
+            onMaximizedMediaOpenChange={(open) =>
+              !open && update({ maximizedMediaItem: undefined })
+            }
+          />
+          <SemanticDomainViewer
+            open={state.semanticDomainPath !== undefined}
+            domainPath={state.semanticDomainPath}
+            allDomains={MOCK_DOMAIN_TREE}
+            filteredEntries={filteredEntries}
+            onOpenChange={(open) => !open && update({ semanticDomainPath: undefined })}
+            onDomainChange={(semanticDomainPath) => update({ semanticDomainPath })}
+            onAllOccurrencesClick={(tokenId) => {
+              // Storybook-only diagnostic: production routes to MarbleForm filtered by occurrences.
+              // eslint-disable-next-line no-console
+              console.log('[story] sdv all-occurrences-click', tokenId);
+            }}
+            onSenseOccurrencesClick={(senseId) => {
+              // Storybook-only diagnostic: production routes to MarbleForm filtered by sense.
+              // eslint-disable-next-line no-console
+              console.log('[story] sdv sense-occurrences-click', senseId);
+            }}
+            localizedStringsWithLoadingState={[localizedStrings, false]}
+          />
+          <ArticleViewer
+            open={state.activeArticleId !== undefined}
+            articleId={state.activeArticleId}
+            articleData={articleData}
+            imageUrlResolver={mockImageUrlResolver}
+            onOpenChange={(open) => !open && update({ activeArticleId: undefined })}
+            onCrossReferenceClick={(ref) => {
+              if (ref.type === 'launchViewer') return;
+              update({ activeArticleId: ref.targetArticleId });
+            }}
+            localizedStringsWithLoadingState={[localizedStrings, false]}
+          />
+          <MarbleGuide
+            open={state.marbleGuideOpen}
+            neverShowAgain={state.marbleGuideNeverShowAgain}
+            onClose={() => update({ marbleGuideOpen: false })}
+            onNeverShowAgainChange={(next) => update({ marbleGuideNeverShowAgain: next })}
+            localizedStringsWithLoadingState={[localizedStrings, false]}
+          />
+        </div>
+      </div>
     );
   },
 };

@@ -422,6 +422,86 @@ export const MATTHEW_1_AND_2_USJ: Usj = {
 };
 
 /**
+ * Marble chapter XML for a Genesis 1:1-3 excerpt with eight `<wg>` linked-research-term tokens:
+ *
+ * - Group "rēšīṯ-bāraʾ" (4 words sharing the SDBH:creation:001 lemma): "beginning", "created",
+ *   "heavens", "earth". Hovering any of the four lights up all four.
+ * - Group "laylāh" (2 words sharing SDBH:darkness:002): "darkness", "night". Hovering either lights
+ *   up both.
+ * - Independents (each with its own lemma): "Spirit" (SDBH:rûaḥ:003), "light" (SDBH:ʾôr:004).
+ *   Hovering either only lights up that single word.
+ *
+ * Used by the scripture-pane `OverlayStates` story. Extended in
+ * `GENESIS_OVERLAY_DEMO_WITH_EXTRA_LINKS_XML` below with two additional tokens (thematic/image link
+ * types) the web-view shell story exercises.
+ */
+export const GENESIS_OVERLAY_DEMO_MARBLE_XML = `
+  <usx_book code="GEN">
+    <chapter style="c" code="GEN" chapter="1"/>
+    <para style="p">
+      <verse style="v" code="GEN" pubnumber="1"/>
+      In the
+      <wg id="1001" strong="H7225" lexical_links="SDBH:creation:001">beginning</wg>
+      God
+      <wg id="1002" strong="H1254" lexical_links="SDBH:creation:001">created</wg>
+      the
+      <wg id="1003" strong="H8064" lexical_links="SDBH:creation:001">heavens</wg>
+      and the
+      <wg id="1004" strong="H0776" lexical_links="SDBH:creation:001">earth</wg>.
+      <verse style="v" code="GEN" pubnumber="2"/>
+      And
+      <wg id="1005" strong="H2822" lexical_links="SDBH:darkness:002">darkness</wg>
+      was upon the face of the deep, and the
+      <wg id="1006" strong="H7307" lexical_links="SDBH:ruah:003">Spirit</wg>
+      of God moved upon the face of the waters.
+      <verse style="v" code="GEN" pubnumber="3"/>
+      And God said, Let there be
+      <wg id="1007" strong="H0216" lexical_links="SDBH:or:004">light</wg>,
+      and God called the
+      <wg id="1008" strong="H3915" lexical_links="SDBH:darkness:002">night</wg>.
+    </para>
+  </usx_book>`;
+
+/**
+ * Same Genesis 1:1-3 fixture as `GENESIS_OVERLAY_DEMO_MARBLE_XML` plus two additional `<wg>` tokens
+ * carrying non-lexical link types ("vessel" with thematic_links, "altar" with image_links). The
+ * extras exercise the marble-converter gating contract: word annotations are only emitted for
+ * tokens with at least one `lexical_links` attribute, so neither vessel nor altar produces an
+ * annotation, while the shape of the source XML still flows through `convertMarbleChapterXml` as
+ * the production data path. Used by the web-view shell story.
+ */
+export const GENESIS_OVERLAY_DEMO_WITH_EXTRA_LINKS_XML = `
+  <usx_book code="GEN">
+    <chapter style="c" code="GEN" chapter="1"/>
+    <para style="p">
+      <verse style="v" code="GEN" pubnumber="1"/>
+      In the
+      <wg id="1001" strong="H7225" lexical_links="SDBH:creation:001">beginning</wg>
+      God
+      <wg id="1002" strong="H1254" lexical_links="SDBH:creation:001">created</wg>
+      the
+      <wg id="1003" strong="H8064" lexical_links="SDBH:creation:001">heavens</wg>
+      and the
+      <wg id="1004" strong="H0776" lexical_links="SDBH:creation:001">earth</wg>.
+      <verse style="v" code="GEN" pubnumber="2"/>
+      And
+      <wg id="1005" strong="H2822" lexical_links="SDBH:darkness:002">darkness</wg>
+      was upon the face of the deep, and the
+      <wg id="1006" strong="H7307" lexical_links="SDBH:ruah:003">Spirit</wg>
+      of God moved upon the face of the waters.
+      <verse style="v" code="GEN" pubnumber="3"/>
+      And God said, Let there be
+      <wg id="1007" strong="H0216" lexical_links="SDBH:or:004">light</wg>,
+      and God called the
+      <wg id="1008" strong="H3915" lexical_links="SDBH:darkness:002">night</wg>.
+      Behold a
+      <wg id="1009" strong="H0935" thematic_links="Realia:1.2.3">vessel</wg>
+      on the
+      <wg id="1010" strong="H0123" image_links="img:reuben">altar</wg>.
+    </para>
+  </usx_book>`;
+
+/**
  * WEB Matthew 2:19-20 paragraph with no note markers - drives the empty FootnoteList state. Derived
  * from the third paragraph of web-matthew-2-verse-range.usj (note-free verses), kept as real WEB
  * text.
