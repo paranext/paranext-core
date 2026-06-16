@@ -291,7 +291,7 @@ export function MarbleGuide({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="tw:flex tw:max-h-[80vh] tw:max-w-2xl tw:flex-col tw:gap-0 tw:p-0"
+        className="tw:flex tw:max-h-[80vh] tw:flex-col tw:gap-0 tw:p-0 tw:sm:w-[80vw] tw:sm:max-w-[800px]"
         data-testid="marble-guide"
       >
         <DialogHeader className="tw:border-b tw:border-border tw:px-6 tw:py-4">
