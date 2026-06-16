@@ -571,7 +571,10 @@ export function EnhancedResourceWebView({
     isLoadingStrings,
   ];
 
-  if (isLoading) {
+  // While l10n strings are still loading the toolbar/labels would render bare `%key%` placeholders,
+  // and any transient errors (e.g. backend not yet resolved) would surface a misleading message.
+  // Show the same full-shell skeleton the `isLoading` story renders until both flags clear.
+  if (isLoading || isLoadingStrings) {
     return (
       <div
         aria-busy="true"
@@ -587,8 +590,6 @@ export function EnhancedResourceWebView({
   }
 
   const showShellEmpty = usj === undefined && !scripturePaneError;
-  if (showShellEmpty)
-    console.warn('[ER] tab bar hidden — usj:', usj, 'scripturePaneError:', scripturePaneError);
 
   return (
     <div className={cn('tw:flex tw:h-[100dvh] tw:flex-col tw:bg-background')}>
@@ -1257,9 +1258,12 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     }
 
     if (!erProxy) {
+      // erProxy is still resolving on initial mount (network-object lookup + readiness polling).
+      // Treat as loading rather than an error so the shell's skeleton covers the gap instead of
+      // flashing a misleading "backend is not available" message.
       setUsj(undefined);
       setAnnotations([]);
-      setScripturePaneError('Enhanced Resources backend is not available.');
+      setScripturePaneError(undefined);
       return () => {
         cancelled = true;
       };
@@ -2990,6 +2994,7 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
   return (
     <EnhancedResourceWebView
       resourceName={resourceId}
+      isLoading={!erProxy}
       usj={usj}
       annotations={annotations}
       scrRef={scrRef}
