@@ -382,6 +382,9 @@
     "%enhancedResources_marbleGuide_aboutBiblicalTerms%": {
       "notes": "Paragraph describing how to research Biblical Terms in the user's project. PT9 MarbleGuideForm_6."
     },
+    "%enhancedResources_marbleGuide_biblicalTermsHeadline%": {
+      "notes": "Headline shown on the collapsible 'Biblical Terms' section in the guide. The section is collapsed by default and contains the Biblical Terms / gray-rendering / orange-rendering paragraphs, none of which are wired up yet."
+    },
     "%enhancedResources_marbleGuide_aboutGrayHighlight%": {
       "notes": "Paragraph describing found-rendering highlighting. Contains the {colorWord} placeholder. PT9 MarbleGuideForm_7."
     },
@@ -599,6 +602,7 @@
       "%enhancedResources_marbleGuide_aboutBlueHighlight%": "Research Terms: A word highlighted in {colorWord} indicates that it can be researched. It may or may not also be in the Biblical terms list associated with your project.",
       "%enhancedResources_marbleGuide_blueWordTitle%": "blue",
       "%enhancedResources_marbleGuide_aboutBiblicalTerms%": "Biblical Terms: To research Biblical Terms in your project, first open your project and then choose it from the drop-down at the top of the Scripture pane. This enables the Found and Problem buttons. Open a Biblical Terms Renderings window to track and edit renderings.",
+      "%enhancedResources_marbleGuide_biblicalTermsHeadline%": "Biblical Terms",
       "%enhancedResources_marbleGuide_aboutGrayHighlight%": "A word highlighted in {colorWord} indicates that a valid rendering for this term has been found in this verse, in your project.",
       "%enhancedResources_marbleGuide_grayWordTitle%": "gray",
       "%enhancedResources_marbleGuide_aboutOrangeHighlight%": "A word highlighted in {colorWord} needs your attention because an approved rendering for this term is \"missing\" in this verse (though Paratext may have found a guessed rendering). For details, see {helpLink}.",

@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import {
   Button,
   Checkbox,
@@ -31,6 +31,7 @@ export const MARBLE_GUIDE_STRING_KEYS = Object.freeze([
   '%enhancedResources_marbleGuide_aboutBlueHighlight%',
   '%enhancedResources_marbleGuide_blueWordTitle%',
   '%enhancedResources_marbleGuide_aboutBiblicalTerms%',
+  '%enhancedResources_marbleGuide_biblicalTermsHeadline%',
   '%enhancedResources_marbleGuide_aboutGrayHighlight%',
   '%enhancedResources_marbleGuide_grayWordTitle%',
   '%enhancedResources_marbleGuide_aboutOrangeHighlight%',
@@ -170,6 +171,9 @@ export function MarbleGuide({
   const aboutBiblicalTerms = String(
     getLocalizedString('%enhancedResources_marbleGuide_aboutBiblicalTerms%'),
   );
+  const biblicalTermsHeadline = String(
+    getLocalizedString('%enhancedResources_marbleGuide_biblicalTermsHeadline%'),
+  );
   const aboutGrayTemplate = String(
     getLocalizedString('%enhancedResources_marbleGuide_aboutGrayHighlight%'),
   );
@@ -212,9 +216,9 @@ export function MarbleGuide({
   //   research terms on hover, so the help-dialog swatch and the on-screen overlay match.
   // - Gray (`--er-marble-rendering-found-bg`) / Orange (`--er-marble-rendering-missing-bg`): PT9
   //   rendering-status colors that the scripture-pane does NOT yet wire up. The surrounding
-  //   paragraphs are dimmed via text-muted-foreground and carry a "(Not yet implemented...)"
-  //   trailing note. When the rendering-status overlays land, the scripture-pane will consume
-  //   these same tokens.
+  //   paragraphs are dimmed via text-muted-foreground and live inside the collapsed Biblical
+  //   Terms section so users aren't promised a visual signal they can't currently see. When the
+  //   rendering-status overlays land, the scripture-pane will consume these same tokens.
   const blueChip = (
     <span
       className="tw:rounded tw:bg-[var(--er-marble-hover-match-bg)] tw:px-1.5 tw:py-0.5 tw:font-medium tw:text-foreground"
@@ -272,6 +276,12 @@ export function MarbleGuide({
     </span>
   );
 
+  // Biblical Terms section is collapsed by default — its contents describe behavior the
+  // scripture-pane does not yet paint (rendering-status overlays), so we don't want to promise
+  // visual signals users can't currently see. State is local because the collapse is a
+  // presentation detail of the guide dialog; it does not need to round-trip via PAPI memento.
+  const [biblicalTermsExpanded, setBiblicalTermsExpanded] = useState(false);
+
   // shadcn Dialog's `onOpenChange` fires for Escape, click-outside, and the built-in close button.
   // Forward `false` through `onClose` so the parent can persist the never-show-again preference.
   const handleOpenChange = (next: boolean) => {
@@ -303,25 +313,44 @@ export function MarbleGuide({
             <strong>{interleavePlaceholders(aboutBlueTemplate, { colorWord: blueChip })}</strong>
           </p>
 
-          <p>{aboutBiblicalTerms}</p>
-
-          {/* Gray + orange rendering-status states are described from PT9 fidelity but the
-              scripture-pane does not yet paint these overlay colors - dim the section and add a
-              trailing note so users aren't promised a visual signal they can't currently see. */}
+          {/* The Biblical Terms section + gray/orange rendering-status paragraphs describe
+              behavior the scripture-pane does not yet paint. Collapsed by default so the guide
+              doesn't promise visual signals users can't currently see; a button-link trigger
+              expands the content on demand. */}
           <div
-            className="tw:flex tw:flex-col tw:gap-3 tw:text-muted-foreground"
-            data-testid="marble-guide-unimplemented-states"
+            className="tw:flex tw:flex-col tw:gap-3 tw:rounded tw:border tw:border-border tw:p-3"
+            data-testid="marble-guide-biblical-terms"
           >
-            <p>{interleavePlaceholders(aboutGrayTemplate, { colorWord: grayChip })}</p>
-
             <p>
-              {interleavePlaceholders(aboutOrangeTemplate, {
-                colorWord: orangeChip,
-                helpLink,
-              })}
+              <button
+                type="button"
+                aria-expanded={biblicalTermsExpanded}
+                aria-controls="marble-guide-biblical-terms-content"
+                onClick={() => setBiblicalTermsExpanded((prev) => !prev)}
+                className="tw:inline-flex tw:cursor-pointer tw:items-center tw:gap-1 tw:text-foreground tw:underline tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
+                data-testid="marble-guide-biblical-terms-trigger"
+              >
+                {biblicalTermsHeadline}
+              </button>{' '}
+              <span className="tw:text-muted-foreground">{notYetImplemented}</span>
             </p>
+            {biblicalTermsExpanded && (
+              <div
+                id="marble-guide-biblical-terms-content"
+                className="tw:flex tw:flex-col tw:gap-3 tw:text-muted-foreground"
+              >
+                <p>{aboutBiblicalTerms}</p>
 
-            <p className="tw:text-xs tw:italic">{notYetImplemented}</p>
+                <p>{interleavePlaceholders(aboutGrayTemplate, { colorWord: grayChip })}</p>
+
+                <p>
+                  {interleavePlaceholders(aboutOrangeTemplate, {
+                    colorWord: orangeChip,
+                    helpLink,
+                  })}
+                </p>
+              </div>
+            )}
           </div>
 
           <p className="tw:pt-2 tw:font-semibold">{tabsHeader}</p>
