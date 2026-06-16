@@ -17,13 +17,7 @@
  */
 import { Fragment } from 'react';
 import { BarChart3, BookA, BookOpenCheck, BookPlus, Copy, FolderInput, Trash2 } from 'lucide-react';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-  Label,
-  cn,
-} from 'platform-bible-react';
+import { Tooltip, TooltipContent, TooltipTrigger, Label, cn } from 'platform-bible-react';
 import {
   ProjectSelectorOpenTab,
   ProjectSelector,
