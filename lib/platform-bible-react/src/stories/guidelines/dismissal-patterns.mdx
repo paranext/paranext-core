@@ -1,0 +1,132 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Guidelines/Dismissal Patterns" />
+
+# Dismissal Patterns
+
+When a transient surface is open — a popover, menu, inline editor, panel — something has to
+decide _when it closes again_. "Dismissal" is that behavior. This page defines the **three
+dismissal patterns** we use, when to reach for each, and the one case our stack does **not** handle
+for free: **iframe (webview) boundaries**.
+
+This is a UX pattern, not a component. Most surfaces are built on shadcn/Radix primitives that
+already implement dismissal; your job is to pick the right pattern and wire the Radix props
+accordingly — and to add the iframe fallback when it matters.
+
+---
+
+## Pick a pattern by how transient the surface is
+
+The three patterns differ only in **which interactions dismiss the surface**. Read the table
+top-to-bottom as "least sticky" to "most sticky".
+
+| Pattern               | Outside press | Escape | Outside scroll | Focus leaves window / enters another iframe |
+| --------------------- | :-----------: | :----: | :------------: | :-----------------------------------------: |
+| **Light dismissal**   |       ✓       |   ✓    |       ✓        |                      ✓                      |
+| **Click-away dismissal** |    ✓       |   ✓    |       ✗        |                      ✓                      |
+| **Explicit dismissal** |       ✗       |   ✓    |       ✗        |                      ✗                      |
+
+### Light dismissal
+
+The surface gets out of the way the moment attention moves anywhere else — including a scroll.
+
+- **Use for:** tooltips, hover cards, transient/informational popovers, non-critical menus.
+- **Don't use for:** anything holding text the user is typing.
+
+### Click-away dismissal
+
+Closes on a deliberate click elsewhere or Escape, but **stays open while the user scrolls** the
+content behind it. This is the right default for popovers and panels that act as a temporary
+"layer" over scrollable content.
+
+- **Use for:** filter panels, detail popovers, secondary controls you might consult _while_
+  scrolling the page behind them.
+- **The scroll column is the whole reason this pattern exists** — it's the difference from Light.
+
+### Explicit dismissal
+
+Only a deliberate action closes it: Escape, a close button, or completing the task (submit /
+select). Outside clicks, scroll, and focus loss are **ignored** so the user never loses in-progress
+work by accident.
+
+- **Use for:** inline editors, comment composers, multi-step forms in a popover — anywhere an
+  accidental outside click would discard work.
+
+---
+
+## How to wire each pattern
+
+Radix (shadcn) primitives expose the triggers as props on the content element. Map them like this:
+
+| Trigger        | Radix prop                                                |
+| -------------- | --------------------------------------------------------- |
+| Outside press  | `onPointerDownOutside` / `onInteractOutside`              |
+| Escape         | `onEscapeKeyDown`                                          |
+| Outside scroll | (handled by closing on `onInteractOutside`; or close the surface from a scroll listener) |
+
+- **Light:** accept Radix's defaults — it already dismisses on outside press and Escape. Add
+  scroll dismissal where the surface isn't anchored to the scrolling content.
+- **Click-away:** keep outside-press + Escape, and **don't** add scroll dismissal. Where a Radix
+  primitive dismisses on ancestor scroll by default, suppress it.
+- **Explicit:** call `event.preventDefault()` in `onPointerDownOutside` / `onInteractOutside` so the
+  surface stays open; leave `onEscapeKeyDown` alone (Escape should still work) and drive closing
+  from your own close/submit controls.
+
+---
+
+## The iframe (webview) gap — read this
+
+Platform.Bible renders most webviews inside **`iframe`s**, and many are **cross-origin and
+sandboxed** (see `src/renderer/services/web-view.service-host.ts`). This breaks the usual
+assumption behind outside-press dismissal:
+
+> When a user clicks **into a cross-origin/sandboxed iframe, the parent document never receives a
+> `pointerdown` / `mousedown`.** So Radix's pointer-based dismissal does **not** fire, and a
+> popover in the parent **stays open** even though the user has clearly moved on.
+
+The only reliable signal the parent gets is **focus leaving the window** — the window blurs and
+`document.activeElement` becomes the focused `<iframe>` element.
+
+### Defining "outside" across iframes: use DOM containment
+
+A surface may **contain its own webview** (a popover with an embedded webview, a panel over a
+webview). So "focus entered an iframe" cannot mean "dismiss" — that would make such a surface
+dismiss itself the instant the user touched its own content. Define "outside" by **DOM containment,
+not by element type**:
+
+> On window/document blur, inspect `document.activeElement`. Dismiss **only if** the focused element
+> is **not contained within the surface's DOM subtree**. A surface's own child iframes never dismiss
+> it; focus landing in **any other** iframe (a sibling webview) counts as an outside interaction and
+> dismisses it (for **Light** and **Click-away**; **Explicit** ignores focus loss entirely).
+
+```ts
+// Conceptual rule — not yet implemented as a shared hook (see status below).
+function isOutsideInteraction(surfaceEl: HTMLElement): boolean {
+  const focused = document.activeElement;
+  // Focus moved into an element (often an <iframe>) that the surface does not contain.
+  return !!focused && !surfaceEl.contains(focused);
+}
+// On window 'blur' / document 'focusout', if isOutsideInteraction(surface) → dismiss.
+```
+
+### Status
+
+There is **no shared hook for the focus-containment fallback yet** (`src/hooks/` contains none).
+Until one exists, treat this as the agreed pattern: implement it per-surface where webview
+adjacency matters, following the DOM-containment rule above so behavior stays consistent.
+
+---
+
+## Glossary
+
+- **Outside-interaction dismissal** — umbrella term for closing a surface in response to interaction
+  elsewhere (pointer, Escape, scroll, or focus loss). Mirrors Radix's `onInteractOutside`.
+- **Light dismissal** — dismissal pattern that closes on _any_ outside interaction, including
+  scroll. (In UX writing, "light dismissal" is sometimes used generically; in this design system it
+  names the specific pattern above.)
+- **Click-away dismissal** — closes on outside press + Escape + focus loss, but **not** on outside
+  scroll.
+- **Explicit dismissal** — closes only on a deliberate action (Escape, close, submit); ignores
+  outside press, scroll, and focus loss.
+- **Outside (across iframes)** — defined by **DOM containment**: an interaction is "outside" when
+  focus moves to an element the surface does not contain.
