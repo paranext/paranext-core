@@ -44,6 +44,8 @@ type BaseSettingProps<TSettingKey, TSettingValue> = {
   defaultSetting: TSettingValue;
   /** Additional css classes to help with unique styling of the Settings component */
   className?: string;
+  /** If true, render the control as read-only and reject change events */
+  disabled?: boolean;
 };
 
 /**
@@ -137,6 +139,7 @@ export function Setting({
   label,
   className,
   description,
+  disabled,
 }: CombinedSettingProps) {
   const validateSetting = validateOtherSetting || validateProjectSetting;
 
@@ -186,6 +189,7 @@ export function Setting({
   const handleChangeSetting = async (
     event: ChangeEvent<HTMLInputElement> | string[] | boolean | 'indeterminate',
   ) => {
+    if (disabled) return;
     let newValue: unknown;
 
     if (typeof event === 'string')
@@ -240,11 +244,31 @@ export function Setting({
 
     if (typeof setting === 'string' || typeof setting === 'number')
       component = (
-        <Input key={settingKey} onChange={debouncedHandleChange} defaultValue={setting} />
+        <Input
+          key={settingKey}
+          disabled={disabled}
+          onChange={debouncedHandleChange}
+          defaultValue={setting}
+        />
       );
     else if (typeof setting === 'boolean')
-      component = (
-        <Switch key={settingKey} onCheckedChange={debouncedHandleChange} defaultChecked={setting} />
+      // When disabled, render the switch as controlled so an externally driven value change (e.g.
+      // `platform.isEditable` flipping to false because `platform.isPublished` became true) is
+      // reflected visually. When not disabled, keep the existing uncontrolled behavior so the
+      // optimistic toggle state survives the debounced write.
+      component = disabled ? (
+        <Switch
+          key={`${settingKey}-disabled`}
+          disabled
+          onCheckedChange={debouncedHandleChange}
+          checked={setting}
+        />
+      ) : (
+        <Switch
+          key={`${settingKey}-enabled`}
+          onCheckedChange={debouncedHandleChange}
+          defaultChecked={setting}
+        />
       );
     else if (typeof setting === 'object')
       if (Array.isArray(setting) && settingKey === 'platform.interfaceLanguage') {
@@ -294,6 +318,7 @@ export function Setting({
     errorMessage,
     languages,
     defaultLanguages,
+    disabled,
   ]);
 
   return (
