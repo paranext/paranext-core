@@ -23,6 +23,17 @@ export function ProjectSetting({
     defaultSetting,
   );
 
+  // `platform.isPublished` is the source of truth for whether the project is locked. When it's
+  // true, `platform.isEditable` is forced off in the UI and both switches become read-only.
+  const [isPublished] = useProjectSetting(projectId, 'platform.isPublished', false);
+  const isPublishedValue = isPublished === true;
+
+  const isPublishedSetting = settingKey === 'platform.isPublished';
+  const isEditableLockedByPublished = settingKey === 'platform.isEditable' && isPublishedValue;
+
+  const isLocked = isPublishedSetting || isEditableLockedByPublished;
+  const displaySetting = isEditableLockedByPublished ? false : setting;
+
   const validateProjectSetting = async (
     currentSettingKey: ProjectSettingNames,
     newValue: ProjectSettingValues,
@@ -34,7 +45,7 @@ export function ProjectSetting({
   return (
     <Setting
       settingKey={settingKey}
-      setting={setting}
+      setting={displaySetting}
       setSetting={setSetting}
       isLoading={isLoading}
       validateProjectSetting={validateProjectSetting}
@@ -42,7 +53,7 @@ export function ProjectSetting({
       description={description}
       className={className}
       disabled={disabled}
-      readOnly={readOnly}
+      readOnly={readOnly || isLocked}
     />
   );
 }
