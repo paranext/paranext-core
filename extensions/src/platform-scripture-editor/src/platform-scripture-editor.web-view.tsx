@@ -7,7 +7,9 @@ import {
   EditorOptions,
   EditorRef,
   getDefaultViewOptions,
+  getViewOptions,
   isInsertEmbedOpOfType,
+  PARAGRAPH_STRUCTURE_VIEW_MODE,
   SelectionRange,
   TypedMarkOnClick,
   TypedMarkOnRemove,
@@ -191,15 +193,25 @@ const defaultTextDirection = 'ltr';
 
 const defaultMarkersMenuTrigger = '\\';
 
-const defaultView: ViewOptions = getDefaultViewOptions();
-
 // Return the appropriate ViewOptions for the given webview `viewType`.
 // Centralizes the logic so initialization and effects can call the same helper
 // instead of duplicating the shallow-copy code.
-const getViewOptionsForType = (viewType: ScriptureEditorViewType): ViewOptions => {
-  const base = { ...defaultView };
-  if (viewType === 'markers') return { ...base, markerMode: 'visible', noteMode: 'expanded' };
-  return base;
+const getViewOptionsForType = (
+  viewType: ScriptureEditorViewType,
+  isPowerMode: boolean,
+): ViewOptions => {
+  // Power users get to choose their own view options, so don't force the paragraph-structure
+  // preset on them. The markers tweaks below predate this and are required to keep the read-only
+  // markers view working.
+  if (isPowerMode) {
+    const base = getDefaultViewOptions();
+    if (viewType === 'markers') return { ...base, markerMode: 'visible', noteMode: 'expanded' };
+    return base;
+  }
+  const paragraphStructure =
+    getViewOptions(PARAGRAPH_STRUCTURE_VIEW_MODE) ?? getDefaultViewOptions();
+  if (viewType === 'markers') return { ...paragraphStructure, noteMode: 'expanded' };
+  return paragraphStructure;
 };
 
 // This regex is connected directly to the exception message within MissingBookException.cs
@@ -476,8 +488,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [newTitleIfUpdated, updateWebViewDefinition]);
 
   const viewOptions = useMemo<ViewOptions>(() => {
-    return getViewOptionsForType(viewType);
-  }, [viewType]);
+    return getViewOptionsForType(viewType, isPowerMode);
+  }, [viewType, isPowerMode]);
 
   const [footnotesPaneVisible, setFootnotesPaneVisible] = useWebViewState<boolean>(
     'footnotesPaneVisible',
@@ -1114,10 +1126,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const setScrRefNoScroll = useCallback(
     (newVerseLocation: SerializedVerseRef) => {
-      internalVerseLocationRef.current = newVerseLocation;
-      setScrRefWithScroll(newVerseLocation);
+      // Preserve versificationStr: ScriptureReferencePlugin returns {book, chapterNum, verseNum}
+      // without versificationStr, so falling back to scrRef keeps the versification consistent and
+      // prevents the PDP selector from changing on every click.
+      const preservedLocation: SerializedVerseRef = {
+        ...newVerseLocation,
+        versificationStr: newVerseLocation.versificationStr ?? scrRef.versificationStr,
+      };
+      internalVerseLocationRef.current = preservedLocation;
+      setScrRefWithScroll(preservedLocation);
     },
-    [setScrRefWithScroll],
+    [setScrRefWithScroll, scrRef.versificationStr],
   );
 
   /**

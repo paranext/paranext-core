@@ -18,7 +18,7 @@ const onDidUpdateWebView = getNetworkEvent(EVENT_NAME_ON_DID_UPDATE_WEB_VIEW);
 const onDidCloseWebView = getNetworkEvent(EVENT_NAME_ON_DID_CLOSE_WEB_VIEW);
 
 let networkObject: WebViewServiceType;
-let initializationPromise: Promise<void>;
+let initializationPromise: Promise<void> | undefined;
 async function initialize(): Promise<void> {
   if (!initializationPromise) {
     initializationPromise = new Promise<void>((resolve, reject) => {
