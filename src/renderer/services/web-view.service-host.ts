@@ -40,8 +40,12 @@ import {
   WebViewId,
   WebViewType,
 } from '@shared/models/web-view.model';
-import { registerCommand } from '@shared/services/command.service';
+import { registerCommand, sendCommand } from '@shared/services/command.service';
+import { dataProviderService } from '@shared/services/data-provider.service';
 import { logger } from '@shared/services/logger.service';
+import { setWorkspaceUpdating } from '@renderer/services/workspace-updating-store';
+import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
+import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import { networkObjectService } from '@shared/services/network-object.service';
 import {
   createBufferedNetworkEventEmitter,
@@ -830,10 +834,14 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
           // Update the cache synchronously with the notification so any `saveLayout` racing the
           // switch reads the new mode immediately (before `loadLayout`'s own read resolves).
           currentInterfaceMode = newMode;
-          try {
-            await loadLayout();
-          } catch (err) {
-            logger.warn(`Dock layout failed to reload after interface mode change: ${err}`);
+          if (newMode === 'simple') {
+            await handleSwitchToSimpleMode();
+          } else {
+            try {
+              await loadLayout();
+            } catch (err) {
+              logger.warn(`Dock layout failed to reload after interface mode change: ${err}`);
+            }
           }
         },
         { retrieveDataImmediately: false },
@@ -879,6 +887,98 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
 
     return true;
   };
+}
+
+/**
+ * Drives the power → simple transition from the renderer instead of relying on the extension-host
+ * picker chain. Resolves the most-recent project in parallel with the layout swap, shows the
+ * "Loading layout for X" overlay immediately, calls `openScriptureEditor` directly (skipping the
+ * picker's recents lookup), and tears the overlay down when finished. Falls back to the original
+ * behavior (load layout, let the picker do its thing) if recents resolution fails.
+ */
+async function handleSwitchToSimpleMode(): Promise<void> {
+  const resolvePromise = tryResolveRecentProjectForSimpleMode();
+  let overlayHeld = false;
+  try {
+    const resolved = await resolvePromise;
+    if (resolved) {
+      setWorkspaceUpdating(true, resolved.name);
+      overlayHeld = true;
+    }
+    try {
+      await loadLayout();
+    } catch (err) {
+      logger.warn(`Dock layout failed to reload after interface mode change: ${err}`);
+    }
+    if (resolved) {
+      try {
+        // Skip the platform-scripture-editor picker's recents lookup by directly opening the
+        // project. The picker still fires from `onDidOpenWebView` but will see the editor is no
+        // longer empty (this command's `open()` flow replaces the placeholder with a real editor)
+        // and no-op. Use a string command name to avoid coupling this service to extension types.
+        // This command comes from an extension and is not typed in CommandHandlers — match the
+        // pattern used in platform-bible-toolbar.tsx.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+        await (sendCommand as any)('platformScriptureEditor.openScriptureEditor', resolved.id);
+      } catch (err) {
+        logger.warn(
+          `Simple-mode pre-fetch: openScriptureEditor for ${resolved.id} failed; the default picker will retry (${err})`,
+        );
+      }
+    }
+  } finally {
+    if (overlayHeld) setWorkspaceUpdating(false);
+  }
+}
+
+/**
+ * When switching to simple mode the simpleLayout's empty Scripture Editor placeholder triggers the
+ * platform-scripture-editor extension's `startDefaultProjectPicker`, which does several async PAPI
+ * round-trips (read interface mode, list webviews, fetch recents, call openScriptureEditor) before
+ * the project starts loading. That visible "tries something for a while, then loads" gap is what we
+ * want to eliminate.
+ *
+ * This helper resolves the most-recent project id + display name directly in the renderer so we can
+ * call `openScriptureEditor` ourselves right after the layout swap, bypassing the picker's async
+ * chain. The picker still runs but sees the editor is no longer empty and no-ops.
+ *
+ * Best-effort: if the recents service is unavailable (Platform.Bible cold start) or the project's
+ * details can't be read, returns `undefined` and we let the picker handle it the slow way. A
+ * failure here must NOT prevent the layout swap from happening.
+ */
+async function tryResolveRecentProjectForSimpleMode(): Promise<
+  { id: string; name: string | undefined } | undefined
+> {
+  try {
+    const recentsProvider = await dataProviderService.get(
+      'platformScripture.recentlyOpenedProjects',
+    );
+    if (!recentsProvider) return undefined;
+    const recents = await recentsProvider.getRecentProjects(undefined);
+    const id = Array.isArray(recents) ? recents[0] : undefined;
+    if (!id) return undefined;
+
+    let name: string | undefined;
+    try {
+      const pdp = await papiFrontendProjectDataProviderService.get(
+        PROJECT_INTERFACE_PLATFORM_BASE,
+        id,
+      );
+      const fullName = await pdp.getSetting('platform.fullName');
+      const shortName = await pdp.getSetting('platform.name');
+      name = (fullName || shortName) ?? undefined;
+    } catch (err) {
+      logger.debug(
+        `Simple-mode pre-fetch: could not read display name for ${id}; overlay will use generic label (${err})`,
+      );
+    }
+    return { id, name };
+  } catch (err) {
+    logger.debug(
+      `Simple-mode pre-fetch: recently-opened-projects unavailable; falling back to default picker (${err})`,
+    );
+    return undefined;
+  }
 }
 
 // #endregion Dock layouts

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   setWorkspaceUpdating,
   getWorkspaceUpdating,
+  getWorkspaceUpdatingProjectName,
   subscribeToWorkspaceUpdating,
   resetWorkspaceUpdating,
 } from './workspace-updating-store';
@@ -73,6 +74,39 @@ describe('workspace-updating-store', () => {
       subscribeToWorkspaceUpdating(listener);
       setWorkspaceUpdating(false); // already false — no change
       expect(listener).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('project name tracking', () => {
+    it('stores the project name from the most recent switch', () => {
+      setWorkspaceUpdating(true, 'Alpha');
+      expect(getWorkspaceUpdatingProjectName()).toBe('Alpha');
+    });
+
+    it('replaces (not stacks) the name on a second concurrent switch', () => {
+      setWorkspaceUpdating(true, 'Alpha');
+      setWorkspaceUpdating(true, 'Beta');
+      expect(getWorkspaceUpdatingProjectName()).toBe('Beta');
+    });
+
+    it('clears the name once all switches finish', () => {
+      setWorkspaceUpdating(true, 'Alpha');
+      setWorkspaceUpdating(false);
+      expect(getWorkspaceUpdatingProjectName()).toBeUndefined();
+    });
+
+    it('notifies listeners when only the project name changes', () => {
+      setWorkspaceUpdating(true, 'Alpha');
+      const listener = vi.fn();
+      subscribeToWorkspaceUpdating(listener);
+      setWorkspaceUpdating(true, 'Beta'); // count 1→2, name changes — listeners should fire
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the existing name when the new switch does not supply one', () => {
+      setWorkspaceUpdating(true, 'Alpha');
+      setWorkspaceUpdating(true); // no name passed
+      expect(getWorkspaceUpdatingProjectName()).toBe('Alpha');
     });
   });
 

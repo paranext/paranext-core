@@ -6,6 +6,11 @@
  *
  * A 30-second safety timer resets on every new switch and auto-clears the state if a switch never
  * resolves (e.g. the extension deactivates mid-switch and the did-finish event is never emitted).
+ *
+ * Also tracks the latest known project name so the overlay can show "Loading layout for {name}".
+ * The name is replaced (not stacked) on every new switch — concurrent switches are rare, and the
+ * most recent switch is the one the user just initiated, so its name is the most useful to
+ * display.
  */
 
 /**
@@ -16,6 +21,7 @@ const SWITCH_SAFETY_TIMEOUT_MS = 30_000;
 
 let switchCount = 0;
 let safetyTimer: ReturnType<typeof setTimeout> | undefined;
+let currentProjectName: string | undefined;
 
 const listeners = new Set<() => void>();
 
@@ -23,14 +29,18 @@ function notifyListeners(): void {
   listeners.forEach((listener) => listener());
 }
 
-export function setWorkspaceUpdating(value: boolean): void {
+export function setWorkspaceUpdating(value: boolean, projectName?: string): void {
   const wasUpdating = switchCount > 0;
+  const previousProjectName = currentProjectName;
   if (value) {
     switchCount += 1;
+    // Replace the project name on every new switch — see module comment.
+    if (projectName !== undefined) currentProjectName = projectName;
     // Reset the safety timer on each new switch, giving 30 s from the latest start.
     clearTimeout(safetyTimer);
     safetyTimer = setTimeout(() => {
       switchCount = 0;
+      currentProjectName = undefined;
       safetyTimer = undefined;
       notifyListeners();
     }, SWITCH_SAFETY_TIMEOUT_MS);
@@ -39,14 +49,20 @@ export function setWorkspaceUpdating(value: boolean): void {
     if (switchCount === 0) {
       clearTimeout(safetyTimer);
       safetyTimer = undefined;
+      currentProjectName = undefined;
     }
   }
   const isNowUpdating = switchCount > 0;
-  if (wasUpdating !== isNowUpdating) notifyListeners();
+  if (wasUpdating !== isNowUpdating || previousProjectName !== currentProjectName)
+    notifyListeners();
 }
 
 export function getWorkspaceUpdating(): boolean {
   return switchCount > 0;
+}
+
+export function getWorkspaceUpdatingProjectName(): string | undefined {
+  return currentProjectName;
 }
 
 /** Subscribe to state changes. Returns an unsubscribe function. */
@@ -66,5 +82,6 @@ export function resetWorkspaceUpdating(): void {
   switchCount = 0;
   clearTimeout(safetyTimer);
   safetyTimer = undefined;
+  currentProjectName = undefined;
   listeners.clear();
 }
