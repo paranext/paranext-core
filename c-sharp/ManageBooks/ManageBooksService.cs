@@ -211,6 +211,14 @@ internal sealed class ManageBooksService : NetworkObject
                 [Param("input", "Book-comparison input.")],
                 ResultOf("object", "Book-comparison result")
             ),
+            ["getProjectBookDates"] = Create(
+                "Get a single project's own per-book last-modified dates (Import-grid date comparison).",
+                [Param("projectId", "Project id.", "string")],
+                ResultOf(
+                    "object",
+                    "Book-comparison result whose destLastModified is each book's own file date"
+                )
+            ),
             ["copyBooks"] = Create(
                 "Copy books from a source project to a destination project.",
                 [Param("request", "Copy-books request.")],
