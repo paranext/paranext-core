@@ -98,6 +98,40 @@ test('initialize retries registerEngine after a failed initialization', async ()
   expect(dataProviderService.registerEngine).toHaveBeenCalledTimes(2);
 });
 
+test('initialize disposes the failed engine and retries with a fresh one', async () => {
+  // initialize() is a cached initializer that the test above leaves resolved, so a fresh module
+  // graph is needed to exercise the failure path again.
+  vi.resetModules();
+  const { dataProviderService: freshDataProviderService } = await import(
+    '@shared/services/data-provider.service'
+  );
+  const { settingsDocumentCombiner: freshCombiner } = await import(
+    '@extension-host/services/contribution.service'
+  );
+  const { initialize: freshInitialize } = await import(
+    '@extension-host/services/settings.service-host'
+  );
+
+  // The engine subscribes to onDidRebuild in its constructor; make the unsubscriber observable so
+  // we can confirm a failed registerEngine disposes the engine instead of leaking the subscription.
+  const unsubscribe = vi.fn(() => true);
+  const onDidRebuildSpy = vi.spyOn(freshCombiner, 'onDidRebuild').mockReturnValue(unsubscribe);
+
+  vi.mocked(freshDataProviderService.registerEngine)
+    .mockRejectedValueOnce(new Error('transient failure'))
+    .mockResolvedValue(settingsProviderEngine);
+
+  // Failed attempt: the engine it built is disposed before the error propagates.
+  await expect(freshInitialize()).rejects.toThrow('transient failure');
+  expect(unsubscribe).toHaveBeenCalledTimes(1);
+
+  // Retry constructs a fresh engine (a second onDidRebuild subscription) and succeeds; the
+  // successful engine is not disposed.
+  await expect(freshInitialize()).resolves.toBeUndefined();
+  expect(onDidRebuildSpy).toHaveBeenCalledTimes(2);
+  expect(unsubscribe).toHaveBeenCalledTimes(1);
+});
+
 test('Get verseRef returns default value', async () => {
   const result = await settingsProviderEngine.get('platform.verseRef');
   expect(result).toEqual(VERSE_REF_DEFAULT.default);
