@@ -606,38 +606,11 @@ public static class CopyBooksOrchestrator
         List<ProjectSummary> summaries = ScrTextCollection
             .ScrTexts(IncludeProjects.AllAccessible)
             .Where(scrText => predicate(scrText))
-            .Select(ToSummary)
+            .Select(ProjectSummary.FromScrText)
             .ToList();
 
         return new ProjectListResult(summaries);
     }
-
-    /// <summary>
-    /// Maps a <see cref="ScrText"/> to the minimal <see cref="ProjectSummary"/>
-    /// contract shape (data-contracts.md Section 3.8).
-    ///
-    /// <para><b>Intentional duplication.</b> A byte-identical projection lives
-    /// in <c>ProjectFilterService.ToSummary</c> (CAP-011). Both capabilities
-    /// project <c>ScrText</c> to the same wire shape because Section 3.8 is
-    /// the single source of truth, and the CAP-011 delegation path runs
-    /// through <see cref="GetToProjectFilterProjects"/> so the two capabilities
-    /// always produce identical results. The duplication is retained
-    /// deliberately:
-    /// unifying the helper would require placing it in a file owned by
-    /// CAP-011 (<c>ProjectFilterService.cs</c>) or adding a static factory to
-    /// <c>ProjectSummary</c>, both of which cross capability-isolation
-    /// boundaries. Any future consolidation should happen in a dedicated
-    /// refactor pass that owns both capabilities' scopes at once.</para>
-    /// </summary>
-    private static ProjectSummary ToSummary(ScrText scrText) =>
-        new(
-            ProjectId: scrText.Guid.ToString(),
-            Name: scrText.Name,
-            ProjectType: scrText.Settings.TranslationInfo.Type.InternalValue,
-            IsEditable: scrText.Settings.IsEditableText,
-            // See ProjectFilterService.ToSummary for rationale.
-            IsResource: scrText.IsResourceProject
-        );
 
     // =====================================================================
     // CAP-007: CopyBooks + M-014 CopyCustomVersification
@@ -860,12 +833,14 @@ public static class CopyBooksOrchestrator
                 toScrText.PutText(bookNum, 0, false, sourceUsfm, null);
                 return true;
             }
-            // Merge path — port of PT9 ImportSfmText.WriteChaptersToBook
-            // (ParatextData/ImportSfmText.cs:245-286). Source chapters overwrite
-            // their dest counterparts; dest chapters absent from source survive.
-            // Empty source chapters are skipped except when the dest book is also
-            // empty (allows the "first copy populates an empty book" path to
-            // work). Uses the same Regex compiled in ImportBooksOrchestrator.
+            // Merge path — "Only copy non-existing chapters": write a source
+            // chapter ONLY when the matching dest chapter is missing, empty, or
+            // scaffolding-only (see UsfmChapterScaffolding). Deliberate PT10
+            // deviation from PT9's WriteChaptersToBook semantic, which
+            // overwrote every dest chapter present in the source (Manila UX
+            // follow-up). Empty source chapters are still skipped except when
+            // the dest book is also empty (preserves the "first copy populates
+            // an empty book" path).
             return TryCopyChaptersFromSource(fromScrText, toScrText, bookNum, sourceUsfm, errors);
         }
         catch (Exception ex)
@@ -917,6 +892,26 @@ public static class CopyBooksOrchestrator
             return true;
         }
 
+        // "Only copy non-existing chapters": split the DEST book so each
+        // source chapter can be checked against its dest counterpart. Without
+        // this analysis the mode's promise can't be kept, so failure to
+        // analyze the dest book is an error for this book, not a fall-through
+        // to overwriting.
+        List<string> destChapters;
+        try
+        {
+            string destUsfm = toScrText.GetText(bookNum) ?? string.Empty;
+            destChapters = ScrText.SplitIntoChapters(toScrText.Name, bookNum, destUsfm);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(
+                $"[CopyBooks.TryCopyChaptersFromSource] dest split failed for book {bookId}: {ex}"
+            );
+            errors.Add($"Failed to analyze existing book {bookId}; no chapters were copied");
+            return false;
+        }
+
         string destChapter1Text = string.Empty;
         try
         {
@@ -931,6 +926,13 @@ public static class CopyBooksOrchestrator
         for (int i = 0; i < chapters.Count; i += 1)
         {
             string chapterText = chapters[i];
+            // Dest chapter exists with real content → never overwrite it.
+            // (SplitIntoChapters returns a dense list: item i is chapter i+1.)
+            if (
+                i < destChapters.Count
+                && UsfmChapterScaffolding.HasContentBeyondScaffolding(destChapters[i])
+            )
+                continue;
             if (MergeEmptyChapterPattern.IsMatch(chapterText))
             {
                 if (i != 0 || destChapter1Text.Trim().Length != 0)

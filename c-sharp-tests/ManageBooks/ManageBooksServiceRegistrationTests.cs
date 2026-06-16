@@ -19,12 +19,12 @@ namespace TestParanextDataProvider.ManageBooks
     /// Contracts:
     /// - Single <c>RegisterNetworkObjectAsync("platformScripture.manageBooks", functions, details)</c> call
     /// - <see cref="NetworkObjectCreatedDetails"/> event with Id, ObjectType=OBJECT, FunctionNames
-    /// - 13 wire methods: deleteBooks, filterProjects, isProjectShared, createBooks,
+    /// - 14 wire methods: deleteBooks, filterProjects, isProjectShared, createBooks,
     ///   getAvailableBooksForCreation, validateCreateBooks, getBookComparison,
-    ///   getToProjectFilter, copyBooks, copyCustomVersification,
+    ///   getProjectBookDates, getToProjectFilter, copyBooks, copyCustomVersification,
     ///   parseImportFiles, checkOverlappingFiles, importBooks
     ///   (isProjectShared added 2026-05-01 per FN-008 Theme C2 for the unified
-    ///   ManageBooksDialog wiring layer.)
+    ///   ManageBooksDialog wiring layer; getProjectBookDates added by I9.)
     ///
     /// Theme-1 constraint: NO individual <c>RegisterRequestHandlerAsync("command:…")</c>
     /// calls for manage-books methods — every manage-books wire entry is dispatched
@@ -50,7 +50,8 @@ namespace TestParanextDataProvider.ManageBooks
         /// <c>ManageBooksService</c> must expose. Sourced from the strategic
         /// plan's CAP-012 NetworkObject methods list and from the Theme-1
         /// single-registration design. Order-independent.
-        /// (13 methods after FN-008 Theme C2 added isProjectShared on 2026-05-01.)
+        /// (14 methods after I9 added getProjectBookDates; 13 after FN-008 Theme C2 added
+        /// isProjectShared on 2026-05-01.)
         /// </summary>
         private static readonly string[] ExpectedWireMethodNames =
         [
@@ -67,6 +68,8 @@ namespace TestParanextDataProvider.ManageBooks
             "validateCreateBooks",
             // CAP-006
             "getBookComparison",
+            // I9: single-project book dates for the Import grid comparison.
+            "getProjectBookDates",
             // CAP-008
             "getToProjectFilter",
             // CAP-007
@@ -157,7 +160,7 @@ namespace TestParanextDataProvider.ManageBooks
         [Property("ScenarioId", "TS-072")]
         [Property("BehaviorId", "BHV-402")]
         [Description(
-            "OUTER acceptance (Theme 1): RegisterNetworkObjectAsync registers all 13 wire methods as `object:platformScripture.manageBooks.{method}` request handlers."
+            "OUTER acceptance (Theme 1): RegisterNetworkObjectAsync registers all 14 wire methods as `object:platformScripture.manageBooks.{method}` request handlers."
         )]
         public async Task RegisterNetworkObjectAsync_RegistersAllWireMethods()
         {
@@ -236,14 +239,14 @@ namespace TestParanextDataProvider.ManageBooks
         [Property("ScenarioId", "TS-072")]
         [Property("BehaviorId", "BHV-402")]
         [Description(
-            "OUTER acceptance (Theme 1): the total count of manage-books wire handlers registered equals 13 methods + 1 NetworkObject sentinel = 14 (after FN-008 Theme C2 added isProjectShared on 2026-05-01)."
+            "OUTER acceptance (Theme 1): the total count of manage-books wire handlers registered equals 14 methods + 1 NetworkObject sentinel = 15 (isProjectShared added per FN-008 Theme C2 on 2026-05-01; getProjectBookDates added by I9)."
         )]
         public async Task RegisterNetworkObjectAsync_RegistersExactlyAllManageBooksHandlers()
         {
             // Act
             await _service.RegisterNetworkObjectAsync();
 
-            // Assert: exactly (12 methods + 1 NetworkObject sentinel) request types live under
+            // Assert: exactly (14 methods + 1 NetworkObject sentinel) request types live under
             // the `object:platformScripture.manageBooks` prefix — no more, no fewer.
             var manageBooksHandlers = Client
                 .RegisteredRequestTypes.Where(req =>

@@ -1236,13 +1236,16 @@ namespace TestParanextDataProvider.ManageBooks
         [Property("CapabilityId", "CAP-010")]
         [Property("BehaviorId", "BHV-110")]
         [Description(
-            "Merge mode: source chapters overwrite their dest counterparts; dest "
-                + "chapters NOT present in source survive (port of PT9 "
-                + "WriteChaptersToBook semantic, ImportSfmText.cs:270-285)."
+            "Merge mode ('Only import non-existing chapters'): dest chapters that "
+                + "have real text are NEVER overwritten — the source version of those "
+                + "chapters is skipped. Deliberate PT10 deviation from PT9 "
+                + "WriteChaptersToBook (which overwrote colliding chapters); see the "
+                + "Manila UX follow-up — the old semantic amounted to 'merge "
+                + "overwrites everything' for complete source files."
         )]
-        public void ImportBooks_MergeMode_OverwritesOverlapping_PreservesNonOverlap()
+        public void ImportBooks_MergeMode_DestChaptersWithText_SurviveUnchanged()
         {
-            // Arrange: dest has GEN with chapters 1-3
+            // Arrange: dest has GEN with chapters 1-3, all with real text
             _scrText.PutText(
                 1,
                 0,
@@ -1256,7 +1259,7 @@ namespace TestParanextDataProvider.ManageBooks
                 "precondition: GEN present in dest with chapters 1-3"
             );
 
-            // Source has only chapters 1-2 with new content
+            // Source has chapters 1-2 with different content
             ImportFileEntry[] files = new[]
             {
                 new ImportFileEntry(
@@ -1276,33 +1279,188 @@ namespace TestParanextDataProvider.ManageBooks
             Assert.That(result.ImportedCount, Is.EqualTo(1));
 
             string finalText = _scrText.GetText(1);
-            // Source chapters overwrite dest counterparts (collision behavior)
+            // Every dest chapter has real text → all survive untouched
             Assert.That(
                 finalText,
-                Does.Contain("source-ch1"),
-                "Chapter 1 should reflect source content after merge"
+                Does.Contain("dest-ch1"),
+                "Chapter 1 exists in dest with text and must survive the merge"
             );
             Assert.That(
                 finalText,
-                Does.Contain("source-ch2"),
-                "Chapter 2 should reflect source content after merge"
+                Does.Contain("dest-ch2"),
+                "Chapter 2 exists in dest with text and must survive the merge"
             );
-            // Dest chapter 3 was not in source → must survive (the key merge property)
             Assert.That(
                 finalText,
                 Does.Contain("dest-ch3"),
                 "Chapter 3 was not in source and must survive the merge"
             );
-            // Dest chapter 1/2 content should NOT survive (overwritten by source)
+            // Source content must NOT have been written anywhere
             Assert.That(
                 finalText,
-                Does.Not.Contain("dest-ch1"),
-                "Chapter 1 source content must replace dest content"
+                Does.Not.Contain("source-ch1"),
+                "Chapter 1 source content must be skipped — dest chapter exists"
             );
             Assert.That(
                 finalText,
-                Does.Not.Contain("dest-ch2"),
-                "Chapter 2 source content must replace dest content"
+                Does.Not.Contain("source-ch2"),
+                "Chapter 2 source content must be skipped — dest chapter exists"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("BehaviorId", "BHV-110")]
+        [Description(
+            "Merge mode ('Only import non-existing chapters'): chapters missing "
+                + "from dest are imported from the source; dest chapters with text "
+                + "stay untouched."
+        )]
+        public void ImportBooks_MergeMode_WritesOnlyChaptersMissingFromDest()
+        {
+            // Arrange: dest has GEN with chapter 1 only
+            _scrText.PutText(1, 0, false, "\\id GEN\n\\c 1\n\\v 1 dest-ch1", null);
+
+            // Source has chapters 1-3
+            ImportFileEntry[] files = new[]
+            {
+                new ImportFileEntry(
+                    FileName: "gen.sfm",
+                    Content: "\\id GEN\n\\c 1\n\\v 1 source-ch1\n\\c 2\n\\v 1 source-ch2\n\\c 3\n\\v 1 source-ch3",
+                    Included: true
+                ),
+            };
+
+            ImportBooksResult result = ImportBooksOrchestrator.ImportBooks(
+                _scrText,
+                files,
+                replaceEntireBook: false
+            );
+
+            Assert.That(result.Success, Is.True);
+            string finalText = _scrText.GetText(1);
+            Assert.That(
+                finalText,
+                Does.Contain("dest-ch1"),
+                "Chapter 1 exists in dest with text and must survive"
+            );
+            Assert.That(
+                finalText,
+                Does.Not.Contain("source-ch1"),
+                "Chapter 1 source content must be skipped"
+            );
+            Assert.That(
+                finalText,
+                Does.Contain("source-ch2"),
+                "Chapter 2 is missing from dest and must be imported"
+            );
+            Assert.That(
+                finalText,
+                Does.Contain("source-ch3"),
+                "Chapter 3 is missing from dest and must be imported"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("BehaviorId", "BHV-110")]
+        [Description(
+            "Merge mode ('Only import non-existing chapters'): a dest chapter "
+                + "that is truly empty (bare \\c marker) counts as non-existing and "
+                + "is filled from the source."
+        )]
+        public void ImportBooks_MergeMode_EmptyDestChapter_IsFilled()
+        {
+            // Arrange: dest GEN — ch1 and ch3 have text, ch2 is a bare \c marker
+            _scrText.PutText(
+                1,
+                0,
+                false,
+                "\\id GEN\n\\c 1\n\\v 1 dest-ch1\n\\c 2\n\\c 3\n\\v 1 dest-ch3",
+                null
+            );
+
+            ImportFileEntry[] files = new[]
+            {
+                new ImportFileEntry(
+                    FileName: "gen.sfm",
+                    Content: "\\id GEN\n\\c 1\n\\v 1 source-ch1\n\\c 2\n\\v 1 source-ch2\n\\c 3\n\\v 1 source-ch3",
+                    Included: true
+                ),
+            };
+
+            ImportBooksResult result = ImportBooksOrchestrator.ImportBooks(
+                _scrText,
+                files,
+                replaceEntireBook: false
+            );
+
+            Assert.That(result.Success, Is.True);
+            string finalText = _scrText.GetText(1);
+            Assert.That(finalText, Does.Contain("dest-ch1"), "ch1 has text — survives");
+            Assert.That(finalText, Does.Contain("dest-ch3"), "ch3 has text — survives");
+            Assert.That(
+                finalText,
+                Does.Contain("source-ch2"),
+                "ch2 was empty in dest — must be filled from source"
+            );
+            Assert.That(finalText, Does.Not.Contain("source-ch1"), "ch1 source skipped");
+            Assert.That(finalText, Does.Not.Contain("source-ch3"), "ch3 source skipped");
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("BehaviorId", "BHV-110")]
+        [Description(
+            "Merge mode ('Only import non-existing chapters'): dest chapters "
+                + "containing only create-books scaffolding (chapter/verse markers "
+                + "without text, bare paragraph markers, book-name headers) count as "
+                + "non-existing and are filled from the source. Mirrors PT9 "
+                + "ScriptureTemplate CreateCV/CreateInitialLines output."
+        )]
+        public void ImportBooks_MergeMode_ScaffoldedDestChapters_AreFilled()
+        {
+            // Arrange: dest GEN is a chapter/verse scaffold as produced by
+            // Create books → "with all chapter and verse numbers": \id with
+            // suffix, \h/\toc headers, bare \p, verse numbers with no text.
+            _scrText.PutText(
+                1,
+                0,
+                false,
+                "\\id GEN - Test Project\n\\h Genesis\n\\toc2 Genesis\n\\toc1 Genesis\n"
+                    + "\\c 1 \n\\p\n\\v 1 \n\\v 2 \n\\c 2 \n\\p\n\\v 1 ",
+                null
+            );
+
+            ImportFileEntry[] files = new[]
+            {
+                new ImportFileEntry(
+                    FileName: "gen.sfm",
+                    Content: "\\id GEN\n\\c 1\n\\v 1 source-ch1\n\\c 2\n\\v 1 source-ch2",
+                    Included: true
+                ),
+            };
+
+            ImportBooksResult result = ImportBooksOrchestrator.ImportBooks(
+                _scrText,
+                files,
+                replaceEntireBook: false
+            );
+
+            Assert.That(result.Success, Is.True);
+            string finalText = _scrText.GetText(1);
+            Assert.That(
+                finalText,
+                Does.Contain("source-ch1"),
+                "Scaffold-only chapter 1 counts as non-existing — filled from source"
+            );
+            Assert.That(
+                finalText,
+                Does.Contain("source-ch2"),
+                "Scaffold-only chapter 2 counts as non-existing — filled from source"
             );
         }
 

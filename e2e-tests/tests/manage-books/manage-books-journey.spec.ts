@@ -56,12 +56,19 @@
  */
 import type { FrameLocator, Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/cdp.fixture';
-import { waitForAppReady } from '../../fixtures/helpers';
+import { openFromEditorHamburger, waitForAppReady } from '../../fixtures/helpers';
 
 const SCREENSHOT_BASE = 'proofs/component-evidence/journey';
 const WEB_VIEW_TITLE_REGEX = /Manage Books/i;
 const MENU_LABEL_REGEX = /Manage Books/i;
 const MANAGE_BOOKS_FRAME = 'iframe[title*="Manage Books" i]';
+/**
+ * Project whose editor hosts the Manage Books entry point (Manila UX follow-up moved the menu item
+ * from the application main menu into the scripture editor's hamburger menu). Same test project the
+ * markers-checklist specs use. Tests that need a different target project still switch via the
+ * dialog's own sidebar project picker after opening.
+ */
+const ENTRY_PROJECT_NAME = 'wgPIDGIN';
 
 test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
   /**
@@ -90,22 +97,21 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
   });
 
   /**
-   * Helper: open the Manage Books unified dialog via the platform menu and return a frameLocator
-   * scoped to the dialog's web-view iframe. Mirrors the navigation pattern used by the per-WP
-   * functional tests so journey tests do not drift from the per-WP idiom.
+   * Helper: open the Manage Books unified dialog via the scripture editor's hamburger ("Project")
+   * menu and return a frameLocator scoped to the dialog's web-view iframe. Uses the shared
+   * {@link openFromEditorHamburger} bootstrap (same helper the per-WP functional tests use) so
+   * journey tests do not drift from the per-WP idiom.
    *
-   * The wiring phase places the entry under either the top-level "Project" or "Tools" menu (per
-   * ui-spec-manage-books.md "Trigger" — the final placement is decided in phase-3-ui when wiring
-   * menus.json). The helper accepts either to remain stable across that decision.
+   * The Manila UX follow-up moved the entry point from the application main menu into the editor
+   * hamburger (reserved `platform.manageBooks` default group in the Project section). The hamburger
+   * button and its Radix menu both render INSIDE the editor's iframe.
    */
   async function openManageBooks(mainPage: Page): Promise<FrameLocator> {
-    await mainPage
-      .getByRole('menuitem', { name: /Project|Tools/i })
-      .first()
-      .click();
-    await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
-    const tab = mainPage.locator('.dock-tab', { hasText: WEB_VIEW_TITLE_REGEX });
-    await expect(tab).toBeVisible({ timeout: 15_000 });
+    await openFromEditorHamburger(mainPage, {
+      projectName: ENTRY_PROJECT_NAME,
+      menuItem: MENU_LABEL_REGEX,
+      tabTitle: WEB_VIEW_TITLE_REGEX,
+    });
     return mainPage.frameLocator(MANAGE_BOOKS_FRAME);
   }
 
@@ -370,7 +376,9 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
     // Step 6: Click OK. The wiring layer's handlePickerSelect resolves the parent's
     // onOpenEstherPicker promise and the parent's createBooks(...) call dispatches with the
     // chosen template (`'vulgate'`). The picker dismisses; the parent dialog stays mounted.
-    await picker.getByRole('button', { name: /^OK$/i }).click();
+    // The picker's confirm button label is 'Choose' (%manageBooks_createEsther_okButton%);
+    // accept the legacy 'OK' too in case the label is revised again.
+    await picker.getByRole('button', { name: /^(OK|Choose)$/i }).click();
     await expect(picker).toBeHidden({ timeout: 5_000 });
 
     // Step 7: createBooks is now in flight — A3 acceptance requires the apply button to be
@@ -509,6 +517,18 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
     // (MIN_SUBMITTING_VISIBLE_MS=1500 guarantees observability).
     await expect(copyApply).toBeEnabled();
     await copyApply.click();
+    // If the bulk selection included books that already exist in the destination,
+    // the three-way conflict prompt ('Books already exist') intercepts the submit.
+    // Choose 'Replace entire books' — this journey asserts the destination ends up
+    // with the source's books.
+    const conflictDialog = frame.getByRole('dialog', { name: /Books already exist/i });
+    const conflictAppeared = await conflictDialog
+      .waitFor({ state: 'visible', timeout: 2_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (conflictAppeared) {
+      await conflictDialog.getByRole('button', { name: /Replace entire books/i }).click();
+    }
     await expect(copyApply).toBeDisabled({ timeout: 5_000 });
 
     // Step 6: Wait for the submit-state to clear. NOTE: we cannot assert
@@ -610,6 +630,17 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
     await waitForAppReady(mainPage);
     const frame = await openManageBooks(mainPage);
 
+    // Step 0: Switch the dialog's target to RH2. Deleting books requires the
+    // current user to be an ADMINISTRATOR of the target project
+    // (DeleteBooksOrchestrator WarnIfNotAdministrator, PT9 parity) — on the
+    // entry project (wgPIDGIN) the e2e user is only a TeamMember, so the
+    // backend correctly refuses with a toast and nothing is deleted. RH2 is a
+    // registered project where the e2e user is Administrator, which also
+    // exercises the shared-project confirmation copy.
+    await frame.locator('[data-testid="manage-books-sidebar-project-trigger"]').click();
+    await frame.locator('[cmdk-item]').filter({ hasText: /RH2/ }).first().click();
+    await mainPage.waitForTimeout(800);
+
     // Step 1: Pick the LAST present-book pill in Delete mode (Delete universe = books currently
     // present; the test asserts on the chosen ID symbolically — whatever the fixture has).
     await frame.locator('[data-testid="manage-books-sidebar-section-delete"]').click();
@@ -617,8 +648,17 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
     await expect(presentPills.first()).toBeVisible({ timeout: 10_000 });
     const presentCount = await presentPills.count();
     expect(presentCount).toBeGreaterThan(0);
-    const targetPill = presentPills.last();
-    const targetBookId = (await targetPill.getAttribute('data-book')) ?? '';
+    // Pick the LAST canonical present pill. (Earlier XX-book delete failures
+    // observed against wgPIDGIN were admin-permission refusals, not an
+    // extra-book defect — fixed by targeting RH2 above. The canonical filter
+    // stays as cheap determinism against fixture drift.)
+    const presentIds = await presentPills.evaluateAll((els) =>
+      els.map((el) => el.getAttribute('data-book')),
+    );
+    const canonicalIds = presentIds.filter((id): id is string => !!id && !id.startsWith('XX'));
+    expect(canonicalIds.length).toBeGreaterThan(0);
+    const targetBookId = canonicalIds[canonicalIds.length - 1];
+    const targetPill = frame.locator(`ul[role="listbox"] li[data-book="${targetBookId}"]`);
     expect(targetBookId).not.toBe('');
     await targetPill.click();
     await expect(targetPill).toHaveAttribute('aria-checked', 'true');
@@ -661,8 +701,8 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
     const viewDeletedBook = frame.locator(`ul[role="listbox"] li[data-book="${targetBookId}"]`);
     await expect(viewDeletedBook).toBeVisible({ timeout: 10_000 });
     // The deleted book's pill must NOT contain the "Present" badge. We check that the pill
-    // text does not include "Present" — the badge renders the localized string
-    // "%manageBooks_pill_present%" → "Present" for present books only.
+    // text does not include "Present" — the badge renders the localized "Present" label for
+    // present books only.
     await expect(viewDeletedBook).not.toContainText(/Present/i);
 
     // EVD-J-006-b: View mode refreshed after Delete — deleted book no longer present.

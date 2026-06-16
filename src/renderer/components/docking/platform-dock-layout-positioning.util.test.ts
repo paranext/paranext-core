@@ -61,5 +61,43 @@ describe('Dock Layout Component', () => {
         height: 10,
       });
     });
+
+    it('should clamp an oversized float to a fraction of the layout size', () => {
+      // Requested 1100x720 in an 800x600 layout -> clamp to 80% width / 85% height
+      const layout: FloatLayout = { type: 'float', floatSize: { width: 1100, height: 720 } };
+      const floatPosition: FloatPosition = { left: 0, top: 0, width: 0, height: 0 };
+
+      const next = getFloatPosition(layout, floatPosition, { width: 800, height: 600 });
+
+      expect(next.width).toBe(640); // 800 * 0.8
+      expect(next.height).toBe(510); // 600 * 0.85
+    });
+
+    it('should center a clamped float using the clamped size', () => {
+      const layout: FloatLayout = {
+        type: 'float',
+        position: 'center',
+        floatSize: { width: 1100, height: 720 },
+      };
+      const floatPosition: FloatPosition = { left: 0, top: 0, width: 0, height: 0 };
+
+      const next = getFloatPosition(layout, floatPosition, { width: 800, height: 600 });
+
+      // Centered on the clamped 640x510 box, not the requested 1100x720
+      expect(next).toEqual({ left: 80, top: 45, width: 640, height: 510 });
+    });
+
+    it('should not alter floats that already fit within the clamp fraction', () => {
+      const layout: FloatLayout = {
+        type: 'float',
+        position: 'center',
+        floatSize: { width: 400, height: 300 },
+      };
+      const floatPosition: FloatPosition = { left: 0, top: 0, width: 0, height: 0 };
+
+      const next = getFloatPosition(layout, floatPosition, { width: 800, height: 600 });
+
+      expect(next).toEqual({ left: 200, top: 150, width: 400, height: 300 });
+    });
   });
 });

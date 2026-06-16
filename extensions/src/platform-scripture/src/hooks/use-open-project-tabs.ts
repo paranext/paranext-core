@@ -33,10 +33,14 @@ interface WebViewEventLike {
  *   freshly-opened editors return no `scrollGroupScrRef` field. Treating "missing" as group 0
  *   matches what the editor itself shows. Non-numeric, non-undefined values (string, null) are
  *   still rejected defensively.
- * - **Lowercase projectId**: WebView definitions store `projectId` in upper-case while
- *   PDP/Manage-Books APIs return lower-case. The hook lowercases on the way out so consumer-side
- *   string comparisons (e.g. `collectOpenTabsByProject`) succeed regardless of which side wrote the
- *   casing.
+ * - **Lowercase projectId**: the hook lowercases the outgoing `projectId`. NOTE: an earlier comment
+ *   claimed this lines the casing up with "PDP/Manage-Books APIs that return lower-case" — that was
+ *   wrong. Canonical project ids are actually UPPERCASE (C# `ProjectSummary` →
+ *   `Guid.ToUpperInvariant()`, `ProjectMetadata` → `id.ToUpperInvariant()`), so lowercasing here
+ *   does NOT match those APIs. Consumers must therefore compare project ids CASE-INSENSITIVELY; the
+ *   project-selector does so via `normalizeProjectId` (see I12). The lowercasing is retained
+ *   because the other consumers (checklist, checks-side-panel) key off this shape; removing it is a
+ *   separate cleanup tracked outside this change.
  */
 export function useOpenProjectTabs(filter?: WebViewFilter): OpenProjectTabWithWebView[] {
   const [tabsMap, setTabsMap] = useState<Map<string, OpenProjectTabWithWebView>>(() => new Map());
@@ -46,12 +50,33 @@ export function useOpenProjectTabs(filter?: WebViewFilter): OpenProjectTabWithWe
     const upsert = (webView: WebViewEventLike) => {
       const { id, projectId, scrollGroupScrRef, webViewType } = webView;
       const passesFilter = !filter || (webViewType !== undefined && filter({ webViewType }));
-      // See JSDoc above: undefined → default group 0; numeric → as-is; anything else → reject.
+      // See JSDoc above: undefined → default group 0; numeric → as-is.
+      //
+      // Sebastian UX review item 12 (2026-06-12): `ScrollGroupScrRef` widened
+      // from `ScrollGroupId` to `ScrollGroupId | SerializedVerseRef` upstream
+      // — a tab that's "unsynced" from any scroll group now stores a
+      // SerializedVerseRef object instead of a number. The previous strict
+      // "anything-non-numeric → reject" branch dropped those tabs entirely,
+      // making Open Tabs grouping in the manage-books project picker (and
+      // any other consumer) empty. Object (SerializedVerseRef) values are
+      // now surfaced under group 0 so the tab still appears in the Open
+      // Tabs section; string/null and other unexpected primitives are still
+      // rejected defensively (PAPI quirk: legacy WebViews can carry null).
       let scrollGroup: ScrollGroupId | undefined;
       if (scrollGroupScrRef === undefined) {
         scrollGroup = 0;
       } else if (typeof scrollGroupScrRef === 'number') {
         scrollGroup = scrollGroupScrRef;
+      } else if (
+        typeof scrollGroupScrRef === 'object' &&
+        // PAPI's WebView definitions can legitimately carry `null` here for legacy WebViews —
+        // the no-null lint rule otherwise wants us to use `undefined`, but the value comes from
+        // the wire so we have to handle it explicitly. Block null from sneaking into the
+        // SerializedVerseRef branch (would crash downstream).
+        // eslint-disable-next-line no-null/no-null
+        scrollGroupScrRef !== null
+      ) {
+        scrollGroup = 0;
       }
       const passes =
         typeof projectId === 'string' &&
@@ -67,8 +92,9 @@ export function useOpenProjectTabs(filter?: WebViewFilter): OpenProjectTabWithWe
         }
         const tab: OpenProjectTabWithWebView = {
           webViewId: id,
-          // Normalize to lowercase so consumer-side comparisons against PDP/manage-books
-          // projectIds (which are lowercase) succeed regardless of WebView casing.
+          // Lowercased for backward-compatibility with existing consumers. This casing is NOT
+          // authoritative — canonical project ids are UPPERCASE — so consumers must match
+          // case-insensitively (see normalizeProjectId / I12).
           projectId: projectId.toLowerCase(),
           scrollGroupId: scrollGroup,
           webViewType: webViewType ?? '',

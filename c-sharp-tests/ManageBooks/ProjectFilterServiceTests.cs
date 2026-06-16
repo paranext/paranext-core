@@ -4,6 +4,7 @@ using Paranext.DataProvider.ManageBooks;
 using Paratext.Data;
 using Paratext.Data.ProjectSettingsAccess;
 using PtxUtils;
+using SIL.Scripture;
 using ProjectType = Paratext.Data.ProjectType;
 
 namespace TestParanextDataProvider.ManageBooks
@@ -51,6 +52,7 @@ namespace TestParanextDataProvider.ManageBooks
         private DummyScrText _notes = null!;
         private DummyScrText _marble = null!;
         private ResourceDummyScrText _resource = null!;
+        private ResourceDummyScrText _editableFlaggedResource = null!;
 
         [SetUp]
         public override async Task TestSetupAsync()
@@ -90,12 +92,24 @@ namespace TestParanextDataProvider.ManageBooks
                 editable: false
             );
 
+            // The NBV21 shape: an installed DBL resource whose raw settings
+            // Editable flag is "T". PT9's ResourceScrText.Settings.Editable
+            // overrides to false regardless of the flag; ProjectSummary must
+            // mirror that (UX Manila follow-up: read-only targets get disabled
+            // mutating actions, not enabled ones).
+            _editableFlaggedResource = CreateResourceScrText(
+                name: "EditableFlaggedResource",
+                type: ProjectType.Standard,
+                editable: true
+            );
+
             AddProject(_std);
             AddProject(_stdReadOnly);
             AddProject(_bt);
             AddProject(_notes);
             AddProject(_marble);
             AddProject(_resource);
+            AddProject(_editableFlaggedResource);
         }
 
         [TearDown]
@@ -107,6 +121,7 @@ namespace TestParanextDataProvider.ManageBooks
             _notes?.Dispose();
             _marble?.Dispose();
             _resource?.Dispose();
+            _editableFlaggedResource?.Dispose();
         }
 
         // -------------------------------------------------------------------
@@ -146,6 +161,96 @@ namespace TestParanextDataProvider.ManageBooks
                 names,
                 Has.No.Member(_marble.Name),
                 "MarbleResource must be excluded (not scripture per IsScripture())"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-011")]
+        [Property("BehaviorId", "BHV-411")]
+        [Description(
+            "ProjectSummary.ProjectId must use PT10's canonical PAPI project-id form "
+                + "(uppercase hex — see ProjectMetadata.Id which applies ToUpperInvariant). "
+                + "The UI compares these ids against papi-supplied ids (e.g. the scripture "
+                + "editor's webview projectId) with case-sensitive equality; a lowercase id "
+                + "makes the manage-books project picker fail to resolve the active project."
+        )]
+        public void FilterProjects_ProjectIds_UseCanonicalUppercaseForm()
+        {
+            var input = new ProjectFilterInput(ProjectFilterPurpose.AllScripture, null);
+
+            ProjectListResult result = ProjectFilterService.FilterProjects(input);
+
+            Assert.That(result.Projects, Is.Not.Empty);
+            foreach (ProjectSummary summary in result.Projects)
+            {
+                Assert.That(
+                    summary.ProjectId,
+                    Is.EqualTo(summary.ProjectId.ToUpperInvariant()),
+                    $"ProjectId for '{summary.Name}' must be uppercase (canonical papi form)"
+                );
+            }
+        }
+
+        // -------------------------------------------------------------------
+        // I2 — FullName + Versification projection (so the frontend drops its
+        // per-project getSetting fan-out)
+        // -------------------------------------------------------------------
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-011")]
+        [Property("BehaviorId", "BHV-411")]
+        [Description(
+            "I2: ProjectSummary.FromScrText surfaces FullName and Versification on the wire so the "
+                + "frontend no longer needs a per-project pdp.getSetting fan-out. FullName comes from "
+                + "the project's FullName setting; Versification is the numeric ScrVersType code as a "
+                + "string (matching what platformScripture.versification getSetting returns)."
+        )]
+        public void FromScrText_PopulatesFullNameAndVersification()
+        {
+            DummyScrText scrText = CreateScrText("VrsProj", ProjectType.Standard, editable: true);
+            // DummyScrText defaults FullName to "Test ScrText"; set a non-default versification.
+            scrText.Settings.Versification = new ScrVers(ScrVersType.English);
+
+            ProjectSummary summary = ProjectSummary.FromScrText(scrText);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(
+                    summary.FullName,
+                    Is.EqualTo("Test ScrText"),
+                    "FullName flows from the project's FullName setting."
+                );
+                Assert.That(
+                    summary.Versification,
+                    Is.EqualTo(((int)ScrVersType.English).ToString()),
+                    "Versification is the numeric ScrVersType code (English = 4) as a string."
+                );
+            });
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-011")]
+        [Property("BehaviorId", "BHV-411")]
+        [Description(
+            "I2: Versification defaults to \"4\" (English) when the project has no stored "
+                + "versification setting — matching BOTH the platformScripture.versification "
+                + "contribution default the frontend's old getSetting path returned AND PT9's "
+                + "absent-versification == English semantics. Defaulting to \"0\" (Unknown) would "
+                + "regress such projects from the English group to the Unknown group in the picker."
+        )]
+        public void FromScrText_DefaultsVersificationToEnglishWhenUnset()
+        {
+            DummyScrText scrText = CreateScrText("NoVrsProj", ProjectType.Standard, editable: true);
+
+            ProjectSummary summary = ProjectSummary.FromScrText(scrText);
+
+            Assert.That(
+                summary.Versification,
+                Is.EqualTo(((int)ScrVersType.English).ToString()),
+                "Unset versification defaults to English (4), matching the old getSetting default."
             );
         }
 
@@ -441,6 +546,64 @@ namespace TestParanextDataProvider.ManageBooks
                 resourceSummary!.IsResource,
                 Is.True,
                 "ScrText.IsResourceProject == true must flow through to ProjectSummary.IsResource"
+            );
+        }
+
+        // -------------------------------------------------------------------
+        // ACCEPTANCE: resources are never editable targets (UX Manila follow-up)
+        // PT9 parity: ProjectSettings.IsEditableText is only the raw settings
+        // flag (its own doc warns it "does not determine if the project is
+        // ultimately editable"); ResourceScrText overrides Settings.Editable to
+        // false even when the flag inside the resource is "T". Installed DBL
+        // resources (e.g. NBV21) carry Editable=T in their settings, so keying
+        // IsEditable off the raw flag wrongly enabled Create/Copy/Import/Delete.
+        // -------------------------------------------------------------------
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-011")]
+        [Property("BehaviorId", "BHV-411")]
+        [Description(
+            "A resource project must surface ProjectSummary.IsEditable = false even when its raw settings Editable flag is true, so the dialog disables mutating actions with the read-only tooltip."
+        )]
+        public void FilterProjects_Summary_ResourceProject_IsEditableFalse()
+        {
+            var input = new ProjectFilterInput(ProjectFilterPurpose.AllScripture, null);
+
+            ProjectListResult result = ProjectFilterService.FilterProjects(input);
+
+            var resourceSummary = result.Projects.FirstOrDefault(p =>
+                p.Name == _editableFlaggedResource.Name
+            );
+            Assert.That(
+                resourceSummary,
+                Is.Not.Null,
+                "scripture-typed resource project must appear in AllScripture filter result"
+            );
+            Assert.That(
+                resourceSummary!.IsEditable,
+                Is.False,
+                "a resource is never an editable target, regardless of its raw settings Editable flag"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-011")]
+        [Property("BehaviorId", "BHV-411")]
+        [Description(
+            "EditableTexts purpose must exclude resource projects even when their raw settings Editable flag is true."
+        )]
+        public void FilterProjects_EditableTexts_ExcludesResources()
+        {
+            var input = new ProjectFilterInput(ProjectFilterPurpose.EditableTexts, null);
+
+            ProjectListResult result = ProjectFilterService.FilterProjects(input);
+
+            Assert.That(
+                result.Projects.Select(p => p.Name),
+                Does.Not.Contain(_editableFlaggedResource.Name),
+                "resources must never be offered as editable/mutation targets"
             );
         }
 

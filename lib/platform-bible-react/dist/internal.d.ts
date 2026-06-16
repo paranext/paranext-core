@@ -55,6 +55,19 @@ export type ProjectSelectorProject = {
 	isDisabled?: boolean;
 	/** Human-readable explanation surfaced in the row tooltip when `isDisabled` is true. */
 	disabledReason?: string;
+	/**
+	 * Locale-stable versification identifier (e.g. the numeric `ScrVersType` enum as a string). Used
+	 * by the selector's optional versification-grouping mode to bucket projects by canon, and to pin
+	 * the consumer-supplied "priority" versification group to the top. Pair with `versificationName`
+	 * for display (Sebastian UX new-requirement 3, 2026-06-12).
+	 */
+	versificationId?: string;
+	/**
+	 * Human-readable versification name (e.g. "English", "Vulgate"). Used as the section header in
+	 * versification-grouping mode. Defaults to a "Unknown" bucket when a project has a
+	 * `versificationId` but no `versificationName`. Pair with `versificationId`.
+	 */
+	versificationName?: string;
 };
 /** A project that is currently open in a specific scroll group. */
 export type ProjectSelectorOpenTab = {
@@ -103,6 +116,12 @@ export type ProjectSelectorLocalizedStrings = {
 	/** Section heading for the Other projects section. Defaults to `"Your projects & resources"`. */
 	otherProjectsSectionHeading?: string;
 	/**
+	 * Section heading rendered for the "Unknown versification" bucket in versification-grouping mode
+	 * (Sebastian UX new-requirement 3, 2026-06-12) — covers projects whose versification can't be
+	 * resolved at load time. Defaults to `"Unknown versification"`.
+	 */
+	versificationUnknownSectionHeading?: string;
+	/**
 	 * Tooltip on the bound-but-closed chip. `{group}` is replaced with the scroll-group letter.
 	 * Defaults to `"Bound to {group} · not currently open"`.
 	 */
@@ -126,9 +145,37 @@ type CommonProps = {
 	popoverContentStyle?: React$1.CSSProperties;
 	alignDropDown?: "start" | "center" | "end";
 	isDisabled?: boolean;
+	/**
+	 * When true, the trigger shows a spinner (instead of the chevron) and is disabled, signalling
+	 * that the project list is still loading. Distinct from `isDisabled`, which conveys a generic
+	 * busy/blocked state with no spinner.
+	 */
+	isLoading?: boolean;
 	localizedStrings?: ProjectSelectorLocalizedStrings;
 	/** Initial state of the "Group by open tabs" toggle. Defaults to `true`. */
 	defaultGroupByOpenTabs?: boolean;
+	/**
+	 * Hide the chevron icon in the trigger button. For very narrow triggers (e.g. an icon-rail
+	 * sidebar ~56px wide) the chevron plus its margin consumes the entire content box and the label
+	 * truncates to nothing; hiding it leaves room for a few characters of the project name. Keep the
+	 * trigger visually recognizable as a control through its button variant when using this. Defaults
+	 * to `false`.
+	 */
+	hideTriggerChevron?: boolean;
+	/**
+	 * When true, rows are grouped by `versificationId` (with the `priorityVersificationId` bucket
+	 * pinned to the top). The "Group by open tabs" toggle is hidden — the two grouping modes are
+	 * mutually exclusive in the same picker. Sebastian UX new-requirement 3 (2026-06-12). When
+	 * `groupByVersification` is enabled, the consumer should ensure each
+	 * {@link ProjectSelectorProject} carries `versificationId` and `versificationName`.
+	 */
+	groupByVersification?: boolean;
+	/**
+	 * Versification id whose bucket should render first in versification grouping mode (typically the
+	 * caller's active project's versification). Optional — when absent, all buckets sort
+	 * alphabetically by `versificationName`.
+	 */
+	priorityVersificationId?: string;
 };
 type ProjectSelectorProps = (CommonProps & {
 	mode: "project";
@@ -136,6 +183,15 @@ type ProjectSelectorProps = (CommonProps & {
 	onChangeSelection: (selection: {
 		projectId: string;
 	}) => void;
+	/**
+	 * Trigger label format. `'shortName'` (the default) renders just the selected project's short
+	 * name. `'shortNameAndFullName'` renders `"{shortName} - {fullName}"` (skipping the suffix
+	 * when the full name is absent or equal to the short name); since the short name leads the
+	 * string, the trigger's existing ellipsis truncation produces e.g. `"arb - True Meaning Ar…"`
+	 * when space is short, and the trigger's `title` still carries the untruncated text for
+	 * native hover.
+	 */
+	triggerLabelFormat?: "shortName" | "shortNameAndFullName";
 }) | (CommonProps & {
 	mode: "project-multi";
 	selection: ProjectMultiSelection;
