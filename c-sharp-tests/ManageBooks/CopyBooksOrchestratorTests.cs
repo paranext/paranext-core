@@ -1029,7 +1029,7 @@ namespace TestParanextDataProvider.ManageBooks
             "Merge mode ('Only copy non-existing chapters'): dest chapters with "
                 + "real text are NEVER overwritten; only chapters missing from dest "
                 + "are copied. Deliberate PT10 deviation from PT9 WriteChaptersToBook "
-                + "(Manila UX follow-up — the old semantic amounted to 'merge "
+                + "(the old semantic amounted to 'merge "
                 + "overwrites everything' for complete source books)."
         )]
         public void CopyBooks_MergeMode_DestChaptersWithText_SurviveUnchanged()

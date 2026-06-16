@@ -47,9 +47,9 @@ const SCREENSHOT_BASE = 'proofs/component-evidence/WP-001';
 const WEB_VIEW_TITLE_REGEX = /Manage Books/i;
 const MENU_LABEL_REGEX = /Manage Books/i;
 /**
- * Project whose editor hosts the Manage Books entry point (the Manila UX follow-up moved the menu
- * item from the application main menu into the scripture editor's hamburger menu, reserved
- * `platform.manageBooks` default group in the Project section).
+ * Project whose editor hosts the Manage Books entry point (the menu item lives in the scripture
+ * editor's hamburger menu rather than the application main menu, reserved `platform.manageBooks`
+ * default group in the Project section).
  */
 const ENTRY_PROJECT_NAME = 'wgPIDGIN';
 
@@ -111,8 +111,8 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
   }) => {
     await waitForAppReady(mainPage);
 
-    // The Manila UX follow-up places the entry point in the scripture editor's hamburger
-    // ("Project") menu — reserved `platform.manageBooks` default group, Project section.
+    // The entry point lives in the scripture editor's hamburger ("Project")
+    // menu — reserved `platform.manageBooks` default group, Project section.
     await openFromEditorHamburger(mainPage, {
       projectName: ENTRY_PROJECT_NAME,
       menuItem: MENU_LABEL_REGEX,
@@ -140,8 +140,8 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
   }) => {
     await waitForAppReady(mainPage);
 
-    // Regression guard for the Manila UX follow-up: the main-menu entry was removed — the
-    // editor hamburger is the only entry point. Open the first main-menu dropdown (the
+    // Regression guard: the main-menu entry was removed — the editor hamburger
+    // is the only entry point. Open the first main-menu dropdown (the
     // product/Project column) and assert Manage Books is absent.
     const projectMenu = mainPage.getByRole('menuitem', { name: /Project|Tools|Platform/i }).first();
     await projectMenu.click();
@@ -227,9 +227,9 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
 
     // The "Existing" presence filter narrows the universe to books currently in the project.
     // The wiring layer subscribes to `useProjectSetting('platformScripture.booksPresent')` so a
-    // real value comes through here; we assert at least one present book is rendered. Per
-    // Sebastian review item 8 (2026-05-06) the chip row was replaced with a Filter-icon trigger
-    // that opens a DropdownMenuRadioGroup — we open the trigger first, then click the radio item.
+    // real value comes through here; we assert at least one present book is rendered. The chip row
+    // was replaced with a Filter-icon trigger that opens a DropdownMenuRadioGroup — we open the
+    // trigger first, then click the radio item.
     const filterTrigger = frame.locator('[data-testid="presence-filter-trigger"]');
     await filterTrigger.click();
     const presentItem = frame.locator('[data-testid="presence-filter-existing"]');
@@ -549,8 +549,8 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     await expect(firstSourceOption).toBeVisible({ timeout: 10_000 });
     await firstSourceOption.click();
 
-    // Now the grid populates with comparison badges. Per Sebastian review item 8 (2026-05-06)
-    // the Copy-mode comparison-state filter (New/Newer/Older/Same/Undetermined) was removed
+    // Now the grid populates with comparison badges. The Copy-mode comparison-state filter
+    // (New/Newer/Older/Same/Undetermined) was removed
     // entirely — the previous `[data-testid^="copy-state-filter-"]` chips no longer exist. We
     // instead assert that book rows appear in the listbox, which is the actual signal that the
     // comparison grid populated against the picked source project.
@@ -759,8 +759,8 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
   });
 
   // @scenario TS-054
-  // GAP-002 FIX (P3U.1 ui-spec-validator post-IUG, 2026-05-02): the component now eagerly loads
-  // the reference project's book inventory when the user picks a "Based on" model
+  // The component eagerly loads the reference project's book inventory when the user picks a
+  // "Based on" model
   // (`useEffect([open, createReferenceId, refreshBooks])` in manage-books-dialog.component.tsx).
   // Before the fix, `createReferenceBookState.present` was always an empty Set, so EVERY selected
   // book appeared "missing" and the prompt always fired regardless of the underlying state — this

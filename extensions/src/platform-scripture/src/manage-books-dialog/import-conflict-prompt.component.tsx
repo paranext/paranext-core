@@ -64,7 +64,7 @@ export function ImportConflictPrompt({
           <p className="tw:text-sm tw:text-muted-foreground">
             {t('%manageBooks_import_conflictBody2%', 'Choose how to proceed with the import.')}
           </p>
-          {/* Sebastian UX review item 10 (2026-06-12): the prior layout
+          {/* The prior layout
               stacked the three buttons in a column at narrow widths
               (`flex-col → sm:flex-row`), which pushed them past the dialog's
               bottom edge. Buttons now stay in a single row and individually
@@ -104,9 +104,9 @@ export function ImportConflictPrompt({
                   destination are written (ImportBooksOrchestrator
                   TryMergeChaptersFromSource + UsfmChapterScaffolding). The key
                   was renamed from %manageBooks_import_mergeFromFiles% (per the
-                  semantic-change-renames-the-key convention) when the Manila
-                  UX follow-up changed the wire behavior from PT9's
-                  chapter-overwrite merge to skip-existing-chapters. */}
+                  semantic-change-renames-the-key convention) when the wire
+                  behavior changed from PT9's chapter-overwrite merge to
+                  skip-existing-chapters. */}
               {t(
                 '%manageBooks_import_onlyNonExistingChapters%',
                 'Only import non-existing chapters',

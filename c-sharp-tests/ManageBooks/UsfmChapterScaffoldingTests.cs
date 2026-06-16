@@ -5,8 +5,8 @@ namespace TestParanextDataProvider.ManageBooks
 {
     /// <summary>
     /// Direct unit tests for <see cref="UsfmChapterScaffolding.HasContentBeyondScaffolding"/>,
-    /// the safety core of the Copy/Import merge mode ("Only copy/import non-existing chapters",
-    /// UX Manila follow-up). A false "scaffolding-only" classification would let merge mode
+    /// the safety core of the Copy/Import merge mode ("Only copy/import non-existing chapters").
+    /// A false "scaffolding-only" classification would let merge mode
     /// overwrite real user content, so every recognized scaffolding shape is pinned here.
     ///
     /// The recognized shapes mirror exactly what PT9's create-books scaffolding emits

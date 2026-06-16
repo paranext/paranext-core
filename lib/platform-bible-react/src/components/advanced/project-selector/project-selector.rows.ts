@@ -27,7 +27,7 @@ export type ProjectSelectorProject = {
    * Locale-stable versification identifier (e.g. the numeric `ScrVersType` enum as a string). Used
    * by the selector's optional versification-grouping mode to bucket projects by canon, and to pin
    * the consumer-supplied "priority" versification group to the top. Pair with `versificationName`
-   * for display (Sebastian UX new-requirement 3, 2026-06-12).
+   * for display.
    */
   versificationId?: string;
   /**
@@ -403,7 +403,7 @@ export function partitionAndSort(
 /**
  * Group rows by their `versificationId`, render the priority group first, and then the other groups
  * sorted alphabetically by `versificationName`. Within each group rows are sorted by
- * {@link compareRows}. Sebastian UX new-requirement 3 (2026-06-12).
+ * {@link compareRows}.
  *
  * Rows without a `versificationId` are collected into a single trailing "Unknown" section labeled
  * by `unknownLabel`. When `priorityVersificationId` is undefined, no group is pinned.

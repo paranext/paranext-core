@@ -809,7 +809,7 @@ public static class ImportBooksOrchestrator
             //     create-books scaffolding. Deliberate PT10 deviation from
             //     PT9's WriteChaptersToBook (which overwrote colliding
             //     chapters — for complete source files that amounted to
-            //     "merge overwrites everything"; Manila UX follow-up).
+            //     "merge overwrites everything").
             //
             // PutText with chapterNum>0 goes through the same ProjectFileManager
             // path the whole-book write uses, so InMemoryFileManager handles
@@ -858,7 +858,7 @@ public static class ImportBooksOrchestrator
     // via PutText(bookNum, chapterNum, ...) ONLY when the matching dest
     // chapter is missing, empty, or scaffolding-only (see
     // UsfmChapterScaffolding). Deviation from PT9, which overwrote every dest
-    // chapter present in the source — Manila UX follow-up.
+    // chapter present in the source.
     private static readonly System.Text.RegularExpressions.Regex EmptyChapterPattern =
         new(@"^(\\id [^\r\n]*)?\s*$", System.Text.RegularExpressions.RegexOptions.Compiled);
 

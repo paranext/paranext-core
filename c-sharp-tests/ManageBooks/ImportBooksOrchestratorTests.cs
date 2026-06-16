@@ -1239,8 +1239,8 @@ namespace TestParanextDataProvider.ManageBooks
             "Merge mode ('Only import non-existing chapters'): dest chapters that "
                 + "have real text are NEVER overwritten — the source version of those "
                 + "chapters is skipped. Deliberate PT10 deviation from PT9 "
-                + "WriteChaptersToBook (which overwrote colliding chapters); see the "
-                + "Manila UX follow-up — the old semantic amounted to 'merge "
+                + "WriteChaptersToBook (which overwrote colliding chapters); the "
+                + "old semantic amounted to 'merge "
                 + "overwrites everything' for complete source files."
         )]
         public void ImportBooks_MergeMode_DestChaptersWithText_SurviveUnchanged()

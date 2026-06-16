@@ -63,8 +63,8 @@ const WEB_VIEW_TITLE_REGEX = /Manage Books/i;
 const MENU_LABEL_REGEX = /Manage Books/i;
 const MANAGE_BOOKS_FRAME = 'iframe[title*="Manage Books" i]';
 /**
- * Project whose editor hosts the Manage Books entry point (Manila UX follow-up moved the menu item
- * from the application main menu into the scripture editor's hamburger menu). Same test project the
+ * Project whose editor hosts the Manage Books entry point (the menu item lives in the scripture
+ * editor's hamburger menu rather than the application main menu). Same test project the
  * markers-checklist specs use. Tests that need a different target project still switch via the
  * dialog's own sidebar project picker after opening.
  */
@@ -102,9 +102,9 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
    * {@link openFromEditorHamburger} bootstrap (same helper the per-WP functional tests use) so
    * journey tests do not drift from the per-WP idiom.
    *
-   * The Manila UX follow-up moved the entry point from the application main menu into the editor
-   * hamburger (reserved `platform.manageBooks` default group in the Project section). The hamburger
-   * button and its Radix menu both render INSIDE the editor's iframe.
+   * The entry point lives in the editor hamburger rather than the application main menu (reserved
+   * `platform.manageBooks` default group in the Project section). The hamburger button and its
+   * Radix menu both render INSIDE the editor's iframe.
    */
   async function openManageBooks(mainPage: Page): Promise<FrameLocator> {
     await openFromEditorHamburger(mainPage, {
@@ -152,8 +152,8 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
    * Why this exists: the cold-open default project (e.g. ESVUS16 in the local fixture) often
    * already contains ESG, which puts ESG outside the Create universe (`books NOT yet present`).
    * Tests that need ESG to be creatable must rotate to a project that doesn't yet contain it. The
-   * fixture rotation pool — per the prompt and the WP-001 verdict notes — is `zzz7`, `zzz6`, `MP1`,
-   * `wgPIDGIN`, `RH2`, `ROT`. We try each until one works.
+   * fixture rotation pool is `zzz7`, `zzz6`, `MP1`, `wgPIDGIN`, `RH2`, `ROT`. We try each until one
+   * works.
    */
   async function switchToProjectMissingBook(frame: FrameLocator, bookId: string): Promise<string> {
     // Candidate pool — order matters: prefer the projects most likely to be missing ESG given

@@ -1,7 +1,7 @@
 /**
  * Stories for the manage-books-dialog component (the new ViewListSelect layout). Renders the
- * orchestrator inside a stateful harness so reviewers can exercise all 5 sidebar sections and see
- * the 2 disabled future-section rows.
+ * orchestrator inside a stateful harness that exercises all 5 sidebar sections and shows the 2
+ * disabled future-section rows.
  *
  * Replaced the 6-variant exploration that lived in
  * `lib/platform-bible-react/src/stories/advanced/manage-books-dialog.stories.tsx` (deleted) — that

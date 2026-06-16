@@ -319,9 +319,9 @@ global.webViewComponent = function ManageBooksWebView({
     initialProjectId ?? '',
   );
 
-  // The EXPLICIT open context wins over persisted state: since the Manila UX
-  // follow-up the dialog is only opened from a scripture editor's hamburger
-  // menu, so a fresh `initialProjectId` means "the user asked to manage THIS
+  // The EXPLICIT open context wins over persisted state: the dialog is only
+  // opened from a scripture editor's hamburger menu, so a fresh
+  // `initialProjectId` means "the user asked to manage THIS
   // project's books" — a previously-persisted choice (possibly stale, or even
   // a project id that no longer resolves) must not override it. Persistence
   // still covers dock-layout session restores, where the definition carries
@@ -347,10 +347,10 @@ global.webViewComponent = function ManageBooksWebView({
   // once the manage-books NetworkObject resolves. The setter is a no-op when
   // projectId is already set so this only fires for the cold-open case.
   //
-  // Per Sebastian review item 25 (2026-05-06): also recompute the dock-tab title
-  // from the new project's `platform.name` setting and pass it to
-  // `updateWebViewDefinition` so the tab label tracks project switches in real
-  // time. Mirrors `manage-books.web-view-provider.ts` getWebView's title shape:
+  // Also recompute the dock-tab title from the new project's `platform.name`
+  // setting and pass it to `updateWebViewDefinition` so the tab label tracks
+  // project switches in real time. Mirrors `manage-books.web-view-provider.ts`
+  // getWebView's title shape:
   //   `${titleTemplate}` when no project, otherwise
   //   `${titleTemplate} — {projectName}` (formatted via formatReplacementString).
   // Keeping these two title-construction sites in sync is intentional — the
@@ -365,9 +365,9 @@ global.webViewComponent = function ManageBooksWebView({
     }
   }, [projectId, persistedProjectId, setPersistedProjectId]);
 
-  // Update the dock-tab title (and projectId) on project change. Per Sebastian
-  // review item 25 (2026-05-06), the tab label must track the active project
-  // in real time. Mirrors `manage-books.web-view-provider.ts:getWebView` so the
+  // Update the dock-tab title (and projectId) on project change so the tab
+  // label tracks the active project in real time. Mirrors
+  // `manage-books.web-view-provider.ts:getWebView` so the
   // initial title (cold open) and update title (project switch) both produce
   // `${titleTemplate}` (no project) or `${titleTemplate} — {projectName}`.
   //
@@ -576,9 +576,8 @@ global.webViewComponent = function ManageBooksWebView({
         const bp = await pdp.getSetting('platformScripture.booksPresent');
         const decoded = decodeBooksPresent(typeof bp === 'string' ? bp : BOOKS_PRESENT_DEFAULT);
         setBookCache((prev) => ({ ...prev, [pid]: decoded }));
-        // Sebastian UX review item 7 (2026-06-12): historically the
-        // comparison dates were fetched in a side-effect after this function
-        // returned, so the first render showed the books with no status
+        // The comparison dates were previously fetched in a side-effect after
+        // this function returned, so the first render showed the books with no status
         // badges, then a second render (triggered by datesByProject updating
         // the decorate ref) repainted them with status. The user perceived
         // that as "books load → status flickers in". We now fetch the
@@ -988,9 +987,8 @@ global.webViewComponent = function ManageBooksWebView({
   // ===== File picker stub (DEF-UI-009 / FN-010 spike) ========================
   // No platform multi-file picker exists in PT10. The component falls back to
   // a native `<input type="file" multiple>` ref-click triggered by the visible
-  // "Choose files…" / "Add files…" buttons. Per Sebastian review item 23
-  // (2026-05-06), Import mode no longer auto-opens the picker on entry —
-  // the user clicks the button explicitly.
+  // "Choose files…" / "Add files…" buttons. Import mode does not auto-open the
+  // picker on entry — the user clicks the button explicitly.
   //
   // Tracked as DEF-UI-009 / FN-010 in deferred-functionality.md. When the
   // future `papi.dialogs.selectFiles({ multi, filters })` PAPI ships, wire
