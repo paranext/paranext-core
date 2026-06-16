@@ -218,13 +218,13 @@ export function Dictionary({
               </SelectContent>
             </Select>
           </div>
-          <div className="tw:max-w-72">
+          <div className="tw:w-full tw:max-w-72">
             <SearchBar
               ref={searchInputRef}
               value={searchQuery}
               onSearch={setSearchQuery}
               placeholder={localizedStrings['%platformLexicalTools_dictionary_searchDictionary%']}
-              isFullWidth={false}
+              isFullWidth
             />
           </div>
         </div>

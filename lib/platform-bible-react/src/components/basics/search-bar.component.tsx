@@ -66,9 +66,9 @@ export const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(
         <Input
           ref={inputRef}
           className={cn(
-            'tw:w-full tw:overflow-hidden tw:text-ellipsis tw:text-sm tw:ps-9 tw:@max-[7rem]/search:ps-3',
+            'tw:w-full tw:overflow-hidden tw:text-ellipsis tw:text-sm tw:ps-9 tw:@max-[7rem]/search:ps-3 tw:@max-[3rem]/search:ps-0 tw:@max-[3rem]/search:pe-0',
             {
-              'tw:pe-8': value,
+              'tw:pe-8 tw:@max-[4rem]/search:pe-3': value,
             },
           )}
           placeholder={placeholder}
@@ -81,7 +81,7 @@ export const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(
             variant="ghost"
             size="icon"
             className={cn(
-              'tw:absolute tw:inset-y-0 tw:my-auto tw:h-7',
+              'tw:absolute tw:inset-y-0 tw:my-auto tw:h-7 tw:@max-[4rem]/search:hidden',
               { 'tw:left-0': dir === 'rtl' },
               { 'tw:right-0': dir === 'ltr' },
             )}
