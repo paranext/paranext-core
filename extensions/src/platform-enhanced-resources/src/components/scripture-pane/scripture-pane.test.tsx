@@ -151,15 +151,50 @@ async function flushMountEffects(): Promise<void> {
 
 /**
  * Create a fake `<mark>` element with the `annotationId-${id}` class that the editor would normally
- * emit, append it to document.body, and return it so a test can assert on classList changes after
- * the host-applied CSS-class paths run (er-marble-highlight-all, er-marble-hover- match).
- * Module-scope so both the EnhancedScripturePane and marble-hover-lifecycle suites can share it.
+ * emit, append it to document.body, and return it. The marble overlay rules in production are
+ * CSS-only (see `buildMarbleOverlayCss`), so tests can verify behavior either by asserting on the
+ * dynamic stylesheet content (`getOverlayCss` / `overlayHasRuleFor`) - which is the canonical path
+ *
+ * - Or by relying on jsdom's CSS matching against this fixture for end-to-end-style cases.
+ *   Module-scope so both the EnhancedScripturePane and marble-hover-lifecycle suites can share it.
  */
 function createMarkFixture(id: string): HTMLElement {
   const mark = globalThis.document.createElement('mark');
   mark.className = `editor-typed-mark-external-marble-word annotationId-${id}`;
   globalThis.document.body.appendChild(mark);
   return mark;
+}
+
+/**
+ * Read the textContent of the dynamic overlay stylesheet the component installs in document.head.
+ * Returns an empty string if no overlay stylesheet is mounted (which is the case before any
+ * EnhancedScripturePane has been rendered).
+ */
+function getOverlayCss(): string {
+  return document.querySelector('style[data-er-marble-overlays]')?.textContent ?? '';
+}
+
+/**
+ * Check whether the dynamic overlay stylesheet contains a rule that targets `annotationId-${id}`
+ * AND sets the given background-color CSS variable. Parses the stylesheet by splitting on `}` and
+ * matching each rule's selector list against the id; precise enough to distinguish filter (one
+ * specific id) from filter-match (the lemma siblings) from hover-match.
+ */
+function overlayHasRuleFor(annotationId: string, bgCssVar: string): boolean {
+  const css = getOverlayCss();
+  const ruleBlocks = css.split('}').filter((block) => block.includes('{'));
+  return ruleBlocks.some((block) => {
+    const [selectorList, declarations] = block.split('{');
+    return (
+      selectorList.includes(`annotationId-${annotationId}`) &&
+      declarations.includes(`var(${bgCssVar})`)
+    );
+  });
+}
+
+/** True when the global highlight-all rule (no annotation-id selector) is present. */
+function overlayHasHighlightAllRule(): boolean {
+  return getOverlayCss().includes('var(--er-marble-highlight-all-bg)');
 }
 
 /**
@@ -211,11 +246,16 @@ beforeEach(() => {
   // Clear any leftover hover/mark fixtures from previous tests. createMarkFixture in the
   // hover-lifecycle suite appends <mark> elements to document.body, and makeFakeMouseEvent
   // appends a <span> for the hover event's currentTarget.ownerDocument scope. Leaking
-  // these would cross-contaminate querySelectorAll('[class~="annotationId-{id}"]') results.
+  // these would cross-contaminate getOverlayCss results across tests.
   // Only remove the fixtures (mark+span at the body root), NOT testing-library's render
   // containers (which @testing-library/react cleans up via its own auto-cleanup).
   document
     .querySelectorAll('body > mark, body > span')
+    .forEach((node) => node.parentNode?.removeChild(node));
+  // Also remove any stale overlay stylesheet from a previous test (testing-library's auto-
+  // unmount handles this in practice, but a hard sweep guards against partial cleanup).
+  document
+    .querySelectorAll('style[data-er-marble-overlays]')
     .forEach((node) => node.parentNode?.removeChild(node));
   setAnnotationSpy.mockClear();
   removeAnnotationSpy.mockClear();
@@ -794,12 +834,10 @@ describe('EnhancedScripturePane', () => {
     expect(onTokenClick).not.toHaveBeenCalled();
   });
 
-  it('adds the er-marble-filter class to the marble-word mark when filteredTokenId matches a known annotation', async () => {
-    // Effect B applies the filter overlay as a direct CSS class on the marble-word mark DOM
-    // element. NOT via editor.setAnnotation — that path triggered AnnotationPlugin's
-    // wrap-merge-replace cycle, which destroyed and recreated the affected mark and stripped any
-    // direct CSS classes attached by Effect C / hover-match.
-    const mark = createMarkFixture('wg-001');
+  it('emits a filter CSS rule for the filtered annotation id (and does NOT go through setAnnotation)', async () => {
+    // The filter overlay is emitted as a CSS rule keyed off the `annotationId-X` class Editorial
+    // attaches to every mark, not via editor.setAnnotation. The rule applies to current AND future
+    // marks - no per-element classList mutation, no race with Effect A's chunked apply.
     const annotations: MarbleAnnotation[] = [
       {
         usjPath: '$.content[0].content[1]',
@@ -819,20 +857,18 @@ describe('EnhancedScripturePane', () => {
     );
 
     await vi.waitFor(() => {
-      expect(mark.classList.contains('er-marble-filter')).toBe(true);
+      expect(overlayHasRuleFor('wg-001', '--er-marble-filter-bg')).toBe(true);
     });
-    // setAnnotation was NOT called for any filter type — the whole point of the CSS-class path
-    // is to bypass the editor for purely cosmetic overlays.
+    // setAnnotation was NOT called for any filter type — the whole point of the CSS-rule path is
+    // to bypass the editor for purely cosmetic overlays.
     const filterCalls = setAnnotationSpy.mock.calls.filter(([, type]) => type === 'marble-filter');
     expect(filterCalls).toHaveLength(0);
   });
 
-  it('adds the er-marble-highlight-all class to every word-annotation mark when highlightAllResearchTerms is true', async () => {
-    // Effect C adds the `er-marble-highlight-all` CSS class directly to the marble-word `<mark>`
-    // DOM elements (NOT via editor.setAnnotation; doing so destroyed the marks' hover handlers
-    // when the toggle flipped off again - see the Effect C comment for the full rationale).
-    const markWord = createMarkFixture('wg-001');
-    const markNote = createMarkFixture('note-1');
+  it('emits the global highlight-all CSS rule when highlightAllResearchTerms is true', async () => {
+    // Highlight-all is a single universal CSS rule (`.editor-typed-mark-external-marble-word { ... }`)
+    // that the browser matches against every current AND future marble-word mark. No per-mark
+    // classList mutation, no MutationObserver, no race with Effect A's chunked apply.
     const annotations: MarbleAnnotation[] = [
       {
         usjPath: '$.content[0].content[1]',
@@ -855,15 +891,14 @@ describe('EnhancedScripturePane', () => {
         localizedStringsWithLoadingState={[STRINGS_BAG, false]}
       />,
     );
-    // Effect C runs after a RAF; vi.waitFor flushes the queued RAF + microtasks until the class
-    // shows up on the word mark.
     await vi.waitFor(() => {
-      expect(markWord.classList.contains('er-marble-highlight-all')).toBe(true);
+      expect(overlayHasHighlightAllRule()).toBe(true);
     });
-    // Notes never receive the highlight class — they're not in the word-annotations list.
-    expect(markNote.classList.contains('er-marble-highlight-all')).toBe(false);
-    // setAnnotation was NOT called for any highlight type — the whole point of the CSS-class path
-    // is to bypass the editor for purely cosmetic overlays.
+    // The rule targets `.editor-typed-mark-external-marble-word`, not marble-note - notes are
+    // styled with the marble-note color, not the highlight overlay.
+    expect(getOverlayCss()).toContain('.editor-typed-mark-external-marble-word ');
+    // setAnnotation was NOT called for any highlight type — the whole point of the CSS-rule path is
+    // to bypass the editor for purely cosmetic overlays.
     const highlightSetAnnotationCalls = setAnnotationSpy.mock.calls.filter(
       ([, type]) => type === 'marble-highlight',
     );
@@ -908,8 +943,7 @@ describe('EnhancedScripturePane', () => {
     expect(removeAnnotationSpy).not.toHaveBeenCalled();
   });
 
-  it('toggling filteredTokenId adds/removes the filter class without re-firing base annotations', async () => {
-    const mark = createMarkFixture('wg-001');
+  it('toggling filteredTokenId adds/removes the filter CSS rule without re-firing base annotations', async () => {
     const annotation: MarbleAnnotation = {
       usjPath: '$.content[0].content[1]',
       kind: 'word',
@@ -941,10 +975,10 @@ describe('EnhancedScripturePane', () => {
         localizedStringsWithLoadingState={localized}
       />,
     );
-    // Effect B applies the filter as a CSS class on the marble-word mark. No setAnnotation
-    // calls at all - filter does not go through the editor.
+    // Filter is now an entry in the dynamic stylesheet. No setAnnotation calls at all - filter
+    // does not go through the editor.
     await vi.waitFor(() => {
-      expect(mark.classList.contains('er-marble-filter')).toBe(true);
+      expect(overlayHasRuleFor('wg-001', '--er-marble-filter-bg')).toBe(true);
     });
     expect(setAnnotationSpy).not.toHaveBeenCalled();
     removeAnnotationSpy.mockClear();
@@ -956,18 +990,16 @@ describe('EnhancedScripturePane', () => {
         localizedStringsWithLoadingState={localized}
       />,
     );
-    // Filter class removed; base annotation not touched, no removeAnnotation calls.
-    expect(mark.classList.contains('er-marble-filter')).toBe(false);
+    // Filter rule removed from the stylesheet; base annotation untouched, no removeAnnotation.
+    expect(overlayHasRuleFor('wg-001', '--er-marble-filter-bg')).toBe(false);
     expect(removeAnnotationSpy).not.toHaveBeenCalled();
     expect(setAnnotationSpy).not.toHaveBeenCalled();
   });
 
-  it('adds the er-marble-filter-match class to lemma-siblings of the filtered word, but not to the focal word itself', async () => {
-    // Two-fold click highlight: the clicked word wears the strong filter color, every lemma-
-    // sibling wears the lighter filter-match color, and unrelated words get neither.
-    const markA = createMarkFixture('wg-A');
-    const markB = createMarkFixture('wg-B');
-    const markC = createMarkFixture('wg-C');
+  it('emits filter-match rules for lemma-siblings of the filtered word, but not for the focal word itself', async () => {
+    // Two-fold click highlight: the clicked word wears the strong filter color (filter-bg), every
+    // lemma-sibling wears the lighter filter-match color (filter-match-bg), and unrelated words
+    // get neither.
     const annotations: MarbleAnnotation[] = [
       {
         usjPath: '$.content[0].content[1]',
@@ -997,22 +1029,19 @@ describe('EnhancedScripturePane', () => {
       />,
     );
     await vi.waitFor(() => {
-      // Focal word: strong filter overlay, NOT the lighter filter-match.
-      expect(markA.classList.contains('er-marble-filter')).toBe(true);
-      expect(markA.classList.contains('er-marble-filter-match')).toBe(false);
-      // Lemma-sibling: lighter filter-match overlay only.
-      expect(markB.classList.contains('er-marble-filter-match')).toBe(true);
-      expect(markB.classList.contains('er-marble-filter')).toBe(false);
-      // Unrelated lemma: neither overlay.
-      expect(markC.classList.contains('er-marble-filter')).toBe(false);
-      expect(markC.classList.contains('er-marble-filter-match')).toBe(false);
+      // Focal word: strong filter rule, NOT the lighter filter-match.
+      expect(overlayHasRuleFor('wg-A', '--er-marble-filter-bg')).toBe(true);
+      expect(overlayHasRuleFor('wg-A', '--er-marble-filter-match-bg')).toBe(false);
+      // Lemma-sibling: lighter filter-match rule only.
+      expect(overlayHasRuleFor('wg-B', '--er-marble-filter-match-bg')).toBe(true);
+      expect(overlayHasRuleFor('wg-B', '--er-marble-filter-bg')).toBe(false);
+      // Unrelated lemma: neither rule.
+      expect(overlayHasRuleFor('wg-C', '--er-marble-filter-bg')).toBe(false);
+      expect(overlayHasRuleFor('wg-C', '--er-marble-filter-match-bg')).toBe(false);
     });
   });
 
-  it('removes filter-match from old siblings and adds it to new siblings when filteredTokenId moves between lemma groups', async () => {
-    const markA = createMarkFixture('wg-A');
-    const markB = createMarkFixture('wg-B');
-    const markC = createMarkFixture('wg-C');
+  it('moves filter / filter-match rules when filteredTokenId moves between lemma groups', async () => {
     const annotations: MarbleAnnotation[] = [
       {
         usjPath: '$.content[0].content[1]',
@@ -1045,7 +1074,7 @@ describe('EnhancedScripturePane', () => {
       />,
     );
     await vi.waitFor(() => {
-      expect(markB.classList.contains('er-marble-filter-match')).toBe(true);
+      expect(overlayHasRuleFor('wg-B', '--er-marble-filter-match-bg')).toBe(true);
     });
 
     rerender(
@@ -1057,25 +1086,55 @@ describe('EnhancedScripturePane', () => {
       />,
     );
     await vi.waitFor(() => {
-      // New focal word.
-      expect(markC.classList.contains('er-marble-filter')).toBe(true);
+      // New focal word's filter rule is present.
+      expect(overlayHasRuleFor('wg-C', '--er-marble-filter-bg')).toBe(true);
     });
-    // Previous focal word no longer wears the filter overlay.
-    expect(markA.classList.contains('er-marble-filter')).toBe(false);
-    // Previous lemma-sibling no longer wears the filter-match overlay.
-    expect(markB.classList.contains('er-marble-filter-match')).toBe(false);
+    // Previous focal word no longer carries a filter rule.
+    expect(overlayHasRuleFor('wg-A', '--er-marble-filter-bg')).toBe(false);
+    // Previous lemma-sibling no longer carries a filter-match rule.
+    expect(overlayHasRuleFor('wg-B', '--er-marble-filter-match-bg')).toBe(false);
     // theos has no other members, so no new filter-match siblings.
-    expect(markA.classList.contains('er-marble-filter-match')).toBe(false);
+    expect(overlayHasRuleFor('wg-A', '--er-marble-filter-match-bg')).toBe(false);
   });
 
-  it('keeps the highlight-all class on the previously-filtered word when filteredTokenId changes', async () => {
+  it('overlays apply to marks regardless of when they appear in the DOM (CSS handles virtualization for free)', async () => {
+    // Regression: the previous classList-mutation path required iterating live marks at apply
+    // time. Marks added later (Effect A's chunked apply emits ~50/RAF; future editor-side
+    // virtualization on scroll would also lazy-mount marks) were missed. With the dynamic
+    // stylesheet, the rule is in document.head as soon as the persistent inputs change, and the
+    // browser matches it against any current OR future marble-word mark. This test demonstrates
+    // the property by creating a mark AFTER mount and verifying the rule is already present.
+    const annotations: MarbleAnnotation[] = [
+      {
+        usjPath: '$.content[0].content[1]',
+        kind: 'word',
+        annotationId: 'wg-A',
+        metadata: {},
+      },
+    ];
+    render(
+      <EnhancedScripturePane
+        usj={makeTestUsj(2)}
+        annotations={annotations}
+        highlightAllResearchTerms
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    await vi.waitFor(() => {
+      expect(overlayHasHighlightAllRule()).toBe(true);
+    });
+    // Add a mark for `wg-B` AFTER the persistent overlay rules are in place. No mutation is
+    // needed - the rule's selector already matches `wg-B` (since highlight-all is universal).
+    createMarkFixture('wg-B');
+    expect(overlayHasHighlightAllRule()).toBe(true);
+  });
+
+  it('keeps highlight-all active for the previously-filtered word when filteredTokenId changes', async () => {
     // Regression: clicking word A then word B (with highlight-all on) used to leave word A with
-    // no overlay because Effect B's old setAnnotation('marble-filter', ...) cleanup destroyed
-    // and recreated the <mark> DOM element, stripping the direct-DOM `er-marble-highlight-all`
-    // class. Effect C only re-applies that class when its own deps change. With filter on the
-    // CSS-class path, neither A's nor B's mark is ever recreated.
-    const markA = createMarkFixture('wg-A');
-    const markB = createMarkFixture('wg-B');
+    // no overlay because the old filter-via-setAnnotation cleanup destroyed and recreated the
+    // <mark> DOM element, stripping the direct-DOM `er-marble-highlight-all` class. With CSS
+    // rules, both the highlight-all rule and the filter rule are in the dynamic stylesheet and
+    // the browser handles selector matching - nothing is ever stripped off marks.
     const annotations: MarbleAnnotation[] = [
       {
         usjPath: '$.content[0].content[1]',
@@ -1103,9 +1162,8 @@ describe('EnhancedScripturePane', () => {
       />,
     );
     await vi.waitFor(() => {
-      expect(markA.classList.contains('er-marble-highlight-all')).toBe(true);
-      expect(markB.classList.contains('er-marble-highlight-all')).toBe(true);
-      expect(markA.classList.contains('er-marble-filter')).toBe(true);
+      expect(overlayHasHighlightAllRule()).toBe(true);
+      expect(overlayHasRuleFor('wg-A', '--er-marble-filter-bg')).toBe(true);
     });
 
     rerender(
@@ -1118,17 +1176,16 @@ describe('EnhancedScripturePane', () => {
       />,
     );
     await vi.waitFor(() => {
-      expect(markB.classList.contains('er-marble-filter')).toBe(true);
+      expect(overlayHasRuleFor('wg-B', '--er-marble-filter-bg')).toBe(true);
     });
-    // Word A keeps highlight-all even though the filter moved away.
-    expect(markA.classList.contains('er-marble-highlight-all')).toBe(true);
-    expect(markA.classList.contains('er-marble-filter')).toBe(false);
-    // Word B also keeps highlight-all alongside the new filter overlay.
-    expect(markB.classList.contains('er-marble-highlight-all')).toBe(true);
+    // The universal highlight-all rule is still in the stylesheet (it applies to ALL marble-word
+    // marks regardless of which one is the filter focal, so word A keeps its blue overlay).
+    expect(overlayHasHighlightAllRule()).toBe(true);
+    // Word A no longer has its own filter rule.
+    expect(overlayHasRuleFor('wg-A', '--er-marble-filter-bg')).toBe(false);
   });
 
-  it('toggling highlightAllResearchTerms adds the highlight-all class without re-firing base or filter setAnnotation calls', async () => {
-    const mark = createMarkFixture('wg-001');
+  it('toggling highlightAllResearchTerms adds the highlight-all rule without re-firing base or filter setAnnotation calls', async () => {
     const annotation: MarbleAnnotation = {
       usjPath: '$.content[0].content[1]',
       kind: 'word',
@@ -1147,8 +1204,8 @@ describe('EnhancedScripturePane', () => {
       />,
     );
     await flushMountEffects();
-    // First render: 1 base marble-word annotation. Filter is now a CSS-class overlay (Effect B
-    // bypasses the editor) so it does NOT show up in setAnnotation calls.
+    // First render: 1 base marble-word annotation. Filter is now a CSS rule, not a setAnnotation
+    // call, so it does NOT show up in the setAnnotation spy.
     const initialCalls = setAnnotationSpy.mock.calls;
     expect(initialCalls.filter(([, type]) => type === 'marble-word')).toHaveLength(1);
     expect(initialCalls.filter(([, type]) => type === 'marble-filter')).toHaveLength(0);
@@ -1164,13 +1221,10 @@ describe('EnhancedScripturePane', () => {
         localizedStringsWithLoadingState={localized}
       />,
     );
-    // Effect C adds the er-marble-highlight-all class to the marble-word mark via
-    // querySelectorAll (no setAnnotation involved - see the Effect C comment for the rationale).
+    // The highlight-all rule lands in the dynamic stylesheet. No setAnnotation involved.
     await vi.waitFor(() => {
-      expect(mark.classList.contains('er-marble-highlight-all')).toBe(true);
+      expect(overlayHasHighlightAllRule()).toBe(true);
     });
-    // No setAnnotation calls of any type should fire on the toggle - base + filter were already
-    // applied on first render and Effect C uses the CSS-class path.
     expect(setAnnotationSpy).not.toHaveBeenCalled();
   });
 
@@ -1266,8 +1320,7 @@ describe('EnhancedScripturePane', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Filter: 453');
   });
 
-  it('removes editor-applied annotations and the highlight-all class on unmount', async () => {
-    const mark = createMarkFixture('wg-001');
+  it('removes editor-applied annotations and tears down the overlay stylesheet on unmount', async () => {
     const { unmount } = render(
       <EnhancedScripturePane
         usj={makeTestUsj(2)}
@@ -1284,21 +1337,22 @@ describe('EnhancedScripturePane', () => {
         localizedStringsWithLoadingState={[STRINGS_BAG, false]}
       />,
     );
-    // Wait for Effect C's RAF-deferred apply to add the highlight-all class to the marble-word
-    // mark, otherwise the cleanup path would have nothing to take off.
+    // The dynamic overlay stylesheet is mounted with both rules present.
     await vi.waitFor(() => {
-      expect(mark.classList.contains('er-marble-highlight-all')).toBe(true);
+      expect(overlayHasHighlightAllRule()).toBe(true);
+      expect(overlayHasRuleFor('wg-001', '--er-marble-filter-bg')).toBe(true);
     });
 
     removeAnnotationSpy.mockClear();
     unmount();
 
-    // Effect A's cleanup calls removeAnnotation for its setAnnotation-managed marble-word type.
-    // Effects B and C are now CSS-class paths so their cleanup removes the classes from `mark`.
+    // The annotation effect's cleanup removes the setAnnotation-managed marble-word type via
+    // editor.removeAnnotation. The overlay stylesheet's own mount-effect cleanup removes the
+    // `<style data-er-marble-overlays>` element from document.head, so no overlay rules linger.
     expect(removeAnnotationSpy).toHaveBeenCalledWith('marble-word', 'wg-001');
-    expect(mark.classList.contains('er-marble-highlight-all')).toBe(false);
-    expect(mark.classList.contains('er-marble-filter')).toBe(false);
-    // Neither the highlight nor filter overlay is routed through removeAnnotation any more.
+    expect(document.querySelector('style[data-er-marble-overlays]')).toBeNull();
+    // Neither the highlight nor filter overlay is routed through removeAnnotation - they were
+    // CSS rules, gone with the stylesheet.
     expect(removeAnnotationSpy).not.toHaveBeenCalledWith('marble-highlight', 'wg-001');
     expect(removeAnnotationSpy).not.toHaveBeenCalledWith('marble-filter', 'wg-001');
   });
@@ -1391,8 +1445,7 @@ describe('marble hover lifecycle', () => {
   // `renderTooltipMarkdown` describe block at the bottom of this file, which is the right
   // unit-of-test boundary for the emitter. See Task 3a.10.
 
-  it('mouseleave dismisses the popover and removes hover-match CSS class (after debounce window)', async () => {
-    const markB = createMarkFixture('wg-B');
+  it('mouseleave dismisses the popover and removes the hover-match CSS rule (after debounce window)', async () => {
     render(
       <EnhancedScripturePane
         usj={makeTestUsj(4)}
@@ -1404,8 +1457,8 @@ describe('marble hover lifecycle', () => {
     const handlers = getHoverHandlersForCall(0);
     handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-A', 'logos');
     await Promise.resolve();
-    // Sanity: enter applied the hover-match class to the lemma-matching sibling.
-    expect(markB.classList.contains('er-marble-hover-match')).toBe(true);
+    // Sanity: enter inserted the hover-match rule for the lemma-matching sibling.
+    expect(overlayHasRuleFor('wg-B', '--er-marble-hover-match-bg')).toBe(true);
 
     removeAnnotationSpy.mockClear();
     handlers.onMouseLeave!(new MouseEvent('mouseleave'), 'marble-word', 'wg-A', 'logos');
@@ -1414,16 +1467,15 @@ describe('marble hover lifecycle', () => {
     // any editor-induced mark re-render briefly taking the cursor off the hovered <mark>)
     // doesn't tear down the popover. Synchronously after leave, cleanup has NOT yet run.
     expect(mockDismissPopover).not.toHaveBeenCalled();
-    expect(markB.classList.contains('er-marble-hover-match')).toBe(true);
+    expect(overlayHasRuleFor('wg-B', '--er-marble-hover-match-bg')).toBe(true);
 
     // After the debounce window elapses, cleanup runs.
     await vi.waitFor(() => {
       expect(mockDismissPopover).toHaveBeenCalledWith('overlay-1');
     });
-    // D-15 final fix: hover-match is a CSS class, not an editor annotation. Cleanup
-    // removes the class from the marble-word mark via querySelectorAll - it does NOT
-    // call editor.removeAnnotation('marble-hover-match', ...).
-    expect(markB.classList.contains('er-marble-hover-match')).toBe(false);
+    // Hover-match is a CSS rule, not an editor annotation. Cleanup drops the rule from the
+    // dynamic stylesheet - it does NOT call editor.removeAnnotation('marble-hover-match', ...).
+    expect(overlayHasRuleFor('wg-B', '--er-marble-hover-match-bg')).toBe(false);
     expect(removeAnnotationSpy).not.toHaveBeenCalledWith('marble-hover-match', expect.anything());
   });
 
@@ -1526,25 +1578,12 @@ describe('marble hover lifecycle', () => {
     expect(updateCall[1].markdown).toContain('word, speech, reason');
   });
 
-  it('every annotation sharing the hovered lemma - including the hovered word itself - gets the er-marble-hover-match class', async () => {
-    // D-15 final fix: hover-match is applied as a direct CSS class on the existing
-    // marble-word marks via querySelectorAll('[class~="annotationId-{id}"]'), NOT via
-    // editor.setAnnotation. Reason: setAnnotation on a range already inside a marble-word
-    // TypedMarkNode triggers AnnotationPlugin's wrap-merge-replace cycle, which destroys
-    // and re-creates the <mark> DOM element - visible flicker burst on first hover after
-    // fresh launch. CSS-class manipulation bypasses the editor entirely; hover-match has
-    // no Lexical-tree role (no click handler, no persistence). Filter + highlight-all
-    // still use setAnnotation - they don't exhibit the flicker.
-    //
-    // The hovered word IS included in the match set so the entire matching expression
-    // reads as one visually unified group. (Previously it was excluded as the "focal
-    // point", but in practice users expect the word under their cursor to look like part
-    // of the group, not a transparent gap in the middle of a highlighted phrase.)
-    //
-    // Stand up fake <mark> fixtures so the querySelectorAll path has something to match.
-    const markA = createMarkFixture('wg-A');
-    const markB = createMarkFixture('wg-B');
-    const markC = createMarkFixture('wg-C');
+  it('every annotation sharing the hovered lemma - including the hovered word itself - is selected by the hover-match CSS rule', async () => {
+    // Hover-match is now emitted as a CSS rule keyed off the `annotationId-X` class Editorial
+    // attaches to every mark. The hovered word IS included in the match set so the entire
+    // matching expression reads as one visually unified group. (Users expect the word under
+    // their cursor to look like part of the group, not a transparent gap in the middle of a
+    // highlighted phrase.) wordA and wordB share 'logos' lemma; wordC has 'theos' (non-matching).
     render(
       <EnhancedScripturePane
         usj={makeTestUsj(4)}
@@ -1558,14 +1597,13 @@ describe('marble hover lifecycle', () => {
 
     handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-A', 'logos');
 
-    // wordA and wordB share 'logos' lemma; wordC has 'theos' (non-matching).
-    // Both the hovered word (A) and its lemma-sibling (B) get the match class. C does not.
-    expect(markA.classList.contains('er-marble-hover-match')).toBe(true);
-    expect(markB.classList.contains('er-marble-hover-match')).toBe(true);
-    expect(markC.classList.contains('er-marble-hover-match')).toBe(false);
+    // Hover-match rule selects both wg-A (hovered) and wg-B (lemma-sibling); wg-C is excluded.
+    expect(overlayHasRuleFor('wg-A', '--er-marble-hover-match-bg')).toBe(true);
+    expect(overlayHasRuleFor('wg-B', '--er-marble-hover-match-bg')).toBe(true);
+    expect(overlayHasRuleFor('wg-C', '--er-marble-hover-match-bg')).toBe(false);
 
-    // And no marble-hover-match editor annotation was ever applied (this is the whole
-    // point of the D-15 final fix - bypass setAnnotation for the hover-match overlay).
+    // And no marble-hover-match editor annotation was ever applied (the whole point of the
+    // CSS-rule path is to bypass setAnnotation for purely-cosmetic overlays).
     const matchCalls = setAnnotationSpy.mock.calls.filter(
       ([, type]) => type === 'marble-hover-match',
     );
