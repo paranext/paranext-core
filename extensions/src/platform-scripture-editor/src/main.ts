@@ -828,8 +828,8 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
 const scriptureEditorWebViewProvider: IWebViewProvider = new ScriptureEditorWebViewFactory();
 
 /**
- * Pending projectId to apply during the next model text panel getWebView call. `null` means no
- * pending value; `undefined` is a valid pending value (opens the panel with no project).
+ * Pending projectId to apply during the next model text panel getWebView call. `undefined` means no
+ * pending value; reset to `undefined` after each getWebView call consumes it.
  *
  * Used to pass a new projectId through reloadWebView, which has no options for extra data.
  */
