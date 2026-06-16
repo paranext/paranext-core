@@ -131,6 +131,64 @@ export const SingleProject: Story = {
   },
 };
 
+export const WideTriggerLabel: Story = {
+  render: () => {
+    const [projectId, setProjectId] = useState<string | undefined>('esvus16');
+    return (
+      <div className="tw:w-80">
+        <ProjectSelector
+          mode="project"
+          projects={sampleProjects}
+          openTabs={sampleOpenTabs}
+          selection={{ projectId }}
+          onChangeSelection={({ projectId: newId }) => setProjectId(newId)}
+          buttonPlaceholder="Select a project"
+          ariaLabel="Project"
+          triggerLabelFormat="shortNameAndFullName"
+          buttonClassName="tw:w-full"
+        />
+      </div>
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '`triggerLabelFormat="shortNameAndFullName"` renders `{shortName} - {fullName}` in the trigger (manage-books wide sidebar). The short name leads so ellipsis truncation keeps it readable, and the trigger\'s own tooltip carries the untruncated text on hover.',
+      },
+    },
+  },
+};
+
+export const NarrowRailTrigger: Story = {
+  render: () => {
+    const [projectId, setProjectId] = useState<string | undefined>('esvus16');
+    return (
+      <div className="tw:w-14">
+        <ProjectSelector
+          mode="project"
+          projects={sampleProjects}
+          openTabs={sampleOpenTabs}
+          selection={{ projectId }}
+          onChangeSelection={({ projectId: newId }) => setProjectId(newId)}
+          buttonPlaceholder="Select"
+          ariaLabel="Project"
+          hideTriggerChevron
+          buttonClassName="tw:w-full tw:px-0.5 tw:text-xs"
+        />
+      </div>
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '`hideTriggerChevron` for very narrow triggers (e.g. an icon-rail sidebar ~56px wide): the chevron plus its margin would consume the whole content box and truncate the label to nothing. The outline button variant keeps it recognizable as a control; pair it with an external tooltip carrying the full project name (as the manage-books narrow rail does). Deliberate deviation from the combobox chevron guideline — see the prop JSDoc.',
+      },
+    },
+  },
+};
+
 // #endregion
 
 // #region project-multi
@@ -270,6 +328,29 @@ export const Disabled: Story = {
       isDisabled
     />
   ),
+};
+
+export const Loading: Story = {
+  render: () => (
+    <ProjectSelector
+      mode="project"
+      projects={[]}
+      openTabs={[]}
+      selection={{ projectId: undefined }}
+      onChangeSelection={() => {}}
+      buttonPlaceholder="Select a project"
+      ariaLabel="Project"
+      isLoading
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '`isLoading` shows a spinner in place of the chevron and disables the trigger while the project list is still loading, so the user sees the picker is not ready yet (distinct from `isDisabled`, which is a generic busy state with no spinner). See I1.',
+      },
+    },
+  },
 };
 
 // #endregion
