@@ -1,17 +1,12 @@
 import * as networkService from '@shared/services/network.service';
 import { CATEGORY_DIALOG, DialogService } from '@shared/services/dialog.service-model';
+import { createCachedInitializer } from '@shared/utils/cached-initializer';
 import { serializeRequestType } from '@shared/utils/util';
 import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
 
-let initializationPromise: Promise<void>;
-async function initialize(): Promise<void> {
-  if (!initializationPromise) {
-    initializationPromise = (async () => {
-      await networkService.initialize();
-    })();
-  }
-  return initializationPromise;
-}
+const initialize = createCachedInitializer(async () => {
+  await networkService.initialize();
+});
 
 export const dialogService: DialogService = {
   showDialog: async <DialogTabType extends DialogTabTypes>(

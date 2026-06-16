@@ -3578,6 +3578,26 @@ declare module 'shared/models/network-object-status.service-model' {
   }
   export const networkObjectStatusServiceNetworkObjectName = 'NetworkObjectStatusService';
 }
+declare module 'shared/utils/cached-initializer' {
+  /**
+   * Creates a function that runs an asynchronous initializer at most once, caching the promise so
+   * concurrent and subsequent calls share the same initialization attempt. If the initializer fails,
+   * the cached promise is cleared so the next call starts a fresh attempt instead of failing forever
+   * with the same error. This is useful for initializing access to a resource that may not be
+   * available yet, like a network object owned by a process that is still starting up.
+   *
+   * Note that the call that started a failed attempt still rejects with the initializer's error; only
+   * later calls retry. The initializer must therefore be safe to run again after a failure, e.g. it
+   * should not leave partial registrations behind.
+   *
+   * @param initializer Asynchronous function that performs the initialization
+   * @returns Function that returns the cached initialization promise, starting a new initialization
+   *   attempt if there is no cached promise
+   */
+  export function createCachedInitializer<T = void>(
+    initializer: () => Promise<T>,
+  ): () => Promise<T>;
+}
 declare module 'shared/services/network-object-status.service' {
   import { NetworkObjectStatusServiceType } from 'shared/models/network-object-status.service-model';
   /**
