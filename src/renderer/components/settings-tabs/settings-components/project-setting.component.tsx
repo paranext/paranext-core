@@ -1,7 +1,15 @@
+import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { useProjectSetting } from '@renderer/hooks/papi-hooks/use-project-setting.hook';
 import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
 import { projectSettingsService } from '@shared/services/project-settings.service';
+import { LocalizeKey } from 'platform-bible-utils';
+import { useMemo } from 'react';
 import { ProjectSettingProps, ProjectSettingValues, Setting } from './setting.component';
+
+const DISABLED_REASON_KEYS: LocalizeKey[] = [
+  '%settings_disabledReason_isPublished%',
+  '%settings_disabledReason_isEditableBecausePublished%',
+];
 
 /**
  * Provides a project-specific setting component by using the `Setting` component with
@@ -34,6 +42,13 @@ export function ProjectSetting({
   const isLocked = isPublishedSetting || isEditableLockedByPublished;
   const displaySetting = isEditableLockedByPublished ? false : setting;
 
+  const [localizedStrings] = useLocalizedStrings(useMemo(() => DISABLED_REASON_KEYS, []));
+  let disabledReason: string | undefined;
+  if (isEditableLockedByPublished)
+    disabledReason = localizedStrings['%settings_disabledReason_isEditableBecausePublished%'];
+  else if (isPublishedSetting)
+    disabledReason = localizedStrings['%settings_disabledReason_isPublished%'];
+
   const validateProjectSetting = async (
     currentSettingKey: ProjectSettingNames,
     newValue: ProjectSettingValues,
@@ -54,6 +69,7 @@ export function ProjectSetting({
       className={className}
       disabled={disabled}
       readOnly={readOnly || isLocked}
+      readOnlyReason={disabledReason}
     />
   );
 }

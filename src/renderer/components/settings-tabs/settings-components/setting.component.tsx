@@ -28,6 +28,7 @@ import {
   TooltipTrigger,
   UiLanguageSelector,
 } from 'platform-bible-react';
+import { Info } from 'lucide-react';
 import {
   debounce,
   DebouncedFunction,
@@ -70,6 +71,8 @@ type BaseSettingProps<TSettingKey, TSettingValue> = {
    * Used for settings contributed with `isReadOnly`. Defaults to `false`.
    */
   readOnly?: boolean;
+  /** Localized explanation shown in a tooltip over the control while `readOnly` is true */
+  readOnlyReason?: string;
 };
 
 /**
@@ -251,6 +254,7 @@ export function Setting({
   description,
   disabled = false,
   readOnly = false,
+  readOnlyReason,
 }: CombinedSettingProps) {
   const validateSetting = validateOtherSetting || validateProjectSetting;
 
@@ -278,6 +282,7 @@ export function Setting({
   const controlId = useId();
   const labelId = useId();
   const descriptionId = useId();
+  const readOnlyReasonId = useId();
   const isUiLanguageSelector =
     Array.isArray(setting) && settingKey === 'platform.interfaceLanguage';
 
@@ -421,7 +426,11 @@ export function Setting({
   const debouncedHandleChange = debouncedHandleChangeRef.current;
   const debouncedHandleStepperChange = debouncedHandleStepperChangeRef.current;
 
-  const ariaDescribedBy = description ? descriptionId : undefined;
+  const shownReadOnlyReason = readOnly ? readOnlyReason : undefined;
+  const ariaDescribedBy =
+    [description && descriptionId, shownReadOnlyReason && readOnlyReasonId]
+      .filter(Boolean)
+      .join(' ') || undefined;
   const ariaInvalid = errorMessage ? true : undefined;
 
   // The control and the id the label points at are derived together so `htmlFor` cannot drift from
@@ -569,24 +578,52 @@ export function Setting({
         </Label>
       ) : (
         <div className="setting-label-container">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Label id={labelId} htmlFor={labelFor} className="setting-label">
-                  {label}
-                </Label>
-              </TooltipTrigger>
-              {description && <TooltipContent>{description}</TooltipContent>}
-            </Tooltip>
-          </TooltipProvider>
-          {/* The tooltip is hover-only; this copy is what the control's `aria-describedby` reads. */}
+          <div className="setting-label-wrapper">
+            {description ? (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Label id={labelId} htmlFor={labelFor} className="setting-label">
+                      <span>{label}</span>
+                      <Info className="setting-label-info-icon" aria-hidden="true" />
+                    </Label>
+                  </TooltipTrigger>
+                  <TooltipContent align="start">{description}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : (
+              <Label id={labelId} htmlFor={labelFor} className="setting-label">
+                {label}
+              </Label>
+            )}
+          </div>
+          {/* The tooltips are hover-only; these copies are what the control's `aria-describedby`
+              reads. */}
           {description && (
             <span id={descriptionId} className="tw:sr-only">
               {description}
             </span>
           )}
+          {shownReadOnlyReason && (
+            <span id={readOnlyReasonId} className="tw:sr-only">
+              {shownReadOnlyReason}
+            </span>
+          )}
           <div className="setting-container">
-            {control}
+            {shownReadOnlyReason ? (
+              <TooltipProvider>
+                <Tooltip>
+                  {/* A disabled control receives no pointer events, so the tooltip hangs on a
+                      wrapper around it. */}
+                  <TooltipTrigger asChild>
+                    <span className="setting-control-tooltip-trigger">{control}</span>
+                  </TooltipTrigger>
+                  <TooltipContent align="start">{shownReadOnlyReason}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : (
+              control
+            )}
             {errorMessage && (
               // Mounted only while there is an error, so the alert announces when one appears. The
               // flex column repeats `.setting-container`'s so the error rows keep their spacing.
