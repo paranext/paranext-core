@@ -131,7 +131,15 @@ const config: StorybookConfig = {
       webpackConfig.resolve.alias = {
         ...webpackConfig.resolve.alias,
         '@': join(__dirname, '../lib/platform-bible-react/src'),
-        'platform-bible-react': join(__dirname, '../lib/platform-bible-react/src/index.ts'),
+        // Resolve the package from source. Exact-match ($) keys are required: the bare
+        // `platform-bible-react` rule would otherwise intercept the `platform-bible-react/internal`
+        // secondary entry point and mangle it to `src/index.ts/internal`, bypassing the package's
+        // `exports` map. Each entry point is aliased to its own source file.
+        'platform-bible-react/internal$': join(
+          __dirname,
+          '../lib/platform-bible-react/src/internal.ts',
+        ),
+        'platform-bible-react$': join(__dirname, '../lib/platform-bible-react/src/index.ts'),
         // `@papi/*` are runtime externals injected by the extension host - there is no npm package
         // for webpack to resolve. Extension components/web-views that use PAPI at runtime get pulled
         // into Storybook via their stories, so alias these to inert stubs. Exact-match ($) keys keep
