@@ -23,19 +23,6 @@ export type ProjectSelectorProject = {
   isDisabled?: boolean;
   /** Human-readable explanation surfaced in the row tooltip when `isDisabled` is true. */
   disabledReason?: string;
-  /**
-   * Locale-stable versification identifier (e.g. the numeric `ScrVersType` enum as a string). Used
-   * by the selector's optional versification-grouping mode to bucket projects by canon, and to pin
-   * the consumer-supplied "priority" versification group to the top. Pair with `versificationName`
-   * for display (Sebastian UX new-requirement 3, 2026-06-12).
-   */
-  versificationId?: string;
-  /**
-   * Human-readable versification name (e.g. "English", "Vulgate"). Used as the section header in
-   * versification-grouping mode. Defaults to a "Unknown" bucket when a project has a
-   * `versificationId` but no `versificationName`. Pair with `versificationId`.
-   */
-  versificationName?: string;
 };
 
 /** A project that is currently open in a specific scroll group. */
@@ -118,10 +105,6 @@ export type ProjectRow = {
   isDisabled: boolean;
   /** Mirrors {@link ProjectSelectorProject.disabledReason}. Surfaced in the row tooltip. */
   disabledReason?: string;
-  /** Mirrors {@link ProjectSelectorProject.versificationId}. */
-  versificationId?: string;
-  /** Mirrors {@link ProjectSelectorProject.versificationName}. */
-  versificationName?: string;
 };
 
 export type ComputeRowsArgs =
@@ -153,24 +136,12 @@ type TabInfo = {
   scrollGroupScrRefLabel?: string;
 };
 
-/**
- * Project ids are matched case-insensitively because their casing is not guaranteed to agree across
- * sources: canonical ids are UPPERCASE (C# `ProjectSummary` → `Guid.ToUpperInvariant()`), but some
- * producers (e.g. the open-project-tabs hook) lowercase them. Normalizing both sides of the
- * open-tab↔project join here keeps the "Open Tabs" section from silently disappearing on a casing
- * mismatch. See I12.
- */
-export function normalizeProjectId(projectId: string): string {
-  return projectId.toUpperCase();
-}
-
 function collectOpenTabsByProject(
   openTabs: readonly ProjectSelectorOpenTab[],
 ): Map<string, TabInfo[]> {
   const map = new Map<string, TabInfo[]>();
   openTabs.forEach((tab) => {
-    const key = normalizeProjectId(tab.projectId);
-    const existing = map.get(key);
+    const existing = map.get(tab.projectId);
     const info: TabInfo = {
       scrollGroupId: tab.scrollGroupId,
       scrollGroupScrRefLabel: tab.scrollGroupScrRefLabel,
@@ -178,7 +149,7 @@ function collectOpenTabsByProject(
     if (existing) {
       if (!existing.some((t) => t.scrollGroupId === tab.scrollGroupId)) existing.push(info);
     } else {
-      map.set(key, [info]);
+      map.set(tab.projectId, [info]);
     }
   });
   map.forEach((infos) => infos.sort((a, b) => a.scrollGroupId - b.scrollGroupId));
@@ -208,7 +179,7 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
   if (args.mode === 'project') {
     const selectedId = args.selection.projectId;
     return args.projects.map((project) => {
-      const tabs = tabsByProject.get(normalizeProjectId(project.id)) ?? [];
+      const tabs = tabsByProject.get(project.id) ?? [];
       return {
         rowKey: project.id,
         projectId: project.id,
@@ -224,8 +195,6 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
         isBoundButClosed: false,
         isDisabled: project.isDisabled === true,
         disabledReason: project.disabledReason,
-        versificationId: project.versificationId,
-        versificationName: project.versificationName,
       };
     });
   }
@@ -247,7 +216,7 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
   const rows: ProjectRow[] = [];
 
   args.projects.forEach((project) => {
-    const tabs = tabsByProject.get(normalizeProjectId(project.id));
+    const tabs = tabsByProject.get(project.id);
     if (!tabs || tabs.length === 0) {
       rows.push({
         rowKey: `project:${project.id}`,
@@ -264,8 +233,6 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
         isBoundButClosed: false,
         isDisabled: project.isDisabled === true,
         disabledReason: project.disabledReason,
-        versificationId: project.versificationId,
-        versificationName: project.versificationName,
       });
       return;
     }
@@ -285,8 +252,6 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
         isBoundButClosed: false,
         isDisabled: project.isDisabled === true,
         disabledReason: project.disabledReason,
-        versificationId: project.versificationId,
-        versificationName: project.versificationName,
       });
     });
   });
@@ -318,8 +283,6 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
       isBoundButClosed: true,
       isDisabled: project.isDisabled === true,
       disabledReason: project.disabledReason,
-      versificationId: project.versificationId,
-      versificationName: project.versificationName,
     });
   });
 
@@ -331,20 +294,9 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
 // #region partitionAndSort
 
 export type RowSection = {
-  /**
-   * 'flat' means no section header (grouping toggle off). 'versification' is a custom-labeled
-   * section that surfaces the versification name; the priority versification group (typically the
-   * active project's versification) is pinned to the top by `partitionByVersification`.
-   */
-  kind: 'openTabs' | 'other' | 'flat' | 'versification';
+  /** 'flat' means no section header (grouping toggle off). */
+  kind: 'openTabs' | 'other' | 'flat';
   rows: ProjectRow[];
-  /**
-   * Set on `versification` sections — the localized versification name to render as the section
-   * header. `undefined` for other section kinds.
-   */
-  label?: string;
-  /** Set on `versification` sections — true for the consumer-supplied priority bucket. */
-  isPriority?: boolean;
 };
 
 function belongsToOpenTabsSection(row: ProjectRow): boolean {
@@ -397,68 +349,6 @@ export function partitionAndSort(
   }
   const sections: RowSection[] = [{ kind: 'openTabs', rows: open }];
   if (other.length > 0) sections.push({ kind: 'other', rows: other });
-  return sections;
-}
-
-/**
- * Group rows by their `versificationId`, render the priority group first, and then the other groups
- * sorted alphabetically by `versificationName`. Within each group rows are sorted by
- * {@link compareRows}. Sebastian UX new-requirement 3 (2026-06-12).
- *
- * Rows without a `versificationId` are collected into a single trailing "Unknown" section labeled
- * by `unknownLabel`. When `priorityVersificationId` is undefined, no group is pinned.
- */
-export function partitionByVersification(
-  rows: readonly ProjectRow[],
-  priorityVersificationId: string | undefined,
-  unknownLabel: string,
-): RowSection[] {
-  // Bucket by versificationId. Maps preserve insertion order which we exploit for stable section
-  // sorting below (alphabetical on the localized name, with the priority group lifted to index 0).
-  const buckets = new Map<string, { label: string; rows: ProjectRow[] }>();
-  const unknownRows: ProjectRow[] = [];
-  rows.forEach((row) => {
-    const id = row.versificationId;
-    if (id === undefined || id === '') {
-      unknownRows.push(row);
-      return;
-    }
-    const label = row.versificationName ?? id;
-    const existing = buckets.get(id);
-    if (existing) {
-      existing.rows.push(row);
-      // Adopt the first non-empty label observed — protects against a row missing
-      // versificationName while siblings have it.
-      if (!existing.label && row.versificationName) existing.label = row.versificationName;
-    } else {
-      buckets.set(id, { label, rows: [row] });
-    }
-  });
-  // Sort each bucket and emit sections in priority-first / alphabetical order.
-  const entries = [...buckets.entries()].map(([id, { label, rows: groupRows }]) => ({
-    id,
-    label,
-    rows: [...groupRows].sort(compareRows),
-  }));
-  entries.sort((a, b) => {
-    if (a.id === priorityVersificationId) return -1;
-    if (b.id === priorityVersificationId) return 1;
-    return a.label.localeCompare(b.label, undefined, { sensitivity: 'base' });
-  });
-  const sections: RowSection[] = entries.map(({ id, label, rows: groupRows }) => ({
-    kind: 'versification' as const,
-    rows: groupRows,
-    label,
-    isPriority: id === priorityVersificationId,
-  }));
-  if (unknownRows.length > 0) {
-    sections.push({
-      kind: 'versification',
-      rows: [...unknownRows].sort(compareRows),
-      label: unknownLabel,
-      isPriority: false,
-    });
-  }
   return sections;
 }
 

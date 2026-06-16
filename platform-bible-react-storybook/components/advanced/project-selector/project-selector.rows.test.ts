@@ -28,46 +28,6 @@ const openTabs: ProjectSelectorOpenTab[] = [
   { projectId: 'b', scrollGroupId: A },
 ];
 
-describe('computeRows — case-insensitive open-tab join (I12 regression)', () => {
-  // Real-world casing mismatch: canonical project ids are UPPERCASE (C# ProjectSummary →
-  // Guid.ToUpperInvariant), but the open-tabs hook lowercases projectId. The join must still match
-  // so the "Open Tabs" section renders. All-lowercase fixtures above never exercise this path.
-  const upperProjects: ProjectSelectorProject[] = [
-    { id: 'ABC123', shortName: 'A', fullName: 'Project A' },
-    { id: 'DEF456', shortName: 'B', fullName: 'Project B' },
-  ];
-  const lowerTabs: ProjectSelectorOpenTab[] = [
-    { projectId: 'abc123', scrollGroupId: A },
-    { projectId: 'abc123', scrollGroupId: B },
-  ];
-
-  it('matches open tabs to projects regardless of id casing (project mode)', () => {
-    const rows = computeRows({
-      mode: 'project',
-      projects: upperProjects,
-      openTabs: lowerTabs,
-      selection: { projectId: undefined },
-    });
-    const rowA = rows.find((r) => r.projectId === 'ABC123');
-    expect(rowA).toBeDefined();
-    expect(rowA!.openGroups).toEqual([A, B]);
-    expect(rowA!.isMuted).toBe(false);
-  });
-
-  it('matches open tabs to projects regardless of id casing (project-multi mode)', () => {
-    const rows = computeRows({
-      mode: 'project-multi',
-      projects: upperProjects,
-      openTabs: lowerTabs,
-      selection: { pairs: [] },
-    });
-    // With a working join, ABC123 has two open groups → two per-pair rows (not one muted row).
-    const abcRows = rows.filter((r) => r.projectId === 'ABC123');
-    expect(abcRows).toHaveLength(2);
-    expect(abcRows.every((r) => r.isMuted === false)).toBe(true);
-  });
-});
-
 describe('computeRows — project mode', () => {
   it('emits one row per project with openGroups reflecting open tabs', () => {
     const rows = computeRows({
