@@ -186,10 +186,14 @@ export function ModelTextPanel({
 
   // Scroll to the current verse whenever the scrRef changes (book, chapter, or verse).
   // A short delay lets the editor finish rendering new content before we scroll.
+  // Using granular deps instead of the whole scrRef object to avoid redundant scroll
+  // attempts when scrRef identity changes but the reference itself hasn't.
   useEffect(() => {
     const timeout = setTimeout(() => scrollToVerse(scrRef), VERSE_SCROLL_DELAY_MS);
     return () => clearTimeout(timeout);
-  }, [scrRef]);
+    // Using granular deps avoids re-running on scrRef identity changes that don't change the reference
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scrRef.book, scrRef.chapterNum, scrRef.verseNum]);
 
   // --- Editor ---
 
