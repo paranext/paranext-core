@@ -190,10 +190,7 @@ internal class UserTextConnectionSettingTests : PapiTestBase
         _provider.SetUserModelTexts(v101.SerializeToJson());
 
         var v100 = new ResourceReferenceList { DataVersion = "1.0.0", Items = [] };
-        Assert.That(
-            () => _provider.SetUserModelTexts(v100.SerializeToJson()),
-            Throws.Nothing
-        );
+        Assert.That(() => _provider.SetUserModelTexts(v100.SerializeToJson()), Throws.Nothing);
     }
 
     [Test]
@@ -248,9 +245,6 @@ internal class UserTextConnectionSettingTests : PapiTestBase
     {
         // No prior write — downgrade protection has nothing to compare against
         var v100 = new ResourceReferenceList { DataVersion = "1.0.0", Items = [] };
-        Assert.That(
-            () => _provider.SetUserModelTexts(v100.SerializeToJson()),
-            Throws.Nothing
-        );
+        Assert.That(() => _provider.SetUserModelTexts(v100.SerializeToJson()), Throws.Nothing);
     }
 }

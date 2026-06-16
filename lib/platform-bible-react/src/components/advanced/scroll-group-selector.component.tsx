@@ -1,9 +1,9 @@
 import {
-  DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS,
   getLocalizeKeyForScrollGroupId,
   LanguageStrings,
   ScrollGroupId,
 } from 'platform-bible-utils';
+import { DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS } from 'platform-bible-utils/internal';
 import {
   Select,
   SelectContent,

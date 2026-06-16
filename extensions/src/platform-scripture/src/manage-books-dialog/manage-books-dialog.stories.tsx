@@ -9,7 +9,7 @@
  */
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { useCallback, useMemo, useState } from 'react';
-import type { ProjectSelectorProject } from 'platform-bible-react';
+import type { ProjectSelectorProject } from 'platform-bible-react/internal';
 import {
   ManageBooksDialog,
   type ManageBooksDialogBookInfo,

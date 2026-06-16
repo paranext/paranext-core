@@ -5,7 +5,6 @@ import {
   Button,
   ColumnDef,
   DataTable,
-  LinkedScrRefButton,
   TabToolbar,
   ToggleGroup,
   ToggleGroupItem,
@@ -14,6 +13,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
+import { LinkedScrRefButton } from 'platform-bible-react/internal';
 import { AlertTriangle, Book, BookOpen, Eye, EyeOff, Pencil, X } from 'lucide-react';
 import { useCallback, useMemo, useState, type CSSProperties } from 'react';
 import type { SerializedVerseRef } from '@sillsdev/scripture';

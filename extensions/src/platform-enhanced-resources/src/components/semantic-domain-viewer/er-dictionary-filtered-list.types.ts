@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { IndexedListItem, SemanticDomain } from 'platform-bible-react';
+import type { IndexedListItem, SemanticDomain } from 'platform-bible-react/internal';
 
 /** Props for the ER Dictionary Filtered by Type component */
 export type ErDictionaryFilteredListProps<T extends IndexedListItem> = {

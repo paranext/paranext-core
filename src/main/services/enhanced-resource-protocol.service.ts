@@ -4,6 +4,13 @@
 // .fetchImageBytes PAPI command and returns an HTTP Response with the
 // decoded bytes. Modeled on extension-asset-protocol.service.ts.
 // Spec Section 10.
+//
+// EXPERIMENTAL: The `papi-er://` protocol this service registers is experimental
+// and not yet a stable contract — the scheme and URL shape may change or be
+// removed without notice. A custom Electron protocol has no TypeScript-type or
+// OpenRPC surface for the standard `@experimental` / `x-experimental` markers, so
+// this comment is the canonical experimental notice. See enhanced-resource.utils.ts
+// and the experimental APIs wiki page.
 import { protocol } from 'electron';
 import { StatusCodes } from 'http-status-codes';
 import { getErrorMessage } from 'platform-bible-utils';

@@ -25,10 +25,6 @@ import {
   Trash2,
 } from 'lucide-react';
 import {
-  ProjectSelectorOpenTab,
-  ProjectSelector,
-  ProjectSelectorProject,
-  type ProjectSelectorLocalizedStrings,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -36,6 +32,12 @@ import {
   Label,
   cn,
 } from 'platform-bible-react';
+import {
+  ProjectSelectorOpenTab,
+  ProjectSelector,
+  ProjectSelectorProject,
+  type ProjectSelectorLocalizedStrings,
+} from 'platform-bible-react/internal';
 import type {
   ManageBooksAction,
   ManageBooksDialogLocalizedStrings,

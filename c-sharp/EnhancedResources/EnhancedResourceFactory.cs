@@ -4,7 +4,9 @@
 // stay null until the background MarbleDataLoader.LoadAsync task finishes successfully,
 // after which each Route* helper returns real data. Spec Section 7 and 9.
 using Paranext.DataProvider.NetworkObjects;
+using Paranext.DataProvider.NetworkObjects.Documentation;
 using Paranext.DataProvider.Projects;
+using static Paranext.DataProvider.NetworkObjects.Documentation.ExperimentalMethodDocumentation;
 
 namespace Paranext.DataProvider.EnhancedResources;
 
@@ -65,9 +67,113 @@ internal sealed class EnhancedResourceFactory : NetworkObject
                 Id = NetworkObjectName,
                 ObjectType = NetworkObjectType.OBJECT,
                 FunctionNames = [.. functions.Select(f => f.functionName)],
+            },
+            // EXPERIMENTAL: the entire platform.enhancedResources network object is experimental.
+            // Experimental = true cascades x-experimental to the object:{name} existence method and
+            // every function; Methods supplies the richer per-method docs.
+            new NetworkObjectDocumentation
+            {
+                Experimental = true,
+                Methods = BuildExperimentalDocumentation(),
             }
         );
     }
+
+    /// <summary>
+    /// Per-function OpenRPC documentation for every method on this network object, each marked
+    /// experimental (<c>x-experimental: true</c>). Object-wide fanout: keys must match the function
+    /// names registered in <see cref="BuildFunctionList"/>.
+    /// </summary>
+    private static Dictionary<
+        string,
+        OpenRpcSingleMethodDocumentation
+    > BuildExperimentalDocumentation() =>
+        new()
+        {
+            ["readInitializeResult"] = Create(
+                "Read the current Enhanced Resources initialize result (available resources and load status).",
+                result: ResultOf("object", "Initialize result")
+            ),
+            ["resolveResourceObjectId"] = Create(
+                "Resolve an Enhanced Resource id to its backing resource object id.",
+                [Param("resourceId", "Enhanced Resource id to resolve.", "string")],
+                ResultOf("string", "Resolved resource object id")
+            ),
+            ["findLinksForScope"] = Create(
+                "Find Marble links for a scripture scope.",
+                [Param("input", "Scope filter input.")],
+                ResultOf("object", "Scope filter result")
+            ),
+            ["findImagesForReference"] = Create(
+                "Find images for a scripture reference.",
+                [Param("input", "Image reference input.")],
+                ResultOf("object", "Image reference result")
+            ),
+            ["readDictionaryEntry"] = Create(
+                "Read a single dictionary entry.",
+                [Param("input", "Dictionary entry input.")],
+                ResultOf("object", "Dictionary entry data")
+            ),
+            ["readArticle"] = Create(
+                "Read a single encyclopedia article.",
+                [Param("input", "Article input.")],
+                ResultOf("object", "Article data")
+            ),
+            ["buildTooltipData"] = Create(
+                "Build tooltip data for a Marble reference.",
+                [Param("input", "Tooltip input.")],
+                ResultOf("object", "Tooltip data")
+            ),
+            ["buildNoteData"] = Create(
+                "Build note data for a Marble reference.",
+                [Param("input", "Note input.")],
+                ResultOf("object", "Note data")
+            ),
+            ["loadDictionary"] = Create(
+                "Load dictionary resources.",
+                [Param("input", "Dictionary load input.")],
+                ResultOf("object", "Dictionary load result")
+            ),
+            ["loadEncyclopedia"] = Create(
+                "Load encyclopedia resources.",
+                [Param("input", "Encyclopedia load input.")],
+                ResultOf("object", "Encyclopedia load result")
+            ),
+            ["loadMedia"] = Create(
+                "Load media resources.",
+                [Param("input", "Media load input.")],
+                ResultOf("object", "Media load result")
+            ),
+            ["findLocalizedGlosses"] = Create(
+                "Find localized glosses for source-language lexemes.",
+                [Param("input", "Gloss lookup input.")],
+                ResultOf("object", "Gloss lookup result")
+            ),
+            ["translatePartOfSpeech"] = Create(
+                "Translate a part-of-speech tag to a localized form.",
+                [
+                    Param("tag", "Part-of-speech tag.", "string"),
+                    Param("language", "Language code.", "string"),
+                    Param("form", "Form/variant.", "string"),
+                ],
+                ResultOf("object", "Part-of-speech translation result")
+            ),
+            ["executeSourceLanguageSearch"] = Create(
+                "Execute a source-language search.",
+                [Param("input", "Source-language search input.")],
+                ResultOf("object", "Source-language search result")
+            ),
+            ["fetchImageBytes"] = Create(
+                "Fetch image bytes for an Enhanced Resource image (used by the papi-er:// protocol).",
+                [Param("input", "Image fetch input.")],
+                ResultOf("object", "Image bytes result, or null if unavailable")
+            ),
+            ["loadMarbleChapterXml"] = Create(
+                "Load the raw Marble chapter XML for a resource/book/chapter.",
+                [Param("input", "Marble chapter XML load input.")],
+                ResultOf("string", "Marble chapter XML")
+            ),
+        };
 
     /// <summary>
     /// Test-only handle to the background load task. Production must not await this -

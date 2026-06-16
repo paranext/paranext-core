@@ -26,7 +26,7 @@ import type {
   ProjectSelectorLocalizedStrings,
   ProjectSelectorOpenTab,
   ProjectSelectorProject,
-} from 'platform-bible-react';
+} from 'platform-bible-react/internal';
 import { formatReplacementString, getErrorMessage } from 'platform-bible-utils';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import {
@@ -129,12 +129,23 @@ type BookComparisonEntry = {
 
 type BookComparisonResult = { entries: BookComparisonEntry[] };
 
+/**
+ * Local typing for the `platformScripture.manageBooks` NetworkObject proxy. The backing C# network
+ * object is marked experimental at registration (every method carries `x-experimental` in the live
+ * OpenRPC document); this web-view-local interface mirrors that, since there is no shared
+ * `papi-shared-types` interface for it.
+ *
+ * @experimental
+ */
 interface ManageBooksNetworkObject {
+  /** @experimental */
   filterProjects: (input: {
     purpose: string;
     sourceProjectType?: string;
   }) => Promise<ProjectListResult>;
+  /** @experimental */
   isProjectShared: (projectId: string) => Promise<boolean>;
+  /** @experimental */
   createBooks: (request: {
     projectId: string;
     bookNumbers: number[];
@@ -142,7 +153,9 @@ interface ManageBooksNetworkObject {
     modelProjectId?: string;
     estherTemplate?: string;
   }) => Promise<MutationResult>;
+  /** @experimental */
   deleteBooks: (request: { projectId: string; bookNumbers: number[] }) => Promise<MutationResult>;
+  /** @experimental */
   copyBooks: (request: {
     fromProjectId: string;
     toProjectId: string;
@@ -155,17 +168,26 @@ interface ManageBooksNetworkObject {
      */
     replaceEntireBook?: boolean;
   }) => Promise<MutationResult>;
+  /** @experimental */
   importBooks: (input: {
     projectId: string;
     files: ImportFileEntry[];
     replaceEntireBook: boolean;
   }) => Promise<MutationResult>;
-  /** Per-book Copy comparison. */
+  /**
+   * Per-book Copy comparison.
+   *
+   * @experimental
+   */
   getBookComparison: (input: {
     fromProjectId: string;
     toProjectId: string;
   }) => Promise<BookComparisonResult>;
-  /** Per-book Import comparison; same wire shape as `getBookComparison`. */
+  /**
+   * Per-book Import comparison; same wire shape as `getBookComparison`.
+   *
+   * @experimental
+   */
   parseImportFiles: (input: {
     projectId: string;
     files: ImportFileEntry[];

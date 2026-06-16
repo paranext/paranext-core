@@ -11,6 +11,11 @@ import tailwindStyles from './tailwind.css?inline';
 
 export const markersChecklistWebViewType = 'platformScripture.markersChecklist';
 
+/**
+ * Options for opening the Markers Checklist web view.
+ *
+ * @experimental
+ */
 export interface ChecklistWebViewOptions extends GetWebViewOptions {
   projectId: string | undefined;
 }
@@ -20,6 +25,10 @@ export interface ChecklistWebViewOptions extends GetWebViewOptions {
  * platform base PDP and formats the tab title from the `%markersChecklist_windowTitle%` localize
  * key. Mirrors `InventoryWebViewProvider` (`inventory.web-view-provider.ts`) with the same
  * project-name-formatted title pattern.
+ *
+ * @experimental This web view provider, its WebView state shape, and its options
+ *   ({@link ChecklistWebViewOptions}) are not yet a stable contract and may change without notice.
+ *   The provider is also marked experimental at registration via `x-experimental` (see `main.ts`).
  */
 export class ChecklistWebViewProvider implements IWebViewProvider {
   // getWebView doesn't use instance state but cannot be static because it implements the

@@ -9,6 +9,8 @@ declare module 'platform-enhanced-resources' {
    * triggered the command (so verse navigation stays in sync), and `resourceId` from the user's
    * selected Enhanced Resource. Both are optional - missing values cause the web view to render its
    * empty state (TS-043).
+   *
+   * @experimental
    */
   export interface EnhancedResourceWebViewOptions extends OpenWebViewOptions {
     /** Identifier of the Enhanced Resource to display (matches a backend factory entry). */
@@ -30,6 +32,7 @@ declare module 'papi-shared-types' {
      * @param editorWebViewId - The id of the editor web view the user opened the Enhanced Resource
      *   from. Used to inherit the editor's scroll group and project id when present.
      * @returns Web view id for the new Enhanced Resource web view, or `undefined` if not created.
+     * @experimental
      */
     'platformEnhancedResources.openEnhancedResource': (
       editorWebViewId?: string,
@@ -44,6 +47,8 @@ declare module 'papi-shared-types' {
      *
      * The Enhanced Resource web view dispatches this on mount; a `true` response opens the guide
      * locally inside the web view (UI-PKG-008).
+     *
+     * @experimental
      */
     'platformEnhancedResources.requestAutoShowGuide': () => Promise<boolean>;
   }
@@ -55,6 +60,8 @@ declare module 'papi-shared-types' {
      * user can flip this off via the "Don't show this again" checkbox inside the guide; toggling it
      * off and clicking Close persists `false`. The user can re-enable from inside the guide by
      * unchecking the box and clicking Close. Per BHV-461.
+     *
+     * @experimental
      */
     'platformEnhancedResources.showMarbleGuide': boolean;
   }

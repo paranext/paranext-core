@@ -21,9 +21,8 @@ import {
   TooltipTrigger,
   Z_INDEX_MODAL,
   cn,
-  type IndexedListItem,
-  type SemanticDomain,
 } from 'platform-bible-react';
+import { type IndexedListItem, type SemanticDomain } from 'platform-bible-react/internal';
 import { ArrowUp, ChevronRight, MoreHorizontal } from 'lucide-react';
 import type { ErDictionaryFilteredListProps } from './er-dictionary-filtered-list.types';
 

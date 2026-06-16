@@ -22,10 +22,6 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
   Label,
-  ProjectSelectorOpenTab,
-  ProjectSelector,
-  ProjectSelectorLocalizedStrings,
-  ProjectSelectorProject,
   SearchBar,
   Select,
   SelectContent,
@@ -40,6 +36,12 @@ import {
   TooltipTrigger,
   Z_INDEX_OVERLAY,
 } from 'platform-bible-react';
+import {
+  ProjectSelectorOpenTab,
+  ProjectSelector,
+  ProjectSelectorLocalizedStrings,
+  ProjectSelectorProject,
+} from 'platform-bible-react/internal';
 import { ManageBooksSidebar } from './manage-books-sidebar.component';
 import {
   BookGridGroupBy,

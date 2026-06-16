@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider;
+using Paranext.DataProvider.NetworkObjects.Documentation;
 
 namespace TestParanextDataProvider
 {
@@ -7,6 +8,11 @@ namespace TestParanextDataProvider
     internal class DummyPapiClient : PapiClient
     {
         private readonly Queue<(string eventType, object? eventParameters)> _sentEvents = [];
+
+        private readonly Dictionary<
+            string,
+            OpenRpcSingleMethodDocumentation?
+        > _documentationByRequestType = [];
 
         #region Overrides of PapiClient
 
@@ -25,11 +31,21 @@ namespace TestParanextDataProvider
         public override Task<bool> RegisterRequestHandlerAsync(
             string requestType,
             Delegate requestHandler,
-            TimeSpan? timeout
+            TimeSpan? timeout = null,
+            OpenRpcSingleMethodDocumentation? documentation = null
         )
         {
+            _documentationByRequestType[requestType] = documentation;
             return Task.FromResult(_localMethods.TryAdd(requestType, requestHandler));
         }
+
+        /// <summary>
+        /// Test-only accessor for the OpenRPC documentation a request type was registered with
+        /// (null when registered without docs, or when not registered at all). Lets tests assert the
+        /// <c>NetworkObjectDocumentation</c> experimental cascade onto each method's wire docs.
+        /// </summary>
+        public OpenRpcSingleMethodDocumentation? GetDocumentationFor(string requestType) =>
+            _documentationByRequestType.GetValueOrDefault(requestType);
 
         public override Task SendEventAsync(string eventType, object? eventParameters)
         {

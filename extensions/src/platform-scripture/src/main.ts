@@ -327,6 +327,8 @@ export async function activate(context: ExecutionActivationContext) {
     CHECKLIST_OPEN_SETTINGS_EVENT,
     {
       notification: {
+        // Experimental: this event is not yet a stable contract.
+        'x-experimental': true,
         summary: 'Asks any mounted Markers Checklist web view to open its Marker Settings dialog.',
         params: [],
       },
@@ -535,6 +537,8 @@ export async function activate(context: ExecutionActivationContext) {
     openMarkersChecklist,
     {
       method: {
+        // Experimental: this command's contract is not yet stable.
+        'x-experimental': true,
         summary: 'Open the Markers Checklist tool',
         params: [
           {
@@ -557,6 +561,8 @@ export async function activate(context: ExecutionActivationContext) {
     openMarkersChecklistSettings,
     {
       method: {
+        // Experimental: this command's contract is not yet stable.
+        'x-experimental': true,
         summary: 'Open the Marker Settings dialog for the Markers Checklist',
         params: [],
         result: {
@@ -570,12 +576,17 @@ export async function activate(context: ExecutionActivationContext) {
   const markersChecklistWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     markersChecklistWebViewType,
     markersChecklistWebViewProvider,
+    undefined,
+    // Experimental: the Markers Checklist web view and its options are not yet a stable contract.
+    { 'x-experimental': true },
   );
   const openManageBooksPromise = papi.commands.registerCommand(
     'platformScripture.openManageBooks',
     openManageBooks,
     {
       method: {
+        // Experimental: this command's contract is not yet stable.
+        'x-experimental': true,
         summary: 'Open the unified Manage Books dialog (FN-008)',
         params: [
           {
@@ -597,6 +608,9 @@ export async function activate(context: ExecutionActivationContext) {
   const manageBooksWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     MANAGE_BOOKS_WEB_VIEW_TYPE,
     manageBooksWebViewProvider,
+    undefined,
+    // Experimental: the Manage Books web view and its options are not yet a stable contract.
+    { 'x-experimental': true },
   );
 
   const openFindPromise = papi.commands.registerCommand('platformScripture.openFind', openFind, {

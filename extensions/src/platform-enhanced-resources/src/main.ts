@@ -27,6 +27,11 @@ const HARDCODED_DEFAULT_RESOURCE_ID = 'ESV16UK+';
  * `resolveResourceObjectId` validation is intentionally omitted at provider time - the UI shell
  * renders an empty state when `tokens === undefined`, which is what TS-043 expects when no Enhanced
  * Resource is selected or when the factory has no marble data installed.
+ *
+ * @experimental This web view provider, its WebView state shape, and its options
+ *   ({@link EnhancedResourceWebViewOptions}) are not yet a stable contract and may change without
+ *   notice. The provider is also marked experimental at registration via `x-experimental` (see
+ *   `activate`).
  */
 const enhancedResourceWebViewProvider: IWebViewProvider = {
   async getWebView(
@@ -65,6 +70,10 @@ export async function activate(context: ExecutionActivationContext) {
   const enhancedResourceWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     ENHANCED_RESOURCE_WEB_VIEW_TYPE,
     enhancedResourceWebViewProvider,
+    undefined,
+    // Experimental: the Enhanced Resource web view, its state shape, and its options are not yet a
+    // stable contract. See the experimental APIs wiki page.
+    { 'x-experimental': true },
   );
 
   const openEnhancedResourceCommandPromise = papi.commands.registerCommand(
@@ -89,6 +98,28 @@ export async function activate(context: ExecutionActivationContext) {
         { type: 'tab' },
         enhancedResourceWebViewOptions,
       );
+    },
+    {
+      method: {
+        // Experimental: this command's contract is not yet stable.
+        'x-experimental': true,
+        summary: 'Opens the Enhanced Resource web view',
+        params: [
+          {
+            name: 'editorWebViewId',
+            required: false,
+            summary:
+              "The id of the editor web view the user opened the Enhanced Resource from. Used to inherit the editor's scroll group and project id when present.",
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary:
+            'Web view id for the new Enhanced Resource web view, or undefined if not created',
+          schema: { type: ['string', 'null'] },
+        },
+      },
     },
   );
 
@@ -123,6 +154,21 @@ export async function activate(context: ExecutionActivationContext) {
       }
       haveShownMarbleGuide = true;
       return true;
+    },
+    {
+      method: {
+        // Experimental: this command's contract is not yet stable.
+        'x-experimental': true,
+        summary:
+          'Asks the extension whether the MarbleGuide tutorial should auto-show on this Enhanced Resource open',
+        params: [],
+        result: {
+          name: 'return value',
+          summary:
+            'True only on the first call per application session and only when the showMarbleGuide setting is true',
+          schema: { type: 'boolean' },
+        },
+      },
     },
   );
 

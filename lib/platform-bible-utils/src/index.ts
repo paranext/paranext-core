@@ -45,7 +45,6 @@ export {
   FIRST_SCR_VERSE_NUM,
   getLocalizeKeyForScrollGroupId,
   getLocalizeKeysForScrollGroupIds,
-  DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS,
   defaultScrRef,
 } from './scripture/scripture-util';
 export {
