@@ -461,6 +461,8 @@
   "%selectMultipleProjects_title_selectProjects%": "Seleccionar Proyectos",
   "%selectProject_title%": "Seleccionar Proyecto",
   "%settings_defaultMessage_loadingOneSetting%": "Cargando configuración",
+  "%settings_disabledReason_isEditableBecausePublished%": "Esta configuración está bloqueada porque el proyecto está publicado.",
+  "%settings_disabledReason_isPublished%": "Esta configuración no se puede cambiar desde la pestaña de configuración.",
   "%settings_defaultMessage_loadingSettings%": "Cargando settings...",
   "%settings_defaultMessage_noSettingComponent%": "Configuración no disponible",
   "%settings_defaultMessage_noSettings%": "Ninguna configuración",

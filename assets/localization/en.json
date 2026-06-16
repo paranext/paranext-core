@@ -343,6 +343,8 @@
   "%selectMultipleProjects_title_selectProjects%": "Select Projects",
   "%selectProject_title%": "Select Project",
   "%settings_defaultMessage_loadingOneSetting%": "Loading setting",
+  "%settings_disabledReason_isEditableBecausePublished%": "This setting is locked because the project is published.",
+  "%settings_disabledReason_isPublished%": "This setting cannot be changed from the settings tab.",
   "%settings_defaultMessage_loadingSettings%": "Loading settings...",
   "%settings_defaultMessage_noSettingComponent%": "Setting cannot be displayed",
   "%settings_defaultMessage_noSettings%": "No settings",

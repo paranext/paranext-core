@@ -22,6 +22,7 @@ import {
   TooltipTrigger,
   UiLanguageSelector,
 } from 'platform-bible-react';
+import { Info } from 'lucide-react';
 import {
   debounce,
   getErrorMessage,
@@ -46,6 +47,8 @@ type BaseSettingProps<TSettingKey, TSettingValue> = {
   className?: string;
   /** If true, render the control as read-only and reject change events */
   disabled?: boolean;
+  /** Localized tooltip shown over the control when `disabled` is true */
+  disabledReason?: string;
 };
 
 /**
@@ -140,6 +143,7 @@ export function Setting({
   className,
   description,
   disabled,
+  disabledReason,
 }: CombinedSettingProps) {
   const validateSetting = validateOtherSetting || validateProjectSetting;
 
@@ -293,9 +297,23 @@ export function Setting({
         );
       }
 
+    const wrappedComponent =
+      disabled && disabledReason ? (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="setting-control-tooltip-trigger">{component}</span>
+            </TooltipTrigger>
+            <TooltipContent align="start">{disabledReason}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      ) : (
+        component
+      );
+
     return (
       <div className="setting-container">
-        {component}
+        {wrappedComponent}
         {errorMessage && (
           <>
             <Label className="error-label">
@@ -319,6 +337,7 @@ export function Setting({
     languages,
     defaultLanguages,
     disabled,
+    disabledReason,
   ]);
 
   return (
@@ -329,16 +348,25 @@ export function Setting({
         </Label>
       ) : (
         <div className="setting-label-container">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Label htmlFor={settingKey} className="setting-label">
-                  {label}
-                </Label>
-              </TooltipTrigger>
-              {description && <TooltipContent>{description}</TooltipContent>}
-            </Tooltip>
-          </TooltipProvider>
+          <div className="setting-label-wrapper">
+            {description ? (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Label htmlFor={settingKey} className="setting-label">
+                      <span>{label}</span>
+                      <Info className="setting-label-info-icon" aria-hidden="true" />
+                    </Label>
+                  </TooltipTrigger>
+                  <TooltipContent align="start">{description}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : (
+              <Label htmlFor={settingKey} className="setting-label">
+                {label}
+              </Label>
+            )}
+          </div>
           {generateComponent()}
         </div>
       )}
