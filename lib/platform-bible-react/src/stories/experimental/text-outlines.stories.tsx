@@ -1,12 +1,18 @@
 /**
  * EXPERIMENTAL / DEMO-ONLY - not a design-system component.
  *
- * Two techniques for drawing a non-rectangular outline/highlight that hugs the ragged-right shape
- * of a multiline text block (the "staircase"/Z shape a text selection makes across lines):
+ * Two approaches for drawing a non-rectangular outline/highlight that wraps a multiline block of
+ * text. The target shape is the one a text selection makes across wrapped lines: tight to where the
+ * text starts and ends on the first and last lines, but filling the full block width on the lines
+ * in between. Because the right edge steps in and out from line to line, the silhouette looks like
+ * a staircase.
  *
- * - Technique 1: a CSS clip-path pseudo-element pair (border layer + inset fill layer).
- * - Technique 4: measuring per-line rects with Range.getClientRects() and stitching them into a
- *   single connected SVG path.
+ * - ClipPathOutline: a pair of stacked CSS clip-path pseudo-elements (a border-coloured layer and a
+ *   slightly inset fill layer; the exposed rim reads as the outline). A pseudo-element is a
+ *   generated `::before`/`::after` box that CSS paints behind the real element. `clip-path` cuts a
+ *   box down to an arbitrary polygon.
+ * - SvgPathOutline: measures each line's rectangle with `Range.getClientRects()` and stitches the
+ *   rectangles into a single connected SVG path that can be stroked, rounded, dashed, or animated.
  *
  * Everything here is self-contained (local helpers + inline styles). It intentionally avoids
  * shadcn/ui, design tokens, and shared components so it can be copied out as a sketch without
@@ -58,24 +64,38 @@ function lineRows(el: HTMLElement): Row[] {
 }
 
 /**
- * Build an ordered list of points (element-local px) tracing a ragged staircase around the text:
- * down the right edge, then back up the left edge. `pad` insets/expands the outline uniformly.
+ * Build an ordered list of points (element-local px) tracing an outline around the text: down the
+ * right edge, then back up the left edge. `pad` insets/expands the outline uniformly.
+ *
+ * When `blockMiddles` is true, every line _except the first and last_ is stretched to the block's
+ * full extent (its max right / min left) instead of its own ragged edge. That yields the shape a
+ * text selection makes: the first and last lines stay tight to where the text actually starts and
+ * ends, while the middle lines fill the block width. When false, every line follows its own edge (a
+ * fully ragged staircase). Only the trailing edge visibly changes, since every line already shares
+ * the same leading edge (the right edge in left-to-right text, the left edge in right-to-left).
  */
-function staircasePoints(el: HTMLElement, pad: number): Point[] {
+function staircasePoints(el: HTMLElement, pad: number, blockMiddles = false): Point[] {
   const rows = lineRows(el);
   if (rows.length === 0) return [];
   const base = el.getBoundingClientRect();
   const ox = base.left;
   const oy = base.top;
+  const maxRight = Math.max(...rows.map((r) => r.right));
+  const minLeft = Math.min(...rows.map((r) => r.left));
+  const last = rows.length - 1;
+  // First and last lines keep their own ragged edge; middle lines snap to the block extent.
+  const isEnd = (i: number) => i === 0 || i === last;
+  const rightX = (i: number) => (blockMiddles && !isEnd(i) ? maxRight : rows[i].right) - ox + pad;
+  const leftX = (i: number) => (blockMiddles && !isEnd(i) ? minLeft : rows[i].left) - ox - pad;
   const pts: Point[] = [];
-  rows.forEach((r) => {
-    pts.push([r.right - ox + pad, r.top - oy - pad]);
-    pts.push([r.right - ox + pad, r.bottom - oy + pad]);
+  rows.forEach((r, i) => {
+    pts.push([rightX(i), r.top - oy - pad]);
+    pts.push([rightX(i), r.bottom - oy + pad]);
   });
-  for (let i = rows.length - 1; i >= 0; i -= 1) {
+  for (let i = last; i >= 0; i -= 1) {
     const r = rows[i];
-    pts.push([r.left - ox - pad, r.bottom - oy + pad]);
-    pts.push([r.left - ox - pad, r.top - oy - pad]);
+    pts.push([leftX(i), r.bottom - oy + pad]);
+    pts.push([leftX(i), r.top - oy - pad]);
   }
   return pts;
 }
@@ -181,6 +201,23 @@ function Slider({ label, value, min, max, onChange }: SliderProps) {
   );
 }
 
+interface ToggleProps {
+  label: string;
+  checked: boolean;
+  onChange: Dispatch<SetStateAction<boolean>>;
+}
+
+function Toggle({ label, checked, onChange }: ToggleProps) {
+  return (
+    <label
+      style={{ display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: 13, opacity: 0.8 }}
+    >
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      {label}
+    </label>
+  );
+}
+
 const controlsRow: CSSProperties = {
   display: 'flex',
   gap: 18,
@@ -199,7 +236,7 @@ const demoStage: CSSProperties = {
 };
 
 // ---------------------------------------------------------------------------
-// Technique 1 - clip-path pseudo-element (border layer + inset fill layer)
+// Clip-path outline: pseudo-element pair (border layer + inset fill layer)
 // ---------------------------------------------------------------------------
 
 function ClipPathDemo() {
@@ -208,6 +245,8 @@ function ClipPathDemo() {
   const ref = useRef<HTMLDivElement>(null);
   const [pad, setPad] = useState(6);
   const [border, setBorder] = useState(3);
+  const [blockMiddles, setBlockMiddles] = useState(true);
+  const [rtl, setRtl] = useState(false);
   const [outer, setOuter] = useState('');
   const [inner, setInner] = useState('');
 
@@ -217,9 +256,12 @@ function ClipPathDemo() {
   const recompute = useCallback(() => {
     const el = ref.current;
     if (!el) return;
-    setOuter(toPolygon(staircasePoints(el, pad)));
-    setInner(toPolygon(staircasePoints(el, pad - border)));
-  }, [pad, border]);
+    // Measure in the chosen writing direction. The geometry reads visual rects, so it is
+    // direction-agnostic; flipping `dir` re-wraps the lines without resizing the box.
+    el.dir = rtl ? 'rtl' : 'ltr';
+    setOuter(toPolygon(staircasePoints(el, pad, blockMiddles)));
+    setInner(toPolygon(staircasePoints(el, pad - border, blockMiddles)));
+  }, [pad, border, blockMiddles, rtl]);
 
   useReflow(ref, recompute);
 
@@ -229,8 +271,9 @@ function ClipPathDemo() {
     <div>
       <style>{`
         .${cls} {
-          position: relative; display: inline-block; max-width: 26ch;
-          padding: 8px 14px; font-size: 1.5rem; font-weight: 600; line-height: 1.55;
+          position: relative; display: inline-block; max-inline-size: 26ch;
+          padding-block: 8px; padding-inline: 14px;
+          font-size: 1.5rem; font-weight: 600; line-height: 1.55;
           color: #1a1230; z-index: 0;
         }
         .${cls}::before, .${cls}::after {
@@ -255,19 +298,27 @@ function ClipPathDemo() {
           tabIndex={0}
           onInput={recompute}
         >
-          Outlines that wrap around ragged multiline text the way a marker would.
+          This editable demo draws a highlighter-style outline around a whole block of wrapped text.
+          The middle lines stay flush to the block width while the short last line tucks in. Type
+          here to watch the outline re-fit as the text re-wraps across several lines.
         </div>
       </div>
       <div style={controlsRow}>
         <Slider label="Padding" value={pad} min={0} max={16} onChange={setPad} />
         <Slider label="Border" value={border} min={0} max={10} onChange={setBorder} />
+        <Toggle
+          label="Block-width middle lines"
+          checked={blockMiddles}
+          onChange={setBlockMiddles}
+        />
+        <Toggle label="Right-to-left" checked={rtl} onChange={setRtl} />
       </div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Technique 4 - getClientRects() -> SVG staircase path
+// SVG path outline: getClientRects() -> single connected SVG staircase path
 // ---------------------------------------------------------------------------
 
 function SvgStaircaseDemo() {
@@ -276,13 +327,18 @@ function SvgStaircaseDemo() {
   const ref = useRef<HTMLDivElement>(null);
   const [pad, setPad] = useState(6);
   const [corner, setCorner] = useState(8);
+  const [blockMiddles, setBlockMiddles] = useState(true);
+  const [rtl, setRtl] = useState(false);
   const [d, setD] = useState('');
 
   const recompute = useCallback(() => {
     const el = ref.current;
     if (!el) return;
-    setD(roundedPath(staircasePoints(el, pad), corner));
-  }, [pad, corner]);
+    // Measure in the chosen writing direction. The geometry reads visual rects, so it is
+    // direction-agnostic; flipping `dir` re-wraps the lines without resizing the box.
+    el.dir = rtl ? 'rtl' : 'ltr';
+    setD(roundedPath(staircasePoints(el, pad, blockMiddles), corner));
+  }, [pad, corner, blockMiddles, rtl]);
 
   useReflow(ref, recompute);
 
@@ -326,18 +382,27 @@ function SvgStaircaseDemo() {
               fontSize: '1.5rem',
               fontWeight: 600,
               lineHeight: 1.85,
-              maxWidth: '26ch',
-              padding: '8px 12px',
+              maxInlineSize: '26ch',
+              paddingBlock: '8px',
+              paddingInline: '12px',
               color: 'inherit',
             }}
           >
-            A single connected outline traces the whole ragged block of multiline text.
+            This editable demo traces one connected outline around a whole block of wrapped text,
+            filling the middle lines to full width while the first and last lines hug the text. Type
+            here to watch the path re-fit as the text re-wraps across several lines.
           </div>
         </div>
       </div>
       <div style={controlsRow}>
         <Slider label="Padding" value={pad} min={0} max={16} onChange={setPad} />
         <Slider label="Corner" value={corner} min={0} max={20} onChange={setCorner} />
+        <Toggle
+          label="Block-width middle lines"
+          checked={blockMiddles}
+          onChange={setBlockMiddles}
+        />
+        <Toggle label="Right-to-left" checked={rtl} onChange={setRtl} />
       </div>
     </div>
   );
@@ -361,12 +426,12 @@ export default meta;
 
 type Story = StoryObj;
 
-export const Technique1ClipPath: Story = {
-  name: 'Technique 1 - clip-path outline',
+export const ClipPathOutline: Story = {
+  name: 'Clip-path outline',
   render: () => <ClipPathDemo />,
 };
 
-export const Technique4SvgPath: Story = {
-  name: 'Technique 4 - SVG staircase path',
+export const SvgPathOutline: Story = {
+  name: 'SVG staircase path',
   render: () => <SvgStaircaseDemo />,
 };
