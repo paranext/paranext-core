@@ -58,28 +58,31 @@ export function MediaItemDetail({
   const previewUrl = thumbnailUrlResolver ? thumbnailUrlResolver(item.imageId) : undefined;
 
   return (
-    <div data-testid={`media-item-detail-${item.imageId}`}>
+    <div
+      data-testid={`media-item-detail-${item.imageId}`}
+      className="tw:flex tw:h-full tw:flex-col"
+    >
       <Button
         data-back-to-list
         type="button"
         onClick={onClose}
         variant="ghost"
         size="sm"
-        className="tw:mb-3"
+        className="tw:mb-3 tw:shrink-0"
       >
         <ArrowLeft className="tw:mr-1 tw:h-4 tw:w-4" />
         {backToListLabel}
       </Button>
-      <div className="tw:mb-3 tw:flex tw:items-center tw:gap-2">
+      <div className="tw:mb-3 tw:flex tw:shrink-0 tw:items-center tw:gap-2">
         <h2 className="tw:text-lg">{item.title}</h2>
         <Badge variant="outline">{item.mediaType}</Badge>
       </div>
       {previewUrl && (
-        <div className="tw:relative tw:mb-3">
+        <div className="tw:relative tw:mb-3 tw:min-h-0 tw:flex-1">
           <img
             src={previewUrl}
             alt={thumbnailLabel}
-            className="tw:w-full tw:rounded tw:object-contain"
+            className="tw:h-full tw:w-full tw:rounded tw:object-contain"
           />
           <Button
             type="button"
@@ -94,7 +97,7 @@ export function MediaItemDetail({
         </div>
       )}
       {item.referenceLabel && (
-        <p className="tw:text-sm tw:text-muted-foreground">{item.referenceLabel}</p>
+        <p className="tw:shrink-0 tw:text-sm tw:text-muted-foreground">{item.referenceLabel}</p>
       )}
     </div>
   );

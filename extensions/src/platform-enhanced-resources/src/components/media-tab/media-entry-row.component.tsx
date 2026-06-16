@@ -92,7 +92,7 @@ export function MediaEntryRow({
     >
       <div
         className={cn(
-          'tw:flex tw:h-14 tw:w-14 tw:shrink-0 tw:items-center tw:justify-center',
+          'tw:flex tw:w-14 tw:shrink-0 tw:items-center tw:justify-center',
           'tw:overflow-hidden tw:rounded tw:border tw:border-border tw:bg-muted/40',
         )}
       >
@@ -100,15 +100,11 @@ export function MediaEntryRow({
           <Skeleton
             aria-busy="true"
             aria-label={thumbnailLoadingLabel}
-            className="tw:h-full tw:w-full"
+            className="tw:h-14 tw:w-full"
           />
         )}
         {loaded && thumbnailUrl && (
-          <img
-            src={thumbnailUrl}
-            alt={thumbnailLabel}
-            className="tw:h-full tw:w-full tw:object-cover"
-          />
+          <img src={thumbnailUrl} alt={thumbnailLabel} className="tw:w-full tw:h-auto" />
         )}
         {loaded && !thumbnailUrl && (
           // No resolver supplied - render a neutral placeholder block so the layout stays stable.
