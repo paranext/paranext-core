@@ -820,6 +820,13 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
             );
             return;
           }
+          // All settings share one data provider data type, so the settings service notifies every
+          // settings subscriber on any setting write (e.g. `platform.verseRef` syncing on the first
+          // BCV navigation), not just when `platform.interfaceMode` changes. Only reload when the
+          // mode actually changed; otherwise an unrelated first settings write needlessly reloads
+          // the entire dock layout. `currentInterfaceMode` was seeded by the `loadLayout()` call in
+          // `registerDockLayout`, so it reflects the real mode by the time this fires.
+          if (newMode === currentInterfaceMode) return;
           // Update the cache synchronously with the notification so any `saveLayout` racing the
           // switch reads the new mode immediately (before `loadLayout`'s own read resolves).
           currentInterfaceMode = newMode;
