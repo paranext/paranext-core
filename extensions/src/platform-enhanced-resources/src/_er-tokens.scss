@@ -4,6 +4,16 @@
 // term UI. Keep every color used by extension-owned CSS in this file so a future tweak (or
 // accessibility audit) only has to look in one place.
 //
+// Deviation from the design-system theming guideline: the platform's theming guide
+// (lib/platform-bible-react/src/stories/guidelines/theming.mdx) discourages "manual colors on
+// primitives" because they don't follow the active theme. We deviate intentionally here because
+// the marble research-term overlays carry SEMANTIC meaning ("this word is researchable" / "this
+// is a lemma sibling" / "this is the focal point of your filter") whose color identity must
+// remain stable across light and dark mode AND match between the on-page overlays and the
+// chip swatches in marble-guide.component.tsx. Token name is the contract; the theme switcher
+// is the wrong axis to vary these colors along. Foreground pinning (`color: black` here and at
+// each consumer site) follows from the same reasoning - the pastel bgs are themselves fixed.
+//
 // Naming convention: `--er-*` prefix (Enhanced Resources) so these never collide with the global
 // Platform.Bible token namespace, and scope is `:root` so any extension stylesheet (including the
 // component-local block injected via `useStylesheet` in scripture-pane.component.tsx) can resolve
