@@ -2380,6 +2380,9 @@ declare module 'papi-shared-types' {
      * tilde character, not a whitespace substitute.
      */
     'platformScripture.allowInvisibleCharacters': boolean;
+
+    /** Whether the paragraph structure of this project is protected from changes */
+    'platformScripture.structureProtection': boolean;
   }
 
   export interface NetworkEvents {
