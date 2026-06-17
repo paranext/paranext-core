@@ -96,12 +96,27 @@ internal class LocalParatextProjects
         }
     }
 
-    public IEnumerable<ProjectDetails> GetAllProjectDetails()
+    public IEnumerable<ProjectDetails> GetAllProjectDetails(
+        IReadOnlyList<string>? includeSettings = null
+    )
     {
         var allScrTexts = GetScrTexts();
         if (!RegistrationInfo.DefaultUser.IsValid)
             allScrTexts = allScrTexts.Where((scrText) => !scrText.IsResourceProject);
-        return allScrTexts.Select(scrText => scrText.GetProjectDetails());
+        return allScrTexts.Select(scrText =>
+        {
+            var details = scrText.GetProjectDetails();
+            // When the caller opted in via includeSettings, fill the project's settings snapshot
+            // from the live ScrText in this same pass (no extra ScrTextCollection lookup, no
+            // per-project getSetting round-trip). The project set and resource filtering above are
+            // unchanged whether or not settings are requested.
+            if (includeSettings is { Count: > 0 })
+                details.Metadata.SettingsSnapshot = ProjectSettingsSnapshotReader.ReadSettings(
+                    scrText,
+                    includeSettings
+                );
+            return details;
+        });
     }
 
     public ProjectDetails GetProjectDetails(string projectId)

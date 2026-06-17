@@ -1240,6 +1240,198 @@ describe('Merging metadata filters', () => {
       includeProjectInterfaces: ['blah5', ['thing5.5', 'thing5.6', 'thing5.7'], 'thing5'],
     });
   });
+
+  it('unions includeSettings and de-dupes (so it survives the Layering PDPF re-merge)', () => {
+    const merged = projectLookupService.mergeMetadataFilters(
+      { includeSettings: ['platform.fullName', 'platform.name'] },
+      { includeSettings: ['platform.name', 'platform.language'] },
+    );
+    expect(merged.includeSettings).toEqual([
+      'platform.fullName',
+      'platform.name',
+      'platform.language',
+    ]);
+  });
+
+  it('keeps includeSettings from one side when the other omits it', () => {
+    expect(
+      projectLookupService.mergeMetadataFilters({ includeSettings: ['platform.name'] }, {})
+        .includeSettings,
+    ).toEqual(['platform.name']);
+    expect(
+      projectLookupService.mergeMetadataFilters(undefined, { includeSettings: ['platform.name'] })
+        .includeSettings,
+    ).toEqual(['platform.name']);
+  });
+
+  it('omits includeSettings entirely when neither side has it', () => {
+    expect(
+      projectLookupService.mergeMetadataFilters(
+        { includeProjectIds: 'a' },
+        { includeProjectIds: 'b' },
+      ),
+    ).not.toHaveProperty('includeSettings');
+  });
+});
+
+describe('Settings snapshot (includeSettings)', () => {
+  const testProjectId = 'snapshot-project';
+  const baseProjectInterfaces: ProjectInterfaces[] = ['platform.base', 'platform.placeholder'];
+  const layeringProjectInterfaces: ProjectInterfaces[] = ['platformScripture.USJ_Chapter'];
+
+  // Records the options the base factory's getAvailableProjects was last called with, so we can
+  // assert includeSettings is forwarded to it.
+  let lastBaseOptions: ProjectMetadataFilterOptions | undefined;
+
+  // A base PDPF that returns one project and fills its settingsSnapshot from whatever
+  // includeSettings it receives (mimicking the real C# Paratext factory). Returns no snapshot when
+  // includeSettings is empty/absent.
+  function makeBasePdpf(): Partial<IProjectDataProviderFactory> {
+    return {
+      async getAvailableProjects(
+        options?: ProjectMetadataFilterOptions,
+      ): Promise<ProjectMetadataWithoutFactoryInfo[]> {
+        lastBaseOptions = options;
+        const md: ProjectMetadataWithoutFactoryInfo = {
+          id: testProjectId,
+          projectInterfaces: baseProjectInterfaces,
+        };
+        const keys = options?.includeSettings ?? [];
+        if (keys.length > 0)
+          md.settingsSnapshot = Object.fromEntries(keys.map((key) => [key, `value:${key}`]));
+        return [md];
+      },
+    };
+  }
+
+  function baseInfo(): Record<string, Partial<NetworkObjectDetails>> {
+    return {
+      [getPDPFactoryNetworkObjectNameFromId('base')]: {
+        objectType: PDP_FACTORY_OBJECT_TYPE,
+        attributes: { projectInterfaces: baseProjectInterfaces },
+      },
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    lastBaseOptions = undefined;
+  });
+
+  it('forwards includeSettings to the base factory and carries back the settingsSnapshot', async () => {
+    const pdpfs = { [getPDPFactoryNetworkObjectNameFromId('base')]: makeBasePdpf() };
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a vitest function :(
+    networkObjectStatusService.getAllNetworkObjectDetails.mockImplementation(() => baseInfo());
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a vitest function :(
+    networkObjectService.get.mockImplementation((id: string) => pdpfs[id]);
+
+    const result = await projectLookupService.getMetadataForAllProjects({
+      includeSettings: ['platform.name', 'platform.isPublished'],
+    });
+
+    expect(lastBaseOptions?.includeSettings).toEqual(['platform.name', 'platform.isPublished']);
+    expect(result).toHaveLength(1);
+    expect(result[0].settingsSnapshot).toEqual({
+      'platform.name': 'value:platform.name',
+      'platform.isPublished': 'value:platform.isPublished',
+    });
+  });
+
+  it('leaves settingsSnapshot undefined when no settings are requested', async () => {
+    const pdpfs = { [getPDPFactoryNetworkObjectNameFromId('base')]: makeBasePdpf() };
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a vitest function :(
+    networkObjectStatusService.getAllNetworkObjectDetails.mockImplementation(() => baseInfo());
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a vitest function :(
+    networkObjectService.get.mockImplementation((id: string) => pdpfs[id]);
+
+    const result = await projectLookupService.getMetadataForAllProjects();
+
+    expect(result).toHaveLength(1);
+    expect(result[0].settingsSnapshot).toBeUndefined();
+  });
+
+  it('carries a settingsSnapshot reported only by a later-processed factory (order-independent merge)', async () => {
+    const snapshot = { 'platform.name': 'Late Name' };
+    // 'first' is processed before 'second' (insertion order) and returns NO snapshot; 'second'
+    // returns the snapshot. The merge must still carry it onto the aggregated metadata — without
+    // the explicit settingsSnapshot merge the loop would silently drop it.
+    const info: Record<string, Partial<NetworkObjectDetails>> = {
+      [getPDPFactoryNetworkObjectNameFromId('first')]: {
+        objectType: PDP_FACTORY_OBJECT_TYPE,
+        attributes: { projectInterfaces: baseProjectInterfaces },
+      },
+      [getPDPFactoryNetworkObjectNameFromId('second')]: {
+        objectType: PDP_FACTORY_OBJECT_TYPE,
+        attributes: { projectInterfaces: baseProjectInterfaces },
+      },
+    };
+    const pdpfs: Record<string, Partial<IProjectDataProviderFactory>> = {
+      [getPDPFactoryNetworkObjectNameFromId('first')]: {
+        async getAvailableProjects(): Promise<ProjectMetadataWithoutFactoryInfo[]> {
+          return [{ id: testProjectId, projectInterfaces: baseProjectInterfaces }];
+        },
+      },
+      [getPDPFactoryNetworkObjectNameFromId('second')]: {
+        async getAvailableProjects(): Promise<ProjectMetadataWithoutFactoryInfo[]> {
+          return [
+            {
+              id: testProjectId,
+              projectInterfaces: baseProjectInterfaces,
+              settingsSnapshot: snapshot,
+            },
+          ];
+        },
+      },
+    };
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a vitest function :(
+    networkObjectStatusService.getAllNetworkObjectDetails.mockImplementation(() => info);
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a vitest function :(
+    networkObjectService.get.mockImplementation((id: string) => pdpfs[id]);
+
+    const result = await projectLookupService.getMetadataForAllProjects({
+      includeSettings: ['platform.name'],
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0].settingsSnapshot).toEqual(snapshot);
+  });
+
+  it('threads includeSettings through a Layering PDPF so the layered project keeps the snapshot', async () => {
+    class TestLayeringPDP extends LayeringProjectDataProviderEngineFactory<
+      typeof layeringProjectInterfaces
+    > {
+      projectInterfacesToLayerOver = 'platform.placeholder';
+
+      providedProjectInterfaces = layeringProjectInterfaces;
+    }
+    const info: Record<string, Partial<NetworkObjectDetails>> = {
+      ...baseInfo(),
+      [getPDPFactoryNetworkObjectNameFromId('layering')]: {
+        objectType: PDP_FACTORY_OBJECT_TYPE,
+        attributes: { projectInterfaces: layeringProjectInterfaces },
+      },
+    };
+    const pdpfs: Record<string, Partial<IProjectDataProviderFactory>> = {
+      [getPDPFactoryNetworkObjectNameFromId('base')]: makeBasePdpf(),
+      [getPDPFactoryNetworkObjectNameFromId('layering')]: new TestLayeringPDP('layering'),
+    };
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a vitest function :(
+    networkObjectStatusService.getAllNetworkObjectDetails.mockImplementation(() => info);
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a vitest function :(
+    networkObjectService.get.mockImplementation((id: string) => pdpfs[id]);
+
+    // Filter on the USJ interface that ONLY the layering PDPF provides — the project is only
+    // returned because the layering PDPF layered over the base, and it must still carry the base
+    // factory's snapshot (proving includeSettings reached the base through the layering re-entry).
+    const result = await projectLookupService.getMetadataForAllProjects({
+      includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
+      includeSettings: ['platform.name'],
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0].projectInterfaces).toContain('platformScripture.USJ_Chapter');
+    expect(result[0].settingsSnapshot).toEqual({ 'platform.name': 'value:platform.name' });
+  });
 });
 
 describe('Nested retry skip behavior', () => {

@@ -13,6 +13,7 @@ import {
 import type { SharedProjectsInfo } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Home, HOME_STRING_KEYS, LocalProjectInfo } from './home.component';
+import { getLocalProjectsInfo } from './get-local-projects.util';
 
 const defaultExcludePdpFactoryIds: string[] = [];
 const defaultInterfaceLanguages: string[] = ['en'];
@@ -229,22 +230,10 @@ globalThis.webViewComponent = function HomeWebView() {
   useEffect(() => {
     let promiseIsCurrent = true;
     const getLocalProjects = async () => {
-      const projectMetadata = await papi.projectLookup.getMetadataForAllProjects({
-        includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
-        excludePdpFactoryIds,
-      });
-      const projectInfo = await Promise.all(
-        projectMetadata.map(async (data) => {
-          const pdp = await papi.projectDataProviders.get('platform.base', data.id);
-          return {
-            projectId: data.id,
-            isPublished: await pdp.getSetting('platform.isPublished'),
-            fullName: await pdp.getSetting('platform.fullName'),
-            name: await pdp.getSetting('platform.name'),
-            language: await pdp.getSetting('platform.language'),
-          };
-        }),
-      );
+      // Single batched request: project settings come back on each project's `settingsSnapshot`
+      // instead of a per-project `projectDataProviders.get` + serial `getSetting` fan-out. See
+      // get-local-projects.util.ts.
+      const projectInfo = await getLocalProjectsInfo(excludePdpFactoryIds);
 
       if (promiseIsCurrent && isMounted.current) {
         setIsLoadingLocalProjects(false);

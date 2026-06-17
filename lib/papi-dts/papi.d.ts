@@ -5416,6 +5416,24 @@ declare module 'shared/models/project-metadata.model' {
      * project.
      */
     projectInterfaces: ProjectInterfaces[];
+    /**
+     * Opt-in batch of project setting values, populated only when project metadata is requested with
+     * {@link ProjectMetadataFilterOptions.includeSettings}. Lets consumers read common settings (e.g.
+     * `platform.name`, `platform.fullName`, `platform.language`, `platform.isPublished`) directly off
+     * the project list in a single cross-process request rather than fanning out a per-project
+     * `getSetting` call per setting (which scales linearly with project count).
+     *
+     * Keyed by setting name. This is **best-effort**: a Project Data Provider Factory that does not
+     * support the hint returns no snapshot, and a requested setting key may be absent — in both cases
+     * consumers should fall back to `getSetting` for that setting. Values match what the
+     * corresponding `getSetting` returns for a set value; unset values may come back empty, so apply
+     * the same missing-value fallback you would for `getSetting`.
+     *
+     * @experimental This field is experimental and may change or be removed.
+     */
+    settingsSnapshot?: {
+      [settingName: string]: unknown;
+    };
   };
   export type ProjectDataProviderFactoryMetadataInfo = {
     /**
@@ -5460,6 +5478,18 @@ declare module 'shared/models/project-data-provider-factory.interface' {
     includeProjectIds?: string | string[];
     /** Project IDs to exclude */
     excludeProjectIds?: string | string[];
+    /**
+     * Names of project settings (e.g. `platform.name`, `platform.fullName`, `platform.language`,
+     * `platform.isPublished`) to request as a batch alongside the metadata. A Project Data Provider
+     * Factory that supports this hint populates {@link ProjectMetadata.settingsSnapshot} with these
+     * settings, read server-side in a single pass — letting callers avoid a per-project `getSetting`
+     * fan-out. Factories that do not support the hint, and individual settings they cannot cheaply
+     * provide, are simply omitted from the snapshot; callers should fall back to `getSetting` for any
+     * setting missing from {@link ProjectMetadata.settingsSnapshot}.
+     *
+     * @experimental This option is experimental and may change or be removed.
+     */
+    includeSettings?: string[];
   };
   /**
    * Network object that creates Project Data Providers of a specific set of `projectInterface`s as

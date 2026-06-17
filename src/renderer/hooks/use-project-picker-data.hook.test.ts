@@ -317,5 +317,153 @@ describe('useProjectPickerData', () => {
 
     await waitFor(() => expect(result.current.currentProject?.fullName).toBe('Updated Project'));
   });
+
+  it('reads allProjects from settingsSnapshot without a per-project getSetting fan-out', async () => {
+    const { projectLookupService, papiFrontendProjectDataProviderService } = await importMocks();
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([
+      {
+        id: 'p1',
+        projectInterfaces: [],
+        pdpFactoryInfo: {},
+        settingsSnapshot: {
+          'platform.fullName': 'Full One',
+          'platform.name': 'P1',
+          'platform.language': 'en',
+          'platform.languageTag': 'en',
+          'platform.isEditable': true,
+        },
+      },
+    ] as never);
+
+    const { result } = renderHook(() => useProjectPickerData());
+
+    await waitFor(() => expect(result.current.allProjects.length).toBe(1));
+    expect(result.current.allProjects[0]).toMatchObject({
+      id: 'p1',
+      fullName: 'Full One',
+      shortName: 'P1',
+    });
+    // The fast path must not touch the PDP service for the snapshot-bearing project (no editor is
+    // open and there are no recent projects in this test, so any call would be the old fan-out).
+    expect(papiFrontendProjectDataProviderService.get).not.toHaveBeenCalled();
+  });
+
+  it('falls back to getSetting when the snapshot language is empty (unset)', async () => {
+    // An unset (empty) language in the snapshot must NOT take the fast path — it would render and
+    // sort differently than the getSetting path. Instead it defers to the per-project fallback, so
+    // the row matches exactly what the pre-batch code produced.
+    const { projectLookupService, papiFrontendProjectDataProviderService } = await importMocks();
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([
+      {
+        id: 'p1',
+        projectInterfaces: [],
+        pdpFactoryInfo: {},
+        settingsSnapshot: {
+          'platform.fullName': 'Full One',
+          'platform.name': 'P1',
+          'platform.language': '',
+          'platform.languageTag': 'en',
+          'platform.isEditable': true,
+        },
+      },
+    ] as never);
+    vi.mocked(papiFrontendProjectDataProviderService.get).mockImplementation(
+      async (_iface: string, projectId: string) =>
+        ({
+          getSetting: vi.fn(async (key: string) => {
+            if (key === 'platform.fullName') return `Full ${projectId}`;
+            if (key === 'platform.name') return `Short ${projectId}`;
+            if (key === 'platform.language') return 'English';
+            if (key === 'platform.languageTag') return 'en';
+            if (key === 'platform.isEditable') return true;
+            return undefined;
+          }),
+        }) as never,
+    );
+
+    const { result } = renderHook(() => useProjectPickerData());
+
+    await waitFor(() => expect(result.current.allProjects.length).toBe(1));
+    // The empty snapshot language forced the per-project fallback, which fetched real values.
+    expect(papiFrontendProjectDataProviderService.get).toHaveBeenCalled();
+    expect(result.current.allProjects[0]).toMatchObject({
+      id: 'p1',
+      fullName: 'Full p1',
+      shortName: 'Short p1',
+    });
+  });
+
+  it('excludes non-editable projects reported via settingsSnapshot', async () => {
+    const { projectLookupService } = await importMocks();
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([
+      {
+        id: 'editable',
+        projectInterfaces: [],
+        pdpFactoryInfo: {},
+        settingsSnapshot: {
+          'platform.fullName': 'Full editable',
+          'platform.name': 'editable',
+          'platform.language': 'en',
+          'platform.languageTag': 'en',
+          'platform.isEditable': true,
+        },
+      },
+      {
+        id: 'readonly',
+        projectInterfaces: [],
+        pdpFactoryInfo: {},
+        settingsSnapshot: {
+          'platform.fullName': 'Full readonly',
+          'platform.name': 'readonly',
+          'platform.language': 'en',
+          'platform.languageTag': 'en',
+          'platform.isEditable': false,
+        },
+      },
+    ] as never);
+
+    const { result } = renderHook(() => useProjectPickerData());
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.allProjects).toHaveLength(1);
+    });
+    expect(result.current.allProjects[0].id).toBe('editable');
+  });
+
+  it('falls back to per-project getSetting when the snapshot is incomplete', async () => {
+    const { projectLookupService, papiFrontendProjectDataProviderService } = await importMocks();
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([
+      {
+        id: 'p1',
+        projectInterfaces: [],
+        pdpFactoryInfo: {},
+        // Only one of the five needed keys — the hook must fall back to getSetting for this project.
+        settingsSnapshot: { 'platform.name': 'P1' },
+      },
+    ] as never);
+    vi.mocked(papiFrontendProjectDataProviderService.get).mockImplementation(
+      async (_iface: string, projectId: string) =>
+        ({
+          getSetting: vi.fn(async (key: string) => {
+            if (key === 'platform.fullName') return `Full ${projectId}`;
+            if (key === 'platform.name') return `Short ${projectId}`;
+            if (key === 'platform.language') return 'English';
+            if (key === 'platform.isEditable') return true;
+            return undefined;
+          }),
+        }) as never,
+    );
+
+    const { result } = renderHook(() => useProjectPickerData());
+
+    await waitFor(() => expect(result.current.allProjects.length).toBe(1));
+    expect(result.current.allProjects[0]).toMatchObject({
+      id: 'p1',
+      fullName: 'Full p1',
+      shortName: 'Short p1',
+    });
+    expect(papiFrontendProjectDataProviderService.get).toHaveBeenCalled();
+  });
 });
 /* eslint-enable no-type-assertion/no-type-assertion */

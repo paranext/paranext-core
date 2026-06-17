@@ -6,6 +6,7 @@ import { webViews } from '@renderer/services/papi-frontend.service';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
+import { ProjectMetadata } from '@shared/models/project-metadata.model';
 import {
   EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
   EVENT_NAME_ON_DID_OPEN_WEB_VIEW,
@@ -64,6 +65,68 @@ async function fetchProjectDetails(projectId: string): Promise<{
     languageDisplayName: resolved?.displayName,
     isEditable: !!isEditable,
   };
+}
+
+/**
+ * The `platform.*` settings each "all projects" picker row needs. Requested as a batch via
+ * `getMetadataForAllProjects({ includeSettings })` so they arrive on each project's
+ * `settingsSnapshot` in one call instead of a per-project `getSetting` fan-out.
+ */
+const PROJECT_PICKER_SETTING_KEYS = [
+  'platform.fullName',
+  'platform.name',
+  'platform.language',
+  'platform.languageTag',
+  'platform.isEditable',
+] as const;
+
+/** Read a snapshot value as a string, treating any non-string (or absent) value as empty. */
+function snapshotString(snapshot: { [settingName: string]: unknown }, settingName: string): string {
+  const value = snapshot[settingName];
+  return typeof value === 'string' ? value : '';
+}
+
+/**
+ * Build an "all projects" {@link ProjectItem} from project metadata.
+ *
+ * Fast path: read the row straight off `settingsSnapshot` — but only when it carries every needed
+ * setting AND the display strings (`fullName`, `language`) are actually set. An unset string comes
+ * back empty from the snapshot, which the snapshot deliberately does not invent a value for; for
+ * those we defer to {@link fetchProjectDetails} (fallback) so the row matches what the per-project /
+ * pre-batch path returned — same displayed name and same alphabetical sort position.
+ *
+ * Fallback: a provider that does not support the `includeSettings` hint, or a project with an unset
+ * display setting.
+ *
+ * Returns undefined for non-editable projects, which the picker filters out.
+ */
+async function resolveProjectItemFromMetadata(
+  metadata: ProjectMetadata,
+): Promise<ProjectItem | undefined> {
+  const snapshot = metadata.settingsSnapshot;
+  if (
+    snapshot &&
+    PROJECT_PICKER_SETTING_KEYS.every((key) => key in snapshot) &&
+    snapshotString(snapshot, 'platform.fullName').length > 0 &&
+    snapshotString(snapshot, 'platform.language').length > 0
+  ) {
+    if (snapshot['platform.isEditable'] !== true) return undefined;
+    const resolved = resolveLanguage(
+      snapshotString(snapshot, 'platform.language'),
+      snapshotString(snapshot, 'platform.languageTag'),
+    );
+    return {
+      id: metadata.id,
+      fullName: snapshotString(snapshot, 'platform.fullName'),
+      shortName: snapshotString(snapshot, 'platform.name'),
+      language: resolved?.tag,
+      languageDisplayName: resolved?.displayName,
+    };
+  }
+
+  const { isEditable, ...details } = await fetchProjectDetails(metadata.id);
+  if (!isEditable) return undefined;
+  return { id: metadata.id, ...details };
 }
 
 export type ProjectPickerData = {
@@ -164,32 +227,17 @@ export function useProjectPickerData(): ProjectPickerData {
       // Referenced so this callback re-runs whenever refresh() is called
       // eslint-disable-next-line no-unused-expressions
       refreshCounter;
+      // Request the per-row settings as a batch so they arrive on each project's `settingsSnapshot`
+      // in this single call, instead of a per-project `get` + `getSetting` fan-out that scaled
+      // linearly with project count.
       const metadata = await projectLookupService.getMetadataForAllProjects({
         includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
+        includeSettings: [...PROJECT_PICKER_SETTING_KEYS],
       });
       const settled = await Promise.all(
         metadata.map(async (m) => {
           try {
-            const pdp = await papiFrontendProjectDataProviderService.get(
-              PROJECT_INTERFACE_PLATFORM_BASE,
-              m.id,
-            );
-            const [fullName, shortName, language, languageTag, isEditable] = await Promise.all([
-              pdp.getSetting('platform.fullName'),
-              pdp.getSetting('platform.name'),
-              pdp.getSetting('platform.language'),
-              pdp.getSetting('platform.languageTag'),
-              pdp.getSetting('platform.isEditable'),
-            ]);
-            if (!isEditable) return undefined;
-            const resolved = resolveLanguage(language, languageTag);
-            return {
-              id: m.id,
-              fullName,
-              shortName,
-              language: resolved?.tag,
-              languageDisplayName: resolved?.displayName,
-            };
+            return await resolveProjectItemFromMetadata(m);
           } catch (e) {
             logger.warn(
               `ProjectPicker: could not fetch details for project ${m.id}: ${getErrorMessage(e)}`,

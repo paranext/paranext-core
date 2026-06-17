@@ -16,6 +16,22 @@ export type ProjectMetadataWithoutFactoryInfo = {
    * project.
    */
   projectInterfaces: ProjectInterfaces[];
+  /**
+   * Opt-in batch of project setting values, populated only when project metadata is requested with
+   * {@link ProjectMetadataFilterOptions.includeSettings}. Lets consumers read common settings (e.g.
+   * `platform.name`, `platform.fullName`, `platform.language`, `platform.isPublished`) directly off
+   * the project list in a single cross-process request rather than fanning out a per-project
+   * `getSetting` call per setting (which scales linearly with project count).
+   *
+   * Keyed by setting name. This is **best-effort**: a Project Data Provider Factory that does not
+   * support the hint returns no snapshot, and a requested setting key may be absent — in both cases
+   * consumers should fall back to `getSetting` for that setting. Values match what the
+   * corresponding `getSetting` returns for a set value; unset values may come back empty, so apply
+   * the same missing-value fallback you would for `getSetting`.
+   *
+   * @experimental This field is experimental and may change or be removed.
+   */
+  settingsSnapshot?: { [settingName: string]: unknown };
 };
 
 export type ProjectDataProviderFactoryMetadataInfo = {

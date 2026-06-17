@@ -572,6 +572,11 @@ global.webViewComponent = function ChecklistWebView({
 
   const [allProjects] = usePromise(
     useCallback(async () => {
+      // PERF-FANOUT-FOLLOWUP: this still fans out a per-project `getSetting` (name/fullName) after
+      // `getMetadataForAllProjects`. Migrate to the batched `includeSettings`/`settingsSnapshot`
+      // path used by the Home tab (extensions/src/platform-get-resources/src/get-local-projects.util.ts)
+      // and the project picker (src/renderer/hooks/use-project-picker-data.hook.ts) to remove the
+      // per-project round-trips.
       const allMetadata = await papi.projectLookup.getMetadataForAllProjects({
         // Scripture + Paratext project interfaces — mirrors checks-side-panel's filter so we pick
         // up the same project set that the scripture editor shows.
