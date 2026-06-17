@@ -10,6 +10,7 @@ import {
   ReferencedItem,
   transformAndEnsureRegExpRegExpArray,
 } from 'platform-bible-utils';
+import { createCachedInitializer } from '@shared/utils/cached-initializer';
 import { ProjectSettingsContributionInfo } from '@shared/utils/project-settings-document-combiner';
 import { ProjectDataProviderInterfaces } from 'papi-shared-types';
 import { areProjectInterfacesIncluded } from '@shared/models/project-lookup.service-model';
@@ -80,31 +81,16 @@ export function filterProjectSettingsContributionsByProjectInterfaces(
 }
 
 let networkObject: IProjectSettingsService;
-let initializationPromise: Promise<void>;
-async function initialize(): Promise<void> {
-  if (!initializationPromise) {
-    initializationPromise = new Promise<void>((resolve, reject) => {
-      const executor = async () => {
-        try {
-          const localProjectSettingsService =
-            await networkObjectService.get<IProjectSettingsService>(
-              projectSettingsServiceNetworkObjectName,
-            );
-          if (!localProjectSettingsService)
-            throw new Error(
-              `${projectSettingsServiceNetworkObjectName} is not available as a network object`,
-            );
-          networkObject = localProjectSettingsService;
-          resolve();
-        } catch (error) {
-          reject(error);
-        }
-      };
-      executor();
-    });
-  }
-  return initializationPromise;
-}
+const initialize = createCachedInitializer(async () => {
+  const localProjectSettingsService = await networkObjectService.get<IProjectSettingsService>(
+    projectSettingsServiceNetworkObjectName,
+  );
+  if (!localProjectSettingsService)
+    throw new Error(
+      `${projectSettingsServiceNetworkObjectName} is not available as a network object`,
+    );
+  networkObject = localProjectSettingsService;
+});
 
 export const projectSettingsService = createSyncProxyForAsyncObject<IProjectSettingsService>(
   async () => {
