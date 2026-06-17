@@ -105,6 +105,9 @@ public sealed class ProjectSettingsNames
         "platformScripture.referencedProjectsAndResources";
     public const string PT_REFERENCED_PROJECTS_AND_RESOURCES = "ReferencedProjectsAndResources";
 
+    public const string PB_STRUCTURE_PROTECTION = "platformScripture.structureProtection";
+    public const string PT_STRUCTURE_PROTECTION = "PlatformBibleStructureProtection";
+
     /// <summary>
     /// Paratext setting names that are either T or F and need to be converted to booleans
     /// </summary>
@@ -115,6 +118,7 @@ public sealed class ProjectSettingsNames
         "AllowReadAccess",
         "AllowSharingWithSLDR",
         "AllowInvisibleChars",
+        "PlatformBibleStructureProtection",
     ];
 
     // Make sure this dictionary gets updated whenever new settings are added
@@ -128,6 +132,7 @@ public sealed class ProjectSettingsNames
             { PB_NAME, PT_NAME },
             { PB_VERSIFICATION, PT_VERSIFICATION },
             { PB_IS_EDITABLE, PT_IS_EDITABLE },
+            { PB_STRUCTURE_PROTECTION, PT_STRUCTURE_PROTECTION },
             { PB_TEXT_DIRECTION, PT_TEXT_DIRECTION },
             { PB_VALID_CHARACTERS, PT_VALID_CHARACTERS },
             { PB_INVALID_CHARACTERS, PT_INVALID_CHARACTERS },
