@@ -1,4 +1,10 @@
-import { renderHook, waitFor, act, configure, getConfig } from '@testing-library/react';
+import {
+  renderHook,
+  waitFor,
+  act,
+  configure,
+  getConfig,
+} from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import { EVENT_NAME_ON_DID_UPDATE_WEB_VIEW } from '@shared/services/web-view.service-model';
