@@ -49,12 +49,18 @@ namespace TestParanextDataProvider.Projects
         )]
         public void ReadSettings_MatchesGetProjectSetting_ForPresentAndComputedSettings()
         {
+            // Ensure the raw Editable flag is present so both the reader and GetProjectSetting read
+            // it (rather than GetProjectSetting hitting the GetDefault wire call), making isEditable
+            // part of the parity contract too.
+            _scrText.Settings.ParametersDictionary[ProjectSettingsNames.PT_IS_EDITABLE] = "T";
+
             string[] keys =
             [
                 ProjectSettingsNames.PB_NAME,
                 ProjectSettingsNames.PB_FULL_NAME,
                 ProjectSettingsNames.PB_IS_PUBLISHED,
                 ProjectSettingsNames.PB_LANGUAGE_TAG,
+                ProjectSettingsNames.PB_IS_EDITABLE,
             ];
 
             var snapshot = ProjectSettingsSnapshotReader.ReadSettings(_scrText, keys);
@@ -86,12 +92,12 @@ namespace TestParanextDataProvider.Projects
 
         [Test]
         [Description(
-            "platform.isEditable mirrors ProjectSummary.IsEditableTarget: Settings.Editable AND not "
-                + "a resource. A normal editable project reports true."
+            "platform.isEditable mirrors GetProjectSetting: a non-resource project with raw Editable=T "
+                + "reports true (reads the raw flag, not the version-gated Settings.Editable)."
         )]
         public void ReadSettings_IsEditable_NonResourceEditableProject_ReturnsTrue()
         {
-            _scrText.Settings.Editable = true;
+            _scrText.Settings.ParametersDictionary[ProjectSettingsNames.PT_IS_EDITABLE] = "T";
 
             var snapshot = ProjectSettingsSnapshotReader.ReadSettings(
                 _scrText,
@@ -103,13 +109,32 @@ namespace TestParanextDataProvider.Projects
 
         [Test]
         [Description(
+            "When the raw Editable flag is absent the reader OMITS platform.isEditable rather than "
+                + "guessing (it cannot reproduce GetProjectSetting's GetDefault without a wire call), "
+                + "so the consumer falls back to getSetting — keeping the snapshot a faithful batch."
+        )]
+        public void ReadSettings_IsEditable_AbsentRawFlag_IsOmitted()
+        {
+            _scrText.Settings.ParametersDictionary.Remove(ProjectSettingsNames.PT_IS_EDITABLE);
+
+            var snapshot = ProjectSettingsSnapshotReader.ReadSettings(
+                _scrText,
+                [ProjectSettingsNames.PB_IS_EDITABLE]
+            );
+
+            Assert.That(snapshot, Does.Not.ContainKey(ProjectSettingsNames.PB_IS_EDITABLE));
+        }
+
+        [Test]
+        [Description(
             "A resource project is published and is never an editable target — even when its raw "
                 + "Editable flag is true (the NBV21 shape)."
         )]
         public void ReadSettings_ResourceProject_IsPublishedTrueAndIsEditableFalse()
         {
             using var resource = new ResourceDummyScrText();
-            resource.Settings.Editable = true;
+            // Even with the raw Editable flag set to true (the NBV21 shape), the resource override wins.
+            resource.Settings.ParametersDictionary[ProjectSettingsNames.PT_IS_EDITABLE] = "T";
 
             var snapshot = ProjectSettingsSnapshotReader.ReadSettings(
                 resource,

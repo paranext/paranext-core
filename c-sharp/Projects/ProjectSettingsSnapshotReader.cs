@@ -1,3 +1,4 @@
+using System.IO;
 using Paranext.DataProvider.Services;
 using Paratext.Data;
 
@@ -75,21 +76,41 @@ internal static class ProjectSettingsSnapshotReader
                 value = scrText.IsResourceProject;
                 return true;
 
-            // Canonical editability. Mirrors ManageBooks ProjectSummary.IsEditableTarget: a resource
-            // is never an editable target even when its raw Editable flag is "T" (e.g. NBV21).
-            // Inlined here rather than referenced so the core Projects layer stays free of a
-            // dependency on the ManageBooks feature layer.
+            // Mirror GetProjectSetting('platform.isEditable') EXACTLY so the snapshot stays a faithful
+            // batch of getSetting (a consumer's snapshot fast-path must match its getSetting fallback):
+            // a resource is never editable (the resource override in GetProjectSetting), otherwise read
+            // the raw "Editable" flag (T/F) — NOT Settings.Editable, which is version-gated and can
+            // diverge from the raw flag getSetting reads. If the raw flag is absent we cannot reproduce
+            // getSetting's GetDefault without a wire call, so omit the key and let the consumer fall
+            // back to getSetting for this one project.
             case ProjectSettingsNames.PB_IS_EDITABLE:
-                value = scrText.Settings.Editable && !scrText.IsResourceProject;
-                return true;
+                if (scrText.IsResourceProject)
+                {
+                    value = false;
+                    return true;
+                }
+                if (
+                    scrText.Settings.ParametersDictionary.TryGetValue(
+                        ProjectSettingsNames.PT_IS_EDITABLE,
+                        out string? editableRaw
+                    )
+                )
+                {
+                    value = CoerceParatextBool(editableRaw);
+                    return true;
+                }
+                value = null;
+                return false;
 
             // BCP-47 tag from the project's LDML file, not Settings.xml.
             case ProjectSettingsNames.PB_LANGUAGE_TAG:
                 value = scrText.Language.LanguageId.Id;
                 return true;
 
-            // Raw parameter reads; empty string when unset (consumer applies the missing-value
-            // fallback — Home falls back to the short name, the picker treats empty as "no language").
+            // Raw parameter reads; empty string when unset. The consumer treats an empty value as
+            // "not in the snapshot" and falls back to getSetting for it (which returns the platform
+            // default), so the snapshot stays a faithful batch of getSetting rather than inventing a
+            // different value for unset settings.
             case ProjectSettingsNames.PB_FULL_NAME:
                 value = ReadRawSetting(scrText, ProjectSettingsNames.PT_FULL_NAME);
                 return true;
@@ -112,4 +133,20 @@ internal static class ProjectSettingsSnapshotReader
         scrText.Settings.ParametersDictionary.TryGetValue(paratextSettingName, out string? value)
             ? value
             : string.Empty;
+
+    /// <summary>
+    /// Coerces a raw Paratext boolean setting value (T/F or TRUE/FALSE) to a bool, matching the
+    /// coercion in <see cref="ParatextProjectDataProvider.GetProjectSetting"/>. Throws on an
+    /// unexpected value; the per-setting catch in <see cref="ReadSettings"/> then omits the key, so
+    /// the consumer falls back to getSetting rather than receiving a wrong value.
+    /// </summary>
+    private static bool CoerceParatextBool(string value) =>
+        value.ToUpperInvariant() switch
+        {
+            "T" or "TRUE" => true,
+            "F" or "FALSE" => false,
+            _ => throw new InvalidDataException(
+                $"Editable flag was not T/F or TRUE/FALSE: '{value}'"
+            ),
+        };
 }

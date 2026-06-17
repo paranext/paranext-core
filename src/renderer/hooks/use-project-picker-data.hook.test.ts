@@ -348,8 +348,11 @@ describe('useProjectPickerData', () => {
     expect(papiFrontendProjectDataProviderService.get).not.toHaveBeenCalled();
   });
 
-  it('treats an empty snapshot language as no language (preserves prior unset behavior)', async () => {
-    const { projectLookupService } = await importMocks();
+  it('falls back to getSetting when the snapshot language is empty (unset)', async () => {
+    // An unset (empty) language in the snapshot must NOT take the fast path — it would render and
+    // sort differently than the getSetting path. Instead it defers to the per-project fallback, so
+    // the row matches exactly what the pre-batch code produced.
+    const { projectLookupService, papiFrontendProjectDataProviderService } = await importMocks();
     vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([
       {
         id: 'p1',
@@ -364,12 +367,30 @@ describe('useProjectPickerData', () => {
         },
       },
     ] as never);
+    vi.mocked(papiFrontendProjectDataProviderService.get).mockImplementation(
+      async (_iface: string, projectId: string) =>
+        ({
+          getSetting: vi.fn(async (key: string) => {
+            if (key === 'platform.fullName') return `Full ${projectId}`;
+            if (key === 'platform.name') return `Short ${projectId}`;
+            if (key === 'platform.language') return 'English';
+            if (key === 'platform.languageTag') return 'en';
+            if (key === 'platform.isEditable') return true;
+            return undefined;
+          }),
+        }) as never,
+    );
 
     const { result } = renderHook(() => useProjectPickerData());
 
     await waitFor(() => expect(result.current.allProjects.length).toBe(1));
-    expect(result.current.allProjects[0].language).toBeUndefined();
-    expect(result.current.allProjects[0].languageDisplayName).toBeUndefined();
+    // The empty snapshot language forced the per-project fallback, which fetched real values.
+    expect(papiFrontendProjectDataProviderService.get).toHaveBeenCalled();
+    expect(result.current.allProjects[0]).toMatchObject({
+      id: 'p1',
+      fullName: 'Full p1',
+      shortName: 'Short p1',
+    });
   });
 
   it('excludes non-editable projects reported via settingsSnapshot', async () => {

@@ -1,4 +1,5 @@
-import papi from '@papi/frontend';
+import papi, { logger } from '@papi/frontend';
+import { getErrorMessage } from 'platform-bible-utils';
 import { LocalProjectInfo } from './home.component';
 
 /**
@@ -33,40 +34,60 @@ function readSnapshotString(
 /**
  * Resolve one project's {@link LocalProjectInfo}.
  *
- * Fast path: when the project's `settingsSnapshot` carries every needed setting, read them straight
- * off it — no per-project round-trips.
+ * Fast path: take the row straight off `settingsSnapshot` — but only when it carries every needed
+ * setting AND the display strings (`fullName`, `language`) are actually set. An unset string comes
+ * back empty from the snapshot; the snapshot deliberately does NOT invent a value for it, so for
+ * those we defer to `getSetting` (fallback below) — the same value the per-project / pre-batch code
+ * returned. This keeps the snapshot a faithful batch of `getSetting`, so a project renders the same
+ * whether it took the fast path or the fallback.
  *
- * Fallback: when a project's PDP factory did not provide a snapshot (e.g. a non-Paratext provider
- * that does not support the `includeSettings` hint) or it is incomplete, fetch the settings
- * directly for just that one project. This preserves correctness for providers that do not support
- * the hint.
+ * Fallback: a provider that does not support the `includeSettings` hint, or a project with an unset
+ * display setting — fetch directly for just that one project (identical to the pre-batch
+ * behavior).
+ *
+ * Never throws: a project whose lookup fails returns a minimal entry rather than rejecting the
+ * whole batch (which would leave the Home list stuck on its spinner).
  */
 async function resolveLocalProjectInfo(
   metadata: ProjectMetadataWithSnapshot,
 ): Promise<LocalProjectInfo> {
-  const { settingsSnapshot } = metadata;
-  if (settingsSnapshot && HOME_PROJECT_SETTING_KEYS.every((key) => key in settingsSnapshot)) {
-    const name = readSnapshotString(settingsSnapshot, 'platform.name');
-    const fullName = readSnapshotString(settingsSnapshot, 'platform.fullName');
+  try {
+    const { settingsSnapshot } = metadata;
+    if (
+      settingsSnapshot &&
+      HOME_PROJECT_SETTING_KEYS.every((key) => key in settingsSnapshot) &&
+      readSnapshotString(settingsSnapshot, 'platform.fullName').length > 0 &&
+      readSnapshotString(settingsSnapshot, 'platform.language').length > 0
+    ) {
+      return {
+        projectId: metadata.id,
+        isPublished: settingsSnapshot['platform.isPublished'] === true,
+        fullName: readSnapshotString(settingsSnapshot, 'platform.fullName'),
+        name: readSnapshotString(settingsSnapshot, 'platform.name'),
+        language: readSnapshotString(settingsSnapshot, 'platform.language'),
+      };
+    }
+
+    const pdp = await papi.projectDataProviders.get('platform.base', metadata.id);
+    const [isPublished, fullName, name, language] = await Promise.all([
+      pdp.getSetting('platform.isPublished'),
+      pdp.getSetting('platform.fullName'),
+      pdp.getSetting('platform.name'),
+      pdp.getSetting('platform.language'),
+    ]);
+    return { projectId: metadata.id, isPublished, fullName, name, language };
+  } catch (e) {
+    logger.warn(
+      `get-local-projects: could not load info for project ${metadata.id}: ${getErrorMessage(e)}`,
+    );
     return {
       projectId: metadata.id,
-      isPublished: settingsSnapshot['platform.isPublished'] === true,
-      // An unset full name (empty on the wire) falls back to the short name — matching the
-      // convention the Manage Books project list uses.
-      fullName: fullName.length > 0 ? fullName : name,
-      name,
-      language: readSnapshotString(settingsSnapshot, 'platform.language'),
+      isPublished: false,
+      fullName: metadata.id,
+      name: metadata.id,
+      language: '',
     };
   }
-
-  const pdp = await papi.projectDataProviders.get('platform.base', metadata.id);
-  const [isPublished, fullName, name, language] = await Promise.all([
-    pdp.getSetting('platform.isPublished'),
-    pdp.getSetting('platform.fullName'),
-    pdp.getSetting('platform.name'),
-    pdp.getSetting('platform.language'),
-  ]);
-  return { projectId: metadata.id, isPublished, fullName, name, language };
 }
 
 /**
@@ -79,10 +100,16 @@ async function resolveLocalProjectInfo(
 export async function getLocalProjectsInfo(
   excludePdpFactoryIds: string[],
 ): Promise<LocalProjectInfo[]> {
-  const projectMetadata = await papi.projectLookup.getMetadataForAllProjects({
-    includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
-    excludePdpFactoryIds,
-    includeSettings: [...HOME_PROJECT_SETTING_KEYS],
-  });
-  return Promise.all(projectMetadata.map((data) => resolveLocalProjectInfo(data)));
+  try {
+    const projectMetadata = await papi.projectLookup.getMetadataForAllProjects({
+      includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
+      excludePdpFactoryIds,
+      includeSettings: [...HOME_PROJECT_SETTING_KEYS],
+    });
+    // resolveLocalProjectInfo never rejects, so one bad project cannot fail the whole batch.
+    return await Promise.all(projectMetadata.map((data) => resolveLocalProjectInfo(data)));
+  } catch (e) {
+    logger.warn(`get-local-projects: failed to load the project list: ${getErrorMessage(e)}`);
+    return [];
+  }
 }
