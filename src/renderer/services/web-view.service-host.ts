@@ -44,6 +44,10 @@ import { registerCommand } from '@shared/services/command.service';
 import { dataProviderService } from '@shared/services/data-provider.service';
 import { logger } from '@shared/services/logger.service';
 import { setWorkspaceUpdating } from '@renderer/services/workspace-updating-store';
+import {
+  getLastOpenedProject,
+  setLastOpenedProject,
+} from '@renderer/services/last-opened-project-cache';
 import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import { networkObjectService } from '@shared/services/network-object.service';
@@ -903,21 +907,38 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
  * layout — same code path power mode uses on restore — and renders project content immediately,
  * with no empty-placeholder → reload round-trip.
  *
- * The overlay is driven entirely from the renderer in this flow: shown when we know the target
- * project, hidden once `loadLayout` returns. Because no empty Scripture Editor placeholder ever
- * exists, the picker sees `'no-empty'` and exits without firing `openScriptureEditor`, so no
- * extension-host `open()` runs and no `WILL_START`/`DID_FINISH` events are emitted — the renderer
- * is the single source of truth for the overlay during a power → simple switch.
+ * The overlay is driven entirely from the renderer in this flow: shown synchronously at the very
+ * top of the handler (so it paints before the layout swap starts), and hidden one paint after
+ * `loadLayout` returns (so the new tabs are visible before the overlay disappears, avoiding a flash
+ * of unresolved state). Because no empty Scripture Editor placeholder ever exists, the picker sees
+ * `'no-empty'` and exits without firing `openScriptureEditor`, so no extension-host `open()` runs
+ * and no `WILL_START`/`DID_FINISH` events are emitted — the renderer is the single source of truth
+ * for the overlay during a power → simple switch.
  *
- * Fallback: if no recent project can be resolved (cold start, empty recents), we load the bare
- * `simpleLayout` and let the picker do the slow legacy path. The overlay is then driven by the
- * extension's network events, so we don't set it ourselves in that branch.
+ * Fast path: `getLastOpenedProject` returns the cached id+name (populated reactively from
+ * `useProjectPickerData`). The overlay shows immediately with the right project name and no `await`
+ * precedes the layout swap. This is the common case after any successful previous open.
+ *
+ * Slow path: cold start (no cache yet) — fall back to the async recents-provider + PDP chain
+ * (`tryResolveRecentProjectForSimpleMode`). On success, populate the cache for next time.
+ *
+ * Fallback: if neither cache nor recents can produce a project, load the bare `simpleLayout` and
+ * let the picker do the slow legacy path. The overlay is then driven by the extension's network
+ * events, so we don't set it ourselves in that branch.
  */
 async function handleSwitchToSimpleMode(): Promise<void> {
   const logPerf = (message: string) => logger.info(`[perf:simple-switch] ${message}`);
 
   const tStart = performance.now();
   logPerf('handleSwitchToSimpleMode start');
+
+  const cached = getLastOpenedProject();
+  if (cached) {
+    logPerf(`fast path: using cached project ${cached.id} (${JSON.stringify(cached.name)})`);
+    await runProjectBoundSimpleSwitch(cached.id, cached.name, tStart, logPerf);
+    return;
+  }
+
   const resolved = await tryResolveRecentProjectForSimpleMode();
   logPerf(
     `resolveRecent done at ${(performance.now() - tStart).toFixed(0)} ms (resolved=${!!resolved})`,
@@ -935,10 +956,42 @@ async function handleSwitchToSimpleMode(): Promise<void> {
     return;
   }
 
-  setWorkspaceUpdating(true, resolved.name);
+  // Populate the cache so the next switch can take the fast path.
+  setLastOpenedProject({ id: resolved.id, name: resolved.name });
+  await runProjectBoundSimpleSwitch(resolved.id, resolved.name, tStart, logPerf);
+}
+
+/**
+ * Shared body of the project-bound simple-mode switch.
+ *
+ * The flow is structured around three guaranteed paint cycles so the overlay actually appears (and
+ * is visible long enough to be perceived) rather than being toggled on/off within a single React
+ * commit:
+ *
+ * 1. `setWorkspaceUpdating(true)` — schedule the overlay-visible state change.
+ * 2. `await waitForNextPaint()` — force React to commit and the browser to paint the overlay BEFORE we
+ *    start the layout swap. Without this, both setStates (true + false) would batch around the fast
+ *    `loadLayout` and the overlay would never paint at all.
+ * 3. `await loadLayout(projectBoundLayout)` — swap to the project-bound simple layout. The overlay is
+ *    now on screen covering the swap.
+ * 4. `await waitForNextPaint()` — let the new tabs paint behind the overlay so the user sees them
+ *    appear at the moment the overlay disappears, not a half-painted layout.
+ * 5. `setWorkspaceUpdating(false)` — hide the overlay; the new layout is revealed.
+ */
+async function runProjectBoundSimpleSwitch(
+  projectId: string,
+  projectName: string | undefined,
+  tStart: number,
+  logPerf: (message: string) => void,
+): Promise<void> {
+  setWorkspaceUpdating(true, projectName);
+  // Force the overlay to paint BEFORE we begin the (fast) layout swap. Without this yield, React
+  // 18's automatic batching can merge the upcoming `setWorkspaceUpdating(false)` into the same
+  // commit as the show, and the overlay never appears.
+  await waitForNextPaint();
   try {
     const tLoad = performance.now();
-    const projectBoundLayout = buildSimpleLayoutForProject(resolved.id);
+    const projectBoundLayout = buildSimpleLayoutForProject(projectId);
     // `loadLayout` types its parameter as `LayoutInfo` (Record<string, unknown>) but actually just
     // forwards it to `dockLayoutVar.loadLayout`, which accepts the same `LayoutBase` that
     // `simpleLayout` already uses. Cast to bridge the type gap without changing the public type.
@@ -950,8 +1003,27 @@ async function handleSwitchToSimpleMode(): Promise<void> {
   } catch (err) {
     logger.warn(`Dock layout failed to reload after interface mode change: ${err}`);
   } finally {
+    // Let the new tabs paint behind the overlay before we hide it, so the user sees a smooth
+    // handoff (overlay → tabs) instead of a flash of an unresolved layout.
+    await waitForNextPaint();
     setWorkspaceUpdating(false);
   }
+}
+
+/**
+ * Resolves after the next browser paint. Double `requestAnimationFrame` so we wait one frame for
+ * React to commit + browser to paint, and a second frame to ensure that paint has been flushed
+ * before the caller proceeds. Falls back to immediate resolution in environments that don't provide
+ * `requestAnimationFrame` (some test runners).
+ */
+function waitForNextPaint(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (typeof requestAnimationFrame !== 'function') {
+      resolve();
+      return;
+    }
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
 }
 
 /**
