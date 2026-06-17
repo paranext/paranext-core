@@ -132,7 +132,6 @@ public sealed class ProjectSettingsNames
             { PB_NAME, PT_NAME },
             { PB_VERSIFICATION, PT_VERSIFICATION },
             { PB_IS_EDITABLE, PT_IS_EDITABLE },
-            { PB_STRUCTURE_PROTECTION, PT_STRUCTURE_PROTECTION },
             { PB_TEXT_DIRECTION, PT_TEXT_DIRECTION },
             { PB_VALID_CHARACTERS, PT_VALID_CHARACTERS },
             { PB_INVALID_CHARACTERS, PT_INVALID_CHARACTERS },
@@ -145,6 +144,7 @@ public sealed class ProjectSettingsNames
             { PB_ALLOW_INVISIBLE_CHARACTERS, PT_ALLOW_INVISIBLE_CHARACTERS },
             { PB_MODEL_TEXTS, PT_MODEL_TEXTS },
             { PB_REFERENCED_PROJECTS_AND_RESOURCES, PT_REFERENCED_PROJECTS_AND_RESOURCES },
+            { PB_STRUCTURE_PROTECTION, PT_STRUCTURE_PROTECTION },
         };
 
     private static readonly Dictionary<string, string> s_paratextToPlatformBibleSettingsNames =

@@ -65,6 +65,7 @@ const versificationValidator: ProjectSettingValidator<'platformScripture.versifi
   return valueAsNumber >= 0 && valueAsNumber <= 6 && Number.isInteger(valueAsNumber);
 };
 
+// C# converts Paratext's "T"/"F" to boolean before it reaches this validator
 const structureProtectionValidator: ProjectSettingValidator<
   'platformScripture.structureProtection'
 > = async (newValue: unknown) => typeof newValue === 'boolean';
