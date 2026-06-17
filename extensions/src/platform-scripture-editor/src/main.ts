@@ -1269,8 +1269,8 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
       const key = `platformScriptureEditor.userStructureProtection.${projectId}`;
       try {
         const raw = await papi.storage.readUserData(context.executionToken, key);
-        const parsed: boolean = JSON.parse(raw);
-        return parsed;
+        const parsed = JSON.parse(raw);
+        return typeof parsed === 'boolean' ? parsed : true;
       } catch {
         return true;
       }
