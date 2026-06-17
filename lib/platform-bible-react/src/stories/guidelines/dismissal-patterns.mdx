@@ -1,0 +1,203 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Guidelines/Dismissal Patterns" />
+
+# Dismissal Patterns
+
+When a transient surface is open — a popover, menu, inline editor, panel — something has to
+decide _when it closes again_. "Dismissal" is that behavior. This page defines the **three
+dismissal patterns** we use, when to reach for each, and the one case our stack does **not** handle
+for free: **iframe (webview) boundaries**.
+
+This is a UX pattern, not a component. Most surfaces are built on shadcn/Radix primitives that
+already implement dismissal; your job is to pick the right pattern and wire the Radix props
+accordingly — and to add the iframe supplement when it matters.
+
+> **Scope.** This page is about _which interactions dismiss a surface_. It is **orthogonal to
+> modality** — whether the rest of the UI is inert and focus is trapped. A `Dialog` can be modal
+> _and_ use Explicit dismissal. Modal vs non-modal, touch long-press, and right-click context menus
+> are out of scope here.
+
+---
+
+## Pick a pattern by how transient the surface is
+
+The three patterns differ only in **which interactions dismiss the surface**. Read the table
+top-to-bottom as "least sticky" to "most sticky".
+
+| Pattern                  | Outside press | Escape | Outside scroll | Focus → foreign webview |
+| ------------------------ | :-----------: | :----: | :------------: | :---------------------: |
+| **Light dismissal**      |       ✓       |   ✓    |       ✓        |            ✓            |
+| **Click-away dismissal** |       ✓       |   ✓    |       ✗        |            ✓            |
+| **Explicit dismissal**   |       ✗       |   ✓    |       ✗        |            ✗            |
+
+The last column is **focus moving into a different surface or webview** — _not_ the window merely
+losing focus (alt-tab, DevTools). A plain window switch does not dismiss anything; see
+[the iframe section](#the-iframe-webview-gap).
+
+### Light dismissal
+
+The surface gets out of the way the moment attention moves anywhere else — including a scroll.
+
+- **Use for:** transient/informational popovers, hover cards, non-critical menus.
+- **Don't use for:** anything holding text the user is typing. (And not tooltips/hints — see below.)
+
+### Click-away dismissal
+
+Closes on a deliberate click elsewhere or Escape, but **stays open while the user scrolls** the
+content behind it. This is the right default for popovers and panels that act as a temporary
+"layer" over scrollable content.
+
+- **Use for:** filter panels, detail popovers, secondary controls you might consult _while_
+  scrolling the page behind them.
+- **The scroll column is the whole reason this pattern exists** — it's the difference from Light.
+
+### Explicit dismissal
+
+Only a deliberate action closes it: Escape, a close button, or completing the task (submit /
+select). Outside clicks, scroll, and focus loss are **ignored** so the user never loses in-progress
+work by accident.
+
+- **Use for:** inline editors, comment composers, multi-step forms in a popover — anywhere an
+  accidental outside click would discard work.
+
+### Not on this axis: tooltips & hints
+
+You might expect a fourth, "weakest" pattern for tooltips and hints. It doesn't belong on this
+table. This axis is about which **outside interactions** dismiss an **open, interactive** surface. A
+tooltip/hint is defined by the opposite: it opens on **hover/focus of its trigger** and closes when
+that **hover/focus leaves the trigger** — the withdrawal of what opened it, not an outside
+interaction. None of the columns above is its primary dismiss trigger.
+
+It's also **non-interactive** (you never move the pointer into it — anything you _can_ move into is a
+hover-card or menu, which uses **Light** or **Click-away**), it's fully handled by the
+[`Tooltip`](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/shadcn-tooltip--docs)
+primitive (you use the component rather than choosing and wiring a dismissal recipe), and because
+it's anchored in-document and closes on its trigger losing hover/focus, the iframe/webview machinery
+below **does not apply** to it.
+
+So: for tooltips and hints, reach for the `Tooltip` primitive — not a pattern on this page.
+
+---
+
+## How to wire each pattern
+
+Radix (shadcn) primitives expose the triggers as props on the content element:
+
+| Trigger                 | How                                                                                   |
+| ----------------------- | ------------------------------------------------------------------------------------- |
+| Outside press           | `onPointerDownOutside` / `onInteractOutside` (portal-aware — see the iframe section)  |
+| Escape                  | `onEscapeKeyDown`                                                                     |
+| Outside scroll          | **No Radix prop.** Add a `scroll`/`wheel` listener on the scroll container and close. `onInteractOutside` does _not_ fire on scroll. |
+| Focus → foreign webview | No Radix prop — the focus supplement in the iframe section below                      |
+
+- **Light:** accept Radix's defaults (outside press + Escape), and add a scroll listener to close on
+  ancestor/page scroll.
+- **Click-away:** keep outside-press + Escape, and **don't** add scroll dismissal. Where a Radix
+  primitive dismisses on ancestor scroll by default, suppress it.
+- **Explicit:** call `event.preventDefault()` in `onPointerDownOutside` / `onInteractOutside` so the
+  surface stays open; leave `onEscapeKeyDown` alone (Escape should still work) and drive closing
+  from your own close/submit controls.
+
+---
+
+## Accessibility
+
+Dismissal is a keyboard and screen-reader concern, not just a pointer one:
+
+- **Restore focus on close.** When a surface closes, return focus to the element that opened it
+  (WCAG 2.4.3). Radix primitives do this automatically; a hand-rolled focus supplement (below) runs
+  _outside_ Radix's lifecycle, so it must call `trigger.focus()` on dismiss — otherwise keyboard
+  users are stranded on a closed surface's dead anchor.
+- **Escape closes the topmost surface only.** When surfaces stack (e.g. a popover inside a dialog —
+  supported here via `PopoverPortalContainerProvider`), Escape should dismiss the innermost first.
+  Radix handles this per layer; preserve it rather than adding a global Escape handler.
+- **Don't trap focus unless the surface is modal.** Modal surfaces (`Dialog`) trap focus by design;
+  non-modal surfaces (popover, menu) must not (WCAG 2.1.2). Modality is orthogonal to this axis.
+- **Tooltips/hints** must stay hoverable, be dismissible with Escape, and not disappear on their own
+  while hovered (WCAG 1.4.13). The `Tooltip` primitive handles this.
+
+---
+
+## The iframe (webview) gap
+
+Platform.Bible renders most webviews as **`iframe`s**, and many are **cross-origin and sandboxed**
+(see `src/renderer/services/web-view.service-host.ts`). Two consequences for dismissal:
+
+**1. Pointer dismissal silently fails across a webview.** When a user clicks **into a
+cross-origin/sandboxed iframe, the parent document never receives a `pointerdown`/`mousedown`.** So
+pointer-based outside detection doesn't fire, and a parent popover stays open even though the user
+has clearly moved into a sibling webview.
+
+**2. Don't hand-roll containment against the trigger.** Radix portals content to `document.body`
+(`lib/platform-bible-react/src/components/shadcn-ui/popover.tsx`), so the floating content is **not**
+a DOM descendant of its trigger. A naive `trigger.contains(activeElement)` check therefore reads the
+surface's own content as "outside" and **dismisses itself**. Radix's built-in
+`onInteractOutside`/`onPointerDownOutside` are already portal-aware — use them for same-document
+interactions instead of rolling your own.
+
+### The focus supplement (cross-iframe only)
+
+For the one gap Radix can't see — focus crossing into a _foreign_ webview — supplement with a focus
+check. Measure containment against the surface's **rendered content node** (the portaled
+`PopoverContent` element), not its trigger, and guard against a plain window switch:
+
+```ts
+// `contentEl` is the surface's PORTALED content node (e.g. the PopoverContent element).
+function focusMovedIntoForeignFrame(contentEl: HTMLElement): boolean {
+  const focused = document.activeElement;
+  // Window lost focus entirely (alt-tab, DevTools, browser chrome, another window):
+  // activeElement falls back to <body> or null. That is NOT a move into a sibling
+  // webview, so do not dismiss — otherwise surfaces vanish on every window switch.
+  if (!focused || focused === document.body) return false;
+  // Focus landed on a concrete element (usually an <iframe>). Dismiss only if the
+  // surface's own content does not contain it.
+  return !contentEl.contains(focused);
+}
+// On window 'blur', if focusMovedIntoForeignFrame(contentEl) → dismiss (Light & Click-away only).
+```
+
+Keep a surface's **own embedded webview** (and any nested popover) _inside_ `contentEl`'s subtree so
+the check treats it as inside: portal nested popovers into the content with
+`PopoverPortalContainerProvider` rather than letting them default to `document.body`. Explicit
+dismissal ignores focus loss, so it needs none of this.
+
+Why measure against the content node rather than the trigger? Because `trigger.contains(...)` reads
+the surface's own portaled content as "outside" and self-dismisses. For the same reason we reject
+**pointer-only** detection (blind across cross-origin iframes) and **"any iframe focus dismisses"**
+(a surface's own embedded webview would close it).
+
+### Scroll inside a webview is unobservable
+
+Light is supposed to dismiss on outside scroll, but the parent **cannot observe scroll that happens
+inside a cross-origin webview**. Until the platform forwards webview scroll up to the host, **Light
+surfaces do not dismiss on scroll that occurs inside a foreign webview** — press and focus crossings
+still dismiss them. We deliberately do **not** approximate this from pointer position — treating
+"pointer entered the webview" as a scroll signal would conflate hovering with scrolling and dismiss
+Light surfaces on mere cursor movement. The real fix is the **webview forwarding its scroll events
+to the host** (feasible over the existing channels — `papi.webViewProviders.postMessageToWebView` /
+the reverse path for sandboxed webviews, `window.parent.papi` for same-origin webviews), which is
+not built yet.
+
+### Status
+
+No outside-interaction/dismissal hook exists in `lib/platform-bible-react/src/hooks/` yet, and there
+is no webview scroll-forwarding capability. Until both land, implement the focus supplement
+per-surface following the rule above (against the content node, with the window-switch guard), and
+accept that in-webview scroll won't dismiss a Light surface.
+
+---
+
+## Glossary
+
+- **Outside-interaction dismissal** — umbrella term for closing a surface in response to interaction
+  elsewhere (pointer, Escape, scroll, or focus moving away). Mirrors Radix's `onInteractOutside`.
+- **Light dismissal** — closes on _any_ outside interaction, including scroll. (In UX writing,
+  "light dismissal" is sometimes used generically; here it names this specific pattern.)
+- **Click-away dismissal** — closes on outside press + Escape + focus moving into a foreign webview,
+  but **not** on outside scroll.
+- **Explicit dismissal** — closes only on a deliberate action (Escape, close, submit); ignores
+  outside press, scroll, and focus loss.
+- **Outside (across iframes)** — defined by **containment against the surface's portaled content
+  node**, not its trigger. Focus moving to an element the content node doesn't contain is "outside";
+  the window merely losing focus (`activeElement` is `<body>`/null) is not.
