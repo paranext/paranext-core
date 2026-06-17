@@ -158,7 +158,7 @@ describe('useProjectPickerData', () => {
       });
       expect(result.current.currentProject?.id).toBe('proj-abc');
     },
-    { timeout: 15_000 },
+    15_000,
   );
 
   it('returns allProjects from projectLookupService', async () => {
