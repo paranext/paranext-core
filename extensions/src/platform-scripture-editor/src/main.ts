@@ -367,10 +367,16 @@ async function open(
       options,
     };
 
+    const tOpenAll = performance.now();
+    logger.info(
+      `[perf:simple-switch] extension open() start (interfaceMode=${interfaceMode}, dispatch.kind=${dispatch.kind})`,
+    );
+
     // If in simple interface mode, open/update the model text, bible text, and commentary text panels
     if (interfaceMode === 'simple' && projectForWebView.projectId)
       await openTextConnectionPanels(papi, projectForWebView.projectId);
 
+    const tMainOpen = performance.now();
     const openedWebViewId = await papi.webViews
       .openWebView(
         SCRIPTURE_EDITOR_WEBVIEW_TYPE,
@@ -380,6 +386,9 @@ async function open(
         openWebViewOptions,
       )
       .finally(emitDidFinish);
+    logger.info(
+      `[perf:simple-switch] main editor openWebView done in ${(performance.now() - tMainOpen).toFixed(0)} ms (extension open() total ${(performance.now() - tOpenAll).toFixed(0)} ms)`,
+    );
 
     return openedWebViewId;
   }

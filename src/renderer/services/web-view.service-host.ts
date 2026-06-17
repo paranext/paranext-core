@@ -897,20 +897,30 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
  * behavior (load layout, let the picker do its thing) if recents resolution fails.
  */
 async function handleSwitchToSimpleMode(): Promise<void> {
+  const tStart = performance.now();
+  logger.info('[perf:simple-switch] handleSwitchToSimpleMode start');
   const resolvePromise = tryResolveRecentProjectForSimpleMode();
   let overlayHeld = false;
   try {
     const resolved = await resolvePromise;
+    logger.info(
+      `[perf:simple-switch] resolveRecent done at ${(performance.now() - tStart).toFixed(0)} ms (resolved=${!!resolved})`,
+    );
     if (resolved) {
       setWorkspaceUpdating(true, resolved.name);
       overlayHeld = true;
     }
     try {
+      const tLoad = performance.now();
       await loadLayout();
+      logger.info(
+        `[perf:simple-switch] loadLayout done in ${(performance.now() - tLoad).toFixed(0)} ms (total ${(performance.now() - tStart).toFixed(0)} ms)`,
+      );
     } catch (err) {
       logger.warn(`Dock layout failed to reload after interface mode change: ${err}`);
     }
     if (resolved) {
+      const tOpen = performance.now();
       try {
         // Skip the platform-scripture-editor picker's recents lookup by directly opening the
         // project. The picker still fires from `onDidOpenWebView` but will see the editor is no
@@ -920,9 +930,12 @@ async function handleSwitchToSimpleMode(): Promise<void> {
         // pattern used in platform-bible-toolbar.tsx.
         // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
         await (sendCommand as any)('platformScriptureEditor.openScriptureEditor', resolved.id);
+        logger.info(
+          `[perf:simple-switch] openScriptureEditor done in ${(performance.now() - tOpen).toFixed(0)} ms (total ${(performance.now() - tStart).toFixed(0)} ms)`,
+        );
       } catch (err) {
         logger.warn(
-          `Simple-mode pre-fetch: openScriptureEditor for ${resolved.id} failed; the default picker will retry (${err})`,
+          `Simple-mode pre-fetch: openScriptureEditor for ${resolved.id} failed after ${(performance.now() - tOpen).toFixed(0)} ms; the default picker will retry (${err})`,
         );
       }
     }
