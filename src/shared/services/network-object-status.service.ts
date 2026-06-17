@@ -48,30 +48,26 @@ async function waitForNetworkObject(
     `wait-for-net-obj with details ${JSON.stringify(objectDetailsToMatch)}`,
     timeoutInMS ?? -1,
   );
-  try {
-    // Watch the stream of incoming network objects before getting a snapshot to avoid race conditions
-    const unsub = onDidCreateNetworkObject((networkObjectDetails) => {
-      if (!asyncVar.hasSettled && isSubset(networkObjectDetails, objectDetailsToMatch)) {
-        asyncVar.resolveToValue(networkObjectDetails, false);
-      }
-      if (asyncVar.hasSettled) {
-        unsub();
-      }
-    });
-    // Now check if the needed network object has already been created
-    const existingNetworkObjectDetails = await getAllNetworkObjectDetails();
-    if (!asyncVar.hasSettled) {
-      const match = Object.values(existingNetworkObjectDetails).find((networkObjectDetails) =>
-        isSubset(networkObjectDetails, objectDetailsToMatch),
-      );
-      if (match) {
-        asyncVar.resolveToValue(match, false);
-      }
+  // Watch the stream of incoming network objects before getting a snapshot to avoid race conditions
+  const unsub = onDidCreateNetworkObject((networkObjectDetails) => {
+    if (!asyncVar.hasSettled && isSubset(networkObjectDetails, objectDetailsToMatch)) {
+      asyncVar.resolveToValue(networkObjectDetails, false);
     }
-  } catch (e) {
-    const message = `waitForNetworkObject failed for details ${JSON.stringify(objectDetailsToMatch)}! ${e}`;
-    asyncVar.rejectWithReason(message, true);
-    throw e;
+    if (asyncVar.hasSettled) {
+      unsub();
+    }
+  });
+  // Now check if the needed network object has already been created. If this throws, the rejection
+  // propagates straight to the caller; we deliberately don't reject asyncVar.promise on that path
+  // since it is never returned, and rejecting it would strand an unhandled rejection.
+  const existingNetworkObjectDetails = await getAllNetworkObjectDetails();
+  if (!asyncVar.hasSettled) {
+    const match = Object.values(existingNetworkObjectDetails).find((networkObjectDetails) =>
+      isSubset(networkObjectDetails, objectDetailsToMatch),
+    );
+    if (match) {
+      asyncVar.resolveToValue(match, false);
+    }
   }
   return asyncVar.promise;
 }
