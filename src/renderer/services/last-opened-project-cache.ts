@@ -15,23 +15,25 @@ const STORAGE_KEY = 'platform-bible.lastOpenedProject';
 
 export type LastOpenedProject = { id: string; name?: string };
 
+function isLastOpenedProject(value: unknown): value is { id: string; name?: unknown } {
+  if (!value || typeof value !== 'object') return false;
+  if (!('id' in value)) return false;
+  const { id }: { id: unknown } = value;
+  return typeof id === 'string' && id.length > 0;
+}
+
+function readName(value: { name?: unknown }): string | undefined {
+  const { name } = value;
+  return typeof name === 'string' && name.length > 0 ? name : undefined;
+}
+
 export function getLastOpenedProject(): LastOpenedProject | undefined {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return undefined;
     const parsed: unknown = JSON.parse(raw);
-    if (
-      parsed &&
-      typeof parsed === 'object' &&
-      'id' in parsed &&
-      typeof (parsed as { id: unknown }).id === 'string' &&
-      (parsed as { id: string }).id.length > 0
-    ) {
-      const id = (parsed as { id: string }).id;
-      const rawName = (parsed as { name?: unknown }).name;
-      const name = typeof rawName === 'string' && rawName.length > 0 ? rawName : undefined;
-      return { id, name };
-    }
+    if (!isLastOpenedProject(parsed)) return undefined;
+    return { id: parsed.id, name: readName(parsed) };
   } catch {
     // unavailable or malformed — fall through
   }

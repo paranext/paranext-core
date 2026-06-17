@@ -1,40 +1,40 @@
-import { BoxData, PanelData } from 'rc-dock';
+import { BoxBase, PanelBase } from 'rc-dock';
 import { SavedTabInfo } from '@shared/models/docking-framework.model';
 import { buildSimpleLayoutForProject, SIMPLE_LAYOUT_TAB_IDS } from './simple-layout.builder';
 import { SIMPLE_LAYOUT_TAB_ID } from './simple-layout.tab-ids';
 
 const PROJECT_ID = 'test-project-id-1234';
 
-function isBoxData(node: BoxData | PanelData): node is BoxData {
+function isBoxBase(node: BoxBase | PanelBase): node is BoxBase {
   return 'children' in node;
 }
 
-function asBoxData(node: BoxData | PanelData): BoxData {
-  if (!isBoxData(node)) throw new Error('Expected BoxData node with children');
+function asBoxBase(node: BoxBase | PanelBase): BoxBase {
+  if (!isBoxBase(node)) throw new Error('Expected BoxBase node with children');
   return node;
 }
 
-function isPanelData(node: BoxData | PanelData): node is PanelData {
+function isPanelBase(node: BoxBase | PanelBase): node is PanelBase {
   return 'tabs' in node;
 }
 
-function asPanelData(node: BoxData | PanelData): PanelData {
-  if (!isPanelData(node)) throw new Error('Expected PanelData node with tabs');
+function asPanelBase(node: BoxBase | PanelBase): PanelBase {
+  if (!isPanelBase(node)) throw new Error('Expected PanelBase node with tabs');
   return node;
 }
 
-function getColumns(layout: ReturnType<typeof buildSimpleLayoutForProject>): BoxData[] {
-  const dockbox = asBoxData(layout.dockbox);
-  return dockbox.children.map(asBoxData);
+function getColumns(layout: ReturnType<typeof buildSimpleLayoutForProject>): BoxBase[] {
+  if (!layout.dockbox) throw new Error('Expected layout.dockbox to be defined');
+  return layout.dockbox.children.map(asBoxBase);
 }
 
 function getTabs(layout: ReturnType<typeof buildSimpleLayoutForProject>): SavedTabInfo[] {
   const collected: SavedTabInfo[] = [];
   const columns = getColumns(layout);
   columns.forEach((col) => {
-    const panel = asPanelData(col.children[0]);
+    const panel = asPanelBase(col.children[0]);
     panel.tabs.forEach((tab) => {
-      // The builder produces SavedTabInfo entries internally but rc-dock's TabData type
+      // The builder produces SavedTabInfo entries internally but rc-dock's TabBase type
       // doesn't expose that — round-trip via unknown to recover the original shape.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       collected.push(tab as unknown as SavedTabInfo);
@@ -63,7 +63,7 @@ describe('simple-layout.builder', () => {
     const columns = getColumns(layout);
 
     it('produces a horizontal dockbox with exactly 3 columns', () => {
-      expect(asBoxData(layout.dockbox).mode).toBe('horizontal');
+      expect(layout.dockbox?.mode).toBe('horizontal');
       expect(columns).toHaveLength(3);
     });
 
