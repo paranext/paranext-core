@@ -1263,6 +1263,69 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
+  const getUserStructureProtectionPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.getUserStructureProtection',
+    async (projectId: string): Promise<boolean> => {
+      const key = `platformScriptureEditor.userStructureProtection.${projectId}`;
+      try {
+        const raw = await papi.storage.readUserData(context.executionToken, key);
+        const parsed: boolean = JSON.parse(raw);
+        return parsed;
+      } catch {
+        return true;
+      }
+    },
+    {
+      method: {
+        summary: 'Get the user structure protection preference for a project',
+        params: [
+          {
+            name: 'projectId',
+            required: true,
+            summary: 'The project ID to get the structure protection preference for',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'Whether structure protection is enabled for the project (defaults to true)',
+          schema: { type: 'boolean' },
+        },
+      },
+    },
+  );
+
+  const setUserStructureProtectionPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.setUserStructureProtection',
+    async (projectId: string, value: boolean): Promise<void> => {
+      const key = `platformScriptureEditor.userStructureProtection.${projectId}`;
+      await papi.storage.writeUserData(context.executionToken, key, JSON.stringify(value));
+    },
+    {
+      method: {
+        summary: 'Set the user structure protection preference for a project',
+        params: [
+          {
+            name: 'projectId',
+            required: true,
+            summary: 'The project ID to set the structure protection preference for',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'value',
+            required: true,
+            summary: 'Whether to enable structure protection for the project',
+            schema: { type: 'boolean' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
   // Default active project picker for simple layout. Subscribes to web-view-open and
   // sync-completion events and attempts to fill the empty Scripture Editor with the
   // most-recently-active editable project. Re-runs on each subscribed event; concurrent
@@ -1289,6 +1352,8 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await bibleTextsPanelWebViewProviderPromise,
     await commentariesPanelWebViewProviderPromise,
     await openResourceTextPromise,
+    await getUserStructureProtectionPromise,
+    await setUserStructureProtectionPromise,
     {
       dispose: async () => {
         selectionChangedEventEmitter?.dispose();
