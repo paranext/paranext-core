@@ -88,7 +88,10 @@ import {
   Unsubscriber,
   UnsubscriberAsync,
 } from 'platform-bible-utils';
-import { buildSimpleLayoutForProject } from '@renderer/components/docking/simple-layout.builder';
+import {
+  buildSimpleLayoutForProject,
+  SIMPLE_LAYOUT_TAB_IDS,
+} from '@renderer/components/docking/simple-layout.builder';
 import {
   closeOpenUsersnapForm,
   isUsersnapFormCurrentlyOpen,
@@ -989,6 +992,14 @@ async function runProjectBoundSimpleSwitch(
   // 18's automatic batching can merge the upcoming `setWorkspaceUpdating(false)` into the same
   // commit as the show, and the overlay never appears.
   await waitForNextPaint();
+
+  // Start tracking webview-resolved events BEFORE `loadLayout` fires the async
+  // `retrieveWebViewContent` calls — otherwise the events for fast-resolving tabs can fire before
+  // we subscribe and we'd miss them. Especially important on subsequent simple-mode switches,
+  // where the previous switch's resolved titles are still in the dock layout and a `tabTitle`
+  // poll would resolve immediately with stale (old-project) values before the new updates land.
+  const tabsResolved = trackSimpleLayoutTabsResolved();
+
   try {
     const tLoad = performance.now();
     const projectBoundLayout = buildSimpleLayoutForProject(projectId);
@@ -1000,14 +1011,84 @@ async function runProjectBoundSimpleSwitch(
     logPerf(
       `project-bound loadLayout done in ${(performance.now() - tLoad).toFixed(0)} ms (total ${(performance.now() - tStart).toFixed(0)} ms)`,
     );
+    const tWait = performance.now();
+    await tabsResolved.promise;
+    logPerf(`tab titles resolved in ${(performance.now() - tWait).toFixed(0)} ms`);
   } catch (err) {
     logger.warn(`Dock layout failed to reload after interface mode change: ${err}`);
+    tabsResolved.dispose();
   } finally {
     // Let the new tabs paint behind the overlay before we hide it, so the user sees a smooth
     // handoff (overlay → tabs) instead of a flash of an unresolved layout.
     await waitForNextPaint();
     setWorkspaceUpdating(false);
   }
+}
+
+/**
+ * Max time to wait for the simple-layout tabs to finish loading their titles before hiding the
+ * overlay anyway. The overlay should never get stuck if a tab's webview provider misbehaves — the
+ * user is better off seeing a tab with an unresolved title than no UI at all.
+ */
+const SIMPLE_LAYOUT_TABS_RESOLVED_TIMEOUT_MS = 5000;
+
+/**
+ * Sets up a tracker that resolves once every simple-layout tab has fired an open- or update-webview
+ * event — meaning the tab's data has been replaced with the freshly-loaded webview definition (real
+ * title, real content, real projectId), not the `%tab_title_unknown%` placeholder that
+ * `loadWebViewTab` puts in place while `retrieveWebViewContent` is in flight.
+ *
+ * Subscribing BEFORE the caller runs `loadLayout` is critical: `loadLayout` synchronously installs
+ * the placeholder tab definitions and then kicks off the async webview fetches whose results land
+ * via these events. Subscribing afterward would race the fastest webview and miss its event.
+ *
+ * Falls back to resolving after {@link SIMPLE_LAYOUT_TABS_RESOLVED_TIMEOUT_MS} if any tab never
+ * fires (e.g. its webview provider hangs) — better to drop the overlay than wedge the UI.
+ */
+function trackSimpleLayoutTabsResolved(): { promise: Promise<void>; dispose: () => void } {
+  const remaining = new Set<string>(SIMPLE_LAYOUT_TAB_IDS);
+  let unsubOpen: (() => void) | undefined;
+  let unsubUpdate: (() => void) | undefined;
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  let finished = false;
+  let resolveFn: (() => void) | undefined;
+
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    if (timeoutHandle !== undefined) {
+      clearTimeout(timeoutHandle);
+      timeoutHandle = undefined;
+    }
+    unsubOpen?.();
+    unsubOpen = undefined;
+    unsubUpdate?.();
+    unsubUpdate = undefined;
+    resolveFn?.();
+  };
+
+  const promise = new Promise<void>((resolve) => {
+    resolveFn = resolve;
+  });
+
+  const handleEvent = ({ webView }: { webView: { id: string } }) => {
+    if (!remaining.delete(webView.id)) return;
+    if (remaining.size === 0) finish();
+  };
+
+  unsubOpen = onDidOpenWebView(handleEvent);
+  unsubUpdate = onDidUpdateWebView(handleEvent);
+
+  timeoutHandle = setTimeout(() => {
+    if (remaining.size > 0) {
+      logger.info(
+        `[perf:simple-switch] tab-resolved tracker timed out after ${SIMPLE_LAYOUT_TABS_RESOLVED_TIMEOUT_MS} ms — ${remaining.size} tab(s) still pending, hiding overlay anyway`,
+      );
+    }
+    finish();
+  }, SIMPLE_LAYOUT_TABS_RESOLVED_TIMEOUT_MS);
+
+  return { promise, dispose: finish };
 }
 
 /**
