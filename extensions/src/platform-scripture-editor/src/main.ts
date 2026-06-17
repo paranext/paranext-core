@@ -1263,15 +1263,21 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
+  const getUserStructureProtectionKey = (projectId: string) =>
+    `platformScriptureEditor.userStructureProtection.${projectId}`;
+
   const getUserStructureProtectionPromise = papi.commands.registerCommand(
     'platformScriptureEditor.getUserStructureProtection',
     async (projectId: string): Promise<boolean> => {
-      const key = `platformScriptureEditor.userStructureProtection.${projectId}`;
+      const key = getUserStructureProtectionKey(projectId);
       try {
         const raw = await papi.storage.readUserData(context.executionToken, key);
         const parsed = JSON.parse(raw);
         return typeof parsed === 'boolean' ? parsed : true;
-      } catch {
+      } catch (e) {
+        logger.warn(
+          `getUserStructureProtection: failed to read or parse structure protection for project ${projectId}: ${getErrorMessage(e)}`,
+        );
         return true;
       }
     },
@@ -1298,7 +1304,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   const setUserStructureProtectionPromise = papi.commands.registerCommand(
     'platformScriptureEditor.setUserStructureProtection',
     async (projectId: string, value: boolean): Promise<void> => {
-      const key = `platformScriptureEditor.userStructureProtection.${projectId}`;
+      const key = getUserStructureProtectionKey(projectId);
       await papi.storage.writeUserData(context.executionToken, key, JSON.stringify(value));
     },
     {
