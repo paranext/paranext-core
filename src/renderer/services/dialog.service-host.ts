@@ -21,6 +21,7 @@ import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
 import { serializeRequestType } from '@shared/utils/util';
+import { createCachedInitializer } from '@shared/utils/cached-initializer';
 import {
   aggregateUnsubscriberAsyncs,
   isLocalizeKey,
@@ -49,16 +50,10 @@ type DialogRequest<DialogTabType extends DialogTabTypes> = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const dialogRequests = new Map<string, DialogRequest<any>>();
 
-let initializationPromise: Promise<void>;
 /** Sets up the dialog service. Runs only once */
-async function initialize(): Promise<void> {
-  if (!initializationPromise) {
-    initializationPromise = (async () => {
-      await webViewService.initialize();
-    })();
-  }
-  return initializationPromise;
-}
+const initialize = createCachedInitializer(async () => {
+  await webViewService.initialize();
+});
 
 /**
  * Determine whether there is an unresolved dialog request for a specified dialog id

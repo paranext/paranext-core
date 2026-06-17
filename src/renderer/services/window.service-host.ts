@@ -10,6 +10,8 @@ import {
   FocusSubjectTab,
 } from '@shared/services/window.service-model';
 import { dataProviderService } from '@shared/services/data-provider.service';
+import { logger } from '@shared/services/logger.service';
+import { createCachedInitializer } from '@shared/utils/cached-initializer';
 import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import {
@@ -244,28 +246,22 @@ async function detectFocus(): Promise<FocusSubject | FocusSubjectElement | undef
   return { focusType: 'element', element: activeElement };
 }
 
-let initializationPromise: Promise<void>;
 /** Need to run initialize before using this */
 let dataProvider: IWindowService;
-export async function initialize(): Promise<void> {
-  if (!initializationPromise) {
-    initializationPromise = new Promise<void>((resolve, reject) => {
-      const executor = async () => {
-        try {
-          dataProvider = await dataProviderService.registerEngine(
-            windowServiceProviderName,
-            new WindowDataProviderEngine(),
-          );
-          resolve();
-        } catch (error) {
-          reject(error);
-        }
-      };
-      executor();
-    });
+export const initialize = createCachedInitializer(async () => {
+  const engine = new WindowDataProviderEngine();
+  try {
+    dataProvider = await dataProviderService.registerEngine(windowServiceProviderName, engine);
+  } catch (error) {
+    // Dispose so the engine's window focus listeners don't leak if initialization is retried
+    await engine
+      .dispose()
+      .catch((e) =>
+        logger.warn(`Failed to dispose WindowDataProviderEngine after failed init: ${e}`),
+      );
+    throw error;
   }
-  return initializationPromise;
-}
+});
 
 /** This is an internal-only export for testing purposes and should not be used in development */
 export const testingWindowService = {
