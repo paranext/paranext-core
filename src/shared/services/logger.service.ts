@@ -6,6 +6,23 @@ import chalk from 'chalk';
 // Abstract and shim the logger
 setUpLogger(log);
 
+// In the renderer, the default console transport leaves `data` as a multi-element array
+// (`[formatPrefix, message]`) when calling `console.log(...data)`. Electron's
+// `webContents.on('console-message')` event — the mechanism `spyRendererConsole` uses in main to
+// relay renderer logs into `main.log` — does not preserve multi-argument console calls; the
+// timestamp prefix at `data[0]` is dropped, leaving `main.log` without timestamps for renderer
+// logs. Push a final transform that collapses `data` into a single string so the relay carries the
+// full formatted line.
+if (isRenderer() && log.transports.console) {
+  const collapseDataToSingleString = ({ data }: { data: unknown[] }) => [
+    data.map((entry) => (typeof entry === 'string' ? entry : String(entry))).join(' '),
+  ];
+  log.transports.console.transforms = [
+    ...(log.transports.console.transforms ?? []),
+    collapseDataToSingleString,
+  ];
+}
+
 // Adjust some log settings that should not be set up in the renderer process
 if (!isRenderer()) {
   // Renderer doesn't log to file. Sends to main to log in file

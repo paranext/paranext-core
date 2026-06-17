@@ -40,7 +40,7 @@ import {
   WebViewId,
   WebViewType,
 } from '@shared/models/web-view.model';
-import { registerCommand, sendCommand } from '@shared/services/command.service';
+import { registerCommand } from '@shared/services/command.service';
 import { dataProviderService } from '@shared/services/data-provider.service';
 import { logger } from '@shared/services/logger.service';
 import { setWorkspaceUpdating } from '@renderer/services/workspace-updating-store';
@@ -890,57 +890,38 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
 }
 
 /**
- * Drives the power → simple transition from the renderer instead of relying on the extension-host
- * picker chain. Resolves the most-recent project in parallel with the layout swap, shows the
- * "Loading layout for X" overlay immediately, calls `openScriptureEditor` directly (skipping the
- * picker's recents lookup), and tears the overlay down when finished. Falls back to the original
- * behavior (load layout, let the picker do its thing) if recents resolution fails.
+ * Drives the power → simple transition from the renderer. Resolves the most-recent project in
+ * parallel with the layout swap so we can show the "Loading layout for X" overlay immediately, then
+ * runs the layout swap. The actual project open is performed by the platform-scripture-editor
+ * default-project picker, which fires off `onDidOpenWebView` for the empty placeholder tab in
+ * `simpleLayout` and opens the same most-recent project — so doing it here too just causes a race
+ * where every webview opens twice. The overlay is torn down by the extension's `onDidSwitchProject`
+ * network event (see `workspace-updating-service.ts`) once the picker's `open()` flow completes.
  */
 async function handleSwitchToSimpleMode(): Promise<void> {
+  const logPerf = (message: string) => logger.info(`[perf:simple-switch] ${message}`);
+
   const tStart = performance.now();
-  logger.info('[perf:simple-switch] handleSwitchToSimpleMode start');
-  const resolvePromise = tryResolveRecentProjectForSimpleMode();
-  let overlayHeld = false;
+  logPerf('handleSwitchToSimpleMode start');
+  const resolved = await tryResolveRecentProjectForSimpleMode();
+  logPerf(
+    `resolveRecent done at ${(performance.now() - tStart).toFixed(0)} ms (resolved=${!!resolved})`,
+  );
+  // Show the overlay immediately if we know which project will load. The extension's
+  // `onWillSwitchProject` event will set it again with the same name (no-op) when the picker's
+  // `open()` runs; `onDidSwitchProject` clears it when the open finishes.
+  if (resolved) setWorkspaceUpdating(true, resolved.name);
   try {
-    const resolved = await resolvePromise;
-    logger.info(
-      `[perf:simple-switch] resolveRecent done at ${(performance.now() - tStart).toFixed(0)} ms (resolved=${!!resolved})`,
+    const tLoad = performance.now();
+    await loadLayout();
+    logPerf(
+      `loadLayout done in ${(performance.now() - tLoad).toFixed(0)} ms (total ${(performance.now() - tStart).toFixed(0)} ms)`,
     );
-    if (resolved) {
-      setWorkspaceUpdating(true, resolved.name);
-      overlayHeld = true;
-    }
-    try {
-      const tLoad = performance.now();
-      await loadLayout();
-      logger.info(
-        `[perf:simple-switch] loadLayout done in ${(performance.now() - tLoad).toFixed(0)} ms (total ${(performance.now() - tStart).toFixed(0)} ms)`,
-      );
-    } catch (err) {
-      logger.warn(`Dock layout failed to reload after interface mode change: ${err}`);
-    }
-    if (resolved) {
-      const tOpen = performance.now();
-      try {
-        // Skip the platform-scripture-editor picker's recents lookup by directly opening the
-        // project. The picker still fires from `onDidOpenWebView` but will see the editor is no
-        // longer empty (this command's `open()` flow replaces the placeholder with a real editor)
-        // and no-op. Use a string command name to avoid coupling this service to extension types.
-        // This command comes from an extension and is not typed in CommandHandlers — match the
-        // pattern used in platform-bible-toolbar.tsx.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-        await (sendCommand as any)('platformScriptureEditor.openScriptureEditor', resolved.id);
-        logger.info(
-          `[perf:simple-switch] openScriptureEditor done in ${(performance.now() - tOpen).toFixed(0)} ms (total ${(performance.now() - tStart).toFixed(0)} ms)`,
-        );
-      } catch (err) {
-        logger.warn(
-          `Simple-mode pre-fetch: openScriptureEditor for ${resolved.id} failed after ${(performance.now() - tOpen).toFixed(0)} ms; the default picker will retry (${err})`,
-        );
-      }
-    }
-  } finally {
-    if (overlayHeld) setWorkspaceUpdating(false);
+  } catch (err) {
+    logger.warn(`Dock layout failed to reload after interface mode change: ${err}`);
+    // If the layout swap failed, the picker won't fire and `onDidSwitchProject` will never arrive
+    // to clear the overlay. Clear it here so the user isn't stuck.
+    if (resolved) setWorkspaceUpdating(false);
   }
 }
 

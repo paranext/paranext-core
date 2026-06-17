@@ -1,5 +1,10 @@
 import { getNetworkEvent } from '@shared/services/network.service';
+import { logger } from '@shared/services/logger.service';
 import { setWorkspaceUpdating } from './workspace-updating-store';
+
+function logPerf(message: string): void {
+  logger.info(`[perf:simple-switch] ${message}`);
+}
 
 // String values must match PROJECT_SWITCH_WILL_START_EVENT / PROJECT_SWITCH_DID_FINISH_EVENT in
 // extensions/src/platform-scripture-editor/src/main.ts
@@ -14,11 +19,15 @@ type ProjectSwitchWillStartPayload = { projectName?: string };
  */
 export function initWorkspaceUpdatingService(): () => void {
   const unsubWill = getNetworkEvent<ProjectSwitchWillStartPayload>(PROJECT_SWITCH_WILL_START_EVENT)(
-    (payload) => setWorkspaceUpdating(true, payload?.projectName),
+    (payload) => {
+      logPerf(`onWillSwitchProject received (projectName=${JSON.stringify(payload?.projectName)})`);
+      setWorkspaceUpdating(true, payload?.projectName);
+    },
   );
-  const unsubDid = getNetworkEvent(PROJECT_SWITCH_DID_FINISH_EVENT)(() =>
-    setWorkspaceUpdating(false),
-  );
+  const unsubDid = getNetworkEvent(PROJECT_SWITCH_DID_FINISH_EVENT)(() => {
+    logPerf('onDidSwitchProject received');
+    setWorkspaceUpdating(false);
+  });
   return () => {
     unsubWill();
     unsubDid();
