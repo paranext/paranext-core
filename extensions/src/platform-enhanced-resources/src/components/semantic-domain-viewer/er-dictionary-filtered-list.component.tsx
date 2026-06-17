@@ -22,7 +22,7 @@ import {
   Z_INDEX_MODAL,
   cn,
 } from 'platform-bible-react';
-import { type IndexedListItem, type SemanticDomain } from 'platform-bible-react/internal';
+import { type IndexedListItem, type SemanticDomain } from 'platform-bible-react/experimental';
 import { ArrowUp, ChevronRight, MoreHorizontal } from 'lucide-react';
 import type { ErDictionaryFilteredListProps } from './er-dictionary-filtered-list.types';
 

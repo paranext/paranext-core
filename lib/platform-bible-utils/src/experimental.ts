@@ -1,6 +1,6 @@
 // Unstable API surface for platform-bible-utils.
 //
-// Everything exported here is importable from `platform-bible-utils/internal`
+// Everything exported here is importable from `platform-bible-utils/experimental`
 // but carries NO stability guarantee — symbols may change shape, move, or
 // disappear at any time without a deprecation cycle. Extensions may use
 // it, but should accept the maintenance burden of breaking changes.

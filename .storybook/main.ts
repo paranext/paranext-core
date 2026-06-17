@@ -132,12 +132,12 @@ const config: StorybookConfig = {
         ...webpackConfig.resolve.alias,
         '@': join(__dirname, '../lib/platform-bible-react/src'),
         // Resolve the package from source. Exact-match ($) keys are required: the bare
-        // `platform-bible-react` rule would otherwise intercept the `platform-bible-react/internal`
-        // secondary entry point and mangle it to `src/index.ts/internal`, bypassing the package's
+        // `platform-bible-react` rule would otherwise intercept the `platform-bible-react/experimental`
+        // secondary entry point and mangle it to `src/index.ts/experimental`, bypassing the package's
         // `exports` map. Each entry point is aliased to its own source file.
-        'platform-bible-react/internal$': join(
+        'platform-bible-react/experimental$': join(
           __dirname,
-          '../lib/platform-bible-react/src/internal.ts',
+          '../lib/platform-bible-react/src/experimental.ts',
         ),
         'platform-bible-react$': join(__dirname, '../lib/platform-bible-react/src/index.ts'),
         // `@papi/*` are runtime externals injected by the extension host - there is no npm package

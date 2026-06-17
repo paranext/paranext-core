@@ -1,5 +1,5 @@
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from 'platform-bible-react';
-import { type IndexedListItem, type SemanticDomain } from 'platform-bible-react/internal';
+import { type IndexedListItem, type SemanticDomain } from 'platform-bible-react/experimental';
 import type { LocalizedStringValue } from 'platform-bible-utils';
 import ErDictionaryFilteredList from './er-dictionary-filtered-list.component';
 import {

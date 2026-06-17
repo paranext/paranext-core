@@ -13,7 +13,7 @@ import {
   type ProjectSelectorProjectPair,
   type ProjectSelectorProject,
   type ScopeWithRange,
-} from 'platform-bible-react/internal';
+} from 'platform-bible-react/experimental';
 import {
   defaultScrRef,
   formatReplacementString,

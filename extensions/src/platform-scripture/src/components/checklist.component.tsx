@@ -13,7 +13,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { LinkedScrRefButton } from 'platform-bible-react/internal';
+import { LinkedScrRefButton } from 'platform-bible-react/experimental';
 import { AlertTriangle, Book, BookOpen, Eye, EyeOff, Pencil, X } from 'lucide-react';
 import { useCallback, useMemo, useState, type CSSProperties } from 'react';
 import type { SerializedVerseRef } from '@sillsdev/scripture';

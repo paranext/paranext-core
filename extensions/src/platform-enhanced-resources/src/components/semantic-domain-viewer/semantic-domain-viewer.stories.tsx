@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { useCallback, useState } from 'react';
-import type { SemanticDomain } from 'platform-bible-react/internal';
+import type { SemanticDomain } from 'platform-bible-react/experimental';
 import { Button } from 'platform-bible-react';
 import { getLocalizedStrings } from '../../../../../../.storybook/localization.utils';
 import {

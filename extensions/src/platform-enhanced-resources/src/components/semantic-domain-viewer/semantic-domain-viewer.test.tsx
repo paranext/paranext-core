@@ -23,7 +23,7 @@ import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import type { ComponentProps } from 'react';
-import type { SemanticDomain } from 'platform-bible-react/internal';
+import type { SemanticDomain } from 'platform-bible-react/experimental';
 import {
   SemanticDomainViewer,
   type SemanticDomainFilteredItem,

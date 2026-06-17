@@ -50,7 +50,7 @@ import {
   ProjectSelector,
   ProjectSelectorLocalizedStrings,
   ProjectSelectorProject,
-} from 'platform-bible-react/internal';
+} from 'platform-bible-react/experimental';
 import { ManageBooksSidebar } from './manage-books-sidebar.component';
 import {
   BookGridGroupBy,
