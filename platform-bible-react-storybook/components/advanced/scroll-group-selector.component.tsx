@@ -3,7 +3,7 @@ import {
   LanguageStrings,
   ScrollGroupId,
 } from 'platform-bible-utils';
-import { DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS } from 'platform-bible-utils/internal';
+import { DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS } from 'platform-bible-utils/experimental';
 import {
   Select,
   SelectContent,
