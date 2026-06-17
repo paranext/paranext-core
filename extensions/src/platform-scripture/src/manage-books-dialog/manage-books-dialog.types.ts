@@ -28,13 +28,13 @@ export type ManageBooksImportStrategy = 'replaceEntireBooks' | 'nonExistingChapt
 /**
  * Strategy for resolving conflicts when copying into a project that already has the book.
  *
- * Mirrors {@link ManageBooksImportStrategy}. Vladimir review item 16 asked Copy to surface the same
- * three-way confirmation Import does (Cancel / Replace entire books / Copy non-existing chapters).
- * The frontend distinguishes the two paths so the wiring layer can pass the chosen strategy to the
- * backend once the C# side accepts it. Today the `copyBooks` PAPI method has no strategy parameter
- * (CopyBooksOrchestrator unconditionally writes the full book), so both choices currently route
- * through the same `copyBooks` call and the backend behaves as `replaceEntireBooks` regardless —
- * matching the same gap Sebastian flagged for Import (#15). See TODO in the web-view adapter.
+ * Mirrors {@link ManageBooksImportStrategy}. Copy surfaces the same three-way confirmation Import
+ * does (Cancel / Replace entire books / Copy non-existing chapters). The frontend distinguishes the
+ * two paths so the wiring layer can pass the chosen strategy to the backend once the C# side
+ * accepts it. Today the `copyBooks` PAPI method has no strategy parameter (CopyBooksOrchestrator
+ * unconditionally writes the full book), so both choices currently route through the same
+ * `copyBooks` call and the backend behaves as `replaceEntireBooks` regardless — the same gap that
+ * exists for Import. See TODO in the web-view adapter.
  */
 export type ManageBooksCopyStrategy = 'replaceEntireBooks' | 'nonExistingChapters';
 
@@ -94,9 +94,8 @@ export type ManageBooksDialogProject = {
   isResource?: boolean;
   /**
    * Locale-stable versification id for the project (the numeric `ScrVersType` as a string).
-   * Sebastian UX new-requirement 3 (2026-06-12): forwarded to the Create "Based on"
-   * `<ProjectSelector>` so it can group projects by versification with the target's versification
-   * pinned to the top.
+   * Forwarded to the Create "Based on" `<ProjectSelector>` so it can group projects by
+   * versification with the target's versification pinned to the top.
    */
   versificationId?: string;
   /**
@@ -186,10 +185,10 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_header_projectLabel%',
   '%manageBooks_header_subtitle%',
   '%manageBooks_header_subtitleNoVersification%',
-  // Vladimir review item 21 (2026-05-06): the header subtitle's `{2}` placeholder used to
-  // resolve to the raw numeric `ScrVersType` enum value (e.g. "4"). It now resolves to one of
-  // these localized names via `versificationLabelKey()`; the surrounding template appends
-  // "Versification" so the final reads e.g. "{0} books in {1} ⋅ English Versification".
+  // The header subtitle's `{2}` placeholder resolves to one of these localized versification names
+  // via `versificationLabelKey()` (not the raw numeric `ScrVersType` enum value); the surrounding
+  // template appends "Versification" so the final reads e.g. "{0} books in {1} ⋅ English
+  // Versification".
   '%manageBooks_versification_original%',
   '%manageBooks_versification_septuagint%',
   '%manageBooks_versification_vulgate%',
@@ -208,9 +207,8 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_create_method_referenceText%',
   '%manageBooks_create_referenceProjectPlaceholder%',
   '%manageBooks_create_basedOnInfo%',
-  // Sebastian review item 27 (2026-05-06): in Create > Based on, books that do
-  // not exist in the reference project are disabled in the grid with this
-  // tooltip ("Not in {0}", where {0} is the reference project's shortName).
+  // In Create > Based on, books that do not exist in the reference project are disabled in the grid
+  // with this tooltip ("Not in {0}", where {0} is the reference project's shortName).
   '%manageBooks_create_book_notInReference%',
   // Copy mode
   '%manageBooks_copy_fromLabel%',
@@ -225,7 +223,7 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_copy_confirmBodyWithBooks_other%',
   '%manageBooks_copy_confirmReplace%',
   '%manageBooks_copy_confirmCancel%',
-  // Vladimir review #16: Copy gets the same 3-way conflict prompt as Import.
+  // Copy gets the same 3-way conflict prompt as Import.
   '%manageBooks_copy_onlyNonExistingChapters%',
   // Per-action empty states
   '%manageBooks_create_emptyState_allPresent%',
@@ -259,9 +257,9 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_filter_state_older%',
   '%manageBooks_filter_state_same%',
   '%manageBooks_filter_state_undetermined%',
-  // Sebastian review item 8 (2026-05-06): the View / Import presence-filter chip rows were
-  // replaced with a single Filter-icon button that opens a DropdownMenu of radio items. These
-  // two strings localize the trigger's aria-label/title and the menu's section header.
+  // The View / Import presence-filter chip rows were replaced with a single Filter-icon button that
+  // opens a DropdownMenu of radio items. These two strings localize the trigger's aria-label/title
+  // and the menu's section header.
   '%manageBooks_filter_buttonAriaLabel%',
   '%manageBooks_filter_menuLabel%',
   // Selection / book grid
@@ -312,9 +310,8 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_import_overlapTitle%',
   '%manageBooks_import_overlapBody%',
   '%manageBooks_import_overlapDismiss%',
-  // Sebastian review item 22 (2026-05-06): Import grid renders an empty body until the user
-  // attaches files; this is the empty-state message that replaces the previous "all books in
-  // canon" universe.
+  // Import grid renders an empty body until the user attaches files; this is the empty-state
+  // message that replaces the previous "all books in canon" universe.
   '%manageBooks_import_emptyState_addFiles%',
   // Delete confirm
   '%manageBooks_delete_confirmTitle%',
@@ -324,10 +321,9 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_delete_confirmBodyAllShared%',
   '%manageBooks_delete_confirmCancel%',
   '%manageBooks_delete_confirmAccept%',
-  // Sebastian review item 26 (2026-05-06, FE half): runDelete refreshes the destination book set
-  // before issuing the delete; if the user's selection contains books that have already been
-  // removed in another tab/window, this localized warning surfaces the skipped count via a
-  // sonner toast.
+  // runDelete refreshes the destination book set before issuing the delete; if the user's
+  // selection contains books that have already been removed in another tab/window, this localized
+  // warning surfaces the skipped count via a sonner toast.
   '%manageBooks_delete_alreadyDeletedWarning%',
   // Create prompts (versification / missing model books)
   '%manageBooks_create_versificationMismatchTitle%',
@@ -393,8 +389,7 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_sidebar_delete_label%',
   '%manageBooks_sidebar_delete_subtitle%',
   // Read-only target — Create / Copy / Import / Delete are disabled when the active project is
-  // not editable (Sebastian item 18). The localized string is the tooltip body. `{0}` is the
-  // project's short name.
+  // not editable. The localized string is the tooltip body. `{0}` is the project's short name.
   '%manageBooks_sidebar_readOnlyTooltip%',
   // Disabled future sections (DEF-UI-011/012/013)
   '%manageBooks_progressTracking_label%',

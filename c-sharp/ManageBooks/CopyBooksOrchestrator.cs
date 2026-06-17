@@ -837,8 +837,8 @@ public static class CopyBooksOrchestrator
             // chapter ONLY when the matching dest chapter is missing, empty, or
             // scaffolding-only (see UsfmChapterScaffolding). Deliberate PT10
             // deviation from PT9's WriteChaptersToBook semantic, which
-            // overwrote every dest chapter present in the source (Manila UX
-            // follow-up). Empty source chapters are still skipped except when
+            // overwrote every dest chapter present in the source. Empty source
+            // chapters are still skipped except when
             // the dest book is also empty (preserves the "first copy populates
             // an empty book" path).
             return TryCopyChaptersFromSource(fromScrText, toScrText, bookNum, sourceUsfm, errors);

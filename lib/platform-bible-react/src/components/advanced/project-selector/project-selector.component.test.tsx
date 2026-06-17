@@ -168,7 +168,7 @@ describe('ProjectSelector — trigger label format', () => {
     expect(trigger).toHaveTextContent('ESVUS16');
     expect(trigger).not.toHaveTextContent('English Standard Version (US) 2016');
     // No native title in any format — hover full-text reveal is the trigger's own
-    // Radix tooltip (Sebastian UX review 2026-06-12).
+    // Radix tooltip.
     expect(trigger).not.toHaveAttribute('title');
   });
 
@@ -187,8 +187,8 @@ describe('ProjectSelector — trigger label format', () => {
     );
     const trigger = screen.getByRole('combobox', { name: 'Project' });
     expect(trigger).toHaveTextContent('ESVUS16 - English Standard Version (US) 2016');
-    // The untruncated text surfaces via the trigger's own Radix tooltip (Sebastian UX
-    // review 2026-06-12), not a native title attribute.
+    // The untruncated text surfaces via the trigger's own Radix tooltip, not a
+    // native title attribute.
     expect(trigger).not.toHaveAttribute('title');
   });
 

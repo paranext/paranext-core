@@ -36,26 +36,26 @@ const EVIDENCE_DIR = 'proofs/component-evidence/WP-002';
 const MANAGE_BOOKS_FRAME = 'iframe[title*="Manage Books" i]';
 const MENU_LABEL_REGEX = /Manage Books/i;
 /**
- * Project whose editor hosts the Manage Books entry point (the Manila UX follow-up moved the menu
- * item into the scripture editor's hamburger menu). Note this differs from the fixture projects the
- * tests switch to via the dialog's own sidebar picker after opening.
+ * Project whose editor hosts the Manage Books entry point (the menu item lives in the scripture
+ * editor's hamburger menu). Note this differs from the fixture projects the tests switch to via the
+ * dialog's own sidebar picker after opening.
  */
 const ENTRY_PROJECT_NAME = 'wgPIDGIN';
 
 /**
- * WF-002 (P3U.1 verdict): The four Category 9 mutating tests rely on specific rotation projects
- * starting WITHOUT the book each test creates (so the book is in the Create universe). The
- * `manageBooks.createBooks` PAPI command writes USFM stub files to disk that PERSIST across
- * `./.erb/scripts/refresh.sh` restarts (refresh only clears in-memory app state, not the project
- * filesystem under `~/.platform.bible/projects/Paratext 9 Projects/`). After a previous full-suite
- * run, those stubs leak into subsequent runs and break the ESG-missing / GEN-missing precondition.
+ * The four Category 9 mutating tests rely on specific rotation projects starting WITHOUT the book
+ * each test creates (so the book is in the Create universe). The `manageBooks.createBooks` PAPI
+ * command writes USFM stub files to disk that PERSIST across `./.erb/scripts/refresh.sh` restarts
+ * (refresh only clears in-memory app state, not the project filesystem under
+ * `~/.platform.bible/projects/Paratext 9 Projects/`). After a previous full-suite run, those stubs
+ * leak into subsequent runs and break the ESG-missing / GEN-missing precondition.
  *
  * Each entry maps a rotation project to the SFM file the test would create. If the file already
  * exists the test would mis-route (ESG already present → ESG hidden from Create universe → click
  * fails with a confusing locator-timeout). This pre-flight check converts that silent failure into
  * a precise skip with a remediation hint.
  *
- * Cleanup procedure (manual; matches the WF-002 task in the verdict):
+ * Cleanup procedure (manual):
  *
  * ```bash
  * rm -v "~/.platform.bible/projects/Paratext 9 Projects/RH2/70ESGRH2.SFM"
@@ -101,9 +101,9 @@ async function openManageBooksDialog(
   mainPage: Page,
   projectName: string = 'SRL',
 ): Promise<FrameLocator> {
-  // The Manila UX follow-up moved the entry point from the application main
-  // menu into the scripture editor's hamburger ("Project") menu, which renders
-  // INSIDE the editor's iframe. The shared helper opens the entry project's
+  // The entry point lives in the scripture editor's hamburger ("Project") menu
+  // rather than the application main menu, and it renders INSIDE the editor's
+  // iframe. The shared helper opens the entry project's
   // editor first (skipped when already open), drives the hamburger, and waits
   // for the Manage Books dock tab (tabTitle defaults to the menu-item regex).
   await openFromEditorHamburger(mainPage, {
@@ -155,7 +155,7 @@ async function openPickerFromCreateFlow(frame: FrameLocator): Promise<Locator> {
   // constraints discovered 2026-06-11: (1) the lookup must be scoped to the open Radix
   // popper, because the book-grid pills also carry role="option" and an unscoped .first()
   // matches a pill instead of a project row (same trap Journey 2 documents); (2) the
-  // reference must have ESG, otherwise the Sebastian-item-27 prune deselects ESG once the
+  // reference must have ESG, otherwise the reference-prune effect deselects ESG once the
   // reference's books load and the picker never opens (apply stays gated).
   await frame.locator('#af-reference').click();
   await frame
@@ -175,9 +175,9 @@ async function openPickerFromCreateFlow(frame: FrameLocator): Promise<Locator> {
 
 test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
   /**
-   * WF-002 fixture-state pre-flight (defensive). Detects rotation-project pollution from prior test
-   * runs and skips the entire describe with a clear remediation message rather than letting
-   * individual Category 9 tests fail with mysterious locator timeouts. See
+   * Fixture-state pre-flight (defensive). Detects rotation-project pollution from prior test runs
+   * and skips the entire describe with a clear remediation message rather than letting individual
+   * Category 9 tests fail with mysterious locator timeouts. See
    * ROTATION_FIXTURES_REQUIRING_MISSING_BOOK above for the cleanup procedure.
    */
   test.beforeAll(() => {
@@ -190,7 +190,7 @@ test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
       // The skip reason is surfaced in Playwright's report and the terminal output, so the
       // remediation hint is visible without a separate console.warn.
       const reason =
-        `WF-002: rotation fixture pollution detected — prior test run left USFM stubs on disk:\n${detail}\n` +
+        `Rotation fixture pollution detected — prior test run left USFM stubs on disk:\n${detail}\n` +
         `These break the missing-book precondition for Category 9 mutating tests. ` +
         `Delete the stub files (and restore Settings.xml from .BAK) before re-running. ` +
         `See block comment on ROTATION_FIXTURES_REQUIRING_MISSING_BOOK for the cleanup procedure.`;
@@ -247,7 +247,7 @@ test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
       await mainPage.waitForTimeout(500);
     }
 
-    // WF-003 (P3U.1 verdict): assert deterministic clean state before declaring the next test
+    // Assert deterministic clean state before declaring the next test
     // ready. Earlier observations showed test 2 (render-radios) flaking when prior-test state
     // bled in — the renderer would still have a stale dialog mounted by the time the next
     // beforeEach finished, masking sensible cleanup as visual-vibes flakiness. Two checks:
@@ -257,13 +257,13 @@ test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
     // mysterious DevTools-screenshot failure mid-test.
     await expect(
       mainPage.locator('.dock-tab').filter({ hasNotText: 'Home' }),
-      'WF-003: stale dock-tab(s) remain after beforeEach cleanup — prior test left a web view ' +
+      'Stale dock-tab(s) remain after beforeEach cleanup — prior test left a web view ' +
         'open. Check that the prior test closed its dialog/web-view via Cancel, Escape, or the ' +
         'tab close button.',
     ).toHaveCount(0, { timeout: 5_000 });
     await expect(
       mainPage.locator('[role="dialog"][data-state="open"]'),
-      'WF-003: stale Radix Dialog overlay remains after beforeEach cleanup. Escape pumping ' +
+      'Stale Radix Dialog overlay remains after beforeEach cleanup. Escape pumping ' +
         'and overlay-removal evaluate() did not fully tear down the dialog tree. Increase the ' +
         'Escape iteration count or investigate whether a non-Radix overlay is responsible.',
     ).toHaveCount(0, { timeout: 5_000 });
@@ -649,9 +649,9 @@ test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
     await frame.locator('[data-testid="manage-books-sidebar-section-create"]').click();
     await frame.locator('ul[role="listbox"] li[data-book="ESG"]').click();
 
-    // Switch the method dropdown to Empty. The default createMethod was changed to
-    // 'fromTemplate' per Sebastian item 11 (2026-05-06), so this test must explicitly
-    // pick 'empty' before applying. The picker MUST NOT open for the empty-book path.
+    // Switch the method dropdown to Empty. The default createMethod is
+    // 'fromTemplate', so this test must explicitly pick 'empty' before
+    // applying. The picker MUST NOT open for the empty-book path.
     await frame.locator('#af-method').click();
     await frame.getByRole('option', { name: /Create empty book|Empty book/i }).click();
     await frame.getByRole('button', { name: /Create .* in /i }).click();

@@ -95,8 +95,8 @@ namespace TestParanextDataProvider.ManageBooks
             // The NBV21 shape: an installed DBL resource whose raw settings
             // Editable flag is "T". PT9's ResourceScrText.Settings.Editable
             // overrides to false regardless of the flag; ProjectSummary must
-            // mirror that (UX Manila follow-up: read-only targets get disabled
-            // mutating actions, not enabled ones).
+            // mirror that, because read-only targets must get disabled
+            // mutating actions, not enabled ones.
             _editableFlaggedResource = CreateResourceScrText(
                 name: "EditableFlaggedResource",
                 type: ProjectType.Standard,
@@ -550,7 +550,7 @@ namespace TestParanextDataProvider.ManageBooks
         }
 
         // -------------------------------------------------------------------
-        // ACCEPTANCE: resources are never editable targets (UX Manila follow-up)
+        // ACCEPTANCE: resources are never editable targets
         // PT9 parity: ProjectSettings.IsEditableText is only the raw settings
         // flag (its own doc warns it "does not determine if the project is
         // ultimately editable"); ResourceScrText overrides Settings.Editable to

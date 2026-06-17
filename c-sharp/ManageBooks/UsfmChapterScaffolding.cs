@@ -3,8 +3,8 @@ using System.Text.RegularExpressions;
 namespace Paranext.DataProvider.ManageBooks;
 
 // === NEW IN PT10 ===
-// Reason: the Manila UX follow-up redefined merge mode for Copy/Import from
-// PT9's WriteChaptersToBook semantic (source chapters overwrite their dest
+// Reason: PT10 redefines merge mode for Copy/Import from PT9's
+// WriteChaptersToBook semantic (source chapters overwrite their dest
 // counterparts) to "only write chapters that do not already exist in the
 // destination". That requires deciding whether a destination chapter
 // "exists", where chapters holding nothing or only create-books scaffolding

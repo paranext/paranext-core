@@ -18,11 +18,9 @@ import { fmtTemplate } from './manage-books-dialog.utils';
  * Replace entire books (destructive), Copy non-existing chapters (outline). Closing the dialog
  * cancels the copy entirely.
  *
- * History: Sebastian #16 introduced this prompt with a two-button shape (Cancel / Replace).
- * Vladimir #16 (follow-up) asked for the same three-way prompt that Import shows so the user can
- * also pick the "merge non-existing chapters" path. The third button is wired through the new
- * `ManageBooksCopyStrategy` union; see `manage-books-dialog.types.ts` for the wire note about the
- * backend currently honoring only the full-book replace path.
+ * The third (non-existing chapters) button is wired through the `ManageBooksCopyStrategy` union;
+ * see `manage-books-dialog.types.ts` for the wire note about the backend currently honoring only
+ * the full-book replace path.
  */
 export type CopyConflictPromptProps = {
   /** Pending conflict (the books being copied and which already exist in the destination). */
@@ -58,8 +56,8 @@ export function CopyConflictPrompt({
             <DialogDescription>
               {conflict
                 ? // Lists the conflicting book names like the import-conflict prompt
-                  // does (Manila UX follow-up: "the message should also list the book
-                  // name(s)"). Proper _one/_other pluralization (matching the import
+                  // does, so the user sees exactly which books would be overwritten.
+                  // Proper _one/_other pluralization (matching the import
                   // filesMatched pair) instead of "book(s)"; the old count-only
                   // %manageBooks_copy_confirmBody% is redirected via metadata
                   // fallbackKey since its placeholder arity changed. The list join is
@@ -91,7 +89,7 @@ export function CopyConflictPrompt({
                 : ''}
             </DialogDescription>
           </DialogHeader>
-          {/* Sebastian UX review item 10 (2026-06-12): the prior layout
+          {/* The prior layout
               stacked the three buttons in a column at narrow widths
               (`flex-col → sm:flex-row`), which pushed them past the dialog's
               bottom edge. Buttons now stay in a single row and individually
@@ -131,8 +129,8 @@ export function CopyConflictPrompt({
                   destination are written (CopyBooksOrchestrator
                   TryCopyChaptersFromSource + UsfmChapterScaffolding). The key
                   was renamed from %manageBooks_copy_confirmMergeFromSource%
-                  when the Manila UX follow-up changed the wire behavior from
-                  PT9's chapter-overwrite merge to skip-existing-chapters. */}
+                  when the wire behavior changed from PT9's chapter-overwrite
+                  merge to skip-existing-chapters. */}
               {t('%manageBooks_copy_onlyNonExistingChapters%', 'Only copy non-existing chapters')}
             </Button>
           </div>

@@ -507,10 +507,10 @@ export interface OpenFromEditorHamburgerOptions {
 /**
  * Open a tool (e.g. "Manage books…") from the scripture editor's hamburger ("Project") menu.
  *
- * The Manila UX follow-up moved tool entry points from the application main menu into the scripture
- * editor's hamburger menu. The hamburger button (`button[aria-label='Project']`) and its Radix menu
- * both render INSIDE the editor's iframe, while the resulting tool web view surfaces as a dock tab
- * at MAIN-PAGE level.
+ * Tool entry points live in the scripture editor's hamburger menu rather than the application main
+ * menu. The hamburger button (`button[aria-label='Project']`) and its Radix menu both render INSIDE
+ * the editor's iframe, while the resulting tool web view surfaces as a dock tab at MAIN-PAGE
+ * level.
  *
  * Steps:
  *

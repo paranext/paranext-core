@@ -52,7 +52,7 @@ export function useOpenProjectTabs(filter?: WebViewFilter): OpenProjectTabWithWe
       const passesFilter = !filter || (webViewType !== undefined && filter({ webViewType }));
       // See JSDoc above: undefined → default group 0; numeric → as-is.
       //
-      // Sebastian UX review item 12 (2026-06-12): `ScrollGroupScrRef` widened
+      // `ScrollGroupScrRef` widened
       // from `ScrollGroupId` to `ScrollGroupId | SerializedVerseRef` upstream
       // — a tab that's "unsynced" from any scroll group now stores a
       // SerializedVerseRef object instead of a number. The previous strict

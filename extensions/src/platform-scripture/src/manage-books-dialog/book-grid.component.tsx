@@ -125,25 +125,15 @@ const BOOK_PILL_BASE_CLASS =
 /**
  * Compose the pill's color/border classes for a given `present`/`disabled` state pair.
  *
- * - In-project (`present`) books use the accent tone at rest and shift to primary on hover.
- * - Absent (addable) books get a dashed primary outline plus muted text and the same hover treatment
- *   — dashed-primary uniquely means "available to act on". Per Sebastian item 24 (2026-05-06).
+ * - In-project (`present`) books use the accent tone at rest; hover emphasises the border.
+ * - Absent (addable) books get a dashed primary outline plus muted text — dashed-primary uniquely
+ *   means "available to act on".
  * - Disabled books (e.g. Create mode's not-in-reference books) render as "inert gray": solid
  *   `border-border`, faint muted fill, slightly-muted FULL-OPACITY text so the book code stays
- *   legible, no hover, no addable affordance. This replaces the former `opacity-50`-only treatment,
- *   which was nearly indistinguishable from the enabled absent state (Manila UX follow-up:
- *   "Difference between disabled and not in project is too subtle").
+ *   legible, no hover, no addable affordance. This must stay clearly distinct from the enabled
+ *   absent state — a former `opacity-50`-only treatment was nearly indistinguishable from it.
  *
- * The hover treatment is the original `bg-primary/90` + `text-primary-foreground` the UX team
- * signed off in the original port; PR #2296 downgraded it to a `/20` tint that is visually
- * indistinguishable from the at-rest accent color, which UX reported as "hover effect has been
- * removed". Selection is conveyed by the checkbox glyph, not the hover color.
- *
- * NOTE on `tw:hover:bg-primary/90` vs `tw:hover:bg-primary`: the slashless `tw:hover:bg-primary`
- * does not get JIT-compiled in this build pipeline (only the slash variants `/10`, `/70`, `/80`,
- * `/90` are emitted). Using `/90` keeps a near-solid primary on hover while ensuring the rule
- * actually exists in the stylesheet — without it the hover background falls back to the at-rest
- * accent color and the white `text-primary-foreground` becomes unreadable on the light background.
+ * Selection is conveyed by the checkbox glyph, not the hover color.
  */
 const bookPillClasses = (present: boolean, disabled = false): string => {
   if (disabled)
@@ -151,11 +141,11 @@ const bookPillClasses = (present: boolean, disabled = false): string => {
       BOOK_PILL_BASE_CLASS,
       'tw:cursor-not-allowed tw:bg-muted/40 tw:text-muted-foreground/70',
     );
-  // Sebastian UX review item 8 (2026-06-12): the prior hover style swapped
-  // background + foreground (`bg-primary/90` + `text-primary-foreground`)
-  // which jarred against the at-rest pill look. Hover now keeps the same
-  // fill/text and instead emphasises the border — solid + ring color — so
-  // the pill reads as "interactive" without a color flash.
+  // The prior hover style swapped background + foreground (`bg-primary/90` +
+  // `text-primary-foreground`) which jarred against the at-rest pill look.
+  // Hover now keeps the same fill/text and instead emphasises the border —
+  // solid + ring color — so the pill reads as "interactive" without a color
+  // flash.
   return cn(
     BOOK_PILL_BASE_CLASS,
     'tw:transition-colors tw:hover:border-solid tw:hover:border-ring',
@@ -778,7 +768,7 @@ export function BookGridSelector({
       <Tooltip>
         <TooltipTrigger asChild>{button}</TooltipTrigger>
         {/* Tooltip renders bottom-CENTER so it stays near the cursor on wide
-            pills (Manila UX follow-up). */}
+            pills. */}
         <TooltipContent side="bottom" align="center" sideOffset={-4}>
           {tooltipContent}
         </TooltipContent>
@@ -789,7 +779,7 @@ export function BookGridSelector({
   return (
     <div
       className={cn(
-        // Sebastian UX review item 14 (2026-06-12): the prior `overflow-auto`
+        // The prior `overflow-auto`
         // produced a permanent vertical scrollbar in Import mode because the
         // grid's intrinsic height (badges + section headers) was a few
         // pixels taller than the flex slot. `overflow-y-auto` only renders
@@ -871,8 +861,8 @@ export function BookGridSelector({
                     // in the preset upgrade, which painted every EXPANDED
                     // group header with a persistent background bar. Neutralize
                     // it here so headers are plain text with background on
-                    // hover only (Manila UX follow-up), while keeping
-                    // aria-expanded for accessibility. Other ghost dropdown
+                    // hover only, while keeping aria-expanded for
+                    // accessibility. Other ghost dropdown
                     // triggers still rely on the variant default, so this is a
                     // per-usage override, not a button.tsx change.
                     className="tw:h-6 tw:flex-1 tw:justify-start tw:gap-1 tw:px-2 tw:text-[11px] tw:font-semibold tw:uppercase tw:tracking-wider tw:text-muted-foreground tw:hover:text-foreground tw:aria-expanded:bg-transparent tw:aria-expanded:text-muted-foreground tw:hover:aria-expanded:bg-muted tw:hover:aria-expanded:text-foreground"

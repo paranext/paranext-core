@@ -1,16 +1,14 @@
 /**
- * Left sidebar for the rebuilt Manage Books tab. Replaces the horizontal `<ToggleGroup>` action
- * selector that the original cherry-pick used, matching the Sebastian/Vladimir-preferred
- * ViewListSelect design from PR #2224's stories file (lines 366-680).
+ * Left sidebar for the rebuilt Manage Books tab. A vertical ViewListSelect-style action selector
+ * (replacing the horizontal `<ToggleGroup>` an earlier iteration used).
  *
- * The sidebar groups sections into three blocks separated by whitespace only (per the Manila UX
- * follow-up: no separators, no group headings):
+ * The sidebar groups sections into three blocks separated by whitespace only — no separators, no
+ * group headings:
  *
  * 1. Show Books (alone at top)
  * 2. Create / Copy / Import / Delete (the 5 in-scope sections)
  * 3. Progress tracking / Book Names (2 disabled future sections, DEF-UI-011/012; the former
- *    Introductions row was removed per the Manila UX follow-up — it belongs with the checklists
- *    feature instead)
+ *    Introductions row was removed — it belongs with the checklists feature instead)
  *
  * The disabled sections render as muted, non-clickable rows with a tooltip explaining that the
  * functionality is not yet available in Platform.Bible.
@@ -43,8 +41,8 @@ export type ManageBooksSidebarSectionId =
 type SectionDef = {
   id: ManageBooksSidebarSectionId;
   /**
-   * When set, this row starts a new visual group. Groups are separated by whitespace only (per the
-   * Manila UX follow-up — no separator lines, no headings).
+   * When set, this row starts a new visual group. Groups are separated by whitespace only — no
+   * separator lines, no headings.
    */
   startsGroup?: boolean;
   /** When true, render the row in disabled/muted state with a "not yet available" tooltip. */
@@ -281,11 +279,10 @@ export function ManageBooksSidebar({
             {t('%manageBooks_header_projectLabel%', 'Project')}
           </Label>
         )}
-        {/* The trigger shows "{shortName} - {fullName}" inline (Manila UX
-            follow-up), ellipsis-truncated by the trigger itself; the
-            untruncated text surfaces via ProjectSelector's own trigger
-            tooltip (Sebastian UX review 2026-06-12) in both wide and narrow
-            modes, so the sidebar adds no tooltip of its own. */}
+        {/* The trigger shows "{shortName} - {fullName}" inline,
+            ellipsis-truncated by the trigger itself; the untruncated text
+            surfaces via ProjectSelector's own trigger tooltip in both wide and
+            narrow modes, so the sidebar adds no tooltip of its own. */}
         <div data-testid="manage-books-sidebar-project-trigger" className="tw:w-full">
           <ProjectSelector
             mode="project"
@@ -328,7 +325,7 @@ export function ManageBooksSidebar({
         const disabled = defDisabled === true || isReadOnlyDisabled;
         const isActive = !disabled && id === activeSectionId;
         // Groups are separated by whitespace only — no separator lines, no
-        // headings (Manila UX follow-up).
+        // headings.
         const startsGroup = !!defStartsGroup && index > 0;
         const labels = getSectionLabels(id, t);
         const tooltip = labels.tooltip ?? (isReadOnlyDisabled ? readOnlyTooltip : undefined);
@@ -374,8 +371,8 @@ export function ManageBooksSidebar({
           </button>
         );
 
-        // Tooltips are only rendered when they add information (Manila UX
-        // follow-up — a tooltip repeating the visible label is redundant):
+        // Tooltips are only rendered when they add information (a tooltip
+        // repeating the visible label is redundant):
         //   - in narrow (icon-only) mode every row needs one since labels are
         //     hidden;
         //   - in wide mode only rows with a real message (read-only reason /

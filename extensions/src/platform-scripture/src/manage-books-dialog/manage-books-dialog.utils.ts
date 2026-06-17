@@ -47,9 +47,9 @@ const parseDateForCompare = (value: string): number => Date.parse(value);
  * Which of the four delete-confirmation bodies applies, given whether the user selected every
  * present book and whether the project is shared (Send/Receive).
  *
- * Precedence rule (UX Manila follow-up): the shared-project warning must survive in EVERY shared
- * case — the original branch order dropped it exactly in the highest-impact case (deleting ALL
- * books of a shared project). Pure function so the 2x2 precedence is unit-testable.
+ * Precedence rule: the shared-project warning must survive in EVERY shared case — the original
+ * branch order dropped it exactly in the highest-impact case (deleting ALL books of a shared
+ * project). Pure function so the 2x2 precedence is unit-testable.
  */
 export type DeleteConfirmVariant = 'allShared' | 'all' | 'partialShared' | 'partial';
 
@@ -93,10 +93,9 @@ export const computeImportCompareState = (
 /**
  * Map a versification value (numeric `ScrVersType` enum or its stringified form, as returned by
  * `pdp.getSetting('platformScripture.versification')`) to the localization key for its display
- * name. Per Vladimir review item 21 (2026-05-06), the dialog's header subtitle previously rendered
- * the raw numeric enum (e.g. "4"), which is meaningless to users. The header now resolves the value
- * through this helper and the surrounding template appends "Versification" so e.g.
- * `ScrVersType.English` reads as "English Versification".
+ * name. The raw numeric enum (e.g. "4") is meaningless to users, so the dialog's header subtitle
+ * resolves the value through this helper and the surrounding template appends "Versification" so
+ * e.g. `ScrVersType.English` reads as "English Versification".
  *
  * Keep the switch arms aligned with `@sillsdev/scripture`'s `ScrVersType` enum order (Unknown=0,
  * Original=1, Septuagint=2, Vulgate=3, English=4, RussianProtestant=5, RussianOrthodox=6).

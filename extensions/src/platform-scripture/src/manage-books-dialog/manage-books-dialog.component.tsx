@@ -171,11 +171,11 @@ export type ManageBooksDialogProps = {
   /**
    * Commit a Copy-books operation.
    *
-   * `strategy` mirrors the Import flow's `replaceEntireBooks` / `nonExistingChapters` choice (see
-   * Vladimir review #16 — Copy now surfaces the same three-button conflict prompt as Import).
-   * `strategy` is `undefined` when no conflict prompt was shown (the picked books did not exist in
-   * the destination, so the question never came up). Wiring layers should treat `undefined` as
-   * "destination had nothing in the way — write through".
+   * `strategy` mirrors the Import flow's `replaceEntireBooks` / `nonExistingChapters` choice — Copy
+   * surfaces the same three-button conflict prompt as Import. `strategy` is `undefined` when no
+   * conflict prompt was shown (the picked books did not exist in the destination, so the question
+   * never came up). Wiring layers should treat `undefined` as "destination had nothing in the way —
+   * write through".
    */
   onCopyBooks: (args: {
     destProjectId: string;
@@ -243,7 +243,7 @@ export type ManageBooksDialogProps = {
    * supplied, the dialog uses it as a fast-path for the read-only-target gating decision so the
    * Create / Copy / Import / Delete sections lock immediately on project switch even before the
    * dialog's slower internal `projects` fetch (which does extra per-project pdp.getSetting calls)
-   * has caught up. Sebastian UX review item 6 (2026-06-12).
+   * has caught up.
    */
   sidebarProjects?: readonly (ProjectSelectorProject & { isEditable?: boolean })[];
 
@@ -375,19 +375,18 @@ function DisabledStubButtonTooltip({
   );
 }
 
-// Sebastian review item 8 (2026-05-06): the Copy-mode comparison-state filter (New/Newer/Older/
-// Same/Undetermined) was removed entirely — the New/Newer/Older/Same options didn't actually
-// filter anything (the chip selection was decorative without a backing state-set), and the
-// All/Undetermined options were equivalent. Per Sebastian's verdict the simplest fix is to drop
-// the affordance until comparison-state filtering is genuinely needed; the per-book status
+// The Copy-mode comparison-state filter (New/Newer/Older/Same/Undetermined) was removed entirely —
+// the New/Newer/Older/Same options didn't actually filter anything (the chip selection was
+// decorative without a backing state-set), and the All/Undetermined options were equivalent. The
+// affordance is dropped until comparison-state filtering is genuinely needed; the per-book status
 // labels and badges already give users the same information at a glance.
 
 /**
  * Presence-filter dropdown shared by View and Import modes. Replaces the chip rows that used to sit
- * in the filter bar (per Sebastian review item 8, 2026-05-06): the trigger is a Filter-icon Button
- * that opens a `<DropdownMenuRadioGroup>` of the three presence states (All / New / Existing). The
- * trigger picks up an accent background when a non-`all` filter is active so the affordance still
- * reads as "filter applied" without a chip row.
+ * in the filter bar: the trigger is a Filter-icon Button that opens a `<DropdownMenuRadioGroup>` of
+ * the three presence states (All / New / Existing). The trigger picks up an accent background when
+ * a non-`all` filter is active so the affordance still reads as "filter applied" without a chip
+ * row.
  *
  * E2E tests use `data-testid` on each radio item — preserve the existing tokens
  * (`presence-filter-{all|new|existing}` and `import-presence-filter-{…}`) so the tests just need to
@@ -558,12 +557,11 @@ export function ManageBooksDialog({
 
   // -- Loaded data ---------------------------------------------------------
   const [projects, setProjects] = useState<ManageBooksDialogProject[]>([]);
-  // Sebastian UX review item 1 (2026-06-12): track whether the initial
-  // `loadProjects` fetch has completed at least once. Used to drive the
-  // project-trigger disabled state and the right-pane skeleton placeholder
-  // so the user doesn't see the projectId GUID render in the header subtitle
-  // ("random number" — the fallback projectDisplayName) or a half-rendered
-  // body before the project list has resolved.
+  // Track whether the initial `loadProjects` fetch has completed at least
+  // once. Used to drive the project-trigger disabled state and the right-pane
+  // skeleton placeholder so the user doesn't see the projectId GUID render in
+  // the header subtitle ("random number" — the fallback projectDisplayName) or
+  // a half-rendered body before the project list has resolved.
   const [hasLoadedProjects, setHasLoadedProjects] = useState(false);
   const [booksByProjectId, setBooksByProjectId] = useState<
     Record<string, ManageBooksDialogBookInfo[]>
@@ -606,10 +604,9 @@ export function ManageBooksDialog({
   const [selectionsByAction, setSelectionsByAction] = useState<Record<string, Set<string>>>({});
   const [filter, setFilter] = useState('');
   const [copySourceId, setCopySourceId] = useState<string | undefined>(undefined);
-  // Default Create method is "Create based on" (FromTemplate). Per Sebastian item 11 (2026-05-06)
-  // the prompt copy now reads "Create based on" rather than "Based on", and the most useful default
-  // for users is to start by picking a reference project; they can switch to Empty or
-  // ChapterAndVerse if they prefer.
+  // Default Create method is "Create based on" (FromTemplate): the prompt copy reads "Create based
+  // on" rather than "Based on", and the most useful default for users is to start by picking a
+  // reference project; they can switch to Empty or ChapterAndVerse if they prefer.
   const [createMethod, setCreateMethod] = useState<ManageBooksCreateMethod>('fromTemplate');
   const [createReferenceId, setCreateReferenceId] = useState<string | undefined>(undefined);
   const [importFiles, setImportFiles] = useState<Record<string, ManageBooksImportFile>>({});
@@ -620,7 +617,7 @@ export function ManageBooksDialog({
       }
     | undefined
   >(undefined);
-  // Copy overwrite-confirm — Sebastian #16. Without this, Copy with mixed existence silently
+  // Copy overwrite-confirm. Without this, Copy with mixed existence silently
   // overwrites the books that already exist in the destination project.
   const [copyConfirm, setCopyConfirm] = useState<
     | {
@@ -637,9 +634,9 @@ export function ManageBooksDialog({
   const [importPresenceFilter, setImportPresenceFilter] = useState<ViewPresenceFilter>('all');
   const [viewPresenceFilter, setViewPresenceFilter] = useState<ViewPresenceFilter>('all');
   // BookGridSelector grouping state. Initial mount defaults to canon grouping
-  // (the dialog opens in View mode where "OT / NT / DC" reads naturally). Per
-  // Sebastian item 10 (2026-05-06) the user's choice is preserved across
-  // workflow switches so changing modes doesn't undo their grouping preference.
+  // (the dialog opens in View mode where "OT / NT / DC" reads naturally). The
+  // user's choice is preserved across workflow switches so changing modes
+  // doesn't undo their grouping preference.
   const [gridGroupBy, setGridGroupBy] = useState<BookGridGroupBy>('canon');
   // Using null for React ref compatibility
   // eslint-disable-next-line no-null/no-null
@@ -696,7 +693,7 @@ export function ManageBooksDialog({
   }, [open, projectId, loadVersification]);
 
   // -- Derived state -------------------------------------------------------
-  // Sebastian UX review item 6 (2026-06-12): the gating decision used to read
+  // The gating decision used to read
   // `isEditable` only from the dialog's slower internal `projects` array
   // (loaded via the `loadProjects` prop, which awaits two pdp.getSetting
   // calls per project for display names). When the user switched projects
@@ -727,8 +724,8 @@ export function ManageBooksDialog({
   // `ManageBooksDialogProject` to that shape — `p.fullName` (sourced from `platform.fullName`
   // upstream) becomes the secondary label, falling back to `shortName` when no fullName is
   // configured. The target project itself is filtered out (already done in `otherProjects`).
-  // Sebastian UX new-requirement 4 (2026-06-12): commentaries should be excluded from both the
-  // Copy "From" and Create "Based on" pickers. DEFERRED — there is no reliable commentary signal in
+  // Commentaries should be excluded from both the Copy "From" and Create "Based on" pickers.
+  // DEFERRED — there is no reliable commentary signal in
   // the current data model: DBL classifies resources only by medium (text/audio/print), ParatextData
   // has no commentary concept, and the only marker is a hardcoded 3-UID whitelist in
   // DblDownloadableDataProvider that never reaches ProjectSummary. The previous `isCommentary` filter
@@ -738,7 +735,7 @@ export function ManageBooksDialog({
   // already excludes all resources for licensing reasons, so commentaries (being resources) stay out
   // of Copy regardless.
   //
-  // Sebastian UX new-requirement 3 (2026-06-12): the picker is also enriched
+  // The picker is also enriched
   // with versification id + localized name so the consumer can opt into
   // versification-grouping (Create "Based on" does; Copy "From" leaves it
   // off). The name resolution lives here on the dialog side because we own
@@ -750,8 +747,8 @@ export function ManageBooksDialog({
         shortName: p.shortName,
         fullName: p.fullName ?? p.shortName,
         versificationId: p.versificationId,
-        // Group header reads "{name} versification" (lowercase, per Sebastian N3 follow-up),
-        // localized via a template so word order can vary by language. The "Unknown
+        // Group header reads "{name} versification" (lowercase), localized via a template so word
+        // order can vary by language. The "Unknown
         // versification" bucket is labeled separately (versificationUnknownSectionHeading) and is
         // unaffected, so no double "versification" suffix.
         versificationName: p.versificationId
@@ -774,8 +771,7 @@ export function ManageBooksDialog({
   // The Create "Based on" picker deliberately INCLUDES resources: it only
   // reads the reference's book/chapter structure to scaffold empty books, no
   // text is copied (PT9 parity: CreateBooksForm's model combobox lists all
-  // accessible scripture texts including resources; Manila UX follow-up
-  // confirmed this).
+  // accessible scripture texts including resources).
   const copyFromProjectsAsPS = useMemo<ProjectSelectorProject[]>(
     () =>
       otherProjects
@@ -799,7 +795,7 @@ export function ManageBooksDialog({
   // Both pickers below stay undefined until the picked project's books have
   // actually LOADED (booksByProjectId[id] set — an empty array means "loaded,
   // no books"). toProjectBookState(undefined) would yield a truthy empty
-  // state, which made the Sebastian-item-27 prune effect below fire in the
+  // state, which made the reference-prune effect below fire in the
   // load gap right after picking a reference and wipe the user's entire
   // selection (and made every pill briefly render as not-in-reference
   // disabled). The copy-source picker gets the same guard so the A7
@@ -847,9 +843,9 @@ export function ManageBooksDialog({
     });
   }, [copySourceId]);
 
-  // Reset per-action filters when the action changes. Per Sebastian item 10
-  // (2026-05-06) the gridGroupBy preference is intentionally NOT reset — the
-  // user's grouping choice persists across workflow switches.
+  // Reset per-action filters when the action changes. The gridGroupBy
+  // preference is intentionally NOT reset — the user's grouping choice
+  // persists across workflow switches.
   useEffect(() => {
     setImportPresenceFilter('all');
     setViewPresenceFilter('all');
@@ -876,7 +872,7 @@ export function ManageBooksDialog({
     }
   }, [project.isEditable, action]);
 
-  // GAP-002 (P3U.1 ui-spec-validator): when the user picks a "Based on" reference project in
+  // When the user picks a "Based on" reference project in
   // Create mode, eagerly load that project's book set so EXT-102's missing-model pre-flight
   // prompt can compare the user's selection against a real book inventory. Without this, the
   // first call to `createReferenceBookState` returns an empty `present` set (because
@@ -906,7 +902,7 @@ export function ManageBooksDialog({
       case 'copy':
         return copySource ? allBooks.filter((b) => copySource.present.has(b)) : [];
       case 'import':
-        // Sebastian review item 22 (2026-05-06): Import mode starts empty and only shows books
+        // Import mode starts empty and only shows books
         // the user has actually attached files for. As `runImport` removes successfully-imported
         // entries from `importFiles`, the grid shrinks too — books vanish on success without
         // needing any extra clean-up. Sort by canonical book number so multi-file picks render
@@ -919,7 +915,7 @@ export function ManageBooksDialog({
     }
   }, [action, allBooks, current, copySource, importFiles]);
 
-  // Per Sebastian review item 27 (2026-05-06): when the user picks a different
+  // When the user picks a different
   // reference project (or clears it / changes createMethod), prune any books from
   // the current Create selection that are NOT in the new reference project's book
   // set. Without this, switching reference projects could leave a stale selection
@@ -966,8 +962,8 @@ export function ManageBooksDialog({
     });
   }, [action, copySource, copySourceId, universe, current]);
 
-  // Sebastian UX review item 11 (2026-06-12): book-id detection must rely on
-  // the `\id` marker in the file content, not the filename. A filename like
+  // Book-id detection relies on the `\id` marker in the file content, not the
+  // filename. A filename like
   // `38ZECCUNP89T.SFM` contains "ECC" before "ZEC", so the old filename-only
   // substring scan misidentified the book. We now read the first `\id`
   // marker and only fall back to a filename match when the content is missing
@@ -1036,9 +1032,9 @@ export function ManageBooksDialog({
           return;
         }
         seenInBatch[book] = f.name;
-        // Sebastian UX review item 9 (2026-06-12): the import grid must show
-        // the file's last-modified date so the newer/older comparison reflects
-        // the real source date. `File.lastModified` is always populated for
+        // The import grid shows the file's last-modified date so the
+        // newer/older comparison reflects the real source date.
+        // `File.lastModified` is always populated for
         // real File objects coming from the browser picker or
         // `onPickImportFiles`; story decorators that pass `{name}` shapes
         // still get a date but without `lastModified` it would always read 0
@@ -1111,7 +1107,7 @@ export function ManageBooksDialog({
     return { pickedAny: true };
   }, [ingestImportFiles, onPickImportFiles]);
 
-  // Per Sebastian review item 23 (2026-05-06): auto-browse on Import-mode entry was reversed.
+  // Auto-browse on Import-mode entry is intentionally not used.
   // The file picker now opens only when the user explicitly clicks the "Choose files…" /
   // "Add files…" button (rendered around line 1759-1768). Decision A8's "auto-browse on entry"
   // behavior is superseded — the prior `useEffect` that called `triggerFileBrowser()` and the
@@ -1298,14 +1294,14 @@ export function ManageBooksDialog({
     setIsSubmitting(true);
     const minDisplay = minDelay(MIN_SUBMITTING_VISIBLE_MS);
     try {
-      // Sebastian review item 26 (2026-05-06, FE half): re-fetch the project's current book set
+      // Re-fetch the project's current book set
       // before issuing the delete. If another tab/process has deleted some of the user's selected
       // books since the dialog last loaded, those books are now absent from the destination — the
       // C# `DeleteBooksOrchestrator` would either no-op or surface a confusing error per book. We
       // intersect the user's selection with the freshly-loaded inventory and continue with only
       // the still-present subset; the dropped books are reported back to the user via a toast so
-      // they understand why the count shrank. The backend's AlertCapture wrap (BE half of #26)
-      // remains a separate PR.
+      // they understand why the count shrank. The matching backend AlertCapture wrap
+      // remains a separate change.
       const fresh = await Promise.resolve(loadBooks(projectId));
       setBooksByProjectId((prev) => ({ ...prev, [projectId]: fresh }));
       const freshPresent = new Set(fresh.map((b) => b.id));
@@ -1425,8 +1421,7 @@ export function ManageBooksDialog({
       const destVrs = versification ?? '';
       const modelVrs = await Promise.resolve(loadVersification(createReferenceId)).catch(() => '');
       if (destVrs && modelVrs && destVrs !== modelVrs) {
-        // Sebastian UX new-requirement 2 (2026-06-12): the prompt body must
-        // show the localized versification NAME (e.g. "English", "Vulgate"),
+        // The prompt body shows the localized versification NAME (e.g. "English", "Vulgate"),
         // not the numeric ScrVersType id (e.g. "0", "4"). Resolve here so the
         // prompt component stays presentational.
         setCreatePrompt({
@@ -1455,7 +1450,7 @@ export function ManageBooksDialog({
         break;
       case 'copy': {
         if (!copySourceId) break;
-        // Sebastian #16: gate Copy with an overwrite-confirm prompt when the selection contains
+        // Gate Copy with an overwrite-confirm prompt when the selection contains
         // books that already exist in the destination project. Mixed-existence selections used to
         // silently overwrite — now the user has to confirm.
         const existing = selectedArr.filter((b) => current.present.has(b));
@@ -1480,13 +1475,11 @@ export function ManageBooksDialog({
     }
   };
 
-  // Vladimir review item 21 (2026-05-06): the subtitle was rewritten from
-  // "{count} of {88} canonical books in {short} ({vrs})" to "{count} books in {full} ⋅ {vrs name}
-  // Versification". The new copy reports the absolute number of books currently in the project
-  // (not capped to canonical) so users with deuterocanonical or extra books see them counted.
+  // Counts the absolute number of books currently in the project (not capped to canonical) so
+  // users with deuterocanonical or extra books see them all counted in the header subtitle.
   const totalPresent = current.present.size;
 
-  // Vladimir review item 21 (2026-05-06): the subtitle now reads
+  // The subtitle reads
   // "{count} books in {full project name} ⋅ {versification name} Versification". The
   // versification name is resolved from the numeric `ScrVersType` enum (which `loadVersification`
   // returns as a string) via `versificationLabelKey` + `t()`. The trailing literal " Versification"
@@ -1505,9 +1498,8 @@ export function ManageBooksDialog({
     ? fmtTemplate(subtitleTemplate, totalPresent, projectDisplayName, versificationName)
     : fmtTemplate(subtitleTemplate, totalPresent, projectDisplayName);
 
-  // Sebastian UX new-requirement 1 (2026-06-12): the right-pane headline now
-  // tracks the active section ("Show books", "Create books", …) instead of the
-  // static "Manage books". We reuse the existing sidebar localized labels —
+  // The right-pane headline tracks the active section ("Show books", "Create
+  // books", …) instead of a static "Manage books". We reuse the existing sidebar localized labels —
   // they're already translated and exactly match the desired text, so no new
   // localize keys are needed.
   const headerTitle = (() => {
@@ -1526,7 +1518,7 @@ export function ManageBooksDialog({
     }
   })();
 
-  // Per Sebastian review item 8 (2026-05-06): only the All/New/Existing presence-filter labels
+  // Only the All/New/Existing presence-filter labels
   // are used now that the Copy comparison-state filter has been removed. The remaining
   // newer/older/same/undetermined chip-label localized strings are still consumed by the per-row
   // status section headers in the BookGrid (see `gridItems` above) — leave them in
@@ -1558,7 +1550,7 @@ export function ManageBooksDialog({
         '%manageBooks_copy_emptyState_chooseSource%',
         'Choose a source project to see books available to copy.',
       );
-    // Sebastian I7 follow-up (2026-06-12): copy mode with a source picked but its books not yet
+    // Copy mode with a source picked but its books not yet
     // fetched (the brief load gap). Without this branch it falls through to the misleading "...has
     // no books to copy" message below. Show a loading hint instead.
     if (action === 'copy' && copySourceId && !booksByProjectId[copySourceId]) {
@@ -1570,7 +1562,7 @@ export function ManageBooksDialog({
           )
         : t('%manageBooks_copy_emptyState_loading%', 'Loading books…');
     }
-    // Sebastian review item 22 (2026-05-06): Import mode renders an empty grid until the user
+    // Import mode renders an empty grid until the user
     // attaches files. The "Add files…" / "Choose files…" affordance lives in the per-action
     // header just above; this empty-state message gives the otherwise-blank grid area a hint.
     if (action === 'import' && universe.length === 0) {
@@ -1700,7 +1692,7 @@ export function ManageBooksDialog({
         primaryDate = destDate;
       }
 
-      // Per Sebastian review item 27 (2026-05-06): in Create > Based on,
+      // In Create > Based on,
       // books not present in the reference project are not selectable —
       // there is no template content to base the new book on. Disable the
       // pill at the grid level (defense in depth alongside the existing
@@ -1720,11 +1712,11 @@ export function ManageBooksDialog({
           t('%manageBooks_create_book_notInReference%', 'Not in {0}'),
           createReferenceProject.shortName,
         );
-        // Manila UX follow-up ("disabled vs not in project is too subtle"):
-        // cluster the non-creatable books in their own status group at the
+        // Cluster the non-creatable books in their own status group at the
         // bottom (notInProject sorts last via STATUS_GROUP_PRIORITY) instead
-        // of interleaving them with creatable "New" books. Pairs with the
-        // inert-gray disabled pill styling in book-grid.component.tsx.
+        // of interleaving them with creatable "New" books — keeps them clearly
+        // distinct rather than too-subtly different. Pairs with the inert-gray
+        // disabled pill styling in book-grid.component.tsx.
         statusGroupKey = 'notInProject';
         statusLabel = disabledReason;
       }
@@ -1921,8 +1913,8 @@ export function ManageBooksDialog({
   // the standard confirm with the shared-users warning (DeleteBooksForm.cs),
   // and the previous PT10 branch order dropped it exactly in the
   // highest-impact case (deleting every book of a shared project). The
-  // wording is S/R-accurate per the Manila UX follow-up: deletion is local
-  // until other users Send/Receive — the old copy falsely claimed "they will
+  // wording is S/R-accurate: deletion is local until other users Send/Receive
+  // — the old copy falsely claimed "they will
   // see this change immediately" (old key redirected via metadata
   // fallbackKey).
   // Variant selection (the shared-warning precedence) is a pure function in
@@ -2003,7 +1995,7 @@ export function ManageBooksDialog({
             openTabs={openTabs}
             projectId={projectId}
             onProjectIdChange={onProjectIdChange}
-            // Sebastian UX review item 1 (2026-06-12): during the initial
+            // During the initial
             // `loadProjects` fetch the sidebar is fully locked — the
             // ProjectSelector disables (no clicks until the list is ready)
             // and the action rows disable because there's nothing actionable
@@ -2023,8 +2015,7 @@ export function ManageBooksDialog({
                 <h2 className="tw:text-lg tw:font-semibold">{headerTitle}</h2>
                 {/* Header subtitle hides when the dialog is narrow. Driven by
                     the JS-resize-observer flag on the dialog root.
-                    Sebastian UX review item 1 (2026-06-12): while the initial
-                    `loadProjects` fetch is in flight we render a placeholder
+                    While the initial `loadProjects` fetch is in flight we render a placeholder
                     skeleton bar instead of the subtitle template, otherwise
                     the user briefly sees the projectId GUID render in place
                     of the project name ("random number") and a book count of
@@ -2040,7 +2031,7 @@ export function ManageBooksDialog({
                 )}
               </div>
             </header>
-            {/* Sebastian UX review item 1 (2026-06-12): while projects are
+            {/* While projects are
                 loading the action body / filter bar / grid / footer below
                 are replaced with a skeleton placeholder so the user doesn't
                 see real-but-stale content (book pills against a different
@@ -2077,7 +2068,7 @@ export function ManageBooksDialog({
               <>
                 <div className="tw:flex tw:flex-col tw:items-start tw:gap-2 tw:border-b tw:px-6 tw:py-3 tw:@container/actions">
                   {action === 'view' && (
-                    /* Sebastian UX review item 4 (2026-06-12): the row used to wrap
+                    /* The row used to wrap
                    (tw:flex-wrap) which ate two extra rows of vertical real
                    estate. It now stays single-line and overflows horizontally
                    with a hidden scrollbar — the user can shift+scroll if a
@@ -2353,7 +2344,7 @@ export function ManageBooksDialog({
                           )}
                     </span>
                   )}
-                  {/* Sebastian review item 8 (2026-05-06): the View / Import presence-filter chip
+                  {/* The View / Import presence-filter chip
                   rows were replaced with a single Filter-icon button that opens a popover
                   containing the radio choices. Mirrors the pattern in
                   `lib/platform-bible-react/src/components/advanced/project-selector/
@@ -2511,11 +2502,10 @@ export function ManageBooksDialog({
                             'Select reference project',
                           )}
                           localizedStrings={projectSelectorLocalizedStrings}
-                          // Sebastian UX new-requirement 3 (2026-06-12): group
-                          // reference candidates by versification so the user
-                          // can pick one whose canon matches the destination
-                          // project. The destination's own versification group
-                          // is pinned to the top.
+                          // Group reference candidates by versification so the
+                          // user can pick one whose canon matches the
+                          // destination project. The destination's own
+                          // versification group is pinned to the top.
                           groupByVersification
                           priorityVersificationId={versification}
                           // Mirror the prior <SelectTrigger> "primary fill while empty" affordance —
@@ -2583,9 +2573,8 @@ export function ManageBooksDialog({
                           </Button>
                         );
                         // Tooltip body: when disabled use disabledTooltip; when enabled, only Create
-                        // and Copy have defined enabled-state tooltips per Sebastian item 20
-                        // (2026-05-06). Delete and Import fall through with no enabled tooltip and
-                        // render the bare button.
+                        // and Copy have defined enabled-state tooltips. Delete and Import fall
+                        // through with no enabled tooltip and render the bare button.
                         let tooltipBody: string | undefined;
                         if (disabled) {
                           tooltipBody = disabledTooltip;
@@ -2674,8 +2663,8 @@ export function ManageBooksDialog({
               ? await Promise.resolve(loadVersification(createReferenceId)).catch(() => '')
               : '';
             if (destVrs && modelVrs && destVrs !== modelVrs) {
-              // Sebastian UX new-requirement 2 (2026-06-12): same name (not
-              // number) treatment as the primary apply path above.
+              // Same versification name (not number) treatment as the primary
+              // apply path above.
               setCreatePrompt({
                 kind: 'versification',
                 destVrs: t(versificationLabelKey(destVrs), versificationFallbackName(destVrs)),
