@@ -1,10 +1,4 @@
-import {
-  renderHook,
-  waitFor,
-  act,
-  configure,
-  getConfig,
-} from '@testing-library/react';
+import { renderHook, waitFor, act, configure, getConfig } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import { EVENT_NAME_ON_DID_UPDATE_WEB_VIEW } from '@shared/services/web-view.service-model';
@@ -70,9 +64,7 @@ const DEFAULT_RECENT_IDS: string[] = [];
 async function importMocks() {
   const { getNetworkEvent } = await import('@shared/services/network.service');
   const { webViews } = await import('@renderer/services/papi-frontend.service');
-  const { projectLookupService } = await import(
-    '@shared/services/project-lookup.service'
-  );
+  const { projectLookupService } = await import('@shared/services/project-lookup.service');
   const { papiFrontendProjectDataProviderService } = await import(
     '@shared/services/project-data-provider.service'
   );
@@ -123,9 +115,7 @@ describe('useProjectPickerData', () => {
 
     vi.mocked(getNetworkEvent).mockImplementation(() => vi.fn(() => vi.fn()));
     vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([]);
-    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
-      [],
-    );
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([]);
     vi.mocked(papiFrontendProjectDataProviderService.get).mockResolvedValue({
       getSetting: vi.fn(async (key: string) => {
         if (key === 'platform.fullName') return 'Mock Full Name';
@@ -135,9 +125,7 @@ describe('useProjectPickerData', () => {
       }),
     } as never);
     vi.mocked(useData).mockImplementation(() => ({
-      RecentProjects: vi
-        .fn()
-        .mockReturnValue([DEFAULT_RECENT_IDS, vi.fn(), false]),
+      RecentProjects: vi.fn().mockReturnValue([DEFAULT_RECENT_IDS, vi.fn(), false]),
     }));
   });
 
@@ -152,8 +140,7 @@ describe('useProjectPickerData', () => {
   // testTimeout must exceed it to leave room for test setup on starved Windows CI runners;
   // without that margin the test can time out before waitFor even starts polling.
   it('returns currentProject from the first open Scripture Editor web view', async () => {
-    const { webViews, papiFrontendProjectDataProviderService } =
-      await importMocks();
+    const { webViews, papiFrontendProjectDataProviderService } = await importMocks();
     vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([
       { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-abc' },
     ] as never);
@@ -171,14 +158,11 @@ describe('useProjectPickerData', () => {
   }, 15_000);
 
   it('returns allProjects from projectLookupService', async () => {
-    const { projectLookupService, papiFrontendProjectDataProviderService } =
-      await importMocks();
-    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
-      [
-        { id: 'p1', projectInterfaces: [], pdpFactoryInfo: {} },
-        { id: 'p2', projectInterfaces: [], pdpFactoryInfo: {} },
-      ] as never,
-    );
+    const { projectLookupService, papiFrontendProjectDataProviderService } = await importMocks();
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([
+      { id: 'p1', projectInterfaces: [], pdpFactoryInfo: {} },
+      { id: 'p2', projectInterfaces: [], pdpFactoryInfo: {} },
+    ] as never);
     vi.mocked(papiFrontendProjectDataProviderService.get).mockImplementation(
       async (_iface: string, projectId: string) =>
         ({
@@ -210,12 +194,9 @@ describe('useProjectPickerData', () => {
   });
 
   it('recentProjects reflects recent project IDs from data provider', async () => {
-    const { papiFrontendProjectDataProviderService, useData } =
-      await importMocks();
+    const { papiFrontendProjectDataProviderService, useData } = await importMocks();
     vi.mocked(useData).mockImplementation(() => ({
-      RecentProjects: vi
-        .fn()
-        .mockReturnValue([['proj-r1', 'proj-r2'], vi.fn(), false]),
+      RecentProjects: vi.fn().mockReturnValue([['proj-r1', 'proj-r2'], vi.fn(), false]),
     }));
     vi.mocked(papiFrontendProjectDataProviderService.get).mockImplementation(
       async (_iface: string, projectId: string) =>
@@ -249,14 +230,11 @@ describe('useProjectPickerData', () => {
   });
 
   it('excludes non-editable projects from allProjects', async () => {
-    const { projectLookupService, papiFrontendProjectDataProviderService } =
-      await importMocks();
-    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
-      [
-        { id: 'editable', projectInterfaces: [], pdpFactoryInfo: {} },
-        { id: 'readonly', projectInterfaces: [], pdpFactoryInfo: {} },
-      ] as never,
-    );
+    const { projectLookupService, papiFrontendProjectDataProviderService } = await importMocks();
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([
+      { id: 'editable', projectInterfaces: [], pdpFactoryInfo: {} },
+      { id: 'readonly', projectInterfaces: [], pdpFactoryInfo: {} },
+    ] as never);
     vi.mocked(papiFrontendProjectDataProviderService.get).mockImplementation(
       async (_iface: string, projectId: string) =>
         ({
@@ -280,20 +258,15 @@ describe('useProjectPickerData', () => {
   });
 
   it('excludes recent projects from allProjects', async () => {
-    const {
-      projectLookupService,
-      papiFrontendProjectDataProviderService,
-      useData,
-    } = await importMocks();
+    const { projectLookupService, papiFrontendProjectDataProviderService, useData } =
+      await importMocks();
     vi.mocked(useData).mockImplementation(() => ({
       RecentProjects: vi.fn().mockReturnValue([['proj-r1'], vi.fn(), false]),
     }));
-    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
-      [
-        { id: 'proj-r1', projectInterfaces: [], pdpFactoryInfo: {} },
-        { id: 'proj-other', projectInterfaces: [], pdpFactoryInfo: {} },
-      ] as never,
-    );
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([
+      { id: 'proj-r1', projectInterfaces: [], pdpFactoryInfo: {} },
+      { id: 'proj-other', projectInterfaces: [], pdpFactoryInfo: {} },
+    ] as never);
     vi.mocked(papiFrontendProjectDataProviderService.get).mockImplementation(
       async (_iface: string, projectId: string) =>
         ({
@@ -318,17 +291,13 @@ describe('useProjectPickerData', () => {
   });
 
   it('refreshes currentProject when onDidUpdateWebView fires', async () => {
-    const {
-      getNetworkEvent,
-      webViews,
-      papiFrontendProjectDataProviderService,
-    } = await importMocks();
+    const { getNetworkEvent, webViews, papiFrontendProjectDataProviderService } =
+      await importMocks();
     let capturedCallback: (() => void) | undefined;
     vi.mocked(getNetworkEvent).mockImplementation(
       (eventName: string) =>
         vi.fn((cb: () => void) => {
-          if (eventName === EVENT_NAME_ON_DID_UPDATE_WEB_VIEW)
-            capturedCallback = cb;
+          if (eventName === EVENT_NAME_ON_DID_UPDATE_WEB_VIEW) capturedCallback = cb;
           return vi.fn();
         }) as never,
     );
@@ -353,9 +322,7 @@ describe('useProjectPickerData', () => {
     expect(capturedCallback).toBeDefined();
     act(() => capturedCallback!());
 
-    await waitFor(() =>
-      expect(result.current.currentProject?.fullName).toBe('Updated Project'),
-    );
+    await waitFor(() => expect(result.current.currentProject?.fullName).toBe('Updated Project'));
   });
 });
 /* eslint-enable no-type-assertion/no-type-assertion */
