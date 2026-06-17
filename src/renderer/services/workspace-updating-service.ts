@@ -3,7 +3,7 @@ import { logger } from '@shared/services/logger.service';
 import { setWorkspaceUpdating } from './workspace-updating-store';
 
 function logPerf(message: string): void {
-  logger.info(`[perf:simple-switch] ${message}`);
+  logger.debug(`[perf:simple-switch] ${message}`);
 }
 
 // String values must match PROJECT_SWITCH_WILL_START_EVENT / PROJECT_SWITCH_DID_FINISH_EVENT in

@@ -1,7 +1,7 @@
 import { logger } from '@shared/services/logger.service';
 
 function logPerf(message: string): void {
-  logger.info(`[perf:simple-switch] ${message}`);
+  logger.debug(`[perf:simple-switch] ${message}`);
 }
 
 /**

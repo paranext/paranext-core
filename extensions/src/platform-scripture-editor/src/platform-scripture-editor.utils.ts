@@ -886,7 +886,7 @@ export async function syncOnProjectSwitch(
   const tIncoming = performance.now();
   try {
     await papi.commands.sendCommand('paratextBibleSendReceive.syncProjects', [incomingProjectId]);
-    papi.logger.info(
+    papi.logger.debug(
       `[perf:simple-switch] syncOnProjectSwitch incoming ${incomingProjectId}: ${(performance.now() - tIncoming).toFixed(0)} ms`,
     );
   } catch (e) {
@@ -901,7 +901,7 @@ export async function syncOnProjectSwitch(
       await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [
         outgoingProjectId,
       ]);
-      papi.logger.info(
+      papi.logger.debug(
         `[perf:simple-switch] syncOnProjectSwitch outgoing ${outgoingProjectId}: ${(performance.now() - tOutgoing).toFixed(0)} ms`,
       );
     } catch (e) {
@@ -930,7 +930,7 @@ export async function openTextConnectionPanels(
   const tModel = performance.now();
   try {
     await papi.commands.sendCommand('platformScriptureEditor.openModelText', projectId);
-    papi.logger.info(
+    papi.logger.debug(
       `[perf:simple-switch] openModelText done in ${(performance.now() - tModel).toFixed(0)} ms`,
     );
   } catch (e) {
@@ -943,7 +943,7 @@ export async function openTextConnectionPanels(
       'CommentaryResource',
       projectId,
     );
-    papi.logger.info(
+    papi.logger.debug(
       `[perf:simple-switch] openResourceText(Commentary) done in ${(performance.now() - tCommentary).toFixed(0)} ms`,
     );
   } catch (e) {
@@ -956,13 +956,13 @@ export async function openTextConnectionPanels(
       'ScriptureResource',
       projectId,
     );
-    papi.logger.info(
+    papi.logger.debug(
       `[perf:simple-switch] openResourceText(Scripture) done in ${(performance.now() - tScripture).toFixed(0)} ms`,
     );
   } catch (e) {
     papi.logger.warn(`Error opening scripture resource text panel: ${getErrorMessage(e)}`);
   }
-  papi.logger.info(
+  papi.logger.debug(
     `[perf:simple-switch] openTextConnectionPanels total ${(performance.now() - tAll).toFixed(0)} ms`,
   );
 }

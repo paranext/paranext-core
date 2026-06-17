@@ -1,13 +1,14 @@
 import { SavedTabInfo } from '@shared/models/docking-framework.model';
 import { LayoutBase } from 'rc-dock';
 import { TAB_TYPE_WEBVIEW } from '@renderer/components/web-view.component';
+import { SIMPLE_LAYOUT_TAB_ID } from './simple-layout.tab-ids';
 
-// Stable tab IDs for the four tabs that make up the simple layout. `simple-layout.builder` keeps
-// the same IDs (duplicated to avoid a dependency cycle) — keep them in sync if they ever change.
-const MODEL_TEXT_TAB_ID = '0a23566d-1b2c-4dd2-8d3d-cda54b598cd2';
-const SCRIPTURE_EDITOR_TAB_ID = '3cf575f0-2cc2-464b-8765-b588f216dfce';
-const BIBLE_TEXTS_TAB_ID = '27616073-bf60-4f2b-9518-922d1a7d3601';
-const COMMENTARIES_TAB_ID = '6c950d23-f8d7-4482-a384-93ea0481698b';
+const {
+  modelText: MODEL_TEXT_TAB_ID,
+  scriptureEditor: SCRIPTURE_EDITOR_TAB_ID,
+  bibleTexts: BIBLE_TEXTS_TAB_ID,
+  commentaries: COMMENTARIES_TAB_ID,
+} = SIMPLE_LAYOUT_TAB_ID;
 
 // Using `as` here simplifies type changes.
 /* eslint-disable no-type-assertion/no-type-assertion */

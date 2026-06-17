@@ -930,7 +930,7 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
  * events, so we don't set it ourselves in that branch.
  */
 async function handleSwitchToSimpleMode(): Promise<void> {
-  const logPerf = (message: string) => logger.info(`[perf:simple-switch] ${message}`);
+  const logPerf = (message: string) => logger.debug(`[perf:simple-switch] ${message}`);
 
   const tStart = performance.now();
   logPerf('handleSwitchToSimpleMode start');
@@ -1081,7 +1081,7 @@ function trackSimpleLayoutTabsResolved(): { promise: Promise<void>; dispose: () 
 
   timeoutHandle = setTimeout(() => {
     if (remaining.size > 0) {
-      logger.info(
+      logger.debug(
         `[perf:simple-switch] tab-resolved tracker timed out after ${SIMPLE_LAYOUT_TABS_RESOLVED_TIMEOUT_MS} ms — ${remaining.size} tab(s) still pending, hiding overlay anyway`,
       );
     }

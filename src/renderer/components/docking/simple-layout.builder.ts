@@ -1,29 +1,16 @@
 import { SavedTabInfo } from '@shared/models/docking-framework.model';
 import { LayoutBase } from 'rc-dock';
+import { SIMPLE_LAYOUT_TAB_ID } from './simple-layout.tab-ids';
 
-// Tab IDs and the `TAB_TYPE_WEBVIEW` literal are inlined here rather than imported from
-// `simple-layout.data` or `web-view.component`. Importing either would create a dependency cycle
-// (this file is imported by `web-view.service-host`, and both of those files transitively import
-// back into the service). The IDs are stable UUIDs that match the static `simpleLayout`, and the
-// type literal `'webView'` is the docking-framework contract — duplicating them here is safe and
-// keeps the cycle broken. If the static-layout IDs ever change, update them here too.
-const MODEL_TEXT_TAB_ID = '0a23566d-1b2c-4dd2-8d3d-cda54b598cd2';
-const SCRIPTURE_EDITOR_TAB_ID = '3cf575f0-2cc2-464b-8765-b588f216dfce';
-const BIBLE_TEXTS_TAB_ID = '27616073-bf60-4f2b-9518-922d1a7d3601';
-const COMMENTARIES_TAB_ID = '6c950d23-f8d7-4482-a384-93ea0481698b';
+export { SIMPLE_LAYOUT_TAB_IDS } from './simple-layout.tab-ids';
+
+// `TAB_TYPE_WEBVIEW` is inlined here rather than imported from `web-view.component`. That import
+// would close a dependency cycle (this file is imported by `web-view.service-host`, which
+// transitively imports `web-view.component`). The string literal `'webView'` is the
+// docking-framework contract — duplicating the single literal is safe and keeps the cycle broken.
 const TAB_TYPE_WEBVIEW = 'webView';
 
-/**
- * The four stable UUIDs used for the simple-mode tabs. Exposed so callers driving the power →
- * simple transition can poll for tab readiness (e.g. wait until each tab's title has resolved
- * before hiding the workspace-updating overlay).
- */
-export const SIMPLE_LAYOUT_TAB_IDS: readonly string[] = [
-  MODEL_TEXT_TAB_ID,
-  SCRIPTURE_EDITOR_TAB_ID,
-  BIBLE_TEXTS_TAB_ID,
-  COMMENTARIES_TAB_ID,
-];
+const { modelText, scriptureEditor, bibleTexts, commentaries } = SIMPLE_LAYOUT_TAB_ID;
 
 /**
  * Builds a clone of the static simple layout with `projectId` baked into each tab's saved web-view
@@ -51,11 +38,11 @@ export function buildSimpleLayoutForProject(projectId: string): LayoutBase {
             {
               tabs: [
                 {
-                  id: MODEL_TEXT_TAB_ID,
+                  id: modelText,
                   tabType: TAB_TYPE_WEBVIEW,
                   data: {
                     webViewType: 'platformScriptureEditor.modelText',
-                    id: MODEL_TEXT_TAB_ID,
+                    id: modelText,
                     contentType: 'react',
                     projectId,
                     state: {},
@@ -72,11 +59,11 @@ export function buildSimpleLayoutForProject(projectId: string): LayoutBase {
             {
               tabs: [
                 {
-                  id: SCRIPTURE_EDITOR_TAB_ID,
+                  id: scriptureEditor,
                   tabType: TAB_TYPE_WEBVIEW,
                   data: {
                     webViewType: 'platformScriptureEditor.react',
-                    id: SCRIPTURE_EDITOR_TAB_ID,
+                    id: scriptureEditor,
                     contentType: 'react',
                     projectId,
                     // The factory reads `state.isReadOnly` when restoring from saved state. Set
@@ -96,22 +83,22 @@ export function buildSimpleLayoutForProject(projectId: string): LayoutBase {
             {
               tabs: [
                 {
-                  id: BIBLE_TEXTS_TAB_ID,
+                  id: bibleTexts,
                   tabType: TAB_TYPE_WEBVIEW,
                   data: {
                     webViewType: 'platformScriptureEditor.bibleTexts',
-                    id: BIBLE_TEXTS_TAB_ID,
+                    id: bibleTexts,
                     contentType: 'react',
                     projectId,
                     state: {},
                   },
                 },
                 {
-                  id: COMMENTARIES_TAB_ID,
+                  id: commentaries,
                   tabType: TAB_TYPE_WEBVIEW,
                   data: {
                     webViewType: 'platformScriptureEditor.commentaries',
-                    id: COMMENTARIES_TAB_ID,
+                    id: commentaries,
                     contentType: 'react',
                     projectId,
                     state: {},

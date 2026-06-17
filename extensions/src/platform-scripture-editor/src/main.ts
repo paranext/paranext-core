@@ -368,7 +368,7 @@ async function open(
     };
 
     const tOpenAll = performance.now();
-    logger.info(
+    logger.debug(
       `[perf:simple-switch] extension open() start (interfaceMode=${interfaceMode}, dispatch.kind=${dispatch.kind})`,
     );
 
@@ -386,7 +386,7 @@ async function open(
         openWebViewOptions,
       )
       .finally(emitDidFinish);
-    logger.info(
+    logger.debug(
       `[perf:simple-switch] main editor openWebView done in ${(performance.now() - tMainOpen).toFixed(0)} ms (extension open() total ${(performance.now() - tOpenAll).toFixed(0)} ms)`,
     );
 
