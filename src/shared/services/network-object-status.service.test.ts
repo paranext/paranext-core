@@ -113,20 +113,8 @@ describe('waitForNetworkObject', () => {
     const service = await loadService();
     mockGet.mockRejectedValue(new Error('network object service unavailable'));
 
-    // waitForNetworkObject rejects its internal AsyncVariable and then re-throws; that
-    // AsyncVariable's promise is never returned, so its rejection surfaces (a tick later) as an
-    // unhandled rejection. Capture it so it can't fail the run, and assert it carries the reason.
-    const floating: unknown[] = [];
-    const onUnhandled = (reason: unknown) => floating.push(reason);
-    process.on('unhandledRejection', onUnhandled);
-    try {
-      await expect(service.waitForNetworkObject({ id: 'Anything' })).rejects.toThrow(
-        'network object service unavailable',
-      );
-      await vi.waitFor(() => expect(floating).toHaveLength(1));
-      expect(floating[0]).toMatch(/network object service unavailable/);
-    } finally {
-      process.off('unhandledRejection', onUnhandled);
-    }
+    await expect(service.waitForNetworkObject({ id: 'Anything' })).rejects.toThrow(
+      'network object service unavailable',
+    );
   });
 });

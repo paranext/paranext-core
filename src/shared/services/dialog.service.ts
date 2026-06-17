@@ -4,6 +4,9 @@ import { createCachedInitializer } from '@shared/utils/cached-initializer';
 import { serializeRequestType } from '@shared/utils/util';
 import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
 
+// networkService.initialize() is already idempotent and retry-safe on its own, so this wrapper adds
+// no retry behavior; it exists only to keep this service structurally uniform with the other shared
+// services that use createCachedInitializer.
 const initialize = createCachedInitializer(async () => {
   await networkService.initialize();
 });

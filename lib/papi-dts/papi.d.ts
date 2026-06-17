@@ -3586,9 +3586,9 @@ declare module 'shared/utils/cached-initializer' {
    * with the same error. This is useful for initializing access to a resource that may not be
    * available yet, like a network object owned by a process that is still starting up.
    *
-   * Note that the call that started a failed attempt still rejects with the initializer's error; only
-   * later calls retry. The initializer must therefore be safe to run again after a failure, e.g. it
-   * should not leave partial registrations behind.
+   * Note that calls that awaited the failed attempt all reject with its error; only calls arriving
+   * after the rejection settles retry. The initializer must therefore be safe to run again after a
+   * failure, e.g. it should not leave partial registrations behind.
    *
    * @param initializer Asynchronous function that performs the initialization
    * @returns Function that returns the cached initialization promise, starting a new initialization
