@@ -84,6 +84,7 @@ import {
   Unsubscriber,
   UnsubscriberAsync,
 } from 'platform-bible-utils';
+import { buildSimpleLayoutForProject } from '@renderer/components/docking/simple-layout.builder';
 import {
   closeOpenUsersnapForm,
   isUsersnapFormCurrentlyOpen,
@@ -890,13 +891,27 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
 }
 
 /**
- * Drives the power → simple transition from the renderer. Resolves the most-recent project in
- * parallel with the layout swap so we can show the "Loading layout for X" overlay immediately, then
- * runs the layout swap. The actual project open is performed by the platform-scripture-editor
- * default-project picker, which fires off `onDidOpenWebView` for the empty placeholder tab in
- * `simpleLayout` and opens the same most-recent project — so doing it here too just causes a race
- * where every webview opens twice. The overlay is torn down by the extension's `onDidSwitchProject`
- * network event (see `workspace-updating-service.ts`) once the picker's `open()` flow completes.
+ * Drives the power → simple transition from the renderer. The bare `simpleLayout` declares four
+ * tabs with empty state (no `projectId`); restoring it would mount four empty webviews, fire
+ * `onDidOpenWebView` for each, trigger the default-project picker, and then reload all four
+ * webviews with the project — paying a full webview teardown + remount cycle twice. Power mode
+ * avoids this because its persisted layout already has every tab's state populated.
+ *
+ * To match the power-mode shape, we resolve the most-recent project here, bake its `projectId` into
+ * a cloned simple layout via {@link buildSimpleLayoutForProject}, and pass that to `loadLayout`.
+ * Each web-view provider's `getWebView` then receives `savedWebView.projectId` directly from the
+ * layout — same code path power mode uses on restore — and renders project content immediately,
+ * with no empty-placeholder → reload round-trip.
+ *
+ * The overlay is driven entirely from the renderer in this flow: shown when we know the target
+ * project, hidden once `loadLayout` returns. Because no empty Scripture Editor placeholder ever
+ * exists, the picker sees `'no-empty'` and exits without firing `openScriptureEditor`, so no
+ * extension-host `open()` runs and no `WILL_START`/`DID_FINISH` events are emitted — the renderer
+ * is the single source of truth for the overlay during a power → simple switch.
+ *
+ * Fallback: if no recent project can be resolved (cold start, empty recents), we load the bare
+ * `simpleLayout` and let the picker do the slow legacy path. The overlay is then driven by the
+ * extension's network events, so we don't set it ourselves in that branch.
  */
 async function handleSwitchToSimpleMode(): Promise<void> {
   const logPerf = (message: string) => logger.info(`[perf:simple-switch] ${message}`);
@@ -907,21 +922,35 @@ async function handleSwitchToSimpleMode(): Promise<void> {
   logPerf(
     `resolveRecent done at ${(performance.now() - tStart).toFixed(0)} ms (resolved=${!!resolved})`,
   );
-  // Show the overlay immediately if we know which project will load. The extension's
-  // `onWillSwitchProject` event will set it again with the same name (no-op) when the picker's
-  // `open()` runs; `onDidSwitchProject` clears it when the open finishes.
-  if (resolved) setWorkspaceUpdating(true, resolved.name);
+
+  if (!resolved) {
+    // Fallback path — bare simpleLayout, picker fills the empty editor, extension drives overlay.
+    try {
+      const tLoad = performance.now();
+      await loadLayout();
+      logPerf(`fallback loadLayout done in ${(performance.now() - tLoad).toFixed(0)} ms`);
+    } catch (err) {
+      logger.warn(`Dock layout failed to reload after interface mode change: ${err}`);
+    }
+    return;
+  }
+
+  setWorkspaceUpdating(true, resolved.name);
   try {
     const tLoad = performance.now();
-    await loadLayout();
+    const projectBoundLayout = buildSimpleLayoutForProject(resolved.id);
+    // `loadLayout` types its parameter as `LayoutInfo` (Record<string, unknown>) but actually just
+    // forwards it to `dockLayoutVar.loadLayout`, which accepts the same `LayoutBase` that
+    // `simpleLayout` already uses. Cast to bridge the type gap without changing the public type.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    await loadLayout(projectBoundLayout as unknown as LayoutInfo);
     logPerf(
-      `loadLayout done in ${(performance.now() - tLoad).toFixed(0)} ms (total ${(performance.now() - tStart).toFixed(0)} ms)`,
+      `project-bound loadLayout done in ${(performance.now() - tLoad).toFixed(0)} ms (total ${(performance.now() - tStart).toFixed(0)} ms)`,
     );
   } catch (err) {
     logger.warn(`Dock layout failed to reload after interface mode change: ${err}`);
-    // If the layout swap failed, the picker won't fire and `onDidSwitchProject` will never arrive
-    // to clear the overlay. Clear it here so the user isn't stuck.
-    if (resolved) setWorkspaceUpdating(false);
+  } finally {
+    setWorkspaceUpdating(false);
   }
 }
 
