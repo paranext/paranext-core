@@ -65,6 +65,10 @@ const versificationValidator: ProjectSettingValidator<'platformScripture.versifi
   return valueAsNumber >= 0 && valueAsNumber <= 6 && Number.isInteger(valueAsNumber);
 };
 
+const structureProtectionValidator: ProjectSettingValidator<
+  'platformScripture.structureProtection'
+> = async (newValue: unknown) => typeof newValue === 'boolean';
+
 // A character can be any string value
 const charactersValidator: ProjectSettingValidator<
   'platformScripture.validCharacters' | 'platformScripture.invalidCharacters'
@@ -377,6 +381,10 @@ export async function activate(context: ExecutionActivationContext) {
   const versificationPromise = papi.projectSettings.registerValidator(
     'platformScripture.versification',
     versificationValidator,
+  );
+  const structureProtectionPromise = papi.projectSettings.registerValidator(
+    'platformScripture.structureProtection',
+    structureProtectionValidator,
   );
   const validCharactersPromise = papi.projectSettings.registerValidator(
     'platformScripture.validCharacters',
@@ -694,6 +702,7 @@ export async function activate(context: ExecutionActivationContext) {
     await scriptureFinderPdpefPromise,
     await booksPresentPromise,
     await versificationPromise,
+    await structureProtectionPromise,
     await validCharactersPromise,
     await invalidCharactersPromise,
     await openCharactersInventoryPromise,
