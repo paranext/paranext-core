@@ -94,8 +94,8 @@ export type ProjectSelectorLocalizedStrings = {
   otherProjectsSectionHeading?: string;
   /**
    * Section heading rendered for the "Unknown versification" bucket in versification-grouping mode
-   * (Sebastian UX new-requirement 3, 2026-06-12) — covers projects whose versification can't be
-   * resolved at load time. Defaults to `"Unknown versification"`.
+   * — covers projects whose versification can't be resolved at load time. Defaults to `"Unknown
+   * versification"`.
    */
   versificationUnknownSectionHeading?: string;
   /**
@@ -182,9 +182,9 @@ type CommonProps = {
   /**
    * When true, rows are grouped by `versificationId` (with the `priorityVersificationId` bucket
    * pinned to the top). The "Group by open tabs" toggle is hidden — the two grouping modes are
-   * mutually exclusive in the same picker. Sebastian UX new-requirement 3 (2026-06-12). When
-   * `groupByVersification` is enabled, the consumer should ensure each
-   * {@link ProjectSelectorProject} carries `versificationId` and `versificationName`.
+   * mutually exclusive in the same picker. When `groupByVersification` is enabled, the consumer
+   * should ensure each {@link ProjectSelectorProject} carries `versificationId` and
+   * `versificationName`.
    */
   groupByVersification?: boolean;
   /**
@@ -390,7 +390,7 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen, selectedRowRef }:
           below. Each line truncates independently. Tooltip-on-clip still
           works because the wrapping span is what scrollWidth/clientWidth is
           measured on (truncation in EITHER child contributes to overflow).
-          Sebastian UX review item 3 (2026-06-12): when `fullName` is missing
+          When `fullName` is missing
           or equal to `shortName` the second line would render the same
           string the user already sees above (e.g. consumers that fall back
           `fullName ?? shortName` upstream and forward an unset project
@@ -621,7 +621,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     return result;
   }, [rows, query, props.mode, showSelectedOnly]);
 
-  // Sebastian UX new-requirement 3 (2026-06-12): when the caller opts into
+  // When the caller opts into
   // versification grouping (`groupByVersification`), sections are partitioned
   // by versificationId with the priority bucket pinned to the top. The
   // "Group by open tabs" toggle is intentionally hidden in this mode (see
@@ -844,8 +844,8 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       ? handleOpenProjectInGroup
       : undefined;
 
-  // Sebastian UX review item 5 (2026-06-12): the trigger used to expose its
-  // untruncated label via the native `title` attribute, which surfaces a
+  // The trigger used to expose its untruncated label via the native `title`
+  // attribute, which surfaces a
   // browser-default yellow tooltip — inconsistent with the rest of the app's
   // shadcn tooltip styling. We now wrap the PopoverTrigger in a shadcn
   // Tooltip so the surrounding consumer's TooltipProvider (e.g. manage-books
