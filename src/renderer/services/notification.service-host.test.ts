@@ -99,4 +99,28 @@ describe('notification service host', () => {
       expect(mockToast.dismiss).not.toHaveBeenCalled();
     });
   });
+
+  describe('send with a reused notificationId (PT-4002)', () => {
+    it('passes the existing toast id as the top-level id so Sonner updates instead of duplicating', async () => {
+      mockToastInfo.mockReturnValueOnce('toast-1');
+      const notification: PlatformNotification = {
+        message: 'Syncing...',
+        severity: 'info',
+        notificationId: 'sync-status',
+      };
+
+      // First send creates the toast and maps notificationId -> 'toast-1'.
+      await capturedService.send(notification);
+      // Re-sending with the same notificationId must UPDATE the existing toast, i.e. pass the
+      // existing toast id as the top-level `id` option (what Sonner uses to update vs create).
+      await capturedService.send(notification);
+
+      expect(mockToastInfo).toHaveBeenCalledTimes(2);
+      expect(mockToastInfo).toHaveBeenNthCalledWith(
+        2,
+        'Syncing...',
+        expect.objectContaining({ id: 'toast-1' }),
+      );
+    });
+  });
 });

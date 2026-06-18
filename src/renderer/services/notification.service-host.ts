@@ -36,12 +36,15 @@ async function send(notification: PlatformNotification): Promise<string | number
   if (notification.duration !== undefined)
     duration = notification.duration <= 0 ? Infinity : notification.duration;
   const toastOptions = {
+    // When re-sending with the same notificationId, reuse the existing toast id so Sonner
+    // updates the existing toast instead of creating a duplicate. Sonner reads this from the
+    // top-level `id` (not from `action.id`, which it ignores). PT-4002.
+    id: toastId,
     action:
       clickCommandLabel && clickCommand
         ? {
             label: await localize(clickCommandLabel),
             onClick: () => commandService.sendCommand(clickCommand, effectiveNotificationId),
-            id: toastId,
           }
         : undefined,
     // Duration calc from https://paratextstudio.atlassian.net/browse/PT-2196?focusedCommentId=13075
