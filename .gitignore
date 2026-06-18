@@ -59,13 +59,6 @@ e2e-tests/playwright-report/
 e2e-tests/test-results/
 e2e-tests/.dev-server.pid
 
-# claude
-.claude
-.claude.backup/
-.context
-c-sharp/CLAUDE.md
-CLAUDE.md
-CLAUDE.md.backup
 
 docs/superpowers/
 .superpowers/
