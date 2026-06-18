@@ -54,13 +54,13 @@ Terse decisions for the C# backend. Each lists the chosen approach, what to avoi
   - When: you define the discriminated-union hierarchy in this repository AND it has a simple tagged-union wire shape (one discriminator property naming the subtype).
   - Avoid: attribute-based polymorphism for types you don't own or that need multiple input shapes / wire transformations beyond a single discriminator — fall back to a custom `JsonConverter<T>` there.
   - Why: declarative, co-located with the type hierarchy, zero runtime registration, compile-time-validated subtype list. Example: `c-sharp/Checklists/ChecklistContentItem.cs` (the `TextItem` / `VerseItem` / `EditLinkItem` / `LinkItem` / `ErrorItem` / `MessageItem` union).
-  - Concrete-return-type exception: the general rule is that PAPI delegates return concrete types, never `object`/`dynamic`. The one allowed exception is a delegate whose wire shape *is* a discriminated union fully described by `[JsonPolymorphic]`/`[JsonDerivedType]` — it MAY declare its return type as `object` (never `dynamic`) so System.Text.Json serializes the runtime type. Document the exception with xmldoc naming the concrete union branches.
-  - Consuming side (TS) — narrowing a union with NO named discriminator: when a C# wire response is a discriminated union that does not carry a discriminator field (e.g. an OK shape `{ rows, columnHeaders, ... }` versus an error shape `{ error }`), the TypeScript consumer must narrow on property *presence* — `'rows' in response` — not on an absent boolean. Inventing a `success` flag that is on neither variant means every response falls into the wrong branch (the data table stays empty even when rows arrive). `'key' in value` narrowing is the idiomatic match for a union without a tag field.
+  - Concrete-return-type exception: by convention PAPI delegates return concrete types, never `object`/`dynamic`. Only the `dynamic` half is lint-enforced — the `PNX008` analyzer bans `dynamic` returns but **allows `object`** (verified by `BanDynamicAnalyzerTests.ObjectReturn_NoDiagnostic`); the preference against `object` is convention, caught in review. The one sanctioned `object` return is a delegate whose wire shape *is* an **untagged** discriminated union — a success record OR an error record with no shared base and no discriminator field (e.g. `ChecklistNetworkObject.BuildChecklistData` returning `ChecklistResult | ChecklistResultError`) — declared `object` (never `dynamic`) so System.Text.Json serializes whichever runtime type is returned. Document it with xmldoc naming the concrete branches. (This is distinct from `[JsonPolymorphic]`/`[JsonDerivedType]` unions like `ChecklistContentItem`, which are serialized as typed *fields*, not returned as `object`.)
+  - Consuming side (TS) — narrowing a union with NO named discriminator: when a C# wire response is a discriminated union that does not carry a discriminator field (e.g. an OK shape `{ rows, columnHeaders, ... }` versus an error shape `{ code, message }`, e.g. `ChecklistResultError`), the TypeScript consumer must narrow on property *presence* — `'rows' in response` — not on an absent boolean. Inventing a `success` flag that is on neither variant means every response falls into the wrong branch (the data table stays empty even when rows arrive). `'key' in value` narrowing is the idiomatic match for a union without a tag field.
 - **D-Bus client (Linux-only IPC):** `Tmds.DBus.Protocol`.
   - When: low-level Linux D-Bus IPC (e.g. IBus input-method-framework integration).
   - Avoid: `Tmds.DBus` (the legacy higher-level package — in maintenance mode), and `dbus-sharp` (unmaintained).
   - Why: the actively maintained low-level library (.NET 8/9 + AOT-compatible) where new D-Bus features land. (No D-Bus code is present in `main` today; this records the decision for when such IPC is added.)
-- **Native OS keyboard / input-method switching (per platform):** P/Invoke per OS behind a single `IKeyboardingPrimitive` interface, with the implementation selected at construction via `RuntimeInformation.IsOSPlatform(...)`.
+- **Native OS keyboard / input-method switching (per platform):** P/Invoke per OS behind a single `IKeyboardingPrimitive` interface, with the implementation selected at construction via `RuntimeInformation.IsOSPlatform(...)`. (A per-platform interface rather than one cross-platform library, because `SIL.Windows.Forms.Keyboarding` — PT9's keyboarding library — is Windows-only at the TFM level.)
   - **Windows:** P/Invoke `user32.dll` — `GetKeyboardLayoutList` / `GetKeyboardLayout` to enumerate, `ActivateKeyboardLayout` to switch. `SIL.Windows.Forms.Keyboarding` targets .NET Framework 4.6.2, so reusing it under a `net8.0-windows` TFM needs verification; standalone P/Invoke is the safer fallback.
   - **Linux:** IBus over D-Bus via `Tmds.DBus.Protocol` (the `org.freedesktop.IBus` interface — `ListEngines` / `SetGlobalEngine` / `GetGlobalEngine`). Degrade to a no-op plus a console warning when the IBus daemon is absent (XKB-only systems).
   - **macOS:** P/Invoke HIToolbox Text Input Services — `TISCreateInputSourceList` / `TISCopyCurrentKeyboardInputSource` / `TISSelectInputSource`. These survive in macOS 14/15 despite the "Carbon discontinuation" (which removed higher-level UI APIs, not Text Input Services); signed/sandboxed builds may need entitlements for TIS access.
@@ -448,7 +448,7 @@ public class MissingBookException(int bookNum, string projectId)
 A multi-item PAPI operation (copy/import/delete a set of books) should NOT abort the whole batch on the first failure. Return a result record carrying `{ Success, Errors[], Warnings[] }` and accumulate per-item failures *inside* the loop — catch the per-item exception, append it to `Errors`, and continue — rather than throwing out of the loop.
 
 - `Success` is typically `Errors.Length == 0` (optionally also requiring at least one item to have succeeded).
-- Examples: `CopyBooksResult` / `ImportBooksResult` in `c-sharp/ManageBooks/`. The element type of `Errors`/`Warnings` may differ per operation (`List<string>` vs structured `AlertEntry[]`) depending on whether the operation captures ParatextData alerts (see **AlertCapture** below).
+- Examples: `CopyBooksResult` / `ImportBooksResult` / `CreateBooksResult` in `c-sharp/ManageBooks/` carry structured `AlertEntry[]` (they capture ParatextData alerts — see **AlertCapture** below); `DeleteBooksResult` uses `List<string>`. The element type depends on whether the operation captures ParatextData alerts.
 
 Reserve `throw` (with `PlatformErrorCodes.WithCode`) for whole-operation preconditions that fail before the loop (missing project, non-admin, etc.), not for individual item failures.
 
@@ -487,7 +487,7 @@ ParatextData surfaces user-facing warnings and errors by calling `Alert.Show` / 
   ```
 
 - `AlertCapture` keeps the active scope in an `AsyncLocal<AlertScope?>`, so each async wire call captures only its own alerts even when calls run concurrently. Nested scopes save and restore the parent on dispose.
-- Partition the captured `AlertEntry[]` into the result's `Warnings` / `Errors` (e.g. `AlertCapture.PartitionAlertsByLevel`) so the caller gets structured feedback instead of a swallowed message.
+- Partition the captured `List<AlertEntry>` (the `Entries`) into the result's `Warnings` / `Errors` `AlertEntry[]` arrays (e.g. `AlertCapture.PartitionAlertsByLevel`, whose `out` params are those arrays) so the caller gets structured feedback instead of a swallowed message.
 - Outside any scope, `AlertCapture` falls back to `Console.WriteLine` plus a negative `AlertResult`.
 
 Don't call `Alert.Show` from your own orchestrator code as poor-man's logging — put the message in the structured result field instead.
@@ -561,7 +561,7 @@ When a feature writes files that ParatextData must later read back (`Settings.xm
 - **GUIDs** from `Guid.NewGuid()` are dashed and 36 chars; `HexId.FromStr()` rejects that form. Project GUIDs must be 40-char hex strings — use `HexId.CreateNew()`, not `Guid.NewGuid()`.
 - **Field set** must match PT9: same element names, element order, and presence. If PT9's file has 30 fields and yours has 8, the missing fields will make the file unreadable. Don't emit extra XML namespace attributes unless PT9 does.
 
-After writing, verify ParatextData can round-trip the file: call `ScrTextCollection.RefreshScrTexts()`, confirm `ScrTextCollection.ScrTexts()` includes the project, and read back key properties (name, language, versification). Compare the generated file against a known-good PT9 reference before trusting it.
+After writing, verify ParatextData can round-trip the file: call `ScrTextCollection.RefreshScrTexts()`, confirm `ScrTextCollection.ScrTexts(IncludeProjects.AllAccessible)` includes the project, and read back key properties (name, language, versification). Compare the generated file against a known-good PT9 reference before trusting it.
 
 ### Multi-threaded/Concurrent Code
 
@@ -700,13 +700,15 @@ public void ThreadSafe(string key1, string value)
 
 #### Project write-locking — reuse `ParatextData.WriteLockManager`
 
-To protect a project during a multi-step mutation (file swap, book copy/import/delete), obtain an exclusive write lock from ParatextData rather than rolling your own. PT10 already uses this primitive directly — `c-sharp/Projects/ParatextProjectDataProvider.cs` and the Manage-Books orchestrators (`DeleteBooksOrchestrator`, `CopyBooksOrchestrator`, `ImportBooksOrchestrator`) all call it.
+To protect a project during a multi-step mutation (file swap, book copy/import/delete), obtain an exclusive write lock from ParatextData rather than rolling your own. PT10 already uses this primitive directly: `c-sharp/Projects/ParatextProjectDataProvider.cs` (via `RunWithinLock`, scope `WriteScope.EntireProject`) and `DeleteBooksOrchestrator` (scope `WriteScope.ProjectText`). Copy/Import don't call it themselves — they rely on ParatextData's own internal locking (`ImportSfmText.ImportBooks` / `PutText`) and only map the resulting `LockNotObtainedException`.
 
 ```csharp
-WriteLock writeLock = WriteLockManager.Default.ObtainLock(WriteScope.EntireProject(scrText));
+// ObtainLock returns null when the lock can't be obtained — never assume success.
+WriteLock writeLock = WriteLockManager.Default.ObtainLock(WriteScope.EntireProject(scrText))
+    ?? throw PlatformErrorCodes.WithCode(PlatformErrorCodes.FailedPrecondition, "The project is busy.");
 ```
 
-`ObtainLock` signals an unavailable lock via `LockNotObtainedException` — handle that as a failed precondition, not a crash. When porting PT9 code that uses this lock, the lock logic and `LockNotObtainedException` port across without rewrite.
+`ObtainLock` **returns null** when the lock is unavailable (it does not throw); callers convert that null — or an inactive lock — into a `LockNotObtainedException` (or a `PlatformError`) and handle it as a failed precondition, not a crash. `LockNotObtainedException` itself is thrown by higher-level ParatextData helpers (`ScrText`, `ScrTextCollection`) and by paranext-core's own null checks. When porting PT9 code that uses this lock, the lock logic and `LockNotObtainedException` port across without rewrite.
 
 ### PAPI Event/Request Registration
 
