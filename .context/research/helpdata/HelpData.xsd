@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified">
+  
+  <!-- Root element -->
+  <xs:element name="ArrayOfHelpDataItem">
+    <xs:annotation>
+      <xs:documentation>
+        Root element containing all help data items for Paratext 9.
+        This file provides context-sensitive help, FAQs, and documentation.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="HelpDataItem" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  
+  <!-- HelpDataItem element -->
+  <xs:element name="HelpDataItem">
+    <xs:annotation>
+      <xs:documentation>
+        A single help topic or FAQ entry in the Paratext help system.
+        Contains a question, answer, and metadata for categorization and searching.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Question" type="xs:string">
+          <xs:annotation>
+            <xs:documentation>
+              The question or topic title that users might search for or browse.
+            </xs:documentation>
+          </xs:annotation>
+        </xs:element>
+        
+        <xs:element name="Answer" type="xs:string">
+          <xs:annotation>
+            <xs:documentation>
+              The detailed answer or explanation. May contain formatted text with special markup:
+              - {link:id} for internal links
+              - {tip:text:description} for tooltips
+              - {image:filename:width:size} for images
+              - {section:title}...{section} for collapsible sections
+              - Markdown-like formatting (* for bold, _ for italic, # for numbered lists, etc.)
+            </xs:documentation>
+          </xs:annotation>
+        </xs:element>
+        
+        <xs:element name="Type" type="xs:string">
+          <xs:annotation>
+            <xs:documentation>
+              The type of help item. Common values include:
+              - "help" (standard help topic)
+              - "faq" (frequently asked question)
+            </xs:documentation>
+          </xs:annotation>
+        </xs:element>
+        
+        <xs:element name="Tags" type="xs:string" minOccurs="0">
+          <xs:annotation>
+            <xs:documentation>
+              Space-separated tags for categorizing the help item.
+              Common tags include: DC (Document-Centric), faq, etc.
+            </xs:documentation>
+          </xs:annotation>
+        </xs:element>
+        
+        <xs:element name="Keywords" type="xs:string" minOccurs="0">
+          <xs:annotation>
+            <xs:documentation>
+              Space-separated keywords for searching and indexing.
+              Often includes component names, menu paths, and related terms.
+              Examples: ComponentResources, Full-Menus, ContentWordlist
+            </xs:documentation>
+          </xs:annotation>
+        </xs:element>
+        
+        <xs:element name="AltSearchTerms" type="xs:string" minOccurs="0">
+          <xs:annotation>
+            <xs:documentation>
+              Alternative search terms that users might use to find this help topic.
+              Provides additional discoverability beyond the Keywords field.
+            </xs:documentation>
+          </xs:annotation>
+        </xs:element>
+        
+        <xs:element name="Dialogs" type="xs:string" minOccurs="0">
+          <xs:annotation>
+            <xs:documentation>
+              Space-separated list of dialog or form names that this help topic relates to.
+              Examples: LocationFilterForm, WordListForm, LanguageSettingsForm_tabAlphabetic
+            </xs:documentation>
+          </xs:annotation>
+        </xs:element>
+      </xs:sequence>
+      
+      <xs:attribute name="id" type="xs:string" use="required">
+        <xs:annotation>
+          <xs:documentation>
+            Unique identifier for this help item (GUID format).
+            Used for internal linking and cross-references.
+          </xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      
+      <xs:attribute name="translationLink" type="xs:string" use="optional">
+        <xs:annotation>
+          <xs:documentation>
+            Link to the translation record for this help item.
+            Used to track translations across different language versions.
+          </xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      
+      <xs:attribute name="language" type="xs:string" use="required">
+        <xs:annotation>
+          <xs:documentation>
+            The language code for this help item (e.g., "en", "es", "fr", "pt-BR", "zh-Hans").
+            Follows ISO 639 language codes with optional region codes.
+          </xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      
+      <xs:attribute name="component" type="xs:string" use="optional">
+        <xs:annotation>
+          <xs:documentation>
+            Optional component identifier that this help item is associated with.
+            Used for organizing help topics by feature or component.
+          </xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+    </xs:complexType>
+  </xs:element>
+  
+</xs:schema>
