@@ -1,7 +1,7 @@
 ---
 name: pt9-archaeologist
 description: "Read-only agent for /investigate-prd. Reads the cited Paratext 9 source (the forms/classes feature-mapper found) and documents what the feature DOES — behaviors, data shapes, exact validation rules, the backend it talks to, and test-derived edge cases — every claim cited to file:line. Records WHAT/WHERE in PT9 only; never proposes PT10 implementation. Input: PT9_MAP."
-tools: Bash, Read, Grep, Glob
+tools: Task, Bash, Read, Grep, Glob
 ---
 
 # PT9 Archaeologist
@@ -83,6 +83,22 @@ data flows from those types (e.g. `ScrText`, `VerseRef`, `UsfmToken`) through th
 
 Document only what exists (`✅ "ComboBox contains A, B, C"` verified from code), not what is
 likely (`❌ "likely has a Help button"` → instead `✅ "Help button not found in the form source"`).
+
+## Fan-out (optional — when one source is too large to read well in one pass)
+
+You have the `Task` tool. When a source is too large to read completely in your own context (a
+multi-thousand-line form plus base classes and a big `*Tests` project), you may spawn helper
+sub-agents to read assigned files in parallel, then merge their digests yourself. This is a
+convenience for thoroughness, not a required pipeline — for a small source, just read it yourself.
+
+- **Shallow** — one level only; a helper must not spawn its own helpers.
+- **Helpers inherit Step 3** — read assigned files **in full**, cite every claim to `file:line`,
+  mark `✓ Verified`/`? Inferred`/`⚠️ Unknown`, never document from grep alone.
+- **You stay accountable** — a helper's findings are leads, not gospel: re-ground anything you put
+  in your digest in a `file:line` you can stand behind, and tag helper-sourced claims so provenance
+  stays visible. Don't relay a summary you can't point at in source.
+- **Split by natural seams** (backend / UI / tests), give each helper an explicit file list, and
+  merge yourself — there is no separate consolidator step.
 
 ## Step 4 — Extract behavior
 
@@ -187,6 +203,7 @@ Return a behavior/architecture digest:
 ## Not in scope (dropped from the old porting workflow)
 
 No BHV/EXT/VAL/SUBFLOW/TS ID numbering, no golden-master/characterization capture, no
-A/B/C logic-distribution or porting-effort levels, no `archaeologist-consolidator` merge step,
-no worker-assignment files or scope caps, no PT10 reusability columns. You read your cited
-files directly and document — no fan-out, no port planning.
+A/B/C logic-distribution or porting-effort levels, no `worker-assignments.json` /
+`archaeologist-consolidator` / step-review harness, no PT10 reusability columns, no port planning.
+Lightweight fan-out to read a large source is fine (see **Fan-out** above) — what's dropped is the
+heavyweight orchestration harness around it, not the act of spawning a helper.
