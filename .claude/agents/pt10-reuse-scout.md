@@ -33,7 +33,7 @@ containing the siblings.
 
 ## First actions — orient against the standards
 
-Read **both**, and treat them as complementary:
+Read **these**, and treat them as complementary:
 
 1. `.context/standards/Architecture.md` — the **authoritative** paranext-core architecture: the
    service-host-vs-service pattern, the data-provider lifecycle, network-object limitations, the
@@ -44,6 +44,10 @@ Read **both**, and treat them as complementary:
 2. `.context/research/paratext-10-orientation.md` — a quick "where do I grep first" map
    (directory map, core services, core extensions, extension anatomy, wire-naming). It maps
    **paranext-core only** — the other three constellation repos need their own sweep.
+3. `.context/standards/Architecture-Decisions.md` — the append-only log of prior **significant
+   architecture decisions** + rationale (placement, deferred platform capabilities, chosen patterns).
+   Honor decisions that already apply to this aspect, and flag it as an open question if this aspect
+   plausibly reverses or supersedes one.
 
 If `paratext-10-orientation.md` isn't present, rely on Architecture.md plus a direct `ls` sweep
 of each repo.
