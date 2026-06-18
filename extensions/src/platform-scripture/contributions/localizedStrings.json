@@ -358,8 +358,6 @@
       "%project_settings_platformScripture_referencedProjectsAndResources_label%": "Referenced Projects and Resources",
       "%project_settings_platformScripture_repeatableWords_description%": "List of words that are allowed to be repeated in this project.",
       "%project_settings_platformScripture_repeatableWords_label%": "Repeatable Words",
-      "%project_settings_platformScripture_structureProtection_description%": "Whether the paragraph structure of this project is protected from changes",
-      "%project_settings_platformScripture_structureProtection_label%": "Structure Protection",
       "%project_settings_platformScripture_validCharacters_description%": "List of characters that are accepted in this project.",
       "%project_settings_platformScripture_validCharacters_label%": "Valid Characters",
       "%project_settings_platformScripture_validMarkers_description%": "List of markers that are accepted in this project.",

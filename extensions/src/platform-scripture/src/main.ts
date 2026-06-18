@@ -66,8 +66,8 @@ const versificationValidator: ProjectSettingValidator<'platformScripture.versifi
 };
 
 // C# converts Paratext's "T"/"F" to boolean before it reaches this validator
-const structureProtectionValidator: ProjectSettingValidator<
-  'platformScripture.structureProtection'
+const structureProtectedValidator: ProjectSettingValidator<
+  'platformScripture.structureProtected'
 > = async (newValue: unknown) => typeof newValue === 'boolean';
 
 // A character can be any string value
@@ -383,9 +383,9 @@ export async function activate(context: ExecutionActivationContext) {
     'platformScripture.versification',
     versificationValidator,
   );
-  const structureProtectionPromise = papi.projectSettings.registerValidator(
-    'platformScripture.structureProtection',
-    structureProtectionValidator,
+  const structureProtectedPromise = papi.projectSettings.registerValidator(
+    'platformScripture.structureProtected',
+    structureProtectedValidator,
   );
   const validCharactersPromise = papi.projectSettings.registerValidator(
     'platformScripture.validCharacters',
@@ -703,7 +703,7 @@ export async function activate(context: ExecutionActivationContext) {
     await scriptureFinderPdpefPromise,
     await booksPresentPromise,
     await versificationPromise,
-    await structureProtectionPromise,
+    await structureProtectedPromise,
     await validCharactersPromise,
     await invalidCharactersPromise,
     await openCharactersInventoryPromise,

@@ -105,8 +105,16 @@ public sealed class ProjectSettingsNames
         "platformScripture.referencedProjectsAndResources";
     public const string PT_REFERENCED_PROJECTS_AND_RESOURCES = "ReferencedProjectsAndResources";
 
-    public const string PB_STRUCTURE_PROTECTION = "platformScripture.structureProtection";
-    public const string PT_STRUCTURE_PROTECTION = "PlatformBibleStructureProtection";
+    /// <summary>
+    /// Whether the paragraph/verse structure of this project is protected from changes. A project
+    /// Admin may define a structure for the translated Scripture text or adopt the structure of a
+    /// model text to provide consistency and ensure the acceptability of the published text. When
+    /// true, other team members cannot change the structure of the translated text. The Admin can
+    /// set this to false to temporarily allow structural changes. Stored in Paratext's Settings.xml
+    /// as "StructureProtected".
+    /// </summary>
+    public const string PB_STRUCTURE_PROTECTED = "platformScripture.structureProtected";
+    public const string PT_STRUCTURE_PROTECTED = "StructureProtected";
 
     /// <summary>
     /// Paratext setting names that are either T or F and need to be converted to booleans
@@ -118,7 +126,7 @@ public sealed class ProjectSettingsNames
         "AllowReadAccess",
         "AllowSharingWithSLDR",
         "AllowInvisibleChars",
-        "PlatformBibleStructureProtection",
+        "StructureProtected",
     ];
 
     // Make sure this dictionary gets updated whenever new settings are added
@@ -144,7 +152,7 @@ public sealed class ProjectSettingsNames
             { PB_ALLOW_INVISIBLE_CHARACTERS, PT_ALLOW_INVISIBLE_CHARACTERS },
             { PB_MODEL_TEXTS, PT_MODEL_TEXTS },
             { PB_REFERENCED_PROJECTS_AND_RESOURCES, PT_REFERENCED_PROJECTS_AND_RESOURCES },
-            { PB_STRUCTURE_PROTECTION, PT_STRUCTURE_PROTECTION },
+            { PB_STRUCTURE_PROTECTED, PT_STRUCTURE_PROTECTED },
         };
 
     private static readonly Dictionary<string, string> s_paratextToPlatformBibleSettingsNames =
