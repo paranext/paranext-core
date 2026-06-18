@@ -1581,12 +1581,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool SetUserStructureProtected(object? value)
     {
-        string? str = value?.ToString();
-        if (!bool.TryParse(str, out bool boolValue))
+        if (value is not bool boolValue)
             throw new InvalidDataException(
                 $"Expected boolean for UserStructureProtected, got: {value}"
             );
         var itemsElement = new XElement("Items", boolValue.ToString().ToLowerInvariant());
+        // Version stored for consistency with other settings; ignored on read
         GetUserProjectSettings().SetSetting("StructureProtected", "1.0.0", itemsElement);
         SendDataUpdateEvent(
             ProjectDataType.USER_STRUCTURE_PROTECTED,
