@@ -15,6 +15,18 @@ const BIBLE_TEXTS_TAB_ID = '27616073-bf60-4f2b-9518-922d1a7d3601';
 const COMMENTARIES_TAB_ID = '6c950d23-f8d7-4482-a384-93ea0481698b';
 
 /**
+ * The four stable UUIDs used for the simple-mode tabs. Exposed so callers driving the power →
+ * simple transition can wait until each tab's webview has resolved (replacing the unknown-title
+ * placeholder) before hiding the workspace-updating overlay.
+ */
+export const SIMPLE_LAYOUT_TAB_IDS: readonly string[] = [
+  MODEL_TEXT_TAB_ID,
+  SCRIPTURE_EDITOR_TAB_ID,
+  BIBLE_TEXTS_TAB_ID,
+  COMMENTARIES_TAB_ID,
+];
+
+/**
  * Builds a clone of the static simple layout with `projectId` baked into each tab's saved web-view
  * definition. When the dock layout restores from this, each web-view provider's `getWebView`
  * receives the `projectId` via `savedWebView.projectId` (or `state.isReadOnly` for the scripture

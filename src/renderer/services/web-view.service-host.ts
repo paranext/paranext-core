@@ -43,6 +43,7 @@ import {
 import { registerCommand } from '@shared/services/command.service';
 import { dataProviderService } from '@shared/services/data-provider.service';
 import { logger } from '@shared/services/logger.service';
+import { setWorkspaceUpdating } from '@renderer/services/workspace-updating-store';
 import {
   getLastOpenedProject,
   setLastOpenedProject,
@@ -85,7 +86,10 @@ import {
   Unsubscriber,
   UnsubscriberAsync,
 } from 'platform-bible-utils';
-import { buildSimpleLayoutForProject } from '@renderer/components/docking/simple-layout.builder';
+import {
+  buildSimpleLayoutForProject,
+  SIMPLE_LAYOUT_TAB_IDS,
+} from '@renderer/components/docking/simple-layout.builder';
 import {
   closeOpenUsersnapForm,
   isUsersnapFormCurrentlyOpen,
@@ -936,6 +940,21 @@ async function handleSwitchToSimpleMode(): Promise<void> {
 }
 
 async function runProjectBoundSimpleSwitch(projectId: string): Promise<void> {
+  // The renderer drives the overlay on this fast path: because the layout has projectId baked in,
+  // the default-project picker never fires `openScriptureEditor` and the extension's
+  // `WILL_START`/`DID_FINISH` events are never emitted — so nothing else would show the overlay.
+  setWorkspaceUpdating(true);
+  // Force React to commit + browser to paint the overlay BEFORE the layout swap, otherwise the
+  // show/hide can batch around the fast `loadLayout` and the overlay never appears.
+  await waitForNextPaint();
+
+  // Start tracking webview-resolved events BEFORE `loadLayout` fires the async
+  // `retrieveWebViewContent` calls — otherwise the events for fast-resolving tabs can fire before
+  // we subscribe and we'd miss them. Especially important on subsequent simple-mode switches,
+  // where the previous switch's resolved titles are still in the dock layout and the new update
+  // events for them are what tell us the project content has actually landed.
+  const tabsResolved = trackSimpleLayoutTabsResolved();
+
   try {
     const projectBoundLayout = buildSimpleLayoutForProject(projectId);
     // `loadLayout` types its parameter as `LayoutInfo` (Record<string, unknown>) but actually just
@@ -943,9 +962,92 @@ async function runProjectBoundSimpleSwitch(projectId: string): Promise<void> {
     // `simpleLayout` already uses. Cast to bridge the type gap without changing the public type.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     await loadLayout(projectBoundLayout as unknown as LayoutInfo);
+    // Wait for every simple-layout tab's webview to fire its open/update event, which is when
+    // `loadWebViewTab` replaces the `%tab_title_unknown%` placeholder with the real title.
+    await tabsResolved.promise;
   } catch (err) {
     logger.warn(`Dock layout failed to reload after interface mode change: ${err}`);
+    tabsResolved.dispose();
+  } finally {
+    // Let the resolved tabs paint behind the overlay before we hide it, so the user sees a clean
+    // handoff (overlay → tabs) instead of a flash of an unresolved layout.
+    await waitForNextPaint();
+    setWorkspaceUpdating(false);
   }
+}
+
+/**
+ * Max time to wait for the simple-layout tabs to finish loading their titles before hiding the
+ * overlay anyway. The overlay should never get stuck if a tab's webview provider misbehaves — the
+ * user is better off seeing a tab with an unresolved title than no UI at all.
+ */
+const SIMPLE_LAYOUT_TABS_RESOLVED_TIMEOUT_MS = 5000;
+
+/**
+ * Sets up a tracker that resolves once every simple-layout tab has fired an open- or update-webview
+ * event — meaning the tab's data has been replaced with the freshly-loaded webview definition (real
+ * title, real content, real projectId), not the `%tab_title_unknown%` placeholder that
+ * `loadWebViewTab` puts in place while `retrieveWebViewContent` is in flight.
+ *
+ * Subscribe BEFORE the caller runs `loadLayout`: `loadLayout` synchronously installs the
+ * placeholder tab definitions and then kicks off the async webview fetches whose results land via
+ * these events. Subscribing afterward would race the fastest webview and miss its event.
+ */
+function trackSimpleLayoutTabsResolved(): { promise: Promise<void>; dispose: () => void } {
+  const remaining = new Set<string>(SIMPLE_LAYOUT_TAB_IDS);
+  let unsubOpen: (() => void) | undefined;
+  let unsubUpdate: (() => void) | undefined;
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  let finished = false;
+  let resolveFn: (() => void) | undefined;
+
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    if (timeoutHandle !== undefined) {
+      clearTimeout(timeoutHandle);
+      timeoutHandle = undefined;
+    }
+    unsubOpen?.();
+    unsubOpen = undefined;
+    unsubUpdate?.();
+    unsubUpdate = undefined;
+    resolveFn?.();
+  };
+
+  const promise = new Promise<void>((resolve) => {
+    resolveFn = resolve;
+  });
+
+  const handleEvent = ({ webView }: { webView: { id: string } }) => {
+    if (!remaining.delete(webView.id)) return;
+    if (remaining.size === 0) finish();
+  };
+
+  unsubOpen = onDidOpenWebView(handleEvent);
+  unsubUpdate = onDidUpdateWebView(handleEvent);
+
+  timeoutHandle = setTimeout(() => {
+    finish();
+  }, SIMPLE_LAYOUT_TABS_RESOLVED_TIMEOUT_MS);
+
+  return { promise, dispose: finish };
+}
+
+/**
+ * Resolves after the next browser paint. Double `requestAnimationFrame` so we wait one frame for
+ * React to commit + browser to paint, and a second frame to ensure that paint has been flushed
+ * before the caller proceeds. Falls back to immediate resolution in environments that don't provide
+ * `requestAnimationFrame` (some test runners).
+ */
+function waitForNextPaint(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (typeof requestAnimationFrame !== 'function') {
+      resolve();
+      return;
+    }
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
 }
 
 async function tryResolveRecentProjectIdForSimpleMode(): Promise<string | undefined> {
