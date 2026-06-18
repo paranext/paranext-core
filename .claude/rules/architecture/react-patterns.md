@@ -21,6 +21,12 @@ component-name/
 └── component-name.utils.ts    # If has helpers
 ```
 
+## Component placement: extension `src/` vs `lib/platform-bible-react`
+
+- **Feature-specific UI lives in `extensions/src/{ext}/src/`.** `lib/platform-bible-react/` is the shared design system, reserved ONLY for multi-consumer reusable components.
+  - Avoid: placing UI in `lib/platform-bible-react/` when only one feature ever consumes it; placing a genuinely cross-feature primitive inside a single extension's `src/`.
+  - Why: a component with no multi-consumer story belongs to the owning extension. `inventory` (consumed by markers, characters, etc.) is a correct `lib/` resident; a single-feature dialog is not.
+
 ## Component Style Decisions
 
 Terse decisions (choice → what to avoid → one-line why). Add only the net-new; don't restate what's already covered above.
@@ -42,6 +48,24 @@ Terse decisions (choice → what to avoid → one-line why). Add only the net-ne
 - **Detect-and-reuse with the two-call pattern**: `papi.webViews.openWebView(type, layout, { ...options, existingId: '?', createNewIfNotFound: false })` → if the returned id is truthy, `papi.webViews.reloadWebView(type, id, options)` and return that id; otherwise call `openWebView` again without `existingId`.
   - Avoid: opening a second instance when only one of a web-view-type should be open at a time.
   - Why: `existingId: '?'` is PAPI's documented detect-and-reuse mechanism; `reloadWebView` hands fresh options to the existing instance. See `openManageBooks` / `openFind` in `extensions/src/platform-scripture/src/main.ts`.
+
+### Web-view UI-state persistence
+
+- **`useWebViewState<T>(key, default)` is scoped per-`webViewId`.** `openWebView` mints a new id on each call, so closing and reopening a web view starts with empty slots unless the tool deterministically reuses its id.
+  - Avoid: assuming `useWebViewState` survives close/reopen; reaching for `papi.settings` (user-scoped) when you only meant per-instance state.
+  - Why: id reuse is what makes state durable across reopen — the Find tool reuses the same id for the same project (see "Single-instance web views" above, the `existingId: '?'` detect-and-reuse path). Use `papi.settings` only when the state is genuinely per-user, not per-web-view. See [Component-Builder-Patterns.md](../../../.context/standards/Component-Builder-Patterns.md).
+
+### Decoupling from unmerged lib work
+
+- **When a component must depend on unmerged/unstable lib work (draft PRs), isolate via abstract props + callbacks** so a later phase swaps in the real component.
+  - Avoid: importing a component from a branch you don't control; blocking a design-phase component on an unmerged dependency.
+  - Why: a stand-in trigger that exposes the eventual component's surface as props (e.g. `comparativeTextsLabel` + `onComparativeTextsTriggerClick`) lets the integration step drop in the real component, a vendored copy, or a rebuilt one without rewriting the consumer.
+
+### Variant/visibility logic from `projectInterfaces`
+
+- **Drive variant/visibility logic from `projectInterfaces` capability predicates ("what can this project do?"), not a PT9-style `ProjectKind` typology.**
+  - Avoid: a `'standard' | 'resource' | ...` enum gating which controls render or are enabled.
+  - Why: PT10's extensibility model is interface-based — a project's interface list honestly reflects per-project capability, and adding a new project type via an extension PDPF should not require a global enum update. See `Paranext-Core-Patterns.md` for the full rationale and the metadata-read mechanics.
 
 ## Storybook Conventions
 

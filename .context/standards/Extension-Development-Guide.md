@@ -51,6 +51,25 @@ Keep pure presentational React in `src/components/*.component.tsx`, separate fro
   follow this layout (e.g. `platform-scripture/src/checklist.web-view.tsx` imports
   `ChecklistTool` from `./components/checklist.component`).
 
+#### Component import purity (PAPI-decoupled)
+
+A presentational `*.component.tsx` must be free of any PAPI/platform runtime coupling:
+all data flows in via props, and all platform wiring (data fetching, settings, the
+`globalThis.webViewComponent` assignment) lives in the matching `*.web-view.tsx` entry
+point or web view provider. This keeps components reusable, Storybook-renderable, and
+unit-testable without a running app.
+
+The rule is grep-enforceable — none of the following should match in any
+`*.component.tsx` file:
+
+```bash
+grep -rnE "@papi/frontend|useData\b|useDataProvider\b|useSetting\b|papi\.|globalThis\.webViewComponent" \
+  extensions/src/{ext}/src/components/
+```
+
+Any hit is a coupling leak: move it into the web view entry point/provider and pass the
+result down as a prop.
+
 ---
 
 ## Backend Entry Point (main.ts)
