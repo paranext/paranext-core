@@ -29,6 +29,7 @@ import { extensionHostService } from '@main/services/extension-host.service';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
 import { performShutdownTasks } from '@main/shutdown-tasks';
+import { performStartupTasks } from '@main/startup-tasks';
 import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
 import {
   CommandLineArgs,
@@ -225,6 +226,13 @@ async function main() {
 
   // TODO (maybe): Wait for signal from the extension host process that it is ready (except 'getWebView')
   // We could then wait for the renderer to be ready and signal the extension host
+
+  // Fire-and-forget startup tasks (e.g. simple-mode initial S/R). Must not block window creation.
+  // The S/R command is registered by the .NET data provider, which may not yet be reachable;
+  // performStartupTasks uses retrying request semantics and swallows failures.
+  performStartupTasks().catch((e) =>
+    logger.error(`performStartupTasks threw unexpectedly: ${getErrorMessage(e)}`),
+  );
 
   // Keep a global reference of the window object. If you don't, the window will
   // be closed automatically when the JavaScript object is garbage collected.
