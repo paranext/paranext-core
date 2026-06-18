@@ -852,15 +852,8 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
           // Update the cache synchronously with the notification so any `saveLayout` racing the
           // switch reads the new mode immediately (before `loadLayout`'s own read resolves).
           currentInterfaceMode = newMode;
-          if (newMode === 'simple') {
-            await handleSwitchToSimpleMode();
-          } else {
-            try {
-              await loadLayout();
-            } catch (err) {
-              logger.warn(`Dock layout failed to reload after interface mode change: ${err}`);
-            }
-          }
+          if (newMode === 'simple') await handleSwitchToSimpleMode();
+          else await loadLayoutWithWarning();
         },
         { retrieveDataImmediately: false },
       );
@@ -935,20 +928,29 @@ async function handleSwitchToSimpleMode(): Promise<void> {
     return;
   }
 
-  const resolvedId = await tryResolveRecentProjectIdForSimpleMode();
+  const resolvedId = await getMostRecentProjectId();
 
   if (!resolvedId) {
-    try {
-      await loadLayout();
-    } catch (err) {
-      logger.warn(`Dock layout failed to reload after interface mode change: ${err}`);
-    }
+    await loadLayoutWithWarning();
     return;
   }
 
   // Populate the cache so the next switch can take the fast path.
   setLastOpenedProject({ id: resolvedId });
   await runProjectBoundSimpleSwitch(resolvedId);
+}
+
+/**
+ * Wrapper around `loadLayout()` that catches any failure and logs a single consistent warning. Used
+ * by the mode-change subscription and the fast-switch fallback — both paths want
+ * "load-and-keep-going" semantics rather than propagating the error.
+ */
+async function loadLayoutWithWarning(): Promise<void> {
+  try {
+    await loadLayout();
+  } catch (err) {
+    logger.warn(`Dock layout failed to reload after interface mode change: ${err}`);
+  }
 }
 
 async function runProjectBoundSimpleSwitch(projectId: string): Promise<void> {
@@ -1004,7 +1006,7 @@ function waitForNextPaint(): Promise<void> {
   });
 }
 
-async function tryResolveRecentProjectIdForSimpleMode(): Promise<string | undefined> {
+async function getMostRecentProjectId(): Promise<string | undefined> {
   try {
     const recentsProvider = await dataProviderService.get(
       'platformScripture.recentlyOpenedProjects',

@@ -1,9 +1,9 @@
 import { useData } from '@renderer/hooks/papi-hooks';
 import { useEvent, usePromise } from 'platform-bible-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { setLastOpenedProject } from '@renderer/services/last-opened-project-cache';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { webViews } from '@renderer/services/papi-frontend.service';
+import { setLastOpenedProject } from '@renderer/services/last-opened-project-cache';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';

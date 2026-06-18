@@ -33,7 +33,11 @@ export function getLastOpenedProject(): LastOpenedProject | undefined {
     if (!raw) return undefined;
     const parsed: unknown = JSON.parse(raw);
     if (!isLastOpenedProject(parsed)) return undefined;
-    return { id: parsed.id, name: readName(parsed) };
+    const name = readName(parsed);
+    // Omit the `name` key entirely when there's no name to report, matching the optional shape of
+    // `LastOpenedProject` — destructuring `name` then yields a missing key rather than an explicit
+    // `undefined`.
+    return name === undefined ? { id: parsed.id } : { id: parsed.id, name };
   } catch {
     // unavailable or malformed — fall through
   }
