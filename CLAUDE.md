@@ -6,22 +6,6 @@ This file provides guidance to Claude Code when working with code in the paranex
 
 Platform.Bible is extensible Bible translation software built on Electron with a TypeScript/React frontend and .NET 8 backend data provider. The core platform provides a minimal framework with functionality delivered primarily through extensions, giving developers flexibility to create and share their desired Bible translation experience.
 
-## Symlinked Configuration (ai-prompts Repository)
-
-`CLAUDE.md`, `.claude/`, and `.context/` in this checkout are **symlinks** to the `ai-prompts` repository. The files you see here are not local to paranext-core — editing them edits the upstream source shared by every team member who installed this profile.
-
-| Symlink in paranext-core | Physical location                        |
-| ------------------------ | ---------------------------------------- |
-| `CLAUDE.md`              | `ai-prompts/general/claude-md/CLAUDE.md` |
-| `.claude/`               | `ai-prompts/general/.claude/`            |
-| `.context/`              | `ai-prompts/general/.context/`           |
-
-When asked to change project-level instructions, Claude skills, `.claude/settings.json`, or any standards doc:
-
-1. Edit the files under `ai-prompts/general/` — not copies inside paranext-core.
-2. Commit the changes in the `ai-prompts` repo, not in paranext-core. All three symlinks are gitignored in paranext-core; commits there would not reach teammates.
-3. If the ai-prompts repo is not in your workspace, ask the user for its path rather than guessing — `ls -la CLAUDE.md` shows the target.
-
 ## Reference Documentation
 
 Read these when you need depth on a topic. Keep them in mind when writing or reviewing code.

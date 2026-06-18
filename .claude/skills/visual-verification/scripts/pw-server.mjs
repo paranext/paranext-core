@@ -55,9 +55,10 @@ import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
 
-// Resolve playwright from paranext-core's node_modules. This script lives in
-// ai-prompts (symlinked into paranext-core), so ESM resolution won't find
-// playwright. We use createRequire anchored at paranext-core's package.json.
+// Resolve playwright from the repo root's node_modules. This script lives deep
+// under .claude/skills/visual-verification/scripts/, so we anchor createRequire
+// at the repo root's package.json (located by findParanextRoot) to resolve
+// playwright reliably regardless of how the script is invoked.
 function findParanextRoot() {
   const candidates = [
     // When invoked as: node paranext-core/.claude/skills/.../pw-server.mjs
