@@ -25,6 +25,11 @@ import {
   useSetting,
 } from '@renderer/hooks/papi-hooks';
 import { useInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
+import {
+  applyLayoutDirection,
+  readLayoutDirection,
+  type LayoutDirection,
+} from '@renderer/services/layout-direction.service';
 import { sendCommand } from '@shared/services/command.service';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
@@ -36,7 +41,7 @@ import {
   type ThemeDefinitionExpanded,
 } from 'platform-bible-utils';
 import type { RegistrationData } from 'paratext-registration';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type MouseEvent } from 'react';
 import './user-profile-popover.component.css';
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
@@ -99,6 +104,32 @@ export function UserProfilePopover() {
   const [registrationData, setRegistrationData] = useState<RegistrationData | undefined>(undefined);
   const [isRegistrationLoading, setIsRegistrationLoading] = useState(false);
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
+
+  // Power-user only: revealed when the trigger button is shift+clicked. Resets when the popover
+  // closes so it stays hidden on a subsequent normal click.
+  const [showDirectionToggle, setShowDirectionToggle] = useState(false);
+  const [layoutDirection, setLayoutDirection] = useState<LayoutDirection>(() =>
+    readLayoutDirection(),
+  );
+
+  const handleTriggerClick = (e: MouseEvent<HTMLButtonElement>) => {
+    // Only react on the click that *opens* the popover. A click while it's already open is a close,
+    // and handleOpenChange will reset the toggle to hidden — we don't want this handler racing it.
+    if (isOpen) return;
+    setShowDirectionToggle(e.shiftKey);
+  };
+
+  const handleOpenChange = (next: boolean) => {
+    if (!next) setShowDirectionToggle(false);
+    setIsOpen(next);
+  };
+
+  const handleDirectionChange = (value: string) => {
+    if (value !== 'ltr' && value !== 'rtl') return;
+    if (value === layoutDirection) return;
+    applyLayoutDirection(value);
+    setLayoutDirection(value);
+  };
 
   const [safeInterfaceMode, setInterfaceMode] = useInterfaceMode();
 
@@ -230,7 +261,7 @@ export function UserProfilePopover() {
   else emailText = undefined;
 
   return (
-    <Popover open={isOpen} onOpenChange={setIsOpen}>
+    <Popover open={isOpen} onOpenChange={handleOpenChange}>
       <TooltipProvider delayDuration={TOOLTIP_DELAY}>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -241,6 +272,7 @@ export function UserProfilePopover() {
                 className="pr-twp tw:h-8 tw:shrink-0"
                 aria-label={localizedStrings['%toolbar_userProfile_label%']}
                 data-testid="user-profile-popover-trigger"
+                onClick={handleTriggerClick}
               >
                 <CircleUserRound />
               </Button>
@@ -421,6 +453,39 @@ export function UserProfilePopover() {
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
+        {showDirectionToggle && (
+          <div
+            className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:px-2"
+            data-testid="user-profile-direction-row"
+          >
+            <span className="tw:text-xs tw:text-muted-foreground">Layout direction</span>
+            <ToggleGroup
+              type="single"
+              value={layoutDirection}
+              onValueChange={handleDirectionChange}
+              size="sm"
+            >
+              <ToggleGroupItem
+                value="ltr"
+                variant="outline"
+                data-testid="user-profile-direction-ltr"
+                aria-label="Left to right"
+                className="user-profile-popover-text-3xs tw:h-6 tw:min-w-0 tw:px-2"
+              >
+                LTR
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="rtl"
+                variant="outline"
+                data-testid="user-profile-direction-rtl"
+                aria-label="Right to left"
+                className="user-profile-popover-text-3xs tw:h-6 tw:min-w-0 tw:px-2"
+              >
+                RTL
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   );

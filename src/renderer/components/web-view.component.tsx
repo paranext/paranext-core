@@ -41,6 +41,7 @@ import {
   useRecentScriptureRefs,
 } from '@renderer/hooks/papi-hooks';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
+import { readLayoutDirection } from '@renderer/services/layout-direction.service';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
 import { getNetworkEvent, registerRequestHandler } from '@shared/services/network.service';
 import {
@@ -291,6 +292,17 @@ export function WebView({
     iframeHasLoadedRef.current = true;
     // Increment the tracker for the number of times the iframe has loaded
     setIframeHasLoadedTimes((prev) => prev + 1);
+
+    // Apply the current layout direction inside the iframe so RTL/LTR styling is correct.
+    // Cross-origin iframes throw on contentDocument access — swallow that case silently.
+    try {
+      const innerDoc = iframeRef.current?.contentDocument;
+      if (innerDoc?.documentElement) {
+        innerDoc.documentElement.setAttribute('dir', readLayoutDirection());
+      }
+    } catch {
+      // cross-origin — nothing we can do from here
+    }
   }, []);
 
   // Keep track of focus in the iframe

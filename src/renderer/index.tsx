@@ -4,6 +4,10 @@ import '@renderer/global-this-web-view.model';
 import '@renderer/global-this.model';
 
 import { App } from '@renderer/app.component';
+import {
+  applyLayoutDirection,
+  readLayoutDirection,
+} from '@renderer/services/layout-direction.service';
 import { startDialogService } from '@renderer/services/dialog.service-host';
 import { startNotificationService } from '@renderer/services/notification.service-host';
 import { startOverlayService } from '@renderer/services/overlays/overlay.service-host';
@@ -122,6 +126,9 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
 // #endregion
 
 // #region set up the React UI
+
+// Apply persisted layout direction (LTR/RTL) before mounting so initial render is correct.
+applyLayoutDirection(readLayoutDirection());
 
 const container = document.getElementById('root');
 if (!container) {
