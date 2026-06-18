@@ -73,3 +73,8 @@ e2e-tests/playwright-report
 
 # format only
 .prettierignorerun
+
+# Embedded Claude Code profile (vendored from ai-prompts; exempt from repo format/lint)
+.claude
+.context
+CLAUDE.md
