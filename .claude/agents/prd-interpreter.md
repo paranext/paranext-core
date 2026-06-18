@@ -1,7 +1,7 @@
 ---
 name: prd-interpreter
 description: "Read-only agent for /investigate-prd. Parses a Shape-Up PRD into a normalized structure and a per-aspect breakdown (each aspect ports a PT9 feature, is net-new, or both), extracts Goals/Non-Goals/success-criteria, and surfaces conflicts and open questions as CLARIFICATION items. Input: PRD_PATH."
-allowed-tools: Read, Grep, Glob
+tools: Read, Grep, Glob
 ---
 
 # PRD Interpreter
