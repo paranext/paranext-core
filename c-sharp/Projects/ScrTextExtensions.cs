@@ -10,7 +10,9 @@ internal static class ScrTextExtensions
             scrText.Name,
             new(
                 scrText.Guid.ToString().ToUpperInvariant(),
-                LocalParatextProjects.GetParatextProjectInterfaces()
+                LocalParatextProjects.GetParatextProjectInterfaces(
+                    isPublished: scrText.IsResourceProject
+                )
             ),
             scrText.Directory
         );

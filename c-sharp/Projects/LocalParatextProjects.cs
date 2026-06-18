@@ -1,4 +1,3 @@
-using System.Xml;
 using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Users;
 using Paratext.Data;
@@ -32,10 +31,15 @@ internal class LocalParatextProjects
         "CountryStatuses.xml",
     ];
 
-    private static readonly List<string> s_paratextProjectInterfaces =
+    // Published projects are read-only in PT9 — ResourceProjectFileManager.SetXml() throws
+    // AttemptedResourceWritingException — and cannot accept comment writes. They therefore do not
+    // advertise legacyCommentManager.comments; everything else still applies because published
+    // projects can still be read for scripture and resource-references. The unpublished list is
+    // defined as the published list plus the comment interface so the two stay in sync by
+    // construction.
+    private static readonly List<string> s_paratextPublishedProjectInterfaces =
     [
         ProjectInterfaces.BASE,
-        ProjectInterfaces.LEGACY_COMMENT,
         ProjectInterfaces.USFM_BOOK,
         ProjectInterfaces.USFM_CHAPTER,
         ProjectInterfaces.USFM_VERSE,
@@ -47,6 +51,12 @@ internal class LocalParatextProjects
         ProjectInterfaces.TEXT_CONNECTION_SETTINGS,
         ProjectInterfaces.SCRIPTURE_EDIT_PERMISSIONS,
         ProjectInterfaces.VERSIFICATION,
+    ];
+
+    private static readonly List<string> s_paratextUnpublishedProjectInterfaces =
+    [
+        .. s_paratextPublishedProjectInterfaces,
+        ProjectInterfaces.LEGACY_COMMENT,
     ];
 
     public LocalParatextProjects()
@@ -96,12 +106,54 @@ internal class LocalParatextProjects
         }
     }
 
+    /// <summary>
+    /// All available Paratext projects (the union of <see cref="GetAvailableUnpublishedProjectDetails"/>
+    /// and <see cref="GetAvailablePublishedProjectDetails"/>). Defined in terms of the partition
+    /// helpers so future filtering added to either partition automatically applies here too.
+    /// </summary>
     public IEnumerable<ProjectDetails> GetAllProjectDetails()
+    {
+        return GetAvailableUnpublishedProjectDetails()
+            .Concat(GetAvailablePublishedProjectDetails());
+    }
+
+    /// <summary>
+    /// Available unpublished Paratext projects (regular, editable scripture projects).
+    /// Used by <see cref="ParatextProjectDataProviderFactory"/> to populate its project list.
+    /// </summary>
+    public IEnumerable<ProjectDetails> GetAvailableUnpublishedProjectDetails()
+    {
+        // IsResourceProject is true for ResourceScrText and JoinedScrText (PT9's read-only
+        // resource-backed project shapes); everything else is unpublished.
+        return GetVisibleScrTexts()
+            .Where(scrText => !scrText.IsResourceProject)
+            .Select(scrText => scrText.GetProjectDetails());
+    }
+
+    /// <summary>
+    /// Available published Paratext projects (read-only DBL / biblical resources).
+    /// Used by <see cref="ParatextPublishedProjectDataProviderFactory"/> to populate its project list.
+    /// </summary>
+    public IEnumerable<ProjectDetails> GetAvailablePublishedProjectDetails()
+    {
+        // IsResourceProject is true for ResourceScrText and JoinedScrText (PT9's read-only
+        // resource-backed project shapes).
+        return GetVisibleScrTexts()
+            .Where(scrText => scrText.IsResourceProject)
+            .Select(scrText => scrText.GetProjectDetails());
+    }
+
+    /// <summary>
+    /// Returns the set of ScrTexts that should be visible to the user given current registration
+    /// state. When the user has no valid Paratext registration, published projects are filtered out
+    /// entirely (matching PT9 behavior).
+    /// </summary>
+    private static IEnumerable<ScrText> GetVisibleScrTexts()
     {
         var allScrTexts = GetScrTexts();
         if (!RegistrationInfo.DefaultUser.IsValid)
             allScrTexts = allScrTexts.Where((scrText) => !scrText.IsResourceProject);
-        return allScrTexts.Select(scrText => scrText.GetProjectDetails());
+        return allScrTexts;
     }
 
     public ProjectDetails GetProjectDetails(string projectId)
@@ -117,9 +169,12 @@ internal class LocalParatextProjects
         return retVal;
     }
 
-    public static List<string> GetParatextProjectInterfaces()
+    public static List<string> GetParatextProjectInterfaces(bool isPublished)
     {
-        return [.. s_paratextProjectInterfaces];
+        var source = isPublished
+            ? s_paratextPublishedProjectInterfaces
+            : s_paratextUnpublishedProjectInterfaces;
+        return [.. source];
     }
     #endregion
 
@@ -160,47 +215,6 @@ internal class LocalParatextProjects
             ProjectPath = projectPath,
         };
         ScrTextCollection.Add(new ScrText(projectName, RegistrationInfo.DefaultUser));
-    }
-
-    private static ProjectDetails? LoadProjectDetails(
-        string projectHomeDir,
-        out string errorMessage
-    )
-    {
-        string settingsFilePath = Path.Combine(projectHomeDir, PROJECT_SETTINGS_FILE);
-        if (!File.Exists(settingsFilePath))
-        {
-            errorMessage = $"Ignoring project without Settings.xml file: {projectHomeDir}";
-            return null;
-        }
-
-        var settings = new XmlDocument();
-        settings.Load(settingsFilePath);
-
-        // ScrText always prioritizes the folder name over the Name setting as the "name" even when
-        // accessing scrText.Settings.Name. So we're copying Paratext's functionality here and using
-        // the folder name instead of Settings.Name.
-        // https://github.com/ubsicap/Paratext/blob/aaadecd828a9b02e6f55d18e4c5dda8703ce2429/ParatextData/ScrText.cs#L258
-        // Removing extension twice because file may be in form name.id.ext to match Paratext
-        // https://github.com/ubsicap/Paratext/blob/aaadecd828a9b02e6f55d18e4c5dda8703ce2429/ParatextData/ScrTextCollection.cs#L1661
-        var shortName = Path.GetFileNameWithoutExtension(
-            Path.GetFileNameWithoutExtension(projectHomeDir)
-        );
-
-        var idNode = settings.SelectSingleNode("/ScriptureText/Guid");
-        if (idNode == null)
-        {
-            errorMessage = $"Could not find Guid in Settings.xml of {projectHomeDir}";
-            return null;
-        }
-        var id = idNode.InnerText;
-
-        var metadata = new ProjectMetadata(id, GetParatextProjectInterfaces());
-
-        var details = new ProjectDetails(shortName, metadata, projectHomeDir);
-
-        errorMessage = "";
-        return details;
     }
 
     private void SetUpProjectRootFolder()
