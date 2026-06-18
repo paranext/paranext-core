@@ -1,7 +1,7 @@
 ---
 title: Localization Guide
 description: Mandatory localization patterns for all user-facing text in paranext-core — UI web views (TS) and C# backend services.
-version: 1.6.0
+version: 1.7.0
 status: active
 created: 2026-03-04
 last_updated: 2026-07-28
@@ -32,6 +32,8 @@ This guide documents localization patterns for paranext-core. All user-facing te
 <!-- | [Localization Checklist](#localization-checklist) | -->
 <!-- | [Blocking Issues](#blocking-issues) | -->
 <!-- | [C# Backend Localization](#c-backend-localization) | -->
+<!-- | [Testing Localized C# Backends](#testing-localized-c-backends) | -->
+<!-- | [Porting PT9 Features](#porting-pt9-features) | -->
 <!-- | [Version Log](#version-log) | -->
 <!-- TOC:END -->
 
@@ -577,12 +579,67 @@ Alternative design: use a dedicated `xxxKey` field (e.g. `ErrorMessageKey`) alon
 
 ---
 
+## Testing Localized C# Backends
+
+When a C# backend returns localize keys and resolves them at the wire boundary (the Approach 1 pattern above), the unit/integration tests that exercise it usually run against `DummyPapiClient` — a test double that does **not** have a real localization service wired up.
+
+**The trap:** `DummyPapiClient.SendRequestAsync<T>` returns `Task.FromResult<T?>(default)` for any request type it has no registered handler for (see `c-sharp-tests/DummyPapiClient.cs`). The localization service is one such unregistered request. So `LocalizationService.GetLocalizedString(papiClient, key, defaultValue)` gets back `default(T)` (i.e. `null` for the resolved string) and falls back to the `defaultValue` you supplied.
+
+**Consequence:** if you provide an English fallback as the `defaultValue` (which you should — see the C# checklist above), a wire integration test **still sees the English string**, not the localize key. The test passes whether or not localization is wired correctly, because the fallback masks the missing resolution.
+
+```csharp
+// In the backend:
+var localized = LocalizationService.GetLocalizedString(
+    PapiClient,           // a DummyPapiClient in tests
+    "%markersChecklist_errorInvalidMarkerPair%",
+    "Equivalent markers need to be entered in the form: p/q" // English fallback
+);
+// Under DummyPapiClient: GetLocalizedString returns default(string) → falls back to
+// "Equivalent markers need to be entered in the form: p/q" — the test sees ENGLISH.
+```
+
+**Implications for test design:**
+
+- A test that asserts the wire response equals the English literal does **not** prove localization works — it only proves the fallback works. Don't treat such a green test as evidence the key resolves.
+- To verify resolution actually happens, assert that the backend emits the **localize key** (`%…%`) at the layer that hasn't resolved yet (e.g. the static service return value), and resolve-then-assert separately, or register a localization handler on the dummy client so a non-`default(T)` value comes back.
+- When you rewire a backend from English literals to localize keys, expect tests that asserted on the old English literal to keep passing via the fallback — re-point them at the key, don't trust the green.
+
+See the test-runner reference for running these C# tests: `.claude/skills/test-runner/reference.md`.
+
+---
+
+## Porting PT9 Features
+
+PT9-specific localization facts to apply when porting a Paratext 9 feature to PT10.
+
+### Don't inherit PT9's English-only surfaces
+
+PT9 leaves some user-facing surfaces unlocalized — most notably **early-startup error dialogs shown before the localizer bootstraps** (e.g. the settings-error / reset `MessageBox` that PT9 renders English-only because its localizer is not yet available at that point in startup).
+
+When you port a feature whose whole purpose is internationalization (or any feature that touches one of these surfaces), do **not** carry PT9's English-only behavior across as an inherited assumption. A translation/i18n feature that itself shows English-only text is a self-defeating regression. The PT10 equivalent surface MUST be internationalized through PT10's localization mechanism — even when PT9 itself does not localize it, and even if that means making the localizer available earlier in PT10's startup than PT9 did.
+
+Treat "PT9 didn't localize this" as a gap to close in PT10, not a spec to replicate.
+
+### Catalogue PT9 user-facing strings during discovery
+
+Before backend TDD begins, sweep the PT9 source for **`Localizer.Str(...)` calls and other user-facing string literals** in the feature's scope, and record them as a digest of localize keys to port. Knowing the full set of keys up front prevents the localization gap from being discovered late.
+
+This was learned the hard way: the markers-checklist port shipped two backend strings (`MarkerSettingsForm_1`, `CLParagraphCellsDataSource_1`) as English literals because the localization gap was found only during late review, then had to be retrofitted (33 language sections re-added, C# rewired to resolve at the wire boundary). A discovery-time `Localizer.Str` sweep would have surfaced every key before any backend code was written.
+
+> The PT9-archaeology discovery agent (`.claude/agents/pt9-archaeologist.md`) performs this `Localizer.Str` sweep and emits a `UserFacingStrings` digest — consume that digest when planning a feature's localization.
+
+---
+
 ## Version Log
 
 | Version | Date       | Change          |
 | ------- | ---------- | --------------- |
+| 1.7.0   | 2026-07-28 | Ported from the embedded profile (authored 2026-06-18, landed via #2438): Added "Testing Localized C# Backends" section: `DummyPapiClient.SendRequestAsync<T>` returns `default(T)` for unregistered services, so `GetLocalizedString` falls back to its `defaultValue` and wire integration tests still see English when a fallback is supplied — a green literal-asserting test does not prove resolution works. Added "Porting PT9 Features" section: don't inherit PT9's English-only surfaces (e.g. early-startup error dialogs shown before the localizer bootstraps) — the PT10 equivalent MUST be internationalized; catalogue PT9 `Localizer.Str` user-facing strings during discovery so all keys are known before backend TDD (markers-checklist shipped two strings as English literals because the gap was found late). Cross-referenced `pt9-archaeologist.md` and `test-runner/reference.md`. |
 | 1.6.0   | 2026-07-28 | Code-review pass on the 1.5.0 additions. Fixed TOC section order (Spanish now listed before Text Direction, matching the body). Added the source Google Doc link and a "Last synced" date to the Spanish section. Split out language-agnostic content into a new "Translation Style (All Languages)" subsection under Conventions (terminology priority, plain vocabulary, non-literal clarity, length, neutral error tone, sentence-case capitalization, classifying ambiguous UI text, placeholder-text categorization) so it's not scoped to Spanish only. Closed a gap in Spanish verb-mood rules for tooltips/placeholders/progress indicators/status-bar labels (gerund for in-progress, past participle for current-state, infinitive as the default fallback), with Spanish examples. Reworded the "Favor de + infinitive" guidance from "non-standard" to a regional-preference note, since it's a well-established Mexican/Latin American variant the team simply isn't adopting. Added a "Flag Unclear or Non-Standard English Source Text" step to the Localization Pattern. Documented `getLocalizeKeyForPhysicalKey`/`NameablePhysicalKey` (not yet merged, see [#2590](https://github.com/paranext/paranext-core/pull/2590)) and the per-language policy for translating vs. preserving physical key names. Moved "Revising an Existing Localization Decision" under "Existing Strings Are Immutable" as a named, meaning-preservation-scoped exception (`Exception: Fixing Errors or Applying a Revised Style Rule`), and clarified the sync direction (Google Doc first, then this guide, then shipped strings). Fixed the `formatReplacementStringToArray` example's placeholder count to match its cited reference implementation and added the missing `.map`/`Fragment` key-wrapping it also uses. Documented a real correctness defect in the `interleavePlaceholders` duplicate helper (its `\w+` regex silently drops hyphenated placeholder names) and filed [PT-4269](https://paratextstudio.atlassian.net/browse/PT-4269) to track migrating it to the shared utility. |
 | 1.5.0   | 2026-07-27 | Added "Embedding JSX in Localized Text with formatReplacementStringToArray" section (mid-sentence JSX interpolation, e.g. links/`Kbd` elements, via the existing `formatReplacementStringToArray` utility — was previously undocumented and had already been reimplemented once as a local helper; also notes to use the shadcn `Kbd`/`KbdGroup` components and, once merged, `getLocalizeKeyForPhysicalKey` for key names rather than hardcoding them). Added "Spanish (es) Localization Decisions" section distilled from the team's "Localization decisions - Paratext 10 Studio" Google Doc (Spanish tab): regional-variant/priority guidance, formal `usted` register, error-message templates, capitalization rules, and verb-mood rules (infinitive for controls, conjugated imperative for messages/alerts). French tab exists but is not yet authoritative, so not captured. |
+=======
+| 1.5.0   | 2026-06-18 | Added "Testing Localized C# Backends" section: `DummyPapiClient.SendRequestAsync<T>` returns `default(T)` for unregistered services, so `GetLocalizedString` falls back to its `defaultValue` and wire integration tests still see English when a fallback is supplied — a green literal-asserting test does not prove resolution works. Added "Porting PT9 Features" section: don't inherit PT9's English-only surfaces (e.g. early-startup error dialogs shown before the localizer bootstraps) — the PT10 equivalent MUST be internationalized; catalogue PT9 `Localizer.Str` user-facing strings during discovery so all keys are known before backend TDD (markers-checklist shipped two strings as English literals because the gap was found late). Cross-referenced `pt9-archaeologist.md` and `test-runner/reference.md`. |
+>>>>>>> 0e2d11725bd (feat(salvage): port durable ai-porting content into the embedded profile)
 | 1.4.0   | 2026-06-17 | Added "Localizing Shared Library Components (`lib/platform-bible-react/`)" section: process-agnostic library components must not call `useLocalizedStrings`/PAPI; they expose a frozen `STRING_KEYS` tuple + a `Partial<Record<…>>` type + an optional `localizedStrings?` prop with English-fallback reads, and the consumer resolves and passes strings down. Named the hardcoded-string enforcer as the real ESLint rule `paranext/no-hardcoded-jsx-strings`. Added a "one key-prefix convention per feature namespace" subsection under Conventions › Key Format (prefer camelCase feature-prefix with `_` subsegments; don't mix camelCase and snake_case variants of the same prefix). Grounded against `book-chapter-control`, `book-selector`, and `marker-menu`. |
 | 1.3.0   | 2026-04-29 | Added "Text Direction (RTL/LTR)" section codifying per-content direction via `useProjectSetting('platform.textDirection', defaultTextDirection)`. Forbids hardcoded language-code equality checks (`x === 'he' \|\| x === 'ar'`). References `platform-scripture-editor.web-view.tsx` (the `defaultTextDirection` constant and the `OHEBGRK` branch) as the canonical pattern. Clarifies separation between global UI direction (`readDirection()`) and per-content direction. Sourced from markers-checklist PR feedback (RTL-hardcoding comment). |
 | 1.2.0   | 2026-04-21 | Added `toc: true` + machine-readable TOC block now that the guide has grown past the stub-patterns.md threshold. No content changes. |

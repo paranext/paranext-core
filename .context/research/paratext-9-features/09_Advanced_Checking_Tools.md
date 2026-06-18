@@ -214,6 +214,8 @@ Advanced Checking Tools are sophisticated analysis features typically used by co
 - Keyword: `ComponentCompareVersions`
 - Total items: 12 related help items
 
+**PT10 porting note — `DifferencesToolForm` is a broadly shared verse-diff surface**: `DifferencesToolForm` is not specific to Compare Versions. In PT9 it is the common verse-level USFM diff dialog reached through `DiffToolConfigurationInfo` by many callers — Restore (`RestoreForm.CompareFiles`), Copy Books (`CopyBooksForm.CompareFiles`), Import Books (`ImportBooksForm`), Parallel Passages (`ParallelPassagesTool`), View History for Verses, the repository change-list / history-summary forms, and the editor itself (`TextForm`) — well over five distinct call sites. As of the latest checks **no PT10 port of `DifferencesToolForm` exists** in paranext-core (`c-sharp/` or `extensions/src/`); PT10 Manage Books explicitly opted out of the right-click compare context menu. Any feature that needs verse-level diff (Compare Versions, Restore "compare against current", Copy/Import Books) should treat the diff renderer as a **shared standalone primitive** to build once and reuse, not a per-feature component. This is the verse-level diff surface — distinct from the file-level comparison grid (`BookGridSelector`), which is a separate reusable.
+
 **Validation**: [MS] [FR] [H] [M] [C] — Last verified: 2026-01-21
 
 ---
