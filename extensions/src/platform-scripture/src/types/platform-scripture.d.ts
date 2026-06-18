@@ -854,7 +854,12 @@ declare module 'platform-scripture' {
        * set a preference — the caller is responsible for applying a default.
        */
       getUserStructureProtected(): Promise<boolean | undefined>;
-      /** Sets the user's structure protection preference */
+      /**
+       * Sets the user's structure protection preference
+       *
+       * @param value Whether structure protection is enabled for this user on this project
+       * @returns Update instructions for the data provider
+       */
       setUserStructureProtected(
         value: boolean,
       ): Promise<DataProviderUpdateInstructions<UserEditorSettingsProjectInterfaceDataTypes>>;
@@ -871,6 +876,11 @@ declare module 'platform-scripture' {
         callback: (value: boolean | undefined | PlatformError) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
+      /**
+       * Resets the user's structure protection preference, removing it so the caller applies the
+       * mode-aware default
+       */
+      resetUserStructureProtected(): Promise<boolean>;
     };
 
   // #endregion User Editor Settings Types

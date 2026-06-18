@@ -126,6 +126,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(("resetUserModelTexts", ResetUserModelTexts));
         retVal.Add(("getUserStructureProtected", GetUserStructureProtected));
         retVal.Add(("setUserStructureProtected", SetUserStructureProtected));
+        retVal.Add(("resetUserStructureProtected", ResetUserStructureProtected));
         retVal.Add(
             ("getUserReferencedProjectsAndResources", GetUserReferencedProjectsAndResources)
         );
@@ -1571,6 +1572,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool? GetUserStructureProtected(object? param = null)
     {
+        // Schema version is intentionally ignored — a plain boolean has no versioned schema
         var (_, content) = GetUserProjectSettings().GetSetting("StructureProtected");
         if (content == null)
             return null; // not set - frontend applies mode-aware default
@@ -1579,15 +1581,26 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool SetUserStructureProtected(object? value)
     {
-        if (value is not bool boolValue)
+        string? str = value?.ToString();
+        if (!bool.TryParse(str, out bool boolValue))
             throw new InvalidDataException(
                 $"Expected boolean for UserStructureProtected, got: {value}"
             );
-        var itemsEl = new XElement("Items", boolValue.ToString().ToLowerInvariant());
+        var itemsElement = new XElement("Items", boolValue.ToString().ToLowerInvariant());
         GetUserProjectSettings().SetSetting("StructureProtected", "1.0.0", itemsEl);
         SendDataUpdateEvent(
             ProjectDataType.USER_STRUCTURE_PROTECTED,
             "user structure protected update event"
+        );
+        return true;
+    }
+
+    public bool ResetUserStructureProtected()
+    {
+        GetUserProjectSettings().RemoveSetting("StructureProtected");
+        SendDataUpdateEvent(
+            ProjectDataType.USER_STRUCTURE_PROTECTED,
+            "user structure protected reset event"
         );
         return true;
     }
