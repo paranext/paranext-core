@@ -1587,7 +1587,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 $"Expected boolean for UserStructureProtected, got: {value}"
             );
         var itemsElement = new XElement("Items", boolValue.ToString().ToLowerInvariant());
-        GetUserProjectSettings().SetSetting("StructureProtected", "1.0.0", itemsEl);
+        GetUserProjectSettings().SetSetting("StructureProtected", "1.0.0", itemsElement);
         SendDataUpdateEvent(
             ProjectDataType.USER_STRUCTURE_PROTECTED,
             "user structure protected update event"
