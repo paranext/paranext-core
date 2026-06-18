@@ -806,24 +806,6 @@ declare module 'papi-shared-types' {
       resourceType: Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
       projectId?: string,
     ) => Promise<string | undefined>;
-    /**
-     * Gets the user-level structure protection preference for a project. Defaults to `true` if no
-     * preference has been saved.
-     *
-     * @param projectId The project ID to get the structure protection preference for
-     * @returns Whether structure protection is enabled for the project
-     */
-    'platformScriptureEditor.getUserStructureProtection': (projectId: string) => Promise<boolean>;
-    /**
-     * Sets the user-level structure protection preference for a project.
-     *
-     * @param projectId The project ID to set the structure protection preference for
-     * @param value Whether to enable structure protection for the project
-     */
-    'platformScriptureEditor.setUserStructureProtection': (
-      projectId: string,
-      value: boolean,
-    ) => Promise<void>;
   }
 
   export interface DataProviders {
