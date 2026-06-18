@@ -65,6 +65,11 @@ const versificationValidator: ProjectSettingValidator<'platformScripture.versifi
   return valueAsNumber >= 0 && valueAsNumber <= 6 && Number.isInteger(valueAsNumber);
 };
 
+// C# converts Paratext's "T"/"F" to boolean before it reaches this validator
+const structureProtectedValidator: ProjectSettingValidator<
+  'platformScripture.structureProtected'
+> = async (newValue: unknown) => typeof newValue === 'boolean';
+
 // A character can be any string value
 const charactersValidator: ProjectSettingValidator<
   'platformScripture.validCharacters' | 'platformScripture.invalidCharacters'
@@ -377,6 +382,10 @@ export async function activate(context: ExecutionActivationContext) {
   const versificationPromise = papi.projectSettings.registerValidator(
     'platformScripture.versification',
     versificationValidator,
+  );
+  const structureProtectedPromise = papi.projectSettings.registerValidator(
+    'platformScripture.structureProtected',
+    structureProtectedValidator,
   );
   const validCharactersPromise = papi.projectSettings.registerValidator(
     'platformScripture.validCharacters',
@@ -694,6 +703,7 @@ export async function activate(context: ExecutionActivationContext) {
     await scriptureFinderPdpefPromise,
     await booksPresentPromise,
     await versificationPromise,
+    await structureProtectedPromise,
     await validCharactersPromise,
     await invalidCharactersPromise,
     await openCharactersInventoryPromise,

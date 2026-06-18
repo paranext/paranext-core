@@ -105,6 +105,11 @@
         "default": { "dataVersion": "1.0.0", "items": [] },
         "isHidden": true,
         "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.structureProtected": {
+        "isHidden": true,
+        "default": false,
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
       }
     }
   }

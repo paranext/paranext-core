@@ -2380,6 +2380,19 @@ declare module 'papi-shared-types' {
      * tilde character, not a whitespace substitute.
      */
     'platformScripture.allowInvisibleCharacters': boolean;
+
+    /**
+     * Whether the paragraph/verse structure of this project is protected from changes.
+     *
+     * A project Admin may define a structure for the translated scripture text or adopt the
+     * structure of a model text to provide consistency and ensure the acceptability of the
+     * published text. When `true`, team members other than the Admin cannot intentionally or
+     * unintentionally change that structure. The Admin can set this to `false` to temporarily allow
+     * structural changes when needed.
+     *
+     * Corresponds to the `StructureProtected` field in Paratext's `Settings.xml`.
+     */
+    'platformScripture.structureProtected': boolean;
   }
 
   export interface NetworkEvents {
