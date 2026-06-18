@@ -92,7 +92,7 @@ step, no automation. Just a record.
   similar), where the mutation lives determines whether external PAPI callers stay in sync. A
   `NetworkObject` method is a publicly callable mutation with **no subscribable surface** — any
   consumer (another extension, a debug tool, another part of the platform) can call it, and
-  subscribers do not learn the state changed (surfaced as RM-010 in the keyboard-switching port:
+  subscribers do not learn the state changed (surfaced in the keyboard-switching port:
   an OS-keyboard `activate(id)` on a NetworkObject let the activation service's cached state silently
   diverge from reality).
 - **Decision:**
@@ -104,8 +104,9 @@ step, no automation. Just a record.
     the `set` action propagates a change event to subscribers automatically. Reserve `NetworkObject`
     for stateless query/command functions with no subscription semantics. (Precedent for the
     promotion: `c-sharp/Checks/InventoryDataProvider.cs` — subclass `NetworkObjects.DataProvider`,
-    return `(dataType, get/set/subscribe)` triples from `GetFunctions()`, fire updates via the
-    inherited update event.)
+    return `(functionName, Delegate)` pairs from `GetFunctions()` (paired `getX`/`setX`, with
+    `subscribeX` auto-generated per data type), and fire updates via the inherited
+    `SendDataUpdateEvent(dataType, …)`.)
 - **Alternatives:** (menus) build a declarative predicate-visibility API — deferred: large surface
   (menu schema, utils types, generated `papi.d.ts`, docs) for marginal benefit when submission-time
   checks already give correct behavior. (writer placement) keep the NetworkObject and require all
@@ -118,7 +119,7 @@ step, no automation. Just a record.
   boilerplate (base class + data-type triples + update plumbing) but keeps external mutations
   observable, which is load-bearing whenever any subscriber caches the state.
 - **Source:** manage-books port (menu-availability deferred); keyboard-switching port (OS-keyboard
-  NetworkObject → DataProvider promotion, RM-010). See `Entry-Point-Guide.md` for the menu mechanics
+  NetworkObject → DataProvider promotion). See `Entry-Point-Guide.md` for the menu mechanics
   and `Paranext-Core-Patterns.md` for the DataProvider-vs-NetworkObject pattern.
 
 ## ADR-0004: Surface ParatextData alerts via `AlertCapture` instead of swallowing them
@@ -160,8 +161,9 @@ step, no automation. Just a record.
   create-project primitive** in paranext-core: no `CreateProject` / `AddProject` for new projects, no
   `ProjectPropertiesForm` equivalent. The C# factory only registers PDPs for projects **already on
   disk** (`createProjectDataProviderEngine` is PDP-**engine** registration, not project creation); the
-  only create-project references are the `hello-rock3.createNewProject` sample extension and
-  test/menu fixtures that are never registered or handled. Reading an existing project's Guid works
+  only create-project references are the `hello-rock3.createNewProject` sample extension (registered
+  and handled, but it creates its own non-ParatextData sample data, not a ParatextData/ScrText
+  project) and unregistered test/menu fixtures. Reading an existing project's Guid works
   (via `ScrText.Guid`, a ParatextData primitive); **creating** a Guid for a brand-new project does
   not, because that path is Mercurial-backed and PT10 does not touch Mercurial.
 - **Decision:** Treat "create a new project" as an **unavailable platform capability**. Features that
