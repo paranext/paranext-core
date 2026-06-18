@@ -8,16 +8,16 @@
 ## Why this document exists
 
 UX and dev have been talking about "settings" without a shared definition of
-what a setting *is*, where one lives, and how it relates to the other places we
+what a setting _is_, where one lives, and how it relates to the other places we
 stash state. This document puts the whole spectrum in one place so we can agree
 on vocabulary and set expectations before designing features that touch it.
 
 Two recurring UX questions motivated this:
 
-1. **"Can something be editable in the Settings UI *and* somewhere else too?"**
+1. **"Can something be editable in the Settings UI _and_ somewhere else too?"**
    — Yes (see below).
 2. **"What kinds of settings can exist, and how do user-level and project-level
-   choices interact?"** — This is the part that is *not* yet formalized. See
+   choices interact?"** — This is the part that is _not_ yet formalized. See
    [Scope interaction](#scope-interaction-the-part-were-still-defining).
 
 ---
@@ -33,20 +33,23 @@ Mostly yes. The primary term in code is **setting**:
 - Types: `SettingNames`, `SettingTypes`, `ProjectSettingNames`, `ProjectSettingTypes`
 - UI: `setting.component.tsx`, `project-setting.component.tsx`
 
-There is **one nuance**: when an extension *contributes* a setting (in
+There is **one nuance**: when an extension _contributes_ a setting (in
 `manifest.json` → `contributions/settings.json`), each individual setting is
 declared as a **property** of a settings **group**:
 
 ```jsonc
-[{
-  "label": "Hello Rock3 Settings",          // the group
-  "properties": {
-    "helloRock3.personName": {              // the setting, declared as a "property"
-      "label": "...",
-      "default": "Bill"
-    }
-  }
-}]
+[
+  {
+    "label": "Hello Rock3 Settings", // the group
+    "properties": {
+      "helloRock3.personName": {
+        // the setting, declared as a "property"
+        "label": "...",
+        "default": "Bill",
+      },
+    },
+  },
+]
 ```
 
 So: the user-facing thing is a **setting**; the schema entry that defines it is
@@ -58,7 +61,7 @@ contribution schema.**
 
 This is the most important thing for UX to internalize. A setting is just a
 piece of **shared, persisted, reactive data** behind a service and a hook. The
-Settings tab is *one consumer* of that data, not its owner.
+Settings tab is _one consumer_ of that data, not its owner.
 
 That means **yes — the same setting can be edited in Settings AND in a
 convenient inline place** (a toolbar, a panel header, a context menu). Both call
@@ -79,31 +82,31 @@ These are the distinct "places state lives," ordered from most
 configuration-like (deliberate, persistent, user-meaningful) to most ephemeral
 (per-view, transient UI memory).
 
-| Layer | Code name / hook | Scope | Persisted where | Edited by user via |
-|---|---|---|---|---|
-| **User Setting** | `useSetting` | The whole app, per user | Backend file `settings.json` | Settings UI and/or inline controls |
-| **Project Setting** | `useProjectSetting` | One project | Inside that project's Project Data Provider (PDP) | Settings UI (filtered to project) and/or inline |
-| **Project Data** | `useProjectData` (PDP) | One project | PDP backend | The actual content/editing UI (not "settings") |
-| **Web View State** | `useWebViewState` | One open panel instance | `localStorage` (`web-view-state`) | Implicitly, by interacting with that panel |
-| **Workspace / Layout State** | dock layout | The whole workspace arrangement | `localStorage` (`dock-saved-layout`) | Dragging/arranging panels (power mode only) |
-| **Scroll / Verse Reference** | `useWebViewScrollGroupScrRef` | Shared across linked panels | In-memory service + saved on the web view | Navigating Scripture; choosing a scroll group |
+| Layer                        | Code name / hook              | Scope                           | Persisted where                                   | Edited by user via                              |
+| ---------------------------- | ----------------------------- | ------------------------------- | ------------------------------------------------- | ----------------------------------------------- |
+| **User Setting**             | `useSetting`                  | The whole app, per user         | Backend file `settings.json`                      | Settings UI and/or inline controls              |
+| **Project Setting**          | `useProjectSetting`           | One project                     | Inside that project's Project Data Provider (PDP) | Settings UI (filtered to project) and/or inline |
+| **Project Data**             | `useProjectData` (PDP)        | One project                     | PDP backend                                       | The actual content/editing UI (not "settings")  |
+| **Web View State**           | `useWebViewState`             | One open panel instance         | `localStorage` (`web-view-state`)                 | Implicitly, by interacting with that panel      |
+| **Workspace / Layout State** | dock layout                   | The whole workspace arrangement | `localStorage` (`dock-saved-layout`)              | Dragging/arranging panels (power mode only)     |
+| **Scroll / Verse Reference** | `useWebViewScrollGroupScrRef` | Shared across linked panels     | In-memory service + saved on the web view         | Navigating Scripture; choosing a scroll group   |
 
 ### How to tell them apart (the distinctions devs actually make)
 
-- **User Setting vs Project Setting** — *same machinery*, different scope. User
+- **User Setting vs Project Setting** — _same machinery_, different scope. User
   settings are global to the person; project settings travel with a specific
   project and can be filtered to only apply to certain project types (via
   `includeProjectInterfaces`). A per-project preference is a project setting.
-- **Setting vs Project Data** — A setting is *configuration about how something
-  behaves*; data is *the content itself* (the Scripture text, notes, etc.).
+- **Setting vs Project Data** — A setting is _configuration about how something
+  behaves_; data is _the content itself_ (the Scripture text, notes, etc.).
   Both can live in a project's PDP, but a setting is small, typed, has a
   default, and is meant to be tweaked.
-- **Setting vs Web View State** — Web View State is *one open panel's private
-  memory* (a scroll position, a local toggle). It isn't surfaced in Settings,
+- **Setting vs Web View State** — Web View State is _one open panel's private
+  memory_ (a scroll position, a local toggle). It isn't surfaced in Settings,
   isn't shared, and is keyed to that panel instance. Two copies of the same view
   each have their own.
 - **Setting vs Workspace State** — Layout (which panels are open and where) is
-  workspace state in `localStorage`, *not* in the settings system. Users edit it
+  workspace state in `localStorage`, _not_ in the settings system. Users edit it
   by arranging panels, not in a dialog. (Note: only saved in "power" interface
   mode.)
 - **Scroll/Verse reference** is its own shared, synchronized state across panels
@@ -111,11 +114,11 @@ configuration-like (deliberate, persistent, user-meaningful) to most ephemeral
 
 ---
 
-## Part 3 — Scope interaction *(the part we're still defining)*
+## Part 3 — Scope interaction _(the part we're still defining)_
 
-> **This is the gap.** The codebase gives us *storage primitives* (user setting,
-> project setting, web view state). It does **not** define a standard for *how a
-> user-level choice and a project-level choice compose*. Today that's decided
+> **This is the gap.** The codebase gives us _storage primitives_ (user setting,
+> project setting, web view state). It does **not** define a standard for _how a
+> user-level choice and a project-level choice compose_. Today that's decided
 > per-feature. UX is right to push for a shared model here.
 
 The key realization: **the project↔user relationship is not always the same.**
@@ -123,7 +126,7 @@ Two of our current designs already behave differently:
 
 ### Pattern A — Additive / superset (project sets a floor)
 
-> *Example: a project's resource list.*
+> _Example: a project's resource list._
 
 The project provides a base list. In their UX, the user can **add** to it but
 **cannot subtract** from it. The user always sees a **superset** of what the
@@ -136,9 +139,9 @@ effective = projectList ∪ userAdditions     (user cannot remove project items)
 
 ### Pattern B — Default + transient reduction (project sets a default, user can show less)
 
-> *Example: text collections (designed, not yet built).*
+> _Example: text collections (designed, not yet built)._
 
-The project determines what the user *initially* sees. But the user can show
+The project determines what the user _initially_ sees. But the user can show
 **less** than that — e.g., there are five texts but the screen only has room for
 three. This is **display state**, not a durable preference: it's closer to
 **web view / workspace state** than to a setting. The project value is a
@@ -153,7 +156,7 @@ displayed = projectDefault − userHidesForThisView   (transient, per-view)
 Pattern A and Pattern B look similar to UX ("project provides something, user
 adjusts it") but map onto **different storage layers** in code:
 
-- Pattern A = **project setting** + **user setting** that *compose additively*.
+- Pattern A = **project setting** + **user setting** that _compose additively_.
   Both are durable; the composition rule (union, user-can-only-add) is the
   feature's responsibility.
 - Pattern B = **project setting / project data** (the source of truth) +
@@ -165,7 +168,7 @@ adjusts it") but map onto **different storage layers** in code:
 1. Do we want a **named, reusable set of interaction patterns** (e.g.
    "project-only," "user-only," "user-overrides," "additive/superset,"
    "default + transient reduction") that designs can reference by name?
-2. When a user choice is a *reduction for display*, is that always **web view /
+2. When a user choice is a _reduction for display_, is that always **web view /
    workspace state**, never a setting? (Proposed: yes.)
 3. For additive cases, do we need first-class support in the settings system for
    "this user setting composes onto that project setting," or does each feature
