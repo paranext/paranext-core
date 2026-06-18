@@ -91,9 +91,20 @@ internal class ParatextProjectSendReceiveService(
     /// </param>
     protected void SyncProjects(String[]? projectIds)
     {
+#if DEBUG
+        // Dev-only placeholder: paranext-core has no S/R impl. PT10 patches the whole method.
+        NotificationService.Send(
+            papiClient,
+            new("Syncing projects… (dev placeholder)", NotificationSeverity.Info)
+            {
+                Duration = 3000,
+            }
+        );
+#else
         throw new PlatformUnimplementedException(
             $"Command '{nameof(SyncProjects)}' is not implemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
         );
+#endif
     }
 
     /// <summary>

@@ -25,6 +25,8 @@ export async function performStartupTasks(): Promise<void> {
 }
 
 async function performStartupTasksInternal(): Promise<void> {
+  logger.info('performStartupTasks invoked');
+
   // Power mode: no automatic sync on startup.
   // If the setting can't be read, default to simple mode to avoid skipping sync.
   let interfaceMode: string | undefined;
@@ -33,6 +35,7 @@ async function performStartupTasksInternal(): Promise<void> {
   } catch {
     /* settings service unavailable — treat as simple mode */
   }
+  logger.info(`performStartupTasks: interfaceMode=${interfaceMode}`);
   if (interfaceMode !== undefined && interfaceMode !== 'simple') return;
 
   // Simple mode: sync all locally-known shared projects (no project IDs = "sync all" per the
