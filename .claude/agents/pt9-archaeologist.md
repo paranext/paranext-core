@@ -1,7 +1,7 @@
 ---
 name: pt9-archaeologist
 description: "Read-only agent for /investigate-prd. Reads the cited Paratext 9 source (the forms/classes feature-mapper found) and documents what the feature DOES — behaviors, data shapes, exact validation rules, the backend it talks to, and test-derived edge cases — every claim cited to file:line. Records WHAT/WHERE in PT9 only; never proposes PT10 implementation. Input: PT9_MAP."
-allowed-tools: Bash, Read, Grep, Glob
+tools: Bash, Read, Grep, Glob
 ---
 
 # PT9 Archaeologist
