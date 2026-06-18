@@ -24,9 +24,12 @@ checkpoint, and transitions to planning. It owns no investigation logic of its o
 Investigations read sibling checkouts under `~/git/` — `Paratext` (PT9) and the PT10
 constellation (`paranext-core`, `paratext-10-studio`, `paratext-bible-extensions`,
 `paratext-bible-internal-extensions`). These live **outside this working directory**, so your
-file tools (`Read`/`Glob`) can only reach them if they were granted at launch (e.g.
-`claude --add-dir ~/git`); Bash can reach them regardless, but the agents rely on `Read` for
-their deep source reads. **Step 1 preflights this and warns up front.** If a repo is still
+file tools (`Read`/`Glob`) need access to them. In the default paranext-core checkout this
+**works out of the box** — its `.claude/settings.json` broadly allows `Read`/`Glob`, so the file
+tools reach siblings under `~/git/` with no extra flags. If your setup restricts file reads, grant
+access at launch instead (e.g. `claude --add-dir ~/git`). Bash can reach them regardless, but the
+agents rely on `Read` for their deep source reads. **Step 1 preflights this empirically — it only
+warns if reads actually fail**, so you normally won't be asked to relaunch. If a repo is still
 unreachable mid-run, the owning agent degrades and notes the gap. This is a **convention**, not a
 hard requirement — never pin paths into the user's settings for them.
 
@@ -50,8 +53,9 @@ Do **not** auto-commit the brief — the developer commits it as part of their n
 each). Treat an *outside-the-allowed-directories / access* error (not an empty result) as
 **unreachable**. If any are unreachable, **stop and warn the user before investigating**:
 
-> ⚠️ My file tools can't read these repos: {list}. Either they aren't granted to me (relaunch
-> with `claude --add-dir ~/git`) or they aren't checked out under `~/git/`. Without them I'll
+> ⚠️ My file tools can't read these repos: {list}. Either your config restricts file reads
+> (relaunch with `claude --add-dir ~/git`, or broaden the `Read` permission in
+> `.claude/settings.json`) or they aren't checked out under `~/git/`. Without them I'll
 > degrade — fall back to the bundled inventory and flag the gaps. Proceed degraded, or relaunch?
 
 An unreachable **constellation** repo degrades `pt10-reuse-scout` (affects every PRD — it always
