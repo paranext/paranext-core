@@ -125,7 +125,7 @@ Locate each discrete logic unit (a method or cohesive section, by `file:line`) a
 
 For aspects with no PT9 antecedent, this sweep is the **primary** investigation: prior art,
 architectural fit, and reusable infrastructure (services, hooks, components, PAPI surfaces). Stay
-within the constellation + the bundled `general/` standards. If a net-new aspect clearly needs
+within the constellation + the repo's `.context/standards/`. If a net-new aspect clearly needs
 research beyond them (external library choice, a pattern not present in-repo), **flag it as an
 open question** — do not go off-repo to research it yourself.
 

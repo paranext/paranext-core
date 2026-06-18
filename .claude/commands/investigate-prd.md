@@ -33,10 +33,8 @@ containing the siblings. Never pin paths into settings for them.
 If `$ARGUMENTS` is empty, ask the user for the PRD path and stop until they provide it.
 
 Derive a slug from the PRD filename (lowercase; spaces and punctuation → hyphens; drop the
-extension). Briefs live in the **shared, tracked** research area so collaborators get them via
-git — `.context/research/investigations/<slug>/`. (Today `.context/` is shared through the
-ai-prompts profile repo; once `general/` moves into paranext-core, `.context/` is paranext-core's
-own tracked folder — the path is stable across that migration.)
+extension). Briefs live in the **shared, tracked** research area
+`.context/research/investigations/<slug>/` so collaborators get them via git.
 
 ```bash
 SLUG="<derived-slug>"
@@ -73,7 +71,9 @@ archaeologist). A fully net-new PRD runs only the scout.
   breakdown** — the scout sweeps the constellation by each port aspect's PT9 form/category). Dispatch
   all of these in one message.
 - **Wave B (single response, in parallel):** for each `feature-mapper` that returned a map, one
-  `pt9-archaeologist` (`subagent_type: "pt9-archaeologist"`, pass that aspect's `PT9_MAP`).
+  `pt9-archaeologist` (`subagent_type: "pt9-archaeologist"`, pass that aspect's `PT9_MAP`). Pair
+  each archaeologist with the `feature-mapper` output whose `## PT9 map: {feature}` heading matches
+  that aspect — keep the aspect → mapper → archaeologist correspondence strictly 1:1.
 
 Each agent prompt ends with: "Follow the instructions in your agent definition exactly. Return
 output in the specified format." Collect every agent's output and status token. If an agent
