@@ -1,7 +1,7 @@
 ---
 name: shadcn-customization-tracker
 description: "Analyzes a batch of shadcn component files in lib/platform-bible-react/src/components/shadcn-ui/ and reports all customizations made relative to the original boilerplate. Returns one structured markdown report block per file for aggregation by the shadcn-customizations command. Input: a list of file paths relative to the paranext-core repo root."
-allowed-tools: Bash, Read, Grep
+tools: Bash, Read, Grep
 ---
 
 # Shadcn Customization Tracker
