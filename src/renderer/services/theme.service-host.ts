@@ -588,13 +588,11 @@ let dataProvider: IThemeService;
 export const initialize = createCachedInitializer(async () => {
   const systemThemeChangesInfo = listenToSystemThemeChanges();
 
-  // registerEngine mutates the engine it receives (layering over notifyUpdate, set, and dispose),
-  // which is not idempotent. Since createCachedInitializer retries after a failure, use a fresh
-  // instance each attempt so a retry after a post-mutation failure doesn't double-layer the engine.
-  // Dispose the instance being replaced — the eager module-scope one on the first attempt, or a
-  // failed prior attempt's — so its constructor's timer and theme subscriptions don't leak. Build
-  // the replacement first so themeServiceEngine never points at a disposed engine (getCurrentThemeSync
-  // reads it synchronously). dispose() is idempotent, so re-disposing a failed attempt is harmless.
+  // registerEngine mutates the engine it receives (not idempotent), so build a fresh instance on
+  // each attempt and dispose the replaced one to avoid leaking its timer and theme subscriptions.
+  // Build the replacement before disposing so getCurrentThemeSync never observes a mid-disposal
+  // engine. After a catch-block failure, themeServiceEngine holds the disposed attempt — safe
+  // because dispose() tears down subscriptions/timers but does not clear currentTheme.
   const previousEngine = themeServiceEngine;
   themeServiceEngine = createThemeServiceEngine();
   await previousEngine
