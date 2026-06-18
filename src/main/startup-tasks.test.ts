@@ -12,7 +12,7 @@ vi.mock('@shared/services/network.service', () => ({
 }));
 
 vi.mock('@shared/services/logger.service', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 const mockSettingsGet = vi.mocked(settingsService.get);

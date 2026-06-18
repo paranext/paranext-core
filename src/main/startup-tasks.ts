@@ -25,7 +25,7 @@ export async function performStartupTasks(): Promise<void> {
 }
 
 async function performStartupTasksInternal(): Promise<void> {
-  logger.info('performStartupTasks invoked');
+  logger.debug('performStartupTasks invoked');
 
   // Power mode: no automatic sync on startup.
   // If the setting can't be read, default to simple mode to avoid skipping sync.
@@ -35,7 +35,7 @@ async function performStartupTasksInternal(): Promise<void> {
   } catch {
     /* settings service unavailable — treat as simple mode */
   }
-  logger.info(`performStartupTasks: interfaceMode=${interfaceMode}`);
+  logger.debug(`performStartupTasks: interfaceMode=${interfaceMode}`);
   if (interfaceMode !== undefined && interfaceMode !== 'simple') return;
 
   // Simple mode: sync all locally-known shared projects (no project IDs = "sync all" per the
@@ -43,13 +43,13 @@ async function performStartupTasksInternal(): Promise<void> {
   // `requestNoRetry`, because the C# S/R command registers asynchronously during startup; this
   // call may race ahead of it. `undefined` as the single arg serializes as `null` in the
   // JSON-RPC params array — matching the "sync all" sentinel on the C# side.
-  logger.info('Startup sync starting');
+  logger.debug('Startup sync starting');
   try {
     await networkService.request(
       serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.syncProjects'),
       undefined,
     );
-    logger.info('Startup sync complete');
+    logger.debug('Startup sync complete');
   } catch {
     /* command absent (Platform.Bible) / extension not yet activated / sync failed — no-op */
   }
