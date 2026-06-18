@@ -9,3 +9,5 @@
 {"type":"backlog","candidateId":"c8","title":"Sonner shown for manual sync status (fix lives in private extension)","area":"paratext-bible-internal-extensions (not in this repo)","source":"jira","jiraKey":"PT-3979","dedupKey":"jira:PT-3979","impactScore":3,"confidence":0.2,"status":"open","date":"2026-06-18"}
 {"type":"repro","runId":"qs-2026-06-17","candidateId":"c1","result":"reproduced","evidenceRef":"RED: notification.service-host.test.ts PT-4002 - 2nd toast.info call has no top-level id (action:undefined,duration:10000); expected id:toast-1","date":"2026-06-18"}
 {"type":"fix","runId":"qs-2026-06-17","candidateId":"c1","result":"dropped","branch":"fix/PT-4002-duplicate-notification-toast","reason":"dry-run: stopped before opening PR (QUALITY_SWEEP_DRY_RUN=1)","date":"2026-06-18"}
+{"type":"fix","runId":"qs-2026-06-17","candidateId":"c1","result":"pr_opened","prNumber":2435,"prUrl":"https://github.com/paranext/paranext-core/pull/2435","branch":"fix/PT-4002-duplicate-notification-toast","date":"2026-06-18"}
+{"type":"pr_outcome","prNumber":2435,"outcome":"open","checkedDate":"2026-06-18","date":"2026-06-18"}
