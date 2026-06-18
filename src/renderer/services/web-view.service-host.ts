@@ -90,6 +90,8 @@ import {
   buildSimpleLayoutForProject,
   SIMPLE_LAYOUT_TAB_IDS,
 } from '@renderer/components/docking/simple-layout.builder';
+import { trackSimpleLayoutTabsResolved as trackSimpleLayoutTabsResolvedImpl } from '@renderer/services/simple-layout-tabs-resolved.tracker';
+import type { LayoutBase } from 'rc-dock';
 import {
   closeOpenUsersnapForm,
   isUsersnapFormCurrentlyOpen,
@@ -722,15 +724,25 @@ const onLayoutChange: OnLayoutChange = async (newLayout, _currentTabId, changeIn
 /**
  * Loads layout information into the dock layout.
  *
+ * Accepts either the shared model's opaque `LayoutInfo` or rc-dock's `LayoutBase`. The two are
+ * structurally compatible at runtime; `LayoutInfo` is opaque in the shared model to keep callers
+ * outside the docking module unaware of rc-dock's type. Callers inside the renderer that already
+ * speak rc-dock (e.g. `buildSimpleLayoutForProject`) can pass `LayoutBase` directly without a
+ * cast.
+ *
  * @param layout If this parameter is provided, loads that layout information. If not provided, gets
  *   the persisted layout information and loads it into the dock layout.
  */
-async function loadLayout(layout?: LayoutInfo): Promise<void> {
+async function loadLayout(layout?: LayoutInfo | LayoutBase): Promise<void> {
   const dockLayoutVar = await getDockLayout();
   if (layout) {
+    // Cross the rc-dock / shared-model boundary with one cast at this edge so callers don't have
+    // to. Matches the convention in `platform-dock-layout.component.tsx`.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const layoutAsInfo = layout as unknown as LayoutInfo;
     // Explicit layout change. `loadLayout` doesn't run `onLayoutChange`, so run it manually.
-    dockLayoutVar.loadLayout(layout);
-    await onLayoutChange(layout);
+    dockLayoutVar.loadLayout(layoutAsInfo);
+    await onLayoutChange(layoutAsInfo);
     return;
   }
 
@@ -953,15 +965,15 @@ async function runProjectBoundSimpleSwitch(projectId: string): Promise<void> {
   // we subscribe and we'd miss them. Especially important on subsequent simple-mode switches,
   // where the previous switch's resolved titles are still in the dock layout and the new update
   // events for them are what tell us the project content has actually landed.
-  const tabsResolved = trackSimpleLayoutTabsResolved();
+  const tabsResolved = trackSimpleLayoutTabsResolvedImpl({
+    tabIds: SIMPLE_LAYOUT_TAB_IDS,
+    onDidOpenWebView,
+    onDidUpdateWebView,
+  });
 
   try {
     const projectBoundLayout = buildSimpleLayoutForProject(projectId);
-    // `loadLayout` types its parameter as `LayoutInfo` (Record<string, unknown>) but actually just
-    // forwards it to `dockLayoutVar.loadLayout`, which accepts the same `LayoutBase` that
-    // `simpleLayout` already uses. Cast to bridge the type gap without changing the public type.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    await loadLayout(projectBoundLayout as unknown as LayoutInfo);
+    await loadLayout(projectBoundLayout);
     // Wait for every simple-layout tab's webview to fire its open/update event, which is when
     // `loadWebViewTab` replaces the `%tab_title_unknown%` placeholder with the real title.
     await tabsResolved.promise;
@@ -974,64 +986,6 @@ async function runProjectBoundSimpleSwitch(projectId: string): Promise<void> {
     await waitForNextPaint();
     setWorkspaceUpdating(false);
   }
-}
-
-/**
- * Max time to wait for the simple-layout tabs to finish loading their titles before hiding the
- * overlay anyway. The overlay should never get stuck if a tab's webview provider misbehaves — the
- * user is better off seeing a tab with an unresolved title than no UI at all.
- */
-const SIMPLE_LAYOUT_TABS_RESOLVED_TIMEOUT_MS = 5000;
-
-/**
- * Sets up a tracker that resolves once every simple-layout tab has fired an open- or update-webview
- * event — meaning the tab's data has been replaced with the freshly-loaded webview definition (real
- * title, real content, real projectId), not the `%tab_title_unknown%` placeholder that
- * `loadWebViewTab` puts in place while `retrieveWebViewContent` is in flight.
- *
- * Subscribe BEFORE the caller runs `loadLayout`: `loadLayout` synchronously installs the
- * placeholder tab definitions and then kicks off the async webview fetches whose results land via
- * these events. Subscribing afterward would race the fastest webview and miss its event.
- */
-function trackSimpleLayoutTabsResolved(): { promise: Promise<void>; dispose: () => void } {
-  const remaining = new Set<string>(SIMPLE_LAYOUT_TAB_IDS);
-  let unsubOpen: (() => void) | undefined;
-  let unsubUpdate: (() => void) | undefined;
-  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
-  let finished = false;
-  let resolveFn: (() => void) | undefined;
-
-  const finish = () => {
-    if (finished) return;
-    finished = true;
-    if (timeoutHandle !== undefined) {
-      clearTimeout(timeoutHandle);
-      timeoutHandle = undefined;
-    }
-    unsubOpen?.();
-    unsubOpen = undefined;
-    unsubUpdate?.();
-    unsubUpdate = undefined;
-    resolveFn?.();
-  };
-
-  const promise = new Promise<void>((resolve) => {
-    resolveFn = resolve;
-  });
-
-  const handleEvent = ({ webView }: { webView: { id: string } }) => {
-    if (!remaining.delete(webView.id)) return;
-    if (remaining.size === 0) finish();
-  };
-
-  unsubOpen = onDidOpenWebView(handleEvent);
-  unsubUpdate = onDidUpdateWebView(handleEvent);
-
-  timeoutHandle = setTimeout(() => {
-    finish();
-  }, SIMPLE_LAYOUT_TABS_RESOLVED_TIMEOUT_MS);
-
-  return { promise, dispose: finish };
 }
 
 /**
