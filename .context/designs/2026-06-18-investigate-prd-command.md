@@ -865,6 +865,12 @@ no worker-assignment files or scope caps, no PT10 reusability columns. You read 
 files directly and document — no fan-out, no port planning.
 ````
 
+> **Revised after build (2026-06-18):** the shipped `pt9-archaeologist` and `pt10-reuse-scout`
+> now permit *disciplined* fan-out (they hold the `Task` tool); the "no fan-out" wording in the
+> snippet above reflects the original build only. What stays dropped is the heavyweight harness
+> (`archaeologist-consolidator` / `worker-assignments.json` / step-review), not the act of spawning
+> a helper. See commit `79cd3c120b`.
+
 - [ ] **Step 3: Verify structure & conventions**
 
 ```bash
