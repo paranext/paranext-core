@@ -7,6 +7,7 @@ import {
   PopoverHeader,
   PopoverTitle,
   PopoverTrigger,
+  readDirection,
   Separator,
   Skeleton,
   ToggleGroup,
@@ -15,9 +16,19 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  type Direction,
   type LanguageInfo,
 } from 'platform-bible-react';
-import { CircleUserRound, Globe, Monitor, Moon, Sun, User, Wifi } from 'lucide-react';
+import {
+  ArrowLeftRight,
+  CircleUserRound,
+  Globe,
+  Monitor,
+  Moon,
+  Sun,
+  User,
+  Wifi,
+} from 'lucide-react';
 import {
   useData,
   useDataProvider,
@@ -25,11 +36,7 @@ import {
   useSetting,
 } from '@renderer/hooks/papi-hooks';
 import { useInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
-import {
-  applyLayoutDirection,
-  readLayoutDirection,
-  type LayoutDirection,
-} from '@renderer/services/layout-direction.service';
+import { applyLayoutDirection } from '@renderer/services/layout-direction.service';
 import { sendCommand } from '@shared/services/command.service';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
@@ -59,6 +66,11 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%userProfile_appearance_light%',
   '%userProfile_appearance_dark%',
   '%userProfile_appearance_system%',
+  '%userProfile_layoutDirection%',
+  '%userProfile_layoutDirection_ltr%',
+  '%userProfile_layoutDirection_ltr_aria%',
+  '%userProfile_layoutDirection_rtl%',
+  '%userProfile_layoutDirection_rtl_aria%',
 ];
 
 const DEFAULT_AVAILABLE_LANGUAGES: Record<string, LanguageInfo> = {
@@ -108,13 +120,11 @@ export function UserProfilePopover() {
   // Power-user only: revealed when the trigger button is shift+clicked. Resets when the popover
   // closes so it stays hidden on a subsequent normal click.
   const [showDirectionToggle, setShowDirectionToggle] = useState(false);
-  const [layoutDirection, setLayoutDirection] = useState<LayoutDirection>(() =>
-    readLayoutDirection(),
-  );
+  const [layoutDirection, setLayoutDirection] = useState<Direction>(() => readDirection());
 
   const handleTriggerClick = (e: MouseEvent<HTMLButtonElement>) => {
     // Only react on the click that *opens* the popover. A click while it's already open is a close,
-    // and handleOpenChange will reset the toggle to hidden — we don't want this handler racing it.
+    // not a reveal — handleOpenChange will reset the toggle to hidden.
     if (isOpen) return;
     setShowDirectionToggle(e.shiftKey);
   };
@@ -458,7 +468,10 @@ export function UserProfilePopover() {
             className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:px-2"
             data-testid="user-profile-direction-row"
           >
-            <span className="tw:text-xs tw:text-muted-foreground">Layout direction</span>
+            <span className="tw:flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-muted-foreground">
+              <ArrowLeftRight className="tw:size-3.5" />
+              {localizedStrings['%userProfile_layoutDirection%']}
+            </span>
             <ToggleGroup
               type="single"
               value={layoutDirection}
@@ -469,19 +482,19 @@ export function UserProfilePopover() {
                 value="ltr"
                 variant="outline"
                 data-testid="user-profile-direction-ltr"
-                aria-label="Left to right"
+                aria-label={localizedStrings['%userProfile_layoutDirection_ltr_aria%']}
                 className="user-profile-popover-text-3xs tw:h-6 tw:min-w-0 tw:px-2"
               >
-                LTR
+                {localizedStrings['%userProfile_layoutDirection_ltr%']}
               </ToggleGroupItem>
               <ToggleGroupItem
                 value="rtl"
                 variant="outline"
                 data-testid="user-profile-direction-rtl"
-                aria-label="Right to left"
+                aria-label={localizedStrings['%userProfile_layoutDirection_rtl_aria%']}
                 className="user-profile-popover-text-3xs tw:h-6 tw:min-w-0 tw:px-2"
               >
-                RTL
+                {localizedStrings['%userProfile_layoutDirection_rtl%']}
               </ToggleGroupItem>
             </ToggleGroup>
           </div>

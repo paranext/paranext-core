@@ -78,6 +78,11 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%userProfile_appearance_light%': 'Light theme',
       '%userProfile_appearance_dark%': 'Dark theme',
       '%userProfile_appearance_system%': 'Match OS theme',
+      '%userProfile_layoutDirection%': 'Direction label',
+      '%userProfile_layoutDirection_ltr%': 'LTR text',
+      '%userProfile_layoutDirection_ltr_aria%': 'LTR aria',
+      '%userProfile_layoutDirection_rtl%': 'RTL text',
+      '%userProfile_layoutDirection_rtl_aria%': 'RTL aria',
     },
   ]),
   useSetting: vi.fn((key: string) => {
@@ -108,6 +113,11 @@ vi.mock('@shared/services/command.service', () => ({
   sendCommand: vi.fn(async () => ({ name: '', code: '', email: '', supporterName: '' })),
 }));
 
+const mockApplyLayoutDirection = vi.fn();
+vi.mock('@renderer/services/layout-direction.service', () => ({
+  applyLayoutDirection: (...args: unknown[]) => mockApplyLayoutDirection(...args),
+}));
+
 vi.mock('@shared/services/logger.service', () => ({
   logger: { warn: vi.fn(), error: vi.fn() },
 }));
@@ -124,6 +134,9 @@ beforeEach(() => {
   setMockSetting('shouldMatchSystem', false);
   setMockSetting('setShouldMatchSystem', vi.fn());
   vi.mocked(sendCommand).mockClear();
+  mockApplyLayoutDirection.mockClear();
+  // Reset persisted direction so each test starts from the default ltr.
+  localStorage.removeItem('layoutDirection');
 });
 
 describe('UserProfilePopover', () => {
@@ -341,5 +354,49 @@ describe('UserProfilePopover appearance', () => {
     fireEvent.click(await screen.findByTestId('user-profile-appearance-system'));
     expect(mockState.setShouldMatchSystem).toHaveBeenCalledWith(true);
     expect(mockState.setTheme).not.toHaveBeenCalled();
+  });
+});
+
+describe('UserProfilePopover layout direction (shift+click)', () => {
+  test('the direction row is hidden on a normal trigger click', async () => {
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.queryByTestId('user-profile-direction-row')).not.toBeInTheDocument();
+  });
+
+  test('shift+clicking the trigger reveals the direction row', async () => {
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'), { shiftKey: true });
+    expect(await screen.findByTestId('user-profile-direction-row')).toBeInTheDocument();
+  });
+
+  test('closing the popover resets the toggle so a subsequent normal click hides it', async () => {
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'), { shiftKey: true });
+    expect(await screen.findByTestId('user-profile-direction-row')).toBeInTheDocument();
+    // Close via the Escape key, which Radix Popover handles natively.
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    // Now open normally — row should NOT be visible.
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.queryByTestId('user-profile-direction-row')).not.toBeInTheDocument();
+  });
+
+  test('clicking RTL calls applyLayoutDirection with rtl', async () => {
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'), { shiftKey: true });
+    fireEvent.click(await screen.findByTestId('user-profile-direction-rtl'));
+    expect(mockApplyLayoutDirection).toHaveBeenCalledTimes(1);
+    expect(mockApplyLayoutDirection).toHaveBeenCalledWith('rtl');
+  });
+
+  test('clicking the already-selected direction is a no-op', async () => {
+    // Default direction reads from localStorage; absence => 'ltr'.
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'), { shiftKey: true });
+    fireEvent.click(await screen.findByTestId('user-profile-direction-ltr'));
+    expect(mockApplyLayoutDirection).not.toHaveBeenCalled();
   });
 });

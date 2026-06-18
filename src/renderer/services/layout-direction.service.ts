@@ -1,42 +1,36 @@
 import { logger } from '@shared/services/logger.service';
+import { persistDirection, type Direction } from 'platform-bible-react';
 import { getErrorMessage } from 'platform-bible-utils';
 
-export type LayoutDirection = 'ltr' | 'rtl';
-
 /**
- * Storage key matches the one used by `lib/platform-bible-react`'s `dir-helper.util.ts`
- * (`readDirection()`), so flipping the value here flips the direction every component that calls
- * `readDirection()` will see on its next render — including those inside same-origin webview
- * iframes that share `localStorage` with the renderer.
+ * Apply the given direction to a single iframe — both the iframe element's `dir` attribute and
+ * (when same-origin) its inner `documentElement`. Cross-origin iframes
+ * (`WEB_VIEW_CONTENT_TYPE.URL`) won't expose `contentDocument` — that's expected, not a real
+ * failure, and is logged at `debug`.
  */
-const STORAGE_KEY = 'layoutDirection';
-
-export function readLayoutDirection(): LayoutDirection {
-  return localStorage.getItem(STORAGE_KEY) === 'rtl' ? 'rtl' : 'ltr';
+export function applyDirectionToIframeElement(iframe: HTMLIFrameElement, dir: Direction): void {
+  iframe.setAttribute('dir', dir);
+  try {
+    const innerDoc = iframe.contentDocument;
+    if (innerDoc?.documentElement) innerDoc.documentElement.setAttribute('dir', dir);
+  } catch (e: unknown) {
+    logger.debug(`layout-direction: could not set dir on iframe content: ${getErrorMessage(e)}`);
+  }
 }
 
-function applyDirectionToIframes(dir: LayoutDirection): void {
+function applyDirectionToIframes(dir: Direction): void {
   const iframes = document.querySelectorAll('iframe');
-  iframes.forEach((iframe) => {
-    iframe.setAttribute('dir', dir);
-    try {
-      const innerDoc = iframe.contentDocument;
-      if (innerDoc?.documentElement) innerDoc.documentElement.setAttribute('dir', dir);
-    } catch (e: unknown) {
-      // Cross-origin iframes (WEB_VIEW_CONTENT_TYPE.URL) won't expose contentDocument — that's
-      // expected, not a real failure. Only log at debug level.
-      logger.debug(`layout-direction: could not set dir on iframe content: ${getErrorMessage(e)}`);
-    }
-  });
+  iframes.forEach((iframe) => applyDirectionToIframeElement(iframe, dir));
 }
 
 /**
  * Apply the given layout direction to the whole renderer document and to every webview iframe
- * currently in the DOM. Also persists it so future reads (including new webview mounts) pick up the
- * same value.
+ * currently in the DOM. Also persists it (via `persistDirection` from `platform-bible-react`) so
+ * future reads — including new webview mounts and any component that calls `readDirection()` — pick
+ * up the same value.
  */
-export function applyLayoutDirection(dir: LayoutDirection): void {
-  localStorage.setItem(STORAGE_KEY, dir);
+export function applyLayoutDirection(dir: Direction): void {
+  persistDirection(dir);
   document.documentElement.setAttribute('dir', dir);
   applyDirectionToIframes(dir);
 }

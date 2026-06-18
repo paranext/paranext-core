@@ -4,11 +4,8 @@ import '@renderer/global-this-web-view.model';
 import '@renderer/global-this.model';
 
 import { App } from '@renderer/app.component';
-import {
-  applyLayoutDirection,
-  readLayoutDirection,
-} from '@renderer/services/layout-direction.service';
 import { startDialogService } from '@renderer/services/dialog.service-host';
+import { applyLayoutDirection } from '@renderer/services/layout-direction.service';
 import { startNotificationService } from '@renderer/services/notification.service-host';
 import { startOverlayService } from '@renderer/services/overlays/overlay.service-host';
 import { blockWebSocketsToPapiNetwork } from '@renderer/services/renderer-web-socket.service';
@@ -27,6 +24,7 @@ import { logger } from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
 import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
 import { webViewProviderService } from '@shared/services/web-view-provider.service';
+import { readDirection } from 'platform-bible-react';
 import {
   applyThemeStylesheet,
   getErrorMessage,
@@ -128,7 +126,7 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
 // #region set up the React UI
 
 // Apply persisted layout direction (LTR/RTL) before mounting so initial render is correct.
-applyLayoutDirection(readLayoutDirection());
+applyLayoutDirection(readDirection());
 
 const container = document.getElementById('root');
 if (!container) {
