@@ -15,6 +15,11 @@ Design decisions for the C# data-provider backend (not enforceable by linting). 
 - Every `Set*` MUST call `SendDataUpdateEvent(...)` for each affected data type — that is how subscribers get notified.
 - Each data type needs its own paired `Get*` / `Set*` / `subscribe*`; they cannot be shared across methods.
 - A provider helper that is **not** part of the contract MUST NOT start with `get`/`set`/`subscribe` — use another verb (`lookup*`, `compute*`, `list*`).
+- When a **NetworkObject** (not the DataProvider itself) mutates project data that DataProvider subscribers observe, it must fire `GetExistingProjectDataProvider(projectId)?.SendFullProjectUpdateEvent()` for the changed project — see the mutation-notify pattern in [Paranext-Core-Patterns.md](../../../.context/standards/Paranext-Core-Patterns.md).
+
+## Logic Placement: C# Process Is Reserved for ParatextData
+
+The C# data-provider process is for **ParatextData-backed** services. OS-state / UI-adjacent services (focus, `WebViewDefinition` reads, settings — anything not backed by `ParatextData.dll`) belong in a TypeScript service host, not C#. See "Logic Placement" in [Paranext-Core-Patterns.md](../../../.context/standards/Paranext-Core-Patterns.md).
 
 ## Visibility
 
@@ -29,6 +34,8 @@ Design decisions for the C# data-provider backend (not enforceable by linting). 
 
 - **Return records, not tuples**, from `DataProvider`/`NetworkObject` methods — tuples serialize as `{}` over JSON-RPC and silently lose data (this is what PNX007 catches).
 - Throw **custom exception types** with structured properties for domain errors that cross process boundaries (e.g. `MissingBookException`); keep shared ones at the `c-sharp/` root.
+- **Multi-item operations return a partial-success record** (`{ Success, Errors[], Warnings[] }`) and accumulate per-item failures *inside* the loop rather than throwing on the first one (e.g. `CopyBooksResult` / `ImportBooksResult`). See "Partial-success Result contract" in [Paranext-Core-Patterns.md](../../../.context/standards/Paranext-Core-Patterns.md).
+- **Preserve PT9 persisted/wire identifiers verbatim — including typos.** A PT9 on-the-wire identifier is the persisted value that round-trips through PT9-touched project data, so the PT10 config must match it exactly. Example: `CheckType.InternalValue` is `"MixexCapitalization"` (typo in PT9 `ParatextData/Checking/CheckType.cs`), so the PT10 check config uses that exact misspelled string. See "Preserve PT9 persisted/wire identifiers verbatim" in [Paranext-Core-Patterns.md](../../../.context/standards/Paranext-Core-Patterns.md).
 
 ### Cross-process parameter alignment
 

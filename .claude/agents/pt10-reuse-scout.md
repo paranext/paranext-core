@@ -138,6 +138,30 @@ Locate each discrete logic unit (a method or cohesive section, by `file:line`) a
 - Note **dependencies between blocks** (does A call B? shared state?) and **hotspots** (risky to
   migrate: many branches, tight coupling).
 
+### De-WinForms when classifying PT9 code
+
+Most PT9 logic worth porting is entangled with WinForms. Don't transliterate the WinForms shape
+into PT10 — recognize the idiom and classify it as **needs-rewrite**, then describe the PT10 target
+shape:
+
+- **Scattered control-driven callsites are one consolidated unit, not N ports.** When the same
+  static method is called from many WinForms files (e.g. a `KeyboardHelper.ActivateDefaultKeyboard`
+  / `KeyboardHelper.Create` pattern wired into ~16 forms), do NOT count it as N reusable callsites
+  to replicate. The PT10 target is a single centralized router/service (one observer per surface),
+  so classify the callsites collectively and recommend consolidation — replicating the
+  independently-callable static-method pattern repeats the PT9 mistake.
+- **Map WinForms idioms to their PT10 equivalents** when recording the entanglement of a
+  needs-rewrite block:
+
+  | PT9 (WinForms) | PT10 adaptation |
+  | --- | --- |
+  | `MessageBox.Show(...)` | return an error result (don't show UI from the data layer) |
+  | `this.control.Text` | pass in as a method parameter |
+  | `Settings.Default.X` | inject via a parameter or service |
+
+  A block dominated by these idioms is entangled and needs-rewrite; the underlying business rule is
+  often still portable once the control/UI/static-settings dependencies are lifted out.
+
 ## Net-new aspects
 
 For aspects with no PT9 antecedent, this sweep is the **primary** investigation: prior art,

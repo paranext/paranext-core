@@ -36,6 +36,19 @@ Rules for code shared across processes (main, renderer, extension-host).
 - Implementation lives in process-specific code
 - Use request/response patterns over IPC/WebSocket
 
+## TypeScript Service Authoring
+
+Pick the service shape by whether it holds state and whether its implementation differs per process. (This is orthogonal to the network/proxy axis above — it's about how you *write* the module.)
+
+| Shape | Use | When | Why |
+| ----- | --- | ---- | --- |
+| **Stateless** | Function exports — no class | Pure utilities, logging, formatting, stateless helpers | Simpler, tree-shakeable, no `this`-binding issues |
+| **Stateful** | Module-level state plus `initialize()` / `shutdown()` functions | Services with a lifecycle (network, data providers) | Explicit lifecycle; mutex-protected initialization (e.g. `network.service.ts`) |
+| **Process-specific** | Factory function with dynamic `import()` | Different implementation per process (main / renderer / extension-host) | Lazy loading; process detection at runtime (e.g. `rpc-handler.factory.ts` does `(await import('@main/...')).default`) |
+
+- **Choice:** default to stateless function exports; reach for module-level state + `initialize()`/`shutdown()` only when there's a real lifecycle to manage; use a factory + dynamic import only when the implementation genuinely diverges per process.
+- **Avoid:** wrapping stateless helpers in a class instance, and eager top-level `import` of a process-specific implementation (it pulls that process's code into every bundle).
+
 ## DataProvider Engine Hosting
 
 Host a DataProvider engine in the process where its **dominant data source** lives, so subscribers don't fan out cross-process. The renderer hosts focus/window state, browser-only APIs (`localStorage`), `WebViewDefinition` reads, and theme/system-preference observers — engines reading those belong in the renderer (`src/renderer/services/*.service-host.ts`). The extension host hosts engines whose data is genuinely extension-host-local (extension lifecycle, cross-extension coordination).
@@ -43,6 +56,7 @@ Host a DataProvider engine in the process where its **dominant data source** liv
 - **Choice:** put the engine in the process that owns its primary data source. e.g. `theme.service-host.ts` (reads OS color-scheme preference + `localStorage`) and `window.service-host.ts` (emits `Focus` / `AppFocus` from renderer-local events) both live in the renderer.
 - **Avoid:** hosting an engine in the extension host when ALL its data sources are renderer-local — every event would then JSON-RPC across the boundary for each subscriber.
 - **Rationale:** the decision is per-engine; a cross-process subscription chain is fine as the exception, not the rule for every event.
+- **C# vs TypeScript host:** OS-state / UI-adjacent services (focus, `WebViewDefinition`, settings) belong in a TypeScript service host; the C# data-provider process is reserved for ParatextData-backed services. See "Logic Placement" in [Paranext-Core-Patterns.md](../../../.context/standards/Paranext-Core-Patterns.md).
 
 ## Service-Internal Key-Value State
 
