@@ -36,8 +36,8 @@ flags from the primer to skip the noise directories (`DataAccessServer`,
 
 1. **Entry points** — menus, toolbar buttons, shortcuts.
 2. **Main classes** — the dialogs/forms/services in `PT9_MAP`.
-3. **Help** — `grep -i '{keywords}' ~/git/Paratext/**/HelpData.xml`.
-4. **Tests** — `~/git/Paratext/**/*Tests/`.
+3. **Help** — `grep -rin '{keywords}' ~/git/Paratext --include=HelpData.xml` (recursive — avoids `**`, which needs globstar, off by default in non-interactive shells).
+4. **Tests** — the `*Tests` projects, located via `find ~/git/Paratext -type d -name '*Tests'` (e.g. `ParatextData.Tests/`, `Paratext.Tests/`).
 
 ```bash
 EXCL="--exclude-dir=DataAccessServer --exclude-dir=DataAccessServer.Tests --exclude-dir=PA"
@@ -105,7 +105,8 @@ likely (`❌ "likely has a Help button"` → instead `✅ "Help button not found
 
 ## Step 5 — Mine PT9's own tests as a behavior source
 
-Find the test class by target class/namespace in `~/git/Paratext/**/*Tests/`. Extract:
+Find the test class by target class/namespace in the `*Tests` projects (list them with
+`find ~/git/Paratext -type d -name '*Tests'`). Extract:
 
 | Pattern | Use for |
 |---------|---------|

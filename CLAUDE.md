@@ -24,6 +24,7 @@ Read these when you need depth on a topic. Keep them in mind when writing or rev
 | Code Review             | [Code-Review-Guide.md](.context/standards/Code-Review-Guide.md)           | Reviewable, code-steward, review workflow, auto-merge        |
 | Security                | [Security-Guide.md](.context/standards/Security-Guide.md)                 | CSP, module import restrictions, extension sandboxing        |
 | PT9 Feature Inventory   | [paratext-9-features/](.context/research/paratext-9-features/README.md) | Catalogue of Paratext 9 features (entry points, forms, classes, sources) — used by `/investigate-prd` |
+| Capability Designs      | [designs/](.context/designs/)                                             | Design specs + implementation plans for capabilities (e.g. `/investigate-prd`) |
 
 ## Terminology
 
