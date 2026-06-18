@@ -35,7 +35,7 @@ import {
   getCommandLineArgument,
   getCommandLineSwitch,
 } from '@node/utils/command-line.util';
-import { resolveHtmlPath } from '@node/utils/util';
+import { readBootSettingBoolean, resolveHtmlPath } from '@node/utils/util';
 import {
   DEFAULT_ZOOM_FACTOR,
   DEV_MODE_QUERY_PARAMETER,
@@ -47,6 +47,7 @@ import { GET_METHODS } from '@shared/data/rpc.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import * as commandService from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
+import { setLoggerHomeDir, setLoggerPrivacyMode } from '@shared/utils/logger.utils';
 import { readFile } from 'fs/promises';
 import { networkObjectService } from '@shared/services/network-object.service';
 import * as networkService from '@shared/services/network.service';
@@ -65,6 +66,15 @@ import {
 } from 'platform-bible-utils';
 import { windowService } from '@shared/services/window.service';
 import { themeService } from '@shared/services/theme.service';
+
+// Seed the logger's home-directory cache so `platform.privacyMode` can strip it from log lines.
+// Done here (not in shared logger.service) because the renderer bundle can't resolve `os`.
+setLoggerHomeDir(os.homedir());
+// Synchronously pre-load the privacy flag from settings.json so the very first log lines (e.g.
+// the `Starting … version <ver+build>` line below, whose build metadata contains the dev
+// machine's username) are anonymized too. The settings service will later subscribe and keep
+// this in sync with runtime toggles.
+setLoggerPrivacyMode(readBootSettingBoolean('platform.privacyMode', false));
 
 // #region Helper functions
 
