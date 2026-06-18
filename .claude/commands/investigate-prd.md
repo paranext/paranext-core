@@ -77,19 +77,27 @@ Wait for the user. Do not invent answers.
 
 ## Step 4: Investigate (parallel fan-out)
 
-Dispatch the investigation agents. `pt10-reuse-scout` **always** runs. For each aspect tagged
+Dispatch the investigation agents. `pt10-reuse-scout` **always** runs. For aspects tagged
 `PT9-port` or `hybrid`, run `feature-mapper` then `pt9-archaeologist` (the map feeds the
 archaeologist). A fully net-new PRD runs only the scout.
 
-- **Wave A (single response, in parallel):** one `feature-mapper` (`subagent_type: "feature-mapper"`,
-  pass that aspect's `PT9_REFERENCES`) per port/hybrid aspect, **and**
-  `pt10-reuse-scout` (`subagent_type: "pt10-reuse-scout"`, pass the PRD summary **and the aspect
-  breakdown** — the scout sweeps the constellation by each port aspect's PT9 form/category). Dispatch
-  all of these in one message.
+**Dedupe to distinct PT9 sources first.** Multiple aspects commonly cite the **same** PT9 form /
+category (e.g. nine Send/Receive aspects that all derive from `SendReceiveProjectsForm`). Do **not**
+run one mapper/archaeologist per aspect — that re-investigates the same source N times. Group the
+`PT9-port`/`hybrid` aspects by their distinct `(PT9 form, category)` key and investigate **each
+distinct source once**, recording which aspects it covers. The unit of fan-out is the distinct PT9
+source, not the aspect.
+
+- **Wave A (single response, in parallel):** one `feature-mapper` (`subagent_type: "feature-mapper"`)
+  **per distinct PT9 source**, passing that source's `PT9_REFERENCES` **and the list of aspects it
+  covers**, **and** `pt10-reuse-scout` (`subagent_type: "pt10-reuse-scout"`, pass the PRD summary
+  **and the full aspect breakdown** — the scout sweeps the constellation by each distinct PT9
+  form/category). Dispatch all of these in one message.
 - **Wave B (single response, in parallel):** for each `feature-mapper` that returned a map, one
-  `pt9-archaeologist` (`subagent_type: "pt9-archaeologist"`, pass that aspect's `PT9_MAP`). Pair
-  each archaeologist with the `feature-mapper` output whose `## PT9 map: {feature}` heading matches
-  that aspect — keep the aspect → mapper → archaeologist correspondence strictly 1:1.
+  `pt9-archaeologist` (`subagent_type: "pt9-archaeologist"`, pass that source's `PT9_MAP`). Pair each
+  archaeologist with the `feature-mapper` output whose `## PT9 map: {feature}` heading matches that
+  source — keep the **distinct-PT9-source → mapper → archaeologist** correspondence strictly 1:1
+  (each may cover several aspects).
 
 Each agent prompt ends with: "Follow the instructions in your agent definition exactly. Return
 output in the specified format." Collect every agent's output and status token. If an agent

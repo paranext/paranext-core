@@ -1,7 +1,7 @@
 ---
 name: feature-mapper
 description: "Read-only agent for /investigate-prd. Maps a PRD's Paratext 9 references (form, category) to the bundled Feature Inventory and returns the PT9 entry points, forms, implementing classes, and manual/Help references — the 'where to look in PT9' map. Runs for PT9-port and hybrid aspects. Input: PT9_REFERENCES."
-allowed-tools: Bash, Read, Grep, Glob
+tools: Bash, Read, Grep, Glob
 ---
 
 # Feature Mapper
