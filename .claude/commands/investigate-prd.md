@@ -158,6 +158,21 @@ on the user's behalf.
 On approval, invoke the **superpowers:writing-plans** skill to turn the approved brief —
 especially §8 (the first slice) — into an implementation plan. Pass the brief path as context.
 
+**Plan quality bars.** When the plan comes back, sanity-check it against these bars before
+treating it as ready — they catch the common ways a plan looks complete but isn't executable:
+
+1. **Acyclic dependency graph.** Capability/task dependencies form a DAG with no cycles, and that
+   dependency order is what drives the execution order. A unit that (transitively) depends on
+   itself is a planning bug.
+2. **Risk + concrete mitigation pairs.** Each identified risk is paired with a specific, actionable
+   mitigation — not a restatement of the risk. "Might be slow → profile and cache hot path", not
+   "performance risk".
+3. **Per-unit acceptance criteria.** Every capability/task says what "done" looks like (an
+   acceptance test or a concrete "done when"), specific enough to evaluate against.
+
+(TDD-for-backend and Component-First-for-UI strategy selection is already handled by
+`superpowers:writing-plans`.)
+
 ## Error handling
 
 - **No PRD path** → ask for it (Step 1).

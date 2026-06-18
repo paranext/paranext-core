@@ -105,6 +105,21 @@ For each entry point, add to `extensions/src/{ext}/contributions/menus.json`:
 - Order numbers determine sort order within the group
 - Commands must match exactly what's registered in main.ts
 
+### Menu Availability: Menus Stay Always-Available
+
+paranext-core has **no predicate-gated menu visibility** — the menu contribution system does not
+support evaluating arbitrary conditions before a menu item renders, so there is no
+`enabledWhen`/`visibleWhen` equivalent. Don't try to add a "should this menu item show?" backend
+command or conditionally suppress the contribution.
+
+Instead, leave menu items **always-available** and enforce permission/state at the point of action:
+the command handler (or its C# backend) checks whether the operation is allowed at submission time
+and surfaces failures via `PlatformError` codes (`NOT_FOUND`, `PERMISSION_DENIED`,
+`FAILED_PRECONDITION`, etc.) rather than by hiding the entry point. Document the PT9
+visibility/enable rules inline in the command/backend so the rationale isn't lost.
+
+See `Architecture-Decisions.md` (ADR on deferred menu availability) for the rationale and history.
+
 ---
 
 ## Step 4: Register Command Handlers

@@ -19,6 +19,8 @@ Checking Inventories analyze the text to build a comprehensive list of all occur
 - `WindowCollection.cs` creates `InventoryForm` with the appropriate `ScriptureInventoryBase` subclass
 - `InventoryForm` displays results using data from `ChecksDataSource`
 
+**PT10 reuse note**: The sibling inventories already run on shared, generic infrastructure in paranext-core, so porting another inventory feature requires **zero net-new C#**. `c-sharp/Checks/InventoryFactory.cs` registers each `ScriptureInventoryBase` subclass by its check internal-value (Characters, Marker, MatchedPairs, MixedCapitalization, Punctuation, RepeatedWord, the capitalization inventories, etc.), and one generic `c-sharp/Checks/InventoryDataProvider.cs` serves all of them through a single set of endpoints (`getAvailableInventories`, `get/setInventoryItemStatus`, `get/setInventoryOptionValues`, plus the itemized-job and summarized-inventory endpoints). Adding a per-feature inventory service or data provider duplicates working generic infrastructure — register the check in the factory instead. The net-new surface for a new inventory is a TypeScript `open*Inventory` command (conforming to the sibling bare `(webViewId?) => Promise<string | undefined>` shape) plus a small set of UI pieces in `platform-scripture`.
+
 ---
 
 ## Feature List

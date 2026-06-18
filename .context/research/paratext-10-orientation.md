@@ -40,3 +40,22 @@ WebSocket, port 8876**. PAPI (`lib/papi-dts/papi.d.ts`) is the central extension
 Webpack enforces import boundaries (main ≠ renderer ≠ extension-host; `shared` is safe
 everywhere). Wire naming: `command:{ext}.{cmd}`, data-provider `object:{name}-data.{method}`,
 updates `{objectId}:onDidUpdate`.
+
+## Verified PT10 platform facts (for porting scoping)
+
+- **Project identity / Guid lookup.** A project's stable identity Guid is read from its
+  `Settings.xml` (`/ScriptureText/Guid`) by ParatextData and surfaced as `ScrText.Guid`
+  (e.g. `c-sharp/Projects/ScrTextExtensions.cs`). PT10 does not use Mercurial for projects,
+  so PT9's Mercurial-backed Guid **creation/repair** (`VersioningManager.EnsureHasGuid`) has
+  no PT10 equivalent — but Guid **lookup** of an existing on-disk project already works today.
+  Any feature that needs duplicate-detection by Guid equality can rely on the lookup path; a
+  feature that needs to _mint_ a Guid for a brand-new project is blocked until PT10 gains a
+  create-project primitive.
+- **`DifferencesToolForm` has no PT10 port.** PT9's verse-level USFM diff dialog
+  (`DifferencesToolForm`, configured via `DiffToolConfigurationInfo.ForGetPutTexts(...)`) is a
+  broadly shared surface in PT9 — invoked from Backup/Restore, Copy/Import Books, the text
+  editor, and Parallel Passages (5+ callers). No equivalent has been ported to paranext-core
+  (grep of `c-sharp/` + `extensions/src/` finds nothing). Treat it as net-new when scoping any
+  feature that compares two text sources verse-by-verse; design the diff renderer as a
+  standalone primitive (text-source-A vs text-source-B) so later callers can wrap it.
+  See also `paratext-9-features/09_Advanced_Checking_Tools.md` §9.3.

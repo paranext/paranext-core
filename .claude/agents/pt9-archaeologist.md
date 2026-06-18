@@ -51,6 +51,23 @@ grep -rn 'Keys\.' ~/git/Paratext --include='*.cs' $EXCL | grep -i '{feature}'   
 feature talks to**; logic under `Paratext/` is the **WinForms UI**. Note which layer each class
 lives in.
 
+### Localize-key sweep (do this now, not later)
+
+Catalogue every PT9 user-facing string in the feature's files so all localize keys are known
+*before* backend TDD begins. Missing this early is costly: a checklist port shipped two backend
+strings as English literals because the localization gap was not found until late review, then
+needed a retroactive multi-language retrofit. Sweep the feature's `.cs` files for:
+
+```bash
+grep -rn 'Localizer\.Str' {feature-files} --include='*.cs'   # PT9 user-facing string API (key + English default)
+grep -rn 'MessageBox\.Show\|Alert\.Show'  {feature-files} --include='*.cs'   # inline message text
+```
+
+`Localizer.Str("Key", "English default")` exposes both the **localize key** and its **English
+default**; record every key, its English default, and the `file:line`. Treat every dialog/error/
+warning/label string as a key to port, including those passed inline to `MessageBox.Show` /
+`Alert.Show`. Emit the results in the `### User-facing strings` digest section.
+
 ## Step 2 — Reverse-dependency scan (find the backend a feature consumes)
 
 If a backend layer returned **fewer than 3 files** in Step 1, check the *reverse* direction:
@@ -78,11 +95,35 @@ data flows from those types (e.g. `ScrText`, `VerseRef`, `UsfmToken`) through th
 
 1. **Read the entire file** before documenting any behavior from it.
 2. **Read base-class/partial-class files completely first** (Form → BaseForm; read base first).
-3. **Read called in-scope files too.**
-4. **Never document from grep results alone.** No partial (offset/limit) reads — read whole files.
+3. **Read the `*.Designer.cs` alongside its Form.** WinForms splits a dialog across the hand-written
+   `Form.cs` and the generated `Form.Designer.cs`; control IDs, parent containers, tab membership,
+   anchoring, and default values live in the Designer file. Reading only one half misses half the UI.
+4. **Read called in-scope files too.**
+5. **Never document from grep results alone.** No partial (offset/limit) reads — read whole files.
 
 Document only what exists (`✅ "ComboBox contains A, B, C"` verified from code), not what is
 likely (`❌ "likely has a Help button"` → instead `✅ "Help button not found in the form source"`).
+
+### PT9 source is the oracle (not help docs, labels, or prior summaries)
+
+The actual PT9 `file:line` is the only authority. Help text, UI labels, code comments, and any
+prior-phase summary can misdescribe what the code does — re-verify every claim against the source.
+
+- **Help docs and labels can contradict the code.** A help page once said marker mappings were
+  *directional* ("`q/q1` means `\q` in text 1 is equivalent to `\q1` in text 2"); the code stored
+  them *bidirectionally* (both `q → [q1]` and `q1 → [q]`), and a PT9 test (`BuildRows_…_WithMapping_Identical`)
+  confirmed the bidirectional behavior. The code is canonical; document the discrepancy as a note.
+- **Re-read the cited line, don't trust the summary.** Re-grounding decisions in PT9 source caught
+  four substantive errors that prior summaries had introduced (a sentinel value, a dedup key, a
+  cancel mechanism, and an "is this re-scan idempotent?" question) — each confirmed only by opening
+  the cited file. Always quote the actual line; never relay a behavior from a paraphrase.
+- **Flag defensive guards and latent bugs for a reproduce-vs-fix decision.** When PT9 has a
+  defensive null-fallback (e.g. returning an empty cell instead of throwing when an upstream lookup
+  fails) or an apparent latent bug (e.g. an inverted guard that silently drops aliased entries),
+  do NOT silently decide whether PT10 should reproduce it. Record the exact `file:line`, describe
+  the guard/bug, and add a Review Flag asking a human whether PT10 should reproduce the behavior
+  bug-for-bug, fix it, or treat it as documented technical debt. That is a port-fidelity judgment,
+  not yours to make.
 
 ## Fan-out (optional — when one source is too large to read well in one pass)
 
@@ -187,6 +228,7 @@ Return a behavior/architecture digest:
 ### Behaviors        (trigger / input / output / side-effects / error / edge cases, each with file:line)
 ### Data models
 ### Validation rules (exact char-sets verbatim + messages)
+### User-facing strings   (every `Localizer.Str` key + English default + file:line, plus inline message text — so PT10 has the full key list before backend TDD)
 ### Backend it talks to   (the consumed APIs / data flow; Chorus/Mercurial etc. for sync)
 ### Tests & edge cases     (from PT9's own tests)
 ### UI                     (abstract elements + ASCII wireframes + state variants — if applicable)

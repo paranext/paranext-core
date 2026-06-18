@@ -32,6 +32,10 @@ All checklists follow this evidence chain:
 
 Individual features below list only their Depth 0 handler line.
 
+**PT10 reuse note**: The Markers checklist (8.7) has been ported to paranext-core and established a shared checklist framework. Porting another checklist (e.g. Punctuation) consumes most of it rather than building parallel infrastructure — see the checklist reuse map in `.context/research/Architecture-Decisions.md` for the consume / re-extract / pattern-copy breakdown. In short: consume the shared C# `ChecklistService` / `ChecklistNetworkObject`, the shared data model (`ChecklistResult` / `ChecklistRow` / `ChecklistCell` / polymorphic content items) and TS mirrors, and the `checklist.component.tsx` structural pattern; re-extract small per-tool pieces (the comparison loop, the row cap) into the new tool's own service; and make one small upstream addition (`ChecklistRowBuilder.BuildRowsNonMergingCells` by parameterizing `MaxCellsToGrab`, leaving Markers on the merging-cells path).
+
+**Verse-range scope divergence (PT9 vs PT10)**: In PT9 the comparative-texts **verse range is GLOBAL** — it is shared across all checklist tools, so changing it in one tool changes it everywhere. The PT10 Markers checklist instead stores the verse range (and scope / range-start / range-end) **per-instance** via `useWebViewState` (`extensions/src/platform-scripture/src/checklist.web-view.tsx`), so each open checklist web view holds its own range. This is a known divergence from PT9, tracked at [paranext/ai-prompts#271](https://github.com/paranext/ai-prompts/issues/271); when a global-range fix lands it will apply to all checklist siblings. A newly ported checklist should match the current per-instance behavior so the eventual fix can be applied uniformly.
+
 ---
 
 ## Feature List

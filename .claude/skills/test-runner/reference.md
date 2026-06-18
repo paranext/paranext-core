@@ -220,6 +220,11 @@ ProjectDetails details = CreateProjectDetails(scrText);
 ParatextProjects.FakeAddProject(details, scrText);
 ```
 
+> **Localization gotcha:** `DummyPapiClient.SendRequestAsync` returns `default(T)` for unregistered
+> services, so `GetLocalizedString` falls back to its `defaultValue` — a wire integration test can
+> still see English even when no localization service is registered. See
+> [Localization-Guide.md](../../../.context/standards/Localization-Guide.md) § "Testing Localized C# Backends".
+
 ## Test Base Classes
 
 ### C# Test Base
