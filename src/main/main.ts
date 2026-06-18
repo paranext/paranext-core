@@ -229,10 +229,15 @@ async function main() {
 
   // Fire-and-forget startup tasks (e.g. simple-mode initial S/R). Must not block window creation.
   // The S/R command is registered by the .NET data provider, which may not yet be reachable;
-  // performStartupTasks uses retrying request semantics and swallows failures.
-  performStartupTasks().catch((e) =>
-    logger.error(`performStartupTasks threw unexpectedly: ${getErrorMessage(e)}`),
-  );
+  // performStartupTasks uses retrying sendCommand semantics and swallows failures internally.
+  // Wrapped in an async IIFE per code-style preference for try/catch over `.catch()` chains.
+  (async () => {
+    try {
+      await performStartupTasks();
+    } catch (e) {
+      logger.warn(`performStartupTasks threw unexpectedly: ${getErrorMessage(e)}`);
+    }
+  })();
 
   // Keep a global reference of the window object. If you don't, the window will
   // be closed automatically when the JavaScript object is garbage collected.

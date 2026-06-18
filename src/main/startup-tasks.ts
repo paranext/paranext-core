@@ -1,8 +1,7 @@
-import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
+import * as commandService from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
-import * as networkService from '@shared/services/network.service';
 import { settingsService } from '@shared/services/settings.service';
-import { serializeRequestType } from '@shared/utils/util';
+import { getErrorMessage } from 'platform-bible-utils';
 
 /**
  * Runs initialization tasks (currently: triggering an initial project sync) shortly after the app
@@ -20,7 +19,7 @@ export async function performStartupTasks(): Promise<void> {
   try {
     await performStartupTasksInternal();
   } catch (e) {
-    logger.error('Unexpected error during startup tasks:', e);
+    logger.warn(`Unexpected error during startup tasks: ${getErrorMessage(e)}`);
   }
 }
 
@@ -32,25 +31,26 @@ async function performStartupTasksInternal(): Promise<void> {
   let interfaceMode: string | undefined;
   try {
     interfaceMode = await settingsService.get('platform.interfaceMode');
-  } catch {
-    /* settings service unavailable — treat as simple mode */
+  } catch (e) {
+    logger.warn(
+      `Could not read platform.interfaceMode; defaulting to simple-mode behavior: ${getErrorMessage(e)}`,
+    );
   }
   logger.debug(`performStartupTasks: interfaceMode=${interfaceMode}`);
   if (interfaceMode !== undefined && interfaceMode !== 'simple') return;
 
   // Simple mode: sync all locally-known shared projects (no project IDs = "sync all" per the
-  // C# `String[]? projectIds` contract). Uses `request` (with retry on missing handler), not
-  // `requestNoRetry`, because the C# S/R command registers asynchronously during startup; this
-  // call may race ahead of it. `undefined` as the single arg serializes as `null` in the
-  // JSON-RPC params array — matching the "sync all" sentinel on the C# side.
+  // C# `String[]? projectIds` contract). The C# S/R command registers asynchronously during
+  // startup; `sendCommand` will wait (with retry on missing handler) until it's available or
+  // times out. `undefined` as the single arg serializes as `null` in the JSON-RPC params array
+  // — matching the "sync all" sentinel on the C# side.
   logger.debug('Startup sync starting');
   try {
-    await networkService.request(
-      serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.syncProjects'),
-      undefined,
-    );
+    await commandService.sendCommand('paratextBibleSendReceive.syncProjects', undefined);
     logger.debug('Startup sync complete');
-  } catch {
-    /* command absent (Platform.Bible) / extension not yet activated / sync failed — no-op */
+  } catch (e) {
+    logger.warn(
+      `Startup sync failed or skipped (command absent / extension not yet activated): ${getErrorMessage(e)}`,
+    );
   }
 }
