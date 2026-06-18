@@ -1,8 +1,5 @@
 import { SavedTabInfo } from '@shared/models/docking-framework.model';
 import { LayoutBase } from 'rc-dock';
-import { SIMPLE_LAYOUT_TAB_ID } from './simple-layout.tab-ids';
-
-export { SIMPLE_LAYOUT_TAB_IDS } from './simple-layout.tab-ids';
 
 // `TAB_TYPE_WEBVIEW` is inlined here rather than imported from `web-view.component`. That import
 // would close a dependency cycle (this file is imported by `web-view.service-host`, which
@@ -10,7 +7,12 @@ export { SIMPLE_LAYOUT_TAB_IDS } from './simple-layout.tab-ids';
 // docking-framework contract — duplicating the single literal is safe and keeps the cycle broken.
 const TAB_TYPE_WEBVIEW = 'webView';
 
-const { modelText, scriptureEditor, bibleTexts, commentaries } = SIMPLE_LAYOUT_TAB_ID;
+// These UUIDs must match the ones in `simple-layout.data.ts` so the dock layout recognizes tabs
+// across the static-layout / project-bound-layout paths.
+const MODEL_TEXT_TAB_ID = '0a23566d-1b2c-4dd2-8d3d-cda54b598cd2';
+const SCRIPTURE_EDITOR_TAB_ID = '3cf575f0-2cc2-464b-8765-b588f216dfce';
+const BIBLE_TEXTS_TAB_ID = '27616073-bf60-4f2b-9518-922d1a7d3601';
+const COMMENTARIES_TAB_ID = '6c950d23-f8d7-4482-a384-93ea0481698b';
 
 /**
  * Builds a clone of the static simple layout with `projectId` baked into each tab's saved web-view
@@ -38,11 +40,11 @@ export function buildSimpleLayoutForProject(projectId: string): LayoutBase {
             {
               tabs: [
                 {
-                  id: modelText,
+                  id: MODEL_TEXT_TAB_ID,
                   tabType: TAB_TYPE_WEBVIEW,
                   data: {
                     webViewType: 'platformScriptureEditor.modelText',
-                    id: modelText,
+                    id: MODEL_TEXT_TAB_ID,
                     contentType: 'react',
                     projectId,
                     state: {},
@@ -59,11 +61,11 @@ export function buildSimpleLayoutForProject(projectId: string): LayoutBase {
             {
               tabs: [
                 {
-                  id: scriptureEditor,
+                  id: SCRIPTURE_EDITOR_TAB_ID,
                   tabType: TAB_TYPE_WEBVIEW,
                   data: {
                     webViewType: 'platformScriptureEditor.react',
-                    id: scriptureEditor,
+                    id: SCRIPTURE_EDITOR_TAB_ID,
                     contentType: 'react',
                     projectId,
                     // The factory reads `state.isReadOnly` when restoring from saved state. Set
@@ -83,22 +85,22 @@ export function buildSimpleLayoutForProject(projectId: string): LayoutBase {
             {
               tabs: [
                 {
-                  id: bibleTexts,
+                  id: BIBLE_TEXTS_TAB_ID,
                   tabType: TAB_TYPE_WEBVIEW,
                   data: {
                     webViewType: 'platformScriptureEditor.bibleTexts',
-                    id: bibleTexts,
+                    id: BIBLE_TEXTS_TAB_ID,
                     contentType: 'react',
                     projectId,
                     state: {},
                   },
                 },
                 {
-                  id: commentaries,
+                  id: COMMENTARIES_TAB_ID,
                   tabType: TAB_TYPE_WEBVIEW,
                   data: {
                     webViewType: 'platformScriptureEditor.commentaries',
-                    id: commentaries,
+                    id: COMMENTARIES_TAB_ID,
                     contentType: 'react',
                     projectId,
                     state: {},

@@ -11,7 +11,6 @@ import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useProjectPickerData } from '@renderer/hooks/use-project-picker-data.hook';
 import { PROJECT_PICKER_DIALOG_TYPE } from '@renderer/components/dialogs/dialog-definition.model';
 import { app, dataProviders } from '@renderer/services/papi-frontend.service';
-import { setProjectPickerOpen } from '@renderer/services/project-picker-open-store';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import { sendCommand } from '@shared/services/command.service';
@@ -125,16 +124,6 @@ export function PlatformBibleToolbar() {
 
   const projectPickerItems = recentProjects.length > 0 ? recentProjects : allProjects;
   const hasProjectPickerItems = projectPickerItems.length > 0;
-
-  // Tracked locally so we can publish it to the project-picker-open store. The workspace-updating
-  // overlay subscribes to that store and left-aligns its text when the picker is open, so the
-  // centered text isn't hidden behind the dropdown at narrow widths.
-  const [isProjectPickerOpen, setIsProjectPickerOpenState] = useState(false);
-  const handleProjectPickerOpenChange = useCallback((open: boolean) => {
-    setIsProjectPickerOpenState(open);
-    setProjectPickerOpen(open);
-  }, []);
-  useEffect(() => () => setProjectPickerOpen(false), []);
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
@@ -350,8 +339,6 @@ export function PlatformBibleToolbar() {
       </TooltipProvider>
       {!isPowerMode && (
         <Select
-          open={isProjectPickerOpen}
-          onOpenChange={handleProjectPickerOpenChange}
           value={currentProject?.id ?? ''}
           onValueChange={async (projectId: string) => {
             try {

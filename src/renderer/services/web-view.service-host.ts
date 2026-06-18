@@ -43,13 +43,10 @@ import {
 import { registerCommand } from '@shared/services/command.service';
 import { dataProviderService } from '@shared/services/data-provider.service';
 import { logger } from '@shared/services/logger.service';
-import { setWorkspaceUpdating } from '@renderer/services/workspace-updating-store';
 import {
   getLastOpenedProject,
   setLastOpenedProject,
 } from '@renderer/services/last-opened-project-cache';
-import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
-import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import { networkObjectService } from '@shared/services/network-object.service';
 import {
   createBufferedNetworkEventEmitter,
@@ -88,10 +85,7 @@ import {
   Unsubscriber,
   UnsubscriberAsync,
 } from 'platform-bible-utils';
-import {
-  buildSimpleLayoutForProject,
-  SIMPLE_LAYOUT_TAB_IDS,
-} from '@renderer/components/docking/simple-layout.builder';
+import { buildSimpleLayoutForProject } from '@renderer/components/docking/simple-layout.builder';
 import {
   closeOpenUsersnapForm,
   isUsersnapFormCurrentlyOpen,
@@ -910,36 +904,24 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
  * layout — same code path power mode uses on restore — and renders project content immediately,
  * with no empty-placeholder → reload round-trip.
  *
- * The overlay is driven entirely from the renderer in this flow: shown synchronously at the very
- * top of the handler (so it paints before the layout swap starts), and hidden one paint after
- * `loadLayout` returns (so the new tabs are visible before the overlay disappears, avoiding a flash
- * of unresolved state). Because no empty Scripture Editor placeholder ever exists, the picker sees
- * `'no-empty'` and exits without firing `openScriptureEditor`, so no extension-host `open()` runs
- * and no `WILL_START`/`DID_FINISH` events are emitted — the renderer is the single source of truth
- * for the overlay during a power → simple switch.
+ * Fast path: `getLastOpenedProject` returns the cached id (populated reactively from
+ * `useProjectPickerData`), and no `await` precedes the layout swap.
  *
- * Fast path: `getLastOpenedProject` returns the cached id+name (populated reactively from
- * `useProjectPickerData`). The overlay shows immediately with the right project name and no `await`
- * precedes the layout swap. This is the common case after any successful previous open.
- *
- * Slow path: cold start (no cache yet) — fall back to the async recents-provider + PDP chain
- * (`tryResolveRecentProjectForSimpleMode`). On success, populate the cache for next time.
+ * Slow path: cold start (no cache yet) — fall back to the async recents-provider lookup.
  *
  * Fallback: if neither cache nor recents can produce a project, load the bare `simpleLayout` and
- * let the picker do the slow legacy path. The overlay is then driven by the extension's network
- * events, so we don't set it ourselves in that branch.
+ * let the picker do the slow legacy path.
  */
 async function handleSwitchToSimpleMode(): Promise<void> {
   const cached = getLastOpenedProject();
   if (cached) {
-    await runProjectBoundSimpleSwitch(cached.id, cached.name);
+    await runProjectBoundSimpleSwitch(cached.id);
     return;
   }
 
-  const resolved = await tryResolveRecentProjectForSimpleMode();
+  const resolvedId = await tryResolveRecentProjectIdForSimpleMode();
 
-  if (!resolved) {
-    // Fallback path — bare simpleLayout, picker fills the empty editor, extension drives overlay.
+  if (!resolvedId) {
     try {
       await loadLayout();
     } catch (err) {
@@ -949,44 +931,11 @@ async function handleSwitchToSimpleMode(): Promise<void> {
   }
 
   // Populate the cache so the next switch can take the fast path.
-  setLastOpenedProject({ id: resolved.id, name: resolved.name });
-  await runProjectBoundSimpleSwitch(resolved.id, resolved.name);
+  setLastOpenedProject({ id: resolvedId });
+  await runProjectBoundSimpleSwitch(resolvedId);
 }
 
-/**
- * Shared body of the project-bound simple-mode switch.
- *
- * The flow is structured around three guaranteed paint cycles so the overlay actually appears (and
- * is visible long enough to be perceived) rather than being toggled on/off within a single React
- * commit:
- *
- * 1. `setWorkspaceUpdating(true)` — schedule the overlay-visible state change.
- * 2. `await waitForNextPaint()` — force React to commit and the browser to paint the overlay BEFORE we
- *    start the layout swap. Without this, both setStates (true + false) would batch around the fast
- *    `loadLayout` and the overlay would never paint at all.
- * 3. `await loadLayout(projectBoundLayout)` — swap to the project-bound simple layout. The overlay is
- *    now on screen covering the swap.
- * 4. `await waitForNextPaint()` — let the new tabs paint behind the overlay so the user sees them
- *    appear at the moment the overlay disappears, not a half-painted layout.
- * 5. `setWorkspaceUpdating(false)` — hide the overlay; the new layout is revealed.
- */
-async function runProjectBoundSimpleSwitch(
-  projectId: string,
-  projectName: string | undefined,
-): Promise<void> {
-  setWorkspaceUpdating(true, projectName);
-  // Force the overlay to paint BEFORE we begin the (fast) layout swap. Without this yield, React
-  // 18's automatic batching can merge the upcoming `setWorkspaceUpdating(false)` into the same
-  // commit as the show, and the overlay never appears.
-  await waitForNextPaint();
-
-  // Start tracking webview-resolved events BEFORE `loadLayout` fires the async
-  // `retrieveWebViewContent` calls — otherwise the events for fast-resolving tabs can fire before
-  // we subscribe and we'd miss them. Especially important on subsequent simple-mode switches,
-  // where the previous switch's resolved titles are still in the dock layout and a `tabTitle`
-  // poll would resolve immediately with stale (old-project) values before the new updates land.
-  const tabsResolved = trackSimpleLayoutTabsResolved();
-
+async function runProjectBoundSimpleSwitch(projectId: string): Promise<void> {
   try {
     const projectBoundLayout = buildSimpleLayoutForProject(projectId);
     // `loadLayout` types its parameter as `LayoutInfo` (Record<string, unknown>) but actually just
@@ -994,137 +943,20 @@ async function runProjectBoundSimpleSwitch(
     // `simpleLayout` already uses. Cast to bridge the type gap without changing the public type.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     await loadLayout(projectBoundLayout as unknown as LayoutInfo);
-    await tabsResolved.promise;
   } catch (err) {
     logger.warn(`Dock layout failed to reload after interface mode change: ${err}`);
-    tabsResolved.dispose();
-  } finally {
-    // Let the new tabs paint behind the overlay before we hide it, so the user sees a smooth
-    // handoff (overlay → tabs) instead of a flash of an unresolved layout.
-    await waitForNextPaint();
-    setWorkspaceUpdating(false);
   }
 }
 
-/**
- * Max time to wait for the simple-layout tabs to finish loading their titles before hiding the
- * overlay anyway. The overlay should never get stuck if a tab's webview provider misbehaves — the
- * user is better off seeing a tab with an unresolved title than no UI at all.
- */
-const SIMPLE_LAYOUT_TABS_RESOLVED_TIMEOUT_MS = 5000;
-
-/**
- * Sets up a tracker that resolves once every simple-layout tab has fired an open- or update-webview
- * event — meaning the tab's data has been replaced with the freshly-loaded webview definition (real
- * title, real content, real projectId), not the `%tab_title_unknown%` placeholder that
- * `loadWebViewTab` puts in place while `retrieveWebViewContent` is in flight.
- *
- * Subscribing BEFORE the caller runs `loadLayout` is critical: `loadLayout` synchronously installs
- * the placeholder tab definitions and then kicks off the async webview fetches whose results land
- * via these events. Subscribing afterward would race the fastest webview and miss its event.
- *
- * Falls back to resolving after {@link SIMPLE_LAYOUT_TABS_RESOLVED_TIMEOUT_MS} if any tab never
- * fires (e.g. its webview provider hangs) — better to drop the overlay than wedge the UI.
- */
-function trackSimpleLayoutTabsResolved(): { promise: Promise<void>; dispose: () => void } {
-  const remaining = new Set<string>(SIMPLE_LAYOUT_TAB_IDS);
-  let unsubOpen: (() => void) | undefined;
-  let unsubUpdate: (() => void) | undefined;
-  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
-  let finished = false;
-  let resolveFn: (() => void) | undefined;
-
-  const finish = () => {
-    if (finished) return;
-    finished = true;
-    if (timeoutHandle !== undefined) {
-      clearTimeout(timeoutHandle);
-      timeoutHandle = undefined;
-    }
-    unsubOpen?.();
-    unsubOpen = undefined;
-    unsubUpdate?.();
-    unsubUpdate = undefined;
-    resolveFn?.();
-  };
-
-  const promise = new Promise<void>((resolve) => {
-    resolveFn = resolve;
-  });
-
-  const handleEvent = ({ webView }: { webView: { id: string } }) => {
-    if (!remaining.delete(webView.id)) return;
-    if (remaining.size === 0) finish();
-  };
-
-  unsubOpen = onDidOpenWebView(handleEvent);
-  unsubUpdate = onDidUpdateWebView(handleEvent);
-
-  timeoutHandle = setTimeout(() => {
-    finish();
-  }, SIMPLE_LAYOUT_TABS_RESOLVED_TIMEOUT_MS);
-
-  return { promise, dispose: finish };
-}
-
-/**
- * Resolves after the next browser paint. Double `requestAnimationFrame` so we wait one frame for
- * React to commit + browser to paint, and a second frame to ensure that paint has been flushed
- * before the caller proceeds. Falls back to immediate resolution in environments that don't provide
- * `requestAnimationFrame` (some test runners).
- */
-function waitForNextPaint(): Promise<void> {
-  return new Promise<void>((resolve) => {
-    if (typeof requestAnimationFrame !== 'function') {
-      resolve();
-      return;
-    }
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-  });
-}
-
-/**
- * When switching to simple mode the simpleLayout's empty Scripture Editor placeholder triggers the
- * platform-scripture-editor extension's `startDefaultProjectPicker`, which does several async PAPI
- * round-trips (read interface mode, list webviews, fetch recents, call openScriptureEditor) before
- * the project starts loading. That visible "tries something for a while, then loads" gap is what we
- * want to eliminate.
- *
- * This helper resolves the most-recent project id + display name directly in the renderer so we can
- * call `openScriptureEditor` ourselves right after the layout swap, bypassing the picker's async
- * chain. The picker still runs but sees the editor is no longer empty and no-ops.
- *
- * Best-effort: if the recents service is unavailable (Platform.Bible cold start) or the project's
- * details can't be read, returns `undefined` and we let the picker handle it the slow way. A
- * failure here must NOT prevent the layout swap from happening.
- */
-async function tryResolveRecentProjectForSimpleMode(): Promise<
-  { id: string; name: string | undefined } | undefined
-> {
+async function tryResolveRecentProjectIdForSimpleMode(): Promise<string | undefined> {
   try {
     const recentsProvider = await dataProviderService.get(
       'platformScripture.recentlyOpenedProjects',
     );
     if (!recentsProvider) return undefined;
     const recents = await recentsProvider.getRecentProjects(undefined);
-    const id = Array.isArray(recents) ? recents[0] : undefined;
-    if (!id) return undefined;
-
-    let name: string | undefined;
-    try {
-      const pdp = await papiFrontendProjectDataProviderService.get(
-        PROJECT_INTERFACE_PLATFORM_BASE,
-        id,
-      );
-      const fullName = await pdp.getSetting('platform.fullName');
-      const shortName = await pdp.getSetting('platform.name');
-      name = (fullName || shortName) ?? undefined;
-    } catch {
-      // best-effort — overlay falls back to the generic label
-    }
-    return { id, name };
+    return Array.isArray(recents) ? recents[0] : undefined;
   } catch {
-    // best-effort — recents provider unavailable, picker handles the slow path
     return undefined;
   }
 }

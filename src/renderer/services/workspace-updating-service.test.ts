@@ -29,8 +29,8 @@ describe('initWorkspaceUpdatingService', () => {
       // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
       ((eventName: string) => {
         if (eventName === 'platformScriptureEditor.onWillSwitchProject')
-          return (cb: (payload: unknown) => void) => {
-            capturedWillHandler = () => cb({ projectName: 'Test Project' });
+          return (cb: () => void) => {
+            capturedWillHandler = cb;
             return willUnsub;
           };
         if (eventName === 'platformScriptureEditor.onDidSwitchProject')
@@ -45,12 +45,12 @@ describe('initWorkspaceUpdatingService', () => {
     );
   });
 
-  it('calls setWorkspaceUpdating(true, projectName) when the will-switch event fires', () => {
+  it('calls setWorkspaceUpdating(true) when the will-switch event fires', () => {
     initWorkspaceUpdatingService();
     expect(capturedWillHandler).toBeDefined();
     if (!capturedWillHandler) throw new Error('capturedWillHandler not set');
     capturedWillHandler();
-    expect(vi.mocked(setWorkspaceUpdating)).toHaveBeenCalledWith(true, 'Test Project');
+    expect(vi.mocked(setWorkspaceUpdating)).toHaveBeenCalledWith(true);
   });
 
   it('calls setWorkspaceUpdating(false) when the did-switch event fires', () => {

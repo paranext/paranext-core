@@ -1,14 +1,6 @@
 import { SavedTabInfo } from '@shared/models/docking-framework.model';
 import { LayoutBase } from 'rc-dock';
 import { TAB_TYPE_WEBVIEW } from '@renderer/components/web-view.component';
-import { SIMPLE_LAYOUT_TAB_ID } from './simple-layout.tab-ids';
-
-const {
-  modelText: MODEL_TEXT_TAB_ID,
-  scriptureEditor: SCRIPTURE_EDITOR_TAB_ID,
-  bibleTexts: BIBLE_TEXTS_TAB_ID,
-  commentaries: COMMENTARIES_TAB_ID,
-} = SIMPLE_LAYOUT_TAB_ID;
 
 // Using `as` here simplifies type changes.
 /* eslint-disable no-type-assertion/no-type-assertion */
@@ -24,11 +16,11 @@ export const simpleLayout: LayoutBase = {
           {
             tabs: [
               {
-                id: MODEL_TEXT_TAB_ID,
+                id: '0a23566d-1b2c-4dd2-8d3d-cda54b598cd2',
                 tabType: TAB_TYPE_WEBVIEW,
                 data: {
                   webViewType: 'platformScriptureEditor.modelText',
-                  id: MODEL_TEXT_TAB_ID,
+                  id: '0a23566d-1b2c-4dd2-8d3d-cda54b598cd2',
                   contentType: 'react',
                   state: {},
                 },
@@ -45,11 +37,11 @@ export const simpleLayout: LayoutBase = {
           {
             tabs: [
               {
-                id: SCRIPTURE_EDITOR_TAB_ID,
+                id: '3cf575f0-2cc2-464b-8765-b588f216dfce',
                 tabType: TAB_TYPE_WEBVIEW,
                 data: {
                   webViewType: 'platformScriptureEditor.react',
-                  id: SCRIPTURE_EDITOR_TAB_ID,
+                  id: '3cf575f0-2cc2-464b-8765-b588f216dfce',
                   contentType: 'react',
                   state: {},
                 },
@@ -66,21 +58,21 @@ export const simpleLayout: LayoutBase = {
           {
             tabs: [
               {
-                id: BIBLE_TEXTS_TAB_ID,
+                id: '27616073-bf60-4f2b-9518-922d1a7d3601',
                 tabType: TAB_TYPE_WEBVIEW,
                 data: {
                   webViewType: 'platformScriptureEditor.bibleTexts',
-                  id: BIBLE_TEXTS_TAB_ID,
+                  id: '27616073-bf60-4f2b-9518-922d1a7d3601',
                   contentType: 'react',
                   state: {},
                 },
               },
               {
-                id: COMMENTARIES_TAB_ID,
+                id: '6c950d23-f8d7-4482-a384-93ea0481698b',
                 tabType: TAB_TYPE_WEBVIEW,
                 data: {
                   webViewType: 'platformScriptureEditor.commentaries',
-                  id: COMMENTARIES_TAB_ID,
+                  id: '6c950d23-f8d7-4482-a384-93ea0481698b',
                   contentType: 'react',
                   state: {},
                 },

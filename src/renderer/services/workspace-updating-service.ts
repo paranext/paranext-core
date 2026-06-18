@@ -6,17 +6,13 @@ import { setWorkspaceUpdating } from './workspace-updating-store';
 const PROJECT_SWITCH_WILL_START_EVENT = 'platformScriptureEditor.onWillSwitchProject';
 const PROJECT_SWITCH_DID_FINISH_EVENT = 'platformScriptureEditor.onDidSwitchProject';
 
-type ProjectSwitchWillStartPayload = { projectName?: string };
-
 /**
  * Subscribes to project-switch network events and drives the workspace-updating store. Call once at
  * app startup. Returns a cleanup function.
  */
 export function initWorkspaceUpdatingService(): () => void {
-  const unsubWill = getNetworkEvent<ProjectSwitchWillStartPayload>(PROJECT_SWITCH_WILL_START_EVENT)(
-    (payload) => {
-      setWorkspaceUpdating(true, payload?.projectName);
-    },
+  const unsubWill = getNetworkEvent(PROJECT_SWITCH_WILL_START_EVENT)(() =>
+    setWorkspaceUpdating(true),
   );
   const unsubDid = getNetworkEvent(PROJECT_SWITCH_DID_FINISH_EVENT)(() =>
     setWorkspaceUpdating(false),

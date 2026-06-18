@@ -111,16 +111,10 @@ const PROJECT_SWITCH_WILL_START_EVENT = 'platformScriptureEditor.onWillSwitchPro
 const PROJECT_SWITCH_DID_FINISH_EVENT = 'platformScriptureEditor.onDidSwitchProject';
 
 /**
- * Payload for the project-switch will-start event — carries the project name so the workspace
- * updating overlay can show "Loading layout for {name}" instead of a generic message.
- */
-type ProjectSwitchWillStartPayload = { projectName?: string };
-
-/**
  * Event emitter fired before a project switch. Created lazily on the first call to open() to avoid
  * network initialization races during extension activation.
  */
-let projectSwitchWillStartEmitter: PlatformEventEmitter<ProjectSwitchWillStartPayload> | undefined;
+let projectSwitchWillStartEmitter: PlatformEventEmitter<Record<string, never>> | undefined;
 
 /** Event emitter fired after a project switch completes. Created lazily on the first call to open(). */
 let projectSwitchDidFinishEmitter: PlatformEventEmitter<Record<string, never>> | undefined;
@@ -317,31 +311,14 @@ async function open(
     if (needsOverlay) {
       // Create emitters lazily on first use, after full activation, to avoid network init races.
       if (!projectSwitchWillStartEmitter)
-        projectSwitchWillStartEmitter =
-          papi.network.createNetworkEventEmitter<ProjectSwitchWillStartPayload>(
-            PROJECT_SWITCH_WILL_START_EVENT,
-          );
+        projectSwitchWillStartEmitter = papi.network.createNetworkEventEmitter<
+          Record<string, never>
+        >(PROJECT_SWITCH_WILL_START_EVENT);
       if (!projectSwitchDidFinishEmitter)
         projectSwitchDidFinishEmitter = papi.network.createNetworkEventEmitter<
           Record<string, never>
         >(PROJECT_SWITCH_DID_FINISH_EVENT);
-      // Look up the project name (best-effort) so the overlay can show "Loading layout for {name}".
-      // A failure here must not block the open — falls back to the generic overlay text.
-      let projectName: string | undefined;
-      try {
-        const namePdp = await papi.projectDataProviders.get(
-          'platform.base',
-          projectForWebView.projectId,
-        );
-        const fullName = await namePdp.getSetting('platform.fullName');
-        const shortName = await namePdp.getSetting('platform.name');
-        projectName = fullName || shortName || undefined;
-      } catch (e) {
-        logger.debug(
-          `Open ${isReadOnly ? 'Resource Viewer' : 'Scripture Editor'}: could not read project name for ${projectForWebView.projectId} (${getErrorMessage(e)}); overlay will use generic label`,
-        );
-      }
-      projectSwitchWillStartEmitter.emit({ projectName });
+      projectSwitchWillStartEmitter.emit({});
 
       const outgoing = allScriptureEditors.find((e) => e.id === dispatch.targetTabId);
       // Skip outgoing S/R for read-only viewers — no local changes are possible.
