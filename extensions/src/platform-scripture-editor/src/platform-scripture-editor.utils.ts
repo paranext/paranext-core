@@ -883,30 +883,22 @@ export async function syncOnProjectSwitch(
   incomingProjectId: string,
   outgoingProjectId: string | undefined,
 ): Promise<void> {
-  const tIncoming = performance.now();
   try {
     await papi.commands.sendCommand('paratextBibleSendReceive.syncProjects', [incomingProjectId]);
-    papi.logger.debug(
-      `[perf:simple-switch] syncOnProjectSwitch incoming ${incomingProjectId}: ${(performance.now() - tIncoming).toFixed(0)} ms`,
-    );
   } catch (e) {
     papi.logger.warn(
-      `Project-switch sync: incoming sync for ${incomingProjectId} failed after ${(performance.now() - tIncoming).toFixed(0)} ms: ${getErrorMessage(e)}`,
+      `Project-switch sync: incoming sync for ${incomingProjectId} failed: ${getErrorMessage(e)}`,
     );
   }
 
   if (outgoingProjectId) {
-    const tOutgoing = performance.now();
     try {
       await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [
         outgoingProjectId,
       ]);
-      papi.logger.debug(
-        `[perf:simple-switch] syncOnProjectSwitch outgoing ${outgoingProjectId}: ${(performance.now() - tOutgoing).toFixed(0)} ms`,
-      );
     } catch (e) {
       papi.logger.warn(
-        `Project-switch sync: outgoing sync for ${outgoingProjectId} failed after ${(performance.now() - tOutgoing).toFixed(0)} ms: ${getErrorMessage(e)}`,
+        `Project-switch sync: outgoing sync for ${outgoingProjectId} failed: ${getErrorMessage(e)}`,
       );
     }
   }
@@ -926,45 +918,29 @@ export async function openTextConnectionPanels(
   papi: typeof PapiBackend,
   projectId: string,
 ): Promise<void> {
-  const tAll = performance.now();
-  const tModel = performance.now();
   try {
     await papi.commands.sendCommand('platformScriptureEditor.openModelText', projectId);
-    papi.logger.debug(
-      `[perf:simple-switch] openModelText done in ${(performance.now() - tModel).toFixed(0)} ms`,
-    );
   } catch (e) {
     papi.logger.warn(`Error opening model text panel: ${getErrorMessage(e)}`);
   }
-  const tCommentary = performance.now();
   try {
     await papi.commands.sendCommand(
       'platformScriptureEditor.openResourceText',
       'CommentaryResource',
       projectId,
     );
-    papi.logger.debug(
-      `[perf:simple-switch] openResourceText(Commentary) done in ${(performance.now() - tCommentary).toFixed(0)} ms`,
-    );
   } catch (e) {
     papi.logger.warn(`Error opening commentary text panel: ${getErrorMessage(e)}`);
   }
-  const tScripture = performance.now();
   try {
     await papi.commands.sendCommand(
       'platformScriptureEditor.openResourceText',
       'ScriptureResource',
       projectId,
     );
-    papi.logger.debug(
-      `[perf:simple-switch] openResourceText(Scripture) done in ${(performance.now() - tScripture).toFixed(0)} ms`,
-    );
   } catch (e) {
     papi.logger.warn(`Error opening scripture resource text panel: ${getErrorMessage(e)}`);
   }
-  papi.logger.debug(
-    `[perf:simple-switch] openTextConnectionPanels total ${(performance.now() - tAll).toFixed(0)} ms`,
-  );
 }
 
 // #endregion Text Connection Panels

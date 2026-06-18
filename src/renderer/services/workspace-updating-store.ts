@@ -1,9 +1,3 @@
-import { logger } from '@shared/services/logger.service';
-
-function logPerf(message: string): void {
-  logger.debug(`[perf:simple-switch] ${message}`);
-}
-
 /**
  * Store tracking whether the workspace is currently switching projects.
  *
@@ -38,9 +32,6 @@ function notifyListeners(): void {
 export function setWorkspaceUpdating(value: boolean, projectName?: string): void {
   const wasUpdating = switchCount > 0;
   const previousProjectName = currentProjectName;
-  logPerf(
-    `setWorkspaceUpdating(${value}, ${JSON.stringify(projectName)}) — switchCount ${switchCount} → ${value ? switchCount + 1 : Math.max(0, switchCount - 1)}`,
-  );
   if (value) {
     switchCount += 1;
     // Replace the project name on every new switch — see module comment.
@@ -48,9 +39,6 @@ export function setWorkspaceUpdating(value: boolean, projectName?: string): void
     // Reset the safety timer on each new switch, giving 30 s from the latest start.
     clearTimeout(safetyTimer);
     safetyTimer = setTimeout(() => {
-      logPerf(
-        `SAFETY TIMER FIRED after ${SWITCH_SAFETY_TIMEOUT_MS} ms — force-clearing overlay (switchCount was ${switchCount})`,
-      );
       switchCount = 0;
       currentProjectName = undefined;
       safetyTimer = undefined;
@@ -65,11 +53,8 @@ export function setWorkspaceUpdating(value: boolean, projectName?: string): void
     }
   }
   const isNowUpdating = switchCount > 0;
-  if (wasUpdating !== isNowUpdating || previousProjectName !== currentProjectName) {
-    if (wasUpdating !== isNowUpdating)
-      logPerf(`overlay visibility → ${isNowUpdating ? 'SHOWN' : 'HIDDEN'}`);
+  if (wasUpdating !== isNowUpdating || previousProjectName !== currentProjectName)
     notifyListeners();
-  }
 }
 
 export function getWorkspaceUpdating(): boolean {

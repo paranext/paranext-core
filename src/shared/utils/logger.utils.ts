@@ -120,17 +120,9 @@ export function setUpLogger(log: MainLogger | RendererLogger) {
   // Don't show main console logs in the renderer DevTools
   if (log.transports.ipc) log.transports.ipc.level = false;
   log.hooks.push((message) => {
-    // If we're piping through a log message from another process, don't add another file path.
-    // Relayed renderer messages arrive already prefixed with the timestamp the renderer applied
-    // (format `[{y}-{m}-{d} {h}:{i}:{s}.{ms}] [{level}] {text}` from log.transports.console.format),
-    // so we detect that exact shape rather than a generic `[xxx]` — otherwise any user log message
-    // that starts with `[some-tag]` (e.g. `[perf:simple-switch]`) would be misclassified and have
-    // its timestamp suppressed.
-    if (
-      message.data.some((logLine) =>
-        /^\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+\]/.test(logLine),
-      )
-    )
+    // If we're piping through a log message from another process, don't add another file path
+    // Messages from other processes all start with "[process name]"
+    if (message.data.some((logLine) => /^\s*\[[\w\d:\-. ]+\]/.test(logLine)))
       if (message.variables?.processType === 'renderer')
         // And skip formatting if it comes from the renderer because it already has formatting
         return {

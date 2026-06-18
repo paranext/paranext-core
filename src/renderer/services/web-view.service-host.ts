@@ -930,29 +930,18 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
  * events, so we don't set it ourselves in that branch.
  */
 async function handleSwitchToSimpleMode(): Promise<void> {
-  const logPerf = (message: string) => logger.debug(`[perf:simple-switch] ${message}`);
-
-  const tStart = performance.now();
-  logPerf('handleSwitchToSimpleMode start');
-
   const cached = getLastOpenedProject();
   if (cached) {
-    logPerf(`fast path: using cached project ${cached.id} (${JSON.stringify(cached.name)})`);
-    await runProjectBoundSimpleSwitch(cached.id, cached.name, tStart, logPerf);
+    await runProjectBoundSimpleSwitch(cached.id, cached.name);
     return;
   }
 
   const resolved = await tryResolveRecentProjectForSimpleMode();
-  logPerf(
-    `resolveRecent done at ${(performance.now() - tStart).toFixed(0)} ms (resolved=${!!resolved})`,
-  );
 
   if (!resolved) {
     // Fallback path — bare simpleLayout, picker fills the empty editor, extension drives overlay.
     try {
-      const tLoad = performance.now();
       await loadLayout();
-      logPerf(`fallback loadLayout done in ${(performance.now() - tLoad).toFixed(0)} ms`);
     } catch (err) {
       logger.warn(`Dock layout failed to reload after interface mode change: ${err}`);
     }
@@ -961,7 +950,7 @@ async function handleSwitchToSimpleMode(): Promise<void> {
 
   // Populate the cache so the next switch can take the fast path.
   setLastOpenedProject({ id: resolved.id, name: resolved.name });
-  await runProjectBoundSimpleSwitch(resolved.id, resolved.name, tStart, logPerf);
+  await runProjectBoundSimpleSwitch(resolved.id, resolved.name);
 }
 
 /**
@@ -984,8 +973,6 @@ async function handleSwitchToSimpleMode(): Promise<void> {
 async function runProjectBoundSimpleSwitch(
   projectId: string,
   projectName: string | undefined,
-  tStart: number,
-  logPerf: (message: string) => void,
 ): Promise<void> {
   setWorkspaceUpdating(true, projectName);
   // Force the overlay to paint BEFORE we begin the (fast) layout swap. Without this yield, React
@@ -1001,19 +988,13 @@ async function runProjectBoundSimpleSwitch(
   const tabsResolved = trackSimpleLayoutTabsResolved();
 
   try {
-    const tLoad = performance.now();
     const projectBoundLayout = buildSimpleLayoutForProject(projectId);
     // `loadLayout` types its parameter as `LayoutInfo` (Record<string, unknown>) but actually just
     // forwards it to `dockLayoutVar.loadLayout`, which accepts the same `LayoutBase` that
     // `simpleLayout` already uses. Cast to bridge the type gap without changing the public type.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     await loadLayout(projectBoundLayout as unknown as LayoutInfo);
-    logPerf(
-      `project-bound loadLayout done in ${(performance.now() - tLoad).toFixed(0)} ms (total ${(performance.now() - tStart).toFixed(0)} ms)`,
-    );
-    const tWait = performance.now();
     await tabsResolved.promise;
-    logPerf(`tab titles resolved in ${(performance.now() - tWait).toFixed(0)} ms`);
   } catch (err) {
     logger.warn(`Dock layout failed to reload after interface mode change: ${err}`);
     tabsResolved.dispose();
@@ -1080,11 +1061,6 @@ function trackSimpleLayoutTabsResolved(): { promise: Promise<void>; dispose: () 
   unsubUpdate = onDidUpdateWebView(handleEvent);
 
   timeoutHandle = setTimeout(() => {
-    if (remaining.size > 0) {
-      logger.debug(
-        `[perf:simple-switch] tab-resolved tracker timed out after ${SIMPLE_LAYOUT_TABS_RESOLVED_TIMEOUT_MS} ms — ${remaining.size} tab(s) still pending, hiding overlay anyway`,
-      );
-    }
     finish();
   }, SIMPLE_LAYOUT_TABS_RESOLVED_TIMEOUT_MS);
 
@@ -1143,16 +1119,12 @@ async function tryResolveRecentProjectForSimpleMode(): Promise<
       const fullName = await pdp.getSetting('platform.fullName');
       const shortName = await pdp.getSetting('platform.name');
       name = (fullName || shortName) ?? undefined;
-    } catch (err) {
-      logger.debug(
-        `Simple-mode pre-fetch: could not read display name for ${id}; overlay will use generic label (${err})`,
-      );
+    } catch {
+      // best-effort — overlay falls back to the generic label
     }
     return { id, name };
-  } catch (err) {
-    logger.debug(
-      `Simple-mode pre-fetch: recently-opened-projects unavailable; falling back to default picker (${err})`,
-    );
+  } catch {
+    // best-effort — recents provider unavailable, picker handles the slow path
     return undefined;
   }
 }
