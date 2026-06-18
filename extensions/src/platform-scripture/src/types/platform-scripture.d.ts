@@ -835,6 +835,46 @@ declare module 'platform-scripture' {
 
   // #endregion User Text Connection Settings Types
 
+  // #region User Editor Settings Types
+
+  /** Provides per-user editor preferences scoped to a project */
+  export type UserEditorSettingsProjectInterfaceDataTypes = {
+    /**
+     * Gets/sets the user's structure protection preference for this project. `undefined` means not
+     * set — the consumer applies a mode-aware default.
+     */
+    UserStructureProtected: DataProviderDataType<undefined, boolean | undefined, boolean>;
+  };
+
+  /** Provides per-user editor preferences scoped to a project */
+  export type IUserEditorSettingsProjectDataProvider =
+    IProjectDataProvider<UserEditorSettingsProjectInterfaceDataTypes> & {
+      /**
+       * Gets the user's structure protection preference. Returns `undefined` if the user has never
+       * set a preference — the caller is responsible for applying a default.
+       */
+      getUserStructureProtected(): Promise<boolean | undefined>;
+      /** Sets the user's structure protection preference */
+      setUserStructureProtected(
+        value: boolean,
+      ): Promise<DataProviderUpdateInstructions<UserEditorSettingsProjectInterfaceDataTypes>>;
+      /**
+       * Subscribe to run a callback when the user's structure protection preference changes
+       *
+       * @param selector Tells the provider what changes to listen for
+       * @param callback Function to run with the updated value, or a {@link PlatformError} on error
+       * @param options Various options to adjust how the subscriber emits updates
+       * @returns Unsubscriber function
+       */
+      subscribeUserStructureProtected(
+        selector: undefined,
+        callback: (value: boolean | undefined | PlatformError) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+    };
+
+  // #endregion User Editor Settings Types
+
   // #region Scripture Edit Permissions Types
 
   /** Provides permission checks for editing Scripture content (intentionally empty) */
@@ -2135,6 +2175,7 @@ declare module 'papi-shared-types' {
     IFindInScriptureProjectDataProvider,
     IReplaceWithUsfmProjectDataProvider,
     ITextConnectionSettingsProjectDataProvider,
+    IUserEditorSettingsProjectDataProvider,
     IScriptureEditPermissionsProjectDataProvider,
     ICheckAggregatorService,
     ICheckRunner,
@@ -2163,6 +2204,7 @@ declare module 'papi-shared-types' {
     'platformScripture.findInScripture': IFindInScriptureProjectDataProvider;
     'platformScripture.replaceWithUsfm': IReplaceWithUsfmProjectDataProvider;
     'platformScripture.textConnectionSettings': ITextConnectionSettingsProjectDataProvider;
+    'platformScripture.userEditorSettings': IUserEditorSettingsProjectDataProvider;
     'platformScripture.scriptureEditPermissions': IScriptureEditPermissionsProjectDataProvider;
   }
 

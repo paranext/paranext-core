@@ -1573,20 +1573,20 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     {
         var (_, content) = GetUserProjectSettings().GetSetting("StructureProtected");
         if (content == null)
-            return null;
+            return null; // not set - frontend applies mode-aware default
         return bool.TryParse(content.Value, out bool result) ? result : null;
     }
 
-    public bool SetUserStructureProtected(bool value)
+    public bool SetUserStructureProtected(object? value)
     {
-        GetUserProjectSettings()
-            .SetSetting(
-                "StructureProtected",
-                "1.0",
-                new XElement("Items", value ? "true" : "false")
+        if (value is not bool boolValue)
+            throw new InvalidDataException(
+                $"Expected boolean for UserStructureProtected, got: {value}"
             );
+        var itemsEl = new XElement("Items", boolValue.ToString().ToLowerInvariant());
+        GetUserProjectSettings().SetSetting("StructureProtected", "1.0.0", itemsEl);
         SendDataUpdateEvent(
-            ProjectDataType.USER_STRUCTURE_PROTECTION,
+            ProjectDataType.USER_STRUCTURE_PROTECTED,
             "user structure protected update event"
         );
         return true;
