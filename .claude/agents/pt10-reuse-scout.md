@@ -1,7 +1,7 @@
 ---
 name: pt10-reuse-scout
 description: "Read-only agent for /investigate-prd. Sweeps the Paratext 10 repo constellation (paranext-core, paratext-10-studio, paratext-bible-extensions, paratext-bible-internal-extensions) for existing related code, decides where a feature should live, and classifies what to reuse vs build. Always runs; primary investigation for net-new aspects. Input: the PRD summary + aspect breakdown."
-tools: Bash, Read, Grep, Glob
+tools: Task, Bash, Read, Grep, Glob
 ---
 
 # PT10 Reuse Scout
@@ -54,6 +54,19 @@ Sweep all four repos for the feature's key terms / PT9 form names / inventory ca
 focus where there are hits: internal-only features → `paratext-bible-internal-extensions`;
 public → `paratext-bible-extensions` / `paranext-core`; app-shell/window concerns →
 `paratext-10-studio`.
+
+## Fan-out (optional — for sweeping the four repos)
+
+You have the `Task` tool. When the sweep across the four constellation repos is large, you may
+spawn a helper sub-agent per repo (or per plausible extension) to discover and read in parallel,
+then synthesize one landscape yourself. A convenience, not a required pipeline — for a quick sweep,
+just do it yourself.
+
+- **Shallow** — one level only; a helper must not spawn its own helpers.
+- **Helpers inherit your rules** — read the 2–3 most-likely files in full and cite `file:line`;
+  they report findings, they don't decide placement.
+- **You stay accountable** — re-ground anything in the landscape in a real `file:line`; the
+  recommended-home and reuse-vs-build calls are yours to make from the merged evidence.
 
 ## Step 1 — Discover existing related code (do NOT assume it's absent)
 
