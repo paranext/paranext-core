@@ -150,6 +150,8 @@ A single markdown brief written to the tracked, shared research area `.context/r
 
 Phases & quality gates (G0–G10), `phase-status.json`/`branches.json`, golden masters / characterization / the gm-capture harness, SRP/BHV/TS/INV/CAP/EXT traceability IDs, the split-PR lifecycle + `pr-updater`/`review-manifest-generator`, `step-reviewer`/`work-unit-judge`/the Iterate-Until-Good loop, capability isolation, audit-logging hooks, the ADR governance gate, the utility-registry, the `ai/main` model. The capability produces a **brief + plan**, not gated artifacts.
 
+> **Added later (2026-06-18):** only the ADR *governance gate* (and the heavy `decision-registry.json`/`Decisions.md` machinery) stays dropped. A **lightweight, gate-free** architecture-decisions log was subsequently adopted as a repo-wide practice — see `.context/standards/Architecture-Decisions.md` and the "Recording Architecture Decisions" section of CLAUDE.md. It records rationale and is read by `pt10-reuse-scout`; it is not an `/investigate-prd` gate.
+
 ## 11. Source material from ai-porting (mining map)
 
 | New unit | Mine from | Lift | Drop |
