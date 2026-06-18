@@ -1,7 +1,7 @@
 ---
 name: pt10-reuse-scout
 description: "Read-only agent for /investigate-prd. Sweeps the Paratext 10 repo constellation (paranext-core, paratext-10-studio, paratext-bible-extensions, paratext-bible-internal-extensions) for existing related code, decides where a feature should live, and classifies what to reuse vs build. Always runs; primary investigation for net-new aspects. Input: the PRD summary + aspect breakdown."
-allowed-tools: Bash, Read, Grep, Glob
+tools: Bash, Read, Grep, Glob
 ---
 
 # PT10 Reuse Scout
