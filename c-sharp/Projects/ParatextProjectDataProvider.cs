@@ -124,6 +124,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(("getUserModelTexts", GetUserModelTexts));
         retVal.Add(("setUserModelTexts", SetUserModelTexts));
         retVal.Add(("resetUserModelTexts", ResetUserModelTexts));
+        retVal.Add(("getUserStructureProtected", GetUserStructureProtected));
+        retVal.Add(("setUserStructureProtected", SetUserStructureProtected));
         retVal.Add(
             ("getUserReferencedProjectsAndResources", GetUserReferencedProjectsAndResources)
         );
@@ -1564,6 +1566,29 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     {
         GetUserProjectSettings().RemoveSetting("ModelTexts");
         SendDataUpdateEvent(ProjectDataType.USER_MODEL_TEXTS, "user model texts reset event");
+        return true;
+    }
+
+    public bool? GetUserStructureProtected(object? param = null)
+    {
+        var (_, content) = GetUserProjectSettings().GetSetting("StructureProtected");
+        if (content == null)
+            return null;
+        return bool.TryParse(content.Value, out bool result) ? result : null;
+    }
+
+    public bool SetUserStructureProtected(bool value)
+    {
+        GetUserProjectSettings()
+            .SetSetting(
+                "StructureProtected",
+                "1.0",
+                new XElement("Items", value ? "true" : "false")
+            );
+        SendDataUpdateEvent(
+            ProjectDataType.USER_STRUCTURE_PROTECTION,
+            "user structure protected update event"
+        );
         return true;
     }
 
