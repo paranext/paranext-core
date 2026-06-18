@@ -23,12 +23,14 @@ checkpoint, and transitions to planning. It owns no investigation logic of its o
 
 Investigations read sibling checkouts under `~/git/` — `Paratext` (PT9) and the PT10
 constellation (`paranext-core`, `paratext-10-studio`, `paratext-bible-extensions`,
-`paratext-bible-internal-extensions`). This is a **convention**, not a hard requirement: if an
-agent reports it cannot read a repo, it degrades and notes the gap, and you tell the user they
-can add the repo via `additionalDirectories` in their settings or launch Claude from a directory
-containing the siblings. Never pin paths into settings for them.
+`paratext-bible-internal-extensions`). These live **outside this working directory**, so your
+file tools (`Read`/`Glob`) can only reach them if they were granted at launch (e.g.
+`claude --add-dir ~/git`); Bash can reach them regardless, but the agents rely on `Read` for
+their deep source reads. **Step 1 preflights this and warns up front.** If a repo is still
+unreachable mid-run, the owning agent degrades and notes the gap. This is a **convention**, not a
+hard requirement — never pin paths into the user's settings for them.
 
-## Step 1: Prepare the output location
+## Step 1: Prepare the run
 
 If `$ARGUMENTS` is empty, ask the user for the PRD path and stop until they provide it.
 
@@ -42,6 +44,20 @@ mkdir -p ".context/research/investigations/$SLUG"
 ```
 
 Do **not** auto-commit the brief — the developer commits it as part of their normal flow.
+
+**Preflight — repo access.** Before going further, probe each expected repo with your file tools
+(e.g. `Glob ~/git/Paratext/*`, and a `Glob` of each constellation repo — or `Read` a file under
+each). Treat an *outside-the-allowed-directories / access* error (not an empty result) as
+**unreachable**. If any are unreachable, **stop and warn the user before investigating**:
+
+> ⚠️ My file tools can't read these repos: {list}. Either they aren't granted to me (relaunch
+> with `claude --add-dir ~/git`) or they aren't checked out under `~/git/`. Without them I'll
+> degrade — fall back to the bundled inventory and flag the gaps. Proceed degraded, or relaunch?
+
+An unreachable **constellation** repo degrades `pt10-reuse-scout` (affects every PRD — it always
+runs); an unreachable **`~/git/Paratext`** degrades `pt9-archaeologist` (only matters if the PRD
+ports PT9 features). Wait for the user. If they choose to proceed, continue and let the agents
+degrade per their own `## Degradation` rules.
 
 ## Step 2: Interpret the PRD
 
