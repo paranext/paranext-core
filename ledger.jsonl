@@ -11,3 +11,4 @@
 {"type":"fix","runId":"qs-2026-06-17","candidateId":"c1","result":"dropped","branch":"fix/PT-4002-duplicate-notification-toast","reason":"dry-run: stopped before opening PR (QUALITY_SWEEP_DRY_RUN=1)","date":"2026-06-18"}
 {"type":"fix","runId":"qs-2026-06-17","candidateId":"c1","result":"pr_opened","prNumber":2435,"prUrl":"https://github.com/paranext/paranext-core/pull/2435","branch":"fix/PT-4002-duplicate-notification-toast","date":"2026-06-18"}
 {"type":"pr_outcome","prNumber":2435,"outcome":"open","checkedDate":"2026-06-18","date":"2026-06-18"}
+{"type":"pr_outcome","prNumber":2435,"outcome":"open","checkedDate":"2026-06-19"}
