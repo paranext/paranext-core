@@ -143,7 +143,8 @@ describe('useProjectPickerData', () => {
   it(
     'returns currentProject from the first open Scripture Editor web view',
     async () => {
-      const { webViews, papiFrontendProjectDataProviderService } = await importMocks();
+      const { webViews, papiFrontendProjectDataProviderService } =
+        await importMocks();
       vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([
         { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-abc' },
       ] as never);
