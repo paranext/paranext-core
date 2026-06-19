@@ -120,13 +120,17 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         const next = startIdx < 0 ? 0 : Math.min(startIdx + 1, items.length - 1);
-        if (next === focusedIndex) return;
+        // Compare against startIdx (the effective current row), not focusedIndex: after a
+        // click focusedIndex is -1 while the selected row is the start, so guarding on
+        // focusedIndex would let a boundary no-op fall through to selectItem() and toggle the
+        // selection off (collapsing the open detail panel).
+        if (next === startIdx) return;
         setFocusedIndex(next);
         if (!narrow) selectItem(items[next]);
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         const prev = startIdx < 0 ? items.length - 1 : Math.max(startIdx - 1, 0);
-        if (prev === focusedIndex) return;
+        if (prev === startIdx) return;
         setFocusedIndex(prev);
         if (!narrow) selectItem(items[prev]);
       } else if ((e.key === 'Enter' || e.key === ' ') && narrow && focusedIndex >= 0) {
