@@ -140,28 +140,23 @@ describe('useProjectPickerData', () => {
   // importMocks() + renderHook setup can consume non-trivial wall-clock time on a
   // starved Windows CI runner, causing the default 5 s Vitest test timeout to
   // expire before waitFor resolves (observed in run 27636725842 on 2026-06-16).
-  it(
-    'returns currentProject from the first open Scripture Editor web view',
-    async () => {
-      const { webViews, papiFrontendProjectDataProviderService } =
-        await importMocks();
-      vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([
-        { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-abc' },
-      ] as never);
-      vi.mocked(papiFrontendProjectDataProviderService.get).mockResolvedValue({
-        getSetting: vi.fn(async () => 'Genesis Project'),
-      } as never);
+  it('returns currentProject from the first open Scripture Editor web view', async () => {
+    const { webViews, papiFrontendProjectDataProviderService } = await importMocks();
+    vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([
+      { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-abc' },
+    ] as never);
+    vi.mocked(papiFrontendProjectDataProviderService.get).mockResolvedValue({
+      getSetting: vi.fn(async () => 'Genesis Project'),
+    } as never);
 
-      const { result } = renderHook(() => useProjectPickerData());
+    const { result } = renderHook(() => useProjectPickerData());
 
-      await waitFor(() => {
-        expect(result.current.isLoading).toBe(false);
-        expect(result.current.currentProject?.fullName).toBe('Genesis Project');
-      });
-      expect(result.current.currentProject?.id).toBe('proj-abc');
-    },
-    15_000,
-  );
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.currentProject?.fullName).toBe('Genesis Project');
+    });
+    expect(result.current.currentProject?.id).toBe('proj-abc');
+  }, 15_000);
 
   it('returns allProjects from projectLookupService', async () => {
     const { projectLookupService, papiFrontendProjectDataProviderService } = await importMocks();
