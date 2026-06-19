@@ -59,12 +59,18 @@ e2e-tests/playwright-report/
 e2e-tests/test-results/
 e2e-tests/.dev-server.pid
 
-# claude
-.claude
+# claude - personal/generated files are ignored; shared config is tracked in .claude/
+.claude/*
+!.claude/CLAUDE.md
+!.claude/settings.json
+!.claude/hooks/
+.claude/hooks/*
+!.claude/hooks/session-start.sh
 .claude.backup/
 .context
 c-sharp/CLAUDE.md
 CLAUDE.md
+!.claude/CLAUDE.md
 CLAUDE.md.backup
 
 docs/superpowers/
