@@ -23,3 +23,4 @@
 {"type":"pr_outcome","prNumber":2445,"outcome":"open","checkedDate":"2026-06-19","date":"2026-06-19"}
 {"type":"pr_outcome","prNumber":2435,"outcome":"open","checkedDate":"2026-06-20"}
 {"type":"pr_outcome","prNumber":2445,"outcome":"open","checkedDate":"2026-06-20"}
+{"type":"run_started","runId":"qs-2026-06-20","seeds":{"jira":[],"scanTarget":"extensions/src/platform-scripture"},"date":"2026-06-20"}
