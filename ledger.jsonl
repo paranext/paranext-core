@@ -21,3 +21,5 @@
 {"type":"repro","runId":"qs-2026-06-19","candidateId":"c2","result":"reproduced","evidenceRef":"evidence/qs-2026-06-19-c2-before-RED.txt","date":"2026-06-19"}
 {"type":"fix","runId":"qs-2026-06-19","candidateId":"c2","result":"pr_opened","prNumber":2445,"prUrl":"https://github.com/paranext/paranext-core/pull/2445","branch":"fix/er-dictionary-arrow-boundary-deselect","date":"2026-06-19"}
 {"type":"pr_outcome","prNumber":2445,"outcome":"open","checkedDate":"2026-06-19","date":"2026-06-19"}
+{"type":"pr_outcome","prNumber":2435,"outcome":"open","checkedDate":"2026-06-20"}
+{"type":"pr_outcome","prNumber":2445,"outcome":"open","checkedDate":"2026-06-20"}
