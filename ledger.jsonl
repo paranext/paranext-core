@@ -24,3 +24,4 @@
 {"type":"pr_outcome","prNumber":2435,"outcome":"open","checkedDate":"2026-06-20"}
 {"type":"pr_outcome","prNumber":2445,"outcome":"open","checkedDate":"2026-06-20"}
 {"type":"run_started","runId":"qs-2026-06-20","seeds":{"jira":[],"scanTarget":"extensions/src/platform-scripture"},"date":"2026-06-20"}
+{"type":"candidate","runId":"qs-2026-06-20","candidateId":"c1","source":"scan","title":"Checks status bar: queued job renders no progress bar/Cancel button (JSX operator-precedence bug)","area":"extensions/src/platform-scripture/src/checks/checks-side-panel","dedupKey":"scan:platform-scripture:queued-statusbar-no-cancel","confidence":0.85,"refute":"survived","refuteReason":"Code at line 324 is A || (B && C && JSX); queued state reachable on job start, renders boolean true (nothing)","impact":{"userVisible":true,"severity":1,"frequency":1,"score":1},"date":"2026-06-20"}
