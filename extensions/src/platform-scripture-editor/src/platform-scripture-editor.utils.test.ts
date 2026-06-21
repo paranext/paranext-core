@@ -4,6 +4,7 @@ import type PapiBackend from '@papi/backend';
 import { UsjTextContentLocation } from 'platform-bible-utils';
 import {
   convertScriptureRangeToEditorRange,
+  getNextScriptureViewType,
   openDefaultActiveProjectIfApplicable,
   resolveOpenEditorDispatch,
   syncOnProjectSwitch,
@@ -2340,3 +2341,20 @@ describe('syncOnProjectSwitch', () => {
 });
 
 // #endregion syncOnProjectSwitch
+
+// #region getNextScriptureViewType
+
+describe('getNextScriptureViewType', () => {
+  // Regression: in simple interface mode both the formatted and markers views resolve to
+  // markerMode 'hidden', so a markerMode-based toggle got stuck and could never return to the
+  // formatted (editable) view. The toggle must simply alternate based on the current view type.
+  it('switches from the markers view back to the formatted view', () => {
+    expect(getNextScriptureViewType('markers')).toBe('formatted');
+  });
+
+  it('switches from the formatted view to the markers view', () => {
+    expect(getNextScriptureViewType('formatted')).toBe('markers');
+  });
+});
+
+// #endregion getNextScriptureViewType
