@@ -43,3 +43,4 @@
 {"type":"pr_outcome","prNumber":2435,"outcome":"open","checkedDate":"2026-06-21"}
 {"type":"pr_outcome","prNumber":2445,"outcome":"open","checkedDate":"2026-06-21"}
 {"type":"pr_outcome","prNumber":2446,"outcome":"open","checkedDate":"2026-06-21"}
+{"type":"run_started","runId":"qs-2026-06-21","seeds":{"jira":["PT-4005","PT-4007","PT-4001","PT-3979"],"scanTarget":"extensions/src/platform-scripture-editor"},"date":"2026-06-21"}
