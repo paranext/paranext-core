@@ -1,0 +1,24 @@
+   × ErDictionaryFilteredList keyboard boundary selection (wide mode) > ArrowUp on the already-selected first row (after a click) keeps it selected 73ms
+Expected the element to have attribute:
+  aria-selected="true"
+Received:
+  aria-selected="false"
+   × ErDictionaryFilteredList keyboard boundary selection (wide mode) > ArrowDown on the already-selected last row (after a click) keeps it selected 16ms
+Expected the element to have attribute:
+  aria-selected="true"
+Received:
+  aria-selected="false"
+   ✓ ErDictionaryFilteredList keyboard boundary selection (wide mode) > ArrowDown from the first row still moves selection to the second row 11ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/platform-enhanced-resources/src/components/semantic-domain-viewer/er-dictionary-filtered-list.test.tsx > ErDictionaryFilteredList keyboard boundary selection (wide mode) > ArrowUp on the already-selected first row (after a click) keeps it selected
+Expected the element to have attribute:
+  aria-selected="true"
+Received:
+  aria-selected="false"
+ FAIL  src/platform-enhanced-resources/src/components/semantic-domain-viewer/er-dictionary-filtered-list.test.tsx > ErDictionaryFilteredList keyboard boundary selection (wide mode) > ArrowDown on the already-selected last row (after a click) keeps it selected
+Expected the element to have attribute:
+  aria-selected="true"
+Received:
+  aria-selected="false"
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed (3)

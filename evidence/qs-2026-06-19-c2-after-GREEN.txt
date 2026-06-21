@@ -1,0 +1,16 @@
+ ✓ src/platform-enhanced-resources/src/lib/scope-keyed-ref-key.test.ts (7 tests) 4ms
+ ✓ src/platform-enhanced-resources/src/presenters/dictionary-presenter.test.ts (20 tests) 6ms
+ ✓ src/platform-enhanced-resources/src/presenters/tooltip-presenter.test.ts (27 tests) 8ms
+ ✓ src/platform-enhanced-resources/src/presenters/media-presenter.test.ts (12 tests) 8ms
+ ✓ src/platform-enhanced-resources/src/presenters/encyclopedia-presenter.test.ts (13 tests) 4ms
+ ✓ src/platform-enhanced-resources/src/lib/marble-converter.test.ts (23 tests) 20ms
+ ✓ src/platform-enhanced-resources/src/lib/use-enhanced-resources-proxy.test.ts (10 tests) 740ms
+   ✓ useEnhancedResourcesProxy > resolves the proxy when readInitializeResult.haveMarbleData flips from false to true  356ms
+ ✓ src/platform-enhanced-resources/src/components/dictionary-tab/dictionary-display-item.test.tsx (6 tests) 81ms
+ ✓ src/platform-enhanced-resources/src/components/dictionary-tab/dictionary-entry-detail.test.tsx (1 test) 53ms
+ ✓ src/platform-enhanced-resources/src/components/footnotes-pane/footnotes-pane.test.tsx (2 tests) 68ms
+ ✓ src/platform-enhanced-resources/src/components/semantic-domain-viewer/er-dictionary-filtered-list.test.tsx (3 tests) 101ms
+ ✓ src/platform-enhanced-resources/src/components/scripture-pane/scripture-pane.test.tsx (64 tests) 439ms
+ ✓ src/platform-enhanced-resources/src/components/semantic-domain-viewer/semantic-domain-viewer.test.tsx (6 tests) 270ms
+ Test Files  13 passed (13)
+      Tests  194 passed (194)
