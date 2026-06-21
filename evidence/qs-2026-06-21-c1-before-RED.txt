@@ -1,0 +1,39 @@
+quality-sweep qs-2026-06-21  candidate c1  (BEFORE / RED)
+Defect: "Switch Scripture View" cannot toggle back from Markers to Formatted in simple interface mode.
+File: extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx:739
+
+ROOT CAUSE
+The changeScriptureView handler decided the next view from the resolved markerMode:
+    setViewType(viewOptions.markerMode === 'hidden' ? 'markers' : 'formatted');
+where viewOptions = getViewOptionsForType(viewType, isPowerMode).
+
+In SIMPLE interface mode (platform.interfaceMode default 'simple'), both view types resolve to
+markerMode 'hidden':
+  - formatted -> getViewOptions('paragraph-structure')                 -> markerMode 'hidden'
+  - markers   -> { ...getViewOptions('paragraph-structure'), noteMode } -> markerMode 'hidden'
+So once viewType === 'markers', the rule computes 'hidden' === 'hidden' -> 'markers' again: the
+user is stuck in the read-only markers view. viewType is persisted via useWebViewState, so a reload
+does not recover. line 739 is the ONLY caller of setViewType. Power mode works because markers
+resolves to markerMode 'visible'.
+
+Verified library values (.yalc/@eten-tech-foundation/platform-editor/dist/index.js):
+  default view mode = "formatted" -> markerMode "hidden"
+  "paragraph-structure"           -> markerMode "hidden"
+  "unformatted"                   -> markerMode "editable"
+
+DEMONSTRATION OF THE BUGGY PRODUCTION RULE (real platform-editor library, faithful copy of
+getViewOptionsForType + the line-739 rule):
+  × simple mode: from markers it WRONGLY stays in markers (bug)
+      AssertionError: expected 'markers' to be 'formatted'
+      Expected: "formatted"
+      Received: "markers"
+  ✓ simple mode: from formatted it goes to markers (works)
+  ✓ power mode:  from markers it correctly returns to formatted (works)
+  Test Files  1 failed (1)   Tests  1 failed | 2 passed (3)
+
+REGRESSION TEST RED (platform-scripture-editor.utils.test.ts, before the fix existed):
+  × getNextScriptureViewType > switches from the markers view back to the formatted view
+      TypeError: (0 , getNextScriptureViewType) is not a function
+  × getNextScriptureViewType > switches from the formatted view to the markers view
+      TypeError: (0 , getNextScriptureViewType) is not a function
+  Test Files  1 failed (1)   Tests  2 failed | 85 skipped (87)

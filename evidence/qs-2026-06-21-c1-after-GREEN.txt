@@ -1,0 +1,20 @@
+quality-sweep qs-2026-06-21  candidate c1  (AFTER / GREEN)
+Fix: derive the next view from the current viewType (a pure toggle) instead of the resolved
+markerMode. New exported helper getNextScriptureViewType() in platform-scripture-editor.utils.ts;
+the changeScriptureView handler now calls setViewType(getNextScriptureViewType(viewType)) and the
+message-listener effect depends on viewType.
+
+Regression test (platform-scripture-editor.utils.test.ts):
+  ✓ getNextScriptureViewType > switches from the markers view back to the formatted view
+  ✓ getNextScriptureViewType > switches from the formatted view to the markers view
+
+Full extension test suite:
+  ✓ src/paragraph-marker-tooltip/paragraph-marker-tooltip.utils.test.ts (10 tests)
+  ✓ src/select-dbl-resource.test.ts (16 tests)
+  ✓ src/use-editor-pdp-sync.hook.test.ts (3 tests)
+  ✓ src/use-effective-resource-reference-list.hook.test.ts (14 tests)
+  ✓ src/platform-scripture-editor.utils.test.ts (87 tests)
+  Test Files  5 passed (5)   Tests  130 passed (130)
+
+Also clean: eslint (changed files) exit 0; tsc --noEmit -p tsconfig.json exit 0.
+Power mode behavior unchanged (flip yields the same result as the old rule); simple mode fixed.
