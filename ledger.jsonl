@@ -40,3 +40,6 @@
 {"type":"repro","runId":"qs-2026-06-20","candidateId":"c4","result":"reproduced","evidenceRef":"extensions/src/platform-scripture/src/manage-books-dialog/manage-books-dialog.utils.test.ts (RED: 38ZECCUNP89T.SFM -> ECC expected ZEC; 40MATGEN.SFM -> GEN expected MAT)","date":"2026-06-20"}
 {"type":"fix","runId":"qs-2026-06-20","candidateId":"c4","result":"pr_opened","prNumber":2446,"prUrl":"https://github.com/paranext/paranext-core/pull/2446","branch":"fix/import-book-id-filename-position","date":"2026-06-20"}
 {"type":"pr_outcome","prNumber":2446,"outcome":"open","checkedDate":"2026-06-20","date":"2026-06-20"}
+{"type":"pr_outcome","prNumber":2435,"outcome":"open","checkedDate":"2026-06-21"}
+{"type":"pr_outcome","prNumber":2445,"outcome":"open","checkedDate":"2026-06-21"}
+{"type":"pr_outcome","prNumber":2446,"outcome":"open","checkedDate":"2026-06-21"}
