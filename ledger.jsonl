@@ -48,3 +48,4 @@
 {"type":"selected","runId":"qs-2026-06-21","candidateId":"c1","date":"2026-06-21"}
 {"type":"repro","runId":"qs-2026-06-21","candidateId":"c1","result":"reproduced","evidenceRef":"evidence/qs-2026-06-21-c1-before-RED.txt","date":"2026-06-21"}
 {"type":"fix","runId":"qs-2026-06-21","candidateId":"c1","result":"pr_opened","prNumber":2447,"prUrl":"https://github.com/paranext/paranext-core/pull/2447","branch":"fix/switch-scripture-view-simple-mode","date":"2026-06-21"}
+{"type":"pr_outcome","prNumber":2447,"outcome":"open","checkedDate":"2026-06-21","date":"2026-06-21"}
