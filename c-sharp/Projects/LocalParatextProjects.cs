@@ -49,6 +49,7 @@ internal class LocalParatextProjects
         ProjectInterfaces.PLAIN_TEXT_VERSE,
         ProjectInterfaces.MARKER_NAMES,
         ProjectInterfaces.TEXT_CONNECTION_SETTINGS,
+        ProjectInterfaces.USER_EDITOR_SETTINGS,
         ProjectInterfaces.SCRIPTURE_EDIT_PERMISSIONS,
         ProjectInterfaces.VERSIFICATION,
     ];

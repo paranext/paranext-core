@@ -128,6 +128,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(("getUserModelTexts", GetUserModelTexts));
         retVal.Add(("setUserModelTexts", SetUserModelTexts));
         retVal.Add(("resetUserModelTexts", ResetUserModelTexts));
+        retVal.Add(("getUserStructureProtected", GetUserStructureProtected));
+        retVal.Add(("setUserStructureProtected", SetUserStructureProtected));
+        retVal.Add(("resetUserStructureProtected", ResetUserStructureProtected));
         retVal.Add(
             ("getUserReferencedProjectsAndResources", GetUserReferencedProjectsAndResources)
         );
@@ -1589,6 +1592,41 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     {
         GetUserProjectSettings().RemoveSetting("ModelTexts");
         SendDataUpdateEvent(ProjectDataType.USER_MODEL_TEXTS, "user model texts reset event");
+        return true;
+    }
+
+    public bool? GetUserStructureProtected(object? param = null)
+    {
+        // Schema version is intentionally ignored — a plain boolean has no versioned schema
+        var (_, content) = GetUserProjectSettings().GetSetting("StructureProtected");
+        if (content == null)
+            return null; // not set - frontend applies mode-aware default
+        return bool.TryParse(content.Value, out bool result) ? result : null;
+    }
+
+    public bool SetUserStructureProtected(object? value)
+    {
+        if (value is not bool boolValue)
+            throw new InvalidDataException(
+                $"Expected boolean for UserStructureProtected, got: {value}"
+            );
+        var itemsElement = new XElement("Items", boolValue.ToString().ToLowerInvariant());
+        // Version stored for consistency with other settings; ignored on read
+        GetUserProjectSettings().SetSetting("StructureProtected", "1.0.0", itemsElement);
+        SendDataUpdateEvent(
+            ProjectDataType.USER_STRUCTURE_PROTECTED,
+            "user structure protected update event"
+        );
+        return true;
+    }
+
+    public bool ResetUserStructureProtected()
+    {
+        GetUserProjectSettings().RemoveSetting("StructureProtected");
+        SendDataUpdateEvent(
+            ProjectDataType.USER_STRUCTURE_PROTECTED,
+            "user structure protected reset event"
+        );
         return true;
     }
 
