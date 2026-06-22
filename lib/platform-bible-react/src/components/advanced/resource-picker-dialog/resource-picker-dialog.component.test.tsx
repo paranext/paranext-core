@@ -23,7 +23,6 @@ const STRINGS: ResourcePickerDialogLocalizedStrings = {
   '%resourcePicker_section_already_selected%': 'Already selected',
   '%resourcePicker_section_installed%': 'Installed',
   '%resourcePicker_section_available_to_download%': 'Available to download',
-  '%resourcePicker_button_use%': 'Use',
   '%resourcePicker_no_results%': 'No results found',
   '%resourcePicker_search_placeholder%': 'Search resources…',
   '%resourcePicker_language_filter_any%': 'Any language',
@@ -54,56 +53,47 @@ describe('ResourcePickerDialog', () => {
     expect(screen.getByText('RVR60')).toBeInTheDocument();
   });
 
-  it('does not show Use or Download buttons for already-selected resources', () => {
-    renderDialog();
-    // NIV and RVR60 are already selected — their rows must not have action buttons
-    const rows = screen.getAllByText(/NIV|RVR60/);
-    rows.forEach((row) => {
-      const rowContainer = row.closest('div');
-      expect(rowContainer?.querySelector('button')).toBeNull();
-    });
+  it('does not allow selecting already-selected resources', () => {
+    const { onSelect } = renderDialog();
+    // NIV is already selected — clicking its row must not trigger onSelect
+    const nivText = screen.getByText('NIV');
+    const nivRow = nivText.closest('tr');
+    if (!nivRow) throw new Error('NIV row not found');
+    fireEvent.click(nivRow);
+    expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it('shows "Installed" section with Use buttons for installed, non-selected resources', () => {
+  it('shows "Installed" section with selectable rows for installed, non-selected resources', () => {
     renderDialog();
     expect(screen.getByText('Installed')).toBeInTheDocument();
     expect(screen.getByText('ESV')).toBeInTheDocument();
     expect(screen.getByText('KJV')).toBeInTheDocument();
-    const useButtons = screen.getAllByRole('button', { name: 'Use' });
-    expect(useButtons.length).toBeGreaterThan(0);
   });
 
-  it('shows "Available to Download" section with Use buttons for uninstalled resources', () => {
+  it('shows "Available to Download" section with selectable rows for uninstalled resources', () => {
     renderDialog();
     expect(screen.getByText('Available to download')).toBeInTheDocument();
     expect(screen.getByText('NLT')).toBeInTheDocument();
-    // All action buttons (installed + to-download) use the same "Use" label
-    const useButtons = screen.getAllByRole('button', { name: 'Use' });
-    expect(useButtons.length).toBeGreaterThan(0);
   });
 
-  it('calls onSelect with an installed resource when its Use button is clicked', () => {
+  it('calls onSelect with an installed resource when its row is clicked', () => {
     const { onSelect } = renderDialog();
-    // Find the Use button next to ESV (installed, not selected)
+    // Click the ESV row directly (installed, not selected)
     const esvText = screen.getByText('ESV');
     const esvRow = esvText.closest('tr');
     if (!esvRow) throw new Error('ESV row not found');
-    const useBtn = esvRow.querySelector('button');
-    if (!useBtn) throw new Error('Use button not found in ESV row');
-    fireEvent.click(useBtn);
+    fireEvent.click(esvRow);
     expect(onSelect).toHaveBeenCalledTimes(1);
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ dblEntryUid: 'installed-1' }));
   });
 
-  it('calls onSelect with an uninstalled resource when its Use button is clicked', () => {
+  it('calls onSelect with an uninstalled resource when its row is clicked', () => {
     const { onSelect } = renderDialog();
-    // Find the Use button next to NLT (uninstalled)
+    // Click the NLT row directly (uninstalled)
     const nltText = screen.getByText('NLT');
     const nltRow = nltText.closest('tr');
     if (!nltRow) throw new Error('NLT row not found');
-    const useBtn = nltRow.querySelector('button');
-    if (!useBtn) throw new Error('Use button not found in NLT row');
-    fireEvent.click(useBtn);
+    fireEvent.click(nltRow);
     expect(onSelect).toHaveBeenCalledTimes(1);
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ dblEntryUid: 'download-1' }));
   });

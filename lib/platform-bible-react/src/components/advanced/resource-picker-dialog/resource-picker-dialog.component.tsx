@@ -21,7 +21,6 @@ export const RESOURCE_PICKER_DIALOG_STRING_KEYS = Object.freeze([
   '%resourcePicker_section_already_selected%',
   '%resourcePicker_section_installed%',
   '%resourcePicker_section_available_to_download%',
-  '%resourcePicker_button_use%',
   '%resourcePicker_no_results%',
   '%resourcePicker_search_placeholder%',
   '%resourcePicker_language_filter_any%',
@@ -54,7 +53,7 @@ export interface ResourcePickerDialogProps {
   selectedResourceIds?: string[];
   /** Localized strings — use RESOURCE_PICKER_DIALOG_STRING_KEYS with useLocalizedStrings */
   localizedStrings: ResourcePickerDialogLocalizedStrings;
-  /** Called when the user clicks "Use" on a resource entry */
+  /** Called when the user clicks a resource row to select it */
   onSelect: (resource: DblResourceData) => void;
 }
 
@@ -75,7 +74,7 @@ function ResourceSection({
   if (resources.length === 0) return undefined;
   return (
     <>
-      <TableRow className="tw:border-0 tw:hover:bg-transparent" aria-hidden>
+      <TableRow className="tw:border-0 tw:hover:bg-transparent">
         <TableCell colSpan={4} className="tw:border-0 tw:pt-4 tw:pb-0">
           <Label className="tw:text-xs tw:tracking-wider tw:text-muted-foreground tw:uppercase">
             {label}
@@ -88,11 +87,16 @@ function ResourceSection({
           className={
             onSelect ? 'tw:cursor-pointer tw:border-0' : 'tw:pointer-events-none tw:border-0'
           }
+          role={onSelect ? 'button' : undefined}
+          aria-label={onSelect ? r.displayName : undefined}
           onClick={onSelect ? () => onSelect(r) : undefined}
           onKeyDown={
             onSelect
               ? (e) => {
-                  if (e.key === 'Enter' || e.key === ' ') onSelect(r);
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onSelect(r);
+                  }
                 }
               : undefined
           }
