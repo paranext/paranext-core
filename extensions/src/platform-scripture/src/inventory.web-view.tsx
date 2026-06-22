@@ -76,6 +76,7 @@ const INVENTORY_TYPE_CONFIG = {
     checkId: 'MixexCapitalization' satisfies CheckType,
     validItemsSetting: 'platformScripture.validMixedCapitalization',
     invalidItemsSetting: 'platformScripture.invalidMixedCapitalization',
+    typeStringKeys: CHARACTER_INVENTORY_STRING_KEYS,
   },
 } as const;
 
