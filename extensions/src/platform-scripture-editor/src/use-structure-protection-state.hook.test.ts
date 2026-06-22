@@ -23,6 +23,7 @@ const mockUseProjectDataProvider = vi.mocked(useProjectDataProvider);
 const mockUseProjectData = vi.mocked(useProjectData);
 const mockUseSetting = vi.mocked(useSetting);
 
+/** Minimal PlatformError shape — matches the isPlatformError runtime check */
 function makePlatformError(): object {
   return { platformErrorVersion: 1, message: 'test error' };
 }

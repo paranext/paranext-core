@@ -28,7 +28,8 @@ export type StructureProtectionState = {
  * Truth table:
  *
  * - Project LOCKED + non-admin user → always locked (project wins)
- * - Project LOCKED + admin user → follows admin's own user setting
+ * - Project LOCKED + admin user (`canAdminToggle=true`) → the project lock does NOT force protection;
+ *   the admin's own user setting decides (an admin who can toggle the lock is not bound by it)
  * - Project allows changes → follows user setting for all roles
  * - User setting absent → true (locked) in Simple mode, false in Power mode
  *
@@ -62,7 +63,7 @@ export function useStructureProtectionState(
   useEffect(() => {
     if (!textConnectionsPdp) {
       setCanAdminToggle(false);
-      return () => {};
+      return;
     }
     let disposed = false;
     textConnectionsPdp
@@ -79,7 +80,10 @@ export function useStructureProtectionState(
     };
   }, [textConnectionsPdp]);
 
-  const isAdminProtected = !isPlatformError(adminSettingPossiblyError) && adminSettingPossiblyError;
+  // Boolean() is needed: `&&` would short-circuit to the boolean setting value, but TypeScript
+  // infers the union type without it — this makes the `boolean` return explicit.
+  const isAdminProtected =
+    !isPlatformError(adminSettingPossiblyError) && Boolean(adminSettingPossiblyError);
   const modeDefault = interfaceMode === 'simple';
   const userSetting = isPlatformError(userSettingPossiblyError)
     ? undefined
