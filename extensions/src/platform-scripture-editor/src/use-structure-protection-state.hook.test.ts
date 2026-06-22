@@ -40,11 +40,11 @@ function makeTextConnectionsPdp(canWrite: boolean): ITextConnectionSettingsProje
 }
 
 function setup({
-  adminSetting = false as boolean | object,
-  userSetting = undefined as boolean | undefined | object,
-  interfaceMode = 'simple' as 'simple' | 'power',
+  adminSetting = false,
+  userSetting = undefined,
+  interfaceMode = 'simple',
   canWrite = false,
-  textConnectionsPdp = undefined as ITextConnectionSettingsProjectDataProvider | undefined,
+  textConnectionsPdp = undefined,
 }: {
   adminSetting?: boolean | object;
   userSetting?: boolean | undefined | object;
@@ -52,15 +52,20 @@ function setup({
   canWrite?: boolean;
   textConnectionsPdp?: ITextConnectionSettingsProjectDataProvider | undefined;
 } = {}) {
+  // adminSetting may be a PlatformError object to test error handling; cast needed to satisfy mock return type
   // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const adminSettingAsBool = adminSetting as boolean;
   mockUseProjectSetting.mockReturnValue([
-    adminSetting as boolean,
+    adminSettingAsBool,
     mockSetAdminSetting,
     undefined,
     false,
   ]);
+  // useSetting's return type has string in the first position; cast needed for the narrower literal union type
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  mockUseSetting.mockReturnValue([interfaceMode as string, vi.fn(), vi.fn(), false]);
+  const interfaceModeAsString = interfaceMode as string;
+  mockUseSetting.mockReturnValue([interfaceModeAsString, vi.fn(), vi.fn(), false]);
+  // Mock object literal cannot satisfy the full useProjectData return type — cast needed for test isolation
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   mockUseProjectData.mockReturnValue({
     UserStructureProtected: vi.fn().mockReturnValue([userSetting, mockSetUserSetting, false]),
