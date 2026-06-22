@@ -21,8 +21,8 @@ import { scrollToVerse } from './editor-dom.util';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
-/** Ms to wait after a scrRef change before scrolling, to give the editor time to render */
-const VERSE_SCROLL_DELAY_MS = 200;
+/** Max ms to retry scrolling via rAF before giving up (e.g. verse marker missing from USJ) */
+const SCROLL_MAX_WAIT_MS = 2000;
 
 /**
  * Object containing all keys used for localization in this component. Pass these keys into the
@@ -142,6 +142,12 @@ export function ModelTextPanel({
 
   const [isSelecting, setIsSelecting] = useState(false);
 
+  // Tracks the latest scrRef this panel's editor just published so we can suppress the echo that
+  // comes back through scroll group 0 (forced in simple mode) and avoid scroll-jumping the user's
+  // own click target to the top of the viewport.
+  // eslint-disable-next-line no-null/no-null
+  const lastPublishedScrRefRef = useRef<SerializedVerseRef | null>(null);
+
   // --- Load the resolved resource's chapter USJ (re-fetch on resource/reference change) ---
 
   const [usj, setUsj] = useState<Usj | undefined>(undefined);
@@ -184,16 +190,48 @@ export function ModelTextPanel({
     getResourceChapter,
   ]);
 
-  // Scroll to the current verse whenever the scrRef changes (book, chapter, or verse).
-  // A short delay lets the editor finish rendering new content before we scroll.
-  // Using granular deps instead of the whole scrRef object to avoid redundant scroll
-  // attempts when scrRef identity changes but the reference itself hasn't.
+  // Scroll to the current verse whenever the scrRef or USJ changes.
+  // Using granular scrRef deps instead of the whole object avoids redundant scroll attempts
+  // when scrRef identity changes but the reference itself hasn't.
   useEffect(() => {
-    const timeout = setTimeout(() => scrollToVerse(scrRef), VERSE_SCROLL_DELAY_MS);
-    return () => clearTimeout(timeout);
-    // Using granular deps avoids re-running on scrRef identity changes that don't change the reference
+    // Suppress our own echo: the panel is on scroll group 0 in simple mode, so a verse click
+    // inside Editorial publishes to the scroll group and immediately bounces back as a prop
+    // update. Without this check, scrollToVerse would snap the user's click target to the top
+    // of the viewport after they clicked it.
+    const lastPublished = lastPublishedScrRefRef.current;
+    if (
+      lastPublished &&
+      lastPublished.book === scrRef.book &&
+      lastPublished.chapterNum === scrRef.chapterNum &&
+      lastPublished.verseNum === scrRef.verseNum
+    ) {
+      lastPublishedScrRefRef.current = null;
+      return undefined;
+    }
+
+    // Gate on USJ being loaded for the current chapter. On book/chapter change, usj still holds
+    // the previous chapter while the fetch is in flight — querying the DOM now would scroll into
+    // the wrong chapter's content (or silently no-op). usj in deps ensures we re-run once data
+    // arrives and the editor has re-rendered.
+    if (!usj || isUsjLoading) return undefined;
+
+    // rAF retry: waits for the editor DOM to paint the new chapter before scrolling. Stops as
+    // soon as the verse element is found, or after SCROLL_MAX_WAIT_MS (verse marker absent).
+    let cancelled = false;
+    const start = Date.now();
+    const tryScroll = () => {
+      if (cancelled) return;
+      const found = scrollToVerse(scrRef);
+      if (found || scrRef.verseNum <= 1) return;
+      if (Date.now() - start > SCROLL_MAX_WAIT_MS) return;
+      requestAnimationFrame(tryScroll);
+    };
+    tryScroll();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scrRef.book, scrRef.chapterNum, scrRef.verseNum]);
+  }, [usj, isUsjLoading, scrRef.book, scrRef.chapterNum, scrRef.verseNum]);
 
   // --- Editor ---
 
@@ -264,6 +302,14 @@ export function ModelTextPanel({
     if (resource) await handleResourceSelect(resource);
   }, [showResourcePicker, currentModelTextIds, handleResourceSelect]);
 
+  const handleScrRefChange = useCallback(
+    (newScrRef: SerializedVerseRef) => {
+      lastPublishedScrRefRef.current = newScrRef;
+      onScrRefChange(newScrRef);
+    },
+    [onScrRefChange],
+  );
+
   // --- Render the resolved state ---
 
   // No project: opened without a project id (expected to be brief).
@@ -330,7 +376,7 @@ export function ModelTextPanel({
       <Editorial
         ref={editorRef}
         scrRef={scrRef}
-        onScrRefChange={onScrRefChange}
+        onScrRefChange={handleScrRefChange}
         options={options}
         logger={logger}
       />

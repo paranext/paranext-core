@@ -68,7 +68,7 @@ export function scrollToVerse(verseRef: SerializedVerseRef): HTMLElement | undef
     verseRef.verseNum < 1
       ? undefined
       : (document.querySelector<HTMLElement>(
-          `.editor-container span[data-marker="v"][data-number*="${verseRef.verseNum}"]`,
+          `.editor-container span[data-marker="v"][data-number="${verseRef.verseNum}"]`,
         ) ?? undefined);
 
   const scrollContainerElement =
