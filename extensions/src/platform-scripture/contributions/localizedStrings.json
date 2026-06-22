@@ -619,6 +619,7 @@
       "%project_settings_platformScripture_referencedProjectsAndResources_label%": "Proyectos y recursos referenciados",
       "%project_settings_platformScripture_repeatableWords_description%": "Lista de palabras que se permiten repetir en este proyecto",
       "%project_settings_platformScripture_repeatableWords_label%": "Palabras Repetibles",
+      "%project_settings_platformScripture_structureProtected_label%": "Estructura protegida",
       "%project_settings_platformScripture_validCharacters_description%": "Lista de caracteres aceptados en este proyecto",
       "%project_settings_platformScripture_validCharacters_label%": "Caracteres válidos",
       "%project_settings_platformScripture_validMarkers_description%": "Lista de marcadores permitidos en este proyecto",
