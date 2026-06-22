@@ -107,6 +107,7 @@
         "includeProjectInterfaces": ["Paratext", "Scripture"]
       },
       "platformScripture.structureProtected": {
+        "label": "%project_settings_platformScripture_structureProtected_label%",
         "isHidden": true,
         "default": false,
         "includeProjectInterfaces": ["Paratext", "Scripture"]
