@@ -66,6 +66,9 @@ dev-packages/
 e2e-tests/test-results
 e2e-tests/playwright-report
 
+# Extracted PT9 CSS snapshots (verbatim reference data; not authored source)
+data/pt9-css/
+
 # Formats not supported by Prettier
 # (no sync with .eslintignore and .stylelintignore)
 ## MDXv2+ (used by Storybook)
