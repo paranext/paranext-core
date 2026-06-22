@@ -145,8 +145,7 @@ export function ModelTextPanel({
   // Tracks the latest scrRef this panel's editor just published so we can suppress the echo that
   // comes back through scroll group 0 (forced in simple mode) and avoid scroll-jumping the user's
   // own click target to the top of the viewport.
-  // eslint-disable-next-line no-null/no-null
-  const lastPublishedScrRefRef = useRef<SerializedVerseRef | null>(null);
+  const lastPublishedScrRefRef = useRef<SerializedVerseRef | undefined>(undefined);
 
   // --- Load the resolved resource's chapter USJ (re-fetch on resource/reference change) ---
 
@@ -205,7 +204,7 @@ export function ModelTextPanel({
       lastPublished.chapterNum === scrRef.chapterNum &&
       lastPublished.verseNum === scrRef.verseNum
     ) {
-      lastPublishedScrRefRef.current = null;
+      lastPublishedScrRefRef.current = undefined;
       return undefined;
     }
 
@@ -230,6 +229,7 @@ export function ModelTextPanel({
     return () => {
       cancelled = true;
     };
+    // scrollToVerse is a stable module-level import — adding it as a dep would cause spurious re-runs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usj, isUsjLoading, scrRef.book, scrRef.chapterNum, scrRef.verseNum]);
 
