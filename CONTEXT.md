@@ -93,19 +93,23 @@ An **automated** evaluation run against the text — catalog/basic checks, spell
 _Avoid_: using "check" for human-judgment work (that is a **Review**); validation, test, rule.
 
 **Review**:
-A **human-judgment** evaluation of the text by a person — exegetical, naturalness, comprehension, consultant, and community review. (PT9 called these "checks"; we deliberately call them **reviews** — a human forms the judgment, nothing is automated.) Like a Check, a Review is a **source of demand**: its findings are satisfied by a **Revision** task. Adopting "review" over "check" here is a real, outward-facing vocabulary shift (needs stakeholder buy-in) — see `docs/reports/2026-06-23-check-terminology-overloading.md`.
-_Avoid_: "manual check", "consultant check", "community check"; "reviewer" as a synonym (a Review is the activity, not the person).
+A human-judgment evaluation of the text by a person — exegetical, naturalness, comprehension, consultant, community. (PT9 called these "checks"; we deliberately call them **reviews**.) A Review is a **Task**: a person must perform it, and progress **stalls** until they do. The reviewer records **Comments**; each open comment becomes an **Issue** (via the automated _unresolved-comments_ check) that the team clears by **Revision**. A Review is **satisfied** when all its comments are resolved (rarely, a review finds nothing → zero comments → satisfied outright). Reviews **ratchet forward**. _[verifying in code: satisfaction-by-comment-resolution + ratcheting.]_ The "review" rename is a deliberate, outward-facing shift — see `docs/reports/2026-06-23-check-terminology-overloading.md`.
+_Avoid_: "manual check", "consultant check", "community check"; "reviewer" as a synonym for the activity.
+
+**Comment**:
+What a reviewer records on the text during a **Review** (≈ PT9 "project note"; canonical PT10 term — _comment_ vs _note_ — pending code check). Content-addressed to the text it was left on. Each **open** comment surfaces as an **Issue**; resolving all of a review's comments **satisfies** that review.
+_Avoid_: note (pending reconciliation with the codebase term).
 
 **Revision**:
 The **Task** of changing the text or project to satisfy the issues a **Check** or a **Review** raised. Typical flow: the team **drafts** → a teammate **reviews** → a reviser **revises** to satisfy that review; the text is also **checked** automatically, and **revisions** clear those issues too.
 _Avoid_: fix, correction, generic "edit".
 
 **Issue**:
-A problem a check surfaces that must be resolved before the check can pass; it can **reopen** if later edits change the text.
+A problem that must be resolved, surfaced by a **Check**. It comes from the **text** (e.g. a punctuation violation) or from an **open Comment** left during a **Review** (via the unresolved-comments check). An issue can **reopen** when later edits change the text.
 _Avoid_: error, flag, warning.
 
 **Pass**:
-A check's satisfied state — performed (manual) or evaluated (automated) with no open issues. A check result is tied to the text it was run against, so editing the text can make a prior pass **stale**.
+A **Check**'s satisfied state — evaluated by the engine with **no open issues**. A check result is **content-addressed** (tied to the text it ran against), so editing the text can make a prior pass go **stale** and reopen. _[completion wording — a check **passes**; a **Review** is **satisfied** — being grilled.]_
 
 **Current Step**:
 The single step Saroj is focused on at a given moment, surfaced persistently in his workspace. The system recommends one by default (so there is always a "what's next"); Saroj can change it. May be a Task or a Check.
