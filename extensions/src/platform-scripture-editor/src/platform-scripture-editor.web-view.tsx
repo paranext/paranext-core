@@ -85,6 +85,10 @@ import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal'
 import { ChevronDown } from 'lucide-react';
 import { useAnnotationStyleSheet } from './annotations/use-annotation-stylesheet.hook';
 import {
+  StructureProtectionButton,
+  STRUCTURE_PROTECTION_BUTTON_STRING_KEYS,
+} from './structure-protection-button.component';
+import {
   getLocalizeKeysFromDecorations,
   mergeDecorations,
   removeDecorations,
@@ -128,6 +132,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...FOOTNOTE_EDITOR_STRING_KEYS,
   ...UNDO_REDO_BUTTONS_STRING_KEYS,
   ...MARKER_MENU_STRING_KEYS,
+  ...STRUCTURE_PROTECTION_BUTTON_STRING_KEYS,
   ...Object.values(blockMarkerToBlockNames),
   ...Object.entries(usfmMarkers)
     .map((item) => item[1].description)
@@ -1779,7 +1784,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             )}
           </>
         }
-        endAreaChildren={scrollGroupSelector}
+        endAreaChildren={
+          <>
+            <StructureProtectionButton
+              projectId={projectId}
+              localizedStrings={localizedStrings}
+              className="tw:h-8"
+            />
+            {scrollGroupSelector}
+          </>
+        }
       />
       {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state */}
       <InPortal node={editorPortalNode}>
@@ -1803,7 +1817,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             </div>
           ),
           <div className="tw:flex tw:flex-col tw:h-full">
-            <div className="tw:flex-grow tw:min-h-0 tw:m-1 tw:flex tw:flex-col tw:gap-1">
+            <div className="tw:grow tw:min-h-0 tw:m-1 tw:flex tw:flex-col tw:gap-1">
               {Object.entries(decorations.headers ?? {}).map(([id, header]) => (
                 // Headers
                 <Alert
