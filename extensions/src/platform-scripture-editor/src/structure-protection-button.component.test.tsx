@@ -24,7 +24,7 @@ beforeAll(() => {
 
 // Mutable mock return; each test sets the fields it cares about.
 const mockState: StructureProtectionState = {
-  isProtected: true,
+  isStructureProtected: true,
   isAdminProtected: false,
   canAdminToggle: true,
   setAdminProtection: vi.fn(),
@@ -49,12 +49,12 @@ function setState(next: Partial<StructureProtectionState>) {
 
 afterEach(() => {
   vi.clearAllMocks();
-  setState({ isProtected: true, isAdminProtected: false, canAdminToggle: true });
+  setState({ isStructureProtected: true, isAdminProtected: false, canAdminToggle: true });
 });
 
 describe('StructureProtectionButton', () => {
   it('renders ShieldCheck (not ShieldOff) and is enabled when protected', () => {
-    setState({ isProtected: true, canAdminToggle: true, isAdminProtected: false });
+    setState({ isStructureProtected: true, canAdminToggle: true, isAdminProtected: false });
     const { container } = render(
       <StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />,
     );
@@ -65,7 +65,7 @@ describe('StructureProtectionButton', () => {
   });
 
   it('renders ShieldOff when editable', () => {
-    setState({ isProtected: false, canAdminToggle: true, isAdminProtected: false });
+    setState({ isStructureProtected: false, canAdminToggle: true, isAdminProtected: false });
     const { container } = render(
       <StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />,
     );
@@ -79,9 +79,9 @@ describe('StructureProtectionButton', () => {
   });
 
   it('admin click toggles both the project and user settings to the new effective state', () => {
-    // Admin, currently protected (isProtected drives the icon) -> click unlocks both settings so the
+    // Admin, currently protected (isStructureProtected drives the icon) -> click unlocks both settings so the
     // admin's own icon flips and the team-wide lock is lifted in one action.
-    setState({ canAdminToggle: true, isAdminProtected: false, isProtected: true });
+    setState({ canAdminToggle: true, isAdminProtected: false, isStructureProtected: true });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     fireEvent.click(screen.getByRole('button'));
     expect(mockState.setAdminProtection).toHaveBeenCalledWith(false);
@@ -89,7 +89,7 @@ describe('StructureProtectionButton', () => {
   });
 
   it('non-admin click on an unlocked project toggles the user setting', () => {
-    setState({ canAdminToggle: false, isAdminProtected: false, isProtected: true });
+    setState({ canAdminToggle: false, isAdminProtected: false, isStructureProtected: true });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     fireEvent.click(screen.getByRole('button'));
     expect(mockState.setUserProtection).toHaveBeenCalledWith(false);
@@ -97,7 +97,7 @@ describe('StructureProtectionButton', () => {
   });
 
   it('non-admin on an admin-locked project is disabled and does not toggle', () => {
-    setState({ canAdminToggle: false, isAdminProtected: true, isProtected: true });
+    setState({ canAdminToggle: false, isAdminProtected: true, isStructureProtected: true });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     const button = screen.getByRole('button');
     expect(button).toBeDisabled();
@@ -107,14 +107,14 @@ describe('StructureProtectionButton', () => {
   });
 
   it('auto-opens the tooltip when the protection state changes', async () => {
-    setState({ isProtected: true, canAdminToggle: true, isAdminProtected: false });
+    setState({ isStructureProtected: true, canAdminToggle: true, isAdminProtected: false });
     const { rerender } = render(
       <StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />,
     );
     // Controlled tooltip starts closed, so its content is not rendered on mount.
     expect(screen.queryByText('Structure editable')).not.toBeInTheDocument();
     // Flip to editable; the useEffect should open the tooltip on the change.
-    setState({ isProtected: false });
+    setState({ isStructureProtected: false });
     rerender(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     expect((await screen.findAllByText('Structure editable')).length).toBeGreaterThan(0);
   });
@@ -123,20 +123,20 @@ describe('StructureProtectionButton', () => {
     // The controlled tooltip starts closed; flip the protection state to auto-open it (same
     // mechanism as the auto-open test) so the tooltip content renders. jsdom's userAgent is not
     // Macintosh, so the non-mac hint is expected.
-    setState({ isProtected: true, canAdminToggle: true, isAdminProtected: false });
+    setState({ isStructureProtected: true, canAdminToggle: true, isAdminProtected: false });
     const { rerender } = render(
       <StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />,
     );
     expect(screen.queryByText('Ctrl+Shift+L')).not.toBeInTheDocument();
-    setState({ isProtected: false });
+    setState({ isStructureProtected: false });
     rerender(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     expect((await screen.findAllByText('Ctrl+Shift+L')).length).toBeGreaterThan(0);
   });
 
   it('auto-opens the tooltip when an admin locks an already-protected project', async () => {
-    // Non-admin, already protected: isProtected stays true, but the admin lock disables the button
+    // Non-admin, already protected: isStructureProtected stays true, but the admin lock disables the button
     // and changes the tooltip to "locked by admin" — a visible change that must surface the tooltip.
-    setState({ isProtected: true, canAdminToggle: false, isAdminProtected: false });
+    setState({ isStructureProtected: true, canAdminToggle: false, isAdminProtected: false });
     const { rerender } = render(
       <StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />,
     );
@@ -148,7 +148,7 @@ describe('StructureProtectionButton', () => {
   });
 
   it('does not auto-open the tooltip on a re-render with no state change', () => {
-    setState({ isProtected: true, canAdminToggle: true, isAdminProtected: false });
+    setState({ isStructureProtected: true, canAdminToggle: true, isAdminProtected: false });
     const { rerender } = render(
       <StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />,
     );
@@ -157,7 +157,7 @@ describe('StructureProtectionButton', () => {
   });
 
   it('Ctrl+Shift+L triggers the toggle when enabled', () => {
-    setState({ canAdminToggle: true, isAdminProtected: false, isProtected: true });
+    setState({ canAdminToggle: true, isAdminProtected: false, isStructureProtected: true });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     fireEvent.keyDown(window, { key: 'l', ctrlKey: true, shiftKey: true });
     expect(mockState.setAdminProtection).toHaveBeenCalledWith(false);
@@ -173,12 +173,12 @@ describe('StructureProtectionButton', () => {
   });
 
   it('closes the tooltip on scroll', async () => {
-    setState({ isProtected: true, canAdminToggle: true, isAdminProtected: false });
+    setState({ isStructureProtected: true, canAdminToggle: true, isAdminProtected: false });
     const { rerender } = render(
       <StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />,
     );
     // Transition to auto-open the tooltip.
-    setState({ isProtected: false });
+    setState({ isStructureProtected: false });
     rerender(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     expect((await screen.findAllByText('Structure editable')).length).toBeGreaterThan(0);
     // Scrolling anything should close it via the capture-phase listener.

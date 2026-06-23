@@ -464,9 +464,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   );
 
   // Effective structure-protection state for this project/user, used to gate keyboard edits to
-  // paragraph/verse markers in the editor (passed to EditorOptions.isProtected below). The toolbar
-  // StructureProtectionButton subscribes to the same state independently.
-  const { isProtected } = useStructureProtectionState(projectId);
+  // paragraph/verse markers in the editor (passed to EditorOptions.isStructureProtected below). The
+  // toolbar StructureProtectionButton subscribes to the same state independently.
+  const { isStructureProtected } = useStructureProtectionState(projectId);
 
   // Get the updated title. Note this is NO_UPDATE_TITLE if no update is needed
   const [newTitleIfUpdated] = usePromise(
@@ -688,7 +688,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const options = useMemo<EditorOptions>(
     () => ({
       isReadonly: isReadOnlyEffective,
-      isProtected,
+      isStructureProtected,
       hasSpellCheck: false,
       nodes: nodeOptions,
       textDirection: textDirectionEffective,
@@ -705,7 +705,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }),
     [
       isReadOnlyEffective,
-      isProtected,
+      isStructureProtected,
       canUserCreateComments,
       textDirectionEffective,
       nodeOptions,

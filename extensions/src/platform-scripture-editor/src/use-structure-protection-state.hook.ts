@@ -5,7 +5,7 @@ import { useProjectDataProvider, useProjectSetting, useSetting } from '@papi/fro
 /** Return type of {@link useStructureProtectionState}. */
 export type StructureProtectionState = {
   /** Effective enforcement state — what the editor uses to gate structure changes */
-  isProtected: boolean;
+  isStructureProtected: boolean;
   /** Raw project setting — `true` means the admin has set a structure lock */
   isAdminProtected: boolean;
   /** Whether the current user has write permission on project settings */
@@ -114,7 +114,7 @@ export function useStructureProtectionState(
     !isPlatformError(adminSettingPossiblyError) && Boolean(adminSettingPossiblyError);
   const modeDefault = interfaceMode === 'simple';
   const effectiveUserSetting = userSetting ?? modeDefault;
-  const isProtected = (isAdminProtected && !canAdminToggle) || effectiveUserSetting;
+  const isStructureProtected = (isAdminProtected && !canAdminToggle) || effectiveUserSetting;
 
   const setAdminProtection = useCallback(
     (value: boolean) => {
@@ -134,7 +134,7 @@ export function useStructureProtectionState(
   );
 
   return {
-    isProtected,
+    isStructureProtected,
     isAdminProtected,
     canAdminToggle,
     setAdminProtection,

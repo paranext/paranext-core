@@ -53,7 +53,7 @@ const DISPLAY_STATE_KEYS: Record<
 
 export type StructureProtectionButtonViewProps = {
   /** Effective protection state — drives the icon and tooltip text. */
-  isProtected: boolean;
+  isStructureProtected: boolean;
   /** When `true` the button is disabled and the toggle (click + shortcut) is a no-op. */
   isDisabled: boolean;
   /** Invoked on click or Ctrl/Cmd+Shift+L when not disabled. */
@@ -74,7 +74,7 @@ export type StructureProtectionButtonViewProps = {
  * the Ctrl/Cmd+Shift+L shortcut, and the OS-appropriate shortcut hint.
  */
 export function StructureProtectionButtonView({
-  isProtected,
+  isStructureProtected,
   isDisabled,
   onToggle,
   localizedStrings = {},
@@ -90,12 +90,12 @@ export function StructureProtectionButtonView({
   // regardless of the underlying protection value.
   let displayState: DisplayState;
   if (isDisabled) displayState = 'lockedByAdmin';
-  else if (isProtected) displayState = 'protected';
+  else if (isStructureProtected) displayState = 'protected';
   else displayState = 'editable';
 
   // Auto-open the tooltip whenever the visible state changes, so the change is not silent (NN6).
-  // Watching displayState (not just isProtected) also catches an admin lock arriving while the
-  // project is already protected. Radix closes it again on click-away and Escape via onOpenChange;
+  // Watching displayState (not just isStructureProtected) also catches an admin lock arriving while
+  // the project is already protected. Radix closes it again on click-away and Escape via onOpenChange;
   // scroll dismissal is handled by the effect below.
   const [tooltipOpen, setTooltipOpen] = useState(false);
   const prevDisplayState = useRef(displayState);
@@ -144,7 +144,7 @@ export function StructureProtectionButtonView({
             disabled={isDisabled}
             onClick={onToggle}
           >
-            {isProtected ? <ShieldCheck /> : <ShieldOff />}
+            {isStructureProtected ? <ShieldCheck /> : <ShieldOff />}
           </Button>
         </TooltipTrigger>
         <TooltipContent>
@@ -179,26 +179,37 @@ export function StructureProtectionButton({
   localizedStrings = {},
   className,
 }: StructureProtectionButtonProps) {
-  const { isProtected, isAdminProtected, canAdminToggle, setAdminProtection, setUserProtection } =
-    useStructureProtectionState(projectId);
+  const {
+    isStructureProtected,
+    isAdminProtected,
+    canAdminToggle,
+    setAdminProtection,
+    setUserProtection,
+  } = useStructureProtectionState(projectId);
 
   const isDisabled = !canAdminToggle && isAdminProtected;
 
   const handleToggle = useCallback(() => {
     if (canAdminToggle) {
       // Admin: set the team-wide project setting AND the admin's own user setting to the new state.
-      // The hook does not bind an admin to the project lock, so isProtected (which drives the icon)
-      // follows the user setting; writing both keeps them in sync and lets the admin's own icon flip
+      // The hook does not bind an admin to the project lock, so isStructureProtected (which drives
+      // the icon) follows the user setting; writing both keeps them in sync and lets the admin's own icon flip
       // on click while still imposing the lock team-wide.
-      const newIsProtected = !isProtected;
-      setAdminProtection(newIsProtected);
-      setUserProtection(newIsProtected);
+      const newIsStructureProtected = !isStructureProtected;
+      setAdminProtection(newIsStructureProtected);
+      setUserProtection(newIsStructureProtected);
     } else if (!isAdminProtected) {
       // Non-admin, project not locked: toggle the personal user setting.
-      setUserProtection(!isProtected);
+      setUserProtection(!isStructureProtected);
     }
     // Non-admin + project locked: disabled, no-op.
-  }, [canAdminToggle, isAdminProtected, isProtected, setAdminProtection, setUserProtection]);
+  }, [
+    canAdminToggle,
+    isAdminProtected,
+    isStructureProtected,
+    setAdminProtection,
+    setUserProtection,
+  ]);
 
   // PT-4013 coordination: the view's auto-open effect watches the effective display state, so the
   // tooltip auto-opens on the protected->lockedByAdmin transition (admin locks mid-session). That
@@ -207,7 +218,7 @@ export function StructureProtectionButton({
 
   return (
     <StructureProtectionButtonView
-      isProtected={isProtected}
+      isStructureProtected={isStructureProtected}
       isDisabled={isDisabled}
       onToggle={handleToggle}
       localizedStrings={localizedStrings}

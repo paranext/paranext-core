@@ -29,12 +29,12 @@ const localizedStrings = getLocalizedStrings([...STRUCTURE_PROTECTION_BUTTON_STR
 
 /** Interactive harness: holds the effective state locally and flips it on toggle. */
 function StructureProtectionButtonHarness({ initialProtected }: { initialProtected: boolean }) {
-  const [isProtected, setIsProtected] = useState(initialProtected);
+  const [isStructureProtected, setIsStructureProtected] = useState(initialProtected);
   return (
     <StructureProtectionButtonView
-      isProtected={isProtected}
+      isStructureProtected={isStructureProtected}
       isDisabled={false}
-      onToggle={() => setIsProtected((previous) => !previous)}
+      onToggle={() => setIsStructureProtected((previous) => !previous)}
       localizedStrings={localizedStrings}
     />
   );
@@ -57,7 +57,7 @@ export const Editable: Story = {
 export const LockedByAdmin: Story = {
   render: () => (
     <StructureProtectionButtonView
-      isProtected
+      isStructureProtected
       isDisabled
       onToggle={() => {}}
       localizedStrings={localizedStrings}
