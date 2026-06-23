@@ -48,13 +48,8 @@ describe('performShutdownTasks', () => {
     mockNetworkObjectGet.mockResolvedValue(makeWebViewService([]));
     await performShutdownTasks();
     expect(mockRequestNoRetry).toHaveBeenCalledWith(expect.stringContaining('cancelSync'));
-    expect(mockRequestNoRetry).not.toHaveBeenCalledWith(
+    expect(mockRequestNoRetry.mock.calls.map(([cmd]) => cmd)).not.toContainEqual(
       expect.stringContaining('sendReceiveProjects'),
-      expect.anything(),
-    );
-    expect(mockRequestNoRetry).not.toHaveBeenCalledWith(
-      expect.stringContaining('sendReceiveProjects'),
-      undefined,
     );
   });
 
@@ -70,13 +65,8 @@ describe('performShutdownTasks', () => {
       ]),
     );
     await performShutdownTasks();
-    expect(mockRequestNoRetry).not.toHaveBeenCalledWith(
+    expect(mockRequestNoRetry.mock.calls.map(([cmd]) => cmd)).not.toContainEqual(
       expect.stringContaining('sendReceiveProjects'),
-      expect.anything(),
-    );
-    expect(mockRequestNoRetry).not.toHaveBeenCalledWith(
-      expect.stringContaining('sendReceiveProjects'),
-      undefined,
     );
   });
 
@@ -102,13 +92,8 @@ describe('performShutdownTasks', () => {
     mockSettingsGet.mockResolvedValue('simple');
     mockNetworkObjectGet.mockRejectedValue(new Error('service unavailable'));
     await performShutdownTasks();
-    expect(mockRequestNoRetry).not.toHaveBeenCalledWith(
+    expect(mockRequestNoRetry.mock.calls.map(([cmd]) => cmd)).not.toContainEqual(
       expect.stringContaining('sendReceiveProjects'),
-      expect.anything(),
-    );
-    expect(mockRequestNoRetry).not.toHaveBeenCalledWith(
-      expect.stringContaining('sendReceiveProjects'),
-      undefined,
     );
   });
 
