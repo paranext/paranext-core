@@ -91,9 +91,10 @@ Concretely, building the prototype the `proto/saroj-studies` way means:
 - **Storybook stories, not the running app.** Each surface is a folder under `lib/platform-bible-react/src/stories/...` with a `.component.tsx` + `.stories.tsx` (plus `.data.ts` / `.utils.ts` as needed). Viewed in Storybook; ships nothing into Electron.
 - **`WorkspaceShell` decorator** (`src/storybook/decorators/workspace-shell.tsx`) fakes PT10 Simple chrome: a top **stub toolbar** (where the BCV control "lives") over **three columns** — *Model Text · Editor · Resources & Tools* — with non-focused columns dimmed so a story spotlights one. This tells us where our surfaces slot:
   - Primary **Current Step** indicator → the **top toolbar** slot (or a side rail).
-  - Secondary chapter panel → the **Resources & Tools** column.
+  - Secondary chapter panel → the **Model Text** column.
   - The **chooser** → a deeper surface (dialog) opened from the toolbar/panel.
-- **Reuse the real component library** (`platform-bible-react`, shadcn-based) and **real plan data** (`project-plan-draft` `types.ts` + factory plans). Only the progress, Priority, assignment, and Solo/Together layers are invented.
+- **Reuse the real component library** (`platform-bible-react`, shadcn-based) and **real plan data** (`project-plan-draft` `types.ts` + factory plans). **Build each new surface as a reusable component** (shadcn-style, under `components/…`) — not inline in a story — so both Storybook and the real app can mount it. Only the progress, Priority, assignment, and Solo/Together layers are invented.
+- **Higher-fidelity alternative vehicle:** `main`'s `src/stories/platform/ten-layout-shared.tsx` (`TenSimpleView`) mocks the *real* Simple layout using `rc-dock` + the real `BookChapterControl`/editor — far closer to the app than `WorkspaceShell`, without being Electron. Being evaluated as a separate build vehicle.
 - **Tailwind v4 `tw:` prefix** and shadcn semantic colors; localization strings in `assets/localization/*.json`.
 - **Variants are separate stories** (the branch merged several variant stories per surface).
 
