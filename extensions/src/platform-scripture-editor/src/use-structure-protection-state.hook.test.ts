@@ -38,6 +38,7 @@ function makeTextConnectionsPdp(canWrite: boolean): ITextConnectionSettingsProje
 function makeUserEditorSettingsPdp(
   userSetting: boolean | undefined | object,
 ): IUserEditorSettingsProjectDataProvider {
+  // Mock object literal cannot satisfy the full interface — cast needed for test isolation
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   return {
     subscribeUserStructureProtected: vi.fn().mockImplementation((_selector, callback) => {
@@ -51,11 +52,11 @@ function makeUserEditorSettingsPdp(
 }
 
 function setup({
-  adminSetting = false as boolean | object,
-  userSetting = undefined as boolean | undefined | object,
-  interfaceMode = 'simple' as 'simple' | 'power',
+  adminSetting = false,
+  userSetting = undefined,
+  interfaceMode = 'simple',
   canWrite = false,
-  textConnectionsPdp = undefined as ITextConnectionSettingsProjectDataProvider | undefined,
+  textConnectionsPdp = undefined,
 }: {
   adminSetting?: boolean | object;
   userSetting?: boolean | undefined | object;
@@ -63,27 +64,34 @@ function setup({
   canWrite?: boolean;
   textConnectionsPdp?: ITextConnectionSettingsProjectDataProvider | undefined;
 } = {}) {
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
   mockUseProjectSetting.mockReturnValue([
+    // adminSetting may be a PlatformError object in error-path tests, but the mocked tuple's first
+    // slot is typed as the boolean setting value, so assert to satisfy the mock signature.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     adminSetting as boolean,
     mockSetAdminSetting,
     undefined,
     false,
   ]);
+  // The platform.interfaceMode setting value type is broader than our test literals; widen it.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   mockUseSetting.mockReturnValue([interfaceMode as string, vi.fn(), vi.fn(), false]);
 
-  const userPdp = makeUserEditorSettingsPdp(userSetting);
-  const textPdp = textConnectionsPdp ?? makeTextConnectionsPdp(canWrite);
-  // The hook calls useProjectDataProvider twice — once per PDP — so we switch on the provider name.
+  // The partial PDP mocks can't satisfy the full useProjectDataProvider return type, so assert
+  // each through unknown.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  mockUseProjectDataProvider.mockImplementation((providerName) => {
-    if (providerName === 'platformScripture.userEditorSettings')
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      return userPdp as unknown as ReturnType<typeof useProjectDataProvider>;
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    return textPdp as unknown as ReturnType<typeof useProjectDataProvider>;
-  });
+  const userPdp = makeUserEditorSettingsPdp(userSetting) as unknown as ReturnType<
+    typeof useProjectDataProvider
+  >;
+  // Same partial-mock assertion as above, for the text-connections PDP.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const textPdp = (textConnectionsPdp ?? makeTextConnectionsPdp(canWrite)) as unknown as ReturnType<
+    typeof useProjectDataProvider
+  >;
+  // The hook calls useProjectDataProvider twice — once per PDP — so return the matching mock by name.
+  mockUseProjectDataProvider.mockImplementation((providerName) =>
+    providerName === 'platformScripture.userEditorSettings' ? userPdp : textPdp,
+  );
 }
 
 describe('useStructureProtectionState — truth table', () => {
