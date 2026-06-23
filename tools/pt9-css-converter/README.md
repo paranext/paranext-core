@@ -8,10 +8,10 @@ It is the build-time partner to [`tools/pt9-css-extractor`](../pt9-css-extractor
 
 The classifier is a **closed list of 20 properties** drawn from the Handbook Marker Styling design doc §3.3. Each declaration in the input is routed to one of three view-mode buckets so the editor can toggle them independently; everything outside the closed list falls through to typography and is logged in the warning header so a reviewer can spot misclassifications.
 
-| Bucket                           | Selector                                                                                | Properties                                                                                                                |
-| -------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `formatted-font`                 | `.formatted-font .usfm_<marker>`                                                        | `color`, `font-family`, `font-size`, `font-style`, `font-variant`, `font-weight`, `text-decoration`, `vertical-align`     |
-| `text-spacing` (non-directional) | `.text-spacing .usfm_<marker>`                                                          | `line-height`, `margin-top`, `margin-bottom`, `padding-top`, `padding-bottom`, `text-align`, `text-indent`, `white-space` |
+| Bucket                           | Selector                                                                                | Properties                                                                                                                 |
+| -------------------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `formatted-font`                 | `.formatted-font .usfm_<marker>`                                                        | `color`, `font-family`, `font-size`, `font-style`, `font-variant`, `font-weight`, `text-decoration`, `vertical-align`      |
+| `text-spacing` (non-directional) | `.text-spacing .usfm_<marker>`                                                          | `line-height`, `margin-top`, `margin-bottom`, `padding-top`, `padding-bottom`, `text-align`, `text-indent`, `white-space`  |
 | `text-spacing[dir]`              | `.text-spacing[dir='ltr'] .usfm_<marker>` and `.text-spacing[dir='rtl'] .usfm_<marker>` | `margin-left`, `margin-right`, `padding-left`, `padding-right`. Emitted twice — the RTL block swaps `*-left` ↔ `*-right`. |
 
 `@font-face` at-rules are stripped (the editor handles fonts elsewhere). Table-marker selectors matching `^(tr|tc\d+|th\d+|tcr\d+|tcc\d+|thr\d+|thc\d+)$` are skipped — the editor doesn't render PT9's table model.
