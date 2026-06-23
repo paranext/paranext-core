@@ -78,16 +78,27 @@ A named, ordered selection of scripture — chapters, ranges, books, or book-gro
 _Avoid_: grouping, filter, assignment.
 
 **Step**:
-The umbrella term for one unit of work that gates a chapter's advance through a stage. Every step is either a **Task** or a **Check**.
-_Avoid_: item, to-do, activity, requirement, criterion.
+Colloquial only — "what's my next step?" **Not a modeled entity.** The initiative name _next-step workflow_ uses it loosely; the modeled units are **Stage**, **Task** (kinds: Drafting / Review / Revision), and **Check**. Neither PT9's progress subsystem nor the plan data has a "step" type.
+_Avoid_: using "step" as a data type, an umbrella, or a row in a list.
 
 **Task**:
-A step completed by human **assertion** (the translator checks it off) that surfaces no issues. (e.g. "Draft the text.")
-_Avoid_: to-do, action.
+The umbrella for a unit of work a **person** does and asserts complete — everything Saroj actively does is a Task. Its kinds:
+- **Drafting** — produce the text.
+- **Review** — perform a human-judgment evaluation of the text (see **Review**).
+- **Revision** — change the text/project to satisfy issues a **Check** or **Review** raised (see **Revision**).
+_Avoid_: step (colloquial only), to-do, action.
 
 **Check**:
-A step whose purpose is to surface **issues**; it **passes** only when none remain. Completion is either **manual** — a human performs the activity and asserts it (e.g. exegetical, naturalness check) — or **automated** — an engine evaluates it, deterministic today and possibly AI-based later (e.g. basic checks, spelling). In a given stage a check is **required** (it gates that stage) or **notify-only** (advisory there).
-_Avoid_: validation, test, rule.
+An **automated** evaluation run against the text — catalog/basic checks, spelling, and AI checks. _Automated in **how** it is performed_, even when a human triggers the run. A Check is **not** a unit of human work; it is a **source of demand** — when it surfaces **issues**, the work to clear them is a **Revision** task. It **passes** when no issues remain. In a given stage a check is **required** (gates that stage) or **notify-only** (advisory there).
+_Avoid_: using "check" for human-judgment work (that is a **Review**); validation, test, rule.
+
+**Review**:
+A **human-judgment** evaluation of the text by a person — exegetical, naturalness, comprehension, consultant, and community review. (PT9 called these "checks"; we deliberately call them **reviews** — a human forms the judgment, nothing is automated.) Like a Check, a Review is a **source of demand**: its findings are satisfied by a **Revision** task. Adopting "review" over "check" here is a real, outward-facing vocabulary shift (needs stakeholder buy-in) — see `docs/reports/2026-06-23-check-terminology-overloading.md`.
+_Avoid_: "manual check", "consultant check", "community check"; "reviewer" as a synonym (a Review is the activity, not the person).
+
+**Revision**:
+The **Task** of changing the text or project to satisfy the issues a **Check** or a **Review** raised. Typical flow: the team **drafts** → a teammate **reviews** → a reviser **revises** to satisfy that review; the text is also **checked** automatically, and **revisions** clear those issues too.
+_Avoid_: fix, correction, generic "edit".
 
 **Issue**:
 A problem a check surfaces that must be resolved before the check can pass; it can **reopen** if later edits change the text.
@@ -158,11 +169,9 @@ _Avoid_: meeting mode, group mode.
 
 ## Flagged ambiguities
 
-- "step" (the non-negotiables' word) vs. "task"/"check" (the data model's words) — resolved: **Step** is the user-facing umbrella; **Task** and **Check** are its two subtypes. A **Check** is further **manual** (asserted by a human) or **automated** (evaluated by an engine). There is no third kind of step.
-- **Subtype naming — Scheme A adopted; Scheme B (with "Review") to be advocated.** We use **Scheme A** (Task / Manual Check / Automated Check) as the working scheme. **Alex intends to advocate Scheme B (Task / Review / Check) separately with the team** — renaming the human-judgment "manual check" to **Review**. Supporting rationale (a data-alignment finding from the SIL Compact plan):
-  > One data-alignment note worth flagging (it bears on our taxonomy): in the actual data, the manual checks (Comprehension Check, exegetical, naturalness) are modeled as by-chapter Tasks, not as catalog checks. Only the automated checks are the `requiredInStage` entries. So in the data the assert-vs-evaluate line is Task-vs-Check — our "manual check" subtype has no distinct data flag; we'd infer it from the task's name/intent. Conceptually Scheme A still holds; just know the seeded data represents a manual check as a task.
-
-  Under Scheme B the data aligns one-to-one — **a Check is automated (evaluated); a Task is asserted** — with **Review** as the named human-judgment kind of Task. That would reduce or remove the need for the umbrella **Step** and the qualifier **automated check**. Revisit this glossary if the team adopts B.
+- **"step" vs "task"/"check" — RESOLVED (2026-06-23): Task is the spine; "step" is colloquial only.** Everything a person does is a **Task** (kinds: Drafting / Review / Revision); **Step** is no longer a modeled umbrella. Ground truth: PT9's `ProjectProgress` subsystem uses Stage/Task/Check with **zero** uses of "step", and the plan data is `PlanStage`/`PlanTask` (+ a `checks` catalog) — no "step".
+- **Check vs Review — RESOLVED (2026-06-23): "check" = automated only; human-judgment work = "review".** A **Check** is automated (catalog/basic, spelling, AI). A **Review** is human-judgment (exegetical, naturalness, comprehension, consultant, community). Both are **sources of demand**, satisfied by **Revision** tasks. This fixes a genuine PT9 overload — PT9 names human work "…check" (e.g. "Naturalness check", `<Type>ManualByChapter</Type>`) *and also* uses "review" for the same kind of work (e.g. "Naturalness review", "Review by the Community"). Adopting "review" uniformly is a deliberate, outward-facing shift (needs stakeholder buy-in) — see `docs/reports/2026-06-23-check-terminology-overloading.md`.
+- **Open (being grilled):** whether a **Review** shares a **Check**'s full lifecycle (raises Issues → Revision clears → satisfied, content-addressed/stale on edit) or has a different shape; whether **Revision** is a *planned* task or *emergent*; the rename of **Current Step**; and the completion vocabulary (Check "passes" — does a Review?). Relationships/Dynamics/Current Step entries below still reflect the old Step model and will be reworked as these resolve.
 - "grouping" — resolved: a grouping is a **Priority's** scripture selection, not a separate concept.
 - chapter vs. grouping as the progression unit — resolved: the **Chapter** is the base unit. Because a Priority can slice into or across books, chapters must be independently trackable and cannot inherit a single stage from their book.
 - "next-task workflow" vs. "next-step workflow" — resolved: internally **next-step workflow**; the external proposal/Google Doc keeps its original "Next-task workflow" title.
