@@ -1,11 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { isPlatformError } from 'platform-bible-utils';
-import {
-  useProjectData,
-  useProjectDataProvider,
-  useProjectSetting,
-  useSetting,
-} from '@papi/frontend/react';
+import { useProjectDataProvider, useProjectSetting, useSetting } from '@papi/frontend/react';
 
 /** Return type of {@link useStructureProtectionState}. */
 export type StructureProtectionState = {
@@ -49,10 +44,43 @@ export function useStructureProtectionState(
     ? 'simple'
     : interfaceModePossiblyError;
 
-  const [userSettingPossiblyError, setUserSetting] = useProjectData(
+  // Use the project data provider directly (subscribe + direct setter) rather than the useProjectData
+  // data hook. The data hook's setter always calls `set<DataType>(selector, newData)` with two
+  // positional args, but the C# `SetUserStructureProtected` handler takes a single `value` parameter,
+  // so a data-hook write fails over JSON-RPC with -32602. A direct PDP method call sends exactly one
+  // arg, matching the handler — this mirrors how the sibling user settings (UserModelTexts) are set.
+  const userEditorSettingsPdp = useProjectDataProvider(
     'platformScripture.userEditorSettings',
     projectId,
-  ).UserStructureProtected(undefined, undefined);
+  );
+
+  // The user's structure-protection preference. `undefined` means not yet loaded or never set — the
+  // mode-aware default applies below.
+  const [userSetting, setUserSettingState] = useState<boolean | undefined>(undefined);
+  useEffect(() => {
+    if (!userEditorSettingsPdp) {
+      setUserSettingState(undefined);
+      return undefined;
+    }
+    let disposed = false;
+    let unsubscribe: (() => Promise<boolean>) | undefined;
+    userEditorSettingsPdp
+      .subscribeUserStructureProtected(undefined, (value) => {
+        setUserSettingState(isPlatformError(value) ? undefined : value);
+      })
+      .then((unsub) => {
+        if (disposed) unsub();
+        else unsubscribe = unsub;
+        return undefined;
+      })
+      .catch((err) => {
+        console.error(`Failed to subscribe to user structure protection: ${err}`);
+      });
+    return () => {
+      disposed = true;
+      unsubscribe?.();
+    };
+  }, [userEditorSettingsPdp]);
 
   const textConnectionsPdp = useProjectDataProvider(
     'platformScripture.textConnectionSettings',
@@ -85,9 +113,6 @@ export function useStructureProtectionState(
   const isAdminProtected =
     !isPlatformError(adminSettingPossiblyError) && Boolean(adminSettingPossiblyError);
   const modeDefault = interfaceMode === 'simple';
-  const userSetting = isPlatformError(userSettingPossiblyError)
-    ? undefined
-    : userSettingPossiblyError;
   const effectiveUserSetting = userSetting ?? modeDefault;
   const isProtected = (isAdminProtected && !canAdminToggle) || effectiveUserSetting;
 
@@ -101,9 +126,11 @@ export function useStructureProtectionState(
 
   const setUserProtection = useCallback(
     (value: boolean) => {
-      setUserSetting?.(value);
+      userEditorSettingsPdp?.setUserStructureProtected(value).catch((err) => {
+        console.error(`Failed to set user structure protection: ${err}`);
+      });
     },
-    [setUserSetting],
+    [userEditorSettingsPdp],
   );
 
   return {
