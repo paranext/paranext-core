@@ -1,6 +1,6 @@
 # Q3 2026 Next-Step Prototype — Resolved Design
 
-Companion to the [prototype brief](./2026-06-22-q3-saroj-next-task-prototype-brief.md) (the *why / scope*), [`CONTEXT.md`](../../CONTEXT.md) (the *language*), and the ADRs (the two hard calls). This doc captures the *resolved how* from the design grilling session on 2026-06-22 — the prototype design itself.
+Companion to the [prototype brief](./2026-06-22-q3-saroj-next-task-prototype-brief.md) (the _why / scope_), [`CONTEXT.md`](../../CONTEXT.md) (the _language_), and the ADRs (the two hard calls). This doc captures the _resolved how_ from the design grilling session on 2026-06-22 — the prototype design itself.
 
 > Status: provisional. Several decisions are deliberately held loosely and exist to be tested with designees. Where a decision diverges from PT9 or is held with an open hand, that is called out.
 
@@ -10,8 +10,8 @@ Companion to the [prototype brief](./2026-06-22-q3-saroj-next-task-prototype-bri
 
 We build **two distinct concepts** to put in front of designees, not one:
 
-- **Primary — "one thing to focus on."** A persistent **Current Step** indicator in the global toolbar (top or side), always visible, plus a deeper **chooser** for picking which available step becomes the focus. Philosophy: *go where you're most needed.*
-- **Secondary — "the chapter's full picture."** A chapter-anchored panel showing a prominent next step over an expandable *remaining-in-this-stage* list. Philosophy: *here's everything about the chapter in front of you.*
+- **Primary — "one thing to focus on."** A persistent **Current Step** indicator in the global toolbar (top or side), always visible, plus a deeper **chooser** for picking which available step becomes the focus. Philosophy: _go where you're most needed._
+- **Secondary — "the chapter's full picture."** A chapter-anchored panel showing a prominent next step over an expandable _remaining-in-this-stage_ list. Philosophy: _here's everything about the chapter in front of you._
 
 **Variant switcher** (primary ↔ secondary) lives **out of the way** — an avatar menu or a meta/Storybook-level control — never in Saroj's workspace chrome, so it doesn't read as a product feature.
 
@@ -32,10 +32,11 @@ We build **two distinct concepts** to put in front of designees, not one:
 
 The single recommended step, in precedence order:
 
-0. **Unblock a teammate** — Saroj has an unfinished step that is the *direct* prerequisite of a step assigned to a teammate who is otherwise ready. In the **primary** prototype this may pull the indicator to a *different chapter*; in the **secondary** it never does (no cross-chapter pull — it only elevates an in-chapter step).
-1. **First available unfinished step in the chapter in view** (the default). "Available" = its `taskStart` condition is satisfied. The step's *type + state* decide what Saroj sees (do & check off / perform & confirm / resolve issues) — no separate ranking.
+0. **Unblock a teammate** — Saroj has an unfinished step that is the _direct_ prerequisite of a step assigned to a teammate who is otherwise ready. In the **primary** prototype this may pull the indicator to a _different chapter_; in the **secondary** it never does (no cross-chapter pull — it only elevates an in-chapter step).
+1. **First available unfinished step in the chapter in view** (the default). "Available" = its `taskStart` condition is satisfied. The step's _type + state_ decide what Saroj sees (do & check off / perform & confirm / resolve issues) — no separate ranking.
 
 Other rules:
+
 - The indicator **follows the editor** by default (re-recommends per chapter in view). Pinning to an explicit pick is deferred ("maybe later — keep it simple").
 - The Current Step is **only ever recommended from Solo** (see §5). **Together** steps surface only in **Team-meeting mode**.
 - Multiple steps can be available at once; the indicator features one, the chapter view lists all.
@@ -50,10 +51,10 @@ Other rules:
 
 ## 6. The chooser (primary's "choose a task" surface)
 
-PT9's "My Tasks" view is the lineage, trimmed for Simple (do *not* reproduce PT9's dense table):
+PT9's "My Tasks" view is the lineage, trimmed for Simple (do _not_ reproduce PT9's dense table):
 
 - Defaults to **"My Tasks"**, a lean list of Saroj's available steps grouped by the active scope (book, or Priority with **prev/next** navigation as in PT9's "Current priority: Gospels / Next priority: ACT").
-- Each row = step + chapter + status. Drop the *assignee* column in My-Tasks mode (it's all Saroj). Unobtrusive **"All Tasks"** toggle for the team picture.
+- Each row = step + chapter + status. Drop the _assignee_ column in My-Tasks mode (it's all Saroj). Unobtrusive **"All Tasks"** toggle for the team picture.
 - Split into **Solo** and **Together** sections.
 - Status wording flips PT9's negative "Blocked by stage: Drafting" to the informative-but-positive **"Available after Drafting"**.
 
@@ -63,25 +64,25 @@ Inform-only — never lets Saroj author a plan (authoring is out of scope; see [
 
 - The Current Step indicator shows a quiet "No plan set" rather than a step.
 - A zero state (reuse the `saroj-studies` `no-project-zero-state` pattern) with two CTAs: **learn the value of a project plan** (article — content to be written) and **contact your project admin**.
-- *Deferred:* once built, route users with the proper privileges to configure a plan.
+- _Deferred:_ once built, route users with the proper privileges to configure a plan.
 
 ## 8. Non-negotiables coverage
 
-| NN | Covered by |
-| --- | --- |
-| 1 — active chapter's current stage | Derived stage (§2), shown in both prototypes |
-| 2 — fallback if no plan | Inform-only zero state (§7) |
-| 3 — which steps remain | Chapter view lists all current-stage steps (§1 secondary; §6 chooser) |
-| 4 — check off a step | **Intentionally open** — checkbox-vs-other affordance is a mockup exploration |
-| 5 — step that must earn a pass | Check + its actions/procedure or flagged issues (§3) |
-| 6 — all complete → next stage | Derived advance + a "reached next stage" state (§1 secondary, Php 1 in fixture) |
+| NN                                 | Covered by                                                                      |
+| ---------------------------------- | ------------------------------------------------------------------------------- |
+| 1 — active chapter's current stage | Derived stage (§2), shown in both prototypes                                    |
+| 2 — fallback if no plan            | Inform-only zero state (§7)                                                     |
+| 3 — which steps remain             | Chapter view lists all current-stage steps (§1 secondary; §6 chooser)           |
+| 4 — check off a step               | **Intentionally open** — checkbox-vs-other affordance is a mockup exploration   |
+| 5 — step that must earn a pass     | Check + its actions/procedure or flagged issues (§3)                            |
+| 6 — all complete → next stage      | Derived advance + a "reached next stage" state (§1 secondary, Php 1 in fixture) |
 
 ## 9. Seeded fixture
 
 - **Plan:** SIL Compact Base Plan (real, 6 stages: Drafting → Team Check & Comprehension Check → Preparing for Consultant → Consultant Check → Community Review → Final Preparation for Publication). Reuse `project-plan-draft` types + factory plans; do not re-author.
 - **Two scopes:** **Philippians** (4 ch, book-by-book) + **Priority "Birth Narrative"** (Matt 1–2 / Luke 1–2, cross-book).
-- **Roles** fall out of stages — Saroj drafts; consultant *Maria* owns Consultant Check (enables the teammate-block).
-- **Per-chapter spread (Philippians):** Php 1 advanced (Community Review; a **stale reopened check**), Php 2 *dense* multi-step focal chapter (Comprehension Check available; Co-Translator Review with issues; `spelling.word-list` 12 issues; `basic.quotations` no issues; `other.biblical-terms` 5 issues; a later task "Available after Consultant Check"), Php 3 drafting (plain next), Php 4 drafting that **blocks Maria**.
+- **Roles** fall out of stages — Saroj drafts; consultant _Maria_ owns Consultant Check (enables the teammate-block).
+- **Per-chapter spread (Philippians):** Php 1 advanced (Community Review; a **stale reopened check**), Php 2 _dense_ multi-step focal chapter (Comprehension Check available; Co-Translator Review with issues; `spelling.word-list` 12 issues; `basic.quotations` no issues; `other.biblical-terms` 5 issues; a later task "Available after Consultant Check"), Php 3 drafting (plain next), Php 4 drafting that **blocks Maria**.
 - A **second project** on `EMPTY_PROJECT_PLAN` for the no-plan fallback.
 
 ## 10. Build approach — the "saroj-studies pattern" (ADR-0001)
@@ -89,12 +90,12 @@ Inform-only — never lets Saroj author a plan (authoring is out of scope; see [
 Concretely, building the prototype the `proto/saroj-studies` way means:
 
 - **Storybook stories, not the running app.** Each surface is a folder under `lib/platform-bible-react/src/stories/...` with a `.component.tsx` + `.stories.tsx` (plus `.data.ts` / `.utils.ts` as needed). Viewed in Storybook; ships nothing into Electron.
-- **`WorkspaceShell` decorator** (`src/storybook/decorators/workspace-shell.tsx`) fakes PT10 Simple chrome: a top **stub toolbar** (where the BCV control "lives") over **three columns** — *Model Text · Editor · Resources & Tools* — with non-focused columns dimmed so a story spotlights one. This tells us where our surfaces slot:
+- **`WorkspaceShell` decorator** (`src/storybook/decorators/workspace-shell.tsx`) fakes PT10 Simple chrome: a top **stub toolbar** (where the BCV control "lives") over **three columns** — _Model Text · Editor · Resources & Tools_ — with non-focused columns dimmed so a story spotlights one. This tells us where our surfaces slot:
   - Primary **Current Step** indicator → the **top toolbar** slot (or a side rail).
   - Secondary chapter panel → the **Model Text** column.
   - The **chooser** → a deeper surface (dialog) opened from the toolbar/panel.
 - **Reuse the real component library** (`platform-bible-react`, shadcn-based) and **real plan data** (`project-plan-draft` `types.ts` + factory plans). **Build each new surface as a reusable component** (shadcn-style, under `components/…`) — not inline in a story — so both Storybook and the real app can mount it. Only the progress, Priority, assignment, and Solo/Together layers are invented.
-- **Higher-fidelity alternative vehicle:** `main`'s `src/stories/platform/ten-layout-shared.tsx` (`TenSimpleView`) mocks the *real* Simple layout using `rc-dock` + the real `BookChapterControl`/editor — far closer to the app than `WorkspaceShell`, without being Electron. Being evaluated as a separate build vehicle.
+- **Recommended vehicle (per the 2026-06-22 3-vehicle build comparison — see the ADR-0001 update):** `main`'s `src/stories/platform/ten-layout-shared.tsx` (`TenSimpleView`) mocks the _real_ Simple layout using `rc-dock` + the real `BookChapterControl`/editor — closest to the app without Electron. It had the lowest integration friction and the only passing full Storybook build of the three vehicles tested. `WorkspaceShell` remains fine for isolated single-surface views; the real running app is the eventual epic target, not the prototype vehicle.
 - **Tailwind v4 `tw:` prefix** and shadcn semantic colors; localization strings in `assets/localization/*.json`.
 - **Variants are separate stories** (the branch merged several variant stories per surface).
 
