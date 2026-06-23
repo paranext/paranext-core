@@ -119,6 +119,20 @@ describe('StructureProtectionButton', () => {
     expect((await screen.findAllByText('Structure editable')).length).toBeGreaterThan(0);
   });
 
+  it('shows the keyboard shortcut hint in the tooltip when enabled', async () => {
+    // The controlled tooltip starts closed; flip the protection state to auto-open it (same
+    // mechanism as the auto-open test) so the tooltip content renders. jsdom's userAgent is not
+    // Macintosh, so the non-mac hint is expected.
+    setState({ isProtected: true, canAdminToggle: true, isAdminProtected: false });
+    const { rerender } = render(
+      <StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />,
+    );
+    expect(screen.queryByText('Ctrl+Shift+L')).not.toBeInTheDocument();
+    setState({ isProtected: false });
+    rerender(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
+    expect((await screen.findAllByText('Ctrl+Shift+L')).length).toBeGreaterThan(0);
+  });
+
   it('Ctrl+Shift+L triggers the toggle when enabled', () => {
     setState({ canAdminToggle: true, isAdminProtected: false, isProtected: true });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
