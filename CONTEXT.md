@@ -93,19 +93,19 @@ An **automated** evaluation run against the text — catalog/basic checks, spell
 _Avoid_: using "check" for human-judgment work (that is a **Review**); validation, test, rule.
 
 **Review**:
-A human-judgment evaluation of the text by a person — exegetical, naturalness, comprehension, consultant, community. (PT9 called these "checks"; we deliberately call them **reviews**.) A Review is a **Task**: a person must perform it, and progress **stalls** until they do. The reviewer records **Comments**; each open comment becomes an **Issue** (via the automated _unresolved-comments_ check) that the team clears by **Revision**. A Review is **satisfied** when all its comments are resolved (rarely, a review finds nothing → zero comments → satisfied outright). Reviews **ratchet forward**. _[verifying in code: satisfaction-by-comment-resolution + ratcheting.]_ The "review" rename is a deliberate, outward-facing shift — see `docs/reports/2026-06-23-check-terminology-overloading.md`.
+A human-judgment evaluation of the text by a person — exegetical, naturalness, comprehension, consultant, community. (PT9 called these "checks"; we deliberately call them **reviews**.) A Review is a **Task**: a person performs it and **asserts** it done, and progress **stalls** until they do. The reviewer leaves **Notes**; each open note is surfaced as an **Issue** by the automated **unresolved-notes** check and cleared by **Revision**. Reviews **ratchet forward** — once asserted done, a later edit does not auto-reopen them (verified in PT9). _[Open design decision: is a Review complete on the reviewer's **assertion alone** — PT9 keeps the manual-task checkbox **separate** from the unresolved-notes check — or do we **unify** so a Review isn't "done" until all its notes are resolved? Being decided.]_ The "review" rename is a deliberate, outward-facing shift — see `docs/reports/2026-06-23-check-terminology-overloading.md`.
 _Avoid_: "manual check", "consultant check", "community check"; "reviewer" as a synonym for the activity.
 
-**Comment**:
-What a reviewer records on the text during a **Review** (≈ PT9 "project note"; canonical PT10 term — _comment_ vs _note_ — pending code check). Content-addressed to the text it was left on. Each **open** comment surfaces as an **Issue**; resolving all of a review's comments **satisfies** that review.
-_Avoid_: note (pending reconciliation with the codebase term).
+**Note**:
+What a reviewer records on the text during a **Review** (PT9: a _project note_; paranext-core: the **unresolved-notes** check group — `notes.consultant`, `notes.translator`, `notes.spelling-discussion`, `notes.rendering-discussion`). Each **open** note is surfaced as an **Issue** by the unresolved-notes check; **Revision** resolves it.
+_Avoid_: comment (an internal code class only; the user-facing word is **note**).
 
 **Revision**:
 The **Task** of changing the text or project to satisfy the issues a **Check** or a **Review** raised. Typical flow: the team **drafts** → a teammate **reviews** → a reviser **revises** to satisfy that review; the text is also **checked** automatically, and **revisions** clear those issues too.
 _Avoid_: fix, correction, generic "edit".
 
 **Issue**:
-A problem that must be resolved, surfaced by a **Check**. It comes from the **text** (e.g. a punctuation violation) or from an **open Comment** left during a **Review** (via the unresolved-comments check). An issue can **reopen** when later edits change the text.
+A problem that must be resolved, surfaced by a **Check**. It comes from the **text** (e.g. a punctuation violation) or from an **open Note** left during a **Review** (via the unresolved-notes check). An issue can **reopen** when later edits change the text.
 _Avoid_: error, flag, warning.
 
 **Pass**:
