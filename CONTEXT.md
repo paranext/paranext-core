@@ -132,7 +132,7 @@ The grouping of steps a person does on their own time — those assigned to them
 _Avoid_: individual tasks, my tasks.
 
 **Together**:
-The grouping of **Team**-assigned steps the team does in a team meeting. Parked from Solo work until team-meeting time; never recommended as the individual Current Step. (First-class distinction grounded in observed behavior — teams used PT9's "(Team)" label to mean "save for the meeting.")
+The grouping of **Team**-assigned steps the team does collaboratively, such as in a team meeting. Parked from Solo work until team-meeting time; never recommended as the individual Current Step. (First-class distinction grounded in observed behavior — teams used PT9's "(Team)" label to mean "save for the meeting.")
 _Avoid_: team tasks (as the bucket label), group work.
 
 **Team-meeting mode**:
