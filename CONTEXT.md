@@ -2,28 +2,79 @@
 
 The prototype context for "Saroj advances a chapter through the steps and stages of a project plan." This glossary fixes the language the prototype, the focus-group feedback, and the eventual epic all share. Scope: this Q3 2026 prototype only — not the whole platform.
 
+## The Problem**
+
+*Primary: Known unknown*  
+**Next-step workflow.** Assignments and Progress is often too hard for whole teams to adopt — and the feature only delivers value when the whole team uses it. A single member who can't or won't use Assignments & Progress breaks the workflow for everyone. How might *Saroj* know what to do *next* and how to get there?
+
+*Supplemental: Unknown unknowns*  
+**Blind spots and personas.** We need Paratext 10 to be usable at the end of Q3, and we need to develop awareness of our blind spots by having users interact with the product and its prototypes.
+
+### **Context**
+
+We're unsure how Saroj will figure out the next thing to work on. Paratext 9 has a UI for this, but prior research suggests usage may be missing, incomplete, or performative (after-the-fact). The Paratext 10 feature set currently lacks a next-step workflow.1 Without evidence, we are betting the project-plan and task-navigation work on a model of behavior that may not match real Sarojes.
+
+### **Hypotheses we will test**
+
+* **H1 — The next-step workflow must be embedded in the user's working context, not in a separate plan view.** If Saroj has to navigate *to* a plan to know what's next, the workflow fails regardless of how well-designed the plan itself is. Adoption failure in PT9 is a symptom of this structural mismatch, not a discoverability problem. *Tested by:* Round 1a observation (do teams actually consult the plan, or work around it?) and Round 2 prototype testing (embedded-task vs. plan-first flows).  
+* **H2 — Stakeholders' model of the next-step workflow diverges from what translation teams actually do.** *Tested by:* comparing Round 1a (team observation) against Round 1b (stakeholder sessions), which are designed to run in parallel for exactly this comparison.
+
+### **Who has this problem?**
+
+* **Saroj.** Translators who would benefit from a next-step workflow but currently don't get one.  
+* **Donna and team leads.** Need everyone using Assignments & Progress for the feature to deliver any value.  
+* **Consultants, translation orgs, funders.** Depend on progress data that Assignments & Progress would produce if used consistently.
+
+### **How do we know?**
+
+**52.5% of survey respondents say they don't use Assignments and Progress** (n \= 295 actionable responses).
+
+* **"Don't know how" is the \#1 actionable barrier (49 responses).** Discoverability and onboarding failure, not a design failure.  
+  *"Never heard of it. I do translation consulting, and my boss tells me what to do next."*  
+* **No project plan \= no entry point (60 responses, largest category).** Assignments & Progress is downstream of a project plan existing.  
+* **Spreadsheets and Rev79 are winning alternatives (20).**  
+  *"We found Paratext and other project planners hard to use, so I developed our own task planner — and they found even that simple version hard to use."*  
+* **Workflow mismatch is underreported but vocal (7).** Too linear; incompatible with Oral Bible Translation; stage logic blocks partial-book workflows.  
+  *"The options I am given are too linear and awkward to work with, so I just ignore paying attention to the whole thing."*  
+* **Team resistance is a real secondary barrier (11).** Discipline, computer skills, leaders not using Paratext, tasks assigned verbally.  
+  *"Many teams have been unwilling to learn or use the planning tools — it's not a hill I'm willing to die on."*  
+* **Low perceived ROI (10).** Too much admin work for the benefit; entrenched prior systems.  
+  *"To much extra work for too litle benfit."* \[sic\]  
+* **Navigation heuristics support the diagnosis.** Established heuristics — primary tasks should be reachable from the user's current context, recognition over recall, system status visible without traversal — are all violated by a project plan that lives off-screen. The survey signal and the design heuristics point at the same root cause.
+
+1 Marvin interview of stakeholder: *"If I have a translator and they're assigned different roles or different tasks, where would they go to figure out, kind of like, 'All right, we finished drafting John 1\. What do I need to be doing next?…Being able to hyperlink it to the correct screen…What windows do I need to have open?'"* — [recording](https://app.heymarvin.com/note/38fbb19c-87da-402e-bea1-dbdd0190535d/)
+
+### **What happens if we do nothing?**
+
+* Saroj self-manages his tasks, doesn't follow a plan, or has no plan at all. Saroj struggles to navigate P10simple.  
+* Funders receive poorer progress data because Assignments & Progress isn't populated.  
+* We build the project-plan and task-navigation system on assumptions → high risk of rework after beta.  
+* Dev capacity is misallocated against an untested workflow model.  
+* Partner trust in PT10 simple's persona alignment is compromised.
+
+
 ## Language
 
 **Next-Step Workflow**:
-The initiative and prototype: a translator advancing a chapter through the steps and stages of a project plan, knowing what to do next.
-_Avoid_: next-task workflow (the external proposal doc keeps that name; internally we say next-step).
+The initiative and prototype: a translator advancing through the steps and stages of a project plan, knowing what to do next.
+_Avoid_: next-task workflow (the external proposal doc keeps that name; internally we say next-step to avoid conflating the work "task").
 
 **Saroj**:
-The persona — a translator using PT10 Simple who needs to know what's next for the chapter in front of them.
+The persona — a translator using PT10 Simple who needs to know what's next for the chapter in front of them. Saroj is a professional translator, and he is good at his job, but he is not comfortable with complex software or technology; he is a “low tech preference translator”. If there are too many buttons or complex menus, Saroj feels overwhelmed. It slows him down and makes him feel like the technology is working against him. Sometimes Saroj might close the wrong tab or move a panel in Paratext 9 and he loses his layout. Saroj wants to be able to focus on the words, not on the software.
 
 **Chapter**:
 The base unit of progression — each chapter independently advances through the plan's stages — and the editor's current-view lens (the manuscript editor shows one chapter at a time). The smallest unit that can belong to a Priority.
 
 **Project Plan**:
 The ordered set of stages (and their steps) every chapter passes through.
-_Avoid_: workflow (reserved for the initiative name), process.
+_Avoid_: workflow (reserved for other purposes), process.
 
 **Stage**:
-A named phase a chapter is in, composed of steps. A chapter's current stage is the earliest stage that still has unfinished steps for it; it advances when all of that stage's steps are done.
+A named phase a chapter, book, or Priority is in, composed of steps. A chapter's, book's, or Priority's current stage is the earliest stage that still has unfinished steps for it; it advances when all of that stage's steps are done.
 _Avoid_: phase, status, milestone.
 
 **Priority**:
-A named, ordered selection of scripture — chapters, ranges, books, or book-groups, possibly slicing into or across books (e.g. "Birth Narrative" = Mat 1–2, Luk 1–2) — that orders which chapters the team works next. Optional; absent any Priority, work proceeds book-by-book.
+A named, ordered selection of scripture — chapters, ranges, books, or book-groups, possibly slicing into or across books (e.g. "Birth Narrative" = Mat 1–2, Luk 1–2) — that orders which chapters the team works next and is in sequence with other Priorities. Optional; absent any Priority, work proceeds book-by-book and chapter-by-chapter.
 _Avoid_: grouping, filter, assignment.
 
 **Step**:
