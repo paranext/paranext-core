@@ -1,3 +1,4 @@
+// PAPI (Platform API): the extension API for Platform.Bible
 declare module 'shared/utils/util' {
   import { ProcessType } from 'shared/global-this.model';
   /**

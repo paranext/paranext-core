@@ -10,7 +10,8 @@ namespace Paranext.DataProvider.ParatextUtils;
 /// </summary>
 public class PlatformScrTextCollection : ScrTextCollection
 {
-    // keep track of languages that weren't found in SLDR so we don't call over and over for the same bad code
+    // keep track of languages that weren't found in SLDR (SIL Locale Data Repository,
+    // https://github.com/silnrsi/sldr) so we don't call over and over for the same bad code
     private static readonly HashSet<string> s_sldrLookupFailed = [];
 
     protected override ScrText CreateResourceProject(ProjectName name)

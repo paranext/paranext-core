@@ -6,9 +6,9 @@ using Paratext.Data;
 namespace Paranext.DataProvider.Projects;
 
 /// <summary>
-/// Shared base for Paratext-backed PDP factories. Concrete subclasses provide:
+/// Shared base for Paratext-backed PDP (Project Data Provider) factories. Concrete subclasses provide:
 /// <list type="number">
-///   <item>the project interface list and PDPF name (constructor),</item>
+///   <item>the project interface list and PDPF (Project Data Provider Factory) name (constructor),</item>
 ///   <item>which projects this factory advertises
 ///     (<see cref="ProjectDataProviderFactory.GetAvailableProjects"/>) and which projects this
 ///     factory will actually serve (<see cref="ShouldServeProject"/>), and</item>

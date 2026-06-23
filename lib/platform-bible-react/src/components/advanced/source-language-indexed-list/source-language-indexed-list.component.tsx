@@ -29,7 +29,8 @@ import type {
  * without requiring a close-then-reopen cycle. Clicking the already-selected item closes the
  * detail. Pressing Escape while focus is inside the detail panel closes it (focus returns to the
  * listbox). The list and detail are siblings inside the same scrollable container, so outer
- * toolbars, tab switches, scope selectors, and any controls outside the SLI remain fully live.
+ * toolbars, tab switches, scope selectors, and any controls outside the SLI
+ * (SourceLanguageIndexedList) remain fully live.
  *
  * Used by Enhanced Resources (dictionary, encyclopedia, media) and lexical tools (dictionary).
  *
@@ -227,7 +228,8 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
       {detailElement ? (
         // Side-by-side ResizablePanelGroup split per PR #2209 stories pattern: list at ~33% with
         // a draggable handle, detail at ~67%. The detail is a sibling of the list (not an overlay)
-        // so all controls outside the SLI remain interactive while the detail is open.
+        // so all controls outside the SLI (SourceLanguageIndexedList) remain interactive while the
+        // detail is open.
         <ResizablePanelGroup direction="horizontal" className="tw:h-full tw:w-full">
           <ResizablePanel defaultSize={33.3333} minSize={20}>
             <div className="tw:h-full tw:overflow-y-auto">{listContent}</div>

@@ -16,9 +16,9 @@
  *
  * ## Seeding comment threads
  *
- * `createCommentThreads` requests the Paratext PDPF (`platform.Paratext-pdpf`) for the project's
- * PDP, then calls `createComment` on that PDP via WebSocket to seed threads before the UI test
- * runs.
+ * `createCommentThreads` requests the Paratext PDPF (Project Data Provider Factory,
+ * `platform.Paratext-pdpf`) for the project's PDP (Project Data Provider), then calls
+ * `createComment` on that PDP via WebSocket to seed threads before the UI test runs.
  *
  * ## User management
  *
@@ -49,7 +49,7 @@ const PARATEXT_PROJECTS_ROOT = path.join(
   'Paratext 9 Projects',
 );
 
-/** Network object name for the Paratext project data provider factory */
+/** Network object name for the Paratext PDPF (Project Data Provider Factory) */
 const PARATEXT_PDPF_METHOD = 'object:platform.Paratext-pdpf.getProjectDataProviderId';
 
 const DEFAULT_WEBSOCKET_PORT = 8876;
