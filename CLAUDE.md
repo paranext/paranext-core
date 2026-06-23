@@ -158,6 +158,7 @@ npm run typecheck
 - Frame tasks as verifiable goals: "Fix the bug" → "Write a test that reproduces it, then make it pass."
 - When any code quality tool flags your code (ESLint, TypeScript, Prettier, Stylelint), fix the code first. Only suppress warnings if the fix would be significantly worse.
 - Don't add features, refactor code, or make "improvements" beyond what was asked.
+- Avoid indecipherable [initialisms and abbreviations](.context/standards/Code-Style-Guide.md#initialisms-and-abbreviations).
 
 ## Never Commit Secrets
 

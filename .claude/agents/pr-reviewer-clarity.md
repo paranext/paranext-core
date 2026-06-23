@@ -31,7 +31,9 @@ Reviews a PR for readability, maintainability, and adherence to conventions. Thi
 
 #### Naming Conventions
 
-Verify the code follows the project's C#/TS naming conventions. **Naming violation = suggestion**
+- Verify the code follows the project's C#/TS naming conventions.
+- Flag indecipherable [initialisms and abbreviations](../../.context/standards/Code-Style-Guide.md#initialisms-and-abbreviations) in identifiers, types, comments, localization string names, and microcopy.
+- **Naming violation = suggestion**
 
 #### Over-Engineering
 - Unnecessary abstractions (interface + single implementation)
@@ -68,6 +70,7 @@ Return findings as a JSON array. Each finding must use `"perspective": "clarity"
 | Unresolved TODO/FIXME/placeholder implementation | `warning` |
 | Missing localization for user-facing string | `warning` |
 | Naming convention deviation | `suggestion` |
+| Indecipherable initialism/abbreviation | `suggestion` |
 | Over-engineering | `suggestion` |
 | Complex logic without comment | `suggestion` |
 
