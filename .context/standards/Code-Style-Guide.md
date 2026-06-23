@@ -47,7 +47,7 @@ High-level guidelines that should shape both writing and reviewing code. The top
 - **Clear variable names**:
   - Functions use verbs: `getClientId`, `checkStatus`.
   - Booleans use status words: `didFinish`, `isInitialized`, `hasPolicy`. `success` is acceptable.
-  - Avoid abbreviations that aren't widely accepted.
+  - Avoid [initialisms and abbreviations](#initialisms-and-abbreviations) that aren't explicitly established or widely accepted.
   - Capitalize acronyms per [.NET capitalization conventions](https://learn.microsoft.com/en-us/dotnet/standard/design-guidelines/capitalization-conventions): two-letter together (`IOStream`), longer as words (`HttpRequest`).
 - **Use comments to explain why**, not what. Don't narrate obvious code; do explain non-obvious intent or purpose.
 - **Prefer `undefined` over `null`**: [JavaScript's two concepts of nothing](https://medium.com/@hbarcelos/why-i-banned-null-from-my-js-code-and-why-you-should-too-13df90323cfa) cause confusion. Use `undefined` throughout the codebase. Confine `null` to the boundary with external APIs that require or return it.
@@ -179,6 +179,22 @@ Unless stated otherwise, follow:
 
 ---
 
+## Initialisms and abbreviations
+
+Prefer spelling terms out. Only use an abbreviation or initialism a reader can decipher, and — when in doubt — define it on first use: a glossary entry, a TSDoc / `///` comment, or the full phrase the first time it appears.
+
+This applies to **code** (identifiers, types, comments) and to **UI microcopy** (labels, button text, messages, tooltips). Reviewers check it.
+
+**An initialism is likely _indecipherable_ — and must not be introduced — if it meets these signals:**
+
+- **Not findable by search** — a web search for it returns nothing relevant.
+- **No reference recognition** — it has no entry in Wikipedia, in this repo's glossary, or in the docs for a tool or library we build on (e.g. [USFM](https://docs.usfm.bible/), React, .NET).
+- **Not guessable** — a reasonably educated person working in Bible translation or software development would be unlikely to guess what it stands for.
+
+Domain-standard or glossary-defined initialisms (e.g. `USFM`, `RTL`, `PAPI`) are fine to use as-is. If an initialism is project-coined and undefined, either spell it out or define it on first use.
+
+---
+
 ## Code Patterns We Use
 
 - **Early Return (Guard Clauses)** — see [this explanation](https://gomakethings.com/the-early-return-pattern-in-javascript/#what-is-the-early-return-pattern). Always add a blank line after an early return to visually separate it.
@@ -226,6 +242,8 @@ Unless stated otherwise, follow:
   ```
 
   This applies to conditional logic, array filtering/finding, and string includes/matching.
+
+- **Avoid indecipherable [initialisms and abbreviations](#initialisms-and-abbreviations) in localization keys and user-facing text**.
 
 ---
 

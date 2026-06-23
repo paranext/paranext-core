@@ -116,6 +116,7 @@ Check:
 - Overly complex code that could be simplified
 - Dead/unreachable code
 - Unclear variable or function naming
+- Indecipherable [initialisms and abbreviations](../../.context/standards/Code-Style-Guide.md#initialisms-and-abbreviations) in identifiers, types, comments, or localization keys
 
 ---
 
@@ -202,6 +203,8 @@ ls lib/platform-bible-react/src/stories/guides/
 Read all files found in those directories. They are MDX documentation and TSX story files that define Platform.Bible's design system — covering vocabulary, capitalization, interaction patterns, component choices, ellipsis usage, responsiveness, theming, directionality, and more.
 
 After reading the guide, read the changed UI files and check them against what you learned. Use your own judgment about which guidelines apply to the specific changes — not every guideline is relevant to every change. Prioritize clear, verifiable violations over speculative ones.
+
+Flag indecipherable [initialisms and abbreviations](../../.context/standards/Code-Style-Guide.md#initialisms-and-abbreviations) in user-facing microcopy: labels, button text, messages, and tooltips.
 
 Apply the same severity rubric as the other focus areas:
 
