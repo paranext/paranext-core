@@ -3,7 +3,7 @@
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import type { StructureProtectionState } from './use-structure-protection-state.mock';
+import type { StructureProtectionState } from './use-structure-protection-state.hook';
 import { StructureProtectionButton } from './structure-protection-button.component';
 
 // jsdom does not implement ResizeObserver; platform-bible-react's Tooltip + other components wire
@@ -31,7 +31,7 @@ const mockState: StructureProtectionState = {
   setUserProtection: vi.fn(),
 };
 
-vi.mock('./use-structure-protection-state.mock', () => ({
+vi.mock('./use-structure-protection-state.hook', () => ({
   useStructureProtectionState: () => mockState,
 }));
 
@@ -78,12 +78,14 @@ describe('StructureProtectionButton', () => {
     expect(screen.getByRole('button', { name: 'Toggle structure protection' })).toBeInTheDocument();
   });
 
-  it('admin click toggles the project (admin) setting', () => {
-    setState({ canAdminToggle: true, isAdminProtected: false });
+  it('admin click toggles both the project and user settings to the new effective state', () => {
+    // Admin, currently protected (isProtected drives the icon) -> click unlocks both settings so the
+    // admin's own icon flips and the team-wide lock is lifted in one action.
+    setState({ canAdminToggle: true, isAdminProtected: false, isProtected: true });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     fireEvent.click(screen.getByRole('button'));
-    expect(mockState.setAdminProtection).toHaveBeenCalledWith(true);
-    expect(mockState.setUserProtection).not.toHaveBeenCalled();
+    expect(mockState.setAdminProtection).toHaveBeenCalledWith(false);
+    expect(mockState.setUserProtection).toHaveBeenCalledWith(false);
   });
 
   it('non-admin click on an unlocked project toggles the user setting', () => {
@@ -118,10 +120,11 @@ describe('StructureProtectionButton', () => {
   });
 
   it('Ctrl+Shift+L triggers the toggle when enabled', () => {
-    setState({ canAdminToggle: true, isAdminProtected: false });
+    setState({ canAdminToggle: true, isAdminProtected: false, isProtected: true });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     fireEvent.keyDown(window, { key: 'l', ctrlKey: true, shiftKey: true });
-    expect(mockState.setAdminProtection).toHaveBeenCalledWith(true);
+    expect(mockState.setAdminProtection).toHaveBeenCalledWith(false);
+    expect(mockState.setUserProtection).toHaveBeenCalledWith(false);
   });
 
   it('Ctrl+Shift+L is a no-op when the button is disabled (non-admin + admin-locked)', () => {

@@ -7,7 +7,7 @@ import {
 } from 'platform-bible-react';
 import { ShieldCheck, ShieldOff } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useStructureProtectionState } from './use-structure-protection-state.mock';
+import { useStructureProtectionState } from './use-structure-protection-state.hook';
 
 const PROTECTED_KEY = '%webView_platformScriptureEditor_structureProtection_protected%';
 const EDITABLE_KEY = '%webView_platformScriptureEditor_structureProtection_editable%';
@@ -61,8 +61,13 @@ export function StructureProtectionButton({
 
   const handleToggle = useCallback(() => {
     if (canAdminToggle) {
-      // Admin: toggle the project setting (team-wide).
-      setAdminProtection(!isAdminProtected);
+      // Admin: set the team-wide project setting AND the admin's own user setting to the new state.
+      // The hook does not bind an admin to the project lock, so isProtected (which drives the icon)
+      // follows the user setting; writing both keeps them in sync and lets the admin's own icon flip
+      // on click while still imposing the lock team-wide.
+      const newIsProtected = !isProtected;
+      setAdminProtection(newIsProtected);
+      setUserProtection(newIsProtected);
     } else if (!isAdminProtected) {
       // Non-admin, project not locked: toggle the personal user setting.
       setUserProtection(!isProtected);
@@ -115,7 +120,7 @@ export function StructureProtectionButton({
             aria-label={localize(localizedStrings, ARIA_LABEL_KEY)}
             className={className}
             size="icon"
-            variant={isProtected ? 'ghost' : 'destructive'}
+            variant="ghost"
             disabled={isDisabled}
             onClick={handleToggle}
           >

@@ -2,25 +2,21 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import type { ITextConnectionSettingsProjectDataProvider } from 'platform-scripture';
-import {
-  useProjectSetting,
-  useProjectDataProvider,
-  useProjectData,
-  useSetting,
-} from '@papi/frontend/react';
+import type {
+  ITextConnectionSettingsProjectDataProvider,
+  IUserEditorSettingsProjectDataProvider,
+} from 'platform-scripture';
+import { useProjectSetting, useProjectDataProvider, useSetting } from '@papi/frontend/react';
 import { useStructureProtectionState } from './use-structure-protection-state.hook';
 
 vi.mock('@papi/frontend/react', () => ({
   useProjectSetting: vi.fn(),
   useProjectDataProvider: vi.fn(),
-  useProjectData: vi.fn(),
   useSetting: vi.fn(),
 }));
 
 const mockUseProjectSetting = vi.mocked(useProjectSetting);
 const mockUseProjectDataProvider = vi.mocked(useProjectDataProvider);
-const mockUseProjectData = vi.mocked(useProjectData);
 const mockUseSetting = vi.mocked(useSetting);
 
 /** Minimal PlatformError shape — matches the isPlatformError runtime check */
@@ -29,7 +25,7 @@ function makePlatformError(): object {
 }
 
 const mockSetAdminSetting = vi.fn();
-const mockSetUserSetting = vi.fn().mockResolvedValue(undefined);
+const mockSetUserStructureProtected = vi.fn().mockResolvedValue(true);
 
 function makeTextConnectionsPdp(canWrite: boolean): ITextConnectionSettingsProjectDataProvider {
   // Mock object literal cannot satisfy the full interface — cast needed for test isolation
@@ -37,6 +33,22 @@ function makeTextConnectionsPdp(canWrite: boolean): ITextConnectionSettingsProje
   return {
     canUserWriteProjectTextConnectionSettings: vi.fn().mockResolvedValue(canWrite),
   } as unknown as ITextConnectionSettingsProjectDataProvider;
+}
+
+function makeUserEditorSettingsPdp(
+  userSetting: boolean | undefined | object,
+): IUserEditorSettingsProjectDataProvider {
+  // Mock object literal cannot satisfy the full interface — cast needed for test isolation
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return {
+    // Immediately invoke the subscriber callback with the current value (as the real subscribe does),
+    // then return an unsubscriber.
+    subscribeUserStructureProtected: vi.fn(async (_selector, callback) => {
+      callback(userSetting);
+      return async () => true;
+    }),
+    setUserStructureProtected: mockSetUserStructureProtected,
+  } as unknown as IUserEditorSettingsProjectDataProvider;
 }
 
 function setup({
@@ -65,13 +77,11 @@ function setup({
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const interfaceModeAsString = interfaceMode as string;
   mockUseSetting.mockReturnValue([interfaceModeAsString, vi.fn(), vi.fn(), false]);
-  // Mock object literal cannot satisfy the full useProjectData return type — cast needed for test isolation
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  mockUseProjectData.mockReturnValue({
-    UserStructureProtected: vi.fn().mockReturnValue([userSetting, mockSetUserSetting, false]),
-  } as unknown as ReturnType<typeof useProjectData>);
-  mockUseProjectDataProvider.mockReturnValue(
-    textConnectionsPdp ?? makeTextConnectionsPdp(canWrite),
+  // The hook resolves two project data providers by name; return the matching mock for each.
+  mockUseProjectDataProvider.mockImplementation((projectInterface: string) =>
+    projectInterface === 'platformScripture.userEditorSettings'
+      ? makeUserEditorSettingsPdp(userSetting)
+      : (textConnectionsPdp ?? makeTextConnectionsPdp(canWrite)),
   );
 }
 
@@ -173,7 +183,7 @@ describe('useStructureProtectionState — setters', () => {
     act(() => {
       result.current.setUserProtection(false);
     });
-    expect(mockSetUserSetting).toHaveBeenCalledWith(false);
+    expect(mockSetUserStructureProtected).toHaveBeenCalledWith(false);
   });
 });
 
@@ -216,7 +226,7 @@ describe('useStructureProtectionState — edge cases', () => {
       interfaceMode: 'simple',
       canWrite: false,
     });
-    mockUseProjectDataProvider.mockReturnValue(undefined);
+    mockUseProjectDataProvider.mockImplementation(() => undefined);
     const { result } = renderHook(() => useStructureProtectionState(undefined));
     await act(async () => {});
     expect(result.current.canAdminToggle).toBe(false);

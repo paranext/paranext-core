@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.Json;
 using System.Xml;
 using System.Xml.Linq;
 using System.Xml.XPath;
@@ -1606,10 +1607,17 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool SetUserStructureProtected(object? value)
     {
-        if (value is not bool boolValue)
-            throw new InvalidDataException(
+        // Values crossing the JSON-RPC boundary arrive as JsonElement, not a native bool, so accept
+        // both (matches the bool-handling pattern in Checks/InventoryOption.SerializeValue).
+        bool boolValue = value switch
+        {
+            bool b => b,
+            JsonElement { ValueKind: JsonValueKind.True } => true,
+            JsonElement { ValueKind: JsonValueKind.False } => false,
+            _ => throw new InvalidDataException(
                 $"Expected boolean for UserStructureProtected, got: {value}"
-            );
+            ),
+        };
         var itemsElement = new XElement("Items", boolValue.ToString().ToLowerInvariant());
         // Version stored for consistency with other settings; ignored on read
         GetUserProjectSettings().SetSetting("StructureProtected", "1.0.0", itemsElement);

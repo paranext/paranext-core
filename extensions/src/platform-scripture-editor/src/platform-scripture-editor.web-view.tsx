@@ -88,6 +88,7 @@ import {
   StructureProtectionButton,
   STRUCTURE_PROTECTION_BUTTON_STRING_KEYS,
 } from './structure-protection-button.component';
+import { useStructureProtectionState } from './use-structure-protection-state.hook';
 import {
   getLocalizeKeysFromDecorations,
   mergeDecorations,
@@ -462,6 +463,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [isReadOnly, viewType],
   );
 
+  // Effective structure-protection state for this project/user, used to gate keyboard edits to
+  // paragraph/verse markers in the editor (passed to EditorOptions.isProtected below). The toolbar
+  // StructureProtectionButton subscribes to the same state independently.
+  const { isProtected } = useStructureProtectionState(projectId);
+
   // Get the updated title. Note this is NO_UPDATE_TITLE if no update is needed
   const [newTitleIfUpdated] = usePromise(
     useCallback(async () => {
@@ -682,6 +688,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const options = useMemo<EditorOptions>(
     () => ({
       isReadonly: isReadOnlyEffective,
+      isProtected,
       hasSpellCheck: false,
       nodes: nodeOptions,
       textDirection: textDirectionEffective,
@@ -698,6 +705,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }),
     [
       isReadOnlyEffective,
+      isProtected,
       canUserCreateComments,
       textDirectionEffective,
       nodeOptions,
