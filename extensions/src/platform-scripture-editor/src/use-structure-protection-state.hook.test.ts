@@ -51,6 +51,33 @@ function makeUserEditorSettingsPdp(
   } as unknown as IUserEditorSettingsProjectDataProvider;
 }
 
+/** Cast a partial PDP mock to the full `useProjectDataProvider` return type for test isolation. */
+function asProvider(pdp: object): ReturnType<typeof useProjectDataProvider> {
+  // Partial PDP mocks can't satisfy the full return type; cast through unknown.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return pdp as unknown as ReturnType<typeof useProjectDataProvider>;
+}
+
+/**
+ * Builds a user-editor-settings PDP mock that exposes its `subscribe`/`unsubscribe` spies so
+ * lifecycle tests can assert on the subscription being established and torn down.
+ */
+function makeTrackedUserPdp(userSetting: boolean | undefined) {
+  const unsubscribe = vi.fn().mockResolvedValue(true);
+  const subscribe = vi.fn().mockImplementation((_selector, callback) => {
+    if (userSetting !== undefined) callback(userSetting);
+    return Promise.resolve(unsubscribe);
+  });
+  return {
+    subscribe,
+    unsubscribe,
+    pdp: asProvider({
+      subscribeUserStructureProtected: subscribe,
+      setUserStructureProtected: mockSetUserSetting,
+    }),
+  };
+}
+
 function setup({
   adminSetting = false,
   userSetting = undefined,
@@ -194,6 +221,68 @@ describe('useStructureProtectionState — setters', () => {
     });
     expect(mockSetUserSetting).toHaveBeenCalledWith(false);
   });
+
+  it('setUserProtection swallows a rejected PDP setter (logs, does not throw)', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockSetUserSetting.mockRejectedValueOnce(new Error('rpc failed'));
+    setup({ adminSetting: false, userSetting: false, canWrite: false });
+    const { result } = renderHook(() => useStructureProtectionState('proj-1'));
+    await act(async () => {});
+    await act(async () => {
+      result.current.setUserProtection(true);
+      // flush the rejected setter's microtask so the hook's .catch runs
+      await Promise.resolve();
+    });
+    expect(mockSetUserSetting).toHaveBeenCalledWith(true);
+    expect(consoleSpy).toHaveBeenCalled();
+    consoleSpy.mockRestore();
+  });
+});
+
+describe('useStructureProtectionState — subscription lifecycle', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('unsubscribes from the user setting on unmount', async () => {
+    setup({ adminSetting: false, userSetting: true, canWrite: false });
+    const { pdp, unsubscribe } = makeTrackedUserPdp(true);
+    mockUseProjectDataProvider.mockImplementation((providerName) =>
+      providerName === 'platformScripture.userEditorSettings'
+        ? pdp
+        : asProvider(makeTextConnectionsPdp(false)),
+    );
+    const { unmount } = renderHook(() => useStructureProtectionState('proj-1'));
+    await act(async () => {});
+    expect(unsubscribe).not.toHaveBeenCalled();
+    unmount();
+    await act(async () => {});
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops the old subscription and re-subscribes (with the new value) when projectId changes', async () => {
+    setup({ adminSetting: false, userSetting: true, canWrite: false });
+    const first = makeTrackedUserPdp(true); // proj-1: user locked
+    const second = makeTrackedUserPdp(false); // proj-2: user unlocked
+    const textPdp = asProvider(makeTextConnectionsPdp(false));
+    mockUseProjectDataProvider.mockImplementation((providerName, projectId) => {
+      if (providerName !== 'platformScripture.userEditorSettings') return textPdp;
+      return projectId === 'proj-1' ? first.pdp : second.pdp;
+    });
+    const { result, rerender } = renderHook(({ id }) => useStructureProtectionState(id), {
+      initialProps: { id: 'proj-1' },
+    });
+    await act(async () => {});
+    expect(first.subscribe).toHaveBeenCalledTimes(1);
+    expect(result.current.isProtected).toBe(true);
+
+    rerender({ id: 'proj-2' });
+    await act(async () => {});
+    // old subscription torn down, new one established, and the value reflects proj-2 (not stale proj-1)
+    expect(first.unsubscribe).toHaveBeenCalledTimes(1);
+    expect(second.subscribe).toHaveBeenCalledTimes(1);
+    expect(result.current.isProtected).toBe(false);
+  });
 });
 
 describe('useStructureProtectionState — edge cases', () => {
@@ -201,12 +290,35 @@ describe('useStructureProtectionState — edge cases', () => {
     vi.clearAllMocks();
   });
 
-  it('PlatformError on admin setting is treated as false (not locked)', async () => {
-    setup({ adminSetting: makePlatformError(), userSetting: false, canWrite: false });
+  it('PlatformError delivered to the subscribe callback is mapped to undefined (mode default applies)', async () => {
+    // power-mode default is unlocked; if the error object were stored instead of mapped to undefined
+    // it would be truthy and wrongly force isProtected=true
+    setup({
+      adminSetting: false,
+      userSetting: makePlatformError(),
+      interfaceMode: 'power',
+      canWrite: false,
+    });
+    const { result } = renderHook(() => useStructureProtectionState('proj-1'));
+    await act(async () => {});
+    expect(result.current.isProtected).toBe(false);
+  });
+
+  it('PlatformError on admin setting is treated as false and surfaced via adminSettingError', async () => {
+    const adminError = makePlatformError();
+    setup({ adminSetting: adminError, userSetting: false, canWrite: false });
     const { result } = renderHook(() => useStructureProtectionState('proj-1'));
     await act(async () => {});
     expect(result.current.isAdminProtected).toBe(false);
     expect(result.current.isProtected).toBe(false);
+    expect(result.current.adminSettingError).toBe(adminError);
+  });
+
+  it('adminSettingError is undefined when the admin setting loads without error', async () => {
+    setup({ adminSetting: true, userSetting: false, canWrite: false });
+    const { result } = renderHook(() => useStructureProtectionState('proj-1'));
+    await act(async () => {});
+    expect(result.current.adminSettingError).toBeUndefined();
   });
 
   it('user setting undefined in simple mode defaults to locked (isProtected=true)', async () => {

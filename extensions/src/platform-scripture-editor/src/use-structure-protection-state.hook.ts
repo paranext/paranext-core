@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { isPlatformError } from 'platform-bible-utils';
+import { isPlatformError, type PlatformError } from 'platform-bible-utils';
 import { useProjectDataProvider, useProjectSetting, useSetting } from '@papi/frontend/react';
 
 /** Return type of {@link useStructureProtectionState}. */
@@ -8,6 +8,13 @@ export type StructureProtectionState = {
   isProtected: boolean;
   /** Raw project setting — `true` means the admin has set a structure lock */
   isAdminProtected: boolean;
+  /**
+   * Set when the admin (project-level) `structureProtected` setting failed to load (e.g. a
+   * transient connection error). While this is set, `isProtected` and `isAdminProtected` fall back
+   * to treating the admin layer as unset — callers should surface an error/disabled state rather
+   * than trusting the protection values.
+   */
+  adminSettingError: PlatformError | undefined;
   /** Whether the current user has write permission on project settings */
   canAdminToggle: boolean;
   /** Update the admin (project-level) setting. No-op when `!canAdminToggle` */
@@ -62,26 +69,44 @@ export function useStructureProtectionState(
       setUserSettingState(undefined);
       return undefined;
     }
+    // Reset to `undefined` while (re)subscribing so a project switch falls back to the mode-aware
+    // default instead of briefly showing the previous project's preference until the first callback
+    // arrives.
+    setUserSettingState(undefined);
     let disposed = false;
     let unsubscribe: (() => Promise<boolean>) | undefined;
-    userEditorSettingsPdp
-      .subscribeUserStructureProtected(undefined, (value) => {
-        setUserSettingState(isPlatformError(value) ? undefined : value);
-      })
-      .then((unsub) => {
-        if (disposed) unsub();
+    const logUnsubscribeError = (err: unknown) => {
+      console.error(`Failed to unsubscribe from user structure protection: ${err}`);
+    };
+    (async () => {
+      try {
+        const unsub = await userEditorSettingsPdp.subscribeUserStructureProtected(
+          undefined,
+          (value) => {
+            setUserSettingState(isPlatformError(value) ? undefined : value);
+          },
+        );
+        // The subscription may resolve after this effect was torn down; unsubscribe immediately so
+        // we don't leak it.
+        if (disposed) unsub().catch(logUnsubscribeError);
         else unsubscribe = unsub;
-        return undefined;
-      })
-      .catch((err) => {
+      } catch (err) {
         console.error(`Failed to subscribe to user structure protection: ${err}`);
-      });
+      }
+    })();
     return () => {
       disposed = true;
-      unsubscribe?.();
+      unsubscribe?.().catch(logUnsubscribeError);
     };
   }, [userEditorSettingsPdp]);
 
+  // The admin (project-level) `structureProtected` setting lives on the `platform.base` PDP, which
+  // has no per-setting write-permission check. We gate the toggle on
+  // `canUserWriteProjectTextConnectionSettings()` because in C# it resolves to
+  // `IsUserProjectAdministrator()` — i.e. it is the project-admin check, which is the correct
+  // authority for an admin/project-level setting. The coupling is implicit: if that method is ever
+  // narrowed to a connection-specific permission, this gate's meaning changes with no compile-time
+  // signal, so revisit this if a dedicated `canUserWriteStructureProtected` check is added.
   const textConnectionsPdp = useProjectDataProvider(
     'platformScripture.textConnectionSettings',
     projectId,
@@ -108,10 +133,14 @@ export function useStructureProtectionState(
     };
   }, [textConnectionsPdp]);
 
-  // Boolean() is needed: `&&` would short-circuit to the boolean setting value, but TypeScript
-  // infers the union type without it — this makes the `boolean` return explicit.
-  const isAdminProtected =
-    !isPlatformError(adminSettingPossiblyError) && Boolean(adminSettingPossiblyError);
+  // `!isPlatformError(...)` narrows the value to `boolean` in the right-hand operand, so this
+  // expression is already typed `boolean` (it is `false` on error or while the setting is loading).
+  // On error the admin layer is treated as unset and the error is surfaced via `adminSettingError`
+  // so callers can decide how to handle it rather than silently trusting the fallback.
+  const adminSettingError = isPlatformError(adminSettingPossiblyError)
+    ? adminSettingPossiblyError
+    : undefined;
+  const isAdminProtected = !isPlatformError(adminSettingPossiblyError) && adminSettingPossiblyError;
   const modeDefault = interfaceMode === 'simple';
   const effectiveUserSetting = userSetting ?? modeDefault;
   const isProtected = (isAdminProtected && !canAdminToggle) || effectiveUserSetting;
@@ -136,6 +165,7 @@ export function useStructureProtectionState(
   return {
     isProtected,
     isAdminProtected,
+    adminSettingError,
     canAdminToggle,
     setAdminProtection,
     setUserProtection,
