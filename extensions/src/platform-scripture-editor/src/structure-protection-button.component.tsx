@@ -35,6 +35,22 @@ const localize = (
   key: keyof StructureProtectionButtonLocalizedStrings,
 ) => strings[key] ?? key;
 
+/**
+ * The three mutually-exclusive states the button can display, driving the tooltip text and the
+ * auto-open trigger.
+ */
+type DisplayState = 'lockedByAdmin' | 'protected' | 'editable';
+
+/** Maps each {@link DisplayState} to the localization key for its tooltip text. */
+const DISPLAY_STATE_KEYS: Record<
+  DisplayState,
+  (typeof STRUCTURE_PROTECTION_BUTTON_STRING_KEYS)[number]
+> = {
+  lockedByAdmin: LOCKED_BY_ADMIN_KEY,
+  protected: PROTECTED_KEY,
+  editable: EDITABLE_KEY,
+};
+
 export type StructureProtectionButtonViewProps = {
   /** Effective protection state — drives the icon and tooltip text. */
   isProtected: boolean;
@@ -69,17 +85,36 @@ export function StructureProtectionButtonView({
   const isMac = useMemo(() => /Macintosh/i.test(navigator.userAgent), []);
   const shortcutHint = isMac ? '⇧⌘L' : 'Ctrl+Shift+L';
 
-  // Auto-open the tooltip whenever the effective protection state changes, so the change is not
-  // silent. Radix closes it again on the next outside interaction (click-away, scroll, blur, Escape)
-  // via onOpenChange.
+  // The visible tooltip state. Drives both the tooltip text and the auto-open trigger, so the two
+  // can never disagree. 'lockedByAdmin' takes precedence because the disabled button shows that text
+  // regardless of the underlying protection value.
+  let displayState: DisplayState;
+  if (isDisabled) displayState = 'lockedByAdmin';
+  else if (isProtected) displayState = 'protected';
+  else displayState = 'editable';
+
+  // Auto-open the tooltip whenever the visible state changes, so the change is not silent (NN6).
+  // Watching displayState (not just isProtected) also catches an admin lock arriving while the
+  // project is already protected. Radix closes it again on click-away and Escape via onOpenChange;
+  // scroll dismissal is handled by the effect below.
   const [tooltipOpen, setTooltipOpen] = useState(false);
-  const prevIsProtected = useRef(isProtected);
+  const prevDisplayState = useRef(displayState);
   useEffect(() => {
-    if (prevIsProtected.current !== isProtected) {
-      prevIsProtected.current = isProtected;
+    if (prevDisplayState.current !== displayState) {
+      prevDisplayState.current = displayState;
       setTooltipOpen(true);
     }
-  }, [isProtected]);
+  }, [displayState]);
+
+  // Close the tooltip on scroll. Radix closes the controlled tooltip on click-away and Escape, but
+  // not on scroll, and this button sits in the toolbar while content scrolls in a separate
+  // container. Capture phase catches scroll from any element (scroll events do not bubble).
+  useEffect(() => {
+    if (!tooltipOpen) return undefined;
+    const close = () => setTooltipOpen(false);
+    window.addEventListener('scroll', close, true);
+    return () => window.removeEventListener('scroll', close, true);
+  }, [tooltipOpen]);
 
   // Ctrl/Cmd+Shift+L toggles protection. DOM-level listener is correct here — this is a UI toggle,
   // not a Lexical edit (enforcement uses KEY_DOWN_COMMAND in PT-4013/PT-4014).
@@ -95,10 +130,7 @@ export function StructureProtectionButtonView({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onToggle, isDisabled]);
 
-  let tooltipText: string;
-  if (isDisabled) tooltipText = localize(localizedStrings, LOCKED_BY_ADMIN_KEY);
-  else if (isProtected) tooltipText = localize(localizedStrings, PROTECTED_KEY);
-  else tooltipText = localize(localizedStrings, EDITABLE_KEY);
+  const tooltipText = localize(localizedStrings, DISPLAY_STATE_KEYS[displayState]);
 
   return (
     <TooltipProvider>
@@ -168,11 +200,10 @@ export function StructureProtectionButton({
     // Non-admin + project locked: disabled, no-op.
   }, [canAdminToggle, isAdminProtected, isProtected, setAdminProtection, setUserProtection]);
 
-  // PT-4013: coordinate the "admin locked structure mid-session" warning here.
-  // Fires on a non-admin (!canAdminToggle) isAdminProtected false->true transition, guarded by a
-  // useRef of the previous value so it does NOT fire on initial mount. Deferred from PT-4016 — needs
-  // the real hook's live setting feed and must fire at the same moment as PT-4013's keyboard-
-  // enforcement warning.
+  // PT-4013 coordination: the view's auto-open effect watches the effective display state, so the
+  // tooltip auto-opens on the protected->lockedByAdmin transition (admin locks mid-session). That
+  // surfacing IS the NN6 "no sudden silent UI shift" cue, so PT-4013's keyboard-enforcement work
+  // must NOT add a separate notification for that transition — it would double-warn.
 
   return (
     <StructureProtectionButtonView

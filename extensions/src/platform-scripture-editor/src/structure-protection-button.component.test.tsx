@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { StructureProtectionState } from './use-structure-protection-state.hook';
 import { StructureProtectionButton } from './structure-protection-button.component';
@@ -133,6 +133,29 @@ describe('StructureProtectionButton', () => {
     expect((await screen.findAllByText('Ctrl+Shift+L')).length).toBeGreaterThan(0);
   });
 
+  it('auto-opens the tooltip when an admin locks an already-protected project', async () => {
+    // Non-admin, already protected: isProtected stays true, but the admin lock disables the button
+    // and changes the tooltip to "locked by admin" — a visible change that must surface the tooltip.
+    setState({ isProtected: true, canAdminToggle: false, isAdminProtected: false });
+    const { rerender } = render(
+      <StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />,
+    );
+    expect(screen.queryByText('Structure locked by admin')).not.toBeInTheDocument();
+    setState({ isAdminProtected: true });
+    rerender(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
+    expect((await screen.findAllByText('Structure locked by admin')).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button')).toBeDisabled();
+  });
+
+  it('does not auto-open the tooltip on a re-render with no state change', () => {
+    setState({ isProtected: true, canAdminToggle: true, isAdminProtected: false });
+    const { rerender } = render(
+      <StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />,
+    );
+    rerender(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
+    expect(screen.queryByText('Structure protected')).not.toBeInTheDocument();
+  });
+
   it('Ctrl+Shift+L triggers the toggle when enabled', () => {
     setState({ canAdminToggle: true, isAdminProtected: false, isProtected: true });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
@@ -147,5 +170,19 @@ describe('StructureProtectionButton', () => {
     fireEvent.keyDown(window, { key: 'l', ctrlKey: true, shiftKey: true });
     expect(mockState.setAdminProtection).not.toHaveBeenCalled();
     expect(mockState.setUserProtection).not.toHaveBeenCalled();
+  });
+
+  it('closes the tooltip on scroll', async () => {
+    setState({ isProtected: true, canAdminToggle: true, isAdminProtected: false });
+    const { rerender } = render(
+      <StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />,
+    );
+    // Transition to auto-open the tooltip.
+    setState({ isProtected: false });
+    rerender(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
+    expect((await screen.findAllByText('Structure editable')).length).toBeGreaterThan(0);
+    // Scrolling anything should close it via the capture-phase listener.
+    fireEvent.scroll(document.body);
+    await waitFor(() => expect(screen.queryByText('Structure editable')).not.toBeInTheDocument());
   });
 });
