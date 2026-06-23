@@ -19,7 +19,14 @@ export type StructureProtectionState = {
   canAdminToggle: boolean;
   /** Update the admin (project-level) setting. No-op when `!canAdminToggle` */
   setAdminProtection: (value: boolean) => void;
-  /** Update the user's personal preference. Always available regardless of role */
+  /**
+   * Update the user's personal preference. Always available regardless of role.
+   *
+   * Note: a successful write does not necessarily change `isProtected`. While the project is
+   * admin-LOCKED and the caller is a non-admin (`canAdminToggle` is `false`), the admin lock
+   * dominates, so the stored user preference has no effect on `isProtected` until the lock is
+   * lifted.
+   */
   setUserProtection: (value: boolean) => void;
 };
 
@@ -63,7 +70,7 @@ export function useStructureProtectionState(
 
   // The user's structure-protection preference. `undefined` means not yet loaded or never set — the
   // mode-aware default applies below.
-  const [userSetting, setUserSettingState] = useState<boolean | undefined>(undefined);
+  const [userSettingState, setUserSettingState] = useState<boolean | undefined>(undefined);
   useEffect(() => {
     if (!userEditorSettingsPdp) {
       setUserSettingState(undefined);
@@ -142,7 +149,7 @@ export function useStructureProtectionState(
     : undefined;
   const isAdminProtected = !isPlatformError(adminSettingPossiblyError) && adminSettingPossiblyError;
   const modeDefault = interfaceMode === 'simple';
-  const effectiveUserSetting = userSetting ?? modeDefault;
+  const effectiveUserSetting = userSettingState ?? modeDefault;
   const isProtected = (isAdminProtected && !canAdminToggle) || effectiveUserSetting;
 
   const setAdminProtection = useCallback(
