@@ -15,8 +15,8 @@ marker colour (the `\Color <int>` value PT9 emits a line earlier gets overwritte
 by `GetThemeColor()` returning 0 when no theme is configured).
 
 We use it once per resource to capture a frozen CSS snapshot that the
-[`pt9-css-to-editor-scss`](../../../scripture-editors) converter then turns
-into the editor's view-mode-bucketed SCSS shape.
+[`pt9-css-converter`](../pt9-css-converter/README.md) tool then turns into
+the editor's view-mode-bucketed SCSS shape.
 
 ## Requirements
 
