@@ -52,6 +52,10 @@ describe('performShutdownTasks', () => {
       expect.stringContaining('sendReceiveProjects'),
       expect.anything(),
     );
+    expect(mockRequestNoRetry).not.toHaveBeenCalledWith(
+      expect.stringContaining('sendReceiveProjects'),
+      undefined,
+    );
   });
 
   it('skips S/R when the only open Scripture Editor is read-only', async () => {
@@ -69,6 +73,10 @@ describe('performShutdownTasks', () => {
     expect(mockRequestNoRetry).not.toHaveBeenCalledWith(
       expect.stringContaining('sendReceiveProjects'),
       expect.anything(),
+    );
+    expect(mockRequestNoRetry).not.toHaveBeenCalledWith(
+      expect.stringContaining('sendReceiveProjects'),
+      undefined,
     );
   });
 
@@ -97,6 +105,10 @@ describe('performShutdownTasks', () => {
     expect(mockRequestNoRetry).not.toHaveBeenCalledWith(
       expect.stringContaining('sendReceiveProjects'),
       expect.anything(),
+    );
+    expect(mockRequestNoRetry).not.toHaveBeenCalledWith(
+      expect.stringContaining('sendReceiveProjects'),
+      undefined,
     );
   });
 

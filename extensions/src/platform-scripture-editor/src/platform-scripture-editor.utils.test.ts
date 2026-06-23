@@ -665,6 +665,10 @@ describe('openDefaultActiveProjectIfApplicable', () => {
       'platformScriptureEditor.openScriptureEditor',
       expect.anything(),
     );
+    expect(mockSendCommand).not.toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      undefined,
+    );
     // Expected steady state on Platform.Bible — logged at debug, not warn.
     expect(mockDebug).toHaveBeenCalled();
     expect(mockWarn).not.toHaveBeenCalled();
@@ -2306,6 +2310,10 @@ describe('syncOnProjectSwitch', () => {
     expect(mockSendCommand).not.toHaveBeenCalledWith(
       'paratextBibleSendReceive.sendReceiveProjects',
       expect.anything(),
+    );
+    expect(mockSendCommand).not.toHaveBeenCalledWith(
+      'paratextBibleSendReceive.sendReceiveProjects',
+      undefined,
     );
   });
 
