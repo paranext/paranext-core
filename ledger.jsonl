@@ -73,3 +73,8 @@
 {"type":"repro","runId":"qs-2026-06-22","candidateId":"c1","result":"reproduced","evidenceRef":"RED unit test: lib/platform-bible-react/src/hooks/listbox-keyboard-navigation.hook.test.tsx - 'invokes onCharacterPress when a printable key is pressed while the listbox container is focused' fails (spy called 0 times) before the fix; guard test passes."}
 {"type":"fix","runId":"qs-2026-06-22","candidateId":"c1","result":"pr_opened","prNumber":2449,"prUrl":"https://github.com/paranext/paranext-core/pull/2449","branch":"fix/listbox-type-ahead-container-focus"}
 {"type":"pr_outcome","prNumber":2449,"outcome":"open","checkedDate":"2026-06-22"}
+{"type":"pr_outcome","prNumber":2435,"outcome":"merged","checkedDate":"2026-06-24","resolutionHours":98.84}
+{"type":"pr_outcome","prNumber":2445,"outcome":"closed_unmerged","checkedDate":"2026-06-24","resolutionHours":67.77}
+{"type":"pr_outcome","prNumber":2446,"outcome":"open","checkedDate":"2026-06-24"}
+{"type":"pr_outcome","prNumber":2447,"outcome":"open","checkedDate":"2026-06-24"}
+{"type":"pr_outcome","prNumber":2449,"outcome":"open","checkedDate":"2026-06-24"}
