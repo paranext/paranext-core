@@ -26,6 +26,7 @@ beforeAll(() => {
 const mockState: StructureProtectionState = {
   isStructureProtected: true,
   isAdminProtected: false,
+  adminSettingError: undefined,
   canAdminToggle: false,
   setAdminProtection: vi.fn(),
   setUserProtection: vi.fn(),
