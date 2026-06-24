@@ -74,14 +74,17 @@ Inform-only — never lets Saroj author a plan (authoring is out of scope; see [
 | 3 — which tasks remain             | Chapter view lists all current-stage tasks (§1 secondary; §6 chooser)           |
 | 4 — mark a task done               | **Intentionally open** — checkbox-vs-other affordance is a mockup exploration   |
 | 5 — task that must earn a pass     | Check or Review + what's required, or flagged issues (§3)                       |
-| 6 — all complete → next stage      | Derived advance + a "reached next stage" state (§1 secondary, Php 1 in fixture) |
+| 6 — all complete → next stage      | Derived advance + a "reached next stage" state (§1 secondary; **Luke 1** in fixture, §9 B2) |
 
 ## 9. Seeded fixture
 
-- **Plan:** SIL Compact Base Plan (real, 6 stages: Drafting → Team Check & Comprehension Check → Preparing for Consultant → Consultant Check → Community Review → Final Preparation for Publication). Reuse `project-plan-draft` types + factory plans; do not re-author.
+> **Display-name relabel (UX fix B1):** the two human-judgment stages show **Review** vocabulary — "Team Review & Comprehension Review" and "Consultant Review" — a thin display relabel over the **real** plan ids (ids/structure/lookup unchanged; not a re-authoring). Automated Checks (spelling/quotations/biblical-terms/etc.) stay **Check**.
+
+- **Plan:** SIL Compact Base Plan (real, 6 stages: Drafting → Team Review & Comprehension Review → Preparing for Consultant → Consultant Review → Community Review → Final Preparation for Publication). Reuse `project-plan-draft` types + factory plans; do not re-author (only the shown stage names are relabeled per the note above).
 - **Two scopes:** **Philippians** (4 ch, book-by-book) + **Priority "Birth Narrative"** (Matt 1–2 / Luke 1–2, cross-book).
-- **Roles** fall out of stages — Saroj drafts; consultant _Maria_ owns Consultant Check (enables the teammate-block).
-- **Per-chapter spread (Philippians):** Php 1 advanced (Community Review; a **stale reopened check**), Php 2 _dense_ multi-task focal chapter (comprehension review available; co-translator review with comments; `spelling.word-list` 12 issues; `basic.quotations` no issues; `other.biblical-terms` 5 issues; a later task "Available after Consultant Check"), Php 3 drafting (plain next), Php 4 drafting that **blocks Maria**.
+- **Roles** fall out of stages — Saroj drafts; consultant _Maria_ owns Consultant Review (enables the teammate-block).
+- **Per-chapter spread (Philippians):** Php 1 advanced (Community Review) carrying a **stale reopened check** — the **forward-ratchet + staleness** story (it does _not_ demonstrate NN6 just-advanced; that lives on Luke 1), Php 2 _dense_ multi-task focal chapter (comprehension review available; co-translator review with comments; `spelling.word-list` 12 issues; `basic.quotations` no issues; `other.biblical-terms` 5 issues; a later task "Available after Consultant Review"), Php 3 drafting (plain next), Php 4 drafting that **blocks Maria**.
+- **NN6 dedicated chapter — Luke 1** (Birth Narrative Priority): just finished all of Drafting with no open issues and **cleanly crossed into "Team Review & Comprehension Review"** — show the explicit "reached next stage" indication here.
 - A **second project** on `EMPTY_PROJECT_PLAN` for the no-plan fallback.
 
 ## 10. Build approach

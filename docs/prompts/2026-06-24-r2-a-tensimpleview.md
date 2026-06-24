@@ -79,7 +79,9 @@ Then import the real model and data:
 
 **Webpack/import paths already resolve:** the root Storybook webpack (`.storybook/main.ts:127–143`) aliases `@` → `lib/platform-bible-react/src` and `platform-bible-react$` → that package's `src/index.ts`. So from `src/stories/…` you can `import { … } from 'platform-bible-react'` for components, and import the plan data by relative path or `@/` alias the same way `sample-data.ts` does (`@/components/advanced/project-plan-dialog`). If the project-plan-dialog components aren't re-exported from PBR's `index.ts`, import the data by direct path — do not edit the auto-generated barrel unnecessarily.
 
-The **6 stages** of the SIL Compact Base Plan (confirmed from real data) are: Drafting → Team Check & Comprehension Check → Preparing for Consultant → Consultant Check → Community Review → Final Preparation for Publication. Real stage ids exist in the data; reference them by lookup, not by hand-copying.
+The **6 stages** of the SIL Compact Base Plan (confirmed from real data) are: Drafting → Team Review & Comprehension Review → Preparing for Consultant → Consultant Review → Community Review → Final Preparation for Publication. Real stage ids exist in the data; reference them by lookup, not by hand-copying.
+
+> **Display relabel (UX fix B1):** the two human-judgment stages show **Review** vocabulary above ("Team Review & Comprehension Review", "Consultant Review") — a thin display-name relabel over the **real** plan ids (ids/structure/lookup unchanged; not a re-authoring). Automated Checks stay **Check**. Derived wording follows: "Available after Consultant **Review**."
 
 ### The synthesized layers (invent these — they don't exist on `project-plan-draft`)
 
@@ -99,12 +101,13 @@ Mind `markComplete` granularity (design §2, brief NN-table): only `by-chapter` 
 
 - **Plan:** SIL Compact Base Plan (the real `SAMPLE_PROJECT_PLAN`).
 - **Two scopes:** **Philippians** (4 ch, book-by-book) + **Priority "Birth Narrative"** (Matt 1–2 / Luke 1–2, cross-book).
-- **Roles from stages:** Saroj drafts; consultant **Maria** owns Consultant Check (enables the teammate-block).
+- **Roles from stages:** Saroj drafts; consultant **Maria** owns Consultant Review (enables the teammate-block).
 - **Per-chapter spread (Philippians):**
-  - **Php 1** — advanced to **Community Review**; carries a **stale, reopened check**.
-  - **Php 2** — the **dense focal chapter** (open the fixture here by default): comprehension review available; a co-translator review with comments; `spelling.word-list` = **12 issues**; `basic.quotations` = **no issues** (passing); `other.biblical-terms` = **5 issues**; plus a later task showing **"Available after Consultant Check."**
+  - **Php 1** — advanced to **Community Review**; carries a **stale, reopened check** — this is the **forward-ratchet + staleness** story (it does NOT demonstrate NN6 just-advanced; that lives on Luke 1 below).
+  - **Php 2** — the **dense focal chapter** (open the fixture here by default): comprehension review available; a co-translator review with comments; `spelling.word-list` = **12 issues**; `basic.quotations` = **no issues** (passing); `other.biblical-terms` = **5 issues**; plus a later task showing **"Available after Consultant Review."**
   - **Php 3** — Drafting (plain next step).
   - **Php 4** — Drafting that **blocks Maria** (drives the §4 unblock-teammate recommendation).
+- **NN6 dedicated chapter — Luke 1** (Birth Narrative Priority): just finished all of Drafting with no open issues and **cleanly crossed into "Team Review & Comprehension Review"** — show the explicit "reached next stage" indication here (this is the dedicated NN6 chapter, not Php 1).
 - **Second project on `EMPTY_PROJECT_PLAN`** for the no-plan fallback (NN2).
 
 Default the editor's `scrRef` to **PHP 2** so the dense chapter is what loads (round-1 used `initialScrRef={{ book: 'PHP', chapterNum: 2, verseNum: 1 }}`).
@@ -147,7 +150,7 @@ Localization strings (where you add UI copy) go in `assets/localization/*.json` 
 3. **Tasks remaining** — chapter panel lists all current-stage tasks; chooser lists Saroj's tasks (NN3, §1/§6).
 4. **Mark a task done** — provide a "mark done" affordance (checkbox or other — **intentionally open**, explore it; design §11/NN4). Flips progress + may advance the chapter.
 5. **Task that must earn a pass** — for a Check/Review, show what's required to pass or the flagged issue count (`spelling.word-list` 12, `other.biblical-terms` 5, `basic.quotations` passing; the stale check on Php 1) (NN5, §3).
-6. **All complete → next stage** — a "reached next stage" state; demonstrate on **Php 1** advancing (NN6, §1).
+6. **All complete → next stage** — a "reached next stage" state; demonstrate on the dedicated **Luke 1** chapter (just cleanly crossed Drafting → Team Review & Comprehension Review with no open issues). Php 1 carries the ratchet/staleness story only (NN6, §1, §9).
 
 Both prototype concepts must be present and switchable (variants as separate stories + out-of-chrome switcher).
 

@@ -2,6 +2,10 @@
 
 This is the ready-to-paste prompt for [magicpatterns.com](https://www.magicpatterns.com). It is deliberately self-contained — Magic Patterns cannot read our repo, components, or docs, so the design is restated in full prose below. Paste everything inside the fenced block.
 
+> **Companion seed data:** paste the companion seed dataset ([`2026-06-24-r2-c-magicpatterns-sample-data.md`](./2026-06-24-r2-c-magicpatterns-sample-data.md)) alongside this prompt — Magic Patterns can't read the repo, so the hard-coded fixture has to be supplied inline.
+>
+> **Display relabel (UX fix B1):** the two human-judgment stages use **Review** vocabulary — "Team Review & Comprehension Review" and "Consultant Review" — a thin display-name relabel over the real plan ids (structure unchanged; not a re-authoring). Automated Checks stay **Check**.
+
 ---
 
 ````text
@@ -89,24 +93,25 @@ Two projects. Saroj is the signed-in user; his teammate is **Maria**, a consulta
 **Project 1 — "Philippians" (has a plan).**
 Plan name: **SIL Compact Base Plan**, with these 6 stages in order:
 1. Drafting
-2. Team Check & Comprehension Check
+2. Team Review & Comprehension Review
 3. Preparing for Consultant
-4. Consultant Check
+4. Consultant Review
 5. Community Review
 6. Final Preparation for Publication
 
 Scope: the book of **Philippians (4 chapters)**, worked book-by-book, PLUS a Priority named **"Birth Narrative"** (Matthew 1–2 and Luke 1–2) for the scope/Priority navigation. Each chapter sits at its own stage:
 
-- **Philippians 1** — advanced all the way to **Community Review** (stage 5). It also has a Check that was passing but went **stale** (reopened) because the text was edited — show it as needing a re-run. Use this chapter to demonstrate non-negotiable #6 ("reached the next stage").
+- **Philippians 1** — advanced all the way to **Community Review** (stage 5). It also has a Check that was passing but went **stale** (reopened) because the text was edited — show it as needing a re-run. Use this chapter for the **forward-ratchet + staleness** story (a stage already passed does not un-pass; the stale Check just needs a re-run). It does NOT demonstrate non-negotiable #6 — that lives on Luke 1 below.
 - **Philippians 2** — the DENSE focal chapter (show off the full picture here). It currently has, all at once:
   - a **comprehension Review** that is available for Saroj to perform,
   - a co-translator **Review** that already has **Comments** on it (open Comments = Issues to clear by Revision),
   - a spelling **Check** with **12 Issues**,
   - a quotations **Check** that is **passing** (0 issues),
   - a biblical-terms **Check** with **5 Issues**,
-  - and a later Task marked **"Available after Consultant Check"**.
+  - and a later Task marked **"Available after Consultant Review"**.
 - **Philippians 3** — plain **Drafting** in progress (the simple, ordinary "next" case).
-- **Philippians 4** — **Drafting** in progress, and this drafting task is the one that **blocks Maria** the consultant from starting her Consultant Check. This is what triggers the "unblock a teammate" recommendation.
+- **Philippians 4** — **Drafting** in progress, and this drafting task is the one that **blocks Maria** the consultant from starting her Consultant Review. This is what triggers the "unblock a teammate" recommendation.
+- **Luke 1** (in the "Birth Narrative" Priority) — the DEDICATED chapter for non-negotiable #6. It just finished all of **Drafting** with no open issues and **cleanly crossed into "Team Review & Comprehension Review"** — show the explicit "reached the next stage" indication here.
 
 **Project 2 — "(second project)" with NO plan** — used only to demonstrate the no-plan fallback above.
 
