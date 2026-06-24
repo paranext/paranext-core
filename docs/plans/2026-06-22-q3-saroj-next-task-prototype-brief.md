@@ -22,12 +22,14 @@ This is the headline epic the Board has committed to partners (per Escrow): _the
 
 These six are the agreed, in-focus requirements. They are what the prototype must let Saroj do. (Matt proposed them 7 Jun; Alex confirmed all six in focus 8 Jun.)
 
+> Throughout, **chapter** is a fine-grain stand-in for the unit of progression — it can equally be a **book** or a **Priority**. Where a requirement says "chapter," read "the chapter, book, or Priority in view." (See [`CONTEXT.md`](../../CONTEXT.md).)
+
 1. **View the active chapter's current stage** (as per the project plan).
 2. **Fallback if no project plan is selected** (the experience must degrade gracefully).
-3. **View which steps remain** to be completed for this chapter to progress to the next stage.
-4. **Check off a checkbox step** in relation to this chapter. _(The checkbox UI itself is up for grabs — it may be a literal checkbox or some other "mark this done" affordance. The capability is fixed; the control is a design question.)_
-5. **For a step that must earn a "pass,"** Saroj can see the actions required to earn the pass.
-6. **See an indication when all steps are complete** and the chapter has reached the next stage.
+3. **View which tasks remain** for this chapter to progress to the next stage.
+4. **Mark a task done** for this chapter. _(The affordance — a literal checkbox or some other "mark done" control — is a design question; the capability is fixed.)_
+5. **For a task that depends on a Check or Review passing,** Saroj can see what's required to earn the pass.
+6. **See an indication when all of a stage's work is complete** and the chapter has reached the next stage.
 
 ---
 
@@ -35,7 +37,7 @@ These six are the agreed, in-focus requirements. They are what the prototype mus
 
 **In scope**
 
-- Advancing a _chapter_ through steps/stages — viewing current stage, what remains, marking progress, seeing completion.
+- Advancing a _chapter_ (or book, or Priority) through its tasks and stages — viewing current stage, what remains, marking progress, seeing completion.
 - The six non-negotiables above.
 
 **Out of scope (this quarter)**
@@ -50,9 +52,9 @@ These six are the agreed, in-focus requirements. They are what the prototype mus
 
 ## Data model & example data
 
-**Short answer:** the _plan definition_ already exists as real, PT9-derived, reusable data — we do **not** need to invent it. The _per-chapter progress state_ (the thing Saroj actually advances) does **not** exist anywhere and we **do** have to model and fake it. Nothing is exposed over PAPI / from the C# backend yet.
+**Short answer:** the _plan definition_ already exists as real, PT9-derived, reusable data — reuse it. The _progress layer_ (the thing Saroj advances — which chapter/book/Priority is at which stage, what's done, by whom) **also exists in PT9** at the model level (`ProjectProgress.xml`, `ReadOnlyProjectProgressInfo`, per-book/chapter task completion, `GetFirstIncompleteStageIndex`). What's missing is a **PT10 representation**: nothing is exposed over PAPI / from C# yet, and `project-plan-draft` models the _plan_ but not _progress_. So for the prototype we **synthesize PT10-shaped progress data** — not because the concept is new, but because PT10 doesn't surface PT9's yet.
 
-> Note: this product is not Paratext 9 and isn't recreating it — but it consumes PT9 project-plan data. The factory plans below _are_ that real PT9 data; the progress layer we add on top is new PT10 design.
+> Note: this product is not Paratext 9 and isn't recreating it — but it consumes PT9 project-plan data and builds on PT9's progress model. The factory plans below _are_ that real PT9 data; the progress layer is that PT9 model **reinterpreted and enhanced** for PT10 (Priority ordering, assignment, Solo/Together, within-stage check-blocking).
 
 ### What already exists — reuse, don't reinvent
 
@@ -68,28 +70,33 @@ On **`project-plan-draft`**:
 - **Handwritten sample/org plans** — `stories/advanced/project-plan-dialog/sample-data.ts`: ETEN Quickstart, Acme, plus `EMPTY_PROJECT_PLAN` (covers NN #2 no-plan fallback) and `CUSTOM_PROJECT_PLAN`.
 - **Full UI implementations + Storybook** for several design variants (hierarchical, ER-UI, checks-merged). `project-plan-redesign-1` renames this to `project-plan-editor` with a richer task-availability enum (`WhenStageIsComplete`, `WhenStageIsCompleteByChapter`, …) and its own `mock-data.ts`. **Caveat:** these are plan-_authoring_ UIs — i.e. the "who sets the plan" work that is **out of scope** this quarter. Reuse them as reference and for their data/types, not as the thing we're prototyping.
 
-### What does NOT exist anywhere — we invent it
+### What PT10 doesn't surface yet — we synthesize it
 
-- **Per-chapter progress / status state**: which chapter is at which stage, which tasks it has completed, by whom/when, which "pass" checks are outstanding. This is the core data for "Saroj advances a chapter," and there is no model and no example data for it — not on `main`, not on the draft branches (they model the _plan_, not _progress_).
-- **Any backend / PAPI exposure.** C# can reach `Paratext.Data` but does not read `ProjectProgress.xml` and exposes no plan/stage/step/progress over PAPI; `ChangeBooksInProjectPlan` integration is explicitly deferred. The PT9 source `_StandardPlans` XMLs are **not** committed. (`c-sharp/ParatextUtils/ProgressUtilsRunImmediately.cs` on the draft branches is unrelated — it's a UI-threading helper, not plan progress.)
+The progress _concept and data_ exist in PT9; what's absent is any **PT10/paranext-core** representation. So we synthesize it for the prototype:
+
+- **A PT10 progress model + example data**: which chapter/book/Priority is at which stage, which tasks are done (by whom/when), which checks/reviews are outstanding. PT9 has this; paranext-core has no model and no example data for it — not on `main`, not on the draft branches (they model the _plan_, not _progress_).
+- **No backend / PAPI exposure.** C# can reach `Paratext.Data` but does not read `ProjectProgress.xml` and exposes no plan/stage/task/progress over PAPI; `ChangeBooksInProjectPlan` is explicitly deferred. The PT9 `_StandardPlans` XMLs are **not** committed. (`c-sharp/ParatextUtils/ProgressUtilsRunImmediately.cs` on the draft branches is unrelated — a UI-threading helper, not plan progress.)
+- **PT10 enhancements** with no PT9 equivalent: Priority ordering, assignment, the Solo/Together split.
 
 ### How the existing model maps to the non-negotiables
 
-| NN                               | Covered by existing plan-def model?            | Needs new progress model?                         |
+The progress behind every NN below **already exists in PT9**. The third column asks only what **PT10 must newly represent or synthesize** — since PT9's progress isn't exposed to paranext-core yet — _not_ whether the concept is missing.
+
+| NN                               | Covered by existing plan-def model?            | Needs new PT10 representation?                     |
 | -------------------------------- | ---------------------------------------------- | ------------------------------------------------- |
-| 1 — chapter's current stage      | stages exist                                   | **yes** — chapter→stage pointer                   |
+| 1 — current stage                | stages exist                                   | **yes** — unit→stage pointer (synthesized)        |
 | 2 — fallback if no plan          | `EMPTY_PROJECT_PLAN`                           | no                                                |
-| 3 — steps remaining for chapter  | ordered tasks via `taskStart`                  | **yes** — need completions to compute "remaining" |
-| 4 — check off a step for chapter | `markComplete:'by-chapter'` tasks              | **yes** — record the check                        |
-| 5 — step that must earn a "pass" | `CheckSetting.requiredInStage` + check catalog | partial — surface "actions to earn the pass"      |
-| 6 — all complete → next stage    | derivable                                      | **yes** — needs progress                          |
+| 3 — tasks remaining              | ordered tasks via `taskStart`                  | **yes** — need completions to compute "remaining" |
+| 4 — mark a task done             | `markComplete:'by-chapter'` tasks              | **yes** — record completion                       |
+| 5 — task that must earn a "pass" | `CheckSetting.requiredInStage` + check catalog | partial — surface "what's required to pass"       |
+| 6 — all complete → next stage    | derivable                                      | **yes** — needs the synthesized progress          |
 
 ### Recommendation
 
 1. **Reuse** `types.ts` + the factory/sample plans from `project-plan-draft` as the plan-definition substrate. Don't re-author plans.
-2. **Author one small progress model** on top — the only modeling we genuinely make up. Something like `ChapterProgress { bookId, chapter, currentStageId, completedTaskIds, pendingPassChecks }`.
+2. **Author one small PT10 progress model**, shaped to PT9's (a unit→stage pointer + task completions + outstanding checks/reviews) — the main thing we synthesize. Something like `Progress { unit /* chapter | book | priority */, currentStageId, completedTaskIds, openChecks }`.
 3. **Synthesize realistic example progress**: pick one real factory plan (e.g. _SIL Compact Base Plan_) + a short NT book, and seed a few chapters at different stages so the prototype demonstrates a believable "what's next."
-4. **Mind the `markComplete` granularity**: only `by-chapter` tasks are per-chapter checkboxes. `by-book` / `by-project` tasks (e.g. "Complete translation brief") complete once at a coarser level — decide how (or whether) they surface in a chapter-centric "what's next" view.
+4. **Mind the `markComplete` granularity**: only `by-chapter` tasks are per-chapter. `by-book` / `by-project` tasks (e.g. "Complete translation brief") complete once at a coarser level — decide how (or whether) they surface in a chapter-centric "what's next" view.
 
 ---
 
@@ -99,15 +106,13 @@ On **`project-plan-draft`**:
 - **Watch, don't (only) ask.** People are poor at describing their own workflow in the abstract or predicting what they'd use. We weigh observation of real behavior and walk-throughs of past scenarios over stated preference. ([NN/g: first rule of usability](https://www.nngroup.com/articles/first-rule-of-usability-dont-listen-to-users/))
 - **New design, not a PT9 comparison.** Most partners/users don't use the PT9 project plan, and a _small minority_ uses PT9 progress tracking consistently — that under-use is precisely the problem we're solving. Don't frame the prototype as "PT9 vs PT10." For teams that _do_ know PT9, we can map which PT9 features this corresponds to, but that mapping is not the focus.
 - **De-risk decisions at the cheapest point.** Each research activity exists to retire a specific assumption before it gets expensive (catch it in a conversation or observation, not after we've built it).
+- **Harmonize with the PT9 data model when possible.** PT9 already models plans and progress; shape the synthesized PT10 layer to it (units, stages, task completion, checks) rather than inventing a parallel structure. Diverge deliberately and only where PT10 needs it — and say so (see the ADRs).
 
 ---
 
 ## Prototype approach
 
-- **Standalone, separate from the app (for now).** The current plan is to build the prototype _completely separate_ from the Platform.Bible application.
-  - _Pro:_ faster to build; can portray a future vision unencumbered by today's technical constraints.
-  - _Con:_ we don't usability-test the app as it actually is — learnings are about whether the _design ideas_ are usable, not about the real implementation.
-  - The earlier proposal described the usability prototype as **"AI-based."** Treat "AI-assisted, standalone prototype" as the working assumption.
+- **Three parallel vehicles** — Storybook (`TenSimpleView`), an in-app unwired surface, and Magic Patterns; see [ADR-0001](../adr/0001-prototype-vehicle-storybook-in-repo.md). Spanning standalone-blue-sky → close-to-the-app lets us compare how each portrays the design and which best de-risks the epic. None wires up PAPI/C# this quarter; data is faked.
 - **Fidelity ramps up.** Start with **rough mockups** (fast, low investment, directional) and converge toward higher fidelity over the quarter.
 - **"Epic-candidate" prototype** introduced **mid-quarter (~7 Jul)** — the version close enough to what engineering might actually build that exercising it de-risks the epic.
 - **Usability testing is non-blocking.** It runs in the ongoing-observation swimlane against the epic-candidate prototype; its learnings _can_ feed the focus-group share-back, but that's discretionary. This round tests **only** "Saroj advances a chapter," not general Simple usability (defer that to ~August, against the real implementation).
@@ -142,7 +147,6 @@ Everything upstream is driven by the **11 Aug** engineering start and the **29 J
 
 ## Open questions / watch-outs
 
-- **Where does the standalone prototype actually live?** This branch is in `paranext-core`, but the agreed direction is a prototype _separate_ from the app. Resolve before building: standalone repo/page vs. an unwired surface inside this repo. _(Needs a decision — see chat with Alex.)_
 - **Checkbox vs. other "mark done" affordance** (non-negotiable #4) is deliberately unresolved — a design question for the mockups.
 - **Ownership / the "catch":** UX (Alex) relocates internationally mid-quarter. The timeline only holds if Product co-owns the stakeholder/designee-facing rounds (originally framed as Rounds 1b and 3). Megan is running observations/interviews and piloting scheduling tooling.
 - **Roadmap drift:** adjacent epics moved (e.g. _Saroj's workspace is stable and uncluttered_ → 14 Jul; _Saroj navigates all the Simple functionality smoothly and intuitively_ → 28 Jul). Re-confirm dates against the live roadmap before committing.

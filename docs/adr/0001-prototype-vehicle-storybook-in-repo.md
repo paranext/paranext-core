@@ -1,19 +1,17 @@
-# Prototype vehicle: Storybook stories in paranext-core
+# Prototype vehicles: three parallel builds
 
-The Q3 "Saroj advances a chapter" prototype is built as **Storybook stories inside `paranext-core`** (on `prototype/2026-q3-advance-chapter-through-plan-steps`), rendered through a `workspace-shell`-style decorator that fakes the app chrome — the same pattern already proven by the earlier `proto/saroj-studies` prototype. This satisfies the brief's "standalone, separate from the running app" intent (Storybook is not the Electron app and ships nothing into it) while letting the prototype import the _real_ `platform-bible-react` components and the _real_ `project-plan-draft` plan types/factory plans, so the ~7 Jul "epic-candidate" version can converge toward something buildable without re-platforming.
+The Q3 "Saroj advances a chapter" prototype is built in **three vehicles in parallel** — same design, decisions, and build prompt; only the platform differs. The point is to compare how far each gets and which best de-risks the ~7 Jul epic-candidate, not to pick one up front.
 
-## Considered options
+| Vehicle | What it is | Why |
+| ------- | ---------- | --- |
+| **A — Storybook (`TenSimpleView`)** | Mounts the surfaces in the _real_ `rc-dock` Simple layout (`src/stories/platform/ten-layout-shared.tsx`) with the real `BookChapterControl`/editor — no Electron. | Lowest integration friction (a new panel is a ~6-line rc-dock tab), high fidelity, fast. _Use `TenSimpleView`, not `WorkspaceShell`._ |
+| **B — In-app unwired surface** | The surfaces built into the running app as an **unwired** surface (no PAPI/C# data — faked locally). Requires `platform-bible-react` rebuilds. | Highest fidelity and the eventual epic target; tests the design against the app as it really is. |
+| **C — Magic Patterns** | Rebuilt in the Magic Patterns AI design tool by **pasting a prompt**. Standalone — cannot import real components. | Maximum blue-sky freedom; a check on whether the design ideas hold without the constraints of the real component library. |
 
-- **Storybook-in-repo (chosen)** — fast, team-proven, reuses real components + plan data.
-- **Fully standalone web app/repo (the "AI-assisted, standalone" working assumption)** — maximum blue-sky freedom, but re-creates the component library, copies the plan data, and drifts away from what engineering would actually build.
-- **Unwired surface inside the running app** — highest fidelity, slowest, drags in the PAPI/C# wiring explicitly deferred this quarter.
+## Shared build approach
 
-## Update (2026-06-22): `TenSimpleView` is the recommended expression, not `WorkspaceShell`
+- **Reuse the real substrate.** Vehicles A & B import the real `platform-bible-react` components and the real `project-plan-draft` plan types + factory plans. Only the progress, Priority, assignment, and Solo/Together layers are invented.
+- **Build low-wiring components into `platform-bible-react` (or root Storybook)** so A & B mount the _same_ reusable components rather than re-implementing per vehicle. (Magic Patterns is standalone and gets its own from-the-prompt build.)
+- **Structural note (from prior builds):** panels in `SIMPLE_LAYOUT` receive per-chapter state via React **context, not props** (the `LayoutData` is a static module-load object).
 
-A 3-vehicle build experiment (one agent each, in parallel worktrees, then reviewed + fixed) tested how far each Storybook-in-repo expression gets, alongside a real-app integration:
-
-- **A — `WorkspaceShell`** (the lightweight faked-chrome decorator this ADR originally named): works, but lower fidelity (dimmed stub columns) and the decorator had to be copied from `proto/saroj-studies`.
-- **C — `TenSimpleView`** (`src/stories/platform/ten-layout-shared.tsx`): mounts the panel into the _real_ `rc-dock` Simple layout with the _real_ `BookChapterControl`. **Lowest integration friction** (a new panel is a ~6-line rc-dock tab), **highest fidelity**, and the **only vehicle whose full Storybook build passed**.
-- **B — real running app** (native renderer tab): got impressively far (unit-tested derivation, real dock registration) but its headline integration shipped a compile error an isolated typecheck masked, and it depends on a `platform-bible-react` rebuild and ultimately PAPI/C# for real data — hardest to verify headless.
-
-**Refinement:** the core decision stands (Storybook-in-repo, _not_ standalone and _not_ the running app). But the recommended _expression_ is now **`TenSimpleView`** (real layout + real BCV, no Electron), not `WorkspaceShell`. `WorkspaceShell` remains fine for an isolated single-surface view; the real running app (B) is the eventual epic target, not the prototype vehicle. Structural note from C for the epic-candidate: panels in `SIMPLE_LAYOUT` receive per-chapter state via React **context, not props** (the `LayoutData` is a static module-load object).
+This keeps the in-repo vehicles "standalone, separate from the running app" per the brief while staying close enough to real components that the epic-candidate can converge toward buildable without re-platforming.

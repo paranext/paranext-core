@@ -2,7 +2,7 @@
 
 The prototype context for "Saroj advances a chapter through the steps and stages of a project plan." This glossary fixes the language the prototype, the focus-group feedback, and the eventual epic all share. Scope: this Q3 2026 prototype only — not the whole platform.
 
-## The Problem**
+## The Problem
 
 *Primary: Known unknown*  
 **Next-step workflow.** Assignments and Progress is often too hard for whole teams to adopt — and the feature only delivers value when the whole team uses it. A single member who can't or won't use Assignments & Progress breaks the workflow for everyone. How might *Saroj* know what to do *next* and how to get there?
@@ -66,7 +66,7 @@ The persona — a translator using PT10 Simple who needs to know what's next for
 The base unit of progression — each chapter independently advances through the plan's stages — and the editor's current-view lens (the manuscript editor shows one chapter at a time). The smallest unit that can belong to a Priority.
 
 **Project Plan**:
-The ordered set of stages (and their steps) every chapter passes through.
+The ordered set of **Stages** (and their **Tasks** and **Checks**) every chapter passes through.
 _Avoid_: workflow (reserved for other purposes), process.
 
 **Stage**:
@@ -93,27 +93,27 @@ An **automated** evaluation of the text — basic/catalog checks, spelling, AI c
 _Avoid_: using "check" for human-judgment work (that is a **Review**); validation, test, rule.
 
 **Review**:
-A **human-judgment** evaluation of the text by a person — exegetical, naturalness, comprehension, consultant, community. (PT9 called these "checks"; we use **review**.) A Review is a **Task** the reviewer performs and asserts done; the **Notes** it raises are cleared by **Revision** before the chapter advances. Ratchets forward.
+A **human-judgment** evaluation of the text by a person — exegetical, naturalness, comprehension, consultant, community. (PT9 called these "checks"; we use **review**.) A Review is a **Task** the reviewer performs and asserts done; the **Comments** it raises are cleared by **Revision** before the chapter advances. Ratchets forward.
 _Avoid_: "manual check", "consultant/community check"; "reviewer" as a synonym for the activity.
 
-**Note**:
-A reviewer's note on the text during a **Review** (PT9: a "project note"). Each **open** note is an **Issue** to clear by **Revision**.
-_Avoid_: comment (an internal code term; the user-facing word is **note**).
+**Comment**:
+A reviewer's note on the text — **comment** in PT10 (PT9 called it a *note*). Each **open** comment is an **Issue** to clear by **Revision**.
+_Avoid_: note (the PT9 term; PT10 uses **comment**).
 
 **Revision**:
 The **Task** of changing the text or project to clear the **Issues** a **Check** or **Review** raised — often done by someone other than the reviewer.
 _Avoid_: fix, correction, generic "edit".
 
 **Issue**:
-Something to resolve, surfaced by a **Check** — from the **text** (e.g. punctuation) or from an **open Note** in a **Review**. Can **reopen** when the text changes.
+Something to resolve, surfaced by a **Check** — from the **text** (e.g. punctuation) or from an **open Comment** in a **Review**. Can **reopen** when the text changes.
 _Avoid_: error, flag, warning.
 
 **Pass**:
 A **Check**'s satisfied state — no open issues. Content-addressed, so editing the text can make a pass go **stale** and reopen.
 
-**Current Step**:
-The one **Task** the system surfaces as Saroj's focus, shown colloquially as "your next step." Recommended by default (so there's always a "what's next"); Saroj can change it.
-_Avoid_: treating "step" as a typed unit; "active step".
+**Current Task**:
+The one **Task** the system surfaces as Saroj's focus — shown to the user colloquially as "your next step." Recommended by default (so there's always a "what's next"); Saroj can change it.
+_Avoid_: "Current Step" / "active step" as the modeled name (the unit is a **Task**; "next step" is fine as user-facing copy).
 
 **Teammate**:
 Another user on the project with **Tasks** of their own. Saroj's work can block, or be blocked by, a teammate's.
@@ -128,53 +128,50 @@ The pairing of a **Task** (for given chapters) with who will do it: a specific p
 _Avoid_: allocation.
 
 **Anyone**:
-The assignment for a **Task** no specific person has claimed — whoever's looking may pick it up.
-_Avoid_: unassigned (implies the task is no one's job).
+The **Assignment** for a **Task** any project member may do **individually** — whoever's looking may claim it.
+
+**Unassigned**:
+An **Assignment** not yet determined. _(UXR question: should this behave the same as **Anyone**, or stay distinct?)_
 
 **Solo**:
-The grouping of **Tasks** a person does on their own time — assigned to them, to **Multiple** including them, or to **Anyone**. The **Current Step** is only ever recommended from Solo.
-_Avoid_: individual tasks, my tasks.
+The grouping of **Tasks** a person does on their own time — assigned to them, to **Multiple** including them, or to **Anyone**. The **Current Task** is only ever recommended from Solo.
 
 **Together**:
-The grouping of **Team**-assigned **Tasks** the team does collaboratively, such as in a team meeting. Parked from Solo work until team-meeting time; never recommended as the individual Current Step. (Grounded in observed behavior — teams used PT9's "(Team)" label to mean "save for the meeting.")
-_Avoid_: team tasks (as the bucket label), group work.
-
-**Team-meeting mode**:
-A mode the current user (e.g. Saroj) turns on from within the next-step UI when the team meets. While on, the **Together** grouping comes forward and the **Current Step** is recommended from Together instead of Solo; turning it off reverts to Solo work.
-_Avoid_: meeting mode, group mode.
+The grouping of **Team**-assigned **Tasks** the team does collaboratively (e.g. in a team meeting) rather than alone; never recommended as the individual Current Task. (Grounded in observed behavior — teams used PT9's "(Team)" label to mean "save for the meeting.")
 
 ## Relationships
 
 - A **Project Plan** has one or more ordered **Stages**
 - A **Stage** contains **Tasks** (Drafting / Review / Revision) and **Checks** (required or notify-only)
-- A **Review** raises **Notes**; open Notes — and problems in the text — surface as **Issues** via **Checks**, cleared by **Revision**
+- A **Review** raises **Comments**; open Comments — and problems in the text — surface as **Issues** via **Checks**, cleared by **Revision**
 - A **Chapter** is the base unit of progression: it advances through the **Stages** by completing each stage's Tasks and clearing its required Checks
 - A Task or Check is satisfied per-chapter, per-book, or once per-project — a book-/project-level one is shared across the chapters it covers, so it can gate many at once
 - A **Priority** orders which **Chapters** are worked next; absent any Priority, work proceeds book-by-book
-- Saroj's **Current Step** is the recommended **Task** — overridable — surfaced persistently in the workspace
+- Saroj's **Current Task** is the recommended **Task** — overridable — surfaced persistently in the workspace
 - A **Task** may be **assigned** to a user for specific chapters
-- Saroj's unfinished task **blocks** a **Teammate** when it is the direct prerequisite of one assigned to that teammate; unblocking takes precedence in the **Current Step** recommendation
+- Saroj's unfinished task **blocks** a **Teammate** when it is the direct prerequisite of one assigned to that teammate; unblocking takes precedence in the **Current Task** recommendation
 
 ### Dynamics
 
 - Asserting a **Task** **advances** the chapter; a **required Check** blocks the chapter from leaving its stage until it **passes**. (Within-stage blocking is a PT10 design behavior — PT9 advances on task completion alone; provisional, see ADR-0002.)
 - **Forward ratchet:** once a chapter passes a stage, a later regression is *advisory* — unless a subsequent stage also requires that check.
 - **Content-addressed:** editing text can make a passed check go **stale** and reopen.
-- **Several Tasks/Checks can be available at once** — the plan is not strictly single-file. Each reads as *waiting*, *has issues* (a count), or *done*. The **Current Step** features one; the chapter view lists them all.
-- **Together** tasks are parked until the current user turns on **Team-meeting mode**, when the Current Step is drawn from Together instead of Solo.
+- **Several Tasks/Checks can be available at once** — the plan is not strictly single-file. Each reads as *waiting*, *has issues* (a count), or *done*. The **Current Task** features one; the chapter view lists them all.
+- **Together** tasks are worked collaboratively, never offered as the individual **Current Task**.
 
 ## Example dialogue
 
 > **Dev:** "Saroj checks off the draft for Mark 2 — does the chapter move to the next stage?"
-> **Domain expert:** "Only if it was the last thing in the stage, and only for Mark 2 — Mark 1 and Mark 3 are tracked separately. Drafting is a **Task**: he just asserts it. The next stage has an exegetical **Review** — a person performs it and leaves **Notes**; the chapter stalls until those notes are cleared by **Revision**."
+> **Domain expert:** "Only if it was the last thing in the stage, and only for Mark 2 — Mark 1 and Mark 3 are tracked separately. Drafting is a **Task**: he just asserts it. The next stage has an exegetical **Review** — a person performs it and leaves **Comments**; the chapter stalls until those comments are cleared by **Revision**."
 > **Dev:** "And the spelling check?"
 > **Domain expert:** "That's an automated **Check** — it **passes** when there are no **Issues**. If he edits Mark 2 later, a passed check can **reopen**."
 
 ## Flagged ambiguities
 
-- **"step" vs "task"/"check" — RESOLVED (2026-06-23): Task is the spine; "step" is colloquial only.** Everything a person does is a **Task** (kinds: Drafting / Review / Revision); **Step** is no longer a modeled umbrella. Ground truth: PT9's `ProjectProgress` subsystem uses Stage/Task/Check with **zero** uses of "step", and the plan data is `PlanStage`/`PlanTask` (+ a `checks` catalog) — no "step".
-- **Check vs Review — RESOLVED (2026-06-23): "check" = automated only; human-judgment work = "review".** A **Check** is automated (catalog/basic, spelling, AI). A **Review** is human-judgment (exegetical, naturalness, comprehension, consultant, community). Both are **sources of demand**, satisfied by **Revision** tasks. This fixes a genuine PT9 overload — PT9 names human work "…check" (e.g. "Naturalness check", `<Type>ManualByChapter</Type>`) *and also* uses "review" for the same kind of work (e.g. "Naturalness review", "Review by the Community"). Adopting "review" uniformly is a deliberate, outward-facing shift (needs stakeholder buy-in) — see `docs/reports/2026-06-23-check-terminology-overloading.md`.
-- **Review lifecycle — RESOLVED (2026-06-23):** a **Review** is a **Task** the reviewer asserts done; the **Notes** it raises are cleared by **Revision** (each open note becomes an **Issue** via the automated *unresolved-notes* check). PT9 keeps the reviewer's assertion and the notes-check as separate gates; the prototype may present them as one "review." The term is **note** (not "comment"); reviews **ratchet forward**. **Current Step** stays a colloquial label for the recommended Task. (Whether a **Revision** is *planned* or *emergent* is left open/flexible.)
-- "grouping" — resolved: a grouping is a **Priority's** scripture selection, not a separate concept.
-- chapter vs. grouping as the progression unit — resolved: the **Chapter** is the base unit. Because a Priority can slice into or across books, chapters must be independently trackable and cannot inherit a single stage from their book.
+_The terminology calls below are settled in the glossary above; this records the reasoning a future reader would otherwise wonder about._
+
+- **Task is the spine; "step" is colloquial; "check" = automated, "review" = human.** This fixes a real PT9 overload: PT9 names human work "…check" (e.g. "Naturalness check", `ManualByChapter`) *and also* "review" (e.g. "Naturalness review", "Review by the Community"). Adopting **review** uniformly — and **comment** for the PT9 "note" — is a deliberate, outward-facing shift needing stakeholder buy-in. Full evidence: `docs/reports/2026-06-23-check-terminology-overloading.md`.
+- **A Review is a Task that raises Comments → Issues (via the automated unresolved-comments check) → Revision.** PT9 keeps the reviewer's assertion and the comments-check as separate gates; the prototype may present them as one "review." Reviews ratchet forward.
+- **Open / flexible (UXR):** **Anyone** vs **Unassigned**; whether a **Revision** is a planned task or emergent.
+- **grouping / progression unit:** a "grouping" is a **Priority's** scripture selection (not a separate concept). The base unit of progression is the **Chapter** (a Priority can slice across books, so chapters can't inherit a book's stage) — though "chapter" stands in for book or Priority where progression is tracked at that grain.
 - "next-task workflow" vs. "next-step workflow" — resolved: internally **next-step workflow**; the external proposal/Google Doc keeps its original "Next-task workflow" title.
