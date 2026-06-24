@@ -3251,6 +3251,12 @@ export declare const Z_INDEX_MODAL = 500;
  *   described above
  */
 export declare function cn(...inputs: ClassValue[]): string;
+/** Text and layout direction */
+export type Direction = "rtl" | "ltr";
+/** Read layout direction from localStorage or return 'ltr' */
+export declare function readDirection(): Direction;
+/** Write layout direction to localStorage */
+export declare function persistDirection(dir: Direction): void;
 
 export {
 	TabNavigationContentSearch as NavigationContentSearch,
