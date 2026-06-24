@@ -1,6 +1,7 @@
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Button,
+  ButtonGroup,
   Kbd,
   Tooltip,
   TooltipContent,
@@ -21,6 +22,7 @@ const UNLOCK_STRUCTURE_FOR_PROJECT_KEY =
   '%webView_platformScriptureEditor_structureProtection_unlockStructureForProject%';
 const PROJECT_ARIA_LABEL_KEY =
   '%webView_platformScriptureEditor_structureProtection_projectAriaLabel%';
+const ERROR_LOADING_KEY = '%webView_platformScriptureEditor_structureProtection_errorLoading%';
 
 /**
  * Localization keys used by {@link StructureProtectionButton}. Spread these into the editor
@@ -34,6 +36,7 @@ export const STRUCTURE_PROTECTION_BUTTON_STRING_KEYS = Object.freeze([
   LOCKED_BY_ADMIN_KEY,
   ARIA_LABEL_KEY,
   PROJECT_ARIA_LABEL_KEY,
+  ERROR_LOADING_KEY,
 ] as const);
 
 export type StructureProtectionStringKey = (typeof STRUCTURE_PROTECTION_BUTTON_STRING_KEYS)[number];
@@ -206,6 +209,7 @@ export function StructureProtectionButton({
   const {
     isStructureProtected,
     isAdminProtected,
+    adminSettingError,
     canAdminToggle,
     setAdminProtection,
     setUserProtection,
@@ -214,7 +218,13 @@ export function StructureProtectionButton({
   // OS-appropriate shortcut symbols, matching the editor web-view's `/Macintosh/i` detection.
   const isMac = useMemo(() => /Macintosh/i.test(navigator.userAgent), []);
 
-  const personalDisabled = !canAdminToggle && isAdminProtected;
+  // When the admin (project-level) setting failed to load, the protection values fall back to
+  // treating the admin layer as unset, so we can't trust them. Disable both toggles and surface the
+  // error via the tooltip rather than letting the user act on a possibly-wrong state.
+  const hasAdminError = adminSettingError !== undefined;
+
+  const personalDisabled = hasAdminError || (!canAdminToggle && isAdminProtected);
+  const personalDisabledTooltipKey = hasAdminError ? ERROR_LOADING_KEY : LOCKED_BY_ADMIN_KEY;
 
   const handlePersonalToggle = useCallback(() => {
     if (personalDisabled) return;
@@ -251,7 +261,7 @@ export function StructureProtectionButton({
   );
 
   return (
-    <div className="tw:flex tw:flex-row tw:items-center tw:gap-1">
+    <ButtonGroup>
       <LockToggleButtonView
         isLocked={isStructureProtected}
         isDisabled={personalDisabled}
@@ -260,7 +270,7 @@ export function StructureProtectionButton({
         unlockedIcon={<LockOpen />}
         lockTooltipKey={LOCK_STRUCTURE_KEY}
         unlockTooltipKey={UNLOCK_STRUCTURE_KEY}
-        disabledTooltipKey={LOCKED_BY_ADMIN_KEY}
+        disabledTooltipKey={personalDisabledTooltipKey}
         ariaLabelKey={ARIA_LABEL_KEY}
         shortcut={personalShortcut}
         localizedStrings={localizedStrings}
@@ -269,19 +279,20 @@ export function StructureProtectionButton({
       {canAdminToggle && (
         <LockToggleButtonView
           isLocked={isAdminProtected}
-          isDisabled={false}
+          isDisabled={hasAdminError}
           onToggle={handleProjectToggle}
           lockedIcon={<Shield />}
           unlockedIcon={<ShieldOff />}
           lockTooltipKey={LOCK_STRUCTURE_FOR_PROJECT_KEY}
           unlockTooltipKey={UNLOCK_STRUCTURE_FOR_PROJECT_KEY}
+          disabledTooltipKey={ERROR_LOADING_KEY}
           ariaLabelKey={PROJECT_ARIA_LABEL_KEY}
           shortcut={projectShortcut}
           localizedStrings={localizedStrings}
           className={className}
         />
       )}
-    </div>
+    </ButtonGroup>
   );
 }
 

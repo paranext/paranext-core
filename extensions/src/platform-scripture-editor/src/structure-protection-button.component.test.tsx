@@ -48,10 +48,19 @@ const STRINGS = {
   '%webView_platformScriptureEditor_structureProtection_ariaLabel%': 'Toggle structure protection',
   '%webView_platformScriptureEditor_structureProtection_projectAriaLabel%':
     'Toggle structure lock for project',
+  '%webView_platformScriptureEditor_structureProtection_errorLoading%':
+    'Structure protection state unavailable',
 };
 
 const PERSONAL = 'Toggle structure protection';
 const PROJECT = 'Toggle structure lock for project';
+
+// A minimal PlatformError stand-in; the component only checks `adminSettingError !== undefined`.
+// Cast through unknown because the object literal does not structurally satisfy PlatformError.
+// eslint-disable-next-line no-type-assertion/no-type-assertion
+const ADMIN_ERROR = { platformErrorVersion: 1, message: 'load failed' } as unknown as NonNullable<
+  StructureProtectionState['adminSettingError']
+>;
 
 function setState(next: Partial<StructureProtectionState>) {
   Object.assign(mockState, next);
@@ -59,7 +68,12 @@ function setState(next: Partial<StructureProtectionState>) {
 
 afterEach(() => {
   vi.clearAllMocks();
-  setState({ isStructureProtected: true, isAdminProtected: false, canAdminToggle: false });
+  setState({
+    isStructureProtected: true,
+    isAdminProtected: false,
+    canAdminToggle: false,
+    adminSettingError: undefined,
+  });
 });
 
 describe('StructureProtectionButton — personal button', () => {
@@ -105,6 +119,16 @@ describe('StructureProtectionButton — personal button', () => {
 
   it('is disabled and a no-op for a non-admin on an admin-locked project', () => {
     setState({ canAdminToggle: false, isAdminProtected: true, isStructureProtected: true });
+    render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
+    const button = screen.getByRole('button', { name: PERSONAL });
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(mockState.setUserProtection).not.toHaveBeenCalled();
+    expect(mockState.setAdminProtection).not.toHaveBeenCalled();
+  });
+
+  it('is disabled with the error tooltip when the admin setting failed to load', () => {
+    setState({ canAdminToggle: false, isAdminProtected: false, adminSettingError: ADMIN_ERROR });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     const button = screen.getByRole('button', { name: PERSONAL });
     expect(button).toBeDisabled();
@@ -229,6 +253,16 @@ describe('StructureProtectionButton — admin project button', () => {
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     fireEvent.keyDown(window, { key: 'l', ctrlKey: true, altKey: true, shiftKey: true });
     expect(mockState.setAdminProtection).toHaveBeenCalledWith(true);
+    expect(mockState.setUserProtection).not.toHaveBeenCalled();
+  });
+
+  it('is disabled and a no-op for an admin when the admin setting failed to load', () => {
+    setState({ canAdminToggle: true, isAdminProtected: false, adminSettingError: ADMIN_ERROR });
+    render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
+    const button = screen.getByRole('button', { name: PROJECT });
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(mockState.setAdminProtection).not.toHaveBeenCalled();
     expect(mockState.setUserProtection).not.toHaveBeenCalled();
   });
 
