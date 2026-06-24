@@ -1,6 +1,7 @@
 import { Direction } from '@/utils/dir-helper.util';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { LanguageStrings } from 'platform-bible-utils';
+import { ChevronDown, ChevronsLeft, ChevronsRight, ChevronUp } from 'lucide-react';
 import { ComponentType, useCallback, useMemo } from 'react';
 import { fetchEndChapter } from './book-chapter-control.utils';
 
@@ -16,6 +17,7 @@ export function useQuickNavButtons(
   availableBooks: string[],
   direction: Direction,
   handleSubmit: (scrRef: SerializedVerseRef) => void,
+  localizedStrings?: LanguageStrings,
 ): QuickNavButton[] {
   const handlePreviousChapter = useCallback(() => {
     if (scrRef.chapterNum > 1) {
@@ -84,20 +86,8 @@ export function useQuickNavButtons(
         disabled:
           availableBooks.length === 0 ||
           (scrRef.chapterNum === 1 && availableBooks.indexOf(scrRef.book) === 0),
-        title: 'Previous chapter',
+        title: localizedStrings?.['%bookChapterControl_previousChapter%'] ?? 'Previous chapter',
         icon: direction === 'ltr' ? ChevronsLeft : ChevronsRight,
-      },
-      {
-        onClick: handlePreviousVerse,
-        disabled: availableBooks.length === 0 || scrRef.verseNum === 0,
-        title: 'Previous verse',
-        icon: direction === 'ltr' ? ChevronLeft : ChevronRight,
-      },
-      {
-        onClick: handleNextVerse,
-        disabled: availableBooks.length === 0,
-        title: 'Next verse',
-        icon: direction === 'ltr' ? ChevronRight : ChevronLeft,
       },
       {
         onClick: handleNextChapter,
@@ -106,14 +96,27 @@ export function useQuickNavButtons(
           ((scrRef.chapterNum === fetchEndChapter(scrRef.book) ||
             fetchEndChapter(scrRef.book) <= 0) &&
             availableBooks.indexOf(scrRef.book) === availableBooks.length - 1),
-        title: 'Next chapter',
+        title: localizedStrings?.['%bookChapterControl_nextChapter%'] ?? 'Next chapter',
         icon: direction === 'ltr' ? ChevronsRight : ChevronsLeft,
+      },
+      {
+        onClick: handlePreviousVerse,
+        disabled: availableBooks.length === 0 || scrRef.verseNum === 0,
+        title: localizedStrings?.['%bookChapterControl_previousVerse%'] ?? 'Previous verse',
+        icon: ChevronUp,
+      },
+      {
+        onClick: handleNextVerse,
+        disabled: availableBooks.length === 0,
+        title: localizedStrings?.['%bookChapterControl_nextVerse%'] ?? 'Next verse',
+        icon: ChevronDown,
       },
     ];
   }, [
     scrRef,
     availableBooks,
     direction,
+    localizedStrings,
     handlePreviousChapter,
     handlePreviousVerse,
     handleNextVerse,

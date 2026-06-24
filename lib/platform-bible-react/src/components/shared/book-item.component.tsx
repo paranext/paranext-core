@@ -116,7 +116,11 @@ export function BookItem({
         aria-disabled={disabled || undefined}
         aria-label={`${Canon.bookIdToEnglishName(bookId)} (${bookId.toLocaleUpperCase()})`}
         disabled={disabled}
-        className={cn(className, disabled && 'tw:cursor-not-allowed tw:opacity-50')}
+        className={cn(
+          'tw:[&>svg:last-child]:hidden',
+          className,
+          disabled && 'tw:cursor-not-allowed tw:opacity-50',
+        )}
       >
         {showCheck && (
           <Check
