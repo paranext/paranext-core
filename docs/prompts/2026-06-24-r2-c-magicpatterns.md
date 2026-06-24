@@ -118,3 +118,21 @@ Scope: the book of **Philippians (4 chapters)**, worked book-by-book, PLUS a Pri
 - The Current Task / "your next step" should feel reassuring and singular, never like a to-do firehose.
 - Make both variants and the no-plan project navigable from the seeded UI so a reviewer can walk through all six capabilities above.
 ````
+
+---
+
+## Iterating on an existing prototype — preserve, don't revert
+
+Magic Patterns works **iteratively**: the block above is the cold-start build; you refine by pasting follow-up prompts. On a follow-up, Magic Patterns tends to regenerate from scratch and can quietly drop features or layout you already had. So whenever a prototype **already exists** and you're only adding to it, lead the follow-up prompt with the preservation guard below — then describe the specific change you want.
+
+Paste this at the **top of any follow-up prompt**:
+
+````text
+Keep as much of the existing prototype as possible. We're adding a feature — I don't want to see important features or layout reverted.
+
+For example:
+- Disallowed: replacing the Model Text column with a Next Task column.
+- Allowed: wrapping the Model Text in a tab UI and adding a Next Task tab.
+
+The single-task-focus variant and the chapter-focus variant are exclusive of one another. Use the existing View menu to swap between them (useful for demoing multiple ideas without the UI getting too busy).
+````
