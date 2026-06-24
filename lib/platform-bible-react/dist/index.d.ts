@@ -7,7 +7,7 @@ import { Column, ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSort
 import { ClassValue } from 'clsx';
 import { Command as CommandPrimitive } from 'cmdk';
 import { LucideProps } from 'lucide-react';
-import { CommentStatus, DblResourceData, LanguageStrings, LegacyCommentThread, LocalizeKey, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ResourceType, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
+import { CommentStatus, LanguageStrings, LegacyCommentThread, LocalizeKey, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
 import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as RadixTabs, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import React$1 from 'react';
 import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithoutRef, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, RefObject } from 'react';
@@ -1091,58 +1091,6 @@ export declare function MarkerMenu({ localizedStrings, markerMenuItems, searchRe
 export interface SelectMenuItemHandler {
 	(selectedMenuItem: MenuItemContainingCommand): void;
 }
-/**
- * Localization keys used by {@link ResourcePickerDialog}. Pass to `useLocalizedStrings` and forward
- * the result as the `localizedStrings` prop.
- */
-export declare const RESOURCE_PICKER_DIALOG_STRING_KEYS: readonly [
-	"%resourcePicker_title%",
-	"%resourcePicker_section_already_selected%",
-	"%resourcePicker_section_installed%",
-	"%resourcePicker_section_available_to_download%",
-	"%resourcePicker_button_use%",
-	"%resourcePicker_no_results%",
-	"%resourcePicker_search_placeholder%",
-	"%resourcePicker_language_filter_any%",
-	"%resourcePicker_language_filter_multipleSelected%",
-	"%resourcePicker_showing_count%"
-];
-/**
- * Map of localized strings required by {@link ResourcePickerDialog}. Derive from
- * {@link RESOURCE_PICKER_DIALOG_STRING_KEYS}.
- */
-export type ResourcePickerDialogLocalizedStrings = {
-	[key in (typeof RESOURCE_PICKER_DIALOG_STRING_KEYS)[number]]?: string;
-};
-/** Props for {@link ResourcePickerDialog} */
-export interface ResourcePickerDialogProps {
-	/** Full list of DBL resources fetched by the caller via PAPI */
-	allResources: DblResourceData[];
-	/** Whether the `allResources` is still loading */
-	isResourcesLoading?: boolean;
-	/** If provided, only resources of this type are shown */
-	resourceType?: ResourceType;
-	/** IDs of resources already selected in the calling panel */
-	selectedResourceIds?: string[];
-	/** Localized strings — use RESOURCE_PICKER_DIALOG_STRING_KEYS with useLocalizedStrings */
-	localizedStrings: ResourcePickerDialogLocalizedStrings;
-	/** Called when the user clicks "Use" on a resource entry */
-	onSelect: (resource: DblResourceData) => void;
-}
-/**
- * Presentational dialog content for picking a DBL resource. Renders three sections — Already
- * Selected, Installed, and Available to Download — derived from `allResources` and
- * `selectedResourceIds`. Supports text search and language filtering.
- *
- * Does not include an outer `Dialog` or `DialogContent` wrapper; the host (paranext-core dialog
- * infrastructure or a Storybook decorator) is responsible for providing that context.
- *
- * Obtain localized strings by passing {@link RESOURCE_PICKER_DIALOG_STRING_KEYS} to
- * `useLocalizedStrings` and forwarding the result as `localizedStrings`.
- *
- * @param props See {@link ResourcePickerDialogProps}
- */
-export function ResourcePickerDialog({ allResources, isResourcesLoading, resourceType, selectedResourceIds, localizedStrings, onSelect, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
 export type SelectedSettingsSidebarItem = {
 	label: string;
 	projectId?: string;

@@ -70,6 +70,12 @@
     "notes": "The tooltip text for the redo button in the common undo/redo control used in various editors.",
     "fallbackKey": "%Paratext.Base.ProjectComments.CommentEditorForm.uiRedo.ToolTipText%"
   },
+  "%resourcePicker_button_use%": {
+    "deprecationInfo": {
+      "date": "2026-06-01",
+      "message": "The resource picker no longer has an explicit 'Use' button. Resources are selected by clicking the row directly."
+    }
+  },
   "%resources_type_ER%": {
     "fallbackKey": "%ProjectType_17%"
   },
