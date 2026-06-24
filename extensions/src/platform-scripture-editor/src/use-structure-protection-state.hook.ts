@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { isPlatformError } from 'platform-bible-utils';
+import { logger } from '@papi/frontend';
 import { useProjectDataProvider, useProjectSetting, useSetting } from '@papi/frontend/react';
 
 /** Return type of {@link useStructureProtectionState}. */
@@ -74,7 +75,7 @@ export function useStructureProtectionState(
         return undefined;
       })
       .catch((err) => {
-        console.error(`Failed to subscribe to user structure protection: ${err}`);
+        logger.error(`Failed to subscribe to user structure protection: ${err}`);
       });
     return () => {
       disposed = true;
@@ -127,7 +128,7 @@ export function useStructureProtectionState(
   const setUserProtection = useCallback(
     (value: boolean) => {
       userEditorSettingsPdp?.setUserStructureProtected(value).catch((err) => {
-        console.error(`Failed to set user structure protection: ${err}`);
+        logger.error(`Failed to set user structure protection: ${err}`);
       });
     },
     [userEditorSettingsPdp],
