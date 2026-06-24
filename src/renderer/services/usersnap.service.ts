@@ -240,12 +240,7 @@ export async function initializeUsersnapApi() {
 
     initializeUsersnapDomObserver();
   } catch (error) {
-    logger.error('Failed to initialize UserSnap API:', error);
-    logger.warn(
-      'UserSnap functionality will be unavailable. This may be due to network connectivity issues, invalid API keys, or blocked external requests.',
-    );
-
-    // Set globalUsersnapApi to undefined to indicate initialization failed
+    logger.warn('Failed to initialize UserSnap API; feedback forms will be unavailable:', error);
     globalUsersnapApi = undefined;
   }
 }
