@@ -7,7 +7,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { Lock, LockOpen, ShieldCheck, ShieldOff } from 'lucide-react';
+import { Lock, LockOpen, Shield, ShieldOff } from 'lucide-react';
 import { useStructureProtectionState } from './use-structure-protection-state.hook';
 
 const LOCK_STRUCTURE_KEY = '%webView_platformScriptureEditor_structureProtection_lockStructure%';
@@ -271,7 +271,7 @@ export function StructureProtectionButton({
           isLocked={isAdminProtected}
           isDisabled={false}
           onToggle={handleProjectToggle}
-          lockedIcon={<ShieldCheck />}
+          lockedIcon={<Shield />}
           unlockedIcon={<ShieldOff />}
           lockTooltipKey={LOCK_STRUCTURE_FOR_PROJECT_KEY}
           unlockTooltipKey={UNLOCK_STRUCTURE_FOR_PROJECT_KEY}

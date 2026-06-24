@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { useMemo, useState } from 'react';
-import { Lock, LockOpen, ShieldCheck, ShieldOff } from 'lucide-react';
+import { Lock, LockOpen, Shield, ShieldOff } from 'lucide-react';
 import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
 import {
   LockToggleButtonView,
@@ -122,7 +122,7 @@ function AdminButtonsHarness() {
         isLocked={projectLocked}
         isDisabled={false}
         onToggle={() => setProjectLocked((previous) => !previous)}
-        lockedIcon={<ShieldCheck />}
+        lockedIcon={<Shield />}
         unlockedIcon={<ShieldOff />}
         lockTooltipKey="%webView_platformScriptureEditor_structureProtection_lockStructureForProject%"
         unlockTooltipKey="%webView_platformScriptureEditor_structureProtection_unlockStructureForProject%"

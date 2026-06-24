@@ -199,13 +199,13 @@ describe('StructureProtectionButton — admin project button', () => {
     expect(screen.getByRole('button', { name: PERSONAL })).toBeInTheDocument();
   });
 
-  it('is rendered for an admin with ShieldCheck (locked) / ShieldOff (unlocked) icons', () => {
+  it('is rendered for an admin with Shield (locked) / ShieldOff (unlocked) icons', () => {
     setState({ canAdminToggle: true, isAdminProtected: true, isStructureProtected: true });
     const { rerender } = render(
       <StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />,
     );
     const lockedButton = screen.getByRole('button', { name: PROJECT });
-    expect(lockedButton.querySelector('.lucide-shield-check')).toBeInTheDocument();
+    expect(lockedButton.querySelector('.lucide-shield')).toBeInTheDocument();
     expect(lockedButton.className).not.toContain('tw:text-destructive');
 
     setState({ isAdminProtected: false });
