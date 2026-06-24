@@ -213,7 +213,13 @@ Cmd+Z
   </ExampleBlock>
 </ExampleBlockGroup>
 
-Caveat: The shared `Kbd` component doesn't exist yet and won't until after we upgrade shadcn/ui, so style `<kbd>` inline:
+Use the shared `Kbd` component from `platform-bible-react`, which applies this styling for you (use `KbdGroup` to group the keys of a combination):
+
+```tsx
+<Kbd>⌘Z</Kbd>
+```
+
+In raw HTML or MDX contexts where you can't import `Kbd`, style a `<kbd>` element inline to match:
 
 ```tsx
 <kbd className="tw:rounded tw:border tw:border-border tw:bg-muted tw:px-1 tw:py-0.5 tw:text-xs tw:font-mono">

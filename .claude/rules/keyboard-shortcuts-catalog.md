@@ -6,9 +6,9 @@ is no automated scan; it is maintained by hand):
 
 - **Single source of truth** → `src/stories/keyboard-shortcuts.data.ts`
 
-It is rendered by the shared `KeyboardShortcutsCatalog` component (exported from
-`platform-bible-react`) on the **Reference → Keyboard shortcuts** page of the main Platform.Bible
-Storybook.
+It is rendered by the `KeyboardShortcutsCatalog` component, which lives in the main Platform.Bible
+Storybook at `src/stories/keyboard-shortcuts-catalog/keyboard-shortcuts-catalog.component.tsx`, on
+the **Reference → Keyboard shortcuts** page.
 
 ### The rule
 

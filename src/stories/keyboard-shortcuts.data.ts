@@ -6,6 +6,14 @@ import { KeyboardShortcutEntry } from './keyboard-shortcuts-catalog/keyboard-sho
  * shortcuts defined inside the shared `platform-bible-react` component library. This is the single
  * source of truth — when you add, change, or remove any keyboard handler anywhere in the app,
  * update the matching entry here.
+ *
+ * Note on macOS modifier order: the `Guidelines/Keyboard shortcuts` page documents the macOS
+ * display order as Control, Option, Shift, Command. A few entries intentionally deviate and show
+ * Command before Option (`⌘⌥…`) because their `keys` mirror the modifier order written in the code
+ * that handles them (`next-tab-group`, `previous-tab-group`, `scripture-insert-comment`). These are
+ * raw `keydown` handlers, not OS-rendered menu accelerators, so the chord is identical regardless
+ * of display order; the entries are kept in code order so they read the same as the handler
+ * source.
  */
 export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   {
@@ -29,6 +37,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Switch to the next tab group',
     category: 'Navigation',
     context: 'Main process (global)',
+    // macOS combo mirrors code order (`input.meta && input.alt`); see file note on modifier order
     keys: { macOS: '⌘⌥↓', windows: 'Ctrl+PageDown', linux: 'Ctrl+PageDown' },
     locations: ['src/main/main.ts'],
   },
@@ -37,6 +46,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Switch to the previous tab group',
     category: 'Navigation',
     context: 'Main process (global)',
+    // macOS combo mirrors code order (`input.meta && input.alt`); see file note on modifier order
     keys: { macOS: '⌘⌥↑', windows: 'Ctrl+PageUp', linux: 'Ctrl+PageUp' },
     locations: ['src/main/main.ts'],
   },
@@ -104,10 +114,15 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   },
   {
     id: 'scripture-insert-comment',
-    purpose: 'Insert a comment at the selection (also Ctrl+Shift+N on Windows/Linux)',
+    purpose: 'Insert a comment at the selection',
     category: 'Editing',
     context: 'Scripture editor web view',
-    keys: { macOS: '⌘⌥M', windows: 'Ctrl+Alt+M', linux: 'Ctrl+Alt+M' },
+    // macOS combo mirrors code order (`event.metaKey && event.altKey`); see file note on modifier order
+    keys: {
+      macOS: '⌘⌥M',
+      windows: 'Ctrl+Alt+M / Ctrl+Shift+N',
+      linux: 'Ctrl+Alt+M / Ctrl+Shift+N',
+    },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
     ],
@@ -165,10 +180,10 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   },
   {
     id: 'editor-redo',
-    purpose: 'Redo the last undone edit (also Ctrl+Shift+Z on Windows/Linux)',
+    purpose: 'Redo the last undone edit',
     category: 'Editing',
     context: 'Editor (text editing)',
-    keys: { macOS: '⇧⌘Z', windows: 'Ctrl+Y', linux: 'Ctrl+Y' },
+    keys: { macOS: '⇧⌘Z', windows: 'Ctrl+Y / Ctrl+Shift+Z', linux: 'Ctrl+Y / Ctrl+Shift+Z' },
     locations: [
       'lib/platform-bible-react/src/components/basics/editor-keyboard-shortcuts.component.tsx',
     ],

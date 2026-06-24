@@ -45,9 +45,12 @@ export const KEYBOARD_SHORTCUTS_CATALOG_STRING_KEYS = Object.freeze([
 ] as const);
 
 /**
- * Localized column-header strings for {@link KeyboardShortcutsCatalog}. If you use this component in
- * an extension, pass {@link KEYBOARD_SHORTCUTS_CATALOG_STRING_KEYS} into the `useLocalizedStrings`
- * hook to obtain these.
+ * Localized column-header strings for {@link KeyboardShortcutsCatalog}. This component lives in the
+ * core Platform.Bible Storybook (`src/stories/`) and is not exported from `platform-bible-react`;
+ * it renders the **Reference → Keyboard shortcuts** catalog page. The keys are kept localizable so
+ * the catalog can be translated in Storybook, but no caller needs to pass `localizedStrings` today
+ * — the built-in English {@link KEYBOARD_SHORTCUTS_CATALOG_STRING_KEYS} defaults are used by
+ * default.
  */
 export type KeyboardShortcutsCatalogLocalizedStrings = {
   [key in (typeof KEYBOARD_SHORTCUTS_CATALOG_STRING_KEYS)[number]]?: string;
