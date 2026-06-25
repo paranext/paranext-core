@@ -18,7 +18,7 @@ export const USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY: string = 'bd3bc542-1f0c-40e4-
 export const USERSNAP_SPACE_API_KEY: string = '1cf2709b-3ff0-4cff-8952-a2d2bca7590d';
 
 /** Milliseconds to wait for `loadSpace` to resolve before giving up. */
-const LOAD_SPACE_TIMEOUT_MS = 5 * 1000;
+export const LOAD_SPACE_TIMEOUT_MS = 5 * 1000;
 
 /** Global UserSnap API instance service */
 
@@ -171,6 +171,7 @@ export async function initializeUsersnapApi() {
     const startTime = performance.now();
     // Set a timeout, since `loadSpace` reaches an external server that can hang indefinitely.
     const loadVar = new AsyncVariable<SpaceApi>('usersnapLoadSpace', LOAD_SPACE_TIMEOUT_MS);
+    // Fire-and-forget: startup awaits `loadVar.promise`, so the timeout can win even if this hangs.
     (async () => {
       try {
         const spaceApi = await loadSpace(USERSNAP_SPACE_API_KEY);
@@ -179,7 +180,7 @@ export async function initializeUsersnapApi() {
         else loadVar.resolveToValue(spaceApi);
       } catch (error) {
         if (loadVar.hasSettled)
-          logger.debug('Usersnap loadSpace settled or failed cleanup after timeout:', error);
+          logger.debug('Usersnap loadSpace rejected (or cleanup failed) after timeout:', error);
         else loadVar.rejectWithReason(getErrorMessage(error));
       }
     })();
