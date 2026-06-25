@@ -443,13 +443,16 @@ class ThemeDataProviderEngine
   }
 
   async dispose(): Promise<boolean> {
+    // Set before awaiting runAllUnsubscribers so a constructor theme subscription resolving
+    // mid-disposal unsubscribes itself instead of being added to the list that's about to clear.
+    this.#isDisposed = true;
+
     const success = await this.unsubscribeEventListeners.runAllUnsubscribers();
 
     if (!this.#allThemeFamiliesByIdAsyncVariable.hasSettled) {
       this.#allThemeFamiliesByIdAsyncVariable.rejectWithReason('Theme service host disposing');
     }
 
-    this.#isDisposed = true;
     return success;
   }
 
@@ -589,9 +592,9 @@ export const initialize = createCachedInitializer(async () => {
   const systemThemeChangesInfo = listenToSystemThemeChanges();
 
   // registerEngine mutates the engine it receives (not idempotent), so build a fresh instance per
-  // attempt and dispose the replaced one to avoid leaking timers/subscriptions. Build the
-  // replacement before disposing so getCurrentThemeSync never observes a mid-disposal engine; after
-  // a failed attempt it holds the disposed engine, which is safe since dispose() keeps currentTheme.
+  // attempt and dispose the replaced one to avoid leaking timers/subscriptions. Building the
+  // replacement before disposing keeps getCurrentThemeSync on a live engine; after a catch-block
+  // failure it reads the disposed engine, still safe since dispose() retains currentTheme.
   const previousEngine = themeServiceEngine;
   themeServiceEngine = createThemeServiceEngine();
   await previousEngine
