@@ -3,6 +3,7 @@ import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { notificationService } from '@shared/services/notification.service';
 import { loadSpace, type InitOptions, type SpaceApi } from '@usersnap/browser';
+import { AsyncVariable, getErrorMessage } from 'platform-bible-utils';
 
 /**
  * These API keys are unique IDs that can be used to interact with our feedback forms on Usersnap. A
@@ -154,38 +155,6 @@ function stopUsersnapObserver(): void {
   }
 }
 
-/**
- * Loads a Usersnap space, rejecting if it takes longer than `timeoutMs`. Usersnap reaches an
- * external server, which can hang indefinitely in offline or firewalled environments; the timeout
- * keeps a hung load from blocking any renderer startup await that depends on it.
- *
- * Since a promise can't be cancelled, a `loadSpace` that resolves after the timeout has its space
- * destroyed so the loaded SDK isn't left orphaned.
- *
- * @param apiKey Usersnap Space API key to load.
- * @param timeoutMs Milliseconds to wait for `loadSpace` before rejecting.
- * @returns The loaded `SpaceApi`.
- * @throws If `loadSpace` rejects, or if it doesn't resolve within `timeoutMs`.
- */
-function loadSpaceWithTimeout(apiKey: string, timeoutMs: number): Promise<SpaceApi> {
-  const loadPromise = loadSpace(apiKey);
-  return new Promise<SpaceApi>((resolve, reject) => {
-    const timeoutId = setTimeout(() => {
-      loadPromise.then((late) => late.destroy()).catch(() => {});
-      reject(new Error(`Usersnap loadSpace timed out after ${timeoutMs} ms`));
-    }, timeoutMs);
-    loadPromise
-      .then((result) => {
-        clearTimeout(timeoutId);
-        return resolve(result);
-      })
-      .catch((error: unknown) => {
-        clearTimeout(timeoutId);
-        reject(error);
-      });
-  });
-}
-
 /** Initializes the global UserSnap API instance */
 export async function initializeUsersnapApi() {
   try {
@@ -197,7 +166,20 @@ export async function initializeUsersnapApi() {
     };
 
     const startTime = performance.now();
-    const api = await loadSpaceWithTimeout(USERSNAP_SPACE_API_KEY, 5000);
+    // `loadSpace` reaches an external server that can hang indefinitely in offline or firewalled
+    // environments; bound it so a hung load can't block renderer startup.
+    const loadVar = new AsyncVariable<SpaceApi>('usersnapLoadSpace', 5000);
+    loadSpace(USERSNAP_SPACE_API_KEY)
+      .then((space) => {
+        // Since a pending promise can't be cancelled, a space that loads after the timeout fires is
+        // destroyed so the loaded SDK isn't left orphaned.
+        if (loadVar.hasSettled) return space.destroy();
+        return loadVar.resolveToValue(space);
+      })
+      .catch((error: unknown) => {
+        if (!loadVar.hasSettled) loadVar.rejectWithReason(getErrorMessage(error));
+      });
+    const api = await loadVar.promise;
     await api.init(defaultInitParams);
     const endTime = performance.now();
     logger.info(`UserSnap initialized successfully in ${endTime - startTime}ms`);
