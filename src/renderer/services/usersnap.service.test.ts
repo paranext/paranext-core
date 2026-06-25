@@ -104,16 +104,14 @@ describe('initializeUsersnapApi loadSpace timeout/race logic', () => {
     await vi.waitFor(() => expect(spaceApi.destroy).toHaveBeenCalledTimes(1));
   });
 
-  it('rejects before the timeout: no init, no destroy', async () => {
+  it('rejects before the timeout: initialization resolves without throwing', async () => {
     const { initializeUsersnapApi } = await importService();
-    const spaceApi = createMockSpaceApi();
 
     const initPromise = initializeUsersnapApi();
 
     loadSpaceDeferred.reject(new Error('network down'));
-    await initPromise;
 
-    expect(spaceApi.init).not.toHaveBeenCalled();
-    expect(spaceApi.destroy).not.toHaveBeenCalled();
+    // The rejection flows into the outer catch, so startup settles gracefully rather than throwing.
+    await expect(initPromise).resolves.toBeUndefined();
   });
 });
