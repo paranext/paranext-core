@@ -358,3 +358,47 @@ describe('useStructureProtectionState — edge cases', () => {
     expect(result.current.isStructureProtected).toBe(true); // simple mode default
   });
 });
+
+describe('useStructureProtectionState — power mode (feature inactive)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('forces the feature off even when admin-locked and the user setting is true', async () => {
+    setup({ adminSetting: true, userSetting: true, interfaceMode: 'power', canWrite: false });
+    const { result } = renderHook(() => useStructureProtectionState('proj-1'));
+    await act(async () => {});
+    expect(result.current.isProtectionActive).toBe(false);
+    expect(result.current.isStructureProtected).toBe(false);
+    expect(result.current.isAdminProtected).toBe(false);
+    expect(result.current.canAdminToggle).toBe(false);
+    expect(result.current.adminSettingError).toBeUndefined();
+  });
+
+  it('setAdminProtection is a no-op in power mode even for an admin', async () => {
+    setup({ adminSetting: false, userSetting: false, interfaceMode: 'power', canWrite: true });
+    const { result } = renderHook(() => useStructureProtectionState('proj-1'));
+    await act(async () => {});
+    act(() => {
+      result.current.setAdminProtection(true);
+    });
+    expect(mockSetAdminSetting).not.toHaveBeenCalled();
+  });
+
+  it('setUserProtection is a no-op in power mode', async () => {
+    setup({ adminSetting: false, userSetting: false, interfaceMode: 'power', canWrite: false });
+    const { result } = renderHook(() => useStructureProtectionState('proj-1'));
+    await act(async () => {});
+    act(() => {
+      result.current.setUserProtection(true);
+    });
+    expect(mockSetUserSetting).not.toHaveBeenCalled();
+  });
+
+  it('isProtectionActive is true in simple mode', async () => {
+    setup({ adminSetting: false, userSetting: false, interfaceMode: 'simple', canWrite: false });
+    const { result } = renderHook(() => useStructureProtectionState('proj-1'));
+    await act(async () => {});
+    expect(result.current.isProtectionActive).toBe(true);
+  });
+});

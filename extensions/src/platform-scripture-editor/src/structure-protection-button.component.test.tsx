@@ -28,6 +28,7 @@ const mockState: StructureProtectionState = {
   isAdminProtected: false,
   adminSettingError: undefined,
   canAdminToggle: false,
+  isProtectionActive: true,
   setAdminProtection: vi.fn(),
   setUserProtection: vi.fn(),
 };
@@ -73,6 +74,7 @@ afterEach(() => {
     isAdminProtected: false,
     canAdminToggle: false,
     adminSettingError: undefined,
+    isProtectionActive: true,
   });
 });
 
@@ -283,5 +285,22 @@ describe('StructureProtectionButton — admin project button', () => {
     setState({ isAdminProtected: false });
     rerender(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     expect((await screen.findAllByText('Ctrl+Alt+Shift+L')).length).toBeGreaterThan(0);
+  });
+});
+
+describe('StructureProtectionButton — power mode', () => {
+  it('renders nothing when protection is inactive', () => {
+    setState({
+      isProtectionActive: false,
+      canAdminToggle: true,
+      isAdminProtected: true,
+      isStructureProtected: true,
+    });
+    const { container } = render(
+      <StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />,
+    );
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByRole('button', { name: PERSONAL })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: PROJECT })).not.toBeInTheDocument();
   });
 });

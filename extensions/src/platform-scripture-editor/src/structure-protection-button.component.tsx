@@ -211,6 +211,7 @@ export function StructureProtectionButton({
     isAdminProtected,
     adminSettingError,
     canAdminToggle,
+    isProtectionActive,
     setAdminProtection,
     setUserProtection,
   } = useStructureProtectionState(projectId);
@@ -259,6 +260,9 @@ export function StructureProtectionButton({
     }),
     [isMac],
   );
+
+  // The structure-protection feature applies in simple mode only; render nothing when inactive.
+  if (!isProtectionActive) return undefined;
 
   return (
     <ButtonGroup>
