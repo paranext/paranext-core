@@ -588,11 +588,10 @@ let dataProvider: IThemeService;
 export const initialize = createCachedInitializer(async () => {
   const systemThemeChangesInfo = listenToSystemThemeChanges();
 
-  // registerEngine mutates the engine it receives (not idempotent), so build a fresh instance on
-  // each attempt and dispose the replaced one to avoid leaking its timer and theme subscriptions.
-  // Build the replacement before disposing so getCurrentThemeSync never observes a mid-disposal
-  // engine. After a catch-block failure, themeServiceEngine holds the disposed attempt — safe
-  // because dispose() tears down subscriptions/timers but does not clear currentTheme.
+  // registerEngine mutates the engine it receives (not idempotent), so build a fresh instance per
+  // attempt and dispose the replaced one to avoid leaking timers/subscriptions. Build the
+  // replacement before disposing so getCurrentThemeSync never observes a mid-disposal engine; after
+  // a failed attempt it holds the disposed engine, which is safe since dispose() keeps currentTheme.
   const previousEngine = themeServiceEngine;
   themeServiceEngine = createThemeServiceEngine();
   await previousEngine

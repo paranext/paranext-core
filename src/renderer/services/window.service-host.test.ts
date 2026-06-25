@@ -5,15 +5,14 @@ const { mockRegisterEngine } = vi.hoisted(() => ({
 }));
 
 // detectFocus() calls getDockLayout().getTabInfoByElement; stub the dock layout so the engine
-// constructor's async initial-focus detection resolves without error. This mock must NOT be
-// cleared by vi.restoreAllMocks() — a floating promise from the engine constructor's
-// #setDetectFocusInternal() can run after the test completes, and if the mock were cleared it
-// would resolve to undefined and throw. Avoid afterEach(vi.restoreAllMocks()) for this reason.
+// constructor's async initial-focus detection resolves without error. Don't clear this mock with
+// vi.restoreAllMocks(): the constructor's #setDetectFocusInternal() floating promise can run after
+// the test, and a cleared mock would resolve to undefined and throw.
 vi.mock('@renderer/services/web-view.service-host', () => ({
   getDockLayout: vi.fn().mockResolvedValue({
     focusTab: vi.fn(),
-    getTabInfoByElement: vi.fn().mockReturnValue(undefined),
     getTabInfoByDirectionFromTab: vi.fn().mockReturnValue(undefined),
+    getTabInfoByElement: vi.fn().mockReturnValue(undefined),
     getTabInfoById: vi.fn().mockReturnValue(undefined),
   }),
 }));
