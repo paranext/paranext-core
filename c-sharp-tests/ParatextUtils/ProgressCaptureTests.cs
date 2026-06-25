@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using NUnit.Framework;
 using Paranext.DataProvider.ParatextUtils;
@@ -27,6 +28,23 @@ namespace TestParanextDataProvider.ParatextUtils
                 session.Text = "Connection to server lost. Retrying...";
 
             Assert.That(captured, Does.Contain("Connection to server lost. Retrying..."));
+        }
+
+        [Test]
+        public void SetProgressText_SwallowsCallbackException()
+        {
+            // A callback that throws must NOT escape into ParatextData's status-update path
+            // (it runs synchronously inside the retry loop), or it would turn an otherwise
+            // recoverable reconnect into a hard Send/Receive failure.
+            using var scope = ProgressCapture.StartCapture(_ =>
+                throw new InvalidOperationException("callback boom")
+            );
+
+            Assert.DoesNotThrow(() =>
+            {
+                using var session = Progress.Mgr.StartIndefiniteTask();
+                session.Text = "trigger";
+            });
         }
 
         [Test]
