@@ -81,3 +81,4 @@
 {"type":"pr_outcome","prNumber":2446,"outcome":"open","checkedDate":"2026-06-25"}
 {"type":"pr_outcome","prNumber":2447,"outcome":"open","checkedDate":"2026-06-25"}
 {"type":"pr_outcome","prNumber":2449,"outcome":"open","checkedDate":"2026-06-25"}
+{"type":"run_started","runId":"qs-2026-06-25","seeds":{"jira":["PT-3924","PT-3909","PT-3993","PT-4004","PT-3852","PT-3931","PT-3879","PT-3922","PT-3848","PT-4005","PT-4007","PT-4001","PT-3979"],"scanTarget":null},"date":"2026-06-25"}
