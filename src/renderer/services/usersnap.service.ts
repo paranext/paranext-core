@@ -17,6 +17,9 @@ export const USERSNAP_PROJECT_REPORT_ISSUE_API_KEY: string = '68df6b26-c519-4829
 export const USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY: string = 'bd3bc542-1f0c-40e4-85f7-315f5138ea88';
 export const USERSNAP_SPACE_API_KEY: string = '1cf2709b-3ff0-4cff-8952-a2d2bca7590d';
 
+/** Milliseconds to wait for `loadSpace` to resolve before giving up. */
+const LOAD_SPACE_TIMEOUT_MS = 5 * 1000;
+
 /** Global UserSnap API instance service */
 
 let globalUsersnapApi: SpaceApi | undefined;
@@ -166,19 +169,20 @@ export async function initializeUsersnapApi() {
     };
 
     const startTime = performance.now();
-    // `loadSpace` reaches an external server that can hang indefinitely in offline or firewalled
-    // environments; bound it so a hung load can't block renderer startup.
-    const loadVar = new AsyncVariable<SpaceApi>('usersnapLoadSpace', 5000);
-    loadSpace(USERSNAP_SPACE_API_KEY)
-      .then((space) => {
-        // Since a pending promise can't be cancelled, a space that loads after the timeout fires is
-        // destroyed so the loaded SDK isn't left orphaned.
-        if (loadVar.hasSettled) return space.destroy();
-        return loadVar.resolveToValue(space);
-      })
-      .catch((error: unknown) => {
-        if (!loadVar.hasSettled) loadVar.rejectWithReason(getErrorMessage(error));
-      });
+    // Set a timeout, since `loadSpace` reaches an external server that can hang indefinitely.
+    const loadVar = new AsyncVariable<SpaceApi>('usersnapLoadSpace', LOAD_SPACE_TIMEOUT_MS);
+    (async () => {
+      try {
+        const spaceApi = await loadSpace(USERSNAP_SPACE_API_KEY);
+        // If a space loads after the timeout fires, destroy it to avoid an orphaned instance.
+        if (loadVar.hasSettled) await spaceApi.destroy();
+        else loadVar.resolveToValue(spaceApi);
+      } catch (error) {
+        if (loadVar.hasSettled)
+          logger.debug('Usersnap loadSpace settled or failed cleanup after timeout:', error);
+        else loadVar.rejectWithReason(getErrorMessage(error));
+      }
+    })();
     const api = await loadVar.promise;
     await api.init(defaultInitParams);
     const endTime = performance.now();
