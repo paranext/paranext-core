@@ -154,6 +154,38 @@ function stopUsersnapObserver(): void {
   }
 }
 
+/**
+ * Loads a Usersnap space, rejecting if it takes longer than `timeoutMs`. Usersnap reaches an
+ * external server, which can hang indefinitely in offline or firewalled environments; the timeout
+ * keeps a hung load from blocking any renderer startup await that depends on it.
+ *
+ * Since a promise can't be cancelled, a `loadSpace` that resolves after the timeout has its space
+ * destroyed so the loaded SDK isn't left orphaned.
+ *
+ * @param apiKey Usersnap Space API key to load.
+ * @param timeoutMs Milliseconds to wait for `loadSpace` before rejecting.
+ * @returns The loaded `SpaceApi`.
+ * @throws If `loadSpace` rejects, or if it doesn't resolve within `timeoutMs`.
+ */
+function loadSpaceWithTimeout(apiKey: string, timeoutMs: number): Promise<SpaceApi> {
+  const loadPromise = loadSpace(apiKey);
+  return new Promise<SpaceApi>((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      loadPromise.then((late) => late.destroy()).catch(() => {});
+      reject(new Error(`Usersnap loadSpace timed out after ${timeoutMs} ms`));
+    }, timeoutMs);
+    loadPromise
+      .then((result) => {
+        clearTimeout(timeoutId);
+        return resolve(result);
+      })
+      .catch((error: unknown) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
+}
+
 /** Initializes the global UserSnap API instance */
 export async function initializeUsersnapApi() {
   try {
@@ -165,21 +197,7 @@ export async function initializeUsersnapApi() {
     };
 
     const startTime = performance.now();
-    const api = await new Promise<Awaited<ReturnType<typeof loadSpace>>>((resolve, reject) => {
-      const id = setTimeout(
-        () => reject(new Error('Usersnap loadSpace timed out after 5 s')),
-        5000,
-      );
-      loadSpace(USERSNAP_SPACE_API_KEY)
-        .then((result) => {
-          clearTimeout(id);
-          return resolve(result);
-        })
-        .catch((error: unknown) => {
-          clearTimeout(id);
-          reject(error);
-        });
-    });
+    const api = await loadSpaceWithTimeout(USERSNAP_SPACE_API_KEY, 5000);
     await api.init(defaultInitParams);
     const endTime = performance.now();
     logger.info(`UserSnap initialized successfully in ${endTime - startTime}ms`);
