@@ -26,7 +26,12 @@ commitments.
 
 ## 1. Goal
 
-Display several Scripture translations side by side as columns in a CSS grid, where
+This maps to a nice-to-have in the PRD:
+
+> Saroj sees the different versions of a verse side-by-side, and each verse is horizontally
+> aligned with the other versions of the same verse.
+
+Concretely: display several Scripture translations side by side as columns in a CSS grid, where
 **corresponding verses line up on the same row across every column** (verse 1 of every
 translation in one row, verse 2 in the next, etc.), so a reader's eye can scan a single
 verse horizontally across translations.
