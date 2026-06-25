@@ -98,3 +98,4 @@
 {"type":"backlog","candidateId":"c5","title":"BCV navigation to a new book is wrong when editor has focus/edit (regression)","area":"editor BCV sync","source":"jira","jiraKey":"PT-4004","dedupKey":"jira:PT-4004","impactScore":4,"confidence":0.4,"status":"open","date":"2026-06-25"}
 {"type":"backlog","candidateId":"c6","title":"Simple interface: no local project auto-loaded into editor on startup","area":"platform-scripture-editor openDefaultActiveProjectIfApplicable","source":"jira","jiraKey":"PT-3993","dedupKey":"jira:PT-3993","impactScore":4,"confidence":0.4,"status":"open","date":"2026-06-25"}
 {"type":"repro","runId":"qs-2026-06-25","candidateId":"c1","result":"reproduced","evidenceRef":"evidence/before-PT-3924.txt","date":"2026-06-25"}
+{"type":"fix","runId":"qs-2026-06-25","candidateId":"c1","result":"pr_opened","prNumber":2459,"prUrl":"https://github.com/paranext/paranext-core/pull/2459","branch":"fix/PT-3924-projectlist-nested-button","date":"2026-06-25"}
