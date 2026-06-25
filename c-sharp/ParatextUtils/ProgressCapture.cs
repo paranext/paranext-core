@@ -45,7 +45,22 @@ public sealed class ProgressCapture : ProgressDisplay
         return new ProgressScope(progress);
     }
 
-    void ProgressDisplay.SetProgressText(string text) => _onText?.Invoke(text);
+    void ProgressDisplay.SetProgressText(string text)
+    {
+        // The caller-supplied callback runs synchronously inside ParatextData's status-update
+        // path (e.g. RetryIndefinitely's catch block, while holding Progress's lock). A callback
+        // that throws would unwind ParatextData's retry loop and turn an otherwise-recoverable
+        // reconnect into a hard failure, so isolate it: a dropped status update is harmless;
+        // tearing down the in-flight operation is not.
+        try
+        {
+            _onText?.Invoke(text);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"ProgressCapture onText callback threw (ignored): {e}");
+        }
+    }
 
     void ProgressDisplay.SetProgressValue(double val)
     {
