@@ -2,8 +2,12 @@ import { describe, it, expect, vi } from 'vitest';
 import { ScriptureRange } from 'platform-scripture-editor';
 import type PapiBackend from '@papi/backend';
 import { UsjTextContentLocation } from 'platform-bible-utils';
+import { MutableRefObject } from 'react';
+import { EditorRef } from '@eten-tech-foundation/platform-editor';
 import {
   convertScriptureRangeToEditorRange,
+  generateParagraphMenuListItems,
+  generateInlineMarkerMenuListItems,
   openDefaultActiveProjectIfApplicable,
   resolveOpenEditorDispatch,
   syncOnProjectSwitch,
@@ -11,7 +15,20 @@ import {
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   selectProjectIdsForOpenMode,
   startDefaultProjectPicker,
+  isBlockMarker,
 } from './platform-scripture-editor.utils';
+
+/** Build a mock editor ref exposing spies for the methods the generators call. */
+function makeMockEditorRef() {
+  const formatPara = vi.fn();
+  const insertMarker = vi.fn();
+  // Mock literal cannot satisfy the full EditorRef interface — cast for test isolation.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const ref = {
+    current: { formatPara, insertMarker },
+  } as unknown as MutableRefObject<EditorRef | null>;
+  return { ref, formatPara, insertMarker };
+}
 
 // Sample USJ chapter data for Genesis chapter 1 with multiple verses
 const SAMPLE_USJ_CHAPTER = Object.freeze({
@@ -2340,3 +2357,106 @@ describe('syncOnProjectSwitch', () => {
 });
 
 // #endregion syncOnProjectSwitch
+
+describe('isBlockMarker', () => {
+  it('returns true for paragraph markers in blockMarkerToBlockNames', () => {
+    expect(isBlockMarker('p')).toBe(true);
+    expect(isBlockMarker('q1')).toBe(true);
+    expect(isBlockMarker('mt')).toBe(true);
+  });
+
+  it('returns true for verse and chapter markers', () => {
+    expect(isBlockMarker('v')).toBe(true);
+    expect(isBlockMarker('c')).toBe(true);
+  });
+
+  it('returns false for inline markers', () => {
+    expect(isBlockMarker('f')).toBe(false);
+    expect(isBlockMarker('x')).toBe(false);
+    expect(isBlockMarker('rem')).toBe(false);
+    expect(isBlockMarker('')).toBe(false);
+  });
+});
+
+describe('generateParagraphMenuListItems', () => {
+  it('when protected: action notifies and does not call formatPara', () => {
+    const { ref, formatPara } = makeMockEditorRef();
+    const notify = vi.fn();
+    const items = generateParagraphMenuListItems(ref, {}, true, notify);
+
+    expect(items.length).toBeGreaterThan(0);
+    items[0].action?.();
+
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(formatPara).not.toHaveBeenCalled();
+  });
+
+  it('when not protected: action calls formatPara and does not notify', () => {
+    const { ref, formatPara } = makeMockEditorRef();
+    const notify = vi.fn();
+    const items = generateParagraphMenuListItems(ref, {}, false, notify);
+
+    const item = items[0];
+    item.action?.();
+
+    expect(formatPara).toHaveBeenCalledTimes(1);
+    expect(formatPara).toHaveBeenCalledWith(item.marker);
+    expect(notify).not.toHaveBeenCalled();
+  });
+});
+
+describe('generateInlineMarkerMenuListItems', () => {
+  // The 'id' parent's children include block markers (e.g. 'h', 'mt') and non-block markers
+  // (e.g. 'rem') against the real usfmMarkers data.
+  const PARENT = 'id';
+  const noop = () => {};
+
+  it('when protected: block-marker item is disallowed and its action notifies without inserting', () => {
+    const { ref, insertMarker } = makeMockEditorRef();
+    const notify = vi.fn();
+    const close = vi.fn();
+    const items = generateInlineMarkerMenuListItems(ref, close, {}, true, notify, PARENT);
+
+    const blockItem = items.find((i) => i.marker === 'h');
+    expect(blockItem?.isDisallowed).toBe(true);
+
+    blockItem?.action?.();
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(insertMarker).not.toHaveBeenCalled();
+  });
+
+  it('when protected: inline-marker item is allowed and its action inserts', () => {
+    const { ref, insertMarker } = makeMockEditorRef();
+    const notify = vi.fn();
+    const close = vi.fn();
+    const items = generateInlineMarkerMenuListItems(ref, close, {}, true, notify, PARENT);
+
+    const inlineItem = items.find((i) => i.marker === 'rem');
+    expect(inlineItem?.isDisallowed).toBeFalsy();
+
+    inlineItem?.action?.();
+    expect(insertMarker).toHaveBeenCalledWith('rem');
+    expect(notify).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('when not protected: no item is disallowed and all actions insert', () => {
+    const { ref, insertMarker } = makeMockEditorRef();
+    const notify = vi.fn();
+    const close = vi.fn();
+    const items = generateInlineMarkerMenuListItems(ref, close, {}, false, notify, PARENT);
+
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.every((i) => !i.isDisallowed)).toBe(true);
+
+    items[0].action?.();
+    expect(insertMarker).toHaveBeenCalledWith(items[0].marker);
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('returns [] when there is no parent marker', () => {
+    const { ref } = makeMockEditorRef();
+    expect(generateInlineMarkerMenuListItems(ref, noop, {}, false, vi.fn())).toEqual([]);
+  });
+});
