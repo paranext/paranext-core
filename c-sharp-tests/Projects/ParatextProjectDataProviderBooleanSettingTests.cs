@@ -54,10 +54,6 @@ internal class ParatextProjectDataProviderBooleanSettingTests : PapiTestBase
         _scrText?.Dispose();
     }
 
-    // ------------------------------------------------------------------
-    // Helpers
-    // ------------------------------------------------------------------
-
     /// <summary>Stubs getDefault to return the given bool as a JSON boolean default.</summary>
     private async Task RegisterBooleanDefault(string settingName, bool defaultValue) =>
         await Client.RegisterRequestHandlerAsync(
@@ -85,22 +81,16 @@ internal class ParatextProjectDataProviderBooleanSettingTests : PapiTestBase
     {
         await RegisterBooleanDefault(BoolSettingName, defaultValue);
 
-        bool setResult = _provider.SetProjectSetting(BoolSettingName, setValue);
-        string stored = _scrText.Settings.ParametersDictionary[BoolSettingName];
+        Assert.That(_provider.SetProjectSetting(BoolSettingName, setValue), Is.True);
+        Assert.That(
+            _scrText.Settings.ParametersDictionary[BoolSettingName],
+            Is.EqualTo(expectedStored)
+        );
+
         object? readBack = _provider.GetProjectSetting(BoolSettingName);
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(setResult, Is.True);
-            Assert.That(stored, Is.EqualTo(expectedStored));
-            Assert.That(readBack, Is.TypeOf<bool>());
-            Assert.That(readBack, Is.EqualTo(expectedRead));
-        });
+        Assert.That(readBack, Is.TypeOf<bool>());
+        Assert.That(readBack, Is.EqualTo(expectedRead));
     }
-
-    // ------------------------------------------------------------------
-    // Tests
-    // ------------------------------------------------------------------
 
     [Test]
     public Task SetThenGet_NativeBoolTrue() => AssertSetRoundTrips(true, false, "T", true);
@@ -126,11 +116,8 @@ internal class ParatextProjectDataProviderBooleanSettingTests : PapiTestBase
 
         object? result = _provider.GetProjectSetting(BoolSettingName);
 
-        Assert.Multiple(() =>
-        {
-            Assert.That(result, Is.TypeOf<string>());
-            Assert.That(result, Is.EqualTo("hello"));
-        });
+        Assert.That(result, Is.TypeOf<string>());
+        Assert.That(result, Is.EqualTo("hello"));
     }
 
     // With no registered default, GetDefault throws and the raw string is returned.
@@ -141,10 +128,7 @@ internal class ParatextProjectDataProviderBooleanSettingTests : PapiTestBase
 
         object? result = _provider.GetProjectSetting(BoolSettingName);
 
-        Assert.Multiple(() =>
-        {
-            Assert.That(result, Is.TypeOf<string>());
-            Assert.That(result, Is.EqualTo("T"));
-        });
+        Assert.That(result, Is.TypeOf<string>());
+        Assert.That(result, Is.EqualTo("T"));
     }
 }
