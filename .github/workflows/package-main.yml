@@ -36,7 +36,7 @@ jobs:
         uses: paranext/setup-macports@v0.2.0
 
       - name: Update MacPorts ports tree
-        if: ${{ matrix.os == 'macos-15' }}
+        if: ${{ matrix.os == env.OS_MACOS }}
         # Not using `-v` for verbose because it is very slow and does not add much value
         run: |
           sudo port sync
