@@ -14,6 +14,9 @@ namespace Paranext.DataProvider.Projects.DigitalBibleLibrary;
 internal class DblResourcesDataProvider(PapiClient papiClient)
     : NetworkObjects.DataProvider("platformGetResources.dblResourcesProvider", papiClient)
 {
+    // These UIDs are also used by the TypeScript `useCommentaryMarkerStyles` hook to load
+    // per-commentary marker stylesheets (extensions/src/platform-scripture-editor/src/
+    // use-commentary-marker-styles.hook.ts). Keep these two lists in sync.
     private static readonly HashSet<string> CommentariesWhiteList =
     [
         "97196133a859179b", // HBKENG
