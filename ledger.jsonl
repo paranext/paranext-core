@@ -100,3 +100,7 @@
 {"type":"repro","runId":"qs-2026-06-25","candidateId":"c1","result":"reproduced","evidenceRef":"evidence/before-PT-3924.txt","date":"2026-06-25"}
 {"type":"fix","runId":"qs-2026-06-25","candidateId":"c1","result":"pr_opened","prNumber":2459,"prUrl":"https://github.com/paranext/paranext-core/pull/2459","branch":"fix/PT-3924-projectlist-nested-button","date":"2026-06-25"}
 {"type":"pr_outcome","prNumber":2459,"outcome":"open","checkedDate":"2026-06-25","date":"2026-06-25"}
+{"type":"pr_outcome","prNumber":2446,"outcome":"open","checkedDate":"2026-06-26"}
+{"type":"pr_outcome","prNumber":2447,"outcome":"open","checkedDate":"2026-06-26"}
+{"type":"pr_outcome","prNumber":2449,"outcome":"open","checkedDate":"2026-06-26"}
+{"type":"pr_outcome","prNumber":2459,"outcome":"open","checkedDate":"2026-06-26"}
