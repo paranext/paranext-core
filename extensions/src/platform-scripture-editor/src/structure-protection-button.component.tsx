@@ -208,7 +208,7 @@ export function StructureProtectionButton({
 }: StructureProtectionButtonProps) {
   const {
     isStructureProtected,
-    isAdminProtected,
+    isProtectedByAdmin,
     adminSettingError,
     canAdminToggle,
     isProtectionActive,
@@ -227,7 +227,7 @@ export function StructureProtectionButton({
   // error via the tooltip rather than letting the user act on a possibly-wrong state.
   const hasAdminError = adminSettingError !== undefined;
 
-  const personalDisabled = hasAdminError || (!canAdminToggle && isAdminProtected);
+  const personalDisabled = hasAdminError || (!canAdminToggle && isProtectedByAdmin);
   const personalDisabledTooltipKey = hasAdminError ? ERROR_LOADING_KEY : LOCKED_BY_ADMIN_KEY;
 
   const handlePersonalToggle = useCallback(() => {
@@ -236,8 +236,8 @@ export function StructureProtectionButton({
   }, [personalDisabled, isStructureProtected, setUserProtection]);
 
   const handleProjectToggle = useCallback(() => {
-    setAdminProtection(!isAdminProtected);
-  }, [isAdminProtected, setAdminProtection]);
+    setAdminProtection(!isProtectedByAdmin);
+  }, [isProtectedByAdmin, setAdminProtection]);
 
   // `!event.altKey` keeps the personal shortcut distinct from the admin combo below.
   const personalShortcut = useMemo<ShortcutSpec>(
@@ -287,7 +287,7 @@ export function StructureProtectionButton({
       />
       {canAdminToggle && (
         <LockToggleButtonView
-          isLocked={isAdminProtected}
+          isLocked={isProtectedByAdmin}
           isDisabled={hasAdminError}
           onToggle={handleProjectToggle}
           lockedIcon={<Shield />}
@@ -304,5 +304,3 @@ export function StructureProtectionButton({
     </ButtonGroup>
   );
 }
-
-export default StructureProtectionButton;

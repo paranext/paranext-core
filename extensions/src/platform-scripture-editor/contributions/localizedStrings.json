@@ -97,7 +97,7 @@
       "%webView_platformScriptureEditor_structureProtection_errorLoading%": "Structure protection state unavailable",
       "%webView_platformScriptureEditor_structureProtection_lockStructure%": "Lock structure",
       "%webView_platformScriptureEditor_structureProtection_lockStructureForProject%": "Lock structure for project",
-      "%webView_platformScriptureEditor_structureProtection_lockedByAdmin%": "Structure locked by admin",
+      "%webView_platformScriptureEditor_structureProtection_lockedByAdmin%": "Structure locked by Project Administrator",
       "%webView_platformScriptureEditor_structureProtection_projectAriaLabel%": "Toggle structure lock for project",
       "%webView_platformScriptureEditor_structureProtection_unlockStructure%": "Unlock structure",
       "%webView_platformScriptureEditor_structureProtection_unlockStructureForProject%": "Unlock structure for project",

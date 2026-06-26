@@ -13,10 +13,10 @@ export type StructureProtectionState = {
    */
   isProtectionActive: boolean;
   /** Raw project setting — `true` means the admin has set a structure lock */
-  isAdminProtected: boolean;
+  isProtectedByAdmin: boolean;
   /**
    * Set when the admin (project-level) `structureProtected` setting failed to load (e.g. a
-   * transient connection error). While this is set, `isStructureProtected` and `isAdminProtected`
+   * transient connection error). While this is set, `isStructureProtected` and `isProtectedByAdmin`
    * fall back to treating the admin layer as unset — callers should surface an error/disabled state
    * rather than trusting the protection values.
    */
@@ -188,7 +188,7 @@ export function useStructureProtectionState(
 
   return {
     isStructureProtected,
-    isAdminProtected: isProtectionActive && isAdminProtected,
+    isProtectedByAdmin: isProtectionActive && isAdminProtected,
     adminSettingError: isProtectionActive ? adminSettingError : undefined,
     canAdminToggle: isProtectionActive && canAdminToggle,
     isProtectionActive,
@@ -196,5 +196,3 @@ export function useStructureProtectionState(
     setUserProtection,
   };
 }
-
-export default useStructureProtectionState;

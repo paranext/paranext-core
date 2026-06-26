@@ -137,7 +137,7 @@ describe('useStructureProtectionState — truth table', () => {
     const { result } = renderHook(() => useStructureProtectionState('proj-1'));
     await act(async () => {});
     expect(result.current.isStructureProtected).toBe(false);
-    expect(result.current.isAdminProtected).toBe(false);
+    expect(result.current.isProtectedByAdmin).toBe(false);
   });
 
   it('row 2: project unset, user locked → isStructureProtected=true (user setting wins)', async () => {
@@ -145,7 +145,7 @@ describe('useStructureProtectionState — truth table', () => {
     const { result } = renderHook(() => useStructureProtectionState('proj-1'));
     await act(async () => {});
     expect(result.current.isStructureProtected).toBe(true);
-    expect(result.current.isAdminProtected).toBe(false);
+    expect(result.current.isProtectedByAdmin).toBe(false);
   });
 
   it('row 3: project unset, admin role, user unlocked → isStructureProtected=false (user setting wins)', async () => {
@@ -169,7 +169,7 @@ describe('useStructureProtectionState — truth table', () => {
     const { result } = renderHook(() => useStructureProtectionState('proj-1'));
     await act(async () => {});
     expect(result.current.isStructureProtected).toBe(true);
-    expect(result.current.isAdminProtected).toBe(true);
+    expect(result.current.isProtectedByAdmin).toBe(true);
     expect(result.current.canAdminToggle).toBe(false);
   });
 
@@ -178,7 +178,7 @@ describe('useStructureProtectionState — truth table', () => {
     const { result } = renderHook(() => useStructureProtectionState('proj-1'));
     await act(async () => {});
     expect(result.current.isStructureProtected).toBe(false);
-    expect(result.current.isAdminProtected).toBe(true);
+    expect(result.current.isProtectedByAdmin).toBe(true);
     expect(result.current.canAdminToggle).toBe(true);
   });
 
@@ -187,7 +187,7 @@ describe('useStructureProtectionState — truth table', () => {
     const { result } = renderHook(() => useStructureProtectionState('proj-1'));
     await act(async () => {});
     expect(result.current.isStructureProtected).toBe(true);
-    expect(result.current.isAdminProtected).toBe(true);
+    expect(result.current.isProtectedByAdmin).toBe(true);
     expect(result.current.canAdminToggle).toBe(true);
   });
 });
@@ -313,7 +313,7 @@ describe('useStructureProtectionState — edge cases', () => {
     setup({ adminSetting: adminError, userSetting: false, canWrite: false });
     const { result } = renderHook(() => useStructureProtectionState('proj-1'));
     await act(async () => {});
-    expect(result.current.isAdminProtected).toBe(false);
+    expect(result.current.isProtectedByAdmin).toBe(false);
     expect(result.current.isStructureProtected).toBe(false);
     expect(result.current.adminSettingError).toBe(adminError);
   });
@@ -370,7 +370,7 @@ describe('useStructureProtectionState — power mode (feature inactive)', () => 
     await act(async () => {});
     expect(result.current.isProtectionActive).toBe(false);
     expect(result.current.isStructureProtected).toBe(false);
-    expect(result.current.isAdminProtected).toBe(false);
+    expect(result.current.isProtectedByAdmin).toBe(false);
     expect(result.current.canAdminToggle).toBe(false);
     expect(result.current.adminSettingError).toBeUndefined();
   });
