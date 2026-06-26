@@ -181,7 +181,7 @@ Unless stated otherwise, follow:
 
 ## Initialisms and abbreviations
 
-Prefer spelling terms out. Only use an abbreviation or initialism a reader can decipher, and — when in doubt — define it on first use: a glossary entry, a TSDoc / `///` comment, or the full phrase the first time it appears.
+Prefer spelling terms out. Only use an abbreviation or initialism a reader can decipher, and — when in doubt — define it on first use: a glossary entry, a TSDoc / `///` comment, a hyperlink to an explainer, or the full phrase the first time it appears.
 
 This applies to **code** (identifiers, types, comments) and to **UI microcopy** (labels, button text, messages, tooltips). Reviewers check it.
 
@@ -191,7 +191,7 @@ This applies to **code** (identifiers, types, comments) and to **UI microcopy** 
 - **No reference recognition** — it has no entry in Wikipedia, in this repo's glossary, or in the docs for a tool or library we build on (e.g. [USFM](https://docs.usfm.bible/), React, .NET).
 - **Not guessable** — a reasonably educated person working in Bible translation or software development would be unlikely to guess what it stands for.
 
-Domain-standard or glossary-defined initialisms (e.g. `USFM`, `RTL`, `PAPI`) are fine to use as-is. If an initialism is project-coined and undefined, either spell it out or define it on first use.
+Domain-standard or glossary-defined initialisms (e.g. `USFM`, `RTL`, `PAPI`) are fine to use as-is. If an initialism is project-coined and undefined, either spell it out or define it on first use. Prefer `Spelled Out Initialism (SOI)` to `SOI (Spelled Out Initialism)`.
 
 ---
 
