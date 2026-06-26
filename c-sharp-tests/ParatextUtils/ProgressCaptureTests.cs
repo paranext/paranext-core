@@ -70,7 +70,11 @@ namespace TestParanextDataProvider.ParatextUtils
             int countBeforeDispose = captured.Count;
             scope.Dispose();
 
-            Assert.That(Progress.Mgr.Cancelled, Is.False, "Reset() should clear stale cancel state");
+            Assert.That(
+                Progress.Mgr.Cancelled,
+                Is.False,
+                "Reset() should clear stale cancel state"
+            );
             // Dispose detaches the display before Reset()'s `Text = ""`, so it must NOT forward a
             // spurious empty status to the callback. A bare Does.Not.Contain("after dispose") would
             // pass even if captured were [""], so assert the count is exactly unchanged.
