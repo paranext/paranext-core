@@ -105,3 +105,4 @@
 {"type":"pr_outcome","prNumber":2449,"outcome":"open","checkedDate":"2026-06-26"}
 {"type":"pr_outcome","prNumber":2459,"outcome":"open","checkedDate":"2026-06-26"}
 {"type":"run_started","runId":"qs-2026-06-26","seeds":{"jira":[],"scanTarget":null},"date":"2026-06-26"}
+{"type":"selected","runId":"qs-2026-06-26","candidateId":"j1","date":"2026-06-26"}
