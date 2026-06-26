@@ -48,7 +48,8 @@ function renderDialog(overrides: Partial<Parameters<typeof ResourcePickerDialog>
 describe('ResourcePickerDialog', () => {
   it('shows "Already Selected" section heading with selected resource names', () => {
     renderDialog();
-    expect(screen.getByText('Already selected')).toBeInTheDocument();
+    // The section heading and sr-only row labels both contain this text, so use getAllByText
+    expect(screen.getAllByText('Already selected').length).toBeGreaterThan(0);
     expect(screen.getByText('NIV')).toBeInTheDocument();
     expect(screen.getByText('RVR60')).toBeInTheDocument();
   });
