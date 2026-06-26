@@ -119,3 +119,4 @@
 {"type":"backlog","candidateId":"d1","title":"Manage Books per-group Select-All (toggleAllInGroup in book-grid) does not filter disabled books, unlike single-click/range select","area":"extensions/src/platform-scripture/src/manage-books-dialog/book-grid.component.tsx","source":"scan","dedupKey":"scan:platform-scripture:bookgrid-toggleallingroup-includes-disabled","impactScore":2,"confidence":0.8,"status":"open","date":"2026-06-26"}
 {"type":"fix","runId":"qs-2026-06-26","candidateId":"s1","result":"pr_opened","prNumber":2463,"prUrl":"https://github.com/paranext/paranext-core/pull/2463","branch":"fix/manage-books-selectall-excludes-disabled","date":"2026-06-26"}
 {"type":"pr_outcome","prNumber":2463,"outcome":"open","checkedDate":"2026-06-26","date":"2026-06-26"}
+{"type":"backlog","candidateId":"s1","dedupKey":"scan:platform-scripture:selectall-selects-disabled-books","status":"resolved","reason":"pr_opened #2463","date":"2026-06-26"}
