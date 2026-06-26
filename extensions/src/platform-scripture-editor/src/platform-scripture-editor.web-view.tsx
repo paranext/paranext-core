@@ -84,7 +84,7 @@ import { PropsWithChildren, useCallback, useEffect, useMemo, useRef, useState } 
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
 import { ChevronDown } from 'lucide-react';
 import { useAnnotationStyleSheet } from './annotations/use-annotation-stylesheet.hook';
-import { useHandbookMarkerStyles } from './use-handbook-marker-styles.hook';
+import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
 import {
   StructureProtectionButton,
   STRUCTURE_PROTECTION_BUTTON_STRING_KEYS,
@@ -1100,8 +1100,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // Apply annotation styles from extensions
   useAnnotationStyleSheet();
 
-  // Load PT9-derived marker styles when the open project is a Translator's Handbook
-  useHandbookMarkerStyles(projectId);
+  // Load PT9-derived marker styles when the open project is a supported commentary
+  useCommentaryMarkerStyles(projectId);
 
   const [decorationsLocalizedStringsBase] = useLocalizedStrings(
     useMemo(() => getLocalizeKeysFromDecorations(decorations), [decorations]),
