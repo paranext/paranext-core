@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using NUnit.Framework;
 using Paranext.DataProvider.ParatextUtils;
 using PtxUtils.Progress;
@@ -60,18 +61,82 @@ namespace TestParanextDataProvider.ParatextUtils
         }
 
         [Test]
-        public void Dispose_ClearsCancelledAndStopsForwarding()
+        public void Dispose_ClearsCancelledStopsForwardingAndEmitsNoSpuriousText()
         {
             var captured = new List<string>();
             var scope = ProgressCapture.StartCapture(captured.Add);
             scope.Cancel();
+
+            int countBeforeDispose = captured.Count;
             scope.Dispose();
 
             Assert.That(Progress.Mgr.Cancelled, Is.False, "Reset() should clear stale cancel state");
+            // Dispose detaches the display before Reset()'s `Text = ""`, so it must NOT forward a
+            // spurious empty status to the callback. A bare Does.Not.Contain("after dispose") would
+            // pass even if captured were [""], so assert the count is exactly unchanged.
+            Assert.That(
+                captured,
+                Has.Count.EqualTo(countBeforeDispose),
+                "Dispose must not forward any status (including an empty string) to the callback"
+            );
 
             using (var session = Progress.Mgr.StartIndefiniteTask())
                 session.Text = "after dispose";
-            Assert.That(captured, Does.Not.Contain("after dispose"), "display detached on dispose");
+            Assert.That(
+                captured,
+                Has.Count.EqualTo(countBeforeDispose),
+                "display detached on dispose — no forwarding after dispose"
+            );
+            Assert.That(captured, Does.Not.Contain("after dispose"));
+        }
+
+        [Test]
+        public void Cancel_FromAnotherThread_SetsFlagOnCapturedInstanceNotTheCaller()
+        {
+            // The whole point of ProgressScope holding a direct Progress reference (instead of
+            // re-reading the [ThreadStatic] Progress.Mgr) is that Cancel() works from a thread
+            // other than the one running the captured operation. Single-threaded tests can't
+            // exercise that — there scope._progress and Progress.Mgr are the same instance.
+            ProgressCapture.ProgressScope? scope = null;
+            Progress workerProgress = null!;
+            using var started = new ManualResetEventSlim();
+            using var release = new ManualResetEventSlim();
+
+            var worker = new Thread(() =>
+            {
+                workerProgress = Progress.Mgr; // this thread's own [ThreadStatic] instance
+                scope = ProgressCapture.StartCapture();
+                started.Set();
+                release.Wait(); // keep the captured instance alive until the assertions run
+            })
+            {
+                IsBackground = true,
+            };
+            worker.Start();
+            started.Wait();
+
+            Assert.That(
+                Progress.Mgr,
+                Is.Not.SameAs(workerProgress),
+                "precondition: caller and worker must have distinct thread-static Progress instances"
+            );
+
+            scope!.Cancel(); // called from the test thread, not the worker thread
+
+            Assert.That(
+                workerProgress.Cancelled,
+                Is.True,
+                "cross-thread Cancel must set the flag on the captured (worker) instance"
+            );
+            Assert.That(
+                Progress.Mgr.Cancelled,
+                Is.False,
+                "Cancel must not touch the cancelling thread's own Progress.Mgr"
+            );
+
+            release.Set();
+            worker.Join();
+            workerProgress.Reset();
         }
     }
 }
