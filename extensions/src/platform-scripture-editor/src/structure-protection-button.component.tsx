@@ -208,22 +208,26 @@ export function StructureProtectionButton({
 }: StructureProtectionButtonProps) {
   const {
     isStructureProtected,
-    isAdminProtected,
+    isProtectedByAdmin,
     adminSettingError,
     canAdminToggle,
+    isProtectionActive,
     setAdminProtection,
     setUserProtection,
   } = useStructureProtectionState(projectId);
 
   // OS-appropriate shortcut symbols, matching the editor web-view's `/Macintosh/i` detection.
   const isMac = useMemo(() => /Macintosh/i.test(navigator.userAgent), []);
+  // Windows orders modifiers Ctrl, Shift, Alt; Linux/GNOME orders them Ctrl, Alt, Shift. This only
+  // affects the project shortcut, which is the one combo with both Shift and Alt.
+  const isWindows = useMemo(() => /Windows/i.test(navigator.userAgent), []);
 
   // When the admin (project-level) setting failed to load, the protection values fall back to
   // treating the admin layer as unset, so we can't trust them. Disable both toggles and surface the
   // error via the tooltip rather than letting the user act on a possibly-wrong state.
   const hasAdminError = adminSettingError !== undefined;
 
-  const personalDisabled = hasAdminError || (!canAdminToggle && isAdminProtected);
+  const personalDisabled = hasAdminError || (!canAdminToggle && isProtectedByAdmin);
   const personalDisabledTooltipKey = hasAdminError ? ERROR_LOADING_KEY : LOCKED_BY_ADMIN_KEY;
 
   const handlePersonalToggle = useCallback(() => {
@@ -232,8 +236,8 @@ export function StructureProtectionButton({
   }, [personalDisabled, isStructureProtected, setUserProtection]);
 
   const handleProjectToggle = useCallback(() => {
-    setAdminProtection(!isAdminProtected);
-  }, [isAdminProtected, setAdminProtection]);
+    setAdminProtection(!isProtectedByAdmin);
+  }, [isProtectedByAdmin, setAdminProtection]);
 
   // `!event.altKey` keeps the personal shortcut distinct from the admin combo below.
   const personalShortcut = useMemo<ShortcutSpec>(
@@ -248,17 +252,22 @@ export function StructureProtectionButton({
     [isMac],
   );
 
-  const projectShortcut = useMemo<ShortcutSpec>(
-    () => ({
+  const projectShortcut = useMemo<ShortcutSpec>(() => {
+    let hint = 'Ctrl+Alt+Shift+L'; // Linux/GNOME modifier order
+    if (isMac) hint = '⌥⇧⌘L';
+    else if (isWindows) hint = 'Ctrl+Shift+Alt+L'; // Windows modifier order
+    return {
       matches: (event) =>
         (event.ctrlKey || event.metaKey) &&
         event.shiftKey &&
         event.altKey &&
         event.key.toLowerCase() === 'l',
-      hint: isMac ? '⌥⇧⌘L' : 'Ctrl+Alt+Shift+L',
-    }),
-    [isMac],
-  );
+      hint,
+    };
+  }, [isMac, isWindows]);
+
+  // The structure-protection feature applies in simple mode only; render nothing when inactive.
+  if (!isProtectionActive) return undefined;
 
   return (
     <ButtonGroup>
@@ -278,7 +287,7 @@ export function StructureProtectionButton({
       />
       {canAdminToggle && (
         <LockToggleButtonView
-          isLocked={isAdminProtected}
+          isLocked={isProtectedByAdmin}
           isDisabled={hasAdminError}
           onToggle={handleProjectToggle}
           lockedIcon={<Shield />}
@@ -295,5 +304,3 @@ export function StructureProtectionButton({
     </ButtonGroup>
   );
 }
-
-export default StructureProtectionButton;

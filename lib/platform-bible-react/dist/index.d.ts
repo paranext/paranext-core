@@ -1100,7 +1100,6 @@ export declare const RESOURCE_PICKER_DIALOG_STRING_KEYS: readonly [
 	"%resourcePicker_section_already_selected%",
 	"%resourcePicker_section_installed%",
 	"%resourcePicker_section_available_to_download%",
-	"%resourcePicker_button_use%",
 	"%resourcePicker_no_results%",
 	"%resourcePicker_search_placeholder%",
 	"%resourcePicker_language_filter_any%",
@@ -1126,7 +1125,7 @@ export interface ResourcePickerDialogProps {
 	selectedResourceIds?: string[];
 	/** Localized strings — use RESOURCE_PICKER_DIALOG_STRING_KEYS with useLocalizedStrings */
 	localizedStrings: ResourcePickerDialogLocalizedStrings;
-	/** Called when the user clicks "Use" on a resource entry */
+	/** Called when the user clicks a resource row to select it */
 	onSelect: (resource: DblResourceData) => void;
 }
 /**

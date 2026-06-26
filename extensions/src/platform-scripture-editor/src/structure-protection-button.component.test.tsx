@@ -25,9 +25,10 @@ beforeAll(() => {
 // Mutable mock return; each test sets the fields it cares about.
 const mockState: StructureProtectionState = {
   isStructureProtected: true,
-  isAdminProtected: false,
+  isProtectedByAdmin: false,
   adminSettingError: undefined,
   canAdminToggle: false,
+  isProtectionActive: true,
   setAdminProtection: vi.fn(),
   setUserProtection: vi.fn(),
 };
@@ -70,15 +71,16 @@ afterEach(() => {
   vi.clearAllMocks();
   setState({
     isStructureProtected: true,
-    isAdminProtected: false,
+    isProtectedByAdmin: false,
     canAdminToggle: false,
     adminSettingError: undefined,
+    isProtectionActive: true,
   });
 });
 
 describe('StructureProtectionButton — personal button', () => {
   it('renders Lock (not LockOpen) and ghost variant when protected', () => {
-    setState({ isStructureProtected: true, canAdminToggle: false, isAdminProtected: false });
+    setState({ isStructureProtected: true, canAdminToggle: false, isProtectedByAdmin: false });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     const button = screen.getByRole('button', { name: PERSONAL });
     expect(button.querySelector('.lucide-lock')).toBeInTheDocument();
@@ -88,7 +90,7 @@ describe('StructureProtectionButton — personal button', () => {
   });
 
   it('renders LockOpen and destructive variant when unlocked', () => {
-    setState({ isStructureProtected: false, canAdminToggle: false, isAdminProtected: false });
+    setState({ isStructureProtected: false, canAdminToggle: false, isProtectedByAdmin: false });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     const button = screen.getByRole('button', { name: PERSONAL });
     expect(button.querySelector('.lucide-lock-open')).toBeInTheDocument();
@@ -102,7 +104,7 @@ describe('StructureProtectionButton — personal button', () => {
   });
 
   it('toggles only the user setting (never the admin setting)', () => {
-    setState({ canAdminToggle: false, isAdminProtected: false, isStructureProtected: true });
+    setState({ canAdminToggle: false, isProtectedByAdmin: false, isStructureProtected: true });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     fireEvent.click(screen.getByRole('button', { name: PERSONAL }));
     expect(mockState.setUserProtection).toHaveBeenCalledWith(false);
@@ -110,7 +112,7 @@ describe('StructureProtectionButton — personal button', () => {
   });
 
   it('admin click on the personal button toggles only the user setting', () => {
-    setState({ canAdminToggle: true, isAdminProtected: false, isStructureProtected: true });
+    setState({ canAdminToggle: true, isProtectedByAdmin: false, isStructureProtected: true });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     fireEvent.click(screen.getByRole('button', { name: PERSONAL }));
     expect(mockState.setUserProtection).toHaveBeenCalledWith(false);
@@ -118,7 +120,7 @@ describe('StructureProtectionButton — personal button', () => {
   });
 
   it('is disabled and a no-op for a non-admin on an admin-locked project', () => {
-    setState({ canAdminToggle: false, isAdminProtected: true, isStructureProtected: true });
+    setState({ canAdminToggle: false, isProtectedByAdmin: true, isStructureProtected: true });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     const button = screen.getByRole('button', { name: PERSONAL });
     expect(button).toBeDisabled();
@@ -128,7 +130,7 @@ describe('StructureProtectionButton — personal button', () => {
   });
 
   it('is disabled with the error tooltip when the admin setting failed to load', () => {
-    setState({ canAdminToggle: false, isAdminProtected: false, adminSettingError: ADMIN_ERROR });
+    setState({ canAdminToggle: false, isProtectedByAdmin: false, adminSettingError: ADMIN_ERROR });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     const button = screen.getByRole('button', { name: PERSONAL });
     expect(button).toBeDisabled();
@@ -138,7 +140,7 @@ describe('StructureProtectionButton — personal button', () => {
   });
 
   it('Ctrl+Shift+L toggles the personal user setting when enabled', () => {
-    setState({ canAdminToggle: false, isAdminProtected: false, isStructureProtected: true });
+    setState({ canAdminToggle: false, isProtectedByAdmin: false, isStructureProtected: true });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     fireEvent.keyDown(window, { key: 'l', ctrlKey: true, shiftKey: true });
     expect(mockState.setUserProtection).toHaveBeenCalledWith(false);
@@ -146,7 +148,7 @@ describe('StructureProtectionButton — personal button', () => {
   });
 
   it('Ctrl+Shift+L is a no-op when the personal button is disabled', () => {
-    setState({ canAdminToggle: false, isAdminProtected: true });
+    setState({ canAdminToggle: false, isProtectedByAdmin: true });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     fireEvent.keyDown(window, { key: 'l', ctrlKey: true, shiftKey: true });
     expect(mockState.setUserProtection).not.toHaveBeenCalled();
@@ -154,14 +156,14 @@ describe('StructureProtectionButton — personal button', () => {
   });
 
   it('does NOT fire the personal toggle on the admin combo (Ctrl+Alt+Shift+L)', () => {
-    setState({ canAdminToggle: false, isAdminProtected: false, isStructureProtected: true });
+    setState({ canAdminToggle: false, isProtectedByAdmin: false, isStructureProtected: true });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     fireEvent.keyDown(window, { key: 'l', ctrlKey: true, altKey: true, shiftKey: true });
     expect(mockState.setUserProtection).not.toHaveBeenCalled();
   });
 
   it('auto-opens the tooltip with the action label when the state changes', async () => {
-    setState({ isStructureProtected: true, canAdminToggle: false, isAdminProtected: false });
+    setState({ isStructureProtected: true, canAdminToggle: false, isProtectedByAdmin: false });
     const { rerender } = render(
       <StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />,
     );
@@ -172,7 +174,7 @@ describe('StructureProtectionButton — personal button', () => {
   });
 
   it('shows the Ctrl+Shift+L hint in the tooltip when enabled', async () => {
-    setState({ isStructureProtected: true, canAdminToggle: false, isAdminProtected: false });
+    setState({ isStructureProtected: true, canAdminToggle: false, isProtectedByAdmin: false });
     const { rerender } = render(
       <StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />,
     );
@@ -183,19 +185,19 @@ describe('StructureProtectionButton — personal button', () => {
   });
 
   it('auto-opens the "locked by admin" tooltip when an admin locks an already-protected project', async () => {
-    setState({ isStructureProtected: true, canAdminToggle: false, isAdminProtected: false });
+    setState({ isStructureProtected: true, canAdminToggle: false, isProtectedByAdmin: false });
     const { rerender } = render(
       <StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />,
     );
     expect(screen.queryByText('Structure locked by admin')).not.toBeInTheDocument();
-    setState({ isAdminProtected: true });
+    setState({ isProtectedByAdmin: true });
     rerender(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     expect((await screen.findAllByText('Structure locked by admin')).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: PERSONAL })).toBeDisabled();
   });
 
   it('does not auto-open the tooltip on a re-render with no state change', () => {
-    setState({ isStructureProtected: true, canAdminToggle: false, isAdminProtected: false });
+    setState({ isStructureProtected: true, canAdminToggle: false, isProtectedByAdmin: false });
     const { rerender } = render(
       <StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />,
     );
@@ -204,7 +206,7 @@ describe('StructureProtectionButton — personal button', () => {
   });
 
   it('closes the tooltip on scroll', async () => {
-    setState({ isStructureProtected: true, canAdminToggle: false, isAdminProtected: false });
+    setState({ isStructureProtected: true, canAdminToggle: false, isProtectedByAdmin: false });
     const { rerender } = render(
       <StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />,
     );
@@ -218,14 +220,14 @@ describe('StructureProtectionButton — personal button', () => {
 
 describe('StructureProtectionButton — admin project button', () => {
   it('is not rendered for a non-admin', () => {
-    setState({ canAdminToggle: false, isAdminProtected: false, isStructureProtected: true });
+    setState({ canAdminToggle: false, isProtectedByAdmin: false, isStructureProtected: true });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     expect(screen.queryByRole('button', { name: PROJECT })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: PERSONAL })).toBeInTheDocument();
   });
 
   it('is rendered for an admin with Shield (locked) / ShieldOff (unlocked) icons', () => {
-    setState({ canAdminToggle: true, isAdminProtected: true, isStructureProtected: true });
+    setState({ canAdminToggle: true, isProtectedByAdmin: true, isStructureProtected: true });
     const { rerender } = render(
       <StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />,
     );
@@ -233,7 +235,7 @@ describe('StructureProtectionButton — admin project button', () => {
     expect(lockedButton.querySelector('.lucide-shield')).toBeInTheDocument();
     expect(lockedButton.className).not.toContain('tw:text-destructive');
 
-    setState({ isAdminProtected: false });
+    setState({ isProtectedByAdmin: false });
     rerender(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     const unlockedButton = screen.getByRole('button', { name: PROJECT });
     expect(unlockedButton.querySelector('.lucide-shield-off')).toBeInTheDocument();
@@ -241,7 +243,7 @@ describe('StructureProtectionButton — admin project button', () => {
   });
 
   it('clicking the project button toggles only the admin setting', () => {
-    setState({ canAdminToggle: true, isAdminProtected: false, isStructureProtected: false });
+    setState({ canAdminToggle: true, isProtectedByAdmin: false, isStructureProtected: false });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     fireEvent.click(screen.getByRole('button', { name: PROJECT }));
     expect(mockState.setAdminProtection).toHaveBeenCalledWith(true);
@@ -249,7 +251,7 @@ describe('StructureProtectionButton — admin project button', () => {
   });
 
   it('Ctrl+Alt+Shift+L toggles the project setting for an admin', () => {
-    setState({ canAdminToggle: true, isAdminProtected: false, isStructureProtected: false });
+    setState({ canAdminToggle: true, isProtectedByAdmin: false, isStructureProtected: false });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     fireEvent.keyDown(window, { key: 'l', ctrlKey: true, altKey: true, shiftKey: true });
     expect(mockState.setAdminProtection).toHaveBeenCalledWith(true);
@@ -257,7 +259,7 @@ describe('StructureProtectionButton — admin project button', () => {
   });
 
   it('is disabled and a no-op for an admin when the admin setting failed to load', () => {
-    setState({ canAdminToggle: true, isAdminProtected: false, adminSettingError: ADMIN_ERROR });
+    setState({ canAdminToggle: true, isProtectedByAdmin: false, adminSettingError: ADMIN_ERROR });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     const button = screen.getByRole('button', { name: PROJECT });
     expect(button).toBeDisabled();
@@ -267,21 +269,38 @@ describe('StructureProtectionButton — admin project button', () => {
   });
 
   it('Ctrl+Shift+L (no Alt) does not toggle the project setting', () => {
-    setState({ canAdminToggle: true, isAdminProtected: false, isStructureProtected: false });
+    setState({ canAdminToggle: true, isProtectedByAdmin: false, isStructureProtected: false });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     fireEvent.keyDown(window, { key: 'l', ctrlKey: true, shiftKey: true });
     expect(mockState.setAdminProtection).not.toHaveBeenCalled();
   });
 
   it('uses the localized project aria-label and shows the Ctrl+Alt+Shift+L hint', async () => {
-    setState({ canAdminToggle: true, isAdminProtected: true, isStructureProtected: true });
+    setState({ canAdminToggle: true, isProtectedByAdmin: true, isStructureProtected: true });
     const { rerender } = render(
       <StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />,
     );
     expect(screen.getByRole('button', { name: PROJECT })).toBeInTheDocument();
     expect(screen.queryByText('Ctrl+Alt+Shift+L')).not.toBeInTheDocument();
-    setState({ isAdminProtected: false });
+    setState({ isProtectedByAdmin: false });
     rerender(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     expect((await screen.findAllByText('Ctrl+Alt+Shift+L')).length).toBeGreaterThan(0);
+  });
+});
+
+describe('StructureProtectionButton — power mode', () => {
+  it('renders nothing when protection is inactive', () => {
+    setState({
+      isProtectionActive: false,
+      canAdminToggle: true,
+      isProtectedByAdmin: true,
+      isStructureProtected: true,
+    });
+    const { container } = render(
+      <StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />,
+    );
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByRole('button', { name: PERSONAL })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: PROJECT })).not.toBeInTheDocument();
   });
 });

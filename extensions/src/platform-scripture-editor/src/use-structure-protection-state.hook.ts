@@ -7,11 +7,16 @@ import { useProjectDataProvider, useProjectSetting, useSetting } from '@papi/fro
 export type StructureProtectionState = {
   /** Effective enforcement state — what the editor uses to gate structure changes */
   isStructureProtected: boolean;
+  /**
+   * Whether the structure-protection feature applies in the current interface mode. `false` in
+   * power mode, where the feature is fully inactive (no enforcement, no toggles).
+   */
+  isProtectionActive: boolean;
   /** Raw project setting — `true` means the admin has set a structure lock */
-  isAdminProtected: boolean;
+  isProtectedByAdmin: boolean;
   /**
    * Set when the admin (project-level) `structureProtected` setting failed to load (e.g. a
-   * transient connection error). While this is set, `isStructureProtected` and `isAdminProtected`
+   * transient connection error). While this is set, `isStructureProtected` and `isProtectedByAdmin`
    * fall back to treating the admin layer as unset — callers should surface an error/disabled state
    * rather than trusting the protection values.
    */
@@ -42,6 +47,8 @@ export type StructureProtectionState = {
  *   the admin's own user setting decides (an admin who can toggle the lock is not bound by it)
  * - Project allows changes → follows user setting for all roles
  * - User setting absent → true (locked) in Simple mode, false in Power mode
+ * - Power mode → feature inactive: `isStructureProtected` is always `false`, `isProtectionActive` is
+ *   `false`, no toggles are shown, and the admin/user settings have no effect
  *
  * @param projectId The project to query. Pass `undefined` while the project is loading.
  */
@@ -149,35 +156,43 @@ export function useStructureProtectionState(
     ? adminSettingPossiblyError
     : undefined;
   const isAdminProtected = !isPlatformError(adminSettingPossiblyError) && adminSettingPossiblyError;
-  const modeDefault = interfaceMode === 'simple';
-  const effectiveUserSetting = userSettingState ?? modeDefault;
-  const isStructureProtected = (isAdminProtected && !canAdminToggle) || effectiveUserSetting;
+  // The feature applies in simple mode only. In power mode it is fully inactive: enforcement is off
+  // and no toggles are shown, regardless of the admin or user settings (which are left untouched so
+  // returning to simple mode restores prior behavior).
+  const isProtectionActive = interfaceMode === 'simple';
+  // When the user has no stored preference, simple mode defaults to locked. (`isProtectionActive`
+  // also equals `interfaceMode === 'simple'`; in power mode this default is discarded by the branch
+  // below since the feature is inactive.)
+  const effectiveUserSetting = userSettingState ?? isProtectionActive;
+  const isStructureProtected = isProtectionActive
+    ? (isAdminProtected && !canAdminToggle) || effectiveUserSetting
+    : false;
 
   const setAdminProtection = useCallback(
     (value: boolean) => {
-      if (!canAdminToggle) return;
+      if (!isProtectionActive || !canAdminToggle) return;
       setAdminSetting?.(value);
     },
-    [canAdminToggle, setAdminSetting],
+    [isProtectionActive, canAdminToggle, setAdminSetting],
   );
 
   const setUserProtection = useCallback(
     (value: boolean) => {
+      if (!isProtectionActive) return;
       userEditorSettingsPdp?.setUserStructureProtected(value).catch((err) => {
         logger.error(`Failed to set user structure protection: ${err}`);
       });
     },
-    [userEditorSettingsPdp],
+    [isProtectionActive, userEditorSettingsPdp],
   );
 
   return {
     isStructureProtected,
-    isAdminProtected,
-    adminSettingError,
-    canAdminToggle,
+    isProtectedByAdmin: isProtectionActive && isAdminProtected,
+    adminSettingError: isProtectionActive ? adminSettingError : undefined,
+    canAdminToggle: isProtectionActive && canAdminToggle,
+    isProtectionActive,
     setAdminProtection,
     setUserProtection,
   };
 }
-
-export default useStructureProtectionState;
