@@ -102,7 +102,12 @@ function ResourceSection({
           }
         >
           <TableCell className="tw:w-5 tw:border-0 tw:py-1 tw:pr-1">
-            {!onSelect && <Check className="tw:h-3.5 tw:w-3.5" />}
+            {!onSelect && (
+              <>
+                <Check className="tw:h-3.5 tw:w-3.5" aria-hidden />
+                <span className="tw:sr-only">{label}</span>
+              </>
+            )}
           </TableCell>
           <TableCell className="tw:border-0 tw:py-1 tw:pr-2 tw:font-normal tw:whitespace-nowrap">
             {r.displayName}
