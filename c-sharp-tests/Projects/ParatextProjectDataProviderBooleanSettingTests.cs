@@ -5,15 +5,9 @@ using Paranext.DataProvider.Projects;
 namespace TestParanextDataProvider.Projects;
 
 /// <summary>
-/// Integration tests for the GetProjectSetting / SetProjectSetting logic that handles extension
-/// project settings registered with a boolean default.
-///
-/// The write path stores a <c>bool</c> as the string <c>"T"</c> / <c>"F"</c>. The read path looks
-/// up the registered default via <c>ProjectSettingsService.GetDefault</c>; when that default is a
-/// JSON boolean, a stored <c>"T"/"F"</c> token is converted back to a real <c>bool</c>. A stored
-/// value that is not one of those tokens is returned as the raw string on purpose (a setting with a
-/// boolean default may legitimately hold a non-boolean value — a union/mixed type), and a setting
-/// with no registered default falls back to returning the raw string.
+/// Tests for GetProjectSetting / SetProjectSetting handling of extension settings registered with a
+/// boolean default: the write path stores a bool as "T"/"F", and the read path converts a stored
+/// "T"/"F" token back to a bool.
 /// </summary>
 [ExcludeFromCodeCoverage]
 [TestFixture]
@@ -21,9 +15,7 @@ internal class ParatextProjectDataProviderBooleanSettingTests : PapiTestBase
 {
     private const string PdpName = "booleanSettingTestProject";
 
-    // An extension setting name that is NOT a known Paratext setting, so it is treated as an
-    // extension setting (its Paratext name equals the Platform.Bible name and it is not in the
-    // known-boolean list).
+    // An extension setting name that is NOT a known Paratext setting.
     private const string BoolSettingName = "myExtension.someBooleanSetting";
 
     private DummyScrText _scrText = null!;
@@ -35,8 +27,7 @@ internal class ParatextProjectDataProviderBooleanSettingTests : PapiTestBase
     {
         await base.TestSetupAsync();
 
-        // Register a stub for ProjectSettingsService.isValid that always approves changes.
-        // SetProjectSetting calls this before writing any value.
+        // SetProjectSetting calls isValid before writing; approve everything.
         await Client.RegisterRequestHandlerAsync(
             "object:ProjectSettingsService.isValid",
             new Func<string, object?, object?, object?, bool>(
@@ -67,28 +58,44 @@ internal class ParatextProjectDataProviderBooleanSettingTests : PapiTestBase
     // Helpers
     // ------------------------------------------------------------------
 
-    /// <summary>
-    /// Registers a stub for ProjectSettingsService.getDefault that returns the given boolean as a
-    /// JSON boolean default (mirroring how an extension registers a boolean-typed default).
-    /// </summary>
-    private void RegisterBooleanDefault(string settingName, bool defaultValue)
-    {
-        Client.RegisterRequestHandlerAsync(
+    /// <summary>Stubs getDefault to return the given bool as a JSON boolean default.</summary>
+    private async Task RegisterBooleanDefault(string settingName, bool defaultValue) =>
+        await Client.RegisterRequestHandlerAsync(
             "object:ProjectSettingsService.getDefault",
             new Func<string, object?>(key =>
                 key == settingName ? JsonSerializer.SerializeToElement(defaultValue) : null
             ),
             null
         );
-    }
+
+    /// <summary>Writes a raw string straight into the project so GetProjectSetting reads it back.</summary>
+    private void SetRawSetting(string settingName, string rawValue) =>
+        _scrText.Settings.ParametersDictionary[settingName] = rawValue;
 
     /// <summary>
-    /// Directly writes a raw string value into the project's ParametersDictionary so that
-    /// GetProjectSetting reads whatever we put there, without going through SetProjectSetting.
+    /// Sets <paramref name="setValue"/>, then asserts it stored as <paramref name="expectedStored"/>
+    /// and reads back as the bool <paramref name="expectedRead"/>.
     /// </summary>
-    private void SetRawSetting(string settingName, string rawValue)
+    private async Task AssertSetRoundTrips(
+        object setValue,
+        bool defaultValue,
+        string expectedStored,
+        bool expectedRead
+    )
     {
-        _scrText.Settings.ParametersDictionary[settingName] = rawValue;
+        await RegisterBooleanDefault(BoolSettingName, defaultValue);
+
+        bool setResult = _provider.SetProjectSetting(BoolSettingName, setValue);
+        string stored = _scrText.Settings.ParametersDictionary[BoolSettingName];
+        object? readBack = _provider.GetProjectSetting(BoolSettingName);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(setResult, Is.True);
+            Assert.That(stored, Is.EqualTo(expectedStored));
+            Assert.That(readBack, Is.TypeOf<bool>());
+            Assert.That(readBack, Is.EqualTo(expectedRead));
+        });
     }
 
     // ------------------------------------------------------------------
@@ -96,64 +103,48 @@ internal class ParatextProjectDataProviderBooleanSettingTests : PapiTestBase
     // ------------------------------------------------------------------
 
     [Test]
-    public void SetThenGetProjectSetting_True_StoresTAndReturnsBoolTrue()
-    {
-        RegisterBooleanDefault(BoolSettingName, false);
-
-        bool result = _provider.SetProjectSetting(BoolSettingName, true);
-        Assert.That(result, Is.True);
-
-        // The value is stored as the string "T".
-        Assert.That(_scrText.Settings.ParametersDictionary[BoolSettingName], Is.EqualTo("T"));
-
-        // Reading it back yields a real boolean true.
-        object? readBack = _provider.GetProjectSetting(BoolSettingName);
-        Assert.That(readBack, Is.TypeOf<bool>());
-        Assert.That(readBack, Is.True);
-    }
+    public Task SetThenGet_NativeBoolTrue() => AssertSetRoundTrips(true, false, "T", true);
 
     [Test]
-    public void SetThenGetProjectSetting_False_StoresFAndReturnsBoolFalse()
-    {
-        RegisterBooleanDefault(BoolSettingName, true);
+    public Task SetThenGet_NativeBoolFalse() => AssertSetRoundTrips(false, true, "F", false);
 
-        bool result = _provider.SetProjectSetting(BoolSettingName, false);
-        Assert.That(result, Is.True);
-
-        // The value is stored as the string "F".
-        Assert.That(_scrText.Settings.ParametersDictionary[BoolSettingName], Is.EqualTo("F"));
-
-        // Reading it back yields a real boolean false.
-        object? readBack = _provider.GetProjectSetting(BoolSettingName);
-        Assert.That(readBack, Is.TypeOf<bool>());
-        Assert.That(readBack, Is.False);
-    }
+    // PAPI deserializes wire values as JsonElement, so these mirror the production path.
+    [Test]
+    public Task SetThenGet_JsonElementTrue() =>
+        AssertSetRoundTrips(JsonSerializer.SerializeToElement(true), false, "T", true);
 
     [Test]
-    public void GetProjectSetting_BooleanDefaultButNonBooleanStoredValue_ReturnsRawString()
+    public Task SetThenGet_JsonElementFalse() =>
+        AssertSetRoundTrips(JsonSerializer.SerializeToElement(false), true, "F", false);
+
+    // A boolean-default setting may legitimately hold a non-boolean value (union type).
+    [Test]
+    public async Task GetProjectSetting_BooleanDefaultButNonBooleanStoredValue_ReturnsRawString()
     {
-        // The setting has a registered boolean default, but the stored value is not a T/F token.
-        // This pins the intentional union-type permissiveness: the raw string is returned, not an
-        // exception.
-        RegisterBooleanDefault(BoolSettingName, false);
+        await RegisterBooleanDefault(BoolSettingName, false);
         SetRawSetting(BoolSettingName, "hello");
 
         object? result = _provider.GetProjectSetting(BoolSettingName);
 
-        Assert.That(result, Is.TypeOf<string>());
-        Assert.That(result, Is.EqualTo("hello"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.TypeOf<string>());
+            Assert.That(result, Is.EqualTo("hello"));
+        });
     }
 
+    // With no registered default, GetDefault throws and the raw string is returned.
     [Test]
     public void GetProjectSetting_NoRegisteredDefault_ReturnsStoredValueAsString()
     {
-        // No getDefault handler is registered, so ProjectSettingsService.GetDefault throws and the
-        // legacy behavior of returning the raw stored string is preserved.
         SetRawSetting(BoolSettingName, "T");
 
         object? result = _provider.GetProjectSetting(BoolSettingName);
 
-        Assert.That(result, Is.TypeOf<string>());
-        Assert.That(result, Is.EqualTo("T"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.TypeOf<string>());
+            Assert.That(result, Is.EqualTo("T"));
+        });
     }
 }
