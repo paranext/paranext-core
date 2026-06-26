@@ -14,7 +14,6 @@ const STRINGS: ResourcePickerDialogLocalizedStrings = {
   '%resourcePicker_section_already_selected%': 'Included',
   '%resourcePicker_section_installed%': 'Installed',
   '%resourcePicker_section_available_to_download%': 'Available to download',
-  '%resourcePicker_button_use%': 'Use',
   '%resourcePicker_no_results%': 'No results found',
   '%resourcePicker_search_placeholder%': 'Search resources…',
   '%resourcePicker_language_filter_any%': 'Any language',
@@ -29,7 +28,7 @@ const meta: Meta<typeof ResourcePickerDialog> = {
   decorators: [
     (Story) => (
       <Dialog open modal={false}>
-        <div className="tw-flex tw-h-[600px] tw-w-[560px] tw-flex-col tw-rounded-lg tw-border tw-bg-background tw-shadow-xl">
+        <div className="tw:flex tw:h-[600px] tw:w-[560px] tw:flex-col tw:rounded-lg tw:border tw:bg-background tw:shadow-xl">
           <Story />
         </div>
       </Dialog>

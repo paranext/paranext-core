@@ -1,2 +1,0 @@
-import{r,j as i}from"./iframe-Dy2h32my.js";import{c as s}from"./utils-BPbySc-g.js";import{L as a}from"./loader-circle-BT1Pil4C.js";const e=r.forwardRef(({className:t,...n},o)=>i.jsx(a,{size:35,className:s("tw:animate-spin",t),...n,ref:o}));e.displayName="Spinner";e.__docgenInfo={description:`A spinner component that uses the LoaderCircle icon from lucide-react to indicate loading states.
-The spinner rotates to indicate that a process is ongoing.`,methods:[],displayName:"Spinner"};export{e as S};
