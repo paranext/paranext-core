@@ -108,3 +108,4 @@
 {"type":"selected","runId":"qs-2026-06-26","candidateId":"j1","date":"2026-06-26"}
 {"type":"repro","runId":"qs-2026-06-26","candidateId":"j1","result":"failed","date":"2026-06-26"}
 {"type":"backlog","candidateId":"j1","dedupKey":"jira:PT-4005","status":"resolved","reason":"not auto-fixable: iframe-boundary architectural, no minimal diff or unit-testable regression - deferred to human rearchitecture","date":"2026-06-26"}
+{"type":"run_started","runId":"qs-2026-06-26","seeds":{"jira":[],"scanTarget":"src/renderer/components"},"date":"2026-06-26"}
