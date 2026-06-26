@@ -1330,16 +1330,22 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 };
             }
 
-            // Check if extension setting is a supported non-string type
+            // If this extension setting has a registered boolean default, treat it as a boolean.
+            // GetDefault throws if no default is registered for this setting (and is
+            // indistinguishable from a transient PAPI failure here); in either case fall back to
+            // the legacy string behavior below.
             bool? defaultBool = null;
             try
             {
-                if (ProjectSettingsService.GetDefault(PapiClient, settingName) is JsonElement elem)
-                    defaultBool = elem.Deserialize<bool?>();
+                if (
+                    ProjectSettingsService.GetDefault(PapiClient, settingName) is JsonElement elem
+                    && elem.ValueKind is JsonValueKind.True or JsonValueKind.False
+                )
+                    defaultBool = elem.GetBoolean();
             }
             catch
             {
-                // No registered default; keep original string behavior
+                // No registered default (or PAPI unavailable); keep original string behavior
             }
 
             // Boolean setting found, so convert from string
@@ -1351,6 +1357,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                     "FALSE" => false,
                     "T" => true,
                     "TRUE" => true,
+                    // A setting with a boolean default may legitimately hold a non-boolean value
+                    // (a union/mixed type), so pass the raw string through rather than throwing.
                     _ => settingValue,
                 };
             }
