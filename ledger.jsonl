@@ -120,3 +120,8 @@
 {"type":"fix","runId":"qs-2026-06-26","candidateId":"s1","result":"pr_opened","prNumber":2463,"prUrl":"https://github.com/paranext/paranext-core/pull/2463","branch":"fix/manage-books-selectall-excludes-disabled","date":"2026-06-26"}
 {"type":"pr_outcome","prNumber":2463,"outcome":"open","checkedDate":"2026-06-26","date":"2026-06-26"}
 {"type":"backlog","candidateId":"s1","dedupKey":"scan:platform-scripture:selectall-selects-disabled-books","status":"resolved","reason":"pr_opened #2463","date":"2026-06-26"}
+{"type":"pr_outcome","prNumber":2446,"outcome":"open","checkedDate":"2026-06-27"}
+{"type":"pr_outcome","prNumber":2447,"outcome":"open","checkedDate":"2026-06-27"}
+{"type":"pr_outcome","prNumber":2449,"outcome":"open","checkedDate":"2026-06-27"}
+{"type":"pr_outcome","prNumber":2459,"outcome":"open","checkedDate":"2026-06-27"}
+{"type":"pr_outcome","prNumber":2463,"outcome":"open","checkedDate":"2026-06-27"}
