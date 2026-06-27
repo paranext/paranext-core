@@ -2,9 +2,11 @@
 // One-off build-time CLI that prints results for the operator; not part of the
 // runtime where the platform logger would otherwise be required.
 /* eslint-disable no-console */
+import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import path from 'node:path';
 import process from 'node:process';
+import { pathToFileURL } from 'node:url';
 import { convert, type ConvertWarnings } from './convert';
 
 interface CliArgs {
@@ -13,12 +15,47 @@ interface CliArgs {
   base?: string;
 }
 
+interface NormalizeSourcePathDeps {
+  cwd?: string;
+  resolveRepoRoot?: (dir: string) => string | undefined;
+  pathModule?: typeof path;
+}
+
+// Normalize whatever path the operator passed via --in into a stable, repo-root-
+// relative POSIX-style string. Keeps the generated SCSS header reproducible
+// across machines and worktrees so committed output doesn't bake in the
+// operator's absolute filesystem layout.
+export function normalizeSourcePath(inputPath: string, deps: NormalizeSourcePathDeps = {}): string {
+  const pathLib = deps.pathModule ?? path;
+  const cwd = deps.cwd ?? process.cwd();
+  const resolveRepoRoot = deps.resolveRepoRoot ?? gitRepoRootResolver;
+
+  const absolutePath = pathLib.resolve(cwd, inputPath);
+  const repoRoot = resolveRepoRoot(pathLib.dirname(absolutePath));
+  if (!repoRoot) return pathLib.basename(absolutePath);
+  const rel = pathLib.relative(repoRoot, absolutePath);
+  return rel.split(pathLib.sep).join('/');
+}
+
+function gitRepoRootResolver(dir: string): string | undefined {
+  try {
+    const root = execFileSync('git', ['-C', dir, 'rev-parse', '--show-toplevel'], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    return root || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function main(): void {
   const args = parseArgs(process.argv.slice(2));
-  const css = readFileSync(resolve(args.in), 'utf-8');
-  const baseScss = args.base ? readFileSync(resolve(args.base), 'utf-8') : undefined;
-  const { scss, markerCount, warnings } = convert(css, { source: args.in, baseScss });
-  writeFileSync(resolve(args.out), scss, 'utf-8');
+  const css = readFileSync(path.resolve(args.in), 'utf-8');
+  const baseScss = args.base ? readFileSync(path.resolve(args.base), 'utf-8') : undefined;
+  const source = normalizeSourcePath(args.in);
+  const { scss, markerCount, warnings } = convert(css, { source, baseScss });
+  writeFileSync(path.resolve(args.out), scss, 'utf-8');
   console.log(`Wrote ${args.out} — ${markerCount} markers${summarizeWarnings(warnings)}`);
 }
 
@@ -71,4 +108,13 @@ function printUsage(): void {
   );
 }
 
-main();
+function isMainModule(): boolean {
+  if (!process.argv[1]) return false;
+  try {
+    return import.meta.url === pathToFileURL(process.argv[1]).href;
+  } catch {
+    return false;
+  }
+}
+
+if (isMainModule()) main();
