@@ -123,7 +123,18 @@ public sealed class ProgressCapture : ProgressDisplay
             {
                 if (_disposed)
                     return;
-                _progress.Cancel();
+                try
+                {
+                    _progress.Cancel();
+                }
+                catch (PlatformNotSupportedException)
+                {
+                    // See the remarks above: on a definite sub-task that set AllowAbort = true,
+                    // Progress.Cancel() can reach Thread.Abort(), which throws
+                    // PlatformNotSupportedException on .NET 8. Cancellation here is cooperative
+                    // (it sets Progress.Cancelled, which the retry loops poll), so swallow the
+                    // abort failure rather than faulting the cross-thread caller.
+                }
             }
         }
 
