@@ -208,8 +208,31 @@ function render({
 function emitBlock(lines: string[], selector: string, declarations: Declaration[]): void {
   if (!declarations.length) return;
   lines.push(`${selector} {`);
-  declarations.forEach((decl) => lines.push(`  ${decl.property}: ${decl.value};`));
+  declarations.forEach((decl) => lines.push(`  ${decl.property}: ${normalizeValue(decl.value)};`));
   lines.push('}');
+}
+
+// Match prettier's SCSS normalization under the project's singleQuote: true config,
+// so the converter emits files that pass `prettier --check` without a post-pass.
+function normalizeValue(value: string): string {
+  return singleQuoteStrings(trimTrailingZeroDecimals(lowercaseHexInValue(value)));
+}
+
+function lowercaseHexInValue(value: string): string {
+  return value.replace(/#[0-9A-Fa-f]{3,8}\b/g, (hex) => hex.toLowerCase());
+}
+
+// The lookbehind/lookahead keep us from chewing up dotted non-numbers like
+// url(./fonts/charis.woff2?v=1.0.0), which prettier leaves alone.
+function trimTrailingZeroDecimals(value: string): string {
+  return value.replace(/(?<![\d.])(-?\d+)\.(\d+)(?![\d.])/g, (_, intPart, fracPart) => {
+    const trimmed = fracPart.replace(/0+$/, '');
+    return trimmed.length ? `${intPart}.${trimmed}` : intPart;
+  });
+}
+
+function singleQuoteStrings(value: string): string {
+  return value.replace(/"([^"'\\]*)"/g, (_, inner) => `'${inner}'`);
 }
 
 function hasAnyWarning(w: ConvertWarnings, baseProvided: boolean): boolean {

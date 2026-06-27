@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest';
+import prettier from 'prettier';
 import { convert } from './convert';
 
 const FIXED_DATE = new Date('2026-06-22T00:00:00.000Z');
@@ -64,7 +65,7 @@ describe('convert', () => {
     const { scss } = convert(css, { generatedAt: FIXED_DATE });
 
     expect(scss).toMatch(
-      /\.formatted-font \.usfm_toc1 \{[^}]*font-weight: bold;[^}]*color: #004C00;/,
+      /\.formatted-font \.usfm_toc1 \{[^}]*font-weight: bold;[^}]*color: #004c00;/,
     );
     expect(scss).toMatch(
       /\.text-spacing \.usfm_toc1 \{[^}]*margin-top: 8pt;[^}]*text-align: left;/,
@@ -195,5 +196,24 @@ describe('convert', () => {
 
     expect(scss).not.toContain("[dir='ltr']");
     expect(scss).not.toContain("[dir='rtl']");
+  });
+
+  test('emits prettier-conformant SCSS (no formatting drift through prettier)', async () => {
+    // Exercises every shape that previously failed prettier --check on the
+    // downstream marker-style files: uppercase hex, trailing-zero decimals,
+    // and double-quoted strings from postcss (project config sets singleQuote).
+    const css = `
+      .usfm_a { color: #004C00; font-family: "Arial"; }
+      .usfm_b { margin-top: 8.000pt; margin-left: 10.000vw; text-indent: -7.500vw; }
+      .usfm_c { color: #FFFFFF; font-size: 12.500pt; }
+    `;
+
+    const { scss } = convert(css, { generatedAt: FIXED_DATE });
+    // Resolve the project's prettier config so this test tracks whatever rules
+    // `npx prettier --check` enforces in CI, not just prettier's defaults.
+    const config = (await prettier.resolveConfig(__filename)) ?? {};
+    const formatted = await prettier.format(scss, { ...config, parser: 'scss' });
+
+    expect(scss).toBe(formatted);
   });
 });
