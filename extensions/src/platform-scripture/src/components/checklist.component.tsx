@@ -684,12 +684,16 @@ export function ChecklistTool({
     return undefined;
   };
 
-  // Backend-supplied empty-result message is preferred over the generic no-results string — e.g.
-  // gm-002 emits "Comparative texts have identical markers." (BHV-600).
+  // A non-empty backend-supplied empty-result message is preferred over the generic no-results
+  // string — the "identical" variant ships a resolved message (gm-002's "Comparative texts have
+  // identical markers.", BHV-600). The "noResults" variant intentionally ships an EMPTY message
+  // (the backend leaves the wording to the UI), and the field is also absent on the defensive
+  // undefined-data path. In both of those cases fall back to the neutral generic "No markers
+  // found." — not the identical-markers string (which would falsely claim a match that was never
+  // computed) and not a blank panel. `||` (not `??`) so an empty backend message also falls back.
+  const backendEmptyResultMessage = data?.emptyResultMessage?.message;
   const noResultsMessage =
-    data?.emptyResultMessage?.message ??
-    getLocalizedString('%markersChecklist_emptyResult_identicalMarkers%') ??
-    getLocalizedString('%markersChecklist_noResults%');
+    backendEmptyResultMessage || getLocalizedString('%markersChecklist_noResults%');
 
   return (
     <div
