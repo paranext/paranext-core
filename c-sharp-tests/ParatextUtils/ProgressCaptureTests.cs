@@ -95,6 +95,35 @@ namespace TestParanextDataProvider.ParatextUtils
         }
 
         [Test]
+        public void SetProgressValue_ForwardsValueToOnValueCallback()
+        {
+            var values = new List<double>();
+            using (ProgressCapture.StartCapture(_ => { }, v => values.Add(v)))
+            {
+                // Drive SetProgressValue via a determinate task session (StartTask maps
+                // Value → SetProgressValue as a 0..1 fraction; Value=42 on a 0..100 task → 0.42).
+                using var session = Progress.Mgr.StartTask(0, 100, "");
+                session.Value = 42;
+            }
+            Assert.That(values, Does.Contain(0.42));
+        }
+
+        [Test]
+        public void SetProgressValue_SwallowsCallbackException()
+        {
+            using var scope = ProgressCapture.StartCapture(
+                _ => { },
+                _ => throw new InvalidOperationException("value callback boom")
+            );
+
+            Assert.DoesNotThrow(() =>
+            {
+                using var session = Progress.Mgr.StartTask(0, 100, "");
+                session.Value = 42;
+            });
+        }
+
+        [Test]
         public void Cancel_FromAnotherThread_SetsFlagOnCapturedInstanceNotTheCaller()
         {
             // The whole point of ProgressScope holding a direct Progress reference (instead of
