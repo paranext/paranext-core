@@ -140,3 +140,4 @@
 {"type":"backlog","candidateId":"c4","dedupKey":"scan:lib/platform-bible-react:bcv-typed-colon-verse-grid-keyboard-nav","status":"resolved","reason":"could not reproduce","date":"2026-06-27"}
 {"type":"selected","runId":"qs-2026-06-27","candidateId":"sb8","date":"2026-06-27"}
 {"type":"repro","runId":"qs-2026-06-27","candidateId":"sb8","result":"reproduced","evidenceRef":"evidence/qs-2026-06-27-c8-checklist-empty-message.md","date":"2026-06-27"}
+{"type":"fix","runId":"qs-2026-06-27","candidateId":"sb8","result":"pr_opened","prNumber":2468,"prUrl":"https://github.com/paranext/paranext-core/pull/2468","branch":"fix/markers-checklist-empty-state-message","date":"2026-06-27"}
