@@ -67,13 +67,13 @@ Inform-only — never lets Saroj author a plan (authoring is out of scope; see [
 
 ## 8. Non-negotiables coverage
 
-| NN                                 | Covered by                                                                      |
-| ---------------------------------- | ------------------------------------------------------------------------------- |
-| 1 — active chapter's current stage | Derived stage (§2), shown in both prototypes                                    |
-| 2 — fallback if no plan            | Inform-only zero state (§7)                                                     |
-| 3 — which tasks remain             | Chapter view lists all current-stage tasks (§1 secondary; §6 chooser)           |
-| 4 — mark a task done               | **Intentionally open** — checkbox-vs-other affordance is a mockup exploration   |
-| 5 — task that must earn a pass     | Check or Review + what's required, or flagged issues (§3)                       |
+| NN                                 | Covered by                                                                                  |
+| ---------------------------------- | ------------------------------------------------------------------------------------------- |
+| 1 — active chapter's current stage | Derived stage (§2), shown in both prototypes                                                |
+| 2 — fallback if no plan            | Inform-only zero state (§7)                                                                 |
+| 3 — which tasks remain             | Chapter view lists all current-stage tasks (§1 secondary; §6 chooser)                       |
+| 4 — mark a task done               | **Intentionally open** — checkbox-vs-other affordance is a mockup exploration               |
+| 5 — task that must earn a pass     | Check or Review + what's required, or flagged issues (§3)                                   |
 | 6 — all complete → next stage      | Derived advance + a "reached next stage" state (§1 secondary; **Luke 1** in fixture, §9 B2) |
 
 ## 9. Seeded fixture
@@ -103,3 +103,24 @@ The three vehicles and the shared build approach live in **[ADR-0001](../adr/000
 - **Pinning** the Current Task (vs. follow-editor) — deferred.
 - **`project-plan-redesign-1` types** — its availability enum mirrors PT9 more faithfully; consider for the epic-candidate.
 - **PRD due 29 Jul; epic dev starts 11 Aug** — fidelity ramps toward the epic-candidate (~7 Jul).
+
+## 12. Round 3 — post-demo revision (Matt demo, 2026-06-26)
+
+The Magic Patterns prototype (the two §1 variants) was demoed to Matt. Direction: **combine the variants** and **lean coarse**. This evolves §1 (one combined concept, not two) and §4 (teammate rule).
+
+- **Combine the variants.** The always-present **single focus item** (top-center) becomes the **entry point** into the **one-chapter focus** view (Matt liked both — merge them). Collapsed = a one-line "what's next"; expand = this chapter's stages/steps + where the chapter sits in the plan. The expandable panel _is_ the chapter view — not a separate sidebar.
+- **Scope the focus to the current chapter only** — not all the Priority's tasks. Repeating the same task across chapters overwhelmed (Matt's main critique of the single-item variant).
+- **Coarse by default (Matt's instruction).** Primary action = advance the chapter through **stages** with a single "mark done / advance"; tasks/issues stay on-demand via progressive disclosure, never required clicks. Asserting a stage done asserts its steps done. Bring the granularity question to designees; if they want finer, honor it.
+- **Combine BCV with the task UI** — the focus item doubles as the BCV navigator (one control, not two).
+- **Don't block on teammates' offline work** — proceed to the next available action; only show a calm "waiting on \<person\>" when that teammate's data is genuinely required (no forced send/receive). Reframes §4 rule 0.
+- **Progress-reporting finding (PT codebase):** what gets _reported_ is the **asserted manual tasks**, not issue resolution — so issues don't drive progress reporting. Reinforces the coarse default; issues are advisory to the assert.
+- **Central tension (nannying vs. vague):** help Saroj know what's next and stay _sincere_ about real practice without _demanding_ insincerity. The live pull is best-practice accountability (#2, consultant-driven, tends to nanny) vs. scalable real use (#3).
+
+### Round-3 A/B explorations (build as demoable toggles; resolve with designees)
+
+- **1a vs 1b — focus granularity:** single focus = **Stage** (1a, coarse) vs = **Step** (1b — a Task, or a Check → its Issues). Tests Toulmin's hypothesis (step-focus over-nannies / overwhelms) vs Mercado's (step-focus helpfully narrows attention).
+- **3a vs 3b — BCV/focus coupling:** changing book/chapter moves the focus too (3a, unified) vs focus stays **pinned** while navigating, with progressive-disclosure affordances to jump back to the focus chapter or re-point the focus to the viewed one (3b). When viewed = focus, keep it simple; complexity appears only when they diverge.
+
+### Tension to resolve (flagged)
+
+- **Coarse advance vs required-checks-block (ADR-0002).** A single coarse "advance" is in tension with "required checks block within the stage." Round-3 leans: the assert covers the manual tasks (what's reported); open issues are surfaced but **advisory**, not hard-gating the coarse assert — softening ADR-0002 (which was provisional). Confirm with designees before hardening.
