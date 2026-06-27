@@ -135,3 +135,4 @@
 {"type":"selected","runId":"qs-2026-06-27","candidateId":"jb1","date":"2026-06-27"}
 {"type":"repro","runId":"qs-2026-06-27","candidateId":"jb1","result":"failed","date":"2026-06-27"}
 {"type":"backlog","candidateId":"jb1","dedupKey":"jira:PT-3993","status":"resolved","reason":"could not reproduce","date":"2026-06-27"}
+{"type":"run_started","runId":"qs-2026-06-27","seeds":{"jira":[],"scanTarget":"src/shared/services"},"date":"2026-06-27"}
