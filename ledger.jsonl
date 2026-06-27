@@ -134,3 +134,4 @@
 {"type":"candidate","runId":"qs-2026-06-27","candidateId":"j6","source":"jira","jiraKey":"PT-3994","title":"Get Resources not displaying results from DBL","area":"c-sharp DBL data provider + platform-get-resources","dedupKey":"jira:PT-3994","confidence":0.15,"refute":"refuted","refuteReason":"Defect in remote credentialed DBL data path; cannot reproduce without live DBL server + valid registration/credentials; no deterministic in-repo trigger.","impact":{"userVisible":true,"severity":3,"frequency":2,"score":6},"date":"2026-06-27"}
 {"type":"selected","runId":"qs-2026-06-27","candidateId":"jb1","date":"2026-06-27"}
 {"type":"repro","runId":"qs-2026-06-27","candidateId":"jb1","result":"failed","date":"2026-06-27"}
+{"type":"backlog","candidateId":"jb1","dedupKey":"jira:PT-3993","status":"resolved","reason":"could not reproduce","date":"2026-06-27"}
