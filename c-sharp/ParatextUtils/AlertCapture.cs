@@ -129,7 +129,9 @@ public sealed class AlertCapture : Alert
             RegexOptions.Compiled
         );
 
-    private static string RedactPathsForLog(string? value) =>
+    // internal (not private) so ProgressCapture's console fallback can reuse this exact redactor
+    // rather than duplicating the regex (Theme 4 defense-in-depth, kept to one source of truth).
+    internal static string RedactPathsForLog(string? value) =>
         string.IsNullOrEmpty(value) ? string.Empty : s_pathPattern.Replace(value, "<path>");
 
     /// <summary>
