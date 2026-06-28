@@ -11,6 +11,7 @@ import {
   isPlatformError,
   LanguageStrings,
   LocalizeKey,
+  MarkerType,
   serialize,
   Unsubscriber,
   USFM_MARKERS_MAP_PARATEXT_3_0,
@@ -324,12 +325,17 @@ export const blockMarkerToBlockNames: Record<string, LocalizeKey> = {
 };
 
 /**
- * True when a marker is paragraph/verse (block) level — i.e. a structure marker whose insertion or
- * formatting is blocked while structure protection is on. Verse (`v`) and chapter (`c`) markers are
- * structure markers but are not in {@link blockMarkerToBlockNames}, so they are special-cased.
+ * True when a marker is a paragraph- or verse-level (block) structure marker — i.e. one whose
+ * insertion or formatting is blocked while structure protection is on.
+ *
+ * Paragraph-level markers are identified by their {@link MarkerType.Paragraph} type in
+ * {@link usfmMarkers} rather than a hand-maintained list, so every paragraph marker (including
+ * poetry lines like `q`, section headings like `s1`, and embedded paragraphs like `pm`) is covered.
+ * Verse (`v`) is a structure marker but is typed as {@link MarkerType.Character}, so it is
+ * special-cased; chapter (`c`) is already {@link MarkerType.Paragraph} and needs no special case.
  */
 export function isBlockMarker(marker: string): boolean {
-  return marker in blockMarkerToBlockNames || marker === 'v' || marker === 'c';
+  return usfmMarkers[marker]?.type === MarkerType.Paragraph || marker === 'v';
 }
 
 /**

@@ -2359,22 +2359,31 @@ describe('syncOnProjectSwitch', () => {
 // #endregion syncOnProjectSwitch
 
 describe('isBlockMarker', () => {
-  it('returns true for paragraph markers in blockMarkerToBlockNames', () => {
+  it('returns true for paragraph-type markers', () => {
     expect(isBlockMarker('p')).toBe(true);
-    expect(isBlockMarker('q1')).toBe(true);
     expect(isBlockMarker('mt')).toBe(true);
+    // Poetry and section markers that are NOT in blockMarkerToBlockNames must still be recognized
+    // as block markers (the bug that allowed inserting them while structure was protected).
+    expect(isBlockMarker('q')).toBe(true);
+    expect(isBlockMarker('q1')).toBe(true);
+    expect(isBlockMarker('b')).toBe(true);
+    expect(isBlockMarker('s1')).toBe(true);
+    expect(isBlockMarker('pm')).toBe(true);
   });
 
   it('returns true for verse and chapter markers', () => {
+    // Verse is typed as a Character marker, so it is special-cased; chapter is already Paragraph.
     expect(isBlockMarker('v')).toBe(true);
     expect(isBlockMarker('c')).toBe(true);
   });
 
-  it('returns false for inline markers', () => {
+  it('returns false for inline (character/note) markers', () => {
     expect(isBlockMarker('f')).toBe(false);
     expect(isBlockMarker('x')).toBe(false);
-    expect(isBlockMarker('rem')).toBe(false);
+    expect(isBlockMarker('bd')).toBe(false);
+    expect(isBlockMarker('add')).toBe(false);
     expect(isBlockMarker('')).toBe(false);
+    expect(isBlockMarker('notamarker')).toBe(false);
   });
 });
 
@@ -2406,9 +2415,9 @@ describe('generateParagraphMenuListItems', () => {
 });
 
 describe('generateInlineMarkerMenuListItems', () => {
-  // The 'id' parent's children include block markers (e.g. 'h', 'mt') and non-block markers
-  // (e.g. 'rem') against the real usfmMarkers data.
-  const PARENT = 'id';
+  // The 'p' parent's children include block markers (e.g. 'q' poetry, 's1' section heading) and
+  // inline markers (e.g. 'f' footnote, 'x' cross-reference) against the real usfmMarkers data.
+  const PARENT = 'p';
   const noop = () => {};
 
   it('when protected: block-marker item is disallowed and its action notifies without inserting', () => {
@@ -2417,7 +2426,7 @@ describe('generateInlineMarkerMenuListItems', () => {
     const close = vi.fn();
     const items = generateInlineMarkerMenuListItems(ref, close, {}, true, notify, PARENT);
 
-    const blockItem = items.find((i) => i.marker === 'h');
+    const blockItem = items.find((i) => i.marker === 'q');
     expect(blockItem?.isDisallowed).toBe(true);
 
     blockItem?.action?.();
@@ -2432,11 +2441,11 @@ describe('generateInlineMarkerMenuListItems', () => {
     const close = vi.fn();
     const items = generateInlineMarkerMenuListItems(ref, close, {}, true, notify, PARENT);
 
-    const inlineItem = items.find((i) => i.marker === 'rem');
+    const inlineItem = items.find((i) => i.marker === 'f');
     expect(inlineItem?.isDisallowed).toBeFalsy();
 
     inlineItem?.action?.();
-    expect(insertMarker).toHaveBeenCalledWith('rem');
+    expect(insertMarker).toHaveBeenCalledWith('f');
     expect(notify).not.toHaveBeenCalled();
     expect(close).toHaveBeenCalledTimes(1);
   });
