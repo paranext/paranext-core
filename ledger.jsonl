@@ -167,3 +167,4 @@
 {"type":"backlog","candidateId":"c3","title":"Resources should not be editable using the menus to insert FT/Comments","area":"platform-scripture-editor main.ts insert handlers","source":"jira","jiraKey":"PT-3880","dedupKey":"jira:PT-3880","impactScore":4,"confidence":0.5,"status":"open","date":"2026-06-28"}
 {"type":"repro","runId":"qs-2026-06-28","candidateId":"c4","result":"reproduced","evidenceRef":"evidence/before-PT-3852.txt","date":"2026-06-28"}
 {"type":"fix","runId":"qs-2026-06-28","candidateId":"c4","result":"pr_opened","prNumber":2470,"prUrl":"https://github.com/paranext/paranext-core/pull/2470","branch":"fix/PT-3852-comment-thread-read-sync","date":"2026-06-28"}
+{"type":"pr_outcome","prNumber":2470,"outcome":"open","checkedDate":"2026-06-28","date":"2026-06-28"}
