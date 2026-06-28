@@ -59,9 +59,12 @@ public sealed class ProgressCapture : ProgressDisplay
     /// ParatextData's retry loop.
     /// </param>
     /// <param name="onValue">
-    /// Optional. Invoked with the 0.0–1.0 progress fraction reported by ParatextData. Subject to
-    /// the same threading and exception-isolation constraints as <paramref name="onText"/>: called
-    /// synchronously inside ParatextData's progress path; exceptions are caught and ignored.
+    /// Optional. Invoked with the progress fraction (normally 0.0–1.0) reported by ParatextData for
+    /// determinate tasks. Indefinite tasks report no fraction — ParatextData signals this as a
+    /// negative sentinel (-1) — and those updates are dropped rather than forwarded, so the callback
+    /// is never invoked with a negative value. Subject to the same threading and exception-isolation
+    /// constraints as <paramref name="onText"/>: called synchronously inside ParatextData's progress
+    /// path; exceptions are caught and ignored.
     /// </param>
     public static ProgressScope StartCapture(
         Action<string>? onText = null,
@@ -78,8 +81,15 @@ public sealed class ProgressCapture : ProgressDisplay
     void ProgressDisplay.SetProgressText(string text) =>
         SafeInvokeCallback("onText", _onText, text);
 
-    void ProgressDisplay.SetProgressValue(double val) =>
-        SafeInvokeCallback("onValue", _onValue, val);
+    void ProgressDisplay.SetProgressValue(double val)
+    {
+        // ParatextData reports -1 for indefinite tasks (StartIndefiniteTask → Begin(-1, -1) →
+        // AbsVal == -1): there is no determinate fraction, so drop the sentinel rather than
+        // forward a negative "progress" that a consumer would render as e.g. a -100% bar.
+        // onValue's contract is a non-negative fraction.
+        if (val >= 0)
+            SafeInvokeCallback("onValue", _onValue, val);
+    }
 
     // Both progress callbacks run synchronously inside ParatextData's progress path (e.g.
     // RetryIndefinitely's catch block, while Progress's lock is held). A callback that throws

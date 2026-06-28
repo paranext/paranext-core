@@ -109,6 +109,28 @@ namespace TestParanextDataProvider.ParatextUtils
         }
 
         [Test]
+        public void SetProgressValue_DropsIndefiniteSentinelValue()
+        {
+            // ParatextData runs Send/Receive phases as indefinite tasks: StartIndefiniteTask →
+            // Begin(-1, -1) → SetProgressValue(AbsVal == -1). onValue's contract is a non-negative
+            // fraction, so the indefinite sentinel must be dropped, not forwarded as a negative
+            // "progress" (which a consumer would render as e.g. a -100% bar). Without the guard the
+            // values below would be [-1, -1]; with it the callback is never invoked.
+            var values = new List<double>();
+            using (ProgressCapture.StartCapture(_ => { }, values.Add))
+            {
+                using var session = Progress.Mgr.StartIndefiniteTask();
+                session.Incr(); // refresh — drives another SetProgressValue(-1)
+            }
+
+            Assert.That(
+                values,
+                Has.None.LessThan(0),
+                "indefinite -1 sentinel must not reach onValue"
+            );
+        }
+
+        [Test]
         public void SetProgressValue_SwallowsCallbackException()
         {
             using var scope = ProgressCapture.StartCapture(
