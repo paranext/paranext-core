@@ -261,6 +261,17 @@ export function CommentThread({
     handleReadStatusChange?.(threadId, newIsRead);
   }, [isRead, handleReadStatusChange, threadId]);
 
+  // Keep the local read state in sync with the backend's read state. The thread seeds `isRead`
+  // from the prop once on mount, and the parent reuses a stable key per thread, so a later backend
+  // update (e.g. adding a reply re-marks the thread read, PT-3852) arrives as a prop change rather
+  // than a remount and would otherwise never reach the UI. An incoming read also clears a prior
+  // manual unread so the thread doesn't stay visually unread after the backend marks it read; a
+  // manual unread persists to the backend as `isRead=false`, so it is preserved here.
+  useEffect(() => {
+    setIsRead(isReadProp);
+    if (isReadProp) setManuallyUnread(false);
+  }, [isReadProp]);
+
   useEffect(() => {
     setShowAllReplies(false);
   }, [isSelected]);
