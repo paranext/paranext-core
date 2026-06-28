@@ -75,38 +75,30 @@ public sealed class ProgressCapture : ProgressDisplay
         return new ProgressScope(progress);
     }
 
-    void ProgressDisplay.SetProgressText(string text)
-    {
-        // The caller-supplied callback runs synchronously inside ParatextData's status-update
-        // path (e.g. RetryIndefinitely's catch block, while holding Progress's lock). A callback
-        // that throws would unwind ParatextData's retry loop and turn an otherwise-recoverable
-        // reconnect into a hard failure, so isolate it: a dropped status update is harmless;
-        // tearing down the in-flight operation is not.
-        try
-        {
-            _onText?.Invoke(text);
-        }
-        catch (Exception e)
-        {
-            // Redact filesystem-path-shaped substrings before logging, mirroring AlertCapture's
-            // console fallback (Theme 4): a callback wrapping IO can surface raw paths in the
-            // exception text, and server logs may be aggregated / shipped off-host.
-            Console.WriteLine(
-                $"ProgressCapture onText callback threw (ignored): {AlertCapture.RedactPathsForLog(e.ToString())}"
-            );
-        }
-    }
+    void ProgressDisplay.SetProgressText(string text) =>
+        SafeInvokeCallback("onText", _onText, text);
 
-    void ProgressDisplay.SetProgressValue(double val)
+    void ProgressDisplay.SetProgressValue(double val) =>
+        SafeInvokeCallback("onValue", _onValue, val);
+
+    // Both progress callbacks run synchronously inside ParatextData's progress path (e.g.
+    // RetryIndefinitely's catch block, while Progress's lock is held). A callback that throws
+    // would unwind ParatextData's retry loop and turn an otherwise-recoverable reconnect into a
+    // hard failure, so isolate it: a dropped progress update is harmless; tearing down the
+    // in-flight operation is not. Redact filesystem-path-shaped substrings before logging,
+    // mirroring AlertCapture's console fallback (Theme 4): a callback wrapping IO can surface raw
+    // paths in the exception text, and server logs may be aggregated / shipped off-host. Generic
+    // (rather than an Action closure) so the hot status-update path stays allocation-free.
+    private static void SafeInvokeCallback<T>(string callbackName, Action<T>? callback, T arg)
     {
         try
         {
-            _onValue?.Invoke(val);
+            callback?.Invoke(arg);
         }
         catch (Exception e)
         {
             Console.WriteLine(
-                $"ProgressCapture onValue callback threw (ignored): {AlertCapture.RedactPathsForLog(e.ToString())}"
+                $"ProgressCapture {callbackName} callback threw (ignored): {AlertCapture.RedactPathsForLog(e.ToString())}"
             );
         }
     }
