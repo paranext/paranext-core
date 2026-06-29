@@ -207,6 +207,8 @@
       "%markerMenu_marker_xta_description%": "*Cross reference target references added text",
       "%markerMenu_noResults%": "*No results found.",
       "%markerMenu_searchPlaceholder%": "*Type a style or search.",
+      "%markerMenu_searchPlaceholder_insert%": "*Search to insert a style.",
+      "%markerMenu_searchPlaceholder_paragraph%": "*Search to change paragraph style.",
       "%redoButton_tooltip%": "*Redo",
       "%undoButton_tooltip%": "*Undo"
     },
@@ -417,6 +419,8 @@
       "%markerMenu_marker_xta_description%": "*****Texto añadido en referencia cruzada!!!!!!!!!!",
       "%markerMenu_noResults%": "*****No se encontraron resultados.!!!!!!!!!!",
       "%markerMenu_searchPlaceholder%": "*****Escriba un estilo o busque.!!!!!!!!!!",
+      "%markerMenu_searchPlaceholder_insert%": "*****Buscar para insertar un estilo.!!!!!!!!!!",
+      "%markerMenu_searchPlaceholder_paragraph%": "*****Buscar para cambiar el estilo de párrafo.!!!!!!!!!!",
       "%redoButton_tooltip%": "*****Rehacer!!!!!!!!!!",
       "%undoButton_tooltip%": "*****Deshacer!!!!!!!!!!"
     }
