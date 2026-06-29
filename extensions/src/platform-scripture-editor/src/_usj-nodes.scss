@@ -2270,6 +2270,14 @@
   white-space: nowrap;
 }
 
+/* Verse marker armed for the two-step intentional delete (first Backspace/Delete selects it).
+   Selection-style background so it reads as selected. */
+.verse-selected {
+  background-color: color-mix(in srgb, var(--destructive) 15%, transparent);
+  color: var(--destructive);
+  border-radius: 2px;
+}
+
 span.unread img {
   background-color: #ffff99;
   position: relative;
