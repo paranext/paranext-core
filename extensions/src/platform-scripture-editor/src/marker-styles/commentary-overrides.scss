@@ -1,0 +1,27 @@
+/* Hand-authored overrides for the commentary marker stylesheets — NOT generated.
+ *
+ * Stopgap (PT-3086): the editor does not yet wire up navigation for commentary
+ * link markers, so `\jmp` (glossary / internal section jumps) and `\xtSee` /
+ * `\xtSeeAlso` (cross-reference "See …" links) render as clickable-looking links
+ * that do nothing when clicked. Until real jump navigation lands, render them as
+ * plain prose so users are not misled into clicking dead links.
+ *
+ * This file is imported `?inline` and appended AFTER the generated commentary
+ * stylesheet in use-commentary-marker-styles.hook.ts. Equal specificity + later
+ * source order means these rules win the cascade, and keeping them here (rather
+ * than editing the generated `hbkeng/tnn/tnd.scss`) means they survive every
+ * regeneration of those files by the CSS→SCSS pipeline.
+ *
+ * Scope: matches the `.formatted-font .usfm_<marker>` selectors the generated
+ * sheets emit for these markers, so the link appearance (color, weight, style,
+ * underline) is neutralized to look like the surrounding body text.
+ */
+.formatted-font .usfm_jmp,
+.formatted-font .usfm_xtSee,
+.formatted-font .usfm_xtSeeAlso {
+  color: inherit;
+  font-style: normal;
+  font-weight: normal;
+  text-decoration: none;
+  cursor: default;
+}
