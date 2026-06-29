@@ -67,6 +67,10 @@
           "platformScriptureEditor.comments": {
             "column": "platformScriptureEditor.tools",
             "order": 4
+          },
+          "platformScriptureEditor.hyphenation": {
+            "column": "platformScriptureEditor.tools",
+            "order": 5
           }
         },
         "items": [
@@ -161,6 +165,13 @@
             "group": "platformScriptureEditor.comments",
             "order": 1,
             "command": "legacyCommentManager.openCommentList"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_hyphenation%",
+            "localizeNotes": "Scripture editor web view top menu > Tools > Hyphenation...",
+            "group": "platformScriptureEditor.hyphenation",
+            "order": 1,
+            "command": "platformScripture.openHyphenation"
           }
         ]
       },

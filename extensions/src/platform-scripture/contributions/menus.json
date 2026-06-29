@@ -67,6 +67,7 @@
         "items": []
       }
     },
-    "platformScripture.manageBooks": {}
+    "platformScripture.manageBooks": {},
+    "platformScripture.hyphenation": {}
   }
 }

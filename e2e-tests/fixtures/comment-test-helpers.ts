@@ -41,10 +41,16 @@ import { addUsersToProject, sendPapiRequestOnce, waitForPapiMethodRegistered } f
 /** Source WEB project bundled with the c-sharp assets */
 const WEB_PROJECT_ASSETS_DIR = path.resolve(__dirname, '../../c-sharp/assets/WEB');
 
-/** Platform.Bible's Paratext 9 projects root (matches LocalParatextProjects constructor) */
+/**
+ * Platform.Bible's Paratext 9 projects root (matches the LocalParatextProjects constructor —
+ * `c-sharp/Projects/LocalParatextProjects.cs` hardcodes `.platform.bible`).
+ *
+ * NOTE: this previously used the literal `'.{{ productInfo.name }}'` placeholder, which the C# data
+ * provider never scans, so test projects were invisible to the app ("Project not found").
+ */
 const PARATEXT_PROJECTS_ROOT = path.join(
   os.homedir(),
-  '.{{ productInfo.name }}',
+  '.platform.bible',
   'projects',
   'Paratext 9 Projects',
 );
@@ -181,9 +187,11 @@ export async function createCommentThreads(
   // 3. Wait for the PDP's createComment method to appear in rpc.discover
   await waitForPapiMethodRegistered(`object:${pdpId}.createComment`, resolvedPort, 60_000);
 
-  // 4. Create each thread sequentially (the PDP is not safe to hammer in parallel)
+  // 4. Create each thread sequentially
   const threadIds: string[] = [];
 
+  // The PDP is not safe to hammer in parallel, so the await-per-iteration is intentional
+  /* eslint-disable no-await-in-loop */
   for (let i = 0; i < verseRefs.length; i++) {
     // The C# CreateComment method takes a PlatformCommentWrapper deserialized from JSON.
     // Required field: `contents` (HTML string). Optional but useful: `verseRef`.
@@ -198,6 +206,7 @@ export async function createCommentThreads(
     const threadId = commentId.split('/')[0];
     threadIds.push(threadId);
   }
+  /* eslint-enable no-await-in-loop */
 
   return threadIds;
 }

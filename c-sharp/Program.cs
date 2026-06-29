@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Paranext.DataProvider.Checklists;
 using Paranext.DataProvider.Checks;
 using Paranext.DataProvider.EnhancedResources;
+using Paranext.DataProvider.Linguistics;
 using Paranext.DataProvider.ManageBooks;
 using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.ParatextUtils;
@@ -91,6 +92,7 @@ public static class Program
                 appInfo
             );
             var inventoryDataProvider = new InventoryDataProvider(papi, paratextProjects);
+            var hyphenationDataProvider = new HyphenationDataProvider(papi);
             var checkRunner = new CheckRunner(papi, inventoryDataProvider);
             var dblResources = new DblResourcesDataProvider(papi);
             var paratextRegistrationService = new ParatextRegistrationService(papi);
@@ -109,6 +111,7 @@ public static class Program
                 paratextFactory.InitializeAsync(),
                 paratextPublishedFactory.InitializeAsync(),
                 inventoryDataProvider.RegisterDataProviderAsync(),
+                hyphenationDataProvider.RegisterDataProviderAsync(),
                 checkRunner.RegisterDataProviderAsync(),
                 dblResources.RegisterDataProviderAsync(),
                 paratextRegistrationService.InitializeAsync(),

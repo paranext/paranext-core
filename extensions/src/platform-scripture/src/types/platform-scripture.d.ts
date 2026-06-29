@@ -1804,6 +1804,120 @@ declare module 'platform-scripture' {
 
   // #endregion Inventory Data Provider Types
 
+  // #region Hyphenation Data Provider Types
+
+  /**
+   * A single word's hyphenation data from a project's hyphenatedWords.txt file.
+   *
+   * This type corresponds to the HyphenationEntry class defined in
+   * c-sharp/Linguistics/HyphenationEntry.cs. Keep their structures in sync for serialization
+   * compatibility.
+   */
+  export type HyphenationEntry = {
+    /** Word without hyphens, lowercase */
+    word: string;
+    /** Word hyphenated, with "=" signs at hyphenation points, lowercase */
+    hyphenation: string;
+    /**
+     * True if a user explicitly approved/edited this hyphenation (stored with a leading "*" in
+     * hyphenatedWords.txt). False if it was machine-guessed (e.g., by Paratext 9's hyphenation
+     * guesser).
+     */
+    isApproved: boolean;
+  };
+
+  /**
+   * Selector for hyphenation entries of a project.
+   *
+   * This type corresponds to the HyphenationEntriesSelector class defined in
+   * c-sharp/Linguistics/HyphenationEntriesSelector.cs. Keep their structures in sync for
+   * serialization compatibility.
+   */
+  export type HyphenationEntriesSelector = {
+    /** ID of the project */
+    projectId: string;
+    /**
+     * Optional word to select a single entry (any casing). When getting, only the matching entry is
+     * returned. Required when setting.
+     */
+    word?: string;
+  };
+
+  /**
+   * Update payload for a single word's hyphenation.
+   *
+   * This type corresponds to the HyphenationEntryUpdate class defined in
+   * c-sharp/Linguistics/HyphenationEntryUpdate.cs. Keep their structures in sync for serialization
+   * compatibility.
+   */
+  export type HyphenationEntryUpdate = {
+    /**
+     * Word hyphenated, with "=" signs at hyphenation points. Stripped of "=", it must match the
+     * selected word (case-insensitive), or the update is rejected.
+     */
+    hyphenation: string;
+    /** True to mark the hyphenation approved, false to mark it as a guess */
+    isApproved: boolean;
+  };
+
+  /**
+   * Project-level hyphenation metadata from hyphenatedWords.txt.
+   *
+   * This type corresponds to the HyphenationInfo class defined in
+   * c-sharp/Linguistics/HyphenationInfo.cs. Keep their structures in sync for serialization
+   * compatibility.
+   */
+  export type HyphenationInfo = {
+    /** True if hyphenatedWords.txt exists in the project directory */
+    fileExists: boolean;
+    /** The hyphen character that should be output for printing (default U+00AD, soft hyphen) */
+    softHyphenOut: string;
+    /** USFM paragraph markers whose text should be hyphenated when publishing */
+    hyphenatedMarkers: string[];
+    /**
+     * True if duplicate words with conflicting hyphenation were found when reading the file (can
+     * only occur if the file was edited outside Paratext)
+     */
+    hadRedundancy: boolean;
+    /**
+     * True if words with capital letters were detected in the file (Paratext stores only lowercase
+     * words; cased forms are normalized on read)
+     */
+    hadUppercase: boolean;
+  };
+
+  /** Data types provided by the hyphenation data provider */
+  export type HyphenationDataTypes = {
+    /**
+     * Get or set hyphenation entries for a project.
+     *
+     * When getting, if the `word` property is provided in the selector, only that word's entry (if
+     * any) is returned in the array. If not provided, all entries for the project are returned,
+     * ordered by word.
+     *
+     * When setting, the `word` property is required in the selector. Passing a
+     * {@link HyphenationEntryUpdate} value adds or updates that word's entry; passing `undefined`
+     * deletes the entry entirely. The hyphenation (stripped of "=") must match the word,
+     * case-insensitively. Words are stored lowercase, matching Paratext 9 behavior.
+     */
+    HyphenationEntries: DataProviderDataType<
+      HyphenationEntriesSelector,
+      HyphenationEntry[],
+      HyphenationEntryUpdate | undefined
+    >;
+    /** Get project-level hyphenation metadata (get only, no set) */
+    HyphenationInfo: DataProviderDataType<HyphenationEntriesSelector, HyphenationInfo, never>;
+  };
+
+  /**
+   * Data provider that exposes a project's hyphenation data (hyphenatedWords.txt) so users can
+   * view, add, edit, approve, and remove word hyphenations. Backed by ParatextData's own
+   * hyphenation persistence, so the file format round-trips exactly as in Paratext 9.
+   */
+  export type IHyphenationDataProvider = IDataProvider<HyphenationDataTypes>;
+
+  // #endregion Hyphenation Data Provider Types
+
   // #region Check Hosting (in the Extension Host) Types
 
   /**
@@ -2189,6 +2303,7 @@ declare module 'papi-shared-types' {
     IScriptureEditPermissionsProjectDataProvider,
     ICheckAggregatorService,
     ICheckRunner,
+    IHyphenationDataProvider,
     IInventoryDataProvider,
     CheckDetails,
     CheckCreatorFunction,
@@ -2229,6 +2344,8 @@ declare module 'papi-shared-types' {
     'platformScripture.extensionHostCheckRunner': ICheckRunner;
     /** Data provider for managing inventories and their options */
     'platformScripture.inventoryDataProvider': IInventoryDataProvider;
+    /** Data provider for viewing and managing a project's word hyphenation data */
+    'platformScripture.hyphenationDataProvider': IHyphenationDataProvider;
     /**
      * Service that maintains the list of projects most recently opened as a main project in the
      * Simple interface. See {@link IRecentlyOpenedProjectsService}.
@@ -2273,6 +2390,15 @@ declare module 'papi-shared-types' {
 
     'platformScripture.openChecksSidePanel': (
       projectId?: string | undefined,
+    ) => Promise<string | undefined>;
+
+    /**
+     * Open the Hyphenation tool for a project. The single optional argument is the calling editor's
+     * `webViewId` (when invoked from an editor's menu, so the tool can resolve the editor's
+     * project).
+     */
+    'platformScripture.openHyphenation': (
+      webViewId?: string | undefined,
     ) => Promise<string | undefined>;
 
     /**
