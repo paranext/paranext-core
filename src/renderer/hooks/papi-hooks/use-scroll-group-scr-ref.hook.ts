@@ -1,13 +1,28 @@
 import {
+  getScrRefSourceProjectIdSync,
   getScrRefSync,
   onDidUpdateScrRef,
   setScrRefSync,
 } from '@renderer/services/scroll-group.service-host';
+import { useProjectDataProvider } from '@renderer/hooks/papi-hooks/use-project-data-provider.hook';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { useEvent } from 'platform-bible-react';
 import { compareScrRefs, ScrollGroupId } from 'platform-bible-utils';
 import { useCallback, useEffect, useRef, useState } from 'react';
+
+/**
+ * Minimal surface of `IVersificationProjectDataProvider` needed for reference conversion. Declared
+ * locally because papi-dts compilation excludes extension typeRoots (the full type lives in
+ * `platform-scripture.d.ts`).
+ */
+type VersificationPdp = {
+  mapVerseRefBetweenProjects(
+    verseRef: SerializedVerseRef,
+    sourceProjectId: string | undefined,
+    targetProjectId: string,
+  ): Promise<SerializedVerseRef>;
+};
 
 function extractScrollGroupId(scrollGroupScrRef: ScrollGroupScrRef): ScrollGroupId | undefined {
   return typeof scrollGroupScrRef === 'number' ? scrollGroupScrRef : undefined;
@@ -16,6 +31,16 @@ function extractScrRef(scrollGroupScrRef: ScrollGroupScrRef): SerializedVerseRef
   return typeof scrollGroupScrRef === 'number'
     ? getScrRefSync(scrollGroupScrRef)
     : scrollGroupScrRef;
+}
+function extractSourceProjectId(
+  scrollGroupScrRef: ScrollGroupScrRef,
+  projectId: string | undefined,
+): string | undefined {
+  // Following a group: the source is whichever project last set the group's ref.
+  // Independent ref (object): it is the web view's own ref, so the source is this project.
+  return typeof scrollGroupScrRef === 'number'
+    ? getScrRefSourceProjectIdSync(scrollGroupScrRef)
+    : projectId;
 }
 
 /**
@@ -36,9 +61,13 @@ function extractScrRef(scrollGroupScrRef: ScrollGroupScrRef): SerializedVerseRef
  *   callback to be returned. However, because this is just used when needed and doesn't have any
  *   reason to render changes, this has no adverse effect on the functionality of this hook. It will
  *   always set using the latest value of this callback
+ * @param projectId Optional project id for the consuming web view. When provided, the returned
+ *   `scrRef` is converted into this project's versification for display. `setScrRef` stamps the
+ *   scroll group with this project as the source.
  * @returns `[scrRef, setScrRef, scrollGroupId, setScrollGroupId]`
  *
- *   - `scrRef`: The current value for the Scripture reference this `scrollGroupScrRef` represents
+ *   - `scrRef`: The current value for the Scripture reference this `scrollGroupScrRef` represents,
+ *       converted into `projectId`'s versification when a `projectId` is provided
  *   - `setScrRef`: Function to use to update the Scripture reference this `scrollGroupScrRef`
  *       represents. If it is synced to a scroll group, sets the scroll group's Scripture reference
  *   - `scrollGroupId`: The current value for the scroll group this `scrollGroupScrRef` is synced with.
@@ -49,6 +78,7 @@ function extractScrRef(scrollGroupScrRef: ScrollGroupScrRef): SerializedVerseRef
 export function useScrollGroupScrRef(
   scrollGroupScrRef: ScrollGroupScrRef | undefined,
   setScrollGroupScrRef: (scrollGroupScrRef: ScrollGroupScrRef) => boolean,
+  projectId?: string,
 ): [
   scrRef: SerializedVerseRef,
   setScrRef: (newScrRef: SerializedVerseRef) => void,
@@ -72,6 +102,10 @@ export function useScrollGroupScrRef(
     });
   }, []);
 
+  const [sourceProjectIdLocal, setSourceProjectIdLocal] = useState(() =>
+    extractSourceProjectId(scrollGroupScrRefDefaulted, projectId),
+  );
+
   // If the prop changes meaning the scroll group changes or the independent scrRef changes, update
   useEffect(() => {
     const updatedScrollGroupId = extractScrollGroupId(scrollGroupScrRefDefaulted);
@@ -81,15 +115,18 @@ export function useScrollGroupScrRef(
     setScrollGroupIdLocal(updatedScrollGroupId);
 
     setScrRefLocalIfDifferent(updatedScrRef);
-  }, [scrollGroupScrRefDefaulted, setScrRefLocalIfDifferent]);
+    setSourceProjectIdLocal(extractSourceProjectId(scrollGroupScrRefDefaulted, projectId));
+  }, [scrollGroupScrRefDefaulted, setScrRefLocalIfDifferent, projectId]);
 
   // If the scrRef value changes while we're on a selected scroll group, update
   useEvent(
     onDidUpdateScrRef,
     useCallback(
-      ({ scrRef: updatedScrRef, scrollGroupId: scrollGroupToUpdate }) => {
-        if (scrollGroupToUpdate === scrollGroupIdLocalRef.current)
+      ({ scrRef: updatedScrRef, scrollGroupId: scrollGroupToUpdate, sourceProjectId }) => {
+        if (scrollGroupToUpdate === scrollGroupIdLocalRef.current) {
           setScrRefLocalIfDifferent(updatedScrRef);
+          setSourceProjectIdLocal(sourceProjectId);
+        }
       },
       [setScrRefLocalIfDifferent],
     ),
@@ -101,7 +138,7 @@ export function useScrollGroupScrRef(
       // If we are synced to a scroll group, set it. If it didn't change, return
       if (
         scrollGroupIdLocalRef.current !== undefined &&
-        !setScrRefSync(scrollGroupIdLocalRef.current, newScrRef)
+        !setScrRefSync(scrollGroupIdLocalRef.current, newScrRef, projectId)
       )
         return;
 
@@ -110,7 +147,7 @@ export function useScrollGroupScrRef(
       if (scrollGroupIdLocalRef.current === undefined) setScrollGroupScrRefRef.current(newScrRef);
       else setScrRefLocalIfDifferent(newScrRef);
     },
-    [setScrRefLocalIfDifferent],
+    [setScrRefLocalIfDifferent, projectId],
   );
 
   // Change the scroll group and update ours if successful
@@ -128,7 +165,42 @@ export function useScrollGroupScrRef(
     [scrRefLocal],
   );
 
-  return [scrRefLocal, setScrRef, scrollGroupIdLocal, setScrollGroupId];
+  // Convert the followed (raw) ref into this consumer's project versification for display only.
+  type UseVersificationPdp = (
+    projectInterface: string,
+    projectId: string | undefined,
+  ) => VersificationPdp | undefined;
+  // 'platformScripture.Versification' is registered by an extension; papi-dts compilation excludes
+  // extension typeRoots so the literal is not assignable to ProjectInterface there.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const versificationPdp = (useProjectDataProvider as unknown as UseVersificationPdp)(
+    'platformScripture.Versification',
+    projectId,
+  );
+  const [convertedScrRef, setConvertedScrRef] = useState(scrRefLocal);
+
+  useEffect(() => {
+    // Pass-through when we have no target project, no PDP yet, or source === target.
+    if (!projectId || !versificationPdp || sourceProjectIdLocal === projectId) {
+      setConvertedScrRef(scrRefLocal);
+      return undefined;
+    }
+    let cancelled = false;
+    versificationPdp
+      .mapVerseRefBetweenProjects(scrRefLocal, sourceProjectIdLocal, projectId)
+      .then((converted) => {
+        if (!cancelled) setConvertedScrRef(converted);
+        return undefined;
+      })
+      .catch(() => {
+        if (!cancelled) setConvertedScrRef(scrRefLocal); // pass-through on error
+      });
+    return () => {
+      cancelled = true; // stale-result guard
+    };
+  }, [versificationPdp, projectId, scrRefLocal, sourceProjectIdLocal]);
+
+  return [convertedScrRef, setScrRef, scrollGroupIdLocal, setScrollGroupId];
 }
 
 export default useScrollGroupScrRef;

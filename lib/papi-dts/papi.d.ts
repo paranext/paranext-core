@@ -81,6 +81,11 @@ declare module 'shared/services/scroll-group.service-model' {
   export type ScrollGroupUpdateInfo = {
     scrRef: SerializedVerseRef;
     scrollGroupId: ScrollGroupId;
+    /**
+     * Project whose versification the `scrRef` is expressed in. `undefined` = unknown / canonical
+     * English.
+     */
+    sourceProjectId?: string;
   };
   /** Parts of the Scroll Group Service that are exposed through the network object */
   export interface IScrollGroupRemoteService {
@@ -102,6 +107,7 @@ declare module 'shared/services/scroll-group.service-model' {
     setScrRef(
       scrollGroupId: ScrollGroupId | undefined,
       scrRef: SerializedVerseRef,
+      sourceProjectId?: string,
     ): Promise<boolean>;
   }
   /**
@@ -8115,6 +8121,8 @@ declare module 'renderer/services/scroll-group.service-host' {
   export const onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo>;
   /** See {@link IScrollGroupRemoteService.getScrRef} */
   export function getScrRefSync(scrollGroupId?: ScrollGroupId): SerializedVerseRef;
+  /** Source project id whose versification the scroll group's scrRef is expressed in. */
+  export function getScrRefSourceProjectIdSync(scrollGroupId?: ScrollGroupId): string | undefined;
   /**
    * See {@link IScrollGroupRemoteService.setScrRef}
    *
@@ -8125,10 +8133,37 @@ declare module 'renderer/services/scroll-group.service-host' {
   export function setScrRefSync(
     scrollGroupId: ScrollGroupId | undefined,
     scrRef: SerializedVerseRef,
+    sourceProjectId?: string,
     shouldSetVerseRefSetting?: boolean,
   ): boolean;
   /** Register the network object that backs the scroll group service */
   export function startScrollGroupService(): Promise<void>;
+}
+declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
+  import { ProjectDataProviderInterfaces, ProjectInterfaces } from 'papi-shared-types';
+  /**
+   * Gets a project data provider with specified provider name
+   *
+   * @param projectInterface `projectInterface` that the project to load must support. The TypeScript
+   *   type for the returned project data provider will have the project data provider interface type
+   *   associated with this `projectInterface`. If the project does not implement this
+   *   `projectInterface` (according to its metadata), an error will be thrown.
+   * @param projectDataProviderSource String name of the id of the project to get OR
+   *   projectDataProvider (result of useProjectDataProvider, if you want this hook to just return the
+   *   data provider again)
+   * @param pdpFactoryId Optional ID of the PDP factory from which to get the project data provider if
+   *   the PDP factory supports this project id and project interface. If not provided, then look in
+   *   all available PDP factories for the given project ID.
+   * @returns `undefined` if the Project Data Provider has not been retrieved, the requested Project
+   *   Data Provider if it has been retrieved and is not disposed, and undefined again if the Project
+   *   Data Provider is disposed
+   */
+  export const useProjectDataProvider: <ProjectInterface extends ProjectInterfaces>(
+    projectInterface: ProjectInterface,
+    projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
+    pdpFactoryId?: string,
+  ) => ProjectDataProviderInterfaces[ProjectInterface] | undefined;
+  export default useProjectDataProvider;
 }
 declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
   import { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
@@ -8152,9 +8187,13 @@ declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
    *   callback to be returned. However, because this is just used when needed and doesn't have any
    *   reason to render changes, this has no adverse effect on the functionality of this hook. It will
    *   always set using the latest value of this callback
+   * @param projectId Optional project id for the consuming web view. When provided, the returned
+   *   `scrRef` is converted into this project's versification for display. `setScrRef` stamps the
+   *   scroll group with this project as the source.
    * @returns `[scrRef, setScrRef, scrollGroupId, setScrollGroupId]`
    *
-   *   - `scrRef`: The current value for the Scripture reference this `scrollGroupScrRef` represents
+   *   - `scrRef`: The current value for the Scripture reference this `scrollGroupScrRef` represents,
+   *       converted into `projectId`'s versification when a `projectId` is provided
    *   - `setScrRef`: Function to use to update the Scripture reference this `scrollGroupScrRef`
    *       represents. If it is synced to a scroll group, sets the scroll group's Scripture reference
    *   - `scrollGroupId`: The current value for the scroll group this `scrollGroupScrRef` is synced with.
@@ -8165,6 +8204,7 @@ declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
   export function useScrollGroupScrRef(
     scrollGroupScrRef: ScrollGroupScrRef | undefined,
     setScrollGroupScrRef: (scrollGroupScrRef: ScrollGroupScrRef) => boolean,
+    projectId?: string,
   ): [
     scrRef: SerializedVerseRef,
     setScrRef: (newScrRef: SerializedVerseRef) => void,
@@ -8219,32 +8259,6 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
     isLoading: boolean,
   ];
   export default useSetting;
-}
-declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
-  import { ProjectDataProviderInterfaces, ProjectInterfaces } from 'papi-shared-types';
-  /**
-   * Gets a project data provider with specified provider name
-   *
-   * @param projectInterface `projectInterface` that the project to load must support. The TypeScript
-   *   type for the returned project data provider will have the project data provider interface type
-   *   associated with this `projectInterface`. If the project does not implement this
-   *   `projectInterface` (according to its metadata), an error will be thrown.
-   * @param projectDataProviderSource String name of the id of the project to get OR
-   *   projectDataProvider (result of useProjectDataProvider, if you want this hook to just return the
-   *   data provider again)
-   * @param pdpFactoryId Optional ID of the PDP factory from which to get the project data provider if
-   *   the PDP factory supports this project id and project interface. If not provided, then look in
-   *   all available PDP factories for the given project ID.
-   * @returns `undefined` if the Project Data Provider has not been retrieved, the requested Project
-   *   Data Provider if it has been retrieved and is not disposed, and undefined again if the Project
-   *   Data Provider is disposed
-   */
-  export const useProjectDataProvider: <ProjectInterface extends ProjectInterfaces>(
-    projectInterface: ProjectInterface,
-    projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
-    pdpFactoryId?: string,
-  ) => ProjectDataProviderInterfaces[ProjectInterface] | undefined;
-  export default useProjectDataProvider;
 }
 declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
   import { PlatformError } from 'platform-bible-utils';
