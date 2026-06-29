@@ -105,6 +105,7 @@ import {
   formatEditorTitle,
   generateInlineMarkerMenuListItems,
   generateParagraphMenuListItems,
+  getNextScriptureViewType,
   openCommentListAndSelectThreadSafe,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
 } from './platform-scripture-editor.utils';
@@ -749,7 +750,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           break;
         }
         case 'changeScriptureView': {
-          setViewType(viewOptions.markerMode === 'hidden' ? 'markers' : 'formatted');
+          setViewType(getNextScriptureViewType(viewType));
           break;
         }
         case 'toggleFootnotesPaneVisibility': {
@@ -992,7 +993,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     setDecorations,
     setFootnotesPaneVisible,
     setViewType,
-    viewOptions.markerMode,
+    viewType,
     localizedStrings,
     projectId,
   ]);

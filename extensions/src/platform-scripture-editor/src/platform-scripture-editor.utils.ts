@@ -19,7 +19,7 @@ import {
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { ScriptureRange } from 'platform-scripture-editor';
+import { ScriptureEditorViewType, ScriptureRange } from 'platform-scripture-editor';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import { MutableRefObject } from 'react';
 import { EditorRef } from '@eten-tech-foundation/platform-editor';
@@ -27,6 +27,24 @@ import { MarkerMenuItem } from 'platform-bible-react';
 
 // Note: src/main/shutdown-tasks.ts has a copy of this value — keep them in sync.
 export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
+
+/**
+ * Determine which Scripture editor view to switch to when the user toggles the view (e.g. via the
+ * "Switch Scripture View" menu command).
+ *
+ * The toggle simply alternates between the two view types. It must not be derived from the resolved
+ * `markerMode`: in simple interface mode both the formatted and markers views resolve to
+ * `markerMode: 'hidden'`, so a markerMode-based toggle stayed stuck in the (read-only) markers view
+ * and could never return to the formatted view.
+ *
+ * @param currentViewType The view type the editor is currently showing
+ * @returns The view type to switch to
+ */
+export function getNextScriptureViewType(
+  currentViewType: ScriptureEditorViewType,
+): ScriptureEditorViewType {
+  return currentViewType === 'markers' ? 'formatted' : 'markers';
+}
 
 /**
  * Check deep equality of two values such that two equal objects or arrays created in two different
