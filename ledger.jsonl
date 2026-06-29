@@ -169,3 +169,10 @@
 {"type":"fix","runId":"qs-2026-06-28","candidateId":"c4","result":"pr_opened","prNumber":2470,"prUrl":"https://github.com/paranext/paranext-core/pull/2470","branch":"fix/PT-3852-comment-thread-read-sync","date":"2026-06-28"}
 {"type":"pr_outcome","prNumber":2470,"outcome":"open","checkedDate":"2026-06-28","date":"2026-06-28"}
 {"type":"backlog","candidateId":"c4","dedupKey":"jira:PT-3852","status":"resolved","reason":"pr_opened #2470","date":"2026-06-28"}
+{"type":"pr_outcome","prNumber":2446,"outcome":"open","checkedDate":"2026-06-29"}
+{"type":"pr_outcome","prNumber":2447,"outcome":"open","checkedDate":"2026-06-29"}
+{"type":"pr_outcome","prNumber":2449,"outcome":"open","checkedDate":"2026-06-29"}
+{"type":"pr_outcome","prNumber":2459,"outcome":"open","checkedDate":"2026-06-29"}
+{"type":"pr_outcome","prNumber":2463,"outcome":"open","checkedDate":"2026-06-29"}
+{"type":"pr_outcome","prNumber":2468,"outcome":"open","checkedDate":"2026-06-29"}
+{"type":"pr_outcome","prNumber":2470,"outcome":"open","checkedDate":"2026-06-29"}
