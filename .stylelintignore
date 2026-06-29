@@ -70,7 +70,10 @@ data/pt9-css/
 e2e-tests/test-results
 e2e-tests/playwright-report
 
-# Extracted PT9 CSS snapshots (verbatim reference data; not authored source)
+# Generated/extracted PT9 CSS snapshots: prettier-formatted for consistency, but
+# exempt from stylelint — they are machine output, not authored source, and tripping
+# authoring rules (block-no-empty, selector-class-pattern on PT9's .usfm_* names, etc.)
+# would force edits that break their fidelity to PT9.
 data/pt9-css/
 
 
