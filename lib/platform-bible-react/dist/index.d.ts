@@ -1036,7 +1036,7 @@ export declare const inventoryCountColumn: (countLabel: string) => ColumnDef<Inv
  */
 export declare const inventoryStatusColumn: (statusLabel: string, approvedItems: string[], onApprovedItemsChange: (items: string[]) => void, unapprovedItems: string[], onUnapprovedItemsChange: (items: string[]) => void) => ColumnDef<InventoryTableData>;
 /**
- * Object containing all keys used for localization in the FootnoteEditor component. If you're using
+ * Object containing all keys used for localization in the MarkerMenu component. If you're using
  * this component in an extension, you can pass it into the useLocalizedStrings hook to easily
  * obtain the localized strings and pass them into the localizedStrings prop of this component
  */

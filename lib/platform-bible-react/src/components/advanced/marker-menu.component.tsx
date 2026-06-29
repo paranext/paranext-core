@@ -12,7 +12,7 @@ import {
 } from '../shadcn-ui/command';
 
 /**
- * Object containing all keys used for localization in the FootnoteEditor component. If you're using
+ * Object containing all keys used for localization in the MarkerMenu component. If you're using
  * this component in an extension, you can pass it into the useLocalizedStrings hook to easily
  * obtain the localized strings and pass them into the localizedStrings prop of this component
  */
@@ -21,6 +21,9 @@ export const MARKER_MENU_STRING_KEYS = Object.freeze([
   '%markerMenu_disallowed_label%',
   '%markerMenu_noResults%',
   '%markerMenu_searchPlaceholder%',
+  // These two keys are not read by this component directly; they are provided here so callers can
+  // localize them and pass the result into the optional `searchPlaceholder` prop to override the
+  // default search-field placeholder.
   '%markerMenu_searchPlaceholder_insert%',
   '%markerMenu_searchPlaceholder_paragraph%',
 ] as const);
