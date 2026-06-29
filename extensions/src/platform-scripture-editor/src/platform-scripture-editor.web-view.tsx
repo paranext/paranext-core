@@ -148,6 +148,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_platformScriptureEditor_error_permissions_format%',
   '%webView_platformScriptureEditor_error_noTextSelected%',
   '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
+  '%webView_platformScriptureEditor_paragraphSelection_protectedTooltip%',
   '%webView_platformScriptureEditor_insertCommentAtSelection%',
 ];
 
@@ -549,9 +550,24 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [],
   );
 
+  const notifyStructureProtected = useCallback(
+    () =>
+      papi.notifications.send({
+        message: '%webView_platformScriptureEditor_error_structureProtected%',
+        severity: 'warning',
+      }),
+    [],
+  );
+
   const paragraphSwitcherMenuItems = useMemo(
-    () => generateParagraphMenuListItems(editorRef, localizedStrings),
-    [localizedStrings],
+    () =>
+      generateParagraphMenuListItems(
+        editorRef,
+        localizedStrings,
+        isStructureProtected,
+        notifyStructureProtected,
+      ),
+    [localizedStrings, isStructureProtected, notifyStructureProtected],
   );
 
   const nextSelectionRange = useRef<SelectionRange | undefined>(undefined);
@@ -1003,9 +1019,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         editorRef,
         () => setShowMarkersMenu(false),
         localizedStrings,
+        isStructureProtected,
+        notifyStructureProtected,
         contextMarker,
       ),
-    [contextMarker, localizedStrings],
+    [contextMarker, localizedStrings, isStructureProtected, notifyStructureProtected],
   );
 
   // When the marker menu closes, should refocus the editor
@@ -1771,7 +1789,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                       <Button
                         className="tw:h-8"
                         aria-label="Paragraph Selection"
-                        title="Paragraph Selection"
+                        title={
+                          isStructureProtected
+                            ? localizedStrings[
+                                '%webView_platformScriptureEditor_paragraphSelection_protectedTooltip%'
+                              ]
+                            : 'Paragraph Selection'
+                        }
+                        disabled={isStructureProtected}
                         variant="outline"
                       >
                         {blockMarker ? `${blockMarker} - ` : ''}

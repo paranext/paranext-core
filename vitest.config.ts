@@ -8,7 +8,11 @@ const config = defineConfig(async () => {
     test: {
       globals: true,
       environment: 'jsdom',
-      include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+      include: [
+        'src/**/*.test.ts',
+        'src/**/*.test.tsx',
+        'tools/pt9-css-converter/src/**/*.test.ts',
+      ],
     },
   };
 });
