@@ -61,6 +61,13 @@ const scrRefsSerialized = localStorage.getItem(SCR_REFS_STORAGE_KEY);
 const scrRefs: { [scrollGroupId: ScrollGroupId]: SerializedVerseRef | undefined } =
   scrRefsSerialized ? (deserialize(scrRefsSerialized) ?? {}) : {};
 
+/**
+ * Source project id per scroll group — which project's versification the stored scrRef is expressed
+ * in. Session-only (NOT persisted): on reload the source is unknown until the next navigation
+ * re-stamps it, matching PT9's session-only scroll behavior.
+ */
+const scrRefSourceProjectIds: { [scrollGroupId: ScrollGroupId]: string | undefined } = {};
+
 // The scrRefs object might contain old values that are of older types that are no longer supported.
 // We need to check if this is the case, and convert them to `SerializedVerseRef`.
 Object.entries(scrRefs).forEach(([key, value]) => {
@@ -101,6 +108,11 @@ export function getScrRefSync(scrollGroupId: ScrollGroupId = 0): SerializedVerse
   return scrRefs[scrollGroupId] ?? DEFAULT_SCR_REF;
 }
 
+/** Source project id whose versification the scroll group's scrRef is expressed in. */
+export function getScrRefSourceProjectIdSync(scrollGroupId: ScrollGroupId = 0): string | undefined {
+  return scrRefSourceProjectIds[scrollGroupId];
+}
+
 async function getScrRef(scrollGroupScrRef: ScrollGroupId = 0): Promise<SerializedVerseRef> {
   return getScrRefSync(scrollGroupScrRef);
 }
@@ -115,6 +127,7 @@ async function getScrRef(scrollGroupScrRef: ScrollGroupId = 0): Promise<Serializ
 export function setScrRefSync(
   scrollGroupId: ScrollGroupId | undefined,
   scrRef: SerializedVerseRef,
+  sourceProjectId?: string,
   shouldSetVerseRefSetting = true,
 ): boolean {
   if (
@@ -135,10 +148,12 @@ export function setScrRefSync(
   // Update the scr ref and send out an event. The buffered emitter is usable immediately; if it
   // hasn't finished registering yet, the latest update per scroll group is buffered and flushed.
   scrRefs[scrollGroupIdDefaulted] = scrRefClone;
+  scrRefSourceProjectIds[scrollGroupIdDefaulted] = sourceProjectId;
   saveScrRefs();
   onDidUpdateScrRefBufferedEmitter.emit({
     scrollGroupId: scrollGroupIdDefaulted,
     scrRef: scrRefClone,
+    sourceProjectId,
   });
 
   if (shouldSetVerseRefSetting && scrollGroupIdDefaulted === 0)
@@ -158,8 +173,9 @@ export function setScrRefSync(
 async function setScrRef(
   scrollGroupId: ScrollGroupId | undefined,
   scrRef: SerializedVerseRef,
+  sourceProjectId?: string,
 ): Promise<boolean> {
-  return setScrRefSync(scrollGroupId, scrRef);
+  return setScrRefSync(scrollGroupId, scrRef, sourceProjectId);
 }
 
 const scrollGroupService: IScrollGroupRemoteService = {
@@ -179,6 +195,6 @@ export async function startScrollGroupService(): Promise<void> {
       );
       return;
     }
-    setScrRefSync(0, newScrRef, false);
+    setScrRefSync(0, newScrRef, undefined, false);
   });
 }

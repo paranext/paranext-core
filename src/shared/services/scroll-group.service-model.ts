@@ -32,6 +32,11 @@ export type ScrollGroupScrRef = ScrollGroupId | SerializedVerseRef;
 export type ScrollGroupUpdateInfo = {
   scrRef: SerializedVerseRef;
   scrollGroupId: ScrollGroupId;
+  /**
+   * Project whose versification the `scrRef` is expressed in. `undefined` = unknown / canonical
+   * English.
+   */
+  sourceProjectId?: string;
 };
 
 /** Parts of the Scroll Group Service that are exposed through the network object */
@@ -51,7 +56,11 @@ export interface IScrollGroupRemoteService {
    * @param scrRef Scripture reference to which to set the scroll group
    * @returns `true` if the Scripture reference changed. `false` otherwise
    */
-  setScrRef(scrollGroupId: ScrollGroupId | undefined, scrRef: SerializedVerseRef): Promise<boolean>;
+  setScrRef(
+    scrollGroupId: ScrollGroupId | undefined,
+    scrRef: SerializedVerseRef,
+    sourceProjectId?: string,
+  ): Promise<boolean>;
 }
 
 // Parts of the Scroll Group Service that are added in the service client on top of what is provided by the network object
