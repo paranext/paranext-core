@@ -35,8 +35,7 @@ Committing them gives us:
 2. In the Elements panel, drill into the resource's iframe and inspect the
    rendered markers.
 3. From the Computed styles tab, collect the CSS rules that target each
-   `\usfm_<marker>` selector along with the `.formatted-font` /
-   `.text-spacing` ancestors that Paratext applies.
+   `\usfm_<marker>` selector OR copy them from the html head's style element.
 4. Save the consolidated ruleset as `<resource-id>-manual.css`.
 
 ## Selection criteria
