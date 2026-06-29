@@ -8,8 +8,10 @@ namespace Paranext.DataProvider.ParatextUtils;
 /// ParatextData's thread-static <see cref="Progress.Mgr"/>. Mirrors
 /// <c>AlertCapture</c>: a caller opens a scope around long-running
 /// ParatextData work, receives live status text through the
-/// <c>onText</c> callback, and can cancel the in-flight operation by
-/// calling <see cref="ProgressScope.Cancel"/> (safe from another thread).
+/// <c>onText</c> callback and an optional 0.0–1.0 progress fraction
+/// through the <c>onValue</c> callback, and can cancel the in-flight
+/// operation by calling <see cref="ProgressScope.Cancel"/> (safe from
+/// another thread).
 ///
 /// <para>ParatextData's <c>InternetSharedRepositorySource.RetryIndefinitely</c>,
 /// <c>Hg</c>, and <c>ExeRunner</c> consult <see cref="Progress.Cancelled"/>
@@ -28,8 +30,13 @@ namespace Paranext.DataProvider.ParatextUtils;
 public sealed class ProgressCapture : ProgressDisplay
 {
     private readonly Action<string>? _onText;
+    private readonly Action<double>? _onValue;
 
-    private ProgressCapture(Action<string>? onText) => _onText = onText;
+    private ProgressCapture(Action<string>? onText, Action<double>? onValue)
+    {
+        _onText = onText;
+        _onValue = onValue;
+    }
 
     /// <summary>
     /// Installs a new <see cref="ProgressCapture"/> as the display on the
@@ -51,40 +58,59 @@ public sealed class ProgressCapture : ProgressDisplay
     /// read <c>AllowAbort</c>. Exceptions it throws are caught and ignored so they cannot unwind
     /// ParatextData's retry loop.
     /// </param>
-    public static ProgressScope StartCapture(Action<string>? onText = null)
+    /// <param name="onValue">
+    /// Optional. Invoked with the progress fraction (normally 0.0–1.0) reported by ParatextData for
+    /// determinate tasks. Indefinite tasks report no fraction — ParatextData signals this as a
+    /// negative sentinel (-1) — and those updates are dropped rather than forwarded, so the callback
+    /// is never invoked with a negative value. Subject to the same threading and exception-isolation
+    /// constraints as <paramref name="onText"/>: called synchronously inside ParatextData's progress
+    /// path; exceptions are caught and ignored.
+    /// </param>
+    public static ProgressScope StartCapture(
+        Action<string>? onText = null,
+        Action<double>? onValue = null
+    )
     {
-        var display = new ProgressCapture(onText);
+        var display = new ProgressCapture(onText, onValue);
         Progress progress = Progress.Mgr;
         progress.Reset(); // clear stale cancelled/display left on a pooled thread
         progress.SetDisplay(display);
         return new ProgressScope(progress);
     }
 
-    void ProgressDisplay.SetProgressText(string text)
-    {
-        // The caller-supplied callback runs synchronously inside ParatextData's status-update
-        // path (e.g. RetryIndefinitely's catch block, while holding Progress's lock). A callback
-        // that throws would unwind ParatextData's retry loop and turn an otherwise-recoverable
-        // reconnect into a hard failure, so isolate it: a dropped status update is harmless;
-        // tearing down the in-flight operation is not.
-        try
-        {
-            _onText?.Invoke(text);
-        }
-        catch (Exception e)
-        {
-            // Redact filesystem-path-shaped substrings before logging, mirroring AlertCapture's
-            // console fallback (Theme 4): a callback wrapping IO can surface raw paths in the
-            // exception text, and server logs may be aggregated / shipped off-host.
-            Console.WriteLine(
-                $"ProgressCapture onText callback threw (ignored): {AlertCapture.RedactPathsForLog(e.ToString())}"
-            );
-        }
-    }
+    void ProgressDisplay.SetProgressText(string text) =>
+        SafeInvokeCallback("onText", _onText, text);
 
     void ProgressDisplay.SetProgressValue(double val)
     {
-        // Indefinite Send/Receive has no determinate progress value; ignore.
+        // ParatextData reports -1 for indefinite tasks (StartIndefiniteTask → Begin(-1, -1) →
+        // AbsVal == -1): there is no determinate fraction, so drop the sentinel rather than
+        // forward a negative "progress" that a consumer would render as e.g. a -100% bar.
+        // onValue's contract is a non-negative fraction.
+        if (val >= 0)
+            SafeInvokeCallback("onValue", _onValue, val);
+    }
+
+    // Both progress callbacks run synchronously inside ParatextData's progress path (e.g.
+    // RetryIndefinitely's catch block, while Progress's lock is held). A callback that throws
+    // would unwind ParatextData's retry loop and turn an otherwise-recoverable reconnect into a
+    // hard failure, so isolate it: a dropped progress update is harmless; tearing down the
+    // in-flight operation is not. Redact filesystem-path-shaped substrings before logging,
+    // mirroring AlertCapture's console fallback (Theme 4): a callback wrapping IO can surface raw
+    // paths in the exception text, and server logs may be aggregated / shipped off-host. Generic
+    // (rather than an Action closure) so the hot status-update path stays allocation-free.
+    private static void SafeInvokeCallback<T>(string callbackName, Action<T>? callback, T arg)
+    {
+        try
+        {
+            callback?.Invoke(arg);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(
+                $"ProgressCapture {callbackName} callback threw (ignored): {AlertCapture.RedactPathsForLog(e.ToString())}"
+            );
+        }
     }
 
     /// <summary>
