@@ -95,6 +95,57 @@ namespace TestParanextDataProvider.ParatextUtils
         }
 
         [Test]
+        public void SetProgressValue_ForwardsValueToOnValueCallback()
+        {
+            var values = new List<double>();
+            using (ProgressCapture.StartCapture(_ => { }, v => values.Add(v)))
+            {
+                // Drive SetProgressValue via a determinate task session (StartTask maps
+                // Value → SetProgressValue as a 0..1 fraction; Value=42 on a 0..100 task → 0.42).
+                using var session = Progress.Mgr.StartTask(0, 100, "");
+                session.Value = 42;
+            }
+            Assert.That(values, Does.Contain(0.42));
+        }
+
+        [Test]
+        public void SetProgressValue_DropsIndefiniteSentinelValue()
+        {
+            // ParatextData runs Send/Receive phases as indefinite tasks: StartIndefiniteTask →
+            // Begin(-1, -1) → SetProgressValue(AbsVal == -1). onValue's contract is a non-negative
+            // fraction, so the indefinite sentinel must be dropped, not forwarded as a negative
+            // "progress" (which a consumer would render as e.g. a -100% bar). Without the guard the
+            // values below would be [-1, -1]; with it the callback is never invoked.
+            var values = new List<double>();
+            using (ProgressCapture.StartCapture(_ => { }, values.Add))
+            {
+                using var session = Progress.Mgr.StartIndefiniteTask();
+                session.Incr(); // refresh — drives another SetProgressValue(-1)
+            }
+
+            Assert.That(
+                values,
+                Has.None.LessThan(0),
+                "indefinite -1 sentinel must not reach onValue"
+            );
+        }
+
+        [Test]
+        public void SetProgressValue_SwallowsCallbackException()
+        {
+            using var scope = ProgressCapture.StartCapture(
+                _ => { },
+                _ => throw new InvalidOperationException("value callback boom")
+            );
+
+            Assert.DoesNotThrow(() =>
+            {
+                using var session = Progress.Mgr.StartTask(0, 100, "");
+                session.Value = 42;
+            });
+        }
+
+        [Test]
         public void Cancel_FromAnotherThread_SetsFlagOnCapturedInstanceNotTheCaller()
         {
             // The whole point of ProgressScope holding a direct Progress reference (instead of
