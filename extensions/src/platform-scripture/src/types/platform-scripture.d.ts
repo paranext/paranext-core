@@ -1030,6 +1030,19 @@ declare module 'platform-scripture' {
         callback: (finalVerseNumber: number | PlatformError) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
+      /**
+       * Converts a Scripture reference from a source project's versification into a target
+       * project's versification, using each project's live versification setting. Pass `null` for
+       * `sourceProjectId` to treat the reference as canonical English (e.g. a project-less
+       * navigator at cold start). Unmapped verses are returned unchanged; segments are preserved.
+       *
+       * @experimental
+       */
+      mapVerseRefBetweenProjects(
+        verseRef: SerializedVerseRef,
+        sourceProjectId: string | null,
+        targetProjectId: string,
+      ): Promise<SerializedVerseRef>;
 
       /**
        * Returns the final chapter number in the specified book using the project's versification.
