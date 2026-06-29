@@ -48,59 +48,6 @@ var ut=Object.defineProperty;var ht=(e,t,n)=>t in e?ut(e,t,{enumerable:!0,config
         src: url('./sb-common-assets/nunito-sans-bold-italic.woff2') format('woff2');
       }
     /**
- * Preview iframe: theme backgrounds are scoped so Docs prose (title, description) is not the same
- * flat canvas as the story. Canvas tab fills #storybook-root; Docs uses --muted for the page;
- * embedded previews (.sbdocs-preview) match the Story canvas including the zoom toolbar.
- * Theme classes live on \`html\` (theme-decorator.ts). Variables: src/index.css
- */
-
-html {
-  min-height: 100%;
-}
-
-body {
-  margin: 0;
-  min-height: 100%;
-  /* Avoid painting the whole iframe — only the Storybook roots below */
-  background-color: transparent;
-}
-
-/* Story / Canvas tab */
-#storybook-root:not([hidden]) {
-  box-sizing: border-box;
-  min-height: 100vh;
-  background-color: var(--background);
-  color: var(--foreground);
-}
-
-/* Docs tab: MDX page (headings, description, args tables) — distinct from embedded preview */
-#storybook-docs:not([hidden]) {
-  box-sizing: border-box;
-  min-height: 100vh;
-  background-color: var(--muted);
-  color: var(--foreground);
-}
-
-/* Loading states */
-.sb-preparing-story,
-.sb-preparing-docs {
-  background-color: var(--background);
-  color: var(--foreground);
-}
-
-/*
- * Docs: embedded story + zoom toolbar — full theme surface (matches Canvas).
- * Storybook’s block chrome uses its own theme background; !important aligns with our tokens.
- */
-.sbdocs.sbdocs-preview {
-  background-color: var(--background) !important;
-  color: var(--foreground) !important;
-}
-
-.docs-story {
-  background-color: var(--background);
-}
-/**
  * Storybook-only theme palettes. This file is imported in preview.ts and is NOT shipped in the
  * library dist. Add CSS classes here that are only needed for the Storybook preview (e.g. theme
  * switcher options that are not part of the production app).
@@ -184,6 +131,59 @@ body {
   --sidebar-accent-foreground: hsl(0 0% 98%);
   --sidebar-border: hsl(0 0% 100% / 0.1);
   --sidebar-ring: hsl(0 0% 45.2%);
+}
+/**
+ * Preview iframe: theme backgrounds are scoped so Docs prose (title, description) is not the same
+ * flat canvas as the story. Canvas tab fills #storybook-root; Docs uses --muted for the page;
+ * embedded previews (.sbdocs-preview) match the Story canvas including the zoom toolbar.
+ * Theme classes live on \`html\` (theme-decorator.ts). Variables: src/index.css
+ */
+
+html {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100%;
+  /* Avoid painting the whole iframe — only the Storybook roots below */
+  background-color: transparent;
+}
+
+/* Story / Canvas tab */
+#storybook-root:not([hidden]) {
+  box-sizing: border-box;
+  min-height: 100vh;
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+/* Docs tab: MDX page (headings, description, args tables) — distinct from embedded preview */
+#storybook-docs:not([hidden]) {
+  box-sizing: border-box;
+  min-height: 100vh;
+  background-color: var(--muted);
+  color: var(--foreground);
+}
+
+/* Loading states */
+.sb-preparing-story,
+.sb-preparing-docs {
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+/*
+ * Docs: embedded story + zoom toolbar — full theme surface (matches Canvas).
+ * Storybook’s block chrome uses its own theme background; !important aligns with our tokens.
+ */
+.sbdocs.sbdocs-preview {
+  background-color: var(--background) !important;
+  color: var(--foreground) !important;
+}
+
+.docs-story {
+  background-color: var(--background);
 }
 /* Copied from https://github.com/eten-tech-foundation/scripture-editors/blob/ba0e846b3f11bea5720c4aa1a3486b69feb6b7e0/packages/platform/src/usj-nodes.css */
 
