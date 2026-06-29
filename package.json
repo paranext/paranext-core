@@ -158,6 +158,7 @@
     "@eten-tech-foundation/platform-editor": "~0.8.14",
     "@eten-tech-foundation/scripture-utilities": "~0.1.6",
     "@lexical/headless": "~0.43.0",
+    "@lexical/html": "~0.43.0",
     "@lexical/react": "~0.43.0",
     "@lexical/rich-text": "~0.43.0",
     "@lexical/table": "~0.43.0",
