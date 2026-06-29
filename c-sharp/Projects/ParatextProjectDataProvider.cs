@@ -154,6 +154,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(("setFinalChapter", SetFinalChapter));
         retVal.Add(("getFinalVerseNumbersInBook", GetFinalVerseNumbersInBook));
         retVal.Add(("setFinalVerseNumbersInBook", SetFinalVerseNumbersInBook));
+        retVal.Add(("mapVerseRefBetweenProjects", MapVerseRefBetweenProjects));
 
         return retVal;
     }
@@ -1924,6 +1925,35 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// </summary>
     public bool SetFinalVerseNumbersInBook(int bookNum, int[] value) =>
         throw new NotSupportedException(VersificationReadOnlyMessage);
+
+    /// <summary>
+    /// Converts <paramref name="verseRef"/> from the source project's versification into the
+    /// target project's versification. The source frame is grounded in
+    /// <paramref name="sourceProjectId"/>'s versification setting (any versification carried on
+    /// the incoming ref is ignored); pass <c>null</c> to treat the ref as canonical English.
+    /// Unmapped verses are returned unchanged; segments (e.g. "1a") are preserved.
+    /// </summary>
+    public VerseRef MapVerseRefBetweenProjects(
+        VerseRef verseRef,
+        string? sourceProjectId,
+        string targetProjectId
+    )
+    {
+        var sourceVers = sourceProjectId is null
+            ? new ScrVers(ScrVersType.English)
+            : LocalParatextProjects.GetParatextProject(sourceProjectId).Settings.Versification;
+        var targetVers = LocalParatextProjects
+            .GetParatextProject(targetProjectId)
+            .Settings.Versification;
+
+        var working = verseRef; // VerseRef is a struct; this copies by value
+        working.Versification = sourceVers; // ground the source frame in data
+        if (working.HasMultiple)
+            working.ChangeVersificationWithRanges(targetVers);
+        else
+            working.ChangeVersification(targetVers);
+        return working;
+    }
 
     #endregion
 
