@@ -21,6 +21,8 @@ export const MARKER_MENU_STRING_KEYS = Object.freeze([
   '%markerMenu_disallowed_label%',
   '%markerMenu_noResults%',
   '%markerMenu_searchPlaceholder%',
+  '%markerMenu_searchPlaceholder_insert%',
+  '%markerMenu_searchPlaceholder_paragraph%',
 ] as const);
 
 export type MarkerMenuLocalizedStrings = {
@@ -64,6 +66,11 @@ export interface MarkerMenuProps {
   markerMenuItems: MarkerMenuItem[];
   /** Optional ref for the command search input to be able to focus it manually */
   searchRef?: LegacyRef<HTMLInputElement>;
+  /**
+   * Optional placeholder text for the search input. When provided, overrides the default
+   * `%markerMenu_searchPlaceholder%` localized string.
+   */
+  searchPlaceholder?: string;
 }
 
 /** Function to format the marker menu icon and size it accordingly */
@@ -114,7 +121,12 @@ function MarkerMenuCommandItem({
 }
 
 /** Marker menu component to render the list of markers and a few commands in the scripture editor */
-export function MarkerMenu({ localizedStrings, markerMenuItems, searchRef }: MarkerMenuProps) {
+export function MarkerMenu({
+  localizedStrings,
+  markerMenuItems,
+  searchRef,
+  searchPlaceholder,
+}: MarkerMenuProps) {
   const [commandSearch, setCommandSearch] = useState<string>('');
 
   const [exactMatchItems, titleMatchItems] = useMemo(() => {
@@ -144,7 +156,7 @@ export function MarkerMenu({ localizedStrings, markerMenuItems, searchRef }: Mar
         ref={searchRef}
         value={commandSearch}
         onValueChange={(value) => setCommandSearch(value)}
-        placeholder={localizedStrings['%markerMenu_searchPlaceholder%']}
+        placeholder={searchPlaceholder ?? localizedStrings['%markerMenu_searchPlaceholder%']}
       />
       <CommandList>
         <CommandEmpty>{localizedStrings['%markerMenu_noResults%']}</CommandEmpty>

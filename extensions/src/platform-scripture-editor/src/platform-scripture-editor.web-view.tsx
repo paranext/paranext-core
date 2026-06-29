@@ -1788,6 +1788,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                       <MarkerMenu
                         localizedStrings={localizedStrings}
                         markerMenuItems={paragraphSwitcherMenuItems}
+                        searchPlaceholder={
+                          localizedStrings['%markerMenu_searchPlaceholder_paragraph%']
+                        }
                       />
                     </PopoverContent>
                   </Popover>
@@ -1909,6 +1912,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             markerMenuItems={inlineMarkerMenuItems}
             localizedStrings={localizedStrings}
             searchRef={markerMenuSearchRef}
+            searchPlaceholder={localizedStrings['%markerMenu_searchPlaceholder_insert%']}
           />
         </PopoverContent>
       </Popover>
