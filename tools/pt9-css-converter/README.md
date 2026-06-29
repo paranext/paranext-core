@@ -2,7 +2,7 @@
 
 Converts the flat per-marker CSS that PT9 ships (e.g. `.usfm_id { font-size: 100%; }`) into the view-mode-bucketed SCSS the platform scripture editor consumes.
 
-It is the build-time partner to [`tools/pt9-css-extractor`](../pt9-css-extractor/README.md), which produces the raw input CSS by running PT9's `CSSCreator.CreateDefaultCSS` against a project's `custom.sty`.
+It is the build-time partner to [`tools/pt9-css-extractor`](https://github.com/paranext/paranext-core/pull/2452) (in progress), which produces the raw input CSS by running PT9's `CSSCreator.CreateDefaultCSS` against a project's `custom.sty`. Once that tool lands the link will become a repo-relative `../pt9-css-extractor/README.md`.
 
 ## Buckets
 

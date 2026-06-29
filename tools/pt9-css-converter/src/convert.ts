@@ -1,3 +1,22 @@
+/**
+ * Core conversion: turns flat PT9 per-marker CSS into the view-mode-bucketed SCSS the platform
+ * scripture editor consumes.
+ *
+ * Pipeline ({@link convert}):
+ *
+ * 1. Parse the input CSS with PostCSS and strip `@font-face` at-rules (the editor handles fonts).
+ * 2. Walk every rule. Selectors matching `.usfm_<marker>` are kept; table markers (`tr`, `tc1`, …) and
+ *    any other selectors are skipped and recorded as warnings.
+ * 3. For each kept marker, route its declarations into typography / non-directional / directional
+ *    buckets via {@link classify}.
+ * 4. Optionally diff against a base SCSS file to flag markers also styled there.
+ * 5. Render SCSS: a header comment (source, timestamp, marker count, warnings) followed by one block
+ *    per bucket per marker. Directional declarations are emitted twice — an LTR block and an RTL
+ *    block whose left/right properties are mirrored via {@link mirrorRtl}.
+ *
+ * Emitted values are normalized to match Prettier's SCSS output (lowercase hex, trimmed trailing
+ * zero decimals, single-quoted strings) so the generated file passes `prettier --check` as-is.
+ */
 import postcss from 'postcss';
 import { classify, mirrorRtl, type Declaration } from './classifier';
 
@@ -20,26 +39,49 @@ interface RenderInput {
   baseProvided: boolean;
 }
 
+/** Optional inputs to {@link convert}. */
 export interface ConvertOptions {
+  /** Source path recorded verbatim in the generated header comment (for provenance). */
   source?: string;
+  /** Timestamp recorded in the header; defaults to now. Injectable for deterministic tests. */
   generatedAt?: Date;
+  /** Contents of the editor's base SCSS; when provided, markers also styled there are flagged. */
   baseScss?: string;
 }
 
+/**
+ * Non-fatal observations collected during conversion. Each list holds de-duplicated marker or
+ * property names and is rendered into the output header so a reviewer can spot issues.
+ */
 export interface ConvertWarnings {
+  /** Properties outside the closed list, defaulted to typography. */
   unknownProperties: string[];
+  /** Table markers (`tr`, `tc1`, …) skipped because the editor doesn't render PT9's table model. */
   skippedTableMarkers: string[];
+  /** Selectors that didn't match `.usfm_<marker>` and were skipped. */
   skippedSelectors: string[];
+  /** Markers that appeared in more than one rule; their declarations were merged. */
   duplicateMarkers: string[];
+  /** Markers also styled in the base SCSS (only populated when `baseScss` is provided). */
   baseOverlapMarkers: string[];
 }
 
+/** Result of a conversion: the rendered SCSS plus diagnostics. */
 export interface ConvertResult {
   scss: string;
+  /** Number of distinct markers emitted. */
   markerCount: number;
   warnings: ConvertWarnings;
 }
 
+/**
+ * Converts flat PT9 per-marker CSS into view-mode-bucketed editor SCSS. See the file header for the
+ * full pipeline.
+ *
+ * @param css Raw PT9 CSS to convert.
+ * @param options Optional source/timestamp metadata and a base SCSS to diff against.
+ * @returns The rendered SCSS, the marker count, and any non-fatal warnings.
+ */
 export function convert(css: string, options: ConvertOptions = {}): ConvertResult {
   const root = postcss.parse(css);
   const markers = new Map<string, MarkerBuckets>();
@@ -129,6 +171,7 @@ export function convert(css: string, options: ConvertOptions = {}): ConvertResul
   return { scss, markerCount: markerOrder.length, warnings };
 }
 
+/** Returns the bucket array within `buckets` that a {@link classify} result should be pushed into. */
 function bucketFor(
   buckets: MarkerBuckets,
   bucket: ReturnType<typeof classify>['bucket'],
@@ -141,16 +184,21 @@ function bucketFor(
     case 'directional':
       return buckets.directional;
     default: {
+      // Exhaustiveness guard: `bucket` is narrowed to `never` here, so a new
+      // Bucket member is a compile error. If somehow reached at runtime, throw
+      // loudly rather than returning undefined and crashing at the call site.
       const unhandled: never = bucket;
-      return unhandled;
+      throw new Error(`Unhandled bucket: ${String(unhandled)}`);
     }
   }
 }
 
+/** Collects every `.usfm_<marker>` name referenced anywhere in the base SCSS. */
 function extractBaseMarkers(baseScss: string): Set<string> {
   return new Set(Array.from(baseScss.matchAll(BASE_MARKER_RE), (match) => match[1]));
 }
 
+/** Renders the final SCSS string: the header comment followed by one block per bucket per marker. */
 function render({
   markerOrder,
   markers,
@@ -181,7 +229,7 @@ function render({
       );
     if (warnings.baseOverlapMarkers.length)
       lines.push(
-        ` *   Markers also styled in base _usj-nodes.scss (cascade-resolved): ${warnings.baseOverlapMarkers.join(', ')}`,
+        ` *   Markers also styled in base _usj-nodes.scss (resolved at runtime by CSS cascade order — review for conflicts): ${warnings.baseOverlapMarkers.join(', ')}`,
       );
   }
   lines.push(' */');
@@ -205,6 +253,7 @@ function render({
   return `${lines.join('\n')}\n`;
 }
 
+/** Appends a `selector { … }` block to `lines`, or nothing when there are no declarations. */
 function emitBlock(lines: string[], selector: string, declarations: Declaration[]): void {
   if (!declarations.length) return;
   lines.push(`${selector} {`);

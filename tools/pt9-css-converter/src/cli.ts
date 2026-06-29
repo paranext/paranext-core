@@ -1,6 +1,17 @@
 #!/usr/bin/env tsx
-// One-off build-time CLI that prints results for the operator; not part of the
-// runtime where the platform logger would otherwise be required.
+/**
+ * Build-time CLI wrapper around {@link convert}. An operator runs it by hand to regenerate a
+ * marker-styles SCSS file from PT9 CSS:
+ *
+ * ```bash
+ * npx tsx tools/pt9-css-converter/src/cli.ts --in <input.css> --out <output.scss> [--base <base.scss>]
+ * ```
+ *
+ * It reads `--in`, optionally reads `--base`, calls {@link convert}, writes the result to `--out`,
+ * and prints a one-line summary. `console` is used deliberately here (rather than the platform
+ * logger) because this is a standalone operator script, not part of the running application — hence
+ * the file-level `no-console` disable below.
+ */
 /* eslint-disable no-console */
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -9,22 +20,31 @@ import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 import { convert, type ConvertWarnings } from './convert';
 
+/** Parsed command-line arguments. */
 interface CliArgs {
   in: string;
   out: string;
   base?: string;
 }
 
+/** Injectable dependencies for {@link normalizeSourcePath}, overridden in tests. */
 interface NormalizeSourcePathDeps {
   cwd?: string;
   resolveRepoRoot?: (dir: string) => string | undefined;
   pathModule?: typeof path;
 }
 
-// Normalize whatever path the operator passed via --in into a stable, repo-root-
-// relative POSIX-style string. Keeps the generated SCSS header reproducible
-// across machines and worktrees so committed output doesn't bake in the
-// operator's absolute filesystem layout.
+/**
+ * Normalizes whatever path the operator passed via `--in` into a stable, repo-root-relative
+ * POSIX-style string. Keeps the generated SCSS header reproducible across machines and worktrees so
+ * committed output doesn't bake in the operator's absolute filesystem layout. Falls back to the
+ * bare filename when the repo root can't be determined.
+ *
+ * @param inputPath The `--in` path as given (absolute or relative to `cwd`).
+ * @param deps Injectable overrides for the working directory, repo-root resolver, and path module.
+ * @returns A forward-slash path relative to the repo root, or just the basename if no root is
+ *   found.
+ */
 export function normalizeSourcePath(inputPath: string, deps: NormalizeSourcePathDeps = {}): string {
   const pathLib = deps.pathModule ?? path;
   const cwd = deps.cwd ?? process.cwd();
@@ -37,6 +57,7 @@ export function normalizeSourcePath(inputPath: string, deps: NormalizeSourcePath
   return rel.split(pathLib.sep).join('/');
 }
 
+/** Resolves the git repo root containing `dir` via `git rev-parse`, or `undefined` if not a repo. */
 function gitRepoRootResolver(dir: string): string | undefined {
   try {
     const root = execFileSync('git', ['-C', dir, 'rev-parse', '--show-toplevel'], {
@@ -49,7 +70,12 @@ function gitRepoRootResolver(dir: string): string | undefined {
   }
 }
 
-function main(): void {
+/**
+ * Entry point: parses args, runs the conversion, writes the output file, and prints a summary.
+ * Exported so it can be driven in-process by tests; execution is still gated by
+ * {@link isMainModule}.
+ */
+export function main(): void {
   const args = parseArgs(process.argv.slice(2));
   const css = readFileSync(path.resolve(args.in), 'utf-8');
   const baseScss = args.base ? readFileSync(path.resolve(args.base), 'utf-8') : undefined;
@@ -59,6 +85,13 @@ function main(): void {
   console.log(`Wrote ${args.out} — ${markerCount} markers${summarizeWarnings(warnings)}`);
 }
 
+/**
+ * Parses `--in`, `--out`, and optional `--base` flags. Prints usage and exits non-zero on unknown
+ * arguments or when a required flag is missing; exits zero on `--help`/`-h`.
+ *
+ * @param argv Argument list (typically `process.argv.slice(2)`).
+ * @returns The validated `--in`/`--out`/`--base` values.
+ */
 function parseArgs(argv: string[]): CliArgs {
   let inPath: string | undefined;
   let outPath: string | undefined;
@@ -90,6 +123,7 @@ function parseArgs(argv: string[]): CliArgs {
   return { in: inPath, out: outPath, base: basePath };
 }
 
+/** Builds the parenthetical warning summary appended to the success line (empty when none). */
 function summarizeWarnings(w: ConvertWarnings): string {
   const parts: string[] = [];
   if (w.unknownProperties.length) parts.push(`${w.unknownProperties.length} unknown properties`);
@@ -108,6 +142,7 @@ function printUsage(): void {
   );
 }
 
+/** True when this file was invoked directly (vs. imported), so `main()` should run. */
 function isMainModule(): boolean {
   if (!process.argv[1]) return false;
   try {

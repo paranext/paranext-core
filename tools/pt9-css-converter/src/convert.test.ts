@@ -164,7 +164,9 @@ describe('convert', () => {
     const { warnings, scss } = convert(css, { generatedAt: FIXED_DATE, baseScss });
 
     expect(warnings.baseOverlapMarkers).toEqual(['id', 'c']);
-    expect(scss).toContain('Markers also styled in base _usj-nodes.scss (cascade-resolved): id, c');
+    expect(scss).toContain(
+      'Markers also styled in base _usj-nodes.scss (resolved at runtime by CSS cascade order — review for conflicts): id, c',
+    );
   });
 
   test('does not emit base-overlap warning when baseScss is not provided', () => {
