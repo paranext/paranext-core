@@ -49,7 +49,23 @@ export class ScriptureFinderProjectDataProviderEngineFactory
       ),
     ) as ScriptureFinderOverlayPDPs;
 
-    return new ScriptureFinderProjectDataProviderEngine(pdpsToOverlay);
+    // Fetch the PDPs needed to compute effective structure protection. These are intentionally NOT
+    // part of the layering overlay (that would AND them into the required-interface set and could
+    // exclude projects lacking them). They are optional; the engine falls back to defaults when a
+    // PDP is unavailable.
+    const [userEditorSettingsPdp, textConnectionSettingsPdp] = await Promise.all([
+      papi.projectDataProviders
+        .get('platformScripture.userEditorSettings', projectId)
+        .catch(() => undefined),
+      papi.projectDataProviders
+        .get('platformScripture.textConnectionSettings', projectId)
+        .catch(() => undefined),
+    ]);
+
+    return new ScriptureFinderProjectDataProviderEngine(pdpsToOverlay, {
+      userEditorSettingsPdp,
+      textConnectionSettingsPdp,
+    });
   }
 }
 

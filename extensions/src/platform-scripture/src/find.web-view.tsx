@@ -2,6 +2,7 @@ import { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
   useLocalizedStrings,
+  useProjectData,
   useProjectDataProvider,
   useProjectSetting,
   useWebViewController,
@@ -28,6 +29,10 @@ import {
 } from 'platform-scripture';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Find, FIND_LOCALIZED_STRING_KEYS } from './find/find.component';
+import {
+  STRUCTURE_PROTECTED_ERROR,
+  replacementContainsStructuralMarker,
+} from './find/structure-protection.util';
 import { LocalizedBookData, SearchTextType } from './find/find-types';
 import {
   HidableFindResult,
@@ -210,6 +215,16 @@ global.webViewComponent = function FindWebView({
   const findPdp = useProjectDataProvider('platformScripture.findInScripture', projectId);
   const replacePdp = useProjectDataProvider('platformScripture.replaceWithUsfm', projectId);
 
+  const [isStructureProtectedPossiblyError] = useProjectData(
+    'platformScripture.replaceWithUsfm',
+    projectId,
+  ).IsStructureProtected(undefined, false);
+
+  const isStructureProtected =
+    typeof isStructureProtectedPossiblyError === 'boolean'
+      ? isStructureProtectedPossiblyError
+      : false;
+
   // Project data provider for USFM Book data — used in Replace mode to detect external edits.
   // Only activated in Replace mode to avoid overhead.
   const usfmBookPdp = useProjectDataProvider(
@@ -283,6 +298,11 @@ global.webViewComponent = function FindWebView({
     });
     return data;
   }, [availableBooksIds, localizedBookIdsAndShortNames]);
+
+  const isReplacementStructureChanging = useMemo(
+    () => replacementContainsStructuralMarker(replaceTerm),
+    [replaceTerm],
+  );
 
   // #endregion
 
@@ -964,7 +984,11 @@ global.webViewComponent = function FindWebView({
           await handleStartSearchRef.current();
         }
       } catch (error) {
-        logger.error(`Error replacing result: ${getErrorMessage(error)}`);
+        if (getErrorMessage(error).includes(STRUCTURE_PROTECTED_ERROR)) {
+          sonner(localizedStrings['%webView_find_replace_structureProtectedError%']);
+        } else {
+          logger.error(`Error replacing result: ${getErrorMessage(error)}`);
+        }
       } finally {
         setIsReplacing(false);
       }
@@ -1155,7 +1179,11 @@ global.webViewComponent = function FindWebView({
         await handleStartSearchRef.current();
       }
     } catch (error) {
-      logger.error(`Error replacing all results: ${getErrorMessage(error)}`);
+      if (getErrorMessage(error).includes(STRUCTURE_PROTECTED_ERROR)) {
+        sonner(localizedStrings['%webView_find_replace_structureProtectedError%']);
+      } else {
+        logger.error(`Error replacing all results: ${getErrorMessage(error)}`);
+      }
     } finally {
       setIsReplacing(false);
     }
@@ -1218,6 +1246,8 @@ global.webViewComponent = function FindWebView({
       replaceTerm={replaceTerm}
       preserveCase={preserveCase}
       isReplacing={isReplacing}
+      isStructureProtected={isStructureProtected}
+      isReplacementStructureChanging={isReplacementStructureChanging}
       results={results}
       resultsByBook={resultsByBook}
       focusedResultIndex={focusedResultIndex}
