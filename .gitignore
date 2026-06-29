@@ -85,3 +85,4 @@ service-account.json
 
 # Phase 3 UI evidence proofs (canonical location is ai-prompts/.context/features/{feature}/proofs/)
 /proofs/
+.claude/scheduled_tasks.lock

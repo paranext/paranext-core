@@ -61,6 +61,11 @@ yalc.lock
 # Local dev packages checked out for linking during CI or local development
 dev-packages/
 
+# Raw PT9 CSS snapshots — verbatim from Paratext 9 DevTools, kept as the audit
+# reference for the post-MVP extraction pipeline. Uses non-conforming class names
+# (`.usfm_<marker>`) by design.
+data/pt9-css/
+
 # Playwright test output
 e2e-tests/test-results
 e2e-tests/playwright-report
