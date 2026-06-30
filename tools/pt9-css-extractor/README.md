@@ -67,6 +67,15 @@ dotnet run -- `
   --projects-dir "D:\My Paratext 9 Projects"
 ```
 
+Alongside the `Wrote …` line, the tool prints the resource's **DBL entry UID**
+to stderr, e.g. `DBL entry UID    : 6c21e835eb8ca3b2`. That UID is the key the
+editor uses to attach the generated marker styles — add it (lowercase) to the
+`COMMENTARY_STYLES_BY_DBL_ENTRY_UID` map in
+`extensions/src/platform-scripture-editor/src/use-commentary-marker-styles.hook.ts`
+and to `CommentariesWhiteList` in
+`c-sharp/Projects/DigitalBibleLibrary/DblDownloadableDataProvider.cs` when
+wiring up a new commentary resource, so you don't have to look it up by hand.
+
 ## Verifying the output
 
 The first time we extract for a project we also capture a reference snapshot

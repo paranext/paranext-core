@@ -32,6 +32,14 @@ internal static class ParatextExtractor
                 $"Could not find Paratext project or resource named '{opts.ProjectName}' "
                 + $"under '{opts.ProjectsDir}' (projects and the _Resources subdirectory are both searched).");
 
+        // The DBL entry UID is what the editor keys commentary marker styles on (the TS
+        // `useCommentaryMarkerStyles` hook and the C# `CommentariesWhiteList`), so surface it
+        // here — it saves a manual lookup when wiring a freshly-extracted resource into those
+        // registries. Resources always have one; guard anyway so a non-DBL project still extracts.
+        string dblId = scrText.Settings.DBLId.ToString();
+        Console.Error.WriteLine(
+            $"DBL entry UID    : {(string.IsNullOrEmpty(dblId) ? "(none — not a DBL resource)" : dblId)}");
+
         // zoom: 1.0 matches what PT9 itself passes (Paratext\Plugins\Legacy\LegacyPluginManager.cs
         // and Paratext\Marble\MarbleForm.cs). The design-doc value of 100 produces nonsense
         // 1200pt font sizes — zoom multiplies font-size and margin values directly.
