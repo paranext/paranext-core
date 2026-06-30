@@ -48,7 +48,7 @@ export function extractStructuralMarkers(usfm: string): string[] {
 
 /**
  * True when replacing `removed` with `inserted` would add, remove, change, or reorder any
- * structural (paragraph-level or verse) marker.
+ * structural (paragraph-level, verse, or chapter) marker.
  */
 export function usfmChangesStructure(removed: string, inserted: string): boolean {
   const before = extractStructuralMarkers(removed);

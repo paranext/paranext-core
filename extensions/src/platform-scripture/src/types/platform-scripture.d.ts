@@ -705,8 +705,8 @@ declare module 'platform-scripture' {
      * Read-only. The effective structure-protection state for this project (combining the project
      * `structureProtected` admin setting, the global interface mode, the user's personal
      * preference, and admin write-permission). When `true`, `replace()` rejects any replacement
-     * that would add, remove, or change a paragraph-level or verse marker. Subscribe to react to
-     * changes; this data type cannot be set.
+     * that would add, remove, or change a paragraph-level, verse, or chapter marker. Subscribe to
+     * react to changes; this data type cannot be set.
      */
     IsStructureProtected: DataProviderDataType<undefined, boolean, never>;
   };
