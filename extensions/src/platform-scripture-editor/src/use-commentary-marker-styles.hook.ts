@@ -37,8 +37,10 @@ const COMMENTARY_STYLES_BY_DBL_ENTRY_UID: Record<string, string> = {
 };
 
 /**
- * Loads the marker stylesheet for a supported commentary (HBKENG, TNN, TND) when the project being
- * displayed in this WebView is one of those commentaries. No-op for any other project.
+ * Loads the marker stylesheet for a supported UBS Translator's Handbook/Notes commentary (see
+ * {@link COMMENTARY_STYLES_BY_DBL_ENTRY_UID} for the current set of resources and languages) when
+ * the project being displayed in this WebView is one of those commentaries. No-op for any other
+ * project.
  *
  * The stylesheet is injected into the WebView's iframe via a `<style>` element, so the rules only
  * affect the current iframe and do not leak into other open WebViews (project editor, other
