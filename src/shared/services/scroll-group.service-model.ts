@@ -54,6 +54,8 @@ export interface IScrollGroupRemoteService {
    * @param scrollGroupId Scroll group whose Scripture reference to get. If `undefined`, defaults to
    *   0
    * @param scrRef Scripture reference to which to set the scroll group
+   * @param sourceProjectId Project whose versification `scrRef` is expressed in. `undefined` =
+   *   unknown / canonical English.
    * @returns `true` if the Scripture reference changed. `false` otherwise
    */
   setScrRef(

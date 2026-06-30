@@ -4,25 +4,23 @@ import {
   onDidUpdateScrRef,
   setScrRefSync,
 } from '@renderer/services/scroll-group.service-host';
-import { useProjectDataProvider } from '@renderer/hooks/papi-hooks/use-project-data-provider.hook';
+import { sendCommand } from '@shared/services/command.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { useEvent } from 'platform-bible-react';
 import { compareScrRefs, ScrollGroupId } from 'platform-bible-utils';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-/**
- * Minimal surface of `IVersificationProjectDataProvider` needed for reference conversion. Declared
- * locally because papi-dts compilation excludes extension typeRoots (the full type lives in
- * `platform-scripture.d.ts`).
- */
-type VersificationPdp = {
-  mapVerseRefBetweenProjects(
-    verseRef: SerializedVerseRef,
-    sourceProjectId: string | undefined,
-    targetProjectId: string,
-  ): Promise<SerializedVerseRef>;
-};
+type MapVerseRefBetweenProjectsCommand = (
+  command: 'platformScripture.mapVerseRefBetweenProjects',
+  verseRef: SerializedVerseRef,
+  sourceProjectId: string | undefined,
+  targetProjectId: string,
+) => Promise<SerializedVerseRef>;
+// 'platformScripture.mapVerseRefBetweenProjects' is registered by an extension; core's tsconfig
+// excludes extension typeRoots, so sendCommand isn't typed for it here.
+// eslint-disable-next-line no-type-assertion/no-type-assertion
+const mapVerseRefBetweenProjects = sendCommand as unknown as MapVerseRefBetweenProjectsCommand;
 
 function extractScrollGroupId(scrollGroupScrRef: ScrollGroupScrRef): ScrollGroupId | undefined {
   return typeof scrollGroupScrRef === 'number' ? scrollGroupScrRef : undefined;
@@ -166,28 +164,21 @@ export function useScrollGroupScrRef(
   );
 
   // Convert the followed (raw) ref into this consumer's project versification for display only.
-  type UseVersificationPdp = (
-    projectInterface: string,
-    projectId: string | undefined,
-  ) => VersificationPdp | undefined;
-  // 'platformScripture.Versification' is registered by an extension; papi-dts compilation excludes
-  // extension typeRoots so the literal is not assignable to ProjectInterface there.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const versificationPdp = (useProjectDataProvider as unknown as UseVersificationPdp)(
-    'platformScripture.Versification',
-    projectId,
-  );
   const [convertedScrRef, setConvertedScrRef] = useState(scrRefLocal);
 
   useEffect(() => {
-    // Pass-through when we have no target project, no PDP yet, or source === target.
-    if (!projectId || !versificationPdp || sourceProjectIdLocal === projectId) {
+    // Pass-through when we have no target project or the source already equals the target.
+    if (!projectId || sourceProjectIdLocal === projectId) {
       setConvertedScrRef(scrRefLocal);
       return undefined;
     }
     let cancelled = false;
-    versificationPdp
-      .mapVerseRefBetweenProjects(scrRefLocal, sourceProjectIdLocal, projectId)
+    mapVerseRefBetweenProjects(
+      'platformScripture.mapVerseRefBetweenProjects',
+      scrRefLocal,
+      sourceProjectIdLocal,
+      projectId,
+    )
       .then((converted) => {
         if (!cancelled) setConvertedScrRef(converted);
         return undefined;
@@ -198,7 +189,7 @@ export function useScrollGroupScrRef(
     return () => {
       cancelled = true; // stale-result guard
     };
-  }, [versificationPdp, projectId, scrRefLocal, sourceProjectIdLocal]);
+  }, [projectId, scrRefLocal, sourceProjectIdLocal]);
 
   return [convertedScrRef, setScrRef, scrollGroupIdLocal, setScrollGroupId];
 }

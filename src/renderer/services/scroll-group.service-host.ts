@@ -120,6 +120,8 @@ async function getScrRef(scrollGroupScrRef: ScrollGroupId = 0): Promise<Serializ
 /**
  * See {@link IScrollGroupRemoteService.setScrRef}
  *
+ * @param sourceProjectId Project whose versification `scrRef` is expressed in. `undefined` =
+ *   unknown / canonical English.
  * @param shouldSetVerseRefSetting If `true`: if scroll group 0's reference changes, update the
  *   `platform.verseRef` setting to keep it in sync for backwards compatibility. Defaults to `true`.
  *   Only set to `false` when running this from subscription to updates to the setting
