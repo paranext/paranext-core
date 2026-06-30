@@ -1031,20 +1031,6 @@ declare module 'platform-scripture' {
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
       /**
-       * Converts a Scripture reference from a source project's versification into a target
-       * project's versification, using each project's live versification setting. Pass `null` for
-       * `sourceProjectId` to treat the reference as canonical English (e.g. a project-less
-       * navigator at cold start). Unmapped verses are returned unchanged; segments are preserved.
-       *
-       * @experimental
-       */
-      mapVerseRefBetweenProjects(
-        verseRef: SerializedVerseRef,
-        sourceProjectId: string | null,
-        targetProjectId: string,
-      ): Promise<SerializedVerseRef>;
-
-      /**
        * Returns the final chapter number in the specified book using the project's versification.
        *
        * @experimental
@@ -2181,6 +2167,7 @@ declare module 'platform-scripture' {
 
 declare module 'papi-shared-types' {
   import { UnsubscriberAsync } from 'platform-bible-utils';
+  import { SerializedVerseRef } from '@sillsdev/scripture';
 
   import type {
     IUSFMBookProjectDataProvider,
@@ -2333,6 +2320,19 @@ declare module 'papi-shared-types' {
     'platformScripture.openManageBooks': (
       webViewIdOrProjectId?: string | undefined,
     ) => Promise<string | undefined>;
+
+    /**
+     * Converts a Scripture reference from a source project's versification into a target project's
+     * versification. Pass `undefined` for `sourceProjectId` to treat the reference as canonical
+     * English. Unmapped verses are returned unchanged; segments preserved.
+     *
+     * @experimental
+     */
+    'platformScripture.mapVerseRefBetweenProjects': (
+      verseRef: SerializedVerseRef,
+      sourceProjectId: string | undefined,
+      targetProjectId: string,
+    ) => Promise<SerializedVerseRef>;
   }
 
   export interface ProjectSettingTypes {

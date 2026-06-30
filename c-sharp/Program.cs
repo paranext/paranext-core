@@ -105,6 +105,7 @@ public static class Program
                 paratextProjects,
                 new MarbleDataLoader()
             );
+            var versificationConversionService = new VersificationConversionService(papi);
             await Task.WhenAll(
                 paratextFactory.InitializeAsync(),
                 paratextPublishedFactory.InitializeAsync(),
@@ -115,7 +116,8 @@ public static class Program
                 paratextSendReceiveService.InitializeAsync(),
                 checklistNetworkObject.InitializeAsync(),
                 manageBooksService.RegisterNetworkObjectAsync(),
-                enhancedResourceFactory.InitializeAsync()
+                enhancedResourceFactory.InitializeAsync(),
+                versificationConversionService.InitializeAsync()
             );
 
             // Things that only run in our "noisy dev mode" go here
