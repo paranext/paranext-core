@@ -363,6 +363,10 @@ export function generateParagraphMenuListItems(
       marker,
       title: localizedStrings[title] ?? title,
       action: () => {
+        // Defense-in-depth: unreachable while the paragraph control is disabled
+        // (`disabled={isStructureProtected}` in the web view), so the popover never opens and this
+        // action never runs. Kept as a second layer of protection in case that disabled state is
+        // ever loosened or the menu wiring changes.
         if (isStructureProtected) {
           notifyStructureProtected();
           return;
@@ -414,6 +418,9 @@ export function generateInlineMarkerMenuListItems(
             localizedStrings[usfmMarkers[marker].description] ?? usfmMarkers[marker].description,
           isDisallowed,
           action: () => {
+            // Defense-in-depth: unreachable while the menu renders `isDisallowed` items as disabled
+            // `CommandItem`s (a disabled cmdk item never fires `onSelect`). Kept as a second layer of
+            // protection in case that disabled rendering is ever loosened or the menu wiring changes.
             if (isDisallowed) {
               notifyStructureProtected();
               closeMarkersMenu();
