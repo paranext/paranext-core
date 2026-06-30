@@ -1,8 +1,8 @@
 # PT9 Commentary CSS Snapshots
 
-This directory holds raw `.css` snapshots captured from the Paratext 9.5
-Desktop application. These files are the **manually-captured reference**
-that the post-MVP automated extraction pipeline will be measured against.
+This directory holds `.css` snapshots captured from the Paratext 9 Desktop
+application. These files are the **manually-captured reference** that the
+post-MVP automated extraction pipeline will be measured against.
 
 ## Files
 
@@ -31,7 +31,7 @@ Committing them gives us:
 
 ## Capture method
 
-1. Open the resource in Paratext 9.5 Desktop with CEFSharp DevTools enabled.
+1. Open the resource in Paratext 9 Desktop with CEFSharp DevTools enabled.
 2. In the Elements panel, drill into the resource's iframe and inspect the
    rendered markers.
 3. From the Computed styles tab, collect the CSS rules that target each
@@ -43,5 +43,11 @@ Committing them gives us:
 Markers were captured if they appear in the rendered output of the
 resource on representative books (FRT, BAK, INT, XXA, DC books, and a
 sample of canonical books). Markers that exist in the resource's stylesheet
-but never render in normal viewing were skipped. Properties were captured
-verbatim from "Computed styles" — no manual normalization or pruning.
+but never render in normal viewing were skipped. Property _values_ are
+verbatim from "Computed styles" — no manual normalization or pruning of
+values — but the snapshots themselves have been reformatted by Prettier
+(quote style, hex-color case, number formatting, whitespace) so they're
+not byte-for-byte identical to PT9's raw output. The CSS is semantically
+unchanged; see the header comment in each `*-manual.css` file. When
+comparing against a fresh PT9 capture, normalize both sides (or run the
+capture through Prettier) before diffing.

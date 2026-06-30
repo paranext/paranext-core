@@ -65,6 +65,10 @@ dev-packages/
 e2e-tests/test-results
 e2e-tests/playwright-report
 
+# Generated/extracted PT9 CSS snapshots: prettier-formatted, but machine output rather
+# than authored source, so exempt from lint rules.
+data/pt9-css/
+
 # Embedded Claude Code profile (vendored from ai-prompts; exempt from repo format/lint)
 .claude
 .context

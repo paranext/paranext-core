@@ -61,14 +61,17 @@ yalc.lock
 # Local dev packages checked out for linking during CI or local development
 dev-packages/
 
-# Raw PT9 CSS snapshots — verbatim from Paratext 9 DevTools, kept as the audit
-# reference for the post-MVP extraction pipeline. Uses non-conforming class names
-# (`.usfm_<marker>`) by design.
-data/pt9-css/
-
 # Playwright test output
 e2e-tests/test-results
 e2e-tests/playwright-report
+
+# Generated/extracted PT9 CSS snapshots
+# (no sync with .prettierignore / .prettierignorerun — these files SHOULD be
+# prettier-formatted; they're only exempt from stylelint)
+# Machine output, not authored source — tripping authoring rules (block-no-empty,
+# selector-class-pattern on PT9's .usfm_* names, etc.) would force edits that
+# break their fidelity to PT9.
+data/pt9-css/
 
 
 # Embedded Claude Code profile (vendored from ai-prompts; exempt from repo format/lint)
