@@ -54,7 +54,12 @@ const COMMENTARIES: ReadonlyArray<readonly [label: string, uid: string]> = [
   ['TNDPTG', 'e0b3f20ff8677585'],
 ];
 
-const HBKENG_UID = '97196133a859179b';
+/** Look up a commentary's DBL entry UID by label from the single COMMENTARIES source above. */
+const uidOf = (label: string): string => {
+  const entry = COMMENTARIES.find(([l]) => l === label);
+  if (!entry) throw new Error(`No COMMENTARIES entry for ${label}`);
+  return entry[1];
+};
 
 describe('useCommentaryMarkerStyles', () => {
   beforeEach(() => {
@@ -82,7 +87,7 @@ describe('useCommentaryMarkerStyles', () => {
   );
 
   it('matches DBL UID case-insensitively', () => {
-    renderHook(() => useCommentaryMarkerStyles(`${HBKENG_UID.toUpperCase()}_LOCAL-SUFFIX`));
+    renderHook(() => useCommentaryMarkerStyles(`${uidOf('HBKENG').toUpperCase()}_LOCAL-SUFFIX`));
     expect(lastStylesheet()).toContain('HBKENG_CSS');
   });
 
@@ -97,15 +102,14 @@ describe('useCommentaryMarkerStyles', () => {
   });
 
   it('swaps stylesheets when projectId changes between commentaries', () => {
-    const tnnUid = '090f7cbf7924b245';
-    const initialProps: { projectId: string | undefined } = { projectId: `${HBKENG_UID}_a` };
+    const initialProps: { projectId: string | undefined } = { projectId: `${uidOf('HBKENG')}_a` };
     const { rerender } = renderHook(
       ({ projectId }: { projectId: string | undefined }) => useCommentaryMarkerStyles(projectId),
       { initialProps },
     );
     expect(lastStylesheet()).toContain('HBKENG_CSS');
 
-    rerender({ projectId: `${tnnUid}_b` });
+    rerender({ projectId: `${uidOf('TNN')}_b` });
     expect(lastStylesheet()).toContain('TNN_CSS');
 
     rerender({ projectId: 'unrelated-project-id' });
