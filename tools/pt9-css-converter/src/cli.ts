@@ -17,8 +17,8 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import { pathToFileURL } from 'node:url';
 import { convert, type ConvertWarnings } from './convert';
+import { isMainModule } from './is-main-module';
 
 /** Parsed command-line arguments. */
 interface CliArgs {
@@ -142,14 +142,4 @@ function printUsage(): void {
   );
 }
 
-/** True when this file was invoked directly (vs. imported), so `main()` should run. */
-function isMainModule(): boolean {
-  if (!process.argv[1]) return false;
-  try {
-    return import.meta.url === pathToFileURL(process.argv[1]).href;
-  } catch {
-    return false;
-  }
-}
-
-if (isMainModule()) main();
+if (isMainModule(import.meta.url)) main();
