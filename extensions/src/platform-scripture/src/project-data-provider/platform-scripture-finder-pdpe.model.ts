@@ -1,10 +1,12 @@
 import { Usj, usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
-import { logger, ProjectDataProviderEngine } from '@papi/backend';
+import papi, { logger, ProjectDataProviderEngine } from '@papi/backend';
 import { IProjectDataProviderEngine } from '@papi/core';
+import type { DataProviderUpdateInstructions } from '@papi/core';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { ProjectDataProviderInterfaces } from 'papi-shared-types';
 import {
   AsyncVariable,
+  computeEffectiveStructureProtection,
   getErrorMessage,
   Mutex,
   MutexMap,
@@ -23,9 +25,11 @@ import {
   FindOptions,
   FindResult,
   FindScope,
+  ReplaceWithUsfmProjectInterfaceDataTypes,
   ScriptureRangeUsjChapterOrUsfmVerseLocation,
 } from 'platform-scripture';
 import { buildSearchRegex, CharacterCategorizer } from '../find/find.utils';
+import { STRUCTURE_PROTECTED_ERROR, usfmChangesStructure } from '../find/structure-protection.util';
 import { USFM_VERSE_TEXT_MARKERS_SET } from '../find/usfm-verse-text-markers';
 import { correctUsjVersion } from './scripture.util';
 
@@ -71,6 +75,16 @@ export const SCRIPTURE_FINDER_OVERLAY_PROJECT_INTERFACES = [
 
 export type ScriptureFinderOverlayPDPs = {
   [ProjectInterface in (typeof SCRIPTURE_FINDER_OVERLAY_PROJECT_INTERFACES)[number]]: ProjectDataProviderInterfaces[ProjectInterface];
+};
+
+/**
+ * Extra PDPs the Scripture Finder engine uses to determine effective structure protection.
+ * Optional: when a PDP is absent, that input falls back to its default (user preference
+ * `undefined`, admin-toggle `false`), mirroring `useStructureProtectionState`.
+ */
+export type ScriptureFinderProtectionContext = {
+  userEditorSettingsPdp?: ProjectDataProviderInterfaces['platformScripture.userEditorSettings'];
+  textConnectionSettingsPdp?: ProjectDataProviderInterfaces['platformScripture.textConnectionSettings'];
 };
 
 /** The maximum number of results that can be returned in a single find job */
@@ -161,14 +175,28 @@ export class ScriptureFinderProjectDataProviderEngine
    */
   #chapterUsxUnsubscriberPromise: Promise<UnsubscriberAsync | undefined>;
 
+  /** Extra PDPs used to compute effective structure protection. May be empty. */
+  readonly #protectionContext: ScriptureFinderProtectionContext;
+
+  /**
+   * Promise for the structure-protection subscription unsubscribers. Resolves to `undefined` if the
+   * subscriptions failed (error logged in the constructor).
+   */
+  #structureProtectionUnsubscriberPromise: Promise<UnsubscriberAsync[] | undefined>;
+
   /**
    * Creates a new ScriptureFinderProjectDataProviderEngine instance.
    *
    * @param pdpsToOverlay - Underlying project data providers that provide book and chapter data.
+   * @param protectionContext - Optional extra PDPs used to compute effective structure protection.
    */
-  constructor(pdpsToOverlay: ScriptureFinderOverlayPDPs) {
+  constructor(
+    pdpsToOverlay: ScriptureFinderOverlayPDPs,
+    protectionContext: ScriptureFinderProtectionContext = {},
+  ) {
     super();
     this.#pdps = pdpsToOverlay;
+    this.#protectionContext = protectionContext;
 
     // Subscribe to character categorizer settings changes to invalidate the cache when they change
     this.#characterCategorizerSettingsUnsubscriberPromise = (async () => {
@@ -262,6 +290,41 @@ export class ScriptureFinderProjectDataProviderEngine
       );
       return undefined;
     });
+
+    // Notify subscribers of IsStructureProtected when any underlying input changes. The value is
+    // recomputed lazily in getIsStructureProtected(); here we only signal that it may have changed.
+    // Capture constructor params in locals so the async IIFE avoids using `this.#pdps` and
+    // `this.#protectionContext` before TypeScript considers them definitively assigned.
+    const basePdp = pdpsToOverlay['platform.base'];
+    const { userEditorSettingsPdp } = protectionContext;
+    this.#structureProtectionUnsubscriberPromise = (async () => {
+      const unsubscribers: UnsubscriberAsync[] = [];
+      const notify = () => {
+        this.notifyUpdate('IsStructureProtected');
+      };
+      unsubscribers.push(
+        await basePdp.subscribeSetting('platformScripture.structureProtected', notify, {
+          retrieveDataImmediately: false,
+        }),
+      );
+      const settingsUnsub = await papi.settings.subscribe('platform.interfaceMode', notify, {
+        retrieveDataImmediately: false,
+      });
+      unsubscribers.push(settingsUnsub);
+      if (userEditorSettingsPdp) {
+        unsubscribers.push(
+          await userEditorSettingsPdp.subscribeUserStructureProtected(undefined, notify, {
+            retrieveDataImmediately: false,
+          }),
+        );
+      }
+      return unsubscribers;
+    })().catch((e) => {
+      logger.error(
+        `Scripture Finder PDP failed to subscribe to structure-protection inputs! ${getErrorMessage(e)}`,
+      );
+      return undefined;
+    });
   }
 
   async beginFindJob(findOptions: FindOptions): Promise<string> {
@@ -349,6 +412,9 @@ export class ScriptureFinderProjectDataProviderEngine
    * @throws Error if usfmToInsert array length doesn't match rangesToReplace length
    * @throws Error if any range spans multiple books
    * @throws Error if any ranges overlap within the same book
+   * @throws Error with message {@link STRUCTURE_PROTECTED_ERROR} when structure protection is active
+   *   and a replacement would add, remove, change, or reorder a paragraph-level, verse, or chapter
+   *   marker
    */
   async replace(
     rangesToReplace: ScriptureRangeUsjChapterOrUsfmVerseLocation[],
@@ -412,6 +478,8 @@ export class ScriptureFinderProjectDataProviderEngine
       /* eslint-disable no-await-in-loop */
       for (let attempt = 0; attempt <= MAX_CACHE_INVALIDATION_RETRIES; attempt++) {
         const versionBeforePhase1 = this.#cacheVersion;
+        // Recompute per attempt so a cache-invalidation retry re-derives protection on fresh state.
+        const isStructureProtected = await this.#computeIsStructureProtected();
 
         // Track pending writes so we can execute all USFM writes together at the end
         const pendingWrites: Array<{
@@ -500,6 +568,19 @@ export class ScriptureFinderProjectDataProviderEngine
               const originalUsfm = modifiedUsfm;
               rangesWithIndices.forEach((rangeWithIndex) => {
                 const replacement = replacements[rangeWithIndex.originalIndex];
+                // Block any structural (paragraph-level or verse) marker change while protected.
+                // `originalUsfm` is the unmodified book USFM, so substring(start,end) is exactly the
+                // text this range removes; reject if the replacement's structural-marker sequence
+                // differs from the removed span's (covers add, remove, change, and reorder).
+                if (isStructureProtected) {
+                  const removed = originalUsfm.substring(
+                    rangeWithIndex.startIndex,
+                    rangeWithIndex.endIndex,
+                  );
+                  if (usfmChangesStructure(removed, replacement)) {
+                    throw new Error(STRUCTURE_PROTECTED_ERROR);
+                  }
+                }
                 modifiedUsfm =
                   modifiedUsfm.substring(0, rangeWithIndex.startIndex) +
                   replacement +
@@ -584,6 +665,20 @@ export class ScriptureFinderProjectDataProviderEngine
     });
   }
 
+  async getIsStructureProtected(): Promise<boolean> {
+    return this.#computeIsStructureProtected();
+  }
+
+  // IsStructureProtected is read-only (computed). Set is not supported.
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  async setIsStructureProtected(): Promise<
+    DataProviderUpdateInstructions<ReplaceWithUsfmProjectInterfaceDataTypes>
+  > {
+    throw new Error(
+      'Cannot set IsStructureProtected; it is computed from settings and permissions',
+    );
+  }
+
   /**
    * Disposes of this Project Data Provider Engine. Unsubscribes from listening to overlaid PDPs
    *
@@ -603,9 +698,12 @@ export class ScriptureFinderProjectDataProviderEngine
     const bookUnsub = await this.#bookUsxUnsubscriberPromise;
     const chapterUnsub = await this.#chapterUsxUnsubscriberPromise;
     const settingsUnsubs = await this.#characterCategorizerSettingsUnsubscriberPromise;
+    const structureProtectionUnsubs = await this.#structureProtectionUnsubscriberPromise;
     if (bookUnsub) unsubscriberList.add(bookUnsub);
     if (chapterUnsub) unsubscriberList.add(chapterUnsub);
     if (settingsUnsubs) settingsUnsubs.forEach((u) => unsubscriberList.add(u));
+    if (structureProtectionUnsubs)
+      structureProtectionUnsubs.forEach((u) => unsubscriberList.add(u));
 
     // Clear caches
     this.#bookCache.clear();
@@ -620,6 +718,74 @@ export class ScriptureFinderProjectDataProviderEngine
     this.#characterCategorizerMutex.cancel();
 
     return unsubscriberList.runAllUnsubscribers();
+  }
+
+  /**
+   * Computes the project's effective structure-protection state. Mirrors
+   * `useStructureProtectionState` in
+   * `extensions/src/platform-scripture-editor/src/use-structure-protection-state.hook.ts`
+   * (canonical). Fail-safe on both reads: if `platform.interfaceMode` cannot be read it defaults to
+   * `'simple'` (routing into the protected branch), and if the project `structureProtected` setting
+   * cannot be read it returns `true` (protected) rather than silently allowing a structural edit.
+   */
+  async #computeIsStructureProtected(): Promise<boolean> {
+    let interfaceMode: string | undefined;
+    try {
+      interfaceMode = await papi.settings.get('platform.interfaceMode');
+    } catch (e) {
+      // Fail-safe: a settings-service error must not silently disable protection. Mirror the
+      // canonical hook (use-structure-protection-state.hook.ts), which defaults to 'simple' on a
+      // settings error, so we route into the protected branch rather than returning "not protected".
+      logger.warn(
+        `Scripture Finder PDP could not read interfaceMode; failing safe to 'simple'. ${getErrorMessage(e)}`,
+      );
+      interfaceMode = 'simple';
+    }
+    // Feature only applies in simple mode; skip everything else when inactive.
+    if (interfaceMode !== 'simple') return false;
+
+    let isAdminProtected: boolean;
+    try {
+      isAdminProtected =
+        (await this.#pdps['platform.base'].getSetting('platformScripture.structureProtected')) ===
+        true;
+    } catch (e) {
+      logger.warn(
+        `Scripture Finder PDP could not read structureProtected; failing safe (protected). ${getErrorMessage(e)}`,
+      );
+      return true;
+    }
+
+    let userSetting: boolean | undefined;
+    try {
+      userSetting = this.#protectionContext.userEditorSettingsPdp
+        ? await this.#protectionContext.userEditorSettingsPdp.getUserStructureProtected()
+        : undefined;
+    } catch (e) {
+      logger.warn(
+        `Scripture Finder PDP could not read user structure-protection preference; defaulting to unset. ${getErrorMessage(e)}`,
+      );
+      userSetting = undefined;
+    }
+
+    let canAdminToggle = false;
+    try {
+      canAdminToggle = this.#protectionContext.textConnectionSettingsPdp
+        ? await this.#protectionContext.textConnectionSettingsPdp.canUserWriteProjectTextConnectionSettings()
+        : false;
+    } catch (e) {
+      logger.warn(
+        `Scripture Finder PDP could not read admin toggle permission; defaulting to false. ${getErrorMessage(e)}`,
+      );
+      canAdminToggle = false;
+    }
+
+    return computeEffectiveStructureProtection({
+      interfaceMode,
+      isAdminProtected,
+      canAdminToggle,
+      userSetting,
+    });
   }
 
   /**

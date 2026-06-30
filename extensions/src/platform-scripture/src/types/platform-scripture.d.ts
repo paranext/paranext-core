@@ -699,8 +699,17 @@ declare module 'platform-scripture' {
 
   // #region Replace Types
 
-  /** Provides information about replacing text in scripture projects (intentionally empty) */
-  export type ReplaceWithUsfmProjectInterfaceDataTypes = {};
+  /** Provides information about replacing text in scripture projects */
+  export type ReplaceWithUsfmProjectInterfaceDataTypes = {
+    /**
+     * Read-only. The effective structure-protection state for this project (combining the project
+     * `structureProtected` admin setting, the global interface mode, the user's personal
+     * preference, and admin write-permission). When `true`, `replace()` rejects any replacement
+     * that would add, remove, or change a paragraph-level, verse, or chapter marker. Subscribe to
+     * react to changes; this data type cannot be set.
+     */
+    IsStructureProtected: DataProviderDataType<undefined, boolean, never>;
+  };
 
   /** Provides methods for replacing scripture content with USFM text */
   export type IReplaceWithUsfmProjectDataProvider =
@@ -749,6 +758,11 @@ declare module 'platform-scripture' {
        * @throws Error if `usfmToInsert` array length doesn't match `rangesToReplace` length
        * @throws Error if any range spans multiple books
        * @throws Error if any ranges overlap
+       * @throws Error whose message is the `STRUCTURE_PROTECTED_ERROR` sentinel
+       *   (`'platformScripture.replace.structureProtected'`) when structure protection is active
+       *   and a replacement would add, remove, change, or reorder a paragraph-level, verse, or
+       *   chapter marker. The Find web view substring-matches this sentinel to surface a localized
+       *   message.
        */
       replace(
         rangesToReplace: ScriptureRangeUsjChapterOrUsfmVerseLocation[],

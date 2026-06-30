@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { isPlatformError, type PlatformError } from 'platform-bible-utils';
+import {
+  computeEffectiveStructureProtection,
+  isPlatformError,
+  type PlatformError,
+} from 'platform-bible-utils';
 import { logger } from '@papi/frontend';
 import { useProjectDataProvider, useProjectSetting, useSetting } from '@papi/frontend/react';
 
@@ -160,13 +164,15 @@ export function useStructureProtectionState(
   // and no toggles are shown, regardless of the admin or user settings (which are left untouched so
   // returning to simple mode restores prior behavior).
   const isProtectionActive = interfaceMode === 'simple';
-  // When the user has no stored preference, simple mode defaults to locked. (`isProtectionActive`
-  // also equals `interfaceMode === 'simple'`; in power mode this default is discarded by the branch
-  // below since the feature is inactive.)
-  const effectiveUserSetting = userSettingState ?? isProtectionActive;
-  const isStructureProtected = isProtectionActive
-    ? (isAdminProtected && !canAdminToggle) || effectiveUserSetting
-    : false;
+  // Effective enforcement state is computed by the shared algebra in platform-bible-utils so the
+  // editor and the Scripture Finder PDP (which cannot import each other) stay in lockstep. In simple
+  // mode with no stored user preference it defaults to locked; in power mode it is always inactive.
+  const isStructureProtected = computeEffectiveStructureProtection({
+    interfaceMode,
+    isAdminProtected,
+    canAdminToggle,
+    userSetting: userSettingState,
+  });
 
   const setAdminProtection = useCallback(
     (value: boolean) => {

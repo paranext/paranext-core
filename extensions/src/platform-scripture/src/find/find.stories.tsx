@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
 import { alertCommand } from '../../../../../.storybook/story.utils';
 import { Find, FIND_LOCALIZED_STRING_KEYS, type BookResultEntry } from './find.component';
+import { replacementContainsStructuralMarker } from './structure-protection.util';
 import { LocalizedBookData, SearchTextType } from './find-types';
 import { HidableFindResult, SEARCH_RESULT_LOCALIZED_STRING_KEYS } from './search-result.component';
 
@@ -211,6 +212,13 @@ type HarnessConfig = {
   totalNumberOfResults?: number;
   /** Start with every result already in the replaced state (the Replaced showcase). */
   initiallyReplacedAll?: boolean;
+  /** Initial replace term (defaults to a sample word). */
+  replaceTerm?: string;
+  /**
+   * Whether structure is locked. When `true`, the protected note shows and a replacement containing
+   * a paragraph/verse/chapter marker disables Replace with an explanatory tooltip.
+   */
+  isStructureProtected?: boolean;
 };
 
 /**
@@ -235,7 +243,7 @@ function FindHarness({ config }: { config: HarnessConfig }) {
   const [isRegexAllowed, setIsRegexAllowed] = useState(false);
 
   const [activeMode, setActiveMode] = useState<'find' | 'replace'>(config.activeMode ?? 'find');
-  const [replaceTerm, setReplaceTerm] = useState('Yahweh');
+  const [replaceTerm, setReplaceTerm] = useState(config.replaceTerm ?? 'Yahweh');
   const [preserveCase, setPreserveCase] = useState(false);
 
   const [focusedResultIndex, setFocusedResultIndex] = useState<number | undefined>(undefined);
@@ -410,6 +418,13 @@ function FindHarness({ config }: { config: HarnessConfig }) {
     ? baseResults.length
     : (config.totalNumberOfResults ?? baseResults.length);
 
+  // When structure is locked, a replacement that itself contains a paragraph/verse/chapter marker
+  // would change structure, so Replace is disabled with a tooltip. Computed live so editing the
+  // replace term in the story toggles the disabled state, mirroring the real web view.
+  const isStructureProtected = config.isStructureProtected ?? false;
+  const isReplacementStructureChanging =
+    isStructureProtected && replacementContainsStructuralMarker(replaceTerm);
+
   return (
     <Find
       localizedStrings={localizedStrings}
@@ -430,6 +445,8 @@ function FindHarness({ config }: { config: HarnessConfig }) {
       replaceTerm={replaceTerm}
       preserveCase={preserveCase}
       isReplacing={false}
+      isStructureProtected={isStructureProtected}
+      isReplacementStructureChanging={isReplacementStructureChanging}
       results={displayedResults}
       resultsByBook={resultsByBook}
       focusedResultIndex={focusedResultIndex}
@@ -526,4 +543,16 @@ export const NoResults: Story = {
  */
 export const Replaced: Story = {
   decorators: [createDecorator({ activeMode: 'replace', initiallyReplacedAll: true })],
+};
+
+/**
+ * Replace mode with structure locked. The locked-structure note shows above the results, and
+ * because the replace term contains a paragraph marker (`\p`) the replacement would change
+ * structure — so Replace / Replace All are disabled and hovering them explains why. Clear or edit
+ * the replace term to a plain word to see Replace re-enable while the note stays.
+ */
+export const StructureProtected: Story = {
+  decorators: [
+    createDecorator({ activeMode: 'replace', isStructureProtected: true, replaceTerm: '\\p text' }),
+  ],
 };

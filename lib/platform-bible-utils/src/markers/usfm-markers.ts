@@ -3064,3 +3064,18 @@ export const usfmMarkers: { [marker: string]: Marker } = {
     children: undefined,
   },
 };
+
+/**
+ * True when a marker is a paragraph- or verse-level (block) structure marker — i.e. one whose
+ * insertion, formatting, or renumbering is structurally significant (and is blocked while structure
+ * protection/locking is on).
+ *
+ * Paragraph-level markers are identified by their {@link MarkerType.Paragraph} type in
+ * {@link usfmMarkers} rather than a hand-maintained list, so every paragraph marker (including
+ * poetry lines like `q`, section headings like `s1`, and embedded paragraphs like `pm`) is covered.
+ * Verse (`v`) is a structure marker but is typed as {@link MarkerType.Character}, so it is
+ * special-cased; chapter (`c`) is already {@link MarkerType.Paragraph} and needs no special case.
+ */
+export function isBlockMarker(marker: string): boolean {
+  return usfmMarkers[marker]?.type === MarkerType.Paragraph || marker === 'v';
+}
