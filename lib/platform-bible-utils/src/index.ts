@@ -52,7 +52,7 @@ export {
   aggregateUnsubscriberAsyncs,
 } from './lifetime-management/unsubscriber';
 export { CHAPTER_TYPE, VERSE_TYPE } from './scripture/usj-reader-writer.model';
-export { usfmMarkers } from './markers/usfm-markers';
+export { usfmMarkers, isBlockMarker } from './markers/usfm-markers';
 
 // Enums
 export { Section } from './scripture/scripture-util';
@@ -130,8 +130,10 @@ export { default as formatBytes } from './number-utils';
 export { default as ensureArray } from './array-util';
 export { formatTimeSpan, formatRelativeDate } from './date-time-format-util';
 export { MODIFIER_KEYS } from './keyboard-util';
+export { computeEffectiveStructureProtection } from './structure-protection.util';
 
 // Types
+export type { EffectiveStructureProtectionInputs } from './structure-protection.util';
 export type { DeepPartial, KebabCase, Prettify, ReplaceType, UnionToIntersection } from './util';
 export type {
   Dispose,

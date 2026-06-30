@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ScriptureRangeUsjChapterOrUsfmVerseLocation } from 'platform-scripture';
+import papi from '@papi/backend';
 import {
   ScriptureFinderProjectDataProviderEngine,
   ScriptureFinderOverlayPDPs,
 } from './platform-scripture-finder-pdpe.model';
+import { STRUCTURE_PROTECTED_ERROR } from '../find/structure-protection.util';
 
 // Simple USFM test data for Matthew chapter 1
 const TEST_BOOK_USFM = String.raw`\id MAT
@@ -1881,6 +1883,106 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       expect(writtenUsfm).not.toContain('FIRST_MAT_CH2_A');
       expect(writtenUsfm).not.toContain('FIRST_MAT_CH2_B');
       expect(writtenUsfm).not.toContain('FIRST_MRK');
+    });
+  });
+
+  describe('structure protection enforcement', () => {
+    // Activate the feature: simple mode + no user preference ⇒ protected by default.
+    beforeEach(() => {
+      vi.mocked(papi.settings.get).mockResolvedValue('simple');
+    });
+
+    it('rejects a replacement that adds a paragraph marker when protected', async () => {
+      // offsets 5-8 = "The" (no markers in removed span); replacement adds \p → differs → rejects
+      const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 5 },
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 8 },
+        },
+      ];
+      await expect(engine.replace(ranges, '\\p new paragraph')).rejects.toThrow(
+        STRUCTURE_PROTECTED_ERROR,
+      );
+      // Nothing was written.
+      expect(mockPdps['platformScripture.USFM_Chapter'].setChapterUSFM).not.toHaveBeenCalled();
+      expect(mockPdps['platformScripture.USFM_Book'].setBookUSFM).not.toHaveBeenCalled();
+    });
+
+    it('allows a structure-safe (text-only) replacement when protected', async () => {
+      // offsets 5-8 = "The"; replacement is plain text → no structural change → allowed
+      const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 5 },
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 8 },
+        },
+      ];
+      await engine.replace(ranges, 'Plain');
+      await flushPromises();
+      // Text replaced AND the \v 1 marker is preserved
+      expect(getWrittenUsfm()).toContain('\\v 1 Plain book');
+    });
+
+    it('rejects when a replacement would remove an existing marker (matched span includes a marker)', async () => {
+      // Range starts at offset 0 (the start of the `\v 1 ` marker) through offset 8, so the removed
+      // span includes the verse marker. Replacing it with plain text would delete that marker.
+      const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 0 },
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 8 },
+        },
+      ];
+      await expect(engine.replace(ranges, 'plain text')).rejects.toThrow(STRUCTURE_PROTECTED_ERROR);
+      expect(mockPdps['platformScripture.USFM_Chapter'].setChapterUSFM).not.toHaveBeenCalled();
+      expect(mockPdps['platformScripture.USFM_Book'].setBookUSFM).not.toHaveBeenCalled();
+    });
+
+    it('does no protection rejection when the feature is inactive (power mode)', async () => {
+      vi.mocked(papi.settings.get).mockResolvedValue('power');
+      // offsets 5-8 = "The"; replacement adds \p — allowed because protection is inactive
+      const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 5 },
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 8 },
+        },
+      ];
+      // Even a marker-adding replacement is allowed when protection is inactive.
+      await engine.replace(ranges, '\\p new paragraph');
+      await flushPromises();
+      expect(getWrittenUsfm()).toContain('\\p new paragraph');
+    });
+
+    it('fails safe (rejects) when the project setting cannot be read in simple mode', async () => {
+      vi.mocked(mockPdps['platform.base'].getSetting).mockImplementation((key: string) => {
+        if (key === 'platformScripture.structureProtected')
+          return Promise.reject(new Error('boom'));
+        return Promise.resolve(undefined);
+      });
+      // offsets 5-8 = "The"; replacement adds \v 9 marker → would be rejected if setting read fails
+      const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 5 },
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 8 },
+        },
+      ];
+      await expect(engine.replace(ranges, '\\v 9 added verse')).rejects.toThrow(
+        STRUCTURE_PROTECTED_ERROR,
+      );
+    });
+
+    it('getIsStructureProtected returns true in simple mode with no user preference', async () => {
+      await expect(engine.getIsStructureProtected()).resolves.toBe(true);
+    });
+
+    it('getIsStructureProtected returns false in power mode', async () => {
+      vi.mocked(papi.settings.get).mockResolvedValue('power');
+      await expect(engine.getIsStructureProtected()).resolves.toBe(false);
+    });
+
+    it('fails safe (treats as simple/protected) when interfaceMode cannot be read', async () => {
+      vi.mocked(papi.settings.get).mockRejectedValue(new Error('settings unavailable'));
+      // structureProtected mock resolves undefined (not protected by admin), user setting unset →
+      // simple-mode default is locked, so effective protection is true.
+      await expect(engine.getIsStructureProtected()).resolves.toBe(true);
     });
   });
 });

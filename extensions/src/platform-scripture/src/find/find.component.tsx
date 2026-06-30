@@ -74,6 +74,9 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_replaceAll%',
   '%webView_find_replaceTab%',
   '%webView_find_replaceTerm_placeholder%',
+  '%webView_find_replace_structureProtectedError%',
+  '%webView_find_replace_structureProtectedMarkerTooltip%',
+  '%webView_find_replace_structureProtectedNote%',
   '%webView_find_restrictions%',
   '%webView_find_restrictions_endOfWord%',
   '%webView_find_restrictions_none%',
@@ -142,6 +145,13 @@ export type FindProps = {
   preserveCase: boolean;
   /** True while a replace operation (and its mandatory re-find) is executing. */
   isReplacing: boolean;
+  /** Whether the project's structure is currently protected (replace restrictions apply). */
+  isStructureProtected?: boolean;
+  /**
+   * Whether the current replacement text itself contains a paragraph/verse marker — guaranteed to
+   * be rejected while protected, so Replace is proactively disabled.
+   */
+  isReplacementStructureChanging?: boolean;
 
   // Results state
   /** All current search results (including hidden/replaced ones). */
@@ -237,6 +247,8 @@ export function Find({
   replaceTerm,
   preserveCase,
   isReplacing,
+  isStructureProtected = false,
+  isReplacementStructureChanging = false,
   results,
   resultsByBook,
   focusedResultIndex,
@@ -540,6 +552,11 @@ export function Find({
                 className="tw:w-full tw:min-w-16 tw:!pl-8 tw:!pr-4 scripture-font"
               />
             </div>
+            {isStructureProtected && (
+              <p className="tw:text-xs tw:text-muted-foreground">
+                {localizedStrings['%webView_find_replace_structureProtectedNote%']}
+              </p>
+            )}
             <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:flex-wrap">
               <div className="tw:flex tw:items-center tw:gap-2">
                 <Checkbox
@@ -563,27 +580,66 @@ export function Find({
                   </Tooltip>
                 </TooltipProvider>
               </div>
-              <div className="tw:flex tw:gap-2">
-                <Button
-                  variant="outline"
-                  onClick={onReplaceAll}
-                  disabled={
-                    visibleResults.length === 0 || searchStatus === 'running' || isReplacing
-                  }
-                >
-                  <ReplaceAll className="tw:h-4 tw:w-4" />
-                  {localizedStrings['%webView_find_replaceAll%']}
-                </Button>
-                <Button
-                  onClick={() => onReplace()}
-                  disabled={
-                    focusedResultIndex === undefined || searchStatus === 'running' || isReplacing
-                  }
-                >
-                  <Replace className="tw:h-4 tw:w-4" />
-                  {localizedStrings['%webView_find_replace%']}
-                </Button>
-              </div>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    {/* When the buttons are disabled for structure protection they are not focusable,
+                        so make the wrapper focusable and named while disabled to keep the explanatory
+                        tooltip reachable for keyboard and screen-reader users. */}
+                    <div
+                      className="tw:flex tw:gap-2"
+                      role={
+                        isStructureProtected && isReplacementStructureChanging ? 'group' : undefined
+                      }
+                      // Disabled buttons cannot host their own tooltip; the wrapper must be focusable to surface the structure-protection explanation to keyboard and screen-reader users
+                      // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+                      tabIndex={
+                        isStructureProtected && isReplacementStructureChanging ? 0 : undefined
+                      }
+                      aria-label={
+                        isStructureProtected && isReplacementStructureChanging
+                          ? localizedStrings[
+                              '%webView_find_replace_structureProtectedMarkerTooltip%'
+                            ]
+                          : undefined
+                      }
+                    >
+                      <Button
+                        variant="outline"
+                        onClick={onReplaceAll}
+                        disabled={
+                          visibleResults.length === 0 ||
+                          searchStatus === 'running' ||
+                          isReplacing ||
+                          (isStructureProtected && isReplacementStructureChanging)
+                        }
+                      >
+                        <ReplaceAll className="tw:h-4 tw:w-4" />
+                        {localizedStrings['%webView_find_replaceAll%']}
+                      </Button>
+                      <Button
+                        onClick={() => onReplace()}
+                        disabled={
+                          focusedResultIndex === undefined ||
+                          searchStatus === 'running' ||
+                          isReplacing ||
+                          (isStructureProtected && isReplacementStructureChanging)
+                        }
+                      >
+                        <Replace className="tw:h-4 tw:w-4" />
+                        {localizedStrings['%webView_find_replace%']}
+                      </Button>
+                    </div>
+                  </TooltipTrigger>
+                  {isStructureProtected && isReplacementStructureChanging && (
+                    <TooltipContent>
+                      <p className="tw:max-w-xs tw:whitespace-pre-line">
+                        {localizedStrings['%webView_find_replace_structureProtectedMarkerTooltip%']}
+                      </p>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              </TooltipProvider>
             </div>
           </>
         )}

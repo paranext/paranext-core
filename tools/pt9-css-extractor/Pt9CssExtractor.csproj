@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <RootNamespace>Pt9CssExtractor</RootNamespace>
+    <AssemblyName>pt9-css-extractor</AssemblyName>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <!--
+      Where the Paratext 9 desktop install lives. Override on the command line:
+        dotnet build /p:ParatextInstallDir="D:\Paratext 9"
+      or set PARATEXT_INSTALL_DIR in the environment (resolved at runtime, too).
+    -->
+    <ParatextInstallDir Condition="'$(ParatextInstallDir)' == '' AND '$(PARATEXT_INSTALL_DIR)' != ''">$(PARATEXT_INSTALL_DIR)</ParatextInstallDir>
+    <ParatextInstallDir Condition="'$(ParatextInstallDir)' == ''">C:\Program Files\Paratext 9</ParatextInstallDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="ParatextData">
+      <HintPath>$(ParatextInstallDir)\ParatextData.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="ParatextInternalShared">
+      <HintPath>$(ParatextInstallDir)\ParatextInternalShared.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="PtxUtils">
+      <HintPath>$(ParatextInstallDir)\PtxUtils.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="VerifyParatextInstall" BeforeTargets="ResolveAssemblyReferences">
+    <Error
+      Condition="!Exists('$(ParatextInstallDir)\ParatextData.dll')"
+      Text="Cannot find ParatextData.dll under ParatextInstallDir='$(ParatextInstallDir)'. Install Paratext 9, or pass /p:ParatextInstallDir=&lt;path&gt; / set PARATEXT_INSTALL_DIR." />
+    <Error
+      Condition="!Exists('$(ParatextInstallDir)\ParatextInternalShared.dll')"
+      Text="Cannot find ParatextInternalShared.dll under ParatextInstallDir='$(ParatextInstallDir)'." />
+    <Error
+      Condition="!Exists('$(ParatextInstallDir)\PtxUtils.dll')"
+      Text="Cannot find PtxUtils.dll under ParatextInstallDir='$(ParatextInstallDir)'." />
+  </Target>
+
+</Project>

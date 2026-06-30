@@ -15,7 +15,6 @@ import {
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   selectProjectIdsForOpenMode,
   startDefaultProjectPicker,
-  isBlockMarker,
 } from './platform-scripture-editor.utils';
 
 /** Build a mock editor ref exposing spies for the methods the generators call. */
@@ -2358,34 +2357,8 @@ describe('syncOnProjectSwitch', () => {
 
 // #endregion syncOnProjectSwitch
 
-describe('isBlockMarker', () => {
-  it('returns true for paragraph-type markers', () => {
-    expect(isBlockMarker('p')).toBe(true);
-    expect(isBlockMarker('mt')).toBe(true);
-    // Poetry and section markers that are NOT in blockMarkerToBlockNames must still be recognized
-    // as block markers (the bug that allowed inserting them while structure was protected).
-    expect(isBlockMarker('q')).toBe(true);
-    expect(isBlockMarker('q1')).toBe(true);
-    expect(isBlockMarker('b')).toBe(true);
-    expect(isBlockMarker('s1')).toBe(true);
-    expect(isBlockMarker('pm')).toBe(true);
-  });
-
-  it('returns true for verse and chapter markers', () => {
-    // Verse is typed as a Character marker, so it is special-cased; chapter is already Paragraph.
-    expect(isBlockMarker('v')).toBe(true);
-    expect(isBlockMarker('c')).toBe(true);
-  });
-
-  it('returns false for inline (character/note) markers', () => {
-    expect(isBlockMarker('f')).toBe(false);
-    expect(isBlockMarker('x')).toBe(false);
-    expect(isBlockMarker('bd')).toBe(false);
-    expect(isBlockMarker('add')).toBe(false);
-    expect(isBlockMarker('')).toBe(false);
-    expect(isBlockMarker('notamarker')).toBe(false);
-  });
-});
+// isBlockMarker moved to platform-bible-utils (src/markers/usfm-markers.ts); its tests live in
+// lib/platform-bible-utils/src/markers/usfm-markers.test.ts.
 
 describe('generateParagraphMenuListItems', () => {
   it('when protected: action notifies and does not call formatPara', () => {

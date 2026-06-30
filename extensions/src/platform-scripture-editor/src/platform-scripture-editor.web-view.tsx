@@ -53,6 +53,10 @@ import {
   SelectMenuItemHandler,
   Spinner,
   TabToolbar,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
   UNDO_REDO_BUTTONS_STRING_KEYS,
   UndoRedoButtons,
   usePromise,
@@ -1784,41 +1788,69 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                 />
 
                 {blockMarker !== undefined && (
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        className="tw:h-8"
-                        aria-label="Paragraph Selection"
-                        title={
-                          isStructureProtected
-                            ? localizedStrings[
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        {/* When the button is disabled for structure protection it is not focusable,
+                            so make the wrapper focusable and named while disabled to keep the
+                            explanatory tooltip reachable for keyboard and screen-reader users. */}
+                        <div
+                          role={isStructureProtected ? 'group' : undefined}
+                          // Disabled buttons cannot host their own tooltip; the wrapper must be focusable to surface the structure-protection explanation to keyboard and screen-reader users
+                          // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+                          tabIndex={isStructureProtected ? 0 : undefined}
+                          aria-label={
+                            isStructureProtected
+                              ? localizedStrings[
+                                  '%webView_platformScriptureEditor_paragraphSelection_protectedTooltip%'
+                                ]
+                              : undefined
+                          }
+                        >
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                className="tw:h-8"
+                                aria-label="Paragraph Selection"
+                                title={isStructureProtected ? undefined : 'Paragraph Selection'}
+                                disabled={isStructureProtected}
+                                variant="outline"
+                              >
+                                {blockMarker ? `${blockMarker} - ` : ''}
+                                {blockMarker &&
+                                Object.entries(blockMarkerToBlockNames).some(
+                                  ([marker]) => marker === blockMarker,
+                                )
+                                  ? localizedStrings[blockMarkerToBlockNames[blockMarker]]
+                                  : localizedStrings['%paragraphMenu_misc_markerDescription%']}
+                                <ChevronDown />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="tw:p-0 tw:w-96">
+                              <MarkerMenu
+                                localizedStrings={localizedStrings}
+                                markerMenuItems={paragraphSwitcherMenuItems}
+                                searchPlaceholder={
+                                  localizedStrings['%markerMenu_searchPlaceholder_paragraph%']
+                                }
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                      </TooltipTrigger>
+                      {isStructureProtected && (
+                        <TooltipContent>
+                          <p className="tw:max-w-xs tw:whitespace-pre-line">
+                            {
+                              localizedStrings[
                                 '%webView_platformScriptureEditor_paragraphSelection_protectedTooltip%'
                               ]
-                            : 'Paragraph Selection'
-                        }
-                        disabled={isStructureProtected}
-                        variant="outline"
-                      >
-                        {blockMarker ? `${blockMarker} - ` : ''}
-                        {blockMarker &&
-                        Object.entries(blockMarkerToBlockNames).some(
-                          ([marker]) => marker === blockMarker,
-                        )
-                          ? localizedStrings[blockMarkerToBlockNames[blockMarker]]
-                          : localizedStrings['%paragraphMenu_misc_markerDescription%']}
-                        <ChevronDown />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="tw:p-0 tw:w-96">
-                      <MarkerMenu
-                        localizedStrings={localizedStrings}
-                        markerMenuItems={paragraphSwitcherMenuItems}
-                        searchPlaceholder={
-                          localizedStrings['%markerMenu_searchPlaceholder_paragraph%']
-                        }
-                      />
-                    </PopoverContent>
-                  </Popover>
+                            }
+                          </p>
+                        </TooltipContent>
+                      )}
+                    </Tooltip>
+                  </TooltipProvider>
                 )}
               </>
             )}
