@@ -224,3 +224,4 @@
 {"type":"repro","runId":"qs-2026-06-30","candidateId":"c5","result":"reproduced","evidenceRef":"evidence/before-PT-3880-red.txt","date":"2026-06-30"}
 {"type":"fix","runId":"qs-2026-06-30","candidateId":"c5","result":"pr_opened","prNumber":2479,"prUrl":"https://github.com/paranext/paranext-core/pull/2479","branch":"fix/PT-3880-resource-insert-menus","date":"2026-06-30"}
 {"type":"pr_outcome","prNumber":2479,"outcome":"open","checkedDate":"2026-06-30","date":"2026-06-30"}
+{"type":"backlog","candidateId":"c5","dedupKey":"jira:PT-3880","status":"resolved","reason":"pr_opened #2479","date":"2026-06-30"}
