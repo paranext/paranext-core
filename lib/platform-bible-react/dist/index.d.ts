@@ -766,6 +766,8 @@ export declare const FOOTNOTE_EDITOR_STRING_KEYS: readonly [
 	"%markerMenu_disallowed_label%",
 	"%markerMenu_noResults%",
 	"%markerMenu_searchPlaceholder%",
+	"%markerMenu_searchPlaceholder_insert%",
+	"%markerMenu_searchPlaceholder_paragraph%",
 	...`%${string}%`[],
 	"%footnoteEditor_callerDropdown_item_custom%",
 	"%footnoteEditor_callerDropdown_item_generated%",
@@ -1034,7 +1036,7 @@ export declare const inventoryCountColumn: (countLabel: string) => ColumnDef<Inv
  */
 export declare const inventoryStatusColumn: (statusLabel: string, approvedItems: string[], onApprovedItemsChange: (items: string[]) => void, unapprovedItems: string[], onUnapprovedItemsChange: (items: string[]) => void) => ColumnDef<InventoryTableData>;
 /**
- * Object containing all keys used for localization in the FootnoteEditor component. If you're using
+ * Object containing all keys used for localization in the MarkerMenu component. If you're using
  * this component in an extension, you can pass it into the useLocalizedStrings hook to easily
  * obtain the localized strings and pass them into the localizedStrings prop of this component
  */
@@ -1042,7 +1044,9 @@ export declare const MARKER_MENU_STRING_KEYS: readonly [
 	"%markerMenu_deprecated_label%",
 	"%markerMenu_disallowed_label%",
 	"%markerMenu_noResults%",
-	"%markerMenu_searchPlaceholder%"
+	"%markerMenu_searchPlaceholder%",
+	"%markerMenu_searchPlaceholder_insert%",
+	"%markerMenu_searchPlaceholder_paragraph%"
 ];
 export type MarkerMenuLocalizedStrings = {
 	[localizedKey in (typeof MARKER_MENU_STRING_KEYS)[number]]?: string;
@@ -1081,9 +1085,14 @@ export interface MarkerMenuProps {
 	markerMenuItems: MarkerMenuItem[];
 	/** Optional ref for the command search input to be able to focus it manually */
 	searchRef?: React$1.LegacyRef<HTMLInputElement>;
+	/**
+	 * Optional placeholder text for the search input. When provided, overrides the default
+	 * `%markerMenu_searchPlaceholder%` localized string.
+	 */
+	searchPlaceholder?: string;
 }
 /** Marker menu component to render the list of markers and a few commands in the scripture editor */
-export declare function MarkerMenu({ localizedStrings, markerMenuItems, searchRef }: MarkerMenuProps): import("react/jsx-runtime").JSX.Element;
+export declare function MarkerMenu({ localizedStrings, markerMenuItems, searchRef, searchPlaceholder, }: MarkerMenuProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Callback function that is invoked when a user selects a menu item. Receives the full
  * `MenuItemContainingCommand` object as an argument.
@@ -1100,7 +1109,6 @@ export declare const RESOURCE_PICKER_DIALOG_STRING_KEYS: readonly [
 	"%resourcePicker_section_already_selected%",
 	"%resourcePicker_section_installed%",
 	"%resourcePicker_section_available_to_download%",
-	"%resourcePicker_button_use%",
 	"%resourcePicker_no_results%",
 	"%resourcePicker_search_placeholder%",
 	"%resourcePicker_language_filter_any%",
@@ -1126,7 +1134,7 @@ export interface ResourcePickerDialogProps {
 	selectedResourceIds?: string[];
 	/** Localized strings — use RESOURCE_PICKER_DIALOG_STRING_KEYS with useLocalizedStrings */
 	localizedStrings: ResourcePickerDialogLocalizedStrings;
-	/** Called when the user clicks "Use" on a resource entry */
+	/** Called when the user clicks a resource row to select it */
 	onSelect: (resource: DblResourceData) => void;
 }
 /**

@@ -53,6 +53,10 @@ import {
   SelectMenuItemHandler,
   Spinner,
   TabToolbar,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
   UNDO_REDO_BUTTONS_STRING_KEYS,
   UndoRedoButtons,
   usePromise,
@@ -84,6 +88,12 @@ import { PropsWithChildren, useCallback, useEffect, useMemo, useRef, useState } 
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
 import { ChevronDown } from 'lucide-react';
 import { useAnnotationStyleSheet } from './annotations/use-annotation-stylesheet.hook';
+import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
+import {
+  StructureProtectionButton,
+  STRUCTURE_PROTECTION_BUTTON_STRING_KEYS,
+} from './structure-protection-button.component';
+import { useStructureProtectionState } from './use-structure-protection-state.hook';
 import {
   getLocalizeKeysFromDecorations,
   mergeDecorations,
@@ -128,6 +138,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...FOOTNOTE_EDITOR_STRING_KEYS,
   ...UNDO_REDO_BUTTONS_STRING_KEYS,
   ...MARKER_MENU_STRING_KEYS,
+  ...STRUCTURE_PROTECTION_BUTTON_STRING_KEYS,
   ...Object.values(blockMarkerToBlockNames),
   ...Object.entries(usfmMarkers)
     .map((item) => item[1].description)
@@ -141,6 +152,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_platformScriptureEditor_error_permissions_format%',
   '%webView_platformScriptureEditor_error_noTextSelected%',
   '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
+  '%webView_platformScriptureEditor_paragraphSelection_protectedTooltip%',
   '%webView_platformScriptureEditor_insertCommentAtSelection%',
 ];
 
@@ -457,6 +469,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [isReadOnly, viewType],
   );
 
+  // Effective structure-protection state for this project/user, used to gate keyboard edits to
+  // paragraph/verse markers in the editor (passed to EditorOptions.isStructureProtected below). The
+  // toolbar StructureProtectionButton subscribes to the same state independently.
+  const { isStructureProtected } = useStructureProtectionState(projectId);
+
   // Get the updated title. Note this is NO_UPDATE_TITLE if no update is needed
   const [newTitleIfUpdated] = usePromise(
     useCallback(async () => {
@@ -537,9 +554,24 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [],
   );
 
+  const notifyStructureProtected = useCallback(
+    () =>
+      papi.notifications.send({
+        message: '%webView_platformScriptureEditor_error_structureProtected%',
+        severity: 'warning',
+      }),
+    [],
+  );
+
   const paragraphSwitcherMenuItems = useMemo(
-    () => generateParagraphMenuListItems(editorRef, localizedStrings),
-    [localizedStrings],
+    () =>
+      generateParagraphMenuListItems(
+        editorRef,
+        localizedStrings,
+        isStructureProtected,
+        notifyStructureProtected,
+      ),
+    [localizedStrings, isStructureProtected, notifyStructureProtected],
   );
 
   const nextSelectionRange = useRef<SelectionRange | undefined>(undefined);
@@ -677,6 +709,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const options = useMemo<EditorOptions>(
     () => ({
       isReadonly: isReadOnlyEffective,
+      isStructureProtected,
       hasSpellCheck: false,
       nodes: nodeOptions,
       textDirection: textDirectionEffective,
@@ -693,6 +726,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }),
     [
       isReadOnlyEffective,
+      isStructureProtected,
       canUserCreateComments,
       textDirectionEffective,
       nodeOptions,
@@ -989,9 +1023,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         editorRef,
         () => setShowMarkersMenu(false),
         localizedStrings,
+        isStructureProtected,
+        notifyStructureProtected,
         contextMarker,
       ),
-    [contextMarker, localizedStrings],
+    [contextMarker, localizedStrings, isStructureProtected, notifyStructureProtected],
   );
 
   // When the marker menu closes, should refocus the editor
@@ -1085,6 +1121,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   // Apply annotation styles from extensions
   useAnnotationStyleSheet();
+
+  // Load PT9-derived marker styles when the open project is a supported commentary
+  useCommentaryMarkerStyles(projectId);
 
   const [decorationsLocalizedStringsBase] = useLocalizedStrings(
     useMemo(() => getLocalizeKeysFromDecorations(decorations), [decorations]),
@@ -1749,37 +1788,84 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                 />
 
                 {blockMarker !== undefined && (
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        className="tw:h-8"
-                        aria-label="Paragraph Selection"
-                        title="Paragraph Selection"
-                        variant="outline"
-                      >
-                        {blockMarker ? `${blockMarker} - ` : ''}
-                        {blockMarker &&
-                        Object.entries(blockMarkerToBlockNames).some(
-                          ([marker]) => marker === blockMarker,
-                        )
-                          ? localizedStrings[blockMarkerToBlockNames[blockMarker]]
-                          : localizedStrings['%paragraphMenu_misc_markerDescription%']}
-                        <ChevronDown />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="tw:p-0 tw:w-96">
-                      <MarkerMenu
-                        localizedStrings={localizedStrings}
-                        markerMenuItems={paragraphSwitcherMenuItems}
-                      />
-                    </PopoverContent>
-                  </Popover>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        {/* When the button is disabled for structure protection it is not focusable,
+                            so make the wrapper focusable and named while disabled to keep the
+                            explanatory tooltip reachable for keyboard and screen-reader users. */}
+                        <div
+                          role={isStructureProtected ? 'group' : undefined}
+                          // Disabled buttons cannot host their own tooltip; the wrapper must be focusable to surface the structure-protection explanation to keyboard and screen-reader users
+                          // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+                          tabIndex={isStructureProtected ? 0 : undefined}
+                          aria-label={
+                            isStructureProtected
+                              ? localizedStrings[
+                                  '%webView_platformScriptureEditor_paragraphSelection_protectedTooltip%'
+                                ]
+                              : undefined
+                          }
+                        >
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                className="tw:h-8"
+                                aria-label="Paragraph Selection"
+                                title={isStructureProtected ? undefined : 'Paragraph Selection'}
+                                disabled={isStructureProtected}
+                                variant="outline"
+                              >
+                                {blockMarker ? `${blockMarker} - ` : ''}
+                                {blockMarker &&
+                                Object.entries(blockMarkerToBlockNames).some(
+                                  ([marker]) => marker === blockMarker,
+                                )
+                                  ? localizedStrings[blockMarkerToBlockNames[blockMarker]]
+                                  : localizedStrings['%paragraphMenu_misc_markerDescription%']}
+                                <ChevronDown />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="tw:p-0 tw:w-96">
+                              <MarkerMenu
+                                localizedStrings={localizedStrings}
+                                markerMenuItems={paragraphSwitcherMenuItems}
+                                searchPlaceholder={
+                                  localizedStrings['%markerMenu_searchPlaceholder_paragraph%']
+                                }
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                      </TooltipTrigger>
+                      {isStructureProtected && (
+                        <TooltipContent>
+                          <p className="tw:max-w-xs tw:whitespace-pre-line">
+                            {
+                              localizedStrings[
+                                '%webView_platformScriptureEditor_paragraphSelection_protectedTooltip%'
+                              ]
+                            }
+                          </p>
+                        </TooltipContent>
+                      )}
+                    </Tooltip>
+                  </TooltipProvider>
                 )}
               </>
             )}
           </>
         }
-        endAreaChildren={scrollGroupSelector}
+        endAreaChildren={
+          <>
+            <StructureProtectionButton
+              projectId={projectId}
+              localizedStrings={localizedStrings}
+              className="tw:h-8"
+            />
+            {scrollGroupSelector}
+          </>
+        }
       />
       {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state */}
       <InPortal node={editorPortalNode}>
@@ -1803,7 +1889,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             </div>
           ),
           <div className="tw:flex tw:flex-col tw:h-full">
-            <div className="tw:flex-grow tw:min-h-0 tw:m-1 tw:flex tw:flex-col tw:gap-1">
+            <div className="tw:grow tw:min-h-0 tw:m-1 tw:flex tw:flex-col tw:gap-1">
               {Object.entries(decorations.headers ?? {}).map(([id, header]) => (
                 // Headers
                 <Alert
@@ -1883,6 +1969,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             markerMenuItems={inlineMarkerMenuItems}
             localizedStrings={localizedStrings}
             searchRef={markerMenuSearchRef}
+            searchPlaceholder={localizedStrings['%markerMenu_searchPlaceholder_insert%']}
           />
         </PopoverContent>
       </Popover>

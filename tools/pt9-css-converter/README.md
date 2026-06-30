@@ -1,0 +1,52 @@
+# pt9-css-converter
+
+Converts the flat per-marker CSS that PT9 ships (e.g. `.usfm_id { font-size: 100%; }`) into the view-mode-bucketed SCSS the platform scripture editor consumes.
+
+It is the build-time partner to [`tools/pt9-css-extractor`](../pt9-css-extractor/README.md), which produces the raw input CSS by running PT9's `CSSCreator.CreateDefaultCSS` against a project's `custom.sty`.
+
+## Buckets
+
+The classifier is a **closed list of 20 properties** drawn from the Handbook Marker Styling design doc §3.3. Each declaration in the input is routed to one of three view-mode buckets so the editor can toggle them independently; everything outside the closed list falls through to typography and is logged in the warning header so a reviewer can spot misclassifications.
+
+| Bucket                           | Selector                                                                                | Properties                                                                                                                 |
+| -------------------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `formatted-font`                 | `.formatted-font .usfm_<marker>`                                                        | `color`, `font-family`, `font-size`, `font-style`, `font-variant`, `font-weight`, `text-decoration`, `vertical-align`      |
+| `text-spacing` (non-directional) | `.text-spacing .usfm_<marker>`                                                          | `line-height`, `margin-top`, `margin-bottom`, `padding-top`, `padding-bottom`, `text-align`, `text-indent`, `white-space`  |
+| `text-spacing[dir]`              | `.text-spacing[dir='ltr'] .usfm_<marker>` and `.text-spacing[dir='rtl'] .usfm_<marker>` | `margin-left`, `margin-right`, `padding-left`, `padding-right`. Emitted twice — the RTL block swaps `*-left` ↔ `*-right`. |
+
+`@font-face` at-rules are stripped (the editor handles fonts elsewhere). Table-marker selectors matching `^(tr|tc\d+|th\d+|tcr\d+|tcc\d+|thr\d+|thc\d+)$` are skipped — the editor doesn't render PT9's table model.
+
+## Running
+
+From the repo root:
+
+```bash
+npx tsx tools/pt9-css-converter/src/cli.ts \
+  --in data/pt9-css/hbkeng.css \
+  --out extensions/src/platform-scripture-editor/src/marker-styles/hbkeng.scss \
+  --base extensions/src/platform-scripture-editor/src/_usj-nodes.scss
+```
+
+`--base` is optional. When supplied, the converter scans the file for any selectors matching `.usfm_<marker>` and, for each input marker that also appears in the base, emits a "Markers also styled in base" warning in the header so reviewers can spot cascade interactions.
+
+## Auditing
+
+The committed `extensions/src/platform-scripture-editor/src/marker-styles/{hbkeng,tnn,tnd}.scss` files are generated from the committed `data/pt9-css/{hbkeng,tnn,tnd}.css` snapshots. The audit re-runs the conversion and checks the result still matches what is committed — catching a hand-edit of a generated file, or a converter change that silently alters output, without needing PT9 Desktop or the C# extractor.
+
+From the repo root:
+
+```bash
+npx tsx tools/pt9-css-converter/src/audit-cli.ts
+```
+
+It prints a line per commentary and exits non-zero if any `.scss` has drifted from its source `.css`. The `Source:` and `Generated at:` header lines are re-derived from each committed file, so only a genuine difference in the rendered rules (or the warning summary) is reported as drift — the timestamp never causes a false positive.
+
+**Scope:** this audits the **converter** half of the pipeline (does the committed SCSS still follow from the committed CSS?). It does **not** verify the upstream extraction — regenerating the source `.css` means running [`tools/pt9-css-extractor`](../pt9-css-extractor/README.md) against the resources in PT9 Desktop.
+
+## Testing
+
+Tests are picked up by the root vitest config (`npm run test:core`). Run just this tool's tests with:
+
+```bash
+npx vitest run tools/pt9-css-converter
+```

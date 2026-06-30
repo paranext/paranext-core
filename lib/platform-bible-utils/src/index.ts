@@ -52,7 +52,7 @@ export {
   aggregateUnsubscriberAsyncs,
 } from './lifetime-management/unsubscriber';
 export { CHAPTER_TYPE, VERSE_TYPE } from './scripture/usj-reader-writer.model';
-export { usfmMarkers } from './markers/usfm-markers';
+export { usfmMarkers, isBlockMarker } from './markers/usfm-markers';
 
 // Enums
 export { Section } from './scripture/scripture-util';
@@ -130,8 +130,10 @@ export { default as formatBytes } from './number-utils';
 export { default as ensureArray } from './array-util';
 export { formatTimeSpan, formatRelativeDate } from './date-time-format-util';
 export { MODIFIER_KEYS } from './keyboard-util';
+export { computeEffectiveStructureProtection } from './structure-protection.util';
 
 // Types
+export type { EffectiveStructureProtectionInputs } from './structure-protection.util';
 export type { DeepPartial, KebabCase, Prettify, ReplaceType, UnionToIntersection } from './util';
 export type {
   Dispose,
@@ -265,8 +267,7 @@ export type {
   LegacyComment,
   LegacyCommentThread,
 } from './comments.types';
-export type {
-  MarkerCategoryType as CategoryType,
-  Marker,
-  MarkerType,
-} from './markers/usfm-marker.model';
+export type { MarkerCategoryType as CategoryType, Marker } from './markers/usfm-marker.model';
+// MarkerType is a (string) enum used as a runtime value (e.g. comparing `marker.type ===
+// MarkerType.Paragraph`), so it must be a value export, not a type-only export.
+export { MarkerType } from './markers/usfm-marker.model';

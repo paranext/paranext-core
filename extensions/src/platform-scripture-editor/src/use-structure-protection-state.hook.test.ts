@@ -9,6 +9,12 @@ import type {
 import { useProjectSetting, useProjectDataProvider, useSetting } from '@papi/frontend/react';
 import { useStructureProtectionState } from './use-structure-protection-state.hook';
 
+const { mockLoggerError } = vi.hoisted(() => ({ mockLoggerError: vi.fn() }));
+
+vi.mock('@papi/frontend', () => ({
+  logger: { error: mockLoggerError },
+}));
+
 vi.mock('@papi/frontend/react', () => ({
   useProjectSetting: vi.fn(),
   useProjectDataProvider: vi.fn(),
@@ -126,62 +132,62 @@ describe('useStructureProtectionState — truth table', () => {
     vi.clearAllMocks();
   });
 
-  it('row 1: project unset, user unlocked → isProtected=false (user setting wins)', async () => {
+  it('row 1: project unset, user unlocked → isStructureProtected=false (user setting wins)', async () => {
     setup({ adminSetting: false, userSetting: false, interfaceMode: 'simple', canWrite: false });
     const { result } = renderHook(() => useStructureProtectionState('proj-1'));
     await act(async () => {});
-    expect(result.current.isProtected).toBe(false);
-    expect(result.current.isAdminProtected).toBe(false);
+    expect(result.current.isStructureProtected).toBe(false);
+    expect(result.current.isProtectedByAdmin).toBe(false);
   });
 
-  it('row 2: project unset, user locked → isProtected=true (user setting wins)', async () => {
+  it('row 2: project unset, user locked → isStructureProtected=true (user setting wins)', async () => {
     setup({ adminSetting: false, userSetting: true, interfaceMode: 'simple', canWrite: false });
     const { result } = renderHook(() => useStructureProtectionState('proj-1'));
     await act(async () => {});
-    expect(result.current.isProtected).toBe(true);
-    expect(result.current.isAdminProtected).toBe(false);
+    expect(result.current.isStructureProtected).toBe(true);
+    expect(result.current.isProtectedByAdmin).toBe(false);
   });
 
-  it('row 3: project unset, admin role, user unlocked → isProtected=false (user setting wins)', async () => {
+  it('row 3: project unset, admin role, user unlocked → isStructureProtected=false (user setting wins)', async () => {
     setup({ adminSetting: false, userSetting: false, interfaceMode: 'simple', canWrite: true });
     const { result } = renderHook(() => useStructureProtectionState('proj-1'));
     await act(async () => {});
-    expect(result.current.isProtected).toBe(false);
+    expect(result.current.isStructureProtected).toBe(false);
     expect(result.current.canAdminToggle).toBe(true);
   });
 
-  it('row 4: project unset, admin role, user locked → isProtected=true (user setting wins)', async () => {
+  it('row 4: project unset, admin role, user locked → isStructureProtected=true (user setting wins)', async () => {
     setup({ adminSetting: false, userSetting: true, interfaceMode: 'simple', canWrite: true });
     const { result } = renderHook(() => useStructureProtectionState('proj-1'));
     await act(async () => {});
-    expect(result.current.isProtected).toBe(true);
+    expect(result.current.isStructureProtected).toBe(true);
     expect(result.current.canAdminToggle).toBe(true);
   });
 
-  it('row 5: project LOCKED, user role, any user setting → isProtected=true (project locks)', async () => {
+  it('row 5: project LOCKED, user role, any user setting → isStructureProtected=true (project locks)', async () => {
     setup({ adminSetting: true, userSetting: false, interfaceMode: 'simple', canWrite: false });
     const { result } = renderHook(() => useStructureProtectionState('proj-1'));
     await act(async () => {});
-    expect(result.current.isProtected).toBe(true);
-    expect(result.current.isAdminProtected).toBe(true);
+    expect(result.current.isStructureProtected).toBe(true);
+    expect(result.current.isProtectedByAdmin).toBe(true);
     expect(result.current.canAdminToggle).toBe(false);
   });
 
-  it('row 6: project LOCKED, admin role, user unlocked → isProtected=false (admin override)', async () => {
+  it('row 6: project LOCKED, admin role, user unlocked → isStructureProtected=false (admin override)', async () => {
     setup({ adminSetting: true, userSetting: false, interfaceMode: 'simple', canWrite: true });
     const { result } = renderHook(() => useStructureProtectionState('proj-1'));
     await act(async () => {});
-    expect(result.current.isProtected).toBe(false);
-    expect(result.current.isAdminProtected).toBe(true);
+    expect(result.current.isStructureProtected).toBe(false);
+    expect(result.current.isProtectedByAdmin).toBe(true);
     expect(result.current.canAdminToggle).toBe(true);
   });
 
-  it("row 7: project LOCKED, admin role, user locked → isProtected=true (admin's choice)", async () => {
+  it("row 7: project LOCKED, admin role, user locked → isStructureProtected=true (admin's choice)", async () => {
     setup({ adminSetting: true, userSetting: true, interfaceMode: 'simple', canWrite: true });
     const { result } = renderHook(() => useStructureProtectionState('proj-1'));
     await act(async () => {});
-    expect(result.current.isProtected).toBe(true);
-    expect(result.current.isAdminProtected).toBe(true);
+    expect(result.current.isStructureProtected).toBe(true);
+    expect(result.current.isProtectedByAdmin).toBe(true);
     expect(result.current.canAdminToggle).toBe(true);
   });
 });
@@ -223,7 +229,6 @@ describe('useStructureProtectionState — setters', () => {
   });
 
   it('setUserProtection swallows a rejected PDP setter (logs, does not throw)', async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     mockSetUserSetting.mockRejectedValueOnce(new Error('rpc failed'));
     setup({ adminSetting: false, userSetting: false, canWrite: false });
     const { result } = renderHook(() => useStructureProtectionState('proj-1'));
@@ -234,8 +239,7 @@ describe('useStructureProtectionState — setters', () => {
       await Promise.resolve();
     });
     expect(mockSetUserSetting).toHaveBeenCalledWith(true);
-    expect(consoleSpy).toHaveBeenCalled();
-    consoleSpy.mockRestore();
+    expect(mockLoggerError).toHaveBeenCalled();
   });
 });
 
@@ -274,14 +278,14 @@ describe('useStructureProtectionState — subscription lifecycle', () => {
     });
     await act(async () => {});
     expect(first.subscribe).toHaveBeenCalledTimes(1);
-    expect(result.current.isProtected).toBe(true);
+    expect(result.current.isStructureProtected).toBe(true);
 
     rerender({ id: 'proj-2' });
     await act(async () => {});
     // old subscription torn down, new one established, and the value reflects proj-2 (not stale proj-1)
     expect(first.unsubscribe).toHaveBeenCalledTimes(1);
     expect(second.subscribe).toHaveBeenCalledTimes(1);
-    expect(result.current.isProtected).toBe(false);
+    expect(result.current.isStructureProtected).toBe(false);
   });
 });
 
@@ -292,7 +296,7 @@ describe('useStructureProtectionState — edge cases', () => {
 
   it('PlatformError delivered to the subscribe callback is mapped to undefined (mode default applies)', async () => {
     // power-mode default is unlocked; if the error object were stored instead of mapped to undefined
-    // it would be truthy and wrongly force isProtected=true
+    // it would be truthy and wrongly force isStructureProtected=true
     setup({
       adminSetting: false,
       userSetting: makePlatformError(),
@@ -301,7 +305,7 @@ describe('useStructureProtectionState — edge cases', () => {
     });
     const { result } = renderHook(() => useStructureProtectionState('proj-1'));
     await act(async () => {});
-    expect(result.current.isProtected).toBe(false);
+    expect(result.current.isStructureProtected).toBe(false);
   });
 
   it('PlatformError on admin setting is treated as false and surfaced via adminSettingError', async () => {
@@ -309,8 +313,8 @@ describe('useStructureProtectionState — edge cases', () => {
     setup({ adminSetting: adminError, userSetting: false, canWrite: false });
     const { result } = renderHook(() => useStructureProtectionState('proj-1'));
     await act(async () => {});
-    expect(result.current.isAdminProtected).toBe(false);
-    expect(result.current.isProtected).toBe(false);
+    expect(result.current.isProtectedByAdmin).toBe(false);
+    expect(result.current.isStructureProtected).toBe(false);
     expect(result.current.adminSettingError).toBe(adminError);
   });
 
@@ -321,7 +325,7 @@ describe('useStructureProtectionState — edge cases', () => {
     expect(result.current.adminSettingError).toBeUndefined();
   });
 
-  it('user setting undefined in simple mode defaults to locked (isProtected=true)', async () => {
+  it('user setting undefined in simple mode defaults to locked (isStructureProtected=true)', async () => {
     setup({
       adminSetting: false,
       userSetting: undefined,
@@ -330,14 +334,14 @@ describe('useStructureProtectionState — edge cases', () => {
     });
     const { result } = renderHook(() => useStructureProtectionState('proj-1'));
     await act(async () => {});
-    expect(result.current.isProtected).toBe(true);
+    expect(result.current.isStructureProtected).toBe(true);
   });
 
-  it('user setting undefined in power mode defaults to unlocked (isProtected=false)', async () => {
+  it('user setting undefined in power mode defaults to unlocked (isStructureProtected=false)', async () => {
     setup({ adminSetting: false, userSetting: undefined, interfaceMode: 'power', canWrite: false });
     const { result } = renderHook(() => useStructureProtectionState('proj-1'));
     await act(async () => {});
-    expect(result.current.isProtected).toBe(false);
+    expect(result.current.isStructureProtected).toBe(false);
   });
 
   it('projectId undefined → canAdminToggle=false and mode-aware default applies', async () => {
@@ -347,10 +351,54 @@ describe('useStructureProtectionState — edge cases', () => {
       interfaceMode: 'simple',
       canWrite: false,
     });
-    mockUseProjectDataProvider.mockReturnValue(undefined);
+    mockUseProjectDataProvider.mockImplementation(() => undefined);
     const { result } = renderHook(() => useStructureProtectionState(undefined));
     await act(async () => {});
     expect(result.current.canAdminToggle).toBe(false);
-    expect(result.current.isProtected).toBe(true); // simple mode default
+    expect(result.current.isStructureProtected).toBe(true); // simple mode default
+  });
+});
+
+describe('useStructureProtectionState — power mode (feature inactive)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('forces the feature off even when admin-locked and the user setting is true', async () => {
+    setup({ adminSetting: true, userSetting: true, interfaceMode: 'power', canWrite: false });
+    const { result } = renderHook(() => useStructureProtectionState('proj-1'));
+    await act(async () => {});
+    expect(result.current.isProtectionActive).toBe(false);
+    expect(result.current.isStructureProtected).toBe(false);
+    expect(result.current.isProtectedByAdmin).toBe(false);
+    expect(result.current.canAdminToggle).toBe(false);
+    expect(result.current.adminSettingError).toBeUndefined();
+  });
+
+  it('setAdminProtection is a no-op in power mode even for an admin', async () => {
+    setup({ adminSetting: false, userSetting: false, interfaceMode: 'power', canWrite: true });
+    const { result } = renderHook(() => useStructureProtectionState('proj-1'));
+    await act(async () => {});
+    act(() => {
+      result.current.setAdminProtection(true);
+    });
+    expect(mockSetAdminSetting).not.toHaveBeenCalled();
+  });
+
+  it('setUserProtection is a no-op in power mode', async () => {
+    setup({ adminSetting: false, userSetting: false, interfaceMode: 'power', canWrite: false });
+    const { result } = renderHook(() => useStructureProtectionState('proj-1'));
+    await act(async () => {});
+    act(() => {
+      result.current.setUserProtection(true);
+    });
+    expect(mockSetUserSetting).not.toHaveBeenCalled();
+  });
+
+  it('isProtectionActive is true in simple mode', async () => {
+    setup({ adminSetting: false, userSetting: false, interfaceMode: 'simple', canWrite: false });
+    const { result } = renderHook(() => useStructureProtectionState('proj-1'));
+    await act(async () => {});
+    expect(result.current.isProtectionActive).toBe(true);
   });
 });

@@ -1,6 +1,4 @@
 import { DialogHeader, DialogTitle } from '@/components/shadcn-ui/dialog';
-import { Button } from '@/components/shadcn-ui/button';
-import { Badge } from '@/components/shadcn-ui/badge';
 import { Label } from '@/components/shadcn-ui/label';
 import { Table, TableBody, TableCell, TableRow } from '@/components/shadcn-ui/table';
 import {
@@ -9,6 +7,7 @@ import {
 } from '@/components/advanced/multi-select-combo-box.component';
 import { SearchBar } from '@/components/basics/search-bar.component';
 import { DblResourceData, ResourceType, formatReplacementString } from 'platform-bible-utils';
+import { Check } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Spinner } from '@/components/basics/spinner.component';
 import { useProgressiveList } from './resource-picker-dialog.utils';
@@ -22,7 +21,6 @@ export const RESOURCE_PICKER_DIALOG_STRING_KEYS = Object.freeze([
   '%resourcePicker_section_already_selected%',
   '%resourcePicker_section_installed%',
   '%resourcePicker_section_available_to_download%',
-  '%resourcePicker_button_use%',
   '%resourcePicker_no_results%',
   '%resourcePicker_search_placeholder%',
   '%resourcePicker_language_filter_any%',
@@ -55,57 +53,71 @@ export interface ResourcePickerDialogProps {
   selectedResourceIds?: string[];
   /** Localized strings — use RESOURCE_PICKER_DIALOG_STRING_KEYS with useLocalizedStrings */
   localizedStrings: ResourcePickerDialogLocalizedStrings;
-  /** Called when the user clicks "Use" on a resource entry */
+  /** Called when the user clicks a resource row to select it */
   onSelect: (resource: DblResourceData) => void;
 }
 
 /**
  * Component to list filtered resources entries for one of the resource picker sections. Optionally
- * shows a `Use` button when both `useLabel` and `onSelect` are not undefined for the cases that the
- * resource can be picked and is not already picked.
+ * allows clicking and selecting when `onSelect` is not undefined for the cases that the resource
+ * can be picked and is not already picked.
  */
 function ResourceSection({
   label,
   resources,
-  useLabel,
   onSelect,
 }: {
   label: string;
   resources: DblResourceData[];
-  useLabel?: string;
   onSelect?: (resource: DblResourceData) => void;
 }) {
   if (resources.length === 0) return undefined;
   return (
     <>
-      <Label className="tw:text-xs tw:uppercase tw:tracking-wider tw:text-muted-foreground">
-        {label}
-      </Label>
-      <Table>
-        <TableBody>
-          {resources.map((r) => (
-            <TableRow key={r.dblEntryUid}>
-              <TableCell className="tw:border-0">
-                <div>
-                  <span className="tw:font-medium">{r.fullName}</span>
-                  {' ('}
-                  <span>{r.displayName}</span>)
-                  <Badge variant="secondary" className="tw:ml-2">
-                    {r.bestLanguageName}
-                  </Badge>
-                </div>
-              </TableCell>
-              {onSelect && useLabel && (
-                <TableCell className="tw:border-0 tw:text-right">
-                  <Button variant="outline" onClick={() => onSelect(r)}>
-                    {useLabel}
-                  </Button>
-                </TableCell>
-              )}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+      <TableRow className="tw:border-0 tw:hover:bg-transparent">
+        <TableCell colSpan={4} className="tw:border-0 tw:pt-4 tw:pb-0">
+          <Label className="tw:text-xs tw:tracking-wider tw:text-muted-foreground tw:uppercase">
+            {label}
+          </Label>
+        </TableCell>
+      </TableRow>
+      {resources.map((r) => (
+        <TableRow
+          key={r.dblEntryUid}
+          className={
+            onSelect ? 'tw:cursor-pointer tw:border-0' : 'tw:pointer-events-none tw:border-0'
+          }
+          role={onSelect ? 'button' : undefined}
+          aria-label={onSelect ? r.displayName : undefined}
+          onClick={onSelect ? () => onSelect(r) : undefined}
+          onKeyDown={
+            onSelect
+              ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onSelect(r);
+                  }
+                }
+              : undefined
+          }
+        >
+          <TableCell className="tw:w-5 tw:border-0 tw:py-1 tw:pr-1">
+            {!onSelect && (
+              <>
+                <Check className="tw:h-3.5 tw:w-3.5" aria-hidden />
+                <span className="tw:sr-only">{label}</span>
+              </>
+            )}
+          </TableCell>
+          <TableCell className="tw:border-0 tw:py-1 tw:pr-2 tw:font-normal tw:whitespace-nowrap">
+            {r.displayName}
+          </TableCell>
+          <TableCell className="tw:border-0 tw:py-1 tw:pl-2">{r.fullName}</TableCell>
+          <TableCell className="tw:border-0 tw:py-1 tw:pl-4 tw:text-right tw:text-muted-foreground">
+            {r.bestLanguageName}
+          </TableCell>
+        </TableRow>
+      ))}
     </>
   );
 }
@@ -200,7 +212,6 @@ export default function ResourcePickerDialog({
     localizedStrings,
     '%resourcePicker_section_available_to_download%',
   );
-  const useLabel = localizeString(localizedStrings, '%resourcePicker_button_use%');
   const noResultsText = localizeString(localizedStrings, '%resourcePicker_no_results%');
   const showingCountTemplate = localizeString(localizedStrings, '%resourcePicker_showing_count%');
 
@@ -251,31 +262,33 @@ export default function ResourcePickerDialog({
         </p>
       )}
       <div className="tw:flex-1 tw:overflow-y-auto tw:px-4 tw:pb-4">
-        {hasNoResults && !isResourcesLoading && (
-          <p className="tw:py-8 tw:text-center tw:text-muted-foreground">{noResultsText}</p>
-        )}
         {isResourcesLoading && (
           <p className="tw:py-8 tw:text-center">
             <Spinner />
           </p>
         )}
+        {hasNoResults && !isResourcesLoading && (
+          <p className="tw:py-8 tw:text-center tw:text-muted-foreground">{noResultsText}</p>
+        )}
         {!hasNoResults && !isResourcesLoading && (
-          <>
-            <ResourceSection label={alreadySelectedLabel} resources={alreadySelected} />
-            <ResourceSection
-              label={installedLabel}
-              resources={installed}
-              useLabel={useLabel}
-              onSelect={onSelect}
-            />
-            <ResourceSection
-              label={toDownloadLabel}
-              resources={visibleToDownload}
-              useLabel={useLabel}
-              onSelect={onSelect}
-            />
-            {hasMore && <div ref={sentinelRef} aria-hidden />}
-          </>
+          <Table>
+            <TableBody>
+              <ResourceSection label={alreadySelectedLabel} resources={alreadySelected} />
+              <ResourceSection label={installedLabel} resources={installed} onSelect={onSelect} />
+              <ResourceSection
+                label={toDownloadLabel}
+                resources={visibleToDownload}
+                onSelect={onSelect}
+              />
+              {hasMore && (
+                <TableRow className="tw:border-0">
+                  <TableCell colSpan={4} className="tw:border-0 tw:p-0">
+                    <div ref={sentinelRef} aria-hidden />
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
         )}
       </div>
     </>

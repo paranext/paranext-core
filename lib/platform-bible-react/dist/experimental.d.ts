@@ -59,7 +59,7 @@ export type ProjectSelectorProject = {
 	 * Locale-stable versification identifier (e.g. the numeric `ScrVersType` enum as a string). Used
 	 * by the selector's optional versification-grouping mode to bucket projects by canon, and to pin
 	 * the consumer-supplied "priority" versification group to the top. Pair with `versificationName`
-	 * for display (Sebastian UX new-requirement 3, 2026-06-12).
+	 * for display.
 	 */
 	versificationId?: string;
 	/**
@@ -117,8 +117,8 @@ export type ProjectSelectorLocalizedStrings = {
 	otherProjectsSectionHeading?: string;
 	/**
 	 * Section heading rendered for the "Unknown versification" bucket in versification-grouping mode
-	 * (Sebastian UX new-requirement 3, 2026-06-12) — covers projects whose versification can't be
-	 * resolved at load time. Defaults to `"Unknown versification"`.
+	 * — covers projects whose versification can't be resolved at load time. Defaults to `"Unknown
+	 * versification"`.
 	 */
 	versificationUnknownSectionHeading?: string;
 	/**
@@ -165,9 +165,9 @@ type CommonProps = {
 	/**
 	 * When true, rows are grouped by `versificationId` (with the `priorityVersificationId` bucket
 	 * pinned to the top). The "Group by open tabs" toggle is hidden — the two grouping modes are
-	 * mutually exclusive in the same picker. Sebastian UX new-requirement 3 (2026-06-12). When
-	 * `groupByVersification` is enabled, the consumer should ensure each
-	 * {@link ProjectSelectorProject} carries `versificationId` and `versificationName`.
+	 * mutually exclusive in the same picker. When `groupByVersification` is enabled, the consumer
+	 * should ensure each {@link ProjectSelectorProject} carries `versificationId` and
+	 * `versificationName`.
 	 */
 	groupByVersification?: boolean;
 	/**

@@ -1,18 +1,28 @@
 import { useCallback, useEffect, useState } from 'react';
-import { isPlatformError, type PlatformError } from 'platform-bible-utils';
+import {
+  computeEffectiveStructureProtection,
+  isPlatformError,
+  type PlatformError,
+} from 'platform-bible-utils';
+import { logger } from '@papi/frontend';
 import { useProjectDataProvider, useProjectSetting, useSetting } from '@papi/frontend/react';
 
 /** Return type of {@link useStructureProtectionState}. */
 export type StructureProtectionState = {
   /** Effective enforcement state — what the editor uses to gate structure changes */
-  isProtected: boolean;
+  isStructureProtected: boolean;
+  /**
+   * Whether the structure-protection feature applies in the current interface mode. `false` in
+   * power mode, where the feature is fully inactive (no enforcement, no toggles).
+   */
+  isProtectionActive: boolean;
   /** Raw project setting — `true` means the admin has set a structure lock */
-  isAdminProtected: boolean;
+  isProtectedByAdmin: boolean;
   /**
    * Set when the admin (project-level) `structureProtected` setting failed to load (e.g. a
-   * transient connection error). While this is set, `isProtected` and `isAdminProtected` fall back
-   * to treating the admin layer as unset — callers should surface an error/disabled state rather
-   * than trusting the protection values.
+   * transient connection error). While this is set, `isStructureProtected` and `isProtectedByAdmin`
+   * fall back to treating the admin layer as unset — callers should surface an error/disabled state
+   * rather than trusting the protection values.
    */
   adminSettingError: PlatformError | undefined;
   /** Whether the current user has write permission on project settings */
@@ -22,10 +32,10 @@ export type StructureProtectionState = {
   /**
    * Update the user's personal preference. Always available regardless of role.
    *
-   * Note: a successful write does not necessarily change `isProtected`. While the project is
-   * admin-LOCKED and the caller is a non-admin (`canAdminToggle` is `false`), the admin lock
-   * dominates, so the stored user preference has no effect on `isProtected` until the lock is
-   * lifted.
+   * Note: a successful write does not necessarily change `isStructureProtected`. While the project
+   * is admin-LOCKED and the caller is a non-admin (`canAdminToggle` is `false`), the admin lock
+   * dominates, so the stored user preference has no effect on `isStructureProtected` until the lock
+   * is lifted.
    */
   setUserProtection: (value: boolean) => void;
 };
@@ -41,6 +51,8 @@ export type StructureProtectionState = {
  *   the admin's own user setting decides (an admin who can toggle the lock is not bound by it)
  * - Project allows changes → follows user setting for all roles
  * - User setting absent → true (locked) in Simple mode, false in Power mode
+ * - Power mode → feature inactive: `isStructureProtected` is always `false`, `isProtectionActive` is
+ *   `false`, no toggles are shown, and the admin/user settings have no effect
  *
  * @param projectId The project to query. Pass `undefined` while the project is loading.
  */
@@ -83,7 +95,7 @@ export function useStructureProtectionState(
     let disposed = false;
     let unsubscribe: (() => Promise<boolean>) | undefined;
     const logUnsubscribeError = (err: unknown) => {
-      console.error(`Failed to unsubscribe from user structure protection: ${err}`);
+      logger.error(`Failed to unsubscribe from user structure protection: ${err}`);
     };
     (async () => {
       try {
@@ -98,7 +110,7 @@ export function useStructureProtectionState(
         if (disposed) unsub().catch(logUnsubscribeError);
         else unsubscribe = unsub;
       } catch (err) {
-        console.error(`Failed to subscribe to user structure protection: ${err}`);
+        logger.error(`Failed to subscribe to user structure protection: ${err}`);
       }
     })();
     return () => {
@@ -148,35 +160,45 @@ export function useStructureProtectionState(
     ? adminSettingPossiblyError
     : undefined;
   const isAdminProtected = !isPlatformError(adminSettingPossiblyError) && adminSettingPossiblyError;
-  const modeDefault = interfaceMode === 'simple';
-  const effectiveUserSetting = userSettingState ?? modeDefault;
-  const isProtected = (isAdminProtected && !canAdminToggle) || effectiveUserSetting;
+  // The feature applies in simple mode only. In power mode it is fully inactive: enforcement is off
+  // and no toggles are shown, regardless of the admin or user settings (which are left untouched so
+  // returning to simple mode restores prior behavior).
+  const isProtectionActive = interfaceMode === 'simple';
+  // Effective enforcement state is computed by the shared algebra in platform-bible-utils so the
+  // editor and the Scripture Finder PDP (which cannot import each other) stay in lockstep. In simple
+  // mode with no stored user preference it defaults to locked; in power mode it is always inactive.
+  const isStructureProtected = computeEffectiveStructureProtection({
+    interfaceMode,
+    isAdminProtected,
+    canAdminToggle,
+    userSetting: userSettingState,
+  });
 
   const setAdminProtection = useCallback(
     (value: boolean) => {
-      if (!canAdminToggle) return;
+      if (!isProtectionActive || !canAdminToggle) return;
       setAdminSetting?.(value);
     },
-    [canAdminToggle, setAdminSetting],
+    [isProtectionActive, canAdminToggle, setAdminSetting],
   );
 
   const setUserProtection = useCallback(
     (value: boolean) => {
+      if (!isProtectionActive) return;
       userEditorSettingsPdp?.setUserStructureProtected(value).catch((err) => {
-        console.error(`Failed to set user structure protection: ${err}`);
+        logger.error(`Failed to set user structure protection: ${err}`);
       });
     },
-    [userEditorSettingsPdp],
+    [isProtectionActive, userEditorSettingsPdp],
   );
 
   return {
-    isProtected,
-    isAdminProtected,
-    adminSettingError,
-    canAdminToggle,
+    isStructureProtected,
+    isProtectedByAdmin: isProtectionActive && isAdminProtected,
+    adminSettingError: isProtectionActive ? adminSettingError : undefined,
+    canAdminToggle: isProtectionActive && canAdminToggle,
+    isProtectionActive,
     setAdminProtection,
     setUserProtection,
   };
 }
-
-export default useStructureProtectionState;

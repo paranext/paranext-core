@@ -7,6 +7,7 @@ import {
   aggregateUnsubscribers,
   formatReplacementString,
   getErrorMessage,
+  isBlockMarker,
   isLocalizeKey,
   isPlatformError,
   LanguageStrings,
@@ -330,17 +331,32 @@ export const blockMarkerToBlockNames: Record<string, LocalizeKey> = {
  *
  * @param editorRef Provided ref for the editor component
  * @param localizedStrings The localized strings to use to localize the marker titles
+ * @param isStructureProtected Whether the project's paragraph structure is currently protected;
+ *   when `true`, the action will call `notifyStructureProtected` instead of formatting the
+ *   paragraph
+ * @param notifyStructureProtected Callback to invoke when the user attempts a paragraph format
+ *   while structure is protected
  * @returns List of marker menu items to be used for the paragraph menu
  */
 export function generateParagraphMenuListItems(
   editorRef: MutableRefObject<EditorRef | null>,
   localizedStrings: LanguageStrings,
+  isStructureProtected: boolean,
+  notifyStructureProtected: () => void,
 ): MarkerMenuItem[] {
   return Object.entries(blockMarkerToBlockNames).map(([marker, title]) => {
     const markerMenuItem: MarkerMenuItem = {
       marker,
       title: localizedStrings[title] ?? title,
       action: () => {
+        // Defense-in-depth: unreachable while the paragraph control is disabled
+        // (`disabled={isStructureProtected}` in the web view), so the popover never opens and this
+        // action never runs. Kept as a second layer of protection in case that disabled state is
+        // ever loosened or the menu wiring changes.
+        if (isStructureProtected) {
+          notifyStructureProtected();
+          return;
+        }
         editorRef.current?.formatPara(marker);
       },
     };
@@ -354,6 +370,13 @@ export function generateParagraphMenuListItems(
  * their own markers.
  *
  * @param editorRef The ref for the editor component to be able to insert markers
+ * @param closeMarkersMenu Callback to close the markers menu after an action
+ * @param localizedStrings The localized strings to use to localize the marker titles
+ * @param isStructureProtected Whether the project's paragraph structure is currently protected;
+ *   when `true`, block-level markers will be disallowed and their action will call
+ *   `notifyStructureProtected` instead of inserting
+ * @param notifyStructureProtected Callback to invoke when the user attempts to insert a block-level
+ *   marker while structure is protected
  * @param parentMarker The current parent marker which is used to determine which markers to include
  * @returns The list of inline marker menu items
  */
@@ -361,6 +384,8 @@ export function generateInlineMarkerMenuListItems(
   editorRef: MutableRefObject<EditorRef | null>,
   closeMarkersMenu: () => void,
   localizedStrings: LanguageStrings,
+  isStructureProtected: boolean,
+  notifyStructureProtected: () => void,
   parentMarker?: string,
 ): MarkerMenuItem[] {
   if (!parentMarker) return [];
@@ -371,12 +396,22 @@ export function generateInlineMarkerMenuListItems(
   const markerMenuItems: MarkerMenuItem[] = [];
   Object.entries(markerDetails.children).forEach(([, markers]) => {
     markerMenuItems.push(
-      ...markers.map((marker) => {
+      ...markers.map((marker): MarkerMenuItem => {
+        const isDisallowed = isStructureProtected && isBlockMarker(marker);
         return {
           marker,
           title:
             localizedStrings[usfmMarkers[marker].description] ?? usfmMarkers[marker].description,
+          isDisallowed,
           action: () => {
+            // Defense-in-depth: unreachable while the menu renders `isDisallowed` items as disabled
+            // `CommandItem`s (a disabled cmdk item never fires `onSelect`). Kept as a second layer of
+            // protection in case that disabled rendering is ever loosened or the menu wiring changes.
+            if (isDisallowed) {
+              notifyStructureProtected();
+              closeMarkersMenu();
+              return;
+            }
             editorRef.current?.insertMarker(marker);
             closeMarkersMenu();
           },

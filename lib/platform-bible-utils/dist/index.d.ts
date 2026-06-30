@@ -3305,6 +3305,18 @@ export declare const usfmMarkers: {
 	[marker: string]: Marker;
 };
 /**
+ * True when a marker is a paragraph- or verse-level (block) structure marker — i.e. one whose
+ * insertion, formatting, or renumbering is structurally significant (and is blocked while structure
+ * protection/locking is on).
+ *
+ * Paragraph-level markers are identified by their {@link MarkerType.Paragraph} type in
+ * {@link usfmMarkers} rather than a hand-maintained list, so every paragraph marker (including
+ * poetry lines like `q`, section headings like `s1`, and embedded paragraphs like `pm`) is covered.
+ * Verse (`v`) is a structure marker but is typed as {@link MarkerType.Character}, so it is
+ * special-cased; chapter (`c`) is already {@link MarkerType.Paragraph} and needs no special case.
+ */
+export declare function isBlockMarker(marker: string): boolean;
+/**
  * Sanitizes HTML content to prevent security risks while preserving safe formatting.
  *
  * @param html - The HTML string to sanitize
@@ -3968,6 +3980,29 @@ export declare function formatRelativeDate(date: Date, todayString: string, yest
  * https://developer.mozilla.org/en-US/docs/Web/API/UI_Events/Keyboard_event_key_values#modifier_keys
  */
 export declare const MODIFIER_KEYS: Set<string>;
+/** Inputs to {@link computeEffectiveStructureProtection}. */
+export type EffectiveStructureProtectionInputs = {
+	/** Global `platform.interfaceMode` value; the feature applies only in `'simple'`. */
+	interfaceMode: string | undefined;
+	/** Project-level `platformScripture.structureProtected` admin setting. */
+	isAdminProtected: boolean;
+	/** Whether the current user can toggle the admin/project lock. */
+	canAdminToggle: boolean;
+	/** The user's personal preference; `undefined` when never set. */
+	userSetting: boolean | undefined;
+};
+/**
+ * Computes whether structure protection (a.k.a. structure locking) is effectively active.
+ *
+ * This is the single source of truth for the effective-protection algebra, shared across extensions
+ * that cannot import each other directly: the `platform-scripture-editor` structure-protection hook
+ * and the `platform-scripture` Scripture Finder PDP both call it.
+ *
+ * The feature applies in simple interface mode only; in power mode it is always inactive. Within
+ * simple mode, an admin project lock that the user cannot toggle forces protection on; otherwise the
+ * user's own preference governs (defaulting to on when never set).
+ */
+export declare function computeEffectiveStructureProtection({ interfaceMode, isAdminProtected, canAdminToggle, userSetting, }: EffectiveStructureProtectionInputs): boolean;
 /** Localized string value associated with this key */
 export type LocalizedStringValue = string;
 /**
