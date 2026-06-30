@@ -2,15 +2,12 @@
 // One-off build-time CLI that prints results for the operator; not part of the
 // runtime where the platform logger would otherwise be required.
 /* eslint-disable no-console */
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { auditScss } from './audit';
-
-// The commentaries whose SCSS is generated from a committed CSS snapshot. Keep in sync with the
-// keys in extensions/.../use-commentary-marker-styles.hook.ts.
-const RESOURCES = ['hbkeng', 'tnn', 'tnd'];
+import { fileURLToPath } from 'node:url';
+import { auditScss, firstDifference } from './audit';
+import { isMainModule } from './is-main-module';
 
 // tools/pt9-css-converter/src -> repo root. Resolved from the script location so the audit works
 // regardless of the caller's cwd.
@@ -25,29 +22,28 @@ const BASE_SCSS = path.join(
   'extensions/src/platform-scripture-editor/src/_usj-nodes.scss',
 );
 
-// Report the first line where committed and freshly-converted SCSS diverge, so the operator can see
-// what drifted without paging through the whole file.
-function firstDifference(expected: string, actual: string): string {
-  const expectedLines = expected.split('\n');
-  const actualLines = actual.split('\n');
-  const max = Math.max(expectedLines.length, actualLines.length);
-  for (let i = 0; i < max; i += 1) {
-    if (expectedLines[i] !== actualLines[i]) {
-      return [
-        `    first difference at line ${i + 1}:`,
-        `      committed:  ${JSON.stringify(expectedLines[i])}`,
-        `      regenerated:${JSON.stringify(actualLines[i])}`,
-      ].join('\n');
-    }
-  }
-  return '    (files differ only in length)';
+// The commentaries to audit are derived from the committed pipeline CSS snapshots in data/pt9-css —
+// every `<id>.css` except the `*-manual.css` manual references (which are the audit baseline, not a
+// converter input). Deriving the list here means there's no hand-maintained resource list to keep
+// in sync with the directory contents.
+function resourceIds(): string[] {
+  return readdirSync(CSS_DIR)
+    .filter((file) => file.endsWith('.css') && !file.endsWith('-manual.css'))
+    .map((file) => file.replace(/\.css$/, ''))
+    .sort();
 }
 
 function main(): void {
+  const ids = resourceIds();
+  if (!ids.length) {
+    console.error(`No pipeline CSS snapshots found in ${CSS_DIR} — nothing to audit.`);
+    process.exit(1);
+  }
+
   const baseScss = readFileSync(BASE_SCSS, 'utf-8');
   let drift = false;
 
-  RESOURCES.forEach((id) => {
+  ids.forEach((id) => {
     const css = readFileSync(path.join(CSS_DIR, `${id}.css`), 'utf-8');
     const committedScss = readFileSync(path.join(MARKER_STYLES_DIR, `${id}.scss`), 'utf-8');
     const result = auditScss(committedScss, css, { baseScss });
@@ -66,18 +62,7 @@ function main(): void {
     );
     process.exit(1);
   }
-  console.log(
-    `\nAll ${RESOURCES.length} commentary stylesheets are in sync with their source CSS.`,
-  );
+  console.log(`\nAll ${ids.length} commentary stylesheets are in sync with their source CSS.`);
 }
 
-function isMainModule(): boolean {
-  if (!process.argv[1]) return false;
-  try {
-    return import.meta.url === pathToFileURL(process.argv[1]).href;
-  } catch {
-    return false;
-  }
-}
-
-if (isMainModule()) main();
+if (isMainModule(import.meta.url)) main();

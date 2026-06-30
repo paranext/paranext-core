@@ -74,3 +74,24 @@ export function auditScss(
   const { scss } = convert(css, { source, generatedAt, baseScss: options.baseScss });
   return { inSync: scss === committedScss, expected: committedScss, actual: scss };
 }
+
+/**
+ * Renders a human-readable description of the first line at which `expected` and `actual` differ,
+ * so a drift report can point the operator at what changed without dumping the whole file. Assumes
+ * the two strings are not equal (callers only invoke it on a known mismatch).
+ */
+export function firstDifference(expected: string, actual: string): string {
+  const expectedLines = expected.split('\n');
+  const actualLines = actual.split('\n');
+  const max = Math.max(expectedLines.length, actualLines.length);
+  for (let i = 0; i < max; i += 1) {
+    if (expectedLines[i] !== actualLines[i]) {
+      return [
+        `    first difference at line ${i + 1}:`,
+        `      committed:  ${JSON.stringify(expectedLines[i])}`,
+        `      regenerated:${JSON.stringify(actualLines[i])}`,
+      ].join('\n');
+    }
+  }
+  return '    (files differ only in length)';
+}

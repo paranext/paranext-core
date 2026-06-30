@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { convert } from './convert';
-import { auditScss, parseGeneratedHeader } from './audit';
+import { auditScss, firstDifference, parseGeneratedHeader } from './audit';
 
 const FIXED = new Date('2026-06-29T00:00:00.000Z');
 const SAMPLE_CSS = '.usfm_p { color: #FF0000; text-align: left; }\n.usfm_q { font-size: 90%; }\n';
@@ -52,5 +52,20 @@ describe('auditScss', () => {
     });
     const changedCss = SAMPLE_CSS.replace('#FF0000', '#0000FF');
     expect(auditScss(committed, changedCss, { baseScss: BASE }).inSync).toBe(false);
+  });
+});
+
+describe('firstDifference', () => {
+  it('reports the line number and both values at the first differing line', () => {
+    const out = firstDifference('a\nb\nc', 'a\nX\nc');
+    expect(out).toContain('line 2');
+    expect(out).toContain(JSON.stringify('b'));
+    expect(out).toContain(JSON.stringify('X'));
+  });
+
+  it('reports the first extra line when one input is longer than the other', () => {
+    const out = firstDifference('a\nb', 'a\nb\nextra');
+    expect(out).toContain('line 3');
+    expect(out).toContain(JSON.stringify('extra'));
   });
 });

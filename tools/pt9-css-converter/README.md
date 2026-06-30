@@ -2,7 +2,7 @@
 
 Converts the flat per-marker CSS that PT9 ships (e.g. `.usfm_id { font-size: 100%; }`) into the view-mode-bucketed SCSS the platform scripture editor consumes.
 
-It is the build-time partner to [`tools/pt9-css-extractor`](https://github.com/paranext/paranext-core/pull/2452) (in progress), which produces the raw input CSS by running PT9's `CSSCreator.CreateDefaultCSS` against a project's `custom.sty`. Once that tool lands the link will become a repo-relative `../pt9-css-extractor/README.md`.
+It is the build-time partner to [`tools/pt9-css-extractor`](../pt9-css-extractor/README.md), which produces the raw input CSS by running PT9's `CSSCreator.CreateDefaultCSS` against a project's `custom.sty`.
 
 ## Buckets
 
@@ -41,7 +41,7 @@ npx tsx tools/pt9-css-converter/src/audit-cli.ts
 
 It prints a line per commentary and exits non-zero if any `.scss` has drifted from its source `.css`. The `Source:` and `Generated at:` header lines are re-derived from each committed file, so only a genuine difference in the rendered rules (or the warning summary) is reported as drift — the timestamp never causes a false positive.
 
-**Scope:** this audits the **converter** half of the pipeline (does the committed SCSS still follow from the committed CSS?). It does **not** verify the upstream extraction, which needs [`tools/pt9-css-extractor`](https://github.com/paranext/paranext-core/pull/2452) and PT9 Desktop.
+**Scope:** this audits the **converter** half of the pipeline (does the committed SCSS still follow from the committed CSS?). It does **not** verify the upstream extraction — regenerating the source `.css` means running [`tools/pt9-css-extractor`](../pt9-css-extractor/README.md) against the resources in PT9 Desktop.
 
 ## Testing
 
