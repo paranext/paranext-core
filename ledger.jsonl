@@ -222,3 +222,4 @@
 {"type":"backlog","candidateId":"c4","dedupKey":"jira:PT-3875","status":"resolved","reason":"out of scope - root cause in scripture-editors getInsertedNodeKey; not fixable in paranext-core","date":"2026-06-30"}
 {"type":"selected","runId":"qs-2026-06-30","candidateId":"c5","date":"2026-06-30"}
 {"type":"repro","runId":"qs-2026-06-30","candidateId":"c5","result":"reproduced","evidenceRef":"evidence/before-PT-3880-red.txt","date":"2026-06-30"}
+{"type":"fix","runId":"qs-2026-06-30","candidateId":"c5","result":"pr_opened","prNumber":2479,"prUrl":"https://github.com/paranext/paranext-core/pull/2479","branch":"fix/PT-3880-resource-insert-menus","date":"2026-06-30"}
