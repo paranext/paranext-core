@@ -11,7 +11,9 @@ import {
   isLocalizeKey,
   isPlatformError,
   LanguageStrings,
+  Localized,
   LocalizeKey,
+  MultiColumnMenu,
   serialize,
   Unsubscriber,
   USFM_MARKERS_MAP_PARATEXT_3_0,
@@ -28,6 +30,68 @@ import { MarkerMenuItem } from 'platform-bible-react';
 
 // Note: src/main/shutdown-tasks.ts has a copy of this value — keep them in sync.
 export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
+
+/**
+ * PAPI commands that insert editable content (footnote, cross-reference, comment) into the
+ * Scripture editor at the current selection. These actions are meaningless when the editor is not
+ * editable (e.g. when viewing a resource, or in a non-editable markers view), so the menu items
+ * that run them are hidden in that case. See PT-3880.
+ */
+export const EDITOR_INSERT_AT_SELECTION_COMMANDS: readonly string[] = [
+  'platformScriptureEditor.insertFootnoteAtSelection',
+  'platformScriptureEditor.insertCrossReferenceAtSelection',
+  'platformScriptureEditor.insertCommentAtSelection',
+];
+
+/**
+ * Returns the Scripture editor's top menu adjusted for the editor's editability. When the editor is
+ * not editable (e.g. a resource, or a non-editable markers view), the insert-footnote/
+ * cross-reference/comment items are removed so non-editable content cannot be edited via the menus,
+ * and any menu group or column left empty by that removal is pruned so no empty menu remains. When
+ * the editor is editable, the menu is returned unchanged. See PT-3880.
+ *
+ * @param topMenu The localized top menu to adjust, or `undefined`.
+ * @param isReadOnly Whether the editor is (effectively) read-only/non-editable.
+ * @returns The adjusted menu, or `undefined` if `topMenu` was `undefined`.
+ */
+export function filterTopMenuForReadOnly(
+  topMenu: Localized<MultiColumnMenu> | undefined,
+  isReadOnly: boolean,
+): Localized<MultiColumnMenu> | undefined {
+  if (!topMenu || !isReadOnly) return topMenu;
+
+  const insertCommands = new Set<string>(EDITOR_INSERT_AT_SELECTION_COMMANDS);
+  const items = topMenu.items.filter(
+    (item) => !('command' in item) || !insertCommands.has(item.command),
+  );
+  // Nothing was removed; return the menu unchanged.
+  if (items.length === topMenu.items.length) return topMenu;
+
+  // Prune any group the removal left without items, tracking the columns those groups belonged to.
+  // `Reflect.deleteProperty` is used (rather than `delete groups[key]`) because the menu's group and
+  // column collections use template-literal index signatures that a plain `string` key cannot index.
+  const survivingGroupKeys = new Set(items.map((item) => item.group));
+  const emptiedColumnKeys = new Set<string>();
+  const groups = { ...topMenu.groups };
+  Object.entries(topMenu.groups).forEach(([groupKey, group]) => {
+    if (survivingGroupKeys.has(groupKey)) return;
+    if ('column' in group && group.column) emptiedColumnKeys.add(group.column);
+    Reflect.deleteProperty(groups, groupKey);
+  });
+
+  // Prune any column that the group removal left without any groups, so no empty column remains.
+  const survivingColumnKeys = new Set(
+    Object.values(groups)
+      .map((group) => ('column' in group ? group.column : undefined))
+      .filter((columnKey): columnKey is string => columnKey !== undefined),
+  );
+  const columns = { ...topMenu.columns };
+  emptiedColumnKeys.forEach((columnKey) => {
+    if (!survivingColumnKeys.has(columnKey)) Reflect.deleteProperty(columns, columnKey);
+  });
+
+  return { ...topMenu, columns, groups, items };
+}
 
 /**
  * Check deep equality of two values such that two equal objects or arrays created in two different

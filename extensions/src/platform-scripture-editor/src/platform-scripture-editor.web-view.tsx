@@ -106,6 +106,7 @@ import {
   availableScrollGroupIds,
   blockMarkerToBlockNames,
   deepEqualAcrossIframes,
+  filterTopMenuForReadOnly,
   formatEditorTitle,
   generateInlineMarkerMenuListItems,
   generateParagraphMenuListItems,
@@ -1649,6 +1650,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return webViewMenuPossiblyError;
   }, [webViewMenuPossiblyError]);
 
+  // When the editor is not editable (a resource, or a non-editable markers view), hide the
+  // insert-footnote/cross-reference/comment menu items so non-editable content cannot be edited via
+  // the menus (PT-3880).
+  const effectiveTopMenu = useMemo(
+    () => filterTopMenuForReadOnly(webViewMenu.topMenu, isReadOnlyEffective),
+    [webViewMenu, isReadOnlyEffective],
+  );
+
   const [booksPresentPossiblyError] = useProjectSetting(
     projectId,
     'platformScripture.booksPresent',
@@ -1771,7 +1780,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       <TabToolbar
         onSelectProjectMenuItem={menuCommandHandler}
         onSelectViewInfoMenuItem={menuCommandHandler}
-        projectMenuData={webViewMenu.topMenu}
+        projectMenuData={effectiveTopMenu}
         className="scripture-editor-tab-nav tw:block tw:z-10"
         startAreaChildren={
           <>

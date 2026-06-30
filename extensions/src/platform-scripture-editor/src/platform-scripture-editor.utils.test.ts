@@ -1,13 +1,15 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ScriptureRange } from 'platform-scripture-editor';
 import type PapiBackend from '@papi/backend';
-import { UsjTextContentLocation } from 'platform-bible-utils';
+import { Localized, MultiColumnMenu, UsjTextContentLocation } from 'platform-bible-utils';
 import { MutableRefObject } from 'react';
 import { EditorRef } from '@eten-tech-foundation/platform-editor';
 import {
   convertScriptureRangeToEditorRange,
-  generateParagraphMenuListItems,
+  EDITOR_INSERT_AT_SELECTION_COMMANDS,
+  filterTopMenuForReadOnly,
   generateInlineMarkerMenuListItems,
+  generateParagraphMenuListItems,
   openDefaultActiveProjectIfApplicable,
   resolveOpenEditorDispatch,
   syncOnProjectSwitch,
@@ -2442,3 +2444,165 @@ describe('generateInlineMarkerMenuListItems', () => {
     expect(generateInlineMarkerMenuListItems(ref, noop, {}, false, vi.fn())).toEqual([]);
   });
 });
+
+// #region filterTopMenuForReadOnly
+
+/**
+ * A localized top menu that mirrors the real Scripture editor menu structure: an "Insert" column
+ * whose only group holds the three insert-at-selection items, plus an unrelated "Edit" column.
+ */
+function makeSampleTopMenu(): Localized<MultiColumnMenu> {
+  return {
+    columns: {
+      'platformScriptureEditor.edit': { label: 'Edit', order: 2, isExtensible: true },
+      'platformScriptureEditor.insert': { label: 'Insert', order: 5 },
+    },
+    groups: {
+      'platformScriptureEditor.find': { column: 'platformScriptureEditor.edit', order: 1 },
+      'platformScriptureEditor.insertTextualNotes': {
+        column: 'platformScriptureEditor.insert',
+        order: 1,
+      },
+    },
+    items: [
+      {
+        label: 'Find',
+        group: 'platformScriptureEditor.find',
+        order: 1,
+        command: 'platformScripture.openFind',
+        localizeNotes: '',
+      },
+      {
+        label: 'Insert footnote',
+        group: 'platformScriptureEditor.insertTextualNotes',
+        order: 1,
+        command: 'platformScriptureEditor.insertFootnoteAtSelection',
+        localizeNotes: '',
+      },
+      {
+        label: 'Insert cross-reference',
+        group: 'platformScriptureEditor.insertTextualNotes',
+        order: 2,
+        command: 'platformScriptureEditor.insertCrossReferenceAtSelection',
+        localizeNotes: '',
+      },
+      {
+        label: 'Insert comment',
+        group: 'platformScriptureEditor.insertTextualNotes',
+        order: 3,
+        command: 'platformScriptureEditor.insertCommentAtSelection',
+        localizeNotes: '',
+      },
+    ],
+  };
+}
+
+describe('filterTopMenuForReadOnly', () => {
+  it('removes the insert-at-selection items when read-only so resources are not editable via menus', () => {
+    const result = filterTopMenuForReadOnly(makeSampleTopMenu(), true);
+
+    const commands = result?.items.flatMap((item) => ('command' in item ? [item.command] : []));
+    EDITOR_INSERT_AT_SELECTION_COMMANDS.forEach((command) => {
+      expect(commands).not.toContain(command);
+    });
+    // The unrelated item is left intact.
+    expect(commands).toContain('platformScripture.openFind');
+  });
+
+  it('prunes the menu group and column left empty by the removal when read-only', () => {
+    const result = filterTopMenuForReadOnly(makeSampleTopMenu(), true);
+
+    expect(result?.groups).not.toHaveProperty('platformScriptureEditor.insertTextualNotes');
+    expect(result?.columns).not.toHaveProperty('platformScriptureEditor.insert');
+    // The unrelated group and column remain (with their fields intact) so the rest of the menu is
+    // unaffected.
+    expect(result?.groups).toHaveProperty('platformScriptureEditor.find');
+    expect(result?.columns['platformScriptureEditor.edit']).toEqual(
+      makeSampleTopMenu().columns['platformScriptureEditor.edit'],
+    );
+  });
+
+  it('keeps a column that still has a non-empty group after the removal', () => {
+    // Give the "Insert" column a second, non-insert group. Removing the insert items empties only
+    // the insertTextualNotes group, so the column and its surviving group must remain.
+    const menu = makeSampleTopMenu();
+    menu.groups['platformScriptureEditor.insertOther'] = {
+      column: 'platformScriptureEditor.insert',
+      order: 2,
+    };
+    menu.items.push({
+      label: 'Insert something else',
+      group: 'platformScriptureEditor.insertOther',
+      order: 1,
+      command: 'platformScriptureEditor.insertSomethingElse',
+      localizeNotes: '',
+    });
+
+    const result = filterTopMenuForReadOnly(menu, true);
+
+    expect(result?.columns).toHaveProperty('platformScriptureEditor.insert');
+    expect(result?.groups).toHaveProperty('platformScriptureEditor.insertOther');
+    expect(result?.groups).not.toHaveProperty('platformScriptureEditor.insertTextualNotes');
+    const commands = result?.items.flatMap((item) => ('command' in item ? [item.command] : []));
+    expect(commands).toContain('platformScriptureEditor.insertSomethingElse');
+    expect(commands).not.toContain('platformScriptureEditor.insertFootnoteAtSelection');
+  });
+
+  it('never removes a submenu item that has an id instead of a command', () => {
+    const menu = makeSampleTopMenu();
+    menu.items.push({
+      label: 'A submenu',
+      group: 'platformScriptureEditor.find',
+      order: 2,
+      id: 'platformScriptureEditor.someSubmenu',
+      localizeNotes: '',
+    });
+
+    const ids = (candidate: Localized<MultiColumnMenu> | undefined) =>
+      candidate?.items.flatMap((item) => ('id' in item ? [item.id] : []));
+
+    // Survives whether or not insert items are removed.
+    expect(ids(filterTopMenuForReadOnly(menu, true))).toContain(
+      'platformScriptureEditor.someSubmenu',
+    );
+    expect(ids(filterTopMenuForReadOnly(menu, false))).toContain(
+      'platformScriptureEditor.someSubmenu',
+    );
+  });
+
+  it('returns the menu unchanged when the editor is editable', () => {
+    const menu = makeSampleTopMenu();
+
+    const result = filterTopMenuForReadOnly(menu, false);
+
+    expect(result).toBe(menu);
+  });
+
+  it('returns undefined when there is no menu', () => {
+    expect(filterTopMenuForReadOnly(undefined, true)).toBeUndefined();
+  });
+
+  it('returns the menu unchanged when read-only but there are no insert items to remove', () => {
+    const menu: Localized<MultiColumnMenu> = {
+      columns: { 'platformScriptureEditor.edit': { label: 'Edit', order: 2 } },
+      groups: {
+        'platformScriptureEditor.find': { column: 'platformScriptureEditor.edit', order: 1 },
+      },
+      items: [
+        {
+          label: 'Find',
+          group: 'platformScriptureEditor.find',
+          order: 1,
+          command: 'platformScripture.openFind',
+          localizeNotes: '',
+        },
+      ],
+    };
+
+    const result = filterTopMenuForReadOnly(menu, true);
+
+    expect(result).toBe(menu);
+  });
+});
+
+// #endregion filterTopMenuForReadOnly
