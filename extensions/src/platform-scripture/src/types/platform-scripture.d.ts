@@ -1030,6 +1030,7 @@ declare module 'platform-scripture' {
         callback: (finalVerseNumber: number | PlatformError) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
+
       /**
        * Returns the final chapter number in the specified book using the project's versification.
        *

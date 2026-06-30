@@ -17,8 +17,8 @@ type MapVerseRefBetweenProjectsCommand = (
   sourceProjectId: string | undefined,
   targetProjectId: string,
 ) => Promise<SerializedVerseRef>;
-// 'platformScripture.mapVerseRefBetweenProjects' is registered by an extension; core's tsconfig
-// excludes extension typeRoots, so sendCommand isn't typed for it here.
+// 'platformScripture.mapVerseRefBetweenProjects' is typed in an extension's .d.ts, which core's
+// tsconfig excludes from typeRoots, so sendCommand isn't typed for it here.
 // eslint-disable-next-line no-type-assertion/no-type-assertion
 const mapVerseRefBetweenProjects = sendCommand as unknown as MapVerseRefBetweenProjectsCommand;
 

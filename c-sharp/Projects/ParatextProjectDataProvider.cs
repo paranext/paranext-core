@@ -154,6 +154,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(("setFinalChapter", SetFinalChapter));
         retVal.Add(("getFinalVerseNumbersInBook", GetFinalVerseNumbersInBook));
         retVal.Add(("setFinalVerseNumbersInBook", SetFinalVerseNumbersInBook));
+
         return retVal;
     }
 
