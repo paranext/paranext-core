@@ -2,6 +2,7 @@ import { useStylesheet } from 'platform-bible-react';
 import hbkengStyles from './marker-styles/hbkeng.scss?inline';
 import tnnStyles from './marker-styles/tnn.scss?inline';
 import tndStyles from './marker-styles/tnd.scss?inline';
+import commentaryOverrides from './marker-styles/commentary-overrides.scss?inline';
 
 // Keyed on DBL entry UID (lowercase). A locally-installed DBL resource's projectId is the
 // dblEntryUid plus a suffix, so we match by `startsWith`. The same UIDs back the C#
@@ -40,5 +41,8 @@ export function useCommentaryMarkerStyles(projectId: string | undefined): void {
   );
   const css = matchedUid ? COMMENTARY_STYLES_BY_DBL_ENTRY_UID[matchedUid] : undefined;
 
-  useStylesheet(css);
+  // Append hand-authored overrides AFTER the generated stylesheet so they win the cascade (equal
+  // specificity, later source order) and survive regeneration of the generated SCSS. Only injected
+  // when a commentary actually matched, so it never leaks into other projects/resources.
+  useStylesheet(css ? `${css}\n${commentaryOverrides}` : undefined);
 }
