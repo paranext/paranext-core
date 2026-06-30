@@ -1,4 +1,4 @@
-import { usfmMarkers, MarkerType } from 'platform-bible-utils';
+import { isBlockMarker } from 'platform-bible-utils';
 
 /**
  * Sentinel error message thrown by the Scripture Finder PDP's `replace()` when a replacement would
@@ -9,18 +9,6 @@ import { usfmMarkers, MarkerType } from 'platform-bible-utils';
 export const STRUCTURE_PROTECTED_ERROR = 'platformScripture.replace.structureProtected';
 
 /**
- * True when a marker is a paragraph- or verse-level (block) structure marker.
- *
- * Mirrors `isBlockMarker` in
- * `extensions/src/platform-scripture-editor/src/platform-scripture-editor.utils.ts` (canonical):
- * paragraph-type markers (identified via {@link usfmMarkers}/{@link MarkerType.Paragraph}, which
- * already includes chapter `c`) plus verse (`v`, which is typed Character and is special-cased).
- */
-export function isStructuralMarker(marker: string): boolean {
-  return usfmMarkers[marker]?.type === MarkerType.Paragraph || marker === 'v';
-}
-
-/**
  * Matches a USFM backslash marker token: optional `+` nesting, a marker name with optional numeric
  * suffix (e.g. `q1`), and an optional closing `*`.
  */
@@ -28,8 +16,9 @@ const MARKER_TOKEN_REGEX = /\\\+?([a-z]+\d*)\*?/g;
 
 /**
  * Extracts the ordered sequence of structural markers from a USFM string. Paragraph markers are
- * represented by their style (e.g. `p`, `q1`, `c`); verse markers include the verse identifier that
- * follows them (e.g. `v:4`, `v:4-5`). Non-structural (inline/character) markers are ignored.
+ * represented by their style (e.g. `p`, `q1`); verse and chapter markers include the number/
+ * identifier that follows them (e.g. `v:4`, `v:4-5`, `c:1`) so renumbering is detected.
+ * Non-structural (inline/character) markers are ignored.
  */
 export function extractStructuralMarkers(usfm: string): string[] {
   const result: string[] = [];
@@ -39,13 +28,15 @@ export function extractStructuralMarkers(usfm: string): string[] {
   // eslint-disable-next-line no-null/no-null
   while (match !== null) {
     const marker = match[1];
-    if (isStructuralMarker(marker)) {
-      if (marker === 'v') {
-        // Capture the verse identifier immediately following `\v` (e.g. "4" or "4-5").
+    if (isBlockMarker(marker)) {
+      if (marker === 'v' || marker === 'c') {
+        // Capture the number/identifier immediately following a verse (`\v`) or chapter (`\c`)
+        // marker so renumbering is detected (e.g. "4", "4a", "4-5" for verses; "1" for chapters).
+        // Without this, `\c 1` → `\c 2` would extract identically and slip past structure protection.
         const after = usfm.slice(regex.lastIndex);
-        // Verse IDs start with a digit per USFM (e.g. "4", "4a", "4-5"); avoid capturing a following marker.
+        // Verse/chapter IDs start with a digit per USFM (e.g. "4", "4a", "4-5"); avoid capturing a following marker.
         const numMatch = after.match(/^\s*(\d[\d\w-]*)/);
-        result.push(`v:${numMatch ? numMatch[1] : ''}`);
+        result.push(`${marker}:${numMatch ? numMatch[1] : ''}`);
       } else {
         result.push(marker);
       }
@@ -72,34 +63,4 @@ export function usfmChangesStructure(removed: string, inserted: string): boolean
  */
 export function replacementContainsStructuralMarker(text: string): boolean {
   return extractStructuralMarkers(text).length > 0;
-}
-
-/** Inputs to {@link computeEffectiveStructureProtection}. */
-export type EffectiveStructureProtectionInputs = {
-  /** Global `platform.interfaceMode` value; the feature applies only in `'simple'`. */
-  interfaceMode: string | undefined;
-  /** Project-level `platformScripture.structureProtected` admin setting. */
-  isAdminProtected: boolean;
-  /** Whether the current user can toggle the admin/project lock. */
-  canAdminToggle: boolean;
-  /** The user's personal preference; `undefined` when never set. */
-  userSetting: boolean | undefined;
-};
-
-/**
- * Computes effective structure protection. Duplicated from `useStructureProtectionState` in
- * `extensions/src/platform-scripture-editor/src/use-structure-protection-state.hook.ts` (canonical
- * source of truth) because that hook lives in a different extension and cannot be imported here.
- * Keep in sync with that hook.
- */
-export function computeEffectiveStructureProtection({
-  interfaceMode,
-  isAdminProtected,
-  canAdminToggle,
-  userSetting,
-}: EffectiveStructureProtectionInputs): boolean {
-  const isProtectionActive = interfaceMode === 'simple';
-  if (!isProtectionActive) return false;
-  const effectiveUserSetting = userSetting ?? isProtectionActive;
-  return (isAdminProtected && !canAdminToggle) || effectiveUserSetting;
 }

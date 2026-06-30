@@ -6,6 +6,7 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { ProjectDataProviderInterfaces } from 'papi-shared-types';
 import {
   AsyncVariable,
+  computeEffectiveStructureProtection,
   getErrorMessage,
   Mutex,
   MutexMap,
@@ -28,11 +29,7 @@ import {
   ScriptureRangeUsjChapterOrUsfmVerseLocation,
 } from 'platform-scripture';
 import { buildSearchRegex, CharacterCategorizer } from '../find/find.utils';
-import {
-  computeEffectiveStructureProtection,
-  STRUCTURE_PROTECTED_ERROR,
-  usfmChangesStructure,
-} from '../find/structure-protection.util';
+import { STRUCTURE_PROTECTED_ERROR, usfmChangesStructure } from '../find/structure-protection.util';
 import { USFM_VERSE_TEXT_MARKERS_SET } from '../find/usfm-verse-text-markers';
 import { correctUsjVersion } from './scripture.util';
 
@@ -415,6 +412,9 @@ export class ScriptureFinderProjectDataProviderEngine
    * @throws Error if usfmToInsert array length doesn't match rangesToReplace length
    * @throws Error if any range spans multiple books
    * @throws Error if any ranges overlap within the same book
+   * @throws Error with message {@link STRUCTURE_PROTECTED_ERROR} when structure protection is active
+   *   and a replacement would add, remove, change, or reorder a paragraph-level, verse, or chapter
+   *   marker
    */
   async replace(
     rangesToReplace: ScriptureRangeUsjChapterOrUsfmVerseLocation[],

@@ -758,6 +758,11 @@ declare module 'platform-scripture' {
        * @throws Error if `usfmToInsert` array length doesn't match `rangesToReplace` length
        * @throws Error if any range spans multiple books
        * @throws Error if any ranges overlap
+       * @throws Error whose message is the `STRUCTURE_PROTECTED_ERROR` sentinel
+       *   (`'platformScripture.replace.structureProtected'`) when structure protection is active
+       *   and a replacement would add, remove, change, or reorder a paragraph-level, verse, or
+       *   chapter marker. The Find web view substring-matches this sentinel to surface a localized
+       *   message.
        */
       replace(
         rangesToReplace: ScriptureRangeUsjChapterOrUsfmVerseLocation[],
