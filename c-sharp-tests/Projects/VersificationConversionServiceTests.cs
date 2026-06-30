@@ -12,6 +12,9 @@ namespace TestParanextDataProvider.Projects
     /// project (ignoring any versification carried on the input ref), and delegates to libpalaso's
     /// ChangeVersification / ChangeVersificationWithRanges. Assertions compare against a direct
     /// libpalaso conversion so they verify our wiring, not libpalaso's mapping tables.
+    /// Unmapped-verse behavior (a verse returned unchanged rather than zeroed) is libpalaso's
+    /// <c>ChangeVersification</c> behavior; it is not unit-tested here because a robust assertion
+    /// requires .vrs table specifics — it is covered by integration/manual testing.
     /// </summary>
     [ExcludeFromCodeCoverage]
     [TestFixture]
@@ -135,20 +138,6 @@ namespace TestParanextDataProvider.Projects
             var result = _service.MapVerseRefBetweenProjects(input, _englishId, _englishId);
 
             Assert.That(result.Segment(), Is.EqualTo("a"));
-        }
-
-        [Test]
-        [Description("Unmapped verses are returned unchanged (best-effort, see comment).")]
-        public void UnmappedVerse_BestEffort_ReturnsUnchanged()
-        {
-            // A robust assertion requires knowing which specific BBBCCCVVV values are absent from
-            // the English↔RussianOrthodox mapping tables. Asserting those would be brittle and
-            // would couple the test to concrete .vrs table entries. The libpalaso contract
-            // (ChangeVersification returns the ref unchanged when there is no mapping) is stable
-            // and well-tested in libpalaso itself. This case is covered by integration/manual testing.
-            Assert.Pass(
-                "Unmapped-verse assertion deferred: requires .vrs table knowledge; covered by integration/manual testing."
-            );
         }
     }
 }
