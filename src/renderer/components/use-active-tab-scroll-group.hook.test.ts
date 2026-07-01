@@ -193,4 +193,39 @@ describe('useActiveTabScrollGroup', () => {
     await waitFor(() => expect(result.current.webViewId).toBe('wv1'));
     expect(result.current.scrollGroupId).toBeUndefined();
   });
+
+  it('never pairs a new webViewId with the previous tab definition on a direct switch', async () => {
+    currentFocus = { focusType: 'webView', id: 'wv1' };
+    getSavedWebViewDefinitionSync.mockImplementation((id: string) =>
+      id === 'wv2'
+        ? { id: 'wv2', webViewType: 'scriptureEditor', scrollGroupScrRef: 3, projectId: 'projB' }
+        : { id: 'wv1', webViewType: 'scriptureEditor', scrollGroupScrRef: 1, projectId: 'projA' },
+    );
+    const useActiveTabScrollGroup = await importHook();
+
+    const observed: Array<{ webViewId?: string; scrollGroupId?: number; projectId?: string }> = [];
+    const { rerender } = renderHook(() => {
+      const value = useActiveTabScrollGroup();
+      observed.push(value);
+      return value;
+    });
+    await waitFor(() =>
+      expect(observed.at(-1)).toEqual({ webViewId: 'wv1', scrollGroupId: 1, projectId: 'projA' }),
+    );
+
+    currentFocus = { focusType: 'webView', id: 'wv2' };
+    rerender();
+    await waitFor(() =>
+      expect(observed.at(-1)).toEqual({ webViewId: 'wv2', scrollGroupId: 3, projectId: 'projB' }),
+    );
+
+    // The definition is derived synchronously from trackedWebViewId, so no render ever pairs the new
+    // tab's id with the previous tab's group/project.
+    expect(observed).not.toContainEqual(
+      expect.objectContaining({ webViewId: 'wv2', projectId: 'projA' }),
+    );
+    expect(observed).not.toContainEqual(
+      expect.objectContaining({ webViewId: 'wv2', scrollGroupId: 1 }),
+    );
+  });
 });

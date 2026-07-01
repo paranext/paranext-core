@@ -59,11 +59,8 @@ export function useActiveTabScrollGroup(): ActiveTabScrollGroup {
     if (focusedWebViewId !== undefined) setTrackedWebViewId(focusedWebViewId);
   }, [focusedWebViewId]);
 
-  // The tracked tab's saved definition (scrollGroupScrRef + projectId).
-  const [definition, setDefinition] = useState(() => readDefinitionSafely(trackedWebViewId));
-  useEffect(() => {
-    setDefinition(readDefinitionSafely(trackedWebViewId));
-  }, [trackedWebViewId]);
+  // Bumped by an onDidUpdateWebView event for the tracked tab to force a definition re-read.
+  const [definitionRefresh, setDefinitionRefresh] = useState(0);
 
   // Ref so the (deps-stable) update handler always sees the current tracked id.
   const trackedWebViewIdRef = useRef(trackedWebViewId);
@@ -72,9 +69,16 @@ export function useActiveTabScrollGroup(): ActiveTabScrollGroup {
   useEvent(
     onDidUpdateWebView,
     useCallback((event: UpdateWebViewEvent) => {
-      if (event.webView.id === trackedWebViewIdRef.current)
-        setDefinition(readDefinitionSafely(trackedWebViewIdRef.current));
+      if (event.webView.id === trackedWebViewIdRef.current) setDefinitionRefresh((n) => n + 1);
     }, []),
+  );
+
+  // The tracked tab's saved definition (scrollGroupScrRef + projectId). Derived synchronously from
+  // trackedWebViewId so the returned webViewId and its definition always update in the same render
+  // (no transient stale pairing); definitionRefresh re-reads it after an external update event.
+  const definition = useMemo(
+    () => readDefinitionSafely(trackedWebViewId),
+    [trackedWebViewId, definitionRefresh],
   );
 
   return useMemo(() => {
