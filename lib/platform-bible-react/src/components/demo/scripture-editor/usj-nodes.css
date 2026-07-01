@@ -2271,17 +2271,67 @@
 }
 
 /* Verse marker armed for the two-step intentional delete (first Backspace/Delete selects it).
-   Selection-style background so it reads as selected. Mirrors shadcn's destructive affordance
-   (bg-destructive/10 + text-destructive, dark:bg-destructive/20): a 10% --destructive tint in
-   light themes, bumped to 20% under .dark. Falls back to #dc2626 where the theme token is absent
-   (e.g. standalone Storybook demos). */
+   Destructive styling — light-destructive background, destructive text, roomier padding, and a
+   caret-like glow-underline blink — signals "press again to delete". Bound to the live theme
+   tokens (`--destructive`, `--popover`) so it adapts to light/dark. The blink is gated on the
+   `verse-delete-armed` root class so a verse merely inside an ordinary range selection shows the
+   tint but does not blink. `verse-selected` is on the inner VerseDecorator span (the element that
+   paints the red), NOT the outer `.verse`/`.usfm_v` element — so padding lives here, with an equal
+   negative margin so neighbors don't shift when it arms. */
 .verse-selected {
-  background-color: color-mix(in oklab, var(--destructive, #dc2626) 10%, transparent);
-  color: var(--destructive, #dc2626);
-  border-radius: 2px;
+  background-color: color-mix(in srgb, var(--destructive) 15%, transparent);
+  color: var(--destructive);
+  border-radius: 4px;
+  padding: 0 3px;
+  margin: 0 -3px;
 }
+
 .dark .verse-selected {
-  background-color: color-mix(in oklab, var(--destructive, #dc2626) 20%, transparent);
+  background-color: color-mix(in oklab, var(--destructive) 20%, transparent);
+}
+
+/* Caret-like glow-underline blink, only while armed (StructureKeyboardPlugin sets the root class). */
+@keyframes verse-armed-glow {
+  0%,
+  100% {
+    box-shadow: 0 2px 0 -1px var(--destructive);
+  }
+  50% {
+    box-shadow: 0 2px 0 -1px transparent;
+  }
+}
+.verse-delete-armed .verse-selected {
+  animation: verse-armed-glow 1.06s steps(1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .verse-delete-armed .verse-selected {
+    animation: none;
+    box-shadow: 0 2px 0 -1px var(--destructive); /* static glow underline — still signals "armed" */
+  }
+}
+
+/* Destructive tooltip naming the confirming keystroke. Rendered via portal to <body> by
+   VerseDeleteTooltip (shared-react); styled here. Opaque surface from --popover so it reads in
+   both light and dark themes. */
+.verse-delete-tooltip {
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  line-height: 1.2;
+  color: var(--destructive);
+  background-color: color-mix(in srgb, var(--destructive) 12%, var(--popover));
+  border: 1px solid color-mix(in srgb, var(--destructive) 40%, transparent);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 15%);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.verse-delete-tooltip kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  padding: 1px 4px;
+  border: 1px solid color-mix(in srgb, var(--destructive) 40%, transparent);
+  border-radius: 3px;
+  background-color: color-mix(in srgb, var(--destructive) 8%, var(--popover));
 }
 
 span.unread img {
