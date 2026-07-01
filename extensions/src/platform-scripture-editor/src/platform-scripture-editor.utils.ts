@@ -29,6 +29,11 @@ import { MarkerMenuItem } from 'platform-bible-react';
 // Note: src/main/shutdown-tasks.ts has a copy of this value — keep them in sync.
 export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 
+// Substring present in the error thrown by the network-object layer when a service hasn't
+// registered yet (30-second cold-start timeout). Used to distinguish expected timing errors
+// from unexpected failures in getAllOpenWebViewDefinitions.
+export const WEBVIEW_SERVICE_NOT_READY_ERROR_SUBSTRING = 'wait-for-net-obj';
+
 /**
  * Check deep equality of two values such that two equal objects or arrays created in two different
  * iframes successfully test as equal
@@ -667,9 +672,27 @@ export async function openDefaultActiveProjectIfApplicable(
   }
   if (interfaceMode !== 'simple') return 'wrong-mode';
 
-  const openWebViews = await papi.webViews.getAllOpenWebViewDefinitions();
+  // On cold start the renderer (and therefore WebViewService) may not be up yet when the
+  // initial picker run fires inside platformScriptureEditor.activate(). The call waits 30 s
+  // then throws with a "wait-for-net-obj" timeout. Treat that as 'no-empty' — onDidOpenWebView
+  // fires naturally once the renderer is ready, so no extra retry wiring is needed. Any other
+  // error is unexpected and re-thrown so the caller's warn path still fires.
+  let openWebViews: Awaited<ReturnType<typeof papi.webViews.getAllOpenWebViewDefinitions>>;
+  try {
+    openWebViews = await papi.webViews.getAllOpenWebViewDefinitions();
+  } catch (e) {
+    const msg = getErrorMessage(e);
+    if (msg.includes(WEBVIEW_SERVICE_NOT_READY_ERROR_SUBSTRING)) {
+      papi.logger.debug(
+        `Default active project picker: WebViewService not ready; returning 'no-empty'. Will retry on next web-view event (${msg})`,
+      );
+      return 'no-empty';
+    }
+    throw e;
+  }
   const emptyEditor = openWebViews.find(
-    (def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && !def.projectId,
+    (def: { webViewType: string; projectId?: string }) =>
+      def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && !def.projectId,
   );
   if (!emptyEditor) return 'no-empty';
 
