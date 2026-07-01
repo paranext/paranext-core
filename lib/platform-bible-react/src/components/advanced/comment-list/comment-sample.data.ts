@@ -847,9 +847,10 @@ export const sampleComments: LegacyCommentThread[] = [
 ];
 
 /**
- * A verseText merge-conflict comment whose diff/plain fields are the ACTUAL serialized output of the
- * C# PlatformCommentConverter (PT-4028) run on the CreateVerseTextConflictComment fixture — captured
- * verbatim so the card renders exactly what production produces. Do not hand-edit the field values.
+ * A verseText merge-conflict comment whose diff/plain fields are the ACTUAL serialized output of
+ * the C# PlatformCommentConverter (PT-4028) run on the CreateVerseTextConflictComment fixture —
+ * captured verbatim so the card renders exactly what production produces. Do not hand-edit the
+ * field values.
  */
 export const verseTextConflictComment: LegacyComment = {
   id: 'conflict-sample/Tim Steenwyk/2011-08-16T15:49:18.4019847-04:00',
