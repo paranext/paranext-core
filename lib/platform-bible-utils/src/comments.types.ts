@@ -80,6 +80,22 @@ export type LegacyComment = {
   user: string;
   /** Original USFM content of verse */
   verse?: string;
+  /**
+   * Only present on `verseText` conflict notes: HTML diff of the rejected (losing) side, using
+   * Paratext 9's `<u>` (inserted) and `<s>` (deleted) markup. Coloring is applied by the UI, not
+   * carried in the markup. Absent for normal notes and non-`verseText` conflicts.
+   */
+  rejectedText?: string;
+  /**
+   * Only present on `verseText` conflict notes: HTML diff of the accepted (winning) side (same
+   * `<u>`/`<s>` markup as {@link rejectedText}). Absent otherwise.
+   */
+  acceptedText?: string;
+  /**
+   * Only present on `verseText` conflict notes: the resulting verse USFM (plain, no diff markup)
+   * already written into the text at merge time. Equals the accepted side in v1. Absent otherwise.
+   */
+  resultText?: string;
   /** Verse reference in which comment appears */
   verseRef: string;
 };
