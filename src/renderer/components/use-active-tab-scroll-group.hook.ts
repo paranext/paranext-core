@@ -1,0 +1,88 @@
+import { useData } from '@renderer/hooks/papi-hooks';
+import {
+  getSavedWebViewDefinitionSync,
+  onDidUpdateWebView,
+} from '@renderer/services/web-view.service-host';
+import { logger } from '@shared/services/logger.service';
+import { UpdateWebViewEvent } from '@shared/services/web-view.service-model';
+import { windowService } from '@shared/services/window.service';
+import { useEvent } from 'platform-bible-react';
+import { getErrorMessage, isPlatformError, ScrollGroupId } from 'platform-bible-utils';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+/** Describes the active scripture tab the main toolbar should follow. */
+export type ActiveTabScrollGroup = {
+  /** Identity of the last active scripture tab. Undefined until one is focused. */
+  webViewId?: string;
+  /** The tab's scroll group - defined only when it is synced to a numbered group. */
+  scrollGroupId?: ScrollGroupId;
+  /** The tab's project id (from its WebViewDefinition). */
+  projectId?: string;
+};
+
+/**
+ * Reads a WebView's saved definition, tolerating the brief early-mount window before the dock
+ * layout is registered (`getSavedWebViewDefinitionSync` throws then).
+ */
+function readDefinitionSafely(webViewId: string | undefined) {
+  if (!webViewId) return undefined;
+  try {
+    return getSavedWebViewDefinitionSync(webViewId);
+  } catch (e) {
+    logger.warn(
+      `useActiveTabScrollGroup: could not read WebView definition ${webViewId}: ${getErrorMessage(e)}`,
+    );
+    return undefined;
+  }
+}
+
+/**
+ * The active scripture tab the main toolbar should follow: the most recently focused WebView tab.
+ * Transient `'other'` focus (e.g. clicking the toolbar's own controls) and non-WebView tabs are
+ * ignored so the last scripture tab is retained.
+ */
+export function useActiveTabScrollGroup(): ActiveTabScrollGroup {
+  const [focusPossiblyError] = useData(windowService.dataProviderName).Focus(undefined, undefined);
+
+  // The webview id currently focused, or undefined for 'other'/non-webview focus.
+  const focusedWebViewId = useMemo(() => {
+    if (!focusPossiblyError || isPlatformError(focusPossiblyError)) return undefined;
+    if (focusPossiblyError.focusType === 'webView') return focusPossiblyError.id;
+    if (focusPossiblyError.focusType === 'tab' && focusPossiblyError.tabType === 'webView')
+      return focusPossiblyError.id;
+    return undefined;
+  }, [focusPossiblyError]);
+
+  // Track the LAST focused webview; ignore transient 'other'/non-webview focus (keep last).
+  const [trackedWebViewId, setTrackedWebViewId] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    if (focusedWebViewId !== undefined) setTrackedWebViewId(focusedWebViewId);
+  }, [focusedWebViewId]);
+
+  // The tracked tab's saved definition (scrollGroupScrRef + projectId).
+  const [definition, setDefinition] = useState(() => readDefinitionSafely(trackedWebViewId));
+  useEffect(() => {
+    setDefinition(readDefinitionSafely(trackedWebViewId));
+  }, [trackedWebViewId]);
+
+  // Ref so the (deps-stable) update handler always sees the current tracked id.
+  const trackedWebViewIdRef = useRef(trackedWebViewId);
+  trackedWebViewIdRef.current = trackedWebViewId;
+
+  useEvent(
+    onDidUpdateWebView,
+    useCallback((event: UpdateWebViewEvent) => {
+      if (event.webView.id === trackedWebViewIdRef.current)
+        setDefinition(readDefinitionSafely(trackedWebViewIdRef.current));
+    }, []),
+  );
+
+  return useMemo(() => {
+    const scrollGroupScrRef = definition?.scrollGroupScrRef;
+    return {
+      webViewId: trackedWebViewId,
+      scrollGroupId: typeof scrollGroupScrRef === 'number' ? scrollGroupScrRef : undefined,
+      projectId: definition?.projectId,
+    };
+  }, [trackedWebViewId, definition]);
+}
