@@ -135,14 +135,19 @@ export function MarkerMenu({
   const [exactMatchItems, titleMatchItems] = useMemo(() => {
     const query = commandSearch.trim().toLowerCase();
     if (!query) {
-      return [markerMenuItems, []];
+      // Hide disallowed markers until specifically searched, so the menu isn't cluttered with
+      // entries the user cannot insert.
+      return [markerMenuItems.filter((markerItem) => !markerItem.isDisallowed), []];
     }
 
-    // Puts items with markers that have direct inclusions of the search query at the top
-    const filteredExactMatchItems = markerMenuItems.filter((markerItem) =>
-      markerItem.marker?.toLowerCase().includes(query),
-    );
-    // Then lists items with titles that includes the search query
+    // Marker-code matches first. Disallowed markers require an exact code match (never a substring),
+    // so a broad query doesn't surface sibling markers the user cannot use.
+    const filteredExactMatchItems = markerMenuItems.filter((markerItem) => {
+      const code = markerItem.marker?.toLowerCase();
+      return markerItem.isDisallowed ? code === query : code?.includes(query);
+    });
+    // Then title matches. A disallowed marker's title match is itself its reveal condition, so it
+    // needs no extra gate here.
     const filteredTitleMatchItems = markerMenuItems.filter(
       (markerItem) =>
         markerItem.title.toLowerCase().includes(query) &&
