@@ -160,7 +160,10 @@ const commentListPanelProvider: IWebViewProvider = {
     savedWebView: SavedWebViewDefinition,
     openWebViewOptions: CommentListPanelOptions,
   ): Promise<WebViewDefinition | undefined> {
-    if (savedWebView.webViewType !== COMMENT_LIST_PANEL_WEBVIEW_TYPE) return undefined;
+    if (savedWebView.webViewType !== COMMENT_LIST_PANEL_WEBVIEW_TYPE)
+      throw new Error(
+        `${COMMENT_LIST_PANEL_WEBVIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} web view`,
+      );
 
     const projectId =
       currentCommentListPanelProjectId ?? openWebViewOptions.projectId ?? savedWebView.projectId;
