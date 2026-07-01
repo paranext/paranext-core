@@ -1,0 +1,39 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+import { KeyboardShortcutsCatalog } from './keyboard-shortcuts-catalog/keyboard-shortcuts-catalog.component';
+import { rootKeyboardShortcuts } from './keyboard-shortcuts.data';
+
+<Meta title="Reference/Keyboard shortcuts" />
+
+# Keyboard shortcuts
+
+This is the single, complete catalog of keyboard shortcuts used across the entire Platform.Bible
+application — the application-level shortcuts handled in the Electron main process, the shortcuts
+defined by bundled extensions, and the shortcuts defined inside the shared `platform-bible-react`
+component library. It is the one source of truth for what shortcuts exist, what they do, and where
+each is handled in code.
+
+For how to _display_ a shortcut in the UI (per-OS formatting conventions), see the
+`platform-bible-react` Storybook under **Guidelines → Keyboard shortcuts**.
+
+<KeyboardShortcutsCatalog entries={rootKeyboardShortcuts} />
+
+## Not catalogued
+
+The catalog above lists intentional, named application shortcuts. A repo-wide audit also surfaced
+keyboard handling that is **deliberately excluded** because it is standard within-widget interaction
+— arrow keys to move a selection, Enter/Space to activate a focused control, Escape to dismiss, Tab
+focus management — rather than a named shortcut. These follow normal accessibility conventions and
+are not tracked here.
+
+A few specific handlers were reviewed and intentionally left out; they are noted here so they are not
+mistaken for omissions:
+
+- **Enter to run a search** — `extensions/src/platform-scripture/src/find/find.component.tsx` starts
+  the search when Enter is pressed in the focused Find box. This is standard "Enter submits the
+  focused input" behavior, not a named shortcut.
+- **`Ctrl`/`Cmd`+`B` to toggle the sidebar** — present but **commented out** in
+  `lib/platform-bible-react/src/components/shadcn-ui/sidebar.tsx`, pending a UX decision. If it is
+  ever enabled, add it to the catalog.
+- **Configurable reference submit keys** — `book-chapter-control.component.tsx` lets a caller pass a
+  `submitKeys` prop (e.g. space or `-`) to submit the scripture reference in the navigation input.
+  This is caller-configured input behavior rather than a fixed application shortcut.
