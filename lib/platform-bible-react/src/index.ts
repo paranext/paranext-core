@@ -32,6 +32,12 @@ export type {
 } from './components/advanced/comment-list/comment-list.types';
 export { COMMENT_LIST_STRING_KEYS } from './components/advanced/comment-list/comment-list.types';
 export { default as CommentList } from './components/advanced/comment-list/comment-list.component';
+export type {
+  ConflictNoteCardProps,
+  ConflictResolution,
+} from './components/advanced/comment-list/conflict-note-card.types';
+export { CONFLICT_NOTE_STRING_KEYS } from './components/advanced/comment-list/conflict-note-card.types';
+export { ConflictNoteCard } from './components/advanced/comment-list/conflict-note-card.component';
 export { default as DataTable } from './components/advanced/data-table/data-table.component';
 export type {
   ColumnDef,
