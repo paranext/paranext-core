@@ -232,3 +232,11 @@ All interactive UI must be keyboard navigable. Focus should be indicated by a fo
 Be aware that the focus ring sometimes goes on a **container** rather than the interactive element itself. For example, when a text input field contains buttons, the focus ring wraps the entire container — not each individual button.
 
 See also: [Responsiveness](./responsiveness.mdx) for minimum width requirements and container query guidance.
+
+---
+
+## Storybook stories
+
+Storybook stories for PAPI-coupled components (bundled-extension web views and similar) must behave like the running app — filters actually filter, search re-highlights, scope changes change the results, state transitions run, and writes reflect in the UI. A story that only renders a fixed snapshot and ignores its own controls is a bug.
+
+For the full conventions — the three-file split (`.component.tsx` / `.web-view.tsx` / `.stories.tsx`), where UI logic must live vs. what the story may mock, callback conventions, and the pre-commit verification gate — see [Storybook story guidelines](../../../../../.storybook/storybook-interactivity.md).
