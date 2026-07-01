@@ -2270,6 +2270,20 @@
   white-space: nowrap;
 }
 
+/* Verse marker armed for the two-step intentional delete (first Backspace/Delete selects it).
+   Selection-style background so it reads as selected. Mirrors shadcn's destructive affordance
+   (bg-destructive/10 + text-destructive, dark:bg-destructive/20): a 10% --destructive tint in
+   light themes, bumped to 20% under .dark. Falls back to #dc2626 where the theme token is absent
+   (e.g. standalone Storybook demos). */
+.verse-selected {
+  background-color: color-mix(in oklab, var(--destructive, #dc2626) 10%, transparent);
+  color: var(--destructive, #dc2626);
+  border-radius: 2px;
+}
+.dark .verse-selected {
+  background-color: color-mix(in oklab, var(--destructive, #dc2626) 20%, transparent);
+}
+
 span.unread img {
   background-color: #ffff99;
   position: relative;
