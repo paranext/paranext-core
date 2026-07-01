@@ -77,8 +77,10 @@ import {
 import {
   computeCompareState,
   computeImportCompareState,
+  computeSelectableVisibleBooks,
   deleteConfirmVariant,
   fmtTemplate,
+  isBookNotInCreateReference,
   versificationFallbackName,
   versificationLabelKey,
 } from './manage-books-dialog.utils';
@@ -1152,11 +1154,30 @@ export function ManageBooksDialog({
       return next;
     });
 
-  const selectableVisibleBooks = useMemo<string[]>(() => {
-    if (action === 'view') return [];
-    if (action === 'import') return visibleBooks.filter((b) => !!importFiles[b]);
-    return visibleBooks;
-  }, [action, visibleBooks, importFiles]);
+  // "Selectable" excludes books the grid disables (Create > Based on template books not present in
+  // the reference project). Deriving Select-All / counts from this set keeps Select-All from
+  // selecting non-creatable books — the bug where it inflated the count and tripped the
+  // missing-model preflight. Shares `isBookNotInCreateReference` with `gridItems` so the grid's
+  // disabled pills and the selection logic can never disagree.
+  const selectableVisibleBooks = useMemo<string[]>(
+    () =>
+      computeSelectableVisibleBooks({
+        action,
+        visibleBooks,
+        hasImportFile: (b) => !!importFiles[b],
+        createMethod,
+        hasReferenceProject: !!createReferenceProject,
+        referencePresentBooks: createReferenceBookState?.present,
+      }),
+    [
+      action,
+      visibleBooks,
+      importFiles,
+      createMethod,
+      createReferenceProject,
+      createReferenceBookState,
+    ],
+  );
   const visibleSelectedCount = selectableVisibleBooks.filter((b) => selected.has(b)).length;
 
   const headerSelectState: boolean | 'indeterminate' = (() => {
@@ -1701,11 +1722,15 @@ export function ManageBooksDialog({
       let disabled: boolean | undefined;
       let disabledReason: string | undefined;
       if (
-        action === 'create' &&
-        createMethod === 'fromTemplate' &&
-        createReferenceBookState &&
+        // `createReferenceProject &&` is kept so TS narrows it for `.shortName` below; the
+        // not-in-reference determination itself lives in the shared predicate.
         createReferenceProject &&
-        !createReferenceBookState.present.has(book)
+        isBookNotInCreateReference(book, {
+          action,
+          createMethod,
+          hasReferenceProject: true,
+          referencePresentBooks: createReferenceBookState?.present,
+        })
       ) {
         disabled = true;
         disabledReason = fmtTemplate(
