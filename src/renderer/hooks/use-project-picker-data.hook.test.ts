@@ -136,6 +136,10 @@ describe('useProjectPickerData', () => {
     expect(result.current.currentProject).toBeUndefined();
   });
 
+  // Timeout raised to 15 s: asyncUtilTimeout is already 5 s (see beforeAll), and
+  // importMocks() + renderHook setup can consume non-trivial wall-clock time on a
+  // starved Windows CI runner, causing the default 5 s Vitest test timeout to
+  // expire before waitFor resolves (observed in run 27636725842 on 2026-06-16).
   it('returns currentProject from the first open Scripture Editor web view', async () => {
     const { webViews, papiFrontendProjectDataProviderService } = await importMocks();
     vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([
@@ -152,7 +156,7 @@ describe('useProjectPickerData', () => {
       expect(result.current.currentProject?.fullName).toBe('Genesis Project');
     });
     expect(result.current.currentProject?.id).toBe('proj-abc');
-  });
+  }, 15_000);
 
   it('returns allProjects from projectLookupService', async () => {
     const { projectLookupService, papiFrontendProjectDataProviderService } = await importMocks();
