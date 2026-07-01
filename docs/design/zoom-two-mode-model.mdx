@@ -1,0 +1,246 @@
+---
+title: Zoom — the two-mode model (global + per-content-language)
+status: Draft for review
+owners: [Alex Mercado]
+informs: [PT-1680, paranext-core#2211]
+audience: Platform.Bible / Paratext 10 design + engineering
+lastUpdated: 2026-06-02
+---
+
+# Zoom: two modes, two jobs
+
+Zoom in Paratext 10 does two unrelated jobs, and conflating them is what made
+PT-1680 hard to reason about. We split them explicitly:
+
+| Mode | Job | Mechanism | Travels with project? | Set by |
+| --- | --- | --- | --- | --- |
+| **Global zoom** | "Get me to a comfortable baseline on _this_ monitor." Scales **everything** — chrome, toolbars, menus, and all content together. | Native Chromium zoom (`webContents.setZoomFactor`) | **No** — it's machine/user-local (monitor DPI is personal; Ian H.) | Each user |
+| **Per-content-language zoom** | "Fix the outliers." Bump just the Hebrew / Greek / a specific script, _relative to_ global. | CSS `zoom` applied through a language/script selector | **Yes** (the team baseline does) | Team leader (baseline) + each user (personal override) |
+
+This is Alex's May 6 recommendation — *"global zoom: use browser zoom; per
+content language: use a CSS selector for the content type and apply CSS `zoom`"* —
+endorsed by Ian. This article ties it to the real `paranext-core` vocabulary and
+specifies shortcuts, storage, and where users configure each mode.
+
+> **Decision (settled in thread):** CSS `zoom`, **not** `transform: scale()`.
+> Chromium's CSS `zoom` keeps hit-testing, `getBoundingClientRect`, scroll
+> regions, and input coordinates correct; `transform: scale()` breaks the dock's
+> coordinate math.
+
+---
+
+## Vocabulary map (real `paranext-core` identifiers)
+
+Replace any prior placeholder names with these.
+
+| Concept | Real identifier | Location |
+| --- | --- | --- |
+| Global zoom setting (user-scoped) | `platform.zoomFactor` (`number`, default `1.0`, clamp `0.5`–`3.0`) | `src/declarations/papi-shared-types.ts`; declared in `src/extension-host/data/core-settings-info.data.ts`; constants `DEFAULT_ZOOM_FACTOR` / `MIN_ZOOM_FACTOR` / `MAX_ZOOM_FACTOR` in `src/shared/data/platform.data.ts` |
+| Global zoom application | `mainWindow.webContents.setZoomFactor(zoom)` (this **is** "browser zoom") | `src/main/main.ts` (`getZoomFactor`/`setZoomFactor`/`resetZoomFactor`/`zoomIn`/`zoomOut`; subscription at the `platform.zoomFactor` listener) |
+| Existing zoom commands | `platform.zoomIn`, `platform.zoomOut` | `CommandHandlers` in `src/declarations/papi-shared-types.ts` (note: there is **no** `platform.zoomReset` command yet — reset is done inline via `settingsService.reset('platform.zoomFactor')`) |
+| Per-view zoom (PR #2211, **not yet on `main`**) | `platform.viewZooms` (`Record`) + renderer `view-zoom.service.ts` applying CSS `zoom` per view (`getZoom`/`setZoom`/`adjustZoom`/`resetZoom`/`subscribe`/`prune`/`flush`, debounced ~250 ms, clamp `0.5`–`3.0`) | PR #2211 (`ai/feature/zoom-katherine-04-17-2026`) |
+| User settings service / hook | `ISettingsService` (`platform.settingsServiceDataProvider`) / `useSetting<SettingName>(key, default)` → `[value, setValue, resetValue, isLoading]` | `src/shared/services/settings.service-model.ts`; `src/renderer/hooks/papi-hooks/use-setting.hook.ts` |
+| **Project** settings service / hook | `IProjectSettingsService` (`ProjectSettingsService`) / `useProjectSetting<ProjectSettingName>(pdpSource, key, default)` | `src/shared/services/project-settings.service-model.ts`; `src/renderer/hooks/papi-hooks/use-project-setting.hook.ts` |
+| Content language of a project | `platform.languageTag` (BCP 47, e.g. `en-GB`), `platform.language` (display) | project settings, `src/extension-host/data/core-project-settings-info.data.ts` |
+| Text direction of a project | `platform.textDirection` (`'ltr' \| 'rtl' \| '' \| undefined`) | project settings, same file |
+| Per-view identity | `webViewType` (type, e.g. `helloRock3.projectViewer`) + `id` (`WebViewId`, instance) + `projectId` + `contentType`; extensible `state?: Record<string, unknown>` | `src/shared/models/web-view.model.ts` |
+| Product tier ("10Simple" / "10Power") | `platform.interfaceMode: 'simple' \| 'power'` (default `'simple'`); helper `useIsPowerMode()` | `src/declarations/papi-shared-types.ts`; `src/renderer/hooks/use-is-power-mode.hook.ts` |
+| Setting-to-setting initialization | `derivesFrom?: ReferencedItem` — **one-time copy** of another setting's value on first load (NOT a live cascade) | `lib/platform-bible-utils/src/extension-contributions/settings.model.ts` |
+
+> **Gap to know about:** there is **no per-language CSS** in the renderer today,
+> and **no script field** on a project (only `languageTag` + `textDirection`).
+> Mode 2 requires new plumbing (below), not just a setting.
+
+---
+
+## Mode 1 — Global zoom (browser zoom)
+
+**What it is.** The existing `platform.zoomFactor` user setting, applied with
+`webContents.setZoomFactor`. It already scales the entire renderer — chrome and
+content together — which is precisely Ian's "scale the UI _and_ all content."
+Nothing about the storage or mechanism needs to change for Mode 1; it already
+exists and already behaves the way Alex wants.
+
+**Where users access it**
+
+- **Settings flyout** next to **Theme** (Ian's A.4 — *"global zoom probably
+  belongs in a flyout with Theme"*). Today that's the settings icon; longer term
+  it folds into a Profile popover alongside theme / network / language.
+- The full Settings dialog (via the `platform.openSettings` command) for the
+  numeric value.
+- Keyboard + `Ctrl/⌘`+wheel (see [Shortcuts](#keyboard-shortcuts)).
+
+**Behavior decisions (settled)**
+
+- New editors open at **global zoom**, not last-used editor zoom (Ian, Apr 28 —
+  *"opening at global zoom seems safest"*). In #2211 terms, the
+  `${webViewType}:__default` mirror should resolve to `platform.zoomFactor`, not
+  to the last unusual chapter's zoom.
+- Tab bar and title bar stay at 100% regardless (#2211).
+
+---
+
+## Mode 2 — Per-content-language zoom (CSS `zoom` via a language selector)
+
+**What it is.** A CSS `zoom` multiplier applied to content elements matching a
+**language/script selector**, layered _on top of_ global zoom. Because Chromium
+composes browser zoom and CSS `zoom` multiplicatively, the visible result is:
+
+```
+effectiveZoom(language L) = platform.zoomFactor            // Mode 1, user-local
+                          × ( userOverride[L]              // personal, user-local
+                              ?? projectBaseline[L]        // team-pushed, travels
+                              ?? 1.0 )                     // no adjustment
+```
+
+**The selector target (new plumbing required).** Mode 2 needs content to be
+tagged by language so CSS can target it. The natural hook is the standard
+`lang` attribute (BCP 47) on content nodes, addressed with `:lang()` /
+`[lang|="…"]`:
+
+```css
+/* applied by the view container / view-zoom.service.ts, per focused content */
+:lang(hbo) { zoom: var(--content-zoom-hbo); }  /* Ancient Hebrew */
+:lang(grc) { zoom: var(--content-zoom-grc); }  /* Koine Greek */
+```
+
+- Platform webviews (scripture editor) should **stamp `lang`** on content nodes,
+  parallel to how `platform.textDirection` already feeds `dir`. There is no
+  `lang` stamping today — this is net-new.
+- **Key by script subtag, not full locale, where possible.** A "Hebrew bump"
+  should help every Hebrew-script language, not just one locale. BCP 47 carries a
+  script subtag (`Hebr`, `Grek`); derive it from `languageTag`. This also makes
+  the multi-script case (interlinear, ER research pane — Ian's "future") work:
+  one webview shows the project's `languageTag` **plus** original-language
+  resources that carry their own tags, and each script scales independently.
+
+**Tier gating.** Per-instance content-language zoom (e.g. two Comments panels
+for different-script projects, each remembered separately) is a **10Power**
+concern (`platform.interfaceMode === 'power'`; gate with `useIsPowerMode()`).
+**10Simple** can ship per-type only (Ian, Apr 28). Don't block the data model on
+this — just gate the UI.
+
+---
+
+## Storage & the cascade — is the team-pushed adjustment a "third setting"?
+
+Short answer: **conceptually it's one knob, but in `paranext-core` it must be
+realized as two stored settings**, because the platform has **no** VS-Code-style
+single-setting-at-two-scopes cascade. User settings and project settings are
+different services, different key namespaces, different hooks; `derivesFrom` is a
+one-time copy, not a live override resolver. So we compute the cascade ourselves.
+
+| # | Stored value | Setting | Scope / service | Travels? | "Reset" clears it? |
+| --- | --- | --- | --- | --- | --- |
+| 1 | **Global zoom** | `platform.zoomFactor` | user (`useSetting`) | No | `Ctrl/⌘+0` → `1.0` |
+| 2 | **Per-language team baseline** | e.g. `platform.contentLanguageZoom` — `Record<scriptOrTag, relativeFactor>` | **project** (`useProjectSetting`) | **Yes** | No (only the team leader edits it) |
+| 3 | **Per-language personal override** | e.g. `platform.contentLanguageZoomOverrides` — same shape | user (`useSetting`) | No | `Ctrl/⌘+Shift+0` → deletes `[L]` |
+
+**This is what gives you the behavior you asked for.** A team leader edits #2 in
+project settings; it rides the project to every member via send/receive. Members
+who never touch zoom simply render at `global × projectBaseline[L]` — the leader
+has effectively set everyone's _reset target_ without anyone customizing. A
+member who nudges a script writes #3 (personal, local). `Ctrl/⌘+Shift+0` deletes
+their #3 entry, so the script falls **back to the team baseline (#2)** — not to
+`1.0`. That is exactly your `reset = global × project-per-content-language-
+adjustment`, expressed as "clear the personal override and let the effective
+value fall through to the team baseline."
+
+> **So, "is it a third setting?"** There are **three stored values total**, but
+> only because Mode 1 (global) is its own pre-existing thing. The Mode 2 knob is
+> **two** settings — a project baseline and a user override — and it *has* to be,
+> given there's no cross-scope cascade primitive to lean on. It is **not** a
+> single setting at two scopes the way VS Code's `default → user → workspace`
+> would let you model it.
+
+---
+
+## Keyboard shortcuts
+
+Baseline: **plain modifier = global; add `Shift` = per-content-language.** Per OS:
+
+### Windows / Linux (`Ctrl`)
+
+| Action | Global zoom | Per-content-language zoom |
+| --- | --- | --- |
+| Zoom in | `Ctrl` `=` (and numpad `Ctrl` `+`) | `Ctrl` `Shift` `=` |
+| Zoom out | `Ctrl` `-` | `Ctrl` `Shift` `-` |
+| Reset | `Ctrl` `0` → `1.0` | `Ctrl` `Shift` `0` → back to team baseline |
+| Pointer | `Ctrl` `wheel` (view under pointer) | `Ctrl` `Shift` `wheel` |
+
+### macOS (`⌘`, never `Ctrl`)
+
+| Action | Global zoom | Per-content-language zoom |
+| --- | --- | --- |
+| Zoom in | `⌘` `=` ("Zoom In") | `⌘` `Shift` `=` |
+| Zoom out | `⌘` `-` ("Zoom Out") | `⌘` `Shift` `-` |
+| Reset | `⌘` `0` ("Actual Size") → `1.0` | `⌘` `Shift` `0` → back to team baseline |
+| Pointer | `⌘` `wheel` | `⌘` `Shift` `wheel` |
+
+### The one real collision — and the per-OS tweak it forces
+
+On most layouts `+` **is** `Shift`+`=`. So "`Ctrl`+`+`" is physically
+`Ctrl`+`Shift`+`=` — which is the same chord we want for *per-language* zoom-in.
+You can't have both.
+
+**Resolution (honors "add Shift"):** branch on `Shift` **first** — `Shift` ⇒
+Mode 2, otherwise Mode 1 — and **drop the `Ctrl/⌘`+`Shift`+`=` alias for global
+zoom-in.** Global zoom-in stays on `Ctrl/⌘`+`=` and numpad `+` (which carries no
+`Shift`); per-language zoom-in takes `Ctrl/⌘`+`Shift`+`=`. This is the "per-OS
+tweak" the baseline needed.
+
+### Where these are actually wired (so each OS keeps its norms)
+
+Shortcuts are **not** a contribution point today — there is no accelerator /
+keybindings JSON. They live in two OS-specific places, and both must learn the
+`Shift` variants:
+
+- **Windows / Linux:** the `webContents.on('before-input-event', …)` handler in
+  `src/main/main.ts` (the `if (process.platform !== 'darwin')` branch already
+  matches `input.control && input.key === '=' | '+' | '-' | '0'`). Add an
+  `input.shift` discriminator to route to Mode 2.
+- **macOS:** the native menu bar in `src/main/platform-macos-menubar.data.ts`
+  (`role: 'viewMenu'` auto-provides ⌘= / ⌘− / ⌘0 as *Zoom In / Zoom Out /
+  Actual Size*). To free `⌘`+`Shift` for Mode 2 and avoid the default
+  `viewMenu` "Zoom In" grabbing `⌘`+`Shift`+`=`, **replace the default
+  `viewMenu` zoom items with explicit menu items** bound to the zoom commands,
+  and add Mode-2 items (a good home is the existing custom **`macosMenubar.textMenu`**).
+
+> **Heads-up for PT9 users (Ian):** PT9 uses the *non-Shift* `Ctrl` `+`/`-`/`0`
+> as **per-tab** controls. Here, non-Shift is **global**. Worth a migration note.
+
+> **Existing chords to avoid colliding with:** Win/Linux `Ctrl`+`PageUp`/`PageDown`
+> (tab-group nav); macOS `⌘`+`Shift`+`[`/`]` (tab nav) and `⌘`+`Option`+`↑`/`↓`
+> (tab-group nav). The `Shift`+`=/-/0` set is clear of all of these.
+
+---
+
+## Where users access and configure zoom (summary)
+
+| Knob | Where | Backed by |
+| --- | --- | --- |
+| Global zoom | Settings flyout (with Theme) → settings icon now, Profile popover later; full Settings dialog for the number; `Ctrl/⌘` shortcuts + wheel | `platform.zoomFactor` (user) |
+| Per-language **team baseline** | **Project Settings** UI, edited by the team leader; rides the project to the team | `platform.contentLanguageZoom` (project) *(proposed)* |
+| Per-language **personal override** | `Ctrl/⌘`+`Shift` shortcuts / per-view affordance; `…+Shift+0` resets to the team baseline | `platform.contentLanguageZoomOverrides` (user) *(proposed)* |
+
+---
+
+## Open questions (still need a decision)
+
+1. **Key space for Mode 2:** script subtag (`Hebr`, `Grek`) vs full BCP 47
+   `languageTag` (`hbo`, `grc`)? Recommendation: **script subtag**, derived from
+   `languageTag`, so one bump covers a whole script. Confirm.
+2. **Reset target:** `Ctrl/⌘+Shift+0` clears the personal override and falls back
+   to the **team baseline** (recommended), vs hard-setting to `1.0`. Confirm the
+   fall-back semantics.
+3. **Can a user opt out of a team baseline entirely** (force `1.0` for a script),
+   and is that distinguishable from "no override"? (Needs a sentinel vs absence.)
+4. **Naming** of the two new settings (`platform.contentLanguageZoom` /
+   `…Overrides`) — confirm against the `namespace.settingName` convention and
+   whether these are core or belong to the scripture-editor extension.
+5. **`lang` stamping owner:** does the platform stamp `lang` on scripture-editor
+   content, or is each webview responsible for tagging its own content for the
+   `:lang()` selector to work?
+6. **Relationship to #2211's per-view zoom:** is Mode 2 a *third* axis on top of
+   #2211's per-view CSS `zoom`, or does it replace per-type zoom for
+   document-like views? (Composition order matters: `global × perView × perLang`?)
