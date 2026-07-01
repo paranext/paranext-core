@@ -41,7 +41,13 @@ import {
   WebViewType,
 } from '@shared/models/web-view.model';
 import { registerCommand } from '@shared/services/command.service';
+import { dataProviderService } from '@shared/services/data-provider.service';
 import { logger } from '@shared/services/logger.service';
+import { setWorkspaceUpdating } from '@renderer/services/workspace-updating-store';
+import {
+  getLastOpenedProject,
+  setLastOpenedProject,
+} from '@renderer/services/last-opened-project-cache';
 import { networkObjectService } from '@shared/services/network-object.service';
 import {
   createBufferedNetworkEventEmitter,
@@ -80,6 +86,12 @@ import {
   Unsubscriber,
   UnsubscriberAsync,
 } from 'platform-bible-utils';
+import {
+  buildSimpleLayoutForProject,
+  SIMPLE_LAYOUT_TAB_IDS,
+} from '@renderer/components/docking/simple-layout.builder';
+import { trackSimpleLayoutTabsResolved as trackSimpleLayoutTabsResolvedImpl } from '@renderer/services/simple-layout-tabs-resolved.tracker';
+import type { LayoutBase } from 'rc-dock';
 import {
   closeOpenUsersnapForm,
   isUsersnapFormCurrentlyOpen,
@@ -712,15 +724,25 @@ const onLayoutChange: OnLayoutChange = async (newLayout, _currentTabId, changeIn
 /**
  * Loads layout information into the dock layout.
  *
+ * Accepts either the shared model's opaque `LayoutInfo` or rc-dock's `LayoutBase`. The two are
+ * structurally compatible at runtime; `LayoutInfo` is opaque in the shared model to keep callers
+ * outside the docking module unaware of rc-dock's type. Callers inside the renderer that already
+ * speak rc-dock (e.g. `buildSimpleLayoutForProject`) can pass `LayoutBase` directly without a
+ * cast.
+ *
  * @param layout If this parameter is provided, loads that layout information. If not provided, gets
  *   the persisted layout information and loads it into the dock layout.
  */
-async function loadLayout(layout?: LayoutInfo): Promise<void> {
+async function loadLayout(layout?: LayoutInfo | LayoutBase): Promise<void> {
   const dockLayoutVar = await getDockLayout();
   if (layout) {
+    // Cross the rc-dock / shared-model boundary with one cast at this edge so callers don't have
+    // to. Matches the convention in `platform-dock-layout.component.tsx`.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const layoutAsInfo = layout as unknown as LayoutInfo;
     // Explicit layout change. `loadLayout` doesn't run `onLayoutChange`, so run it manually.
-    dockLayoutVar.loadLayout(layout);
-    await onLayoutChange(layout);
+    dockLayoutVar.loadLayout(layoutAsInfo);
+    await onLayoutChange(layoutAsInfo);
     return;
   }
 
@@ -830,11 +852,8 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
           // Update the cache synchronously with the notification so any `saveLayout` racing the
           // switch reads the new mode immediately (before `loadLayout`'s own read resolves).
           currentInterfaceMode = newMode;
-          try {
-            await loadLayout();
-          } catch (err) {
-            logger.warn(`Dock layout failed to reload after interface mode change: ${err}`);
-          }
+          if (newMode === 'simple') await handleSwitchToSimpleMode();
+          else await loadLayoutWithWarning();
         },
         { retrieveDataImmediately: false },
       );
@@ -879,6 +898,125 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
 
     return true;
   };
+}
+
+/**
+ * Drives the power → simple transition from the renderer. The bare `simpleLayout` declares four
+ * tabs with empty state (no `projectId`); restoring it would mount four empty webviews, fire
+ * `onDidOpenWebView` for each, trigger the default-project picker, and then reload all four
+ * webviews with the project — paying a full webview teardown + remount cycle twice. Power mode
+ * avoids this because its persisted layout already has every tab's state populated.
+ *
+ * To match the power-mode shape, we resolve the most-recent project here, bake its `projectId` into
+ * a cloned simple layout via {@link buildSimpleLayoutForProject}, and pass that to `loadLayout`.
+ * Each web-view provider's `getWebView` then receives `savedWebView.projectId` directly from the
+ * layout — same code path power mode uses on restore — and renders project content immediately,
+ * with no empty-placeholder → reload round-trip.
+ *
+ * Fast path: `getLastOpenedProject` returns the cached id (populated reactively from
+ * `useProjectPickerData`), and no `await` precedes the layout swap.
+ *
+ * Slow path: cold start (no cache yet) — fall back to the async recents-provider lookup.
+ *
+ * Fallback: if neither cache nor recents can produce a project, load the bare `simpleLayout` and
+ * let the picker do the slow legacy path.
+ */
+async function handleSwitchToSimpleMode(): Promise<void> {
+  const cached = getLastOpenedProject();
+  if (cached) {
+    await runProjectBoundSimpleSwitch(cached.id);
+    return;
+  }
+
+  const resolvedId = await getMostRecentProjectId();
+
+  if (!resolvedId) {
+    await loadLayoutWithWarning();
+    return;
+  }
+
+  // Populate the cache so the next switch can take the fast path.
+  setLastOpenedProject({ id: resolvedId });
+  await runProjectBoundSimpleSwitch(resolvedId);
+}
+
+/**
+ * Wrapper around `loadLayout()` that catches any failure and logs a single consistent warning. Used
+ * by the mode-change subscription and the fast-switch fallback — both paths want
+ * "load-and-keep-going" semantics rather than propagating the error.
+ */
+async function loadLayoutWithWarning(): Promise<void> {
+  try {
+    await loadLayout();
+  } catch (err) {
+    logger.warn(`Dock layout failed to reload after interface mode change: ${err}`);
+  }
+}
+
+async function runProjectBoundSimpleSwitch(projectId: string): Promise<void> {
+  // The renderer drives the overlay on this fast path: because the layout has projectId baked in,
+  // the default-project picker never fires `openScriptureEditor` and the extension's
+  // `WILL_START`/`DID_FINISH` events are never emitted — so nothing else would show the overlay.
+  setWorkspaceUpdating(true);
+  // Force React to commit + browser to paint the overlay BEFORE the layout swap, otherwise the
+  // show/hide can batch around the fast `loadLayout` and the overlay never appears.
+  await waitForNextPaint();
+
+  // Start tracking webview-resolved events BEFORE `loadLayout` fires the async
+  // `retrieveWebViewContent` calls — otherwise the events for fast-resolving tabs can fire before
+  // we subscribe and we'd miss them. Especially important on subsequent simple-mode switches,
+  // where the previous switch's resolved titles are still in the dock layout and the new update
+  // events for them are what tell us the project content has actually landed.
+  const tabsResolved = trackSimpleLayoutTabsResolvedImpl({
+    tabIds: SIMPLE_LAYOUT_TAB_IDS,
+    onDidOpenWebView,
+    onDidUpdateWebView,
+  });
+
+  try {
+    const projectBoundLayout = buildSimpleLayoutForProject(projectId);
+    await loadLayout(projectBoundLayout);
+    // Wait for every simple-layout tab's webview to fire its open/update event, which is when
+    // `loadWebViewTab` replaces the `%tab_title_unknown%` placeholder with the real title.
+    await tabsResolved.promise;
+  } catch (err) {
+    logger.warn(`Dock layout failed to reload after interface mode change: ${err}`);
+    tabsResolved.dispose();
+  } finally {
+    // Let the resolved tabs paint behind the overlay before we hide it, so the user sees a clean
+    // handoff (overlay → tabs) instead of a flash of an unresolved layout.
+    await waitForNextPaint();
+    setWorkspaceUpdating(false);
+  }
+}
+
+/**
+ * Resolves after the next browser paint. Double `requestAnimationFrame` so we wait one frame for
+ * React to commit + browser to paint, and a second frame to ensure that paint has been flushed
+ * before the caller proceeds. Falls back to immediate resolution in environments that don't provide
+ * `requestAnimationFrame` (some test runners).
+ */
+function waitForNextPaint(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (typeof requestAnimationFrame !== 'function') {
+      resolve();
+      return;
+    }
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+}
+
+async function getMostRecentProjectId(): Promise<string | undefined> {
+  try {
+    const recentsProvider = await dataProviderService.get(
+      'platformScripture.recentlyOpenedProjects',
+    );
+    if (!recentsProvider) return undefined;
+    const recents = await recentsProvider.getRecentProjects(undefined);
+    return Array.isArray(recents) ? recents[0] : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 // #endregion Dock layouts
