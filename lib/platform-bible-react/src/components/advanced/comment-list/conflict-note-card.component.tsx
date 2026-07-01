@@ -110,7 +110,7 @@ export function ConflictNoteCard({
         />
       </div>
 
-      {comment.acceptedText !== undefined && (
+      {!!comment.acceptedText && (
         <div className="tw:flex tw:flex-col tw:gap-1">
           <span className="tw:font-medium">
             {localizedStrings['%conflict_note_accepted_label%'] ?? 'Accepted'}
