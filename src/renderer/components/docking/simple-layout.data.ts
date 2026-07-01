@@ -77,6 +77,16 @@ export const simpleLayout: LayoutBase = {
                   state: {},
                 },
               },
+              {
+                id: 'c7e4a8b2-3d91-4f06-8e5a-1b2c9d0e7f83',
+                tabType: TAB_TYPE_WEBVIEW,
+                data: {
+                  webViewType: 'legacyCommentManager.commentListPanel',
+                  id: 'c7e4a8b2-3d91-4f06-8e5a-1b2c9d0e7f83',
+                  contentType: 'react',
+                  state: {},
+                },
+              },
             ] as SavedTabInfo[],
           },
         ],
