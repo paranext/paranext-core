@@ -1739,6 +1739,20 @@
   margin-right: 10vw;
 }
 
+/* Real-table layout. The editor renders \table / \tr / \tc* / \th* as real
+   <table>/<tr>/<td>/<th>. The paragraph rules above (e.g.
+   .text-spacing .usfm_tr { text-indent: -5vw }) model \tr as an indented block;
+   text-indent is inherited, so on a real <tr> it pulls every cell's text left and
+   collapses the columns. Reset it on the real-table structural classes. Setting
+   text-indent:0 on the cell itself overrides the value inherited from the row
+   regardless of cascade order. Applies to all resources + the project view, since
+   real tables can appear in any USJ. */
+.usfm .table-row,
+.usfm .table-cell {
+  text-indent: 0;
+  margin: 0;
+}
+
 .formatted-font .usfm_th1 {
   font-size: 100%;
   font-style: italic;
@@ -2208,22 +2222,6 @@
 
 .opennote {
   color: #7777ff;
-}
-
-.usfm table {
-  border-collapse: collapse;
-}
-
-.usfm td {
-  border: 1px solid #000000;
-  page-break-inside: avoid;
-  /* FB27281 adding padding based on font size*/
-  padding-right: 0.28em;
-  padding-left: 0.28em;
-}
-
-.usfm td.markercell {
-  border-style: none;
 }
 
 .usfm rt {
