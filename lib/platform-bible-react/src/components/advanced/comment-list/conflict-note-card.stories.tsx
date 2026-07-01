@@ -4,7 +4,10 @@ import { useState } from 'react';
 import { Card, CardContent } from '@/components/shadcn-ui/card';
 import { ConflictNoteCard } from './conflict-note-card.component';
 import { ConflictResolution } from './conflict-note-card.types';
-import { verseTextConflictComment } from './comment-sample.data';
+import {
+  verseTextConflictComment,
+  verseTextConflictReplacementSample,
+} from './comment-sample.data';
 
 const localizedStrings: LanguageStrings = {
   '%conflict_note_description_verseText%': 'Conflicting changes were made to the verse text.',
@@ -49,8 +52,14 @@ export default meta;
 
 type Story = StoryObj<typeof ConflictNoteCardStory>;
 
-/** Default verseText conflict. Toggle Accept/Reject to watch the Result preview change. */
-export const Default: Story = { render: () => <ConflictNoteCardStory /> };
+/**
+ * Default verseText conflict with a REPLACEMENT (both deletion and insertion). Struck-red "town"
+ * and green "village"/"city" are both visible. Toggle Accept/Reject to watch the Result preview
+ * change between "city" (accepted) and "village" (rejected).
+ */
+export const Default: Story = {
+  render: () => <ConflictNoteCardStory comment={verseTextConflictReplacementSample} />,
+};
 
 /** The selector is disabled when the user lacks accept/reject permission. */
 export const RestrictedPermissions: Story = {
