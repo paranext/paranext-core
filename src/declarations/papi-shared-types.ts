@@ -203,6 +203,12 @@ declare module 'papi-shared-types' {
      * @default `simple`
      */
     'platform.interfaceMode': 'simple' | 'power';
+    /**
+     * When enabled, the application avoids leaking personal information: file paths in log output
+     * are made relative (the user's home directory is stripped), and the registered name and email
+     * shown in the user profile are replaced with placeholders.
+     */
+    'platform.privacyMode': boolean;
   }
 
   /**

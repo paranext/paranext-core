@@ -834,6 +834,10 @@ declare module 'shared/utils/internal-util' {
 }
 declare module 'shared/utils/logger.utils' {
   import { MainLogger, RendererLogger } from 'electron-log';
+  /** Update the cached home directory used to anonymize paths when privacy mode is on. */
+  export function setLoggerHomeDir(homeDir: string): void;
+  /** Toggle privacy mode for log output. Wired up from the settings service. */
+  export function setLoggerPrivacyMode(enabled: boolean): void;
   /**
    * Format a string of a service message
    *
@@ -4296,6 +4300,12 @@ declare module 'papi-shared-types' {
      * @default `simple`
      */
     'platform.interfaceMode': 'simple' | 'power';
+    /**
+     * When enabled, the application avoids leaking personal information: file paths in log output
+     * are made relative (the user's home directory is stripped), and the registered name and email
+     * shown in the user profile are replaced with placeholders.
+     */
+    'platform.privacyMode': boolean;
   }
   /**
    * Names for each user setting available on the papi.

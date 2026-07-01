@@ -47,6 +47,11 @@ export const platformSettings: SettingsContribution = [
         description: '%settings_platform_interfaceMode_description%',
         default: 'simple',
       },
+      'platform.privacyMode': {
+        label: '%settings_platform_privacyMode_label%',
+        description: '%settings_platform_privacyMode_description%',
+        default: false,
+      },
     },
   },
 ];
@@ -91,6 +96,12 @@ const serializableStringDictionarySettingValidator: SettingValidator<
 };
 
 const booleanValidator: SettingValidator<'platform.commentsEnabled'> = async (
+  newValue: boolean,
+): Promise<boolean> => {
+  return typeof newValue === 'boolean';
+};
+
+const privacyModeValidator: SettingValidator<'platform.privacyMode'> = async (
   newValue: boolean,
 ): Promise<boolean> => {
   return typeof newValue === 'boolean';
@@ -146,4 +157,5 @@ export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.requestTimeout': requestTimeoutValidator,
   'platform.zoomFactor': zoomFactorValidator,
   'platform.interfaceMode': interfaceModeValidator,
+  'platform.privacyMode': privacyModeValidator,
 };
