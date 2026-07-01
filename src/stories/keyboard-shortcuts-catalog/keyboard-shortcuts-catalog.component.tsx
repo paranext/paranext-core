@@ -97,7 +97,9 @@ function buildOsRows(keys: KeyboardShortcutKeys): OsKeyRow[] {
   });
   return [...byCombo.entries()].map(([combo, osList]) => ({
     // Collapse the all-three-platforms case to a short label so it doesn't overrun its column.
-    os: osList.length === 3 ? 'All OS' : osList.join(' / '),
+    // Join shared-combo platforms with ` | ` (not ` / `) so the inter-OS divider stays distinct
+    // from the ` / ` used inside a combo to separate alternative key presses.
+    os: osList.length === 3 ? 'All OS' : osList.join(' | '),
     combo,
   }));
 }
