@@ -1,26 +1,15 @@
 import {
+  getScrRefForProject,
   getScrRefSourceProjectIdSync,
   getScrRefSync,
   onDidUpdateScrRef,
   setScrRefSync,
 } from '@renderer/services/scroll-group.service-host';
-import { sendCommand } from '@shared/services/command.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { useEvent } from 'platform-bible-react';
+import { useEvent, usePromise } from 'platform-bible-react';
 import { compareScrRefs, ScrollGroupId } from 'platform-bible-utils';
 import { useCallback, useEffect, useRef, useState } from 'react';
-
-type MapVerseRefBetweenProjectsCommand = (
-  command: 'platformScripture.mapVerseRefBetweenProjects',
-  verseRef: SerializedVerseRef,
-  sourceProjectId: string | undefined,
-  targetProjectId: string,
-) => Promise<SerializedVerseRef>;
-// 'platformScripture.mapVerseRefBetweenProjects' is typed in an extension's .d.ts, which core's
-// tsconfig excludes from typeRoots, so sendCommand isn't typed for it here.
-// eslint-disable-next-line no-type-assertion/no-type-assertion
-const mapVerseRefBetweenProjects = sendCommand as unknown as MapVerseRefBetweenProjectsCommand;
 
 function extractScrollGroupId(scrollGroupScrRef: ScrollGroupScrRef): ScrollGroupId | undefined {
   return typeof scrollGroupScrRef === 'number' ? scrollGroupScrRef : undefined;
@@ -130,6 +119,22 @@ export function useScrollGroupScrRef(
     ),
   );
 
+  // Convert the followed (raw) ref into this consumer's project versification for display only. Pass
+  // through when there is no target project or the source already equals the target; fall back to
+  // the raw ref if conversion fails. The host method reads the group's current stored ref and caches
+  // by content, so an unchanged ref yields a stable object identity (no needless re-render).
+  const convertScrRef = useCallback(() => {
+    if (!projectId || sourceProjectIdLocal === projectId) return Promise.resolve(scrRefLocal);
+    return getScrRefForProject(scrollGroupIdLocalRef.current, projectId).catch(() => scrRefLocal);
+  }, [projectId, scrRefLocal, sourceProjectIdLocal]);
+
+  const [convertedScrRef] = usePromise(convertScrRef, scrRefLocal, { preserveValue: true });
+
+  // Show the raw ref synchronously when no conversion is needed (avoids a one-frame lag on the
+  // common no-conversion path); otherwise the asynchronously-converted ref.
+  const displayScrRef =
+    !projectId || sourceProjectIdLocal === projectId ? scrRefLocal : convertedScrRef;
+
   // Change the scrRef and update ours if successful
   const setScrRef = useCallback(
     (newScrRef: SerializedVerseRef) => {
@@ -151,47 +156,21 @@ export function useScrollGroupScrRef(
   // Change the scroll group and update ours if successful
   const setScrollGroupId = useCallback(
     (newScrollGroupId: ScrollGroupId | undefined) => {
+      // On detaching (undefined), seed the now-independent ref with what we are DISPLAYING (converted
+      // into this project's versification), not the raw group ref in the source project's frame.
       if (
         !setScrollGroupScrRefRef.current(
-          newScrollGroupId === undefined ? scrRefLocal : newScrollGroupId,
+          newScrollGroupId === undefined ? displayScrRef : newScrollGroupId,
         )
       )
         return;
 
       scrollGroupIdLocalRef.current = newScrollGroupId;
     },
-    [scrRefLocal],
+    [displayScrRef],
   );
 
-  // Convert the followed (raw) ref into this consumer's project versification for display only.
-  const [convertedScrRef, setConvertedScrRef] = useState(scrRefLocal);
-
-  useEffect(() => {
-    // Pass-through when we have no target project or the source already equals the target.
-    if (!projectId || sourceProjectIdLocal === projectId) {
-      setConvertedScrRef(scrRefLocal);
-      return undefined;
-    }
-    let cancelled = false;
-    mapVerseRefBetweenProjects(
-      'platformScripture.mapVerseRefBetweenProjects',
-      scrRefLocal,
-      sourceProjectIdLocal,
-      projectId,
-    )
-      .then((converted) => {
-        if (!cancelled) setConvertedScrRef(converted);
-        return undefined;
-      })
-      .catch(() => {
-        if (!cancelled) setConvertedScrRef(scrRefLocal); // pass-through on error
-      });
-    return () => {
-      cancelled = true; // stale-result guard
-    };
-  }, [projectId, scrRefLocal, sourceProjectIdLocal]);
-
-  return [convertedScrRef, setScrRef, scrollGroupIdLocal, setScrollGroupId];
+  return [displayScrRef, setScrRef, scrollGroupIdLocal, setScrollGroupId];
 }
 
 export default useScrollGroupScrRef;
