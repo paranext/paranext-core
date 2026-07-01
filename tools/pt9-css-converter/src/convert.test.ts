@@ -87,7 +87,7 @@ describe('convert', () => {
     expect(scss).toContain('.formatted-font .usfm_id');
   });
 
-  test('skips table markers and records them as warnings', () => {
+  test('skips only the table row marker; emits table cell markers', () => {
     const css = `
       .usfm_tr { font-size: 100%; }
       .usfm_tc1 { font-size: 100%; }
@@ -97,13 +97,14 @@ describe('convert', () => {
 
     const { scss, warnings, markerCount } = convert(css, { generatedAt: FIXED_DATE });
 
-    expect(markerCount).toBe(1);
-    expect(warnings.skippedTableMarkers).toEqual(['tr', 'tc1', 'th2']);
+    // tc1, th2, id are emitted; only the row marker `tr` is skipped.
+    expect(markerCount).toBe(3);
+    expect(warnings.skippedTableMarkers).toEqual(['tr']);
     expect(scss).not.toContain('.usfm_tr');
-    expect(scss).not.toContain('.usfm_tc1');
-    expect(scss).not.toContain('.usfm_th2');
+    expect(scss).toContain('.usfm_tc1');
+    expect(scss).toContain('.usfm_th2');
     expect(scss).toContain('.usfm_id');
-    expect(scss).toContain('Skipped table markers: tr, tc1, th2');
+    expect(scss).toContain('Skipped table markers: tr');
   });
 
   test('skips non-marker selectors including pseudo-elements', () => {

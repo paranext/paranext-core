@@ -14,7 +14,7 @@ The classifier is a **closed list of 20 properties** drawn from the Handbook Mar
 | `text-spacing` (non-directional) | `.text-spacing .usfm_<marker>`                                                          | `line-height`, `margin-top`, `margin-bottom`, `padding-top`, `padding-bottom`, `text-align`, `text-indent`, `white-space`  |
 | `text-spacing[dir]`              | `.text-spacing[dir='ltr'] .usfm_<marker>` and `.text-spacing[dir='rtl'] .usfm_<marker>` | `margin-left`, `margin-right`, `padding-left`, `padding-right`. Emitted twice — the RTL block swaps `*-left` ↔ `*-right`. |
 
-`@font-face` at-rules are stripped (the editor handles fonts elsewhere). Table-marker selectors matching `^(tr|tc\d+|th\d+|tcr\d+|tcc\d+|thr\d+|thc\d+)$` are skipped — the editor doesn't render PT9's table model.
+Only the table-row marker selector `.usfm_tr` is skipped (`^tr$`): its PT9 rule is the indented-paragraph model (`text-indent`/`margin`), which would inherit into cells and collapse the columns of the real `<table>` the editor now renders. Table **cell** markers (`tc*`, `th*`, `thc*`, `tcc*`, `thr*`, `tcr*`) are emitted normally — their font/alignment is correct on real `<td>`/`<th>`.
 
 ## Running
 
