@@ -4,7 +4,10 @@ import '@testing-library/jest-dom';
 import { LegacyComment } from 'platform-bible-utils';
 import { vi, beforeAll } from 'vitest';
 import { ConflictNoteCard } from './conflict-note-card.component';
-import { verseTextConflictComment } from './comment-sample.data';
+import {
+  verseTextConflictComment,
+  verseTextConflictReplacementSample,
+} from './comment-sample.data';
 
 // jsdom doesn't implement ResizeObserver, hasPointerCapture, or scrollIntoView.
 // Radix Select uses all three when opening its dropdown. No-op stubs are sufficient
@@ -157,4 +160,18 @@ test('onResolutionChange fires with "reject" when the user changes the selector'
 
   expect(onResolutionChange).toHaveBeenCalledTimes(1);
   expect(onResolutionChange).toHaveBeenCalledWith('reject');
+});
+
+test('trims trailing whitespace out of diff spans so the strikethrough does not dangle', () => {
+  // The replacement sample removes "town": its diff HTML is `<s>town </s>` (trailing space inside).
+  render(
+    <ConflictNoteCard
+      comment={verseTextConflictReplacementSample}
+      localizedStrings={localizedStrings}
+    />,
+  );
+  const struck = document.querySelector('s');
+  expect(struck).toBeInTheDocument();
+  // Whitespace was moved outside the closing tag, so the struck word is "town", not "town ".
+  expect(struck?.textContent).toBe('town');
 });
