@@ -14,7 +14,9 @@ namespace TestParanextDataProvider.Projects
     /// libpalaso conversion so they verify our wiring, not libpalaso's mapping tables.
     /// Unmapped-verse behavior (a verse returned unchanged rather than zeroed) is libpalaso's
     /// <c>ChangeVersification</c> behavior; it is not unit-tested here because a robust assertion
-    /// requires .vrs table specifics — it is covered by integration/manual testing.
+    /// requires .vrs table specifics — it is covered by integration/manual testing. The command is
+    /// best-effort: an unknown source frame (null) or an unresolvable project returns the reference
+    /// unchanged rather than throwing (see the *ReturnsUnchanged tests).
     /// </summary>
     [ExcludeFromCodeCoverage]
     [TestFixture]
@@ -91,21 +93,60 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
-        [Description("Null sourceProjectId → source is treated as canonical English.")]
-        public void NullSource_TreatedAsEnglish()
+        [Description(
+            "Null sourceProjectId means the source frame is unknown, so the reference is returned "
+                + "unchanged rather than assumed English and converted."
+        )]
+        public void NullSource_ReturnsUnchanged()
         {
             var englishVers = new ScrVers(ScrVersType.English);
-            var orthodoxVers = _orthodoxScrText.Settings.Versification;
 
             var input = new VerseRef("PSA 147:1", englishVers);
 
-            var expected = new VerseRef("PSA 147:1", englishVers);
-            expected.ChangeVersification(orthodoxVers);
-
             var result = _service.MapVerseRefBetweenProjects(input, null, _orthodoxId);
 
+            // Not converted: versification and numbers are exactly the input's.
+            Assert.That(result.Versification, Is.EqualTo(englishVers));
+            Assert.That(result.BBBCCCVVV, Is.EqualTo(input.BBBCCCVVV));
+        }
+
+        [Test]
+        [Description(
+            "Unresolvable target project (not registered / not a Scripture project) → the reference "
+                + "is returned unchanged rather than throwing."
+        )]
+        public void UnresolvableTarget_ReturnsUnchanged()
+        {
+            var englishVers = _englishScrText.Settings.Versification;
+            var input = new VerseRef("PSA 147:1", englishVers);
+
+            var result = _service.MapVerseRefBetweenProjects(
+                input,
+                _englishId,
+                "not-a-real-project"
+            );
+
+            Assert.That(result.Versification, Is.EqualTo(englishVers));
+            Assert.That(result.BBBCCCVVV, Is.EqualTo(input.BBBCCCVVV));
+        }
+
+        [Test]
+        [Description(
+            "Unresolvable source project → the reference is returned unchanged rather than throwing."
+        )]
+        public void UnresolvableSource_ReturnsUnchanged()
+        {
+            var orthodoxVers = _orthodoxScrText.Settings.Versification;
+            var input = new VerseRef("PSA 147:1", orthodoxVers);
+
+            var result = _service.MapVerseRefBetweenProjects(
+                input,
+                "not-a-real-project",
+                _orthodoxId
+            );
+
             Assert.That(result.Versification, Is.EqualTo(orthodoxVers));
-            Assert.That(result.BBBCCCVVV, Is.EqualTo(expected.BBBCCCVVV));
+            Assert.That(result.BBBCCCVVV, Is.EqualTo(input.BBBCCCVVV));
         }
 
         [Test]
@@ -127,7 +168,9 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
-        [Description("Segmented ref ('1a'): segment letter is preserved after same-versification round-trip.")]
+        [Description(
+            "Segmented ref ('1a'): segment letter is preserved after same-versification round-trip."
+        )]
         public void Segment_Preserved_AfterConversion()
         {
             var englishVers = _englishScrText.Settings.Versification;

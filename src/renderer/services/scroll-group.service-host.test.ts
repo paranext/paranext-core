@@ -18,11 +18,34 @@ vi.mock('@shared/services/command.service', () => ({
   sendCommand: (...args: unknown[]) => sendCommand(...args),
 }));
 
+// getScrRefForProject reads each project's versification via a base-PDP setting subscription. Mock
+// it: by default every project reports a unique versification (its own id) so conversions fire;
+// tests set `projectVersifications[id]` to make projects share a versification (fast path) or to be
+// unresolvable (undefined).
+const { pdpGet, projectVersifications } = vi.hoisted(() => {
+  const versifications: Record<string, string | undefined> = {};
+  return { pdpGet: vi.fn(), projectVersifications: versifications };
+});
+vi.mock('@shared/services/project-data-provider.service', () => ({
+  papiFrontendProjectDataProviderService: { get: pdpGet },
+}));
+
 describe('scroll-group.service-host source project tracking', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.resetModules();
     sendCommand.mockReset();
+    Object.keys(projectVersifications).forEach((key) => {
+      delete projectVersifications[key];
+    });
+    pdpGet.mockReset();
+    pdpGet.mockImplementation(async (_projectInterface: string, projectId: string) => ({
+      subscribeSetting: (_key: string, callback: (value: unknown) => void) => {
+        // Default: each project has a unique versification (its own id) unless a test overrides it.
+        callback(projectId in projectVersifications ? projectVersifications[projectId] : projectId);
+        return Promise.resolve(() => {});
+      },
+    }));
   });
 
   it('records and returns the source project id set with a scrRef', async () => {
@@ -101,20 +124,77 @@ describe('scroll-group.service-host source project tracking', () => {
     expect(sendCommand).not.toHaveBeenCalled();
   });
 
-  it('falls back to the raw ref and stops retrying when conversion fails for a non-scripture target', async () => {
-    sendCommand.mockRejectedValue(new Error('not a scripture project'));
+  it('returns the raw ref without converting when the source frame is unknown', async () => {
+    const host = await import('@renderer/services/scroll-group.service-host');
+    // No source project stamped: an unknown frame must not be assumed English and converted.
+    host.setScrRefSync(0, { book: 'PSA', chapterNum: 147, verseNum: 1 });
+
+    const result = await host.getScrRefForProject(0, 'targetProj');
+
+    expect(result).toEqual({ book: 'PSA', chapterNum: 147, verseNum: 1 });
+    expect(sendCommand).not.toHaveBeenCalled();
+  });
+
+  it('skips the round-trip when source and target share a versification', async () => {
+    projectVersifications.sourceProj = 'shared';
+    projectVersifications.targetProj = 'shared';
     const host = await import('@renderer/services/scroll-group.service-host');
     host.setScrRefSync(0, { book: 'PSA', chapterNum: 147, verseNum: 1 }, 'sourceProj');
 
-    const first = await host.getScrRefForProject(0, 'lexiconProj');
+    const result = await host.getScrRefForProject(0, 'targetProj');
+
+    expect(result).toEqual({ book: 'PSA', chapterNum: 147, verseNum: 1 });
+    expect(sendCommand).not.toHaveBeenCalled();
+  });
+
+  it('coalesces concurrent identical conversions into a single round-trip', async () => {
+    const converted = { book: 'PSA', chapterNum: 146, verseNum: 1, versificationStr: '4' };
+    sendCommand.mockResolvedValue(converted);
+    const host = await import('@renderer/services/scroll-group.service-host');
+    host.setScrRefSync(0, { book: 'PSA', chapterNum: 147, verseNum: 1 }, 'sourceProj');
+
+    const [first, second] = await Promise.all([
+      host.getScrRefForProject(0, 'targetProj'),
+      host.getScrRefForProject(0, 'targetProj'),
+    ]);
+
+    expect(first).toEqual(converted);
+    expect(second).toEqual(converted);
+    expect(sendCommand).toHaveBeenCalledTimes(1); // shared in-flight promise, one round-trip
+  });
+
+  it('falls back to the raw ref on conversion failure and retries on a later navigation', async () => {
+    sendCommand.mockRejectedValue(new Error('conversion command not ready'));
+    const host = await import('@renderer/services/scroll-group.service-host');
+    host.setScrRefSync(0, { book: 'PSA', chapterNum: 147, verseNum: 1 }, 'sourceProj');
+
+    const first = await host.getScrRefForProject(0, 'targetProj');
     expect(first).toEqual({ book: 'PSA', chapterNum: 147, verseNum: 1 }); // raw fallback, no throw
     expect(sendCommand).toHaveBeenCalledTimes(1);
 
-    // A later navigation to a different verse must not re-fire the failing conversion.
+    // A transient failure must NOT permanently suppress the project: a later navigation retries.
     host.setScrRefSync(0, { book: 'PSA', chapterNum: 148, verseNum: 1 }, 'sourceProj');
     sendCommand.mockClear();
-    const second = await host.getScrRefForProject(0, 'lexiconProj');
+    const second = await host.getScrRefForProject(0, 'targetProj');
     expect(second).toEqual({ book: 'PSA', chapterNum: 148, verseNum: 1 });
-    expect(sendCommand).not.toHaveBeenCalled(); // suppressed after the first failure for this target
+    expect(sendCommand).toHaveBeenCalledTimes(1); // retried, not suppressed
+  });
+
+  it('getScrRefForProjectSync returns a cached conversion, else the raw ref', async () => {
+    const converted = { book: 'PSA', chapterNum: 146, verseNum: 1, versificationStr: '4' };
+    sendCommand.mockResolvedValue(converted);
+    const host = await import('@renderer/services/scroll-group.service-host');
+    host.setScrRefSync(0, { book: 'PSA', chapterNum: 147, verseNum: 1 }, 'sourceProj');
+
+    // Before any conversion is cached, the sync getter returns the raw ref.
+    expect(host.getScrRefForProjectSync(0, 'targetProj')).toEqual({
+      book: 'PSA',
+      chapterNum: 147,
+      verseNum: 1,
+    });
+
+    // After an async conversion caches the result, the sync getter returns it.
+    await host.getScrRefForProject(0, 'targetProj');
+    expect(host.getScrRefForProjectSync(0, 'targetProj')).toEqual(converted);
   });
 });

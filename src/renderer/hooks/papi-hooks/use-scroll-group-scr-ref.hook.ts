@@ -1,5 +1,6 @@
 import {
   getScrRefForProject,
+  getScrRefForProjectSync,
   getScrRefSourceProjectIdSync,
   getScrRefSync,
   onDidUpdateScrRef,
@@ -119,21 +120,36 @@ export function useScrollGroupScrRef(
     ),
   );
 
-  // Convert the followed (raw) ref into this consumer's project versification for display only. Pass
-  // through when there is no target project or the source already equals the target; fall back to
-  // the raw ref if conversion fails. The host method reads the group's current stored ref and caches
-  // by content, so an unchanged ref yields a stable object identity (no needless re-render).
+  // Whether the followed ref needs converting into this consumer's project versification for
+  // display. False when there is no target project or the source frame already matches it. This gate
+  // is load-bearing: it is ALSO what keeps an independent (object) ref — whose source is this project
+  // (see extractSourceProjectId) — from ever calling getScrRefForProject with an undefined scroll
+  // group id, which the host would coerce to group 0 and convert the wrong group's reference.
+  const noConversionNeeded = !projectId || sourceProjectIdLocal === projectId;
+
+  // Convert the followed (raw) ref into this consumer's project versification for display only,
+  // falling back to the raw ref if conversion fails. Only invoked by usePromise when a conversion is
+  // needed (see the `undefined` factory below), so `projectId` is defined when this actually runs.
   const convertScrRef = useCallback(() => {
-    if (!projectId || sourceProjectIdLocal === projectId) return Promise.resolve(scrRefLocal);
+    if (!projectId) return Promise.resolve(scrRefLocal);
     return getScrRefForProject(scrollGroupIdLocalRef.current, projectId).catch(() => scrRefLocal);
-  }, [projectId, scrRefLocal, sourceProjectIdLocal]);
+  }, [projectId, scrRefLocal]);
 
-  const [convertedScrRef] = usePromise(convertScrRef, scrRefLocal, { preserveValue: true });
+  // Seed with the synchronously-known conversion (a cached result, or the raw ref) so a revisited
+  // verse displays correctly with no flash. `preserveValue: false` resets to this current-verse seed
+  // while a fresh conversion is in flight rather than lingering on the previous verse. Passing an
+  // `undefined` factory on the no-conversion path avoids needless usePromise churn (extra renders).
+  const conversionSeed =
+    noConversionNeeded || !projectId
+      ? scrRefLocal
+      : getScrRefForProjectSync(scrollGroupIdLocalRef.current, projectId);
+  const [convertedScrRef] = usePromise(
+    noConversionNeeded ? undefined : convertScrRef,
+    conversionSeed,
+    { preserveValue: false },
+  );
 
-  // Show the raw ref synchronously when no conversion is needed (avoids a one-frame lag on the
-  // common no-conversion path); otherwise the asynchronously-converted ref.
-  const displayScrRef =
-    !projectId || sourceProjectIdLocal === projectId ? scrRefLocal : convertedScrRef;
+  const displayScrRef = noConversionNeeded ? scrRefLocal : convertedScrRef;
 
   // Change the scrRef and update ours if successful
   const setScrRef = useCallback(
@@ -156,8 +172,9 @@ export function useScrollGroupScrRef(
   // Change the scroll group and update ours if successful
   const setScrollGroupId = useCallback(
     (newScrollGroupId: ScrollGroupId | undefined) => {
-      // On detaching (undefined), seed the now-independent ref with what we are DISPLAYING (converted
-      // into this project's versification), not the raw group ref in the source project's frame.
+      // On detaching (undefined), seed the now-independent ref with what we are DISPLAYING — the
+      // reference converted into this project's versification (from cache when available), not the
+      // raw group ref in the source project's frame.
       if (
         !setScrollGroupScrRefRef.current(
           newScrollGroupId === undefined ? displayScrRef : newScrollGroupId,

@@ -1,6 +1,7 @@
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { networkObjectService } from '@shared/services/network-object.service';
+import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
 import {
   createBufferedNetworkEventEmitter,
   getNetworkEvent,
@@ -134,21 +135,154 @@ type MapVerseRefBetweenProjectsCommand = (
 const mapVerseRefBetweenProjects = sendCommand as unknown as MapVerseRefBetweenProjectsCommand;
 
 /**
- * Session cache of versification conversions, keyed by source→target project and the serialized
- * source ref. A project's versification is static for a session (it only changes if the project's
- * `platformScripture.versification` setting is edited), so caching within a session is safe and
- * returns a stable object identity for an unchanged reference.
+ * Current versification identifier per project, read from the `platformScripture.versification`
+ * project setting and kept fresh via a subscription (see {@link ensureVersificationSubscribed}).
+ * Used to (a) skip the conversion round-trip when source and target share a versification and (b)
+ * key the conversion cache so a mid-session versification change yields a fresh key (and therefore
+ * a fresh conversion) rather than a stale hit. `undefined` = not yet known or not resolvable.
  */
-const conversionCache = new Map<string, SerializedVerseRef>();
+const projectVersifications = new Map<string, string | undefined>();
+/**
+ * The one-time subscription-setup promise per project, so concurrent callers await the same setup
+ * (rather than each subscribing and racing to a possibly-inconsistent value). Kept after resolving
+ * because the subscription persists for the session; on failure the entry is removed to allow
+ * retry.
+ */
+const versificationSubscriptions = new Map<string, Promise<void>>();
+
+/** Minimal shape of the base PDP we use to watch the versification project setting. */
+type VersificationSettingSubscriber = {
+  subscribeSetting: (
+    key: 'platformScripture.versification',
+    callback: (value: unknown) => void,
+    options: { retrieveDataImmediately: boolean },
+  ) => Promise<unknown>;
+};
 
 /**
- * Target project ids for which conversion has failed this session (e.g. not a scripture project, so
- * it has no versification). Tracked to avoid re-firing a failing conversion on every navigation.
- * Session-scoped and target-keyed: a genuinely non-versification target stays suppressed for the
- * session; the tradeoff is that a target whose conversion failed transiently is also not retried
- * until reload (acceptable — display always falls back to the raw ref).
+ * Set up (once) a subscription to `projectId`'s versification setting that keeps
+ * {@link projectVersifications} current. Deduped per project so concurrent callers share one setup.
+ * Best-effort: on any failure (e.g. the project is not a scripture project) the versification stays
+ * `undefined` and the entry is removed so a later call can retry. The subscription is intentionally
+ * never disposed — this host is a session-lifetime singleton and the set of projects is small.
  */
-const nonConvertibleProjectIds = new Set<string>();
+function ensureVersificationSubscribed(projectId: string): Promise<void> {
+  const existing = versificationSubscriptions.get(projectId);
+  if (existing) return existing;
+  const subscriptionPromise = (async () => {
+    try {
+      const pdp = await papiFrontendProjectDataProviderService.get('platform.base', projectId);
+      // 'platformScripture.versification' is an extension-contributed project setting that core's
+      // tsconfig excludes from typeRoots, so the base PDP isn't typed for it here. This is the single
+      // boundary point where core reads it.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const versificationPdp = pdp as unknown as VersificationSettingSubscriber;
+      await versificationPdp.subscribeSetting(
+        'platformScripture.versification',
+        (value) => {
+          projectVersifications.set(
+            projectId,
+            isPlatformError(value) || value === undefined ? undefined : String(value),
+          );
+        },
+        { retrieveDataImmediately: true },
+      );
+    } catch (e) {
+      // Couldn't resolve a versification for this project (e.g. not a scripture project, or it is
+      // still loading). Allow a later retry rather than latching it off for the session.
+      versificationSubscriptions.delete(projectId);
+      logger.warn(`Scroll group could not track versification for project ${projectId}. ${e}`);
+    }
+  })();
+  versificationSubscriptions.set(projectId, subscriptionPromise);
+  return subscriptionPromise;
+}
+
+/**
+ * Ensure `projectId`'s versification is being tracked and return its CURRENT identifier. Reads from
+ * {@link projectVersifications} after the subscription is set up, so a mid-session versification
+ * change is reflected (keeping the same-versification fast path and the conversion-cache key
+ * correct) rather than returning a stale subscription-time value.
+ *
+ * Note: a versification change updates the cache key so the NEXT conversion is fresh; an
+ * already-displayed reference is re-converted the next time the hook re-runs (e.g. on navigation).
+ */
+async function getTrackedVersification(projectId: string): Promise<string | undefined> {
+  await ensureVersificationSubscribed(projectId);
+  return projectVersifications.get(projectId);
+}
+
+/**
+ * Session cache of versification conversions. The key includes each project's current versification
+ * identifier (see {@link projectVersifications}) so a mid-session versification change produces a
+ * new key — and therefore a fresh conversion — instead of a stale hit. Bounded by
+ * {@link CONVERSION_CACHE_MAX_SIZE} to avoid unbounded growth over a long session.
+ */
+const conversionCache = new Map<string, SerializedVerseRef>();
+const CONVERSION_CACHE_MAX_SIZE = 500;
+/**
+ * In-flight conversions keyed identically to {@link conversionCache}. Lets concurrent identical
+ * requests (e.g. several followers reacting to one update broadcast) share a single round-trip.
+ */
+const inFlightConversions = new Map<string, Promise<SerializedVerseRef>>();
+
+function conversionCacheKey(
+  sourceProjectId: string,
+  sourceVersification: string | undefined,
+  targetProjectId: string,
+  targetVersification: string | undefined,
+  scrRef: SerializedVerseRef,
+): string {
+  return `${sourceProjectId}|${sourceVersification ?? ''}->${targetProjectId}|${targetVersification ?? ''}:${serialize(scrRef)}`;
+}
+
+function cacheConversion(key: string, converted: SerializedVerseRef) {
+  conversionCache.set(key, converted);
+  // Bound memory: drop the oldest entry (Map preserves insertion order) once over the cap.
+  if (conversionCache.size > CONVERSION_CACHE_MAX_SIZE) {
+    const oldestKey = conversionCache.keys().next().value;
+    if (oldestKey !== undefined) conversionCache.delete(oldestKey);
+  }
+}
+
+/**
+ * Synchronous, best-effort companion to {@link getScrRefForProject}: returns the already-computed
+ * conversion into `projectId`'s versification if one is cached, otherwise the raw stored reference.
+ * Never fires a round-trip. Used for the initial displayed value and when detaching a web view so
+ * callers never block on the async conversion. Returns the raw reference when no conversion is
+ * needed (source frame unknown or already `projectId`) or when a conversion has not been computed
+ * yet.
+ *
+ * @param scrollGroupId Scroll group whose reference to read. If `undefined`, defaults to 0
+ * @param projectId Project into whose versification the reference should be converted
+ * @returns The cached converted reference, or the raw reference when none is available
+ */
+export function getScrRefForProjectSync(
+  scrollGroupId: ScrollGroupId | undefined,
+  projectId: string,
+): SerializedVerseRef {
+  const scrollGroupIdDefaulted = scrollGroupId ?? 0;
+  const scrRef = getScrRefSync(scrollGroupIdDefaulted);
+  const sourceProjectId = getScrRefSourceProjectIdSync(scrollGroupIdDefaulted);
+  // Unknown source frame, or already this project's frame: nothing to convert.
+  if (sourceProjectId === undefined || sourceProjectId === projectId) return scrRef;
+  const sourceVersification = projectVersifications.get(sourceProjectId);
+  const targetVersification = projectVersifications.get(projectId);
+  // Known to share a versification: no conversion needed.
+  if (sourceVersification !== undefined && sourceVersification === targetVersification)
+    return scrRef;
+  return (
+    conversionCache.get(
+      conversionCacheKey(
+        sourceProjectId,
+        sourceVersification,
+        projectId,
+        targetVersification,
+        scrRef,
+      ),
+    ) ?? scrRef
+  );
+}
 
 /**
  * Get the scroll group's Scripture reference converted into the versification of `projectId`.
@@ -157,7 +291,9 @@ const nonConvertibleProjectIds = new Set<string>();
  * {@link getScrRefSourceProjectIdSync}); this resolves that frame and converts to `projectId`'s
  * versification via the `platformScripture.mapVerseRefBetweenProjects` command, so every consumer —
  * in any process — gets a reference it can use directly. Returns the raw stored reference unchanged
- * when no conversion is needed.
+ * when no conversion is needed: the source frame is unknown, already matches `projectId`, or both
+ * projects share a versification. On any conversion failure it falls back to the raw reference (and
+ * does not permanently suppress the project — the failure may be transient).
  *
  * @param scrollGroupId Scroll group whose reference to convert. If `undefined`, defaults to 0
  * @param projectId Project into whose versification to convert the reference
@@ -171,31 +307,56 @@ export async function getScrRefForProject(
   const scrRef = getScrRefSync(scrollGroupIdDefaulted);
   const sourceProjectId = getScrRefSourceProjectIdSync(scrollGroupIdDefaulted);
 
-  // No conversion needed / possible: source already matches, or this target previously failed.
-  if (sourceProjectId === projectId || nonConvertibleProjectIds.has(projectId)) return scrRef;
+  // Unknown source frame (`undefined`) is NOT assumed English: converting a reference whose
+  // versification we don't know would mis-frame it, so pass it through. Also skip when the frame
+  // already matches `projectId`.
+  if (sourceProjectId === undefined || sourceProjectId === projectId) return scrRef;
 
-  const cacheKey = `${sourceProjectId ?? ''}->${projectId}:${serialize(scrRef)}`;
+  // Skip the cross-process round-trip when both projects share a versification (the common case).
+  const [sourceVersification, targetVersification] = await Promise.all([
+    getTrackedVersification(sourceProjectId),
+    getTrackedVersification(projectId),
+  ]);
+  if (sourceVersification !== undefined && sourceVersification === targetVersification)
+    return scrRef;
+
+  const cacheKey = conversionCacheKey(
+    sourceProjectId,
+    sourceVersification,
+    projectId,
+    targetVersification,
+    scrRef,
+  );
   const cached = conversionCache.get(cacheKey);
   if (cached) return cached;
+  // Coalesce concurrent identical conversions into a single round-trip.
+  const inFlight = inFlightConversions.get(cacheKey);
+  if (inFlight) return inFlight;
 
-  try {
-    const converted = await mapVerseRefBetweenProjects(
-      'platformScripture.mapVerseRefBetweenProjects',
-      scrRef,
-      sourceProjectId,
-      projectId,
-    );
-    conversionCache.set(cacheKey, converted);
-    return converted;
-  } catch (e) {
-    // The target has no resolvable versification (e.g. not a scripture project). Remember it so we
-    // stop firing a failing round-trip on every navigation, and fall back to the raw reference.
-    nonConvertibleProjectIds.add(projectId);
-    logger.warn(
-      `Scroll group could not convert its reference into project ${projectId}'s versification; using the reference unconverted. ${e}`,
-    );
-    return scrRef;
-  }
+  const conversionPromise = mapVerseRefBetweenProjects(
+    'platformScripture.mapVerseRefBetweenProjects',
+    scrRef,
+    sourceProjectId,
+    projectId,
+  )
+    .then((converted) => {
+      cacheConversion(cacheKey, converted);
+      return converted;
+    })
+    .catch((e) => {
+      // Best-effort display conversion: fall back to the raw reference. Do NOT permanently suppress
+      // this project — the failure may be transient (command not registered yet, project still
+      // loading), and the command itself passes through when a project has no versification.
+      logger.warn(
+        `Scroll group could not convert its reference into project ${projectId}'s versification; using the reference unconverted. ${e}`,
+      );
+      return scrRef;
+    })
+    .finally(() => {
+      inFlightConversions.delete(cacheKey);
+    });
+  inFlightConversions.set(cacheKey, conversionPromise);
+  return conversionPromise;
 }
 
 async function getScrRef(scrollGroupScrRef: ScrollGroupId = 0): Promise<SerializedVerseRef> {

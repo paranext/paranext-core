@@ -19,13 +19,16 @@ internal class VersificationConversionService(PapiClient papiClient)
             null,
             Create(
                 "Converts a Scripture reference from a source project's versification into a target "
-                    + "project's versification. Pass null for sourceProjectId to treat the reference "
-                    + "as canonical English. Unmapped verses are returned unchanged; segments are preserved.",
+                    + "project's versification. Best-effort: if the source frame is unknown (null "
+                    + "sourceProjectId) or either project's versification cannot be resolved (e.g. not "
+                    + "a Scripture project), the reference is returned unchanged rather than throwing. "
+                    + "Unmapped verses are returned unchanged; segments are preserved.",
                 [
                     Param("verseRef", "The Scripture reference to convert.", "object"),
                     Param(
                         "sourceProjectId",
-                        "Project whose versification the reference is currently in; null = English.",
+                        "Project whose versification the reference is currently in; null = unknown "
+                            + "frame (returned unchanged, NOT assumed English).",
                         "string"
                     ),
                     Param(
@@ -36,7 +39,8 @@ internal class VersificationConversionService(PapiClient papiClient)
                 ],
                 ResultOf(
                     "object",
-                    "The reference converted into the target project's versification."
+                    "The reference converted into the target project's versification, or unchanged "
+                        + "when it could not be converted."
                 )
             )
         );
@@ -44,7 +48,12 @@ internal class VersificationConversionService(PapiClient papiClient)
 
     /// <summary>
     /// Converts <paramref name="verseRef"/> from <paramref name="sourceProjectId"/>'s versification
-    /// (null = canonical English) into <paramref name="targetProjectId"/>'s versification.
+    /// into <paramref name="targetProjectId"/>'s versification. Best-effort and display-oriented: a
+    /// <c>null</c> <paramref name="sourceProjectId"/> means the source frame is unknown, and if either
+    /// project's versification cannot be resolved (e.g. not a Scripture project) the reference is
+    /// returned unchanged rather than thrown. This keeps a caller from having to blocklist a project
+    /// on a transient or structural failure — the only useful fallback is the raw reference, which is
+    /// exactly what this returns.
     /// </summary>
     public VerseRef MapVerseRefBetweenProjects(
         VerseRef verseRef,
@@ -52,12 +61,12 @@ internal class VersificationConversionService(PapiClient papiClient)
         string targetProjectId
     )
     {
-        var sourceVers = sourceProjectId is null
-            ? new ScrVers(ScrVersType.English)
-            : LocalParatextProjects.GetParatextProject(sourceProjectId).Settings.Versification;
-        var targetVers = LocalParatextProjects
-            .GetParatextProject(targetProjectId)
-            .Settings.Versification;
+        // Unknown source frame (null) is NOT assumed to be English: converting a reference whose
+        // versification we don't actually know would mis-frame it. Pass it through unchanged instead.
+        var sourceVers = sourceProjectId is null ? null : TryGetVersification(sourceProjectId);
+        var targetVers = TryGetVersification(targetProjectId);
+        if (sourceVers is null || targetVers is null)
+            return verseRef;
 
         var working = verseRef; // VerseRef is a struct; copies by value
         working.Versification = sourceVers; // ground the source frame in data
@@ -65,5 +74,22 @@ internal class VersificationConversionService(PapiClient papiClient)
         // when the ref HasMultiple (libpalaso VerseRef.cs), so a single call handles both cases.
         working.ChangeVersification(targetVers);
         return working;
+    }
+
+    /// <summary>
+    /// Resolves a project's versification, or returns <c>null</c> when the project cannot be resolved
+    /// (e.g. it is not a Scripture project or is not currently loaded) so callers can fall back to
+    /// returning the reference unconverted.
+    /// </summary>
+    private static ScrVers? TryGetVersification(string projectId)
+    {
+        try
+        {
+            return LocalParatextProjects.GetParatextProject(projectId).Settings.Versification;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 }

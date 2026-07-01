@@ -8143,13 +8143,31 @@ declare module 'renderer/services/scroll-group.service-host' {
   /** Source project id whose versification the scroll group's scrRef is expressed in. */
   export function getScrRefSourceProjectIdSync(scrollGroupId?: ScrollGroupId): string | undefined;
   /**
+   * Synchronous, best-effort companion to {@link getScrRefForProject}: returns the already-computed
+   * conversion into `projectId`'s versification if one is cached, otherwise the raw stored reference.
+   * Never fires a round-trip. Used for the initial displayed value and when detaching a web view so
+   * callers never block on the async conversion. Returns the raw reference when no conversion is
+   * needed (source frame unknown or already `projectId`) or when a conversion has not been computed
+   * yet.
+   *
+   * @param scrollGroupId Scroll group whose reference to read. If `undefined`, defaults to 0
+   * @param projectId Project into whose versification the reference should be converted
+   * @returns The cached converted reference, or the raw reference when none is available
+   */
+  export function getScrRefForProjectSync(
+    scrollGroupId: ScrollGroupId | undefined,
+    projectId: string,
+  ): SerializedVerseRef;
+  /**
    * Get the scroll group's Scripture reference converted into the versification of `projectId`.
    *
    * The group stores its reference in the versification of whichever project last set it (see
    * {@link getScrRefSourceProjectIdSync}); this resolves that frame and converts to `projectId`'s
    * versification via the `platformScripture.mapVerseRefBetweenProjects` command, so every consumer —
    * in any process — gets a reference it can use directly. Returns the raw stored reference unchanged
-   * when no conversion is needed.
+   * when no conversion is needed: the source frame is unknown, already matches `projectId`, or both
+   * projects share a versification. On any conversion failure it falls back to the raw reference (and
+   * does not permanently suppress the project — the failure may be transient).
    *
    * @param scrollGroupId Scroll group whose reference to convert. If `undefined`, defaults to 0
    * @param projectId Project into whose versification to convert the reference

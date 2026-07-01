@@ -5,30 +5,42 @@ const rawRef = { book: 'PSA', chapterNum: 147, verseNum: 1 };
 const convertedRef = { book: 'PSA', chapterNum: 146, verseNum: 1, versificationStr: '4' };
 
 const getScrRefForProject = vi.fn();
+const getScrRefForProjectSync = vi.fn<(...args: unknown[]) => typeof rawRef>(() => rawRef);
 vi.mock('@renderer/services/scroll-group.service-host', () => ({
   getScrRefSync: () => rawRef,
   getScrRefSourceProjectIdSync: () => 'sourceProj',
   setScrRefSync: vi.fn(() => true),
   onDidUpdateScrRef: vi.fn(() => () => {}),
   getScrRefForProject: (...args: unknown[]) => getScrRefForProject(...args),
+  getScrRefForProjectSync: (...args: unknown[]) => getScrRefForProjectSync(...args),
 }));
 
 // useEvent is a no-op subscriber here; usePromise gets a faithful minimal implementation (its real
-// behavior is covered by platform-bible-react's own tests).
+// behavior is covered by platform-bible-react's own tests). This mirrors the two behaviours the hook
+// relies on: an `undefined` factory is a no-op (no conversion), and `preserveValue: false` resets to
+// the current default while a new factory runs.
 vi.mock('platform-bible-react', async () => {
   const react = await import('react');
   return {
     useEvent: () => {},
-    usePromise: (factory: () => Promise<unknown>, defaultValue: unknown) => {
+    usePromise: (
+      factory: (() => Promise<unknown>) | undefined,
+      defaultValue: unknown,
+      options?: { preserveValue?: boolean },
+    ) => {
       const [value, setValue] = react.useState(defaultValue);
+      const defaultRef = react.useRef(defaultValue);
+      defaultRef.current = defaultValue;
       react.useEffect(() => {
         let current = true;
-        (async () => {
-          const result = await factory();
-          if (current) setValue(() => result);
-        })();
+        if (factory)
+          (async () => {
+            const result = await factory();
+            if (current) setValue(() => result);
+          })();
         return () => {
           current = false;
+          if (options?.preserveValue === false) setValue(() => defaultRef.current);
         };
       }, [factory]);
       return [value, false];
@@ -104,6 +116,28 @@ describe('useScrollGroupScrRef versification conversion', () => {
     await waitFor(() => expect(result.current[0]).toEqual(convertedRef));
 
     // Detach: setScrollGroupId(undefined) must pass the converted (displayed) ref, not rawRef.
+    act(() => result.current[3](undefined));
+    expect(setScrollGroupScrRef).toHaveBeenLastCalledWith(convertedRef);
+  });
+
+  it('seeds detach with the synchronously-cached conversion even before the async conversion resolves', async () => {
+    // The synchronous cache already holds the conversion; the async round-trip is still pending.
+    // Detaching in that window must seed the (correct-frame) cached value, not the raw source ref.
+    getScrRefForProjectSync.mockReturnValue(convertedRef);
+    getScrRefForProject.mockReturnValue(new Promise(() => {})); // never resolves during the test
+    const setScrollGroupScrRef = vi.fn(() => true);
+
+    const { useScrollGroupScrRef } = await import(
+      '@renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook'
+    );
+
+    const { result } = renderHook(() =>
+      useScrollGroupScrRef(0, setScrollGroupScrRef, 'targetProj'),
+    );
+
+    // The displayed value comes straight from the synchronous seed while the round-trip is pending.
+    expect(result.current[0]).toEqual(convertedRef);
+
     act(() => result.current[3](undefined));
     expect(setScrollGroupScrRef).toHaveBeenLastCalledWith(convertedRef);
   });
