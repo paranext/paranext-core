@@ -14,13 +14,14 @@ import { ConflictNoteCardProps, ConflictResolution } from './conflict-note-card.
 const VERSE_TEXT_CONFLICT = 'verseText';
 
 // Mirrors CommentItem's content div so conflict diff HTML renders identically, plus theme-token
-// coloring for the PT9 diff markup: <u> = inserted/newer, <s> = deleted/older. No hardcoded colors.
+// coloring matching PT9's default "RedGreen" diff style (by insertion/deletion, same in both
+// regions): <u> = inserted → green + bold; <s> = deleted → red + strikethrough. No hardcoded colors.
 const DIFF_HTML_CLASSES = cn(
   'tw:prose tw:max-w-none tw:break-words tw:text-sm tw:font-normal tw:text-foreground',
   'tw:[&>blockquote]:border-s-0 tw:[&>blockquote]:p-0 tw:[&>blockquote]:ps-0 tw:[&>blockquote]:font-normal tw:[&>blockquote]:not-italic tw:[&>blockquote]:text-foreground',
   'tw:prose-quoteless',
-  'tw:[&_u]:font-medium tw:[&_u]:text-primary tw:[&_u]:no-underline',
-  'tw:[&_s]:text-muted-foreground',
+  'tw:[&_u]:font-medium tw:[&_u]:text-success-foreground tw:[&_u]:no-underline',
+  'tw:[&_s]:text-destructive tw:[&_s]:line-through',
 );
 
 /**
@@ -130,7 +131,7 @@ export function ConflictNoteCard({
         <span className="tw:font-medium">
           {localizedStrings['%conflict_note_result_label%'] ?? 'Result'}
         </span>
-        <p className="tw:whitespace-pre-wrap tw:text-muted-foreground">{resultText}</p>
+        <p className="tw:whitespace-pre-wrap tw:text-foreground">{resultText}</p>
       </div>
     </div>
   );
