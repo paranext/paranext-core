@@ -1,0 +1,72 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Guidelines/AI Review/UX Design Review" />
+
+# UX Design Review
+
+The standard an AI follows when reviewing a Platform.Bible UI change. Catch **big** UI/UX and
+accessibility failures — do not nitpick. Two jobs: enforce the guidelines, and log the gaps
+they don't cover.
+
+The guidelines **are** the rubric. Don't restate them — read them at review time: 
+[Design Principles](../design-principles.mdx) (a11y, focus, buttons, tooltips, contrast — the
+Definition of Done), and `../*`.
+
+Judge through the eyes of our personas.
+
+## Severity lens — report only these
+
+- **Blocker** — breaks access or destroys/loses data: not keyboard-operable, no focus
+  indicator, an icon-only button without an `aria-label`, a contrast failure, a destructive
+  action with the wrong icon or no safeguard, content unreachable at 300px width. Must fix
+  before merge.
+- **Major** — clearly degrades the experience: a missing standard affordance (e.g. no hover or
+  selected style), no feedback on a slow action, layout that jumps on a state change, the same
+  job presented inconsistently, wrong dialog button order or labels, documented-component
+  misuse, a responsiveness break, a wrong per-OS shortcut, a missing or oversized tooltip.
+- Anything not traceable to a guideline plus this lens is **not a finding**. If it is
+  UX-significant but the guidelines are silent, it is a **gap candidate** (see below) — not a
+  nit.
+
+## Interface-impact gate — decide what is even reviewable
+
+A matching path is not enough; check the content too.
+
+- **Candidates:** `**/*.{tsx,css}`, `themes.data.json`, locale/string resource files,
+  `*.hook.ts` under platform-bible-react, `index.css`, theme token files.
+- **Exclude:** `**/*.stories.tsx`, `**/*.test.tsx`, `__mocks__`, generated output, `*.d.ts`.
+- **Content check:** for each candidate hunk, does it touch rendered JSX, `className`/style, an
+  `aria-*`/role attribute, a token value, or user-facing text? A `.tsx` diff that touches none
+  of these (pure logic, hooks, imports) has no interface impact.
+- Token, `themes.data.json`, and `index.css` changes are **broad-impact**: sample the
+  highest-traffic components instead of reading the diff line in isolation.
+- If nothing survives the gate, report `CLEAN — no UI-affecting changes` and stop.
+
+## Premature / low-signal detection
+
+Prefer a **LOW SIGNAL** verdict (and say why) when the diff isn't reliably reviewable: a
+draft/WIP PR, CI red, no Storybook deliverable for new UI, a PR description that lacks
+reference-UI links (see [UI Review](../ui-review.mdx)), a large incidental refactor, or
+referenced components you cannot locate.
+
+## Output
+
+Lead with the verdict so a reader can triage at a glance:
+
+```text
+VERDICT: <CONFIDENT | LOW SIGNAL | CLEAN> — <N blockers, M majors> — PR #<num> <title>
+```
+
+Then **Findings** — each with severity, `file:line`, the issue in Saroj's terms, the guideline
+it violates, a minimal fix, and a confidence level — and **Gap candidates**. Suppress
+low-confidence findings unless you can justify them.
+
+## Posting
+
+Off by default — produce the report only. With `--comment`, submit findings as **one** PR
+review with inline comments at each cited `file:line`. Never post a LOW SIGNAL run.
+
+## Logging gaps
+
+Emit a gap candidate for anything UX-significant the guidelines don't cover, and append it to
+[Design System Gaps](./design-system-gaps.mdx) **following the entry format defined there**.
