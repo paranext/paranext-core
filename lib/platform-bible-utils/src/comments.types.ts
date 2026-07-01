@@ -82,9 +82,9 @@ export type LegacyComment = {
   verse?: string;
   /**
    * Only present on `verseText` conflict notes: HTML diff of the rejected (losing) side, using
-   * Paratext 9's `<u>` (inserted) and `<s>` (deleted) markup. This is full HTML, `<blockquote>`-wrapped
-   * like {@link contents}. Coloring is applied by the UI, not carried in the markup. Absent for normal
-   * notes and non-`verseText` conflicts.
+   * Paratext 9's `<u>` (inserted) and `<s>` (deleted) markup. This is full HTML,
+   * `<blockquote>`-wrapped like {@link contents}. Coloring is applied by the UI, not carried in the
+   * markup. Absent for normal notes and non-`verseText` conflicts.
    */
   rejectedText?: string;
   /**
