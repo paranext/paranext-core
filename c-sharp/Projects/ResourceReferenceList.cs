@@ -102,6 +102,14 @@ public record ResourceReferenceList
                 else if (item is DblResourceReference dbl)
                     element.Add(new XAttribute("id", dbl.Id));
 
+                if (item.IsShownByDefault.HasValue)
+                    element.Add(
+                        new XAttribute(
+                            "isShownByDefault",
+                            item.IsShownByDefault.Value.ToString().ToLowerInvariant()
+                        )
+                    );
+
                 return element;
             })
         );
@@ -130,17 +138,53 @@ public record ResourceReferenceList
                         {
                             Name = name,
                             Id = el.Attribute("id")?.Value ?? "",
+                            IsShownByDefault = bool.TryParse(
+                                el.Attribute("isShownByDefault")?.Value,
+                                out var projShown
+                            )
+                                ? projShown
+                                : null,
                         },
                         "dblResource" => new DblResourceReference
                         {
                             Name = name,
                             Id = el.Attribute("id")?.Value ?? "",
+                            IsShownByDefault = bool.TryParse(
+                                el.Attribute("isShownByDefault")?.Value,
+                                out var dblShown
+                            )
+                                ? dblShown
+                                : null,
                         },
-                        "enhancedResource" => new EnhancedResourceReference { Name = name },
-                        "xmlResource" => new XmlResourceReference { Name = name },
+                        "enhancedResource" => new EnhancedResourceReference
+                        {
+                            Name = name,
+                            IsShownByDefault = bool.TryParse(
+                                el.Attribute("isShownByDefault")?.Value,
+                                out var enhShown
+                            )
+                                ? enhShown
+                                : null,
+                        },
+                        "xmlResource" => new XmlResourceReference
+                        {
+                            Name = name,
+                            IsShownByDefault = bool.TryParse(
+                                el.Attribute("isShownByDefault")?.Value,
+                                out var xmlShown
+                            )
+                                ? xmlShown
+                                : null,
+                        },
                         "sourceLanguageResource" => new SourceLanguageResourceReference
                         {
                             Name = name,
+                            IsShownByDefault = bool.TryParse(
+                                el.Attribute("isShownByDefault")?.Value,
+                                out var srcShown
+                            )
+                                ? srcShown
+                                : null,
                         },
                         _ => new UnknownResourceReference
                         {
