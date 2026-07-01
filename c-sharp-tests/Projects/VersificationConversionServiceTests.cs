@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
 using SIL.Scripture;
@@ -173,5 +174,32 @@ internal class VersificationConversionServiceTests : PapiTestBase
         var result = _service.MapVerseRefBetweenProjects(input, _englishId, _englishId);
 
         Assert.That(result.Segment(), Is.EqualTo("a"));
+    }
+
+    [Test]
+    [Description(
+        "InitializeAsync registers the mapVerseRefBetweenProjects command under its exact wire "
+            + "name with experimental OpenRPC docs describing its three positional parameters."
+    )]
+    public async Task InitializeAsync_RegistersCommandWithExperimentalDocs()
+    {
+        const string wireName = "command:platformScripture.mapVerseRefBetweenProjects";
+
+        await _service.InitializeAsync();
+
+        Assert.That(
+            Client.IsHandlerRegistered(wireName),
+            Is.True,
+            "command handler registered under its exact wire name"
+        );
+
+        var docs = Client.GetDocumentationFor(wireName);
+        Assert.That(docs, Is.Not.Null, "command registered with OpenRPC documentation");
+        Assert.That(docs!.Method.Experimental, Is.True, "command marked experimental");
+        Assert.That(
+            docs.Method.Params.Select(p => p.Name),
+            Is.EqualTo(new[] { "verseRef", "sourceProjectId", "targetProjectId" }),
+            "documents verseRef, sourceProjectId, targetProjectId in positional order"
+        );
     }
 }

@@ -125,7 +125,10 @@ export function useScrollGroupScrRef(
   // is load-bearing: it is ALSO what keeps an independent (object) ref — whose source is this project
   // (see extractSourceProjectId) — from ever calling getScrRefForProject with an undefined scroll
   // group id, which the host would coerce to group 0 and convert the wrong group's reference.
-  const isConversionRequired = projectId && sourceProjectIdLocal !== projectId;
+  // `!!projectId` (not `Boolean(projectId)`) so the value is a true boolean AND TypeScript still
+  // narrows `projectId` to `string` at the guarded getScrRefForProject / getScrRefForProjectSync call
+  // sites below — `Boolean(...)` is an opaque call that would drop that narrowing.
+  const isConversionRequired = !!projectId && sourceProjectIdLocal !== projectId;
 
   // Convert the followed (raw) ref into this consumer's project versification for display only,
   // falling back to the raw ref if conversion fails. Only invoked by usePromise when a conversion is
@@ -135,7 +138,12 @@ export function useScrollGroupScrRef(
   // unchanged because compareScrRefs is versification-blind — still recreates this factory and
   // re-runs the conversion against the new source project.
   const convertScrRef = useCallback(async () => {
-    if (!isConversionRequired) return scrRefLocal;
+    // Same gate as `isConversionRequired`, inlined so react-hooks/exhaustive-deps sees the real
+    // reactive inputs (`projectId`, `sourceProjectIdLocal`) directly. Referencing the derived
+    // `isConversionRequired` const instead makes the rule demand it be listed — and then demand
+    // `sourceProjectIdLocal` be REMOVED as redundant, which would drop the source-only re-conversion
+    // this factory depends on (see the comment above).
+    if (!projectId || sourceProjectIdLocal === projectId) return scrRefLocal;
     try {
       return await getScrRefForProject(scrollGroupIdLocalRef.current, projectId);
     } catch {
