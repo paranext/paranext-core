@@ -13,16 +13,28 @@ import { ConflictNoteCardProps, ConflictResolution } from './conflict-note-card.
 
 const VERSE_TEXT_CONFLICT = 'verseText';
 
-// Mirrors CommentItem's content div so conflict diff HTML renders identically, plus theme-token
-// coloring matching PT9's default "RedGreen" diff style (by insertion/deletion, same in both
-// regions): <u> = inserted → green + bold; <s> = deleted → red + strikethrough. No hardcoded colors.
+// Renders the PT9 diff HTML the same way CommentItem renders note contents, plus theme-token coloring
+// for the diff markup: <u> = inserted → green + semibold; <s> = deleted → red + strikethrough. This is
+// a green/red text-color treatment (theme tokens only, no hardcoded colors) — NOT a copy of any single
+// PT9 diff style: PT9's default (BlueGray) and RedGreen both use background highlights, and RedGreen has
+// no strikethrough. The <u>/<s> markup itself comes from PT9's decode; only the coloring is ours (CSS).
 const DIFF_HTML_CLASSES = cn(
   'tw:prose tw:max-w-none tw:break-words tw:text-sm tw:font-normal tw:text-foreground',
   'tw:[&>blockquote]:border-s-0 tw:[&>blockquote]:p-0 tw:[&>blockquote]:ps-0 tw:[&>blockquote]:font-normal tw:[&>blockquote]:not-italic tw:[&>blockquote]:text-foreground',
   'tw:prose-quoteless',
-  'tw:[&_u]:font-medium tw:[&_u]:text-success-foreground tw:[&_u]:no-underline',
+  'tw:[&_u]:font-semibold tw:[&_u]:text-success-foreground tw:[&_u]:no-underline',
   'tw:[&_s]:text-destructive tw:[&_s]:line-through',
 );
+
+/**
+ * Moves a diff span's trailing whitespace outside its closing tag (e.g. `<s>town </s>` → `<s>town</s> `)
+ * so the strikethrough/color decoration stops at the word rather than dangling into the inter-word gap.
+ * PT9 keeps each word's trailing space inside the diff token (DiffToken.SplitUsfmTokens, FB-38914) and
+ * masks it with a background highlight; our text-only decoration would otherwise show a stray strike over
+ * the space. Only whitespace is relocated across the closing tag — no text changes. Diff spans hold plain
+ * text only, so this is safe.
+ */
+const trimDiffSpanWhitespace = (html: string) => html.replace(/(\s+)(<\/[us]>)/g, '$2$1');
 
 /**
  * Presentational card body for a verseText merge conflict: an Accept/Reject selector, the Rejected
@@ -40,11 +52,11 @@ export function ConflictNoteCard({
   const resolution = selectedResolution ?? internalResolution;
 
   const sanitizedRejected = useMemo(
-    () => sanitizeHtml(comment.rejectedText ?? ''),
+    () => trimDiffSpanWhitespace(sanitizeHtml(comment.rejectedText ?? '')),
     [comment.rejectedText],
   );
   const sanitizedAccepted = useMemo(
-    () => sanitizeHtml(comment.acceptedText ?? ''),
+    () => trimDiffSpanWhitespace(sanitizeHtml(comment.acceptedText ?? '')),
     [comment.acceptedText],
   );
   const sanitizedContents = useMemo(() => sanitizeHtml(comment.contents), [comment.contents]);
