@@ -63,8 +63,7 @@ const variantConfig = {
  * - `variant="prefer"` — teal, thumbs-up, "Prefer"
  * - `variant="avoid"` — rose, thumbs-down, "Avoid"
  * - `variant="neutral"` (default) — sky, info icon, "Example"
- * - `variant="under-consideration"` — amber, lightbulb, "Under Consideration" — for patterns that
- *   are not yet adopted and need UX sign-off before any implementation
+ * - `variant="under-consideration"` — amber, lightbulb; patterns needing UX sign-off
  *
  * Pass a live component to `preview` to render it in a framed stage. Pass source code to `code` —
  * single-line displays inline, multiline collapses and expands on click. The preview and code share
