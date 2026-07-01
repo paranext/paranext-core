@@ -1,12 +1,46 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { LegacyComment } from 'platform-bible-utils';
+import { vi, beforeAll } from 'vitest';
 import { ConflictNoteCard } from './conflict-note-card.component';
 import { verseTextConflictComment } from './comment-sample.data';
+
+// jsdom doesn't implement ResizeObserver, hasPointerCapture, or scrollIntoView.
+// Radix Select uses all three when opening its dropdown. No-op stubs are sufficient
+// because the tests don't assert layout or scroll behaviour.
+class NoopResizeObserver implements ResizeObserver {
+  private readonly targets = new Set<Element>();
+
+  observe(target: Element) {
+    this.targets.add(target);
+  }
+
+  unobserve(target: Element) {
+    this.targets.delete(target);
+  }
+
+  disconnect() {
+    this.targets.clear();
+  }
+}
+
+beforeAll(() => {
+  if (typeof globalThis.ResizeObserver === 'undefined') {
+    globalThis.ResizeObserver = NoopResizeObserver;
+  }
+  if (!Element.prototype.hasPointerCapture) {
+    Element.prototype.hasPointerCapture = () => false;
+  }
+  if (!Element.prototype.scrollIntoView) {
+    Element.prototype.scrollIntoView = () => {};
+  }
+});
 
 const localizedStrings = {
   '%conflict_note_description_verseText%': 'Conflicting changes were made to the verse text.',
   '%conflict_note_choose_label%': 'Choose:',
+  '%conflict_note_choose_aria_label%': 'Choose resolution',
   '%conflict_note_accept%': 'Accept',
   '%conflict_note_reject%': 'Reject',
   '%conflict_note_rejected_label%': 'Rejected',
@@ -23,6 +57,12 @@ test('renders the three region labels and the diff highlight', () => {
   expect(screen.getByText('Result')).toBeInTheDocument();
   // The rejected/accepted regions render PT9 diff HTML with <u>/<s> markup
   expect(document.querySelector('u')).toBeInTheDocument();
+  // Result value is a plain <p>, not an editable control
+  expect(
+    screen
+      .getByText(verseTextConflictComment.resultText ?? '')
+      .closest('input, textarea, [contenteditable="true"]'),
+  ).toBeNull();
 });
 
 test('Result shows the accept outcome by default and the reject outcome when reject is selected', () => {
@@ -94,4 +134,27 @@ test('no-ancestor case (acceptedText absent): selector and Rejected render, Acce
   );
   // Result preview switches to rejectedResultText (reject outcome, the loser)
   expect(screen.getByText(verseTextConflictComment.rejectedResultText ?? '')).toBeInTheDocument();
+});
+
+test('onResolutionChange fires with "reject" when the user changes the selector', async () => {
+  const onResolutionChange = vi.fn();
+  // Radix Select (shadcn) requires pointer-event sequences that fireEvent.click does not
+  // synthesize. userEvent v14 with pointerEventsCheck:0 drives the combobox reliably in
+  // jsdom where layout measurements are unavailable (same pattern as scope-selector tests).
+  const user = userEvent.setup({ pointerEventsCheck: 0 });
+  render(
+    <ConflictNoteCard
+      comment={verseTextConflictComment}
+      localizedStrings={localizedStrings}
+      onResolutionChange={onResolutionChange}
+    />,
+  );
+
+  // Open the Radix Select dropdown
+  await user.click(screen.getByRole('combobox'));
+  // Pick "Reject" from the option list (Radix renders items as options in the listbox)
+  await user.click(await screen.findByRole('option', { name: 'Reject' }));
+
+  expect(onResolutionChange).toHaveBeenCalledTimes(1);
+  expect(onResolutionChange).toHaveBeenCalledWith('reject');
 });

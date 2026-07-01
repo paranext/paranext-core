@@ -13,6 +13,7 @@ export type ConflictResolution = 'accept' | 'reject';
 export const CONFLICT_NOTE_STRING_KEYS: LocalizeKey[] = [
   '%conflict_note_description_verseText%',
   '%conflict_note_choose_label%',
+  '%conflict_note_choose_aria_label%',
   '%conflict_note_accept%',
   '%conflict_note_reject%',
   '%conflict_note_rejected_label%',
