@@ -333,7 +333,7 @@ const MULTI_SELECT_ENTRIES: MultiSelectComboBoxEntry[] = [
 
 const MARKER_MENU_STRINGS: MarkerMenuLocalizedStrings = {
   '%markerMenu_deprecated_label%': 'Deprecated',
-  '%markerMenu_disallowed_label%': 'Disallowed',
+  '%markerMenu_structureLocked_label%': 'Structure locked',
   '%markerMenu_noResults%': 'No results found.',
   '%markerMenu_searchPlaceholder%': 'Type a style or search.',
 };
