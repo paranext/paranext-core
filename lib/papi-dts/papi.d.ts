@@ -115,10 +115,12 @@ declare module 'shared/services/scroll-group.service-model' {
     /**
      * Get the SerializedVerseRef associated with the provided scroll group, converted into the
      * versification of `projectId`. The scroll group stores its reference in the versification of
-     * whichever project last set it; this converts it into `projectId`'s versification so any consumer
-     * gets a reference it can use directly. Returns the raw reference when no conversion is needed.
+     * whichever project last set it; this converts it into `projectId`'s versification so any
+     * consumer gets a reference it can use directly. Returns the raw reference when no conversion is
+     * needed.
      *
-     * @param scrollGroupId Scroll group whose Scripture reference to get. If `undefined`, defaults to 0
+     * @param scrollGroupId Scroll group whose Scripture reference to get. If `undefined`, defaults to
+     *   0
      * @param projectId Project into whose versification to convert the reference
      * @returns Scripture reference in `projectId`'s versification
      */
