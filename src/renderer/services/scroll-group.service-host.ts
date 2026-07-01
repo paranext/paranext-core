@@ -54,6 +54,7 @@ const DEFAULT_SCR_REF: SerializedVerseRef = Object.freeze({
 });
 
 const SCR_REFS_STORAGE_KEY = 'scroll-group.service-host.scrRefs';
+const SCR_REF_SOURCE_PROJECT_IDS_STORAGE_KEY = 'scroll-group.service-host.scrRefSourceProjectIds';
 
 /** FOR LOADING ONLY! DO NOT USE */
 const scrRefsSerialized = localStorage.getItem(SCR_REFS_STORAGE_KEY);
@@ -61,12 +62,17 @@ const scrRefsSerialized = localStorage.getItem(SCR_REFS_STORAGE_KEY);
 const scrRefs: { [scrollGroupId: ScrollGroupId]: SerializedVerseRef | undefined } =
   scrRefsSerialized ? (deserialize(scrRefsSerialized) ?? {}) : {};
 
+/** FOR LOADING ONLY! DO NOT USE */
+const scrRefSourceProjectIdsSerialized = localStorage.getItem(
+  SCR_REF_SOURCE_PROJECT_IDS_STORAGE_KEY,
+);
 /**
  * Source project id per scroll group — which project's versification the stored scrRef is expressed
- * in. Session-only (NOT persisted): on reload the source is unknown until the next navigation
- * re-stamps it, matching PT9's session-only scroll behavior.
+ * in. Persisted alongside `scrRefs` (see {@link saveScrRefs}) so the versification frame survives
+ * reload. `undefined` for a group means the source is unknown / canonical English.
  */
-const scrRefSourceProjectIds: { [scrollGroupId: ScrollGroupId]: string | undefined } = {};
+const scrRefSourceProjectIds: { [scrollGroupId: ScrollGroupId]: string | undefined } =
+  scrRefSourceProjectIdsSerialized ? (deserialize(scrRefSourceProjectIdsSerialized) ?? {}) : {};
 
 // The scrRefs object might contain old values that are of older types that are no longer supported.
 // We need to check if this is the case, and convert them to `SerializedVerseRef`.
@@ -89,6 +95,7 @@ Object.entries(scrRefs).forEach(([key, value]) => {
 
 function saveScrRefs() {
   localStorage.setItem(SCR_REFS_STORAGE_KEY, serialize(scrRefs));
+  localStorage.setItem(SCR_REF_SOURCE_PROJECT_IDS_STORAGE_KEY, serialize(scrRefSourceProjectIds));
 }
 
 /**
@@ -143,8 +150,18 @@ export function setScrRefSync(
   const scrollGroupIdDefaulted = scrollGroupId ?? 0;
   const scrRefClone = deepClone(scrRef);
 
-  // Don't update if the scr refs are the same
-  if (compareScrRefs(scrRefs[scrollGroupIdDefaulted] ?? DEFAULT_SCR_REF, scrRefClone) === 0)
+  // compareScrRefs is versification-blind (book/chapter/verse only), so a same-numbered ref set by a
+  // different source project still changes the versification frame and must NOT be treated as a
+  // no-op. Skip only when the numbers are unchanged AND the write carries no new source info — the
+  // `undefined`-source clause also covers the platform.verseRef echo (the setting-sync subscription
+  // re-sets the same ref with no source), which must not clobber a known source.
+  const scrRefUnchanged =
+    compareScrRefs(scrRefs[scrollGroupIdDefaulted] ?? DEFAULT_SCR_REF, scrRefClone) === 0;
+  if (
+    scrRefUnchanged &&
+    (sourceProjectId === undefined ||
+      sourceProjectId === scrRefSourceProjectIds[scrollGroupIdDefaulted])
+  )
     return false;
 
   // Update the scr ref and send out an event. The buffered emitter is usable immediately; if it

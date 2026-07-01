@@ -29,4 +29,37 @@ describe('scroll-group.service-host source project tracking', () => {
     const host = await import('@renderer/services/scroll-group.service-host');
     expect(host.getScrRefSourceProjectIdSync(4)).toBeUndefined();
   });
+
+  it('persists the source project id across a reload', async () => {
+    const host1 = await import('@renderer/services/scroll-group.service-host');
+    host1.setScrRefSync(3, { book: 'PSA', chapterNum: 23, verseNum: 1 }, 'projReload');
+
+    // Simulate an app reload: drop the module cache but KEEP localStorage.
+    vi.resetModules();
+
+    const host2 = await import('@renderer/services/scroll-group.service-host');
+    expect(host2.getScrRefSourceProjectIdSync(3)).toBe('projReload');
+  });
+
+  it('updates the source project when a same-numbered ref is set by a different project', async () => {
+    const host = await import('@renderer/services/scroll-group.service-host');
+    const ref = { book: 'PSA', chapterNum: 3, verseNum: 1 };
+    host.setScrRefSync(1, ref, 'projA');
+
+    const changed = host.setScrRefSync(1, { ...ref }, 'projB'); // same numbers, different source
+
+    expect(changed).toBe(true);
+    expect(host.getScrRefSourceProjectIdSync(1)).toBe('projB');
+  });
+
+  it('does not clobber a known source when a same-numbered ref is set with no source (verseRef echo)', async () => {
+    const host = await import('@renderer/services/scroll-group.service-host');
+    const ref = { book: 'PSA', chapterNum: 3, verseNum: 1 };
+    host.setScrRefSync(1, ref, 'projA');
+
+    const changed = host.setScrRefSync(1, { ...ref }); // undefined source, same numbers
+
+    expect(changed).toBe(false);
+    expect(host.getScrRefSourceProjectIdSync(1)).toBe('projA');
+  });
 });
