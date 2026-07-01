@@ -116,6 +116,10 @@ public sealed class ProjectSettingsNames
     public const string PB_STRUCTURE_PROTECTED = "platformScripture.structureProtected";
     public const string PT_STRUCTURE_PROTECTED = "StructureProtected";
 
+    /// <summary>
+    /// The active tab identifier chosen by a project admin for the shared layout. Stored in
+    /// Paratext's Settings.xml as "SharedLayoutActiveTab".
+    /// </summary>
     public const string PB_SHARED_LAYOUT_ACTIVE_TAB = "platformScripture.sharedLayoutActiveTab";
     public const string PT_SHARED_LAYOUT_ACTIVE_TAB = "SharedLayoutActiveTab";
 
