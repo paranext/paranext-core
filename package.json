@@ -144,7 +144,7 @@
     "rc-dock": "^3.3.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-router-dom": "^6.30.3",
+    "react-router-dom": "^6.30.4",
     "ws": "^8.18.1"
   },
   "devDependencies": {
