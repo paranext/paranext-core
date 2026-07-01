@@ -81,7 +81,9 @@ export function ConflictNoteCard({
         <Select value={resolution} onValueChange={handleChange} disabled={!canAcceptReject}>
           <SelectTrigger
             className="tw:w-32"
-            aria-label={localizedStrings['%conflict_note_choose_label%'] ?? 'Choose resolution'}
+            aria-label={
+              localizedStrings['%conflict_note_choose_aria_label%'] ?? 'Choose resolution'
+            }
           >
             <SelectValue />
           </SelectTrigger>
