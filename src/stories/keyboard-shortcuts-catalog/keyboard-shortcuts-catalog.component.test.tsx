@@ -60,7 +60,8 @@ describe('KeyboardShortcutsCatalog', () => {
     render(<KeyboardShortcutsCatalog entries={ENTRIES} />);
     // next-tab: Windows and Linux both use Ctrl+Tab -> one joined row, neither platform dropped.
     // Both ENTRIES have Windows/Linux sharing a combo, so getAllByText checks at least one exists.
-    expect(screen.getAllByText('Windows / Linux').length).toBeGreaterThan(0);
+    // Shared-combo OS labels are joined with ` | ` (distinct from the ` / ` used within a combo).
+    expect(screen.getAllByText('Windows | Linux').length).toBeGreaterThan(0);
     expect(screen.getAllByText('macOS').length).toBeGreaterThan(0);
   });
 
