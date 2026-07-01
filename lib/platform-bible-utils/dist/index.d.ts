@@ -5963,7 +5963,10 @@ export type LegacyComment = {
 	rejectedText?: string;
 	/**
 	 * Only present on `verseText` conflict notes: HTML diff of the accepted (winning) side (same
-	 * `<u>`/`<s>` markup as {@link rejectedText}). Absent otherwise.
+	 * `<u>`/`<s>` markup as {@link rejectedText}). Also absent for `verseText` conflicts that have no
+	 * common ancestor (two translators independently drafted the same previously-absent verse, so no
+	 * accepted-side diff exists). Absent otherwise. Consumers must treat this field as optional even
+	 * on `verseText` conflict notes.
 	 */
 	acceptedText?: string;
 	/**

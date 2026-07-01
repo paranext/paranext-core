@@ -255,6 +255,25 @@ internal class PlatformCommentConverterTests : PapiTestBase
     }
 
     [Test]
+    public void Serialize_VerseTextConflictNoAncestor_OmitsAcceptedTextButKeepsOtherConflictFields()
+    {
+        // A verseText conflict where parent == null in the merger: Verse is set but
+        // AcceptedChangeXmlStr is not, so acceptedText must be absent from the JSON payload.
+        Comment testComment = CommentTestHelper.CreateVerseTextConflictCommentNoAncestor();
+        var (commentWrapper, _) = CreateCommentWithThread(testComment);
+
+        var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
+            commentWrapper,
+            _serializationOptions
+        );
+
+        Assert.That(json, Does.Not.Contain(@"""acceptedText"":"));
+        Assert.That(json, Does.Contain(@"""rejectedText"":"));
+        Assert.That(json, Does.Contain(@"""resultText"":"));
+        Assert.That(json, Does.Contain(@"""rejectedResultText"":"));
+    }
+
+    [Test]
     public void Serialize_NormalComment_OmitsConflictTextFields()
     {
         Comment testComment = CommentTestHelper.CreateBasicComment();

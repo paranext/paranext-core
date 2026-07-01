@@ -167,6 +167,18 @@ internal static class CommentTestHelper
     }
 
     /// <summary>
+    /// A verseText merge-conflict Comment with NO common ancestor (parent == null in the merger):
+    /// Verse (result) is set but AcceptedChangeXmlStr is not, mirroring two people independently
+    /// drafting the same previously-absent verse. Exercises the acceptedText-absent path.
+    /// </summary>
+    internal static Comment CreateVerseTextConflictCommentNoAncestor()
+    {
+        Comment c = CreateVerseTextConflictComment();
+        c.AcceptedChangeXmlStr = null; // no ancestor → no accepted-side diff
+        return c;
+    }
+
+    /// <summary>
     /// Internal dummy user class for testing purposes
     /// </summary>
     private class DummyUser : ParatextUser

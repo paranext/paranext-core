@@ -228,7 +228,10 @@ public class PlatformCommentWrapper
             : null;
 
     /// <summary>
-    /// For a verseText conflict note, the HTML diff of the accepted (winning) side. Null for any other note.
+    /// For a verseText conflict note, the HTML diff of the accepted (winning) side. Null for any
+    /// other note, and also null for a verseText conflict with no common ancestor (when
+    /// <c>AcceptedChangeXmlStr</c> was never set because <c>parent == null</c> in the merger).
+    /// Consumers must treat this as optional even on verseText conflict notes.
     /// </summary>
     public string? AcceptedText =>
         IsVerseTextConflict
