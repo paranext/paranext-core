@@ -10,7 +10,7 @@ import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { useEvent, usePromise } from 'platform-bible-react';
 import { compareScrRefs, ScrollGroupId } from 'platform-bible-utils';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 function extractScrollGroupId(scrollGroupScrRef: ScrollGroupScrRef): ScrollGroupId | undefined {
   return typeof scrollGroupScrRef === 'number' ? scrollGroupScrRef : undefined;
@@ -130,19 +130,28 @@ export function useScrollGroupScrRef(
   // Convert the followed (raw) ref into this consumer's project versification for display only,
   // falling back to the raw ref if conversion fails. Only invoked by usePromise when a conversion is
   // needed (see the `undefined` factory below), so `projectId` is defined when this actually runs.
+  // `sourceProjectIdLocal` is a dependency (and gates the early return) so a source-only change — a
+  // same-numbered ref set by a different-versification project, which leaves `scrRefLocal`'s identity
+  // unchanged because compareScrRefs is versification-blind — still recreates this factory and
+  // re-runs the conversion against the new source frame.
   const convertScrRef = useCallback(() => {
-    if (!projectId) return Promise.resolve(scrRefLocal);
+    if (!projectId || sourceProjectIdLocal === projectId) return Promise.resolve(scrRefLocal);
     return getScrRefForProject(scrollGroupIdLocalRef.current, projectId).catch(() => scrRefLocal);
-  }, [projectId, scrRefLocal]);
+  }, [projectId, scrRefLocal, sourceProjectIdLocal]);
 
   // Seed with the synchronously-known conversion (a cached result, or the raw ref) so a revisited
   // verse displays correctly with no flash. `preserveValue: false` resets to this current-verse seed
-  // while a fresh conversion is in flight rather than lingering on the previous verse. Passing an
-  // `undefined` factory on the no-conversion path avoids needless usePromise churn (extra renders).
-  const conversionSeed =
-    noConversionNeeded || !projectId
-      ? scrRefLocal
-      : getScrRefForProjectSync(scrollGroupIdLocalRef.current, projectId);
+  // while a fresh conversion is in flight rather than lingering on the previous verse. Memoized so
+  // the cache-key serialization inside getScrRefForProjectSync runs once per verse change rather than
+  // on every render (usePromise only reads this seed when the factory changes). A source-only change
+  // does not recompute the seed, but convertScrRef re-runs and corrects the displayed value.
+  const conversionSeed = useMemo(
+    () =>
+      !noConversionNeeded && projectId
+        ? getScrRefForProjectSync(scrollGroupIdLocalRef.current, projectId)
+        : scrRefLocal,
+    [noConversionNeeded, projectId, scrRefLocal],
+  );
   const [convertedScrRef] = usePromise(
     noConversionNeeded ? undefined : convertScrRef,
     conversionSeed,
@@ -172,19 +181,41 @@ export function useScrollGroupScrRef(
   // Change the scroll group and update ours if successful
   const setScrollGroupId = useCallback(
     (newScrollGroupId: ScrollGroupId | undefined) => {
+      if (newScrollGroupId !== undefined) {
+        if (!setScrollGroupScrRefRef.current(newScrollGroupId)) return;
+        scrollGroupIdLocalRef.current = newScrollGroupId;
+        return;
+      }
+
       // On detaching (undefined), seed the now-independent ref with what we are DISPLAYING — the
       // reference converted into this project's versification (from cache when available), not the
       // raw group ref in the source project's frame.
-      if (
-        !setScrollGroupScrRefRef.current(
-          newScrollGroupId === undefined ? displayScrRef : newScrollGroupId,
-        )
-      )
-        return;
+      const detachingFromGroupId = scrollGroupIdLocalRef.current;
+      if (!setScrollGroupScrRefRef.current(displayScrRef)) return;
+      scrollGroupIdLocalRef.current = undefined;
 
-      scrollGroupIdLocalRef.current = newScrollGroupId;
+      // If the conversion for the current verse has not resolved yet, `displayScrRef` may still be
+      // the raw source-frame ref (it cannot be converted synchronously). Finish the conversion
+      // asynchronously and re-seed once it resolves; otherwise a first-visit detach would freeze the
+      // now-independent ref in the source project's frame (it is thereafter treated as this project's
+      // own frame and never re-converted).
+      if (!noConversionNeeded && projectId && detachingFromGroupId !== undefined) {
+        (async () => {
+          try {
+            const converted = await getScrRefForProject(detachingFromGroupId, projectId);
+            // Only correct the seed if we are still detached and the value actually differs.
+            if (
+              scrollGroupIdLocalRef.current === undefined &&
+              compareScrRefs(converted, displayScrRef) !== 0
+            )
+              setScrollGroupScrRefRef.current(converted);
+          } catch {
+            // Best-effort re-seed; the synchronous seed applied above stands on failure.
+          }
+        })();
+      }
     },
-    [displayScrRef],
+    [displayScrRef, noConversionNeeded, projectId],
   );
 
   return [displayScrRef, setScrRef, scrollGroupIdLocal, setScrollGroupId];

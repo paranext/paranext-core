@@ -70,9 +70,20 @@ internal class VersificationConversionService(PapiClient papiClient)
 
         var working = verseRef; // VerseRef is a struct; copies by value
         working.Versification = sourceVers; // ground the source frame in data
-        // VerseRef.ChangeVersification already dispatches to ChangeVersificationWithRanges internally
-        // when the ref HasMultiple (libpalaso VerseRef.cs), so a single call handles both cases.
-        working.ChangeVersification(targetVers);
+        try
+        {
+            // VerseRef.ChangeVersification already dispatches to ChangeVersificationWithRanges
+            // internally when the ref HasMultiple (libpalaso VerseRef.cs), so a single call handles
+            // both cases.
+            working.ChangeVersification(targetVers);
+        }
+        catch (Exception)
+        {
+            // Honor the best-effort contract: an edge/malformed ref that libpalaso can't map must be
+            // returned unchanged rather than throwing a JSON-RPC error at the caller (the mapping
+            // itself is best-effort and display-oriented).
+            return verseRef;
+        }
         return working;
     }
 

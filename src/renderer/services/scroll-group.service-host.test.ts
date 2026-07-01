@@ -8,8 +8,9 @@ vi.mock('@shared/services/network.service', () => ({
 vi.mock('@shared/services/network-object.service', () => ({
   networkObjectService: { set: vi.fn() },
 }));
+const settingsSet = vi.fn();
 vi.mock('@shared/services/settings.service', () => ({
-  settingsService: { set: vi.fn(), subscribe: vi.fn() },
+  settingsService: { set: (...args: unknown[]) => settingsSet(...args), subscribe: vi.fn() },
 }));
 vi.mock('@shared/services/logger.service', () => ({ logger: { warn: vi.fn(), error: vi.fn() } }));
 
@@ -35,6 +36,7 @@ describe('scroll-group.service-host source project tracking', () => {
     localStorage.clear();
     vi.resetModules();
     sendCommand.mockReset();
+    settingsSet.mockReset();
     Object.keys(projectVersifications).forEach((key) => {
       delete projectVersifications[key];
     });
@@ -196,5 +198,34 @@ describe('scroll-group.service-host source project tracking', () => {
     // After an async conversion caches the result, the sync getter returns it.
     await host.getScrRefForProject(0, 'targetProj');
     expect(host.getScrRefForProjectSync(0, 'targetProj')).toEqual(converted);
+  });
+
+  it('rewrites the platform.verseRef setting when the verse numbers change on group 0', async () => {
+    const host = await import('@renderer/services/scroll-group.service-host');
+    settingsSet.mockClear();
+
+    host.setScrRefSync(0, { book: 'PSA', chapterNum: 23, verseNum: 1 }, 'projA');
+
+    // The write happens synchronously inside setScrRefSync (no await before settingsService.set).
+    expect(settingsSet).toHaveBeenCalledWith('platform.verseRef', {
+      book: 'PSA',
+      chapterNum: 23,
+      verseNum: 1,
+    });
+  });
+
+  it('does NOT rewrite platform.verseRef on a source-only change to group 0', async () => {
+    const host = await import('@renderer/services/scroll-group.service-host');
+    const ref = { book: 'PSA', chapterNum: 23, verseNum: 1 };
+    host.setScrRefSync(0, ref, 'projA');
+    settingsSet.mockClear();
+
+    // Same numbers, different source: must still emit for followers (changed === true) but must not
+    // rewrite the frame-blind setting, which would fan out an identical-value notification app-wide.
+    const changed = host.setScrRefSync(0, { ...ref }, 'projB');
+
+    expect(changed).toBe(true);
+    expect(host.getScrRefSourceProjectIdSync(0)).toBe('projB');
+    expect(settingsSet).not.toHaveBeenCalled();
   });
 });

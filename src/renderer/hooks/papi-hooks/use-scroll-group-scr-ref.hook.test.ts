@@ -15,14 +15,21 @@ vi.mock('@renderer/services/scroll-group.service-host', () => ({
   getScrRefForProjectSync: (...args: unknown[]) => getScrRefForProjectSync(...args),
 }));
 
-// useEvent is a no-op subscriber here; usePromise gets a faithful minimal implementation (its real
-// behavior is covered by platform-bible-react's own tests). This mirrors the two behaviours the hook
-// relies on: an `undefined` factory is a no-op (no conversion), and `preserveValue: false` resets to
-// the current default while a new factory runs.
+// Captures the latest onDidUpdateScrRef handler the hook registers via useEvent so tests can simulate
+// a scroll-group update (e.g. a same-numbered ref set by a different source project).
+let lastScrRefUpdateHandler: ((update: unknown) => void) | undefined;
+
+// useEvent captures the handler here (the hook's real subscriber path is a thin PAPI wrapper);
+// usePromise gets a faithful minimal implementation (its real behavior is covered by
+// platform-bible-react's own tests). This mirrors the two behaviours the hook relies on: an
+// `undefined` factory is a no-op (no conversion), and `preserveValue: false` resets to the current
+// default while a new factory runs.
 vi.mock('platform-bible-react', async () => {
   const react = await import('react');
   return {
-    useEvent: () => {},
+    useEvent: (_event: unknown, handler: (update: unknown) => void) => {
+      lastScrRefUpdateHandler = handler;
+    },
     usePromise: (
       factory: (() => Promise<unknown>) | undefined,
       defaultValue: unknown,
@@ -140,5 +147,71 @@ describe('useScrollGroupScrRef versification conversion', () => {
 
     act(() => result.current[3](undefined));
     expect(setScrollGroupScrRef).toHaveBeenLastCalledWith(convertedRef);
+  });
+
+  it('re-converts the followed ref when the source project changes for the same verse numbers', async () => {
+    // Consumer project is 'targetProj'; group 0 starts sourced by 'sourceProj'.
+    const convertedFromSource = {
+      book: 'PSA',
+      chapterNum: 146,
+      verseNum: 1,
+      versificationStr: '4',
+    };
+    const convertedFromOther = { book: 'PSA', chapterNum: 145, verseNum: 1, versificationStr: '5' };
+    getScrRefForProjectSync.mockReturnValue(rawRef);
+    getScrRefForProject.mockResolvedValue(convertedFromSource);
+
+    const { useScrollGroupScrRef } = await import(
+      '@renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook'
+    );
+
+    const { result } = renderHook(() => useScrollGroupScrRef(0, () => true, 'targetProj'));
+    await waitFor(() => expect(result.current[0]).toEqual(convertedFromSource));
+
+    // A different-versification project sets the SAME book/chapter/verse; the host emits the new
+    // source id (compareScrRefs is versification-blind, so the numbers look unchanged).
+    getScrRefForProject.mockResolvedValue(convertedFromOther);
+    act(() =>
+      lastScrRefUpdateHandler?.({ scrRef: rawRef, scrollGroupId: 0, sourceProjectId: 'otherProj' }),
+    );
+
+    // Without re-running the conversion on a source-only change the display would stay on
+    // convertedFromSource; the fix re-runs it against the new source frame.
+    await waitFor(() => expect(result.current[0]).toEqual(convertedFromOther));
+  });
+
+  it('re-seeds a ref detached mid-conversion once the pending conversion resolves', async () => {
+    // First visit: nothing cached, so the synchronous seed is the raw source-frame ref and the async
+    // conversion is still in flight when the user detaches.
+    getScrRefForProjectSync.mockReturnValue(rawRef);
+    let resolveConversion: (value: typeof convertedRef) => void = () => {};
+    getScrRefForProject.mockReturnValue(
+      new Promise((resolve) => {
+        resolveConversion = resolve;
+      }),
+    );
+    const setScrollGroupScrRef = vi.fn(() => true);
+
+    const { useScrollGroupScrRef } = await import(
+      '@renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook'
+    );
+
+    const { result } = renderHook(() =>
+      useScrollGroupScrRef(0, setScrollGroupScrRef, 'targetProj'),
+    );
+
+    // Displayed value is the raw seed while the conversion is pending.
+    expect(result.current[0]).toEqual(rawRef);
+
+    // Detach mid-conversion: seeds the raw ref immediately (best-effort, synchronous)...
+    act(() => result.current[3](undefined));
+    expect(setScrollGroupScrRef).toHaveBeenLastCalledWith(rawRef);
+
+    // ...then re-seeds with the correct-frame conversion once the round-trip resolves, so the
+    // detached ref is not frozen in the source project's frame.
+    await act(async () => {
+      resolveConversion(convertedRef);
+    });
+    await waitFor(() => expect(setScrollGroupScrRef).toHaveBeenLastCalledWith(convertedRef));
   });
 });

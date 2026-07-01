@@ -95,9 +95,17 @@ Object.entries(scrRefs).forEach(([key, value]) => {
   }
 });
 
-function saveScrRefs() {
+/**
+ * Persist the scroll-group state to localStorage. `sourceProjectIdsChanged` controls whether the
+ * (separately-keyed) source-project-id map is also rewritten; pass `false` to skip that second
+ * serialize + synchronous write when only the ref changed — the common same-project navigation
+ * case, where the source id is unchanged. Defaults to `true` so callers that can't tell stay
+ * correct.
+ */
+function saveScrRefs(sourceProjectIdsChanged = true) {
   localStorage.setItem(SCR_REFS_STORAGE_KEY, serialize(scrRefs));
-  localStorage.setItem(SCR_REF_SOURCE_PROJECT_IDS_STORAGE_KEY, serialize(scrRefSourceProjectIds));
+  if (sourceProjectIdsChanged)
+    localStorage.setItem(SCR_REF_SOURCE_PROJECT_IDS_STORAGE_KEY, serialize(scrRefSourceProjectIds));
 }
 
 /**
@@ -117,7 +125,14 @@ export function getScrRefSync(scrollGroupId: ScrollGroupId = 0): SerializedVerse
   return scrRefs[scrollGroupId] ?? DEFAULT_SCR_REF;
 }
 
-/** Source project id whose versification the scroll group's scrRef is expressed in. */
+/**
+ * Get the id of the project whose versification the scroll group's stored `scrRef` is expressed in.
+ *
+ * @param scrollGroupId Scroll group whose source project id to read. If `undefined`, defaults to 0
+ * @returns The source project id, or `undefined` when the source frame is unknown — e.g. the group
+ *   was never set with a source, or its ref came from the `platform.verseRef` setting / an external
+ *   writer whose versification is not known
+ */
 export function getScrRefSourceProjectIdSync(scrollGroupId: ScrollGroupId = 0): string | undefined {
   return scrRefSourceProjectIds[scrollGroupId];
 }
@@ -184,6 +199,11 @@ function ensureVersificationSubscribed(projectId: string): Promise<void> {
             projectId,
             isPlatformError(value) || value === undefined ? undefined : String(value),
           );
+          // This keeps the same-versification fast path and the conversion-cache key fresh, but it
+          // intentionally does NOT re-emit onDidUpdateScrRef, so a reference already on screen is not
+          // re-converted until the next navigation. Re-converting on a mid-session versification
+          // change is out of scope: a project's versification is chosen at creation and effectively
+          // never changes during a session, so the added event/re-render churn is not worth it.
         },
         { retrieveDataImmediately: true },
       );
@@ -246,6 +266,42 @@ function cacheConversion(key: string, converted: SerializedVerseRef) {
 }
 
 /**
+ * Shared no-conversion gating + cache-key construction for {@link getScrRefForProject} and its
+ * synchronous companion {@link getScrRefForProjectSync}, so the two can never drift (a divergent
+ * gate or key shape would make the sync seed miss the async-written cache and reintroduce a flash).
+ * Given the source and target versification identifiers — read synchronously from
+ * {@link projectVersifications} by the sync path, awaited via {@link getTrackedVersification} by the
+ * async path — decides whether a conversion is actually needed and, if so, the cache key to use.
+ */
+function planConversion(
+  scrRef: SerializedVerseRef,
+  sourceProjectId: string | undefined,
+  projectId: string,
+  sourceVersification: string | undefined,
+  targetVersification: string | undefined,
+): { needsConversion: false } | { needsConversion: true; cacheKey: string } {
+  // Unknown source frame (`undefined`) is NOT assumed English: converting a reference whose
+  // versification we don't know would mis-frame it. Also skip when the frame already matches
+  // `projectId`, or when both projects are known to share a versification.
+  if (
+    sourceProjectId === undefined ||
+    sourceProjectId === projectId ||
+    (sourceVersification !== undefined && sourceVersification === targetVersification)
+  )
+    return { needsConversion: false };
+  return {
+    needsConversion: true,
+    cacheKey: conversionCacheKey(
+      sourceProjectId,
+      sourceVersification,
+      projectId,
+      targetVersification,
+      scrRef,
+    ),
+  };
+}
+
+/**
  * Synchronous, best-effort companion to {@link getScrRefForProject}: returns the already-computed
  * conversion into `projectId`'s versification if one is cached, otherwise the raw stored reference.
  * Never fires a round-trip. Used for the initial displayed value and when detaching a web view so
@@ -264,24 +320,15 @@ export function getScrRefForProjectSync(
   const scrollGroupIdDefaulted = scrollGroupId ?? 0;
   const scrRef = getScrRefSync(scrollGroupIdDefaulted);
   const sourceProjectId = getScrRefSourceProjectIdSync(scrollGroupIdDefaulted);
-  // Unknown source frame, or already this project's frame: nothing to convert.
-  if (sourceProjectId === undefined || sourceProjectId === projectId) return scrRef;
-  const sourceVersification = projectVersifications.get(sourceProjectId);
-  const targetVersification = projectVersifications.get(projectId);
-  // Known to share a versification: no conversion needed.
-  if (sourceVersification !== undefined && sourceVersification === targetVersification)
-    return scrRef;
-  return (
-    conversionCache.get(
-      conversionCacheKey(
-        sourceProjectId,
-        sourceVersification,
-        projectId,
-        targetVersification,
-        scrRef,
-      ),
-    ) ?? scrRef
+  const plan = planConversion(
+    scrRef,
+    sourceProjectId,
+    projectId,
+    sourceProjectId === undefined ? undefined : projectVersifications.get(sourceProjectId),
+    projectVersifications.get(projectId),
   );
+  if (!plan.needsConversion) return scrRef;
+  return conversionCache.get(plan.cacheKey) ?? scrRef;
 }
 
 /**
@@ -309,24 +356,25 @@ export async function getScrRefForProject(
 
   // Unknown source frame (`undefined`) is NOT assumed English: converting a reference whose
   // versification we don't know would mis-frame it, so pass it through. Also skip when the frame
-  // already matches `projectId`.
+  // already matches `projectId`. Checked up front to avoid subscribing when there is nothing to do.
   if (sourceProjectId === undefined || sourceProjectId === projectId) return scrRef;
 
-  // Skip the cross-process round-trip when both projects share a versification (the common case).
+  // Resolve versifications (subscribing if needed) so the same-versification fast path and the cache
+  // key are correct, then plan the conversion with the SAME gating/key logic the sync path uses.
   const [sourceVersification, targetVersification] = await Promise.all([
     getTrackedVersification(sourceProjectId),
     getTrackedVersification(projectId),
   ]);
-  if (sourceVersification !== undefined && sourceVersification === targetVersification)
-    return scrRef;
-
-  const cacheKey = conversionCacheKey(
-    sourceProjectId,
-    sourceVersification,
-    projectId,
-    targetVersification,
+  const plan = planConversion(
     scrRef,
+    sourceProjectId,
+    projectId,
+    sourceVersification,
+    targetVersification,
   );
+  if (!plan.needsConversion) return scrRef;
+
+  const { cacheKey } = plan;
   const cached = conversionCache.get(cacheKey);
   if (cached) return cached;
   // Coalesce concurrent identical conversions into a single round-trip.
@@ -405,16 +453,22 @@ export function setScrRefSync(
 
   // Update the scr ref and send out an event. The buffered emitter is usable immediately; if it
   // hasn't finished registering yet, the latest update per scroll group is buffered and flushed.
+  const sourceProjectIdChanged = scrRefSourceProjectIds[scrollGroupIdDefaulted] !== sourceProjectId;
   scrRefs[scrollGroupIdDefaulted] = scrRefClone;
   scrRefSourceProjectIds[scrollGroupIdDefaulted] = sourceProjectId;
-  saveScrRefs();
+  saveScrRefs(sourceProjectIdChanged);
   onDidUpdateScrRefBufferedEmitter.emit({
     scrollGroupId: scrollGroupIdDefaulted,
     scrRef: scrRefClone,
     sourceProjectId,
   });
 
-  if (shouldSetVerseRefSetting && scrollGroupIdDefaulted === 0)
+  // Only mirror into the backwards-compat platform.verseRef setting when the verse numbers actually
+  // changed. A source-only change (same numbers, different source project) still emits the scroll
+  // event above so followers re-convert, but must NOT rewrite the setting: platform.verseRef tracks
+  // the verse, not the frame, and settingsService.set fans out to every settings subscriber — an
+  // identical-value write would be a needless app-wide notification.
+  if (shouldSetVerseRefSetting && scrollGroupIdDefaulted === 0 && !scrRefUnchanged)
     (async () => {
       try {
         settingsService.set('platform.verseRef', scrRefClone);
@@ -454,6 +508,12 @@ export async function startScrollGroupService(): Promise<void> {
       );
       return;
     }
+    // Pass `undefined` for the source: the setting carries no source-project frame, so a restored /
+    // external platform.verseRef value has an unknown versification and must NOT be assumed to be in
+    // the previous source project's frame. When the numbers match the stored ref this is a harmless
+    // no-op (the no-op guard in setScrRefSync preserves any known source); when they differ it is a
+    // genuine external change whose frame we honestly don't know, so the followers pass it through
+    // unconverted rather than mis-framing it.
     setScrRefSync(0, newScrRef, undefined, false);
   });
 }
