@@ -234,3 +234,4 @@
 {"type":"pr_outcome","prNumber":2470,"outcome":"open","checkedDate":"2026-07-01"}
 {"type":"pr_outcome","prNumber":2471,"outcome":"open","checkedDate":"2026-07-01"}
 {"type":"pr_outcome","prNumber":2479,"outcome":"open","checkedDate":"2026-07-01"}
+{"type":"run_started","runId":"qs-2026-07-01","seeds":{"jira":["PT-4079","PT-4076","PT-4075"],"scanTarget":null},"date":"2026-07-01"}
