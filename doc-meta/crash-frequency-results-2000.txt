@@ -1,0 +1,34 @@
+Scan: last 2000 runs of test.yml in paranext/paranext-core
+Date: 2026-04-11
+Script: .erb/scripts/check-build-crash-frequency.sh --limit 2000
+Filter: failed runs whose head commit touched lib/platform-bible-react
+Pattern: "unreachable code"
+
+========================================
+Results
+========================================
+Runs scanned total:                        2000
+Failed runs:                                551
+Failed + touched lib/platform-bible-react:  204
+Runs with crash pattern:                      0
+
+No crash occurrences found.
+
+------------------------------------------------------------------------
+Interpretation
+------------------------------------------------------------------------
+The single confirmed occurrence remains run #5730:
+  https://github.com/paranext/paranext-core/actions/runs/24285521198/job/70914135269
+  Job: https://github.com/paranext/paranext-core/actions/runs/24285521198/job/70914135269
+  Triggering commit: a9b19c5eea59f0a06cd011f2454d9df739f535c4
+  Branch: pt-example-block-rename
+  Date: 2026-04-11
+
+0/204 matching failed runs show the crash across ~2 years of CI history.
+This is effectively a one-time event — likely a transient infrastructure
+blip (e.g. runner filesystem hiccup, briefly inconsistent cache state)
+rather than a reproducible code or config regression.
+
+The webpack cache version key fix (Option A in the analysis doc) remains
+a low-risk hardening measure but carries very low priority.
+------------------------------------------------------------------------
