@@ -976,6 +976,11 @@ export async function openTextConnectionPanels(
   } catch (e) {
     papi.logger.warn(`Error opening scripture resource text panel: ${getErrorMessage(e)}`);
   }
+  try {
+    await papi.commands.sendCommand('legacyCommentManager.openCommentListPanel', projectId);
+  } catch (e) {
+    papi.logger.warn(`Error opening comment list panel: ${getErrorMessage(e)}`);
+  }
 }
 
 // #endregion Text Connection Panels
