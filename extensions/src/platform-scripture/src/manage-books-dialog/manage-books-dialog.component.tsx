@@ -79,6 +79,7 @@ import {
   computeImportCompareState,
   deleteConfirmVariant,
   fmtTemplate,
+  resolveImportBookId,
   versificationFallbackName,
   versificationLabelKey,
 } from './manage-books-dialog.utils';
@@ -962,24 +963,11 @@ export function ManageBooksDialog({
     });
   }, [action, copySource, copySourceId, universe, current]);
 
-  // Book-id detection relies on the `\id` marker in the file content, not the
-  // filename. A filename like
-  // `38ZECCUNP89T.SFM` contains "ECC" before "ZEC", so the old filename-only
-  // substring scan misidentified the book. We now read the first `\id`
-  // marker and only fall back to a filename match when the content is missing
-  // or carries no usable id (story decorators / unreadable files).
+  // Book-id detection prefers the `\id` marker in the file content over the filename; see
+  // `resolveImportBookId` for the filename-fallback details (USX/XML imports have no `\id` marker).
   const detectBookId = useCallback(
-    (filename: string, content?: string): string | undefined => {
-      if (content) {
-        const idMatch = content.match(/^\s*\\id\s+([A-Za-z0-9]{2,4})/m);
-        if (idMatch) {
-          const candidate = idMatch[1].toUpperCase();
-          if (allBooks.includes(candidate)) return candidate;
-        }
-      }
-      const upper = filename.toUpperCase();
-      return allBooks.find((b) => upper.includes(b));
-    },
+    (filename: string, content?: string): string | undefined =>
+      resolveImportBookId(filename, content, allBooks),
     [allBooks],
   );
 
