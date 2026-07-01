@@ -4,27 +4,30 @@ import { Meta } from '@storybook/addon-docs/blocks';
 
 # Tooltips
 
+See [Design Principles → Tooltips](./design-principles.mdx) for the baseline rules: tooltips are
+required on every icon button and unlabelled control, they are supplementary, and text must be short
+enough to scan at a glance.
+
+This page covers the **tooltip vs. popover decision**.
+
 ## When to use a tooltip
 
-Use a `Tooltip` when the extra information is purely supplemental — the UI is fully usable without it,
-it is triggered only by hover or keyboard focus, and it contains no interactive elements.
-Keep tooltip text brief: a single sentence or short phrase is the target.
+Use a `Tooltip` when the extra information is purely supplemental — the UI is fully usable without
+it, it is triggered only by hover or keyboard focus, and it contains no interactive elements.
 
 ## When to use a popover instead
 
-If the content requires keyboard focus, multiple controls, links, form fields, or any meaningful interaction,
-use a `Popover`. The tooltip role is not in the tab order and cannot contain interactive elements.
+Use a `Popover` when any of the following apply:
+
+- The content requires keyboard focus, multiple controls, links, form fields, or any meaningful interaction.
+- The content must stay open while the user acts on it.
+- The content includes a link or navigation to another destination.
+
+The tooltip role is not in the tab order and cannot contain interactive elements. Our `Tooltip`
+component is Radix-based — it carries `role="tooltip"` and dismisses on pointer-leave and blur,
+so a link inside it cannot be reached by keyboard and is nearly unreachable by mouse before the
+tooltip closes. If you need tooltip-like behaviour that includes a link or action, use a `Popover`.
 
 A concrete example: an info icon next to "API key" could show a tooltip saying
 "Used to authenticate requests." But if the panel also includes a _Copy key_ button,
 that interaction belongs in a click-triggered popover, not a tooltip.
-
-## Exceptions — supplemental links and navigation
-
-Tooltips may contain a single text link **only when** both of the following are true:
-
-1. The link points to an article or entity that provides more context than fits in the tooltip.
-2. There is already another way for the user to reach that destination — the tooltip link is a shortcut, not the only path.
-
-The same rule applies to navigation to a specific entity described in the tooltip.
-If either condition is not met, move the link into a popover or surface it elsewhere in the UI.
