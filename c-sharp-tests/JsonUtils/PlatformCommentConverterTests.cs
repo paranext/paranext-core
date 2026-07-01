@@ -279,6 +279,8 @@ internal class PlatformCommentConverterTests : PapiTestBase
         Assert.That(json, Does.Not.Contain("rejectedText"));
         Assert.That(json, Does.Not.Contain("acceptedText"));
         Assert.That(json, Does.Not.Contain("resultText"));
+        // Prove the ConflictType operand of the gate (not just Type) — this note is Type=Conflict.
+        Assert.That(commentWrapper.RejectedText, Is.Null);
     }
 
     [Test]

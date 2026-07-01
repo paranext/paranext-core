@@ -172,7 +172,20 @@ declare module 'legacy-comment-manager' {
    * {@link ILegacyCommentProjectDataProvider.createComment} method.
    */
   export type NewLegacyComment = Prettify<
-    Partial<Omit<LegacyComment, 'id' | 'user' | 'date' | 'thread' | 'isRead'>> & {
+    Partial<
+      Omit<
+        LegacyComment,
+        | 'id'
+        | 'user'
+        | 'date'
+        | 'thread'
+        | 'isRead'
+        // Read-only, decoded display fields — never set when creating a comment.
+        | 'rejectedText'
+        | 'acceptedText'
+        | 'resultText'
+      >
+    > & {
       contents: string;
     }
   >;
@@ -201,7 +214,13 @@ declare module 'legacy-comment-manager' {
    * {@link ILegacyCommentProjectDataProvider.addCommentToThread} method.
    */
   export type LegacyCommentReply = Prettify<
-    Partial<Omit<LegacyComment, 'id' | 'user' | 'date'>> & { thread: string }
+    Partial<
+      Omit<
+        LegacyComment,
+        // Read-only, decoded display fields — never set when replying to a thread.
+        'id' | 'user' | 'date' | 'rejectedText' | 'acceptedText' | 'resultText'
+      >
+    > & { thread: string }
   >;
 
   // #endregion
