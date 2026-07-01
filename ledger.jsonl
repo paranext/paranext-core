@@ -248,3 +248,4 @@
 {"type":"backlog","candidateId":"s3","title":"SortedNumberMap.findClosestLessThanOrEqual conflates no-entry with undefined-valued entry","area":"lib/platform-bible-utils/src/sorted-number-map.ts","source":"scan","dedupKey":"scan:lib/platform-bible-utils:sortednumbermap-undefined-value-lookup","impactScore":0,"confidence":0.85,"status":"open","date":"2026-07-01"}
 {"type":"repro","runId":"qs-2026-07-01","candidateId":"s1","result":"reproduced","evidenceRef":"RED: date-time-format-util.test.ts 2 failing - sub-second past expected \"now\" got \"1 second ago\"; 1.4s expected \"1 second ago\" got \"2 seconds ago\"","date":"2026-07-01"}
 {"type":"fix","runId":"qs-2026-07-01","candidateId":"s1","result":"pr_opened","prNumber":2483,"prUrl":"https://github.com/paranext/paranext-core/pull/2483","branch":"fix/format-time-span-sub-second","date":"2026-07-01"}
+{"type":"pr_outcome","prNumber":2483,"outcome":"open","checkedDate":"2026-07-01","date":"2026-07-01"}
