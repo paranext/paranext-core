@@ -104,13 +104,28 @@ declare module 'shared/services/scroll-group.service-model' {
      * @param scrRef Scripture reference to which to set the scroll group
      * @param sourceProjectId Project whose versification `scrRef` is expressed in. `undefined` =
      *   unknown / canonical English.
-     * @returns `true` if the Scripture reference changed. `false` otherwise
+     * @returns `true` if the scroll group's reference or its versification source changed. `false`
+     *   otherwise
      */
     setScrRef(
       scrollGroupId: ScrollGroupId | undefined,
       scrRef: SerializedVerseRef,
       sourceProjectId?: string,
     ): Promise<boolean>;
+    /**
+     * Get the SerializedVerseRef associated with the provided scroll group, converted into the
+     * versification of `projectId`. The scroll group stores its reference in the versification of
+     * whichever project last set it; this converts it into `projectId`'s versification so any consumer
+     * gets a reference it can use directly. Returns the raw reference when no conversion is needed.
+     *
+     * @param scrollGroupId Scroll group whose Scripture reference to get. If `undefined`, defaults to 0
+     * @param projectId Project into whose versification to convert the reference
+     * @returns Scripture reference in `projectId`'s versification
+     */
+    getScrRefForProject(
+      scrollGroupId: ScrollGroupId | undefined,
+      projectId: string,
+    ): Promise<SerializedVerseRef>;
   }
   /**
    *
@@ -8125,6 +8140,23 @@ declare module 'renderer/services/scroll-group.service-host' {
   export function getScrRefSync(scrollGroupId?: ScrollGroupId): SerializedVerseRef;
   /** Source project id whose versification the scroll group's scrRef is expressed in. */
   export function getScrRefSourceProjectIdSync(scrollGroupId?: ScrollGroupId): string | undefined;
+  /**
+   * Get the scroll group's Scripture reference converted into the versification of `projectId`.
+   *
+   * The group stores its reference in the versification of whichever project last set it (see
+   * {@link getScrRefSourceProjectIdSync}); this resolves that frame and converts to `projectId`'s
+   * versification via the `platformScripture.mapVerseRefBetweenProjects` command, so every consumer —
+   * in any process — gets a reference it can use directly. Returns the raw stored reference unchanged
+   * when no conversion is needed.
+   *
+   * @param scrollGroupId Scroll group whose reference to convert. If `undefined`, defaults to 0
+   * @param projectId Project into whose versification to convert the reference
+   * @returns The reference in `projectId`'s versification
+   */
+  export function getScrRefForProject(
+    scrollGroupId: ScrollGroupId | undefined,
+    projectId: string,
+  ): Promise<SerializedVerseRef>;
   /**
    * See {@link IScrollGroupRemoteService.setScrRef}
    *

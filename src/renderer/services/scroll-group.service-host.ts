@@ -1,3 +1,4 @@
+import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { networkObjectService } from '@shared/services/network-object.service';
 import {
@@ -120,6 +121,83 @@ export function getScrRefSourceProjectIdSync(scrollGroupId: ScrollGroupId = 0): 
   return scrRefSourceProjectIds[scrollGroupId];
 }
 
+type MapVerseRefBetweenProjectsCommand = (
+  command: 'platformScripture.mapVerseRefBetweenProjects',
+  verseRef: SerializedVerseRef,
+  sourceProjectId: string | undefined,
+  targetProjectId: string,
+) => Promise<SerializedVerseRef>;
+// 'platformScripture.mapVerseRefBetweenProjects' is typed in an extension's .d.ts, which core's
+// tsconfig excludes from typeRoots, so sendCommand isn't typed for it here. This is the single
+// boundary point where core invokes the command.
+// eslint-disable-next-line no-type-assertion/no-type-assertion
+const mapVerseRefBetweenProjects = sendCommand as unknown as MapVerseRefBetweenProjectsCommand;
+
+/**
+ * Session cache of versification conversions, keyed by source→target project and the serialized
+ * source ref. A project's versification is static for a session (it only changes if the project's
+ * `platformScripture.versification` setting is edited), so caching within a session is safe and
+ * returns a stable object identity for an unchanged reference.
+ */
+const conversionCache = new Map<string, SerializedVerseRef>();
+
+/**
+ * Target project ids for which conversion has failed this session (e.g. not a scripture project, so
+ * it has no versification). Tracked to avoid re-firing a failing conversion on every navigation.
+ * Session-scoped and target-keyed: a genuinely non-versification target stays suppressed for the
+ * session; the tradeoff is that a target whose conversion failed transiently is also not retried
+ * until reload (acceptable — display always falls back to the raw ref).
+ */
+const nonConvertibleProjectIds = new Set<string>();
+
+/**
+ * Get the scroll group's Scripture reference converted into the versification of `projectId`.
+ *
+ * The group stores its reference in the versification of whichever project last set it (see
+ * {@link getScrRefSourceProjectIdSync}); this resolves that frame and converts to `projectId`'s
+ * versification via the `platformScripture.mapVerseRefBetweenProjects` command, so every consumer —
+ * in any process — gets a reference it can use directly. Returns the raw stored reference unchanged
+ * when no conversion is needed.
+ *
+ * @param scrollGroupId Scroll group whose reference to convert. If `undefined`, defaults to 0
+ * @param projectId Project into whose versification to convert the reference
+ * @returns The reference in `projectId`'s versification
+ */
+export async function getScrRefForProject(
+  scrollGroupId: ScrollGroupId | undefined,
+  projectId: string,
+): Promise<SerializedVerseRef> {
+  const scrollGroupIdDefaulted = scrollGroupId ?? 0;
+  const scrRef = getScrRefSync(scrollGroupIdDefaulted);
+  const sourceProjectId = getScrRefSourceProjectIdSync(scrollGroupIdDefaulted);
+
+  // No conversion needed / possible: source already matches, or this target previously failed.
+  if (sourceProjectId === projectId || nonConvertibleProjectIds.has(projectId)) return scrRef;
+
+  const cacheKey = `${sourceProjectId ?? ''}->${projectId}:${serialize(scrRef)}`;
+  const cached = conversionCache.get(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const converted = await mapVerseRefBetweenProjects(
+      'platformScripture.mapVerseRefBetweenProjects',
+      scrRef,
+      sourceProjectId,
+      projectId,
+    );
+    conversionCache.set(cacheKey, converted);
+    return converted;
+  } catch (e) {
+    // The target has no resolvable versification (e.g. not a scripture project). Remember it so we
+    // stop firing a failing round-trip on every navigation, and fall back to the raw reference.
+    nonConvertibleProjectIds.add(projectId);
+    logger.warn(
+      `Scroll group could not convert its reference into project ${projectId}'s versification; using the reference unconverted. ${e}`,
+    );
+    return scrRef;
+  }
+}
+
 async function getScrRef(scrollGroupScrRef: ScrollGroupId = 0): Promise<SerializedVerseRef> {
   return getScrRefSync(scrollGroupScrRef);
 }
@@ -200,6 +278,7 @@ async function setScrRef(
 const scrollGroupService: IScrollGroupRemoteService = {
   getScrRef,
   setScrRef,
+  getScrRefForProject,
 };
 
 /** Register the network object that backs the scroll group service */

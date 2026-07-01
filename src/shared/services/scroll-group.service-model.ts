@@ -56,13 +56,30 @@ export interface IScrollGroupRemoteService {
    * @param scrRef Scripture reference to which to set the scroll group
    * @param sourceProjectId Project whose versification `scrRef` is expressed in. `undefined` =
    *   unknown / canonical English.
-   * @returns `true` if the Scripture reference changed. `false` otherwise
+   * @returns `true` if the scroll group's reference or its versification source changed. `false`
+   *   otherwise
    */
   setScrRef(
     scrollGroupId: ScrollGroupId | undefined,
     scrRef: SerializedVerseRef,
     sourceProjectId?: string,
   ): Promise<boolean>;
+  /**
+   * Get the SerializedVerseRef associated with the provided scroll group, converted into the
+   * versification of `projectId`. The scroll group stores its reference in the versification of
+   * whichever project last set it; this converts it into `projectId`'s versification so any
+   * consumer gets a reference it can use directly. Returns the raw reference when no conversion is
+   * needed.
+   *
+   * @param scrollGroupId Scroll group whose Scripture reference to get. If `undefined`, defaults to
+   *   0
+   * @param projectId Project into whose versification to convert the reference
+   * @returns Scripture reference in `projectId`'s versification
+   */
+  getScrRefForProject(
+    scrollGroupId: ScrollGroupId | undefined,
+    projectId: string,
+  ): Promise<SerializedVerseRef>;
 }
 
 // Parts of the Scroll Group Service that are added in the service client on top of what is provided by the network object
