@@ -76,10 +76,12 @@ export function useActiveTabScrollGroup(): ActiveTabScrollGroup {
   // The tracked tab's saved definition (scrollGroupScrRef + projectId). Derived synchronously from
   // trackedWebViewId so the returned webViewId and its definition always update in the same render
   // (no transient stale pairing); definitionRefresh re-reads it after an external update event.
-  const definition = useMemo(
-    () => readDefinitionSafely(trackedWebViewId),
-    [trackedWebViewId, definitionRefresh],
-  );
+  const definition = useMemo(() => {
+    // Referenced so this memo re-runs whenever an onDidUpdateWebView event bumps it
+    // eslint-disable-next-line no-unused-expressions
+    definitionRefresh;
+    return readDefinitionSafely(trackedWebViewId);
+  }, [trackedWebViewId, definitionRefresh]);
 
   return useMemo(() => {
     const scrollGroupScrRef = definition?.scrollGroupScrRef;
