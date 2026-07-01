@@ -22,6 +22,7 @@ import {
   TooltipTrigger,
   UiLanguageSelector,
 } from 'platform-bible-react';
+import { Info } from 'lucide-react';
 import {
   debounce,
   getErrorMessage,
@@ -44,6 +45,10 @@ type BaseSettingProps<TSettingKey, TSettingValue> = {
   defaultSetting: TSettingValue;
   /** Additional css classes to help with unique styling of the Settings component */
   className?: string;
+  /** If true, render the control as read-only and reject change events */
+  disabled?: boolean;
+  /** Localized tooltip shown over the control when `disabled` is true */
+  disabledReason?: string;
 };
 
 /**
@@ -137,6 +142,8 @@ export function Setting({
   label,
   className,
   description,
+  disabled,
+  disabledReason,
 }: CombinedSettingProps) {
   const validateSetting = validateOtherSetting || validateProjectSetting;
 
@@ -186,6 +193,7 @@ export function Setting({
   const handleChangeSetting = async (
     event: ChangeEvent<HTMLInputElement> | string[] | boolean | 'indeterminate',
   ) => {
+    if (disabled) return;
     let newValue: unknown;
 
     if (typeof event === 'string')
@@ -240,11 +248,31 @@ export function Setting({
 
     if (typeof setting === 'string' || typeof setting === 'number')
       component = (
-        <Input key={settingKey} onChange={debouncedHandleChange} defaultValue={setting} />
+        <Input
+          key={settingKey}
+          disabled={disabled}
+          onChange={debouncedHandleChange}
+          defaultValue={setting}
+        />
       );
     else if (typeof setting === 'boolean')
-      component = (
-        <Switch key={settingKey} onCheckedChange={debouncedHandleChange} defaultChecked={setting} />
+      // When disabled, render the switch as controlled so an externally driven value change (e.g.
+      // `platform.isEditable` flipping to false because `platform.isPublished` became true) is
+      // reflected visually. When not disabled, keep the existing uncontrolled behavior so the
+      // optimistic toggle state survives the debounced write.
+      component = disabled ? (
+        <Switch
+          key={`${settingKey}-disabled`}
+          disabled
+          onCheckedChange={debouncedHandleChange}
+          checked={setting}
+        />
+      ) : (
+        <Switch
+          key={`${settingKey}-enabled`}
+          onCheckedChange={debouncedHandleChange}
+          defaultChecked={setting}
+        />
       );
     else if (typeof setting === 'object')
       if (Array.isArray(setting) && settingKey === 'platform.interfaceLanguage') {
@@ -269,9 +297,23 @@ export function Setting({
         );
       }
 
+    const wrappedComponent =
+      disabled && disabledReason ? (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="setting-control-tooltip-trigger">{component}</span>
+            </TooltipTrigger>
+            <TooltipContent align="start">{disabledReason}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      ) : (
+        component
+      );
+
     return (
       <div className="setting-container">
-        {component}
+        {wrappedComponent}
         {errorMessage && (
           <>
             <Label className="error-label">
@@ -294,6 +336,8 @@ export function Setting({
     errorMessage,
     languages,
     defaultLanguages,
+    disabled,
+    disabledReason,
   ]);
 
   return (
@@ -304,16 +348,25 @@ export function Setting({
         </Label>
       ) : (
         <div className="setting-label-container">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Label htmlFor={settingKey} className="setting-label">
-                  {label}
-                </Label>
-              </TooltipTrigger>
-              {description && <TooltipContent>{description}</TooltipContent>}
-            </Tooltip>
-          </TooltipProvider>
+          <div className="setting-label-wrapper">
+            {description ? (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Label htmlFor={settingKey} className="setting-label">
+                      <span>{label}</span>
+                      <Info className="setting-label-info-icon" aria-hidden="true" />
+                    </Label>
+                  </TooltipTrigger>
+                  <TooltipContent align="start">{description}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : (
+              <Label htmlFor={settingKey} className="setting-label">
+                {label}
+              </Label>
+            )}
+          </div>
           {generateComponent()}
         </div>
       )}
