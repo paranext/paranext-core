@@ -245,6 +245,13 @@ internal class PlatformCommentConverterTests : PapiTestBase
             commentWrapper.ResultText,
             Does.Contain(@"\v 1 When Jesus was born in the big village")
         );
+
+        // rejectedResultText = the loser's plain USFM (reject outcome): keeps "small", not "big"
+        Assert.That(json, Does.Contain(@"""rejectedResultText"":"));
+        Assert.That(commentWrapper.RejectedResultText, Does.Contain("small village"));
+        Assert.That(commentWrapper.RejectedResultText, Does.Not.Contain("big"));
+        // resultText (accept outcome) is the winner: "big"
+        Assert.That(commentWrapper.ResultText, Does.Contain("big village"));
     }
 
     [Test]

@@ -242,6 +242,26 @@ public class PlatformCommentWrapper
     public string? ResultText => IsVerseTextConflict ? _comment.Verse : null;
 
     /// <summary>
+    /// For a verseText conflict note, the resulting verse USFM if the change is REJECTED — the losing
+    /// side's plain USFM, decoded by ParatextData's public <c>GetDiffVerseUsfm</c> (the exact value
+    /// PT-4029's reject-write splices into the verse). Pairs with <see cref="ResultText"/> (the accept
+    /// outcome) so the card's Result preview can track the Accept/Reject choice. Null for any other note.
+    /// </summary>
+    public string? RejectedResultText
+    {
+        get
+        {
+            if (!IsVerseTextConflict)
+                return null;
+            var usfm = CommentEditHelper.GetDiffVerseUsfm(
+                _comment.Contents,
+                getChangedVersion: true
+            );
+            return string.IsNullOrEmpty(usfm) ? null : usfm;
+        }
+    }
+
+    /// <summary>
     /// Renders one side of a conflict (its diff XML) to HTML by reusing ParatextData's public
     /// <c>GetContentsAsHtml</c> renderer via its <c>contentOverride</c> parameter. When
     /// <paramref name="skipLeadingMessage"/> is true, the first (non-<c>&lt;p&gt;</c>) child — PT9's

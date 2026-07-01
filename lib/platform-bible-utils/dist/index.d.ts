@@ -5971,6 +5971,12 @@ export type LegacyComment = {
 	 * already written into the text at merge time. Equals the accepted side in v1. Absent otherwise.
 	 */
 	resultText?: string;
+	/**
+	 * Only present on `verseText` conflict notes: the resulting verse USFM (plain, no diff markup) if
+	 * the change is REJECTED — i.e. the losing side. Pairs with {@link resultText} (the accepted
+	 * outcome) to drive a dynamic result preview. Absent otherwise.
+	 */
+	rejectedResultText?: string;
 	/** Verse reference in which comment appears */
 	verseRef: string;
 };

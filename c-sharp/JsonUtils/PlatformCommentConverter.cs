@@ -25,6 +25,7 @@ public class PlatformCommentConverter : JsonConverter<PlatformCommentWrapper>
     private const string ID = "id";
     private const string IS_READ = "isRead";
     private const string LANGUAGE = "language";
+    private const string REJECTED_RESULT_TEXT = "rejectedResultText";
     private const string REJECTED_TEXT = "rejectedText";
     private const string REPLY_TO_USER = "replyToUser";
     private const string RESULT_TEXT = "resultText";
@@ -321,6 +322,7 @@ public class PlatformCommentConverter : JsonConverter<PlatformCommentWrapper>
         JsonConverterUtils.TryWriteString(writer, REJECTED_TEXT, value.RejectedText);
         JsonConverterUtils.TryWriteString(writer, ACCEPTED_TEXT, value.AcceptedText);
         JsonConverterUtils.TryWriteString(writer, RESULT_TEXT, value.ResultText);
+        JsonConverterUtils.TryWriteString(writer, REJECTED_RESULT_TEXT, value.RejectedResultText);
         JsonConverterUtils.TryWriteString(writer, BIBLICAL_TERM_ID, value.BiblicalTermId);
         if (value.TagsAdded != null)
             JsonConverterUtils.TryWriteString(writer, TAG_ADDED, TryJoin(",", value.TagsAdded));
