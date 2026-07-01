@@ -8,6 +8,12 @@ namespace Paranext.DataProvider.Projects;
 public abstract record ResourceReference
 {
     public string Name { get; init; } = string.Empty;
+
+    /// <summary>
+    /// When set by a project admin, indicates this resource should be shown by default
+    /// when the shared layout is applied. Null means no admin preference is set.
+    /// </summary>
+    public bool? IsShownByDefault { get; init; } = null;
 }
 
 public record ProjectReference : ResourceReference

@@ -28,17 +28,28 @@ internal sealed class ResourceReferenceConverter : JsonConverter<ResourceReferen
             {
                 Name = GetString(root, "name"),
                 Id = GetString(root, "id"),
+                IsShownByDefault = GetNullableBool(root, "isShownByDefault"),
             },
             "dblResource" => new DblResourceReference
             {
                 Name = GetString(root, "name"),
                 Id = GetString(root, "id"),
+                IsShownByDefault = GetNullableBool(root, "isShownByDefault"),
             },
-            "enhancedResource" => new EnhancedResourceReference { Name = GetString(root, "name") },
-            "xmlResource" => new XmlResourceReference { Name = GetString(root, "name") },
+            "enhancedResource" => new EnhancedResourceReference
+            {
+                Name = GetString(root, "name"),
+                IsShownByDefault = GetNullableBool(root, "isShownByDefault"),
+            },
+            "xmlResource" => new XmlResourceReference
+            {
+                Name = GetString(root, "name"),
+                IsShownByDefault = GetNullableBool(root, "isShownByDefault"),
+            },
             "sourceLanguageResource" => new SourceLanguageResourceReference
             {
                 Name = GetString(root, "name"),
+                IsShownByDefault = GetNullableBool(root, "isShownByDefault"),
             },
             _ => CreateUnknown(root),
         };
@@ -48,6 +59,18 @@ internal sealed class ResourceReferenceConverter : JsonConverter<ResourceReferen
         element.TryGetProperty(propertyName, out var prop) && prop.ValueKind == JsonValueKind.String
             ? prop.GetString() ?? ""
             : "";
+
+    private static bool? GetNullableBool(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var prop))
+            return null;
+        return prop.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            _ => null,
+        };
+    }
 
     private static UnknownResourceReference CreateUnknown(JsonElement root)
     {
@@ -101,6 +124,8 @@ internal sealed class ResourceReferenceConverter : JsonConverter<ResourceReferen
                 writer.WriteString("id", proj.Id);
             else if (value is DblResourceReference dbl)
                 writer.WriteString("id", dbl.Id);
+            if (value.IsShownByDefault.HasValue)
+                writer.WriteBoolean("isShownByDefault", value.IsShownByDefault.Value);
         }
 
         writer.WriteEndObject();

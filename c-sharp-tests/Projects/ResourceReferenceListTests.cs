@@ -124,6 +124,68 @@ public class ResourceReferenceListTests
         Assert.That(item!.Name, Is.EqualTo("Greek"));
     }
 
+    [Test]
+    public void ProjectReference_IsShownByDefaultTrue_SerializesAndDeserializesCorrectly()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new ProjectReference { Name = "My Project", Id = "aabbcc", IsShownByDefault = true }],
+        };
+        string json = list.SerializeToJson();
+        var result = json.DeserializeFromJson<ResourceReferenceList>();
+
+        Assert.That(result, Is.Not.Null);
+        var item = result!.Items[0] as ProjectReference;
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.IsShownByDefault, Is.EqualTo(true));
+    }
+
+    [Test]
+    public void ProjectReference_IsShownByDefaultAbsent_DeserializesAsNull()
+    {
+        const string json =
+            """{"dataVersion":"1.0.0","items":[{"type":"project","name":"My Project","id":"aabbcc"}]}""";
+        var result = json.DeserializeFromJson<ResourceReferenceList>();
+
+        var item = result!.Items[0] as ProjectReference;
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.IsShownByDefault, Is.Null);
+    }
+
+    [Test]
+    public void ProjectReference_IsShownByDefaultNull_NotPresentInSerializedJson()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new ProjectReference { Name = "P", Id = "abc" }],
+        };
+        string json = list.SerializeToJson();
+        Assert.That(json, Does.Not.Contain("isShownByDefault"));
+    }
+
+    [Test]
+    public void DblResourceReference_IsShownByDefaultFalse_SerializesAndDeserializesCorrectly()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items =
+            [
+                new DblResourceReference
+                {
+                    Name = "Web English",
+                    Id = "aabbccddeeff00112233445566778899aabbccddeeff0011",
+                    IsShownByDefault = false,
+                },
+            ],
+        };
+        string json = list.SerializeToJson();
+        var result = json.DeserializeFromJson<ResourceReferenceList>();
+
+        var item = result!.Items[0] as DblResourceReference;
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.IsShownByDefault, Is.EqualTo(false));
+    }
+
     #endregion
 
     #region Serialization — unknown type round-trip
