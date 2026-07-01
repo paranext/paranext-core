@@ -430,6 +430,18 @@ declare module 'papi-shared-types' {
       webViewId?: string | undefined,
       options?: OpenCommentListWebViewOptions,
     ) => Promise<string | undefined>;
+
+    /**
+     * Opens or updates the fixed Comment List panel in Column 3 for the given project.
+     *
+     * Called by `openTextConnectionPanels` whenever the active project changes in Simple mode.
+     *
+     * @param projectId The project whose comments to display
+     * @returns The webView ID of the panel
+     */
+    'legacyCommentManager.openCommentListPanel': (
+      projectId?: string | undefined,
+    ) => Promise<string | undefined>;
   }
 
   export interface WebViewControllers {
