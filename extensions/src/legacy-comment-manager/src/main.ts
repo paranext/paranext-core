@@ -25,6 +25,7 @@ import {
 import { LEGACY_COMMENT_USJ_PROJECT_INTERFACES } from './project-data-provider/legacy-comment-manager-usj-pdpe.model';
 
 const commentListWebViewType = 'legacyCommentManager.commentList';
+const COMMENT_LIST_PANEL_WEBVIEW_TYPE = 'legacyCommentManager.commentListPanel';
 
 // #region Comment List WebView
 
@@ -144,6 +145,68 @@ class CommentListWebViewFactory extends WebViewFactory<typeof commentListWebView
 const commentListWebViewProvider: IWebViewProvider = new CommentListWebViewFactory();
 
 // #endregion Comment List WebView
+
+// #region Comment List Panel WebView (Column 3 fixed tab)
+
+interface CommentListPanelOptions extends OpenWebViewOptions {
+  projectId?: string;
+}
+
+/** Pending projectId consumed by commentListPanelProvider.getWebView() after reloadWebView() */
+let currentCommentListPanelProjectId: string | undefined;
+
+const commentListPanelProvider: IWebViewProvider = {
+  async getWebView(
+    savedWebView: SavedWebViewDefinition,
+    openWebViewOptions: CommentListPanelOptions,
+  ): Promise<WebViewDefinition | undefined> {
+    if (savedWebView.webViewType !== COMMENT_LIST_PANEL_WEBVIEW_TYPE) return undefined;
+
+    const projectId =
+      currentCommentListPanelProjectId ?? openWebViewOptions.projectId ?? savedWebView.projectId;
+    currentCommentListPanelProjectId = undefined;
+
+    const title = await papi.localization.getLocalizedString({
+      localizeKey: '%webView_legacyCommentManager_commentList_title%',
+    });
+
+    return {
+      ...savedWebView,
+      title,
+      projectId,
+      content: commentListWebView,
+      styles: tailwindStyles,
+    };
+  },
+};
+
+/**
+ * Opens or updates the fixed Comment List Panel in Column 3 for the given project.
+ *
+ * This implements the `legacyCommentManager.openCommentListPanel` command. Called by
+ * `openTextConnectionPanels` whenever the active project changes in Simple mode.
+ *
+ * @param projectId The project whose comments to display, or `undefined` to show an empty panel
+ * @returns The webView ID of the panel, or `undefined` if opening failed
+ */
+async function openCommentListPanel(projectId: string | undefined): Promise<string | undefined> {
+  const allOpenDefs = await papi.webViews.getAllOpenWebViewDefinitions();
+  const existingPanel = allOpenDefs.find(
+    (def) => def.webViewType === COMMENT_LIST_PANEL_WEBVIEW_TYPE,
+  );
+
+  if (existingPanel) {
+    currentCommentListPanelProjectId = projectId;
+    return papi.webViews.reloadWebView(COMMENT_LIST_PANEL_WEBVIEW_TYPE, existingPanel.id, {
+      bringToFront: false,
+    });
+  }
+
+  const openOptions: CommentListPanelOptions = { projectId };
+  return papi.webViews.openWebView(COMMENT_LIST_PANEL_WEBVIEW_TYPE, { type: 'tab' }, openOptions);
+}
+
+// #endregion Comment List Panel WebView
 
 /**
  * Open or focus the Comment List WebView for the project ID associated with the specified WebView
@@ -300,6 +363,34 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     commentListWebViewProvider,
   );
 
+  const commentListPanelWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    COMMENT_LIST_PANEL_WEBVIEW_TYPE,
+    commentListPanelProvider,
+  );
+
+  const openCommentListPanelPromise = papi.commands.registerCommand(
+    'legacyCommentManager.openCommentListPanel',
+    openCommentListPanel,
+    {
+      method: {
+        summary: 'Open or update the fixed Comment List panel in Column 3',
+        params: [
+          {
+            name: 'projectId',
+            required: false,
+            summary: 'The project whose comments to display',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The webView ID of the panel',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
   // Subscribe to web view updates to clean up tracking when comment list is closed
   const webViewUpdateUnsub = papi.webViews.onDidCloseWebView((event) => {
     // Check if this was one of our tracked comment lists
@@ -393,7 +484,9 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
 
   context.registrations.add(
     await commentListWebViewProviderPromise,
+    await commentListPanelWebViewProviderPromise,
     await openCommentListPromise,
+    await openCommentListPanelPromise,
     await commentsUsjPdpefPromise,
     webViewUpdateUnsub,
   );
