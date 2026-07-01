@@ -61,10 +61,9 @@ internal class VersificationConversionService(PapiClient papiClient)
 
         var working = verseRef; // VerseRef is a struct; copies by value
         working.Versification = sourceVers; // ground the source frame in data
-        if (working.HasMultiple)
-            working.ChangeVersificationWithRanges(targetVers);
-        else
-            working.ChangeVersification(targetVers);
+        // VerseRef.ChangeVersification already dispatches to ChangeVersificationWithRanges internally
+        // when the ref HasMultiple (libpalaso VerseRef.cs), so a single call handles both cases.
+        working.ChangeVersification(targetVers);
         return working;
     }
 }
