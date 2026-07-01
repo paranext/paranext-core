@@ -67,3 +67,31 @@ test('canAcceptReject=false disables the selector', () => {
   );
   expect(screen.getByRole('combobox')).toBeDisabled();
 });
+
+test('no-ancestor case (acceptedText absent): selector and Rejected render, Accepted absent, Result tracks resolution', () => {
+  const noAncestorComment = { ...verseTextConflictComment, acceptedText: undefined };
+  const { rerender } = render(
+    <ConflictNoteCard
+      comment={noAncestorComment}
+      localizedStrings={localizedStrings}
+      selectedResolution="accept"
+    />,
+  );
+  // The selector (combobox) must render
+  expect(screen.getByRole('combobox')).toBeInTheDocument();
+  // The Rejected region must render
+  expect(screen.getByText('Rejected')).toBeInTheDocument();
+  // The Accepted label must NOT be in the document (no acceptedText)
+  expect(screen.queryByText('Accepted')).not.toBeInTheDocument();
+  // Result preview defaults to resultText (accept outcome, the winner)
+  expect(screen.getByText(verseTextConflictComment.resultText ?? '')).toBeInTheDocument();
+  rerender(
+    <ConflictNoteCard
+      comment={noAncestorComment}
+      localizedStrings={localizedStrings}
+      selectedResolution="reject"
+    />,
+  );
+  // Result preview switches to rejectedResultText (reject outcome, the loser)
+  expect(screen.getByText(verseTextConflictComment.rejectedResultText ?? '')).toBeInTheDocument();
+});
