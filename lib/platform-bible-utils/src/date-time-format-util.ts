@@ -23,7 +23,10 @@ export function formatTimeSpan(
   since: Date,
   to = new Date(),
 ) {
-  const spanSeconds = Math.floor((since.getTime() - to.getTime()) / MILLISECONDS_PER_SECOND);
+  // Round to the nearest second (consistent with the day/hour/minute buckets below). Using
+  // Math.floor here rounded negative spans away from zero, so a sub-second-past timestamp reported
+  // "1 second ago" instead of "now" and elapsed seconds were over-reported by up to one second.
+  const spanSeconds = Math.round((since.getTime() - to.getTime()) / MILLISECONDS_PER_SECOND);
 
   const totalDays = Math.round(spanSeconds / SECONDS_PER_DAY);
   if (Math.abs(totalDays) >= 1) return relativeTimeFormatter.format(totalDays, 'day');
