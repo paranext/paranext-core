@@ -623,7 +623,7 @@
       "%project_settings_platformScripture_referencedProjectsAndResources_label%": "Proyectos y recursos referenciados",
       "%project_settings_platformScripture_repeatableWords_description%": "Lista de palabras que se permiten repetir en este proyecto",
       "%project_settings_platformScripture_repeatableWords_label%": "Palabras Repetibles",
-      "%project_settings_platformScripture_sharedLayoutActiveTab_label%": "Shared Layout Active Tab",
+      "%project_settings_platformScripture_sharedLayoutActiveTab_label%": "Pestaña activa del diseño compartido",
       "%project_settings_platformScripture_structureProtected_label%": "Estructura bloqueada",
       "%project_settings_platformScripture_validCharacters_description%": "Lista de caracteres aceptados en este proyecto",
       "%project_settings_platformScripture_validCharacters_label%": "Caracteres válidos",

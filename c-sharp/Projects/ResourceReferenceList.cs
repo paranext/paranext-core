@@ -13,7 +13,7 @@ public abstract record ResourceReference
     /// When set by a project admin, indicates this resource should be shown by default
     /// when the shared layout is applied. Null means no admin preference is set.
     /// </summary>
-    public bool? IsShownByDefault { get; init; } = null;
+    public bool? IsShownByDefault { get; init; }
 }
 
 public record ProjectReference : ResourceReference
@@ -102,6 +102,10 @@ public record ResourceReferenceList
                 else if (item is DblResourceReference dbl)
                     element.Add(new XAttribute("id", dbl.Id));
 
+                // XML attributes are untyped strings; booleans are emitted as "true"/"false"
+                // (lowercase) and parsed back with bool.TryParse. The JSON path uses a native
+                // JSON boolean via WriteBoolean/JsonValueKind — the difference is inherent to
+                // the respective serialization formats.
                 if (item.IsShownByDefault.HasValue)
                     element.Add(
                         new XAttribute(
@@ -138,53 +142,28 @@ public record ResourceReferenceList
                         {
                             Name = name,
                             Id = el.Attribute("id")?.Value ?? "",
-                            IsShownByDefault = bool.TryParse(
-                                el.Attribute("isShownByDefault")?.Value,
-                                out var projShown
-                            )
-                                ? projShown
-                                : null,
+                            IsShownByDefault = GetNullableBoolAttribute(el, "isShownByDefault"),
                         },
                         "dblResource" => new DblResourceReference
                         {
                             Name = name,
                             Id = el.Attribute("id")?.Value ?? "",
-                            IsShownByDefault = bool.TryParse(
-                                el.Attribute("isShownByDefault")?.Value,
-                                out var dblShown
-                            )
-                                ? dblShown
-                                : null,
+                            IsShownByDefault = GetNullableBoolAttribute(el, "isShownByDefault"),
                         },
                         "enhancedResource" => new EnhancedResourceReference
                         {
                             Name = name,
-                            IsShownByDefault = bool.TryParse(
-                                el.Attribute("isShownByDefault")?.Value,
-                                out var enhShown
-                            )
-                                ? enhShown
-                                : null,
+                            IsShownByDefault = GetNullableBoolAttribute(el, "isShownByDefault"),
                         },
                         "xmlResource" => new XmlResourceReference
                         {
                             Name = name,
-                            IsShownByDefault = bool.TryParse(
-                                el.Attribute("isShownByDefault")?.Value,
-                                out var xmlShown
-                            )
-                                ? xmlShown
-                                : null,
+                            IsShownByDefault = GetNullableBoolAttribute(el, "isShownByDefault"),
                         },
                         "sourceLanguageResource" => new SourceLanguageResourceReference
                         {
                             Name = name,
-                            IsShownByDefault = bool.TryParse(
-                                el.Attribute("isShownByDefault")?.Value,
-                                out var srcShown
-                            )
-                                ? srcShown
-                                : null,
+                            IsShownByDefault = GetNullableBoolAttribute(el, "isShownByDefault"),
                         },
                         _ => new UnknownResourceReference
                         {
@@ -202,6 +181,9 @@ public record ResourceReferenceList
 
         return new ResourceReferenceList { Items = items, DataVersion = dataVersion };
     }
+
+    private static bool? GetNullableBoolAttribute(XElement el, string name) =>
+        bool.TryParse(el.Attribute(name)?.Value, out var value) ? value : null;
 
     private static string GetXmlType(ResourceReference item) =>
         item switch
