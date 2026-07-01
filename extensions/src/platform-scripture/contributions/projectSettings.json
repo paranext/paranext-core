@@ -111,6 +111,12 @@
         "isHidden": true,
         "default": false,
         "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.sharedLayoutActiveTab": {
+        "label": "%project_settings_platformScripture_sharedLayoutActiveTab_label%",
+        "default": "",
+        "isHidden": true,
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
       }
     }
   }

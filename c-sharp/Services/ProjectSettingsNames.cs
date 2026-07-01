@@ -116,6 +116,9 @@ public sealed class ProjectSettingsNames
     public const string PB_STRUCTURE_PROTECTED = "platformScripture.structureProtected";
     public const string PT_STRUCTURE_PROTECTED = "StructureProtected";
 
+    public const string PB_SHARED_LAYOUT_ACTIVE_TAB = "platformScripture.sharedLayoutActiveTab";
+    public const string PT_SHARED_LAYOUT_ACTIVE_TAB = "SharedLayoutActiveTab";
+
     /// <summary>
     /// Paratext setting names that are either T or F and need to be converted to booleans
     /// </summary>
@@ -153,6 +156,7 @@ public sealed class ProjectSettingsNames
             { PB_MODEL_TEXTS, PT_MODEL_TEXTS },
             { PB_REFERENCED_PROJECTS_AND_RESOURCES, PT_REFERENCED_PROJECTS_AND_RESOURCES },
             { PB_STRUCTURE_PROTECTED, PT_STRUCTURE_PROTECTED },
+            { PB_SHARED_LAYOUT_ACTIVE_TAB, PT_SHARED_LAYOUT_ACTIVE_TAB },
         };
 
     private static readonly Dictionary<string, string> s_paratextToPlatformBibleSettingsNames =
