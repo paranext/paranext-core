@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { ThumbsUp, ThumbsDown, Info, ChevronDown } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Info, ChevronDown, Lightbulb } from 'lucide-react';
 import { cn } from '@/utils/shadcn-ui/utils';
 
-type Variant = 'prefer' | 'avoid' | 'neutral';
+type Variant = 'prefer' | 'avoid' | 'neutral' | 'under-consideration';
 
 type ExampleBlockProps = {
   variant?: Variant;
@@ -47,6 +47,14 @@ const variantConfig = {
     textClass: 'tw:text-sky-600 tw:dark:text-sky-400',
     iconBgClass: 'tw:bg-sky-500/15',
   },
+  'under-consideration': {
+    Icon: Lightbulb,
+    label: 'Under Consideration',
+    accentClass: 'tw:bg-amber-500',
+    bgClass: 'tw:bg-amber-500/5',
+    textClass: 'tw:text-amber-600 tw:dark:text-amber-400',
+    iconBgClass: 'tw:bg-amber-500/15',
+  },
 };
 
 /**
@@ -55,6 +63,8 @@ const variantConfig = {
  * - `variant="prefer"` — teal, thumbs-up, "Prefer"
  * - `variant="avoid"` — rose, thumbs-down, "Avoid"
  * - `variant="neutral"` (default) — sky, info icon, "Example"
+ * - `variant="under-consideration"` — amber, lightbulb, "Under Consideration" — for patterns that
+ *   are not yet adopted and need UX sign-off before any implementation
  *
  * Pass a live component to `preview` to render it in a framed stage. Pass source code to `code` —
  * single-line displays inline, multiline collapses and expands on click. The preview and code share
