@@ -111,18 +111,8 @@ export function ConflictNoteCard({
         </Select>
       </div>
 
-      <div className="tw:flex tw:flex-col tw:gap-1">
-        <span className="tw:font-medium">
-          {localizedStrings['%conflict_note_rejected_label%'] ?? 'Rejected'}
-        </span>
-        <div
-          className={DIFF_HTML_CLASSES}
-          // PT9 rejected-side diff HTML; sanitized above before injecting.
-          // eslint-disable-next-line react/no-danger
-          dangerouslySetInnerHTML={{ __html: sanitizedRejected }}
-        />
-      </div>
-
+      {/* Accepted region first, then Rejected — matches PT9's AppendConflictNoteDetails order
+          (winning/current text leads, and Accept is the default resolution). */}
       {!!comment.acceptedText && (
         <div className="tw:flex tw:flex-col tw:gap-1">
           <span className="tw:font-medium">
@@ -136,6 +126,18 @@ export function ConflictNoteCard({
           />
         </div>
       )}
+
+      <div className="tw:flex tw:flex-col tw:gap-1">
+        <span className="tw:font-medium">
+          {localizedStrings['%conflict_note_rejected_label%'] ?? 'Rejected'}
+        </span>
+        <div
+          className={DIFF_HTML_CLASSES}
+          // PT9 rejected-side diff HTML; sanitized above before injecting.
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: sanitizedRejected }}
+        />
+      </div>
 
       <Separator />
 
