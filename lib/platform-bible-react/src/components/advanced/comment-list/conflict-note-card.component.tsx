@@ -48,10 +48,7 @@ export function ConflictNoteCard({
   );
   const sanitizedContents = useMemo(() => sanitizeHtml(comment.contents), [comment.contents]);
 
-  const isVerseTextConflict =
-    comment.conflictType === VERSE_TEXT_CONFLICT &&
-    !!comment.rejectedText &&
-    !!comment.acceptedText;
+  const isVerseTextConflict = comment.conflictType === VERSE_TEXT_CONFLICT && !!comment.resultText;
 
   if (!isVerseTextConflict) {
     return (
@@ -111,17 +108,19 @@ export function ConflictNoteCard({
         />
       </div>
 
-      <div className="tw:flex tw:flex-col tw:gap-1">
-        <span className="tw:font-medium">
-          {localizedStrings['%conflict_note_accepted_label%'] ?? 'Accepted'}
-        </span>
-        <div
-          className={DIFF_HTML_CLASSES}
-          // PT9 accepted-side diff HTML; sanitized above before injecting.
-          // eslint-disable-next-line react/no-danger
-          dangerouslySetInnerHTML={{ __html: sanitizedAccepted }}
-        />
-      </div>
+      {comment.acceptedText !== undefined && (
+        <div className="tw:flex tw:flex-col tw:gap-1">
+          <span className="tw:font-medium">
+            {localizedStrings['%conflict_note_accepted_label%'] ?? 'Accepted'}
+          </span>
+          <div
+            className={DIFF_HTML_CLASSES}
+            // PT9 accepted-side diff HTML; sanitized above before injecting.
+            // eslint-disable-next-line react/no-danger
+            dangerouslySetInnerHTML={{ __html: sanitizedAccepted }}
+          />
+        </div>
+      )}
 
       <Separator />
 
