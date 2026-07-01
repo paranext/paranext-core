@@ -109,6 +109,7 @@ public static class Program
             await Task.WhenAll(
                 paratextFactory.InitializeAsync(),
                 paratextPublishedFactory.InitializeAsync(),
+                versificationConversionService.InitializeAsync(),
                 inventoryDataProvider.RegisterDataProviderAsync(),
                 checkRunner.RegisterDataProviderAsync(),
                 dblResources.RegisterDataProviderAsync(),
@@ -116,8 +117,7 @@ public static class Program
                 paratextSendReceiveService.InitializeAsync(),
                 checklistNetworkObject.InitializeAsync(),
                 manageBooksService.RegisterNetworkObjectAsync(),
-                enhancedResourceFactory.InitializeAsync(),
-                versificationConversionService.InitializeAsync()
+                enhancedResourceFactory.InitializeAsync()
             );
 
             // Things that only run in our "noisy dev mode" go here

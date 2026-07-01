@@ -239,7 +239,7 @@ async function getTrackedVersification(projectId: string): Promise<string | unde
  * {@link CONVERSION_CACHE_MAX_SIZE} to avoid unbounded growth over a long session.
  */
 const conversionCache = new Map<string, SerializedVerseRef>();
-const CONVERSION_CACHE_MAX_SIZE = 500;
+const CONVERSION_CACHE_MAX_SIZE = 1000;
 /**
  * In-flight conversions keyed identically to {@link conversionCache}. Lets concurrent identical
  * requests (e.g. several followers reacting to one update broadcast) share a single round-trip.

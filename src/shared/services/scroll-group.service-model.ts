@@ -28,14 +28,15 @@ export type ScrollGroupScrRef = ScrollGroupId | SerializedVerseRef;
 /**
  * Information about an update to a scroll group. Informs about the new SerializedVerseRef at a
  * {@link ScrollGroupId}
+ *
+ * @param scrRef The new Scripture reference for the scroll group
+ * @param scrollGroupId The scroll group that was updated
+ * @param sourceProjectId Project whose versification the `scrRef` is expressed in. `undefined` =
+ *   unknown
  */
 export type ScrollGroupUpdateInfo = {
   scrRef: SerializedVerseRef;
   scrollGroupId: ScrollGroupId;
-  /**
-   * Project whose versification the `scrRef` is expressed in. `undefined` = unknown / canonical
-   * English.
-   */
   sourceProjectId?: string;
 };
 
@@ -61,7 +62,7 @@ export interface IScrollGroupRemoteService {
    *   0
    * @param scrRef Scripture reference to which to set the scroll group
    * @param sourceProjectId Project whose versification `scrRef` is expressed in. `undefined` =
-   *   unknown / canonical English.
+   *   unknown
    * @returns `true` if the scroll group's reference or its versification source changed. `false`
    *   otherwise
    */

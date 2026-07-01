@@ -28,7 +28,7 @@ internal class VersificationConversionService(PapiClient papiClient)
                     Param(
                         "sourceProjectId",
                         "Project whose versification the reference is currently in; null = unknown "
-                            + "frame (returned unchanged, NOT assumed English).",
+                            + "project (returned unchanged, NOT assumed English).",
                         "string"
                     ),
                     Param(
@@ -49,9 +49,9 @@ internal class VersificationConversionService(PapiClient papiClient)
     /// <summary>
     /// Converts <paramref name="verseRef"/> from <paramref name="sourceProjectId"/>'s versification
     /// into <paramref name="targetProjectId"/>'s versification. Best-effort and display-oriented: a
-    /// <c>null</c> <paramref name="sourceProjectId"/> means the source frame is unknown, and if either
+    /// <c>null</c> <paramref name="sourceProjectId"/> means the source project is unknown, and if either
     /// project's versification cannot be resolved (e.g. not a Scripture project) the reference is
-    /// returned unchanged rather than thrown. This keeps a caller from having to blocklist a project
+    /// returned unchanged rather than thrown. This keeps a caller from having to blacklist a project
     /// on a transient or structural failure — the only useful fallback is the raw reference, which is
     /// exactly what this returns.
     /// </summary>
@@ -61,7 +61,7 @@ internal class VersificationConversionService(PapiClient papiClient)
         string targetProjectId
     )
     {
-        // Unknown source frame (null) is NOT assumed to be English: converting a reference whose
+        // Unknown source project (null) is NOT assumed to be English: converting a reference whose
         // versification we don't actually know would mis-frame it. Pass it through unchanged instead.
         var sourceVers = sourceProjectId is null ? null : TryGetVersification(sourceProjectId);
         var targetVers = TryGetVersification(targetProjectId);
@@ -77,11 +77,14 @@ internal class VersificationConversionService(PapiClient papiClient)
             // both cases.
             working.ChangeVersification(targetVers);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             // Honor the best-effort contract: an edge/malformed ref that libpalaso can't map must be
             // returned unchanged rather than throwing a JSON-RPC error at the caller (the mapping
             // itself is best-effort and display-oriented).
+            Console.WriteLine(
+                $"Failed to convert {verseRef} from {sourceProjectId} to {targetProjectId}: {ex}"
+            );
             return verseRef;
         }
         return working;

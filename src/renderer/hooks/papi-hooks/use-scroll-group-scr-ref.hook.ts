@@ -121,11 +121,11 @@ export function useScrollGroupScrRef(
   );
 
   // Whether the followed ref needs converting into this consumer's project versification for
-  // display. False when there is no target project or the source frame already matches it. This gate
+  // display. False when there is no target project or the source project already matches it. This gate
   // is load-bearing: it is ALSO what keeps an independent (object) ref — whose source is this project
   // (see extractSourceProjectId) — from ever calling getScrRefForProject with an undefined scroll
   // group id, which the host would coerce to group 0 and convert the wrong group's reference.
-  const noConversionNeeded = !projectId || sourceProjectIdLocal === projectId;
+  const isConversionRequired = projectId && sourceProjectIdLocal !== projectId;
 
   // Convert the followed (raw) ref into this consumer's project versification for display only,
   // falling back to the raw ref if conversion fails. Only invoked by usePromise when a conversion is
@@ -133,10 +133,14 @@ export function useScrollGroupScrRef(
   // `sourceProjectIdLocal` is a dependency (and gates the early return) so a source-only change — a
   // same-numbered ref set by a different-versification project, which leaves `scrRefLocal`'s identity
   // unchanged because compareScrRefs is versification-blind — still recreates this factory and
-  // re-runs the conversion against the new source frame.
-  const convertScrRef = useCallback(() => {
-    if (!projectId || sourceProjectIdLocal === projectId) return Promise.resolve(scrRefLocal);
-    return getScrRefForProject(scrollGroupIdLocalRef.current, projectId).catch(() => scrRefLocal);
+  // re-runs the conversion against the new source project.
+  const convertScrRef = useCallback(async () => {
+    if (!isConversionRequired) return scrRefLocal;
+    try {
+      return await getScrRefForProject(scrollGroupIdLocalRef.current, projectId);
+    } catch {
+      return scrRefLocal;
+    }
   }, [projectId, scrRefLocal, sourceProjectIdLocal]);
 
   // Seed with the synchronously-known conversion (a cached result, or the raw ref) so a revisited
@@ -147,18 +151,18 @@ export function useScrollGroupScrRef(
   // does not recompute the seed, but convertScrRef re-runs and corrects the displayed value.
   const conversionSeed = useMemo(
     () =>
-      !noConversionNeeded && projectId
+      isConversionRequired
         ? getScrRefForProjectSync(scrollGroupIdLocalRef.current, projectId)
         : scrRefLocal,
-    [noConversionNeeded, projectId, scrRefLocal],
+    [isConversionRequired, projectId, scrRefLocal],
   );
   const [convertedScrRef] = usePromise(
-    noConversionNeeded ? undefined : convertScrRef,
+    isConversionRequired ? convertScrRef : undefined,
     conversionSeed,
     { preserveValue: false },
   );
 
-  const displayScrRef = noConversionNeeded ? scrRefLocal : convertedScrRef;
+  const displayScrRef = isConversionRequired ? convertedScrRef : scrRefLocal;
 
   // Change the scrRef and update ours if successful
   const setScrRef = useCallback(
@@ -199,7 +203,7 @@ export function useScrollGroupScrRef(
       // asynchronously and re-seed once it resolves; otherwise a first-visit detach would freeze the
       // now-independent ref in the source project's frame (it is thereafter treated as this project's
       // own frame and never re-converted).
-      if (!noConversionNeeded && projectId && detachingFromGroupId !== undefined) {
+      if (isConversionRequired && projectId && detachingFromGroupId !== undefined) {
         (async () => {
           try {
             const converted = await getScrRefForProject(detachingFromGroupId, projectId);
@@ -215,7 +219,7 @@ export function useScrollGroupScrRef(
         })();
       }
     },
-    [displayScrRef, noConversionNeeded, projectId],
+    [displayScrRef, isConversionRequired, projectId],
   );
 
   return [displayScrRef, setScrRef, scrollGroupIdLocal, setScrollGroupId];
