@@ -3,12 +3,15 @@ import {
   EditorOptions,
   EditorRef,
   getDefaultViewOptions,
-  UsjNodeOptions,
 } from '@eten-tech-foundation/platform-editor';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Button, Spinner } from 'platform-bible-react';
-import type { DblResourceData, LocalizedStringValue } from 'platform-bible-utils';
+import {
+  collectUsjMarkers,
+  type DblResourceData,
+  type LocalizedStringValue,
+} from 'platform-bible-utils';
 import type {
   DblResourceReference,
   EffectiveResourceReference,
@@ -238,18 +241,24 @@ export function ModelTextPanel({
   // EditorRef requires null initial value per React ref convention
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | null>(null);
+  // Markers this resource's content actually uses, so the editor doesn't warn "Unexpected <kind>
+  // marker" for handbook/commentary markers (e.g. \pn, \jmp). Scoped per-resource from the displayed
+  // USJ — never a global list — and additive, so listing built-in markers is a harmless no-op.
+  // Intentionally every marker the resource uses — read-only panel, warn-only diagnostic. See collectUsjMarkers JSDoc.
+  const extraValidMarkers = useMemo(() => collectUsjMarkers(usj), [usj]);
+
   const options: EditorOptions = useMemo(
     () => ({
       isReadonly: true,
       hasSpellCheck: false,
-      // UsjNodeOptions is a complex type; empty-object initializer requires assertion
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      nodes: {} as UsjNodeOptions,
+      // Opt-in: omit `nodes` entirely when there are no extra markers (no behavior change), matching
+      // resource-text-panel.
+      ...(extraValidMarkers.length > 0 ? { nodes: { extraValidMarkers } } : {}),
       // Narrow the resource's (string) text-direction setting to the editor's union without a cast.
       textDirection: textDirection === 'rtl' || textDirection === 'auto' ? textDirection : 'ltr',
       view: getDefaultViewOptions(),
     }),
-    [textDirection],
+    [textDirection, extraValidMarkers],
   );
 
   // Read-only: push incoming USJ directly into the editor whenever it changes.

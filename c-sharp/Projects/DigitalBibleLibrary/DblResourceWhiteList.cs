@@ -234,6 +234,7 @@ public static class DblResourceWhiteList
         "1F2E7F3DAF3C47FA",
         "1FB6AFF33E7B3C31",
         "1FD99B0D5841E19B",
+        "1FF24938918BD69E", // HBKESP — UBS Translator's Handbook (Spanish); added with PT-3086 commentary styling
         "1FF6ADA8C35ABF5A",
         "20314A36CCDE603B",
         "2048238EEE3592F8",
