@@ -455,6 +455,11 @@ export function setScrRefSync(
   // hasn't finished registering yet, the latest update per scroll group is buffered and flushed.
   const sourceProjectIdChanged = scrRefSourceProjectIds[scrollGroupIdDefaulted] !== sourceProjectId;
   scrRefs[scrollGroupIdDefaulted] = scrRefClone;
+  // A numbers-changed write with no source project (`sourceProjectId === undefined`) intentionally
+  // CLEARS the stored source frame. This is by design: a driver with no associated project (e.g. a
+  // data model that does not track versification, or the platform.verseRef echo below) has an
+  // unknown versification, so followers must take the raw reference rather than mis-frame it under
+  // the previous source. This is not a lost-frame bug — an unknown frame is honestly unknown.
   scrRefSourceProjectIds[scrollGroupIdDefaulted] = sourceProjectId;
   saveScrRefs(sourceProjectIdChanged);
   onDidUpdateScrRefBufferedEmitter.emit({
@@ -514,6 +519,8 @@ export async function startScrollGroupService(): Promise<void> {
     // no-op (the no-op guard in setScrRefSync preserves any known source); when they differ it is a
     // genuine external change whose frame we honestly don't know, so the followers pass it through
     // unconverted rather than mis-framing it.
+    // (See the source-assignment note in setScrRefSync: a numbers-changed write with no source
+    // deliberately clears the frame so followers use the raw reference.)
     setScrRefSync(0, newScrRef, undefined, false);
   });
 }
