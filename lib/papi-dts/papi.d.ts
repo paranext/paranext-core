@@ -332,6 +332,14 @@ declare module 'shared/models/web-view.model' {
      * @default false
      */
     shouldShowToolbar?: boolean;
+    /**
+     * Whether this WebView's tab can be closed by the user (shows the tab's close button). Set to
+     * `false` for tabs that must always remain open, such as views that are part of the default
+     * layout.
+     *
+     * @default true
+     */
+    isClosable?: boolean;
   };
   /** WebView representation using React */
   export type WebViewDefinitionReact = WebViewDefinitionBase & {
@@ -399,6 +407,7 @@ declare module 'shared/models/web-view.model' {
     'projectId',
     'scrollGroupScrRef',
     'state',
+    'isClosable',
   ];
   /** The properties on a WebViewDefinition that may be updated when that webview is already displayed */
   export type WebViewDefinitionUpdatableProperties = Pick<
@@ -3175,6 +3184,12 @@ declare module 'shared/models/docking-framework.model' {
     minHeight?: number;
     /** Last known focused element. Used for restoring focus in the tab */
     lastFocusedElement?: HTMLElement;
+    /**
+     * Whether this tab can be closed by the user (shows the tab's close button).
+     *
+     * @default true
+     */
+    isClosable?: boolean;
   };
   /**
    * Function that takes a {@link SavedTabInfo} and creates a Platform.Bible tab out of it. Each type

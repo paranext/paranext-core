@@ -131,7 +131,13 @@
       "%webView_resourcePanel_installing%": "Installing resource…",
       "%webView_resourcePanel_selecting%": "Selecting resource…",
       "%webView_resourcePanel_noProject%": "No project selected.",
-      "%webView_selectDblResource_installFailed%": "Failed to install resource. Please try again."
+      "%webView_selectDblResource_installFailed%": "Failed to install resource. Please try again.",
+      "%webView_scriptureTextGrid_title_single%": "Scripture Text",
+      "%webView_scriptureTextGrid_title_multiple%": "Text Collection",
+      "%settings_platformScriptureEditor_group_label%": "Scripture Editor",
+      "%settings_platformScriptureEditor_group_description%": "Settings for the Scripture Editor and Resource Viewer.",
+      "%settings_platformScriptureEditor_enableScriptureTextGrid_label%": "Enable Scripture Text Grid",
+      "%settings_platformScriptureEditor_enableScriptureTextGrid_description%": "Show the Scripture Text Grid view for viewing multiple resources side by side."
     },
     "es": {
       "%mainMenu_openPlatformResourceViewer%": "Abrir el visor de recursos",
@@ -235,7 +241,13 @@
       "%webView_resourcePanel_downloadResources%": "Descargar recursos…",
       "%webView_resourcePanel_installing%": "Instalando recurso…",
       "%webView_resourcePanel_selecting%": "Seleccionando recurso…",
-      "%webView_resourcePanel_noProject%": "Ningún proyecto seleccionado."
+      "%webView_resourcePanel_noProject%": "Ningún proyecto seleccionado.",
+      "%webView_scriptureTextGrid_title_single%": "Texto bíblico",
+      "%webView_scriptureTextGrid_title_multiple%": "Colección de textos",
+      "%settings_platformScriptureEditor_group_label%": "Editor de Escrituras",
+      "%settings_platformScriptureEditor_group_description%": "Configuración del editor de Escrituras y del visor de recursos.",
+      "%settings_platformScriptureEditor_enableScriptureTextGrid_label%": "Habilitar la cuadrícula de textos bíblicos",
+      "%settings_platformScriptureEditor_enableScriptureTextGrid_description%": "Mostrar la vista de cuadrícula de textos bíblicos para ver varios recursos en paralelo."
     }
   }
 }

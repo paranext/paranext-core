@@ -78,6 +78,12 @@ export type TabInfo = SavedTabInfo & {
   minHeight?: number;
   /** Last known focused element. Used for restoring focus in the tab */
   lastFocusedElement?: HTMLElement;
+  /**
+   * Whether this tab can be closed by the user (shows the tab's close button).
+   *
+   * @default true
+   */
+  isClosable?: boolean;
 };
 
 /**

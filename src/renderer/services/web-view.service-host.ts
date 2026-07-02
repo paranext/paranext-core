@@ -4,6 +4,9 @@
  * Don't expose this whole service on papi, just specific operations. The remaining exports are only
  * for services in the renderer to call.
  */
+import defaultLayoutSupplement from '@renderer/components/docking/default-layout-supplement.json';
+import { DefaultLayoutSupplementEntry } from '@renderer/components/docking/default-layout-supplement.model';
+import { mergeDefaultLayoutSupplement } from '@renderer/components/docking/default-layout-supplement.util';
 import {
   type SettingsTabData,
   TAB_TYPE_SETTINGS_TAB,
@@ -49,6 +52,7 @@ import {
 } from '@shared/services/network.service';
 import { settingsService } from '@shared/services/settings.service';
 import { webViewProviderService } from '@shared/services/web-view-provider.service';
+import { LayoutBase } from 'rc-dock';
 import {
   EVENT_NAME_ON_DID_ADD_WEB_VIEW,
   EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
@@ -710,6 +714,26 @@ const onLayoutChange: OnLayoutChange = async (newLayout, _currentTabId, changeIn
 };
 
 /**
+ * Returns the entries from {@link defaultLayoutSupplement} that should be applied to the layout,
+ * filtering out any entries whose {@link DefaultLayoutSupplementEntry.flagSetting} is not `true`.
+ */
+async function getEnabledSupplementEntries(): Promise<DefaultLayoutSupplementEntry[]> {
+  const entries: DefaultLayoutSupplementEntry[] = defaultLayoutSupplement.tabs;
+  const resolved = await Promise.all(
+    entries.map(async (entry) => {
+      if (!entry.flagSetting) return entry;
+      // The flag key is a product-supplied dynamic string; settingsService.get is typed to known keys.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const flagKey = entry.flagSetting as 'platform.interfaceMode';
+      // Cast result to `unknown` so we can safely check the runtime boolean value without a type overlap error.
+      const value: unknown = await settingsService.get(flagKey);
+      return value === true ? entry : undefined;
+    }),
+  );
+  return resolved.filter((e): e is DefaultLayoutSupplementEntry => e !== undefined);
+}
+
+/**
  * Loads layout information into the dock layout.
  *
  * @param layout If this parameter is provided, loads that layout information. If not provided, gets
@@ -742,7 +766,15 @@ async function loadLayout(layout?: LayoutInfo): Promise<void> {
     interfaceMode === 'simple'
       ? dockLayoutVar.simpleLayout
       : getStorageValue(DOCK_LAYOUT_KEY, dockLayoutVar.testLayout);
-  dockLayoutVar.loadLayout(layoutToLoad);
+  const enabledEntries = await getEnabledSupplementEntries();
+  // LayoutInfo is intentionally opaque in the shared model; cross to the concrete rc-dock shape here,
+  // mirroring platform-dock-layout.component.tsx
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const layoutToLoadAsBase = layoutToLoad as unknown as LayoutBase;
+  const supplementedLayout = mergeDefaultLayoutSupplement(layoutToLoadAsBase, enabledEntries);
+  // convert back to the opaque LayoutInfo the dock layout API expects
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  dockLayoutVar.loadLayout(supplementedLayout as unknown as LayoutInfo);
 }
 
 /**

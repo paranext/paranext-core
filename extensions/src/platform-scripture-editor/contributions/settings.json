@@ -1,1 +1,13 @@
-[]
+[
+  {
+    "label": "%settings_platformScriptureEditor_group_label%",
+    "description": "%settings_platformScriptureEditor_group_description%",
+    "properties": {
+      "platformScriptureEditor.enableScriptureTextGrid": {
+        "label": "%settings_platformScriptureEditor_enableScriptureTextGrid_label%",
+        "description": "%settings_platformScriptureEditor_enableScriptureTextGrid_description%",
+        "default": true
+      }
+    }
+  }
+]
