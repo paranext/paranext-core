@@ -32,5 +32,6 @@ export {
   default as LinkedScrRefButton,
   type LinkedScrRefButtonProps,
 } from './components/basics/linked-scr-ref-button.component';
+export { useEffectiveResourceReferenceList } from './hooks/use-effective-resource-reference-list.hook';
 export type { ScopeWithRange } from './components/utils/scripture.util';
 export { Z_INDEX_TOOLTIP } from './components/z-index';

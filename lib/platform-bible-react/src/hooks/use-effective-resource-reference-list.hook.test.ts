@@ -2,10 +2,9 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
-import type {
-  ResourceReferenceList,
-  ITextConnectionSettingsProjectDataProvider,
-} from 'platform-scripture';
+import type { ResourceReferenceList } from 'platform-bible-utils';
+// Resolves to the narrow local shim via the tsconfig `paths` redirect
+import type { ITextConnectionSettingsProjectDataProvider } from 'platform-scripture';
 import { useProjectSetting, useProjectDataProvider } from '@papi/frontend/react';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 

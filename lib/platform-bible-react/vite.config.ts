@@ -43,6 +43,10 @@ const config = defineConfig({
         'react/jsx-dev-runtime',
         ...Object.keys(rootPackageInfoFull.peerDependencies ?? {}),
         ...Object.keys(rootPackageInfoFull.dependencies ?? {}),
+        // Imported at runtime by the experimental useEffectiveResourceReferenceList hook but not
+        // a real dependency — keep it external for the consuming extension to resolve at runtime.
+        // (The hook's `platform-scripture` import is type-only and never reaches the bundler.)
+        '@papi/frontend/react',
       ],
       output: {
         globals: {

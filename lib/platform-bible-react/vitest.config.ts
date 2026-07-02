@@ -8,6 +8,13 @@ import config from './vite.config';
 // Shares the repo-root setup file. See ../../vitest.setup.ts for the full rationale.
 const intlWarmupSetup = path.resolve(__dirname, '../../vitest.setup.ts');
 
+// Stub `@papi/frontend/react` so Vitest can resolve it for the experimental hook's test
+// (which then `vi.mock`s it). Set on the `unit` project below, since Vitest projects
+// don't inherit workspace-level `resolve`.
+const papiTestAlias = {
+  '@papi/frontend/react': path.resolve(__dirname, '__test-mocks__/@papi/frontend-react.ts'),
+};
+
 const workspace = defineConfig({
   ...config,
   test: {
@@ -17,6 +24,7 @@ const workspace = defineConfig({
       // Unit tests configuration
       {
         plugins: [...(config.plugins ?? [])],
+        resolve: { alias: papiTestAlias },
         test: {
           name: 'unit',
           include: ['src/**/*.{test,spec}.{js,ts,jsx,tsx}'],
