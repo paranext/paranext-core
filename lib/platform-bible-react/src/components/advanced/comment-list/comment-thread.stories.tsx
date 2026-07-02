@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import {
   CommentStatus,
+  CommentType,
   LanguageStrings,
   LegacyComment,
   LegacyCommentThread,
@@ -84,6 +85,39 @@ const discussionReplies: LegacyComment[] = [
   },
 ];
 
+// A plain normal (non-conflict) thread — a note plus one reply — for the Default contrast anchor.
+// Shares the wrapper's thread id and verse ref so the same wrapper drives it unchanged.
+const normalThreadComments: LegacyComment[] = [
+  {
+    id: 'conflict-replacement/Grace Hill/2011-08-15T08:00:00.0000000-04:00',
+    thread: THREAD_ID,
+    user: 'Grace Hill',
+    verseRef: VERSE_REF,
+    language: 'en',
+    date: '2011-08-15T08:00:00.0000000-04:00',
+    deleted: false,
+    hideInTextWindow: false,
+    isRead: false,
+    startPosition: 0,
+    selectedText: '',
+    contents: 'Should "king" be capitalized here, or stay lowercase like the rest of the chapter?',
+  },
+  {
+    id: 'conflict-replacement/Tim Steenwyk/2011-08-15T09:30:00.0000000-04:00',
+    thread: THREAD_ID,
+    user: 'Tim Steenwyk',
+    verseRef: VERSE_REF,
+    language: 'en',
+    date: '2011-08-15T09:30:00.0000000-04:00',
+    deleted: false,
+    hideInTextWindow: false,
+    isRead: false,
+    startPosition: 0,
+    selectedText: '',
+    contents: 'Lowercase is consistent with the rest of the chapter — let us keep it as is.',
+  },
+];
+
 // A pre-existing resolution reply for the already-resolved variant. In production PT9's SaveEdits
 // appends a Resolved comment like this when a conflict is resolved; here it is a static sample.
 const preExistingResolutionReply: LegacyComment = {
@@ -107,6 +141,8 @@ type CommentThreadStoryProps = {
   initialComments: LegacyComment[];
   /** Thread status the story starts in. */
   initialStatus: CommentStatus;
+  /** Thread type; defaults to 'Conflict'. The Default story passes 'Normal' for a contrast anchor. */
+  threadType?: CommentType;
   /** Overrides which resolution actions are offered; defaults to the fully-available case. */
   getConflictResolutionOptionsCallback?: (threadId: string) => Promise<ConflictResolutionOptions>;
 };
@@ -119,6 +155,7 @@ type CommentThreadStoryProps = {
 function CommentThreadStory({
   initialComments,
   initialStatus,
+  threadType = 'Conflict',
   getConflictResolutionOptionsCallback,
 }: CommentThreadStoryProps) {
   const [comments, setComments] = useState<LegacyComment[]>(initialComments);
@@ -229,7 +266,7 @@ function CommentThreadStory({
       id: THREAD_ID,
       comments,
       status,
-      type: 'Conflict',
+      type: threadType,
       assignedUser: CURRENT_USER,
       modifiedDate: comments[comments.length - 1]?.date ?? verseTextConflictReplacementSample.date,
       verseRef: VERSE_REF,
@@ -238,7 +275,7 @@ function CommentThreadStory({
       isConsultantNote: false,
       isRead: false,
     }),
-    [comments, status],
+    [comments, status, threadType],
   );
 
   return (
@@ -284,6 +321,21 @@ const meta: Meta<typeof CommentThread> = {
 export default meta;
 
 type Story = StoryObj<typeof CommentThreadStory>;
+
+/**
+ * A normal (type 'Normal') discussion thread with one reply, rendered by the same wrapper — a
+ * visual contrast anchor beside the three conflict stories below. No ConflictNoteCard here: the
+ * thread renders ordinary comment items and the standard resolve controls.
+ */
+export const Default: Story = {
+  render: () => (
+    <CommentThreadStory
+      initialComments={normalThreadComments}
+      initialStatus="Todo"
+      threadType="Normal"
+    />
+  ),
+};
 
 /**
  * A COMPLETE verseText conflict thread as it looks in production, expanded by default:

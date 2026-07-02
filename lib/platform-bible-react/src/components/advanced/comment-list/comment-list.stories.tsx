@@ -109,15 +109,42 @@ function CommentListStory({
     return newCommentId;
   };
 
+  // Mocks PT9's SaveEdits: on resolve, append a Resolved reply describing the outcome (by the
+  // current user) AND flip the thread to Resolved — mirroring the resolution comment the backend
+  // writes when a conflict is resolved. This is story-only state, NOT backend behavior: production
+  // runs this through the comments data provider's resolveConflict.
   const handleResolveConflict = async (
     threadId: string,
     resolution: ConflictResolution,
   ): Promise<boolean> => {
     console.log(`Resolving conflict ${threadId} as ${resolution}`);
     setThreads((prevThreads) =>
-      prevThreads.map((thread) =>
-        thread.id === threadId ? { ...thread, status: 'Resolved' } : thread,
-      ),
+      prevThreads.map((thread) => {
+        if (thread.id !== threadId) return thread;
+        const resolutionReply: LegacyComment = {
+          id: `${thread.id}-${Date.now()}`,
+          user: 'Current User',
+          date: new Date().toISOString(),
+          contents:
+            resolution === 'accept'
+              ? 'Resolved: kept the current text.'
+              : 'Resolved: replaced with the other change.',
+          deleted: false,
+          hideInTextWindow: false,
+          language: 'en',
+          isRead: false,
+          startPosition: 0,
+          selectedText: '',
+          thread: thread.id,
+          verseRef: thread.verseRef,
+          status: 'Resolved',
+        };
+        return {
+          ...thread,
+          comments: [...thread.comments, resolutionReply],
+          status: 'Resolved',
+        };
+      }),
     );
     return true;
   };
@@ -239,12 +266,50 @@ export default meta;
 
 type Story = StoryObj<typeof CommentListStory>;
 
+// Hand-written discussion replies (clearly sample text) hanging off the captured conflict's thread
+// id, with later dates and plain contents: a teammate asks which side to keep, and the assignee
+// (the current user) answers. Mirrors the pattern in comment-thread.stories.tsx.
+const conflictDiscussionReplies: LegacyComment[] = [
+  {
+    id: 'conflict-replacement/Grace Hill/2011-08-17T09:12:00.0000000-04:00',
+    thread: 'conflict-replacement',
+    user: 'Grace Hill',
+    verseRef: 'MAT 2:1',
+    language: 'en',
+    date: '2011-08-17T09:12:00.0000000-04:00',
+    deleted: false,
+    hideInTextWindow: false,
+    isRead: false,
+    startPosition: 0,
+    selectedText: '',
+    contents: 'Which side is right here — do we keep "city" or go back to "village"?',
+  },
+  {
+    id: 'conflict-replacement/Current User/2011-08-17T10:03:00.0000000-04:00',
+    thread: 'conflict-replacement',
+    user: 'Current User',
+    verseRef: 'MAT 2:1',
+    language: 'en',
+    date: '2011-08-17T10:03:00.0000000-04:00',
+    deleted: false,
+    hideInTextWindow: false,
+    isRead: false,
+    startPosition: 0,
+    selectedText: '',
+    contents: 'The team agreed on "city", so let us accept that side (keep the current text).',
+  },
+];
+
+// A COMPLETE conflict thread: the captured verseText conflict as the first comment, assigned to the
+// wrapper's current user (so the "Assigned to Current User" badge shows), followed by the
+// hand-written discussion replies above.
 const unresolvedConflictThread: LegacyCommentThread = {
   id: 'conflict-replacement',
-  comments: [verseTextConflictReplacementSample],
+  comments: [verseTextConflictReplacementSample, ...conflictDiscussionReplies],
   status: 'Todo',
   type: 'Conflict',
-  modifiedDate: verseTextConflictReplacementSample.date,
+  assignedUser: 'Current User',
+  modifiedDate: '2011-08-17T10:03:00.0000000-04:00',
   verseRef: 'MAT 2:1',
   isSpellingNote: false,
   isBTNote: false,
@@ -317,14 +382,28 @@ export const AssigneePreselection: Story = {
 };
 
 /**
- * A comment list containing an unresolved verseText merge conflict. Expand it to see the
- * ConflictNoteCard; clicking Resolve flips the thread to Resolved (read-only card, dimmed row).
+ * A comment list containing a COMPLETE unresolved verseText merge conflict thread:
+ *
+ * - The first comment is the captured conflict sample (`verseTextConflictReplacementSample`),
+ *   rendered by the ConflictNoteCard.
+ * - The thread is assigned to the current user, so the "Assigned to Current User" badge shows.
+ * - Two hand-written discussion replies follow (a teammate asks which side is right; the assignee
+ *   answers).
+ *
+ * Expand it to see the ConflictNoteCard. Clicking Resolve appends a Resolved reply describing the
+ * outcome (contents vary by resolution — accept vs. reject) AND flips the thread to Resolved
+ * (read-only card, dimmed row). That appended reply MOCKS the resolution comment PT9's SaveEdits
+ * writes in production; here the wrapper fakes it in local state — it is NOT backend behavior.
  */
 export const WithUnresolvedConflict: Story = {
   render: () => <CommentListStory initialThreads={[unresolvedConflictThread, ...sampleComments]} />,
 };
 
-/** The conflict's verse was edited after the merge: only Accept is offered (Reject disabled). */
+/**
+ * The conflict's verse was edited after the merge: only Accept is offered (Reject disabled). Reuses
+ * the same complete thread as WithUnresolvedConflict so the stale case shows the full discussion
+ * too.
+ */
 export const WithStaleConflict: Story = {
   render: () => (
     <CommentListStory
