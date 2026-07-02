@@ -96,7 +96,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     await waitForPapiMethodRegistered(
       'command:platformScriptureEditor.openResourceViewer',
       DEFAULT_WEBSOCKET_PORT,
-      PAPI_REQUEST_TIMEOUT_MS,
+      SETTINGS_TIMEOUT_MS,
     );
     await sendPapiRequestOnce(
       'command:platformScriptureEditor.openResourceViewer',
@@ -178,7 +178,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
       await waitForPapiMethodRegistered(
         'command:platformScriptureEditor.openResourceViewer',
         DEFAULT_WEBSOCKET_PORT,
-        PAPI_REQUEST_TIMEOUT_MS,
+        SETTINGS_TIMEOUT_MS,
       );
 
       // Open Project A — triggers openTextConnectionPanels(projectA.projectId)
