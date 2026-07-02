@@ -67,7 +67,7 @@ describe('MarkerMenu — disallowed items', () => {
   // become selectable, these tests fail — pinning the layer that the in-action guard only backs up.
   const DISALLOWED_STRINGS = {
     ...DEFAULT_LOCALIZED_STRINGS,
-    '%markerMenu_structureLocked_label%': 'Structure locked',
+    '%markerMenu_disallowed_label%': 'Disallowed',
   };
 
   it('reveals a disallowed item on exact marker-code match, renders it disabled, and does not fire its action when selected', async () => {
@@ -84,8 +84,8 @@ describe('MarkerMenu — disallowed items', () => {
 
     const item = await screen.findByRole('option', { name: /Poetry/ });
     expect(item).toHaveAttribute('aria-disabled', 'true');
-    // Disallowed markers show the "Structure locked" badge to explain why they can't be inserted.
-    expect(screen.getByText('Structure locked')).toBeInTheDocument();
+    // Disallowed markers show the "Disallowed" badge to explain why they can't be inserted.
+    expect(screen.getByText('Disallowed')).toBeInTheDocument();
 
     await user.click(item);
     expect(action).not.toHaveBeenCalled();

@@ -763,7 +763,7 @@ export interface FootnoteListProps {
  */
 export declare const FOOTNOTE_EDITOR_STRING_KEYS: readonly [
 	"%markerMenu_deprecated_label%",
-	"%markerMenu_structureLocked_label%",
+	"%markerMenu_disallowed_label%",
 	"%markerMenu_noResults%",
 	"%markerMenu_searchPlaceholder%",
 	"%markerMenu_searchPlaceholder_insert%",
@@ -1042,7 +1042,7 @@ export declare const inventoryStatusColumn: (statusLabel: string, approvedItems:
  */
 export declare const MARKER_MENU_STRING_KEYS: readonly [
 	"%markerMenu_deprecated_label%",
-	"%markerMenu_structureLocked_label%",
+	"%markerMenu_disallowed_label%",
 	"%markerMenu_noResults%",
 	"%markerMenu_searchPlaceholder%",
 	"%markerMenu_searchPlaceholder_insert%",

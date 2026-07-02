@@ -18,7 +18,7 @@ import {
  */
 export const MARKER_MENU_STRING_KEYS = Object.freeze([
   '%markerMenu_deprecated_label%',
-  '%markerMenu_structureLocked_label%',
+  '%markerMenu_disallowed_label%',
   '%markerMenu_noResults%',
   '%markerMenu_searchPlaceholder%',
   // These two keys are not read by this component directly; they are provided here so callers can
@@ -115,7 +115,7 @@ function MarkerMenuCommandItem({
       {(item.isDisallowed || item.isDeprecated) && (
         <CommandShortcut className="tw:font-sans">
           {item.isDisallowed
-            ? localizedStrings['%markerMenu_structureLocked_label%']
+            ? localizedStrings['%markerMenu_disallowed_label%']
             : localizedStrings['%markerMenu_deprecated_label%']}
         </CommandShortcut>
       )}

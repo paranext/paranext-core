@@ -275,7 +275,6 @@
   "%markerMenu_searchPlaceholder%": "Type a style or search.",
   "%markerMenu_searchPlaceholder_insert%": "Search to insert a style.",
   "%markerMenu_searchPlaceholder_paragraph%": "Search to change paragraph style.",
-  "%markerMenu_structureLocked_label%": "Structure locked",
   "%menuItemName_wordList%": "Word List",
   "%overlay_aria_commandPaletteOpened%": "Command palette opened",
   "%overlay_aria_contextMenuOpened%": "Context menu opened",

@@ -209,7 +209,6 @@
       "%markerMenu_searchPlaceholder%": "*Type a style or search.",
       "%markerMenu_searchPlaceholder_insert%": "*Search to insert a style.",
       "%markerMenu_searchPlaceholder_paragraph%": "*Search to change paragraph style.",
-      "%markerMenu_structureLocked_label%": "*Structure locked",
       "%redoButton_tooltip%": "*Redo",
       "%undoButton_tooltip%": "*Undo"
     },
@@ -422,7 +421,6 @@
       "%markerMenu_searchPlaceholder%": "*****Escriba un estilo o busque.!!!!!!!!!!",
       "%markerMenu_searchPlaceholder_insert%": "*****Buscar para insertar un estilo.!!!!!!!!!!",
       "%markerMenu_searchPlaceholder_paragraph%": "*****Buscar para cambiar el estilo de párrafo.!!!!!!!!!!",
-      "%markerMenu_structureLocked_label%": "*****Estructura bloqueada!!!!!!!!!!",
       "%redoButton_tooltip%": "*****Rehacer!!!!!!!!!!",
       "%undoButton_tooltip%": "*****Deshacer!!!!!!!!!!"
     }
