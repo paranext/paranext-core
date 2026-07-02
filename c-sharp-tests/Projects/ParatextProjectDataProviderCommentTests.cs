@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
@@ -15,11 +16,14 @@ namespace TestParanextDataProvider.Projects
         private ScrText _scrText = null!;
         private ProjectDetails _projectDetails = null!;
         private DummyParatextProjectDataProvider _provider = null!;
+        private JsonSerializerOptions _serializationOptions = null!;
 
         [SetUp]
         public override async Task TestSetupAsync()
         {
             await base.TestSetupAsync();
+
+            _serializationOptions = SerializationOptions.CreateSerializationOptions();
 
             // Register a mock settings service that returns comments enabled
             await Client.RegisterRequestHandlerAsync(
@@ -209,6 +213,50 @@ namespace TestParanextDataProvider.Projects
                 Is.EqualTo(firstCommentThreadId),
                 "Both comments should be in the same thread"
             );
+        }
+
+        [Test]
+        public void AddCommentToThread_ReplyCarriesClientConflictType_NotPersistedAndNoConflictFields()
+        {
+            // Establish a conflict thread (its root is Type=Conflict, so replies inherit Type=Conflict
+            // via ParatextData's AddNewComment). This is the setup in which a client-supplied
+            // ConflictType on a reply used to decode phantom conflict fields.
+            var firstComment = CommentTestHelper.CreateConflictComment();
+            firstComment.Thread = null!; // provider assigns the thread ID
+            string firstCommentId = _provider.CreateComment(
+                new PlatformCommentWrapper(firstComment)
+            );
+            string threadId = firstCommentId.Split('/')[0];
+
+            // A reply whose client payload (illegally) sets ConflictType=VerseTextConflict and a stale
+            // Verse. If either survived the write path, the wrapper would surface phantom conflict fields.
+            var reply = new Comment(_scrText.User) { Thread = threadId };
+            reply.SetContentsFromHtml("<p>Just a reply</p>");
+            reply.ConflictType = NoteConflictType.VerseTextConflict;
+            reply.Verse = @"\v 1 stale current verse text";
+            string replyId = _provider.AddCommentToThread(new PlatformCommentWrapper(reply));
+
+            var thread = _provider
+                .GetCommentThreads(new CommentThreadSelector { ThreadId = threadId })
+                .Single();
+            var persistedReply = thread.Comments.Single(c => c.Id == replyId);
+
+            // Write-side: the client-supplied ConflictType must not have been persisted.
+            Assert.That(
+                persistedReply.ConflictType == NoteConflictType.None,
+                Is.True,
+                "CopyCommentProperties must not persist a client-supplied ConflictType onto a reply."
+            );
+
+            // Read-side/serialization: the reply must serialize no conflict fields.
+            var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
+                persistedReply,
+                _serializationOptions
+            );
+            Assert.That(json, Does.Not.Contain("rejectedText"));
+            Assert.That(json, Does.Not.Contain("acceptedText"));
+            Assert.That(json, Does.Not.Contain("resultText"));
+            Assert.That(json, Does.Not.Contain("conflictType"));
         }
 
         [Test]

@@ -180,10 +180,13 @@ declare module 'legacy-comment-manager' {
         | 'date'
         | 'thread'
         | 'isRead'
+        // Merger-authored, root-comment-only metadata — never set when creating a comment.
+        | 'conflictType'
         // Read-only, decoded display fields — never set when creating a comment.
         | 'rejectedText'
         | 'acceptedText'
         | 'resultText'
+        | 'rejectedResultText'
       >
     > & {
       contents: string;
@@ -217,8 +220,16 @@ declare module 'legacy-comment-manager' {
     Partial<
       Omit<
         LegacyComment,
-        // Read-only, decoded display fields — never set when replying to a thread.
-        'id' | 'user' | 'date' | 'rejectedText' | 'acceptedText' | 'resultText'
+        // 'conflictType' is merger-authored, root-comment-only metadata; the rest are read-only,
+        // decoded display fields. None may be set when replying to a thread.
+        | 'id'
+        | 'user'
+        | 'date'
+        | 'conflictType'
+        | 'rejectedText'
+        | 'acceptedText'
+        | 'resultText'
+        | 'rejectedResultText'
       >
     > & { thread: string }
   >;

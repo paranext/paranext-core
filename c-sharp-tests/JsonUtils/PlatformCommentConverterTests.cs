@@ -310,6 +310,57 @@ internal class PlatformCommentConverterTests : PapiTestBase
     }
 
     [Test]
+    public void Serialize_ConflictReplyCarryingConflictType_OmitsConflictTextFields()
+    {
+        // The FIRST comment of a verseText conflict thread legitimately carries the decode fields.
+        Comment first = CommentTestHelper.CreateVerseTextConflictComment();
+        _commentManager.AddComment(first);
+        _commentManager.SaveUser(first.User, false);
+        CommentThread thread = _commentManager.FindThread(first.Thread);
+
+        // Simulate a REPLY that (wrongly) carries ConflictType=VerseTextConflict — e.g. persisted by
+        // an older build or hand-edited XML. It is NOT the first comment of the thread, so it must
+        // not surface any conflict decode fields (they would be phantom values read from the reply's
+        // own body and stale Verse).
+        Comment reply = (Comment)first.Clone();
+        reply.Date = "2011-08-16T15:50:18.4019847-04:00"; // later date → distinct Id, not first
+        reply.Verse = @"\v 1 stale current verse text"; // would leak as phantom resultText
+        thread.Comments.Add(reply);
+
+        var threadWrapper = new PlatformCommentThreadWrapper(thread);
+        var replyWrapper = new PlatformCommentWrapper(reply, threadWrapper);
+
+        var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
+            replyWrapper,
+            _serializationOptions
+        );
+
+        Assert.That(
+            json,
+            Does.Not.Contain("rejectedText"),
+            "reply must not serialize rejectedText"
+        );
+        Assert.That(
+            json,
+            Does.Not.Contain("acceptedText"),
+            "reply must not serialize acceptedText"
+        );
+        Assert.That(json, Does.Not.Contain("resultText"), "reply must not serialize resultText");
+        Assert.That(replyWrapper.RejectedText, Is.Null);
+        Assert.That(replyWrapper.ResultText, Is.Null);
+
+        // Control: the FIRST comment still surfaces its fields, proving the gate is first-comment
+        // specific rather than suppressing all conflict fields.
+        var firstWrapper = new PlatformCommentWrapper(first, threadWrapper);
+        Assert.That(
+            firstWrapper.RejectedText,
+            Is.Not.Null,
+            "first comment must still surface rejectedText"
+        );
+        Assert.That(firstWrapper.ResultText, Is.Not.Null);
+    }
+
+    [Test]
     public void Deserialize_InvalidContents_ThrowsInvalidDataException()
     {
         var json = "{\"contents\": \"<p>unclosed\", \"user\": \"tester\", \"thread\": \"t3\"}";

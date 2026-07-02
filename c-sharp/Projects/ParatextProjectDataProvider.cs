@@ -683,8 +683,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             target.AssignedUser = source.AssignedUser;
         if (!string.IsNullOrEmpty(source.BiblicalTermId))
             target.BiblicalTermId = source.BiblicalTermId;
-        if (source.ConflictType != default)
-            target.ConflictType = source.ConflictType;
+        // ConflictType is deliberately NOT copied: it is merger-authored, root-comment-only
+        // metadata (PT9 BookFileMerger.RecordConflict). No papi client can legitimately author it,
+        // and copying it here let replies carry a client-supplied ConflictType, which the wrapper
+        // then decoded into phantom conflict fields. It is also omitted from the NewLegacyComment
+        // and LegacyCommentReply write contracts. Note the FirstComment.Type inheritance done by
+        // ParatextData's AddNewComment is separate and intentionally left intact.
         if (source.Deleted)
             target.Deleted = source.Deleted;
         if (source.HideInTextWindow)

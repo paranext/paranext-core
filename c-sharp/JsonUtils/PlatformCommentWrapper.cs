@@ -210,12 +210,27 @@ public class PlatformCommentWrapper
     }
 
     /// <summary>
+    /// True when this comment is the FIRST comment of its thread. Conflict metadata — the
+    /// rejected/accepted/result decode fields and <c>conflictType</c> itself — is authored by the
+    /// merger only on the root comment of a conflict thread (see PT9 <c>BookFileMerger.RecordConflict</c>),
+    /// and PT9 only ever reads it from the root comment. So it must be surfaced there and never on a
+    /// reply, which may carry a stale <c>conflictType</c> and would otherwise decode phantom fields
+    /// from its own body and current-verse text. Uses the same first-comment test the provider uses
+    /// (<c>thread.Comments[0].Id == comment.Id</c>). Requires thread context; without a thread this is
+    /// false — and such a wrapper cannot be serialized anyway.
+    /// </summary>
+    private bool IsFirstCommentInThread =>
+        _thread != null && _thread.AllComments.FirstOrDefault()?.Id == _comment.Id;
+
+    /// <summary>
     /// True when this is a verse-text merge-conflict note — the only conflict type for which we surface
-    /// discrete rejected/accepted/result text in v1.
+    /// discrete rejected/accepted/result text in v1 — AND this is the thread's first comment (conflict
+    /// metadata is root-comment-only; see <see cref="IsFirstCommentInThread"/>).
     /// </summary>
     private bool IsVerseTextConflict =>
         _comment.Type == NoteType.Conflict
-        && _comment.ConflictType == NoteConflictType.VerseTextConflict;
+        && _comment.ConflictType == NoteConflictType.VerseTextConflict
+        && IsFirstCommentInThread;
 
     /// <summary>
     /// For a verseText conflict note, the HTML diff of the rejected (losing) side, using PT9's
