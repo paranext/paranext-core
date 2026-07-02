@@ -30,10 +30,10 @@ The dialog is a web view, not a normal settings entry. The relevant code:
 
 - **UI / restart flow:** `extensions/src/paratext-registration/src/internet-settings.web-view.tsx`
   - A single controlled form with one action: `saveAndRestart` (line ~103).
-  - On click it saves the *entire* `InternetSettings` object via
+  - On click it saves the _entire_ `InternetSettings` object via
     `paratextRegistration.setParatextDataInternetSettings`, waits 5s
     (`INTERNET_SETTINGS_RESTART_DELAY_MS`), then calls `platform.restart`
-    **unconditionally** (lines ~110–121). Nothing branches on *which* field
+    **unconditionally** (lines ~110–121). Nothing branches on _which_ field
     changed.
   - The button is enabled only when there are unsaved changes
     (`hasUnsavedChanges`, deep-equal against the loaded settings).
@@ -64,14 +64,14 @@ primarily a frontend change.
 - **Couples unrelated concerns.** Internet-use permission, proxy config, and
   server selection are edited and committed together, so the user can't reason
   about them independently.
-- **Restart is expensive**, which is *why* bundling is tempting — but bundling
+- **Restart is expensive**, which is _why_ bundling is tempting — but bundling
   behind a mandatory button is the wrong lever. The user should decide when to
   pay the restart cost, and be able to batch changes into one restart.
 
 ## 4. Design principle
 
 **Immediate apply, deferred restart.** Changing a setting takes effect as far as
-possible right away. When a change needs a restart to *fully* take effect, we
+possible right away. When a change needs a restart to _fully_ take effect, we
 don't block it — we persist it and tell the user a restart is pending, letting
 them restart now or keep working and restart later.
 
@@ -85,7 +85,7 @@ restart-requiring changes into a single restart) while removing its costs
 
 Each control writes its value to the backend as soon as it changes (debounced
 for text inputs like proxy host/port/credentials). Remove the "Save and restart"
-button as the gate for *saving*. The backend setter is already immediate, so no
+button as the gate for _saving_. The backend setter is already immediate, so no
 backend change is required for the apply step.
 
 ### 5.2 Classify each setting: restart-required or not
@@ -100,24 +100,24 @@ The classification must be verified against actual ParatextData behavior (see
 [§8 Open questions](#8-open-questions-must-verify-before-build)). Current best
 understanding:
 
-| Setting | Likely classification | Rationale |
-| --- | --- | --- |
+| Setting                                    | Likely classification         | Rationale                                                                                                                                       |
+| ------------------------------------------ | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | Internet-use mode (`permittedInternetUse`) | **Live (needs verification)** | The one in-repo consumer reads `InternetAccess.Status` at call time (`PlatformScrTextCollection.cs:47`), suggesting the gate is evaluated live. |
-| Server selection (`selectedServer`) | **Restart-required (likely)** | Established registry/send-receive/DBL clients may cache the endpoint at init. |
-| Proxy settings | **Restart-required (likely)** | Already-constructed HTTP clients / connections may hold the old proxy config. |
+| Server selection (`selectedServer`)        | **Restart-required (likely)** | Established registry/send-receive/DBL clients may cache the endpoint at init.                                                                   |
+| Proxy settings                             | **Restart-required (likely)** | Already-constructed HTTP clients / connections may hold the old proxy config.                                                                   |
 
-The point of the design is that the *mechanism* is per-setting, so we can adjust
+The point of the design is that the _mechanism_ is per-setting, so we can adjust
 the table as verification comes in without reworking the UX.
 
 ### 5.3 Pending-restart indicator
 
 When the user changes a restart-required setting, show a **persistent,
-non-blocking banner** in the dialog that reads roughly: *"Some changes require a
-restart to take effect."* The banner offers two actions:
+non-blocking banner** in the dialog that reads roughly: _"Some changes require a
+restart to take effect."_ The banner offers two actions:
 
 - **Restart now** — calls `platform.restart` (optionally after the existing
   short delay so the user sees the confirmation).
-- **Restart later** — dismisses the prompt *for now*; the pending-restart state
+- **Restart later** — dismisses the prompt _for now_; the pending-restart state
   itself is **not** cleared (see §5.5).
 
 If the user only changes **live** settings, no banner appears at all — the
@@ -129,7 +129,7 @@ This replaces the mandatory "Save and restart" button. It is not a blocking
 "are you sure?" modal — it's an offer surfaced only when a restart is actually
 pending. Framing:
 
-- Title: *"Restart required"* (or *"Restart to finish applying changes"*).
+- Title: _"Restart required"_ (or _"Restart to finish applying changes"_).
 - Body: names what changed and that it will apply on next restart.
 - Buttons: **Restart now** (primary) / **Restart later** (secondary).
 
@@ -144,7 +144,7 @@ obvious way to recover. The pending state must remain visible and actionable
 until an actual restart happens.
 
 **Recommended primary mechanism — persistent reminder banner.** A dismissal of
-the restart *dialog* must not clear the pending-restart *state*. As long as any
+the restart _dialog_ must not clear the pending-restart _state_. As long as any
 applied-but-not-yet-effective change exists, keep a lightweight reminder banner
 visible with a **Restart now** action. It should:
 
