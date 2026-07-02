@@ -55,7 +55,7 @@ class CommentListWebViewFactory extends WebViewFactory<typeof commentListWebView
   ): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== commentListWebViewType)
       throw new Error(
-        `${commentListWebViewType} provider received request to provide a ${savedWebView.webViewType} WebView`,
+        `${commentListWebViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
 
     const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
@@ -186,10 +186,10 @@ const commentListPanelProvider: IWebViewProvider = {
 };
 
 /**
- * Opens or updates the fixed Comment List Panel in Column 3 for the given project.
+ * Opens or updates the fixed Comment List Panel in Column 3 for the given project. If the panel is
+ * already open, reloads it in place without bringing it to the front.
  *
- * This implements the `legacyCommentManager.openCommentListPanel` command. Called by
- * `openTextConnectionPanels` whenever the active project changes in Simple mode.
+ * This implements the `legacyCommentManager.openCommentListPanel` command.
  *
  * @param projectId The project whose comments to display, or `undefined` to show an empty panel
  * @returns The webView ID of the panel, or `undefined` if opening failed

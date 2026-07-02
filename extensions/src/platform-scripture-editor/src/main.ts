@@ -36,7 +36,7 @@ import {
   convertScriptureRangeToEditorRange,
   formatEditorTitle,
   openCommentListAndSelectThread,
-  openTextConnectionPanels,
+  openOrUpdateRelatedPanels,
   resolveOpenEditorDispatch,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   selectProjectIdsForOpenMode,
@@ -321,7 +321,7 @@ async function open(
 
     // If in simple interface mode, open/update the model text, bible text, and commentary text panels
     if (interfaceMode === 'simple' && projectForWebView.projectId)
-      await openTextConnectionPanels(papi, projectForWebView.projectId);
+      await openOrUpdateRelatedPanels(papi, projectForWebView.projectId);
 
     const openedWebViewId = await papi.webViews
       .openWebView(
@@ -440,7 +440,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
   ): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE)
       throw new Error(
-        `${SCRIPTURE_EDITOR_WEBVIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} WebView`,
+        `${SCRIPTURE_EDITOR_WEBVIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
 
     // We know that the projectId (if present in the state) will be a string.

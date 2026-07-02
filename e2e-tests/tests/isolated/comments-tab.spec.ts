@@ -92,7 +92,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     // Seed one comment thread in the test project
     await createCommentThreads(project, ['GEN 1:1'], ['Visible comment for PT-4068 test']);
 
-    // Open the project in the scripture editor (triggers openTextConnectionPanels in simple mode)
+    // Open the project in the scripture editor (triggers openOrUpdateRelatedPanels in simple mode)
     await waitForPapiMethodRegistered(
       'command:platformScriptureEditor.openResourceViewer',
       DEFAULT_WEBSOCKET_PORT,
@@ -181,7 +181,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
         SETTINGS_TIMEOUT_MS,
       );
 
-      // Open Project A — triggers openTextConnectionPanels(projectA.projectId)
+      // Open Project A — triggers openOrUpdateRelatedPanels(projectA.projectId)
       await sendPapiRequestOnce(
         'command:platformScriptureEditor.openResourceViewer',
         [projectA.projectId],
@@ -196,7 +196,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
         timeout: 20_000,
       });
 
-      // Switch to Project B — triggers openTextConnectionPanels(projectB.projectId)
+      // Switch to Project B — triggers openOrUpdateRelatedPanels(projectB.projectId)
       await sendPapiRequestOnce(
         'command:platformScriptureEditor.openResourceViewer',
         [projectB.projectId],
