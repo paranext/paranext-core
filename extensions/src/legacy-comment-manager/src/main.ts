@@ -139,7 +139,7 @@ const commentListPanelProvider: IWebViewProvider = {
     currentCommentListPanelProjectId = undefined;
 
     const title = await papi.localization.getLocalizedString({
-      localizeKey: '%webView_legacyCommentManager_commentList_title%',
+      localizeKey: '%webView_legacyCommentManager_commentListPanel_title%',
     });
 
     return {

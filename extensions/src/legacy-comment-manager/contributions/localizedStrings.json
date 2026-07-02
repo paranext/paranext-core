@@ -40,6 +40,7 @@
       "%no_comments%": "No comments yet",
       "%no_comments_match_filter%": "No comments match your filter settings.",
       "%webView_legacyCommentManager_commentList_title%": "Comments",
+      "%webView_legacyCommentManager_commentListPanel_title%": "Comments",
       "%webView_legacyCommentManager_openComments%": "Open Comments"
     },
     "es": {
@@ -70,7 +71,8 @@
       "%comment_filter_unresolved_assigned_to_me%": "Pendientes asignados a mí",
       "%no_comments%": "Todavía no hay comentarios",
       "%no_comments_match_filter%": "No hay comentarios que coincidan con sus parámetros de filtros.",
-      "%webView_legacyCommentManager_commentList_title%": "Comentarios de proyecto",
+      "%webView_legacyCommentManager_commentList_title%": "Comentarios",
+      "%webView_legacyCommentManager_commentListPanel_title%": "Comentarios de proyecto",
       "%webView_legacyCommentManager_openComments%": "Abrir Comentarios"
     }
   }
