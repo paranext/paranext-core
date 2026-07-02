@@ -1,4 +1,4 @@
-import { LegacyCommentThread } from 'platform-bible-utils';
+import { LegacyComment, LegacyCommentThread } from 'platform-bible-utils';
 
 const today = new Date();
 const yesterday = new Date(today);
@@ -845,3 +845,68 @@ export const sampleComments: LegacyCommentThread[] = [
   },
   // #endregion sample comments with some old data
 ];
+
+/**
+ * A verseText merge-conflict comment whose diff/plain fields are the ACTUAL serialized output of
+ * the C# PlatformCommentConverter (PT-4028) run on the CreateVerseTextConflictComment fixture —
+ * captured verbatim so the card renders exactly what production produces. Do not hand-edit the
+ * field values.
+ */
+export const verseTextConflictComment: LegacyComment = {
+  id: 'conflict-sample/Tim Steenwyk/2011-08-16T15:49:18.4019847-04:00',
+  isRead: false,
+  thread: 'conflict-sample',
+  user: 'Tim Steenwyk',
+  verseRef: 'MAT 2:1',
+  language: '',
+  date: '2011-08-16T15:49:18.4019847-04:00',
+  deleted: false,
+  startPosition: 0,
+  status: 'Todo',
+  type: 'Conflict',
+  conflictType: 'verseText',
+  hideInTextWindow: false,
+  contents:
+    "<blockquote lang='dmy' style='text-align:left'><p>Two different people edited this verse. The change shown here (in red) is not in the current copy of the text.</p><p><span lang='es-015-vaidika'>\\v 1 When Jesus was born in the <u>small </u>village of Bethlehem in Judea, Herod was king.</span></p></blockquote>",
+  rejectedText:
+    "<blockquote lang='dmy' style='text-align:left'><p><span lang='es-015-vaidika'>\\v 1 When Jesus was born in the <u>small </u>village of Bethlehem in Judea, Herod was king.</span></p></blockquote>",
+  acceptedText:
+    "<blockquote lang='dmy' style='text-align:left'><p><span lang='es-015-vaidika'>\\v 1 When Jesus was born in the <u>big </u>village of Bethlehem in Judea, Herod was king.</span></p></blockquote>",
+  resultText: '\\v 1 When Jesus was born in the big village of Bethlehem in Judea, Herod was king.',
+  rejectedResultText:
+    '\\v 1 When Jesus was born in the small village of Bethlehem in Judea, Herod was king.',
+};
+
+/**
+ * A verseText merge-conflict comment demonstrating a REPLACEMENT (both deletion and insertion) —
+ * common ancestor "town", loser replaced with "village", winner replaced with "city". Both
+ * rejectedText and acceptedText contain `<s>` (deletion) and `<u>` (insertion) so the card
+ * renders struck-red "town" and green "village"/"city". Fields are the ACTUAL serialized output of
+ * the C# PlatformCommentConverter run on the CreateVerseTextConflictCommentWithReplacement fixture
+ * — captured verbatim. Do not hand-edit the field values.
+ */
+export const verseTextConflictReplacementSample: LegacyComment = {
+  id: 'conflict-replacement/Tim Steenwyk/2011-08-16T15:49:18.4019847-04:00',
+  isRead: false,
+  thread: 'conflict-replacement',
+  user: 'Tim Steenwyk',
+  verseRef: 'MAT 2:1',
+  language: '',
+  date: '2011-08-16T15:49:18.4019847-04:00',
+  deleted: false,
+  startPosition: 0,
+  status: 'Todo',
+  type: 'Conflict',
+  conflictType: 'verseText',
+  hideInTextWindow: false,
+  contents:
+    "<blockquote lang='dmy' style='text-align:left'><p>Two different people edited this verse. The change shown here (in red) is not in the current copy of the text.</p><p><span lang='es-015-vaidika'>\\v 1 When Jesus was born in the <s>town </s><u>village </u>of Bethlehem in Judea, Herod was king.</span></p></blockquote>",
+  rejectedText:
+    "<blockquote lang='dmy' style='text-align:left'><p><span lang='es-015-vaidika'>\\v 1 When Jesus was born in the <s>town </s><u>village </u>of Bethlehem in Judea, Herod was king.</span></p></blockquote>",
+  acceptedText:
+    "<blockquote lang='dmy' style='text-align:left'><p><span lang='es-015-vaidika'>\\v 1 When Jesus was born in the <s>town </s><u>city </u>of Bethlehem in Judea, Herod was king.</span></p></blockquote>",
+  resultText:
+    '\\v 1 When Jesus was born in the city of Bethlehem in Judea, Herod was king.',
+  rejectedResultText:
+    '\\v 1 When Jesus was born in the village of Bethlehem in Judea, Herod was king.',
+};
