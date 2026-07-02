@@ -287,6 +287,24 @@ declare module 'legacy-comment-manager' {
       addCommentToThread(comment: LegacyCommentReply): Promise<string>;
 
       /**
+       * Resolves a `verseText` merge conflict by applying the user's choice and marking the note
+       * resolved.
+       *
+       * - `'accept'` keeps the auto-merged (winning) verse text and resolves the note (no verse
+       *   write).
+       * - `'reject'` writes the losing side's text into the verse, then resolves the note.
+       *
+       * Only a project administrator, or the user the admin assigned to the conflict, may resolve.
+       *
+       * @param threadId The conflict thread to resolve
+       * @param resolution `'accept'` (keep the current/winning text) or `'reject'` (take the other
+       *   side)
+       * @throws If the thread doesn't exist or isn't a `verseText` conflict
+       * @throws If the current user is neither a project administrator nor the assigned resolver
+       */
+      resolveConflict(threadId: string, resolution: 'accept' | 'reject'): Promise<void>;
+
+      /**
        * Deletes a comment by its ID
        *
        * @param commentId The unique ID of the comment to delete
