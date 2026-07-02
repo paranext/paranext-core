@@ -23,7 +23,11 @@ import { Command, CommandItem, CommandList } from '@/components/shadcn-ui/comman
 import { CommentItem } from './comment-item.component';
 import { AddCommentToThreadOptions, CommentThreadProps } from './comment-list.types';
 import { ConflictNoteCard } from './conflict-note-card.component';
-import { ConflictResolution, ConflictResolutionOptions } from './conflict-note-card.types';
+import {
+  ConflictResolution,
+  ConflictResolutionOptions,
+  ConflictResolutionOutcome,
+} from './conflict-note-card.types';
 import { didPressCtrlOrCmdEnter, getAssignedUserDisplayName } from './comment-list.utils';
 
 const initialValue: SerializedEditorState<
@@ -268,6 +272,22 @@ export function CommentThread({
   }, [isSelected, activeComments, canUserEditOrDeleteCommentCallback]);
 
   const firstComment = useMemo(() => activeComments[0], [activeComments]);
+
+  // Which way an already-resolved conflict was resolved, read off the resolution comment's
+  // conflictResolutionAction (scanning last-to-first for the first one present, mirroring how the
+  // backend records it on the appended comment): 'replaced' -> reject, 'merged' -> merged. If none
+  // is present but the thread is Resolved, it was an accept (which writes no action). Undefined for
+  // non-conflict threads and for conflicts that are not yet resolved. Consumed by ConflictNoteCard
+  // only in its read-only ('none') state.
+  const resolvedResolution = useMemo<ConflictResolutionOutcome | undefined>(() => {
+    if (!isConflictThread) return undefined;
+    for (let i = activeComments.length - 1; i >= 0; i -= 1) {
+      const action = activeComments[i].conflictResolutionAction;
+      if (action === 'replaced') return 'reject';
+      if (action === 'merged') return 'merged';
+    }
+    return threadStatus === 'Resolved' ? 'accept' : undefined;
+  }, [isConflictThread, activeComments, threadStatus]);
 
   // </p> expects null and not undefined
   // eslint-disable-next-line no-null/no-null
@@ -588,6 +608,7 @@ export function CommentThread({
               selectedResolution={selectedResolution}
               onResolutionChange={setSelectedResolution}
               availableActions={threadStatus === 'Resolved' ? 'none' : conflictOptions}
+              resolvedResolution={resolvedResolution}
               onResolve={handleResolveConflictClick}
               isResolving={isResolvingConflict}
             />

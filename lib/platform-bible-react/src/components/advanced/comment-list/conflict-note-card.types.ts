@@ -7,6 +7,21 @@ import { LanguageStrings, LegacyComment, LocalizeKey } from 'platform-bible-util
 export type ConflictResolution = 'accept' | 'reject';
 
 /**
+ * How an already-resolved conflict was resolved, derived from the resolution comment's
+ * `conflictResolutionAction`:
+ *
+ * - `'accept'`: resolved by accepting (no text was written); the accepted side stands.
+ * - `'reject'`: resolved by rejecting (the rejected side was written into the verse).
+ * - `'merged'`: a PT9 three-way merge (only possible in data synced from PT9; PT10 never produces
+ *   it). Neither stored result field can represent the merged verse, so the card hides its Result
+ *   region for this outcome.
+ *
+ * Distinct from {@link ConflictResolution} (the live accept/reject choice) because it adds the
+ * `'merged'` legacy outcome and is only meaningful for a conflict that is already resolved.
+ */
+export type ConflictResolutionOutcome = 'accept' | 'reject' | 'merged';
+
+/**
  * The resolution actions the current user may take on a conflict thread (from the comments data
  * provider's getConflictResolutionOptions). Must stay textually identical to the union declared in
  * legacy-comment-manager.d.ts.
@@ -34,6 +49,8 @@ export const CONFLICT_NOTE_STRING_KEYS: LocalizeKey[] = [
   '%conflict_note_resolve%',
   '%conflict_note_stale_notice%',
   '%conflict_note_resolve_failed%',
+  '%conflict_note_outcome_replaced%',
+  '%conflict_note_outcome_merged%',
 ];
 
 /** Props for the ConflictNoteCard component */
@@ -58,6 +75,14 @@ export interface ConflictNoteCardProps {
    * stale-verse explanation tooltip.
    */
   availableActions?: ConflictResolutionOptions;
+  /**
+   * Which way an already-resolved conflict was resolved. Used ONLY when `availableActions` is
+   * `'none'` (read-only): it makes the Result region show the outcome that was actually applied
+   * ('accept' -> resultText, 'reject' -> rejectedResultText) instead of the live selector state,
+   * and hides the Result region for a 'merged' outcome. Ignored while the conflict is still
+   * resolvable.
+   */
+  resolvedResolution?: ConflictResolutionOutcome;
   /** Called when the user clicks Resolve, with the currently selected resolution. */
   onResolve?: (resolution: ConflictResolution) => void;
   /** Disables the selector and Resolve button while a resolve call is in flight. */
