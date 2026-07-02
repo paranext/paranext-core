@@ -206,4 +206,38 @@ describe('useScrollGroupScrRef versification conversion', () => {
 
     await waitFor(() => expect(result.current[0]).toEqual(second));
   });
+
+  it('keeps showing the previous converted verse while the next conversion is in flight', async () => {
+    const firstVerse = { book: 'PSA', chapterNum: 146, verseNum: 1, versificationStr: '4' };
+    getScrRefForProjectSync.mockReturnValue(rawRef); // uncached seed = raw source-frame ref
+    getScrRefForProject.mockResolvedValue(firstVerse);
+    const { useScrollGroupScrRef } = await import(
+      '@renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook'
+    );
+
+    const { result } = renderHook(() => useScrollGroupScrRef(0, () => true, 'targetProj'));
+    await waitFor(() => expect(result.current[0]).toEqual(firstVerse));
+
+    // Navigate to a new uncached verse: source ref changes, new conversion goes in flight.
+    const secondVerse = { book: 'PSA', chapterNum: 145, verseNum: 1, versificationStr: '5' };
+    let resolveSecond: (v: typeof secondVerse) => void = () => {};
+    getScrRefForProject.mockReturnValue(
+      new Promise((resolve) => {
+        resolveSecond = resolve;
+      }),
+    );
+    act(() =>
+      lastScrRefUpdateHandler?.({
+        scrRef: { book: 'PSA', chapterNum: 200, verseNum: 1 },
+        scrollGroupId: 0,
+        sourceProjectId: 'sourceProj',
+      }),
+    );
+
+    // While the second conversion is pending, the display must LINGER on firstVerse, not flash rawRef.
+    expect(result.current[0]).toEqual(firstVerse);
+
+    act(() => resolveSecond(secondVerse));
+    await waitFor(() => expect(result.current[0]).toEqual(secondVerse));
+  });
 });

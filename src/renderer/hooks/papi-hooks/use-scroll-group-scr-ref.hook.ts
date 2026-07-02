@@ -166,11 +166,12 @@ export function useScrollGroupScrRef(
   }, [projectId, scrRefLocal, sourceProjectIdLocal, versificationGeneration]);
 
   // Seed with the synchronously-known conversion (a cached result, or the raw ref) so a revisited
-  // verse displays correctly with no flash. `preserveValue: false` resets to this current-verse seed
-  // while a fresh conversion is in flight rather than lingering on the previous verse. Memoized so
-  // the cache-key serialization inside getScrRefForProjectSync runs once per verse change rather than
-  // on every render (usePromise only reads this seed when the factory changes). A source-only change
-  // does not recompute the seed, but convertScrRef re-runs and corrects the displayed value.
+  // verse displays correctly with no flash. `preserveValue: true` keeps the PREVIOUS converted verse
+  // on screen while a fresh conversion is in flight, rather than resetting to the raw source-frame
+  // seed. Trade-off (deliberate): on an uncached forward move, a differently-versified follower
+  // briefly lags on the previous verse instead of flashing the wrong-versification verse — judged the
+  // less jarring transient for readers, and moot once cached. Memoized so the cache-key serialization
+  // inside getScrRefForProjectSync runs once per verse change rather than on every render.
   const conversionSeed = useMemo(
     () =>
       isConversionRequired
@@ -185,7 +186,7 @@ export function useScrollGroupScrRef(
   const [convertedScrRef] = usePromise(
     isConversionRequired ? convertScrRef : undefined,
     conversionSeed,
-    { preserveValue: false },
+    { preserveValue: true },
   );
 
   const displayScrRef = isConversionRequired ? convertedScrRef : scrRefLocal;
