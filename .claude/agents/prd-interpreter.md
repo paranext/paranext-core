@@ -1,6 +1,6 @@
 ---
 name: prd-interpreter
-description: "Read-only agent for /investigate-prd. Parses a Shape-Up PRD into a normalized structure and a per-aspect breakdown (each aspect ports a PT9 feature, is net-new, or both), extracts Goals/Non-Goals/success-criteria, and surfaces conflicts and open questions as CLARIFICATION items. Input: PRD_PATH."
+description: "Read-only agent for /investigate-prd. Parses a Shape-Up PRD into a normalized structure — numbered non-negotiables (NN-n) and nice-to-haves (NTH-n) — and a per-aspect breakdown (each aspect ports a PT9 feature, is net-new, or both), extracts Goals/Non-Goals/success-criteria, and surfaces conflicts and open questions as CLARIFICATION items. Input: PRD_PATH."
 tools: Read, Grep, Glob
 ---
 
@@ -27,6 +27,9 @@ Capture each section that is present:
   (links to the Feature Inventory taxonomy), complexity.
 - **The Problem** — customer pain, who has it, evidence, cost of inaction.
 - **Appetite & Boundaries** — the table of **non-negotiables / nice-to-haves / no-gos**.
+  Number them in PRD order — `NN-1…` for non-negotiables, `NTH-1…` for nice-to-haves — and
+  keep the PRD's own wording. These IDs are load-bearing: the brief's work items, the
+  requirement-coverage table, and the Jira tickets all reference them.
 - **Shaped Solution** — how it works, key interactions, **rabbit holes** (risky work + the
   decided approach).
 - **Risks** — value / usability / feasibility / viability.
@@ -46,7 +49,7 @@ PT9 — record them precisely (e.g. `Category 10 — Collaboration & Sync`, `Sen
   - edge cases that won't be handled,
   - explicit exclusions (the PRD's no-gos). Write `None.` under any bucket that has no entries.
 - **Success criteria** — specific, testable outcomes; "what 'done' looks like." Derive from
-  the non-negotiables.
+  the non-negotiables, and cite the ID each criterion verifies (e.g. "… (NN-3)").
 
 ## Step 3 — Build the aspect breakdown
 
@@ -59,7 +62,9 @@ For **each** aspect decide its origin:
 - **hybrid** — does both (e.g. ports the sync engine *and* adds a new conflict-resolution UI).
 
 Produce one row per aspect: `Aspect | Origin | PT9 form / category (if any) | One-line summary
-| Appetite slice`. A fully net-new PRD simply has zero PT9-port aspects (no PT9 source to investigate).
+| Covers | Appetite slice` — where `Covers` lists the NN/NTH IDs this aspect serves (an aspect
+may cover several; every NN must be covered by at least one aspect, or be flagged as a gap).
+A fully net-new PRD simply has zero PT9-port aspects (no PT9 source to investigate).
 
 ## Step 4 — Soundness gate
 
@@ -99,11 +104,25 @@ Return one markdown block:
 ## Normalized PRD: {problem name}
 - Appetite: {time box}   Category: {category}   Complexity: {…}
 - Problem: {1-2 sentences}
-- Non-negotiables: {…}   No-gos: {…}   Rabbit holes: {…}
+
+### Non-negotiables
+| ID | Requirement (PRD wording) |
+| NN-1 | … |
+
+### Nice-to-haves
+| ID | Item (PRD wording) |
+| NTH-1 | … |
+(`None.` if the PRD has none — never silently omit this table.)
+
+### No-gos
+- {…}
+
+### Rabbit holes
+- {rabbit hole + the PRD's decided approach}
 
 ## Aspect breakdown
-| Aspect | Origin | PT9 form / category | Summary | Appetite slice |
-| … | PT9-port / net-new / hybrid | … | … | … |
+| Aspect | Origin | PT9 form / category | Summary | Covers | Appetite slice |
+| … | PT9-port / net-new / hybrid | … | … | NN-1, NTH-2 | … |
 
 ## Goals
 1. {action-verb goal} …

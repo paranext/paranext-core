@@ -12,7 +12,8 @@ file-modifying tools.**
 
 ## Inputs
 
-- The PRD summary and aspect breakdown (incl. each port aspect's PT9 form/category). You normally
+- The PRD summary, the numbered non-negotiables / nice-to-haves (`NN-n` / `NTH-n`), and the
+  aspect breakdown (incl. each port aspect's PT9 form/category). You normally
   run **in parallel** with PT9 archaeology, so work from the PRD summary; a `pt9-archaeologist`
   behavior digest is **optional** and often not yet available — if one is provided, use it to
   sharpen the reuse-vs-build judgment for that aspect.
@@ -24,7 +25,13 @@ Sibling checkouts under `~/git/` (the documented convention):
 - `~/git/paranext-core` — the Platform.Bible framework.
 - `~/git/paratext-10-studio` — the PT10 app shell.
 - `~/git/paratext-bible-extensions` — public extensions.
-- `~/git/paratext-bible-internal-extensions` — internal (SIL/UBS) extensions; Send/Receive lives here.
+- `~/git/paratext-bible-internal-extensions` — internal extensions (not publicly distributed);
+  Send/Receive lives here.
+
+**One team.** A single team works on all of these repos (and on PT9's `Paratext`) together. The
+boundaries between them are about distribution and visibility, not ownership. Recommending a home
+in any repo — or work that spans several — carries **zero coordination cost**: never present
+cross-repo placement as a risk, a dependency on "another team", or an open question.
 
 If a repo is **not readable**, note which repo and which part of the sweep you had to skip, and
 produce the landscape from what is available. If an agent reports it cannot access a repo, the
@@ -137,6 +144,9 @@ Locate each discrete logic unit (a method or cohesive section, by `file:line`) a
   cross-check the label against the line count and flag any deliberate mismatch.
 - Note **dependencies between blocks** (does A call B? shared state?) and **hotspots** (risky to
   migrate: many branches, tight coupling).
+- Where an existing unit **directly satisfies a non-negotiable or nice-to-have**, say so by ID
+  in the Notes column (e.g. "covers NN-2 as-is") — this feeds the brief's requirement-coverage
+  mapping.
 
 ### De-WinForms when classifying PT9 code
 
