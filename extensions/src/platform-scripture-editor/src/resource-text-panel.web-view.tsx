@@ -451,6 +451,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // doesn't warn "Unexpected <kind> marker" for handbook/commentary markers (e.g. \pn, \jmp) — scoped
   // per-resource from the USJ being displayed, never a global list. Empty for content that needs
   // nothing extra, so the option is omitted (opt-in, no behavior change).
+  // Intentionally every marker the resource uses — read-only panel, warn-only diagnostic. See collectUsjMarkers JSDoc.
   const extraValidMarkers = useMemo(() => collectUsjMarkers(usjFromPdp), [usjFromPdp]);
 
   const options: EditorOptions = useMemo(
