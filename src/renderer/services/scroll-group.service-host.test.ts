@@ -137,16 +137,21 @@ describe('scroll-group.service-host source project tracking', () => {
     expect(sendCommand).not.toHaveBeenCalled();
   });
 
-  it('skips the round-trip when source and target share a versification', async () => {
+  it('still converts when source and target report the same base versification identifier', async () => {
+    // The platformScripture.versification setting carries only the base ScrVersType (e.g. "4"), not
+    // custom.vrs content, so two projects reporting the same identifier can still differ. The base
+    // identifier must NOT skip conversion; the C# command decides with the real ScrVers.
     projectVersifications.sourceProj = 'shared';
     projectVersifications.targetProj = 'shared';
+    const converted = { book: 'PSA', chapterNum: 146, verseNum: 1, versificationStr: '4' };
+    sendCommand.mockResolvedValue(converted);
     const host = await import('@renderer/services/scroll-group.service-host');
     host.setScrRefSync(0, { book: 'PSA', chapterNum: 147, verseNum: 1 }, 'sourceProj');
 
     const result = await host.getScrRefForProject(0, 'targetProj');
 
-    expect(result).toEqual({ book: 'PSA', chapterNum: 147, verseNum: 1 });
-    expect(sendCommand).not.toHaveBeenCalled();
+    expect(result).toEqual(converted);
+    expect(sendCommand).toHaveBeenCalledTimes(1); // round-trip fired despite equal base identifiers
   });
 
   it('coalesces concurrent identical conversions into a single round-trip', async () => {
@@ -183,47 +188,28 @@ describe('scroll-group.service-host source project tracking', () => {
   });
 
   it('clears a failed versification subscription so a later navigation retries it', async () => {
-    // Both projects share a versification ONCE their subscription succeeds, so a successful retry
-    // engages the same-versification fast path (no round-trip). That skipped round-trip is the
-    // observable proof the failed subscription entry was cleared rather than latched off for the
-    // session: if the `catch`'s `versificationSubscriptions.delete` were removed, the second
-    // navigation would reuse the failed (resolved-void) setup promise, never learn the shared
-    // versification, and fire another conversion — failing the final assertion below.
-    projectVersifications.sourceProj = 'shared';
-    projectVersifications.targetProj = 'shared';
-
-    // Reject the first subscribe attempt per project (e.g. project still loading), then succeed.
+    // The retry is observable as a SECOND subscription attempt: if the catch's
+    // `versificationSubscriptions.delete` were removed, the failed (resolved-void) setup promise would
+    // be reused and the project's PDP would never be requested again.
     const pdpAttempts: Record<string, number> = {};
     pdpGet.mockImplementation(async (_projectInterface: string, projectId: string) => {
       pdpAttempts[projectId] = (pdpAttempts[projectId] ?? 0) + 1;
       if (pdpAttempts[projectId] === 1) throw new Error('project still loading');
       return {
         subscribeSetting: (_key: string, callback: (value: unknown) => void) => {
-          callback(projectVersifications[projectId]);
+          callback(projectId);
           return Promise.resolve(() => {});
         },
       };
     });
-
-    const converted = { book: 'PSA', chapterNum: 146, verseNum: 1, versificationStr: '4' };
-    sendCommand.mockResolvedValue(converted);
+    sendCommand.mockResolvedValue({ book: 'PSA', chapterNum: 146, verseNum: 1 });
     const host = await import('@renderer/services/scroll-group.service-host');
     host.setScrRefSync(0, { book: 'PSA', chapterNum: 147, verseNum: 1 }, 'sourceProj');
 
-    // First navigation: both subscriptions fail, so versifications stay unknown and the host cannot
-    // take the fast path — it conservatively fires the conversion round-trip rather than throwing.
-    const first = await host.getScrRefForProject(0, 'targetProj');
-    expect(first).toEqual(converted);
-    expect(sendCommand).toHaveBeenCalledTimes(1);
+    await host.getScrRefForProject(0, 'targetProj'); // first attempt: sourceProj subscribe throws
+    await host.getScrRefForProject(0, 'targetProj'); // second navigation retries the failed project
 
-    // Second navigation (new verse => fresh cache key): the cleared entries let the subscriptions
-    // retry and succeed; source and target now report the same versification, so the fast path skips
-    // the round-trip entirely.
-    host.setScrRefSync(0, { book: 'PSA', chapterNum: 148, verseNum: 1 }, 'sourceProj');
-    sendCommand.mockClear();
-    const second = await host.getScrRefForProject(0, 'targetProj');
-    expect(second).toEqual({ book: 'PSA', chapterNum: 148, verseNum: 1 });
-    expect(sendCommand).not.toHaveBeenCalled(); // subscription retried and fast path engaged
+    expect(pdpAttempts.sourceProj).toBe(2); // retried, not latched off for the session
   });
 
   it('getScrRefForProjectSync returns a cached conversion, else the raw ref', async () => {

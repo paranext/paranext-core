@@ -282,12 +282,12 @@ function planConversion(
 ): { needsConversion: false } | { needsConversion: true; cacheKey: string } {
   // Unknown source frame (`undefined`) is NOT assumed English: converting a reference whose
   // versification we don't know would mis-frame it. Also skip when the frame already matches
-  // `projectId`, or when both projects are known to share a versification.
-  if (
-    sourceProjectId === undefined ||
-    sourceProjectId === projectId ||
-    (sourceVersification !== undefined && sourceVersification === targetVersification)
-  )
+  // `projectId`. NOTE: we intentionally do NOT skip when the two projects report the same
+  // `platformScripture.versification` value — that setting is only the base `ScrVersType` and does
+  // not capture `custom.vrs`, so two projects can report the same base type yet convert differently.
+  // The C# command decides with the real `ScrVers`; a genuinely-identical versification is a cached
+  // no-op round-trip.
+  if (sourceProjectId === undefined || sourceProjectId === projectId)
     return { needsConversion: false };
   return {
     needsConversion: true,
