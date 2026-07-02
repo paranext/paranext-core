@@ -635,6 +635,15 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         )
         {
             VerifyUserCanResolveThread(comment.Thread);
+
+            // Conflict threads must be resolved through ResolveConflict (accept/reject), which
+            // applies the chosen text and enforces the admin-or-assignee gate. This generic path
+            // would mark the conflict resolved without applying anything, and the already-resolved
+            // guard would then lock out the real flow. Reopening (Todo) stays allowed.
+            if (comment.Status == NoteStatus.Resolved && existingThread.Type == NoteType.Conflict)
+                throw new InvalidOperationException(
+                    $"Thread '{comment.Thread}' is a merge conflict; use resolveConflict to accept or reject it instead of setting its status directly."
+                );
         }
 
         // Validate assigned user has permission to be assigned and is in the assignable users list

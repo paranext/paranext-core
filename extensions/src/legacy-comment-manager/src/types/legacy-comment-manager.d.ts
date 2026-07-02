@@ -288,6 +288,8 @@ declare module 'legacy-comment-manager' {
        *   "threadId/userName/date")
        * @throws If the thread ID is missing or doesn't exist
        * @throws If trying to resolve/unresolve without permission
+       * @throws If trying to set status 'Resolved' on a merge-conflict thread — use resolveConflict
+       *   instead
        * @throws If the assignedUser is not a valid assignable user for this project
        */
       addCommentToThread(comment: LegacyCommentReply): Promise<string>;
