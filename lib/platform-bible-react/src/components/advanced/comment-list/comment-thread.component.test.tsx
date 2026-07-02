@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
@@ -309,16 +309,39 @@ describe('CommentThread conflict resolution', () => {
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
   });
 
-  test('hover resolve check button is suppressed on conflict threads', async () => {
-    renderThread({
+  test('hover resolve button shows on a normal thread but is suppressed on conflict threads', async () => {
+    // The same resolve-permission callback drives both renders. The positive control (normal
+    // thread) proves the callback actually produces the hover resolve button once it settles true;
+    // the conflict render then proves the button is gated off for conflicts even after that same
+    // settlement. Without the positive control the absence assertion is tautological — it would
+    // pass while `canResolve` was still its initial `false`, protecting nothing.
+    const canUserResolveThreadCallback = async () => true;
+
+    const { container: normalContainer } = renderThread({
+      thread: baseThread,
+      comments: [baseComment],
+      canUserResolveThreadCallback,
+    });
+    const { container: conflictContainer } = renderThread({
       thread: conflictThread,
       comments: conflictThread.comments,
-      canUserResolveThreadCallback: async () => true,
+      canUserResolveThreadCallback,
     });
-    // The generic resolve button must never appear for conflicts, even with resolve permission.
+
+    // Positive control: wait for the permission check to settle. The button is hidden until hover
+    // (opacity styling) but is present in the DOM, so getByRole finds it once `canResolve` is true.
     await waitFor(() =>
-      expect(screen.queryByRole('button', { name: 'Resolve thread' })).not.toBeInTheDocument(),
+      expect(
+        within(normalContainer).getByRole('button', { name: 'Resolve thread' }),
+      ).toBeInTheDocument(),
     );
+
+    // Negative: the conflict render's identical permission check has settled by the time the
+    // positive control appeared, yet the generic resolve button must never appear for conflicts.
+    // If the `!isConflictThread` gate were removed this button would be present here too.
+    expect(
+      within(conflictContainer).queryByRole('button', { name: 'Resolve thread' }),
+    ).not.toBeInTheDocument();
   });
 
   test('resolve flow calls handleResolveConflict and locks controls on success', async () => {
