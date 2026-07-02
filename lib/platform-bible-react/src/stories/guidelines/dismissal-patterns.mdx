@@ -199,4 +199,4 @@ See also: [Interactions](./application-interactions.mdx) for the menus and surfa
   outside press, scroll, and focus loss.
 - **Outside (across iframes)** — defined by **containment against the surface's portaled content
   node**, not its trigger. Focus moving to an element the content node doesn't contain is "outside";
-  the window merely losing focus (`activeElement` is `<body>`/null) is not.
+  the window merely losing focus (`document.hasFocus()` is false) is not.
