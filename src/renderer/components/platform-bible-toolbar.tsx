@@ -11,7 +11,10 @@ import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useProjectPickerData } from '@renderer/hooks/use-project-picker-data.hook';
 import { PROJECT_PICKER_DIALOG_TYPE } from '@renderer/components/dialogs/dialog-definition.model';
 import { app, dataProviders } from '@renderer/services/papi-frontend.service';
-import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
+import {
+  availableScrollGroupIds,
+  getScrRefSourceProjectIdSync,
+} from '@renderer/services/scroll-group.service-host';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import { sendCommand } from '@shared/services/command.service';
 import { getNetworkEvent } from '@shared/services/network.service';
@@ -47,6 +50,7 @@ import {
   ScrollGroupId,
 } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useActiveTabScrollGroup } from './use-active-tab-scroll-group.hook';
 
 const TOOLTIP_DELAY = 300;
 
@@ -94,10 +98,28 @@ export function PlatformBibleToolbar() {
   const { currentProject, recentProjects, allProjects, currentProjectError } =
     useProjectPickerData();
 
+  const activeTab = useActiveTabScrollGroup();
+
+  // Follow the active scripture tab: when it is synced to a numbered group, adopt that group.
+  // Keyed on the active tab's identity so switching to a different tab re-attaches even to the same
+  // group number; a manual top-bar override therefore holds until the active tab changes.
+  useEffect(() => {
+    if (activeTab.scrollGroupId !== undefined) updateScrollGroupIdInternal(activeTab.scrollGroupId);
+  }, [activeTab.webViewId, activeTab.scrollGroupId, updateScrollGroupIdInternal]);
+
+  // Versification frame for the toolbar BCV. Attached (mirroring the active tab): use the tab's
+  // project so the toolbar shows the identical ref. Otherwise (manual override / no numbered-group
+  // tab active): use the driven group's own source project, so display shows the group's raw ref and
+  // a navigation preserves that source ("move the verse, nothing else").
+  const attached = scrollGroupIdInternal === activeTab.scrollGroupId;
+  const effectiveProjectId = attached
+    ? activeTab.projectId
+    : getScrRefSourceProjectIdSync(scrollGroupIdInternal);
+
   const [scrRef, setScrRef, scrollGroupId, setScrollGroupId] = useScrollGroupScrRef(
     scrollGroupIdInternal,
     updateScrollGroupIdInternal,
-    currentProject?.id,
+    effectiveProjectId,
   );
 
   const isPowerMode = useIsPowerMode();
