@@ -1,3 +1,10 @@
+---
+paths:
+  - "lib/platform-bible-react/**"
+  - "src/renderer/**"
+  - "**/*.web-view.tsx"
+---
+
 ## Applying Changes — UX apply-model (wiring)
 
 This is a thin pointer, not the rule itself. When building or reviewing any UI that
@@ -13,7 +20,7 @@ Load-bearing defaults (orientation only — the article governs):
 
 - **Default to immediate apply.** Reserve explicit apply (stage-then-commit) for changes that only make sense committed as a group or need a contained preview.
 - **Never interleave immediate- and explicit-apply controls as siblings** — isolate explicit apply in its own container with its own Apply button.
-- **Reversible immediate-apply changes still need undo.** App-wide undo does not exist yet (known gap) — provide feature-local undo until it does; don't ship with no recovery.
+- **Changes that aren't self-reversing need a recovery path.** A control that is its own undo — a toggle, slider, theme switcher, panel/layout toggle, live filter whose effect is visible and reversed by re-operating it — needs no separate undo. Require recovery only for changes that are destructive, costly, hard to reverse, bulk, or off-screen. App-wide undo does not exist yet (known gap), so provide feature-local undo for those until it does; don't ship them with no recovery.
 - **Avoid a bare `OK`/`Cancel` label** — name the outcome (`Save changes` / `Discard changes`).
 
 Anything past these defaults (auto-save drafts, optimistic/pessimistic updates, dirty-state
