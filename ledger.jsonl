@@ -270,3 +270,4 @@
 {"type":"selected","runId":"qs-2026-07-02","candidateId":"c1","date":"2026-07-02"}
 {"type":"backlog","candidateId":"c3","title":"CTRL+Z is not working in the comment editor","area":"comment editor undo (scripture-editors / comment web view)","source":"jira","jiraKey":"PT-4087","dedupKey":"jira:PT-4087","impactScore":4,"confidence":0.35,"status":"open","date":"2026-07-02"}
 {"type":"backlog","candidateId":"c4","title":"Section Level heading style displays in uppercase on draft","area":"draft/editor style rendering (CSS)","source":"jira","jiraKey":"PT-4086","dedupKey":"jira:PT-4086","impactScore":2,"confidence":0.3,"status":"open","date":"2026-07-02"}
+{"type":"backlog","candidateId":"c5","title":"RTL display of verse numbers on draft","area":"draft/editor RTL style rendering","source":"jira","jiraKey":"PT-4085","dedupKey":"jira:PT-4085","impactScore":1,"confidence":0.3,"status":"open","date":"2026-07-02"}
