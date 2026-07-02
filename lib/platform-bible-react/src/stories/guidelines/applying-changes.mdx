@@ -42,7 +42,7 @@ Pick **exactly one** model per surface. These are named so the whole team — an
 
 | Model                           | What it means                                                                                                                                                                         | Use it when                                                                                                | Example                                                      |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| **Immediate apply** *(default)* | Every change takes effect as soon as it is made; the effect is visible immediately. Also called *instant apply* / *auto-apply*.                                                       | The effect is visible and easily reversible: sliders, theme, layout toggles, live filters.                 | Settings pages / `SettingsSidebar`                           |
+| **Immediate apply** *(default)* | Every change takes effect as soon as it is made; the effect is visible immediately. Also called *instant apply* / *auto-apply*.                                                       | The effect is visible and easily reversible: sliders, theme, layout toggles, live filters.                 | Theme switcher; view/layout toggles                          |
 | **Auto-save draft**             | Freeform edits persist continuously on their own (on pause or blur), with a save-state indicator. Publishing or sharing is a separate step from editing. Also called a *local draft*. | The user is authoring continuous, freeform content that would be painful to lose.                          | Scripture editor (Lexical); comment and footnote text fields |
 | **Explicit apply**              | Edits stage locally and take effect only when the user commits them (an **Apply**, **Save**, or **Confirm** action). Also called *deferred apply*.                                    | Changes only make sense **as a group**, or the user needs a **contained preview** before they take effect. | Scope selector; a settings sub-dialog                        |
 
@@ -185,7 +185,7 @@ They are not the same action, and users read them differently ([NN/g](https://ww
 
 A bare **✕** reads as *Close* (preserve), not *Cancel* (discard). So do **not** let a **✕** silently throw away staged edits — if closing discards, either label the intent or confirm it. (This is a live audit target: `ScopeSelector` currently discards its staged selection on **✕**/Escape, which contradicts what **✕** signals.)
 
-See also: [Ellipses](./ellipses.mdx) — a trailing `…` already signals "this won't execute immediately"; [Capitalization](./capitalization.mdx) — sentence case for all labels; [Vocabulary](./vocabulary.mdx) — "badge" and other terms used here.
+See also: [Ellipses](./ellipses.mdx) — a trailing `…` already signals "this won't execute immediately"; [Capitalization](./capitalization.mdx) — sentence case for all labels; [Vocabulary](./vocabulary.mdx) — standard UI terminology.
 
 ---
 
