@@ -4,7 +4,6 @@ paths:
   - .context/standards/**
   - lib/platform-bible-react/src/stories/guidelines/**
   - CLAUDE.md
-  - docs/adr/**
 ---
 
 # Where to Add Rules and Guidance
