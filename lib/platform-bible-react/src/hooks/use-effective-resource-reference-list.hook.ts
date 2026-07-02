@@ -5,7 +5,7 @@ import type {
   EffectiveResourceReferenceList,
   ResourceReference,
   ResourceReferenceList,
-} from 'platform-scripture';
+} from 'platform-bible-utils';
 import { useProjectSetting, useProjectDataProvider } from '@papi/frontend/react';
 
 const CURRENT_DATA_VERSION = '1.0.0';

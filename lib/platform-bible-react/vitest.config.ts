@@ -1,6 +1,14 @@
+import path from 'path';
 import { defineConfig } from 'vitest/config';
 import { storybookTest } from '@storybook/addon-vitest/vitest-plugin';
 import config from './vite.config';
+
+// Stub `@papi/frontend/react` so Vitest can resolve it for the experimental hook's test
+// (which then `vi.mock`s it). Set on the `unit` project below, since Vitest projects
+// don't inherit workspace-level `resolve`.
+const papiTestAlias = {
+  '@papi/frontend/react': path.resolve(__dirname, '__test-mocks__/@papi/frontend-react.ts'),
+};
 
 const workspace = defineConfig({
   ...config,
@@ -11,6 +19,7 @@ const workspace = defineConfig({
       // Unit tests configuration
       {
         plugins: [...(config.plugins ?? [])],
+        resolve: { alias: papiTestAlias },
         test: {
           name: 'unit',
           include: ['src/**/*.{test,spec}.{js,ts,jsx,tsx}'],

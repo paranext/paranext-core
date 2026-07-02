@@ -10,9 +10,10 @@
     // We needed to remove react from here below because having two copies was causing problems in
     // the jest tests. But we need the types in both places.
     "typeRoots": ["./node_modules/@types", "../../node_modules/@types", "./src/types"],
-    // Need vite-env here for css imports during dts-bundle-generator runs because it replaces
-    // `include` (which normally includes ./src/types/vite-env.d.ts) with its single `filePath`
-    "types": ["node", "jest", "vite-env", "react-19-compat"],
+    // `vite-env` (css imports) and `experimental-papi-shim` (declares `@papi/frontend/react`)
+    // are listed here because dts-bundle-generator replaces `include` with a single entry file
+    // and would otherwise drop these ambient ./src/types/*.d.ts.
+    "types": ["node", "jest", "vite-env", "react-19-compat", "experimental-papi-shim"],
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "forceConsistentCasingInFileNames": true,
     "incremental": false,
@@ -23,7 +24,12 @@
     "useDefineForClassFields": true,
     "outDir": "",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      // Redirect `platform-scripture` (an extension, not a real dep) to a narrow local shim of the
+      // one interface the experimental hook needs from it. The real declaration pulls in the papi
+      // type graph, which is circular here; the resource-reference DATA types live in
+      // platform-bible-utils and need no shim.
+      "platform-scripture": ["./src/types/text-connection-settings-pdp.shim.d.ts"]
     }
   },
   "include": ["src"],

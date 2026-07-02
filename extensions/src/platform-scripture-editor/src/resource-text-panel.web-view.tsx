@@ -36,7 +36,7 @@ import type {
   EffectiveResourceReference,
   ResourceReferenceList,
 } from 'platform-scripture';
-import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
+import { useEffectiveResourceReferenceList } from 'platform-bible-react/experimental';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
 import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
 import { DEFAULT_RESOURCE_REFERENCE_LIST, selectTextConnection } from './select-dbl-resource';
