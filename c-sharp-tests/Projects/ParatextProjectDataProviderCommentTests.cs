@@ -2178,5 +2178,90 @@ namespace TestParanextDataProvider.Projects
         }
 
         #endregion
+
+        #region ResolveConflict Tests
+
+        // Winner (post-merge) chapter text for the MAT 2:1 conflict fixture.
+        private const string MatTwoWinnerUsfm =
+            "\\id MAT\n\\c 2\n\\v 1 When Jesus was born in the big village of Bethlehem in Judea, Herod was king.\n";
+
+        private CommentThread SeedVerseTextConflict()
+        {
+            const int matBookNum = 40;
+            _scrText.PutText(matBookNum, 0, false, MatTwoWinnerUsfm, null);
+            var mgr = CommentManager.Get(_scrText);
+            Comment conflict = CommentTestHelper.CreateVerseTextConflictComment();
+            mgr.AddComment(conflict);
+            mgr.SaveUser(conflict.User, false);
+            return mgr.FindThread(conflict.Thread);
+        }
+
+        // Re-reads the (post-resolution) thread. CommentManager.FindThread builds a fresh
+        // CommentThread each call and SaveEdits records the resolution on a new comment, so a
+        // reference captured before resolving is stale - re-query, as the other mutation tests do.
+        private PlatformCommentThreadWrapper ReloadThread(string threadId) =>
+            _provider.GetCommentThreads(new CommentThreadSelector { ThreadId = threadId }).Single();
+
+        [Test]
+        public void ResolveConflict_Accept_ResolvesThreadAndLeavesVerseUnchanged()
+        {
+            CommentThread thread = SeedVerseTextConflict();
+            var vref = new VerseRef("MAT", "2", "1", _scrText.Settings.Versification);
+
+            _provider.ResolveConflict(thread.Id, "accept");
+
+            Assert.That(ReloadThread(thread.Id).Status, Is.EqualTo(NoteStatus.Resolved));
+            // accept keeps the auto-merged (winning) verse text - no verse write.
+            string after = _scrText.GetText(vref, true, true);
+            Assert.That(after, Does.Contain("big village"));
+            Assert.That(after, Does.Not.Contain("small village"));
+        }
+
+        [Test]
+        public void ResolveConflict_Reject_WritesLoserTextAndResolvesThread()
+        {
+            CommentThread thread = SeedVerseTextConflict();
+            var vref = new VerseRef("MAT", "2", "1", _scrText.Settings.Versification);
+
+            _provider.ResolveConflict(thread.Id, "reject");
+
+            Assert.That(ReloadThread(thread.Id).Status, Is.EqualTo(NoteStatus.Resolved));
+            string after = _scrText.GetText(vref, true, true);
+            Assert.That(after, Does.Contain("small village")); // loser text written
+            Assert.That(after, Does.Not.Contain("big village"));
+        }
+
+        [Test]
+        public void ResolveConflict_NonConflictThread_Throws()
+        {
+            var mgr = CommentManager.Get(_scrText);
+            Comment normal = CommentTestHelper.CreateBasicComment(); // a normal note, not a conflict
+            mgr.AddComment(normal);
+            Assert.That(
+                () => _provider.ResolveConflict(normal.Thread, "accept"),
+                Throws.TypeOf<InvalidOperationException>()
+            );
+        }
+
+        [Test]
+        public void ResolveConflict_InvalidResolution_Throws()
+        {
+            CommentThread thread = SeedVerseTextConflict();
+            Assert.That(
+                () => _provider.ResolveConflict(thread.Id, "bogus"),
+                Throws.TypeOf<InvalidDataException>()
+            );
+        }
+
+        [Test]
+        public void ResolveConflict_ConflictNote_NeedsNoCreatorResolve()
+        {
+            // Headless safety: SaveEdits(owner: null) only touches the IComponent inside Alert.Show,
+            // which is gated by ThreadNeedsCreatorResolve. Pin that conflict threads never require it.
+            CommentThread thread = SeedVerseTextConflict();
+            Assert.That(thread.ThreadNeedsCreatorResolve, Is.False);
+        }
+
+        #endregion
     }
 }

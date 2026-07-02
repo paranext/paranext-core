@@ -276,6 +276,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             { "getCommentThreads", GetCommentThreads },
             { "createComment", CreateComment },
             { "addCommentToThread", AddCommentToThread },
+            { "resolveConflict", ResolveConflict },
             { "deleteComment", DeleteComment },
             { "updateComment", UpdateComment },
             { "setIsCommentThreadRead", SetIsCommentThreadRead },
@@ -662,6 +663,79 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         SendDataUpdateEvent(AllCommentDataTypes, "comment added to thread event");
 
         return newComment.Id;
+    }
+
+    /// <summary>
+    /// Applies a user's resolution to a verseText merge-conflict note and marks it resolved.
+    /// <c>"accept"</c> keeps the auto-merged (winning) verse text and resolves the note (no verse
+    /// write). <c>"reject"</c> writes the losing side's USFM into the verse via PT9's
+    /// <see cref="CommentEditHelper.SaveEdits"/>, then resolves the note.
+    /// </summary>
+    /// <exception cref="InvalidDataException">Unknown resolution, or the thread doesn't exist.</exception>
+    /// <exception cref="InvalidOperationException">Not a verseText conflict, or the user lacks permission.</exception>
+    public void ResolveConflict(string threadId, string resolution)
+    {
+        if (resolution != "accept" && resolution != "reject")
+            throw new InvalidDataException(
+                $"Invalid resolution '{resolution}' for ResolveConflict; expected 'accept' or 'reject'."
+            );
+
+        CommentThread? thread = _commentManager.Value.FindThread(threadId);
+        if (thread == null)
+            throw new InvalidDataException($"Thread with id {threadId} does not exist");
+
+        // v1 resolves verseText conflicts only.
+        Comment firstComment = thread.Comments[0];
+        if (
+            thread.Type != NoteType.Conflict
+            || firstComment.ConflictType != NoteConflictType.VerseTextConflict
+        )
+            throw new InvalidOperationException(
+                $"Thread '{threadId}' is not a verseText conflict and cannot be resolved here."
+            );
+
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+
+        // Permission: base resolve check, then restrict to admin OR the assigned resolver (NN4).
+        VerifyUserCanResolveThread(threadId);
+        if (
+            !IsUserProjectAdministrator()
+            && !IsThreadAssignedToCurrentUser(thread, scrText.User.Name)
+        )
+            throw new InvalidOperationException(
+                $"User '{scrText.User.Name}' cannot resolve conflict thread '{threadId}' - only a project administrator or the assigned user may resolve it."
+            );
+
+        // Reuse PT9's orchestration (grant edit -> splice loser USFM -> resolve -> restore) via SaveEdits.
+        var state = new ThreadEditState
+        {
+            Status = NoteStatus.Resolved,
+            ConflictResolution =
+                resolution == "reject"
+                    ? NoteConflictResolutions.Replaced
+                    : NoteConflictResolutions.None,
+        };
+        CommentEditHelper.SaveEdits(null, _commentManager.Value, thread, state, true, out _, out _);
+
+        // Refresh the comment list; on reject the verse text changed via a raw PutText that bypasses
+        // the Set* methods, so also refresh Scripture-text subscribers (the open editor).
+        SendDataUpdateEvent(AllCommentDataTypes, "conflict resolved event");
+        if (resolution == "reject")
+            SendDataUpdateEvent(AllScriptureDataTypes, "conflict reject wrote verse text event");
+    }
+
+    /// <summary>
+    /// True when the thread's most-recent assignment targets <paramref name="userName"/>.
+    /// </summary>
+    private static bool IsThreadAssignedToCurrentUser(CommentThread thread, string userName)
+    {
+        for (int i = thread.Comments.Count - 1; i >= 0; i--)
+        {
+            string? assigned = thread.Comments[i].AssignedUser;
+            if (assigned != null)
+                return string.Equals(assigned, userName, StringComparison.Ordinal);
+        }
+        return false;
     }
 
     /// <summary>
