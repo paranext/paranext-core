@@ -285,6 +285,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             { "canUserAddCommentToThread", CanUserAddCommentToThread },
             { "canUserAssignThread", CanUserAssignThread },
             { "canUserResolveThread", CanUserResolveThread },
+            { "getConflictResolutionOptions", GetConflictResolutionOptions },
             { "canUserEditOrDeleteComment", CanUserEditOrDeleteComment },
         };
 
@@ -683,7 +684,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// not add compensating logic here.
     /// </remarks>
     /// <exception cref="InvalidDataException">Unknown resolution, or the thread doesn't exist.</exception>
-    /// <exception cref="InvalidOperationException">Not a verseText conflict, the thread is already resolved, the user lacks permission, or the resolve was canceled.</exception>
+    /// <exception cref="InvalidOperationException">Not a verseText conflict, the thread is already resolved, the user lacks permission, the resolve was canceled, or resolution is 'reject' and the verse text has changed since the conflict was recorded (stale).</exception>
     public void ResolveConflict(string threadId, string resolution)
     {
         if (resolution != "accept" && resolution != "reject")
@@ -691,6 +692,64 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 $"Invalid resolution '{resolution}' for ResolveConflict; expected 'accept' or 'reject'."
             );
 
+        VerifyUserCanResolveConflict(threadId);
+
+        CommentThread? thread = _commentManager.Value.FindThread(threadId);
+        if (thread == null)
+            throw new InvalidDataException($"Thread with id {threadId} does not exist");
+
+        // Reject writes the loser text over the current verse; refuse when the verse was edited
+        // after the merge (stale) so post-merge edits can't be clobbered. Accept stays available
+        // as the exit path (it writes nothing).
+        if (resolution == "reject" && IsConflictVerseStale(thread))
+            throw new InvalidOperationException(
+                $"Conflict thread '{threadId}' cannot be rejected: the verse text has changed since the conflict was recorded. Only 'accept' (keep the current text) is available."
+            );
+
+        // Reuse PT9's orchestration (grant edit -> splice loser USFM -> resolve -> restore) via SaveEdits.
+        var state = new ThreadEditState
+        {
+            Status = NoteStatus.Resolved,
+            ConflictResolution =
+                resolution == "reject"
+                    ? NoteConflictResolutions.Replaced
+                    : NoteConflictResolutions.None,
+        };
+        // SaveEdits returns false when the user cancels resolving (the creator-resolve path). Surface
+        // that so we don't fire "resolved" events and report success for a thread that is still open.
+        bool resolved = CommentEditHelper.SaveEdits(
+            null,
+            _commentManager.Value,
+            thread,
+            state,
+            true,
+            out _,
+            out _
+        );
+        if (!resolved)
+            throw new InvalidOperationException(
+                $"Resolving conflict thread '{threadId}' was canceled; the thread was not resolved."
+            );
+
+        // Refresh the comment list; on reject the verse text changed via a raw PutText that bypasses
+        // the Set* methods, so also refresh Scripture-text subscribers (the open editor).
+        SendDataUpdateEvent(AllCommentDataTypes, "conflict resolved event");
+        if (resolution == "reject")
+            SendDataUpdateEvent(AllScriptureDataTypes, "conflict reject wrote verse text event");
+    }
+
+    /// <summary>
+    /// Verifies the current user may resolve the given verseText conflict thread right now:
+    /// the thread exists, is an unresolved verseText conflict, passes the base resolve check, and
+    /// the user is a project administrator or the assigned resolver. Throws with a specific
+    /// message otherwise. Shared by <see cref="ResolveConflict"/> (enforcement) and
+    /// <see cref="GetConflictResolutionOptions"/> (capability query).
+    /// </summary>
+    /// <exception cref="InvalidDataException">The thread doesn't exist.</exception>
+    /// <exception cref="InvalidOperationException">Not an unresolved verseText conflict, or the
+    /// user lacks permission.</exception>
+    private void VerifyUserCanResolveConflict(string threadId)
+    {
         CommentThread? thread = _commentManager.Value.FindThread(threadId);
         if (thread == null)
             throw new InvalidDataException($"Thread with id {threadId} does not exist");
@@ -725,37 +784,64 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             throw new InvalidOperationException(
                 $"User '{scrText.User.Name}' cannot resolve conflict thread '{threadId}' - only a project administrator or the assigned user may resolve it."
             );
+    }
 
-        // Reuse PT9's orchestration (grant edit -> splice loser USFM -> resolve -> restore) via SaveEdits.
-        var state = new ThreadEditState
+    /// <summary>
+    /// True when the conflict's verse can no longer be safely rewritten: the current verse text no
+    /// longer matches the merge-winner text recorded on the conflict comment (the verse was edited
+    /// after the merge), or the verse reference is invalid/unreadable. Mirrors the staleness guard
+    /// in PT9's CommentHtmlBuilder.GetResolutionOptions.
+    /// </summary>
+    private bool IsConflictVerseStale(CommentThread thread)
+    {
+        try
         {
-            Status = NoteStatus.Resolved,
-            ConflictResolution =
-                resolution == "reject"
-                    ? NoteConflictResolutions.Replaced
-                    : NoteConflictResolutions.None,
-        };
-        // SaveEdits returns false when the user cancels resolving (the creator-resolve path). Surface
-        // that so we don't fire "resolved" events and report success for a thread that is still open.
-        bool resolved = CommentEditHelper.SaveEdits(
-            null,
-            _commentManager.Value,
-            thread,
-            state,
-            true,
-            out _,
-            out _
-        );
-        if (!resolved)
-            throw new InvalidOperationException(
-                $"Resolving conflict thread '{threadId}' was canceled; the thread was not resolved."
-            );
+            var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+            VerseRef vref = thread.VerseRef;
+            if (!vref.Valid || vref.IsDefault)
+                return true;
+            // PT9 reads verse-only USFM via Parser.GetVerseUsfmText (CommentHtmlBuilder
+            // .GetResolutionOptions); ScrText.GetText returns the whole chapter, which never
+            // matches the verse-only text recorded on Comment.Verse. A missing verse -> stale.
+            string? currentRaw = scrText.Parser.GetVerseUsfmText(vref, true, true);
+            if (currentRaw == null)
+                return true;
+            // Regularize (PT9 does this to the recorded side) AND trim both sides: the parser emits a
+            // trailing space the recorded Comment.Verse may lack, and a pure leading/trailing
+            // whitespace difference is not a meaningful verse edit, so it must not count as stale.
+            string currentVerseUsfm = UsfmToken.RegularizeSpaces(currentRaw).Trim();
+            string conflictUsfm = UsfmToken.RegularizeSpaces(thread.Comments[0].Verse).Trim();
+            return currentVerseUsfm != conflictUsfm;
+        }
+        catch
+        {
+            // Unreadable text -> treat as stale: reject becomes unavailable, accept remains.
+            return true;
+        }
+    }
 
-        // Refresh the comment list; on reject the verse text changed via a raw PutText that bypasses
-        // the Set* methods, so also refresh Scripture-text subscribers (the open editor).
-        SendDataUpdateEvent(AllCommentDataTypes, "conflict resolved event");
-        if (resolution == "reject")
-            SendDataUpdateEvent(AllScriptureDataTypes, "conflict reject wrote verse text event");
+    /// <summary>
+    /// The resolution actions the current user may take on the given conflict thread.
+    /// "none" - not an unresolved verseText conflict, or the user lacks permission (see
+    /// <see cref="VerifyUserCanResolveConflict"/>). "accept" - permitted, but the verse was edited
+    /// after the merge (stale), so only accept (keep current text) is available. "acceptOrReject" -
+    /// permitted and the verse still matches the recorded merge winner. Never throws; this is the
+    /// capability query for <see cref="ResolveConflict"/>.
+    /// </summary>
+    public string GetConflictResolutionOptions(string threadId)
+    {
+        try
+        {
+            VerifyUserCanResolveConflict(threadId);
+            CommentThread? thread = _commentManager.Value.FindThread(threadId);
+            if (thread == null)
+                return "none";
+            return IsConflictVerseStale(thread) ? "accept" : "acceptOrReject";
+        }
+        catch
+        {
+            return "none";
+        }
     }
 
     /// <summary>

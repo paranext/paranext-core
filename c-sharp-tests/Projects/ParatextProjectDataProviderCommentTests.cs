@@ -2186,6 +2186,10 @@ namespace TestParanextDataProvider.Projects
         private const string MatTwoWinnerUsfm =
             "\\id MAT\n\\c 2\n\\v 1 When Jesus was born in the big village of Bethlehem in Judea, Herod was king.\n";
 
+        // The winner verse edited AFTER the merge (big -> enormous) - makes the conflict stale.
+        private const string MatTwoEditedUsfm =
+            "\\id MAT\n\\c 2\n\\v 1 When Jesus was born in the enormous village of Bethlehem in Judea, Herod was king.\n";
+
         // Delegates to the static overload (below) to avoid duplicating the seeding logic.
         private CommentThread SeedVerseTextConflict() => SeedVerseTextConflict(_scrText, null);
 
@@ -2648,6 +2652,111 @@ namespace TestParanextDataProvider.Projects
                 CommentManager.Get(nonAdmin).FindThread(thread.Id).Status,
                 Is.Not.EqualTo(NoteStatus.Resolved)
             );
+        }
+
+        // --- getConflictResolutionOptions capability + reject-only staleness guard ----------------
+
+        [Test]
+        public void GetConflictResolutionOptions_AdminFreshConflict_AcceptOrReject()
+        {
+            CommentThread thread = SeedVerseTextConflict();
+            Assert.That(
+                _provider.GetConflictResolutionOptions(thread.Id),
+                Is.EqualTo("acceptOrReject")
+            );
+        }
+
+        [Test]
+        public void GetConflictResolutionOptions_ResolvedConflict_None()
+        {
+            CommentThread thread = SeedVerseTextConflict();
+            _provider.ResolveConflict(thread.Id, "accept");
+            Assert.That(_provider.GetConflictResolutionOptions(thread.Id), Is.EqualTo("none"));
+        }
+
+        [Test]
+        public void GetConflictResolutionOptions_NormalThread_None()
+        {
+            var mgr = CommentManager.Get(_scrText);
+            Comment normal = CommentTestHelper.CreateBasicComment();
+            mgr.AddComment(normal);
+            mgr.SaveUser(normal.User, false);
+            Assert.That(_provider.GetConflictResolutionOptions(normal.Thread), Is.EqualTo("none"));
+        }
+
+        [Test]
+        public void GetConflictResolutionOptions_NonAdminAssignee_AcceptOrReject()
+        {
+            using var nonAdmin = new NonAdminDummyScrText();
+            var details = CreateProjectDetails(nonAdmin);
+            ParatextProjects.FakeAddProject(details, nonAdmin);
+            var provider = new DummyParatextProjectDataProvider(
+                PdpName + "-options-assignee",
+                Client,
+                details,
+                ParatextProjects
+            );
+            CommentThread thread = SeedVerseTextConflict(nonAdmin, nonAdmin.User.Name);
+            Assert.That(
+                provider.GetConflictResolutionOptions(thread.Id),
+                Is.EqualTo("acceptOrReject")
+            );
+        }
+
+        [Test]
+        public void GetConflictResolutionOptions_NonAdminNonAssignee_None()
+        {
+            using var nonAdmin = new NonAdminDummyScrText();
+            var details = CreateProjectDetails(nonAdmin);
+            ParatextProjects.FakeAddProject(details, nonAdmin);
+            var provider = new DummyParatextProjectDataProvider(
+                PdpName + "-options-denied",
+                Client,
+                details,
+                ParatextProjects
+            );
+            CommentThread thread = SeedVerseTextConflict(nonAdmin, null);
+            Assert.That(provider.GetConflictResolutionOptions(thread.Id), Is.EqualTo("none"));
+        }
+
+        [Test]
+        public void GetConflictResolutionOptions_StaleVerse_AcceptOnly()
+        {
+            CommentThread thread = SeedVerseTextConflict();
+            _scrText.PutText(40, 0, false, MatTwoEditedUsfm, null); // edit the verse post-merge
+            Assert.That(_provider.GetConflictResolutionOptions(thread.Id), Is.EqualTo("accept"));
+        }
+
+        [Test]
+        public void ResolveConflict_RejectStaleVerse_ThrowsAndKeepsEditedText()
+        {
+            CommentThread thread = SeedVerseTextConflict();
+            _scrText.PutText(40, 0, false, MatTwoEditedUsfm, null);
+            var vref = new VerseRef("MAT", "2", "1", _scrText.Settings.Versification);
+
+            Assert.That(
+                () => _provider.ResolveConflict(thread.Id, "reject"),
+                Throws.TypeOf<InvalidOperationException>().With.Message.Contain("has changed")
+            );
+            Assert.That(
+                ReloadThread(thread.Id).Status,
+                Is.Not.EqualTo(NoteStatus.Resolved),
+                "a refused stale reject must leave the thread unresolved"
+            );
+            Assert.That(_scrText.GetText(vref, true, true), Does.Contain("enormous village"));
+        }
+
+        [Test]
+        public void ResolveConflict_AcceptStaleVerse_SucceedsAndKeepsEditedText()
+        {
+            CommentThread thread = SeedVerseTextConflict();
+            _scrText.PutText(40, 0, false, MatTwoEditedUsfm, null);
+            var vref = new VerseRef("MAT", "2", "1", _scrText.Settings.Versification);
+
+            _provider.ResolveConflict(thread.Id, "accept");
+
+            Assert.That(ReloadThread(thread.Id).Status, Is.EqualTo(NoteStatus.Resolved));
+            Assert.That(_scrText.GetText(vref, true, true), Does.Contain("enormous village"));
         }
 
         #endregion

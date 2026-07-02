@@ -114,6 +114,12 @@ declare module 'legacy-comment-manager' {
   // #region Selector Types
 
   /**
+   * The resolution actions the current user may take on a conflict thread. Must stay textually
+   * identical to the union declared in platform-bible-react's conflict-note-card.types.ts.
+   */
+  export type ConflictResolutionOptions = 'none' | 'accept' | 'acceptOrReject';
+
+  /**
    * Selector for retrieving comment threads
    *
    * All properties are optional - if none are specified, returns all threads
@@ -303,8 +309,27 @@ declare module 'legacy-comment-manager' {
        * @throws If the thread doesn't exist or isn't a `verseText` conflict
        * @throws If the conflict thread is already resolved
        * @throws If the current user is neither a project administrator nor the assigned resolver
+       * @throws If resolution is 'reject' and the verse text has changed since the conflict was
+       *   recorded (stale)
        */
       resolveConflict(threadId: string, resolution: 'accept' | 'reject'): Promise<void>;
+
+      /**
+       * The resolution actions the current user may take on the given conflict thread — the
+       * capability query for {@link resolveConflict}. Never rejects; failures map to `'none'`.
+       *
+       * - `'none'`: not an unresolved `verseText` conflict, or the current user is neither a project
+       *   administrator nor the assigned resolver. UIs should hide the accept/reject controls
+       *   entirely.
+       * - `'accept'`: the user may resolve, but the verse has been edited since the conflict was
+       *   recorded (stale), so only `'accept'` (keep the current text) is available —
+       *   `resolveConflict(threadId, 'reject')` would throw.
+       * - `'acceptOrReject'`: fully available.
+       *
+       * @param threadId The conflict thread to query
+       * @returns The available resolution actions
+       */
+      getConflictResolutionOptions(threadId: string): Promise<ConflictResolutionOptions>;
 
       /**
        * Deletes a comment by its ID
