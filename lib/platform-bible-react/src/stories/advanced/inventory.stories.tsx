@@ -28,6 +28,9 @@ const localizedStrings = {
   '%webView_inventory_scope_currentBook%': 'Current book',
   '%webView_inventory_scope_chapter%': 'Current chapter',
   '%webView_inventory_scope_verse%': 'Current verse',
+  // Shown by the results table when a filter matches nothing. Missing here previously, so the raw
+  // key `%webView_inventory_no_results%` leaked into the UI once a filter emptied the list.
+  '%webView_inventory_no_results%': 'No results.',
 };
 
 const sampleInventoryItems: InventorySummaryItem[] = [
