@@ -1,0 +1,201 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+import { Button } from '@/components/shadcn-ui/button';
+import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/shadcn-ui/tooltip';
+import { Kbd, KbdGroup } from '@/components/shadcn-ui/kbd';
+import { Info, Save } from 'lucide-react';
+import { ExampleBlock, ExampleBlockGroup } from '@/storybook/example-block.component';
+
+<Meta title="Guidelines/Tooltips" />
+
+# Tooltips
+
+Tooltips are required for every icon button and any control without a visible label — including
+toolbar items. Tooltips are supplementary: if the tooltip would only repeat the visible label,
+omit it. Keep tooltip text short enough to scan at a glance.
+
+## Required contexts
+
+Tooltips are required for every icon button and any control without a visible label — including
+toolbar items.
+
+<ExampleBlockGroup>
+  <ExampleBlock
+    variant="avoid"
+    previewClassName="tw:pb-8"
+    preview={
+<TooltipProvider>
+<Button variant="outline" size="icon" aria-label="Save">
+<Save />
+</Button>
+</TooltipProvider>
+}
+  >
+    This icon button lacks a tooltip, so users can't learn what it means.
+  </ExampleBlock>
+
+  <ExampleBlock
+    title="Avoid redundant tooltips"
+    variant="avoid"
+    previewClassName="tw:pb-8"
+    preview={
+<TooltipProvider>
+<Tooltip open>
+<TooltipTrigger asChild>
+<Button>Save</Button>
+</TooltipTrigger>
+<TooltipContent side="bottom">Save</TooltipContent>
+</Tooltip>
+</TooltipProvider>
+}
+  >
+    The tooltip only repeats the visible label — omit it.
+  </ExampleBlock>
+</ExampleBlockGroup>
+
+## Keep text short
+
+Tooltip text must be short enough to scan at a glance. A tooltip is a hint, not an explanation.
+
+<ExampleBlockGroup>
+  <ExampleBlock
+    variant="avoid"
+    previewClassName="tw:pb-16"
+    preview={
+<TooltipProvider>
+<Tooltip open>
+<TooltipTrigger asChild>
+<Button variant="outline" size="icon" aria-label="Save">
+<Save />
+</Button>
+</TooltipTrigger>
+<TooltipContent side="bottom" className="tw:max-w-[200px]">Click this button to apply your changes and save the current document</TooltipContent>
+</Tooltip>
+</TooltipProvider>
+}
+  >
+    Too long to scan — a tooltip is a hint, not a sentence.
+  </ExampleBlock>
+
+  <ExampleBlock
+    variant="prefer"
+    previewClassName="tw:pb-16"
+    preview={
+<TooltipProvider>
+<Tooltip open>
+<TooltipTrigger asChild>
+<Button variant="outline" size="icon" aria-label="Save">
+<Save />
+</Button>
+</TooltipTrigger>
+<TooltipContent side="bottom">Save changes</TooltipContent>
+</Tooltip>
+</TooltipProvider>
+}
+  >
+    The tooltip adds meaning an icon alone cannot convey, and it's short enough to read at a glance.
+  </ExampleBlock>
+</ExampleBlockGroup>
+
+## Keyboard shortcuts in tooltips
+
+Render keyboard shortcut hints using the `Kbd` component, not plain text in parentheses. The
+`Kbd` styling provides sufficient visual distinction on its own — no parentheses needed.
+
+<ExampleBlockGroup>
+  <ExampleBlock variant="avoid" preview={<span>Undo (⌘Z)</span>} code="Undo (⌘Z)">
+    Parentheses blend into prose and don't signal "keyboard shortcut" to the reader.
+  </ExampleBlock>
+
+  <ExampleBlock
+    variant="prefer"
+    preview={<span>Undo <KbdGroup><Kbd>⌘</Kbd><Kbd>Z</Kbd></KbdGroup></span>}
+    code="Undo <KbdGroup><Kbd>⌘</Kbd><Kbd>Z</Kbd></KbdGroup>"
+  >
+    The <code>Kbd</code> component provides visual distinction without extra punctuation.
+  </ExampleBlock>
+</ExampleBlockGroup>
+
+For which symbol or word to use per key on each OS, see [Keyboard shortcuts](./keyboard-shortcuts.mdx).
+
+---
+
+## When to use a tooltip
+
+Use a `Tooltip` when the extra information is purely supplemental — the UI is fully usable without
+it, it is triggered only by hover or keyboard focus, and it contains no interactive elements.
+
+### Tooltip-like overlays with redundant links
+
+<ExampleBlockGroup>
+  <ExampleBlock
+    variant="neutral"
+    title="Currently valid"
+    previewClassName="tw:pb-12"
+    preview={
+<TooltipProvider>
+<Tooltip open>
+<TooltipTrigger asChild>
+<Button variant="ghost" size="icon" aria-label="API key info">
+<Info />
+</Button>
+</TooltipTrigger>
+<TooltipContent side="bottom">Used to authenticate requests.</TooltipContent>
+</Tooltip>
+</TooltipProvider>
+}
+  >
+    A tooltip with supplemental text only — no link needed.
+  </ExampleBlock>
+
+  <ExampleBlock
+    variant="under-consideration"
+    previewClassName="tw:pb-12"
+    preview={
+<div className="tw:relative tw:inline-flex tw:items-center tw:justify-center">
+<Button variant="ghost" size="icon" aria-label="API key info">
+<Info />
+</Button>
+<div className="tw:absolute tw:top-full tw:left-1/2 tw:-translate-x-1/2 tw:mt-2 tw:rounded-md tw:border tw:border-border tw:bg-popover tw:px-3 tw:py-1.5 tw:text-xs tw:text-popover-foreground tw:shadow-md tw:whitespace-nowrap">
+Used to authenticate requests.{' '}<a href="#" className="tw:text-primary tw:underline">Learn more →</a>
+</div>
+</div>
+}
+  >
+    A hover-triggered overlay that looks and feels like a tooltip but can contain a
+    single supplemental navigation link.
+  </ExampleBlock>
+</ExampleBlockGroup>
+
+**This pattern is not yet adopted.** It must not be implemented without explicit UX sign-off.
+Patterns like this need agreement across the team and a formal addition to the style guide;
+ad-hoc implementations by individual contributors are not acceptable.
+
+**If adopted, the requirements would be:**
+
+- Must use a component with an appropriate ARIA role that supports interactive content (e.g. a
+  hover-card or popover-style overlay) — **not** the `Tooltip` component, which carries
+  `role="tooltip"` and cannot safely contain links.
+- The link must be **redundant**: the same destination must already be reachable by another path
+  in the UI. The overlay link is a shortcut, never the only route. This also makes the
+  keyboard-accessibility concern acceptable — users who cannot reach the hover-triggered link can
+  always navigate to the destination the regular way.
+- A single link only. Multiple links or other interactive controls push the pattern into standard
+  Popover territory.
+
+---
+
+## When to use a popover instead
+
+Use a `Popover` when any of the following apply:
+
+- The content requires keyboard focus, multiple controls, links, form fields, or any meaningful interaction.
+- The content must stay open while the user acts on it.
+
+The tooltip role is not in the tab order and cannot contain interactive elements. Our `Tooltip`
+component is Radix-based — it carries `role="tooltip"` and dismisses on pointer-leave and blur.
+A link inside it cannot be reached by keyboard and is nearly unreachable by mouse before the
+tooltip closes.
+
+A concrete example: an info icon next to "API key" could show a tooltip saying
+"Used to authenticate requests." But if the panel also includes a _Copy key_ button,
+that interaction belongs in a click-triggered popover, not a tooltip.
