@@ -2190,6 +2190,15 @@ namespace TestParanextDataProvider.Projects
         private const string MatTwoEditedUsfm =
             "\\id MAT\n\\c 2\n\\v 1 When Jesus was born in the enormous village of Bethlehem in Judea, Herod was king.\n";
 
+        // The winner verse re-saved with ONLY interior whitespace changed (extra spaces between two
+        // words). RegularizeSpaces().Trim() on both sides collapses this away, so it is NOT a real
+        // verse edit and the conflict must stay fully resolvable.
+        private const string MatTwoWinnerWhitespaceUsfm =
+            "\\id MAT\n\\c 2\n\\v 1 When Jesus was born in the big   village of Bethlehem in Judea, Herod was king.\n";
+
+        // Chapter 2 with NO verse 1 at all, so reading MAT 2:1 yields no USFM (unreadable verse).
+        private const string MatTwoMissingVerseUsfm = "\\id MAT\n\\c 2\n";
+
         // Delegates to the static overload (below) to avoid duplicating the seeding logic.
         private CommentThread SeedVerseTextConflict() => SeedVerseTextConflict(_scrText, null);
 
@@ -2613,6 +2622,31 @@ namespace TestParanextDataProvider.Projects
         {
             CommentThread thread = SeedVerseTextConflict();
             _scrText.PutText(40, 0, false, MatTwoEditedUsfm, null); // edit the verse post-merge
+            Assert.That(_provider.GetConflictResolutionOptions(thread.Id), Is.EqualTo("accept"));
+        }
+
+        [Test]
+        public void GetConflictResolutionOptions_WhitespaceOnlyEdit_StillAcceptOrReject()
+        {
+            // Pins the documented, deliberate PT9 divergence: IsConflictVerseStale RegularizeSpaces()
+            // .Trim()'s BOTH the current and recorded verse USFM, so re-saving the winner with only
+            // interior whitespace differences is NOT counted as a stale edit (reject stays available).
+            CommentThread thread = SeedVerseTextConflict();
+            _scrText.PutText(40, 0, false, MatTwoWinnerWhitespaceUsfm, null); // same winner, extra spaces
+            Assert.That(
+                _provider.GetConflictResolutionOptions(thread.Id),
+                Is.EqualTo("acceptOrReject")
+            );
+        }
+
+        [Test]
+        public void GetConflictResolutionOptions_UnreadableVerse_AcceptOnly()
+        {
+            // Pins the invalid/unreadable-verse branch of IsConflictVerseStale: when MAT 2:1 can no
+            // longer be read (its verse marker is gone), the current verse USFM can't match the
+            // recorded merge winner, so reject is withdrawn and only accept remains.
+            CommentThread thread = SeedVerseTextConflict();
+            _scrText.PutText(40, 0, false, MatTwoMissingVerseUsfm, null); // chapter 2 without verse 1
             Assert.That(_provider.GetConflictResolutionOptions(thread.Id), Is.EqualTo("accept"));
         }
 
