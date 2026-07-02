@@ -139,14 +139,17 @@ check. Measure containment against the surface's **rendered content node** (the 
 ```ts
 // `contentEl` is the surface's PORTALED content node (e.g. the PopoverContent element).
 function focusMovedIntoForeignFrame(contentEl: HTMLElement): boolean {
+  // Distinguish "focus moved into an iframe in our page" from "the whole window lost focus"
+  // (alt-tab, DevTools, another app) with document.hasFocus(): it stays true while focus is
+  // anywhere in our top-level page — including a child iframe — and flips to false only when
+  // the OS window itself loses focus. Do NOT rely on activeElement resetting to <body> on blur;
+  // Chromium/Electron often leave it on the last-focused element, so that check misses some
+  // window switches and can dismiss on a plain alt-tab.
+  if (!document.hasFocus()) return false; // plain window switch — not a move into a WebView
   const focused = document.activeElement;
-  // Window lost focus entirely (alt-tab, DevTools, browser chrome, another window):
-  // activeElement falls back to <body> or null. That is NOT a move into a sibling
-  // WebView, so do not dismiss — otherwise surfaces vanish on every window switch.
-  if (!focused || focused === document.body) return false;
-  // Focus landed on a concrete element (usually an <iframe>). Dismiss only if the
-  // surface's own content does not contain it.
-  return !contentEl.contains(focused);
+  // Focus is still in our page, on the element that took it — for a cross-origin WebView that
+  // is the <iframe> element itself. Dismiss only if the surface's own content doesn't contain it.
+  return !!focused && !contentEl.contains(focused);
 }
 // On window 'blur', if focusMovedIntoForeignFrame(contentEl) → dismiss (Light & Click-away only).
 ```
