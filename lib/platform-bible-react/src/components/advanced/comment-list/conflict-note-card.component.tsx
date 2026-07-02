@@ -15,7 +15,7 @@ import {
 } from '@/components/shadcn-ui/tooltip';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { sanitizeHtml } from 'platform-bible-utils';
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { ConflictNoteCardProps, ConflictResolution } from './conflict-note-card.types';
 
 const VERSE_TEXT_CONFLICT = 'verseText';
@@ -59,6 +59,10 @@ export function ConflictNoteCard({
 }: ConflictNoteCardProps) {
   const [internalResolution, setInternalResolution] = useState<ConflictResolution>('accept');
   const resolution = selectedResolution ?? internalResolution;
+  // Stable id linking the disabled Reject option to its visually-hidden explanation via
+  // aria-describedby, so screen readers announce why Reject is unavailable (the visual Tooltip
+  // is pointer-only and never reaches assistive tech).
+  const staleNoticeId = useId();
 
   // When reject is unavailable (stale verse) force the visible selection to 'accept' so the
   // selector can never display a choice the Resolve button would be refused for.
@@ -97,6 +101,12 @@ export function ConflictNoteCard({
   const resultText =
     effectiveResolution === 'reject' ? comment.rejectedResultText : comment.resultText;
 
+  // Shared between the visible Tooltip and the visually-hidden aria-describedby target so both
+  // surfaces always announce the same reason.
+  const staleNotice =
+    localizedStrings['%conflict_note_stale_notice%'] ??
+    'The verse has been edited since this conflict was recorded, so rejecting is no longer available. Accept keeps the current text.';
+
   return (
     <div className="tw:flex tw:flex-col tw:gap-3 tw:text-sm">
       <p>
@@ -127,15 +137,18 @@ export function ConflictNoteCard({
                       {/* span wrapper so the tooltip still receives pointer events over the
                           disabled item */}
                       <span className="tw:block">
-                        <SelectItem value="reject" disabled>
+                        {/* aria-describedby links the option to the visually-hidden notice below
+                            so assistive tech announces why Reject is disabled; Radix's Select.Item
+                            forwards the attribute onto its role="option" element. */}
+                        <SelectItem value="reject" disabled aria-describedby={staleNoticeId}>
                           {localizedStrings['%conflict_note_reject%'] ?? 'Reject'}
                         </SelectItem>
+                        <span id={staleNoticeId} className="tw:sr-only">
+                          {staleNotice}
+                        </span>
                       </span>
                     </TooltipTrigger>
-                    <TooltipContent side="right">
-                      {localizedStrings['%conflict_note_stale_notice%'] ??
-                        'The verse has been edited since this conflict was recorded, so rejecting is no longer available. Accept keeps the current text.'}
-                    </TooltipContent>
+                    <TooltipContent side="right">{staleNotice}</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
               ) : (
