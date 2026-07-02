@@ -189,6 +189,27 @@ describe('useScrollGroupScrRef versification conversion', () => {
     await waitFor(() => expect(result.current[0]).toEqual(convertedFromOther));
   });
 
+  it('recomputes the conversion seed when only the source project changes', async () => {
+    getScrRefForProject.mockResolvedValue({ book: 'PSA', chapterNum: 146, verseNum: 1 });
+    const { useScrollGroupScrRef } = await import(
+      '@renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook'
+    );
+
+    const { result } = renderHook(() => useScrollGroupScrRef(0, () => true, 'targetProj'));
+    await waitFor(() =>
+      expect(result.current[0]).toEqual({ book: 'PSA', chapterNum: 146, verseNum: 1 }),
+    );
+
+    getScrRefForProjectSync.mockClear();
+    // Same numbers, different source project: compareScrRefs is versification-blind so scrRefLocal's
+    // identity is unchanged; only the source flips. The seed memo must still recompute.
+    act(() =>
+      lastScrRefUpdateHandler?.({ scrRef: rawRef, scrollGroupId: 0, sourceProjectId: 'otherProj' }),
+    );
+
+    expect(getScrRefForProjectSync).toHaveBeenCalled();
+  });
+
   it('re-converts the followed ref when a versification-changed event fires', async () => {
     const first = { book: 'PSA', chapterNum: 146, verseNum: 1, versificationStr: '4' };
     const second = { book: 'PSA', chapterNum: 145, verseNum: 1, versificationStr: '5' };
