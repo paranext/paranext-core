@@ -68,6 +68,12 @@ declare module 'shared/services/scroll-group.service-model' {
   /** Name to use when creating a network event that is fired when webViews are updated */
   export const EVENT_NAME_ON_DID_UPDATE_SCR_REF: 'scrollGroup:onDidUpdateScrRef';
   /**
+   * Name to use when creating a network event that is fired when a tracked project's versification
+   * changes. Host↔hook INTERNAL: intentionally NOT declared in the public `NetworkEvents` map (not
+   * part of the `@papi/*` surface).
+   */
+  export const EVENT_NAME_ON_DID_CHANGE_VERSIFICATION: 'scrollGroup:onDidChangeVersification';
+  /**
    * Combination of a {@link ScrollGroupId} and a SerializedVerseRef. If this value is a number, that
    * means this should be synced with the scroll group sharing that number. If this value is an
    * object, that means it is an independent Scripture reference and should not be synced with any
@@ -8150,6 +8156,14 @@ declare module 'renderer/services/scroll-group.service-host' {
   export const availableScrollGroupIds: (number | undefined)[];
   /** Event that emits with information about a changed Scripture Reference for a scroll group */
   export const onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo>;
+  /**
+   * Event that emits when a tracked project's versification changes mid-session (see
+   * {@link ensureVersificationSubscribed}). Does NOT emit for the initial subscription load — only for
+   * a genuine change.
+   */
+  export const onDidChangeVersification: PlatformEvent<{
+    projectId: string;
+  }>;
   /** See {@link IScrollGroupRemoteService.getScrRef} */
   export function getScrRefSync(scrollGroupId?: ScrollGroupId): SerializedVerseRef;
   /**
