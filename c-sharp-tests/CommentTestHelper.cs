@@ -132,6 +132,53 @@ internal static class CommentTestHelper
     }
 
     /// <summary>
+    /// Creates a verseText merge-conflict Comment for testing rejected/accepted/result decoding.
+    /// The rejected (losing) side inserted "small"; the accepted (winning) side inserted "big".
+    /// </summary>
+    internal static Comment CreateVerseTextConflictComment()
+    {
+        XmlDocument contentsDoc = new XmlDocument();
+        contentsDoc.LoadXml(
+            """
+            <Contents>Two different people edited this verse. The change shown here (in red) is not in the current copy of the text.<p>
+                <language name="es-015-vaidika">
+                <p>\v 1 When Jesus was born in the <bold><color name="red">small </color></bold>village of Bethlehem in Judea, Herod was king.</p>
+                </language>
+            </p>
+            </Contents>
+            """
+        );
+
+        DummyUser user = new DummyUser("Tim Steenwyk");
+        Comment testComment = new Comment(user);
+        testComment.Thread = "5f5ea40f";
+        testComment.VerseRefStr = "MAT 2:1";
+        testComment.Date = "2011-08-16T15:49:18.4019847-04:00";
+        testComment.Status = NoteStatus.Todo;
+        testComment.HideInTextWindow = false;
+        testComment.Contents = contentsDoc.DocumentElement;
+        testComment.Type = NoteType.Conflict;
+        testComment.ConflictType = NoteConflictType.VerseTextConflict;
+        testComment.AcceptedChangeXmlStr =
+            """<p><language name="es-015-vaidika"><p>\v 1 When Jesus was born in the <bold><color name="red">big </color></bold>village of Bethlehem in Judea, Herod was king.</p></language></p>""";
+        testComment.Verse =
+            @"\v 1 When Jesus was born in the big village of Bethlehem in Judea, Herod was king.";
+        return testComment;
+    }
+
+    /// <summary>
+    /// A verseText merge-conflict Comment with NO common ancestor (parent == null in the merger):
+    /// Verse (result) is set but AcceptedChangeXmlStr is not, mirroring two people independently
+    /// drafting the same previously-absent verse. Exercises the acceptedText-absent path.
+    /// </summary>
+    internal static Comment CreateVerseTextConflictCommentNoAncestor()
+    {
+        Comment c = CreateVerseTextConflictComment();
+        c.AcceptedChangeXmlStr = null; // no ancestor → no accepted-side diff
+        return c;
+    }
+
+    /// <summary>
     /// Internal dummy user class for testing purposes
     /// </summary>
     private class DummyUser : ParatextUser

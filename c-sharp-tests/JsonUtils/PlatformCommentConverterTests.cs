@@ -216,6 +216,100 @@ internal class PlatformCommentConverterTests : PapiTestBase
     }
 
     [Test]
+    public void Serialize_VerseTextConflict_IncludesRejectedAcceptedResultText()
+    {
+        Comment testComment = CommentTestHelper.CreateVerseTextConflictComment();
+        var (commentWrapper, _) = CreateCommentWithThread(testComment);
+
+        var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
+            commentWrapper,
+            _serializationOptions
+        );
+
+        // All three keys are present in the JSON payload
+        Assert.That(json, Does.Contain(@"""rejectedText"":"));
+        Assert.That(json, Does.Contain(@"""acceptedText"":"));
+        Assert.That(json, Does.Contain(@"""resultText"":"));
+
+        // rejectedText: losing side inserted "small" (rendered <u>), message paragraph excluded
+        Assert.That(commentWrapper.RejectedText, Does.Contain("small"));
+        Assert.That(commentWrapper.RejectedText, Does.Contain("<u>"));
+        Assert.That(commentWrapper.RejectedText, Does.Not.Contain("Two different people"));
+
+        // acceptedText: winning side inserted "big"
+        Assert.That(commentWrapper.AcceptedText, Does.Contain("big"));
+        Assert.That(commentWrapper.AcceptedText, Does.Contain("<u>"));
+
+        // resultText: plain USFM of the resulting verse (the accepted/winner text)
+        Assert.That(
+            commentWrapper.ResultText,
+            Does.Contain(@"\v 1 When Jesus was born in the big village")
+        );
+
+        // rejectedResultText = the loser's plain USFM (reject outcome): keeps "small", not "big"
+        Assert.That(json, Does.Contain(@"""rejectedResultText"":"));
+        Assert.That(commentWrapper.RejectedResultText, Does.Contain("small village"));
+        Assert.That(commentWrapper.RejectedResultText, Does.Not.Contain("big"));
+        // resultText (accept outcome) is the winner: "big"
+        Assert.That(commentWrapper.ResultText, Does.Contain("big village"));
+    }
+
+    [Test]
+    public void Serialize_VerseTextConflictNoAncestor_OmitsAcceptedTextButKeepsOtherConflictFields()
+    {
+        // A verseText conflict where parent == null in the merger: Verse is set but
+        // AcceptedChangeXmlStr is not, so acceptedText must be absent from the JSON payload.
+        Comment testComment = CommentTestHelper.CreateVerseTextConflictCommentNoAncestor();
+        var (commentWrapper, _) = CreateCommentWithThread(testComment);
+
+        var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
+            commentWrapper,
+            _serializationOptions
+        );
+
+        Assert.That(json, Does.Not.Contain(@"""acceptedText"":"));
+        Assert.That(json, Does.Contain(@"""rejectedText"":"));
+        Assert.That(json, Does.Contain(@"""resultText"":"));
+        Assert.That(json, Does.Contain(@"""rejectedResultText"":"));
+    }
+
+    [Test]
+    public void Serialize_NormalComment_OmitsConflictTextFields()
+    {
+        Comment testComment = CommentTestHelper.CreateBasicComment();
+        var (commentWrapper, _) = CreateCommentWithThread(testComment);
+
+        var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
+            commentWrapper,
+            _serializationOptions
+        );
+
+        Assert.That(json, Does.Not.Contain("rejectedText"));
+        Assert.That(json, Does.Not.Contain("acceptedText"));
+        Assert.That(json, Does.Not.Contain("resultText"));
+        Assert.That(commentWrapper.RejectedText, Is.Null);
+    }
+
+    [Test]
+    public void Serialize_NonVerseTextConflict_OmitsConflictTextFields()
+    {
+        // CreateConflictComment sets Type=Conflict but leaves ConflictType unset (not VerseTextConflict).
+        Comment testComment = CommentTestHelper.CreateConflictComment();
+        var (commentWrapper, _) = CreateCommentWithThread(testComment);
+
+        var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
+            commentWrapper,
+            _serializationOptions
+        );
+
+        Assert.That(json, Does.Not.Contain("rejectedText"));
+        Assert.That(json, Does.Not.Contain("acceptedText"));
+        Assert.That(json, Does.Not.Contain("resultText"));
+        // Prove the ConflictType operand of the gate (not just Type) — this note is Type=Conflict.
+        Assert.That(commentWrapper.RejectedText, Is.Null);
+    }
+
+    [Test]
     public void Deserialize_InvalidContents_ThrowsInvalidDataException()
     {
         var json = "{\"contents\": \"<p>unclosed\", \"user\": \"tester\", \"thread\": \"t3\"}";

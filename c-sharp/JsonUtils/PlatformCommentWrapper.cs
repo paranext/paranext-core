@@ -210,6 +210,86 @@ public class PlatformCommentWrapper
     }
 
     /// <summary>
+    /// True when this is a verse-text merge-conflict note — the only conflict type for which we surface
+    /// discrete rejected/accepted/result text in v1.
+    /// </summary>
+    private bool IsVerseTextConflict =>
+        _comment.Type == NoteType.Conflict
+        && _comment.ConflictType == NoteConflictType.VerseTextConflict;
+
+    /// <summary>
+    /// For a verseText conflict note, the HTML diff of the rejected (losing) side, using PT9's
+    /// <c>&lt;u&gt;</c> (inserted) / <c>&lt;s&gt;</c> (deleted) markup. The leading conflict-message
+    /// paragraph is skipped so only the verse diff remains. Null for any other note.
+    /// </summary>
+    public string? RejectedText =>
+        IsVerseTextConflict
+            ? RenderConflictSideHtml(_comment.Contents, skipLeadingMessage: true)
+            : null;
+
+    /// <summary>
+    /// For a verseText conflict note, the HTML diff of the accepted (winning) side. Null for any
+    /// other note, and also null for a verseText conflict with no common ancestor (when
+    /// <c>AcceptedChangeXmlStr</c> was never set because <c>parent == null</c> in the merger).
+    /// Consumers must treat this as optional even on verseText conflict notes.
+    /// </summary>
+    public string? AcceptedText =>
+        IsVerseTextConflict
+            ? RenderConflictSideHtml(_comment.AcceptedChangeXml, skipLeadingMessage: false)
+            : null;
+
+    /// <summary>
+    /// For a verseText conflict note, the resulting verse USFM already written into the text at merge time
+    /// (equals the accepted side in v1). Plain USFM, no diff markup. Null for any other note.
+    /// </summary>
+    public string? ResultText => IsVerseTextConflict ? _comment.Verse : null;
+
+    /// <summary>
+    /// For a verseText conflict note, the resulting verse USFM if the change is REJECTED — the losing
+    /// side's plain USFM, decoded by ParatextData's public <c>GetDiffVerseUsfm</c> (the exact value
+    /// PT-4029's reject-write splices into the verse). Pairs with <see cref="ResultText"/> (the accept
+    /// outcome) so the card's Result preview can track the Accept/Reject choice. Null for any other note.
+    /// </summary>
+    public string? RejectedResultText
+    {
+        get
+        {
+            if (!IsVerseTextConflict)
+                return null;
+            var usfm = CommentEditHelper.GetDiffVerseUsfm(
+                _comment.Contents,
+                getChangedVersion: true
+            );
+            return string.IsNullOrEmpty(usfm) ? null : usfm;
+        }
+    }
+
+    /// <summary>
+    /// Renders one side of a conflict (its diff XML) to HTML by reusing ParatextData's public
+    /// <c>GetContentsAsHtml</c> renderer via its <c>contentOverride</c> parameter. When
+    /// <paramref name="skipLeadingMessage"/> is true, the first (non-<c>&lt;p&gt;</c>) child — PT9's
+    /// conflict-message text node — is skipped so only the verse diff is rendered. Returns null when the
+    /// side is empty or no thread context is available.
+    /// </summary>
+    private string? RenderConflictSideHtml(System.Xml.XmlNode? sideRoot, bool skipLeadingMessage)
+    {
+        if (
+            sideRoot == null
+            || string.IsNullOrWhiteSpace(sideRoot.InnerText)
+            || _thread?.ThreadInternal == null
+        )
+            return null;
+
+        return _comment.GetContentsAsHtml(
+            _thread.ThreadInternal,
+            isFirstComment: skipLeadingMessage,
+            skipFirstChildNode: skipLeadingMessage,
+            ignoreScriptureLinks: true,
+            contentOverride: sideRoot
+        );
+    }
+
+    /// <summary>
     /// Gets the underlying Comment object.
     /// </summary>
     internal Comment CommentInternal => _comment;

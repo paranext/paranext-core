@@ -3999,8 +3999,8 @@ export type EffectiveStructureProtectionInputs = {
  * and the `platform-scripture` Scripture Finder PDP both call it.
  *
  * The feature applies in simple interface mode only; in power mode it is always inactive. Within
- * simple mode, an admin project lock that the user cannot toggle forces protection on; otherwise the
- * user's own preference governs (defaulting to on when never set).
+ * simple mode, an admin project lock that the user cannot toggle forces protection on; otherwise
+ * the user's own preference governs (defaulting to on when never set).
  */
 export declare function computeEffectiveStructureProtection({ interfaceMode, isAdminProtected, canAdminToggle, userSetting, }: EffectiveStructureProtectionInputs): boolean;
 /** Localized string value associated with this key */
@@ -5954,6 +5954,32 @@ export type LegacyComment = {
 	user: string;
 	/** Original USFM content of verse */
 	verse?: string;
+	/**
+	 * Only present on `verseText` conflict notes: HTML diff of the rejected (losing) side, using
+	 * Paratext 9's `<u>` (inserted) and `<s>` (deleted) markup. This is full HTML, `<blockquote>`-wrapped
+	 * like {@link contents}. Coloring is applied by the UI, not carried in the markup. Absent for normal
+	 * notes and non-`verseText` conflicts.
+	 */
+	rejectedText?: string;
+	/**
+	 * Only present on `verseText` conflict notes: HTML diff of the accepted (winning) side (same
+	 * `<u>`/`<s>` markup as {@link rejectedText}). Also absent for `verseText` conflicts that have no
+	 * common ancestor (two translators independently drafted the same previously-absent verse, so no
+	 * accepted-side diff exists). Absent otherwise. Consumers must treat this field as optional even
+	 * on `verseText` conflict notes.
+	 */
+	acceptedText?: string;
+	/**
+	 * Only present on `verseText` conflict notes: the resulting verse USFM (plain, no diff markup)
+	 * already written into the text at merge time. Equals the accepted side in v1. Absent otherwise.
+	 */
+	resultText?: string;
+	/**
+	 * Only present on `verseText` conflict notes: the resulting verse USFM (plain, no diff markup) if
+	 * the change is REJECTED — i.e. the losing side. Pairs with {@link resultText} (the accepted
+	 * outcome) to drive a dynamic result preview. Absent otherwise.
+	 */
+	rejectedResultText?: string;
 	/** Verse reference in which comment appears */
 	verseRef: string;
 };

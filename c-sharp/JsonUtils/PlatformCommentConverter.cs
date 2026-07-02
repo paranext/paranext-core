@@ -11,6 +11,7 @@ namespace Paranext.DataProvider.JsonUtils;
 // extensions/src/legacy-comment-manager/src/types/legacy-comment-manager.d.ts
 public class PlatformCommentConverter : JsonConverter<PlatformCommentWrapper>
 {
+    private const string ACCEPTED_TEXT = "acceptedText";
     private const string ASSIGNED_USER = "assignedUser";
     private const string BIBLICAL_TERM_ID = "biblicalTermId";
     private const string CONFLICT_TYPE = "conflictType";
@@ -24,7 +25,10 @@ public class PlatformCommentConverter : JsonConverter<PlatformCommentWrapper>
     private const string ID = "id";
     private const string IS_READ = "isRead";
     private const string LANGUAGE = "language";
+    private const string REJECTED_RESULT_TEXT = "rejectedResultText";
+    private const string REJECTED_TEXT = "rejectedText";
     private const string REPLY_TO_USER = "replyToUser";
+    private const string RESULT_TEXT = "resultText";
     private const string SELECTED_TEXT = "selectedText";
     private const string SHARED = "shared";
     private const string START_POSITION = "startPosition";
@@ -314,6 +318,11 @@ public class PlatformCommentConverter : JsonConverter<PlatformCommentWrapper>
         );
         writer.WriteBoolean(HIDE_IN_TEXT_WINDOW, value.HideInTextWindow);
         writer.WriteString(CONTENTS, value.ContentsHtml);
+        // Conflict-note decode fields (verseText conflicts only; null for all other notes → skipped).
+        JsonConverterUtils.TryWriteString(writer, REJECTED_TEXT, value.RejectedText);
+        JsonConverterUtils.TryWriteString(writer, ACCEPTED_TEXT, value.AcceptedText);
+        JsonConverterUtils.TryWriteString(writer, RESULT_TEXT, value.ResultText);
+        JsonConverterUtils.TryWriteString(writer, REJECTED_RESULT_TEXT, value.RejectedResultText);
         JsonConverterUtils.TryWriteString(writer, BIBLICAL_TERM_ID, value.BiblicalTermId);
         if (value.TagsAdded != null)
             JsonConverterUtils.TryWriteString(writer, TAG_ADDED, TryJoin(",", value.TagsAdded));
