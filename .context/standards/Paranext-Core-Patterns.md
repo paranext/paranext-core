@@ -54,10 +54,17 @@ Terse decisions for the C# backend. Each lists the chosen approach, what to avoi
   - When: you define the discriminated-union hierarchy in this repository AND it has a simple tagged-union wire shape (one discriminator property naming the subtype).
   - Avoid: attribute-based polymorphism for types you don't own or that need multiple input shapes / wire transformations beyond a single discriminator — fall back to a custom `JsonConverter<T>` there.
   - Why: declarative, co-located with the type hierarchy, zero runtime registration, compile-time-validated subtype list. Example: `c-sharp/Checklists/ChecklistContentItem.cs` (the `TextItem` / `VerseItem` / `EditLinkItem` / `LinkItem` / `ErrorItem` / `MessageItem` union).
+  - Concrete-return-type exception: by convention PAPI delegates return concrete types, never `object`/`dynamic`. Only the `dynamic` half is lint-enforced — the `PNX008` analyzer bans `dynamic` returns but **allows `object`** (verified by `BanDynamicAnalyzerTests.ObjectReturn_NoDiagnostic`); the preference against `object` is convention, caught in review. The one sanctioned `object` return is a delegate whose wire shape *is* an **untagged** discriminated union — a success record OR an error record with no shared base and no discriminator field (e.g. `ChecklistNetworkObject.BuildChecklistData` returning `ChecklistResult | ChecklistResultError`) — declared `object` (never `dynamic`) so System.Text.Json serializes whichever runtime type is returned. Document it with xmldoc naming the concrete branches. (This is distinct from `[JsonPolymorphic]`/`[JsonDerivedType]` unions like `ChecklistContentItem`, which are serialized as typed *fields*, not returned as `object`.)
+  - Consuming side (TS) — narrowing a union with NO named discriminator: when a C# wire response is a discriminated union that does not carry a discriminator field (e.g. an OK shape `{ rows, columnHeaders, ... }` versus an error shape `{ code, message }`, e.g. `ChecklistResultError`), the TypeScript consumer must narrow on property *presence* — `'rows' in response` — not on an absent boolean. Inventing a `success` flag that is on neither variant means every response falls into the wrong branch (the data table stays empty even when rows arrive). `'key' in value` narrowing is the idiomatic match for a union without a tag field.
 - **D-Bus client (Linux-only IPC):** `Tmds.DBus.Protocol`.
   - When: low-level Linux D-Bus IPC (e.g. IBus input-method-framework integration).
   - Avoid: `Tmds.DBus` (the legacy higher-level package — in maintenance mode), and `dbus-sharp` (unmaintained).
   - Why: the actively maintained low-level library (.NET 8/9 + AOT-compatible) where new D-Bus features land. (No D-Bus code is present in `main` today; this records the decision for when such IPC is added.)
+- **Native OS keyboard / input-method switching (per platform):** P/Invoke per OS behind a single `IKeyboardingPrimitive` interface, with the implementation selected at construction via `RuntimeInformation.IsOSPlatform(...)`. (A per-platform interface rather than one cross-platform library, because `SIL.Windows.Forms.Keyboarding` — PT9's keyboarding library — is Windows-only at the TFM level.)
+  - **Windows:** P/Invoke `user32.dll` — `GetKeyboardLayoutList` / `GetKeyboardLayout` to enumerate, `ActivateKeyboardLayout` to switch. `SIL.Windows.Forms.Keyboarding` targets .NET Framework 4.6.2, so reusing it under a `net8.0-windows` TFM needs verification; standalone P/Invoke is the safer fallback.
+  - **Linux:** IBus over D-Bus via `Tmds.DBus.Protocol` (the `org.freedesktop.IBus` interface — `ListEngines` / `SetGlobalEngine` / `GetGlobalEngine`). Degrade to a no-op plus a console warning when the IBus daemon is absent (XKB-only systems).
+  - **macOS:** P/Invoke HIToolbox Text Input Services — `TISCreateInputSourceList` / `TISCopyCurrentKeyboardInputSource` / `TISSelectInputSource`. These survive in macOS 14/15 despite the "Carbon discontinuation" (which removed higher-level UI APIs, not Text Input Services); signed/sandboxed builds may need entitlements for TIS access.
+  - Each platform uses a different identifier format (HKL on Windows, IBus engine id on Linux, bundle id on macOS) — normalize to one `KeyboardId` string with per-platform translation. (No keyboarding code is in `main` today; this records the per-platform recipe for when it is added.)
 
 ### Logic Placement
 
@@ -65,6 +72,12 @@ Put business logic that needs direct `ParatextData` access in the C# process (`c
 
 - Avoid: implementing such logic in TypeScript — the renderer/extension-host processes cannot reach `ParatextData.dll`, so anything depending on it must live in C#.
 - Why: C# has direct `ParatextData.dll` access and is the same language the logic was originally written in, keeping the port faithful. Expose the result to TS over PAPI (NetworkObject / DataProvider) rather than reimplementing the logic across the wire.
+
+**The inverse also holds.** This rule is specifically about *ParatextData-backed* logic. Logic that is OS-state-driven or UI-adjacent — window/webview focus, `WebViewDefinition` reads, settings — is NOT ParatextData-backed and should live in a **TypeScript service host**, not the C# data-provider process. Putting such a service in C# would force cross-process PAPI plumbing for every focus event for no benefit. Reserve the C# data-provider process for ParatextData-backed services; let TypeScript own OS-state/UI-adjacent services. (Cross-platform OS primitives that genuinely need P/Invoke can stay in C# behind a thin DataProvider the TS host consumes.)
+
+**Porting fidelity (optional readability trade-off).** When porting a PT9 routine, you may deliberately keep PT9's distinct `if`-gates and loop blocks as *separate* blocks — not coalesced — with inline comments citing the PT9 line numbers, so a reviewer can diff the port against PT9 directly. This trades some idiomatic concision for verifiability of the port; it is a legitimate choice for tricky control flow where coalescing risks subtle behavioral drift. Use it where diff-against-PT9 reviewability matters; don't apply it blanket.
+
+**Preserve PT9 persisted / wire identifiers verbatim — typos included.** If an identifier is persisted to disk or sent on the wire by PT9, the PT10 port MUST reproduce it byte-for-byte so PT10 round-trips with project data that PT9 has touched. This includes PT9's typos. For example, the Mixed Capitalization check's `CheckType.InternalValue` is the misspelled string `"MixexCapitalization"` (in PT9 `ParatextData/Checking/CheckType.cs`); the PT10 inventory config must use that exact `checkId`, not the corrected spelling, or the two tools will not recognize each other's stored settings. "Fix the typo" is a data-corruption bug here, not a cleanup.
 
 ### Service Patterns
 
@@ -217,6 +230,28 @@ NetworkObject (base)
 
 Note: `RegisterNetworkObjectAsync()` must be called in `Program.cs` to be available to PAPI clients. See the **When to use** / **When not to use** notes on each pattern above for choosing between DataProvider, NetworkObject, and individual commands.
 
+##### Notifying DataProvider subscribers after a NetworkObject mutation
+
+A DataProvider notifies its own subscribers from inside its `Set*` methods (see **Adding a Method to an Existing Project Data Provider** below). But a NetworkObject (or a static service) that mutates project data which DataProvider subscribers observe — e.g. a command that adds/removes books, which `useProjectSetting('platformScripture.booksPresent')` consumers watch — has no `Set*` to fire the event. After such a mutation succeeds, reach the affected project's data provider and fire a full update yourself:
+
+```csharp
+_pdpFactory.GetExistingProjectDataProvider(projectId)?.SendFullProjectUpdateEvent();
+```
+
+The null-conditional `?.` handles the case where no PDP is currently active for that project. Discipline for *which* project(s) to notify:
+
+- **Create / delete / import (own-project mutation):** notify the target project.
+- **Copy-style mutation:** notify the **destination** project only; the source is read-only.
+- **Read-only methods** (queries, filtering, comparisons): emit nothing.
+- **Failed mutations:** emit nothing — only notify on success.
+- **Paired calls:** if a mutation is always invoked alongside another mutation that already notifies the same subscribers, let the paired call's event cover it and document the omission at the call site.
+
+Reference: `c-sharp/ManageBooks/ManageBooksService.cs` (`GetExistingProjectDataProvider(...)?.SendFullProjectUpdateEvent()` after copy/create/delete/import); `SendFullProjectUpdateEvent` lives on `c-sharp/Projects/ParatextProjectDataProvider.cs`.
+
+##### Choosing DataProvider over NetworkObject when you are the *writer* of shared state
+
+The visibility gap above is a symptom: a NetworkObject method that *writes* mutable shared state is a publicly-callable mutation with no subscribable surface. Any PAPI consumer (another extension, a debug tool, another part of the platform) can call it directly, and observers of that state will not learn it changed. When a C# layer is the actual writer of mutable shared state that others need to observe, make it a **DataProvider** so the `set` event propagates to subscribers automatically — don't expose the mutation as a bare NetworkObject method and then bolt on a custom event. (When the writer is elsewhere and you only need cross-service notification, the `SendFullProjectUpdateEvent` pattern above is the right tool.)
+
 #### Adding a Method to an Existing Project Data Provider
 
 When you want to expose new data from an existing `ProjectDataProvider` (e.g. `ParatextProjectDataProvider`) — not create a new provider — the plumbing spans both C# and TypeScript. Follow all 6 steps; skipping any one of them silently breaks the method.
@@ -323,6 +358,19 @@ const summary = await pdp?.getBookSummary(bookNum);
 - **Forgetting to call `SendDataUpdateEvent` from a C# `Set*`.** The write succeeds but no `subscribe*` callback ever fires, because the TS data provider service never sees the change.
 - **Using `get`/`set`/`subscribe` as a prefix for a non-contract helper method.** Those prefixes opt the method into the data provider contract; for extra (non-contract) methods, use any other appropriate verb (e.g. `lookup*`, `compute*`, `list*`).
 
+#### Drive variant/visibility logic from `projectInterfaces`, not a `ProjectKind` enum
+
+A `projectInterface` (the capability names a project advertises, registered as above) answers "what can this project do?" — and that is the question UI variant and visibility logic should ask. Do NOT reintroduce a PT9-style `ProjectKind` typology ("standard" / "resource" / "note-type") that asks "what category is this project in?"; PT10's extensibility model is interface-based, so a global `ProjectKind` enum would have to be updated every time an extension adds a new project type.
+
+Instead, read the `projectInterfaces: string[]` from project metadata (e.g. `papi.projectLookup.getMetadataForProject(projectId)`) and apply capability predicates directly:
+
+```typescript
+projectInterfaces.some(isScriptureInterface); // can this project edit scripture?
+projectInterfaces.some(isCommentsInterface); //  does it have a comments surface?
+```
+
+The predicate is the single place to encode the interface-name convention. This keeps an extension's new project type working with zero changes to a central enum, and avoids a wrong-shape "fetch a project-type setting" lookup. Each PT9 project variant maps cleanly onto a combination of interface predicates.
+
 ### Test Infrastructure
 
 - **Framework:** NUnit 4.0.1
@@ -395,6 +443,15 @@ public class MissingBookException(int bookNum, string projectId)
 
 **Location:** `c-sharp/` (root level for shared exceptions)
 
+#### Partial-success Result contract (multi-item operations)
+
+A multi-item PAPI operation (copy/import/delete a set of books) should NOT abort the whole batch on the first failure. Return a result record carrying `{ Success, Errors[], Warnings[] }` and accumulate per-item failures *inside* the loop — catch the per-item exception, append it to `Errors`, and continue — rather than throwing out of the loop.
+
+- `Success` is typically `Errors.Length == 0` (optionally also requiring at least one item to have succeeded).
+- Examples: `CopyBooksResult` / `ImportBooksResult` / `CreateBooksResult` in `c-sharp/ManageBooks/` carry structured `AlertEntry[]` (they capture ParatextData alerts — see **AlertCapture** below); `DeleteBooksResult` uses `List<string>`. The element type depends on whether the operation captures ParatextData alerts.
+
+Reserve `throw` (with `PlatformErrorCodes.WithCode`) for whole-operation preconditions that fail before the loop (missing project, non-admin, etc.), not for individual item failures.
+
 ### PlatformError Codes (across the PAPI wire)
 
 When a C# exception crosses the PAPI wire boundary and the TS caller needs a machine-readable error code (`PERMISSION_DENIED`, `NOT_FOUND`, `UNAVAILABLE`, `INVALID_ARGUMENT`, `FAILED_PRECONDITION`, …), throw an exception built by `PlatformErrorCodes.WithCode(code, message)`.
@@ -415,6 +472,27 @@ throw PlatformErrorCodes.WithCode(
 - String-matching on `ex.Message` in TS — read the `platformErrorCode` property off the caught `PlatformError` instead.
 
 **Location:** `c-sharp/PlatformErrorCodes.cs`
+
+### Capturing ParatextData alerts (`AlertCapture`)
+
+ParatextData surfaces user-facing warnings and errors by calling `Alert.Show` / `Alert.ShowLater` on the globally-installed `Alert.Implementation`. A WinForms host pops these in a dialog; a headless data-provider process has nothing to show them, so by default they are silently swallowed. To return them across the PAPI wire instead, install an `AlertCapture : Alert` implementation and scope-capture the alerts a call raises.
+
+- Install `AlertCapture` as `Alert.Implementation` once at startup.
+- Wrap any ParatextData call that may raise alerts in a capture scope, then project the captured entries into the wire result:
+
+  ```csharp
+  using var alertScope = AlertCapture.StartCapture();
+  // ... run the ParatextData operation that may raise Alert.Show/ShowLater ...
+  var entries = alertScope.Entries; // List<AlertEntry>
+  ```
+
+- `AlertCapture` keeps the active scope in an `AsyncLocal<AlertScope?>`, so each async wire call captures only its own alerts even when calls run concurrently. Nested scopes save and restore the parent on dispose.
+- Partition the captured `List<AlertEntry>` (the `Entries`) into the result's `Warnings` / `Errors` `AlertEntry[]` arrays (e.g. `AlertCapture.PartitionAlertsByLevel`, whose `out` params are those arrays) so the caller gets structured feedback instead of a swallowed message.
+- Outside any scope, `AlertCapture` falls back to `Console.WriteLine` plus a negative `AlertResult`.
+
+Don't call `Alert.Show` from your own orchestrator code as poor-man's logging — put the message in the structured result field instead.
+
+**Location:** `c-sharp/ParatextUtils/AlertCapture.cs`, `c-sharp/ParatextUtils/AlertEntry.cs`. Reference consumer: `c-sharp/ManageBooks/ImportBooksOrchestrator.cs`.
 
 ### Logging
 
@@ -474,6 +552,17 @@ public static JsonSerializerOptions CreateSerializationOptions()
 
 **Location:** `c-sharp/JsonUtils/`
 
+### Writing ParatextData files (Settings.xml / project files)
+
+When a feature writes files that ParatextData must later read back (`Settings.xml`, project metadata, config files), `XmlSerializer`'s default output diverges from PT9's hand-written format in ways that make ParatextData silently skip the project or crash on load. Match PT9's conventions exactly:
+
+- **Booleans** serialize as `true`/`false`, but PT9 expects `T`/`F`.
+- **Enums** serialize as their member *names*, but PT9 expects the numeric values.
+- **GUIDs** from `Guid.NewGuid()` are dashed and 36 chars; `HexId.FromStr()` rejects that form. Project GUIDs must be 40-char hex strings — use `HexId.CreateNew()`, not `Guid.NewGuid()`.
+- **Field set** must match PT9: same element names, element order, and presence. If PT9's file has 30 fields and yours has 8, the missing fields will make the file unreadable. Don't emit extra XML namespace attributes unless PT9 does.
+
+After writing, verify ParatextData can round-trip the file: call `ScrTextCollection.RefreshScrTexts()`, confirm `ScrTextCollection.ScrTexts(IncludeProjects.AllAccessible)` includes the project, and read back key properties (name, language, versification). Compare the generated file against a known-good PT9 reference before trusting it.
+
 ### Multi-threaded/Concurrent Code
 
 #### Bridging sync/async code
@@ -489,6 +578,8 @@ protected void DoSomething(T parameter1, string description = "function call des
 ```
 
 **Location:** `c-sharp/ThreadingUtils.cs`
+
+**Don't async-wrap synchronous work.** Register a NetworkObject/DataProvider delegate as a plain synchronous `Func<>` (not `async Task`) when the underlying SDK work is CPU-bound and synchronous — e.g. ParatextData walks. Wrapping such work in `Task.Run` adds overhead with no I/O interleaving benefit and obscures stack traces. Still thread a `CancellationToken` through for cooperative cancellation. Reach for `async Task<T>` only when you are genuinely bridging synchronous work to async consumers via `ThreadingUtils`.
 
 #### Handling incoming PAPI calls
 
@@ -606,6 +697,18 @@ public void ThreadSafe(string key1, string value)
     _dictionary1.TryAdd(key1, value);
 }
 ```
+
+#### Project write-locking — reuse `ParatextData.WriteLockManager`
+
+To protect a project during a multi-step mutation (file swap, book copy/import/delete), obtain an exclusive write lock from ParatextData rather than rolling your own. PT10 already uses this primitive directly: `c-sharp/Projects/ParatextProjectDataProvider.cs` (via `RunWithinLock`, scope `WriteScope.EntireProject`) and `DeleteBooksOrchestrator` (scope `WriteScope.ProjectText`). Copy/Import don't call it themselves — they rely on ParatextData's own internal locking (`ImportSfmText.ImportBooks` / `PutText`) and only map the resulting `LockNotObtainedException`.
+
+```csharp
+// ObtainLock returns null when the lock can't be obtained — never assume success.
+WriteLock writeLock = WriteLockManager.Default.ObtainLock(WriteScope.EntireProject(scrText))
+    ?? throw PlatformErrorCodes.WithCode(PlatformErrorCodes.FailedPrecondition, "The project is busy.");
+```
+
+`ObtainLock` **returns null** when the lock is unavailable (it does not throw); callers convert that null — or an inactive lock — into a `LockNotObtainedException` (or a `PlatformError`) and handle it as a failed precondition, not a crash. `LockNotObtainedException` itself is thrown by higher-level ParatextData helpers (`ScrText`, `ScrTextCollection`) and by paranext-core's own null checks. When porting PT9 code that uses this lock, the lock logic and `LockNotObtainedException` port across without rewrite.
 
 ### PAPI Event/Request Registration
 

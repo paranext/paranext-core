@@ -26,3 +26,12 @@ Prefer extending an existing folder/service over standing up a parallel one. Bef
 - **What you will call, not duplicate.** The existing service/base class/utility the new code reuses.
 
 If neither can be stated, the new structure is premature — extend instead.
+
+## Validate a Reference Pattern Has Production Consumers
+
+Before you cite a file as the model to copy, confirm it is actually used in production — file existence is not evidence the pattern works. Grep for real callers of its exported types or hooks and count them:
+
+- **Zero callers = aspirational scaffolding.** A pattern nobody reads is a guess about a future use case, not a proven approach. Copying it propagates an untested idea. (Example: `greek-esther-template-picker.component.tsx`'s `useWebViewState('pickerResult')` round-trip had no consumers reading `pickerResult` — the working production pattern for committing a dialog result was the manage-books direct-commit, which is structurally different.)
+- **N callers = production.** A pattern with live consumers has been exercised against real data flows; that is the model to follow.
+
+When two candidate patterns disagree, prefer the one with consumers. Report the caller count alongside the citation so the choice is auditable, not asserted.

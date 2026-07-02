@@ -34,6 +34,8 @@ Test-Driven Development is the recommended default for non-trivial backend logic
 | **GREEN**    | Write MINIMUM code to pass      |
 | **REFACTOR** | Clean up while tests stay green |
 
+**C# RED phase**: A C# RED commit cannot be test-only — tests won't compile without the types they reference, and the pre-commit hook runs `dotnet build` (including the test project). Commit minimal skeleton type stubs (shape only — no constructors, validation, or constant values) alongside the failing tests so the build passes while the tests fail at runtime. Never reach for `--no-verify`.
+
 ### Verifying Tests Can Fail
 
 Every test must be capable of failing when the implementation breaks. How you verify depends on context:
@@ -125,6 +127,41 @@ For methods with side effects, verify the **observable effect** — not just the
 | Delete      | Verify item is no longer findable                                  |
 
 **Anti-stub guidance**: A stub that returns `{ Success = true, Guid = NewGuid() }` passes return-value-only tests. Always include at least one test that verifies persistence.
+
+##### The Restart Test (detecting stubs)
+
+For each side-effect method (create, update, delete, add), ask: **"If I call this method successfully and then restart the application, will the effect still be there?"** If no, the method is a stub, and a return-value-only test will pass against it while the world never actually changes.
+
+A **stub** is code that:
+
+- Returns hardcoded or fabricated data without calling ParatextData APIs.
+- Only stores data in memory (a `Dictionary`/`List`) instead of writing to disk.
+- Uses `Task.FromResult(...)` with a fabricated result instead of performing the real operation.
+- Generates an ID without creating the corresponding persistent artifact.
+
+If a stub is intentional (the feature is not yet available in ParatextData), document it with a comment — `// STUB: {reason} — tracked in {issue}` — rather than leaving it to masquerade as a working implementation. Otherwise, replace it with real ParatextData integration before proceeding.
+
+##### Effect-verification test pattern
+
+An effect-verification test **reloads from the real data source** (ParatextData / disk) rather than trusting in-memory state, then asserts the effect persisted:
+
+```csharp
+[Test]
+public async Task CreateMethod_WhenSuccessful_ActuallyPersistsData()
+{
+    var result = await Service.CreateAsync(CreateValidRequest());
+
+    // What return-value-only tests do:
+    Assert.That(result.Success, Is.True);
+
+    // What effect-verification adds — reload from ParatextData, NOT in-memory state:
+    var reloaded = LoadFromParatextData(result.Id);
+    Assert.That(reloaded, Is.Not.Null, "Data should be loadable after create");
+    Assert.That(reloaded.Name, Is.EqualTo(request.Name));
+}
+```
+
+The distinction: TDD tests verify "the method returns success with the right shape"; effect tests verify "after calling the method, the world has changed." For each side-effect method, add at least one test that reloads from the real source.
 
 #### TDD Variant Selection (Outside-In vs Classic)
 
@@ -267,6 +304,14 @@ AI agents should pause and ask when:
 2. Domain-specific rules are involved (Bible versification, USFM semantics, Paratext conventions).
 3. Architecture decisions are needed (creating new utilities, modifying test infrastructure).
 4. Multiple interpretations of an edge case exist.
+
+### Test Scenario Coverage Mix
+
+When planning the scenarios for a feature (not just the happy path), aim for a healthy distribution rather than a wall of happy-path cases. Useful heuristics:
+
+- **At least ~15% edge cases and ~5% error scenarios.** A scenario set that is almost entirely happy-path is under-specified — the defects live in the edges.
+- **Don't blanket-assign the logic layer.** When every scenario shares one classification (all `ParatextData`, or all `UI`), it usually signals a feature-level guess rather than per-behavior analysis; cross-check each scenario against where the logic actually lives.
+- **Inputs and expected outputs must be concrete enough to implement.** An expected output that is only a boolean flag or a vague description isn't testable — pin specific values so a test can be written without re-deriving the intent.
 
 ---
 
@@ -536,6 +581,24 @@ paranext-core uses hand-crafted test doubles rather than mocking frameworks like
 | `DummyLocalParatextProjects`       | Mock project collection             |
 
 See `c-sharp-tests/DummyPapiClient.cs` and peers for examples.
+
+### Forcing Non-Virtual ParatextData Outcomes via a Type-Name Seam
+
+Some ParatextData outcomes can't be reached from a test without a real precondition, and the API that produces them is **non-virtual** so it can't be overridden in a test double — e.g. `WriteLockManager.ObtainLock` returning null (a lock failure), `ScrText.DeleteBooks`, or `ScrText.PutText` raising. Mocking is impossible, and standing up the real failure condition is impractical.
+
+In that narrow case, gate the simulated outcome on the **runtime type name** of a purpose-built test double:
+
+```csharp
+// In the orchestrator (production code), fenced with a comment explaining the seam:
+private const string LockNotObtainedMarkerTypeName = "LockNotObtainedScrText";
+// ...
+if (scrText.GetType().Name == LockNotObtainedMarkerTypeName)
+    return /* the lock-not-obtained result the real API would produce */;
+```
+
+The test then passes a `LockNotObtainedScrText : DummyScrText` instance and gets the simulated outcome.
+
+This is a documented deviation from the "use real ParatextData — never mock it" rule, justified only because the underlying API is non-virtual and the real precondition is unreachable in a unit test. Keep the seam narrow: a private/internal `const` type-name string, with an inline comment at each call site explaining why it exists. Prefer wrapping the call behind a virtual provider interface when a feature touches that API broadly enough to warrant the larger seam.
 
 ---
 
@@ -1188,6 +1251,8 @@ const res = await papiLive.requestRaw('object:myFeature.someMethod', ['__bogus_i
 if (res.error) expect(RESERVED, res.error.message).not.toContain(res.error.code);
 ```
 
+**Run this against the live app early, per command — not only at the end.** Unit tests invoke service methods directly and bypass the JSON-RPC wire, so they never exercise serialization. A whole class of cross-cutting bugs surfaces only on the wire: the canonical one is a missing `JsonStringEnumConverter(JsonNamingPolicy.CamelCase)` registration in `SerializationOptions.cs`, which makes every C#↔TS enum-boundary call fail with `-32602 Invalid params` even though all unit tests are green. Verifying each command against the running app as it lands (rather than waiting for an end-of-feature smoke pass) catches these the moment they're introduced.
+
 ### E2E Test Templates
 
 **UI Interaction Tests (cdp.fixture — default for per-feature tests):**
@@ -1242,6 +1307,13 @@ test.describe('{Feature} Render Smoke Tests', () => {
   });
 });
 ```
+
+### Journey/E2E Assertion Quality
+
+A cross-screen journey test that only checks `toBeVisible()` proves the page rendered — not that data flowed correctly across screens. For journey/E2E tests:
+
+- **Include at least one DATA assertion** beyond visibility — `toHaveValue(...)`, `toContainText(...)`, `not.toBe('')`, or a count check. Verify the value/state that crossed the boundary, e.g. fill a field in screen A and assert its value appears in screen B, or perform an action in one panel and assert the change is reflected in another.
+- **Span 2+ work packages.** A journey test that touches only one screen/feature belongs in that feature's own functional tests; a true journey test exercises two or more pieces working together.
 
 ### E2E Test Best Practices
 
@@ -1318,6 +1390,27 @@ When C# tests create many `DummyScrText` instances with unique HexIds:
 - With `false`, stale index entries accumulate. After ~50 tests, `ScrTextCollection.RefreshScrTextsInternal` throws `"Sequence contains more than one matching element"`.
 - Symptom: first N tests pass, then tests fail with LINQ duplicate-key errors.
 - `PapiTestBase` handles this correctly; any custom test fixtures must also use `true`.
+
+### Global Mutable Statics Must Be Restored
+
+Some ParatextData entry points are global mutable statics — `Alert.Implementation` is the recurring one. A test that assigns one (e.g. `Alert.Implementation = new DummyAlert()`) must restore the previous value in a `try/finally`:
+
+```csharp
+var previous = Alert.Implementation;
+try
+{
+    Alert.Implementation = new DummyAlert();
+    // ... exercise the code under test ...
+}
+finally
+{
+    Alert.Implementation = previous;
+}
+```
+
+- Unrestored, the assignment leaks into every later test in the same process.
+- Symptom: the test that mutated the static passes in isolation, but a **later-added** test (often one that relies on the default implementation) fails only under a full-suite run — making the failure look unrelated to the test that actually broke it.
+- This is hard to diagnose because the offending test and the failing test are different files. When a test fails only in the full suite, suspect an unrestored global static.
 
 ---
 

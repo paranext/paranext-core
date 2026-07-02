@@ -13,6 +13,7 @@ Read these when you need depth on a topic. Keep them in mind when writing or rev
 | Topic                   | File                                                                      | Key Content                                                  |
 | ----------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | Architecture            | [Architecture.md](.context/standards/Architecture.md)                     | Multi-process architecture, core services, IPC, key patterns |
+| Architecture Decisions  | [Architecture-Decisions.md](.context/standards/Architecture-Decisions.md) | Append-only log of significant architecture decisions + rationale; **update it whenever you make one** (see "Recording Architecture Decisions") |
 | Code Style              | [Code-Style-Guide.md](.context/standards/Code-Style-Guide.md)             | TypeScript/C# conventions, API-surface TSDoc, localization, components, shadcn/ui |
 | Implementation Patterns | [Paranext-Core-Patterns.md](.context/standards/Paranext-Core-Patterns.md) | C# service/DataProvider/NetworkObject patterns, PAPI event registration, concurrency, extension structure, command naming |
 | Testing                 | [Testing-Guide.md](.context/standards/Testing-Guide.md)                   | Vitest/NUnit, TDD (outside-in), testing trophy, mutation/coverage, E2E, mocking, CI, platform gotchas |
@@ -23,6 +24,8 @@ Read these when you need depth on a topic. Keep them in mind when writing or rev
 | Git and GitHub          | [Git-Guide.md](.context/standards/Git-Guide.md)                           | Branch structure, squash-merge, template merges              |
 | Code Review             | [Code-Review-Guide.md](.context/standards/Code-Review-Guide.md)           | Reviewable, code-steward, review workflow, auto-merge        |
 | Security                | [Security-Guide.md](.context/standards/Security-Guide.md)                 | CSP, module import restrictions, extension sandboxing        |
+| PT9 Feature Inventory   | [paratext-9-features/](.context/research/paratext-9-features/README.md) | Catalogue of Paratext 9 features (entry points, forms, classes, sources) — used by `/investigate-prd` |
+| Capability Designs      | [designs/](.context/designs/)                                             | Design specs + implementation plans for capabilities (e.g. `/investigate-prd`) |
 
 ## Terminology
 
@@ -158,6 +161,23 @@ npm run typecheck
 - Frame tasks as verifiable goals: "Fix the bug" → "Write a test that reproduces it, then make it pass."
 - When any code quality tool flags your code (ESLint, TypeScript, Prettier, Stylelint), fix the code first. Only suppress warnings if the fix would be significantly worse.
 - Don't add features, refactor code, or make "improvements" beyond what was asked.
+
+## Recording Architecture Decisions
+
+When any code work surfaces a **significant architecture decision** — choosing among viable
+approaches, introducing a new pattern or top-level structure, deferring a platform capability, or
+deciding where a feature lives — record it in
+[`Architecture-Decisions.md`](.context/standards/Architecture-Decisions.md). This applies to **all**
+work, not just `/investigate-prd`.
+
+- **Capture the decision** as an append-only entry (date · status · context · decision · alternatives
+  · consequences). Mark superseded decisions rather than deleting them.
+- **Promote settled conventions:** when a decision hardens into a rule everyone should follow, also
+  fold it into the relevant standard (`Architecture.md`, `Paranext-Core-Patterns.md`) or a
+  `.claude/rules/` file — that is what the agents read and enforce on the next feature. The log keeps
+  the *why* and the history; the standards keep the *current rule*.
+- **Don't over-record:** skip routine/local choices; capture the cross-cutting ones that would
+  otherwise be re-litigated or re-derived on the next PRD.
 
 ## Never Commit Secrets
 
