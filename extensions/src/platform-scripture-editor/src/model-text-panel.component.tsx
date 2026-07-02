@@ -244,6 +244,7 @@ export function ModelTextPanel({
   // Markers this resource's content actually uses, so the editor doesn't warn "Unexpected <kind>
   // marker" for handbook/commentary markers (e.g. \pn, \jmp). Scoped per-resource from the displayed
   // USJ — never a global list — and additive, so listing built-in markers is a harmless no-op.
+  // Intentionally every marker the resource uses — read-only panel, warn-only diagnostic. See collectUsjMarkers JSDoc.
   const extraValidMarkers = useMemo(() => collectUsjMarkers(usj), [usj]);
 
   const options: EditorOptions = useMemo(

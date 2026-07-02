@@ -618,11 +618,12 @@ export function EnhancedScripturePane({
   // forces Editorial to reconcile its Lexical config, which destroys the Marble annotation marks
   // (see EDITORIAL_OPTIONS note above). When the set genuinely changes, the annotation effect
   // re-applies marks on the new USJ anyway.
-  const extraValidMarkersKey = useMemo(() => collectUsjMarkers(usj).join(' '), [usj]);
+  // Intentionally every marker the resource uses — read-only panel, warn-only diagnostic. See collectUsjMarkers JSDoc.
+  const extraValidMarkersKey = useMemo(() => collectUsjMarkers(usj).join(' '), [usj]);
   const editorialOptions = useMemo(
     () => ({
       ...EDITORIAL_OPTIONS,
-      nodes: { extraValidMarkers: extraValidMarkersKey ? extraValidMarkersKey.split(' ') : [] },
+      nodes: { extraValidMarkers: extraValidMarkersKey ? extraValidMarkersKey.split(' ') : [] },
     }),
     [extraValidMarkersKey],
   );
