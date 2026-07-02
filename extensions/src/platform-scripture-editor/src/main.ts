@@ -1293,6 +1293,12 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   const markerNotifier = new MarkersViewNotifier(papi, context.executionToken);
   const markerNotifierUnsubscribers = await markerNotifier.start();
 
+  // Resolve the optional (feature-flag-gated) Scripture Text Grid registration into a value so the
+  // registrations list below stays a flat list of disposables rather than awaiting inside a spread.
+  const scriptureTextGridRegistration = scriptureTextGridWebViewProviderPromise
+    ? await scriptureTextGridWebViewProviderPromise
+    : undefined;
+
   context.registrations.add(
     await scriptureEditorWebViewProviderPromise,
     await openPlatformScriptureEditorPromise,
@@ -1308,9 +1314,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await openModelTextPanelPromise,
     await bibleTextsPanelWebViewProviderPromise,
     await commentariesPanelWebViewProviderPromise,
-    ...(scriptureTextGridWebViewProviderPromise
-      ? [await scriptureTextGridWebViewProviderPromise]
-      : []),
+    ...(scriptureTextGridRegistration ? [scriptureTextGridRegistration] : []),
     await openResourceTextPromise,
     selectionChangedEventEmitter,
     {

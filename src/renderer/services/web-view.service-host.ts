@@ -52,6 +52,7 @@ import {
 } from '@shared/services/network.service';
 import { settingsService } from '@shared/services/settings.service';
 import { webViewProviderService } from '@shared/services/web-view-provider.service';
+import type { SettingNames } from 'papi-shared-types';
 import { LayoutBase } from 'rc-dock';
 import {
   EVENT_NAME_ON_DID_ADD_WEB_VIEW,
@@ -722,9 +723,11 @@ async function getEnabledSupplementEntries(): Promise<DefaultLayoutSupplementEnt
   const resolved = await Promise.all(
     entries.map(async (entry) => {
       if (!entry.flagSetting) return entry;
-      // The flag key is a product-supplied dynamic string; settingsService.get is typed to known keys.
+      // The flag key is a product-supplied dynamic string; `settingsService.get` is typed to the
+      // union of known setting keys (`SettingNames`), so cast to that rather than to one specific
+      // (unrelated) key. The value is treated as `unknown` below, so an unknown key is handled safely.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const flagKey = entry.flagSetting as 'platform.interfaceMode';
+      const flagKey = entry.flagSetting as SettingNames;
       // Cast result to `unknown` so we can safely check the runtime boolean value without a type overlap error.
       const value: unknown = await settingsService.get(flagKey);
       return value === true ? entry : undefined;
