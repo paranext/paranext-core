@@ -32,8 +32,8 @@ vi.mock('@shared/services/command.service', () => ({
 
 // getScrRefForProject reads each project's versification via a base-PDP setting subscription. Mock
 // it: by default every project reports a unique versification (its own id) so conversions fire;
-// tests set `projectVersifications[id]` to make projects share a versification (fast path) or to be
-// unresolvable (undefined).
+// tests set `projectVersifications[id]` to make projects share a base versification identifier, or
+// to be unresolvable (undefined).
 const { pdpGet, projectVersifications } = vi.hoisted(() => {
   const versifications: Record<string, string | undefined> = {};
   return { pdpGet: vi.fn(), projectVersifications: versifications };

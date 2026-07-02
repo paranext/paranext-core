@@ -26,8 +26,8 @@ let lastVersificationChangeHandler: (() => void) | undefined;
 // useEvent captures the handler here (the hook's real subscriber path is a thin PAPI wrapper);
 // usePromise gets a faithful minimal implementation (its real behavior is covered by
 // platform-bible-react's own tests). This mirrors the two behaviours the hook relies on: an
-// `undefined` factory is a no-op (no conversion), and `preserveValue: false` resets to the current
-// default while a new factory runs.
+// `undefined` factory is a no-op (no conversion), and `preserveValue: true` retains the previous
+// resolved value while a new factory runs (the linger the hook relies on since finding #5).
 vi.mock('platform-bible-react', async () => {
   const react = await import('react');
   return {
