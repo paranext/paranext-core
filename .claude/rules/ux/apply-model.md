@@ -2,6 +2,7 @@
 paths:
   - "lib/platform-bible-react/**"
   - "src/renderer/**"
+  - "extensions/src/**/*.component.tsx"
   - "**/*.web-view.tsx"
 ---
 
