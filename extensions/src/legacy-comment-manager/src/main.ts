@@ -162,18 +162,22 @@ const commentListPanelProvider: IWebViewProvider = {
  * @returns The webView ID of the panel, or `undefined` if opening failed
  */
 async function openCommentListPanel(projectId: string | undefined): Promise<string | undefined> {
-  const allOpenDefs = await papi.webViews.getAllOpenWebViewDefinitions();
-  const existingPanel = allOpenDefs.find(
-    (def) => def.webViewType === COMMENT_LIST_PANEL_WEBVIEW_TYPE,
+  // Use existingId: '?' to detect-and-reuse the fixed Column 3 tab without calling
+  // getAllOpenWebViewDefinitions (which is not reliably available from extension context).
+  const existingId = await papi.webViews.openWebView(
+    COMMENT_LIST_PANEL_WEBVIEW_TYPE,
+    { type: 'tab' },
+    { existingId: '?', createNewIfNotFound: false },
   );
 
-  if (existingPanel) {
+  if (existingId) {
     currentCommentListPanelProjectId = projectId;
-    return papi.webViews.reloadWebView(COMMENT_LIST_PANEL_WEBVIEW_TYPE, existingPanel.id, {
+    return papi.webViews.reloadWebView(COMMENT_LIST_PANEL_WEBVIEW_TYPE, existingId, {
       bringToFront: false, // Don't steal focus from the scripture editor on project switch
     });
   }
 
+  // Panel not yet open (shouldn't happen in Simple mode where it's always in the layout).
   const openOptions: CommentListPanelOptions = { projectId };
   return papi.webViews.openWebView(COMMENT_LIST_PANEL_WEBVIEW_TYPE, { type: 'tab' }, openOptions);
 }
