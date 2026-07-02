@@ -671,8 +671,14 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// write). <c>"reject"</c> writes the losing side's USFM into the verse via PT9's
     /// <see cref="CommentEditHelper.SaveEdits"/>, then resolves the note.
     /// </summary>
+    /// <remarks>
+    /// The reject verse write is best-effort inside PT9's <see cref="CommentEditHelper.SaveEdits"/>
+    /// orchestration: PT9's <c>ReplaceAcceptedText</c> silently no-ops (it traces an error and
+    /// leaves the thread still resolved) if it cannot find the verse marker in the chapter. We do
+    /// not add compensating logic here.
+    /// </remarks>
     /// <exception cref="InvalidDataException">Unknown resolution, or the thread doesn't exist.</exception>
-    /// <exception cref="InvalidOperationException">Not a verseText conflict, or the user lacks permission.</exception>
+    /// <exception cref="InvalidOperationException">Not a verseText conflict, the thread is already resolved, the user lacks permission, or the resolve was canceled.</exception>
     public void ResolveConflict(string threadId, string resolution)
     {
         if (resolution != "accept" && resolution != "reject")
@@ -692,6 +698,14 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         )
             throw new InvalidOperationException(
                 $"Thread '{threadId}' is not a verseText conflict and cannot be resolved here."
+            );
+
+        // A resolved conflict has already had its resolution applied. Re-resolving would rewrite the
+        // verse of an already-settled thread (e.g. reject-after-accept) - a transition PT9's UI never
+        // allows structurally. Reject it here so a stale/duplicate call can't clobber the verse text.
+        if (thread.Status == NoteStatus.Resolved)
+            throw new InvalidOperationException(
+                $"Conflict thread '{threadId}' is already resolved and cannot be resolved again."
             );
 
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
@@ -715,7 +729,21 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                     ? NoteConflictResolutions.Replaced
                     : NoteConflictResolutions.None,
         };
-        CommentEditHelper.SaveEdits(null, _commentManager.Value, thread, state, true, out _, out _);
+        // SaveEdits returns false when the user cancels resolving (the creator-resolve path). Surface
+        // that so we don't fire "resolved" events and report success for a thread that is still open.
+        bool resolved = CommentEditHelper.SaveEdits(
+            null,
+            _commentManager.Value,
+            thread,
+            state,
+            true,
+            out _,
+            out _
+        );
+        if (!resolved)
+            throw new InvalidOperationException(
+                $"Resolving conflict thread '{threadId}' was canceled; the thread was not resolved."
+            );
 
         // Refresh the comment list; on reject the verse text changed via a raw PutText that bypasses
         // the Set* methods, so also refresh Scripture-text subscribers (the open editor).

@@ -288,7 +288,9 @@ declare module 'legacy-comment-manager' {
        * @param threadId The conflict thread to resolve
        * @param resolution `'accept'` (keep the current/winning text) or `'reject'` (take the other
        *   side)
+       * @throws If `resolution` is neither `'accept'` nor `'reject'`
        * @throws If the thread doesn't exist or isn't a `verseText` conflict
+       * @throws If the conflict thread is already resolved
        * @throws If the current user is neither a project administrator nor the assigned resolver
        */
       resolveConflict(threadId: string, resolution: 'accept' | 'reject'): Promise<void>;
