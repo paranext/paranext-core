@@ -255,9 +255,12 @@ public class PlatformCommentWrapper
 
     /// <summary>
     /// For a verseText conflict note, the resulting verse USFM already written into the text at merge time
-    /// (equals the accepted side in v1). Plain USFM, no diff markup. Null for any other note.
+    /// (equals the accepted side in v1). Plain USFM, no diff markup. Null for any other note, and null
+    /// when the merged result verse is empty. (The wire drops empty strings regardless; the explicit
+    /// collapse keeps this C# property's contract matching what serialization emits.)
     /// </summary>
-    public string? ResultText => IsVerseTextConflict ? _comment.Verse : null;
+    public string? ResultText =>
+        IsVerseTextConflict && !string.IsNullOrEmpty(_comment.Verse) ? _comment.Verse : null;
 
     /// <summary>
     /// For a verseText conflict note, the resulting verse USFM if the change is REJECTED — the losing
@@ -283,25 +286,44 @@ public class PlatformCommentWrapper
     /// Renders one side of a conflict (its diff XML) to HTML by reusing ParatextData's public
     /// <c>GetContentsAsHtml</c> renderer via its <c>contentOverride</c> parameter. When
     /// <paramref name="skipLeadingMessage"/> is true, the first (non-<c>&lt;p&gt;</c>) child — PT9's
-    /// conflict-message text node — is skipped so only the verse diff is rendered. Returns null when the
-    /// side is empty or no thread context is available.
+    /// conflict-message text node — is skipped so only the verse diff is rendered. Returns null when
+    /// there is no side, no thread context, or the RENDERED diff has no visible content.
     /// </summary>
+    /// <remarks>
+    /// Emptiness is tested on the RENDERED output, not on <paramref name="sideRoot"/>'s pre-render
+    /// <c>InnerText</c>: the Contents side always carries a leading conflict-message text node (that
+    /// rendering skips), so its <c>InnerText</c> is never empty; and a side can render to an empty
+    /// <c>&lt;blockquote&gt;</c> — including the U+FEFF sentinel that <c>GetContentsAsHtml</c> treats
+    /// as empty but <c>char.IsWhiteSpace</c> does not. The check mirrors PT9's own emptiness test,
+    /// <c>Comment.IsBlank</c> (<c>Trim().Trim('\ufeff')</c>).
+    /// </remarks>
     private string? RenderConflictSideHtml(System.Xml.XmlNode? sideRoot, bool skipLeadingMessage)
     {
-        if (
-            sideRoot == null
-            || string.IsNullOrWhiteSpace(sideRoot.InnerText)
-            || _thread?.ThreadInternal == null
-        )
+        if (sideRoot == null || _thread?.ThreadInternal == null)
             return null;
 
-        return _comment.GetContentsAsHtml(
+        var html = _comment.GetContentsAsHtml(
             _thread.ThreadInternal,
             isFirstComment: skipLeadingMessage,
             skipFirstChildNode: skipLeadingMessage,
             ignoreScriptureLinks: true,
             contentOverride: sideRoot
         );
+
+        return IsRenderedHtmlBlank(html) ? null : html;
+    }
+
+    /// <summary>
+    /// True when rendered conflict-side HTML has no visible content. Strips tags, then applies PT9's
+    /// <c>Comment.IsBlank</c> idiom (<c>.Trim().Trim('\ufeff')</c>). U+FEFF is a sentinel PT9 uses for
+    /// empty verse content and is not treated as whitespace by <c>char.IsWhiteSpace</c>.
+    /// </summary>
+    private static bool IsRenderedHtmlBlank(string? html)
+    {
+        if (string.IsNullOrEmpty(html))
+            return true;
+        var text = Regex.Replace(html, "<[^>]*>", string.Empty);
+        return text.Trim().Trim('\ufeff').Length == 0;
     }
 
     /// <summary>

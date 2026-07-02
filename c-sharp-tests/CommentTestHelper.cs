@@ -179,6 +179,34 @@ internal static class CommentTestHelper
     }
 
     /// <summary>
+    /// A verseText merge-conflict Comment where the losing side DELETED the verse content. The
+    /// parent-vs-loser diff is all-Remove, so the Contents diff paragraph is strikethrough-only (no
+    /// plain text, no <c>&lt;bold&gt;</c>). Consequently the rejected side still renders visible
+    /// <c>&lt;s&gt;</c> markup (so <c>rejectedText</c> is present), but the changed-version decode of
+    /// the note is empty (so <c>rejectedResultText</c> is absent) — the case where the two fields are
+    /// independently optional.
+    /// </summary>
+    internal static Comment CreateVerseTextConflictCommentDeletion()
+    {
+        Comment c = CreateVerseTextConflictComment();
+        XmlDocument contentsDoc = new XmlDocument();
+        contentsDoc.LoadXml(
+            """
+            <Contents>Two different people edited this verse. The change shown here (in red) is not in the current copy of the text.<p>
+                <language name="es-015-vaidika">
+                <p><strikethrough><color name="red">\v 1 When Jesus was born in the village of Bethlehem in Judea, Herod was king.</color></strikethrough></p>
+                </language>
+            </p>
+            </Contents>
+            """
+        );
+        c.Contents = contentsDoc.DocumentElement;
+        c.AcceptedChangeXmlStr = null; // winner kept the verse; no accepted-side change
+        c.Verse = @"\v 1 When Jesus was born in the village of Bethlehem in Judea, Herod was king.";
+        return c;
+    }
+
+    /// <summary>
     /// Internal dummy user class for testing purposes
     /// </summary>
     private class DummyUser : ParatextUser

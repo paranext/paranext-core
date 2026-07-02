@@ -310,6 +310,84 @@ internal class PlatformCommentConverterTests : PapiTestBase
     }
 
     [Test]
+    public void Serialize_VerseTextConflict_EmptyRejectedDiffBody_OmitsRejectedText()
+    {
+        // The rejected side's diff paragraph is empty — only the leading conflict-message text node
+        // remains. The old guard tested Contents.InnerText (which always contains that message), so
+        // the side serialized as an empty <blockquote>. The RENDERED body is blank, so rejectedText
+        // must now be omitted entirely.
+        Comment testComment = CommentTestHelper.CreateVerseTextConflictComment();
+        var xml = new System.Xml.XmlDocument();
+        xml.LoadXml(
+            "<Contents>Two different people edited this verse. The change shown here (in red) is "
+                + "not in the current copy of the text.<p><language name=\"es-015-vaidika\"><p></p>"
+                + "</language></p></Contents>"
+        );
+        testComment.Contents = xml.DocumentElement;
+        var (commentWrapper, _) = CreateCommentWithThread(testComment);
+
+        var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
+            commentWrapper,
+            _serializationOptions
+        );
+
+        Assert.That(
+            commentWrapper.RejectedText,
+            Is.Null,
+            "empty rendered rejected-side diff body → no rejectedText"
+        );
+        Assert.That(json, Does.Not.Contain(@"""rejectedText"":"));
+    }
+
+    [Test]
+    public void Serialize_VerseTextConflict_FeffOnlyAcceptedSide_OmitsAcceptedText()
+    {
+        // The accepted-side diff renders to the U+FEFF empty-content sentinel.
+        // char.IsWhiteSpace('\uFEFF') is false, so the old InnerText guard let it through as an empty
+        // <blockquote>; the render-then-test rule (Trim('\uFEFF')) now collapses it to absent.
+        Comment testComment = CommentTestHelper.CreateVerseTextConflictComment();
+        testComment.AcceptedChangeXmlStr =
+            "<p><language name=\"es-015-vaidika\"><p>\uFEFF</p></language></p>";
+        var (commentWrapper, _) = CreateCommentWithThread(testComment);
+
+        var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
+            commentWrapper,
+            _serializationOptions
+        );
+
+        Assert.That(
+            commentWrapper.AcceptedText,
+            Is.Null,
+            "FEFF-only accepted-side diff → no acceptedText"
+        );
+        Assert.That(json, Does.Not.Contain(@"""acceptedText"":"));
+        // The rejected side still has real content, proving each side is tested on its own payload.
+        Assert.That(commentWrapper.RejectedText, Is.Not.Null);
+    }
+
+    [Test]
+    public void Serialize_VerseTextConflictDeletion_RejectedTextPresent_RejectedResultTextAbsent()
+    {
+        // Losing side deleted the verse content: the diff is strikethrough-only. rejectedText renders
+        // the <s> diff (present), but the changed-version decode is empty so rejectedResultText is
+        // absent — proving the two fields are independently optional (finding 3).
+        Comment testComment = CommentTestHelper.CreateVerseTextConflictCommentDeletion();
+        var (commentWrapper, _) = CreateCommentWithThread(testComment);
+
+        var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
+            commentWrapper,
+            _serializationOptions
+        );
+
+        Assert.That(commentWrapper.RejectedText, Is.Not.Null);
+        Assert.That(commentWrapper.RejectedText, Does.Contain("<s>"));
+        Assert.That(json, Does.Contain(@"""rejectedText"":"));
+
+        Assert.That(commentWrapper.RejectedResultText, Is.Null);
+        Assert.That(json, Does.Not.Contain(@"""rejectedResultText"":"));
+    }
+
+    [Test]
     public void Serialize_ConflictReplyCarryingConflictType_OmitsConflictTextFields()
     {
         // The FIRST comment of a verseText conflict thread legitimately carries the decode fields.
