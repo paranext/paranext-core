@@ -9,8 +9,9 @@
 
 Today the Internet Settings dialog bundles several settings behind a single
 **"Save and restart"** button that always restarts the app. This violates
-Platform.Bible's immediate-apply principle and forces a restart even when the
-user only changed something that may not need one.
+Platform.Bible's [immediate-apply principle](../../lib/platform-bible-react/src/stories/guidelines/applying-changes.mdx)
+and forces a restart even when the user only changed something that may not need
+one.
 
 This plan proposes to:
 
@@ -23,6 +24,11 @@ This plan proposes to:
    instead of paying the cost per change.
 4. **Keep reminding the user until they actually restart** — a dismissed prompt
    must not leave a novice user stranded with changes that never took effect.
+
+> **Note on references.** Several links below point to guideline/concept articles
+> that are still on open PRs and not yet merged to `main` (see [§11 References](#11-references)
+> for the PRs and status). Those links resolve to their final paths once the
+> corresponding PRs merge.
 
 ## 2. Background — how it works today
 
@@ -77,7 +83,11 @@ them restart now or keep working and restart later.
 
 This preserves the one legitimate benefit of the old design (batch several
 restart-requiring changes into a single restart) while removing its costs
-(mandatory button, forced immediate restart, coupling).
+(mandatory button, forced immediate restart, coupling). In the
+[Applying Changes](../../lib/platform-bible-react/src/stories/guidelines/applying-changes.mdx)
+apply-model typology, this moves the surface from **explicit apply** (stage
+everything, commit on a button) to **immediate apply**, with the restart treated
+as a deferred consequence rather than the commit gate.
 
 ## 5. Proposed design
 
@@ -90,7 +100,11 @@ backend change is required for the apply step.
 
 ### 5.2 Classify each setting: restart-required or not
 
-Every setting in the dialog is tagged as either:
+These "internet settings" are a web-view form, not entries in the platform
+settings system — but the
+[Settings & State shared mental model](../concepts/settings-and-state-model.md)
+is the right lens for reasoning about how each value is stored and when it takes
+effect. Every setting in the dialog is tagged as either:
 
 - **Live** — takes effect immediately, no restart needed.
 - **Restart-required** — persisted immediately but only fully in effect after a
@@ -131,7 +145,15 @@ pending. Framing:
 
 - Title: _"Restart required"_ (or _"Restart to finish applying changes"_).
 - Body: names what changed and that it will apply on next restart.
-- Buttons: **Restart now** (primary) / **Restart later** (secondary).
+- Buttons: **Restart now** (primary) / **Restart later** (secondary). Per the
+  [Applying Changes microcopy rules](../../lib/platform-bible-react/src/stories/guidelines/applying-changes.mdx#microcopy),
+  the labels name the outcome rather than using a bare **OK**.
+
+"Restart" is one **action** with several triggers — this dialog, the persistent
+reminder banner, and the empty-state prompt (§5.5) — so it should be modeled per
+[Triggers and Actions](../../lib/platform-bible-react/src/stories/guidelines/triggers-and-actions.mdx):
+one restart action, invoked from many surfaces, rather than duplicated behavior
+per surface.
 
 Because settings are already applied and persisted, "Restart later" is safe —
 the values survive to the next launch regardless.
@@ -144,7 +166,12 @@ obvious way to recover. The pending state must remain visible and actionable
 until an actual restart happens.
 
 **Recommended primary mechanism — persistent reminder banner.** A dismissal of
-the restart _dialog_ must not clear the pending-restart _state_. As long as any
+the restart _dialog_ must not clear the pending-restart _state_. This is a
+deliberate application of the
+[Dismissal Patterns](../../lib/platform-bible-react/src/stories/guidelines/dismissal-patterns.mdx)
+guidance: the pending-restart state is not a transient surface that light or
+click-away dismissal may quietly discard — dismissing the prompt hides the
+_prompt_, not the underlying obligation. As long as any
 applied-but-not-yet-effective change exists, keep a lightweight reminder banner
 visible with a **Restart now** action. It should:
 
@@ -255,3 +282,15 @@ Changes a field ──► value persisted immediately (backend setter)
   settings (this is a targeted fix to two web-view dialogs). If a general
   "restart required" affordance is wanted platform-wide, that's a separate
   proposal this one could feed into.
+
+## 11. References
+
+The principles and patterns that drove this proposal. Several are still on open
+PRs; the relative links above resolve to these final paths once the PRs merge.
+
+| Article                                                                                                | Drives                                                                                            | Status                                                                    |
+| ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| [Applying Changes](../../lib/platform-bible-react/src/stories/guidelines/applying-changes.mdx)         | Immediate-apply-by-default principle, apply-model typology, button microcopy (§1, §4, §5.1, §5.4) | Pending — [PR #2481](https://github.com/paranext/paranext-core/pull/2481) |
+| [Triggers and Actions](../../lib/platform-bible-react/src/stories/guidelines/triggers-and-actions.mdx) | "Restart" as one action reachable from many triggers/surfaces (§5.4, §5.5, §9)                    | Pending — [PR #2222](https://github.com/paranext/paranext-core/pull/2222) |
+| [Settings & State: A Shared Mental Model](../concepts/settings-and-state-model.md)                     | Lens for how each value is stored and when it takes effect (§5.2)                                 | Pending — [PR #2437](https://github.com/paranext/paranext-core/pull/2437) |
+| [Dismissal Patterns](../../lib/platform-bible-react/src/stories/guidelines/dismissal-patterns.mdx)     | Why "Restart later"/closing must not discard pending-restart state (§5.5)                         | Pending — [PR #2413](https://github.com/paranext/paranext-core/pull/2413) |
