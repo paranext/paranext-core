@@ -8184,9 +8184,9 @@ declare module 'renderer/services/scroll-group.service-host' {
    * {@link getScrRefSourceProjectIdSync}); this resolves that frame and converts to `projectId`'s
    * versification via the `platformScripture.mapVerseRefBetweenProjects` command, so every consumer —
    * in any process — gets a reference it can use directly. Returns the raw stored reference unchanged
-   * when no conversion is needed: the source frame is unknown, already matches `projectId`, or both
-   * projects share a versification. On any conversion failure it falls back to the raw reference (and
-   * does not permanently suppress the project — the failure may be transient).
+   * when no conversion is needed: the source frame is unknown, or already matches `projectId`. On any
+   * conversion failure it falls back to the raw reference (and does not permanently suppress the
+   * project — the failure may be transient).
    *
    * @param scrollGroupId Scroll group whose reference to convert. If `undefined`, defaults to 0
    * @param projectId Project into whose versification to convert the reference

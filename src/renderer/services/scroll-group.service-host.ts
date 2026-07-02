@@ -152,9 +152,9 @@ const mapVerseRefBetweenProjects = sendCommand as unknown as MapVerseRefBetweenP
 /**
  * Current versification identifier per project, read from the `platformScripture.versification`
  * project setting and kept fresh via a subscription (see {@link ensureVersificationSubscribed}).
- * Used to (a) skip the conversion round-trip when source and target share a versification and (b)
- * key the conversion cache so a mid-session versification change yields a fresh key (and therefore
- * a fresh conversion) rather than a stale hit. `undefined` = not yet known or not resolvable.
+ * Used to key the conversion cache so a mid-session versification change yields a fresh key (and
+ * therefore a fresh conversion) rather than a stale hit. `undefined` = not yet known or not
+ * resolvable.
  */
 const projectVersifications = new Map<string, string | undefined>();
 /**
@@ -199,11 +199,11 @@ function ensureVersificationSubscribed(projectId: string): Promise<void> {
             projectId,
             isPlatformError(value) || value === undefined ? undefined : String(value),
           );
-          // This keeps the same-versification fast path and the conversion-cache key fresh, but it
-          // intentionally does NOT re-emit onDidUpdateScrRef, so a reference already on screen is not
-          // re-converted until the next navigation. Re-converting on a mid-session versification
-          // change is out of scope: a project's versification is chosen at creation and effectively
-          // never changes during a session, so the added event/re-render churn is not worth it.
+          // This keeps the conversion-cache key fresh, but it intentionally does NOT re-emit
+          // onDidUpdateScrRef, so a reference already on screen is not re-converted until the next
+          // navigation. Re-converting on a mid-session versification change is out of scope: a
+          // project's versification is chosen at creation and effectively never changes during a
+          // session, so the added event/re-render churn is not worth it.
         },
         { retrieveDataImmediately: true },
       );
@@ -221,8 +221,8 @@ function ensureVersificationSubscribed(projectId: string): Promise<void> {
 /**
  * Ensure `projectId`'s versification is being tracked and return its CURRENT identifier. Reads from
  * {@link projectVersifications} after the subscription is set up, so a mid-session versification
- * change is reflected (keeping the same-versification fast path and the conversion-cache key
- * correct) rather than returning a stale subscription-time value.
+ * change is reflected (keeping the conversion-cache key correct) rather than returning a stale
+ * subscription-time value.
  *
  * Note: a versification change updates the cache key so the NEXT conversion is fresh; an
  * already-displayed reference is re-converted the next time the hook re-runs (e.g. on navigation).
@@ -338,9 +338,9 @@ export function getScrRefForProjectSync(
  * {@link getScrRefSourceProjectIdSync}); this resolves that frame and converts to `projectId`'s
  * versification via the `platformScripture.mapVerseRefBetweenProjects` command, so every consumer —
  * in any process — gets a reference it can use directly. Returns the raw stored reference unchanged
- * when no conversion is needed: the source frame is unknown, already matches `projectId`, or both
- * projects share a versification. On any conversion failure it falls back to the raw reference (and
- * does not permanently suppress the project — the failure may be transient).
+ * when no conversion is needed: the source frame is unknown, or already matches `projectId`. On any
+ * conversion failure it falls back to the raw reference (and does not permanently suppress the
+ * project — the failure may be transient).
  *
  * @param scrollGroupId Scroll group whose reference to convert. If `undefined`, defaults to 0
  * @param projectId Project into whose versification to convert the reference
@@ -359,8 +359,8 @@ export async function getScrRefForProject(
   // already matches `projectId`. Checked up front to avoid subscribing when there is nothing to do.
   if (sourceProjectId === undefined || sourceProjectId === projectId) return scrRef;
 
-  // Resolve versifications (subscribing if needed) so the same-versification fast path and the cache
-  // key are correct, then plan the conversion with the SAME gating/key logic the sync path uses.
+  // Resolve versifications (subscribing if needed) so the conversion-cache key is correct, then plan
+  // the conversion with the SAME gating/key logic the sync path uses.
   const [sourceVersification, targetVersification] = await Promise.all([
     getTrackedVersification(sourceProjectId),
     getTrackedVersification(projectId),
