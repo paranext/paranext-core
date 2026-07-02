@@ -1,28 +1,37 @@
 ---
-description: Investigate a Shape-Up PRD (port PT9 feature(s) and/or net-new) and produce a discovery brief, then an implementation plan. Pass the PRD path. e.g. /investigate-prd docs/prds/sync-project.md
+description: Investigate a Shape-Up PRD (port PT9 feature(s) and/or net-new) and produce a short brief with proposed work items mapped to the PRD's non-negotiables; after team approval, optionally create the Jira epic + work items. Pass the PRD path. e.g. /investigate-prd docs/prds/sync-project.md
 ---
 
 # Investigate PRD
 
-Investigate the PRD at **$ARGUMENTS** and produce a discovery brief, then — after one human
-checkpoint — an implementation plan.
+Investigate the PRD at **$ARGUMENTS** and produce a short investigation brief whose centerpiece
+is a **proposed work-item breakdown** mapped to the PRD's non-negotiables and nice-to-haves.
 
 ## Overview
 
-1. Parse the PRD into a normalized structure + a per-aspect breakdown (port PT9 / net-new / both).
-2. Investigate each aspect: map + read PT9 source for port aspects; sweep the PT10 constellation
-   always.
-3. Synthesize a discovery brief.
-4. **Checkpoint** — present the brief; the human reviews / edits / approves.
-5. Hand off to `superpowers:writing-plans` to turn the approved brief into an implementation plan.
+1. Parse the PRD into a normalized structure: numbered non-negotiables (`NN-1…`), nice-to-haves
+   (`NTH-1…`), no-gos, and the port-PT9 / net-new breakdown.
+2. Investigate: map + read PT9 source for ported parts; always sweep the PT10 repos for what
+   already exists.
+3. Interview the user about anything that blocks shaping the work items. Don't decide for them.
+4. Write the brief: what the PRD asks for, what already exists, proposed work items, requirement
+   coverage, open questions.
+5. **Checkpoint** — the product owner and implementation owner discuss the brief and revise the
+   PRD/brief until the non-negotiables fit the appetite. Iterate on their edits.
+6. Once the team is happy, offer to create the Jira epic + work items (`/prd-to-jira`).
 
 The command stays thin: it dispatches agents, collates their structured outputs, runs the
-checkpoint, and transitions to planning. It owns no investigation logic of its own.
+interview + checkpoint, and hands off to Jira creation. It owns no investigation logic of its own.
+
+**One team.** A single team works on all the repos involved (paranext-core, paratext-10-studio,
+paratext-bible-extensions, paratext-bible-internal-extensions, and PT9's Paratext). Place each
+work item in whatever repo is architecturally right and never treat repo boundaries as team
+boundaries — cross-repo work carries no coordination cost and is not a risk to flag.
 
 ## Repo access
 
-Investigations read sibling checkouts under `~/git/` — `Paratext` (PT9) and the PT10
-constellation (`paranext-core`, `paratext-10-studio`, `paratext-bible-extensions`,
+Investigations read sibling checkouts under `~/git/` — `Paratext` (PT9) and the PT10 repos
+(`paranext-core`, `paratext-10-studio`, `paratext-bible-extensions`,
 `paratext-bible-internal-extensions`). These live **outside this working directory**, so your
 file tools (`Read`/`Glob`) need access to them. In the default paranext-core checkout this
 **works out of the box** — its `.claude/settings.json` broadly allows `Read`/`Glob`, so the file
@@ -49,24 +58,25 @@ mkdir -p ".context/research/investigations/$SLUG"
 Do **not** auto-commit the brief — the developer commits it as part of their normal flow.
 
 **Preflight — repo access.** Before going further, probe each expected repo with your file tools
-(e.g. `Glob ~/git/Paratext/*`, and a `Glob` of each constellation repo — or `Read` a file under
-each). Treat an *outside-the-allowed-directories / access* error (not an empty result) as
+(e.g. `Glob ~/git/Paratext/*`, and a `Glob` of each PT10 repo — or `Read` a file under each).
+Treat an *outside-the-allowed-directories / access* error (not an empty result) as
 **unreachable**. If any are unreachable, **stop and warn the user before investigating**:
 
 > ⚠️ My file tools can't read these repos: {list}. Either your config restricts file reads
 > (relaunch with `claude --add-dir ~/git`, or broaden the `Read` permission in
-> `.claude/settings.json`) or they aren't checked out under `~/git/`. Without them I'll
-> degrade — fall back to the bundled inventory and flag the gaps. Proceed degraded, or relaunch?
+> `.claude/settings.json`) or they aren't checked out under `~/git/`. Without them my coverage
+> shrinks — I'll fall back to the bundled inventory and flag the gaps. Continue anyway, or relaunch?
 
-An unreachable **constellation** repo degrades `pt10-reuse-scout` (affects every PRD — it always
-runs); an unreachable **`~/git/Paratext`** degrades `pt9-archaeologist` (only matters if the PRD
-ports PT9 features). Wait for the user. If they choose to proceed, continue and let the agents
-degrade per their own `## Degradation` rules.
+An unreachable **PT10** repo degrades `pt10-reuse-scout` (affects every PRD — it always runs);
+an unreachable **`~/git/Paratext`** degrades `pt9-archaeologist` (only matters if the PRD ports
+PT9 features). Wait for the user. If they choose to proceed, continue and let the agents degrade
+per their own `## Degradation` rules.
 
 ## Step 2: Interpret the PRD
 
 Dispatch the `prd-interpreter` agent with the Agent tool (`subagent_type: "prd-interpreter"`),
-passing `PRD_PATH: $ARGUMENTS`. Read its Aspect Breakdown and its status token.
+passing `PRD_PATH: $ARGUMENTS`. Read its normalized output — the numbered `NN-n` / `NTH-n`
+tables and the aspect breakdown — and its status token.
 
 ## Step 3: Soundness gate (present, don't decide)
 
@@ -94,9 +104,10 @@ source, not the aspect.
 
 - **Wave A (single response, in parallel):** one `feature-mapper` (`subagent_type: "feature-mapper"`)
   **per distinct PT9 source**, passing that source's `PT9_REFERENCES` **and the list of aspects it
-  covers**, **and** `pt10-reuse-scout` (`subagent_type: "pt10-reuse-scout"`, pass the PRD summary
-  **and the full aspect breakdown** — the scout sweeps the constellation by each distinct PT9
-  form/category). Dispatch all of these in one message.
+  covers**, **and** `pt10-reuse-scout` (`subagent_type: "pt10-reuse-scout"`, pass the PRD summary,
+  **the numbered NN/NTH tables**, and the full aspect breakdown — the scout sweeps the PT10 repos
+  by each distinct PT9 form/category and tags what it finds by the NN/NTH it covers). Dispatch all
+  of these in one message.
 - **Wave B (single response, in parallel):** for each `feature-mapper` that returned a map, one
   `pt9-archaeologist` (`subagent_type: "pt9-archaeologist"`, pass that source's `PT9_MAP`). Pair each
   archaeologist with the `feature-mapper` output whose `## PT9 map: {feature}` heading matches that
@@ -106,84 +117,109 @@ source, not the aspect.
 Each agent prompt ends with: "Follow the instructions in your agent definition exactly. Return
 output in the specified format." Collect every agent's output and status token. If an agent
 reports `NEEDS_CONTEXT` (e.g. PT9 not checked out), capture what it asked for — you'll surface it
-at the checkpoint.
+at the interview.
 
-## Step 5: Synthesize the discovery brief
+## Step 5: Interview the user
 
-Write `.context/research/investigations/$SLUG/brief.md` with these sections (use `None.` for empty ones):
+Before writing the brief, draft the work-item breakdown (rules in Step 6) and collect everything
+that **blocks or materially shapes it**:
+
+- CLARIFICATION items the user chose to defer at Step 3.
+- Scope calls the investigation surfaced: unclear boundaries, dependencies on functionality that
+  doesn't exist yet, places where the PRD's ask is already partly built and the remaining scope
+  needs an owner decision.
+- Which nice-to-haves to fold into work items now vs. mark "cut first".
+
+Ask these as a short batch of direct questions, **each with a suggested answer** (use the
+question tool if available; otherwise plain text). Skip the interview entirely if nothing blocks
+the breakdown — don't manufacture questions. Do not invent answers to skipped questions; anything
+unresolved goes in brief §5 as a question for the product owner.
+
+## Step 6: Write the brief
+
+Write `.context/research/investigations/$SLUG/brief.md` (use `None.` for empty sections):
 
 ```markdown
-# Discovery brief: {PRD problem name}
+# {Feature name}: investigation
 
-## 1. Feature summary
-Problem, appetite, non-negotiables, no-gos (from the PRD).
+## 1. What the PRD asks for
+{Problem in one short paragraph. Appetite.}
 
-## 2. Aspect breakdown
-Each aspect tagged: ports PT9 feature {X} / net-new / hybrid.
+| ID | Non-negotiable |
+| NN-1 | {PRD wording} |
 
-## 3. PT9 reference  (port/hybrid aspects)
-Where the logic lives (forms/data/flow at file:line), key behaviors, the backend it talks to.
+| ID | Nice-to-have |
+| NTH-1 | {PRD wording} |
 
-## 4. PT10 landscape
-What already exists across the constellation, where the feature should live, reuse-vs-build.
+No-gos: {list}
 
-## 5. Open questions & rabbit holes
-From the PRD + anything investigation surfaced (incl. any agent NEEDS_CONTEXT requests).
+## 2. What already exists
+- **Paratext 9:** {where the feature lives (file:line) and the behaviors that matter}
+- **Paratext 10:** {what already works today, and where}
+- **Reusable as-is:** {…}  **Needs building:** {…}
 
-## 6. PRD alignment
-| PRD section | Original | Discovery finding | Proposed update |
-Reconcile the PRD against what investigation found (scope expansion/reduction, goal conflicts,
-missing success criteria, complexity surprises).
+## 3. Proposed work items
+| # | Work item | Repo | Complexity | Depends on | Covers |
+| WI-1 | {implementation-shaped title} | {repo} | Simple/Moderate/Complex | — | NN-1, NTH-2 |
 
-## 7. Scope decisions  (present options, do NOT auto-decide)
-For each unclear boundary, dependency on un-built functionality, or heavy sub-flow, a 3-way
-option set — **reduce / expand / stub-or-defer** — each with a size + reuse + required-vs-optional
-summary and a recommendation. These are for the human to decide at the checkpoint.
+**WI-1 — {title}.** {What it does. What it produces and which sibling item consumes it. Files it
+likely touches. What it deliberately leaves to other items. Any spike to run before its design.}
 
-## 8. Recommended first slice
-The smallest valuable increment that fits the appetite. This seeds the implementation plan.
+## 4. Requirement coverage
+| Requirement | Work item(s) | Notes |
+| NN-1 {short name} | WI-2 | {how it's met} |
+| NTH-1 {short name} | WI-4 | included / cut first when time is tight |
+
+## 5. Questions for the product owner
+{Each unresolved question, with a suggested answer.}
 ```
 
-## Step 6: Checkpoint (the one human gate)
+**Work-item rules:**
 
-Present a concise **inline** summary — the aspect breakdown, the Scope decisions (§7) with your
-recommendations, and the Recommended first slice (§8) — and point to the full brief:
+- **Split along architectural seams, not one item per requirement.** Separate the read path from
+  the write path, presentational components from data wiring, and end with an integration item
+  that consumes the others. A requirement may need several items; one item may serve several
+  requirements.
+- **Each item ≈ one PR on one branch.** Titles in implementation terms naming the layer
+  ("Update C# comments data provider to expose …", "Create {x} card"), not user-story phrasing.
+- **Coverage is the contract:** every NN maps to at least one work item (a gap here means the
+  breakdown is wrong or the PRD needs renegotiating — say which); every NTH is either inside an
+  item or explicitly "cut first".
+- **Complexity** comes from the scout's per-unit tiers (Simple / Moderate / Complex).
+  **Never emit time estimates** — no hours, days, or weeks, anywhere.
+- Findings that contradict the PRD (feature mostly built already, appetite clearly mis-sized,
+  a "port" that never existed in PT9) go in §5 as questions with suggested answers — the PRD is
+  the product owner's to change, not yours.
 
-> Discovery brief written to `.context/research/investigations/$SLUG/brief.md`. Summary:
-> {aspect breakdown; scope options with recommendations; recommended first slice}
-> Review and edit the brief as you like. Approve it (or tell me what to change) and I'll turn it
-> into an implementation plan.
+## Step 7: Checkpoint
 
-Wait for approval. If the user requests changes, update the brief and re-present. Decide nothing
-on the user's behalf.
+Present a concise **inline** summary — the work-item table, the requirement-coverage table, and
+the §5 questions — and point to the full brief:
 
-## Step 7: Hand off to planning
+> Brief written to `.context/research/investigations/$SLUG/brief.md`. Summary:
+> {work items; coverage; open questions}
+> This is meant to be discussed between the product owner and the implementation owner and
+> revised until the non-negotiables fit the appetite. Tell me what to change and I'll update it.
 
-On approval, invoke the **superpowers:writing-plans** skill to turn the approved brief —
-especially §8 (the first slice) — into an implementation plan. Pass the brief path as context.
+Iterate on requested changes and re-present. Decide nothing on the user's behalf.
 
-**Plan quality bars.** When the plan comes back, sanity-check it against these bars before
-treating it as ready — they catch the common ways a plan looks complete but isn't executable:
+## Step 8: Create the Jira epic + work items (optional, gated)
 
-1. **Acyclic dependency graph.** Capability/task dependencies form a DAG with no cycles, and that
-   dependency order is what drives the execution order. A unit that (transitively) depends on
-   itself is a planning bug.
-2. **Risk + concrete mitigation pairs.** Each identified risk is paired with a specific, actionable
-   mitigation — not a restatement of the risk. "Might be slow → profile and cache hot path", not
-   "performance risk".
-3. **Per-unit acceptance criteria.** Every capability/task says what "done" looks like (an
-   acceptance test or a concrete "done when"), specific enough to evaluate against.
+When the user says the team is happy with the brief, offer to create the epic and work items in
+Jira. Follow `.claude/commands/prd-to-jira.md` — do not duplicate its steps here. It is also a
+standalone command, so this can happen days later in a fresh session:
+`/prd-to-jira .context/research/investigations/$SLUG/brief.md`.
 
-(TDD-for-backend and Component-First-for-UI strategy selection is already handled by
-`superpowers:writing-plans`.)
+Per-work-item design and implementation planning (e.g. `superpowers:writing-plans`) happen
+**after** Jira creation, one work item at a time — not in this command.
 
 ## Error handling
 
 - **No PRD path** → ask for it (Step 1).
 - **PRD references a PT9 feature not in the inventory** → `feature-mapper` notes the gap;
   `pt9-archaeologist` searches PT9 directly from the PRD's named form.
-- **A constellation repo / PT9 not checked out** → the owning agent degrades and reports what's
-  missing; the brief is still produced; surface the gap at the checkpoint.
+- **A PT10 repo / PT9 not checked out** → the owning agent degrades and reports what's
+  missing; the brief is still produced; surface the gap at the interview/checkpoint.
 - **The PRD is part of an epic** (cites sibling PRDs as "separate PRD") → note the dependencies;
   scope the investigation to this one PRD.
 
@@ -193,7 +229,7 @@ The token sets differ by agent: `prd-interpreter` ends with `DONE` / `DONE_WITH_
 `BLOCKED`; the three investigation agents end with `DONE` / `DONE_WITH_CONCERNS` /
 `NEEDS_CONTEXT`. Handle by phase:
 - `prd-interpreter`'s `DONE_WITH_CONCERNS` → its `CLARIFICATION-{N}` items trigger the **Step 3
-  soundness gate** (stop and ask before investigating); do **not** defer these to §5.
-- an investigation agent's `DONE_WITH_CONCERNS` or `NEEDS_CONTEXT` → material for §5 (open
-  questions) and the checkpoint; not a stop.
+  soundness gate** (stop and ask before investigating); do **not** defer these to the interview.
+- an investigation agent's `DONE_WITH_CONCERNS` or `NEEDS_CONTEXT` → material for the Step 5
+  interview and brief §5; not a stop.
 - any `BLOCKED` → stop-and-ask.
