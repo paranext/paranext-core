@@ -137,6 +137,11 @@ internal static class CommentTestHelper
     /// </summary>
     internal static Comment CreateVerseTextConflictComment()
     {
+        // Reuse the base conflict comment's identity (Thread/VerseRef/Date/Status/Type/…) and override
+        // only the verseText-specific fields: a rejected-side diff Contents (the losing side inserted
+        // "small"), the VerseTextConflict type, the accepted-side diff (the winning side inserted
+        // "big"), and the resulting Verse.
+        Comment testComment = CreateConflictComment();
         XmlDocument contentsDoc = new XmlDocument();
         contentsDoc.LoadXml(
             """
@@ -148,16 +153,7 @@ internal static class CommentTestHelper
             </Contents>
             """
         );
-
-        DummyUser user = new DummyUser("Tim Steenwyk");
-        Comment testComment = new Comment(user);
-        testComment.Thread = "5f5ea40f";
-        testComment.VerseRefStr = "MAT 2:1";
-        testComment.Date = "2011-08-16T15:49:18.4019847-04:00";
-        testComment.Status = NoteStatus.Todo;
-        testComment.HideInTextWindow = false;
         testComment.Contents = contentsDoc.DocumentElement;
-        testComment.Type = NoteType.Conflict;
         testComment.ConflictType = NoteConflictType.VerseTextConflict;
         testComment.AcceptedChangeXmlStr =
             """<p><language name="es-015-vaidika"><p>\v 1 When Jesus was born in the <bold><color name="red">big </color></bold>village of Bethlehem in Judea, Herod was king.</p></language></p>""";

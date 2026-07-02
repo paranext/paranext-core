@@ -232,26 +232,65 @@ public class PlatformCommentWrapper
         && _comment.ConflictType == NoteConflictType.VerseTextConflict
         && IsFirstCommentInThread;
 
+    // Per-instance lazy caches for the decode fields. Each involves a full HTML render (and, for
+    // RejectedResultText, an XmlDocument parse + USFM decode), so caching avoids repeating that work
+    // when a getter is read more than once (tests read them repeatedly; the emit logic may consult a
+    // property twice). PlatformCommentWrapper instances are short-lived and single-consumer — a fresh
+    // wrapper is built per comment per serialization and discarded after one Write — so no locking is
+    // needed. Caches are populated lazily on first GET, never in the constructor: converter Read and
+    // UpdateComment mutate _comment.Contents through the ContentsHtml setter AFTER construction, so an
+    // eager cache could capture stale content — and those wrappers are never serialized anyway
+    // (serialization requires thread context, which they lack). ResultText stays a plain passthrough
+    // (no work worth caching).
+    private bool _rejectedTextComputed;
+    private string? _rejectedTextValue;
+    private bool _acceptedTextComputed;
+    private string? _acceptedTextValue;
+    private bool _rejectedResultTextComputed;
+    private string? _rejectedResultTextValue;
+
     /// <summary>
     /// For a verseText conflict note, the HTML diff of the rejected (losing) side, using PT9's
     /// <c>&lt;u&gt;</c> (inserted) / <c>&lt;s&gt;</c> (deleted) markup. The leading conflict-message
-    /// paragraph is skipped so only the verse diff remains. Null for any other note.
+    /// paragraph is skipped so only the verse diff remains. Null for any other note, and null when the
+    /// rejected-side diff renders empty.
     /// </summary>
-    public string? RejectedText =>
-        IsVerseTextConflict
-            ? RenderConflictSideHtml(_comment.Contents, skipLeadingMessage: true)
-            : null;
+    public string? RejectedText
+    {
+        get
+        {
+            if (!_rejectedTextComputed)
+            {
+                _rejectedTextValue = IsVerseTextConflict
+                    ? RenderConflictSideHtml(_comment.Contents, skipLeadingMessage: true)
+                    : null;
+                _rejectedTextComputed = true;
+            }
+            return _rejectedTextValue;
+        }
+    }
 
     /// <summary>
     /// For a verseText conflict note, the HTML diff of the accepted (winning) side. Null for any
     /// other note, and also null for a verseText conflict with no common ancestor (when
-    /// <c>AcceptedChangeXmlStr</c> was never set because <c>parent == null</c> in the merger).
-    /// Consumers must treat this as optional even on verseText conflict notes.
+    /// <c>AcceptedChangeXmlStr</c> was never set because <c>parent == null</c> in the merger) or when
+    /// the accepted-side diff renders empty. Consumers must treat this as optional even on verseText
+    /// conflict notes.
     /// </summary>
-    public string? AcceptedText =>
-        IsVerseTextConflict
-            ? RenderConflictSideHtml(_comment.AcceptedChangeXml, skipLeadingMessage: false)
-            : null;
+    public string? AcceptedText
+    {
+        get
+        {
+            if (!_acceptedTextComputed)
+            {
+                _acceptedTextValue = IsVerseTextConflict
+                    ? RenderConflictSideHtml(_comment.AcceptedChangeXml, skipLeadingMessage: false)
+                    : null;
+                _acceptedTextComputed = true;
+            }
+            return _acceptedTextValue;
+        }
+    }
 
     /// <summary>
     /// For a verseText conflict note, the resulting verse USFM already written into the text at merge time
@@ -272,13 +311,23 @@ public class PlatformCommentWrapper
     {
         get
         {
-            if (!IsVerseTextConflict)
-                return null;
-            var usfm = CommentEditHelper.GetDiffVerseUsfm(
-                _comment.Contents,
-                getChangedVersion: true
-            );
-            return string.IsNullOrEmpty(usfm) ? null : usfm;
+            if (!_rejectedResultTextComputed)
+            {
+                if (IsVerseTextConflict)
+                {
+                    var usfm = CommentEditHelper.GetDiffVerseUsfm(
+                        _comment.Contents,
+                        getChangedVersion: true
+                    );
+                    _rejectedResultTextValue = string.IsNullOrEmpty(usfm) ? null : usfm;
+                }
+                else
+                {
+                    _rejectedResultTextValue = null;
+                }
+                _rejectedResultTextComputed = true;
+            }
+            return _rejectedResultTextValue;
         }
     }
 
