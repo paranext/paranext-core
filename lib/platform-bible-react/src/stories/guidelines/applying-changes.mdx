@@ -103,7 +103,7 @@ Users make two kinds of errors ([Norman, via NN/g](https://www.nngroup.com/artic
 
 Immediate apply reduces slips (the effect is visible, so a wrong move is caught immediately) but makes a slip on a *destructive* action more costly. We answer that with four tools, in rough order of preference:
 
-1. **Undo — the safety net.** [User control and freedom](https://www.nngroup.com/articles/user-control-and-freedom/) (Nielsen's heuristic #3) calls undo an "emergency exit" that makes errors "less costly." For a reversible action, offering undo afterward is usually **better than blocking with a prompt**.
+1. **Undo — the safety net.** [User control and freedom](https://www.nngroup.com/articles/user-control-and-freedom/) (Nielsen's heuristic #3) calls undo an "emergency exit" that makes errors "less costly." For a reversible action, offering undo afterward is usually **better than blocking with a prompt**. Undo is a **requirement**, not an optional nicety: if you default a reversible change to immediate apply, some undo affordance must exist for it. See the [known gap](#known-gap-app-wide-undo) below for what "some undo affordance" means today.
 2. **Warn before the error** — passive, contextual awareness that an action is consequential (a `destructive` button variant, inline copy) before the user commits it.
 3. **Remove memory burden** — "remove conditions that require users to keep information in their own memory." Show the state; don't make the user remember what they changed.
 4. **Intentional friction — a confirmation step — used sparingly.** For actions that are **consequential, irreversible, expensive, or easy to mis-trigger**, interrupt with a confirm step. But NN/g is explicit that overusing confirmation makes users "instinctively click" it without reading — so a confirmation dialog on a routine action does **not** protect anyone. This is the same reason we avoid **OK** (below).
@@ -137,8 +137,17 @@ If an immediate-apply change is visible on screen, the change **is** its own con
 
 Two consequences:
 
-- **For a reversible immediate-apply change whose effect is already visible, rely on app-wide undo (`Ctrl+Z`) — do not spawn an undo toast.** Reserve undo toasts for changes that are off-screen, bulk, or not obviously reversible via the control itself. Otherwise every toggle spawns a toast and we are back to noise that trains users to ignore it.
+- **For a reversible immediate-apply change whose effect is already visible, prefer undo over an undo toast — but the undo has to actually exist.** The goal state is app-wide undo (`Ctrl+Z`) covering these changes; that does not yet exist (see the [known gap](#known-gap-app-wide-undo)). So do not spawn an undo toast on every visible toggle — but do not ship the change with *no* recovery either. Until app-wide undo lands, the feature must provide its own local undo (a revert control, a feature-scoped `Ctrl+Z`, or a scoped undo toast) for reversible changes. Once app-wide undo covers a change, drop the local affordance. The thing to avoid is a toast on every toggle — noise that trains users to ignore it — not undo itself.
 - **Do not auto-save data with financial, security, or privacy impact** ([GitLab](https://design.gitlab.com/patterns/saving-and-feedback/)) — those want an explicit, deliberate commit.
+
+### Known gap: app-wide undo
+
+The guidance above assumes a single, app-wide undo (`Ctrl+Z`) that can reverse a reversible immediate-apply change wherever it happens. **That does not exist yet.** Today, `Ctrl+Z` is scoped to specific surfaces (e.g. the scripture/footnote editors via `EditorKeyboardShortcuts`); there is no global undo command.
+
+This is a deliberate **aspiration + known gap**, not a claim about the current build:
+
+- **Aspiration:** app-wide undo becomes the default recovery net for reversible immediate-apply changes, so most such changes need no per-change affordance.
+- **Until then:** the undo requirement still holds. A feature that defaults a reversible change to immediate apply **must build its own** undo (feature-local revert, a scoped `Ctrl+Z`, or a scoped undo toast) rather than assume a global one it can lean on. Do not read "rely on app-wide undo" as permission to ship no recovery.
 
 ---
 
