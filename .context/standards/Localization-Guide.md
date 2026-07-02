@@ -184,6 +184,12 @@ The consuming extension resolves the keys with `useLocalizedStrings(STRING_KEYS)
 
 > Note: a few components also accept a separate data map prop such as `localizedBookNames?: Map<…>` for localized book names — that is a distinct, data-shaped prop, not the string-key mechanism described here.
 
+> ⚠️ Several components in the precedent list above currently resolve with `strings[key] ?? key`
+> (raw-key fallback) rather than the `?? 'English'` fallback described here — a known deviation
+> tracked for cleanup. A raw-key fallback renders the localize key verbatim on screen when a key is
+> absent. New or edited library components MUST use the English fallback. See the agent rule
+> [`.claude/rules/code-quality/localized-string-fallbacks.md`](../../.claude/rules/code-quality/localized-string-fallbacks.md).
+
 ---
 
 ## Conventions
