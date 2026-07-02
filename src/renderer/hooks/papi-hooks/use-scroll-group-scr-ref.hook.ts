@@ -219,33 +219,15 @@ export function useScrollGroupScrRef(
 
       // On detaching (undefined), seed the now-independent ref with what we are DISPLAYING — the
       // reference converted into this project's versification (from cache when available), not the
-      // raw group ref in the source project's frame.
-      const detachingFromGroupId = scrollGroupIdLocalRef.current;
+      // raw group ref in the source project's frame. No async correction is needed: a followed
+      // verse's conversion has already resolved (and cached) by the time the user can operate the
+      // scroll-group selector, so `displayScrRef` here is already the converted value. In the
+      // (unreachable) case where a detach races the conversion round-trip, the pane simply keeps the
+      // verse it was displaying — recoverable by navigating, no persisted write.
       if (!setScrollGroupScrRefRef.current(displayScrRef)) return;
       scrollGroupIdLocalRef.current = undefined;
-
-      // If the conversion for the current verse has not resolved yet, `displayScrRef` may still be
-      // the raw source-frame ref (it cannot be converted synchronously). Finish the conversion
-      // asynchronously and re-seed once it resolves; otherwise a first-visit detach would freeze the
-      // now-independent ref in the source project's frame (it is thereafter treated as this project's
-      // own frame and never re-converted).
-      if (isConversionRequired && projectId && detachingFromGroupId !== undefined) {
-        (async () => {
-          try {
-            const converted = await getScrRefForProject(detachingFromGroupId, projectId);
-            // Only correct the seed if we are still detached and the value actually differs.
-            if (
-              scrollGroupIdLocalRef.current === undefined &&
-              compareScrRefs(converted, displayScrRef) !== 0
-            )
-              setScrollGroupScrRefRef.current(converted);
-          } catch {
-            // Best-effort re-seed; the synchronous seed applied above stands on failure.
-          }
-        })();
-      }
     },
-    [displayScrRef, isConversionRequired, projectId],
+    [displayScrRef],
   );
 
   return [displayScrRef, setScrRef, scrollGroupIdLocal, setScrollGroupId];

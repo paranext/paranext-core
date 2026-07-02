@@ -189,41 +189,6 @@ describe('useScrollGroupScrRef versification conversion', () => {
     await waitFor(() => expect(result.current[0]).toEqual(convertedFromOther));
   });
 
-  it('re-seeds a ref detached mid-conversion once the pending conversion resolves', async () => {
-    // First visit: nothing cached, so the synchronous seed is the raw source-frame ref and the async
-    // conversion is still in flight when the user detaches.
-    getScrRefForProjectSync.mockReturnValue(rawRef);
-    let resolveConversion: (value: typeof convertedRef) => void = () => {};
-    getScrRefForProject.mockReturnValue(
-      new Promise((resolve) => {
-        resolveConversion = resolve;
-      }),
-    );
-    const setScrollGroupScrRef = vi.fn(() => true);
-
-    const { useScrollGroupScrRef } = await import(
-      '@renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook'
-    );
-
-    const { result } = renderHook(() =>
-      useScrollGroupScrRef(0, setScrollGroupScrRef, 'targetProj'),
-    );
-
-    // Displayed value is the raw seed while the conversion is pending.
-    expect(result.current[0]).toEqual(rawRef);
-
-    // Detach mid-conversion: seeds the raw ref immediately (best-effort, synchronous)...
-    act(() => result.current[3](undefined));
-    expect(setScrollGroupScrRef).toHaveBeenLastCalledWith(rawRef);
-
-    // ...then re-seeds with the correct-frame conversion once the round-trip resolves, so the
-    // detached ref is not frozen in the source project's frame.
-    await act(async () => {
-      resolveConversion(convertedRef);
-    });
-    await waitFor(() => expect(setScrollGroupScrRef).toHaveBeenLastCalledWith(convertedRef));
-  });
-
   it('re-converts the followed ref when a versification-changed event fires', async () => {
     const first = { book: 'PSA', chapterNum: 146, verseNum: 1, versificationStr: '4' };
     const second = { book: 'PSA', chapterNum: 145, verseNum: 1, versificationStr: '5' };
