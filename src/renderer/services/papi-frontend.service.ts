@@ -14,6 +14,8 @@ import { dataProviderService, DataProviderService } from '@shared/services/data-
 import { dialogService } from '@shared/services/dialog.service';
 import { DialogService } from '@shared/services/dialog.service-model';
 import { internetService, InternetService } from '@shared/services/internet.service';
+import { keyboardService } from '@shared/services/keyboard.service';
+import { IKeyboardService } from '@shared/services/keyboard.service-model';
 import { localizationService } from '@shared/services/localization.service';
 import { ILocalizationService } from '@shared/services/localization.service-model';
 import papiLogger from '@shared/services/logger.service';
@@ -109,6 +111,9 @@ const papi = {
   localization: localizationService as ILocalizationService,
   /** JSDOC DESTINATION notificationService */
   notifications: notificationService as INotificationService,
+  // === NEW IN PT10 === (keyboard-switching CAP-016)
+  /** JSDOC DESTINATION keyboardService */
+  keyboard: keyboardService as IKeyboardService,
   /** JSDOC DESTINATION windowService */
   window: windowService as IWindowService,
   /** JSDOC DESTINATION overlayService */
@@ -189,6 +194,10 @@ Object.freeze(papi.localization);
 /** JSDOC DESTINATION notificationService */
 export const { notifications } = papi;
 Object.freeze(papi.notifications);
+// === NEW IN PT10 === (keyboard-switching CAP-016)
+/** JSDOC DESTINATION keyboardService */
+export const { keyboard } = papi;
+Object.freeze(papi.keyboard);
 /** JSDOC DESTINATION windowService */
 export const { window } = papi;
 Object.freeze(papi.window);

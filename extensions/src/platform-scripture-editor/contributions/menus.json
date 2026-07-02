@@ -78,6 +78,13 @@
             "command": "platformScripture.openManageBooks"
           },
           {
+            "label": "%webView_platformScriptureEditor_keyboardSelection%",
+            "localizeNotes": "Scripture editor project tab menu > Project > Keyboard... (opens the keyboard-selection dialog for the editor's project — keyboard-switching BHV-300/BHV-301)",
+            "group": "platform.projectTop",
+            "order": 4,
+            "command": "platform.openKeyboardSelection"
+          },
+          {
             "label": "%webView_platformScriptureEditor_openFind%",
             "group": "platformScriptureEditor.find",
             "order": 3,

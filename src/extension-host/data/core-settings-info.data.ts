@@ -27,6 +27,16 @@ export const platformSettings: SettingsContribution = [
         default: {},
         isHidden: true,
       },
+      // === NEW IN PT10 === (keyboard-switching CAP-009)
+      // Reason: PT9 stored per-project keyboard associations in `Settings.Default.ProjectKeyboards`
+      // (user-scoped, machine-local); PT10 persists them in ONE nested-object user setting managed
+      // by `KeyboardAssociationStore` (backend-alignment §"Storage Decision").
+      // Maps to: CAP-009 / EXT-100
+      'platform.keyboardsByProject': {
+        label: '%settings_platform_keyboardsByProject_label%',
+        default: {},
+        isHidden: true,
+      },
       'platform.paratextDataLastRegistryDataCachedTimes': {
         label: '%settings_platform_paratextDataLastRegistryDataCachedTimes_label%',
         default: {},

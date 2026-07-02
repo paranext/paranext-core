@@ -58,6 +58,8 @@ import { dataProtectionService } from '@shared/services/data-protection.service'
 import { INotificationService } from '@shared/models/notification.service-model';
 import { notificationService } from '@shared/services/notification.service';
 import { appService } from '@shared/services/app.service';
+import { IKeyboardService } from '@shared/services/keyboard.service-model';
+import { keyboardService } from '@shared/services/keyboard.service';
 
 // IMPORTANT NOTES:
 // 1) When adding new services here, consider whether they also belong in papi-frontend.service.ts.
@@ -132,6 +134,9 @@ const papi = {
   localization: localizationService as ILocalizationService,
   /** JSDOC DESTINATION notificationService */
   notifications: notificationService as INotificationService,
+  // === NEW IN PT10 === (keyboard-switching CAP-016)
+  /** JSDOC DESTINATION keyboardService */
+  keyboard: keyboardService as IKeyboardService,
   /** JSDOC DESTINATION windowService */
   window: windowService as IWindowService,
 };
@@ -231,6 +236,10 @@ Object.freeze(papi.localization);
 /** JSDOC DESTINATION notificationService */
 export const { notifications } = papi;
 Object.freeze(papi.notifications);
+// === NEW IN PT10 === (keyboard-switching CAP-016)
+/** JSDOC DESTINATION keyboardService */
+export const { keyboard } = papi;
+Object.freeze(papi.keyboard);
 /** JSDOC DESTINATION windowService */
 export const { window } = papi;
 Object.freeze(papi.window);
