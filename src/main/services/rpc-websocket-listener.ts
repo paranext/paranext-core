@@ -12,7 +12,6 @@ import {
   requestWithRetry,
   UNREGISTER_EVENT,
   UNREGISTER_METHOD,
-  WEBSOCKET_PORT,
 } from '@shared/data/rpc.model';
 import { IRpcMethodRegistrar, RegisteredRpcMethodDetails } from '@shared/models/rpc.interface';
 import {
@@ -31,6 +30,7 @@ import { WebSocketServer } from 'ws';
 import { logger } from '@shared/services/logger.service';
 import { JSONRPCErrorCode, JSONRPCResponse } from 'json-rpc-2.0';
 import { bindClassMethods, SerializedRequestType } from '@shared/utils/util';
+import { createPapiWebSocketServer } from '@main/services/web-socket-server.factory';
 import { RpcServer } from './rpc-server';
 // RpcEventRegistry was extracted to its own file to satisfy max-classes-per-file
 import { RpcEventRegistry } from './rpc-event-registry';
@@ -81,7 +81,7 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
   }
 
   connect(localEventHandler: EventHandler): Promise<boolean> {
-    return this.connectionMutex.runExclusive(() => {
+    return this.connectionMutex.runExclusive(async () => {
       if (this.connectionStatus !== ConnectionStatus.Disconnected) return false;
       this.localEventHandler = localEventHandler;
       this.registerMethod(GET_METHODS, this.generateOpenRpcSchema, {
@@ -97,7 +97,14 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
         },
       });
 
-      this.webSocketServer = new WebSocketServer({ port: WEBSOCKET_PORT });
+      // Prefer the default port, but fall back to a free port when it is already in use so this
+      // app runs its own isolated PAPI network (e.g. another paranext-based app is running)
+      const { webSocketServer, port } = await createPapiWebSocketServer();
+      this.webSocketServer = webSocketServer;
+      // Advertise the port to the rest of main and to the processes main spawns (renderer,
+      // extension host, .NET data provider) so this app's clients connect to this app's server
+      globalThis.webSocketPort = port;
+      logger.info(`PAPI WebSocket server is listening on port ${port}`);
       this.webSocketServer.addListener('connection', this.onClientConnect);
       this.webSocketServer.addListener('close', this.disconnect);
 

@@ -69,6 +69,17 @@ declare global {
   var updateWebViewDefinition: UpdateWebViewDefinition;
   /** Indicates whether test code meant just for developers to see should be run */
   var isNoisyDevModeEnabled: boolean;
+  /**
+   * Port this app's PAPI WebSocket server is listening on. Each app instance runs its own isolated
+   * PAPI network, and the port may differ from the default when the default port is already in use
+   * (e.g. another paranext-based app is running). `undefined` means the port is not (yet) known,
+   * and consumers should fall back to the default port.
+   *
+   * - Main: set when the WebSocket server starts listening
+   * - Renderer: set from the query parameter provided by main
+   * - Extension host: set from the command-line argument provided by main
+   */
+  var webSocketPort: number | undefined;
 }
 /* eslint-enable */
 

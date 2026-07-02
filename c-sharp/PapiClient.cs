@@ -14,7 +14,20 @@ internal class PapiClient : IDisposable
 {
     #region Delegates/Constants/Member variables
 
-    private static readonly Uri s_connectionUri = new("ws://localhost:8876");
+    /// <summary>
+    /// Default port for the PAPI WebSocket server. Must match WEBSOCKET_PORT in
+    /// src/shared/data/rpc.model.ts
+    /// </summary>
+    internal const int DEFAULT_WEBSOCKET_PORT = 8876;
+
+    /// <summary>
+    /// Environment variable main uses to advertise the port its PAPI WebSocket server is actually
+    /// listening on, which may differ from the default port when the default was in use by another
+    /// app (e.g. another paranext-based app running its own PAPI network)
+    /// </summary>
+    internal const string WEBSOCKET_PORT_ENV_VAR = "PAPI_WEBSOCKET_PORT";
+
+    private static readonly Uri s_connectionUri = GetConnectionUri();
 
     private readonly ClientWebSocket _webSocket = new();
     private readonly JsonRpc _jsonRpc;
@@ -26,6 +39,28 @@ internal class PapiClient : IDisposable
     private ISharedStore? _sharedStore = null;
 
     private bool _isDisposed = false;
+
+    /// <summary>
+    /// Determine the URI of this app's PAPI WebSocket server from the port advertised in
+    /// <see cref="WEBSOCKET_PORT_ENV_VAR"/>, falling back to <see cref="DEFAULT_WEBSOCKET_PORT"/>
+    /// when the variable is absent or invalid
+    /// </summary>
+    internal static Uri GetConnectionUri()
+    {
+        string? portValue = Environment.GetEnvironmentVariable(WEBSOCKET_PORT_ENV_VAR);
+        if (string.IsNullOrEmpty(portValue))
+            return new Uri($"ws://localhost:{DEFAULT_WEBSOCKET_PORT}");
+
+        if (!ushort.TryParse(portValue, out ushort port) || port == 0)
+        {
+            Console.WriteLine(
+                $"Ignoring invalid {WEBSOCKET_PORT_ENV_VAR} value \"{portValue}\". Using default port {DEFAULT_WEBSOCKET_PORT}"
+            );
+            return new Uri($"ws://localhost:{DEFAULT_WEBSOCKET_PORT}");
+        }
+
+        return new Uri($"ws://localhost:{port}");
+    }
 
     #endregion
 

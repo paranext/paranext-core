@@ -6,7 +6,15 @@
  * using webpack. This gives us some performance wins.
  */
 
-import { app, BrowserWindow, ipcMain, RenderProcessGoneDetails, session, shell } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  RenderProcessGoneDetails,
+  session,
+  shell,
+} from 'electron';
 import os from 'os';
 import path from 'path';
 // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
@@ -43,8 +51,9 @@ import {
   LOG_LEVEL_QUERY_PARAMETER,
   MAX_ZOOM_FACTOR,
   MIN_ZOOM_FACTOR,
+  WEBSOCKET_PORT_QUERY_PARAMETER,
 } from '@shared/data/platform.data';
-import { GET_METHODS } from '@shared/data/rpc.model';
+import { GET_METHODS, getWebSocketPort, getWebSocketUrl } from '@shared/data/rpc.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import * as commandService from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
@@ -196,7 +205,17 @@ async function openExternal(url: string) {
 
 async function main() {
   // The network service has to start first, and it uses the shared store after initialization
-  await networkService.initialize();
+  try {
+    await networkService.initialize();
+  } catch (e) {
+    // Without its own PAPI network, none of this app's services or UI can work, so fail loudly
+    // instead of presenting a half-initialized app (PT-4109)
+    const errorMessage = `The PAPI WebSocket server could not start, so ${APP_NAME} cannot run: ${getErrorMessage(e)}`;
+    logger.error(errorMessage);
+    dialog.showErrorBox(`${APP_NAME} cannot start`, errorMessage);
+    app.exit(1);
+    return;
+  }
   await initializeSharedStoreService(networkService);
 
   // The network object status service relies on seeing everything else start up later
@@ -605,6 +624,9 @@ async function main() {
     // Built URL search parameters for use in `src/renderer/global-this.model.ts`
     const searchParamsObject: Record<string, string> = {
       [LOG_LEVEL_QUERY_PARAMETER]: globalThis.logLevel,
+      // Advertise the PAPI WebSocket server's port so the renderer connects to this app's own
+      // network even when the default port was in use by another app
+      [WEBSOCKET_PORT_QUERY_PARAMETER]: `${getWebSocketPort()}`,
     };
 
     if (globalThis.isNoisyDevModeEnabled) searchParamsObject[DEV_MODE_QUERY_PARAMETER] = '';
@@ -933,7 +955,7 @@ async function main() {
     },
   );
 
-  const liveDocsUrl = `https://playground.open-rpc.org/?transport=websocket&schemaUrl=${encodeURIComponent('ws://localhost:8876\n')}&uiSchema[appBar][ui:splitView]=false&uiSchema[appBar][ui:input]=false&uiSchema[appBar][ui:examplesDropdown]=false&uiSchema[appBar][ui:transports]=false&uiSchema[appBar][ui:darkMode]=true&uiSchema[appBar][ui:title]=PAPI`;
+  const liveDocsUrl = `https://playground.open-rpc.org/?transport=websocket&schemaUrl=${encodeURIComponent(`${getWebSocketUrl()}\n`)}&uiSchema[appBar][ui:splitView]=false&uiSchema[appBar][ui:input]=false&uiSchema[appBar][ui:examplesDropdown]=false&uiSchema[appBar][ui:transports]=false&uiSchema[appBar][ui:darkMode]=true&uiSchema[appBar][ui:title]=PAPI`;
   commandService.registerCommand(
     'platform.openDeveloperDocumentationUrl',
     async () => {

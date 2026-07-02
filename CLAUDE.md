@@ -56,7 +56,7 @@ The application runs as four separate processes that communicate via JSON-RPC ov
 │  • Window management & app lifecycle                     │
 │  • Spawns and manages child processes                    │
 └────────────────┬────────────────────────────────────────┘
-                 │ JSON-RPC over WebSocket (port 8876)
+                 │ JSON-RPC over WebSocket (default port 8876; falls back to a free port when taken)
     ┌────────────┼────────────┬───────────────────┐
     │            │            │                   │
 ┌───▼────────┐ ┌─▼──────────┐ ┌▼────────────────┐

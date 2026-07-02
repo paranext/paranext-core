@@ -18,6 +18,10 @@ const logLevel =
   // Assert the extracted type.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   (getCommandLineArgument(CommandLineArgs.LogLevel) as LogLevel) ?? (isPackaged ? 'error' : 'info');
+// Main advertises the port its PAPI WebSocket server is actually listening on, which may differ
+// from the default port when the default was in use by another app. Leave undefined if absent or
+// invalid so consumers fall back to the default port
+const webSocketPort = parseInt(getCommandLineArgument(CommandLineArgs.WebSocketPort) ?? '', 10);
 globalThis.isNoisyDevModeEnabled = isNoisyDevModeEnvVariableSet();
 
 // #endregion
@@ -28,6 +32,7 @@ globalThis.processType = ProcessType.ExtensionHost;
 globalThis.isPackaged = isPackaged;
 globalThis.resourcesPath = resourcesPath;
 globalThis.logLevel = logLevel;
+globalThis.webSocketPort = Number.isNaN(webSocketPort) ? undefined : webSocketPort;
 
 // #endregion
 

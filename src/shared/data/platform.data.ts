@@ -10,6 +10,12 @@ export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
 /** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
 export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
 
+/**
+ * Query parameter passed to the renderer. Advertises the port this app's PAPI WebSocket server is
+ * listening on
+ */
+export const WEBSOCKET_PORT_QUERY_PARAMETER = 'webSocketPort';
+
 /** ID of the default theme family for use in the application */
 export const DEFAULT_THEME_FAMILY = '';
 /** Type of the default theme for use in the application */

@@ -2,7 +2,7 @@
 // Once tested, this code should probably be added to src/extension-host/services/papi-backend.service.ts as PapiNodeWebSocket.
 // This is the equivalent of PapiRendererWebSocket but for the extension host process instead of the renderer process.
 
-import { WEBSOCKET_PORT } from '@shared/data/rpc.model';
+import { getWebSocketPort } from '@shared/data/rpc.model';
 import { logger } from '@shared/services/logger.service';
 import { ClientRequest, ClientRequestArgs, IncomingMessage } from 'http';
 import {
@@ -27,7 +27,7 @@ function isPotentialConnectionToPapiNetwork(url: string | URL): boolean {
   }
 
   const { port } = urlObj;
-  return parseInt(port, 10) === parseInt(`${WEBSOCKET_PORT}`, 10);
+  return parseInt(port, 10) === getWebSocketPort();
 }
 
 // The following block is copied verbatim from the `ws` package type definitions, which use `any`,

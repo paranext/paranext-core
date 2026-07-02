@@ -1,4 +1,4 @@
-import { WEBSOCKET_PORT } from '@shared/data/rpc.model';
+import { getWebSocketPort } from '@shared/data/rpc.model';
 
 // Allow system networking components to create web sockets that connect back to localhost at first
 let allowWebSocketsBackToPapiNetwork: boolean = true;
@@ -18,7 +18,7 @@ function isPotentialConnectionToPapiNetwork(url: string | URL): boolean {
   }
 
   const { port } = urlObj;
-  return parseInt(port, 10) === parseInt(`${WEBSOCKET_PORT}`, 10);
+  return parseInt(port, 10) === getWebSocketPort();
 }
 
 /**

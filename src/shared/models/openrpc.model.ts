@@ -1,7 +1,7 @@
 // The OpenRPC schema types are hand-translated from JSON Schema and inherently require `any` for
 // fields that accept arbitrary JSON values (e.g., schema examples, default values, extensions).
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { WEBSOCKET_PORT } from '@shared/data/rpc.model';
+import { getWebSocketUrl } from '@shared/data/rpc.model';
 import type { JSONSchema7 } from 'json-schema';
 
 // #region OpenRPC types translated from JSON Schema to TypeScript
@@ -244,7 +244,7 @@ export function createEmptyOpenRpc(papiVersion: string): OpenRpc {
       },
       {
         name: 'PAPI websocket',
-        url: `ws://localhost:${WEBSOCKET_PORT}`,
+        url: getWebSocketUrl(),
       },
     ],
     methods: [],
