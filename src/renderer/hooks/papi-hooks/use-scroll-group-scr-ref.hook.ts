@@ -3,6 +3,7 @@ import {
   getScrRefForProjectSync,
   getScrRefSourceProjectIdSync,
   getScrRefSync,
+  onDidChangeVersification,
   onDidUpdateScrRef,
   setScrRefSync,
 } from '@renderer/services/scroll-group.service-host';
@@ -120,6 +121,15 @@ export function useScrollGroupScrRef(
     ),
   );
 
+  // Bump a generation counter when any tracked project's versification changes mid-session so every
+  // consumer re-runs its conversion once (see scroll-group.service-host emit). Blunt by design:
+  // versification changes are rare and deliberate.
+  const [versificationGeneration, setVersificationGeneration] = useState(0);
+  useEvent(
+    onDidChangeVersification,
+    useCallback(() => setVersificationGeneration((generation) => generation + 1), []),
+  );
+
   // Whether the followed ref needs converting into this consumer's project versification for
   // display. False when there is no target project or the source project already matches it. This gate
   // is load-bearing: it is ALSO what keeps an independent (object) ref — whose source is this project
@@ -149,7 +159,11 @@ export function useScrollGroupScrRef(
     } catch {
       return scrRefLocal;
     }
-  }, [projectId, scrRefLocal, sourceProjectIdLocal]);
+    // versificationGeneration is an intentional invalidation token (bumped on a mid-session
+    // versification change) so this factory's identity changes and usePromise re-runs the conversion.
+    // It is deliberately not read in the body; exhaustive-deps cannot model an invalidation token.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, scrRefLocal, sourceProjectIdLocal, versificationGeneration]);
 
   // Seed with the synchronously-known conversion (a cached result, or the raw ref) so a revisited
   // verse displays correctly with no flash. `preserveValue: false` resets to this current-verse seed
@@ -162,7 +176,11 @@ export function useScrollGroupScrRef(
       isConversionRequired
         ? getScrRefForProjectSync(scrollGroupIdLocalRef.current, projectId)
         : scrRefLocal,
-    [isConversionRequired, projectId, scrRefLocal],
+    // versificationGeneration is an intentional invalidation token (bumped on a mid-session
+    // versification change) so this memo recomputes the seed from the (now-updated) sync cache.
+    // It is deliberately not read in the body; exhaustive-deps cannot model an invalidation token.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isConversionRequired, projectId, scrRefLocal, versificationGeneration],
   );
   const [convertedScrRef] = usePromise(
     isConversionRequired ? convertScrRef : undefined,

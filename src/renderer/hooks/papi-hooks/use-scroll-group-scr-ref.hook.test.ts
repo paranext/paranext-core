@@ -10,7 +10,8 @@ vi.mock('@renderer/services/scroll-group.service-host', () => ({
   getScrRefSync: () => rawRef,
   getScrRefSourceProjectIdSync: () => 'sourceProj',
   setScrRefSync: vi.fn(() => true),
-  onDidUpdateScrRef: vi.fn(() => () => {}),
+  onDidUpdateScrRef: 'evt:onDidUpdateScrRef',
+  onDidChangeVersification: 'evt:onDidChangeVersification',
   getScrRefForProject: (...args: unknown[]) => getScrRefForProject(...args),
   getScrRefForProjectSync: (...args: unknown[]) => getScrRefForProjectSync(...args),
 }));
@@ -18,6 +19,9 @@ vi.mock('@renderer/services/scroll-group.service-host', () => ({
 // Captures the latest onDidUpdateScrRef handler the hook registers via useEvent so tests can simulate
 // a scroll-group update (e.g. a same-numbered ref set by a different source project).
 let lastScrRefUpdateHandler: ((update: unknown) => void) | undefined;
+// Captures the latest onDidChangeVersification handler the hook registers via useEvent so tests can
+// simulate a mid-session versification change.
+let lastVersificationChangeHandler: (() => void) | undefined;
 
 // useEvent captures the handler here (the hook's real subscriber path is a thin PAPI wrapper);
 // usePromise gets a faithful minimal implementation (its real behavior is covered by
@@ -27,8 +31,13 @@ let lastScrRefUpdateHandler: ((update: unknown) => void) | undefined;
 vi.mock('platform-bible-react', async () => {
   const react = await import('react');
   return {
-    useEvent: (_event: unknown, handler: (update: unknown) => void) => {
-      lastScrRefUpdateHandler = handler;
+    useEvent: (event: unknown, handler: (update: unknown) => void) => {
+      // The versification event's payload is ignored by the hook (see the interface note), so the
+      // captured handler is wrapped to invoke with `undefined` rather than asserting away the
+      // `(update: unknown) => void` signature down to `() => void`.
+      if (event === 'evt:onDidChangeVersification')
+        lastVersificationChangeHandler = () => handler(undefined);
+      else lastScrRefUpdateHandler = handler;
     },
     usePromise: (
       factory: (() => Promise<unknown>) | undefined,
@@ -213,5 +222,23 @@ describe('useScrollGroupScrRef versification conversion', () => {
       resolveConversion(convertedRef);
     });
     await waitFor(() => expect(setScrollGroupScrRef).toHaveBeenLastCalledWith(convertedRef));
+  });
+
+  it('re-converts the followed ref when a versification-changed event fires', async () => {
+    const first = { book: 'PSA', chapterNum: 146, verseNum: 1, versificationStr: '4' };
+    const second = { book: 'PSA', chapterNum: 145, verseNum: 1, versificationStr: '5' };
+    getScrRefForProject.mockResolvedValue(first);
+    const { useScrollGroupScrRef } = await import(
+      '@renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook'
+    );
+
+    const { result } = renderHook(() => useScrollGroupScrRef(0, () => true, 'targetProj'));
+    await waitFor(() => expect(result.current[0]).toEqual(first));
+
+    // A mid-session versification change: the host now converts to a different verse.
+    getScrRefForProject.mockResolvedValue(second);
+    act(() => lastVersificationChangeHandler?.());
+
+    await waitFor(() => expect(result.current[0]).toEqual(second));
   });
 });
