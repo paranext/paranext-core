@@ -2207,6 +2207,46 @@ describe('ScriptureFinderProjectDataProviderEngine find job API', () => {
     expect(foundBooks.has('MAT')).toBe(true);
     expect(foundBooks.has('MRK')).toBe(true);
   });
+
+  it('should skip a scoped book that is not present in the project and still return results from present books (PT-4089)', async () => {
+    // Reproduces PT-4089: the Find web view can retain a selected-books scope that includes a book
+    // from a previous project which the current project does not contain. When a scoped book is not
+    // present, its book USX is undefined. The whole find job must NOT abort — absent books are
+    // skipped and present books still return results. (Both scopes below are book-level, so only
+    // getBookUSX is exercised.)
+    vi.mocked(mockPdps['platformScripture.USX_Book'].getBookUSX).mockImplementation(
+      (verseRef: { book: string }) =>
+        Promise.resolve(verseRef.book === 'MAT' ? TEST_BOOK_USX : undefined),
+    );
+
+    // GEN (absent) is listed FIRST so the pre-fix behavior aborts the job before MAT is ever searched.
+    const jobId = await engine.beginFindJob({
+      searchString: 'Jesus',
+      scope: [{ bookId: 'GEN' }, { bookId: 'MAT' }],
+      caseInsensitive: false,
+    });
+
+    const foundBooks = new Set<string>();
+    let report = await engine.retrieveFindJobUpdate(jobId, 1000);
+    (report.nextResults ?? []).forEach((r) => foundBooks.add(r.start.verseRef.book));
+    while (report.status === 'running') {
+      // Polling requires sequential awaits; parallelizing would race against job completion.
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 10);
+      });
+      // Sequential await required to get updated status after each polling delay.
+      // eslint-disable-next-line no-await-in-loop
+      report = await engine.retrieveFindJobUpdate(jobId, 1000);
+      (report.nextResults ?? []).forEach((r) => foundBooks.add(r.start.verseRef.book));
+    }
+
+    // Before the fix: the absent GEN scope throws "No scripture found", aborting the entire job
+    // (status 'errored', no MAT results). After the fix: GEN is skipped and MAT still returns hits.
+    expect(report.status).toBe('completed');
+    expect(foundBooks.has('MAT')).toBe(true);
+    expect(foundBooks.has('GEN')).toBe(false);
+  });
 });
 
 describe('ScriptureFinderProjectDataProviderEngine ignoreDiacritics', () => {
