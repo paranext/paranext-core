@@ -461,12 +461,17 @@ export function CommentThread({
     async (resolution: ConflictResolution) => {
       if (!handleResolveConflict) return;
       setIsResolvingConflict(true);
-      const success = await handleResolveConflict(threadId, resolution);
-      setIsResolvingConflict(false);
-      // Lock the controls immediately on success; the data-update re-fetch confirms via
-      // threadStatus. Prevents a double resolve during the stale-props window (and stays
-      // correct even if the fire-and-forget update event never arrives).
-      if (success) setConflictOptions('none');
+      try {
+        const success = await handleResolveConflict(threadId, resolution);
+        // Lock the controls immediately on success; the data-update re-fetch confirms via
+        // threadStatus. Prevents a double resolve during the stale-props window (and stays
+        // correct even if the fire-and-forget update event never arrives).
+        if (success) setConflictOptions('none');
+      } finally {
+        // Always clear the busy state, even if a consumer-supplied handleResolveConflict rejects
+        // (contract violation) — otherwise the card would stay locked in its isResolving state.
+        setIsResolvingConflict(false);
+      }
     },
     [handleResolveConflict, threadId],
   );

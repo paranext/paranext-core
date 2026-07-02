@@ -250,9 +250,14 @@ global.webViewComponent = function CommentListWebView({
 
   const getConflictResolutionOptionsCallback = useCallback(
     async (threadId: string): Promise<ConflictResolutionOptions> =>
-      withPdp(commentsPdp, 'getConflictResolutionOptionsCallback', 'none', (pdp) =>
-        pdp.getConflictResolutionOptions(threadId),
-      ),
+      withPdp(commentsPdp, 'getConflictResolutionOptionsCallback', 'none', async (pdp) => {
+        try {
+          return await pdp.getConflictResolutionOptions(threadId);
+        } catch (error) {
+          logger.error(`Failed to get conflict resolution options for thread ${threadId}:`, error);
+          return 'none';
+        }
+      }),
     [commentsPdp],
   );
 
