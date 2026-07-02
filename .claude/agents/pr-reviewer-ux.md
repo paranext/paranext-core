@@ -39,6 +39,9 @@ Reviews a PR for accessibility gaps, performance anti-patterns, and UX consisten
 - Tailwind classes use `tw:` prefix → **missing = warning**
 - Responsive layout (no hardcoded pixel widths) → **concern = suggestion**
 
+#### Microcopy
+- User-facing text (labels, button text, messages, tooltips) avoids indecipherable [initialisms and abbreviations](../../.context/standards/Code-Style-Guide.md#initialisms-and-abbreviations) → **concern = suggestion**
+
 ## Output
 
 Return findings as a JSON array. Each finding must use `"perspective": "ux"`.
@@ -56,6 +59,7 @@ Return findings as a JSON array. Each finding must use `"perspective": "ux"`.
 | Semantic HTML improvement | `suggestion` |
 | Responsive layout concern | `suggestion` |
 | Component selection improvement | `suggestion` |
+| Indecipherable initialism in microcopy | `suggestion` |
 
 ## Quality Checks
 
