@@ -287,6 +287,7 @@ internal class PlatformCommentConverterTests : PapiTestBase
         Assert.That(json, Does.Not.Contain("rejectedText"));
         Assert.That(json, Does.Not.Contain("acceptedText"));
         Assert.That(json, Does.Not.Contain("resultText"));
+        Assert.That(json, Does.Not.Contain("rejectedResultText"));
         Assert.That(commentWrapper.RejectedText, Is.Null);
     }
 
@@ -305,8 +306,33 @@ internal class PlatformCommentConverterTests : PapiTestBase
         Assert.That(json, Does.Not.Contain("rejectedText"));
         Assert.That(json, Does.Not.Contain("acceptedText"));
         Assert.That(json, Does.Not.Contain("resultText"));
+        Assert.That(json, Does.Not.Contain("rejectedResultText"));
         // Prove the ConflictType operand of the gate (not just Type) — this note is Type=Conflict.
         Assert.That(commentWrapper.RejectedText, Is.Null);
+    }
+
+    [Test]
+    public void Serialize_VerseTextConflictReplacement_RendersStrikethroughAndDecodesChangedVersion()
+    {
+        // A replacement conflict: the losing side swapped one word for another, so the diff has both
+        // a deletion (<s>) and an insertion (<u>). This is the converter-layer coverage of <s> markup
+        // that the insertion-only fixtures lacked.
+        Comment testComment = CommentTestHelper.CreateVerseTextConflictCommentReplacement();
+        var (commentWrapper, _) = CreateCommentWithThread(testComment);
+
+        var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
+            commentWrapper,
+            _serializationOptions
+        );
+
+        // rejectedText carries both deleted (<s>) and inserted (<u>) markup.
+        Assert.That(commentWrapper.RejectedText, Does.Contain("<s>"));
+        Assert.That(commentWrapper.RejectedText, Does.Contain("<u>"));
+
+        // changed-version decode keeps the inserted word and drops the deleted one.
+        Assert.That(commentWrapper.RejectedResultText, Does.Contain("town"));
+        Assert.That(commentWrapper.RejectedResultText, Does.Not.Contain("village"));
+        Assert.That(json, Does.Contain(@"""rejectedResultText"":"));
     }
 
     [Test]
