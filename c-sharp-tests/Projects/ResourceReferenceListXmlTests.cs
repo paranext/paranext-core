@@ -188,6 +188,50 @@ public class ResourceReferenceListXmlTests
         Assert.That(result.Items[4], Is.InstanceOf<SourceLanguageResourceReference>());
     }
 
+    // --- IsShownByDefault XML round-trip ---
+
+    [Test]
+    public void ToXml_FromXml_ProjectReference_IsShownByDefaultTrue_RoundTripsCorrectly()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new ProjectReference { Name = "My Project", Id = "aabbcc", IsShownByDefault = true }],
+        };
+        var xml = ResourceReferenceList.ToXml(list);
+        var result = ResourceReferenceList.FromXml(xml, list.DataVersion);
+
+        var item = result.Items[0] as ProjectReference;
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.IsShownByDefault, Is.EqualTo(true));
+    }
+
+    [Test]
+    public void ToXml_FromXml_ProjectReference_IsShownByDefaultNull_RoundTripsAsNull()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new ProjectReference { Name = "My Project", Id = "aabbcc" }],
+        };
+        var xml = ResourceReferenceList.ToXml(list);
+        var result = ResourceReferenceList.FromXml(xml, list.DataVersion);
+
+        var item = result.Items[0] as ProjectReference;
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.IsShownByDefault, Is.Null);
+    }
+
+    [Test]
+    public void ToXml_ProjectReference_IsShownByDefaultNull_NoAttributeInXml()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new ProjectReference { Name = "P", Id = "abc" }],
+        };
+        var xml = ResourceReferenceList.ToXml(list);
+        var itemEl = xml.Elements("Item").First();
+        Assert.That(itemEl.Attribute("isShownByDefault"), Is.Null);
+    }
+
     [Test]
     public void RoundTrip_UnknownType_PreservesExtraAttributes()
     {

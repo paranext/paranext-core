@@ -1907,6 +1907,11 @@ declare module 'platform-scripture' {
     name: string;
     /** 20-byte (40-char) hex ID that uniquely identifies the project */
     id: string;
+    /**
+     * When set by a project admin, indicates this resource should be shown by default when the
+     * shared layout is applied
+     */
+    isShownByDefault?: boolean;
   };
 
   /** A reference to a DBL resource, identified by its 24-byte (48-char) hex ID */
@@ -1920,6 +1925,11 @@ declare module 'platform-scripture' {
     name: string;
     /** 24-byte (48-char) hex ID that uniquely identifies the resource */
     id: string;
+    /**
+     * When set by a project admin, indicates this resource should be shown by default when the
+     * shared layout is applied
+     */
+    isShownByDefault?: boolean;
   };
 
   /** A reference to an Enhanced resource, identified by name */
@@ -1928,6 +1938,11 @@ declare module 'platform-scripture' {
     type: 'enhancedResource';
     /** Name that uniquely identifies the resource */
     name: string;
+    /**
+     * When set by a project admin, indicates this resource should be shown by default when the
+     * shared layout is applied
+     */
+    isShownByDefault?: boolean;
   };
 
   /** A reference to an XML resource, identified by name */
@@ -1936,6 +1951,11 @@ declare module 'platform-scripture' {
     type: 'xmlResource';
     /** Name that uniquely identifies the resource */
     name: string;
+    /**
+     * When set by a project admin, indicates this resource should be shown by default when the
+     * shared layout is applied
+     */
+    isShownByDefault?: boolean;
   };
 
   /** A reference to a Source Language resource, identified by name */
@@ -1944,6 +1964,11 @@ declare module 'platform-scripture' {
     type: 'sourceLanguageResource';
     /** Name that uniquely identifies the resource */
     name: string;
+    /**
+     * When set by a project admin, indicates this resource should be shown by default when the
+     * shared layout is applied
+     */
+    isShownByDefault?: boolean;
   };
 
   /**
@@ -2416,6 +2441,12 @@ declare module 'papi-shared-types' {
 
     /** Projects and resources useful to team members as general translation references */
     'platformScripture.referencedProjectsAndResources': ResourceReferenceList;
+
+    /**
+     * The active tab in column 3 set by the project admin's shared layout. Empty string means no
+     * admin preference is set.
+     */
+    'platformScripture.sharedLayoutActiveTab': string;
 
     /**
      * Whether the project allows invisible characters to appear literally in USFM text. Corresponds

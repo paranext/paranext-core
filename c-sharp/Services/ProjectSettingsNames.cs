@@ -117,6 +117,13 @@ public sealed class ProjectSettingsNames
     public const string PT_STRUCTURE_PROTECTED = "StructureProtected";
 
     /// <summary>
+    /// The active tab identifier chosen by a project admin for the shared layout. Stored in
+    /// Paratext's Settings.xml as "SharedLayoutActiveTab".
+    /// </summary>
+    public const string PB_SHARED_LAYOUT_ACTIVE_TAB = "platformScripture.sharedLayoutActiveTab";
+    public const string PT_SHARED_LAYOUT_ACTIVE_TAB = "SharedLayoutActiveTab";
+
+    /// <summary>
     /// Paratext setting names that are either T or F and need to be converted to booleans
     /// </summary>
     private static readonly HashSet<string> s_ptSettingBooleans =
@@ -153,6 +160,7 @@ public sealed class ProjectSettingsNames
             { PB_MODEL_TEXTS, PT_MODEL_TEXTS },
             { PB_REFERENCED_PROJECTS_AND_RESOURCES, PT_REFERENCED_PROJECTS_AND_RESOURCES },
             { PB_STRUCTURE_PROTECTED, PT_STRUCTURE_PROTECTED },
+            { PB_SHARED_LAYOUT_ACTIVE_TAB, PT_SHARED_LAYOUT_ACTIVE_TAB },
         };
 
     private static readonly Dictionary<string, string> s_paratextToPlatformBibleSettingsNames =
