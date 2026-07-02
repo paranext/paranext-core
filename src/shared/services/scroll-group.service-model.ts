@@ -18,6 +18,19 @@ export const EVENT_NAME_ON_DID_UPDATE_SCR_REF = serializeRequestType(
 ) as 'scrollGroup:onDidUpdateScrRef';
 
 /**
+ * Name to use when creating a network event that is fired when a tracked project's versification
+ * changes. Host↔hook INTERNAL: intentionally NOT declared in the public `NetworkEvents` map (not
+ * part of the `@papi/*` surface).
+ */
+// serializeRequestType returns SerializedRequestType (an opaque branded string). Cast to the
+// literal so consumers can use this constant directly without re-casting at every usage site.
+// eslint-disable-next-line no-type-assertion/no-type-assertion
+export const EVENT_NAME_ON_DID_CHANGE_VERSIFICATION = serializeRequestType(
+  CATEGORY_SCROLL_GROUP,
+  'onDidChangeVersification',
+) as 'scrollGroup:onDidChangeVersification';
+
+/**
  * Combination of a {@link ScrollGroupId} and a SerializedVerseRef. If this value is a number, that
  * means this should be synced with the scroll group sharing that number. If this value is an
  * object, that means it is an independent Scripture reference and should not be synced with any

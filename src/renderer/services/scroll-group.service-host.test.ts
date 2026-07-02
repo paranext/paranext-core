@@ -1,8 +1,19 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { EVENT_NAME_ON_DID_CHANGE_VERSIFICATION } from '@shared/services/scroll-group.service-model';
 
 // The host module reads localStorage and creates a network emitter at import time; stub those.
+// Emitters are captured by event name so tests can assert on a specific event (e.g.
+// onDidChangeVersification) without conflating it with the pre-existing onDidUpdateScrRef emitter.
+const { emitters } = vi.hoisted(() => {
+  const hoistedEmitters: Record<string, { emit: ReturnType<typeof vi.fn> }> = {};
+  return { emitters: hoistedEmitters };
+});
 vi.mock('@shared/services/network.service', () => ({
-  createBufferedNetworkEventEmitter: () => ({ emit: vi.fn() }),
+  createBufferedNetworkEventEmitter: (eventName: string) => {
+    const emitter = { emit: vi.fn() };
+    emitters[eventName] = emitter;
+    return emitter;
+  },
   getNetworkEvent: () => vi.fn(),
 }));
 vi.mock('@shared/services/network-object.service', () => ({
@@ -40,6 +51,7 @@ describe('scroll-group.service-host source project tracking', () => {
     Object.keys(projectVersifications).forEach((key) => {
       delete projectVersifications[key];
     });
+    Object.keys(emitters).forEach((key) => delete emitters[key]);
     pdpGet.mockReset();
     pdpGet.mockImplementation(async (_projectInterface: string, projectId: string) => ({
       subscribeSetting: (_key: string, callback: (value: unknown) => void) => {
@@ -305,5 +317,27 @@ describe('scroll-group.service-host source project tracking', () => {
     expect(changed).toBe(true);
     expect(host.getScrRefSourceProjectIdSync(0)).toBe('projB');
     expect(settingsSet).not.toHaveBeenCalled();
+  });
+
+  it('emits a versification-changed event only when a tracked versification actually changes', async () => {
+    const callbacks: Record<string, (value: unknown) => void> = {};
+    pdpGet.mockImplementation(async (_pi: string, projectId: string) => ({
+      subscribeSetting: (_key: string, callback: (value: unknown) => void) => {
+        callbacks[projectId] = callback;
+        callback(projectId); // initial value (unique per project)
+        return Promise.resolve(() => {});
+      },
+    }));
+    sendCommand.mockResolvedValue({ book: 'PSA', chapterNum: 146, verseNum: 1 });
+    const host = await import('@renderer/services/scroll-group.service-host');
+    host.setScrRefSync(0, { book: 'PSA', chapterNum: 147, verseNum: 1 }, 'sourceProj');
+    await host.getScrRefForProject(0, 'targetProj'); // establishes subscriptions for both projects
+
+    const { emit } = emitters[EVENT_NAME_ON_DID_CHANGE_VERSIFICATION];
+    expect(emit).not.toHaveBeenCalled(); // initial retrieveDataImmediately load must NOT emit
+
+    callbacks.sourceProj('a-different-versification'); // genuine mid-session change
+    expect(emit).toHaveBeenCalledTimes(1);
+    expect(emit).toHaveBeenCalledWith({ projectId: 'sourceProj' });
   });
 });

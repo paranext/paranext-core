@@ -7,6 +7,7 @@ import {
   getNetworkEvent,
 } from '@shared/services/network.service';
 import {
+  EVENT_NAME_ON_DID_CHANGE_VERSIFICATION,
   EVENT_NAME_ON_DID_UPDATE_SCR_REF,
   IScrollGroupRemoteService,
   NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
@@ -20,9 +21,11 @@ import {
   deserialize,
   isPlatformError,
   type PlatformEvent,
+  type PlatformEventEmitter,
   ScrollGroupId,
   serialize,
 } from 'platform-bible-utils';
+import type { NetworkEventTypes } from 'papi-shared-types';
 
 /**
  * Buffered emitter for changing the Scripture reference on a scroll group. Buffered (and created at
@@ -48,6 +51,40 @@ const onDidUpdateScrRefBufferedEmitter = createBufferedNetworkEventEmitter(
   },
   { bufferStrategy: { latestByKey: (update) => String(update.scrollGroupId) } },
 );
+
+/**
+ * Buffered emitter for a genuine mid-session change to a tracked project's versification (see
+ * {@link ensureVersificationSubscribed}). Consumers use this as a blunt global signal to re-convert
+ * once, rather than subscribing per-project themselves.
+ *
+ * This event is intentionally NOT declared in the public `NetworkEvents` type — it is a
+ * host↔hook-internal signal, not part of the `@papi/*` surface — so `EventType extends
+ * NetworkEventTypes` rejects the literal name. Cast the name past that constraint and recover the
+ * payload type on the result, the same escape hatch used for per-instance data provider update
+ * events in `data-provider.service.ts`.
+ */
+/* eslint-disable no-type-assertion/no-type-assertion */
+const onDidChangeVersificationBufferedEmitter = createBufferedNetworkEventEmitter(
+  EVENT_NAME_ON_DID_CHANGE_VERSIFICATION as NetworkEventTypes,
+  {
+    notification: {
+      summary: 'Emitted when a tracked project’s versification changes mid-session.',
+      params: [
+        {
+          name: 'update',
+          required: true,
+          summary: 'The project whose versification changed.',
+          schema: { type: 'object' },
+        },
+      ],
+    },
+  },
+) as unknown as {
+  emit: (event: { projectId: string }) => void;
+  registeredEmitter: Promise<PlatformEventEmitter<{ projectId: string }>>;
+  dispose: () => void;
+};
+/* eslint-enable no-type-assertion/no-type-assertion */
 
 const DEFAULT_SCR_REF: SerializedVerseRef = Object.freeze({
   book: 'GEN',
@@ -118,6 +155,15 @@ export const availableScrollGroupIds = [undefined, ...Array(5).keys()];
 /** Event that emits with information about a changed Scripture Reference for a scroll group */
 export const onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo> = getNetworkEvent(
   EVENT_NAME_ON_DID_UPDATE_SCR_REF,
+);
+
+/**
+ * Event that emits when a tracked project's versification changes mid-session (see
+ * {@link ensureVersificationSubscribed}). Does NOT emit for the initial subscription load — only for
+ * a genuine change.
+ */
+export const onDidChangeVersification: PlatformEvent<{ projectId: string }> = getNetworkEvent(
+  EVENT_NAME_ON_DID_CHANGE_VERSIFICATION,
 );
 
 /** See {@link IScrollGroupRemoteService.getScrRef} */
@@ -195,15 +241,15 @@ function ensureVersificationSubscribed(projectId: string): Promise<void> {
       await versificationPdp.subscribeSetting(
         'platformScripture.versification',
         (value) => {
-          projectVersifications.set(
-            projectId,
-            isPlatformError(value) || value === undefined ? undefined : String(value),
-          );
-          // This keeps the conversion-cache key fresh, but it intentionally does NOT re-emit
-          // onDidUpdateScrRef, so a reference already on screen is not re-converted until the next
-          // navigation. Re-converting on a mid-session versification change is out of scope: a
-          // project's versification is chosen at creation and effectively never changes during a
-          // session, so the added event/re-render churn is not worth it.
+          const next = isPlatformError(value) || value === undefined ? undefined : String(value);
+          const hadValue = projectVersifications.has(projectId);
+          const changed = hadValue && projectVersifications.get(projectId) !== next;
+          projectVersifications.set(projectId, next);
+          // Re-key the cache-key identifiers. On a GENUINE mid-session change (not the initial
+          // retrieveDataImmediately load) emit a global signal so every scroll-group consumer
+          // re-converts once. Versification changes are rare and deliberate, so the broad re-convert
+          // is acceptable and avoids per-consumer versification subscriptions.
+          if (changed) onDidChangeVersificationBufferedEmitter.emit({ projectId });
         },
         { retrieveDataImmediately: true },
       );
