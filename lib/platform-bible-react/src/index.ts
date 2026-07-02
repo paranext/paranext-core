@@ -35,6 +35,7 @@ export { default as CommentList } from './components/advanced/comment-list/comme
 export type {
   ConflictNoteCardProps,
   ConflictResolution,
+  ConflictResolutionOptions,
 } from './components/advanced/comment-list/conflict-note-card.types';
 export { CONFLICT_NOTE_STRING_KEYS } from './components/advanced/comment-list/conflict-note-card.types';
 export { ConflictNoteCard } from './components/advanced/comment-list/conflict-note-card.component';
