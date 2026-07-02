@@ -2224,6 +2224,12 @@
   color: #7777ff;
 }
 
+/* The generic table-cell box that used to live here (border-collapse on tables +
+   `1px solid #000` on td, with a `.markercell` borderless exception) was moved to
+   marker-styles/commentary-overrides.scss (PT-3086) so it applies only in handbook
+   (HBKENG/TNN/TND) iframes. Real tables in the project view and other resources are
+   intentionally borderless; the paragraph-indent reset for real tables lives in the
+   table-marker section above (.usfm .table-row, .usfm .table-cell). */
 .usfm rt {
   cursor: pointer;
 }

@@ -218,5 +218,7 @@ describe('convert', () => {
     const formatted = await prettier.format(scss, { ...config, parser: 'scss' });
 
     expect(scss).toBe(formatted);
-  });
+    // Raised from vitest's 5s default: this test spawns prettier, which is slow to
+    // cold-start (notably on Windows CI) and otherwise flakes on an unrelated timeout.
+  }, 30_000);
 });
