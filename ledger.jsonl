@@ -260,3 +260,4 @@
 {"type":"pr_outcome","prNumber":2479,"outcome":"closed_unmerged","checkedDate":"2026-07-02","resolutionHours":23.64}
 {"type":"pr_outcome","prNumber":2483,"outcome":"closed_unmerged","checkedDate":"2026-07-02","resolutionHours":0.84}
 {"type":"run_started","runId":"qs-2026-07-02","seeds":{"jira":["PT-4089","PT-4088","PT-4087","PT-4086","PT-4085","PT-4082","PT-4081"],"scanTarget":null},"date":"2026-07-02"}
+{"type":"candidate","runId":"qs-2026-07-02","candidateId":"c2","source":"jira","jiraKey":"PT-4088","title":"Review/fix UI strings formatted with hard-coded punctuation/appended strings","area":"cross-cutting UI localization","dedupKey":"jira:PT-4088","confidence":0.2,"refute":"refuted","refuteReason":"Not a single reproducible defect; broad audit/refactor task spanning many files with no concrete repro. Fails minimal-diff single-fix bar.","impact":{"userVisible":true,"severity":1,"frequency":1,"score":1},"date":"2026-07-02"}
