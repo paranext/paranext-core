@@ -249,3 +249,13 @@
 {"type":"repro","runId":"qs-2026-07-01","candidateId":"s1","result":"reproduced","evidenceRef":"RED: date-time-format-util.test.ts 2 failing - sub-second past expected \"now\" got \"1 second ago\"; 1.4s expected \"1 second ago\" got \"2 seconds ago\"","date":"2026-07-01"}
 {"type":"fix","runId":"qs-2026-07-01","candidateId":"s1","result":"pr_opened","prNumber":2483,"prUrl":"https://github.com/paranext/paranext-core/pull/2483","branch":"fix/format-time-span-sub-second","date":"2026-07-01"}
 {"type":"pr_outcome","prNumber":2483,"outcome":"open","checkedDate":"2026-07-01","date":"2026-07-01"}
+{"type":"pr_outcome","prNumber":2446,"outcome":"open","checkedDate":"2026-07-02"}
+{"type":"pr_outcome","prNumber":2447,"outcome":"open","checkedDate":"2026-07-02"}
+{"type":"pr_outcome","prNumber":2449,"outcome":"open","checkedDate":"2026-07-02"}
+{"type":"pr_outcome","prNumber":2459,"outcome":"open","checkedDate":"2026-07-02"}
+{"type":"pr_outcome","prNumber":2463,"outcome":"open","checkedDate":"2026-07-02"}
+{"type":"pr_outcome","prNumber":2468,"outcome":"closed_unmerged","checkedDate":"2026-07-02","resolutionHours":96.19}
+{"type":"pr_outcome","prNumber":2470,"outcome":"open","checkedDate":"2026-07-02"}
+{"type":"pr_outcome","prNumber":2471,"outcome":"merged","checkedDate":"2026-07-02","resolutionHours":48.41}
+{"type":"pr_outcome","prNumber":2479,"outcome":"closed_unmerged","checkedDate":"2026-07-02","resolutionHours":23.64}
+{"type":"pr_outcome","prNumber":2483,"outcome":"closed_unmerged","checkedDate":"2026-07-02","resolutionHours":0.84}
