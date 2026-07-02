@@ -2182,6 +2182,7 @@ declare module 'platform-scripture' {
 
 declare module 'papi-shared-types' {
   import { UnsubscriberAsync } from 'platform-bible-utils';
+  import { SerializedVerseRef } from '@sillsdev/scripture';
 
   import type {
     IUSFMBookProjectDataProvider,
@@ -2334,6 +2335,27 @@ declare module 'papi-shared-types' {
     'platformScripture.openManageBooks': (
       webViewIdOrProjectId?: string | undefined,
     ) => Promise<string | undefined>;
+
+    /**
+     * Converts a Scripture reference from a source project's versification into a target project's
+     * versification. Best-effort: if the source frame is unknown or a project's versification
+     * cannot be resolved (e.g. not a Scripture project), the reference is returned unchanged.
+     * Unmapped verses are returned unchanged; segments are preserved.
+     *
+     * @param verseRef The Scripture reference to convert
+     * @param sourceProjectId Project whose versification `verseRef` is currently expressed in. Pass
+     *   `undefined` when the source frame is unknown, in which case the reference is returned
+     *   unchanged (it is NOT assumed to be canonical English)
+     * @param targetProjectId Project into whose versification to convert the reference
+     * @returns The reference converted into `targetProjectId`'s versification, or unchanged when it
+     *   could not be converted
+     * @experimental
+     */
+    'platformScripture.mapVerseRefBetweenProjects': (
+      verseRef: SerializedVerseRef,
+      sourceProjectId: string | undefined,
+      targetProjectId: string,
+    ) => Promise<SerializedVerseRef>;
   }
 
   export interface ProjectSettingTypes {

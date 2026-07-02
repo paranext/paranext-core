@@ -28,19 +28,31 @@ export type ScrollGroupScrRef = ScrollGroupId | SerializedVerseRef;
 /**
  * Information about an update to a scroll group. Informs about the new SerializedVerseRef at a
  * {@link ScrollGroupId}
+ *
+ * @param scrRef The new Scripture reference for the scroll group
+ * @param scrollGroupId The scroll group that was updated
+ * @param sourceProjectId Project whose versification the `scrRef` is expressed in. `undefined` =
+ *   unknown
  */
 export type ScrollGroupUpdateInfo = {
   scrRef: SerializedVerseRef;
   scrollGroupId: ScrollGroupId;
+  sourceProjectId?: string;
 };
 
 /** Parts of the Scroll Group Service that are exposed through the network object */
 export interface IScrollGroupRemoteService {
   /**
-   * Get the SerializedVerseRef associated with the provided scroll group
+   * Get the SerializedVerseRef associated with the provided scroll group, in the versification of
+   * whichever project last set it (see {@link ScrollGroupUpdateInfo.sourceProjectId}).
+   *
+   * NOTE: this returns the raw stored reference without versification conversion. If your consumer
+   * displays or navigates in a specific project's versification, use {@link getScrRefForProject}
+   * instead so mixed-versification projects land on the right verse.
    *
    * @param scrollGroupId Scroll group whose Scripture reference to get. Defaults to 0
-   * @returns Scripture reference associated with the provided scroll group
+   * @returns Scripture reference associated with the provided scroll group, in its source project's
+   *   versification
    */
   getScrRef(scrollGroupId?: ScrollGroupId): Promise<SerializedVerseRef>;
   /**
@@ -49,14 +61,42 @@ export interface IScrollGroupRemoteService {
    * @param scrollGroupId Scroll group whose Scripture reference to get. If `undefined`, defaults to
    *   0
    * @param scrRef Scripture reference to which to set the scroll group
-   * @returns `true` if the Scripture reference changed. `false` otherwise
+   * @param sourceProjectId Project whose versification `scrRef` is expressed in. `undefined` =
+   *   unknown
+   * @returns `true` if the scroll group's reference or its versification source changed. `false`
+   *   otherwise
    */
-  setScrRef(scrollGroupId: ScrollGroupId | undefined, scrRef: SerializedVerseRef): Promise<boolean>;
+  setScrRef(
+    scrollGroupId: ScrollGroupId | undefined,
+    scrRef: SerializedVerseRef,
+    sourceProjectId?: string,
+  ): Promise<boolean>;
+  /**
+   * Get the SerializedVerseRef associated with the provided scroll group, converted into the
+   * versification of `projectId`. The scroll group stores its reference in the versification of
+   * whichever project last set it; this converts it into `projectId`'s versification so any
+   * consumer gets a reference it can use directly. Returns the raw reference when no conversion is
+   * needed.
+   *
+   * @param scrollGroupId Scroll group whose Scripture reference to get. If `undefined`, defaults to
+   *   0
+   * @param projectId Project into whose versification to convert the reference
+   * @returns Scripture reference in `projectId`'s versification
+   */
+  getScrRefForProject(
+    scrollGroupId: ScrollGroupId | undefined,
+    projectId: string,
+  ): Promise<SerializedVerseRef>;
 }
 
 // Parts of the Scroll Group Service that are added in the service client on top of what is provided by the network object
 /** JSDOC DESTINATION scrollGroupService */
 export interface IScrollGroupService extends IScrollGroupRemoteService {
-  /** Event that emits with information about a changed Scripture Reference for a scroll group */
+  /**
+   * Event that emits with information about a changed Scripture Reference for a scroll group. The
+   * emitted `scrRef` is in the source project's versification (see
+   * {@link ScrollGroupUpdateInfo.sourceProjectId}); a consumer that needs it in a specific project's
+   * versification should call {@link getScrRefForProject} for that project.
+   */
   onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo>;
 }

@@ -38,7 +38,7 @@ export function useWebViewScrollGroupScrRef(
       [savedWebViewDefinition],
     ),
   );
-  const { scrollGroupScrRef } = savedWebViewDefinition;
+  const { scrollGroupScrRef, projectId } = savedWebViewDefinition;
 
   return useScrollGroupScrRef(
     scrollGroupScrRef,
@@ -47,6 +47,7 @@ export function useWebViewScrollGroupScrRef(
         this.updateWebViewDefinition({ scrollGroupScrRef: newScrollGroupScrRef }),
       [],
     ),
+    projectId,
   );
 }
 

@@ -442,6 +442,7 @@ export function WebView({
         updateWebViewDefinitionSync(id, { scrollGroupScrRef: newScrollGroupScrRef }),
       [id],
     ),
+    projectId,
   );
 
   const isPowerMode = useIsPowerMode();
