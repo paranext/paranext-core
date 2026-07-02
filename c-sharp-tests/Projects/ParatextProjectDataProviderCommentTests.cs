@@ -2334,6 +2334,41 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
+        public void ResolveConflict_Reject_StampsReplacedResolutionActionOnResolutionComment()
+        {
+            // Reject writes the losing side, so SaveEdits stamps ConflictResolutionAction='replaced'
+            // on the appended resolution comment. The wrapper surfaces it (ungated), which is what the
+            // card's Result region and the resolution reply's outcome line read.
+            CommentThread thread = SeedVerseTextConflict();
+
+            _provider.ResolveConflict(thread.Id, "reject");
+
+            PlatformCommentThreadWrapper reloaded = ReloadThread(thread.Id);
+            Assert.That(
+                reloaded.Comments.Any(c => c.ConflictResolutionAction == "replaced"),
+                Is.True,
+                "reject must record a 'replaced' resolution action on the resolution comment"
+            );
+        }
+
+        [Test]
+        public void ResolveConflict_Accept_LeavesNoResolutionActionOnAnyComment()
+        {
+            // Accept writes no text, so SaveEdits leaves ConflictResolutionAction null on every
+            // comment. The UI reads that absence as the accept outcome.
+            CommentThread thread = SeedVerseTextConflict();
+
+            _provider.ResolveConflict(thread.Id, "accept");
+
+            PlatformCommentThreadWrapper reloaded = ReloadThread(thread.Id);
+            Assert.That(
+                reloaded.Comments.All(c => c.ConflictResolutionAction == null),
+                Is.True,
+                "accept must not record any resolution action"
+            );
+        }
+
+        [Test]
         public void ResolveConflict_NonConflictThread_Throws()
         {
             var mgr = CommentManager.Get(_scrText);
