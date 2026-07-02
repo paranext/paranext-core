@@ -42,6 +42,10 @@ const localizedStrings: LanguageStrings = {
   '%conflict_note_resolve%': 'Resolve',
   '%conflict_note_stale_notice%':
     'The verse has been edited since this conflict was recorded, so rejecting is no longer available. Accept keeps the current text.',
+  '%conflict_note_outcome_replaced%':
+    'Replaced the changes that Paratext ACCEPTED with the changes that Paratext REJECTED',
+  '%conflict_note_outcome_merged%':
+    'Merged the changes that Paratext ACCEPTED with the changes that Paratext REJECTED',
 };
 
 const CURRENT_USER = 'Current User';
@@ -118,8 +122,11 @@ const normalThreadComments: LegacyComment[] = [
   },
 ];
 
-// A pre-existing resolution reply for the already-resolved variant. In production PT9's SaveEdits
-// appends a Resolved comment like this when a conflict is resolved; here it is a static sample.
+// A pre-existing resolution reply for the already-resolved variant, resolved by REJECT. In
+// production PT9's SaveEdits appends a Resolved comment like this when a conflict is resolved and
+// records conflictResolutionAction: 'replaced' for a reject; here it is a static sample. The action
+// makes CommentItem render the localized outcome line (instead of the empty body) and makes the
+// read-only card show the rejected-side Result.
 const preExistingResolutionReply: LegacyComment = {
   id: 'conflict-replacement/Current User/2011-08-17T10:45:00.0000000-04:00',
   thread: THREAD_ID,
@@ -133,7 +140,9 @@ const preExistingResolutionReply: LegacyComment = {
   startPosition: 0,
   selectedText: '',
   status: 'Resolved',
-  contents: 'Resolved: kept the current text.',
+  // Empty body, as the real resolution comment has — the outcome line is rendered from the action.
+  contents: "<blockquote lang='en' style='text-align:left'></blockquote>",
+  conflictResolutionAction: 'replaced',
 };
 
 type CommentThreadStoryProps = {
@@ -216,6 +225,10 @@ function CommentThreadStory({
         resolution === 'accept'
           ? 'Resolved: kept the current text.'
           : 'Resolved: replaced with the other change.',
+      // Mirror the backend: a reject writes the losing side and records 'replaced' on the
+      // resolution comment (which makes CommentItem render the outcome line and the card show the
+      // rejected-side Result); an accept writes nothing and records no action.
+      ...(resolution === 'reject' && { conflictResolutionAction: 'replaced' }),
     };
     setComments((prev) => [...prev, resolutionReply]);
     setStatus('Resolved');
@@ -362,9 +375,11 @@ export const CompleteConflictThread: Story = {
 };
 
 /**
- * The same thread already Resolved, including the pre-existing resolution reply. The
- * ConflictNoteCard renders read-only (selector and Resolve button hidden) while the full discussion
- * stays visible.
+ * The same thread already Resolved by REJECT, including the pre-existing resolution reply (which
+ * carries conflictResolutionAction: 'replaced'). The ConflictNoteCard renders read-only (selector
+ * and Resolve button hidden) and its Result shows the rejected side ("village"), while the
+ * resolution reply renders the localized outcome line ("Replaced the changes...") instead of an
+ * empty body. The full discussion stays visible.
  */
 export const ResolvedConflictThread: Story = {
   render: () => (

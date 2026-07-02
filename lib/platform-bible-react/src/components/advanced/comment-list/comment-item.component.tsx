@@ -266,27 +266,41 @@ export function CommentItem({
                 {localizedStrings['%comment_status_todo%']}
               </div>
             )}
-            <div
-              className={cn(
-                'tw:prose tw:items-start tw:gap-2 tw:break-words tw:text-sm tw:font-normal tw:text-foreground',
-                // tw:prose has a max width defined on it, that we choose to override
-                'tw:max-w-none',
-                // Don't render blockquote on the first child. All comments are wrapped in blockquote
-                // that has text-align corresponding to LTR or RTL, so the blockquote is important.
-                // But we don't want it to look like there's a blockquote there. Apply styles to the
-                // blockquote directly inside this div.
-                'tw:[&>blockquote]:border-s-0 tw:[&>blockquote]:p-0 tw:[&>blockquote]:ps-0 tw:[&>blockquote]:font-normal tw:[&>blockquote]:not-italic tw:[&>blockquote]:text-foreground',
-                // Don't render quotes on blockquotes
-                'tw:prose-quoteless',
-                {
-                  'tw:line-clamp-3': !isThreadExpanded,
-                },
-              )}
-              // The comment content is stored in HTML so it needs to be set directly. To make sure
-              // it is safe we have sanitized it first.
-              // eslint-disable-next-line react/no-danger
-              dangerouslySetInnerHTML={{ __html: sanitizedContent }}
-            />
+            {comment.conflictResolutionAction ? (
+              // A conflict thread's resolution comment carries an empty body — PT9 renders its banner
+              // UI-side from conflictResolutionAction, it never stores text. So render the localized
+              // outcome line here instead of the (empty) contents, styled like the italic status
+              // lines above. 'merged' only occurs in PT9-synced data; anything else is a reject.
+              <div className="tw:text-sm tw:italic">
+                {comment.conflictResolutionAction === 'merged'
+                  ? (localizedStrings['%conflict_note_outcome_merged%'] ??
+                    'Merged the changes that Paratext ACCEPTED with the changes that Paratext REJECTED')
+                  : (localizedStrings['%conflict_note_outcome_replaced%'] ??
+                    'Replaced the changes that Paratext ACCEPTED with the changes that Paratext REJECTED')}
+              </div>
+            ) : (
+              <div
+                className={cn(
+                  'tw:prose tw:items-start tw:gap-2 tw:break-words tw:text-sm tw:font-normal tw:text-foreground',
+                  // tw:prose has a max width defined on it, that we choose to override
+                  'tw:max-w-none',
+                  // Don't render blockquote on the first child. All comments are wrapped in blockquote
+                  // that has text-align corresponding to LTR or RTL, so the blockquote is important.
+                  // But we don't want it to look like there's a blockquote there. Apply styles to the
+                  // blockquote directly inside this div.
+                  'tw:[&>blockquote]:border-s-0 tw:[&>blockquote]:p-0 tw:[&>blockquote]:ps-0 tw:[&>blockquote]:font-normal tw:[&>blockquote]:not-italic tw:[&>blockquote]:text-foreground',
+                  // Don't render quotes on blockquotes
+                  'tw:prose-quoteless',
+                  {
+                    'tw:line-clamp-3': !isThreadExpanded,
+                  },
+                )}
+                // The comment content is stored in HTML so it needs to be set directly. To make sure
+                // it is safe we have sanitized it first.
+                // eslint-disable-next-line react/no-danger
+                dangerouslySetInnerHTML={{ __html: sanitizedContent }}
+              />
+            )}
           </>
         )}
       </div>

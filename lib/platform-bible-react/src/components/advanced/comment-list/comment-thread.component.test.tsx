@@ -359,4 +359,61 @@ describe('CommentThread conflict resolution', () => {
     // Locked after success: controls disappear ('none') pending the data refresh.
     await waitFor(() => expect(screen.queryByRole('combobox')).not.toBeInTheDocument());
   });
+
+  // A resolution reply (empty body) appended after the conflict comment. conflictResolutionAction
+  // drives what the read-only card's Result shows: 'replaced' -> reject, absent -> accept.
+  const resolutionReply = (action?: 'replaced' | 'merged'): LegacyComment => ({
+    id: 'conflict-sample/Resolver/2011-08-17T00:00:00.000Z',
+    thread: 'conflict-sample',
+    user: 'Resolver',
+    verseRef: 'MAT 2:1',
+    language: 'en',
+    date: '2011-08-17T00:00:00.000Z',
+    deleted: false,
+    hideInTextWindow: false,
+    isRead: true,
+    startPosition: 0,
+    selectedText: '',
+    status: 'Resolved',
+    contents: '<blockquote></blockquote>',
+    ...(action && { conflictResolutionAction: action }),
+  });
+
+  test("resolved-by-reject thread ('replaced') shows the rejected side in the read-only card", async () => {
+    const resolvedThread: LegacyCommentThread = {
+      ...conflictThread,
+      comments: [verseTextConflictComment, resolutionReply('replaced')],
+      status: 'Resolved',
+    };
+    renderThread({
+      thread: resolvedThread,
+      comments: resolvedThread.comments,
+      isSelected: true,
+      threadStatus: 'Resolved',
+    });
+    // Derivation maps 'replaced' -> 'reject', so the card's Result is the rejected side.
+    expect(
+      await screen.findByText(verseTextConflictComment.rejectedResultText ?? ''),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(verseTextConflictComment.resultText ?? '')).not.toBeInTheDocument();
+  });
+
+  test('resolved-without-action thread shows the accepted side in the read-only card', async () => {
+    const resolvedThread: LegacyCommentThread = {
+      ...conflictThread,
+      comments: [verseTextConflictComment, resolutionReply()],
+      status: 'Resolved',
+    };
+    renderThread({
+      thread: resolvedThread,
+      comments: resolvedThread.comments,
+      isSelected: true,
+      threadStatus: 'Resolved',
+    });
+    // No action recorded + Resolved -> derivation returns 'accept', so the Result is the accepted side.
+    expect(await screen.findByText(verseTextConflictComment.resultText ?? '')).toBeInTheDocument();
+    expect(
+      screen.queryByText(verseTextConflictComment.rejectedResultText ?? ''),
+    ).not.toBeInTheDocument();
+  });
 });

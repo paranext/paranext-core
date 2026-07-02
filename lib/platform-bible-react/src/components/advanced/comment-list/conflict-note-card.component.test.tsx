@@ -114,6 +114,56 @@ test('availableActions none hides the selector and Resolve button', () => {
   expect(screen.getByText('Rejected')).toBeInTheDocument();
 });
 
+test('resolved read-only reject shows the rejected result, not the accepted one', () => {
+  render(
+    <ConflictNoteCard
+      comment={verseTextConflictComment}
+      localizedStrings={localizedStrings}
+      availableActions="none"
+      resolvedResolution="reject"
+    />,
+  );
+  // The Result region reflects the outcome that was actually applied (reject -> rejectedResultText),
+  // not the read-only card's 'accept' selector default.
+  expect(screen.getByText('Result')).toBeInTheDocument();
+  expect(screen.getByText(verseTextConflictComment.rejectedResultText ?? '')).toBeInTheDocument();
+  expect(screen.queryByText(verseTextConflictComment.resultText ?? '')).not.toBeInTheDocument();
+});
+
+test('resolved read-only accept shows the accepted result', () => {
+  render(
+    <ConflictNoteCard
+      comment={verseTextConflictComment}
+      localizedStrings={localizedStrings}
+      availableActions="none"
+      resolvedResolution="accept"
+    />,
+  );
+  expect(screen.getByText(verseTextConflictComment.resultText ?? '')).toBeInTheDocument();
+  expect(
+    screen.queryByText(verseTextConflictComment.rejectedResultText ?? ''),
+  ).not.toBeInTheDocument();
+});
+
+test('resolved read-only merged hides the Result region entirely', () => {
+  render(
+    <ConflictNoteCard
+      comment={verseTextConflictComment}
+      localizedStrings={localizedStrings}
+      availableActions="none"
+      resolvedResolution="merged"
+    />,
+  );
+  // No stored field represents the merged verse, so the Result region is hidden...
+  expect(screen.queryByText('Result')).not.toBeInTheDocument();
+  expect(screen.queryByText(verseTextConflictComment.resultText ?? '')).not.toBeInTheDocument();
+  expect(
+    screen.queryByText(verseTextConflictComment.rejectedResultText ?? ''),
+  ).not.toBeInTheDocument();
+  // ...while the other read-only regions still render.
+  expect(screen.getByText('Rejected')).toBeInTheDocument();
+});
+
 test('availableActions accept disables the Reject option and forces accept', async () => {
   const user = userEvent.setup({ pointerEventsCheck: 0 });
   render(

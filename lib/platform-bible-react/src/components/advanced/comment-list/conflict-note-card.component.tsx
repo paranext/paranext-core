@@ -54,6 +54,7 @@ export function ConflictNoteCard({
   selectedResolution,
   onResolutionChange,
   availableActions = 'acceptOrReject',
+  resolvedResolution,
   onResolve,
   isResolving = false,
 }: ConflictNoteCardProps) {
@@ -98,8 +99,22 @@ export function ConflictNoteCard({
     onResolutionChange?.(next);
   };
 
+  // For an already-resolved conflict shown read-only (availableActions === 'none' with a known
+  // resolvedResolution), the Result must reflect the outcome that was actually applied, not the live
+  // selector (which the read-only card leaves at its 'accept' default). While the conflict is still
+  // resolvable, the Result tracks the selector as before.
+  const isResolvedReadOnly = availableActions === 'none' && resolvedResolution !== undefined;
+  // Which resolution the Result preview tracks: the outcome that was actually applied when the card
+  // is read-only-resolved, otherwise the live selector. ('merged' falls through to resultText but is
+  // never shown — hideResultRegion hides the whole region below.)
+  const resultResolution = isResolvedReadOnly ? resolvedResolution : effectiveResolution;
   const resultText =
-    effectiveResolution === 'reject' ? comment.rejectedResultText : comment.resultText;
+    resultResolution === 'reject' ? comment.rejectedResultText : comment.resultText;
+  // A 'merged' outcome (only possible in PT9-synced data — PT10 never produces it) has NO stored
+  // field that represents the merged verse: resultText is the accepted side and rejectedResultText
+  // is the rejected side, and the true merged text is neither. So the Result region is hidden
+  // entirely rather than showing a misleading value.
+  const hideResultRegion = isResolvedReadOnly && resolvedResolution === 'merged';
 
   // Shared between the visible Tooltip and the visually-hidden aria-describedby target so both
   // surfaces always announce the same reason.
@@ -192,14 +207,18 @@ export function ConflictNoteCard({
         />
       </div>
 
-      <Separator />
+      {!hideResultRegion && (
+        <>
+          <Separator />
 
-      <div className="tw:flex tw:flex-col tw:gap-1">
-        <span className="tw:font-medium">
-          {localizedStrings['%conflict_note_result_label%'] ?? 'Result'}
-        </span>
-        <p className="tw:whitespace-pre-wrap tw:text-foreground">{resultText}</p>
-      </div>
+          <div className="tw:flex tw:flex-col tw:gap-1">
+            <span className="tw:font-medium">
+              {localizedStrings['%conflict_note_result_label%'] ?? 'Result'}
+            </span>
+            <p className="tw:whitespace-pre-wrap tw:text-foreground">{resultText}</p>
+          </div>
+        </>
+      )}
     </div>
   );
 }
