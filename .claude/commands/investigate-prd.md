@@ -112,7 +112,10 @@ source, not the aspect.
   `pt9-archaeologist` (`subagent_type: "pt9-archaeologist"`, pass that source's `PT9_MAP`). Pair each
   archaeologist with the `feature-mapper` output whose `## PT9 map: {feature}` heading matches that
   source — keep the **distinct-PT9-source → mapper → archaeologist** correspondence strictly 1:1
-  (each may cover several aspects).
+  (each may cover several aspects). **Exception:** if two mappers come back with maps of the
+  *same* PT9 feature (matching or overlapping `## PT9 map` headings — it happens when the PRD's
+  named systems turn out to share one implementation), merge those maps and run **one**
+  archaeologist over the combined map; two would deep-read the same files twice.
 
 Each agent prompt ends with: "Follow the instructions in your agent definition exactly. Return
 output in the specified format." Collect every agent's output and status token. If an agent

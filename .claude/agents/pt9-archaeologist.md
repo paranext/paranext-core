@@ -140,6 +140,10 @@ convenience for thoroughness, not a required pipeline — for a small source, ju
   stays visible. Don't relay a summary you can't point at in source.
 - **Split by natural seams** (backend / UI / tests), give each helper an explicit file list, and
   merge yourself — there is no separate consolidator step.
+- **Never end your turn waiting on a helper.** If a helper's result is missing, lost, or late,
+  synthesize your final output from what you have and mark the affected lines `? Inferred` /
+  `⚠️ Unknown` (with a Review Flag naming the unread files). A progress note is not a valid
+  final output — the command consumes exactly one formatted result from you.
 
 ## Step 4 — Extract behavior
 
