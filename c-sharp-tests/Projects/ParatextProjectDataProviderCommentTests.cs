@@ -241,10 +241,12 @@ namespace TestParanextDataProvider.Projects
                 .Single();
             var persistedReply = thread.Comments.Single(c => c.Id == replyId);
 
-            // Write-side: the client-supplied ConflictType must not have been persisted.
+            // Write-side: the client-supplied ConflictType must not have been persisted. Assert on
+            // the underlying Comment, NOT the wrapper property — the wrapper gates ConflictType to
+            // the thread's first comment, so reading it here would pass regardless of persistence.
             Assert.That(
-                persistedReply.ConflictType == NoteConflictType.None,
-                Is.True,
+                persistedReply.CommentInternal.ConflictType,
+                Is.EqualTo(NoteConflictType.None),
                 "CopyCommentProperties must not persist a client-supplied ConflictType onto a reply."
             );
 
@@ -256,6 +258,7 @@ namespace TestParanextDataProvider.Projects
             Assert.That(json, Does.Not.Contain("rejectedText"));
             Assert.That(json, Does.Not.Contain("acceptedText"));
             Assert.That(json, Does.Not.Contain("resultText"));
+            Assert.That(json, Does.Not.Contain("rejectedResultText"));
             Assert.That(json, Does.Not.Contain("conflictType"));
         }
 

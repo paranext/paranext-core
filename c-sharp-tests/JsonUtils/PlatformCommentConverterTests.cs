@@ -294,8 +294,10 @@ internal class PlatformCommentConverterTests : PapiTestBase
     [Test]
     public void Serialize_NonVerseTextConflict_OmitsConflictTextFields()
     {
-        // CreateConflictComment sets Type=Conflict but leaves ConflictType unset (not VerseTextConflict).
+        // CreateConflictComment sets Type=Conflict; give it a concrete NON-verseText ConflictType so
+        // this is a conflict thread ROOT whose conflict type is not VerseTextConflict.
         Comment testComment = CommentTestHelper.CreateConflictComment();
+        testComment.ConflictType = NoteConflictType.InvalidVerses;
         var (commentWrapper, _) = CreateCommentWithThread(testComment);
 
         var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
@@ -309,6 +311,13 @@ internal class PlatformCommentConverterTests : PapiTestBase
         Assert.That(json, Does.Not.Contain("rejectedResultText"));
         // Prove the ConflictType operand of the gate (not just Type) — this note is Type=Conflict.
         Assert.That(commentWrapper.RejectedText, Is.Null);
+        // But conflictType itself IS still emitted on a conflict thread ROOT, even a non-verseText
+        // one: the conflictType gate is first-comment (IsFirstCommentInThread), not verseText-specific.
+        Assert.That(
+            json,
+            Does.Contain(@"""conflictType"":""invalidVerses"""),
+            "non-verseText conflict root must still serialize conflictType"
+        );
     }
 
     [Test]
@@ -414,6 +423,25 @@ internal class PlatformCommentConverterTests : PapiTestBase
     }
 
     [Test]
+    public void Serialize_VerseTextConflictWithEmptyResultVerse_OmitsResultText()
+    {
+        // A verseText conflict whose merged result Verse is empty (""): ResultText must collapse to
+        // null and the wire must omit resultText, pinning ResultText's empty-Verse contract.
+        // (rejectedText/rejectedResultText may legitimately still be present — not asserted here.)
+        Comment testComment = CommentTestHelper.CreateVerseTextConflictComment();
+        testComment.Verse = "";
+        var (commentWrapper, _) = CreateCommentWithThread(testComment);
+
+        var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
+            commentWrapper,
+            _serializationOptions
+        );
+
+        Assert.That(commentWrapper.ResultText, Is.Null);
+        Assert.That(json, Does.Not.Contain(@"""resultText"":"));
+    }
+
+    [Test]
     public void Serialize_ConflictReplyCarryingConflictType_OmitsConflictTextFields()
     {
         // The FIRST comment of a verseText conflict thread legitimately carries the decode fields.
@@ -450,8 +478,19 @@ internal class PlatformCommentConverterTests : PapiTestBase
             "reply must not serialize acceptedText"
         );
         Assert.That(json, Does.Not.Contain("resultText"), "reply must not serialize resultText");
+        Assert.That(
+            json,
+            Does.Not.Contain("rejectedResultText"),
+            "reply must not serialize rejectedResultText"
+        );
+        Assert.That(
+            json,
+            Does.Not.Contain("conflictType"),
+            "reply must not serialize conflictType"
+        );
         Assert.That(replyWrapper.RejectedText, Is.Null);
         Assert.That(replyWrapper.ResultText, Is.Null);
+        Assert.That(replyWrapper.RejectedResultText, Is.Null);
 
         // Control: the FIRST comment still surfaces its fields, proving the gate is first-comment
         // specific rather than suppressing all conflict fields.

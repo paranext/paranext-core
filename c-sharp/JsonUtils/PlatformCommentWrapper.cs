@@ -116,7 +116,18 @@ public class PlatformCommentWrapper
     public string? ContextAfter => _comment.ContextAfter;
     public PtxUtils.Enum<NoteStatus> Status => _comment.Status;
     public PtxUtils.Enum<NoteType> Type => _comment.Type;
-    public PtxUtils.Enum<NoteConflictType> ConflictType => _comment.ConflictType;
+
+    /// <summary>
+    /// The note's conflict type. Gated to the thread's FIRST comment (see
+    /// <see cref="IsFirstCommentInThread"/>): conflict metadata is merger-authored and
+    /// root-comment-only, so a reply that carries a stale <c>ConflictType</c> — e.g. persisted by an
+    /// older build or hand-edited XML — reports <c>None</c> here and the converter therefore never
+    /// serializes <c>conflictType</c> for it. This keeps the wire contract ("never present on
+    /// replies") true while the converter stays a dumb field-writer, and mirrors how the four decode
+    /// fields gate on <see cref="IsFirstCommentInThread"/>.
+    /// </summary>
+    public PtxUtils.Enum<NoteConflictType> ConflictType =>
+        IsFirstCommentInThread ? _comment.ConflictType : NoteConflictType.None;
     public string? Verse => _comment.Verse;
     public string? Shared => _comment.Shared;
     public string? AssignedUser => _comment.AssignedUser;
@@ -166,6 +177,7 @@ public class PlatformCommentWrapper
                 )
                 : _comment.GetContentsAsHtml(
                     _thread.ThreadInternal,
+                    // TODO (PT-4104): this comparison is never true (comment ID vs thread ID); replace with IsFirstCommentInThread — behavior-neutral, see ticket.
                     _comment.Id == _thread?.Id,
                     false,
                     false
@@ -363,15 +375,16 @@ public class PlatformCommentWrapper
     }
 
     /// <summary>
-    /// True when rendered conflict-side HTML has no visible content. Strips tags, then applies PT9's
-    /// <c>Comment.IsBlank</c> idiom (<c>.Trim().Trim('\ufeff')</c>). U+FEFF is a sentinel PT9 uses for
-    /// empty verse content and is not treated as whitespace by <c>char.IsWhiteSpace</c>.
+    /// True when rendered conflict-side HTML has no visible content. Strips tags with ParatextData's
+    /// <c>PasteUtils.RemoveHtmlTags</c>, then applies PT9's <c>Comment.IsBlank</c> idiom
+    /// (<c>.Trim().Trim('\ufeff')</c>). U+FEFF is a sentinel PT9 uses for empty verse content and is
+    /// not treated as whitespace by <c>char.IsWhiteSpace</c>.
     /// </summary>
     private static bool IsRenderedHtmlBlank(string? html)
     {
         if (string.IsNullOrEmpty(html))
             return true;
-        var text = Regex.Replace(html, "<[^>]*>", string.Empty);
+        var text = PasteUtils.RemoveHtmlTags(html);
         return text.Trim().Trim('\ufeff').Length == 0;
     }
 

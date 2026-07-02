@@ -66,11 +66,12 @@ export type LegacyComment = {
   /** Language of note */
   language: string;
   /**
-   * Only present on `verseText` conflict notes: the resulting verse USFM (plain, no diff markup) if
-   * the change is REJECTED — i.e. the losing side. Pairs with {@link resultText} (the accepted
-   * outcome) to drive a dynamic result preview. Absent when the reject outcome decodes to an empty
-   * verse (e.g. the losing side deleted the verse) or the note carries no decodable diff. May be
-   * absent even when {@link rejectedText} is present — the two are independently optional.
+   * Only present on the FIRST comment of a `verseText` conflict thread (never on replies): the
+   * resulting verse USFM (plain, no diff markup) if the change is REJECTED — i.e. the losing side.
+   * Pairs with {@link resultText} (the accepted outcome) to drive a dynamic result preview. Absent
+   * when the reject outcome decodes to an empty verse (e.g. the losing side deleted the verse) or
+   * the note carries no decodable diff. May be absent even when {@link rejectedText} is present —
+   * the two are independently optional.
    */
   rejectedResultText?: string;
   /**
@@ -87,7 +88,10 @@ export type LegacyComment = {
   /**
    * Only present on the first comment of a `verseText` conflict thread when the merged result verse
    * USFM is non-empty: the resulting verse USFM (plain, no diff markup) already written into the
-   * text at merge time. Equals the accepted side in v1. Absent otherwise.
+   * text at merge time. Equals the accepted side in v1. Absent otherwise. For `verseText` conflict
+   * roots this value equals the serialized {@link verse} field — it is kept as a distinct field for
+   * the conflict-card contract and its empty-collapse guarantee, so consumers should not treat
+   * `resultText` and `verse` as independent data.
    */
   resultText?: string;
   /** Text which was selected in comment, or "" for none */
