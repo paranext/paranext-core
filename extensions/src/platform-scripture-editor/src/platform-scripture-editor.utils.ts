@@ -914,7 +914,7 @@ export async function syncOnProjectSwitch(
  * @param papi The instance of papi to send the commands
  * @param projectId The id of the project to open the text connections for
  */
-export async function openTextConnectionPanels(
+export async function openOrUpdateRelatedPanels(
   papi: typeof PapiBackend,
   projectId: string,
 ): Promise<void> {
