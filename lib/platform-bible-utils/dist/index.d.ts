@@ -5894,13 +5894,23 @@ export type CommentType = "Normal" | "Conflict";
  * This is the C# Comment type from Paratext.Data.ProjectComments
  */
 export type LegacyComment = {
+	/**
+	 * Only present on the FIRST comment of a `verseText` conflict thread: HTML diff of the accepted
+	 * (winning) side (same `<u>`/`<s>` markup as {@link rejectedText}). Also absent for `verseText`
+	 * conflicts that have no common ancestor (two translators independently drafted the same
+	 * previously-absent verse, so no accepted-side diff exists), and when the accepted-side diff has
+	 * no visible content. Never present on replies. Consumers must treat this field as optional even
+	 * on `verseText` conflict notes.
+	 */
+	acceptedText?: string;
 	/** Present in a note when it has been assigned to a particular user */
 	assignedUser?: string;
 	/** Present when there is a Biblical Term Id associated with the note */
 	biblicalTermId?: string;
 	/**
 	 * Type of conflict. Only applicable for conflict notes and it used to give a more specific
-	 * message when displaying the note.
+	 * message when displaying the note. Only meaningful on the first comment of a thread; never
+	 * present on replies.
 	 */
 	conflictType?: string;
 	/** Contents of the comment, represented in HTML that includes some Paratext 9 specific tags */
@@ -5929,8 +5939,31 @@ export type LegacyComment = {
 	isRead: boolean;
 	/** Language of note */
 	language: string;
+	/**
+	 * Only present on `verseText` conflict notes: the resulting verse USFM (plain, no diff markup) if
+	 * the change is REJECTED — i.e. the losing side. Pairs with {@link resultText} (the accepted
+	 * outcome) to drive a dynamic result preview. Absent when the reject outcome decodes to an empty
+	 * verse (e.g. the losing side deleted the verse) or the note carries no decodable diff. May be
+	 * absent even when {@link rejectedText} is present — the two are independently optional.
+	 */
+	rejectedResultText?: string;
+	/**
+	 * Only present on the FIRST comment of a `verseText` conflict thread, and only when the rejected
+	 * (losing) side's rendered diff has visible content: HTML diff of the rejected side, using
+	 * Paratext 9's `<u>` (inserted) and `<s>` (deleted) markup. This is full HTML,
+	 * `<blockquote>`-wrapped like {@link contents}. Coloring is applied by the UI, not carried in the
+	 * markup. Absent for normal notes, non-`verseText` conflicts, replies, and conflicts whose
+	 * rejected-side diff body is empty.
+	 */
+	rejectedText?: string;
 	/** Present in a note when it has been assigned to reply-to a particular user */
 	replyToUser?: string;
+	/**
+	 * Only present on the first comment of a `verseText` conflict thread when the merged result verse
+	 * USFM is non-empty: the resulting verse USFM (plain, no diff markup) already written into the
+	 * text at merge time. Equals the accepted side in v1. Absent otherwise.
+	 */
+	resultText?: string;
 	/** Text which was selected in comment, or "" for none */
 	selectedText?: string;
 	/** Present in a note when it has been marked to be shared in teh Global Consultant Notes */
@@ -5954,32 +5987,6 @@ export type LegacyComment = {
 	user: string;
 	/** Original USFM content of verse */
 	verse?: string;
-	/**
-	 * Only present on `verseText` conflict notes: HTML diff of the rejected (losing) side, using
-	 * Paratext 9's `<u>` (inserted) and `<s>` (deleted) markup. This is full HTML, `<blockquote>`-wrapped
-	 * like {@link contents}. Coloring is applied by the UI, not carried in the markup. Absent for normal
-	 * notes and non-`verseText` conflicts.
-	 */
-	rejectedText?: string;
-	/**
-	 * Only present on `verseText` conflict notes: HTML diff of the accepted (winning) side (same
-	 * `<u>`/`<s>` markup as {@link rejectedText}). Also absent for `verseText` conflicts that have no
-	 * common ancestor (two translators independently drafted the same previously-absent verse, so no
-	 * accepted-side diff exists). Absent otherwise. Consumers must treat this field as optional even
-	 * on `verseText` conflict notes.
-	 */
-	acceptedText?: string;
-	/**
-	 * Only present on `verseText` conflict notes: the resulting verse USFM (plain, no diff markup)
-	 * already written into the text at merge time. Equals the accepted side in v1. Absent otherwise.
-	 */
-	resultText?: string;
-	/**
-	 * Only present on `verseText` conflict notes: the resulting verse USFM (plain, no diff markup) if
-	 * the change is REJECTED — i.e. the losing side. Pairs with {@link resultText} (the accepted
-	 * outcome) to drive a dynamic result preview. Absent otherwise.
-	 */
-	rejectedResultText?: string;
 	/** Verse reference in which comment appears */
 	verseRef: string;
 };
