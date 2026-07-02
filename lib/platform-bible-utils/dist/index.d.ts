@@ -6075,6 +6075,7 @@ export {
 	MarkerCategoryType as CategoryType,
 	USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_0,
 	USFM_MARKERS_MAP_PARATEXT as USFM_MARKERS_MAP_PARATEXT_3_0,
+	Usj,
 };
 
 export {};

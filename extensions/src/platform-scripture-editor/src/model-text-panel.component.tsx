@@ -250,7 +250,9 @@ export function ModelTextPanel({
     () => ({
       isReadonly: true,
       hasSpellCheck: false,
-      nodes: { extraValidMarkers },
+      // Opt-in: omit `nodes` entirely when there are no extra markers (no behavior change), matching
+      // resource-text-panel.
+      ...(extraValidMarkers.length > 0 ? { nodes: { extraValidMarkers } } : {}),
       // Narrow the resource's (string) text-direction setting to the editor's union without a cast.
       textDirection: textDirection === 'rtl' || textDirection === 'auto' ? textDirection : 'ltr',
       view: getDefaultViewOptions(),
