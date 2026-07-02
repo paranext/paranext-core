@@ -196,6 +196,25 @@ The 7 verifier LEAVE-BEHIND inputs, grouped:
   (3 of 4 sub-keys — platformErrorCodes, backendLocalization, logging — already in DEST; the
   `Result<T>` axis adds little and is low value).
 
+### 4a. Late dispositions (2026-07-02 review — items the original funnel never enumerated)
+
+An adversarial re-check of this audit found three meaningful `ai-porting` items that appeared in
+neither the PORT list nor this leave-behind list. Dispositions:
+
+- **Multi-repo workspace tooling** (`.claude/scripts/{setup,teardown,list}-workspace.sh` +
+  `.claude/skills/git-worktree/`) — **now ported** as `.claude/skills/feature-workspace/`
+  (workflow plumbing stripped; the `~/git/workspaces/<slug>/` convention, safety guards, and
+  PT9 detached-pin pattern kept). The source skill's "stashes are per-worktree" claim was wrong
+  and is corrected in the ported version.
+- **PT9 TestLodge test-case corpus** (`.context/research/test-cases/`, 782 files) — **left in
+  place**, deliberately. It is the behavioral QA oracle for PT9-parity work, but at 782 files it
+  would dominate this repo's research area; consult it in the `ai-prompts` checkout when a
+  parity feature needs it. Revisit if `ai-prompts` is ever archived out of reach.
+- **`pr-reviewer-completeness` / `pr-reviewer-consistency` agents** — **left behind**. Their
+  every-upstream-item-has-a-downstream-item lens is coupled to the phase-artifact chain
+  (feature-description → design → plan) that was deliberately dropped; the embedded 7-agent
+  panel covers the implementation-facing lenses.
+
 ---
 
 ## 5. Open questions / judgment calls for the human
@@ -204,6 +223,9 @@ The 7 verifier LEAVE-BEHIND inputs, grouped:
    drop the 7.2 MB `images/` and 8.4 MB PDF? The inventory cites the manual by chapter/section, not
    by image — text-only keeps the references resolvable without bloating the repo. Confirm the
    image-drop is acceptable.
+   **RESOLVED (recorded 2026-07-02): the image-drop was reversed during import.** 129 of the
+   images are referenced from 24 of the 47 manual files, so text-only would have shipped 129
+   broken links; the referenced images were imported alongside the text (the PDF stayed behind).
 2. **`AlertCapture` / mutation-notify: doc vs code.** Both patterns already exist as *code* in the
    embedded `c-sharp/` tree (e.g. `AlertCapture.cs`, the `SendFullProjectUpdateEvent` call sites in
    the Manage-Books service). Items 6–7 document them as reusable patterns. Confirm you want the
