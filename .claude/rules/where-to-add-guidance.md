@@ -4,6 +4,9 @@ paths:
   - .context/standards/**
   - lib/platform-bible-react/src/stories/guidelines/**
   - CLAUDE.md
+  # docs/adr/** is intentional: catches agents that try to create ADR files here and
+  # redirects them to the correct location via the table below. No ADRs live here yet.
+  - docs/adr/**
 ---
 
 # Where to Add Rules and Guidance
