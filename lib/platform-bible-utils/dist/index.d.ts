@@ -1778,6 +1778,27 @@ export declare function normalizeScriptureSpaces(str: string): string;
  * are shallow equaled.
  */
 export declare function areUsjContentsEqualExceptWhitespace(a: Usj | undefined, b: Usj | undefined): boolean;
+/**
+ * Collects the distinct markers actually present in a USJ document.
+ *
+ * The scripture editor warns "Unexpected <kind> marker" for any marker in the USJ it doesn't
+ * recognize as a built-in USFM marker. Handbook/commentary resources use extra markers (e.g. `pn`,
+ * `jmp`, `xtSee`) that aren't built-ins, so a consumer can pass this document-derived set to the
+ * editor as `options.nodes.extraValidMarkers` to suppress those warnings — scoped to the resource
+ * actually being displayed, never a global list.
+ *
+ * The editor's `isValidMarker` is additive (a marker is valid if it is built-in OR listed in
+ * `extraValidMarkers`), so returning markers that are already built-in valid is a harmless no-op;
+ * callers therefore don't need the editor's internal built-in list (which it doesn't export) to
+ * compute a "delta". `z`-prefixed markers are omitted because the editor already treats every
+ * `z...` custom marker as unconditionally valid.
+ *
+ * @param usj The USJ document being displayed (e.g. the chapter USJ handed to the editor).
+ * @returns The distinct non-`z` markers found anywhere in the document, in first-seen order. Empty
+ *   when `usj` is undefined or contains no markers, so callers can omit the option (opt-in, no
+ *   behavior change) for content that needs nothing extra.
+ */
+export declare function collectUsjMarkers(usj: Usj | undefined): string[];
 /** WARNING: This file is generated in https://github.com/paranext/usfm-tools. Make changes there */
 /**
  * Information about a USFM marker that is just an attribute in USX/USJ. See {@link MarkerInfo} for
@@ -3999,8 +4020,8 @@ export type EffectiveStructureProtectionInputs = {
  * and the `platform-scripture` Scripture Finder PDP both call it.
  *
  * The feature applies in simple interface mode only; in power mode it is always inactive. Within
- * simple mode, an admin project lock that the user cannot toggle forces protection on; otherwise the
- * user's own preference governs (defaulting to on when never set).
+ * simple mode, an admin project lock that the user cannot toggle forces protection on; otherwise
+ * the user's own preference governs (defaulting to on when never set).
  */
 export declare function computeEffectiveStructureProtection({ interfaceMode, isAdminProtected, canAdminToggle, userSetting, }: EffectiveStructureProtectionInputs): boolean;
 /** Localized string value associated with this key */

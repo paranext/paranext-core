@@ -7,7 +7,11 @@ import {
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Button, Spinner } from 'platform-bible-react';
-import type { DblResourceData, LocalizedStringValue } from 'platform-bible-utils';
+import {
+  collectUsjMarkers,
+  type DblResourceData,
+  type LocalizedStringValue,
+} from 'platform-bible-utils';
 import type {
   DblResourceReference,
   EffectiveResourceReference,
@@ -17,7 +21,6 @@ import type {
 import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { selectTextConnection } from './select-dbl-resource';
 import { scrollToVerse } from './editor-dom.util';
-import { collectUsjMarkers } from './usj-markers.util';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 

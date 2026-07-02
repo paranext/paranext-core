@@ -81,6 +81,7 @@ export {
 export type { FormatScrRefRangeOptions } from './scripture/scripture-util';
 export {
   areUsjContentsEqualExceptWhitespace,
+  collectUsjMarkers,
   compareScrRefs,
   formatScrRef,
   formatScrRefRange,

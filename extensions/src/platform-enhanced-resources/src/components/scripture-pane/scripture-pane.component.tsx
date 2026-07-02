@@ -23,7 +23,7 @@ import {
   Skeleton,
   useStylesheet,
 } from 'platform-bible-react';
-import type { LocalizedStringValue } from 'platform-bible-utils';
+import { collectUsjMarkers, type LocalizedStringValue } from 'platform-bible-utils';
 import type { MarbleAnnotation } from '../../lib/marble-converter';
 import type { EnhancedResourcesNetworkObject } from '../../lib/use-enhanced-resources-proxy';
 import {
@@ -610,6 +610,22 @@ export function EnhancedScripturePane({
   const erProxyRef = useLatestRef(erProxy);
   const resourceIdRef = useLatestRef(resourceId);
   const glossLanguageRef = useLatestRef(glossLanguage);
+
+  // Tell the editor which markers this resource's content uses so it doesn't warn "Unexpected
+  // <kind> marker" for non-built-in markers — scoped per-resource to the displayed USJ, never a
+  // global list. Keyed on the marker-set VALUE (not the array identity) so `options` stays a stable
+  // reference across chapter changes that don't change the set: changing the `options` prop identity
+  // forces Editorial to reconcile its Lexical config, which destroys the Marble annotation marks
+  // (see EDITORIAL_OPTIONS note above). When the set genuinely changes, the annotation effect
+  // re-applies marks on the new USJ anyway.
+  const extraValidMarkersKey = useMemo(() => collectUsjMarkers(usj).join(' '), [usj]);
+  const editorialOptions = useMemo(
+    () => ({
+      ...EDITORIAL_OPTIONS,
+      nodes: { extraValidMarkers: extraValidMarkersKey ? extraValidMarkersKey.split(' ') : [] },
+    }),
+    [extraValidMarkersKey],
+  );
 
   // Hold the latest scrRef + localizer in refs so the annotation effect's hover callbacks
   // (which read these inside fetchAndUpdatePopover) don't have to re-fire the chunked apply
@@ -1208,7 +1224,7 @@ export function EnhancedScripturePane({
           defaultUsj={usj}
           scrRef={scrRef}
           logger={EDITORIAL_LOGGER}
-          options={EDITORIAL_OPTIONS}
+          options={editorialOptions}
         />
         {filteredTokenId && (
           <p
