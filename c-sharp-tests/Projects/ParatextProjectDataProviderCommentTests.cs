@@ -3,6 +3,7 @@ using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
 using Paratext.Data.ProjectComments;
+using Paratext.Data.Users;
 using SIL.Scripture;
 
 namespace TestParanextDataProvider.Projects
@@ -2200,6 +2201,106 @@ namespace TestParanextDataProvider.Projects
             // which is gated by ThreadNeedsCreatorResolve. Pin that conflict threads never require it.
             CommentThread thread = SeedVerseTextConflict();
             Assert.That(thread.ThreadNeedsCreatorResolve, Is.False);
+        }
+
+        // --- admin-or-assignee permission gate (NN4) ---------------------------------------------
+        // The tests above all run on the default admin project (_scrText), so they only cover the
+        // admin branch of ResolveConflict's gate. The two tests below cover the non-admin branches:
+        // denied (non-admin, unassigned) and assignee-succeeds (non-admin, assigned).
+
+        // A project whose current user is a non-admin *team member* (not an Observer). The gate reads
+        // scrText.Permissions.AmAdministrator (see ParatextProjectDataProvider.IsUserProjectAdministrator),
+        // NOT scrText.AmAdministrator, so we swap in a PermissionManager rather than overriding
+        // AmAdministrator on the ScrText itself (adaptation from the brief's sketch). This follows
+        // ManageBooks' NonAdminSharedScrText pattern, but that pattern's empty
+        // InternalProjectUserAccessData makes HaveRoleNotObserver false - which would make the base
+        // VerifyUserCanResolveThread / CommentEditHelper.AllowEditLast checks throw for BOTH tests and
+        // hide the gate. Overriding both properties expresses "non-admin, non-observer team member"
+        // directly, leaving only the admin-or-assignee gate to decide the outcome. DummyScrText has no
+        // (string name) constructor, so this uses the parameterless base.
+        private sealed class NonAdminDummyScrText : DummyScrText
+        {
+            private readonly PermissionManager _permissions = new NonAdminPermissionManager();
+
+            public override PermissionManager Permissions => _permissions;
+
+            private sealed class NonAdminPermissionManager : PermissionManager
+            {
+                public override bool AmAdministrator => false;
+
+                public override bool HaveRoleNotObserver => true;
+            }
+        }
+
+        // Mirrors SeedVerseTextConflict() but seeds the conflict on a caller-supplied project (the
+        // non-admin fixture), optionally pre-assigning the conflict note to a user. Returns the
+        // freshly built thread.
+        private static CommentThread SeedVerseTextConflict(ScrText scrText, string? assignedUser)
+        {
+            scrText.PutText(40, 0, false, MatTwoWinnerUsfm, null);
+            var mgr = CommentManager.Get(scrText);
+            Comment conflict = CommentTestHelper.CreateVerseTextConflictComment();
+            if (assignedUser != null)
+                conflict.AssignedUser = assignedUser;
+            mgr.AddComment(conflict);
+            mgr.SaveUser(conflict.User, false);
+            return mgr.FindThread(conflict.Thread);
+        }
+
+        [Test]
+        public void ResolveConflict_NonAdminNonAssignee_Throws()
+        {
+            // Non-admin, non-observer team member with an UNASSIGNED verseText conflict -> denied.
+            using var nonAdmin = new NonAdminDummyScrText();
+            var details = CreateProjectDetails(nonAdmin);
+            ParatextProjects.FakeAddProject(details, nonAdmin);
+            var provider = new DummyParatextProjectDataProvider(
+                PdpName + "-nonadmin",
+                Client,
+                details,
+                ParatextProjects
+            );
+
+            CommentThread thread = SeedVerseTextConflict(nonAdmin, null);
+
+            // The throw comes from the admin-or-assignee gate, not the base VerifyUserCanResolveThread
+            // (which passes here: HaveRoleNotObserver == true). The gate-specific message proves it -
+            // were the gate deleted, this non-admin resolve would succeed and Throws.TypeOf would fail.
+            Assert.That(
+                () => provider.ResolveConflict(thread.Id, "accept"),
+                Throws
+                    .TypeOf<InvalidOperationException>()
+                    .With.Message.Contains("administrator or the assigned user")
+            );
+            // And the denied attempt left the thread unresolved (no partial side effect).
+            Assert.That(
+                CommentManager.Get(nonAdmin).FindThread(thread.Id).Status,
+                Is.Not.EqualTo(NoteStatus.Resolved)
+            );
+        }
+
+        [Test]
+        public void ResolveConflict_NonAdminAssignedUser_Succeeds()
+        {
+            // Non-admin to whom the conflict is assigned -> allowed by the admin-or-assignee gate.
+            using var nonAdmin = new NonAdminDummyScrText();
+            var details = CreateProjectDetails(nonAdmin);
+            ParatextProjects.FakeAddProject(details, nonAdmin);
+            var provider = new DummyParatextProjectDataProvider(
+                PdpName + "-assignee",
+                Client,
+                details,
+                ParatextProjects
+            );
+
+            // Assign the conflict to the current (non-admin) user before adding it.
+            CommentThread thread = SeedVerseTextConflict(nonAdmin, nonAdmin.User.Name);
+
+            Assert.That(() => provider.ResolveConflict(thread.Id, "accept"), Throws.Nothing);
+            Assert.That(
+                CommentManager.Get(nonAdmin).FindThread(thread.Id).Status,
+                Is.EqualTo(NoteStatus.Resolved)
+            );
         }
 
         #endregion
