@@ -272,3 +272,4 @@
 {"type":"backlog","candidateId":"c4","title":"Section Level heading style displays in uppercase on draft","area":"draft/editor style rendering (CSS)","source":"jira","jiraKey":"PT-4086","dedupKey":"jira:PT-4086","impactScore":2,"confidence":0.3,"status":"open","date":"2026-07-02"}
 {"type":"backlog","candidateId":"c5","title":"RTL display of verse numbers on draft","area":"draft/editor RTL style rendering","source":"jira","jiraKey":"PT-4085","dedupKey":"jira:PT-4085","impactScore":1,"confidence":0.3,"status":"open","date":"2026-07-02"}
 {"type":"repro","runId":"qs-2026-07-02","candidateId":"c1","result":"reproduced","evidenceRef":"evidence/before-PT-4089.txt","date":"2026-07-02"}
+{"type":"fix","runId":"qs-2026-07-02","candidateId":"c1","result":"pr_opened","prNumber":2496,"prUrl":"https://github.com/paranext/paranext-core/pull/2496","branch":"fix/PT-4089-find-skip-absent-books","date":"2026-07-02"}
