@@ -38,6 +38,7 @@ import type {
 } from 'platform-scripture';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
+import { collectUsjMarkers } from './usj-markers.util';
 import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
 import { DEFAULT_RESOURCE_REFERENCE_LIST, selectTextConnection } from './select-dbl-resource';
 
@@ -446,13 +447,20 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // EditorRef requires null initial value per React ref convention
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | null>(null);
+  // Markers this resource's content actually uses. Passed to the editor as extraValidMarkers so it
+  // doesn't warn "Unexpected <kind> marker" for handbook/commentary markers (e.g. \pn, \jmp) — scoped
+  // per-resource from the USJ being displayed, never a global list. Empty for content that needs
+  // nothing extra, so the option is omitted (opt-in, no behavior change).
+  const extraValidMarkers = useMemo(() => collectUsjMarkers(usjFromPdp), [usjFromPdp]);
+
   const options: EditorOptions = useMemo(
     () => ({
       isReadonly: true,
       hasSpellCheck: false,
       textDirection,
+      ...(extraValidMarkers.length > 0 ? { nodes: { extraValidMarkers } } : {}),
     }),
-    [textDirection],
+    [textDirection, extraValidMarkers],
   );
 
   useEffect(() => {
