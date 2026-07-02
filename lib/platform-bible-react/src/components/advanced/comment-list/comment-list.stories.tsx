@@ -2,8 +2,9 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { LanguageStrings, LegacyComment, LegacyCommentThread } from 'platform-bible-utils';
 import { useMemo, useState } from 'react';
 import CommentList from './comment-list.component';
-import { sampleComments } from './comment-sample.data';
+import { sampleComments, verseTextConflictReplacementSample } from './comment-sample.data';
 import { AddCommentToThreadOptions } from './comment-list.types';
+import { ConflictResolution, ConflictResolutionOptions } from './conflict-note-card.types';
 
 const commentListLocalizedStrings: LanguageStrings = {
   '%comment_assign_team%': 'Team',
@@ -21,6 +22,17 @@ const commentListLocalizedStrings: LanguageStrings = {
   '%comment_status_todo%': 'Re-opened',
   '%comment_thread_multiple_replies%': '{count} replies',
   '%comment_thread_single_reply%': '1 reply',
+  '%conflict_note_description_verseText%': 'Conflicting changes were made to the verse text.',
+  '%conflict_note_choose_label%': 'Choose:',
+  '%conflict_note_choose_aria_label%': 'Choose resolution',
+  '%conflict_note_accept%': 'Accept',
+  '%conflict_note_reject%': 'Reject',
+  '%conflict_note_rejected_label%': 'Rejected',
+  '%conflict_note_accepted_label%': 'Accepted',
+  '%conflict_note_result_label%': 'Result',
+  '%conflict_note_resolve%': 'Resolve',
+  '%conflict_note_stale_notice%':
+    'The verse has been edited since this conflict was recorded, so rejecting is no longer available. Accept keeps the current text.',
 };
 
 const mockAssignableUsers: string[] = ['', 'Team', 'Alice', 'Bob', 'Charlie', 'Current User'];
@@ -31,6 +43,7 @@ type CommentListStoryProps = {
   canUserAssignThreadCallback?: (threadId: string) => Promise<boolean>;
   canUserResolveThreadCallback?: (threadId: string) => Promise<boolean>;
   canUserEditOrDeleteCommentCallback?: (commentId: string) => Promise<boolean>;
+  getConflictResolutionOptionsCallback?: (threadId: string) => Promise<ConflictResolutionOptions>;
 };
 
 function CommentListStory({
@@ -39,6 +52,7 @@ function CommentListStory({
   canUserAssignThreadCallback,
   canUserResolveThreadCallback,
   canUserEditOrDeleteCommentCallback,
+  getConflictResolutionOptionsCallback,
 }: CommentListStoryProps) {
   const [threads, setThreads] = useState<LegacyCommentThread[]>(initialThreads);
 
@@ -93,6 +107,19 @@ function CommentListStory({
     );
 
     return newCommentId;
+  };
+
+  const handleResolveConflict = async (
+    threadId: string,
+    resolution: ConflictResolution,
+  ): Promise<boolean> => {
+    console.log(`Resolving conflict ${threadId} as ${resolution}`);
+    setThreads((prevThreads) =>
+      prevThreads.map((thread) =>
+        thread.id === threadId ? { ...thread, status: 'Resolved' } : thread,
+      ),
+    );
+    return true;
   };
 
   const handleUpdateComment = async (commentId: string, contents: string): Promise<boolean> => {
@@ -190,6 +217,10 @@ function CommentListStory({
       canUserEditOrDeleteCommentCallback={
         canUserEditOrDeleteCommentCallback ?? defaultCanUserEditOrDeleteCallback
       }
+      handleResolveConflict={handleResolveConflict}
+      getConflictResolutionOptionsCallback={
+        getConflictResolutionOptionsCallback ?? (async () => 'acceptOrReject')
+      }
     />
   );
 }
@@ -207,6 +238,19 @@ const meta: Meta<typeof CommentList> = {
 export default meta;
 
 type Story = StoryObj<typeof CommentListStory>;
+
+const unresolvedConflictThread: LegacyCommentThread = {
+  id: 'conflict-replacement',
+  comments: [verseTextConflictReplacementSample],
+  status: 'Todo',
+  type: 'Conflict',
+  modifiedDate: verseTextConflictReplacementSample.date,
+  verseRef: 'MAT 2:1',
+  isSpellingNote: false,
+  isBTNote: false,
+  isConsultantNote: false,
+  isRead: false,
+};
 
 export const Default: Story = {
   render: () => (
@@ -268,6 +312,24 @@ export const AssigneePreselection: Story = {
         return true;
       }}
       canUserEditOrDeleteCommentCallback={async () => true}
+    />
+  ),
+};
+
+/**
+ * A comment list containing an unresolved verseText merge conflict. Expand it to see the
+ * ConflictNoteCard; clicking Resolve flips the thread to Resolved (read-only card, dimmed row).
+ */
+export const WithUnresolvedConflict: Story = {
+  render: () => <CommentListStory initialThreads={[unresolvedConflictThread, ...sampleComments]} />,
+};
+
+/** The conflict's verse was edited after the merge: only Accept is offered (Reject disabled). */
+export const WithStaleConflict: Story = {
+  render: () => (
+    <CommentListStory
+      initialThreads={[unresolvedConflictThread, ...sampleComments]}
+      getConflictResolutionOptionsCallback={async () => 'accept'}
     />
   ),
 };
