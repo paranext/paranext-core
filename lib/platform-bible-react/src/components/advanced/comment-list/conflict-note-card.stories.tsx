@@ -3,7 +3,7 @@ import { LanguageStrings, LegacyComment } from 'platform-bible-utils';
 import { useState } from 'react';
 import { Card, CardContent } from '@/components/shadcn-ui/card';
 import { ConflictNoteCard } from './conflict-note-card.component';
-import { ConflictResolution } from './conflict-note-card.types';
+import { ConflictResolution, ConflictResolutionOptions } from './conflict-note-card.types';
 import {
   verseTextConflictComment,
   verseTextConflictReplacementSample,
@@ -18,13 +18,16 @@ const localizedStrings: LanguageStrings = {
   '%conflict_note_rejected_label%': 'Rejected',
   '%conflict_note_accepted_label%': 'Accepted',
   '%conflict_note_result_label%': 'Result',
+  '%conflict_note_resolve%': 'Resolve',
+  '%conflict_note_stale_notice%':
+    'The verse has been edited since this conflict was recorded, so rejecting is no longer available. Accept keeps the current text.',
 };
 
 function ConflictNoteCardStory({
-  canAcceptReject = true,
+  availableActions = 'acceptOrReject',
   comment = verseTextConflictComment,
 }: {
-  canAcceptReject?: boolean;
+  availableActions?: ConflictResolutionOptions;
   comment?: LegacyComment;
 }) {
   const [resolution, setResolution] = useState<ConflictResolution>('accept');
@@ -36,7 +39,8 @@ function ConflictNoteCardStory({
           localizedStrings={localizedStrings}
           selectedResolution={resolution}
           onResolutionChange={setResolution}
-          canAcceptReject={canAcceptReject}
+          availableActions={availableActions}
+          onResolve={(chosen) => console.log(`Resolve clicked: ${chosen}`)}
         />
       </CardContent>
     </Card>
@@ -61,9 +65,17 @@ export const Default: Story = {
   render: () => <ConflictNoteCardStory comment={verseTextConflictReplacementSample} />,
 };
 
-/** The selector is disabled when the user lacks accept/reject permission. */
+/** Controls are hidden when the user may not resolve, or the conflict is already resolved. */
 export const RestrictedPermissions: Story = {
-  render: () => <ConflictNoteCardStory canAcceptReject={false} />,
+  render: () => <ConflictNoteCardStory availableActions="none" />,
+};
+
+/**
+ * The verse was edited after the merge (stale): Reject is disabled with an explanation tooltip and
+ * the selection is forced to Accept (keep current text).
+ */
+export const StaleVerse: Story = {
+  render: () => <ConflictNoteCardStory availableActions="accept" />,
 };
 
 /**

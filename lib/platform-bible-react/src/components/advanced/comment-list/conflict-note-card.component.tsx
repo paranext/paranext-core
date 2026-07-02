@@ -1,3 +1,4 @@
+import { Button } from '@/components/shadcn-ui/button';
 import {
   Select,
   SelectContent,
@@ -6,6 +7,12 @@ import {
   SelectValue,
 } from '@/components/shadcn-ui/select';
 import { Separator } from '@/components/shadcn-ui/separator';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { sanitizeHtml } from 'platform-bible-utils';
 import { useMemo, useState } from 'react';
@@ -27,12 +34,12 @@ const DIFF_HTML_CLASSES = cn(
 );
 
 /**
- * Moves a diff span's trailing whitespace outside its closing tag (e.g. `<s>town </s>` → `<s>town</s> `)
- * so the strikethrough/color decoration stops at the word rather than dangling into the inter-word gap.
- * PT9 keeps each word's trailing space inside the diff token (DiffToken.SplitUsfmTokens, FB-38914) and
- * masks it with a background highlight; our text-only decoration would otherwise show a stray strike over
- * the space. Only whitespace is relocated across the closing tag — no text changes. Diff spans hold plain
- * text only, so this is safe.
+ * Moves a diff span's trailing whitespace outside its closing tag (e.g. `<s>town </s>` →
+ * `<s>town</s> `) so the strikethrough/color decoration stops at the word rather than dangling into
+ * the inter-word gap. PT9 keeps each word's trailing space inside the diff token
+ * (DiffToken.SplitUsfmTokens, FB-38914) and masks it with a background highlight; our text-only
+ * decoration would otherwise show a stray strike over the space. Only whitespace is relocated
+ * across the closing tag — no text changes. Diff spans hold plain text only, so this is safe.
  */
 const trimDiffSpanWhitespace = (html: string) => html.replace(/(\s+)(<\/[us]>)/g, '$2$1');
 
@@ -46,10 +53,17 @@ export function ConflictNoteCard({
   localizedStrings,
   selectedResolution,
   onResolutionChange,
-  canAcceptReject = true,
+  availableActions = 'acceptOrReject',
+  onResolve,
+  isResolving = false,
 }: ConflictNoteCardProps) {
   const [internalResolution, setInternalResolution] = useState<ConflictResolution>('accept');
   const resolution = selectedResolution ?? internalResolution;
+
+  // When reject is unavailable (stale verse) force the visible selection to 'accept' so the
+  // selector can never display a choice the Resolve button would be refused for.
+  const effectiveResolution: ConflictResolution =
+    availableActions === 'accept' ? 'accept' : resolution;
 
   const sanitizedRejected = useMemo(
     () => trimDiffSpanWhitespace(sanitizeHtml(comment.rejectedText ?? '')),
@@ -80,7 +94,8 @@ export function ConflictNoteCard({
     onResolutionChange?.(next);
   };
 
-  const resultText = resolution === 'reject' ? comment.rejectedResultText : comment.resultText;
+  const resultText =
+    effectiveResolution === 'reject' ? comment.rejectedResultText : comment.resultText;
 
   return (
     <div className="tw:flex tw:flex-col tw:gap-3 tw:text-sm">
@@ -89,27 +104,52 @@ export function ConflictNoteCard({
           'Conflicting changes were made to the verse text.'}
       </p>
 
-      <div className="tw:flex tw:flex-row tw:items-center tw:gap-2">
-        <span>{localizedStrings['%conflict_note_choose_label%'] ?? 'Choose:'}</span>
-        <Select value={resolution} onValueChange={handleChange} disabled={!canAcceptReject}>
-          <SelectTrigger
-            className="tw:w-32"
-            aria-label={
-              localizedStrings['%conflict_note_choose_aria_label%'] ?? 'Choose resolution'
-            }
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="accept">
-              {localizedStrings['%conflict_note_accept%'] ?? 'Accept'}
-            </SelectItem>
-            <SelectItem value="reject">
-              {localizedStrings['%conflict_note_reject%'] ?? 'Reject'}
-            </SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      {availableActions !== 'none' && (
+        <div className="tw:flex tw:flex-row tw:items-center tw:gap-2">
+          <span>{localizedStrings['%conflict_note_choose_label%'] ?? 'Choose:'}</span>
+          <Select value={effectiveResolution} onValueChange={handleChange} disabled={isResolving}>
+            <SelectTrigger
+              className="tw:w-32"
+              aria-label={
+                localizedStrings['%conflict_note_choose_aria_label%'] ?? 'Choose resolution'
+              }
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="accept">
+                {localizedStrings['%conflict_note_accept%'] ?? 'Accept'}
+              </SelectItem>
+              {availableActions === 'accept' ? (
+                <TooltipProvider delayDuration={0}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      {/* span wrapper so the tooltip still receives pointer events over the
+                          disabled item */}
+                      <span className="tw:block">
+                        <SelectItem value="reject" disabled>
+                          {localizedStrings['%conflict_note_reject%'] ?? 'Reject'}
+                        </SelectItem>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">
+                      {localizedStrings['%conflict_note_stale_notice%'] ??
+                        'The verse has been edited since this conflict was recorded, so rejecting is no longer available. Accept keeps the current text.'}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : (
+                <SelectItem value="reject">
+                  {localizedStrings['%conflict_note_reject%'] ?? 'Reject'}
+                </SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+          <Button size="sm" disabled={isResolving} onClick={() => onResolve?.(effectiveResolution)}>
+            {localizedStrings['%conflict_note_resolve%'] ?? 'Resolve'}
+          </Button>
+        </div>
+      )}
 
       {/* Accepted region first, then Rejected — matches PT9's AppendConflictNoteDetails order
           (winning/current text leads, and Accept is the default resolution). */}

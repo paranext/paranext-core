@@ -100,15 +100,57 @@ test('non-verseText conflict falls back to rendering contents', () => {
   expect(screen.queryByText('Rejected')).not.toBeInTheDocument();
 });
 
-test('canAcceptReject=false disables the selector', () => {
+test('availableActions none hides the selector and Resolve button', () => {
   render(
     <ConflictNoteCard
       comment={verseTextConflictComment}
-      localizedStrings={localizedStrings}
-      canAcceptReject={false}
+      localizedStrings={{}}
+      availableActions="none"
     />,
   );
+  expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Resolve' })).not.toBeInTheDocument();
+  // Read-only regions still render
+  expect(screen.getByText('Rejected')).toBeInTheDocument();
+});
+
+test('availableActions accept disables the Reject option and forces accept', async () => {
+  const user = userEvent.setup({ pointerEventsCheck: 0 });
+  render(
+    <ConflictNoteCard
+      comment={verseTextConflictComment}
+      localizedStrings={{}}
+      availableActions="accept"
+      selectedResolution="reject"
+    />,
+  );
+  // Forced to accept even though the parent passed 'reject'
+  expect(screen.getByRole('combobox')).toHaveTextContent('Accept');
+  await user.click(screen.getByRole('combobox'));
+  const rejectOption = screen.getByRole('option', { name: 'Reject' });
+  expect(rejectOption).toHaveAttribute('data-disabled');
+});
+
+test('Resolve button reports the current selection', async () => {
+  const user = userEvent.setup({ pointerEventsCheck: 0 });
+  const onResolve = vi.fn();
+  render(
+    <ConflictNoteCard
+      comment={verseTextConflictComment}
+      localizedStrings={{}}
+      selectedResolution="reject"
+      onResolve={onResolve}
+    />,
+  );
+  await user.click(screen.getByRole('button', { name: 'Resolve' }));
+  expect(onResolve).toHaveBeenCalledTimes(1);
+  expect(onResolve).toHaveBeenCalledWith('reject');
+});
+
+test('isResolving disables the selector and Resolve button', () => {
+  render(<ConflictNoteCard comment={verseTextConflictComment} localizedStrings={{}} isResolving />);
   expect(screen.getByRole('combobox')).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Resolve' })).toBeDisabled();
 });
 
 test('no-ancestor case (acceptedText absent): selector and Rejected render, Accepted absent, Result tracks resolution', () => {
