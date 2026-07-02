@@ -1743,6 +1743,14 @@
   margin-right: 10vw;
 }
 
+/* Real-table layout — see platform-scripture-editor/src/_usj-nodes.scss. Reset the
+   inherited paragraph indent/margins so real <tr>/<td> columns don't collapse. */
+.usfm .table-row,
+.usfm .table-cell {
+  text-indent: 0;
+  margin: 0;
+}
+
 .formatted-font .usfm_th1 {
   font-size: 100%;
   font-style: italic;
@@ -2212,22 +2220,6 @@
 
 .opennote {
   color: #7777ff;
-}
-
-table {
-  border-collapse: collapse;
-}
-
-td {
-  border: 1px solid #000000;
-  page-break-inside: avoid;
-  /* FB27281 adding padding based on font size*/
-  padding-right: 0.28em;
-  padding-left: 0.28em;
-}
-
-td.markercell {
-  border-style: none;
 }
 
 rt {

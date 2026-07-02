@@ -25,3 +25,25 @@
   text-decoration: none;
   cursor: default;
 }
+
+/* Handbook tables render boxed like PT9 Desktop. In PT9 the boxed section
+   headings came from the generic `td` border (PT9's per-marker CSS carries no
+   border), so we re-scope that exact border here. This file is injected only in
+   HBKENG/TNN/TND iframes, so the box never reaches the project view or other
+   resources. `th` is included because the editor now emits real <th> for th*
+   markers (PT9's td-only rule predates that). Applies to every handbook table
+   cell: a single-cell section heading becomes one box; a multi-column table
+   becomes a grid of boxes. .markercell keeps its PT9 borderless exception. */
+.usfm table {
+  border-collapse: collapse;
+}
+.usfm td,
+.usfm th {
+  border: 1px solid #000000;
+  page-break-inside: avoid;
+  padding-right: 0.28em;
+  padding-left: 0.28em;
+}
+.usfm td.markercell {
+  border-style: none;
+}
