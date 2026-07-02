@@ -131,6 +131,25 @@ test('availableActions accept disables the Reject option and forces accept', asy
   expect(rejectOption).toHaveAttribute('data-disabled');
 });
 
+test('disabled Reject option is programmatically described by the stale notice for screen readers', async () => {
+  const user = userEvent.setup({ pointerEventsCheck: 0 });
+  render(
+    <ConflictNoteCard
+      comment={verseTextConflictComment}
+      // Empty strings so the component falls back to its default English notice
+      localizedStrings={{}}
+      availableActions="accept"
+    />,
+  );
+  await user.click(screen.getByRole('combobox'));
+  const rejectOption = screen.getByRole('option', { name: 'Reject' });
+  // aria-describedby resolves (via Radix's role="option" element) to the visually-hidden notice,
+  // so the reason Reject is unavailable reaches assistive tech, not just the pointer-only Tooltip.
+  expect(rejectOption).toHaveAccessibleDescription(
+    /the verse has been edited since this conflict was recorded/i,
+  );
+});
+
 test('Resolve button reports the current selection', async () => {
   const user = userEvent.setup({ pointerEventsCheck: 0 });
   const onResolve = vi.fn();
