@@ -131,7 +131,7 @@
   --secondary-foreground: oklch(0.2079 0.0399 265.73); /* slate-900 */
   --muted: oklch(0.9589 0.011 248.06);
   --muted-foreground: oklch(0.5547 0.0408 257.45); /* slate-500 */
-  --accent: oklch(0.9589 0.011 248.06);
+  --accent: oklch(0.929 0.0127 255.58); /* slate-200 (darker than muted) */
   --accent-foreground: oklch(0.2079 0.0399 265.73); /* slate-900 */
   --destructive: oklch(0.6369 0.2077 25.32);
   /* CUSTOM: destructive-foreground is not in shadcn/ui anymore */
@@ -153,7 +153,7 @@
   --sidebar-foreground: oklch(0.1371 0.036 258.53); /* slate-950 */
   --sidebar-primary: oklch(0.2079 0.0399 265.73); /* slate-900 */
   --sidebar-primary-foreground: oklch(0.9838 0.0036 248.23); /* slate-50 */
-  --sidebar-accent: oklch(0.9589 0.011 248.06);
+  --sidebar-accent: oklch(0.929 0.0127 255.58); /* slate-200 (darker than muted) */
   --sidebar-accent-foreground: oklch(0.2079 0.0399 265.73); /* slate-900 */
   --sidebar-border: oklch(0.929 0.0127 255.58); /* slate-200 */
   --sidebar-ring: oklch(0.1371 0.036 258.53); /* slate-950 */
@@ -173,7 +173,7 @@
   --secondary-foreground: oklch(0.9838 0.0036 248.23); /* slate-50 */
   --muted: oklch(0.28 0.037 259.98); /* slate-800 */
   --muted-foreground: oklch(0.7107 0.0351 256.8); /* slate-400 */
-  --accent: oklch(0.28 0.037 259.98); /* slate-800 */
+  --accent: oklch(0.3717 0.0392 257.29); /* slate-700 (lighter than muted) */
   --accent-foreground: oklch(0.9838 0.0036 248.23); /* slate-50 */
   --destructive: oklch(0.396 0.1331 25.71);
   /* CUSTOM: destructive-foreground is not in shadcn/ui anymore */
@@ -195,7 +195,7 @@
   --sidebar-foreground: oklch(0.7107 0.0351 256.8); /* slate-400 */
   --sidebar-primary: oklch(0.9838 0.0036 248.23); /* slate-50 */
   --sidebar-primary-foreground: oklch(0.2079 0.0399 265.73); /* slate-900 */
-  --sidebar-accent: oklch(0.28 0.037 259.98); /* slate-800 */
+  --sidebar-accent: oklch(0.3717 0.0392 257.29); /* slate-700 (lighter than muted) */
   --sidebar-accent-foreground: oklch(0.7107 0.0351 256.8); /* slate-400 */
   --sidebar-border: oklch(0.28 0.037 259.98); /* slate-800 */
   --sidebar-ring: oklch(0.8688 0.0199 252.89); /* slate-300 */
@@ -215,7 +215,7 @@
   --secondary-foreground: oklch(0.21 0.006 285.885); /* slate-900 */
   --muted: oklch(0.966 0.005 106.5);
   --muted-foreground: oklch(0.58 0.031 107.3); /* slate-500 */
-  --accent: oklch(0.966 0.005 106.5);
+  --accent: oklch(0.93 0.007 106.5); /* darker than muted */
   --accent-foreground: oklch(0.228 0.013 107.4); /* slate-900 */
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.9838 0.0036 248.23); /* slate-50 */
@@ -235,7 +235,7 @@
   --sidebar-foreground: oklch(0.153 0.006 107.1); /* slate-950 */
   --sidebar-primary: oklch(0.666 0.179 58.318); /* slate-900 */
   --sidebar-primary-foreground: oklch(0.987 0.022 95.277); /* slate-50 */
-  --sidebar-accent: oklch(0.966 0.005 106.5);
+  --sidebar-accent: oklch(0.93 0.007 106.5); /* darker than muted */
   --sidebar-accent-foreground: oklch(0.228 0.013 107.4); /* slate-900 */
   --sidebar-border: oklch(0.93 0.007 106.5); /* slate-200 */
   --sidebar-ring: oklch(0.737 0.021 106.9); /* slate-950 */
@@ -255,7 +255,7 @@
   --secondary-foreground: oklch(0.985 0 0); /* slate-50 */
   --muted: oklch(0.286 0.016 107.4); /* slate-800 */
   --muted-foreground: oklch(0.737 0.021 106.9); /* slate-400 */
-  --accent: oklch(0.286 0.016 107.4); /* slate-800 */
+  --accent: oklch(0.394 0.023 107.4); /* lighter than muted */
   --accent-foreground: oklch(0.988 0.003 106.5); /* slate-50 */
   --destructive: oklch(0.704 0.191 22.216);
   --destructive-foreground: oklch(0.9838 0.0036 248.23); /* slate-50 */
@@ -275,7 +275,7 @@
   --sidebar-foreground: oklch(0.988 0.003 106.5); /* slate-400 */
   --sidebar-primary: oklch(0.769 0.188 70.08); /* slate-50 */
   --sidebar-primary-foreground: oklch(0.279 0.077 45.635); /* slate-900 */
-  --sidebar-accent: oklch(0.286 0.016 107.4); /* slate-800 */
+  --sidebar-accent: oklch(0.394 0.023 107.4); /* lighter than muted */
   --sidebar-accent-foreground: oklch(0.988 0.003 106.5); /* slate-400 */
   --sidebar-border: oklch(1 0 0 / 10%); /* slate-800 */
   --sidebar-ring: oklch(0.58 0.031 107.3); /* slate-300 */
