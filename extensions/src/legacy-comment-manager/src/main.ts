@@ -23,6 +23,7 @@ import {
   LegacyCommentManagerUsjProjectDataProviderEngineFactory,
 } from './project-data-provider/legacy-comment-manager-usj-pdpef.model';
 import { LEGACY_COMMENT_USJ_PROJECT_INTERFACES } from './project-data-provider/legacy-comment-manager-usj-pdpe.model';
+import { resolveCommentListPanelProjectId } from './comment-list-panel.utils';
 
 const commentListWebViewType = 'legacyCommentManager.commentList';
 const COMMENT_LIST_PANEL_WEBVIEW_TYPE = 'legacyCommentManager.commentListPanel';
@@ -165,10 +166,11 @@ const commentListPanelProvider: IWebViewProvider = {
         `${COMMENT_LIST_PANEL_WEBVIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
 
-    const projectId =
-      currentCommentListPanelProjectId !== undefined
-        ? currentCommentListPanelProjectId
-        : (openWebViewOptions.projectId ?? savedWebView.projectId);
+    const projectId = resolveCommentListPanelProjectId(
+      currentCommentListPanelProjectId,
+      openWebViewOptions.projectId,
+      savedWebView.projectId,
+    );
     currentCommentListPanelProjectId = undefined;
 
     const title = await papi.localization.getLocalizedString({
@@ -200,7 +202,7 @@ async function openCommentListPanel(projectId: string | undefined): Promise<stri
   const existingId = await papi.webViews.openWebView(
     COMMENT_LIST_PANEL_WEBVIEW_TYPE,
     { type: 'tab' },
-    { existingId: '?', createNewIfNotFound: false },
+    { existingId: '?', createNewIfNotFound: false, bringToFront: false },
   );
 
   if (existingId) {
