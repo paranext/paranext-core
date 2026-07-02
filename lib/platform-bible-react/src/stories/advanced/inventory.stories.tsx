@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import {
   Inventory,
+  InventoryLocalizedStrings,
   InventorySummaryItem,
 } from '@/components/advanced/inventory/inventory.component';
 import {
@@ -16,7 +17,9 @@ import { Scope } from '@/components/utils/scripture.util';
 import { escapeStringRegexp } from 'platform-bible-utils';
 import { useState } from 'react';
 
-const localizedStrings = {
+// Typed `Required<InventoryLocalizedStrings>` so the compiler flags a dropped key: Inventory
+// resolves `strings[key] ?? key`, so a missing key would render the raw `%…%` token in the UI.
+const localizedStrings: Required<InventoryLocalizedStrings> = {
   '%webView_inventory_all%': 'All items',
   '%webView_inventory_approved%': 'Approved items',
   '%webView_inventory_unapproved%': 'Unapproved items',
