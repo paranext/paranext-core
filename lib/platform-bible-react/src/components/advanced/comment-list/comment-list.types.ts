@@ -5,6 +5,7 @@ import {
   LegacyCommentThread,
   LocalizeKey,
 } from 'platform-bible-utils';
+import { ConflictResolution, ConflictResolutionOptions } from './conflict-note-card.types';
 
 /** Options for adding a comment to a thread */
 export type AddCommentToThreadOptions = {
@@ -125,6 +126,17 @@ export interface CommentListProps {
   canUserEditOrDeleteCommentCallback?: (commentId: string) => Promise<boolean>;
   /** Callback when the user clicks a verse reference in a comment thread. */
   onVerseRefClick?: (thread: LegacyCommentThread) => void;
+  /**
+   * Handler that applies a conflict resolution via the comments data provider's resolveConflict.
+   * Returns true on success, false on failure (the thread re-enables its controls). Conflict
+   * threads render a read-only card when this (or the options callback) is not provided.
+   */
+  handleResolveConflict?: (threadId: string, resolution: ConflictResolution) => Promise<boolean>;
+  /**
+   * Callback returning which resolution actions the current user may take on a conflict thread (the
+   * getConflictResolutionOptions capability). Treat missing as 'none'.
+   */
+  getConflictResolutionOptionsCallback?: (threadId: string) => Promise<ConflictResolutionOptions>;
 }
 
 /** Props for the CommentThread component */
@@ -205,6 +217,17 @@ export interface CommentThreadProps {
   autoReadDelay?: number;
   /** Callback when the user clicks a verse reference in a comment thread. */
   onVerseRefClick?: (thread: LegacyCommentThread) => void;
+  /**
+   * Handler that applies a conflict resolution via the comments data provider's resolveConflict.
+   * Returns true on success, false on failure (the thread re-enables its controls). Conflict
+   * threads render a read-only card when this (or the options callback) is not provided.
+   */
+  handleResolveConflict?: (threadId: string, resolution: ConflictResolution) => Promise<boolean>;
+  /**
+   * Callback returning which resolution actions the current user may take on a conflict thread (the
+   * getConflictResolutionOptions capability). Treat missing as 'none'.
+   */
+  getConflictResolutionOptionsCallback?: (threadId: string) => Promise<ConflictResolutionOptions>;
 }
 
 /** Props for the CommentItem component */

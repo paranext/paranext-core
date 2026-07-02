@@ -22,6 +22,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/
 import { Command, CommandItem, CommandList } from '@/components/shadcn-ui/command';
 import { CommentItem } from './comment-item.component';
 import { AddCommentToThreadOptions, CommentThreadProps } from './comment-list.types';
+import { ConflictNoteCard } from './conflict-note-card.component';
+import { ConflictResolution, ConflictResolutionOptions } from './conflict-note-card.types';
 import { didPressCtrlOrCmdEnter, getAssignedUserDisplayName } from './comment-list.utils';
 
 const initialValue: SerializedEditorState<
@@ -88,6 +90,8 @@ export function CommentThread({
   autoReadDelay = 5,
   onVerseRefClick,
   initialAssignedUser,
+  handleResolveConflict,
+  getConflictResolutionOptionsCallback,
 }: CommentThreadProps) {
   const [pendingCommentEditorState, setPendingCommentEditorState] =
     useState<SerializedEditorState>(initialValue);
@@ -108,6 +112,11 @@ export function CommentThread({
     Map<string, boolean>
   >(new Map());
 
+  const isConflictThread = thread.type === 'Conflict';
+  const [conflictOptions, setConflictOptions] = useState<ConflictResolutionOptions>('none');
+  const [selectedResolution, setSelectedResolution] = useState<ConflictResolution>('accept');
+  const [isResolvingConflict, setIsResolvingConflict] = useState<boolean>(false);
+
   // Check resolve permission on mount so the button can appear on hover
   useEffect(() => {
     let isPromiseCurrent = true;
@@ -126,6 +135,26 @@ export function CommentThread({
       isPromiseCurrent = false;
     };
   }, [threadId, canUserResolveThreadCallback]);
+
+  // Which conflict resolution actions the user may take; re-checked when the thread status
+  // changes (resolve/reopen both change what is available).
+  useEffect(() => {
+    let isPromiseCurrent = true;
+    if (!isConflictThread) return undefined;
+
+    const checkConflictOptions = async () => {
+      const options = getConflictResolutionOptionsCallback
+        ? await getConflictResolutionOptionsCallback(threadId)
+        : 'none';
+      if (!isPromiseCurrent) return;
+      setConflictOptions(options);
+    };
+
+    checkConflictOptions();
+    return () => {
+      isPromiseCurrent = false;
+    };
+  }, [isConflictThread, threadId, threadStatus, getConflictResolutionOptionsCallback]);
 
   // Check remaining async permissions when thread is selected
   useEffect(() => {
@@ -428,6 +457,20 @@ export function CommentThread({
     [clearEditor, pendingCommentEditorState, handleAddCommentToThread, pendingCommentAssignedUser],
   );
 
+  const handleResolveConflictClick = useCallback(
+    async (resolution: ConflictResolution) => {
+      if (!handleResolveConflict) return;
+      setIsResolvingConflict(true);
+      const success = await handleResolveConflict(threadId, resolution);
+      setIsResolvingConflict(false);
+      // Lock the controls immediately on success; the data-update re-fetch confirms via
+      // threadStatus. Prevents a double resolve during the stale-props window (and stays
+      // correct even if the fire-and-forget update event never arrives).
+      if (success) setConflictOptions('none');
+    },
+    [handleResolveConflict, threadId],
+  );
+
   // If all comments have been deleted there is nothing to render
   if (activeComments.length === 0) return undefined;
 
@@ -475,7 +518,7 @@ export function CommentThread({
             >
               {isRead ? <MailOpen /> : <Mail />}
             </Button>
-            {canResolve && threadStatus !== 'Resolved' && (
+            {canResolve && threadStatus !== 'Resolved' && !isConflictThread && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -533,20 +576,32 @@ export function CommentThread({
               </span>
             </p>
           </div>
-          <CommentItem
-            comment={firstComment}
-            localizedStrings={localizedStrings}
-            isThreadExpanded={isSelected}
-            threadStatus={threadStatus}
-            handleAddCommentToThread={handleAddCommentToThreadWithContents}
-            handleUpdateComment={handleUpdateComment}
-            handleDeleteComment={handleDeleteComment}
-            onEditingChange={setIsAnyCommentEditing}
-            canEditOrDelete={
-              (!isAnyCommentEditing && commentEditDeletePermissions.get(firstComment.id)) ?? false
-            }
-            canUserResolveThread={canResolve}
-          />
+          {isConflictThread && isSelected ? (
+            <ConflictNoteCard
+              comment={firstComment}
+              localizedStrings={localizedStrings}
+              selectedResolution={selectedResolution}
+              onResolutionChange={setSelectedResolution}
+              availableActions={threadStatus === 'Resolved' ? 'none' : conflictOptions}
+              onResolve={handleResolveConflictClick}
+              isResolving={isResolvingConflict}
+            />
+          ) : (
+            <CommentItem
+              comment={firstComment}
+              localizedStrings={localizedStrings}
+              isThreadExpanded={isSelected}
+              threadStatus={threadStatus}
+              handleAddCommentToThread={handleAddCommentToThreadWithContents}
+              handleUpdateComment={handleUpdateComment}
+              handleDeleteComment={handleDeleteComment}
+              onEditingChange={setIsAnyCommentEditing}
+              canEditOrDelete={
+                (!isAnyCommentEditing && commentEditDeletePermissions.get(firstComment.id)) ?? false
+              }
+              canUserResolveThread={canResolve}
+            />
+          )}
         </div>
         <>
           {hasReplies && !isSelected && (
