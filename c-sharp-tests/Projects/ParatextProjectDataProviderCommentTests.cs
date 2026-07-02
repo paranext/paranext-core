@@ -2648,6 +2648,68 @@ namespace TestParanextDataProvider.Projects
             Assert.That(_scrText.GetText(vref, true, true), Does.Contain("enormous village"));
         }
 
+        // --- generic resolved-status is blocked on conflict threads (must go through ResolveConflict) ---
+        // PlatformCommentWrapper has no default constructor and its Thread/Status are get-only (backed by
+        // the wrapped Comment), so these mirror the other AddCommentToThread tests: build a Comment with
+        // the desired Thread/Status, then wrap it.
+
+        [Test]
+        public void AddCommentToThread_ResolveConflictThreadViaStatus_Throws()
+        {
+            CommentThread thread = SeedVerseTextConflict();
+            var comment = new Comment(_scrText.User)
+            {
+                Thread = thread.Id,
+                Status = NoteStatus.Resolved,
+            };
+            Assert.That(
+                () => _provider.AddCommentToThread(new PlatformCommentWrapper(comment)),
+                Throws.TypeOf<InvalidOperationException>().With.Message.Contain("resolveConflict")
+            );
+            Assert.That(ReloadThread(thread.Id).Status, Is.Not.EqualTo(NoteStatus.Resolved));
+        }
+
+        [Test]
+        public void AddCommentToThread_ReopenResolvedConflictViaTodo_Allowed()
+        {
+            CommentThread thread = SeedVerseTextConflict();
+            _provider.ResolveConflict(thread.Id, "accept");
+            var reopen = new Comment(_scrText.User)
+            {
+                Thread = thread.Id,
+                Status = NoteStatus.Todo,
+            };
+
+            Assert.That(
+                () => _provider.AddCommentToThread(new PlatformCommentWrapper(reopen)),
+                Throws.Nothing
+            );
+            Assert.That(ReloadThread(thread.Id).Status, Is.Not.EqualTo(NoteStatus.Resolved));
+            // After reopening, the conflict is resolvable again (verse untouched by accept -> fresh).
+            Assert.That(
+                _provider.GetConflictResolutionOptions(thread.Id),
+                Is.EqualTo("acceptOrReject")
+            );
+        }
+
+        [Test]
+        public void AddCommentToThread_ResolveNormalThreadViaStatus_StillWorks()
+        {
+            var mgr = CommentManager.Get(_scrText);
+            Comment normal = CommentTestHelper.CreateBasicComment();
+            mgr.AddComment(normal);
+            mgr.SaveUser(normal.User, false);
+            var resolve = new Comment(_scrText.User)
+            {
+                Thread = normal.Thread,
+                Status = NoteStatus.Resolved,
+            };
+            Assert.That(
+                () => _provider.AddCommentToThread(new PlatformCommentWrapper(resolve)),
+                Throws.Nothing
+            );
+        }
+
         #endregion
     }
 }
