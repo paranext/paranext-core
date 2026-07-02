@@ -166,7 +166,9 @@ const commentListPanelProvider: IWebViewProvider = {
       );
 
     const projectId =
-      currentCommentListPanelProjectId ?? openWebViewOptions.projectId ?? savedWebView.projectId;
+      currentCommentListPanelProjectId !== undefined
+        ? currentCommentListPanelProjectId
+        : (openWebViewOptions.projectId ?? savedWebView.projectId);
     currentCommentListPanelProjectId = undefined;
 
     const title = await papi.localization.getLocalizedString({
@@ -201,7 +203,7 @@ async function openCommentListPanel(projectId: string | undefined): Promise<stri
   if (existingPanel) {
     currentCommentListPanelProjectId = projectId;
     return papi.webViews.reloadWebView(COMMENT_LIST_PANEL_WEBVIEW_TYPE, existingPanel.id, {
-      bringToFront: false,
+      bringToFront: false, // Don't steal focus from the scripture editor on project switch
     });
   }
 
