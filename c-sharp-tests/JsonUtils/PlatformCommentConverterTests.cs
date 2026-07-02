@@ -321,6 +321,50 @@ internal class PlatformCommentConverterTests : PapiTestBase
         Assert.That(json, Does.Not.Contain("resultText"));
         Assert.That(json, Does.Not.Contain("rejectedResultText"));
         Assert.That(commentWrapper.RejectedText, Is.Null);
+        // A normal comment carries no resolution action, so the key must be absent too.
+        Assert.That(json, Does.Not.Contain("conflictResolutionAction"));
+    }
+
+    [Test]
+    public void Serialize_CommentWithConflictResolutionAction_IncludesKeyUngated()
+    {
+        // The resolution comment PT9's SaveEdits appends is Type==Conflict but ConflictType==None
+        // (never copied), so IsVerseTextConflict is false for it. CreateConflictComment matches that
+        // shape (Type=Conflict, ConflictType unset). Setting ConflictResolutionAction and seeing the
+        // key serialize proves the field is written UNGATED — not behind the verseText gate.
+        Comment testComment = CommentTestHelper.CreateConflictComment();
+        testComment.ConflictResolutionAction = "replaced";
+        var (commentWrapper, _) = CreateCommentWithThread(testComment);
+
+        Assert.That(commentWrapper.ConflictResolutionAction, Is.EqualTo("replaced"));
+        // Guard: this comment is NOT a verseText conflict, so the gated fields stay absent while the
+        // ungated resolution-action field still serializes.
+        Assert.That(commentWrapper.RejectedText, Is.Null);
+
+        var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
+            commentWrapper,
+            _serializationOptions
+        );
+
+        Assert.That(json, Does.Contain(@"""conflictResolutionAction"":""replaced"""));
+        Assert.That(json, Does.Not.Contain("rejectedText"));
+    }
+
+    [Test]
+    public void Serialize_CommentWithoutConflictResolutionAction_OmitsKey()
+    {
+        // No resolution action set → the key must be null-skipped from the payload.
+        Comment testComment = CommentTestHelper.CreateConflictComment();
+        var (commentWrapper, _) = CreateCommentWithThread(testComment);
+
+        Assert.That(commentWrapper.ConflictResolutionAction, Is.Null);
+
+        var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
+            commentWrapper,
+            _serializationOptions
+        );
+
+        Assert.That(json, Does.Not.Contain("conflictResolutionAction"));
     }
 
     [Test]

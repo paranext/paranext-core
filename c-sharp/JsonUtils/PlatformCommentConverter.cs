@@ -14,6 +14,7 @@ public class PlatformCommentConverter : JsonConverter<PlatformCommentWrapper>
     private const string ACCEPTED_TEXT = "acceptedText";
     private const string ASSIGNED_USER = "assignedUser";
     private const string BIBLICAL_TERM_ID = "biblicalTermId";
+    private const string CONFLICT_RESOLUTION_ACTION = "conflictResolutionAction";
     private const string CONFLICT_TYPE = "conflictType";
     private const string CONTENTS = "contents";
     private const string CONTEXT_AFTER = "contextAfter";
@@ -304,6 +305,14 @@ public class PlatformCommentConverter : JsonConverter<PlatformCommentWrapper>
         }
         if (value.ConflictType != NoteConflictType.None)
             writer.WriteString(CONFLICT_TYPE, value.ConflictType.ToString());
+        // Conflict-resolution action of the appended resolution comment ('replaced'/'merged'), or
+        // null (accept / not a resolution comment → skipped). Serialized UNGATED — the resolution
+        // comment is Type==Conflict but ConflictType==None, so a verseText gate would never fire.
+        JsonConverterUtils.TryWriteString(
+            writer,
+            CONFLICT_RESOLUTION_ACTION,
+            value.ConflictResolutionAction
+        );
         JsonConverterUtils.TryWriteString(writer, VERSE, value.Verse);
         JsonConverterUtils.TryWriteString(writer, SHARED, value.Shared);
         // AssignedUser: null means no assignment info, empty string means explicitly unassigned
