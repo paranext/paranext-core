@@ -6,8 +6,10 @@ import {
   Editorial,
   EditorOptions,
   EditorRef,
+  GENERATOR_NOTE_CALLER,
   getDefaultViewOptions,
   getViewOptions,
+  HIDDEN_NOTE_CALLER,
   isInsertEmbedOpOfType,
   PARAGRAPH_STRUCTURE_VIEW_MODE,
   SelectionRange,
@@ -161,6 +163,8 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
   '%webView_platformScriptureEditor_paragraphSelection_protectedTooltip%',
   '%webView_platformScriptureEditor_insertCommentAtSelection%',
+  '%webView_platformScriptureEditor_insertFootnoteAtSelection%',
+  '%webView_platformScriptureEditor_insertCrossReferenceAtSelection%',
 ];
 
 /** Annotation type used for translator comments (kebab-case to match CSS class naming) */
@@ -470,6 +474,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const nodeOptions = useMemo<UsjNodeOptions>(
     () => ({
+      // TODO(phase5): source chapter/verse separator and default note callers from project
+      // settings (PT9 ChapterVerseSeparator / DefaultFootnoteCaller / DefaultCrossRefCaller).
+      // Fallbacks below match the `UsjNodeOptions` defaults documented in platform-editor.
+      // `noteCallers` is intentionally left unset so the editor's built-in default (lowercase
+      // Latin a-z) applies.
+      chapterVerseSeparator: ':',
+      verseRangeSeparator: '-',
+      defaultFootnoteCaller: GENERATOR_NOTE_CALLER,
+      defaultCrossRefCaller: HIDDEN_NOTE_CALLER,
+      crossRefCallers: ['†'],
       noteCallerOnClick: isReadOnly
         ? undefined
         : (event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps) => {
@@ -765,6 +779,73 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     setShowCommentEditor(true);
   }, [scrRef, canUserCreateComments]);
 
+  /**
+   * Inserts a footnote at the current selection (spec §6/§9). Shared by the "Insert footnote"
+   * context-menu item, the Ctrl+T keyboard shortcut, and the top-menu
+   * `platformScriptureEditor.insertFootnoteAtSelection` command (via the `webViewMessageListener`
+   * effect below), so the version-history commit + `insertMarker` behavior stays identical across
+   * every entry point.
+   */
+  const insertFootnoteAtCurrentSelection = useCallback(async () => {
+    // Commits a snapshot of the project to the version history
+    if (projectId)
+      try {
+        await papi.commands.sendCommand(
+          'paratextBibleSendReceive.commitChanges',
+          projectId,
+          localizedStrings['%versionHistoryCommit_beforeInsertFootnote%'],
+          true,
+        );
+      } catch (err: unknown) {
+        const errMessage = getErrorMessage(err);
+        // Requires the `commitChanges` command handler to throw
+        // `PlatformUnimplementedException` having the `ERROR_UNIMPLEMENTED` prefix to
+        // successfully handle if this command is not implemented in the application version
+        if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
+          logger.info(errMessage);
+        } else {
+          logger.warn(
+            `Error committing changes to version history before inserting footnote: ${getErrorMessage(err)}`,
+          );
+        }
+      }
+
+    editorRef.current?.insertMarker('f');
+  }, [projectId, localizedStrings]);
+
+  /**
+   * Inserts a cross-reference at the current selection (spec §6/§9). Shared by the "Insert
+   * cross-reference" context-menu item, the Ctrl+Shift+T keyboard shortcut, and the top-menu
+   * `platformScriptureEditor.insertCrossReferenceAtSelection` command (via the
+   * `webViewMessageListener` effect below).
+   */
+  const insertCrossReferenceAtCurrentSelection = useCallback(async () => {
+    // Commits a snapshot of the project to the version history
+    if (projectId)
+      try {
+        await papi.commands.sendCommand(
+          'paratextBibleSendReceive.commitChanges',
+          projectId,
+          localizedStrings['%versionHistoryCommit_beforeInsertCrossReference%'],
+          true,
+        );
+      } catch (err: unknown) {
+        const errMessage = getErrorMessage(err);
+        // Requires the `commitChanges` command handler to throw
+        // `PlatformUnimplementedException` having the `ERROR_UNIMPLEMENTED` prefix to
+        // successfully handle if this command is not implemented in the application version
+        if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
+          logger.info(errMessage);
+        } else {
+          logger.warn(
+            `Error committing changes to version history before inserting cross-reference: ${getErrorMessage(err)}`,
+          );
+        }
+      }
+
+    editorRef.current?.insertMarker('x');
+  }, [projectId, localizedStrings]);
+
   const options = useMemo<EditorOptions>(
     () => ({
       isReadonly: isReadOnlyEffective,
@@ -776,6 +857,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       view: viewOptions,
       hasExternalUI: true,
       contextMenu: [
+        {
+          title: localizedStrings['%webView_platformScriptureEditor_insertFootnoteAtSelection%'],
+          onSelect: insertFootnoteAtCurrentSelection,
+          isDisabled: isReadOnlyEffective,
+        },
+        {
+          title:
+            localizedStrings['%webView_platformScriptureEditor_insertCrossReferenceAtSelection%'],
+          onSelect: insertCrossReferenceAtCurrentSelection,
+          isDisabled: isReadOnlyEffective,
+        },
         {
           title: localizedStrings['%webView_platformScriptureEditor_insertCommentAtSelection%'],
           onSelect: insertCommentAtCurrentSelection,
@@ -792,6 +884,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       viewOptions,
       localizedStrings,
       insertCommentAtCurrentSelection,
+      insertFootnoteAtCurrentSelection,
+      insertCrossReferenceAtCurrentSelection,
     ],
   );
 
@@ -858,58 +952,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           break;
         }
         case 'insertFootnoteAtSelection': {
-          // Commits a snapshot of the project to the version history
-          if (projectId)
-            try {
-              await papi.commands.sendCommand(
-                'paratextBibleSendReceive.commitChanges',
-                projectId,
-                localizedStrings['%versionHistoryCommit_beforeInsertFootnote%'],
-                true,
-              );
-            } catch (err: unknown) {
-              const errMessage = getErrorMessage(err);
-              // Requires the `commitChanges` command handler to throw
-              // `PlatformUnimplementedException` having the `ERROR_UNIMPLEMENTED` prefix to
-              // successfully handle if this command is not implemented in the application version
-              if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
-                logger.info(errMessage);
-              } else {
-                logger.warn(
-                  `Error committing changes to version history before inserting footnote: ${getErrorMessage(err)}`,
-                );
-              }
-            }
-
-          editorRef.current?.insertMarker('f');
+          await insertFootnoteAtCurrentSelection();
           break;
         }
         case 'insertCrossReferenceAtSelection': {
-          // Commits a snapshot of the project to the version history
-
-          if (projectId)
-            try {
-              await papi.commands.sendCommand(
-                'paratextBibleSendReceive.commitChanges',
-                projectId,
-                localizedStrings['%versionHistoryCommit_beforeInsertCrossReference%'],
-                true,
-              );
-            } catch (err: unknown) {
-              const errMessage = getErrorMessage(err);
-              // Requires the `commitChanges` command handler to throw
-              // `PlatformUnimplementedException` having the `ERROR_UNIMPLEMENTED` prefix to
-              // successfully handle if this command is not implemented in the application version
-              if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
-                logger.info(errMessage);
-              } else {
-                logger.warn(
-                  `Error committing changes to version history before inserting cross-reference: ${getErrorMessage(err)}`,
-                );
-              }
-            }
-
-          editorRef.current?.insertMarker('x');
+          await insertCrossReferenceAtCurrentSelection();
           break;
         }
         case 'insertCommentAtSelection': {
@@ -1086,6 +1133,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     };
   }, [
     insertCommentAtCurrentSelection,
+    insertFootnoteAtCurrentSelection,
+    insertCrossReferenceAtCurrentSelection,
     scrRef,
     setScrRefWithScroll,
     decorations,
@@ -1094,8 +1143,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     setFootnotesAutoShow,
     setViewType,
     viewOptions.markerMode,
-    localizedStrings,
-    projectId,
   ]);
 
   const inlineMarkerMenuItems = useMemo(
@@ -1152,7 +1199,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
   }, [showMarkersMenu]);
 
-  // Listen for Ctrl+F to open find dialog and for the marker menu trigger to open the marker menu
+  // Listen for Ctrl+F to open find dialog, for the marker menu trigger to open the marker menu,
+  // for Ctrl+T / Ctrl+Shift+T to insert a footnote/cross-reference (spec §6/§9), and for
   // Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at selection
   useEffect(() => {
     const editorInput = document.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
@@ -1177,6 +1225,25 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       if (event.ctrlKey && event.key.toLowerCase() === 'f') {
         event.preventDefault();
         papi.commands.sendCommand('platformScripture.openFind', webViewId);
+      } else if (
+        !isReadOnlyEffective &&
+        viewType === 'standard' &&
+        editorInput &&
+        document.activeElement === editorInput &&
+        event.ctrlKey &&
+        event.key.toLowerCase() === 't'
+      ) {
+        // Ctrl+T inserts a footnote; Ctrl+Shift+T inserts a cross-reference (spec §6/§9). Scoped
+        // to the main editor via the same `editorInput`/`activeElement` check used for the marker
+        // menu trigger above, so the shortcut doesn't fire while the FootnoteEditor/CommentEditor
+        // popovers (which have their own separate `.editor-input`) have focus. Standard-view only,
+        // matching the other Standard view PT9-parity entry points.
+        event.preventDefault();
+        if (event.shiftKey) {
+          insertCrossReferenceAtCurrentSelection();
+        } else {
+          insertFootnoteAtCurrentSelection();
+        }
       } else {
         const isInsertCommentHotkey = isMac
           ? event.metaKey &&
@@ -1198,7 +1265,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [webViewId, insertCommentAtCurrentSelection, showMarkersMenu, showInlineMarkersMenu, isMac]);
+  }, [
+    webViewId,
+    insertCommentAtCurrentSelection,
+    insertFootnoteAtCurrentSelection,
+    insertCrossReferenceAtCurrentSelection,
+    showMarkersMenu,
+    showInlineMarkersMenu,
+    isMac,
+    isReadOnlyEffective,
+    viewType,
+  ]);
 
   // Apply annotation styles from extensions
   useAnnotationStyleSheet();
