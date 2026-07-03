@@ -279,7 +279,7 @@ declare module 'platform-scripture-editor' {
 
   // #region editor WebView types
 
-  export type ScriptureEditorViewType = 'formatted' | 'markers';
+  export type ScriptureEditorViewType = 'formatted' | 'markers' | 'standard';
 
   /** Options for configuring the editor you are opening */
   export type OpenEditorOptions = {
