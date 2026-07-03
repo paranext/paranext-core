@@ -95,10 +95,12 @@ export function FootnotesLayout({
   const lastAppliedFocusRequestRef = useRef<FootnotesLayoutProps['focusRequest']>(undefined);
   useEffect(() => {
     if (!focusRequest || focusRequest === lastAppliedFocusRequestRef.current) return;
-    lastAppliedFocusRequestRef.current = focusRequest;
 
     const { index } = focusRequest;
     if (index < 0 || index >= footnotes.length) return;
+    // Mark applied only AFTER the bounds check passes, so a request that arrives while `footnotes`
+    // is still empty (pane-mount frame) is retried when the `footnotes` dep repopulates.
+    lastAppliedFocusRequestRef.current = focusRequest;
     setSelectedFootnote({ footnote: footnotes[index], index });
   }, [focusRequest, footnotes]);
 

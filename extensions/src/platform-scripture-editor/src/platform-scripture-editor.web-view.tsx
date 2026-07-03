@@ -1202,7 +1202,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     setFootnotesPaneVisible,
     setFootnotesAutoShow,
     setViewType,
-    viewOptions.markerMode,
+    viewType,
   ]);
 
   const inlineMarkerMenuItems = useMemo(
