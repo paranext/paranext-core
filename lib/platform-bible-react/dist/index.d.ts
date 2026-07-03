@@ -334,6 +334,7 @@ export function CommentEditor({ assignableUsers, onSave, onClose, localizedStrin
  * (losing) side.
  */
 export type ConflictResolution = "accept" | "reject";
+type ConflictResolutionOutcome = "accept" | "reject" | "merged";
 /**
  * The resolution actions the current user may take on a conflict thread (from the comments data
  * provider's getConflictResolutionOptions). Must stay textually identical to the union declared in
@@ -372,6 +373,14 @@ export interface ConflictNoteCardProps {
 	 * stale-verse explanation tooltip.
 	 */
 	availableActions?: ConflictResolutionOptions;
+	/**
+	 * Which way an already-resolved conflict was resolved. Used ONLY when `availableActions` is
+	 * `'none'` (read-only): it makes the Result region show the outcome that was actually applied
+	 * ('accept' -> resultText, 'reject' -> rejectedResultText) instead of the live selector state,
+	 * and hides the Result region for a 'merged' outcome. Ignored while the conflict is still
+	 * resolvable.
+	 */
+	resolvedResolution?: ConflictResolutionOutcome;
 	/** Called when the user clicks Resolve, with the currently selected resolution. */
 	onResolve?: (resolution: ConflictResolution) => void;
 	/** Disables the selector and Resolve button while a resolve call is in flight. */
@@ -491,7 +500,7 @@ export function CommentList({ className, classNameForVerseText, threads, current
  * and Accepted diff regions, and a read-only Result preview that tracks the selection. Falls back
  * to rendering the raw note contents for any non-verseText conflict.
  */
-export declare function ConflictNoteCard({ comment, localizedStrings, selectedResolution, onResolutionChange, availableActions, onResolve, isResolving, }: ConflictNoteCardProps): import("react/jsx-runtime").JSX.Element;
+export declare function ConflictNoteCard({ comment, localizedStrings, selectedResolution, onResolutionChange, availableActions, resolvedResolution, onResolve, isResolving, }: ConflictNoteCardProps): import("react/jsx-runtime").JSX.Element;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;
