@@ -7,7 +7,7 @@ import { Column, ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSort
 import { ClassValue } from 'clsx';
 import { Command as CommandPrimitive } from 'cmdk';
 import { LucideProps } from 'lucide-react';
-import { CommentStatus, DblResourceData, LanguageStrings, LegacyCommentThread, LocalizeKey, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ResourceType, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
+import { CommentStatus, DblResourceData, LanguageStrings, LegacyComment, LegacyCommentThread, LocalizeKey, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ResourceType, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
 import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as RadixTabs, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import React$1 from 'react';
 import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithoutRef, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, RefObject } from 'react';
@@ -427,6 +427,52 @@ export interface CommentListProps {
  * @param CommentListProps Props for the CommentList component
  */
 export function CommentList({ className, classNameForVerseText, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, handleReadStatusChange, assignableUsers, canUserAddCommentToThread, canUserAssignThreadCallback, canUserResolveThreadCallback, canUserEditOrDeleteCommentCallback, selectedThreadId: externalSelectedThreadId, onSelectedThreadChange, onVerseRefClick, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * The resolution a user picks for a conflict: keep the accepted (winning) side or take the rejected
+ * (losing) side.
+ */
+export type ConflictResolution = "accept" | "reject";
+/**
+ * Object containing all keys used for localization in the ConflictNoteCard component. If you're
+ * using this component in an extension, you can pass it into the useLocalizedStrings hook to easily
+ * obtain the localized strings and pass them into the localizedStrings prop of this component.
+ */
+export declare const CONFLICT_NOTE_STRING_KEYS: readonly [
+	"%conflictNote_description_verseText%",
+	"%conflictNote_chooseLabel%",
+	"%conflictNote_chooseAriaLabel%",
+	"%conflictNote_accept%",
+	"%conflictNote_reject%",
+	"%conflictNote_rejectedLabel%",
+	"%conflictNote_acceptedLabel%",
+	"%conflictNote_resultLabel%",
+	"%conflictNote_resultEmpty%"
+];
+/** Props for the ConflictNoteCard component */
+export interface ConflictNoteCardProps {
+	/**
+	 * The conflict comment. Reads rejected/accepted/result/rejectedResultText + conflictType; falls
+	 * back to contents.
+	 */
+	comment: LegacyComment;
+	/** Optional localized strings for the component; English fallbacks apply when omitted */
+	localizedStrings?: LanguageStrings;
+	/**
+	 * Controlled selected resolution. When omitted, the card manages its own state (default
+	 * 'accept').
+	 */
+	selectedResolution?: ConflictResolution;
+	/** Called when the user changes the Accept/Reject selection */
+	onResolutionChange?: (resolution: ConflictResolution) => void;
+	/** Whether the current user may accept/reject; disables the selector when false */
+	canAcceptReject?: boolean;
+}
+/**
+ * Presentational card body for a verseText merge conflict: an Accept/Reject selector, the Rejected
+ * and Accepted diff regions, and a read-only Result preview that tracks the selection. Falls back
+ * to rendering the raw note contents for any non-verseText conflict.
+ */
+export declare function ConflictNoteCard({ comment, localizedStrings, selectedResolution, onResolutionChange, canAcceptReject, }: ConflictNoteCardProps): import("react/jsx-runtime").JSX.Element;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;

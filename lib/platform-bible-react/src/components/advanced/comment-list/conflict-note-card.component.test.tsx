@@ -6,7 +6,7 @@ import { vi, beforeAll } from 'vitest';
 import { ConflictNoteCard } from './conflict-note-card.component';
 import {
   verseTextConflictComment,
-  verseTextConflictReplacementSample,
+  verseTextConflictReplacementBothSidesSample,
 } from './comment-sample.data';
 
 // jsdom doesn't implement ResizeObserver, hasPointerCapture, or scrollIntoView.
@@ -41,14 +41,15 @@ beforeAll(() => {
 });
 
 const localizedStrings = {
-  '%conflict_note_description_verseText%': 'Conflicting changes were made to the verse text.',
-  '%conflict_note_choose_label%': 'Choose:',
-  '%conflict_note_choose_aria_label%': 'Choose resolution',
-  '%conflict_note_accept%': 'Accept',
-  '%conflict_note_reject%': 'Reject',
-  '%conflict_note_rejected_label%': 'Rejected',
-  '%conflict_note_accepted_label%': 'Accepted',
-  '%conflict_note_result_label%': 'Result',
+  '%conflictNote_description_verseText%': 'Conflicting changes were made to the verse text.',
+  '%conflictNote_chooseLabel%': 'Choose:',
+  '%conflictNote_chooseAriaLabel%': 'Choose resolution',
+  '%conflictNote_accept%': 'Accept',
+  '%conflictNote_reject%': 'Reject',
+  '%conflictNote_rejectedLabel%': 'Rejected',
+  '%conflictNote_acceptedLabel%': 'Accepted',
+  '%conflictNote_resultLabel%': 'Result',
+  '%conflictNote_resultEmpty%': 'The verse will be empty.',
 };
 
 test('renders the three region labels and the diff highlight', () => {
@@ -66,6 +67,10 @@ test('renders the three region labels and the diff highlight', () => {
       .getByText(verseTextConflictComment.resultText ?? '')
       .closest('input, textarea, [contenteditable="true"]'),
   ).toBeNull();
+  // The Result value sits in an aria-live region so screen readers hear the Accept/Reject swap.
+  expect(
+    screen.getByText(verseTextConflictComment.resultText ?? '').closest('[aria-live="polite"]'),
+  ).not.toBeNull();
 });
 
 test('Result shows the accept outcome by default and the reject outcome when reject is selected', () => {
@@ -98,6 +103,52 @@ test('non-verseText conflict falls back to rendering contents', () => {
   render(<ConflictNoteCard comment={fallback} localizedStrings={localizedStrings} />);
   expect(screen.getByText('FALLBACK BODY')).toBeInTheDocument();
   expect(screen.queryByText('Rejected')).not.toBeInTheDocument();
+});
+
+test('verseText conflict with resultText absent still renders the resolution UI (not the contents fallback)', () => {
+  // resultText absent is not producible from a real PT9 merge (an emptied verse keeps its \v marker,
+  // so Comment.Verse is non-blank; a deleted verse produces no note at all — BookFileMerger). But the
+  // card must not strand it: gate on conflictType alone, like PT9, and degrade the Result region.
+  const emptyResultComment: LegacyComment = {
+    ...verseTextConflictComment,
+    resultText: undefined,
+    contents: '<p>SHOULD NOT SHOW AS FALLBACK</p>',
+  };
+  render(<ConflictNoteCard comment={emptyResultComment} localizedStrings={localizedStrings} />);
+  // Structured card renders: selector + regions present...
+  expect(screen.getByRole('combobox')).toBeInTheDocument();
+  expect(screen.getByText('Rejected')).toBeInTheDocument();
+  // ...and the raw contents fallback is NOT used.
+  expect(screen.queryByText('SHOULD NOT SHOW AS FALLBACK')).not.toBeInTheDocument();
+  // Accept outcome has no result USFM -> neutral empty-state, not a blank paragraph.
+  expect(screen.getByText('The verse will be empty.')).toBeInTheDocument();
+});
+
+test('Rejected region is omitted when rejectedText is absent (no orphan heading)', () => {
+  const noRejectedComment: LegacyComment = {
+    ...verseTextConflictComment,
+    rejectedText: undefined,
+  };
+  render(<ConflictNoteCard comment={noRejectedComment} localizedStrings={localizedStrings} />);
+  // Card still renders (Accepted present), but the Rejected heading must not appear over an empty body.
+  expect(screen.getByText('Accepted')).toBeInTheDocument();
+  expect(screen.queryByText('Rejected')).not.toBeInTheDocument();
+});
+
+test('Result shows the empty-state when reject is selected and rejectedResultText is absent', () => {
+  // Reachable: the losing side emptied the verse, so its decoded reject outcome is empty.
+  const rejectDeletesComment: LegacyComment = {
+    ...verseTextConflictComment,
+    rejectedResultText: undefined,
+  };
+  render(
+    <ConflictNoteCard
+      comment={rejectDeletesComment}
+      localizedStrings={localizedStrings}
+      selectedResolution="reject"
+    />,
+  );
+  expect(screen.getByText('The verse will be empty.')).toBeInTheDocument();
 });
 
 test('canAcceptReject=false disables the selector', () => {
@@ -162,11 +213,39 @@ test('onResolutionChange fires with "reject" when the user changes the selector'
   expect(onResolutionChange).toHaveBeenCalledWith('reject');
 });
 
+test('controlled mode does not leak the internal resolution when the parent declines a change', async () => {
+  // Parent controls the card at 'accept' and ignores the user's reject (never updates the prop).
+  const user = userEvent.setup({ pointerEventsCheck: 0 });
+  const { rerender } = render(
+    <ConflictNoteCard
+      comment={verseTextConflictComment}
+      localizedStrings={localizedStrings}
+      selectedResolution="accept"
+      onResolutionChange={() => {}}
+    />,
+  );
+  await user.click(screen.getByRole('combobox'));
+  await user.click(await screen.findByRole('option', { name: 'Reject' }));
+  // Parent later stops controlling. The card must fall back to its default ('accept'), not the
+  // 'reject' the parent declined — so the Result still shows the accept outcome.
+  rerender(
+    <ConflictNoteCard
+      comment={verseTextConflictComment}
+      localizedStrings={localizedStrings}
+      onResolutionChange={() => {}}
+    />,
+  );
+  expect(screen.getByText(verseTextConflictComment.resultText ?? '')).toBeInTheDocument();
+  expect(
+    screen.queryByText(verseTextConflictComment.rejectedResultText ?? ''),
+  ).not.toBeInTheDocument();
+});
+
 test('trims trailing whitespace out of diff spans so the strikethrough does not dangle', () => {
   // The replacement sample removes "town": its diff HTML is `<s>town </s>` (trailing space inside).
   render(
     <ConflictNoteCard
-      comment={verseTextConflictReplacementSample}
+      comment={verseTextConflictReplacementBothSidesSample}
       localizedStrings={localizedStrings}
     />,
   );

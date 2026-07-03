@@ -21,7 +21,11 @@ import { ArrowUp, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react';
 import { formatRelativeDate, formatReplacementString, sanitizeHtml } from 'platform-bible-utils';
 import { MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CommentItemProps } from './comment-list.types';
-import { didPressCtrlOrCmdEnter, getAssignedUserDisplayName } from './comment-list.utils';
+import {
+  COMMENT_BODY_PROSE_CLASSES,
+  didPressCtrlOrCmdEnter,
+  getAssignedUserDisplayName,
+} from './comment-list.utils';
 
 /**
  * A single comment item in the comment list.
@@ -268,16 +272,11 @@ export function CommentItem({
             )}
             <div
               className={cn(
-                'tw:prose tw:items-start tw:gap-2 tw:break-words tw:text-sm tw:font-normal tw:text-foreground',
-                // tw:prose has a max width defined on it, that we choose to override
-                'tw:max-w-none',
-                // Don't render blockquote on the first child. All comments are wrapped in blockquote
-                // that has text-align corresponding to LTR or RTL, so the blockquote is important.
-                // But we don't want it to look like there's a blockquote there. Apply styles to the
-                // blockquote directly inside this div.
-                'tw:[&>blockquote]:border-s-0 tw:[&>blockquote]:p-0 tw:[&>blockquote]:ps-0 tw:[&>blockquote]:font-normal tw:[&>blockquote]:not-italic tw:[&>blockquote]:text-foreground',
-                // Don't render quotes on blockquotes
-                'tw:prose-quoteless',
+                // Shared with ConflictNoteCard so note-body HTML renders identically (prose,
+                // max-width override, blockquote de-styling on the first child, no quote marks).
+                COMMENT_BODY_PROSE_CLASSES,
+                // CommentItem-specific layout layered on top.
+                'tw:items-start tw:gap-2',
                 {
                   'tw:line-clamp-3': !isThreadExpanded,
                 },

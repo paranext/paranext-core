@@ -1,4 +1,4 @@
-import { LanguageStrings, LegacyComment, LocalizeKey } from 'platform-bible-utils';
+import { LanguageStrings, LegacyComment } from 'platform-bible-utils';
 
 /**
  * The resolution a user picks for a conflict: keep the accepted (winning) side or take the rejected
@@ -7,19 +7,26 @@ import { LanguageStrings, LegacyComment, LocalizeKey } from 'platform-bible-util
 export type ConflictResolution = 'accept' | 'reject';
 
 /**
- * Localization keys used by the ConflictNoteCard. Pass into the useLocalizedStrings hook (in the
- * consuming extension) and forward the result via the localizedStrings prop.
+ * Object containing all keys used for localization in the ConflictNoteCard component. If you're
+ * using this component in an extension, you can pass it into the useLocalizedStrings hook to easily
+ * obtain the localized strings and pass them into the localizedStrings prop of this component.
  */
-export const CONFLICT_NOTE_STRING_KEYS: LocalizeKey[] = [
-  '%conflict_note_description_verseText%',
-  '%conflict_note_choose_label%',
-  '%conflict_note_choose_aria_label%',
-  '%conflict_note_accept%',
-  '%conflict_note_reject%',
-  '%conflict_note_rejected_label%',
-  '%conflict_note_accepted_label%',
-  '%conflict_note_result_label%',
-];
+export const CONFLICT_NOTE_STRING_KEYS = Object.freeze([
+  '%conflictNote_description_verseText%',
+  '%conflictNote_chooseLabel%',
+  '%conflictNote_chooseAriaLabel%',
+  '%conflictNote_accept%',
+  '%conflictNote_reject%',
+  '%conflictNote_rejectedLabel%',
+  '%conflictNote_acceptedLabel%',
+  '%conflictNote_resultLabel%',
+  '%conflictNote_resultEmpty%',
+] as const);
+
+/** Type definition for the localized strings used in the ConflictNoteCard component */
+export type ConflictNoteCardLocalizedStrings = {
+  [localizedKey in (typeof CONFLICT_NOTE_STRING_KEYS)[number]]?: string;
+};
 
 /** Props for the ConflictNoteCard component */
 export interface ConflictNoteCardProps {
@@ -28,8 +35,8 @@ export interface ConflictNoteCardProps {
    * back to contents.
    */
   comment: LegacyComment;
-  /** Localized strings for the component */
-  localizedStrings: LanguageStrings;
+  /** Optional localized strings for the component; English fallbacks apply when omitted */
+  localizedStrings?: LanguageStrings;
   /**
    * Controlled selected resolution. When omitted, the card manages its own state (default
    * 'accept').

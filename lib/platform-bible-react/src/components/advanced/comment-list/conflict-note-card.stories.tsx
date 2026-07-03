@@ -6,18 +6,19 @@ import { ConflictNoteCard } from './conflict-note-card.component';
 import { ConflictResolution } from './conflict-note-card.types';
 import {
   verseTextConflictComment,
-  verseTextConflictReplacementSample,
+  verseTextConflictReplacementBothSidesSample,
 } from './comment-sample.data';
 
 const localizedStrings: LanguageStrings = {
-  '%conflict_note_description_verseText%': 'Conflicting changes were made to the verse text.',
-  '%conflict_note_choose_label%': 'Choose:',
-  '%conflict_note_choose_aria_label%': 'Choose resolution',
-  '%conflict_note_accept%': 'Accept',
-  '%conflict_note_reject%': 'Reject',
-  '%conflict_note_rejected_label%': 'Rejected',
-  '%conflict_note_accepted_label%': 'Accepted',
-  '%conflict_note_result_label%': 'Result',
+  '%conflictNote_description_verseText%': 'Conflicting changes were made to the verse text.',
+  '%conflictNote_chooseLabel%': 'Choose:',
+  '%conflictNote_chooseAriaLabel%': 'Choose resolution',
+  '%conflictNote_accept%': 'Accept',
+  '%conflictNote_reject%': 'Reject',
+  '%conflictNote_rejectedLabel%': 'Rejected',
+  '%conflictNote_acceptedLabel%': 'Accepted',
+  '%conflictNote_resultLabel%': 'Result',
+  '%conflictNote_resultEmpty%': 'The verse will be empty.',
 };
 
 function ConflictNoteCardStory({
@@ -58,7 +59,7 @@ type Story = StoryObj<typeof ConflictNoteCardStory>;
  * change between "city" (accepted) and "village" (rejected).
  */
 export const Default: Story = {
-  render: () => <ConflictNoteCardStory comment={verseTextConflictReplacementSample} />,
+  render: () => <ConflictNoteCardStory comment={verseTextConflictReplacementBothSidesSample} />,
 };
 
 /** The selector is disabled when the user lacks accept/reject permission. */

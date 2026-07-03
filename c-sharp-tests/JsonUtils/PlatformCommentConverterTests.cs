@@ -275,11 +275,11 @@ internal class PlatformCommentConverterTests : PapiTestBase
     }
 
     [Test]
-    public void Serialize_VerseTextConflictWithReplacement_IncludesStrikethroughAndUnderline()
+    public void Serialize_VerseTextConflictReplacementBothSides_IncludesStrikethroughAndUnderline()
     {
-        // Replacement: loser "town"→"village", winner "town"→"city". Both diffs show <s> (deleted
-        // "town") and <u> (inserted word), so this exercises the deletion (<s>) path.
-        Comment testComment = CommentTestHelper.CreateVerseTextConflictCommentWithReplacement();
+        // Replacement on both sides: loser "town"→"village", winner "town"→"city". Both diffs show
+        // <s> (deleted "town") and <u> (inserted word), so this exercises the deletion (<s>) path.
+        Comment testComment = CommentTestHelper.CreateVerseTextConflictCommentReplacementBothSides();
         var (commentWrapper, _) = CreateCommentWithThread(testComment);
 
         var json = JsonSerializer.Serialize<PlatformCommentWrapper>(

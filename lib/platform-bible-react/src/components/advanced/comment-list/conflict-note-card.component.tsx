@@ -8,31 +8,32 @@ import {
 import { Separator } from '@/components/shadcn-ui/separator';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { sanitizeHtml } from 'platform-bible-utils';
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
+import { COMMENT_BODY_PROSE_CLASSES } from './comment-list.utils';
 import { ConflictNoteCardProps, ConflictResolution } from './conflict-note-card.types';
 
 const VERSE_TEXT_CONFLICT = 'verseText';
 
-// Renders the PT9 diff HTML the same way CommentItem renders note contents, plus theme-token coloring
-// for the diff markup: <u> = inserted → green + semibold; <s> = deleted → red + strikethrough. This is
-// a green/red text-color treatment (theme tokens only, no hardcoded colors) — NOT a copy of any single
-// PT9 diff style: PT9's default (BlueGray) and RedGreen both use background highlights, and RedGreen has
-// no strikethrough. The <u>/<s> markup itself comes from PT9's decode; only the coloring is ours (CSS).
+// Shares COMMENT_BODY_PROSE_CLASSES with CommentItem so conflict notes render note-body HTML the same
+// way, then layers theme-token diff coloring on top: <u> = inserted → green + semibold; <s> = deleted →
+// red + strikethrough. Green/red text-color treatment (theme tokens only, no hardcoded colors) — NOT a
+// copy of any single PT9 diff style: PT9's default (BlueGray) and RedGreen both use background
+// highlights, and RedGreen has no strikethrough. The <u>/<s> markup comes from PT9's decode; only the
+// coloring is ours. Deletions use --diff-deleted (a per-scheme text-grade red), not --destructive,
+// which is background-grade in the Platform dark theme and fails text contrast there.
 const DIFF_HTML_CLASSES = cn(
-  'tw:prose tw:max-w-none tw:break-words tw:text-sm tw:font-normal tw:text-foreground',
-  'tw:[&>blockquote]:border-s-0 tw:[&>blockquote]:p-0 tw:[&>blockquote]:ps-0 tw:[&>blockquote]:font-normal tw:[&>blockquote]:not-italic tw:[&>blockquote]:text-foreground',
-  'tw:prose-quoteless',
+  COMMENT_BODY_PROSE_CLASSES,
   'tw:[&_u]:font-semibold tw:[&_u]:text-success-foreground tw:[&_u]:no-underline',
-  'tw:[&_s]:text-destructive tw:[&_s]:line-through',
+  'tw:[&_s]:text-diff-deleted tw:[&_s]:line-through',
 );
 
 /**
- * Moves a diff span's trailing whitespace outside its closing tag (e.g. `<s>town </s>` → `<s>town</s> `)
- * so the strikethrough/color decoration stops at the word rather than dangling into the inter-word gap.
- * PT9 keeps each word's trailing space inside the diff token (DiffToken.SplitUsfmTokens, FB-38914) and
- * masks it with a background highlight; our text-only decoration would otherwise show a stray strike over
- * the space. Only whitespace is relocated across the closing tag — no text changes. Diff spans hold plain
- * text only, so this is safe.
+ * Moves a diff span's trailing whitespace outside its closing tag (e.g. `<s>town </s>` →
+ * `<s>town</s> `) so the strikethrough/color decoration stops at the word rather than dangling into
+ * the inter-word gap. PT9 keeps each word's trailing space inside the diff token
+ * (DiffToken.SplitUsfmTokens, FB-38914) and masks it with a background highlight; our text-only
+ * decoration would otherwise show a stray strike over the space. Only whitespace is relocated
+ * across the closing tag — no text changes. Diff spans hold plain text only, so this is safe.
  */
 const trimDiffSpanWhitespace = (html: string) => html.replace(/(\s+)(<\/[us]>)/g, '$2$1');
 
@@ -50,6 +51,7 @@ export function ConflictNoteCard({
 }: ConflictNoteCardProps) {
   const [internalResolution, setInternalResolution] = useState<ConflictResolution>('accept');
   const resolution = selectedResolution ?? internalResolution;
+  const resultLabelId = useId();
 
   const sanitizedRejected = useMemo(
     () => trimDiffSpanWhitespace(sanitizeHtml(comment.rejectedText ?? '')),
@@ -61,7 +63,10 @@ export function ConflictNoteCard({
   );
   const sanitizedContents = useMemo(() => sanitizeHtml(comment.contents), [comment.contents]);
 
-  const isVerseTextConflict = comment.conflictType === VERSE_TEXT_CONFLICT && !!comment.resultText;
+  // Gate on conflictType alone to match PT9 (AppendConflictNoteDetails shows the resolution UI for
+  // every verseText root, never gating on result-emptiness). Absent fields degrade per-region below;
+  // the real accept/reject gating lives in canAcceptReject (the downstream capability query).
+  const isVerseTextConflict = comment.conflictType === VERSE_TEXT_CONFLICT;
 
   if (!isVerseTextConflict) {
     return (
@@ -74,9 +79,13 @@ export function ConflictNoteCard({
     );
   }
 
+  // Only track internal state when uncontrolled. In controlled mode the parent owns the value, so
+  // writing internalResolution would let a choice the parent declined leak back into the UI if it
+  // later stops passing selectedResolution.
+  const isControlled = selectedResolution !== undefined;
   const handleChange = (value: string) => {
     const next: ConflictResolution = value === 'reject' ? 'reject' : 'accept';
-    setInternalResolution(next);
+    if (!isControlled) setInternalResolution(next);
     onResolutionChange?.(next);
   };
 
@@ -85,27 +94,27 @@ export function ConflictNoteCard({
   return (
     <div className="tw:flex tw:flex-col tw:gap-3 tw:text-sm">
       <p>
-        {localizedStrings['%conflict_note_description_verseText%'] ??
+        {localizedStrings?.['%conflictNote_description_verseText%'] ??
           'Conflicting changes were made to the verse text.'}
       </p>
 
       <div className="tw:flex tw:flex-row tw:items-center tw:gap-2">
-        <span>{localizedStrings['%conflict_note_choose_label%'] ?? 'Choose:'}</span>
+        <span>{localizedStrings?.['%conflictNote_chooseLabel%'] ?? 'Choose:'}</span>
         <Select value={resolution} onValueChange={handleChange} disabled={!canAcceptReject}>
           <SelectTrigger
-            className="tw:w-32"
-            aria-label={
-              localizedStrings['%conflict_note_choose_aria_label%'] ?? 'Choose resolution'
-            }
+            // min-w so the trigger keeps a stable width but still grows for longer localized
+            // Accept/Reject values rather than clipping them.
+            className="tw:min-w-32"
+            aria-label={localizedStrings?.['%conflictNote_chooseAriaLabel%'] ?? 'Choose resolution'}
           >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="accept">
-              {localizedStrings['%conflict_note_accept%'] ?? 'Accept'}
+              {localizedStrings?.['%conflictNote_accept%'] ?? 'Accept'}
             </SelectItem>
             <SelectItem value="reject">
-              {localizedStrings['%conflict_note_reject%'] ?? 'Reject'}
+              {localizedStrings?.['%conflictNote_reject%'] ?? 'Reject'}
             </SelectItem>
           </SelectContent>
         </Select>
@@ -116,7 +125,7 @@ export function ConflictNoteCard({
       {!!comment.acceptedText && (
         <div className="tw:flex tw:flex-col tw:gap-1">
           <span className="tw:font-medium">
-            {localizedStrings['%conflict_note_accepted_label%'] ?? 'Accepted'}
+            {localizedStrings?.['%conflictNote_acceptedLabel%'] ?? 'Accepted'}
           </span>
           <div
             className={DIFF_HTML_CLASSES}
@@ -127,25 +136,42 @@ export function ConflictNoteCard({
         </div>
       )}
 
-      <div className="tw:flex tw:flex-col tw:gap-1">
-        <span className="tw:font-medium">
-          {localizedStrings['%conflict_note_rejected_label%'] ?? 'Rejected'}
-        </span>
-        <div
-          className={DIFF_HTML_CLASSES}
-          // PT9 rejected-side diff HTML; sanitized above before injecting.
-          // eslint-disable-next-line react/no-danger
-          dangerouslySetInnerHTML={{ __html: sanitizedRejected }}
-        />
-      </div>
+      {/* Gated on rejectedText like the Accepted region above — PT9 prints the reject label only when
+          the rejected side is non-null (AppendConflictNoteDetails), so no orphan heading over an
+          empty body when the rejected-side diff is blank. */}
+      {!!comment.rejectedText && (
+        <div className="tw:flex tw:flex-col tw:gap-1">
+          <span className="tw:font-medium">
+            {localizedStrings?.['%conflictNote_rejectedLabel%'] ?? 'Rejected'}
+          </span>
+          <div
+            className={DIFF_HTML_CLASSES}
+            // PT9 rejected-side diff HTML; sanitized above before injecting.
+            // eslint-disable-next-line react/no-danger
+            dangerouslySetInnerHTML={{ __html: sanitizedRejected }}
+          />
+        </div>
+      )}
 
       <Separator />
 
       <div className="tw:flex tw:flex-col tw:gap-1">
-        <span className="tw:font-medium">
-          {localizedStrings['%conflict_note_result_label%'] ?? 'Result'}
+        <span id={resultLabelId} className="tw:font-medium">
+          {localizedStrings?.['%conflictNote_resultLabel%'] ?? 'Result'}
         </span>
-        <p className="tw:whitespace-pre-wrap tw:text-foreground">{resultText}</p>
+        {/* aria-live so screen readers announce the Result changing when the user switches
+            Accept/Reject; on a stable wrapper (not the swapped <p>) so the update is detected. */}
+        <div aria-live="polite" aria-labelledby={resultLabelId}>
+          {resultText ? (
+            <p className="tw:whitespace-pre-wrap tw:text-foreground">{resultText}</p>
+          ) : (
+            // The chosen side has no result USFM (e.g. reject deletes the verse). Show a neutral
+            // empty-state rather than a blank <p>, which reads as a rendering bug.
+            <p className="tw:italic tw:text-muted-foreground">
+              {localizedStrings?.['%conflictNote_resultEmpty%'] ?? 'The verse will be empty.'}
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

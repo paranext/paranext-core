@@ -878,14 +878,16 @@ export const verseTextConflictComment: LegacyComment = {
 };
 
 /**
- * A verseText merge-conflict comment demonstrating a REPLACEMENT (both deletion and insertion) —
- * common ancestor "town", loser replaced with "village", winner replaced with "city". Both
- * rejectedText and acceptedText contain `<s>` (deletion) and `<u>` (insertion) so the card
- * renders struck-red "town" and green "village"/"city". Fields are the ACTUAL serialized output of
- * the C# PlatformCommentConverter run on the CreateVerseTextConflictCommentWithReplacement fixture
- * — captured verbatim. Do not hand-edit the field values.
+ * A verseText merge-conflict comment demonstrating a REPLACEMENT on BOTH sides (each side both
+ * deletes and inserts) — common ancestor "town", loser replaced with "village", winner replaced
+ * with "city". Both rejectedText and acceptedText carry `<s>` (deletion) and `<u>` (insertion), so
+ * the card renders struck-red "town" and green "village"/"city". The HTML/USFM field values are the
+ * ACTUAL serialized output of the C# PlatformCommentConverter run on the
+ * `CreateVerseTextConflictCommentReplacementBothSides` fixture — captured verbatim; do not
+ * hand-edit them. (`id`/`thread` are renamed to `conflict-replacement` here for readability; the
+ * fixture serializes an opaque thread id.)
  */
-export const verseTextConflictReplacementSample: LegacyComment = {
+export const verseTextConflictReplacementBothSidesSample: LegacyComment = {
   id: 'conflict-replacement/Tim Steenwyk/2011-08-16T15:49:18.4019847-04:00',
   isRead: false,
   thread: 'conflict-replacement',
@@ -905,8 +907,7 @@ export const verseTextConflictReplacementSample: LegacyComment = {
     "<blockquote lang='dmy' style='text-align:left'><p><span lang='es-015-vaidika'>\\v 1 When Jesus was born in the <s>town </s><u>village </u>of Bethlehem in Judea, Herod was king.</span></p></blockquote>",
   acceptedText:
     "<blockquote lang='dmy' style='text-align:left'><p><span lang='es-015-vaidika'>\\v 1 When Jesus was born in the <s>town </s><u>city </u>of Bethlehem in Judea, Herod was king.</span></p></blockquote>",
-  resultText:
-    '\\v 1 When Jesus was born in the city of Bethlehem in Judea, Herod was king.',
+  resultText: '\\v 1 When Jesus was born in the city of Bethlehem in Judea, Herod was king.',
   rejectedResultText:
     '\\v 1 When Jesus was born in the village of Bethlehem in Judea, Herod was king.',
 };
