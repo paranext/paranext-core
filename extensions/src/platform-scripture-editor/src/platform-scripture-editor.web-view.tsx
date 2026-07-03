@@ -118,6 +118,7 @@ import {
   canAddChapterNumber,
   correctEditorUsjVersion,
   deepEqualAcrossIframes,
+  findNoteIndexByOps,
   formatEditorTitle,
   generateInlineMarkerMenuListItems,
   generateParagraphMenuListItems,
@@ -493,6 +494,31 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [commentsPdp]);
   const [canUserCreateComments] = usePromise(fetchCanUserCreateComments, false);
 
+  // Using react's ref api which uses null, so we must use null
+  // eslint-disable-next-line no-null/no-null
+  const editorRef = useRef<EditorRef | null>(null);
+
+  const [footnotesPaneVisible, setFootnotesPaneVisible] = useWebViewState<boolean>(
+    'footnotesPaneVisible',
+    false,
+  );
+
+  const footnotesPaneVisibleRef = useRef(footnotesPaneVisible);
+
+  useEffect(() => {
+    footnotesPaneVisibleRef.current = footnotesPaneVisible;
+  }, [footnotesPaneVisible]);
+
+  /**
+   * Requests that the footnotes pane select/highlight a given note index, mirroring a real pane-row
+   * click. Set by `nodeOptions.noteCallerOnClick` when a collapsed note caller is clicked while the
+   * pane is visible (PT9 navigate-to-note). Ephemeral UI state — not persisted via
+   * `useWebViewState` since it only needs to survive the current session, not a web-view reload.
+   */
+  const [footnotePaneFocusRequest, setFootnotePaneFocusRequest] = useState<
+    { index: number } | undefined
+  >(undefined);
+
   const nodeOptions = useMemo<UsjNodeOptions>(
     () => ({
       // Also disabled while sync-blocked: opening a note caller can create/edit a note, which is a
@@ -503,6 +529,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           : (event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps) => {
               if (!isCollapsed || editingNoteKey.current) return;
 
+              // Pane visible → focus/highlight the note there (PT9 navigate-to-note) instead of
+              // opening the popover, regardless of the auto-show setting.
+              if (footnotesPaneVisibleRef.current) {
+                const noteOps = getNoteOps();
+                const index = noteOps ? findNoteIndexByOps(editorRef, noteOps) : undefined;
+                if (index !== undefined) setFootnotePaneFocusRequest({ index });
+                return;
+              }
+
+              // Pane hidden → open the popover (existing behavior).
               const noteOp = getNoteOps()?.at(0);
               if (!noteOp || !isInsertEmbedOpOfType('note', noteOp)) return;
 
@@ -579,17 +615,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return getViewOptionsForType(viewType, isPowerMode);
   }, [viewType, isPowerMode]);
 
-  const [footnotesPaneVisible, setFootnotesPaneVisible] = useWebViewState<boolean>(
-    'footnotesPaneVisible',
-    false,
-  );
-
-  const footnotesPaneVisibleRef = useRef(footnotesPaneVisible);
-
-  useEffect(() => {
-    footnotesPaneVisibleRef.current = footnotesPaneVisible;
-  }, [footnotesPaneVisible]);
-
   /**
    * PT9-divergent NN3 setting (default off, so PT9's manual/persistent behavior is unchanged by
    * default): when on, the footnotes pane auto-shows/hides in standard view based on whether the
@@ -620,10 +645,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   useEffect(() => {
     footnotesAutoOverrideRef.current = false;
   }, [scrRef.book, scrRef.chapterNum]);
-
-  // Using react's ref api which uses null, so we must use null
-  // eslint-disable-next-line no-null/no-null
-  const editorRef = useRef<EditorRef | null>(null);
 
   /**
    * Function to run to set the editor's USJ content. Also clears annotation info because setting
@@ -2274,6 +2295,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                   onFootnoteSelected={handleFootnoteSelected}
                   useWebViewState={useWebViewState}
                   showMarkers={options.view?.markerMode !== 'hidden'}
+                  focusRequest={footnotePaneFocusRequest}
                 >
                   {/* Render the editor inside the container decorations without re-mounting on re-parent */}
                   <OutPortal node={editorPortalNode} />
