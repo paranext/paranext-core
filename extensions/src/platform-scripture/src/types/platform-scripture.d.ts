@@ -2446,7 +2446,7 @@ declare module 'papi-shared-types' {
      * The active tab in column 3 set by the project admin's shared layout. Empty string means no
      * admin preference is set.
      */
-    'platformScripture.sharedLayoutActiveTab': string;
+    'platformScripture.sharedLayoutDefaultTab': string;
 
     /**
      * Whether the project allows invisible characters to appear literally in USFM text. Corresponds

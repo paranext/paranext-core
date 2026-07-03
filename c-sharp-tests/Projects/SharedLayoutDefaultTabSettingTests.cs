@@ -6,16 +6,16 @@ namespace TestParanextDataProvider.Projects;
 
 /// <summary>
 /// Integration tests for the GetProjectSetting / SetProjectSetting logic that handles the
-/// <c>platformScripture.sharedLayoutActiveTab</c> setting — a plain string stored directly
-/// in Settings.xml under <c>SharedLayoutActiveTab</c>.
+/// <c>platformScripture.sharedLayoutDefaultTab</c> setting — a plain string stored directly
+/// in Settings.xml under <c>SharedLayoutDefaultTab</c>.
 /// </summary>
 [ExcludeFromCodeCoverage]
 [TestFixture]
-internal class SharedLayoutActiveTabSettingTests : PapiTestBase
+internal class SharedLayoutDefaultTabSettingTests : PapiTestBase
 {
-    private const string PdpName = "sharedLayoutActiveTabTestProject";
-    private const string PbSettingName = ProjectSettingsNames.PB_SHARED_LAYOUT_ACTIVE_TAB;
-    private const string PtSettingName = ProjectSettingsNames.PT_SHARED_LAYOUT_ACTIVE_TAB;
+    private const string PdpName = "sharedLayoutDefaultTabTestProject";
+    private const string PbSettingName = ProjectSettingsNames.PB_SHARED_LAYOUT_DEFAULT_TAB;
+    private const string PtSettingName = ProjectSettingsNames.PT_SHARED_LAYOUT_DEFAULT_TAB;
 
     private DummyScrText _scrText = null!;
     private ProjectDetails _projectDetails = null!;
