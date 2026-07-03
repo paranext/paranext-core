@@ -125,11 +125,11 @@ public class ResourceReferenceListTests
     }
 
     [Test]
-    public void ProjectReference_IsShownByDefaultTrue_SerializesAndDeserializesCorrectly()
+    public void ProjectReference_IsResourceShownByDefaultTrue_SerializesAndDeserializesCorrectly()
     {
         var list = new ResourceReferenceList
         {
-            Items = [new ProjectReference { Name = "My Project", Id = "aabbcc", IsShownByDefault = true }],
+            Items = [new ProjectReference { Name = "My Project", Id = "aabbcc", IsResourceShownByDefault = true }],
         };
         string json = list.SerializeToJson();
         var result = json.DeserializeFromJson<ResourceReferenceList>();
@@ -137,11 +137,11 @@ public class ResourceReferenceListTests
         Assert.That(result, Is.Not.Null);
         var item = result!.Items[0] as ProjectReference;
         Assert.That(item, Is.Not.Null);
-        Assert.That(item!.IsShownByDefault, Is.EqualTo(true));
+        Assert.That(item!.IsResourceShownByDefault, Is.EqualTo(true));
     }
 
     [Test]
-    public void ProjectReference_IsShownByDefaultAbsent_DeserializesAsNull()
+    public void ProjectReference_IsResourceShownByDefaultAbsent_DeserializesAsNull()
     {
         const string json =
             """{"dataVersion":"1.0.0","items":[{"type":"project","name":"My Project","id":"aabbcc"}]}""";
@@ -149,22 +149,22 @@ public class ResourceReferenceListTests
 
         var item = result!.Items[0] as ProjectReference;
         Assert.That(item, Is.Not.Null);
-        Assert.That(item!.IsShownByDefault, Is.Null);
+        Assert.That(item!.IsResourceShownByDefault, Is.Null);
     }
 
     [Test]
-    public void ProjectReference_IsShownByDefaultNull_NotPresentInSerializedJson()
+    public void ProjectReference_IsResourceShownByDefaultNull_NotPresentInSerializedJson()
     {
         var list = new ResourceReferenceList
         {
             Items = [new ProjectReference { Name = "P", Id = "abc" }],
         };
         string json = list.SerializeToJson();
-        Assert.That(json, Does.Not.Contain("isShownByDefault"));
+        Assert.That(json, Does.Not.Contain("isResourceShownByDefault"));
     }
 
     [Test]
-    public void DblResourceReference_IsShownByDefaultFalse_SerializesAndDeserializesCorrectly()
+    public void DblResourceReference_IsResourceShownByDefaultFalse_SerializesAndDeserializesCorrectly()
     {
         var list = new ResourceReferenceList
         {
@@ -174,7 +174,7 @@ public class ResourceReferenceListTests
                 {
                     Name = "Web English",
                     Id = "aabbccddeeff00112233445566778899aabbccddeeff0011",
-                    IsShownByDefault = false,
+                    IsResourceShownByDefault = false,
                 },
             ],
         };
@@ -183,7 +183,7 @@ public class ResourceReferenceListTests
 
         var item = result!.Items[0] as DblResourceReference;
         Assert.That(item, Is.Not.Null);
-        Assert.That(item!.IsShownByDefault, Is.EqualTo(false));
+        Assert.That(item!.IsResourceShownByDefault, Is.EqualTo(false));
     }
 
     #endregion

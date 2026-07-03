@@ -28,28 +28,28 @@ internal sealed class ResourceReferenceConverter : JsonConverter<ResourceReferen
             {
                 Name = GetString(root, "name"),
                 Id = GetString(root, "id"),
-                IsShownByDefault = GetNullableBool(root, "isShownByDefault"),
+                IsResourceShownByDefault = GetNullableBool(root, "isResourceShownByDefault"),
             },
             "dblResource" => new DblResourceReference
             {
                 Name = GetString(root, "name"),
                 Id = GetString(root, "id"),
-                IsShownByDefault = GetNullableBool(root, "isShownByDefault"),
+                IsResourceShownByDefault = GetNullableBool(root, "isResourceShownByDefault"),
             },
             "enhancedResource" => new EnhancedResourceReference
             {
                 Name = GetString(root, "name"),
-                IsShownByDefault = GetNullableBool(root, "isShownByDefault"),
+                IsResourceShownByDefault = GetNullableBool(root, "isResourceShownByDefault"),
             },
             "xmlResource" => new XmlResourceReference
             {
                 Name = GetString(root, "name"),
-                IsShownByDefault = GetNullableBool(root, "isShownByDefault"),
+                IsResourceShownByDefault = GetNullableBool(root, "isResourceShownByDefault"),
             },
             "sourceLanguageResource" => new SourceLanguageResourceReference
             {
                 Name = GetString(root, "name"),
-                IsShownByDefault = GetNullableBool(root, "isShownByDefault"),
+                IsResourceShownByDefault = GetNullableBool(root, "isResourceShownByDefault"),
             },
             _ => CreateUnknown(root),
         };
@@ -124,8 +124,11 @@ internal sealed class ResourceReferenceConverter : JsonConverter<ResourceReferen
                 writer.WriteString("id", proj.Id);
             else if (value is DblResourceReference dbl)
                 writer.WriteString("id", dbl.Id);
-            if (value.IsShownByDefault.HasValue)
-                writer.WriteBoolean("isShownByDefault", value.IsShownByDefault.Value);
+            if (value.IsResourceShownByDefault.HasValue)
+                writer.WriteBoolean(
+                    "isResourceShownByDefault",
+                    value.IsResourceShownByDefault.Value
+                );
         }
 
         writer.WriteEndObject();

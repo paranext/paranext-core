@@ -13,7 +13,7 @@ public abstract record ResourceReference
     /// When set by a project admin, indicates this resource should be shown by default
     /// when the shared layout is applied. Null means no admin preference is set.
     /// </summary>
-    public bool? IsShownByDefault { get; init; }
+    public bool? IsResourceShownByDefault { get; init; }
 }
 
 public record ProjectReference : ResourceReference
@@ -106,11 +106,11 @@ public record ResourceReferenceList
                 // (lowercase) and parsed back with bool.TryParse. The JSON path uses a native
                 // JSON boolean via WriteBoolean/JsonValueKind — the difference is inherent to
                 // the respective serialization formats.
-                if (item.IsShownByDefault.HasValue)
+                if (item.IsResourceShownByDefault.HasValue)
                     element.Add(
                         new XAttribute(
-                            "isShownByDefault",
-                            item.IsShownByDefault.Value.ToString().ToLowerInvariant()
+                            "isResourceShownByDefault",
+                            item.IsResourceShownByDefault.Value.ToString().ToLowerInvariant()
                         )
                     );
 
@@ -142,28 +142,43 @@ public record ResourceReferenceList
                         {
                             Name = name,
                             Id = el.Attribute("id")?.Value ?? "",
-                            IsShownByDefault = GetNullableBoolAttribute(el, "isShownByDefault"),
+                            IsResourceShownByDefault = GetNullableBoolAttribute(
+                                el,
+                                "isResourceShownByDefault"
+                            ),
                         },
                         "dblResource" => new DblResourceReference
                         {
                             Name = name,
                             Id = el.Attribute("id")?.Value ?? "",
-                            IsShownByDefault = GetNullableBoolAttribute(el, "isShownByDefault"),
+                            IsResourceShownByDefault = GetNullableBoolAttribute(
+                                el,
+                                "isResourceShownByDefault"
+                            ),
                         },
                         "enhancedResource" => new EnhancedResourceReference
                         {
                             Name = name,
-                            IsShownByDefault = GetNullableBoolAttribute(el, "isShownByDefault"),
+                            IsResourceShownByDefault = GetNullableBoolAttribute(
+                                el,
+                                "isResourceShownByDefault"
+                            ),
                         },
                         "xmlResource" => new XmlResourceReference
                         {
                             Name = name,
-                            IsShownByDefault = GetNullableBoolAttribute(el, "isShownByDefault"),
+                            IsResourceShownByDefault = GetNullableBoolAttribute(
+                                el,
+                                "isResourceShownByDefault"
+                            ),
                         },
                         "sourceLanguageResource" => new SourceLanguageResourceReference
                         {
                             Name = name,
-                            IsShownByDefault = GetNullableBoolAttribute(el, "isShownByDefault"),
+                            IsResourceShownByDefault = GetNullableBoolAttribute(
+                                el,
+                                "isResourceShownByDefault"
+                            ),
                         },
                         _ => new UnknownResourceReference
                         {

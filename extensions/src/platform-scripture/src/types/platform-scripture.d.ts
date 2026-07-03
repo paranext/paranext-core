@@ -1911,7 +1911,7 @@ declare module 'platform-scripture' {
      * When set by a project admin, indicates this resource should be shown by default when the
      * shared layout is applied
      */
-    isShownByDefault?: boolean;
+    isResourceShownByDefault?: boolean;
   };
 
   /** A reference to a DBL resource, identified by its 24-byte (48-char) hex ID */
@@ -1929,7 +1929,7 @@ declare module 'platform-scripture' {
      * When set by a project admin, indicates this resource should be shown by default when the
      * shared layout is applied
      */
-    isShownByDefault?: boolean;
+    isResourceShownByDefault?: boolean;
   };
 
   /** A reference to an Enhanced resource, identified by name */
@@ -1942,7 +1942,7 @@ declare module 'platform-scripture' {
      * When set by a project admin, indicates this resource should be shown by default when the
      * shared layout is applied
      */
-    isShownByDefault?: boolean;
+    isResourceShownByDefault?: boolean;
   };
 
   /** A reference to an XML resource, identified by name */
@@ -1955,7 +1955,7 @@ declare module 'platform-scripture' {
      * When set by a project admin, indicates this resource should be shown by default when the
      * shared layout is applied
      */
-    isShownByDefault?: boolean;
+    isResourceShownByDefault?: boolean;
   };
 
   /** A reference to a Source Language resource, identified by name */
@@ -1968,7 +1968,7 @@ declare module 'platform-scripture' {
      * When set by a project admin, indicates this resource should be shown by default when the
      * shared layout is applied
      */
-    isShownByDefault?: boolean;
+    isResourceShownByDefault?: boolean;
   };
 
   /**

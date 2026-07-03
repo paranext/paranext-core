@@ -188,25 +188,25 @@ public class ResourceReferenceListXmlTests
         Assert.That(result.Items[4], Is.InstanceOf<SourceLanguageResourceReference>());
     }
 
-    // --- IsShownByDefault XML round-trip ---
+    // --- IsResourceShownByDefault XML round-trip ---
 
     [Test]
-    public void ToXml_FromXml_ProjectReference_IsShownByDefaultTrue_RoundTripsCorrectly()
+    public void ToXml_FromXml_ProjectReference_IsResourceShownByDefaultTrue_RoundTripsCorrectly()
     {
         var list = new ResourceReferenceList
         {
-            Items = [new ProjectReference { Name = "My Project", Id = "aabbcc", IsShownByDefault = true }],
+            Items = [new ProjectReference { Name = "My Project", Id = "aabbcc", IsResourceShownByDefault = true }],
         };
         var xml = ResourceReferenceList.ToXml(list);
         var result = ResourceReferenceList.FromXml(xml, list.DataVersion);
 
         var item = result.Items[0] as ProjectReference;
         Assert.That(item, Is.Not.Null);
-        Assert.That(item!.IsShownByDefault, Is.EqualTo(true));
+        Assert.That(item!.IsResourceShownByDefault, Is.EqualTo(true));
     }
 
     [Test]
-    public void ToXml_FromXml_ProjectReference_IsShownByDefaultNull_RoundTripsAsNull()
+    public void ToXml_FromXml_ProjectReference_IsResourceShownByDefaultNull_RoundTripsAsNull()
     {
         var list = new ResourceReferenceList
         {
@@ -217,11 +217,11 @@ public class ResourceReferenceListXmlTests
 
         var item = result.Items[0] as ProjectReference;
         Assert.That(item, Is.Not.Null);
-        Assert.That(item!.IsShownByDefault, Is.Null);
+        Assert.That(item!.IsResourceShownByDefault, Is.Null);
     }
 
     [Test]
-    public void ToXml_ProjectReference_IsShownByDefaultNull_NoAttributeInXml()
+    public void ToXml_ProjectReference_IsResourceShownByDefaultNull_NoAttributeInXml()
     {
         var list = new ResourceReferenceList
         {
@@ -229,7 +229,7 @@ public class ResourceReferenceListXmlTests
         };
         var xml = ResourceReferenceList.ToXml(list);
         var itemEl = xml.Elements("Item").First();
-        Assert.That(itemEl.Attribute("isShownByDefault"), Is.Null);
+        Assert.That(itemEl.Attribute("isResourceShownByDefault"), Is.Null);
     }
 
     [Test]
