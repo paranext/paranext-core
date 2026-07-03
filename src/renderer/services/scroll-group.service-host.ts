@@ -19,6 +19,7 @@ import {
   compareScrRefs,
   deepClone,
   deserialize,
+  getErrorMessage,
   isPlatformError,
   type PlatformEvent,
   type PlatformEventEmitter,
@@ -266,7 +267,9 @@ function ensureVersificationSubscribed(projectId: string): Promise<void> {
       // Couldn't resolve a versification for this project (e.g. not a scripture project, or it is
       // still loading). Allow a later retry rather than latching it off for the session.
       versificationSubscriptions.delete(projectId);
-      logger.warn(`Scroll group could not track versification for project ${projectId}. ${e}`);
+      logger.warn(
+        `Scroll group could not track versification for project ${projectId}. ${getErrorMessage(e)}`,
+      );
     }
   })();
   versificationSubscriptions.set(projectId, subscriptionPromise);
@@ -453,7 +456,7 @@ export async function getScrRefForProject(
       // command rejects on such failures (rather than passing through) precisely so this branch —
       // which does not write the cache — runs instead of caching an identity result.
       logger.warn(
-        `Scroll group could not convert its reference into project ${projectId}'s versification; using the reference unconverted. ${e}`,
+        `Scroll group could not convert its reference into project ${projectId}'s versification; using the reference unconverted. ${getErrorMessage(e)}`,
       );
       return scrRef;
     })
