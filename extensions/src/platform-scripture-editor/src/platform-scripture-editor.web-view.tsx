@@ -526,6 +526,37 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     footnotesPaneVisibleRef.current = footnotesPaneVisible;
   }, [footnotesPaneVisible]);
 
+  /**
+   * PT9-divergent NN3 setting (default off, so PT9's manual/persistent behavior is unchanged by
+   * default): when on, the footnotes pane auto-shows/hides in standard view based on whether the
+   * current chapter has notes. See the `chapterHasNotes`/auto-show `useEffect` below, which runs
+   * once `usjFromPdp` is available.
+   */
+  const [footnotesAutoShow, setFootnotesAutoShow] = useWebViewState<boolean>(
+    'footnotesAutoShow',
+    false,
+  );
+
+  const footnotesAutoShowRef = useRef(footnotesAutoShow);
+
+  useEffect(() => {
+    footnotesAutoShowRef.current = footnotesAutoShow;
+  }, [footnotesAutoShow]);
+
+  /**
+   * Whether the user has manually toggled the footnotes pane for the current chapter. When set, it
+   * wins over the `footnotesAutoShow` auto-show/hide behavior until the chapter changes. This is
+   * intentionally a ref (not persisted web-view state) since it only needs to survive re-renders
+   * within a chapter, not across web-view reloads.
+   */
+  const footnotesAutoOverrideRef = useRef(false);
+
+  // Chapter change resets the manual override so auto-show/hide behavior resumes for the new
+  // chapter.
+  useEffect(() => {
+    footnotesAutoOverrideRef.current = false;
+  }, [scrRef.book, scrRef.chapterNum]);
+
   // Using react's ref api which uses null, so we must use null
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | null>(null);
@@ -793,8 +824,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           break;
         }
         case 'toggleFootnotesPaneVisibility': {
+          // A manual toggle wins over the `footnotesAutoShow` auto-show/hide behavior until the
+          // next chapter change (see `footnotesAutoOverrideRef`).
+          footnotesAutoOverrideRef.current = true;
           const { current } = footnotesPaneVisibleRef;
           setFootnotesPaneVisible(!current);
+          break;
+        }
+        case 'toggleFootnotesAutoShow': {
+          const { current } = footnotesAutoShowRef;
+          setFootnotesAutoShow(!current);
           break;
         }
         case 'insertFootnoteAtSelection': {
@@ -1031,6 +1070,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     decorations,
     setDecorations,
     setFootnotesPaneVisible,
+    setFootnotesAutoShow,
     setViewType,
     viewOptions.markerMode,
     localizedStrings,
@@ -1466,6 +1506,36 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     currentlyWritingUsjToPdp,
     saveUsjToPdpIfUpdated,
   });
+
+  /**
+   * Whether the currently loaded chapter has at least one note. Reuses the same
+   * `UsjReaderWriter(...).findAllNotes()` mechanism `FootnotesLayout` uses to populate the
+   * footnotes pane, so this stays consistent with what the pane would actually show.
+   */
+  const chapterHasNotes = useMemo(() => {
+    if (!usjFromPdp) return false;
+    try {
+      return (
+        new UsjReaderWriter(usjFromPdp, {
+          markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
+        }).findAllNotes().length > 0
+      );
+    } catch (e) {
+      logger.warn(
+        `Error checking chapter USJ for notes (footnotes auto-show): ${getErrorMessage(e)}. USJ: ${JSON.stringify(usjFromPdp)}`,
+      );
+      return false;
+    }
+  }, [usjFromPdp]);
+
+  // PT9-divergent NN3 behavior (behind `footnotesAutoShow`, default off): in standard view,
+  // auto-show the footnotes pane when the loaded chapter has notes and auto-hide it when it
+  // doesn't, unless the user has manually overridden the pane's visibility for this chapter (see
+  // `footnotesAutoOverrideRef`/`toggleFootnotesPaneVisibility` above).
+  useEffect(() => {
+    if (!footnotesAutoShow || viewType !== 'standard' || footnotesAutoOverrideRef.current) return;
+    setFootnotesPaneVisible(chapterHasNotes);
+  }, [footnotesAutoShow, viewType, chapterHasNotes, setFootnotesPaneVisible]);
 
   // On loading the first time, scroll the selected verse into view and set focus to the editor
   useEffect(() => {

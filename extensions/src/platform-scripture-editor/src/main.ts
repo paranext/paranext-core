@@ -432,6 +432,36 @@ async function toggleFootnotesPane(webViewId: string | undefined): Promise<void>
   await controller.toggleFootnotesPaneVisibility();
 }
 
+async function toggleFootnotesAutoShow(webViewId: string | undefined): Promise<void> {
+  if (!webViewId) {
+    logger.debug('No editor WebView ID!');
+    return;
+  }
+
+  const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
+  if (!webViewDefinition) {
+    logger.debug(`No webViewDefinition found for ${webViewId}!`);
+    return;
+  }
+
+  if (webViewDefinition.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE) {
+    logger.debug(`WebView is not a Scripture editor!`);
+    return;
+  }
+
+  const controller = await papi.webViews.getWebViewController(
+    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+    webViewId,
+  );
+
+  if (!controller) {
+    logger.debug(`WebView controller could not be obtained for ${webViewId}!`);
+    return;
+  }
+
+  await controller.toggleFootnotesAutoShow();
+}
+
 async function changeFootnotesPaneLocation(webViewId: string | undefined): Promise<void> {
   if (!webViewId) {
     logger.debug('No editor WebView ID!');
@@ -665,6 +695,28 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
           );
         } catch (e) {
           const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running toggleFootnotesPaneVisibility! ${getErrorMessage(e)}`;
+          logger.warn(message);
+          throw new Error(message);
+        }
+      },
+      async toggleFootnotesAutoShow() {
+        try {
+          logger.debug(
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to toggleFootnotesAutoShow`,
+          );
+          if (!currentWebViewDefinition.projectId)
+            throw new Error(`webViewDefinition.projectId is empty!`);
+
+          const message: EditorWebViewMessage = {
+            method: 'toggleFootnotesAutoShow',
+          };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+        } catch (e) {
+          const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running toggleFootnotesAutoShow! ${getErrorMessage(e)}`;
           logger.warn(message);
           throw new Error(message);
         }
@@ -1211,6 +1263,29 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
+  const toggleFootnotesAutoShowPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.toggleFootnotesAutoShow',
+    toggleFootnotesAutoShow,
+    {
+      method: {
+        summary:
+          'Toggle the PT9-divergent NN3 auto-show/hide setting for the footnotes pane (default off)',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the WebView to toggle the footnotes auto-show setting for',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
   const changeFootnotesPaneLocationPromise = papi.commands.registerCommand(
     'platformScriptureEditor.changeFootnotesPaneLocation',
     changeFootnotesPaneLocation,
@@ -1357,6 +1432,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await openPlatformResourceViewerPromise,
     await changeScriptureViewPromise,
     await toggleFootnotesPanePromise,
+    await toggleFootnotesAutoShowPromise,
     await changeFootnotesPaneLocationPromise,
     await insertFootnotePromise,
     await insertCrossReferencePromise,

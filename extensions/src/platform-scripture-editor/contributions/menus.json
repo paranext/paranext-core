@@ -102,6 +102,12 @@
             "command": "platformScriptureEditor.changeFootnotesPaneLocation"
           },
           {
+            "label": "%webView_platformScriptureEditor_toggleFootnotesAutoShow%",
+            "group": "platformScriptureEditor.footnotesPane",
+            "order": 3,
+            "command": "platformScriptureEditor.toggleFootnotesAutoShow"
+          },
+          {
             "label": "%webView_platformScriptureEditor_charactersInventory%",
             "group": "platformScriptureEditor.inventory",
             "order": 1,
