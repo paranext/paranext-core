@@ -177,7 +177,7 @@ The consuming extension resolves the keys with `useLocalizedStrings(STRING_KEYS)
 
 **Avoid:**
 - Calling `useLocalizedStrings` (or any `@papi/*` hook) inside a `lib/platform-bible-react/` component — it couples the process-agnostic library to PAPI.
-- Hardcoded English text in JSX. This is enforced by the ESLint rule **`paranext/no-hardcoded-jsx-strings`** (in `lib/eslint-plugin-paranext/`).
+- Hardcoded English text in JSX. The ESLint rule **`paranext/no-hardcoded-jsx-strings`** (in `lib/eslint-plugin-paranext/`) flags this, but only under `npm run lint:ai-strict` — it is **not** part of CI's `npm run lint`, so don't rely on it to catch hardcoded strings.
 - Ad-hoc `localizedStrings: Record<string, string>` props with no typed `STRING_KEYS` tuple — callers lose the typed key list and the partial-map guarantee.
 
 **Why:** the `STRING_KEYS` tuple gives consumers a typed, single-source key list for the `useLocalizedStrings` lookup; the `Partial<Record>` type lets stories pass a subset and trust the fallback; the English-fallback read keeps the component usable in isolation. Established precedent: `BookChapterControl`, `BookSelector`, `MarkerMenu`, `Inventory`, `ScopeSelector`, `CommentEditor`, `CommentList`, `FootnoteEditor`, `UndoRedoButtons`, `ErrorPopover`, `ErrorDump`. See `lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.types.ts` for the `STRING_KEYS` + `…LocalizedStrings` pair and `book-chapter-control.component.tsx` for the `?? 'English'` fallback reads.

@@ -78,22 +78,22 @@ When you modify any vendored shadcn component (under `lib/platform-bible-react/s
 
 **Verification**: before committing changes to any `shadcn-ui/` file, diff against the prior commit on the base branch and confirm every changed line is covered by a `CUSTOM` marker. Reviewers will grep for `CUSTOM` to find all customizations.
 
-## What's Enforced by Linting (Don't Duplicate)
+## Linting: What CI Enforces vs. What It Doesn't
 
-- Tailwind `tw:` prefix on utility classes → enforced by the project's Tailwind/ESLint config
+**Enforced by CI (`npm run lint`, via `.eslintrc.js`) — don't duplicate:**
 
-The following `paranext/*` rules exist but are **not** part of the default `npm run lint` that CI
-runs (which uses `.eslintrc.js` and enables only `paranext/require-disable-comment`). They live in
-`.eslintrc.ai.js`, reachable only via `npm run lint:ai-strict`, and are turned **off** for
-`*.stories.tsx` / test files. They also target hardcoded JSX literals, not missing localize keys.
-Treat them as advisory, not a CI safety net — do not assume they will catch anything:
+- Tailwind `tw:` prefix on utility classes
 
-- Localized strings → `paranext/no-hardcoded-jsx-strings` (ai-strict only; off in stories/tests)
-- ARIA localization → `paranext/require-localized-aria` (ai-strict only; off in stories/tests)
-- Theme colors → `paranext/no-hardcoded-tailwind-colors` (ai-strict only)
+**NOT enforced by CI — advisory only.** These `paranext/*` rules live in `.eslintrc.ai.js`
+(`npm run lint:ai-strict`, which CI does not run), have varying severity (several are only `warn`),
+and are turned **off** for `*.stories.tsx` / test files. They also target hardcoded JSX literals,
+not missing localize keys — so none of them catch a raw-key leak:
 
-Because none of these run in CI, localized-string mistakes are **not** caught automatically. For the
-raw-key-leak class specifically, see
-[localized-string-fallbacks.md](../code-quality/localized-string-fallbacks.md).
+- `paranext/no-hardcoded-jsx-strings` — hardcoded strings in JSX
+- `paranext/require-localized-aria` — hardcoded ARIA labels
+- `paranext/no-hardcoded-tailwind-colors` — hardcoded theme colors
+
+Don't assume localized-string or ARIA mistakes are caught automatically. For the raw-key-leak class,
+see [localized-string-fallbacks.md](../code-quality/localized-string-fallbacks.md).
 
 See [Component-Selection-Quick-Reference.md](../../../.context/standards/Component-Selection-Quick-Reference.md).
