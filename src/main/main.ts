@@ -24,6 +24,7 @@ import '@node/utils/log-archiver.util';
 import { subscribeCurrentMacosMenubar } from '@main/platform-macos-menubar.util';
 import chroma from 'chroma-js';
 import {
+  APP_DISPLAY_NAME,
   APP_NAME,
   APP_URI_SCHEME,
   APP_VERSION,
@@ -209,10 +210,16 @@ async function main() {
     await networkService.initialize();
   } catch (e) {
     // Without its own PAPI network, none of this app's services or UI can work, so fail loudly
-    // instead of presenting a half-initialized app (PT-4109)
-    const errorMessage = `The PAPI WebSocket server could not start, so ${APP_NAME} cannot run: ${getErrorMessage(e)}`;
-    logger.error(errorMessage);
-    dialog.showErrorBox(`${APP_NAME} cannot start`, errorMessage);
+    // instead of presenting a half-initialized app (PT-4109). These strings are intentionally not
+    // localized: the localization service runs over the very PAPI network that just failed to
+    // start, so it is provably unavailable here
+    logger.error(
+      `The PAPI WebSocket server could not start, so ${APP_NAME} cannot run: ${getErrorMessage(e)}`,
+    );
+    dialog.showErrorBox(
+      `${APP_DISPLAY_NAME} cannot start`,
+      `${APP_DISPLAY_NAME} could not set up the internal services it needs to run. Technical details: ${getErrorMessage(e)}`,
+    );
     app.exit(1);
     return;
   }

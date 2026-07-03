@@ -895,6 +895,15 @@ declare module 'shared/data/rpc.model' {
   /** Get the URL of this app's PAPI WebSocket server. See {@link getWebSocketPort} */
   export function getWebSocketUrl(): string;
   /**
+   * Determine whether a WebSocket URL might connect to a PAPI network so such connections can be
+   * blocked. Checks against this app's own PAPI port ({@link getWebSocketPort}) and also the default
+   * PAPI port ({@link WEBSOCKET_PORT}): when this app is running on a fallback port, a raw web socket
+   * to the default port could reach another paranext-based app's PAPI network.
+   *
+   * We are just filtering by port number on purpose to allow other connections to localhost.
+   */
+  export function isPotentialConnectionToPapiNetwork(url: string | URL): boolean;
+  /**
    * Whether an RPC object is setting up or has finished setting up its connection and is ready to
    * communicate on the network
    */
@@ -1776,10 +1785,10 @@ declare module 'node/utils/command-line.util' {
    *   1920x1080). Overrides the saved window state dimensions.
    * - Maximize - Command-line switch that specifies that the renderer should be maximized on launch.
    *   Only on main process
-   * - WebSocketPort - Command-line argument that specifies which port to use for the PAPI WebSocket.
-   *   On main, this is the preferred port for the WebSocket server (falls back to a free port if it
-   *   is in use). On the extension host, main passes this to advertise the port the server is
-   *   actually listening on
+   * - WebSocketPort - Command-line argument that specifies which port to use for the PAPI WebSocket. On
+   *   main, this is the preferred port for the WebSocket server (falls back to a free port if it is
+   *   in use). On the extension host, main passes this to advertise the port the server is actually
+   *   listening on
    */
   export enum CommandLineArgs {
     Extensions = 'extensions',
@@ -1852,6 +1861,43 @@ declare module 'node/utils/command-line.util' {
    */
   export function getCommandLineSwitch(argName: CommandLineArgs): boolean;
 }
+declare module 'shared/data/platform.data' {
+  /**
+   * Namespace to use for features like commands, settings, etc. on the PAPI that are provided by
+   * Platform.Bible core
+   */
+  export const PLATFORM_NAMESPACE = 'platform';
+  /** Query parameter passed to the renderer. Determines which log level to use */
+  export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
+  /** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
+  export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
+  /**
+   * Query parameter passed to the renderer. Advertises the port this app's PAPI WebSocket server is
+   * listening on
+   */
+  export const WEBSOCKET_PORT_QUERY_PARAMETER = 'webSocketPort';
+  /**
+   * Parse a string that should contain a WebSocket port number
+   *
+   * Note: this lives here rather than in `rpc.model.ts` because it is used in each process's
+   * `global-this.model.ts`, which must not (transitively) import `logger.service` — the logger reads
+   * `globalThis` variables at module initialization, before `global-this.model.ts` sets them.
+   *
+   * @param portString String to parse, e.g. from a command-line argument, environment variable, or
+   *   query parameter
+   * @returns The port number, or `undefined` if the string is missing or is not a valid port number
+   *   (an integer from 1 to 65535)
+   */
+  export function parseWebSocketPort(portString: string | undefined): number | undefined;
+  /** ID of the default theme family for use in the application */
+  export const DEFAULT_THEME_FAMILY = '';
+  /** Type of the default theme for use in the application */
+  export const DEFAULT_THEME_TYPE = 'light';
+  /** Constants related to zoom factor of entire application */
+  export const DEFAULT_ZOOM_FACTOR = 1;
+  export const MIN_ZOOM_FACTOR = 0.5;
+  export const MAX_ZOOM_FACTOR = 3;
+}
 declare module 'main/services/web-socket-server.factory' {
   import { WebSocketServer } from 'ws';
   /**
@@ -1859,15 +1905,17 @@ declare module 'main/services/web-socket-server.factory' {
    * The {@link CommandLineArgs.WebSocketPort} command-line argument takes precedence over this.
    */
   export const WEBSOCKET_PORT_ENV_VAR = 'PAPI_WEBSOCKET_PORT';
-  interface PapiWebSocketServerInfo {
+  /** The WebSocketServer hosting this app's PAPI network and where it can be reached */
+  export interface PapiWebSocketServerInfo {
+    /** The listening WebSocket server */
     webSocketServer: WebSocketServer;
     /** Port the WebSocket server is actually listening on */
     port: number;
   }
   /**
-   * Determine which port this app should try first for its PAPI WebSocket server: the
-   * `--webSocketPort` command-line argument, then the {@link WEBSOCKET_PORT_ENV_VAR} environment
-   * variable, then {@link WEBSOCKET_PORT}
+   * Determine which port this app should try first for its PAPI WebSocket server: the first valid
+   * port among the `--webSocketPort` command-line argument, then the {@link WEBSOCKET_PORT_ENV_VAR}
+   * environment variable, then {@link WEBSOCKET_PORT}
    */
   export function getPreferredWebSocketPort(): number;
   /**
@@ -7892,30 +7940,6 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
    */
   export const useData: UseDataHook;
   export default useData;
-}
-declare module 'shared/data/platform.data' {
-  /**
-   * Namespace to use for features like commands, settings, etc. on the PAPI that are provided by
-   * Platform.Bible core
-   */
-  export const PLATFORM_NAMESPACE = 'platform';
-  /** Query parameter passed to the renderer. Determines which log level to use */
-  export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
-  /** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
-  export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
-  /**
-   * Query parameter passed to the renderer. Advertises the port this app's PAPI WebSocket server is
-   * listening on
-   */
-  export const WEBSOCKET_PORT_QUERY_PARAMETER = 'webSocketPort';
-  /** ID of the default theme family for use in the application */
-  export const DEFAULT_THEME_FAMILY = '';
-  /** Type of the default theme for use in the application */
-  export const DEFAULT_THEME_TYPE = 'light';
-  /** Constants related to zoom factor of entire application */
-  export const DEFAULT_ZOOM_FACTOR = 1;
-  export const MIN_ZOOM_FACTOR = 0.5;
-  export const MAX_ZOOM_FACTOR = 3;
 }
 declare module 'shared/log-error.model' {
   /** Error that force logs the error message before throwing. Useful for debugging in some situations. */

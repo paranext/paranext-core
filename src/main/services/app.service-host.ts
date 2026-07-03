@@ -11,6 +11,13 @@ import buildInfo from '../../../release/app/buildInfo.json';
 /** Same as {@link AppInfo.name} */
 export const APP_NAME: string = packageInfo.name;
 
+/**
+ * User-facing display name of this app, e.g. `Platform.Bible`. Not localized; intended for the rare
+ * user-facing surfaces where the localization service is unavailable (it runs over the PAPI
+ * network, so it cannot serve strings before the network is up)
+ */
+export const APP_DISPLAY_NAME: string = packageInfo.displayName;
+
 // Construct the app version according to the SemVer specification (pre-release ID already included)
 const { build } = buildInfo;
 /** Same as {@link AppInfo.version} */

@@ -17,7 +17,7 @@ export async function startLocalOAuthServer(): Promise<void> {
   // We only need this for development and testing purposes. Don't run it in production.
   if (globalThis.isPackaged) return;
 
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     localServer = createServer(async (req, res) => {
       if (!req.url) {
         res.writeHead(StatusCodes.BAD_REQUEST, { 'Content-Type': 'text/plain' });
@@ -61,8 +61,16 @@ export async function startLocalOAuthServer(): Promise<void> {
     });
 
     localServer.on('error', (err) => {
-      logger.error(`Local OAuth server error: ${getErrorMessage(err)}`);
-      reject(err);
+      // Don't reject: extension host startup awaits this dev-only service, and a rejection would
+      // abort extension loading entirely. The port cannot be moved automatically because the OAuth
+      // provider only redirects to the registered port, so just run without OAuth callbacks. This
+      // is expected when another dev instance is already running (supported since PT-4109) - the
+      // instance that owns the port receives the callbacks.
+      logger.warn(
+        `Local OAuth server could not start, so this instance will not receive OAuth callbacks: ${getErrorMessage(err)}. If another dev instance is running, it owns port ${localServerPort}. You can override the port with the LOCAL_OAUTH_SERVER_PORT environment variable if your OAuth configuration allows it.`,
+      );
+      stopLocalOAuthServer();
+      resolve();
     });
   });
 }

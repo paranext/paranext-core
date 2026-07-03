@@ -4,6 +4,7 @@ import { ProcessType } from '@shared/global-this.model';
 import {
   DEV_MODE_QUERY_PARAMETER,
   LOG_LEVEL_QUERY_PARAMETER,
+  parseWebSocketPort,
   WEBSOCKET_PORT_QUERY_PARAMETER,
 } from '@shared/data/platform.data';
 import type { LogLevel } from 'electron-log';
@@ -40,7 +41,8 @@ globalThis.isNoisyDevModeEnabled = searchParams.get(DEV_MODE_QUERY_PARAMETER) !=
 // Main advertises the port its PAPI WebSocket server is actually listening on, which may differ
 // from the default port when the default was in use by another app. Leave undefined if absent or
 // invalid so consumers fall back to the default port
-const webSocketPortParam = parseInt(searchParams.get(WEBSOCKET_PORT_QUERY_PARAMETER) ?? '', 10);
-globalThis.webSocketPort = Number.isNaN(webSocketPortParam) ? undefined : webSocketPortParam;
+globalThis.webSocketPort = parseWebSocketPort(
+  searchParams.get(WEBSOCKET_PORT_QUERY_PARAMETER) ?? undefined,
+);
 
 // #endregion

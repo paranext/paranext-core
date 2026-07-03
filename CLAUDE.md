@@ -149,6 +149,7 @@ npm run typecheck
 1. Changes to renderer or main TypeScript code hot-reload automatically
 2. Extension changes are watched and rebuilt automatically
 3. .NET changes require manual rebuild or running `npm run start:data` in a separate terminal
+   - A manually started data provider connects to the default port 8876. If your app instance fell back to another port (logged as `PAPI WebSocket server is listening on port N`), set `PAPI_WEBSOCKET_PORT=N` when running `npm run start:data` or it will attach to whichever app owns 8876
 4. Use VS Code "Debug Platform" compound configuration to debug both frontend and backend
 
 ## Coding Discipline

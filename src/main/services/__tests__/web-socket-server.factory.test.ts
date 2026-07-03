@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocketServer } from 'ws';
 import {
   createPapiWebSocketServer,
@@ -70,8 +70,18 @@ describe('createPapiWebSocketServer', () => {
 });
 
 describe('getPreferredWebSocketPort', () => {
+  let originalPortEnv: string | undefined;
+
+  beforeEach(() => {
+    // The machine running the tests may have the variable exported; make sure it does not leak in
+    originalPortEnv = process.env[WEBSOCKET_PORT_ENV_VAR];
+    delete process.env[WEBSOCKET_PORT_ENV_VAR];
+  });
+
   afterEach(() => {
     vi.unstubAllEnvs();
+    if (originalPortEnv === undefined) delete process.env[WEBSOCKET_PORT_ENV_VAR];
+    else process.env[WEBSOCKET_PORT_ENV_VAR] = originalPortEnv;
   });
 
   it('returns the default port when no override is specified', () => {
@@ -98,6 +108,21 @@ describe('getPreferredWebSocketPort', () => {
     ];
     try {
       expect(getPreferredWebSocketPort()).toBe(9456);
+    } finally {
+      process.argv = originalArgv;
+    }
+  });
+
+  it('uses a valid environment variable when the command-line argument is invalid', () => {
+    vi.stubEnv(WEBSOCKET_PORT_ENV_VAR, '9123');
+    const originalArgv = process.argv;
+    process.argv = [
+      ...originalArgv,
+      commandLineArgumentsAliases[CommandLineArgs.WebSocketPort][0],
+      'not-a-port',
+    ];
+    try {
+      expect(getPreferredWebSocketPort()).toBe(9123);
     } finally {
       process.argv = originalArgv;
     }

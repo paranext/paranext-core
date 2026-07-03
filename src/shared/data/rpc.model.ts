@@ -35,6 +35,27 @@ export function getWebSocketUrl(): string {
   return `ws://localhost:${getWebSocketPort()}`;
 }
 
+/**
+ * Determine whether a WebSocket URL might connect to a PAPI network so such connections can be
+ * blocked. Checks against this app's own PAPI port ({@link getWebSocketPort}) and also the default
+ * PAPI port ({@link WEBSOCKET_PORT}): when this app is running on a fallback port, a raw web socket
+ * to the default port could reach another paranext-based app's PAPI network.
+ *
+ * We are just filtering by port number on purpose to allow other connections to localhost.
+ */
+export function isPotentialConnectionToPapiNetwork(url: string | URL): boolean {
+  let urlObj: URL;
+  if (typeof url === 'string') {
+    urlObj = new URL(url);
+  } else {
+    urlObj = url;
+  }
+
+  const { port } = urlObj;
+  const portNumber = parseInt(port, 10);
+  return portNumber === getWebSocketPort() || portNumber === WEBSOCKET_PORT;
+}
+
 /** How many times to try sending a request before giving up if the request is not yet registered */
 const MAX_REQUEST_ATTEMPTS = 10;
 /** How long in ms to wait between request attempts if the request is not yet registered */

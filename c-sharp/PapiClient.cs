@@ -15,8 +15,8 @@ internal class PapiClient : IDisposable
     #region Delegates/Constants/Member variables
 
     /// <summary>
-    /// Default port for the PAPI WebSocket server. Must match WEBSOCKET_PORT in
-    /// src/shared/data/rpc.model.ts
+    /// Default port for the PAPI WebSocket server. Must match the value of the default port
+    /// constant WEBSOCKET_PORT in src/shared/data/rpc.model.ts
     /// </summary>
     internal const int DEFAULT_WEBSOCKET_PORT = 8876;
 
@@ -144,9 +144,9 @@ internal class PapiClient : IDisposable
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
 
-        Console.WriteLine("PapiClient connecting");
+        Console.WriteLine($"PapiClient connecting to {s_connectionUri}");
         await _webSocket.ConnectAsync(s_connectionUri, _cancellationToken);
-        Console.WriteLine("PapiClient connected successfully");
+        Console.WriteLine($"PapiClient connected successfully to {s_connectionUri}");
 
         _jsonRpc.Disconnected += (object? _, JsonRpcDisconnectedEventArgs args) =>
         {

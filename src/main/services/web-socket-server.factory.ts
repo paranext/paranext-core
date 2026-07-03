@@ -9,6 +9,7 @@
  */
 
 import { CommandLineArgs, getCommandLineArgument } from '@node/utils/command-line.util';
+import { parseWebSocketPort } from '@shared/data/platform.data';
 import { WEBSOCKET_PORT } from '@shared/data/rpc.model';
 import { logger } from '@shared/services/logger.service';
 import { getErrorMessage } from 'platform-bible-utils';
@@ -20,28 +21,29 @@ import { WebSocketServer } from 'ws';
  */
 export const WEBSOCKET_PORT_ENV_VAR = 'PAPI_WEBSOCKET_PORT';
 
-interface PapiWebSocketServerInfo {
+/** The WebSocketServer hosting this app's PAPI network and where it can be reached */
+export interface PapiWebSocketServerInfo {
+  /** The listening WebSocket server */
   webSocketServer: WebSocketServer;
   /** Port the WebSocket server is actually listening on */
   port: number;
 }
 
 /**
- * Determine which port this app should try first for its PAPI WebSocket server: the
- * `--webSocketPort` command-line argument, then the {@link WEBSOCKET_PORT_ENV_VAR} environment
- * variable, then {@link WEBSOCKET_PORT}
+ * Determine which port this app should try first for its PAPI WebSocket server: the first valid
+ * port among the `--webSocketPort` command-line argument, then the {@link WEBSOCKET_PORT_ENV_VAR}
+ * environment variable, then {@link WEBSOCKET_PORT}
  */
 export function getPreferredWebSocketPort(): number {
-  const portString =
-    getCommandLineArgument(CommandLineArgs.WebSocketPort) ?? process.env[WEBSOCKET_PORT_ENV_VAR];
-  if (portString === undefined) return WEBSOCKET_PORT;
+  const portStringArgument = getCommandLineArgument(CommandLineArgs.WebSocketPort);
+  const portStringEnv = process.env[WEBSOCKET_PORT_ENV_VAR];
+  const port = parseWebSocketPort(portStringArgument) ?? parseWebSocketPort(portStringEnv);
+  if (port !== undefined) return port;
 
-  const port = Number(portString);
-  if (Number.isInteger(port) && port > 0 && port <= 65535) return port;
-
-  logger.warn(
-    `Ignoring invalid PAPI WebSocket port "${portString}" from the command line or ${WEBSOCKET_PORT_ENV_VAR}. Using default port ${WEBSOCKET_PORT}`,
-  );
+  if (portStringArgument !== undefined || portStringEnv !== undefined)
+    logger.warn(
+      `Ignoring invalid PAPI WebSocket port "${portStringArgument ?? portStringEnv}" from the command line or ${WEBSOCKET_PORT_ENV_VAR}. Using default port ${WEBSOCKET_PORT}`,
+    );
   return WEBSOCKET_PORT;
 }
 
@@ -88,15 +90,22 @@ function getListeningPort(webSocketServer: WebSocketServer): number {
 export async function createPapiWebSocketServer(
   preferredPort: number = getPreferredWebSocketPort(),
 ): Promise<PapiWebSocketServerInfo> {
+  let webSocketServer: WebSocketServer | undefined;
   try {
-    const webSocketServer = await startWebSocketServerOnPort(preferredPort);
-    return { webSocketServer, port: preferredPort };
+    webSocketServer = await startWebSocketServerOnPort(preferredPort);
   } catch (error) {
     logger.warn(
       `PAPI WebSocket server could not listen on port ${preferredPort}: ${getErrorMessage(error)}. The port is probably in use by another paranext-based app or a leftover instance of this app. Falling back to an automatically assigned port so this app runs its own isolated PAPI network.`,
     );
   }
 
-  const webSocketServer = await startWebSocketServerOnPort(0);
+  if (!webSocketServer) webSocketServer = await startWebSocketServerOnPort(0);
+
+  // Log rare post-startup server errors instead of letting them become uncaught exceptions
+  webSocketServer.on('error', (error: Error) => {
+    logger.error(`PAPI WebSocket server error: ${getErrorMessage(error)}`);
+  });
+
+  // Read the bound port from the server so this is correct even when `preferredPort` is 0
   return { webSocketServer, port: getListeningPort(webSocketServer) };
 }
