@@ -274,3 +274,10 @@
 {"type":"repro","runId":"qs-2026-07-02","candidateId":"c1","result":"reproduced","evidenceRef":"evidence/before-PT-4089.txt","date":"2026-07-02"}
 {"type":"fix","runId":"qs-2026-07-02","candidateId":"c1","result":"pr_opened","prNumber":2496,"prUrl":"https://github.com/paranext/paranext-core/pull/2496","branch":"fix/PT-4089-find-skip-absent-books","date":"2026-07-02"}
 {"type":"pr_outcome","prNumber":2496,"outcome":"open","checkedDate":"2026-07-02","date":"2026-07-02"}
+{"type":"pr_outcome","prNumber":2446,"outcome":"open","checkedDate":"2026-07-03"}
+{"type":"pr_outcome","prNumber":2447,"outcome":"closed_unmerged","checkedDate":"2026-07-03","resolutionHours":269.03}
+{"type":"pr_outcome","prNumber":2449,"outcome":"open","checkedDate":"2026-07-03"}
+{"type":"pr_outcome","prNumber":2459,"outcome":"open","checkedDate":"2026-07-03"}
+{"type":"pr_outcome","prNumber":2463,"outcome":"open","checkedDate":"2026-07-03"}
+{"type":"pr_outcome","prNumber":2470,"outcome":"open","checkedDate":"2026-07-03"}
+{"type":"pr_outcome","prNumber":2496,"outcome":"merged","checkedDate":"2026-07-03","resolutionHours":1.75}
