@@ -11,6 +11,7 @@ import {
   isInsertEmbedOpOfType,
   PARAGRAPH_STRUCTURE_VIEW_MODE,
   SelectionRange,
+  STANDARD_VIEW_MODE,
   TypedMarkOnClick,
   TypedMarkOnRemove,
   TypedMarkRemovalCause,
@@ -215,6 +216,9 @@ const getViewOptionsForType = (
   viewType: ScriptureEditorViewType,
   isPowerMode: boolean,
 ): ViewOptions => {
+  if (viewType === 'standard') {
+    return getViewOptions(STANDARD_VIEW_MODE) ?? getDefaultViewOptions();
+  }
   // Power users get to choose their own view options, so don't force the paragraph-structure
   // preset on them. The markers tweaks below predate this and are required to keep the read-only
   // markers view working.
@@ -772,7 +776,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           break;
         }
         case 'changeScriptureView': {
-          setViewType(viewOptions.markerMode === 'hidden' ? 'markers' : 'formatted');
+          // Cycle formatted -> standard -> markers -> formatted for QA (Phase 5 will replace this
+          // with the polished power-default + menu). Standard's markerMode is 'editable', not
+          // 'hidden', so it's distinguished from markers' 'visible' below.
+          const nextViewType: ScriptureEditorViewType =
+            // eslint-disable-next-line no-nested-ternary
+            viewOptions.markerMode === 'hidden'
+              ? 'standard'
+              : viewOptions.markerMode === 'editable'
+                ? 'markers'
+                : 'formatted';
+          setViewType(nextViewType);
           break;
         }
         case 'toggleFootnotesPaneVisibility': {
