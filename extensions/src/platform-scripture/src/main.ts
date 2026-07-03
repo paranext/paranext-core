@@ -90,6 +90,11 @@ const punctuationValidator: ProjectSettingValidator<
   'platformScripture.validPunctuation' | 'platformScripture.invalidPunctuation'
 > = async (newValue) => typeof newValue === 'string';
 
+// A tab identifier can be any string value (empty string means unset)
+const sharedLayoutDefaultTabValidator: ProjectSettingValidator<
+  'platformScripture.sharedLayoutDefaultTab'
+> = async (newValue) => typeof newValue === 'string';
+
 // #endregion
 
 async function openPlatformCharactersInventory(
@@ -506,6 +511,10 @@ export async function activate(context: ExecutionActivationContext) {
     'platformScripture.referencedProjectsAndResources',
     resourceReferenceListValidator,
   );
+  const sharedLayoutDefaultTabPromise = papi.projectSettings.registerValidator(
+    'platformScripture.sharedLayoutDefaultTab',
+    sharedLayoutDefaultTabValidator,
+  );
   const openPunctuationInventoryPromise = papi.commands.registerCommand(
     'platformScripture.openPunctuationInventory',
     openPlatformPunctuationInventory,
@@ -720,6 +729,7 @@ export async function activate(context: ExecutionActivationContext) {
     await invalidPunctuationPromise,
     await modelTextsPromise,
     await referencedProjectsAndResourcesPromise,
+    await sharedLayoutDefaultTabPromise,
     await openPunctuationInventoryPromise,
     await punctuationInventoryWebViewProviderPromise,
     await showChecksSidePanelPromise,
