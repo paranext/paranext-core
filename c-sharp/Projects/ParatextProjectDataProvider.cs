@@ -421,6 +421,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (selector.IsRead is bool isRead)
             filteredThreads = filteredThreads.Where(t => ThreadStatus.IsThreadRead(t) == isRead);
 
+        // Filter by resolved status (THREAD status == Resolved or not; PT9 StatusFilter semantics)
+        if (selector.IsResolved is bool isResolved)
+            filteredThreads = filteredThreads.Where(t =>
+                (t.Status == NoteStatus.Resolved) == isResolved
+            );
+
         List<PlatformCommentThreadWrapper> results = filteredThreads
             .Select(t => new PlatformCommentThreadWrapper(t))
             .ToList();

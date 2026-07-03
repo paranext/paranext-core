@@ -688,6 +688,178 @@ namespace TestParanextDataProvider.Projects
             );
         }
 
+        [Test]
+        public void GetCommentThreads_FilterByIsResolvedFalse_ExcludesOnlyResolvedThreads()
+        {
+            // Arrange - three threads: Todo, Resolved, Done. "Unresolved" means the THREAD status
+            // is not Resolved (PT9 StatusFilter semantics), so the Done thread must still match.
+            var comment1 = CreateTestComment("GEN", 1, 1, "Todo thread");
+            string commentId1 = _provider.CreateComment(new PlatformCommentWrapper(comment1));
+            string threadId1 = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId1))
+                .Id;
+
+            var comment2 = CreateTestComment("GEN", 1, 2, "Resolved thread");
+            string commentId2 = _provider.CreateComment(new PlatformCommentWrapper(comment2));
+            string threadId2 = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId2))
+                .Id;
+            _provider.AddCommentToThread(
+                new PlatformCommentWrapper(
+                    new Comment(_scrText.User) { Thread = threadId2, Status = NoteStatus.Resolved }
+                )
+            );
+
+            var comment3 = CreateTestComment("GEN", 1, 3, "Done thread");
+            string commentId3 = _provider.CreateComment(new PlatformCommentWrapper(comment3));
+            string threadId3 = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId3))
+                .Id;
+            _provider.AddCommentToThread(
+                new PlatformCommentWrapper(
+                    new Comment(_scrText.User) { Thread = threadId3, Status = NoteStatus.Done }
+                )
+            );
+
+            var selector = new CommentThreadSelector { IsResolved = false };
+
+            // Act
+            var threads = _provider.GetCommentThreads(selector);
+
+            // Assert
+            Assert.That(
+                threads.Select(t => t.Id),
+                Is.EquivalentTo(new[] { threadId1, threadId3 }),
+                "IsResolved=false must return every thread whose status is not Resolved (incl. Done)"
+            );
+        }
+
+        [Test]
+        public void GetCommentThreads_FilterByIsResolvedTrue_ReturnsOnlyResolvedThreads()
+        {
+            // Arrange
+            var comment1 = CreateTestComment("GEN", 1, 1, "Todo thread");
+            _provider.CreateComment(new PlatformCommentWrapper(comment1));
+
+            var comment2 = CreateTestComment("GEN", 1, 2, "Resolved thread");
+            string commentId2 = _provider.CreateComment(new PlatformCommentWrapper(comment2));
+            string threadId2 = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId2))
+                .Id;
+            _provider.AddCommentToThread(
+                new PlatformCommentWrapper(
+                    new Comment(_scrText.User) { Thread = threadId2, Status = NoteStatus.Resolved }
+                )
+            );
+
+            var selector = new CommentThreadSelector { IsResolved = true };
+
+            // Act
+            var threads = _provider.GetCommentThreads(selector);
+
+            // Assert
+            Assert.That(
+                threads.Single().Id,
+                Is.EqualTo(threadId2),
+                "IsResolved=true must return only Resolved threads"
+            );
+        }
+
+        [Test]
+        public void GetCommentThreads_FilterByIsResolvedNull_ReturnsAllThreads()
+        {
+            // Arrange - one Todo thread and one Resolved thread
+            var comment1 = CreateTestComment("GEN", 1, 1, "Todo thread");
+            string commentId1 = _provider.CreateComment(new PlatformCommentWrapper(comment1));
+            string threadId1 = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId1))
+                .Id;
+
+            var comment2 = CreateTestComment("GEN", 1, 2, "Resolved thread");
+            string commentId2 = _provider.CreateComment(new PlatformCommentWrapper(comment2));
+            string threadId2 = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId2))
+                .Id;
+            _provider.AddCommentToThread(
+                new PlatformCommentWrapper(
+                    new Comment(_scrText.User) { Thread = threadId2, Status = NoteStatus.Resolved }
+                )
+            );
+
+            var selector = new CommentThreadSelector();
+
+            // Act
+            var threads = _provider.GetCommentThreads(selector);
+
+            // Assert
+            Assert.That(
+                threads.Select(t => t.Id),
+                Is.EquivalentTo(new[] { threadId1, threadId2 }),
+                "Unset IsResolved must apply no resolved-status filtering"
+            );
+        }
+
+        [Test]
+        public void GetCommentThreads_TypeConflictAndIsResolvedFalse_ReturnsOnlyUnresolvedConflicts()
+        {
+            // Arrange - { Type = Conflict, IsResolved = false } is the PT-4027 "Unresolved
+            // conflicts" query: an unresolved conflict thread must match; a resolved conflict
+            // thread and a normal Todo thread must not.
+            var unresolvedConflict = CommentTestHelper.CreateConflictComment();
+            unresolvedConflict.Thread = null!; // provider assigns the thread ID
+            string unresolvedConflictCommentId = _provider.CreateComment(
+                new PlatformCommentWrapper(unresolvedConflict)
+            );
+            string unresolvedConflictThreadId = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == unresolvedConflictCommentId))
+                .Id;
+
+            var resolvedConflict = CommentTestHelper.CreateConflictComment();
+            resolvedConflict.Thread = null!;
+            resolvedConflict.VerseRefStr = "MAT 2:2"; // distinct location from the other conflict
+            string resolvedConflictCommentId = _provider.CreateComment(
+                new PlatformCommentWrapper(resolvedConflict)
+            );
+            string resolvedConflictThreadId = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == resolvedConflictCommentId))
+                .Id;
+            // Resolve via CommentManager directly, NOT via AddCommentToThread: the provider's
+            // generic status path will reject Status=Resolved on conflict threads once the
+            // conflict-resolution stack (PT-4029/PT-4030) lands, and this test must survive that.
+            CommentManager commentManager = CommentManager.Get(_scrText);
+            CommentThread conflictThread = commentManager.FindThread(resolvedConflictThreadId);
+            Comment resolution = conflictThread.AddNewComment();
+            resolution.Status = NoteStatus.Resolved;
+            commentManager.AddComment(resolution);
+
+            var normal = CreateTestComment("GEN", 1, 1, "Normal todo thread");
+            _provider.CreateComment(new PlatformCommentWrapper(normal));
+
+            var selector = new CommentThreadSelector
+            {
+                Type = NoteType.Conflict,
+                IsResolved = false,
+            };
+
+            // Act
+            var threads = _provider.GetCommentThreads(selector);
+
+            // Assert
+            Assert.That(
+                threads.Single().Id,
+                Is.EqualTo(unresolvedConflictThreadId),
+                "Only the unresolved conflict thread should match the Unresolved-conflicts query"
+            );
+        }
+
         #endregion
 
         #region DeleteComment Tests
