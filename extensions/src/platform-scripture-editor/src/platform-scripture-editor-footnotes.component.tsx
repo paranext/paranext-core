@@ -30,6 +30,19 @@ export type FootnotesLayoutProps = PropsWithChildren<{
   showMarkers: boolean;
   useWebViewState: UseWebViewStateHook;
   onFootnoteSelected?: (index: number) => void;
+  /**
+   * When set to a new object reference, requests that the pane select/highlight the footnote at
+   * `index` — applying the same `selectedFootnote` state a real pane-row click would, but driven
+   * externally. Used for the reverse navigation direction: a caller click in the editor body while
+   * the pane is visible (PT9 navigate-to-note; see `noteCallerOnClick` in
+   * `platform-scripture-editor.web-view.tsx`).
+   *
+   * Pass a fresh object each time selection should (re)apply, even if `index` repeats — object
+   * identity (not `index`'s value) is what triggers the effect below, so clicking the same
+   * already-selected note's caller again still re-applies (a no-op highlight-wise, but
+   * consistent).
+   */
+  focusRequest?: { index: number };
 }>;
 
 export function FootnotesLayout({
@@ -38,6 +51,7 @@ export function FootnotesLayout({
   showMarkers,
   useWebViewState,
   onFootnoteSelected,
+  focusRequest,
 }: FootnotesLayoutProps) {
   const [footnotes, setFootnotes] = useState<MarkerObject[]>([]);
 
@@ -73,6 +87,20 @@ export function FootnotesLayout({
       );
     }
   }, [usj]);
+
+  // Apply an externally-requested selection (a caller click in the editor body while the pane is
+  // visible), mirroring what a real pane-row click does to `selectedFootnote`. Guarded by object
+  // identity (not `usj`/`footnotes` changing) so unrelated content edits don't re-apply a stale
+  // request or fight with the "preserve selection across edits" logic above.
+  const lastAppliedFocusRequestRef = useRef<FootnotesLayoutProps['focusRequest']>(undefined);
+  useEffect(() => {
+    if (!focusRequest || focusRequest === lastAppliedFocusRequestRef.current) return;
+    lastAppliedFocusRequestRef.current = focusRequest;
+
+    const { index } = focusRequest;
+    if (index < 0 || index >= footnotes.length) return;
+    setSelectedFootnote({ footnote: footnotes[index], index });
+  }, [focusRequest, footnotes]);
 
   const [containerHeight, setContainerHeight] = useState(0);
   const [containerWidth, setContainerWidth] = useState(0);

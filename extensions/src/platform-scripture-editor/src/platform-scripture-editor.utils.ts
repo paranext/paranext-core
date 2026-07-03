@@ -23,7 +23,7 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { ScriptureRange } from 'platform-scripture-editor';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import { MutableRefObject } from 'react';
-import { EditorRef } from '@eten-tech-foundation/platform-editor';
+import { DeltaOp, EditorRef } from '@eten-tech-foundation/platform-editor';
 import { MarkerMenuItem } from 'platform-bible-react';
 
 // Note: src/main/shutdown-tasks.ts has a copy of this value — keep them in sync.
@@ -53,6 +53,42 @@ export function valuesAreDeeplyEqual(a: unknown, b: unknown): boolean {
 // Alias that makes the "across iframes" intent explicit for callers that prefer it.
 // Exported with this syntax to preserve the TSDocs
 export { valuesAreDeeplyEqual as deepEqualAcrossIframes };
+
+/** Defensive upper bound on how many notes we'll scan in {@link findNoteIndexByOps}. */
+const MAX_NOTE_SCAN = 1000;
+
+/**
+ * Maps a note's Lexical key to its 0-based index in document order — the same index basis
+ * `EditorRef.selectNote`/`EditorRef.getNoteOps`'s numeric overload use (see `$getNoteByKeyOrIndex`
+ * in `shared-react`), which walks notes in the same document order as
+ * `UsjReaderWriter.findAllNotes()` — the index basis the footnotes pane (`FootnotesLayout`) uses
+ * for its `footnotes` array.
+ *
+ * There is no direct key→index API on `EditorRef`, so this walks notes by index via
+ * `EditorRef.getNoteOps` (which resolves either a key or an index to the same note and returns
+ * identically-shaped `DeltaOp[]` either way) and returns the first index whose ops deep-equal
+ * `targetOps` — the ops of the note that was actually acted on (e.g. from its own `getNoteOps()`
+ * closure in `noteCallerOnClick`). This compares like-for-like Delta ops (not the pane's USJ-shaped
+ * `MarkerObject`s, which have no Lexical key to compare against). As with the pane's own "preserve
+ * selection across edits" logic, matching by content rather than a stable ID means two notes with
+ * byte-identical caller/category/contents are indistinguishable; the first match wins.
+ *
+ * @param editorRef Ref to the editor, used to query notes by index
+ * @param targetOps The Delta ops of the note to find the index of
+ * @returns The note's 0-based index, or `undefined` if no match was found within
+ *   {@link MAX_NOTE_SCAN} notes
+ */
+export function findNoteIndexByOps(
+  editorRef: MutableRefObject<EditorRef | null>,
+  targetOps: DeltaOp[],
+): number | undefined {
+  for (let index = 0; index < MAX_NOTE_SCAN; index += 1) {
+    const candidateOps = editorRef.current?.getNoteOps(index);
+    if (!candidateOps) return undefined;
+    if (valuesAreDeeplyEqual(candidateOps, targetOps)) return index;
+  }
+  return undefined;
+}
 
 // #region Editor Title Formatting
 
