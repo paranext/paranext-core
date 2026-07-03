@@ -1177,12 +1177,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             VisibilityValidator
         );
 
-        ProjectSettingsService.RegisterValidator(
-            papiClient,
-            ProjectSettingsNames.PB_SHARED_LAYOUT_DEFAULT_TAB,
-            SharedLayoutDefaultTabValidator
-        );
-
         (bool result, string? error) VisibilityValidator(
             (string newValueJson, string currentValueJson, string allChangesJson) data
         )
@@ -1203,26 +1197,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                     error = $"New {VisibilitySettingName} value is not valid.";
                 }
                 return (result, error);
-            }
-            catch (Exception ex)
-            {
-                return (false, ex.Message);
-            }
-        }
-
-        (bool result, string? error) SharedLayoutDefaultTabValidator(
-            (string newValueJson, string currentValueJson, string allChangesJson) data
-        )
-        {
-            try
-            {
-                string? value = data.newValueJson.DeserializeFromJson<string>();
-                if (value == null)
-                    return (
-                        false,
-                        $"New {ProjectSettingsNames.PB_SHARED_LAYOUT_DEFAULT_TAB} value cannot be null."
-                    );
-                return (true, null);
             }
             catch (Exception ex)
             {
