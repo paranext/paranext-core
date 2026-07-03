@@ -2263,6 +2263,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             classNameForEditor="scripture-font"
             noteOps={editingNoteOps.current}
             noteKey={editingNoteKey.current}
+            isNewNote={editingNoteIsNew.current}
             onClose={onFootnoteEditorClose}
             scrRef={scrRef}
             editorOptions={options}
