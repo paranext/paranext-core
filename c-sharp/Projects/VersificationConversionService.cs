@@ -19,10 +19,13 @@ internal class VersificationConversionService(PapiClient papiClient)
             null,
             Create(
                 "Converts a Scripture reference from a source project's versification into a target "
-                    + "project's versification. Best-effort: if the source frame is unknown (null "
-                    + "sourceProjectId) or either project's versification cannot be resolved (e.g. not "
-                    + "a Scripture project), the reference is returned unchanged rather than throwing. "
-                    + "Unmapped verses are returned unchanged; segments are preserved.",
+                    + "project's versification. If the source frame is unknown (null sourceProjectId) "
+                    + "the reference is returned unchanged (it is NOT assumed English). Best-effort "
+                    + "and display-oriented: if a NAMED project's versification cannot be resolved "
+                    + "(e.g. not a Scripture project, or still loading) or the mapping fails, this "
+                    + "THROWS so the caller can fall back to the raw reference without caching a "
+                    + "transient failure. Unmapped verses are returned unchanged; segments are "
+                    + "preserved.",
                 [
                     Param("verseRef", "The Scripture reference to convert.", "object"),
                     Param(
@@ -48,13 +51,17 @@ internal class VersificationConversionService(PapiClient papiClient)
 
     /// <summary>
     /// Converts <paramref name="verseRef"/> from <paramref name="sourceProjectId"/>'s versification
-    /// into <paramref name="targetProjectId"/>'s versification. Best-effort and display-oriented: a
-    /// <c>null</c> <paramref name="sourceProjectId"/> means the source project is unknown, and if either
-    /// project's versification cannot be resolved (e.g. not a Scripture project) the reference is
-    /// returned unchanged rather than thrown. This keeps a caller from having to blacklist a project
-    /// on a transient or structural failure — the only useful fallback is the raw reference, which is
-    /// exactly what this returns.
+    /// into <paramref name="targetProjectId"/>'s versification. Display-oriented: a <c>null</c>
+    /// <paramref name="sourceProjectId"/> means the source frame is unknown, so the reference is
+    /// returned unchanged (NOT assumed English). If a NAMED project's versification cannot be
+    /// resolved (e.g. not a Scripture project, or still loading) or libpalaso cannot map the
+    /// reference, this throws <see cref="VersificationConversionException"/> so the caller can fall
+    /// back to the raw reference WITHOUT caching a transient failure as though it were a real
+    /// identity conversion.
     /// </summary>
+    /// <exception cref="VersificationConversionException">
+    /// A named project's versification could not be resolved, or the mapping failed.
+    /// </exception>
     public VerseRef MapVerseRefBetweenProjects(
         VerseRef verseRef,
         string? sourceProjectId,
@@ -63,10 +70,33 @@ internal class VersificationConversionService(PapiClient papiClient)
     {
         // Unknown source project (null) is NOT assumed to be English: converting a reference whose
         // versification we don't actually know would mis-frame it. Pass it through unchanged instead.
-        var sourceVers = sourceProjectId is null ? null : TryGetVersification(sourceProjectId);
-        var targetVers = TryGetVersification(targetProjectId);
-        if (sourceVers is null || targetVers is null)
+        // (This is the one non-throwing "returned unchanged" path; VerseRefConverter.Write tolerates
+        // the null versification such a ref carries.)
+        if (sourceProjectId is null)
             return verseRef;
+
+        // A named source or target whose versification we cannot resolve is a genuine failure, not
+        // an intentional passthrough. Throw rather than returning the input unchanged: a silent
+        // passthrough is indistinguishable from a real identity conversion, so the caller would cache
+        // it and latch a transient failure (e.g. a still-loading project) for the whole session.
+        // Throwing routes the caller to its raw-ref fallback, which does NOT cache. (Serialization of
+        // a null-versification ref is handled separately by VerseRefConverter.Write's null guard —
+        // that is what keeps the null-source passthrough above safe — so it is not a reason to throw
+        // here.)
+        var sourceVers = TryGetVersification(sourceProjectId);
+        var targetVers = TryGetVersification(targetProjectId);
+        if (sourceVers is null)
+            throw new VersificationConversionException(
+                sourceProjectId,
+                targetProjectId,
+                "source project versification could not be resolved"
+            );
+        if (targetVers is null)
+            throw new VersificationConversionException(
+                sourceProjectId,
+                targetProjectId,
+                "target project versification could not be resolved"
+            );
 
         var working = verseRef; // VerseRef is a struct; copies by value
         working.Versification = sourceVers; // ground the source frame in data
@@ -79,13 +109,15 @@ internal class VersificationConversionService(PapiClient papiClient)
         }
         catch (Exception ex)
         {
-            // Honor the best-effort contract: an edge/malformed ref that libpalaso can't map must be
-            // returned unchanged rather than throwing a JSON-RPC error at the caller (the mapping
-            // itself is best-effort and display-oriented).
-            Console.WriteLine(
-                $"Failed to convert {verseRef} from {sourceProjectId} to {targetProjectId}: {ex}"
+            // An edge/malformed ref that libpalaso can't map is a best-effort failure. Throw so the
+            // caller falls back to the raw reference (and does not cache). Name the offending ref in
+            // the message so the diagnostic keeps the breadcrumb the old Console.WriteLine had.
+            throw new VersificationConversionException(
+                sourceProjectId,
+                targetProjectId,
+                $"libpalaso could not map the reference {verseRef}",
+                ex
             );
-            return verseRef;
         }
         return working;
     }

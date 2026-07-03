@@ -2324,17 +2324,22 @@ declare module 'papi-shared-types' {
 
     /**
      * Converts a Scripture reference from a source project's versification into a target project's
-     * versification. Best-effort: if the source frame is unknown or a project's versification
-     * cannot be resolved (e.g. not a Scripture project), the reference is returned unchanged.
-     * Unmapped verses are returned unchanged; segments are preserved.
+     * versification. If the source frame is unknown (`undefined` sourceProjectId) the reference is
+     * returned unchanged. Best-effort and display-oriented: if a NAMED project's versification
+     * cannot be resolved (e.g. not a Scripture project, or still loading) or the mapping fails,
+     * this rejects rather than returning the reference unchanged — callers should fall back to the
+     * raw reference and should NOT cache the failure (it may be transient). Unmapped verses are
+     * returned unchanged; segments are preserved.
      *
      * @param verseRef The Scripture reference to convert
      * @param sourceProjectId Project whose versification `verseRef` is currently expressed in. Pass
      *   `undefined` when the source frame is unknown, in which case the reference is returned
      *   unchanged (it is NOT assumed to be canonical English)
      * @param targetProjectId Project into whose versification to convert the reference
-     * @returns The reference converted into `targetProjectId`'s versification, or unchanged when it
-     *   could not be converted
+     * @returns The reference converted into `targetProjectId`'s versification (unchanged when the
+     *   source frame is unknown)
+     * @throws If a named project's versification cannot be resolved or the mapping fails — callers
+     *   fall back to the raw reference without caching
      * @experimental
      */
     'platformScripture.mapVerseRefBetweenProjects': (

@@ -33,6 +33,26 @@ function extractSourceProjectId(
 }
 
 /**
+ * A resolved (async) conversion tagged with the reactive inputs it was computed for. The tag lets
+ * the render decide whether the result is still current — i.e. matches the verse, source project,
+ * and versification generation on screen right now — or is a leftover from an earlier phase that
+ * must not be displayed. `ref` is the value to show: the converted reference on success, or the raw
+ * source-frame reference on a best-effort failure.
+ */
+type ConversionResult = {
+  scrRef: SerializedVerseRef;
+  sourceProjectId: string | undefined;
+  /**
+   * The conversion TARGET — this consumer's project. Part of the tag because a target change must
+   * invalidate a prior result, otherwise a conversion into the old target's versification would
+   * show.
+   */
+  projectId: string | undefined;
+  versificationGeneration: number;
+  ref: SerializedVerseRef;
+};
+
+/**
  * React hook for working with a {@link ScrollGroupScrRef}. Returns a value and a function to set the
  * value for both the SerializedVerseRef and the {@link ScrollGroupId} for the provided
  * `scrollGroupScrRef`. Use similarly to `useState`.
@@ -143,39 +163,44 @@ export function useScrollGroupScrRef(
   // Convert the followed (raw) ref into this consumer's project versification for display only,
   // falling back to the raw ref if conversion fails. Only invoked by usePromise when a conversion is
   // needed (see the `undefined` factory below), so `projectId` is defined when this actually runs.
-  // `sourceProjectIdLocal` is a dependency (and gates the early return) so a source-only change — a
-  // same-numbered ref set by a different-versification project, which leaves `scrRefLocal`'s identity
-  // unchanged because compareScrRefs is versification-blind — still recreates this factory and
-  // re-runs the conversion against the new source project.
-  const convertScrRef = useCallback(async () => {
+  // The result is tagged with the reactive inputs it was computed for (scrRef, source project,
+  // versification generation) so the render can tell a still-current result from a leftover of an
+  // earlier phase. `sourceProjectIdLocal` is a dependency (and gates the early return) so a
+  // source-only change — a same-numbered ref set by a different-versification project, which leaves
+  // `scrRefLocal`'s identity unchanged because compareScrRefs is versification-blind — still
+  // recreates this factory and re-runs the conversion against the new source project.
+  const convertScrRef = useCallback(async (): Promise<ConversionResult> => {
+    // The inputs this conversion is for — must mirror this callback's full dependency set so the
+    // currency check below can detect a change to ANY of them (verse, source, target, versification
+    // generation). `versificationGeneration` is included (not just a dep) so a mid-session
+    // versification change both re-runs the conversion AND is reflected in the tag, and exhaustive-deps
+    // sees every reactive input read directly — no invalidation-token disable needed.
+    const inputs = {
+      scrRef: scrRefLocal,
+      sourceProjectId: sourceProjectIdLocal,
+      projectId,
+      versificationGeneration,
+    };
     // Same gate as `isConversionRequired`, inlined so react-hooks/exhaustive-deps sees the real
-    // reactive inputs (`projectId`, `sourceProjectIdLocal`) directly. Referencing the derived
-    // `isConversionRequired` const instead makes the rule demand it be listed — and then demand
-    // `sourceProjectIdLocal` be REMOVED as redundant, which would drop the source-only re-conversion
-    // this factory depends on (see the comment above).
-    if (!projectId || sourceProjectIdLocal === projectId) return scrRefLocal;
+    // reactive inputs (`projectId`, `sourceProjectIdLocal`) directly and narrows `projectId`.
+    if (!projectId || sourceProjectIdLocal === projectId) return { ...inputs, ref: scrRefLocal };
     try {
-      return await getScrRefForProject(scrollGroupIdLocalRef.current, projectId);
+      return {
+        ...inputs,
+        ref: await getScrRefForProject(scrollGroupIdLocalRef.current, projectId),
+      };
     } catch {
-      return scrRefLocal;
+      // Best-effort: show the raw source-frame ref on failure (getScrRefForProject already logs and
+      // does not cache, so this is retried on the next navigation).
+      return { ...inputs, ref: scrRefLocal };
     }
-    // versificationGeneration is an intentional invalidation token (bumped on a mid-session
-    // versification change) so this factory's identity changes and usePromise re-runs the conversion.
-    // It is deliberately not read in the body; exhaustive-deps cannot model an invalidation token.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, scrRefLocal, sourceProjectIdLocal, versificationGeneration]);
 
-  // Seed with the synchronously-known conversion (a cached result, or the raw ref) so a revisited
-  // verse displays correctly with no flash. `preserveValue: true` keeps the PREVIOUS converted verse
-  // on screen while a fresh conversion is in flight, rather than resetting to the raw source-frame
-  // seed. Trade-off (deliberate): on an uncached forward move, a differently-versified follower
-  // briefly lags on the previous verse instead of flashing the wrong-versification verse — judged the
-  // less jarring transient for readers, and moot once cached. Memoized so the cache-key serialization
-  // inside getScrRefForProjectSync runs once per verse change rather than on every render.
-  // `sourceProjectIdLocal` is a dependency so a source-only change — a same-numbered ref set by a
-  // different-versification project, which leaves `scrRefLocal`'s identity unchanged because
-  // compareScrRefs is versification-blind — still recomputes the seed, consistent with
-  // `convertScrRef` above.
+  // Synchronously-known conversion (a cached result, or the raw ref) used ONLY as the cold-start
+  // display before anything has been shown — once a verse has been displayed, an in-flight
+  // conversion lingers on that last-displayed verse instead (see below). This makes a REVISITED verse
+  // (already cached) display converted with no flash on first render. Memoized so getScrRefForProjectSync
+  // (which serializes for the cache key) is not called on every render.
   const conversionSeed = useMemo(
     () =>
       isConversionRequired
@@ -190,13 +215,41 @@ export function useScrollGroupScrRef(
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [isConversionRequired, projectId, scrRefLocal, sourceProjectIdLocal, versificationGeneration],
   );
-  const [convertedScrRef] = usePromise(
+  const [converted] = usePromise<ConversionResult | undefined>(
     isConversionRequired ? convertScrRef : undefined,
-    conversionSeed,
+    undefined,
     { preserveValue: true },
   );
 
-  const displayScrRef = isConversionRequired ? convertedScrRef : scrRefLocal;
+  // The last reference actually shown, so an in-flight conversion can LINGER on it rather than flash
+  // the raw source-frame ref. This is the verse that was on screen — not usePromise's frozen internal
+  // value, which after a source-swap can be a conversion from an earlier phase (a backward jump).
+  const lastDisplayedRef = useRef<SerializedVerseRef | undefined>(undefined);
+
+  // The resolved conversion IFF it is for the inputs on screen RIGHT NOW, else undefined. scrRefLocal
+  // is reference-stable per verse (see setScrRefLocalIfDifferent), so `===` distinguishes verse
+  // changes; source project, target project, and versification generation cover the same-numbers
+  // re-conversion triggers. The `converted &&` also narrows it to non-undefined for `.ref`.
+  const currentConversionRef =
+    converted &&
+    converted.scrRef === scrRefLocal &&
+    converted.sourceProjectId === sourceProjectIdLocal &&
+    converted.projectId === projectId &&
+    converted.versificationGeneration === versificationGeneration
+      ? converted.ref
+      : undefined;
+
+  // The value to show while a conversion is required: the resolved conversion once it is current
+  // (the converted ref on success, the raw ref on failure — see convertScrRef); otherwise linger on
+  // the last-displayed verse while the conversion is in flight, falling back to the sync seed only at
+  // cold start (nothing displayed yet). Sluggish-but-stable beats flashing a wrong-versification verse.
+  const convertedDisplay = currentConversionRef ?? lastDisplayedRef.current ?? conversionSeed;
+  // Our own ref when no conversion is needed; otherwise the converted/lingered value above.
+  const displayScrRef = isConversionRequired ? convertedDisplay : scrRefLocal;
+
+  useEffect(() => {
+    lastDisplayedRef.current = displayScrRef;
+  }, [displayScrRef]);
 
   // Change the scrRef and update ours if successful
   const setScrRef = useCallback(
@@ -225,13 +278,15 @@ export function useScrollGroupScrRef(
         return;
       }
 
-      // On detaching (undefined), seed the now-independent ref with what we are DISPLAYING — the
-      // reference converted into this project's versification (from cache when available), not the
-      // raw group ref in the source project's frame. No async correction is needed: a followed
-      // verse's conversion has already resolved (and cached) by the time the user can operate the
-      // scroll-group selector, so `displayScrRef` here is already the converted value. In the
-      // (unreachable) case where a detach races the conversion round-trip, the pane simply keeps the
-      // verse it was displaying — recoverable by navigating, no persisted write.
+      // On detaching (undefined), seed the now-independent ref with what we are DISPLAYING
+      // (`displayScrRef`) — WYSIWYG. In the common case that is the reference converted into this
+      // project's versification (resolved, or lingered from the last-displayed verse — both
+      // correctly framed), not the raw group ref in the source project's frame, so no async
+      // correction is needed. Residual (accepted, not fixed with an async re-seed): if the
+      // conversion is genuinely FAILING (see convertScrRef's catch), `displayScrRef` is the raw
+      // source-frame ref, so detaching persists an unconverted reference. That is the honest
+      // best-effort — when the conversion cannot succeed, the raw ref is the only value available and
+      // a re-seed would fail identically — and it is recoverable by navigating.
       if (!setScrollGroupScrRefRef.current(displayScrRef)) return;
       scrollGroupIdLocalRef.current = undefined;
     },

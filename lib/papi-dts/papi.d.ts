@@ -8154,7 +8154,13 @@ declare module 'renderer/services/scroll-group.service-host' {
    * https://github.com/paranext/paranext-core/issues/788
    */
   export const availableScrollGroupIds: (number | undefined)[];
-  /** Event that emits with information about a changed Scripture Reference for a scroll group */
+  /**
+   * Event that emits with information about a changed Scripture Reference for a scroll group. Note it
+   * also fires on a source-only change — a same-numbered reference set by a different-versification
+   * project (the `sourceProjectId` changes while the verse numbers do not) — so consumers must not
+   * assume it fires only when the verse numbers change; use the payload's `sourceProjectId` to tell a
+   * frame change from a verse change.
+   */
   export const onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo>;
   /**
    * Event that emits when a tracked project's versification changes mid-session (see

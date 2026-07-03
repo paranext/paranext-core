@@ -15,9 +15,11 @@ namespace TestParanextDataProvider.Projects;
 /// libpalaso conversion so they verify our wiring, not libpalaso's mapping tables.
 /// Unmapped-verse behavior (a verse returned unchanged rather than zeroed) is libpalaso's
 /// <c>ChangeVersification</c> behavior; it is not unit-tested here because a robust assertion
-/// requires .vrs table specifics — it is covered by integration/manual testing. The command is
-/// best-effort: an unknown source frame (null) or an unresolvable project returns the reference
-/// unchanged rather than throwing (see the *ReturnsUnchanged tests).
+/// requires .vrs table specifics — it is covered by integration/manual testing. Contract: an
+/// unknown source frame (null sourceProjectId) returns the reference unchanged (see
+/// <c>NullSource_ReturnsUnchanged</c>), but a NAMED project whose versification cannot be resolved
+/// throws <see cref="VersificationConversionException"/> so the caller falls back to the raw
+/// reference without caching a transient failure (see the *_Throws tests).
 /// </summary>
 [ExcludeFromCodeCoverage]
 [TestFixture]
@@ -113,33 +115,41 @@ internal class VersificationConversionServiceTests : PapiTestBase
 
     [Test]
     [Description(
-        "Unresolvable target project (not registered / not a Scripture project) → the reference "
-            + "is returned unchanged rather than throwing."
+        "Unresolvable target project (not registered / not a Scripture project) → throws so the "
+            + "caller falls back to the raw reference WITHOUT caching a transient failure. The thrown "
+            + "exception carries the (known) source and (failing) target project ids."
     )]
-    public void UnresolvableTarget_ReturnsUnchanged()
+    public void UnresolvableTarget_Throws()
     {
         var englishVers = _englishScrText.Settings.Versification;
         var input = new VerseRef("PSA 147:1", englishVers);
 
-        var result = _service.MapVerseRefBetweenProjects(input, _englishId, "not-a-real-project");
-
-        Assert.That(result.Versification, Is.EqualTo(englishVers));
-        Assert.That(result.BBBCCCVVV, Is.EqualTo(input.BBBCCCVVV));
+        var ex = Assert.Throws<VersificationConversionException>(
+            () => _service.MapVerseRefBetweenProjects(input, _englishId, "not-a-real-project")
+        );
+        // Assert the structured payload (the reason the custom type exists), not just the type, so a
+        // swapped source/target or wrong id is caught and this stays distinguishable from the
+        // source-failure case.
+        Assert.That(ex!.SourceProjectId, Is.EqualTo(_englishId));
+        Assert.That(ex.TargetProjectId, Is.EqualTo("not-a-real-project"));
     }
 
     [Test]
     [Description(
-        "Unresolvable source project → the reference is returned unchanged rather than throwing."
+        "Unresolvable source project → throws so the caller falls back to the raw reference "
+            + "WITHOUT caching a transient failure. The thrown exception carries the (failing) source "
+            + "and (known) target project ids."
     )]
-    public void UnresolvableSource_ReturnsUnchanged()
+    public void UnresolvableSource_Throws()
     {
         var orthodoxVers = _orthodoxScrText.Settings.Versification;
         var input = new VerseRef("PSA 147:1", orthodoxVers);
 
-        var result = _service.MapVerseRefBetweenProjects(input, "not-a-real-project", _orthodoxId);
-
-        Assert.That(result.Versification, Is.EqualTo(orthodoxVers));
-        Assert.That(result.BBBCCCVVV, Is.EqualTo(input.BBBCCCVVV));
+        var ex = Assert.Throws<VersificationConversionException>(
+            () => _service.MapVerseRefBetweenProjects(input, "not-a-real-project", _orthodoxId)
+        );
+        Assert.That(ex!.SourceProjectId, Is.EqualTo("not-a-real-project"));
+        Assert.That(ex.TargetProjectId, Is.EqualTo(_orthodoxId));
     }
 
     [Test]

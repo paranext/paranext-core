@@ -38,7 +38,10 @@ const onDidUpdateScrRefBufferedEmitter = createBufferedNetworkEventEmitter(
   EVENT_NAME_ON_DID_UPDATE_SCR_REF,
   {
     notification: {
-      summary: 'Emitted when the Scripture reference for a scroll group changes.',
+      summary:
+        'Emitted when the Scripture reference for a scroll group changes. Also fires on a ' +
+        'source-only change — a same-numbered reference set by a different-versification project — ' +
+        'so it does NOT fire only when the verse numbers change.',
       params: [
         {
           name: 'update',
@@ -152,7 +155,13 @@ function saveScrRefs(sourceProjectIdsChanged = true) {
  */
 export const availableScrollGroupIds = [undefined, ...Array(5).keys()];
 
-/** Event that emits with information about a changed Scripture Reference for a scroll group */
+/**
+ * Event that emits with information about a changed Scripture Reference for a scroll group. Note it
+ * also fires on a source-only change — a same-numbered reference set by a different-versification
+ * project (the `sourceProjectId` changes while the verse numbers do not) — so consumers must not
+ * assume it fires only when the verse numbers change; use the payload's `sourceProjectId` to tell a
+ * frame change from a verse change.
+ */
 export const onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo> = getNetworkEvent(
   EVENT_NAME_ON_DID_UPDATE_SCR_REF,
 );
@@ -438,9 +447,11 @@ export async function getScrRefForProject(
       return converted;
     })
     .catch((e) => {
-      // Best-effort display conversion: fall back to the raw reference. Do NOT permanently suppress
-      // this project — the failure may be transient (command not registered yet, project still
-      // loading), and the command itself passes through when a project has no versification.
+      // Best-effort display conversion: fall back to the raw reference and do NOT cache it, so a
+      // transient failure (command not registered yet, project still loading, versification not yet
+      // resolvable) is retried on the next navigation rather than latched for the session. The
+      // command rejects on such failures (rather than passing through) precisely so this branch —
+      // which does not write the cache — runs instead of caching an identity result.
       logger.warn(
         `Scroll group could not convert its reference into project ${projectId}'s versification; using the reference unconverted. ${e}`,
       );

@@ -261,4 +261,163 @@ describe('useScrollGroupScrRef versification conversion', () => {
     act(() => resolveSecond(secondVerse));
     await waitFor(() => expect(result.current[0]).toEqual(secondVerse));
   });
+
+  it('lingers on the last displayed verse, not a stale earlier conversion, across a source-swap', async () => {
+    // Repro of the toggle bug: when conversion is required, then NOT (this pane becomes the source),
+    // then required again, the in-flight display must linger on the verse that was last ON SCREEN —
+    // not on usePromise's frozen internal value from an earlier conversion phase.
+    const convR1 = { book: 'PSA', chapterNum: 146, verseNum: 1, versificationStr: '4' };
+    const ownR2 = { book: 'PSA', chapterNum: 100, verseNum: 1 };
+    const convR3 = { book: 'PSA', chapterNum: 145, verseNum: 1, versificationStr: '5' };
+    getScrRefForProjectSync.mockReturnValue(rawRef); // uncached seeds = raw source-frame ref
+    getScrRefForProject.mockResolvedValue(convR1);
+
+    const { useScrollGroupScrRef } = await import(
+      '@renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook'
+    );
+
+    const { result } = renderHook(() => useScrollGroupScrRef(0, () => true, 'targetProj'));
+
+    // Phase 1: following 'sourceProj' → shows conv(R1).
+    await waitFor(() => expect(result.current[0]).toEqual(convR1));
+
+    // Phase 2: THIS pane navigates and becomes the source → no conversion, shows its own ref R2.
+    act(() =>
+      lastScrRefUpdateHandler?.({ scrRef: ownR2, scrollGroupId: 0, sourceProjectId: 'targetProj' }),
+    );
+    expect(result.current[0]).toEqual(ownR2);
+
+    // Phase 3: 'sourceProj' takes over as source again at a new verse; the conversion goes in flight.
+    let resolveR3: (v: typeof convR3) => void = () => {};
+    getScrRefForProject.mockReturnValue(
+      new Promise((resolve) => {
+        resolveR3 = resolve;
+      }),
+    );
+    act(() =>
+      lastScrRefUpdateHandler?.({
+        scrRef: { book: 'PSA', chapterNum: 200, verseNum: 1 },
+        scrollGroupId: 0,
+        sourceProjectId: 'sourceProj',
+      }),
+    );
+
+    // While converting, linger on the LAST DISPLAYED verse (R2) — NOT the stale earlier conv(R1).
+    expect(result.current[0]).toEqual(ownR2);
+    expect(result.current[0]).not.toEqual(convR1);
+
+    // Once the conversion resolves, land on conv(R3).
+    act(() => resolveR3(convR3));
+    await waitFor(() => expect(result.current[0]).toEqual(convR3));
+  });
+
+  it('does not display a conversion into a previous target project after the target project changes', async () => {
+    // The consumer's projectId (the conversion TARGET) is mutable on a live hook. Switching target
+    // projA -> sourceProj(==group source) -> projC must not leave a stale conversion into projA on
+    // screen while converting into projC. The intermediate ==source phase diverges the lingered ref
+    // from the stale conversion, which is what unmasks the bug.
+    const convIntoA = { book: 'PSA', chapterNum: 146, verseNum: 1, versificationStr: '4' };
+    const convIntoC = { book: 'PSA', chapterNum: 145, verseNum: 1, versificationStr: '5' };
+    getScrRefForProjectSync.mockReturnValue(rawRef);
+    getScrRefForProject.mockResolvedValue(convIntoA);
+
+    const { useScrollGroupScrRef } = await import(
+      '@renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook'
+    );
+
+    // Group 0 is sourced by 'sourceProj' (mock). Follow it from target 'projA'.
+    const { result, rerender } = renderHook(
+      ({ projectId }: { projectId: string }) => useScrollGroupScrRef(0, () => true, projectId),
+      { initialProps: { projectId: 'projA' } },
+    );
+    await waitFor(() => expect(result.current[0]).toEqual(convIntoA));
+
+    // Switch target to the SOURCE project: no conversion needed, shows the raw ref. This makes the
+    // last-displayed ref (raw) diverge from `converted` (still the conversion into projA).
+    rerender({ projectId: 'sourceProj' });
+    expect(result.current[0]).toEqual(rawRef);
+
+    // Switch target to a THIRD project: conversion into projC goes in flight.
+    let resolveC: (v: typeof convIntoC) => void = () => {};
+    getScrRefForProject.mockReturnValue(
+      new Promise((resolve) => {
+        resolveC = resolve;
+      }),
+    );
+    rerender({ projectId: 'projC' });
+
+    // While converting into projC, linger on the last-displayed (raw) ref — NOT the stale conversion
+    // into projA (which would show projA's versification in a projC pane).
+    expect(result.current[0]).toEqual(rawRef);
+    expect(result.current[0]).not.toEqual(convIntoA);
+
+    act(() => resolveC(convIntoC));
+    await waitFor(() => expect(result.current[0]).toEqual(convIntoC));
+  });
+
+  it('seeds a detach performed mid-linger with the last-displayed verse, not the raw seed', async () => {
+    const firstVerse = { book: 'PSA', chapterNum: 146, verseNum: 1, versificationStr: '4' };
+    getScrRefForProjectSync.mockReturnValue(rawRef); // uncached seed = raw source-frame ref
+    getScrRefForProject.mockResolvedValue(firstVerse);
+    const setScrollGroupScrRef = vi.fn(() => true);
+
+    const { useScrollGroupScrRef } = await import(
+      '@renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook'
+    );
+
+    const { result } = renderHook(() =>
+      useScrollGroupScrRef(0, setScrollGroupScrRef, 'targetProj'),
+    );
+    await waitFor(() => expect(result.current[0]).toEqual(firstVerse));
+
+    // Navigate to a new uncached verse: the conversion is in flight, so the display lingers.
+    getScrRefForProject.mockReturnValue(new Promise(() => {})); // never resolves during the test
+    act(() =>
+      lastScrRefUpdateHandler?.({
+        scrRef: { book: 'PSA', chapterNum: 200, verseNum: 1 },
+        scrollGroupId: 0,
+        sourceProjectId: 'sourceProj',
+      }),
+    );
+    expect(result.current[0]).toEqual(firstVerse); // lingering
+
+    // Detaching mid-linger must seed with the lingered (last-displayed) verse, not the raw seed.
+    act(() => result.current[3](undefined));
+    expect(setScrollGroupScrRef).toHaveBeenLastCalledWith(firstVerse);
+  });
+
+  it('falls back to the raw new verse when a conversion started mid-follow fails', async () => {
+    const firstVerse = { book: 'PSA', chapterNum: 146, verseNum: 1, versificationStr: '4' };
+    const newRawVerse = { book: 'PSA', chapterNum: 200, verseNum: 1 };
+    getScrRefForProjectSync.mockReturnValue(rawRef);
+    getScrRefForProject.mockResolvedValue(firstVerse);
+
+    const { useScrollGroupScrRef } = await import(
+      '@renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook'
+    );
+
+    const { result } = renderHook(() => useScrollGroupScrRef(0, () => true, 'targetProj'));
+    await waitFor(() => expect(result.current[0]).toEqual(firstVerse));
+
+    // Navigate to a new uncached verse whose conversion rejects.
+    let rejectConv: (e: Error) => void = () => {};
+    getScrRefForProject.mockReturnValue(
+      new Promise((_resolve, reject) => {
+        rejectConv = reject;
+      }),
+    );
+    act(() =>
+      lastScrRefUpdateHandler?.({
+        scrRef: newRawVerse,
+        scrollGroupId: 0,
+        sourceProjectId: 'sourceProj',
+      }),
+    );
+    // Lingers on the last displayed verse while the conversion is in flight.
+    expect(result.current[0]).toEqual(firstVerse);
+
+    // On failure, fall back to the raw NEW verse (best-effort) — not stuck on the stale lingered one.
+    act(() => rejectConv(new Error('boom')));
+    await waitFor(() => expect(result.current[0]).toEqual(newRawVerse));
+  });
 });
