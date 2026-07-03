@@ -1010,8 +1010,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 $"Cannot edit or delete comment {commentId} in thread {thread.Id} - comment is a conflict resolution action."
             );
 
-        // Cannot edit/delete the first comment of a conflict note
-        if (thread.Type == NoteType.Conflict && thread.Comments[0].Id == comment.Id)
+        // Cannot edit/delete the first comment of a conflict note. Root identified by date via the
+        // shared helper, not by list position (see PlatformCommentThreadWrapper.RootCommentId).
+        if (
+            thread.Type == NoteType.Conflict
+            && PlatformCommentThreadWrapper.GetRootCommentId(thread.Comments) == comment.Id
+        )
             throw new InvalidOperationException(
                 $"Cannot edit or delete comment {commentId} in thread {thread.Id} - cannot edit or delete the first comment of a conflict note."
             );

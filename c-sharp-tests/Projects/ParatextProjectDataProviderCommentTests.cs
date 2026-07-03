@@ -260,6 +260,15 @@ namespace TestParanextDataProvider.Projects
             Assert.That(json, Does.Not.Contain("resultText"));
             Assert.That(json, Does.Not.Contain("rejectedResultText"));
             Assert.That(json, Does.Not.Contain("conflictType"));
+
+            // verse, by contrast, IS persisted and serialized from the reply — intended PT9
+            // behavior, not a gating gap: Comment.Verse is per-comment verse-history data
+            // (AddNewComment captures it on replies too), unlike root-only conflict metadata.
+            Assert.That(
+                json,
+                Does.Contain(@"""verse"":""\\v 1 stale current verse text"""),
+                "reply must still persist and serialize its own verse (per-comment history data)"
+            );
         }
 
         [Test]

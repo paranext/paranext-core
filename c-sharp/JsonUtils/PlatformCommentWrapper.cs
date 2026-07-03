@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Paratext.Data.ProjectComments;
+using PtxUtils;
 
 namespace Paranext.DataProvider.JsonUtils;
 
@@ -128,6 +129,14 @@ public class PlatformCommentWrapper
     /// </summary>
     public PtxUtils.Enum<NoteConflictType> ConflictType =>
         IsFirstCommentInThread ? _comment.ConflictType : NoteConflictType.None;
+
+    /// <summary>
+    /// The verse USFM captured on this comment. Per-comment history data, deliberately NOT gated to
+    /// the thread's first comment: PT9's <c>CommentThread.AddNewComment</c> stores the current verse
+    /// text on any comment (reply included) written after the verse changed. Only on a conflict
+    /// thread's ROOT comment does it hold the merged result — conflict-card consumers must read
+    /// <see cref="ResultText"/> (root-only, conflict-only) instead of this field.
+    /// </summary>
     public string? Verse => _comment.Verse;
     public string? Shared => _comment.Shared;
     public string? AssignedUser => _comment.AssignedUser;
@@ -222,17 +231,18 @@ public class PlatformCommentWrapper
     }
 
     /// <summary>
-    /// True when this comment is the FIRST comment of its thread. Conflict metadata — the
+    /// True when this comment is the ROOT (first) comment of its thread. Conflict metadata — the
     /// rejected/accepted/result decode fields and <c>conflictType</c> itself — is authored by the
     /// merger only on the root comment of a conflict thread (see PT9 <c>BookFileMerger.RecordConflict</c>),
     /// and PT9 only ever reads it from the root comment. So it must be surfaced there and never on a
     /// reply, which may carry a stale <c>conflictType</c> and would otherwise decode phantom fields
-    /// from its own body and current-verse text. Uses the same first-comment test the provider uses
-    /// (<c>thread.Comments[0].Id == comment.Id</c>). Requires thread context; without a thread this is
-    /// false — and such a wrapper cannot be serialized anyway.
+    /// from its own body and current-verse text. The root is identified by
+    /// <see cref="PlatformCommentThreadWrapper.RootCommentId"/> (earliest date), NOT by list position
+    /// — after thread-fragment deduplication the root may not be first (see that property's remarks).
+    /// Requires thread context; without a thread this is false — and such a wrapper cannot be
+    /// serialized anyway.
     /// </summary>
-    private bool IsFirstCommentInThread =>
-        _thread != null && _thread.AllComments.FirstOrDefault()?.Id == _comment.Id;
+    private bool IsFirstCommentInThread => _thread != null && _thread.RootCommentId == _comment.Id;
 
     /// <summary>
     /// True when this is a verse-text merge-conflict note — the only conflict type for which we surface
@@ -244,22 +254,10 @@ public class PlatformCommentWrapper
         && _comment.ConflictType == NoteConflictType.VerseTextConflict
         && IsFirstCommentInThread;
 
-    // Per-instance lazy caches for the decode fields. Each involves a full HTML render (and, for
-    // RejectedResultText, an XmlDocument parse + USFM decode), so caching avoids repeating that work
-    // when a getter is read more than once (tests read them repeatedly; the emit logic may consult a
-    // property twice). PlatformCommentWrapper instances are short-lived and single-consumer — a fresh
-    // wrapper is built per comment per serialization and discarded after one Write — so no locking is
-    // needed. Caches are populated lazily on first GET, never in the constructor: converter Read and
-    // UpdateComment mutate _comment.Contents through the ContentsHtml setter AFTER construction, so an
-    // eager cache could capture stale content — and those wrappers are never serialized anyway
-    // (serialization requires thread context, which they lack). ResultText stays a plain passthrough
-    // (no work worth caching).
-    private bool _rejectedTextComputed;
-    private string? _rejectedTextValue;
-    private bool _acceptedTextComputed;
-    private string? _acceptedTextValue;
-    private bool _rejectedResultTextComputed;
-    private string? _rejectedResultTextValue;
+    // No caching on the decode getters: the converter reads each exactly once per serialization
+    // (which is also each wrapper's lifetime), so a cache would never be hit in production — only
+    // tests re-read. Recomputing on read also keeps the getters correct if _comment.Contents is
+    // mutated after construction (converter Read and UpdateComment do, via the ContentsHtml setter).
 
     /// <summary>
     /// For a verseText conflict note, the HTML diff of the rejected (losing) side, using PT9's
@@ -267,20 +265,10 @@ public class PlatformCommentWrapper
     /// paragraph is skipped so only the verse diff remains. Null for any other note, and null when the
     /// rejected-side diff renders empty.
     /// </summary>
-    public string? RejectedText
-    {
-        get
-        {
-            if (!_rejectedTextComputed)
-            {
-                _rejectedTextValue = IsVerseTextConflict
-                    ? RenderConflictSideHtml(_comment.Contents, skipLeadingMessage: true)
-                    : null;
-                _rejectedTextComputed = true;
-            }
-            return _rejectedTextValue;
-        }
-    }
+    public string? RejectedText =>
+        IsVerseTextConflict
+            ? RenderConflictSideHtml(_comment.Contents, skipLeadingMessage: true)
+            : null;
 
     /// <summary>
     /// For a verseText conflict note, the HTML diff of the accepted (winning) side. Null for any
@@ -289,20 +277,10 @@ public class PlatformCommentWrapper
     /// the accepted-side diff renders empty. Consumers must treat this as optional even on verseText
     /// conflict notes.
     /// </summary>
-    public string? AcceptedText
-    {
-        get
-        {
-            if (!_acceptedTextComputed)
-            {
-                _acceptedTextValue = IsVerseTextConflict
-                    ? RenderConflictSideHtml(_comment.AcceptedChangeXml, skipLeadingMessage: false)
-                    : null;
-                _acceptedTextComputed = true;
-            }
-            return _acceptedTextValue;
-        }
-    }
+    public string? AcceptedText =>
+        IsVerseTextConflict
+            ? RenderConflictSideHtml(_comment.AcceptedChangeXml, skipLeadingMessage: false)
+            : null;
 
     /// <summary>
     /// For a verseText conflict note, the resulting verse USFM already written into the text at merge time
@@ -311,7 +289,7 @@ public class PlatformCommentWrapper
     /// collapse keeps this C# property's contract matching what serialization emits.)
     /// </summary>
     public string? ResultText =>
-        IsVerseTextConflict && !string.IsNullOrEmpty(_comment.Verse) ? _comment.Verse : null;
+        IsVerseTextConflict && !IsBlankText(_comment.Verse) ? _comment.Verse : null;
 
     /// <summary>
     /// For a verseText conflict note, the resulting verse USFM if the change is REJECTED — the losing
@@ -323,23 +301,13 @@ public class PlatformCommentWrapper
     {
         get
         {
-            if (!_rejectedResultTextComputed)
-            {
-                if (IsVerseTextConflict)
-                {
-                    var usfm = CommentEditHelper.GetDiffVerseUsfm(
-                        _comment.Contents,
-                        getChangedVersion: true
-                    );
-                    _rejectedResultTextValue = string.IsNullOrEmpty(usfm) ? null : usfm;
-                }
-                else
-                {
-                    _rejectedResultTextValue = null;
-                }
-                _rejectedResultTextComputed = true;
-            }
-            return _rejectedResultTextValue;
+            if (!IsVerseTextConflict)
+                return null;
+            var usfm = CommentEditHelper.GetDiffVerseUsfm(
+                _comment.Contents,
+                getChangedVersion: true
+            );
+            return IsBlankText(usfm) ? null : usfm;
         }
     }
 
@@ -355,8 +323,9 @@ public class PlatformCommentWrapper
     /// <c>InnerText</c>: the Contents side always carries a leading conflict-message text node (that
     /// rendering skips), so its <c>InnerText</c> is never empty; and a side can render to an empty
     /// <c>&lt;blockquote&gt;</c> — including the U+FEFF sentinel that <c>GetContentsAsHtml</c> treats
-    /// as empty but <c>char.IsWhiteSpace</c> does not. The check mirrors PT9's own emptiness test,
-    /// <c>Comment.IsBlank</c> (<c>Trim().Trim('\ufeff')</c>).
+    /// as empty but <c>char.IsWhiteSpace</c> does not. The blank rule is PT9's canonical
+    /// <c>TrimOld</c> \u2014 the same rule the renderer's own emptiness check uses (see
+    /// <see cref="IsBlankText"/>).
     /// </remarks>
     private string? RenderConflictSideHtml(System.Xml.XmlNode? sideRoot, bool skipLeadingMessage)
     {
@@ -367,6 +336,10 @@ public class PlatformCommentWrapper
             _thread.ThreadInternal,
             isFirstComment: skipLeadingMessage,
             skipFirstChildNode: skipLeadingMessage,
+            // Deliberately true, unlike ContentsHtml (false): these renders feed the conflict
+            // card's diff preview panes, where scripture references inside <s>/<u> diff markup
+            // would serialize inert <a> noise. The full note contents, links included, is still
+            // available via the contents field.
             ignoreScriptureLinks: true,
             contentOverride: sideRoot
         );
@@ -375,18 +348,22 @@ public class PlatformCommentWrapper
     }
 
     /// <summary>
-    /// True when rendered conflict-side HTML has no visible content. Strips tags with ParatextData's
-    /// <c>PasteUtils.RemoveHtmlTags</c>, then applies PT9's <c>Comment.IsBlank</c> idiom
-    /// (<c>.Trim().Trim('\ufeff')</c>). U+FEFF is a sentinel PT9 uses for empty verse content and is
-    /// not treated as whitespace by <c>char.IsWhiteSpace</c>.
+    /// True when rendered conflict-side HTML has no visible content: strips tags with ParatextData's
+    /// <c>PasteUtils.RemoveHtmlTags</c>, then applies <see cref="IsBlankText"/>.
     /// </summary>
-    private static bool IsRenderedHtmlBlank(string? html)
-    {
-        if (string.IsNullOrEmpty(html))
-            return true;
-        var text = PasteUtils.RemoveHtmlTags(html);
-        return text.Trim().Trim('\ufeff').Length == 0;
-    }
+    private static bool IsRenderedHtmlBlank(string? html) =>
+        string.IsNullOrEmpty(html) || IsBlankText(PasteUtils.RemoveHtmlTags(html));
+
+    /// <summary>
+    /// True when text has no visible content, by PT9's canonical blank rule <c>TrimOld</c> \u2014
+    /// whitespace plus the U+FEFF empty-content sentinel and U+200B, neither of which
+    /// <c>char.IsWhiteSpace</c> classifies as whitespace. This is the same rule the renderer's own
+    /// emptiness check uses (<c>ConvertContentToHtml</c> tests <c>InnerText.TrimOld()</c>), so all
+    /// four conflict fields share one presence semantic with the renderer: present iff there is
+    /// something to show.
+    /// </summary>
+    private static bool IsBlankText(string? text) =>
+        string.IsNullOrEmpty(text) || text.TrimOld().Length == 0;
 
     /// <summary>
     /// Gets the underlying Comment object.

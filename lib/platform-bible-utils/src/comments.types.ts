@@ -88,10 +88,11 @@ export type LegacyComment = {
   /**
    * Only present on the first comment of a `verseText` conflict thread when the merged result verse
    * USFM is non-empty: the resulting verse USFM (plain, no diff markup) already written into the
-   * text at merge time. Equals the accepted side in v1. Absent otherwise. For `verseText` conflict
-   * roots this value equals the serialized {@link verse} field — it is kept as a distinct field for
-   * the conflict-card contract and its empty-collapse guarantee, so consumers should not treat
-   * `resultText` and `verse` as independent data.
+   * text at merge time. Equals the accepted side in v1. Absent otherwise. On a `verseText` conflict
+   * ROOT this value equals the serialized {@link verse} field, but the two are deliberately
+   * distinct: `verse` is ungated per-comment verse-history data whose meaning varies by position
+   * (on a reply it is the verse text captured at reply time, possibly stale), while `resultText` is
+   * root-only conflict metadata. Conflict-card consumers must read `resultText`, never `verse`.
    */
   resultText?: string;
   /** Text which was selected in comment, or "" for none */
@@ -115,7 +116,12 @@ export type LegacyComment = {
   type?: string;
   /** Name of the user who created this comment */
   user: string;
-  /** Original USFM content of verse */
+  /**
+   * The verse USFM captured on this comment. Per-comment history data, present on replies too:
+   * Paratext 9 stores the current verse text on any comment written after the verse changed. Only
+   * on a conflict thread's ROOT comment does it hold the merged result — conflict-card consumers
+   * should read {@link resultText} instead of this field.
+   */
   verse?: string;
   /** Verse reference in which comment appears */
   verseRef: string;
