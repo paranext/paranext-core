@@ -777,13 +777,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }
         case 'changeScriptureView': {
           // Cycle formatted -> standard -> markers -> formatted for QA (Phase 5 will replace this
-          // with the polished power-default + menu). Standard's markerMode is 'editable', not
-          // 'hidden', so it's distinguished from markers' 'visible' below.
+          // with the polished power-default + menu). Switch on the current `viewType` state
+          // directly rather than `viewOptions.markerMode`: in non-power mode both 'formatted' and
+          // 'markers' resolve to markerMode 'hidden' (the non-power markers branch of
+          // getViewOptionsForType overrides only noteMode, not markerMode), so a markerMode-based
+          // cycle would orphan 'formatted'.
           const nextViewType: ScriptureEditorViewType =
             // eslint-disable-next-line no-nested-ternary
-            viewOptions.markerMode === 'hidden'
+            viewType === 'formatted'
               ? 'standard'
-              : viewOptions.markerMode === 'editable'
+              : viewType === 'standard'
                 ? 'markers'
                 : 'formatted';
           setViewType(nextViewType);
