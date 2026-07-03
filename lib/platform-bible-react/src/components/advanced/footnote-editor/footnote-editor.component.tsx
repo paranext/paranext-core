@@ -214,6 +214,12 @@ export default function FootnoteEditor({
   const options = useMemo<EditorOptions>(
     () => ({
       ...editorOptions,
+      // Drop any inherited context-menu extras (e.g. the main editor's "Insert footnote" /
+      // "Insert cross-reference" / "Insert comment" items). Those items' onSelect closures are
+      // bound to the OUTER main-document editorRef, so surfacing them inside this popover would
+      // let a right-click here silently mutate the main document. The popover keeps only the
+      // built-in Cut/Copy/Paste context-menu items.
+      contextMenu: undefined,
       markerMenuTrigger: defaultMarkerMenuTrigger,
       hasExternalUI: true,
       view: { ...(editorOptions.view ?? getDefaultViewOptions()), noteMode: 'expanded' },
