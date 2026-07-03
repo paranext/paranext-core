@@ -7,7 +7,7 @@ import { Column, ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSort
 import { ClassValue } from 'clsx';
 import { Command as CommandPrimitive } from 'cmdk';
 import { LucideProps } from 'lucide-react';
-import { CommentStatus, DblResourceData, LanguageStrings, LegacyCommentThread, LocalizeKey, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ResourceType, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
+import { CommentStatus, DblResourceData, LanguageStrings, LegacyComment, LegacyCommentThread, LocalizeKey, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ResourceType, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
 import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as RadixTabs, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import React$1 from 'react';
 import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithoutRef, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, RefObject } from 'react';
@@ -329,6 +329,54 @@ export interface CommentEditorProps {
  * @param CommentEditorProps - The properties for the comment editor component
  */
 export function CommentEditor({ assignableUsers, onSave, onClose, localizedStrings, initialAssignedUser, }: CommentEditorProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * The resolution a user picks for a conflict: keep the accepted (winning) side or take the rejected
+ * (losing) side.
+ */
+export type ConflictResolution = "accept" | "reject";
+/**
+ * The resolution actions the current user may take on a conflict thread (from the comments data
+ * provider's getConflictResolutionOptions). Must stay textually identical to the union declared in
+ * legacy-comment-manager.d.ts.
+ *
+ * - 'none': controls hidden entirely (already resolved, or no permission).
+ * - 'accept': the verse was edited after the merge (stale) — Reject is disabled with an explanation;
+ *   Accept keeps the current text.
+ * - 'acceptOrReject': fully available.
+ */
+export type ConflictResolutionOptions = "none" | "accept" | "acceptOrReject";
+/**
+ * Localization keys used by the ConflictNoteCard. Pass into the useLocalizedStrings hook (in the
+ * consuming extension) and forward the result via the localizedStrings prop.
+ */
+export declare const CONFLICT_NOTE_STRING_KEYS: LocalizeKey[];
+/** Props for the ConflictNoteCard component */
+export interface ConflictNoteCardProps {
+	/**
+	 * The conflict comment. Reads rejected/accepted/result/rejectedResultText + conflictType; falls
+	 * back to contents.
+	 */
+	comment: LegacyComment;
+	/** Localized strings for the component */
+	localizedStrings: LanguageStrings;
+	/**
+	 * Controlled selected resolution. When omitted, the card manages its own state (default
+	 * 'accept').
+	 */
+	selectedResolution?: ConflictResolution;
+	/** Called when the user changes the Accept/Reject selection */
+	onResolutionChange?: (resolution: ConflictResolution) => void;
+	/**
+	 * Which resolution actions are available (default 'acceptOrReject'). 'none' hides the selector
+	 * and Resolve button entirely (read-only regions); 'accept' disables the Reject option with a
+	 * stale-verse explanation tooltip.
+	 */
+	availableActions?: ConflictResolutionOptions;
+	/** Called when the user clicks Resolve, with the currently selected resolution. */
+	onResolve?: (resolution: ConflictResolution) => void;
+	/** Disables the selector and Resolve button while a resolve call is in flight. */
+	isResolving?: boolean;
+}
 /** Options for adding a comment to a thread */
 export type AddCommentToThreadOptions = {
 	/** The ID of the thread to add the comment to */
@@ -420,13 +468,30 @@ export interface CommentListProps {
 	canUserEditOrDeleteCommentCallback?: (commentId: string) => Promise<boolean>;
 	/** Callback when the user clicks a verse reference in a comment thread. */
 	onVerseRefClick?: (thread: LegacyCommentThread) => void;
+	/**
+	 * Handler that applies a conflict resolution via the comments data provider's resolveConflict.
+	 * Returns true on success, false on failure (the thread re-enables its controls). Conflict
+	 * threads render a read-only card when this (or the options callback) is not provided.
+	 */
+	handleResolveConflict?: (threadId: string, resolution: ConflictResolution) => Promise<boolean>;
+	/**
+	 * Callback returning which resolution actions the current user may take on a conflict thread (the
+	 * getConflictResolutionOptions capability). Treat missing as 'none'.
+	 */
+	getConflictResolutionOptionsCallback?: (threadId: string) => Promise<ConflictResolutionOptions>;
 }
 /**
  * Component for rendering a list of comment threads
  *
  * @param CommentListProps Props for the CommentList component
  */
-export function CommentList({ className, classNameForVerseText, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, handleReadStatusChange, assignableUsers, canUserAddCommentToThread, canUserAssignThreadCallback, canUserResolveThreadCallback, canUserEditOrDeleteCommentCallback, selectedThreadId: externalSelectedThreadId, onSelectedThreadChange, onVerseRefClick, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
+export function CommentList({ className, classNameForVerseText, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, handleReadStatusChange, assignableUsers, canUserAddCommentToThread, canUserAssignThreadCallback, canUserResolveThreadCallback, canUserEditOrDeleteCommentCallback, selectedThreadId: externalSelectedThreadId, onSelectedThreadChange, onVerseRefClick, handleResolveConflict, getConflictResolutionOptionsCallback, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Presentational card body for a verseText merge conflict: an Accept/Reject selector, the Rejected
+ * and Accepted diff regions, and a read-only Result preview that tracks the selection. Falls back
+ * to rendering the raw note contents for any non-verseText conflict.
+ */
+export declare function ConflictNoteCard({ comment, localizedStrings, selectedResolution, onResolutionChange, availableActions, onResolve, isResolving, }: ConflictNoteCardProps): import("react/jsx-runtime").JSX.Element;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;
