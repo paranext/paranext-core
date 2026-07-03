@@ -16,16 +16,13 @@ import { isPlatformError, LegacyCommentThread, serialize } from 'platform-bible-
 import { VerseRef } from '@sillsdev/scripture';
 import type { LegacyCommentThreadSelector } from 'legacy-comment-manager';
 import { CommentListWebViewMessage } from './comment-list-messages.model';
+import { CommentListPanel, COMMENT_LIST_PANEL_EXTRA_STRING_KEYS } from './comment-list.component';
 import {
+  buildCommentThreadSelector,
   CommentFilter,
-  CommentListPanel,
-  COMMENT_LIST_PANEL_EXTRA_STRING_KEYS,
-  FILTER_UNREAD_ASSIGNED,
-  FILTER_UNRESOLVED_ASSIGNED,
   ScopeFilter,
-  SCOPE_FILTER_CURRENT_CHAPTER,
   UNFILTERED,
-} from './comment-list.component';
+} from './comment-list-filters.model';
 
 const DEFAULT_LEGACY_COMMENT_THREADS: LegacyCommentThread[] = [];
 
@@ -155,38 +152,23 @@ global.webViewComponent = function CommentListWebView({
     'legacyCommentManager.comments',
     projectId,
   ).CommentThreads(
-    useMemo<LegacyCommentThreadSelector>(() => {
-      const selector: LegacyCommentThreadSelector = {};
-
-      // Apply scope (Scripture ranges) filter
-      if (scopeFilter === SCOPE_FILTER_CURRENT_CHAPTER) {
-        selector.scriptureRanges = [
-          {
-            granularity: 'chapter' as const,
-            start: { book: scrRef.book, chapterNum: scrRef.chapterNum, verseNum: scrRef.verseNum },
-            end: { book: scrRef.book, chapterNum: scrRef.chapterNum, verseNum: scrRef.verseNum },
-          },
-        ];
-      }
-
-      // Apply comment filter
-      if (commentFilter === FILTER_UNRESOLVED_ASSIGNED) {
-        selector.status = 'Todo';
-        selector.assignedTo = currentUserName;
-      } else if (commentFilter === FILTER_UNREAD_ASSIGNED) {
-        selector.isRead = false;
-        selector.assignedTo = currentUserName;
-      }
-
-      return selector;
-    }, [
-      scrRef.book,
-      scrRef.chapterNum,
-      scrRef.verseNum,
-      scopeFilter,
-      commentFilter,
-      currentUserName,
-    ]),
+    useMemo<LegacyCommentThreadSelector>(
+      () =>
+        buildCommentThreadSelector({
+          commentFilter,
+          scopeFilter,
+          scrRef: { book: scrRef.book, chapterNum: scrRef.chapterNum, verseNum: scrRef.verseNum },
+          currentUserName,
+        }),
+      [
+        scrRef.book,
+        scrRef.chapterNum,
+        scrRef.verseNum,
+        scopeFilter,
+        commentFilter,
+        currentUserName,
+      ],
+    ),
     DEFAULT_LEGACY_COMMENT_THREADS,
   );
 

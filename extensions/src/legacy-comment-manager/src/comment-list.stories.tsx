@@ -5,16 +5,18 @@ import { ReactElement, useState } from 'react';
 import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
 import { alertCommand } from '../../../../.storybook/story.utils';
 import {
-  CommentFilter,
   CommentListPanel,
   CommentListPanelProps,
   COMMENT_LIST_PANEL_EXTRA_STRING_KEYS,
+} from './comment-list.component';
+import {
+  CommentFilter,
   FILTER_UNREAD_ASSIGNED,
   FILTER_UNRESOLVED_ASSIGNED,
   ScopeFilter,
   SCOPE_FILTER_CURRENT_CHAPTER,
   UNFILTERED,
-} from './comment-list.component';
+} from './comment-list-filters.model';
 
 /**
  * `CommentListPanel` is the presentational half of the legacy comment-list web view: a comment /
