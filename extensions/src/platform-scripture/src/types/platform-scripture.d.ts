@@ -1909,7 +1909,7 @@ declare module 'platform-scripture' {
     id: string;
     /**
      * When set by a project admin, indicates this resource should be shown by default when the
-     * shared layout is applied
+     * shared layout is applied. When `undefined`, no admin preference has been set.
      */
     isResourceShownByDefault?: boolean;
   };
@@ -1927,7 +1927,7 @@ declare module 'platform-scripture' {
     id: string;
     /**
      * When set by a project admin, indicates this resource should be shown by default when the
-     * shared layout is applied
+     * shared layout is applied. When `undefined`, no admin preference has been set.
      */
     isResourceShownByDefault?: boolean;
   };
@@ -1940,7 +1940,7 @@ declare module 'platform-scripture' {
     name: string;
     /**
      * When set by a project admin, indicates this resource should be shown by default when the
-     * shared layout is applied
+     * shared layout is applied. When `undefined`, no admin preference has been set.
      */
     isResourceShownByDefault?: boolean;
   };
@@ -1953,7 +1953,7 @@ declare module 'platform-scripture' {
     name: string;
     /**
      * When set by a project admin, indicates this resource should be shown by default when the
-     * shared layout is applied
+     * shared layout is applied. When `undefined`, no admin preference has been set.
      */
     isResourceShownByDefault?: boolean;
   };
@@ -1966,7 +1966,7 @@ declare module 'platform-scripture' {
     name: string;
     /**
      * When set by a project admin, indicates this resource should be shown by default when the
-     * shared layout is applied
+     * shared layout is applied. When `undefined`, no admin preference has been set.
      */
     isResourceShownByDefault?: boolean;
   };

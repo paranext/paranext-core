@@ -114,8 +114,8 @@
       },
       "platformScripture.sharedLayoutDefaultTab": {
         "label": "%project_settings_platformScripture_sharedLayoutDefaultTab_label%",
-        "default": "",
         "isHidden": true,
+        "default": "",
         "includeProjectInterfaces": ["Paratext", "Scripture"]
       }
     }

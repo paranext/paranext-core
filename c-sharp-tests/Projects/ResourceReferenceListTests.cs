@@ -186,6 +186,51 @@ public class ResourceReferenceListTests
         Assert.That(item!.IsResourceShownByDefault, Is.EqualTo(false));
     }
 
+    [Test]
+    public void EnhancedResourceReference_IsResourceShownByDefaultTrue_SerializesAndDeserializesCorrectly()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new EnhancedResourceReference { Name = "BDAG", IsResourceShownByDefault = true }],
+        };
+        string json = list.SerializeToJson();
+        var result = json.DeserializeFromJson<ResourceReferenceList>();
+
+        var item = result!.Items[0] as EnhancedResourceReference;
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.IsResourceShownByDefault, Is.EqualTo(true));
+    }
+
+    [Test]
+    public void XmlResourceReference_IsResourceShownByDefaultFalse_SerializesAndDeserializesCorrectly()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new XmlResourceReference { Name = "SomeXml", IsResourceShownByDefault = false }],
+        };
+        string json = list.SerializeToJson();
+        var result = json.DeserializeFromJson<ResourceReferenceList>();
+
+        var item = result!.Items[0] as XmlResourceReference;
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.IsResourceShownByDefault, Is.EqualTo(false));
+    }
+
+    [Test]
+    public void SourceLanguageResourceReference_IsResourceShownByDefaultTrue_SerializesAndDeserializesCorrectly()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new SourceLanguageResourceReference { Name = "Greek", IsResourceShownByDefault = true }],
+        };
+        string json = list.SerializeToJson();
+        var result = json.DeserializeFromJson<ResourceReferenceList>();
+
+        var item = result!.Items[0] as SourceLanguageResourceReference;
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.IsResourceShownByDefault, Is.EqualTo(true));
+    }
+
     #endregion
 
     #region Serialization — unknown type round-trip

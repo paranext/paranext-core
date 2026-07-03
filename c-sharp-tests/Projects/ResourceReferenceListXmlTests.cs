@@ -233,6 +233,51 @@ public class ResourceReferenceListXmlTests
     }
 
     [Test]
+    public void ToXml_FromXml_EnhancedResourceReference_IsResourceShownByDefaultTrue_RoundTripsCorrectly()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new EnhancedResourceReference { Name = "BDAG", IsResourceShownByDefault = true }],
+        };
+        var xml = ResourceReferenceList.ToXml(list);
+        var result = ResourceReferenceList.FromXml(xml, list.DataVersion);
+
+        var item = result.Items[0] as EnhancedResourceReference;
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.IsResourceShownByDefault, Is.EqualTo(true));
+    }
+
+    [Test]
+    public void ToXml_FromXml_XmlResourceReference_IsResourceShownByDefaultFalse_RoundTripsCorrectly()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new XmlResourceReference { Name = "SomeXml", IsResourceShownByDefault = false }],
+        };
+        var xml = ResourceReferenceList.ToXml(list);
+        var result = ResourceReferenceList.FromXml(xml, list.DataVersion);
+
+        var item = result.Items[0] as XmlResourceReference;
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.IsResourceShownByDefault, Is.EqualTo(false));
+    }
+
+    [Test]
+    public void ToXml_FromXml_SourceLanguageResourceReference_IsResourceShownByDefaultTrue_RoundTripsCorrectly()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new SourceLanguageResourceReference { Name = "Greek", IsResourceShownByDefault = true }],
+        };
+        var xml = ResourceReferenceList.ToXml(list);
+        var result = ResourceReferenceList.FromXml(xml, list.DataVersion);
+
+        var item = result.Items[0] as SourceLanguageResourceReference;
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.IsResourceShownByDefault, Is.EqualTo(true));
+    }
+
+    [Test]
     public void RoundTrip_UnknownType_PreservesExtraAttributes()
     {
         var original = new XElement(
