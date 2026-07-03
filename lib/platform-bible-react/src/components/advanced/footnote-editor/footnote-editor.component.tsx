@@ -53,6 +53,14 @@ export interface FootnoteEditorProps {
   scrRef: SerializedVerseRef;
   /** The unique note key to identify the note being edited used to apply changes to the note */
   noteKey: string | undefined;
+  /**
+   * True when the note being edited was just inserted (as opposed to an existing note being
+   * reopened). When true, once the note content loads the caret is moved to the end of the last
+   * footnote-text char span (`\ft`/`\xt`) so the user can start typing immediately. Existing notes
+   * are left with whatever selection results from loading the note ops, so reopening one doesn't
+   * unexpectedly reposition the caret.
+   */
+  isNewNote?: boolean;
   /** View options of the parent editor */
   editorOptions: EditorOptions;
   /** Trigger key to open the footnote editor marker menu */
@@ -150,6 +158,7 @@ export default function FootnoteEditor({
   onClose,
   scrRef,
   noteKey,
+  isNewNote,
   editorOptions,
   defaultMarkerMenuTrigger,
   localizedStrings,
@@ -256,6 +265,15 @@ export default function FootnoteEditor({
       timeout = setTimeout(() => {
         // Inserts the note node to be edited as an delta operation
         editorRef.current?.applyUpdate([noteOp]);
+        // For a newly-inserted note there's no prior editing position to preserve, so land the
+        // caret at the end of the last footnote-text char span (`\ft`/`\xt`) to match PT9 behavior
+        // of being ready to type immediately. `0` is this popover's own note index — it always
+        // holds exactly one note (see the other `getNoteOps(0)` call sites below). Existing notes
+        // are intentionally left alone here so reopening one doesn't move the caret.
+        if (isNewNote) {
+          editorRef.current?.selectNote(0);
+          editorRef.current?.focus();
+        }
       }, 0);
     }
 
@@ -264,7 +282,7 @@ export default function FootnoteEditor({
         clearTimeout(timeout);
       }
     };
-  }, [noteOps, noteKey]);
+  }, [noteOps, noteKey, isNewNote]);
 
   /**
    * Gets the current note op from the editor, applies the given caller, calls onChange, and
