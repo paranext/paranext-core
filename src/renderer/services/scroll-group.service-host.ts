@@ -539,7 +539,7 @@ export function setScrRefSync(
         settingsService.set('platform.verseRef', scrRefClone);
       } catch (e) {
         logger.warn(
-          `Failed to update platform.verseRef to ${serialize(scrRefClone)} to keep in sync with scroll group 0! ${e}`,
+          `Failed to update platform.verseRef to ${serialize(scrRefClone)} to keep in sync with scroll group 0! ${getErrorMessage(e)}`,
         );
       }
     })();
@@ -569,7 +569,7 @@ export async function startScrollGroupService(): Promise<void> {
   await settingsService.subscribe('platform.verseRef', (newScrRef) => {
     if (isPlatformError(newScrRef)) {
       logger.warn(
-        `Scroll group service failed to get platform.verseRef setting to keep in sync! ${newScrRef}`,
+        `Scroll group service failed to get platform.verseRef setting to keep in sync! ${getErrorMessage(newScrRef)}`,
       );
       return;
     }
