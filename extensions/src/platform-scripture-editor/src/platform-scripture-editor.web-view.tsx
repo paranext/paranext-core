@@ -417,7 +417,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     'platformScripture.StyleInfo',
     projectId ?? undefined,
   ).StyleInfo(currentBookNum, undefined);
-  const styleInfo = useMemo(() => {
+  const styleInfo = useMemo<StyleInfo | undefined>(() => {
     if (isPlatformError(styleInfoPossiblyError)) {
       logger.warn(`Error getting style info: ${getErrorMessage(styleInfoPossiblyError)}`);
       return undefined;
