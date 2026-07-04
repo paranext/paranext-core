@@ -503,6 +503,10 @@ export default function FootnoteEditor({
 
   // Listens for the marker menu trigger to open the markers menu
   useEffect(() => {
+    // In editable marker mode (e.g. Standard view) a typed backslash IS content — the
+    // editor's marker-editing engine resolves typed markers itself — so the menu trigger
+    // must not swallow the keystroke; let it reach the editor as a literal character.
+    if (options.view?.markerMode === 'editable') return () => {};
     const editorInput =
       editorParentRef.current?.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -526,7 +530,7 @@ export default function FootnoteEditor({
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [showMarkersMenu, showInlineMarkersMenu, defaultMarkerMenuTrigger]);
+  }, [showMarkersMenu, showInlineMarkersMenu, defaultMarkerMenuTrigger, options.view?.markerMode]);
 
   const copyButtonTooltip = localizedStrings['%footnoteEditor_copyButton_tooltip%'];
 
