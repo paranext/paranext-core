@@ -165,6 +165,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(("canUserEditScripture", CanUserEditScripture));
 
         retVal.Add(("getMarkerNames", GetMarkerNames));
+        retVal.Add(("getStyleInfo", GetStyleInfo));
 
         retVal.Add(("getFinalVerseNumber", GetFinalVerseNumber));
         retVal.Add(("setFinalVerseNumber", SetFinalVerseNumber));
@@ -2391,6 +2392,40 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             scrText.ScrStylesheet(bookNum)
             ?? throw new InvalidDataException($"ScrStylesheet for book number '{bookNum}' is null");
         return scrStylesheet.Tags.Where(tag => tag != null).Select(tag => tag.Name).ToArray();
+    }
+
+    /// <summary>
+    /// Gets the full style info (merged usfm.sty + custom.sty) for the book's stylesheet.
+    /// Resolves the custom-stylesheet @todo on getMarkerNames: ScrStylesheet already merges
+    /// custom.sty per-property (ParatextData ScrStylesheet.CreateTag).
+    /// </summary>
+    public PlatformStyleInfo GetStyleInfo(int bookNum)
+    {
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        ScrStylesheet scrStylesheet =
+            scrText.ScrStylesheet(bookNum)
+            ?? throw new InvalidDataException($"ScrStylesheet for book number '{bookNum}' is null");
+        Dictionary<string, PlatformMarkerStyleInfo> markers = [];
+        foreach (var tag in scrStylesheet.Tags)
+        {
+            if (tag == null)
+                continue;
+            // Derived end tags and unknown placeholders are not real stylesheet entries:
+            // endMarker on the base entry carries closer knowledge (spec: closers are
+            // recognized by syntax, not lookup).
+            if (
+                tag.StyleType == ScrStyleType.scEndStyle
+                || tag.StyleType == ScrStyleType.scMilestoneEnd
+                || tag.StyleType == ScrStyleType.scUnknownStyle
+            )
+                continue;
+            markers[tag.Marker] = new PlatformMarkerStyleInfo(tag);
+        }
+        // Default font/size: same ScrText accessors PT9's CSSCreator.CreateUsfmCss(ScrText, ...)
+        // reads (/home/lyonsm/Paratext/ParatextInternalShared/ScriptureEditor/CSSCreator.cs:96-101)
+        // — ScrText has no DefaultFont/DefaultFontSize properties; the language's font is the
+        // project's default font.
+        return new PlatformStyleInfo(scrText.Language.FontName, scrText.Language.FontSize, markers);
     }
 
     #endregion

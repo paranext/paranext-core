@@ -48,6 +48,7 @@ internal class LocalParatextProjects
         ProjectInterfaces.USX_VERSE,
         ProjectInterfaces.PLAIN_TEXT_VERSE,
         ProjectInterfaces.MARKER_NAMES,
+        ProjectInterfaces.STYLE_INFO,
         ProjectInterfaces.TEXT_CONNECTION_SETTINGS,
         ProjectInterfaces.USER_EDITOR_SETTINGS,
         ProjectInterfaces.SCRIPTURE_EDIT_PERMISSIONS,
