@@ -14,6 +14,7 @@ import {
   PARAGRAPH_STRUCTURE_VIEW_MODE,
   SelectionRange,
   STANDARD_VIEW_MODE,
+  StyleInfo,
   TypedMarkOnClick,
   TypedMarkOnRemove,
   TypedMarkRemovalCause,
@@ -109,6 +110,7 @@ import {
 } from './decorations.util';
 import { runOnFirstLoad, scrollToAnnotation, scrollToVerse } from './editor-dom.util';
 import { useEditorPdpSync } from './use-editor-pdp-sync.hook';
+import { useProjectStylesheet } from './use-project-stylesheet.hook';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import {
   availableScrollGroupIds,
@@ -408,6 +410,21 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // verse selection. When the book changes we refetch; for books other than the current one we do
   // not offer verse selection (the picker falls back to chapter-level submission).
   const currentBookNum = useMemo(() => Canon.bookIdToNumber(scrRef.book), [scrRef.book]);
+
+  // Project stylesheet-derived style info for the current book (spec §8 stage 4); feeds
+  // `generateUsjCss` via `useProjectStylesheet` below and `EditorOptions.styleInfo`.
+  const [styleInfoPossiblyError] = useProjectData(
+    'platformScripture.StyleInfo',
+    projectId ?? undefined,
+  ).StyleInfo(currentBookNum, undefined);
+  const styleInfo = useMemo(() => {
+    if (isPlatformError(styleInfoPossiblyError)) {
+      logger.warn(`Error getting style info: ${getErrorMessage(styleInfoPossiblyError)}`);
+      return undefined;
+    }
+    return styleInfoPossiblyError;
+  }, [styleInfoPossiblyError]);
+
   const versificationPdp = useProjectDataProvider('platformScripture.Versification', projectId);
   const fetchLastVersesInCurrentBook = useCallback(async (): Promise<number[] | undefined> => {
     if (!versificationPdp || currentBookNum <= 0) return undefined;
@@ -855,6 +872,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       textDirection: textDirectionEffective,
       markerMenuTrigger: '\\',
       view: viewOptions,
+      styleInfo,
       hasExternalUI: true,
       contextMenu: [
         {
@@ -882,6 +900,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       textDirectionEffective,
       nodeOptions,
       viewOptions,
+      styleInfo,
       localizedStrings,
       insertCommentAtCurrentSelection,
       insertFootnoteAtCurrentSelection,
@@ -1279,6 +1298,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   // Apply annotation styles from extensions
   useAnnotationStyleSheet();
+
+  // Apply the project stylesheet-derived CSS (standard view only; spec §8 stage 4)
+  useProjectStylesheet(styleInfo, textDirectionEffective === 'rtl', viewType === 'standard');
 
   // Load PT9-derived marker styles when the open project is a supported commentary
   useCommentaryMarkerStyles(projectId);
