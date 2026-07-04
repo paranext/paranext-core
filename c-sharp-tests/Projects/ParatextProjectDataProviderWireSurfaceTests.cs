@@ -73,6 +73,14 @@ namespace TestParanextDataProvider.Projects
                 Is.True,
                 "Published PDP must still register scripture read methods"
             );
+
+            // platformScripture.StyleInfo is on the published interface list — getStyleInfo must
+            // be registered even for a published (read-only) project.
+            Assert.That(
+                Client.RegisteredRequestTypes.Any(k => k.EndsWith(".getStyleInfo")),
+                Is.True,
+                "Published PDP must still register getStyleInfo"
+            );
         }
     }
 }
