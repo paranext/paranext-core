@@ -41,6 +41,10 @@ declare module 'papi-shared-types' {
 - If service has cleanup: `context.registrations.add({ dispose: () => service.cleanup() })`
 - Track multiple unsubscribers if needed
 
+## PR Screenshots for UI Changes
+
+A PR that changes an extension's UI should include before/after screenshots (or a short clip) in its description. See [media.md](../docs/media.md) for where to host them (not the code repo).
+
 ## What's Enforced by Linting (Don't Duplicate)
 
 - Registration cleanup → ESLint: registration-cleanup

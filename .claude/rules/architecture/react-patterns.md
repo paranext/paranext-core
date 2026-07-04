@@ -80,7 +80,7 @@ When you modify any vendored shadcn component (under `lib/platform-bible-react/s
 
 ## PR Screenshots for UI Changes
 
-A PR that changes the UI should include before/after screenshots (or a short clip) in its description. Don't commit those binaries to the code repo — store them in `paranext/media`. See [media.md](../docs/media.md).
+A PR that changes the UI should include before/after screenshots (or a short clip) in its description. See [media.md](../docs/media.md) for where to host them (not the code repo).
 
 ## What's Enforced by Linting (Don't Duplicate)
 
