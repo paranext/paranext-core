@@ -997,6 +997,81 @@ declare module 'platform-scripture' {
 
   // #endregion Marker Types
 
+  // #region StyleInfo Types
+
+  /**
+   * A single marker's stylesheet entry (merged usfm.sty + custom.sty). Units:
+   * fontSize/spaceBefore/spaceAfter in points; firstLineIndent/leftMargin/ rightMargin in inches;
+   * color "#RRGGBB" (omitted when black). Matches the scripture-editors platform-editor
+   * `MarkerStyleInfo` shape structurally.
+   */
+  export type MarkerStyleInfo = {
+    marker: string;
+    styleType: 'paragraph' | 'character' | 'note' | 'milestone';
+    endMarker?: string;
+    occursUnder?: string[];
+    rank?: number;
+    textType?: string;
+    textProperties?: string[];
+    notRepeatable?: boolean;
+    description?: string;
+    fontName?: string;
+    fontSize?: number;
+    bold?: boolean;
+    italic?: boolean;
+    underline?: boolean;
+    smallCaps?: boolean;
+    subscript?: boolean;
+    superscript?: boolean;
+    color?: string;
+    justification?: 'left' | 'center' | 'right' | 'both';
+    firstLineIndent?: number;
+    leftMargin?: number;
+    rightMargin?: number;
+    spaceBefore?: number;
+    spaceAfter?: number;
+    lineSpacing?: number;
+  };
+
+  /** A project's merged stylesheet plus its default font settings. */
+  export type StyleInfo = {
+    defaultFont?: string;
+    defaultFontSize?: number;
+    markers: { [marker: string]: MarkerStyleInfo };
+  };
+
+  /** Provides the project's merged stylesheet as StyleInfo */
+  export type StyleInfoProjectInterfaceDataTypes = {
+    /** The merged stylesheet for the given book number */
+    StyleInfo: DataProviderDataType<number, StyleInfo | undefined, never>;
+  };
+
+  /** Provides the project's merged stylesheet (usfm.sty + custom.sty) */
+  export type IStyleInfoProjectDataProvider =
+    IProjectDataProvider<StyleInfoProjectInterfaceDataTypes> & {
+      /** Gets the merged stylesheet (usfm.sty + custom.sty) for the book's stylesheet */
+      getStyleInfo(bookNum: number): Promise<StyleInfo | undefined>;
+      /** Setting is not supported */
+      setStyleInfo(
+        styleInfo: StyleInfo,
+      ): Promise<DataProviderUpdateInstructions<StyleInfoProjectInterfaceDataTypes>>;
+      /**
+       * Subscribe to run a callback function when the style info changes
+       *
+       * @param bookNum Tells the provider what changes to listen for
+       * @param callback Function to run with the updated style info for this selector
+       * @param options Various options to adjust how the subscriber emits updates
+       * @returns Unsubscriber function
+       */
+      subscribeStyleInfo(
+        bookNum: number,
+        callback: (styleInfo: StyleInfo | undefined | PlatformError) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+    };
+
+  // #endregion StyleInfo Types
+
   // #region Versification Types
 
   /**
@@ -2282,6 +2357,7 @@ declare module 'papi-shared-types' {
     IUSJVerseProjectDataProvider,
     IPlainTextVerseProjectDataProvider,
     IMarkerNamesProjectDataProvider,
+    IStyleInfoProjectDataProvider,
     IVersificationProjectDataProvider,
     IFindInScriptureProjectDataProvider,
     IReplaceWithUsfmProjectDataProvider,
@@ -2310,6 +2386,7 @@ declare module 'papi-shared-types' {
     'platformScripture.USJ_Verse': IUSJVerseProjectDataProvider;
     'platformScripture.PlainText_Verse': IPlainTextVerseProjectDataProvider;
     'platformScripture.MarkerNames': IMarkerNamesProjectDataProvider;
+    'platformScripture.StyleInfo': IStyleInfoProjectDataProvider;
     /** @experimental */
     'platformScripture.Versification': IVersificationProjectDataProvider;
     'platformScripture.findInScripture': IFindInScriptureProjectDataProvider;
