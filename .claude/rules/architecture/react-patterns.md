@@ -78,6 +78,10 @@ When you modify any vendored shadcn component (under `lib/platform-bible-react/s
 
 **Verification**: before committing changes to any `shadcn-ui/` file, diff against the prior commit on the base branch and confirm every changed line is covered by a `CUSTOM` marker. Reviewers will grep for `CUSTOM` to find all customizations.
 
+## PR Screenshots for UI Changes
+
+A PR that changes the UI should include before/after screenshots (or a short clip) in its description. Don't commit those binaries to the code repo — store them in `paranext/media`. See [media.md](../docs/media.md).
+
 ## What's Enforced by Linting (Don't Duplicate)
 
 - Tailwind `tw:` prefix on utility classes → enforced by the project's Tailwind/ESLint config
