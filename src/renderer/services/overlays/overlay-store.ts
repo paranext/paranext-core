@@ -136,9 +136,10 @@ export function updateOverlayContent(id: string, content: PopoverContent): boole
  * change can shrink the filtered list out from under the previous index.
  *
  * @param id The overlay id to update
- * @param patch `filterText` replaces the stored filter text (omit to leave it unchanged);
- *   `selectedIndexDelta` moves the current `selectedIndex` by this many items before clamping;
- *   `itemCount` is the length of the filtered item list used to clamp `selectedIndex`
+ * @param patch `filterText` replaces the stored filter text (omit to leave it unchanged; the empty
+ *   string is normalized to undefined so the entry never stores `''`); `selectedIndexDelta` moves
+ *   the current `selectedIndex` by this many items before clamping; `itemCount` is the length of
+ *   the filtered item list used to clamp `selectedIndex`
  * @returns True if the overlay was found and updated, false otherwise
  */
 export function updateCommandPaletteState(
@@ -157,7 +158,8 @@ export function updateCommandPaletteState(
 
   overlays.set(id, {
     ...entry,
-    filterText: patch.filterText !== undefined ? patch.filterText : entry.filterText,
+    // Normalize '' to undefined so the entry's filterText is never the empty string
+    filterText: patch.filterText !== undefined ? patch.filterText || undefined : entry.filterText,
     selectedIndex,
   });
   notifyListeners();

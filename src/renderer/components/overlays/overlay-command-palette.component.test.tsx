@@ -390,6 +390,28 @@ describe('OverlayCommandPalettePresentational', () => {
       );
     });
 
+    it('should render items with role="option" and point the listbox aria-activedescendant at the highlighted item', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          selectedIndex={1}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const options = screen.getAllByRole('option');
+      expect(options).toHaveLength(3);
+
+      const highlighted = screen.getByText('Save File').closest('[data-slot="command-item"]');
+      expect(highlighted?.getAttribute('id')).toBeTruthy();
+      expect(screen.getByRole('listbox')).toHaveAttribute(
+        'aria-activedescendant',
+        highlighted?.getAttribute('id') ?? '',
+      );
+    });
+
     it('should call onSelect when an item is clicked', () => {
       const onSelect = vi.fn();
 

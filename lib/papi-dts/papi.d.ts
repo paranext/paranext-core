@@ -9037,9 +9037,10 @@ declare module 'renderer/services/overlays/overlay-store' {
    * change can shrink the filtered list out from under the previous index.
    *
    * @param id The overlay id to update
-   * @param patch `filterText` replaces the stored filter text (omit to leave it unchanged);
-   *   `selectedIndexDelta` moves the current `selectedIndex` by this many items before clamping;
-   *   `itemCount` is the length of the filtered item list used to clamp `selectedIndex`
+   * @param patch `filterText` replaces the stored filter text (omit to leave it unchanged; the empty
+   *   string is normalized to undefined so the entry never stores `''`); `selectedIndexDelta` moves
+   *   the current `selectedIndex` by this many items before clamping; `itemCount` is the length of
+   *   the filtered item list used to clamp `selectedIndex`
    * @returns True if the overlay was found and updated, false otherwise
    */
   export function updateCommandPaletteState(
@@ -9277,6 +9278,13 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      * {@link IOverlayService.commitCommandPaletteSelection} instead of the palette's own search box
      * and keyboard handling. Defaults to false (the palette owns its own search input and focus, as
      * today).
+     *
+     * @remarks
+     * Passive-palette filtering and commit resolution operate on RAW `label` strings (see
+     * {@link filterPaletteItems}), while the component renders localized labels. Items passed to a
+     * passive palette must therefore use plain-string labels (not `LocalizeKey`s), or the
+     * host-computed highlight can diverge from the rendered list. Localization-aware filtering is a
+     * recorded follow-up.
      */
     passive?: boolean;
   }
@@ -9284,17 +9292,23 @@ declare module 'renderer/services/overlays/overlay.service-model' {
    * Filters command palette items by prefix-matching `filterText` against each item's `label`,
    * mirroring PT9's marker dropdown filtering (`MarkerDropdownControl.UpdateMarkerList`,
    * MarkerDropdownControl.cs:105-114): a leading `+` in the filter text is stripped before matching
-   * (so a filter of `"+w"` matches the same items as `"w"`), and the match is case-insensitive.
-   * Returns `items` unchanged when `filterText` is empty or undefined.
+   * (so a filter of `"+w"` matches the same items as `"w"`), and the match is ordinal
+   * (case-sensitive), like PT9's `StringComparison.Ordinal`. Returns `items` unchanged when
+   * `filterText` is empty or undefined.
    *
    * This is the single filtering implementation shared by {@link IOverlayService}'s host-side
    * `commitCommandPaletteSelection` (to resolve the highlighted item) and the passive command palette
    * component (to render the filtered list) — using one function for both keeps host-side selection
    * and on-screen rendering from disagreeing about which items are visible.
    *
+   * @remarks
+   * Matching operates on RAW `label` strings: host-side filtering and commit resolution never see
+   * localized text, while the component renders localized labels. Items passed to a passive palette
+   * must therefore use plain-string labels (not `LocalizeKey`s), or the host-computed highlight can
+   * diverge from the rendered list. Localization-aware filtering is a recorded follow-up.
    * @param items The full, unfiltered list of command palette items
    * @param filterText The current filter text, or undefined/empty for no filtering
-   * @returns The subset of `items` whose `label` starts with the (stripped, lowercased) filter text
+   * @returns The subset of `items` whose `label` starts with the (stripped) filter text
    */
   export function filterPaletteItems(
     items: CommandPaletteItem[],
@@ -9533,7 +9547,8 @@ declare module 'renderer/services/overlays/overlay.service-model' {
         /**
          * Current filter text. Mutable — updated in place by `updateCommandPalette`, which rejects
          * (no-ops) filter text updates for non-passive palettes since only passive palettes drive
-         * their filter text externally. Undefined until first set.
+         * their filter text externally. Undefined when unset or cleared — never the empty string (the
+         * store normalizes `''` to undefined).
          */
         filterText?: string;
         /**
