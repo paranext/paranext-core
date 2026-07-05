@@ -11,7 +11,7 @@
  * on any module the host's `require` shim does not supply.
  */
 
-import { LocalizationSelectors, SavedWebViewDefinition } from '@papi/core';
+import { CommandPaletteItem, LocalizationSelectors, SavedWebViewDefinition } from '@papi/core';
 import type PapiBackend from '@papi/backend';
 import type PapiFrontend from '@papi/frontend';
 // Type-only: `main.ts` reaches this module in the extension host, where the `require` shim supplies
@@ -37,7 +37,12 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { ScriptureRange } from 'platform-scripture-editor';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import type { MutableRefObject } from 'react';
-import type { DeltaOp, EditorRef, StyleInfo } from '@eten-tech-foundation/platform-editor';
+import type {
+  DeltaOp,
+  EditorRef,
+  MarkerMenuItem as EditorMarkerMenuItem,
+  StyleInfo,
+} from '@eten-tech-foundation/platform-editor';
 import { defaultStyleInfo, getMarkerMenuItems } from '@eten-tech-foundation/platform-editor';
 import type { MarkerMenuItem } from 'platform-bible-react';
 
@@ -537,6 +542,42 @@ export function generateInlineMarkerMenuListItems(
       },
     };
   });
+}
+
+/**
+ * Maps a library marker-menu item to the overlay service's command-palette item shape (the
+ * standard-view `\`/Enter palettes).
+ *
+ * All strings are plain (never `LocalizeKey`s): passive palettes filter and commit on RAW `label`
+ * strings (see `filterPaletteItems`), and the badge shares that constraint by policy. Items are
+ * mapped in the library's PT9-derived order and never regrouped — a `group` key would visually pull
+ * close tags out of the PT9 basic-first interleaved ordering, so close tags are instead marked in
+ * place with an `'end'` badge, and PT9's grey cue for non-basic markers maps to `muted`.
+ */
+export function markerMenuItemToCommandPaletteItem(item: EditorMarkerMenuItem): CommandPaletteItem {
+  return {
+    id: item.marker,
+    label: item.marker,
+    description: item.description,
+    badge: item.kind === 'closeTag' ? 'end' : undefined,
+    muted: !item.isBasic,
+  };
+}
+
+/**
+ * Clears a palette-session ref only when it still holds the session identified by `token`.
+ *
+ * The keydown flow ends sessions synchronously (Escape/Space/`*`/any-other-key clear the ref before
+ * dismissing), but the show-promise's `.then`/`.catch` also clear it asynchronously. If the user
+ * dismisses session A and immediately re-triggers session B, A's promise settles AFTER B was
+ * created — an unconditional clear there would kill the live session B. Tokens are a monotonic
+ * counter, so a stale session's async cleanup can never touch a newer session.
+ */
+export function clearPaletteSessionIfCurrent<TSession extends { token: number }>(
+  sessionRef: MutableRefObject<TSession | undefined>,
+  token: number,
+): void {
+  if (sessionRef.current?.token === token) sessionRef.current = undefined;
 }
 
 // #region Open Editor Dispatch

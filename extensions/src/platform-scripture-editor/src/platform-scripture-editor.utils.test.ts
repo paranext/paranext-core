@@ -14,9 +14,16 @@ import { MutableRefObject } from 'react';
 import { EditorRef, StyleInfo } from '@eten-tech-foundation/platform-editor';
 import { USJ_TYPE, USJ_VERSION, type Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
+  EditorRef,
+  MarkerMenuItem as EditorMarkerMenuItem,
+  StyleInfo,
+} from '@eten-tech-foundation/platform-editor';
+import {
+  clearPaletteSessionIfCurrent,
   convertScriptureRangeToEditorRange,
   generateParagraphMenuListItems,
   generateInlineMarkerMenuListItems,
+  markerMenuItemToCommandPaletteItem,
   openDefaultActiveProjectIfApplicable,
   resolveOpenEditorDispatch,
   syncOnProjectSwitch,
@@ -2694,5 +2701,78 @@ describe('resolveAddChapterNumberClick', () => {
 
   it('returns "insert" when not in flight and lastVerse is positive', () => {
     expect(resolveAddChapterNumberClick(false, 3)).toBe('insert');
+  });
+});
+
+describe('markerMenuItemToCommandPaletteItem', () => {
+  it('maps marker to id/label and passes the description through as plain strings', () => {
+    const item: EditorMarkerMenuItem = {
+      marker: 'q1',
+      kind: 'paragraph',
+      description: 'Poetry level 1 (basic)',
+      isBasic: true,
+    };
+
+    expect(markerMenuItemToCommandPaletteItem(item)).toEqual({
+      id: 'q1',
+      label: 'q1',
+      description: 'Poetry level 1 (basic)',
+      badge: undefined,
+      muted: false,
+    });
+  });
+
+  it('marks close-tag items with the "end" badge in place (no group key — PT9 ordering governs)', () => {
+    const closeTag: EditorMarkerMenuItem = { marker: '+wj*', kind: 'closeTag', isBasic: false };
+
+    const mapped = markerMenuItemToCommandPaletteItem(closeTag);
+
+    expect(mapped.badge).toBe('end');
+    expect(mapped.group).toBeUndefined();
+  });
+
+  it('does not badge non-close-tag items', () => {
+    const charItem: EditorMarkerMenuItem = { marker: 'nd', kind: 'character', isBasic: false };
+
+    expect(markerMenuItemToCommandPaletteItem(charItem).badge).toBeUndefined();
+  });
+
+  it('maps non-basic items to muted (PT9 grey cue) and basic items to unmuted', () => {
+    const nonBasic: EditorMarkerMenuItem = { marker: 'sig', kind: 'character', isBasic: false };
+    const basic: EditorMarkerMenuItem = { marker: 'f', kind: 'note', isBasic: true };
+
+    expect(markerMenuItemToCommandPaletteItem(nonBasic).muted).toBe(true);
+    expect(markerMenuItemToCommandPaletteItem(basic).muted).toBe(false);
+  });
+});
+
+describe('clearPaletteSessionIfCurrent', () => {
+  it('clears the session when the token matches the live session', () => {
+    const sessionRef: MutableRefObject<{ token: number } | undefined> = {
+      current: { token: 3 },
+    };
+
+    clearPaletteSessionIfCurrent(sessionRef, 3);
+
+    expect(sessionRef.current).toBeUndefined();
+  });
+
+  it('leaves a NEWER session in place when a stale token tries to clear (dismiss/re-trigger race)', () => {
+    // Session A (token 1) was dismissed synchronously; session B (token 2) is live when A's
+    // show-promise finally settles and runs its async cleanup with A's captured token.
+    const sessionB = { token: 2 };
+    const sessionRef: MutableRefObject<{ token: number } | undefined> = { current: sessionB };
+
+    clearPaletteSessionIfCurrent(sessionRef, 1);
+
+    expect(sessionRef.current).toBe(sessionB);
+  });
+
+  it('no-ops when no session is live', () => {
+    const sessionRef: MutableRefObject<{ token: number } | undefined> = { current: undefined };
+
+    clearPaletteSessionIfCurrent(sessionRef, 1);
+
+    expect(sessionRef.current).toBeUndefined();
   });
 });
