@@ -1,7 +1,8 @@
 import type { WebViewProps } from '@papi/core';
-import { useLocalizedStrings } from '@papi/frontend/react';
+import { logger } from '@papi/frontend';
+import { useLocalizedStrings, useProjectDataProvider } from '@papi/frontend/react';
 import { LocalizeKey } from 'platform-bible-utils';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { selectScriptureTextGridTitle } from './scripture-text-grid.utils';
 
 // Tab-title localized keys. The label is count-driven: "Scripture text" when 0-1 cells are
@@ -11,12 +12,17 @@ const TITLE_MULTIPLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
 const ALL_STRING_KEYS: LocalizeKey[] = [TITLE_SINGLE_KEY, TITLE_MULTIPLE_KEY];
 
 /**
- * Scripture Text Grid web view (PT-4049 / A1 scaffold).
+ * Scripture Text Grid web view (PT-4049 / A1 scaffold; PT-4050 / A2 first-open trigger).
  *
- * For A1 this is an empty shell: no toolbar, a placeholder body, and a dynamic tab title driven by
- * the number of displayed cells. The `VerseCell` row renderer lands in A4 (PT-4052).
+ * A1 shell: no toolbar, a placeholder body, and a dynamic tab title driven by the number of
+ * displayed cells (the `VerseCell` row renderer lands in A4 / PT-4052). A2 adds a minimal
+ * first-open trigger that initializes the per-user shown-by-default overlay once per project.
+ * Correctness (no double-init) is enforced server-side by an idempotent per-user-per-project
+ * marker; this effect is a thin trigger. Richer UI wiring (contents selector, project selection)
+ * lands in A3/A5.
  */
 globalThis.webViewComponent = function ScriptureTextGridWebView({
+  projectId,
   updateWebViewDefinition,
   useWebViewState,
 }: WebViewProps) {
@@ -30,6 +36,25 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // round-trips across app restart). Replace this state with the A3 selector when it lands.
   const [gridContentsIds] = useWebViewState<string[]>('gridContentsIds', []);
   const displayedCellCount = gridContentsIds.length;
+
+  const textConnectionPdp = useProjectDataProvider(
+    'platformScripture.textConnectionSettings',
+    projectId,
+  );
+
+  // Fire first-open overlay init once per resolved projectId. The server-side marker makes repeated
+  // calls safe; this guard just avoids redundant round-trips within a single web-view lifetime.
+  const initializedProjectIds = useRef(new Set<string>());
+  useEffect(() => {
+    if (!projectId || !textConnectionPdp) return;
+    if (initializedProjectIds.current.has(projectId)) return;
+    initializedProjectIds.current.add(projectId);
+    textConnectionPdp.initializeShownByDefaultOverlay().catch((error) => {
+      // Non-fatal: drop the id from the local guard so a later open can retry; the server-side marker was never written.
+      initializedProjectIds.current.delete(projectId);
+      logger.error(`Failed to initialize shown-by-default overlay for ${projectId}: ${error}`);
+    });
+  }, [projectId, textConnectionPdp]);
 
   // Dynamic tab title: flips to "Text Collection" at 2+ displayed cells, "Scripture text" otherwise.
   useEffect(() => {
