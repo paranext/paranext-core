@@ -919,6 +919,40 @@ declare module 'platform-scripture' {
 
   // #endregion Scripture Edit Permissions Types
 
+  // #region Find History Types
+
+  /**
+   * Data types for the find history data provider. The selector for each data type is the project
+   * id the history belongs to, or `undefined` for history not associated with a project.
+   */
+  export type FindHistoryDataTypes = {
+    /** The user's recent find search history (most recent first) */
+    History: DataProviderDataType<string | undefined, string[], string[]>;
+    /** The find search term most recently used, restored when the find WebView reopens */
+    LastSearchTerm: DataProviderDataType<string | undefined, string, string>;
+  };
+
+  /**
+   * Provides the user's find search history and last search term, backed by user data storage.
+   * Subscribing through this data provider keeps every consumer's copy of the history in sync, so
+   * multiple find WebViews do not clobber each other's changes.
+   */
+  export type IFindHistoryDataProvider = IDataProvider<FindHistoryDataTypes> & {
+    /**
+     * Adds one item to the top of the find search history for a project. If the item is already in
+     * the history, it moves to the top instead of being duplicated. The history is capped at a
+     * maximum number of items, dropping the oldest. Prefer this over `setHistory` so the data
+     * provider manages ordering and deduplication consistently for all consumers.
+     *
+     * @param item The search term to add. Empty strings are ignored.
+     * @param projectId The project whose history to add to, or `undefined` for history not
+     *   associated with a project
+     */
+    addHistoryItem(item: string, projectId?: string): Promise<void>;
+  };
+
+  // #endregion Find History Types
+
   // #region Marker Types
 
   /** Provides information about markers */
@@ -2235,6 +2269,7 @@ declare module 'papi-shared-types' {
     CheckResultsInvalidated,
     ResourceReferenceList,
     IRecentlyOpenedProjectsService,
+    IFindHistoryDataProvider,
   } from 'platform-scripture';
 
   export interface ProjectDataProviderInterfaces {
@@ -2274,6 +2309,8 @@ declare module 'papi-shared-types' {
      * Simple interface. See {@link IRecentlyOpenedProjectsService}.
      */
     'platformScripture.recentlyOpenedProjects': IRecentlyOpenedProjectsService;
+    /** Data provider for the user's find search history and last search term */
+    'platformScripture.findHistory': IFindHistoryDataProvider;
   }
 
   export interface CommandHandlers {

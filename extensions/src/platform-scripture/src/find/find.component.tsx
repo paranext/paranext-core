@@ -227,6 +227,12 @@ export type FindProps = {
   onPreserveCaseChange: (value: boolean) => void;
   /** Called when the user focuses a result (by clicking or keyboard navigation). */
   onFocusedResultChange: (searchResult: HidableFindResult, index: number) => void;
+  /** Called when a result card receives browser focus (e.g. Tab navigation), by original index. */
+  onResultFocus?: (searchResult: HidableFindResult, index: number) => void;
+  /** Called when the user double-clicks a result (jump to editor), by original index. */
+  onResultDoubleClick?: (searchResult: HidableFindResult, index: number) => void;
+  /** Called when the user clicks a result's scripture reference (jump to editor), by original index. */
+  onResultReferenceClick?: (searchResult: HidableFindResult, index: number) => void;
   /** Called when the user hides/dismisses a result, by its original index. */
   onHideResult: (index: number) => void;
   /** Called when the user replaces a single result, by its original index (defaults to focused). */
@@ -304,6 +310,9 @@ export function Find({
   onReplaceTermChange,
   onPreserveCaseChange,
   onFocusedResultChange,
+  onResultFocus,
+  onResultDoubleClick,
+  onResultReferenceClick,
   onHideResult,
   onReplace,
   onReplaceAll,
@@ -838,8 +847,20 @@ export function Find({
                 focusedResultIndex={bookResults.findIndex(
                   ({ originalIndex }) => originalIndex === focusedResultIndex,
                 )}
-                onResultClick={(result, indexInBookResults) =>
-                  onFocusedResultChange(result, bookResults[indexInBookResults].originalIndex)
+                onResultClick={(result, indexInBookResults) => {
+                  onFocusedResultChange(result, bookResults[indexInBookResults].originalIndex);
+                  // Return focus to the scroll container so arrow-key navigation keeps working
+                  // after a single click selects/previews a result.
+                  setTimeout(() => resultsContainerRef.current?.focus(), 0);
+                }}
+                onResultFocus={(result, indexInBookResults) =>
+                  onResultFocus?.(result, bookResults[indexInBookResults].originalIndex)
+                }
+                onResultDoubleClick={(result, indexInBookResults) =>
+                  onResultDoubleClick?.(result, bookResults[indexInBookResults].originalIndex)
+                }
+                onResultReferenceClick={(result, indexInBookResults) =>
+                  onResultReferenceClick?.(result, bookResults[indexInBookResults].originalIndex)
                 }
                 onHideResult={(indexInBookResults) =>
                   onHideResult(bookResults[indexInBookResults].originalIndex)

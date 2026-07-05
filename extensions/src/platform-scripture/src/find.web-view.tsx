@@ -1,6 +1,8 @@
 import { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
+  useData,
+  useDataProvider,
   useLocalizedStrings,
   useProjectData,
   useProjectDataProvider,
@@ -9,9 +11,11 @@ import {
 } from '@papi/frontend/react';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { Scope, SCOPE_SELECTOR_STRING_KEYS, sonner, useRecentSearches } from 'platform-bible-react';
+import { Scope, SCOPE_SELECTOR_STRING_KEYS, sonner } from 'platform-bible-react';
 import {
   debounce,
+  DEBOUNCE_CANCELED_ERROR_MESSAGE,
+  DebouncedFunction,
   formatReplacementString,
   getErrorMessage,
   groupBy,
@@ -58,9 +62,12 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
 ];
 
 const defaultBooksPresent: string = '';
-const findPdpMutex = new Mutex();
 const RESULTS_BATCH_SIZE = 100;
 const SEARCH_DEBOUNCE_DELAY_MS = 500;
+/** Delay after typing stops before the current search term is saved to history. */
+const HISTORY_DEBOUNCE_DELAY_MS = 5000;
+/** Stable empty-array reference so the History data subscription's default doesn't change identity. */
+const DEFAULT_RECENT_SEARCHES: string[] = [];
 
 /**
  * Applies preserve-case transformation to the replacement text based on the casing of the matched
@@ -128,6 +135,9 @@ global.webViewComponent = function FindWebView({
   useWebViewState,
   useWebViewScrollGroupScrRef,
 }: WebViewProps) {
+  // Each instance needs its own mutex — a module-level mutex would cause operations from one Find
+  // panel to block another if two panels are open for different projects simultaneously.
+  const findPdpMutex = useRef(new Mutex()).current;
   const [searchTerm, setSearchTerm] = useWebViewState<string>('findSearchTerm', '');
   const [scope, setScope] = useWebViewState<Scope>('findScope', 'book');
   // These three state variables exist solely for the change-detection feature (booksToMonitor /
@@ -138,9 +148,39 @@ global.webViewComponent = function FindWebView({
     undefined,
   );
 
-  const [recentSearches, setRecentSearches] = useWebViewState<string[]>('findRecentSearches', []);
+  const findHistoryProvider = useDataProvider('platformScripture.findHistory');
+  // Keep the resolved provider in a ref so writes from unmount cleanup effects go out immediately
+  // instead of first awaiting a provider lookup that may not complete before the WebView is destroyed.
+  const findHistoryProviderRef = useRef(findHistoryProvider);
+  findHistoryProviderRef.current = findHistoryProvider;
 
-  const addRecentSearchItem = useRecentSearches(recentSearches, setRecentSearches);
+  // Subscribe to the shared find history so every find WebView sees the same list and updates made
+  // in one WebView automatically appear in the others.
+  const [recentSearchesPossiblyError] = useData<'platformScripture.findHistory'>(
+    findHistoryProvider,
+  ).History(projectId, DEFAULT_RECENT_SEARCHES);
+  const recentSearches = isPlatformError(recentSearchesPossiblyError)
+    ? DEFAULT_RECENT_SEARCHES
+    : recentSearchesPossiblyError;
+
+  // Track the last term written to storage so repeated calls for the same term (e.g. clicking
+  // through results) don't trigger redundant writes.
+  const lastPersistedHistoryTermRef = useRef<string | undefined>(undefined);
+  const addToHistory = useCallback(
+    (term: string) => {
+      if (!term) return;
+      if (term === lastPersistedHistoryTermRef.current) return;
+      lastPersistedHistoryTermRef.current = term;
+      findHistoryProviderRef.current?.addHistoryItem(term, projectId).catch(() => {});
+    },
+    [projectId],
+  );
+
+  const [lastSearchTermPossiblyError, , isLoadingLastSearchTerm] =
+    useData<'platformScripture.findHistory'>(findHistoryProvider).LastSearchTerm(projectId, '');
+  const lastSearchTermStorage = isPlatformError(lastSearchTermPossiblyError)
+    ? ''
+    : lastSearchTermPossiblyError;
 
   const [selectedBookIds, setSelectedBookIds] = useWebViewState<string[]>(
     'findSelectedBookIds',
@@ -164,9 +204,15 @@ global.webViewComponent = function FindWebView({
   const [activeMode, setActiveMode] = useWebViewState<'find' | 'replace'>('findActiveMode', 'find');
   const [replaceTerm, setReplaceTerm] = useWebViewState<string>('findReplaceTerm', '');
   const [preserveCase, setPreserveCase] = useWebViewState<boolean>('findPreserveCase', false);
-  const [previewOptions, setPreviewOptions] = useWebViewState<PreviewOptions>(
+  const [storedPreviewOptions, setStoredPreviewOptions] = useWebViewState<PreviewOptions>(
     'findPreviewOptions',
     DEFAULT_REPLACE_PREVIEW_OPTIONS,
+  );
+  // Spread-merge with defaults so adding new fields in future versions doesn't break stored values
+  // that were saved before those fields existed.
+  const previewOptions = useMemo(
+    () => ({ ...DEFAULT_REPLACE_PREVIEW_OPTIONS, ...storedPreviewOptions }),
+    [storedPreviewOptions],
   );
   /**
    * True while a replace operation is executing (including the mandatory re-find afterward). Keeps
@@ -258,6 +304,88 @@ global.webViewComponent = function FindWebView({
       isMountedRef.current = false;
     };
   }, []);
+
+  // #region Find history persistence
+
+  // Track the current search term and the latest addToHistory callback in refs so unmount cleanups
+  // and timers read fresh values without re-subscribing.
+  const searchTermRef = useRef(searchTerm);
+  useEffect(() => {
+    searchTermRef.current = searchTerm;
+  }, [searchTerm]);
+
+  const addToHistoryRef = useRef(addToHistory);
+  addToHistoryRef.current = addToHistory;
+
+  const persistLastSearchTerm = useCallback(
+    (term: string) => {
+      findHistoryProviderRef.current?.setLastSearchTerm(projectId, term).catch(() => {});
+    },
+    [projectId],
+  );
+  const persistLastSearchTermRef = useRef(persistLastSearchTerm);
+  persistLastSearchTermRef.current = persistLastSearchTerm;
+
+  // Restore the last search term from storage when the webview first loads with an empty field.
+  const [searchTermRestored, setSearchTermRestored] = useState(false);
+  useEffect(() => {
+    if (searchTermRestored) return;
+    if (isLoadingLastSearchTerm) return;
+    setSearchTermRestored(true);
+    if (lastSearchTermStorage && !searchTerm) setSearchTerm(lastSearchTermStorage);
+  }, [
+    isLoadingLastSearchTerm,
+    lastSearchTermStorage,
+    searchTerm,
+    searchTermRestored,
+    setSearchTerm,
+  ]);
+
+  // Persist the current search term (debounced) so it survives session restarts.
+  const debouncedPersistLastSearchTerm = useRef<DebouncedFunction<(term: string) => void>>(
+    debounce((term: string) => persistLastSearchTermRef.current(term), 1000),
+  );
+  useEffect(() => {
+    if (!searchTermRestored) return undefined;
+    const debouncedPersist = debouncedPersistLastSearchTerm.current;
+    debouncedPersist(searchTerm).catch((error) => {
+      const message = getErrorMessage(error);
+      if (message !== DEBOUNCE_CANCELED_ERROR_MESSAGE)
+        logger.warn(`Error persisting last search term: ${message}`);
+    });
+    return () => debouncedPersist.cancel();
+  }, [searchTerm, searchTermRestored]);
+
+  // Save the search term to storage on unmount (closing the tab or the application).
+  useEffect(() => {
+    return () => {
+      persistLastSearchTermRef.current(searchTermRef.current);
+    };
+  }, []);
+
+  // Save the search term to history on unmount, and after a period of typing inactivity.
+  const addToHistoryTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => {
+    return () => {
+      clearTimeout(addToHistoryTimeoutRef.current);
+      if (searchTermRef.current) addToHistoryRef.current(searchTermRef.current);
+    };
+  }, []);
+  useEffect(() => {
+    clearTimeout(addToHistoryTimeoutRef.current);
+    if (searchTerm) {
+      addToHistoryTimeoutRef.current = setTimeout(() => {
+        addToHistoryRef.current(searchTerm);
+      }, HISTORY_DEBOUNCE_DELAY_MS);
+    }
+    return () => clearTimeout(addToHistoryTimeoutRef.current);
+  }, [searchTerm]);
+
+  // Skips the first render of the options-change history effect below so restoring saved options
+  // doesn't immediately push the restored term into history.
+  const isInitialOptionsRenderRef = useRef(true);
+
+  // #endregion Find history persistence
 
   // #region Get available books and their localizations
 
@@ -438,6 +566,16 @@ global.webViewComponent = function FindWebView({
     return `chapter:${verseRefSetting.book}:${verseRefSetting.chapterNum}`;
   }, [scope, selectedBookIds, verseRefSetting.book, verseRefSetting.chapterNum]);
 
+  // When search options change (not the search term itself), add the current term to history — the
+  // user is intentionally refining how to search for it.
+  useEffect(() => {
+    if (isInitialOptionsRenderRef.current) {
+      isInitialOptionsRenderRef.current = false;
+      return;
+    }
+    if (searchTermRef.current) addToHistoryRef.current(searchTermRef.current);
+  }, [shouldMatchCase, wordRestriction, isRegexAllowed, searchTextType, relevantScopeKey]);
+
   // Stores a cancel function for a pending replace/replace-all operation (the 1-second window
   // before the re-search fires). Calling it stops the timer and triggers a revert.
   const pendingReplaceRevertRef = useRef<{ cancel: () => void } | undefined>(undefined);
@@ -475,7 +613,7 @@ global.webViewComponent = function FindWebView({
       isStartingSearchRef.current = true;
 
       try {
-        if (isExplicitSearch) addRecentSearchItem(searchTerm);
+        if (isExplicitSearch) addToHistory(searchTerm);
 
         await abandonFindJob();
         if (!isMountedRef.current) return;
@@ -519,7 +657,7 @@ global.webViewComponent = function FindWebView({
     },
     [
       abandonFindJob,
-      addRecentSearchItem,
+      addToHistory,
       beginFindJob,
       findPdp,
       findScope,
@@ -829,25 +967,64 @@ global.webViewComponent = function FindWebView({
     }
   }, [activeMode, focusedResultIndex, results, searchStatus]);
 
+  // Remove the find-result-highlight annotation when the editor changes or the find panel closes.
+  useEffect(() => {
+    const currentController = editorWebViewController;
+    return () => {
+      currentController?.runAnnotationAction('find-current-result', 'removed').catch(() => {});
+    };
+  }, [editorWebViewController]);
+
   const handleFocusedResultChange = useCallback(
     (searchResult: HidableFindResult, index: number) => {
       setFocusedResultIndex(index);
       setVerseRefSetting(searchResult.start.verseRef);
       if (editorWebViewId && editorWebViewController) {
-        // In Find mode, focus the editor so the user can read in context.
-        // In Replace mode, keep focus in the Find WebView so replace term stays editable.
-        if (activeMode === 'find') {
-          papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
+        // Preview the match in the editor (select + highlight) without stealing focus, so the user
+        // can keep navigating results. Double-click / reference-click shift focus to the editor.
+        try {
+          editorWebViewController
+            .selectRange({ start: searchResult.start, end: searchResult.end })
+            .catch(() => {});
+          editorWebViewController
+            .setAnnotation(
+              { start: searchResult.start, end: searchResult.end },
+              'find-result-highlight',
+              'find-current-result',
+            )
+            .catch(() => {});
+        } catch {
+          // Ignore any synchronous errors from the controller methods.
         }
-        editorWebViewController
-          .selectRange({
-            start: searchResult.start,
-            end: searchResult.end,
-          })
-          .catch((e) => logger.warn(`Find: selectRange failed: ${getErrorMessage(e)}`));
       }
     },
-    [activeMode, editorWebViewController, editorWebViewId, setVerseRefSetting],
+    [editorWebViewController, editorWebViewId, setVerseRefSetting],
+  );
+
+  /** Navigate to a result AND shift focus to the editor (double-click / reference-click). */
+  const handleOpenAtResult = useCallback(
+    (searchResult: HidableFindResult, index: number) => {
+      setFocusedResultIndex(index);
+      setVerseRefSetting(searchResult.start.verseRef);
+      if (editorWebViewId && editorWebViewController) {
+        papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
+        // Await selectRange before setAnnotation so the websocket is settled (avoids
+        // "Tried to send payload while not connected" races).
+        editorWebViewController
+          .selectRange({ start: searchResult.start, end: searchResult.end })
+          .then(() => {
+            if (editorWebViewId && editorWebViewController)
+              return editorWebViewController.setAnnotation(
+                { start: searchResult.start, end: searchResult.end },
+                'find-result-highlight',
+                'find-current-result',
+              );
+            return undefined;
+          })
+          .catch((e) => logger.warn(`Find: failed to update editor: ${getErrorMessage(e)}`));
+      }
+    },
+    [editorWebViewController, editorWebViewId, setVerseRefSetting],
   );
 
   const handleHideResult = useCallback((index: number) => {
@@ -1251,7 +1428,7 @@ global.webViewComponent = function FindWebView({
       replaceTerm={replaceTerm}
       preserveCase={preserveCase}
       previewOptions={previewOptions}
-      onPreviewOptionsChange={setPreviewOptions}
+      onPreviewOptionsChange={setStoredPreviewOptions}
       isReplacing={isReplacing}
       isStructureProtected={isStructureProtected}
       isReplacementStructureChanging={isReplacementStructureChanging}
@@ -1277,6 +1454,9 @@ global.webViewComponent = function FindWebView({
       onReplaceTermChange={setReplaceTerm}
       onPreserveCaseChange={setPreserveCase}
       onFocusedResultChange={handleFocusedResultChange}
+      onResultFocus={handleFocusedResultChange}
+      onResultDoubleClick={handleOpenAtResult}
+      onResultReferenceClick={handleOpenAtResult}
       onHideResult={handleHideResult}
       onReplace={handleReplace}
       onReplaceAll={handleReplaceAll}
