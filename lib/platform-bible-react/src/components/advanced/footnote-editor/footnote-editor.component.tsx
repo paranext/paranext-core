@@ -2,6 +2,7 @@ import { Button } from '@/components/shadcn-ui/button';
 import { ButtonGroup } from '@/components/shadcn-ui/button-group';
 import { CancelAcceptButtons } from '@/components/basics/cancel-accept-buttons.component';
 import {
+  defaultStyleInfo,
   DeltaOp,
   DeltaOpInsertNoteEmbed,
   Editorial,
@@ -9,12 +10,15 @@ import {
   EditorRef,
   GENERATOR_NOTE_CALLER,
   getDefaultViewOptions,
+  getMarkerMenuItems,
   HIDDEN_NOTE_CALLER,
   isInsertEmbedOpOfType,
+  MarkerMenuItem as EditorMarkerMenuItem,
   StateChangeSnapshot,
 } from '@eten-tech-foundation/platform-editor';
 import { Copy } from 'lucide-react';
 import {
+  MutableRefObject,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -79,6 +83,84 @@ export interface FootnoteEditorProps {
    * parent editor, so the client does not need to handle this in the `onChange` callback.
    */
   parentEditorRef?: RefObject<EditorRef | null>;
+  /**
+   * Optional marker-palette driver (standard-view host wiring — Task 10/11 PT9 parity). When
+   * provided in editable marker mode, a typed `\` inside this popover's own editor opens the same
+   * palette the main editor uses instead of the built-in inline markers menu below; when absent,
+   * editable mode falls back to pass-through-only behavior (literal typing works, no menu) — a
+   * graceful degradation for hosts that haven't wired one up. Never consulted outside editable
+   * marker mode — the built-in `MarkerMenu` popup below owns that path unconditionally.
+   */
+  markerPalette?: FootnoteEditorMarkerPalette;
+}
+
+/**
+ * Structural subset of the overlay service's `CommandPaletteItem` (`overlay.service-model.ts` in
+ * the renderer) — defined locally because platform-bible-react must not import renderer or
+ * extension types. Mirrors the extension's `markerMenuItemToCommandPaletteItem` mapping (Task 10):
+ * close-tag items get an `'end'` badge, non-basic items are muted.
+ */
+export interface PaletteItemLike {
+  id: string;
+  label: string;
+  description?: string;
+  badge?: string;
+  muted?: boolean;
+  disabled?: boolean;
+}
+
+/**
+ * Driver for the standard-view `\` marker palette (Task 10/11 PT9 parity), supplied by a host that
+ * wires it to its own overlay/command-palette implementation (e.g. `papi.overlays.*` keyed by
+ * `webViewId` in the platform-scripture-editor web view).
+ */
+export interface FootnoteEditorMarkerPalette {
+  /**
+   * Shows the palette anchored at the given position. `passive` mirrors
+   * `CommandPaletteRequest.passive` — when true, the palette never steals focus and its filter and
+   * highlighted selection are driven externally via {@link FootnoteEditorMarkerPalette.update}.
+   *
+   * @returns The selected item's `id`, or `undefined` if dismissed.
+   */
+  show(
+    items: PaletteItemLike[],
+    anchor: { x: number; y: number; width?: number; height?: number },
+    passive: boolean,
+  ): Promise<string | undefined>;
+  /** Updates the filter text and/or moves the highlighted selection of the active palette. */
+  update(update: { filterText?: string; moveSelection?: number }): Promise<void>;
+  /** Commits the currently highlighted item, resolving the `show` promise with its `id`. */
+  commit(): Promise<void>;
+  /** Dismisses the active palette, resolving the `show` promise with `undefined`. */
+  dismiss(): Promise<void>;
+}
+
+/**
+ * Maps a library marker-menu item to this popover's palette-item shape. Mirrors the extension's
+ * `markerMenuItemToCommandPaletteItem` (Task 10) exactly, redefined locally because
+ * platform-bible-react must not import extension code.
+ */
+export function markerMenuItemToPaletteItemLike(item: EditorMarkerMenuItem): PaletteItemLike {
+  return {
+    id: item.marker,
+    label: item.marker,
+    description: item.description,
+    badge: item.kind === 'closeTag' ? 'end' : undefined,
+    muted: !item.isBasic,
+  };
+}
+
+/**
+ * Clears a palette-session ref only when it still holds the session identified by `token`. Mirrors
+ * the extension's `clearPaletteSessionIfCurrent` (Task 10) — see there for the stale-promise race
+ * this guards against (dismiss one session, immediately open another before the first's show
+ * promise settles) — redefined locally for the same reason as the mapping above.
+ */
+export function clearPaletteSessionIfCurrent<TSession extends { token: number }>(
+  sessionRef: MutableRefObject<TSession | undefined>,
+  token: number,
+): void {
+  if (sessionRef.current?.token === token) sessionRef.current = undefined;
 }
 
 /**
@@ -163,6 +245,7 @@ export default function FootnoteEditor({
   defaultMarkerMenuTrigger,
   localizedStrings,
   parentEditorRef,
+  markerPalette,
 }: FootnoteEditorProps) {
   // These refs must have default values of `null` to be accepted by the React elements as refs
   /* eslint-disable no-null/no-null */
@@ -209,6 +292,22 @@ export default function FootnoteEditor({
   // The refs needs to start out with null for it to work as a element ref
   // eslint-disable-next-line no-null/no-null
   const markerMenuSearchRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * Session state for a `\`-triggered marker palette open inside this popover's own editor (single
+   * owner: the keydown flow below). Mirrors the main editor's `paletteSession` in
+   * `platform-scripture-editor.web-view.tsx` (Task 10) — see there for the full session-shape
+   * rationale — scoped to this popover's own `.editor-input` and driven by its own `editorRef`.
+   * Only ever set for the passive (collapsed-caret) trigger; the selection-wrap trigger opens a
+   * focused palette whose own search input owns typing, so nothing needs forwarding for it.
+   */
+  const paletteSession = useRef<
+    | { token: number; literalPrefixLanded: boolean; filter: string; items: EditorMarkerMenuItem[] }
+    | undefined
+  >(undefined);
+
+  /** Monotonic allocator for {@link paletteSession} tokens. */
+  const paletteSessionCounter = useRef(0);
 
   // Options for the editorial component
   const options = useMemo<EditorOptions>(
@@ -478,6 +577,58 @@ export default function FootnoteEditor({
     }
   }, [inlineMarkerMenuItems, outerBorderRef]);
 
+  /**
+   * Opens this popover's `\`-triggered marker palette via the host-supplied `markerPalette` prop
+   * (Task 10 parity, scoped to this popover's own editor). Mirrors `openMarkerPalette` in
+   * `platform-scripture-editor.web-view.tsx` function-for-function; the only structural difference
+   * is driving `markerPalette` instead of `papi.overlays` directly, so platform-bible-react never
+   * depends on the overlay service.
+   */
+  const openMarkerPalette = useCallback(
+    (
+      ctx: { anchorRect?: { x: number; y: number; width: number; height: number } },
+      items: EditorMarkerMenuItem[],
+      openOptions: { passive: boolean; literalPrefixLanded: boolean },
+    ) => {
+      const { anchorRect } = ctx;
+      if (!markerPalette || !anchorRect) return;
+      const { passive, literalPrefixLanded } = openOptions;
+      paletteSessionCounter.current += 1;
+      const token = paletteSessionCounter.current;
+      paletteSession.current = passive
+        ? { token, literalPrefixLanded, filter: '', items }
+        : undefined;
+
+      markerPalette
+        .show(items.map(markerMenuItemToPaletteItemLike), anchorRect, passive)
+        .then((id) => {
+          clearPaletteSessionIfCurrent(paletteSession, token);
+          if (id !== undefined) {
+            const selected = items.find((item) => item.marker === id);
+            if (selected) {
+              editorRef.current?.applyMarkerMenuSelection(selected, {
+                trigger: 'backslash',
+                literalPrefixLanded,
+              });
+            }
+            editorRef.current?.focus();
+          } else if (!passive) {
+            // Focused palette dismissed: the palette's own search input had focus, so bring it
+            // back to the editor.
+            editorRef.current?.focus();
+          }
+          return undefined;
+        })
+        .catch(() => {
+          // Replaced by a newer overlay request (PlatformError code ABORTED) or any other
+          // rejection — treat the same as an explicit dismissal.
+          clearPaletteSessionIfCurrent(paletteSession, token);
+          if (!passive) editorRef.current?.focus();
+        });
+    },
+    [markerPalette],
+  );
+
   // Need to add a window listener for click events that will close the markers menu when you click
   // outside. There is another `onClick` listener for the marker menu that prevents click events
   // from being passed to this listener if the marker menu is being clicked. Those click events are
@@ -501,14 +652,98 @@ export default function FootnoteEditor({
     }
   }, [showMarkersMenu]);
 
-  // Listens for the marker menu trigger to open the markers menu
+  // Listens for the marker menu trigger to open the markers menu (non-editable modes) or to drive
+  // the standard-view `\` marker palette (editable mode with a host-supplied `markerPalette`).
   useEffect(() => {
-    // In editable marker mode (e.g. Standard view) a typed backslash IS content — the
-    // editor's marker-editing engine resolves typed markers itself — so the menu trigger
-    // must not swallow the keystroke; let it reach the editor as a literal character.
-    if (options.view?.markerMode === 'editable') return () => {};
     const editorInput =
       editorParentRef.current?.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
+
+    if (options.view?.markerMode === 'editable') {
+      // In editable marker mode (e.g. Standard view) a typed backslash IS content — the editor's
+      // marker-editing engine resolves typed markers itself. Without a host-supplied
+      // `markerPalette` there's nothing to wire up here: let every keystroke land as a literal
+      // character (pass-through-only degradation for non-P10 consumers). Enter is never
+      // intercepted below either way — it stays on the library's own `\fp` path.
+      if (!markerPalette) return () => {};
+
+      const handleKeyDown = (event: KeyboardEvent) => {
+        if (!editorInput || document.activeElement !== editorInput) return;
+        const session = paletteSession.current;
+
+        if (session) {
+          if (
+            event.key === 'Shift' ||
+            event.key === 'Control' ||
+            event.key === 'Alt' ||
+            event.key === 'Meta'
+          ) {
+            // Pure modifier keydowns aren't input — e.g. the Shift half of a `+` chord fires its
+            // own keydown before the `+` arrives. Falling through to the dismiss-on-any-other-key
+            // rule would kill the session mid-chord and break `\+w` nested-marker filtering.
+            return;
+          }
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            markerPalette.update({ moveSelection: event.key === 'ArrowDown' ? 1 : -1 });
+            return;
+          }
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            // The session ends here as far as keydown routing is concerned — the commit's
+            // resolution flows through the show-promise, which captured the items it needs, so
+            // clear synchronously like every other session-ending key.
+            paletteSession.current = undefined;
+            markerPalette.commit();
+            return;
+          }
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            paletteSession.current = undefined;
+            markerPalette.dismiss();
+            return;
+          }
+          if (event.key === ' ' || event.key === '*') {
+            // PT9 Space-commit / `*`-close: the key lands as literal text and is picked up by the
+            // engine's own Tier 2 marker-completion trigger, so the palette is no longer relevant.
+            paletteSession.current = undefined;
+            markerPalette.dismiss();
+            return;
+          }
+          if (event.key === 'Backspace' || /^[a-z0-9+]$/.test(event.key)) {
+            // Filter mirroring is keydown-tracked and display-only: `applyMarkerMenuSelection`
+            // reads the real literal run from the document at apply time, so drift here (fast
+            // typing, IME composition) can never corrupt the actual insert.
+            session.filter =
+              event.key === 'Backspace' ? session.filter.slice(0, -1) : session.filter + event.key;
+            markerPalette.update({ filterText: session.filter });
+            return;
+          }
+          // Any other key: what's about to land no longer matches what the palette is offering.
+          paletteSession.current = undefined;
+          markerPalette.dismiss();
+          return;
+        }
+
+        if (event.key !== defaultMarkerMenuTrigger) return;
+        const ctx = editorRef.current?.getMarkerMenuContext();
+        if (!ctx) return;
+        const items = getMarkerMenuItems(options.styleInfo ?? defaultStyleInfo, ctx);
+        if (items.length === 0) return;
+        const passive = !ctx.hasTextSelection;
+        // Collapsed caret: don't prevent default — the `\` lands as literal text and the passive
+        // palette tracks it. Selection: prevent default (focused palette; nothing should land in
+        // place of the wrapped text).
+        if (!passive) event.preventDefault();
+        openMarkerPalette(ctx, items, { passive, literalPrefixLanded: passive });
+      };
+
+      document.addEventListener('keydown', handleKeyDown);
+
+      return () => {
+        document.removeEventListener('keydown', handleKeyDown);
+      };
+    }
+
     const handleKeyDown = (event: KeyboardEvent) => {
       // Shows the marker menu if it isn't already being shown and if the editor is currently selected
       if (
@@ -530,7 +765,15 @@ export default function FootnoteEditor({
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [showMarkersMenu, showInlineMarkersMenu, defaultMarkerMenuTrigger, options.view?.markerMode]);
+  }, [
+    showMarkersMenu,
+    showInlineMarkersMenu,
+    defaultMarkerMenuTrigger,
+    options.view?.markerMode,
+    options.styleInfo,
+    markerPalette,
+    openMarkerPalette,
+  ]);
 
   const copyButtonTooltip = localizedStrings['%footnoteEditor_copyButton_tooltip%'];
 
