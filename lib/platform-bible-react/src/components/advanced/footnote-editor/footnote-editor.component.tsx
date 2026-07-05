@@ -229,6 +229,27 @@ const PARAGRAPH_USJ: Usj = {
 };
 
 /**
+ * OT ("apply" coordinate) length of `PARAGRAPH_USJ`'s wrapper-paragraph prefix in editable marker
+ * mode (Standard view). `PARAGRAPH_USJ`'s lone `para` never specifies a `marker`, so the library's
+ * `usj-editor.adaptor.ts` `createPara` always defaults it to the plain `\p` marker and — in
+ * `markerMode: "editable"` only — always injects that marker as a visible prefix: a `MarkerNode`
+ * glyph (`"\p"`, 2 characters) followed by an NBSP trailing-space `TextNode` (1 character). Both
+ * are `TextNode`s, so `applyUpdate`'s insert/delete traversal counts their text length directly: 2
+ * characters plus 1 character totals 3. This is therefore a fixed constant tied to
+ * `PARAGRAPH_USJ`'s hardcoded default `\p` marker, not a per-marker computation.
+ *
+ * Retaining past this prefix before inserting the note op (see the init effect below) lands the
+ * note AFTER the paragraph's own glyph prefix. Without the retain, the note lands at OT index 0 —
+ * BEFORE the prefix — and the engine then re-materializes a fresh prefix ahead of the note, leaving
+ * the ORIGINAL prefix as visible trailing glyph junk after it (display-only; never written on Save;
+ * see Task 14, Phase 5 standard-view plan).
+ *
+ * Non-editable marker modes don't get this treatment: `createPara` only pushes this two-node prefix
+ * shape for `"editable"`; other modes are left at the pre-existing retain of 0.
+ */
+const EDITABLE_WRAPPER_PARA_PREFIX_RETAIN = 3;
+
+/**
  * Component to edit footnotes from within the editor component
  *
  * @param FootnoteEditorProps - The properties for the footnote editor component
@@ -326,6 +347,15 @@ export default function FootnoteEditor({
     [editorOptions, defaultMarkerMenuTrigger],
   );
 
+  // Stable ref to the current marker mode so the note-load effect below (deps: noteOps/noteKey/
+  // isNewNote — a NEW note being loaded) doesn't also need `options` in its dependency array and
+  // re-run (re-applying the note op a second time) if the host's view options are recreated with
+  // the same markerMode while the SAME note is still being edited.
+  const markerModeRef = useRef(options.view?.markerMode);
+  useLayoutEffect(() => {
+    markerModeRef.current = options.view?.markerMode;
+  });
+
   const inlineMarkerMenuItems = useMemo(
     () =>
       generateInlineMarkerMenuListItems(
@@ -368,8 +398,16 @@ export default function FootnoteEditor({
       // Assigns note type
       setNoteType(noteOp.insert.note?.style ?? 'f');
       timeout = setTimeout(() => {
-        // Inserts the note node to be edited as an delta operation
-        editorRef.current?.applyUpdate([noteOp]);
+        // Inserts the note node to be edited as a delta operation. In editable marker mode the
+        // wrapper paragraph (`PARAGRAPH_USJ`) renders a visible `\p` glyph prefix; retain past it
+        // so the note lands after the prefix instead of displacing it (see
+        // `EDITABLE_WRAPPER_PARA_PREFIX_RETAIN` above). Other marker modes get no such prefix, so
+        // they keep the pre-existing insert at index 0.
+        const insertOps: DeltaOp[] =
+          markerModeRef.current === 'editable'
+            ? [{ retain: EDITABLE_WRAPPER_PARA_PREFIX_RETAIN }, noteOp]
+            : [noteOp];
+        editorRef.current?.applyUpdate(insertOps);
         // For a newly-inserted note there's no prior editing position to preserve, so land the
         // caret at the end of the last footnote-text char span (`\ft`/`\xt`) to match PT9 behavior
         // of being ready to type immediately. `0` is this popover's own note index — it always
