@@ -34,6 +34,11 @@ let lastEditorialLogger:
       debug: (...args: unknown[]) => void;
     }
   | undefined;
+// Capture the `options` object passed to <Editorial> so tests can assert both the derived
+// `extraValidMarkers` and — critically — that its identity stays STABLE across USJ changes that
+// don't change the marker set (an identity change would make the real Editorial reconcile and
+// destroy Marble marks).
+let lastEditorialOptions: { nodes?: { extraValidMarkers?: readonly string[] } } | undefined;
 
 // papi.overlays is an external boundary; mock it so unit tests can assert on
 // hover-lifecycle calls without spinning up the real overlay service.
@@ -78,7 +83,7 @@ vi.mock('@eten-tech-foundation/platform-editor', () => {
     Editorial: React.forwardRef(function MockEditorial(
       props: {
         defaultUsj?: unknown;
-        options?: { isReadonly?: boolean };
+        options?: { isReadonly?: boolean; nodes?: { extraValidMarkers?: readonly string[] } };
         logger?: {
           error: (...args: unknown[]) => void;
           warn: (...args: unknown[]) => void;
@@ -99,6 +104,8 @@ vi.mock('@eten-tech-foundation/platform-editor', () => {
       }));
       // D-008: capture the logger so tests can drive it as the editor would.
       lastEditorialLogger = props.logger;
+      // Capture options so tests can assert extraValidMarkers content + options-identity stability.
+      lastEditorialOptions = props.options;
       return (
         <div
           data-testid="mock-editorial"
@@ -331,6 +338,63 @@ describe('EnhancedScripturePane', () => {
     const editorial = screen.getByTestId('mock-editorial');
     expect(editorial).toHaveAttribute('data-readonly', 'true');
     expect(editorial).toHaveAttribute('data-has-usj', 'true');
+  });
+
+  // The pane derives extraValidMarkers from the displayed USJ (so the editor doesn't warn about
+  // handbook markers) and keys `options` on the marker SET so the object identity stays stable
+  // across chapter changes that reuse the same markers — an identity change would make Editorial
+  // reconcile and destroy the Marble annotation marks.
+  describe('extraValidMarkers passed to Editorial', () => {
+    const usjWithMarkers = (markers: string[]): Usj =>
+      ({
+        type: 'USJ',
+        version: '3.1',
+        content: markers.map((marker) => ({ type: 'para', marker, content: ['x'] })),
+      }) as unknown as Usj;
+
+    it('passes the distinct markers the USJ uses — sorted, deduped, z-markers omitted', () => {
+      render(
+        <EnhancedScripturePane
+          usj={usjWithMarkers(['pn', 'jmp', 'pn', 'zbadge'])}
+          annotations={[]}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      expect(lastEditorialOptions?.nodes?.extraValidMarkers).toEqual(['jmp', 'pn']);
+    });
+
+    it('keeps options identity stable for the same marker set (any order) and changes it when the set changes', () => {
+      const { rerender } = render(
+        <EnhancedScripturePane
+          usj={usjWithMarkers(['pn', 'jmp'])}
+          annotations={[]}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      const optionsForPnJmp = lastEditorialOptions;
+      expect(optionsForPnJmp?.nodes?.extraValidMarkers).toEqual(['jmp', 'pn']);
+
+      // Same set, different first-seen order (plus a duplicate) → same key → SAME options identity.
+      rerender(
+        <EnhancedScripturePane
+          usj={usjWithMarkers(['jmp', 'pn', 'jmp'])}
+          annotations={[]}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      expect(lastEditorialOptions).toBe(optionsForPnJmp);
+
+      // Different set → new options identity and updated markers.
+      rerender(
+        <EnhancedScripturePane
+          usj={usjWithMarkers(['pn', 'jmp', 'xtSee'])}
+          annotations={[]}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      expect(lastEditorialOptions).not.toBe(optionsForPnJmp);
+      expect(lastEditorialOptions?.nodes?.extraValidMarkers).toEqual(['jmp', 'pn', 'xtSee']);
+    });
   });
 
   it('exports the localized string keys as a frozen array', () => {
