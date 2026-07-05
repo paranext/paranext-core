@@ -419,11 +419,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [interfaceModePossiblyError]);
 
   /**
-   * Whether `viewType` was ever explicitly persisted for this web view (as opposed to only ever
-   * having been the `useWebViewState` default below). Computed once via a lazy `useState`
-   * initializer, mirroring how `useWebViewState`'s own local state is seeded once at mount (see
-   * `use-web-view-state.hook.ts`): only an explicit `setViewType` call persists a value, so a
-   * `false` here means this web view has never had a real choice saved.
+   * Whether `viewType` was already explicitly persisted for this web view when it mounted (as
+   * opposed to only ever having been the `useWebViewState` default below). Computed once via a lazy
+   * `useState` initializer, mirroring how `useWebViewState`'s own local state is seeded once at
+   * mount (see `use-web-view-state.hook.ts`): only an explicit `setViewType` call persists a value,
+   * so a `false` here means this web view had no real choice saved as of mount.
    *
    * We need this because `useSetting`'s `isLoading` starts `true` on every mount (see
    * `create-use-data-hook.util.ts`), so `isPowerMode` is guaranteed `false` on this component's
@@ -431,8 +431,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * captures its default into local state via a lazy initializer that runs only once, so a stale
    * 'formatted' default captured on that first render will not self-correct once `isPowerMode`
    * later resolves `true` -- it would otherwise be stuck at 'formatted' for the life of this
-   * webview instance. The correction effect below uses this flag to only ever nudge a genuinely
-   * fresh (never-saved) view, never a saved one.
+   * webview instance. The correction effect below uses this flag only as a fast-path short-circuit;
+   * because it is a mount-time snapshot that can go stale (the user could persist a choice between
+   * mount and `platform.interfaceMode` resolving), the effect re-probes the store fresh at fire
+   * time and that fresh probe is the decider.
    */
   const [hadPersistedViewTypeAtMount] = useState(
     () => globalThis.getWebViewState('viewType', VIEW_TYPE_UNSET) !== VIEW_TYPE_UNSET,
@@ -463,7 +465,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     if (hadPersistedViewTypeAtMount) return;
     if (isLoadingInterfaceMode) return;
     if (!isPowerMode) return;
+    // Re-probe the store fresh at fire time -- the mount snapshot above is only a fast path. The
+    // user could have persisted a genuine choice (e.g. `changeScriptureView`; `setViewType`
+    // persists synchronously) in the window between mount and `platform.interfaceMode`
+    // resolving, and that choice must win over the power-mode default.
+    if (globalThis.getWebViewState('viewType', VIEW_TYPE_UNSET) !== VIEW_TYPE_UNSET) {
+      hasAppliedInitialPowerDefaultRef.current = true;
+      return;
+    }
     hasAppliedInitialPowerDefaultRef.current = true;
+    // This write is intentionally sticky: it persists 'standard', so future reloads of this web
+    // view see a persisted value and skip this whole correction dance.
     setViewType('standard');
   }, [hadPersistedViewTypeAtMount, isLoadingInterfaceMode, isPowerMode, setViewType]);
 
