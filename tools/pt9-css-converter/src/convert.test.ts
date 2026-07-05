@@ -87,24 +87,36 @@ describe('convert', () => {
     expect(scss).toContain('.formatted-font .usfm_id');
   });
 
-  test('skips only the table row marker; emits table cell markers', () => {
+  test('skips only the table row marker; emits table cell markers as real bucketed rules', () => {
     const css = `
-      .usfm_tr { font-size: 100%; }
-      .usfm_tc1 { font-size: 100%; }
-      .usfm_th2 { font-size: 100%; }
+      .usfm_tr { font-size: 100%; text-indent: -20pt; }
+      .usfm_tc1 { font-size: 110%; text-align: center; }
+      .usfm_th2 { font-size: 120%; text-align: right; }
       .usfm_id { font-size: 100%; }
     `;
 
     const { scss, warnings, markerCount } = convert(css, { generatedAt: FIXED_DATE });
 
-    // tc1, th2, id are emitted; only the row marker `tr` is skipped.
+    // Only the row marker `tr` is skipped; tc1, th2, id are emitted.
     expect(markerCount).toBe(3);
     expect(warnings.skippedTableMarkers).toEqual(['tr']);
     expect(scss).not.toContain('.usfm_tr');
-    expect(scss).toContain('.usfm_tc1');
-    expect(scss).toContain('.usfm_th2');
-    expect(scss).toContain('.usfm_id');
     expect(scss).toContain('Skipped table markers: tr');
+
+    // The data-cell marker is emitted as real, correctly-bucketed rules — not just a
+    // stray `.usfm_tc1` substring: its font-size lands under .formatted-font and its
+    // alignment under .text-spacing.
+    expect(scss).toMatch(/\.formatted-font \.usfm_tc1 \{[^}]*font-size: 110%;/);
+    expect(scss).toMatch(/\.text-spacing \.usfm_tc1 \{[^}]*text-align: center;/);
+
+    // Header-cell markers flow through the same pipeline and bucket the same way.
+    // `text-align: right` stays non-directional (never mirrored into a [dir] block).
+    expect(scss).toMatch(/\.formatted-font \.usfm_th2 \{[^}]*font-size: 120%;/);
+    expect(scss).toMatch(/\.text-spacing \.usfm_th2 \{[^}]*text-align: right;/);
+    expect(scss).not.toMatch(/\[dir='(ltr|rtl)'\] \.usfm_th2/);
+
+    // The plain marker is unaffected.
+    expect(scss).toMatch(/\.formatted-font \.usfm_id \{[^}]*font-size: 100%;/);
   });
 
   test('skips non-marker selectors including pseudo-elements', () => {
