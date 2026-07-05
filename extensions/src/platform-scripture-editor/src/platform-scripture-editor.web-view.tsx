@@ -121,16 +121,18 @@ import { FootnotesLayout } from './platform-scripture-editor-footnotes.component
 import {
   availableScrollGroupIds,
   blockMarkerToBlockNames,
-  clearPaletteSessionIfCurrent,
   deepEqualAcrossIframes,
   findNoteIndexByOps,
   formatEditorTitle,
-  generateInlineMarkerMenuListItems,
   generateParagraphMenuListItems,
-  markerMenuItemToCommandPaletteItem,
   openCommentListAndSelectThreadSafe,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
 } from './platform-scripture-editor.utils';
+import {
+  clearPaletteSessionIfCurrent,
+  generateInlineMarkerMenuListItems,
+  markerMenuItemToCommandPaletteItem,
+} from './platform-scripture-editor.web-view.utils';
 import { ParagraphMarkerTooltipOverlay } from './paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component';
 
 /**
