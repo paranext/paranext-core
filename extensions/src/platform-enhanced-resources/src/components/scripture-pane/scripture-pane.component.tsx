@@ -617,9 +617,15 @@ export function EnhancedScripturePane({
   // reference across chapter changes that don't change the set: changing the `options` prop identity
   // forces Editorial to reconcile its Lexical config, which destroys the Marble annotation marks
   // (see EDITORIAL_OPTIONS note above). When the set genuinely changes, the annotation effect
-  // re-applies marks on the new USJ anyway.
+  // re-applies marks on the new USJ anyway. The key is sorted so it depends only on the SET of
+  // markers, not their first-seen order — two chapters that use the same markers in a different
+  // order keep the same key (and stable options), avoiding a needless reconcile. Order doesn't
+  // affect marker validity, so sorting is behavior-neutral for the editor.
   // Intentionally every marker the resource uses — read-only panel, warn-only diagnostic. See collectUsjMarkers JSDoc.
-  const extraValidMarkersKey = useMemo(() => collectUsjMarkers(usj).join(' '), [usj]);
+  const extraValidMarkersKey = useMemo(
+    () => collectUsjMarkers(usj).slice().sort().join(' '),
+    [usj],
+  );
   const editorialOptions = useMemo(
     () => ({
       ...EDITORIAL_OPTIONS,
