@@ -725,10 +725,9 @@ const onLayoutChange: OnLayoutChange = async (newLayout, _currentTabId, changeIn
 async function getEnabledSupplementEntries(): Promise<DefaultLayoutSupplementEntry[]> {
   return filterEnabledSupplementEntries(
     defaultLayoutSupplement.tabs,
-    // The flag key is a product-supplied dynamic string; `settingsService.get` is typed to the union
-    // of known setting keys (`SettingNames`), so cast to that rather than to one specific (unrelated)
-    // key. `filterEnabledSupplementEntries` checks the result as `unknown`, so an unknown key is
-    // handled safely and a rejected read is caught there.
+    // `flagSetting` is a product-supplied dynamic string; cast to the known-keys union that
+    // `settingsService.get` expects. `filterEnabledSupplementEntries` checks it as `unknown` and
+    // catches a rejected read, so an unknown key is safe.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     (flagSetting) => settingsService.get(flagSetting as SettingNames),
     (entry, error) =>
@@ -760,16 +759,11 @@ async function loadLayout(layout?: LayoutInfo): Promise<void> {
     return;
   }
 
-  // Pick the layout based on interface mode. Runs at startup and again whenever
-  // `platform.interfaceMode` changes (see the subscription in `registerDockLayout`).
-  //
-  // - Power mode loads the user's saved layout from `DOCK_LAYOUT_KEY` (falling back to
-  //   `testLayout` if nothing is saved). `saveLayout` only writes to `DOCK_LAYOUT_KEY` when the
-  //   user is in power mode, so this value is preserved across visits to simple mode.
-  // - Simple mode always loads the static `simpleLayout` and never persists user changes — the
-  //   3-column layout is restored every time simple mode is entered. `saveLayout` is a no-op in
-  //   simple mode, so resizing or rearranging in simple mode is ephemeral by design and does not
-  //   clobber the saved power layout.
+  // Pick the layout by interface mode (runs at startup and on every `platform.interfaceMode` change;
+  // see the subscription in `registerDockLayout`):
+  // - Power mode: the user's saved layout from `DOCK_LAYOUT_KEY`, or `testLayout` if none.
+  // - Simple mode: always the static `simpleLayout`. `saveLayout` no-ops in simple mode, so changes
+  //   there are ephemeral and never clobber the saved power layout.
   const interfaceMode = await settingsService.get('platform.interfaceMode');
   // Seed/refresh the cache before loading so any `onLayoutChange` that the load triggers (and every
   // subsequent `saveLayout`) sees the current mode without another settings round-trip.
@@ -784,14 +778,11 @@ async function loadLayout(layout?: LayoutInfo): Promise<void> {
     dockLayoutVar.loadLayout(layoutToLoad);
     return;
   }
-  // KNOWN POWER-MODE LIMITATION (safe today; revisit when power-mode coverage lands): power mode
-  // persists the *merged* layout to `DOCK_LAYOUT_KEY`, so a supplement tab saved during a flag-ON
-  // run survives into a later flag-OFF run — the re-merge excludes it, but the already-saved copy
-  // remains, its provider now unregistered and (if `isClosable: false`) uncloseable. Likewise,
-  // changing a supplement tab's id across versions appends a second copy, since `mergeDefault-
-  // LayoutSupplement` dedups by exact tab id. Simple mode (the current default) is immune because it
-  // always reloads the static `simpleLayout` and no-ops `saveLayout`. When power mode is wired up,
-  // drop/replace persisted supplement tabs whose provider is unregistered, or don't persist them.
+  // KNOWN POWER-MODE LIMITATION (safe today — simple mode is the default and is immune): power mode
+  // persists the merged layout, so a supplement tab saved while its flag was on lingers after a
+  // flag-off run — provider-less and, if `isClosable: false`, uncloseable. (Changing a tab's id
+  // across versions likewise leaves a duplicate, since we dedup by exact id.) Fix when power mode
+  // lands: drop persisted supplement tabs whose provider is no longer registered.
   // LayoutInfo is intentionally opaque in the shared model; cross to the concrete rc-dock shape here,
   // mirroring platform-dock-layout.component.tsx
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -851,11 +842,9 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
   // this pattern in some way. Maybe just export `onLayoutChange`?
   dockLayout.onLayoutChangeRef.current = onLayoutChange;
 
-  // Will we ever need to await this? For now, seems like it unnecessarily complicates registering
-  // because making this function async would probably be annoying in React.
-  // Fire-and-forget, but guard the rejection: `loadLayout` now awaits `getEnabledSupplementEntries`
-  // (settings reads for product supplement flags), and an unhandled rejection here would leave the
-  // entire dock unloaded (blank window). Log and move on instead.
+  // Fire-and-forget so `registerDockLayout` can stay sync. Guard the rejection, though: `loadLayout`
+  // awaits settings reads (supplement flags), and an unhandled rejection here would leave the dock
+  // unloaded (blank window).
   loadLayout().catch((err) => logger.warn(`Initial loadLayout failed: ${getErrorMessage(err)}`));
 
   // Reload the layout whenever `platform.interfaceMode` changes so the user-facing mode switcher
@@ -999,6 +988,10 @@ export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo {
     minHeight,
     flashTriggerTime,
     lastFocusedElement,
+    // `isClosable` is a live TabInfo-only affordance (whether the tab shows a close button). It is
+    // not part of SavedTabInfo, so strip it here rather than let the rest-spread leak it into the
+    // persisted layout, where a stale value could later be resurrected by a tab loader.
+    isClosable,
     /* eslint-enable @typescript-eslint/no-unused-vars */
     ...savedTabInfo
   } = tabInfo;

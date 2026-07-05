@@ -879,9 +879,8 @@ const scriptureTextGridWebViewProvider: IWebViewProvider = {
       // A1 stubs the title as the single-cell form; the web view flips it to "Text Collection"
       // via updateWebViewDefinition once 2+ cells are displayed.
       title: '%webView_scriptureTextGrid_title_single%',
-      // Part of the default PT10 Studio layout and must always remain open, so the tab is
-      // non-closable (PT-4049 subsumes A8). The X-button is omitted and there is no keyboard
-      // close shortcut in the app, so this covers both close paths.
+      // Part of the default PT10 Studio layout and must always stay open, so the tab is non-closable
+      // (PT-4049 subsumes A8). No X-button and no keyboard close shortcut, so both paths are covered.
       isClosable: false,
       // No top toolbar in this view; the View Options icon button comes in A5.
       shouldShowToolbar: false,
@@ -1200,15 +1199,11 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   // Feature flag (default on): gate the Scripture Text Grid web view. When off, the provider is
   // not registered so the view cannot be opened or restored. The PT10 Studio default-layout
   // inclusion is gated by the same setting in the paratext-10-studio repo.
-  const isScriptureTextGridEnabled = await papi.settings.get(
+  // Kick off the settings read now but DON'T await it here — awaiting would serialize every
+  // registration below this line behind a single settings round-trip. It is resolved at the end.
+  const isScriptureTextGridEnabledPromise = papi.settings.get(
     'platformScriptureEditor.enableScriptureTextGrid',
   );
-  const scriptureTextGridWebViewProviderPromise = isScriptureTextGridEnabled
-    ? papi.webViewProviders.registerWebViewProvider(
-        SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
-        scriptureTextGridWebViewProvider,
-      )
-    : undefined;
 
   const openResourceTextPromise = papi.commands.registerCommand(
     'platformScriptureEditor.openResourceText',
@@ -1293,10 +1288,14 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   const markerNotifier = new MarkersViewNotifier(papi, context.executionToken);
   const markerNotifierUnsubscribers = await markerNotifier.start();
 
-  // Resolve the optional (feature-flag-gated) Scripture Text Grid registration into a value so the
-  // registrations list below stays a flat list of disposables rather than awaiting inside a spread.
-  const scriptureTextGridRegistration = scriptureTextGridWebViewProviderPromise
-    ? await scriptureTextGridWebViewProviderPromise
+  // Resolve the feature flag (kicked off above so it overlapped the other registrations) and, only
+  // if enabled, register the provider. Awaiting the flag here rather than up front keeps every
+  // registration above running in parallel instead of behind this one settings round-trip.
+  const scriptureTextGridRegistration = (await isScriptureTextGridEnabledPromise)
+    ? await papi.webViewProviders.registerWebViewProvider(
+        SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+        scriptureTextGridWebViewProvider,
+      )
     : undefined;
 
   context.registrations.add(

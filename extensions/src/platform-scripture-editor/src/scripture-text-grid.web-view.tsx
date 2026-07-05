@@ -35,9 +35,8 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 
   // Dynamic tab title: flips to "Text Collection" at 2+ displayed cells, "Scripture Text" otherwise.
   useEffect(() => {
-    // Wait until localization has resolved so we never flash a raw localize key into the tab.
-    // `useLocalizedStrings` returns the key itself as a placeholder while loading, so gate on
-    // `isLoading` — a truthiness check on the values wouldn't detect the not-yet-resolved state.
+    // Wait for localization so we never flash a raw key into the tab. `useLocalizedStrings` returns
+    // the key itself while loading, so gate on `isLoading` (a truthiness check couldn't detect that).
     if (isLoadingLocalizedStrings) return;
     const singleTitle = localizedStrings[TITLE_SINGLE_KEY];
     const multipleTitle = localizedStrings[TITLE_MULTIPLE_KEY];

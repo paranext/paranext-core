@@ -16,14 +16,11 @@ function webViewTypeOf(tab: TabData): string | undefined {
 
 /**
  * Depth-first walk of a dock box tree, calling `visitPanel` on each leaf panel and returning the
- * first panel `visitPanel` yields (returning `undefined` keeps looking). One recursive helper backs
- * both the anchor lookup and the id collection below. (Uses `reduce`, not a `for` loop, per the
- * repo's `no-restricted-syntax` rule — mirroring `findTabGroupById` in
- * `platform-dock-layout-storage.util.ts`.)
+ * first panel it yields (return `undefined` to keep looking). Backs both the anchor lookup and the
+ * id collection below.
  *
- * We intentionally do NOT reuse that `findTabGroupById`: it searches by panel id (not by contained
- * web view type), and importing it here would create an import cycle — that module imports from
- * `web-view.service-host.ts`, which imports this file.
+ * Not reusing `findTabGroupById` (platform-dock-layout-storage.util.ts) is deliberate: it matches
+ * by panel id, not by contained web view type, and importing it here would form an import cycle.
  */
 function findPanel(
   box: BoxData,
@@ -100,7 +97,14 @@ export function mergeDefaultLayoutSupplement(
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const dockbox = layout.dockbox as BoxData;
   const existingIds = new Set<string>();
-  collectTabIds(dockbox, existingIds);
+  // Dedup across every box, not just the dockbox: rc-dock keeps floated/windowed/maximized tabs in
+  // sibling boxes. A supplement tab the user moved out of the dockbox still exists, so scanning only
+  // the dockbox would re-inject a duplicate that grows on each load and corrupts the saved layout.
+  [dockbox, layout.floatbox, layout.windowbox, layout.maxbox].forEach((box) => {
+    // Each optional box is a BoxData at runtime when present; LayoutBase types them as the rc-dock union.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    if (box) collectTabIds(box as BoxData, existingIds);
+  });
 
   entries.forEach((entry) => {
     if (existingIds.has(entry.tab.id)) return;

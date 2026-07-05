@@ -1,25 +1,17 @@
 /**
  * E2E scaffold checks for the Scripture Text Grid web view (PT-4049 / A1).
  *
- * Scope (what the CDP fixture can deterministically verify against a live instance):
+ * Covered: the view opens as a non-closable dock tab titled "Scripture Text" — no
+ * `.dock-tab-close-btn`, checked against a positive-control tab so a class rename can't make the
+ * assertion pass vacuously. The app has no keyboard close shortcut, so the missing button covers
+ * both close paths.
  *
- * - The view opens as a dock tab titled "Scripture Text" (single-cell title; the count-driven flip to
- *   "Text Collection" is wired to A3's contents selector).
- * - The tab is NON-CLOSABLE: it renders no `.dock-tab-close-btn` (verified against a positive control
- *   tab so the assertion can't pass vacuously if rc-dock renames the class). Because the app
- *   registers no keyboard tab-close shortcut, the absent close button covers both close paths (X +
- *   keyboard).
+ * There is no menu/command for this view (it ships in the PT10 Studio default layout), so the test
+ * opens it directly via `window.papi.webViews.openWebView` (renderer exposes `papi` on
+ * `globalThis`).
  *
- * There is no menu or command for this view (it ships in the PT10 Studio default layout), so the
- * test opens it directly through `window.papi.webViews.openWebView` — the renderer exposes `papi`
- * on `globalThis` via `@renderer/global-this-web-view.model`.
- *
- * NOT covered here (require an app relaunch, which the CDP fixture — connected to an
- * already-running instance — cannot do; verified manually per the plan's verification section):
- *
- * - `useWebViewState` restart-persistence across quit & relaunch.
- * - Feature-flag OFF hiding the view (registration is decided at extension activation, so it needs a
- *   relaunch with the setting pre-set).
+ * NOT covered (need an app relaunch the CDP fixture can't do; verified manually): `useWebViewState`
+ * restart-persistence, and feature-flag-OFF hiding the view (registration happens at activation).
  */
 import { test, expect } from '../../fixtures/cdp.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
@@ -30,6 +22,36 @@ const SCRIPTURE_TEXT_TAB_TITLE = /^Scripture Text$/;
 
 test.describe('Scripture Text Grid (A1 scaffold)', () => {
   test.beforeEach(async ({ mainPage }) => {
+    await closeAllNonHomeDockTabs(mainPage);
+  });
+
+  // The grid tab is non-closable, so the shared close-button sweep can't clear it, and it would leak
+  // into later specs (shared instance + persisted layout). Make it closable via the renderer global
+  // `updateWebViewDefinitionById`, then run the normal sweep. Best-effort: cleanup must not fail the test.
+  test.afterEach(async ({ mainPage }) => {
+    await mainPage
+      .evaluate(async (webViewType) => {
+        // The renderer exposes `papi` and `updateWebViewDefinitionById` on `globalThis`; both are
+        // untyped in the Playwright context.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const win = window as unknown as {
+          papi: {
+            webViews: {
+              getAllOpenWebViewDefinitions: () => Promise<{ id: string; webViewType: string }[]>;
+            };
+          };
+          updateWebViewDefinitionById: (id: string, update: { isClosable: boolean }) => unknown;
+        };
+        const defs = await win.papi.webViews.getAllOpenWebViewDefinitions();
+        await Promise.all(
+          defs
+            .filter((d) => d.webViewType === webViewType)
+            .map((d) => win.updateWebViewDefinitionById(d.id, { isClosable: true })),
+        );
+      }, SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE)
+      .catch(() => {
+        // Ignore — cleanup is best-effort and must not fail the test.
+      });
     await closeAllNonHomeDockTabs(mainPage);
   });
 
@@ -61,11 +83,9 @@ test.describe('Scripture Text Grid (A1 scaffold)', () => {
     // Non-closable: the grid tab renders no close button (rc-dock omits it when `closable` is false).
     await expect(tab.locator('.dock-tab-close-btn')).toHaveCount(0);
 
-    // Positive control so the assertion above can't pass vacuously: if rc-dock ever renamed
-    // `.dock-tab-close-btn`, a bare `toHaveCount(0)` would still pass (selector matches nothing) and
-    // silently stop testing anything. Open a normal, closable web view and confirm the SAME selector
-    // matches its close button exactly once — proving the selector is still valid, so the grid tab's
-    // zero-count genuinely means "no close button" rather than "selector broke".
+    // Positive control: a bare `toHaveCount(0)` would pass vacuously if rc-dock renamed
+    // `.dock-tab-close-btn`. Open a normal closable tab and confirm the SAME selector matches its
+    // close button once, proving the grid tab's zero-count means "no button", not "selector broke".
     await openEnhancedResource(mainPage);
     const closableTab = mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i }).first();
     await expect(closableTab).toBeVisible({ timeout: 15_000 });

@@ -78,6 +78,36 @@ describe('mergeDefaultLayoutSupplement', () => {
       'scripture-text-grid-tab',
     ]);
   });
+  it('does not re-inject a supplement tab that the user has floated out of the dockbox', () => {
+    // rc-dock moves a floated tab into `floatbox`, a sibling of `dockbox`. Dedup must see it there,
+    // otherwise every subsequent load re-appends a duplicate-id copy into the dockbox anchor and
+    // corrupts the persisted layout.
+    const layout = baseLayout();
+    // The test layout is a known-fixed shape; casting the literal to rc-dock's box types matches the
+    // runtime structure (mirrors `baseLayout` / `tabsInFirstPanel` above).
+    /* eslint-disable no-type-assertion/no-type-assertion */
+    (layout as unknown as { floatbox: BoxData }).floatbox = {
+      mode: 'float',
+      children: [
+        {
+          tabs: [
+            {
+              id: 'scripture-text-grid-tab',
+              tabType: 'webView',
+              data: {
+                webViewType: 'platformScriptureEditor.scriptureTextGrid',
+                id: 'scripture-text-grid-tab',
+              },
+            },
+          ],
+        },
+      ],
+    } as unknown as BoxData;
+    /* eslint-enable no-type-assertion/no-type-assertion */
+
+    const merged = mergeDefaultLayoutSupplement(layout, [gridEntry]);
+    expect(tabsInFirstPanel(merged).map((t) => t.id)).toEqual(['anchor-tab']);
+  });
   it('skips an entry whose anchor webViewType is not present', () => {
     const orphan: DefaultLayoutSupplementEntry = {
       ...gridEntry,
