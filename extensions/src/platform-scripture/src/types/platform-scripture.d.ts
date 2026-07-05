@@ -784,6 +784,12 @@ declare module 'platform-scripture' {
       ResourceReferenceList,
       ResourceReferenceList
     >;
+    /** Gets/sets the current user's shown-by-default overlay for this project */
+    ShownByDefaultOverlay: DataProviderDataType<
+      undefined,
+      ShownByDefaultOverlay,
+      ShownByDefaultOverlay
+    >;
   };
 
   /** Provides user-specific text connection settings (model texts and referenced projects/resources) */
@@ -845,6 +851,37 @@ declare module 'platform-scripture' {
       ): Promise<UnsubscriberAsync>;
       /** Determines whether the current user can write to text connection project settings. */
       canUserWriteProjectTextConnectionSettings(): Promise<boolean>;
+      /** Gets the current user's shown-by-default overlay (resourceId -> checkbox state) */
+      getShownByDefaultOverlay(): Promise<ShownByDefaultOverlay>;
+      /** Sets the current user's shown-by-default overlay */
+      setShownByDefaultOverlay(
+        value: ShownByDefaultOverlay,
+      ): Promise<
+        DataProviderUpdateInstructions<UserTextConnectionSettingsProjectInterfaceDataTypes>
+      >;
+      /** Resets (removes) the current user's shown-by-default overlay and its initialized marker */
+      resetShownByDefaultOverlay(): Promise<boolean>;
+      /**
+       * Subscribe to run a callback when the current user's shown-by-default overlay changes
+       *
+       * @param selector Tells the provider what changes to listen for
+       * @param callback Function to run with the updated overlay, or a {@link PlatformError} on
+       *   error
+       * @param options Various options to adjust how the subscriber emits updates
+       * @returns Unsubscriber function
+       */
+      subscribeShownByDefaultOverlay(
+        selector: undefined,
+        callback: (value: ShownByDefaultOverlay | undefined | PlatformError) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+      /**
+       * Initializes the current user's shown-by-default overlay on first open of the Scripture Text
+       * Grid for this project: sets each admin-flagged Bible-text resource's overlay value to the
+       * project's current `isResourceShownByDefault`. Idempotent — a per-user-per-project marker
+       * prevents re-initialization on later opens (returns `false` when already initialized).
+       */
+      initializeShownByDefaultOverlay(): Promise<boolean>;
     };
 
   // #endregion User Text Connection Settings Types
@@ -1908,10 +1945,16 @@ declare module 'platform-scripture' {
     /** 20-byte (40-char) hex ID that uniquely identifies the project */
     id: string;
     /**
-     * When set by a project admin, indicates this resource should be shown by default when the
-     * shared layout is applied. When `undefined`, no admin preference has been set.
+     * Project-scope (Send/Receive'd) admin flag: when set, this resource is shown by default —
+     * consumed by the shared layout and, for Bible-text resources, by the Scripture Text Grid,
+     * where it also seeds new users' overlay on first open. `undefined` means no admin preference.
      */
     isResourceShownByDefault?: boolean;
+    /**
+     * User-scope (NOT Send/Receive'd) per-resource checkbox state on the current user's personal
+     * resources list. Absent by default; only meaningful on Bible-text references.
+     */
+    inTextCollectionUser?: boolean;
   };
 
   /** A reference to a DBL resource, identified by its 24-byte (48-char) hex ID */
@@ -1926,10 +1969,16 @@ declare module 'platform-scripture' {
     /** 24-byte (48-char) hex ID that uniquely identifies the resource */
     id: string;
     /**
-     * When set by a project admin, indicates this resource should be shown by default when the
-     * shared layout is applied. When `undefined`, no admin preference has been set.
+     * Project-scope (Send/Receive'd) admin flag: when set, this resource is shown by default —
+     * consumed by the shared layout and, for Bible-text resources, by the Scripture Text Grid,
+     * where it also seeds new users' overlay on first open. `undefined` means no admin preference.
      */
     isResourceShownByDefault?: boolean;
+    /**
+     * User-scope (NOT Send/Receive'd) per-resource checkbox state on the current user's personal
+     * resources list. Absent by default; only meaningful on Bible-text references.
+     */
+    inTextCollectionUser?: boolean;
   };
 
   /** A reference to an Enhanced resource, identified by name */
@@ -2005,6 +2054,10 @@ declare module 'platform-scripture' {
      * silently lost with no harmful consequences (e.g., cosmetic ordering, non-critical display
      * hints). Use minor bumps for additive, backwards-compatible changes. Use major bumps for
      * breaking changes.
+     *
+     * Current version is `1.1.0`: the `1.1.0` minor bump added the optional Bible-text flags
+     * `isResourceShownByDefault` (project-scope) and `inTextCollectionUser` (user-scope). Both are
+     * additive and backwards-compatible — files lacking them read cleanly.
      */
     dataVersion: string;
     /** Ordered list of project and resource references */
@@ -2033,6 +2086,14 @@ declare module 'platform-scripture' {
     dataVersion: string;
     items: EffectiveResourceReference[];
   };
+
+  /**
+   * Per-user (NOT Send/Receive'd) overlay recording the current user's shown-by-default checkbox
+   * state for admin-flagged Bible-text resources, keyed by resource id. Initialized on first open
+   * of the Scripture Text Grid to match the project's `isResourceShownByDefault` values, then
+   * diverges independently.
+   */
+  export type ShownByDefaultOverlay = { [resourceId: string]: boolean };
 
   // #endregion Resource Reference Types
 

@@ -77,6 +77,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     private UserProjectSettings? _userProjectSettings;
     private string? _cachedUserId;
 
+    private const string OverlaySettingName = "ShownByDefaultOverlay";
+    private const string OverlayInitializedMarkerName = "ShownByDefaultOverlayInitialized";
+    private const string OverlaySchemaVersion = "1.0.0";
+
     #endregion
 
     #region Constructors
@@ -150,6 +154,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(
             ("resetUserReferencedProjectsAndResources", ResetUserReferencedProjectsAndResources)
         );
+        retVal.Add(("getShownByDefaultOverlay", GetShownByDefaultOverlay));
+        retVal.Add(("setShownByDefaultOverlay", SetShownByDefaultOverlay));
+        retVal.Add(("resetShownByDefaultOverlay", ResetShownByDefaultOverlay));
+        retVal.Add(("initializeShownByDefaultOverlay", InitializeShownByDefaultOverlay));
         retVal.Add(
             ("canUserWriteProjectTextConnectionSettings", CanUserWriteProjectTextConnectionSettings)
         );
@@ -1697,6 +1705,26 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 $"{ProjectSettingsNames.PB_IS_PUBLISHED} is a read-only computed setting."
             );
 
+        // Figure out which setting name to use (resolved early so the admin gate below can use it
+        // before the IsValid network round-trip — unauthorized writes are rejected immediately).
+        var paratextSettingName =
+            ProjectSettingsNames.GetParatextSettingNameFromPlatformBibleSettingName(settingName)
+            ?? settingName;
+
+        // PROJECT-scope resource-reference-list settings carry the admin-only
+        // isResourceShownByDefault flag and drive auto-promote. Enforce the admin gate server-side
+        // (the UI-facing query is canUserWriteProjectTextConnectionSettings()). USER-scope writes
+        // (user lists, overlay, init) are intentionally UNGATED.
+        if (
+            (
+                paratextSettingName == ProjectSettingsNames.PT_MODEL_TEXTS
+                || paratextSettingName == ProjectSettingsNames.PT_REFERENCED_PROJECTS_AND_RESOURCES
+            ) && !IsUserProjectAdministrator()
+        )
+            throw new UnauthorizedAccessException(
+                $"Only project administrators may write '{settingName}'."
+            );
+
         // If there is no Paratext setting for the name given, we'll create one lower down
         object? currentValue = null;
         try
@@ -1708,11 +1736,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // Make sure the value we're planning to set is valid
         if (!ProjectSettingsService.IsValid(PapiClient, value, currentValue, settingName, ""))
             throw new InvalidDataException($"Validation failed for {settingName}");
-
-        // Figure out which setting name to use
-        var paratextSettingName =
-            ProjectSettingsNames.GetParatextSettingNameFromPlatformBibleSettingName(settingName)
-            ?? settingName;
 
         // Text direction comes from the project's ldml file, not from Settings.xml
         // We may add an LDML projectInterface one day where you can edit the LDML in the UI
@@ -1796,13 +1819,26 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                                 ?? throw new InvalidDataException(
                                     $"Value for {settingName} could not be converted to a string"
                                 );
-                            var list =
+                            var parsedList =
                                 serialized.DeserializeFromJson<ResourceReferenceList>()
                                 ?? throw new InvalidDataException(
                                     $"Value for {settingName} could not be deserialized as a ResourceReferenceList"
                                 );
-                            value =
-                                $"{ResourceReferenceList.CurrentFormatVersion} {list.SerializeToJson()}";
+                            // Preserve the client-provided parsedList.DataVersion rather than
+                            // stamping CurrentDataVersion here — deliberate forward-compat: stamping
+                            // would silently minor-downgrade a newer body version from a future client.
+                            scrText.Settings.SetSetting(
+                                paratextSettingName,
+                                $"{ResourceReferenceList.CurrentFormatVersion} {parsedList.SerializeToJson()}"
+                            );
+                            scrText.Settings.Save(false);
+                            AutoPromoteShownByDefaultResources(
+                                scrText,
+                                paratextSettingName,
+                                parsedList
+                            );
+                            // Return here; SendDataUpdateEvent fires after the lock releases below.
+                            return;
                         }
                         else if (
                             ProjectSettingsNames.IsParatextSettingABoolean(paratextSettingName)
@@ -1859,6 +1895,153 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             ProjectSettingsService.GetDefault(PapiClient, settingName)
             ?? throw new InvalidDataException($"Default value for {settingName} was null");
         return SetProjectSetting(settingName, defaultValue);
+    }
+
+    /// <summary>
+    /// When <paramref name="writtenList"/> contains Bible-text references flagged
+    /// <c>IsResourceShownByDefault == true</c> that are not already present (by reference type + Id)
+    /// in PT_REFERENCED_PROJECTS_AND_RESOURCES, appends them to that list so the existing (private)
+    /// download path installs them. Idempotent; the appended copy carries no flags (it exists only to
+    /// drive download) and preserves the original <c>Name</c> (and any <c>ExtraData</c>).
+    /// <para>
+    /// Guard contract: if PT_REFERENCED_PROJECTS_AND_RESOURCES is present-but-unparseable (wrong
+    /// major version, missing version prefix, or corrupt JSON) the promote is skipped entirely with a
+    /// warning and the stored value is left untouched. Absent/empty stored values still mean "empty
+    /// list, proceed" (the normal first-promote case). This lenient-with-guard contract is
+    /// intentionally distinct from <see cref="GetProjectSetting"/>'s strict throwing contract —
+    /// promote is a best-effort background operation, while GetProjectSetting is a user-visible read
+    /// that must surface errors.
+    /// </para>
+    /// </summary>
+    private void AutoPromoteShownByDefaultResources(
+        ScrText scrText,
+        string writtenPtSettingName,
+        ResourceReferenceList writtenList
+    )
+    {
+        // Carry the full ResourceReference items (not just keys) so the promoted copy can preserve Name.
+        var flaggedItems = writtenList
+            .Items.Where(i =>
+                i.IsResourceShownByDefault == true && TryGetBibleTextKey(i) is not null
+            )
+            .ToList();
+        if (flaggedItems.Count == 0)
+            return;
+
+        if (
+            !TryReadRawResourceReferenceList(
+                scrText,
+                ProjectSettingsNames.PT_REFERENCED_PROJECTS_AND_RESOURCES,
+                out var referenced
+            )
+        )
+        {
+            Console.WriteLine(
+                $"AutoPromote skipped: {ProjectSettingsNames.PT_REFERENCED_PROJECTS_AND_RESOURCES} "
+                    + "is present but has an unrecognized major version or could not be deserialized. "
+                    + "The stored value has been left untouched."
+            );
+            return;
+        }
+
+        // Present = all items currently stored in PT_REFERENCED_PROJECTS_AND_RESOURCES.
+        // "referenced" already reflects the just-written value when writtenPtSettingName is
+        // PT_REFERENCED_PROJECTS_AND_RESOURCES (SetSetting+Save ran before this helper).
+        var present = new HashSet<(string, string)>();
+        foreach (var i in referenced.Items)
+        {
+            var key = TryGetBibleTextKey(i);
+            if (key is not null)
+                present.Add(key.Value);
+        }
+
+        var toAppend = flaggedItems
+            .Where(i => TryGetBibleTextKey(i) is (string, string) k && !present.Contains(k))
+            .ToList();
+        if (toAppend.Count == 0)
+            return;
+
+        var appended = referenced.Items.ToList();
+        foreach (var item in toAppend)
+            // Strip flags from the promoted copy: it exists only to drive download.
+            appended.Add(
+                item with
+                {
+                    IsResourceShownByDefault = null,
+                    InTextCollectionUser = null,
+                }
+            );
+
+        var updated = referenced with
+        {
+            Items = appended,
+            DataVersion = ResourceReferenceList.CurrentDataVersion,
+        };
+        scrText.Settings.SetSetting(
+            ProjectSettingsNames.PT_REFERENCED_PROJECTS_AND_RESOURCES,
+            $"{ResourceReferenceList.CurrentFormatVersion} {updated.SerializeToJson()}"
+        );
+        scrText.Settings.Save(false);
+    }
+
+    /// <summary>
+    /// Returns the (discriminant, Id) match key for a Bible-text reference
+    /// (<see cref="ProjectReference"/> = "project", <see cref="DblResourceReference"/> =
+    /// "dblResource"); <c>null</c> for all other reference types.
+    /// </summary>
+    private static (string type, string id)? TryGetBibleTextKey(ResourceReference item) =>
+        item switch
+        {
+            ProjectReference p => ("project", p.Id),
+            DblResourceReference d => ("dblResource", d.Id),
+            _ => null,
+        };
+
+    /// <summary>
+    /// Reads a project-scope resource-reference-list setting straight from ScrText settings.
+    /// Returns <c>true</c> with an empty list when absent/empty (normal first-promote case).
+    /// Returns <c>false</c> (leaving <paramref name="list"/> as <c>default</c>) when the stored
+    /// value is non-empty but (a) has no space-separated version prefix, (b) has an unparseable
+    /// version, (c) has a major version != <see cref="ResourceReferenceList.CurrentMajorVersion"/>,
+    /// or (d) fails JSON deserialization — so the caller can skip rather than clobber.
+    /// </summary>
+    private static bool TryReadRawResourceReferenceList(
+        ScrText scrText,
+        string ptSettingName,
+        out ResourceReferenceList list
+    )
+    {
+        if (
+            !scrText.Settings.ParametersDictionary.TryGetValue(ptSettingName, out string? stored)
+            || string.IsNullOrEmpty(stored)
+        )
+        {
+            list = new ResourceReferenceList();
+            return true;
+        }
+        int spaceIndex = stored.IndexOf(' ');
+        if (spaceIndex < 0)
+        {
+            list = default!;
+            return false;
+        }
+        string versionStr = stored[..spaceIndex];
+        if (
+            !System.Version.TryParse(versionStr, out var parsedVersion)
+            || parsedVersion.Major != ResourceReferenceList.CurrentMajorVersion
+        )
+        {
+            list = default!;
+            return false;
+        }
+        var deserialized = stored[(spaceIndex + 1)..].DeserializeFromJson<ResourceReferenceList>();
+        if (deserialized is null)
+        {
+            list = default!;
+            return false;
+        }
+        list = deserialized;
+        return true;
     }
 
     /// <summary>
@@ -2025,6 +2208,109 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return true;
     }
 
+    public Dictionary<string, bool> GetShownByDefaultOverlay(object? param = null)
+    {
+        var (schemaVersion, content) = GetUserProjectSettings().GetSetting(OverlaySettingName);
+        if (content == null || string.IsNullOrEmpty(content.Value))
+            return [];
+        // Reject an overlay written by a future/incompatible build rather than silently
+        // deserializing it into the current shape (mirrors ValidateUserSettingVersion on the
+        // S/R'd lists). Absent/empty overlays above still mean "nothing stored, proceed".
+        ValidateOverlaySchemaVersion(schemaVersion);
+        return content.Value.DeserializeFromJson<Dictionary<string, bool>>() ?? [];
+    }
+
+    public bool SetShownByDefaultOverlay(object? value)
+    {
+        string? json = value?.ToString();
+        var map =
+            (
+                string.IsNullOrEmpty(json)
+                    ? null
+                    : json.DeserializeFromJson<Dictionary<string, bool>>()
+            )
+            ?? throw new InvalidDataException(
+                "ShownByDefaultOverlay value must be a JSON object map"
+            );
+        WriteOverlay(map);
+        SendDataUpdateEvent(
+            ProjectDataType.SHOWN_BY_DEFAULT_OVERLAY,
+            "shown-by-default overlay update event"
+        );
+        return true;
+    }
+
+    public bool ResetShownByDefaultOverlay()
+    {
+        // Full reset: forget the overlay AND the initialized marker so the next first-open re-inits
+        // from the current admin defaults.
+        GetUserProjectSettings().RemoveSetting(OverlaySettingName);
+        GetUserProjectSettings().RemoveSetting(OverlayInitializedMarkerName);
+        SendDataUpdateEvent(
+            ProjectDataType.SHOWN_BY_DEFAULT_OVERLAY,
+            "shown-by-default overlay reset event"
+        );
+        return true;
+    }
+
+    /// <summary>
+    /// First-open initialization of the current user's shown-by-default overlay for this project.
+    /// For each project-scope Bible-text reference whose <c>IsResourceShownByDefault</c> is set,
+    /// records overlay[resourceId] = that value. Idempotent: a per-user-per-project marker prevents
+    /// re-initialization, so later opens (and user un-checks) are preserved. Returns <c>false</c>
+    /// when already initialized. When a resource is flagged in both
+    /// <c>PT_MODEL_TEXTS</c> and <c>PT_REFERENCED_PROJECTS_AND_RESOURCES</c> with different values,
+    /// the <c>PT_REFERENCED_PROJECTS_AND_RESOURCES</c> value wins (iteration order).
+    /// </summary>
+    public bool InitializeShownByDefaultOverlay(object? param = null)
+    {
+        var settings = GetUserProjectSettings();
+        var (_, marker) = settings.GetSetting(OverlayInitializedMarkerName);
+        if (marker != null)
+            return false;
+
+        var overlay = GetShownByDefaultOverlay();
+        foreach (
+            var pbSettingName in new[]
+            {
+                ProjectSettingsNames.PB_MODEL_TEXTS,
+                ProjectSettingsNames.PB_REFERENCED_PROJECTS_AND_RESOURCES,
+            }
+        )
+        {
+            if (GetProjectSetting(pbSettingName) is not ResourceReferenceList list)
+                continue;
+            foreach (var item in list.Items)
+                if (
+                    item.IsResourceShownByDefault is bool shown
+                    && TryGetBibleTextKey(item) is (_, string id)
+                )
+                    overlay[id] = shown;
+        }
+
+        WriteOverlay(overlay);
+        settings.SetSetting(
+            OverlayInitializedMarkerName,
+            OverlaySchemaVersion,
+            new XElement("Items", "true")
+        );
+        SendDataUpdateEvent(
+            ProjectDataType.SHOWN_BY_DEFAULT_OVERLAY,
+            "shown-by-default overlay first-open init event"
+        );
+        return true;
+    }
+
+    private void WriteOverlay(Dictionary<string, bool> map)
+    {
+        GetUserProjectSettings()
+            .SetSetting(
+                OverlaySettingName,
+                OverlaySchemaVersion,
+                new XElement("Items", map.SerializeToJson())
+            );
+    }
+
     private UserProjectSettings GetUserProjectSettings()
     {
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
@@ -2047,6 +2333,26 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             throw new InvalidDataException(
                 $"User setting '{settingName}' has incompatible major version {parsed.Major}; "
                     + $"expected {ResourceReferenceList.CurrentMajorVersion}"
+            );
+    }
+
+    /// <summary>
+    /// Validates the schema version stored alongside the shown-by-default overlay. The overlay has
+    /// its own version line (<see cref="OverlaySchemaVersion"/>), independent of the S/R'd resource
+    /// lists, so it is validated against that rather than
+    /// <see cref="ResourceReferenceList.CurrentMajorVersion"/>.
+    /// </summary>
+    private static void ValidateOverlaySchemaVersion(string? schemaVersion)
+    {
+        int expectedMajor = new Version(OverlaySchemaVersion).Major;
+        if (!Version.TryParse(schemaVersion, out Version? parsed))
+            throw new InvalidDataException(
+                $"Shown-by-default overlay has invalid version format: '{schemaVersion}'"
+            );
+        if (parsed.Major != expectedMajor)
+            throw new InvalidDataException(
+                $"Shown-by-default overlay has incompatible major version {parsed.Major}; "
+                    + $"expected {expectedMajor}"
             );
     }
 

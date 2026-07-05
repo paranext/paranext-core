@@ -129,7 +129,15 @@ public class ResourceReferenceListTests
     {
         var list = new ResourceReferenceList
         {
-            Items = [new ProjectReference { Name = "My Project", Id = "aabbcc", IsResourceShownByDefault = true }],
+            Items =
+            [
+                new ProjectReference
+                {
+                    Name = "My Project",
+                    Id = "aabbcc",
+                    IsResourceShownByDefault = true,
+                },
+            ],
         };
         string json = list.SerializeToJson();
         var result = json.DeserializeFromJson<ResourceReferenceList>();
@@ -191,7 +199,10 @@ public class ResourceReferenceListTests
     {
         var list = new ResourceReferenceList
         {
-            Items = [new EnhancedResourceReference { Name = "BDAG", IsResourceShownByDefault = true }],
+            Items =
+            [
+                new EnhancedResourceReference { Name = "BDAG", IsResourceShownByDefault = true },
+            ],
         };
         string json = list.SerializeToJson();
         var result = json.DeserializeFromJson<ResourceReferenceList>();
@@ -206,7 +217,10 @@ public class ResourceReferenceListTests
     {
         var list = new ResourceReferenceList
         {
-            Items = [new XmlResourceReference { Name = "SomeXml", IsResourceShownByDefault = false }],
+            Items =
+            [
+                new XmlResourceReference { Name = "SomeXml", IsResourceShownByDefault = false },
+            ],
         };
         string json = list.SerializeToJson();
         var result = json.DeserializeFromJson<ResourceReferenceList>();
@@ -221,7 +235,14 @@ public class ResourceReferenceListTests
     {
         var list = new ResourceReferenceList
         {
-            Items = [new SourceLanguageResourceReference { Name = "Greek", IsResourceShownByDefault = true }],
+            Items =
+            [
+                new SourceLanguageResourceReference
+                {
+                    Name = "Greek",
+                    IsResourceShownByDefault = true,
+                },
+            ],
         };
         string json = list.SerializeToJson();
         var result = json.DeserializeFromJson<ResourceReferenceList>();
@@ -318,6 +339,195 @@ public class ResourceReferenceListTests
         Assert.That(result.Items[0], Is.InstanceOf<ProjectReference>());
         Assert.That(result.Items[1], Is.InstanceOf<EnhancedResourceReference>());
         Assert.That(result.Items[2], Is.InstanceOf<SourceLanguageResourceReference>());
+    }
+
+    #endregion
+
+    #region Serialization — two-flag schema (PT-4050)
+
+    [Test]
+    public void CurrentFormatAndDataVersion_AreMinor1_1()
+    {
+        Assert.That(ResourceReferenceList.CurrentFormatVersion, Is.EqualTo("1.1.0"));
+        Assert.That(ResourceReferenceList.CurrentDataVersion, Is.EqualTo("1.1.0"));
+        // Major MUST stay 1 — a downstream private S/R reader keys on it.
+        Assert.That(ResourceReferenceList.CurrentMajorVersion, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void ProjectReference_WithBothFlags_RoundTripsThroughJson()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items =
+            [
+                new ProjectReference
+                {
+                    Name = "P",
+                    Id = "aabbcc",
+                    IsResourceShownByDefault = true,
+                    InTextCollectionUser = false,
+                },
+            ],
+        };
+        var result = list.SerializeToJson().DeserializeFromJson<ResourceReferenceList>();
+
+        var item = result!.Items[0] as ProjectReference;
+        Assert.That(item!.IsResourceShownByDefault, Is.True);
+        Assert.That(item.InTextCollectionUser, Is.False);
+    }
+
+    [Test]
+    public void ResourceReference_WithNullFlags_OmitsAttributesFromJson()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new ProjectReference { Name = "P", Id = "aabbcc" }],
+        };
+        string json = list.SerializeToJson();
+
+        // Old-build files must stay clean: unset flags are absent, not `false`.
+        Assert.That(json, Does.Not.Contain("isResourceShownByDefault"));
+        Assert.That(json, Does.Not.Contain("inTextCollectionUser"));
+    }
+
+    [Test]
+    public void OldJson_WithoutFlags_DeserializesWithNullFlags()
+    {
+        // A file written by an old build (1.0.0, no flag keys) must read cleanly.
+        const string json =
+            """{"dataVersion":"1.0.0","items":[{"type":"project","name":"P","id":"aabbcc"}]}""";
+        var result = json.DeserializeFromJson<ResourceReferenceList>();
+
+        var item = result!.Items[0] as ProjectReference;
+        Assert.That(item!.IsResourceShownByDefault, Is.Null);
+        Assert.That(item.InTextCollectionUser, Is.Null);
+    }
+
+    [Test]
+    public void KnownType_PreservesUnknownJsonFields_OnReSerialize()
+    {
+        // Forward-compat: a build that doesn't know "futureFlag" must not drop it.
+        const string json =
+            """{"dataVersion":"1.1.0","items":[{"type":"project","name":"P","id":"aabbcc","futureFlag":123}]}""";
+        var result = json.DeserializeFromJson<ResourceReferenceList>();
+        string reSerialized = result!.SerializeToJson();
+
+        Assert.That(reSerialized, Does.Contain("futureFlag"));
+        Assert.That(reSerialized, Does.Contain("123"));
+    }
+
+    [Test]
+    public void ProjectReference_WithFlags_RoundTripsThroughXml()
+    {
+        var list = new ResourceReferenceList
+        {
+            DataVersion = ResourceReferenceList.CurrentDataVersion,
+            Items =
+            [
+                new DblResourceReference
+                {
+                    Name = "D",
+                    Id = "112233445566",
+                    IsResourceShownByDefault = false,
+                    InTextCollectionUser = true,
+                },
+            ],
+        };
+        var xml = ResourceReferenceList.ToXml(list);
+        var result = ResourceReferenceList.FromXml(xml, ResourceReferenceList.CurrentDataVersion);
+
+        var item = result.Items[0] as DblResourceReference;
+        Assert.That(item!.IsResourceShownByDefault, Is.False);
+        Assert.That(item.InTextCollectionUser, Is.True);
+    }
+
+    [Test]
+    public void Xml_WithNullFlags_OmitsAttributes()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new ProjectReference { Name = "P", Id = "aabbcc" }],
+        };
+        var xml = ResourceReferenceList.ToXml(list);
+        var itemEl = xml.Elements("Item").First();
+
+        Assert.That(itemEl.Attribute("isResourceShownByDefault"), Is.Null);
+        Assert.That(itemEl.Attribute("inTextCollectionUser"), Is.Null);
+    }
+
+    [Test]
+    public void OldXml_WithoutFlags_ParsesWithNullFlags()
+    {
+        var xml = System.Xml.Linq.XElement.Parse(
+            """<Items><Item type="project" name="P" id="aabbcc" /></Items>"""
+        );
+        var result = ResourceReferenceList.FromXml(xml, "1.0.0");
+
+        var item = result.Items[0] as ProjectReference;
+        Assert.That(item!.IsResourceShownByDefault, Is.Null);
+        Assert.That(item.InTextCollectionUser, Is.Null);
+    }
+
+    [Test]
+    public void KnownXmlItem_PreservesUnknownAttributes_OnXmlRoundTrip()
+    {
+        // Forward-compat: a build that doesn't know "futureAttr" must not drop it from XML.
+        var xml = System.Xml.Linq.XElement.Parse(
+            """<Items><Item type="project" name="P" id="aabbcc" futureAttr="keep-me" /></Items>"""
+        );
+        var list = ResourceReferenceList.FromXml(xml, "1.1.0");
+        var rewritten = ResourceReferenceList.ToXml(list);
+        var itemEl = rewritten.Elements("Item").First();
+
+        Assert.That(itemEl.Attribute("futureAttr")?.Value, Is.EqualTo("keep-me"));
+    }
+
+    [Test]
+    public void KnownJsonItem_WithBooleanExtra_EmitsLowercaseJsonTextInXml()
+    {
+        // A JSON-sourced boolean extra must not degrade to "True" on a JSON->XML transition.
+        const string json =
+            """{"dataVersion":"1.1.0","items":[{"type":"project","name":"P","id":"aabbcc","futureFlag":true}]}""";
+        var list = json.DeserializeFromJson<ResourceReferenceList>()!;
+        var xml = ResourceReferenceList.ToXml(list);
+        var itemEl = xml.Elements("Item").First();
+
+        Assert.That(itemEl.Attribute("futureFlag")?.Value, Is.EqualTo("true"));
+    }
+
+    [Test]
+    public void NamedOnlyType_PreservesBibleTextOnlyProperties_OnJsonRoundTrip()
+    {
+        // A name-only type (enhancedResource) never natively handles "id" or "inTextCollectionUser"
+        // (both are Bible-text-only). A future build that attaches them must not have them silently
+        // dropped: they flow through ExtraData (captured against the narrower
+        // KnownNamedOnlyPropertyNames set) and are re-emitted. isResourceShownByDefault, by contrast,
+        // is understood on every type, so it is a real field rather than a passthrough.
+        const string json =
+            """{"dataVersion":"1.1.0","items":[{"type":"enhancedResource","name":"Enh","id":"keep-id","inTextCollectionUser":true}]}""";
+        var result = json.DeserializeFromJson<ResourceReferenceList>();
+        Assert.That(result!.Items[0], Is.InstanceOf<EnhancedResourceReference>());
+
+        string reSerialized = result.SerializeToJson();
+        Assert.That(reSerialized, Does.Contain("keep-id"));
+        Assert.That(reSerialized, Does.Contain("inTextCollectionUser"));
+    }
+
+    [Test]
+    public void NamedOnlyType_PreservesBibleTextOnlyAttributes_OnXmlRoundTrip()
+    {
+        // Same passthrough guarantee for XML: an xmlResource carrying an "id" attribute (which this
+        // type does not natively handle) must survive an XML round-trip via ExtraData.
+        var xml = System.Xml.Linq.XElement.Parse(
+            """<Items><Item type="xmlResource" name="X" id="keep-id" /></Items>"""
+        );
+        var list = ResourceReferenceList.FromXml(xml, "1.1.0");
+        Assert.That(list.Items[0], Is.InstanceOf<XmlResourceReference>());
+
+        var rewritten = ResourceReferenceList.ToXml(list);
+        var itemEl = rewritten.Elements("Item").First();
+        Assert.That(itemEl.Attribute("id")?.Value, Is.EqualTo("keep-id"));
     }
 
     #endregion
