@@ -1,10 +1,17 @@
+// @vitest-environment jsdom
+// `generateInlineMarkerMenuListItems` now pulls in `getMarkerMenuItems`/`defaultStyleInfo` as real
+// (not type-only) imports from `@eten-tech-foundation/platform-editor`, whose bundled entry point
+// touches `document` at module-eval time (it re-exports the whole editor, React components and
+// all). The default `node` environment (see `vitest.config.ts`) has no `document`, so this file
+// needs jsdom — same fix already used by `scripture-pane.test.tsx` and
+// `use-editor-pdp-sync.hook.test.ts` for the same package.
 import { describe, it, expect, vi } from 'vitest';
 import { ScriptureRange } from 'platform-scripture-editor';
 import type PapiBackend from '@papi/backend';
 import { UsjTextContentLocation } from 'platform-bible-utils';
 import type { SavedWebViewDefinition } from '@papi/core';
 import { MutableRefObject } from 'react';
-import { EditorRef } from '@eten-tech-foundation/platform-editor';
+import { EditorRef, StyleInfo } from '@eten-tech-foundation/platform-editor';
 import {
   convertScriptureRangeToEditorRange,
   generateParagraphMenuListItems,
@@ -2443,18 +2450,38 @@ describe('generateParagraphMenuListItems', () => {
 });
 
 describe('generateInlineMarkerMenuListItems', () => {
-  // The 'p' parent's children include block markers (e.g. 'q' poetry, 's1' section heading) and
-  // inline markers (e.g. 'f' footnote, 'x' cross-reference) against the real usfmMarkers data.
   const PARENT = 'p';
   const noop = () => {};
 
-  it('when protected: block-marker item is disallowed and its action notifies without inserting', () => {
+  // Minimal project-stylesheet fixture (as if merged from usfm.sty + custom.sty and serialized by
+  // the host): 'p' the parent paragraph, 'v' a verse marker (the library classifies it as
+  // styleType "character", but `isBlockMarker` special-cases 'v' as structural — same as PT9), 'f'
+  // a note marker, and 'nd' a plain inline character marker. `wj` is deliberately absent here and
+  // added back per-test to exercise stylesheet-driven inclusion/exclusion.
+  const BASE_STYLE_INFO: StyleInfo = {
+    markers: {
+      p: { marker: 'p', styleType: 'paragraph' },
+      v: { marker: 'v', styleType: 'character' },
+      f: { marker: 'f', styleType: 'note', endMarker: 'f*', description: 'A Footnote text item' },
+      nd: { marker: 'nd', styleType: 'character', description: 'For name of deity' },
+    },
+  };
+
+  it('when protected: block-marker item (v) is disallowed and its action notifies without inserting', () => {
     const { ref, insertMarker } = makeMockEditorRef();
     const notify = vi.fn();
     const close = vi.fn();
-    const items = generateInlineMarkerMenuListItems(ref, close, {}, true, notify, PARENT);
+    const items = generateInlineMarkerMenuListItems(
+      ref,
+      close,
+      {},
+      true,
+      notify,
+      PARENT,
+      BASE_STYLE_INFO,
+    );
 
-    const blockItem = items.find((i) => i.marker === 'q');
+    const blockItem = items.find((i) => i.marker === 'v');
     expect(blockItem?.isDisallowed).toBe(true);
 
     blockItem?.action?.();
@@ -2463,11 +2490,19 @@ describe('generateInlineMarkerMenuListItems', () => {
     expect(insertMarker).not.toHaveBeenCalled();
   });
 
-  it('when protected: inline-marker item is allowed and its action inserts', () => {
+  it('when protected: inline-marker item (f) is allowed and its action inserts', () => {
     const { ref, insertMarker } = makeMockEditorRef();
     const notify = vi.fn();
     const close = vi.fn();
-    const items = generateInlineMarkerMenuListItems(ref, close, {}, true, notify, PARENT);
+    const items = generateInlineMarkerMenuListItems(
+      ref,
+      close,
+      {},
+      true,
+      notify,
+      PARENT,
+      BASE_STYLE_INFO,
+    );
 
     const inlineItem = items.find((i) => i.marker === 'f');
     expect(inlineItem?.isDisallowed).toBeFalsy();
@@ -2482,7 +2517,15 @@ describe('generateInlineMarkerMenuListItems', () => {
     const { ref, insertMarker } = makeMockEditorRef();
     const notify = vi.fn();
     const close = vi.fn();
-    const items = generateInlineMarkerMenuListItems(ref, close, {}, false, notify, PARENT);
+    const items = generateInlineMarkerMenuListItems(
+      ref,
+      close,
+      {},
+      false,
+      notify,
+      PARENT,
+      BASE_STYLE_INFO,
+    );
 
     expect(items.length).toBeGreaterThan(0);
     expect(items.every((i) => !i.isDisallowed)).toBe(true);
@@ -2495,5 +2538,67 @@ describe('generateInlineMarkerMenuListItems', () => {
   it('returns [] when there is no parent marker', () => {
     const { ref } = makeMockEditorRef();
     expect(generateInlineMarkerMenuListItems(ref, noop, {}, false, vi.fn())).toEqual([]);
+  });
+
+  it('titles fall back to the raw stylesheet description, or the marker code when no description is given', () => {
+    const { ref } = makeMockEditorRef();
+    const items = generateInlineMarkerMenuListItems(
+      ref,
+      noop,
+      {},
+      false,
+      vi.fn(),
+      PARENT,
+      BASE_STYLE_INFO,
+    );
+
+    expect(items.find((i) => i.marker === 'f')?.title).toBe('A Footnote text item');
+    expect(items.find((i) => i.marker === 'v')?.title).toBe('v');
+  });
+
+  it('omits a marker the supplied project stylesheet does not define (project-invalid)', () => {
+    const { ref } = makeMockEditorRef();
+    const items = generateInlineMarkerMenuListItems(
+      ref,
+      noop,
+      {},
+      false,
+      vi.fn(),
+      PARENT,
+      BASE_STYLE_INFO,
+    );
+
+    expect(items.some((i) => i.marker === 'wj')).toBe(false);
+  });
+
+  it('includes a marker once the supplied stylesheet defines it (custom.sty addition)', () => {
+    const { ref } = makeMockEditorRef();
+    const withCustomMarker: StyleInfo = {
+      markers: {
+        ...BASE_STYLE_INFO.markers,
+        wj: { marker: 'wj', styleType: 'character', description: 'For marking the words of Jesus' },
+      },
+    };
+    const items = generateInlineMarkerMenuListItems(
+      ref,
+      noop,
+      {},
+      false,
+      vi.fn(),
+      PARENT,
+      withCustomMarker,
+    );
+
+    expect(items.some((i) => i.marker === 'wj')).toBe(true);
+  });
+
+  it('falls back to the bundled default stylesheet when no project styleInfo is supplied', () => {
+    const { ref } = makeMockEditorRef();
+    const items = generateInlineMarkerMenuListItems(ref, noop, {}, false, vi.fn(), PARENT);
+
+    // The bundled usfm.sty defines far more inline/note markers under 'p' than the minimal test
+    // fixture above, so this can only pass if the no-styleInfo path is actually wired up.
+    expect(items.length).toBeGreaterThan(Object.keys(BASE_STYLE_INFO.markers).length);
+    expect(items.some((i) => i.marker === 'wj')).toBe(true);
   });
 });

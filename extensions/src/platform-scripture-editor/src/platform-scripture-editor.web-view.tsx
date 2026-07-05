@@ -1,16 +1,21 @@
 import {
   AnnotationRange,
+  defaultStyleInfo,
   DeltaOp,
   DeltaOpInsertNoteEmbed,
   DeltaSource,
   Editorial,
   EditorOptions,
   EditorRef,
+  getEnterMenuItems,
+  getMarkerMenuItems,
   GENERATOR_NOTE_CALLER,
   getDefaultViewOptions,
   getViewOptions,
   HIDDEN_NOTE_CALLER,
   isInsertEmbedOpOfType,
+  MarkerMenuContext,
+  MarkerMenuItem,
   PARAGRAPH_STRUCTURE_VIEW_MODE,
   SelectionRange,
   STANDARD_VIEW_MODE,
@@ -22,7 +27,7 @@ import {
   ViewOptions,
 } from '@eten-tech-foundation/platform-editor';
 import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
-import type { WebViewProps } from '@papi/core';
+import type { CommandPaletteItem, WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
   useData,
@@ -216,6 +221,24 @@ const defaultTextDirection = 'ltr';
 
 const defaultMarkersMenuTrigger = '\\';
 
+/**
+ * The marker-menu context plus the caret/selection anchor rect returned by
+ * `EditorRef.getMarkerMenuContext`. Anchor coordinates are iframe-relative by contract, so they can
+ * be passed straight through to `papi.overlays.showCommandPalette`'s `anchor` option.
+ */
+type MarkerMenuAnchorContext = MarkerMenuContext & {
+  anchorRect?: { x: number; y: number; width: number; height: number };
+};
+
+/**
+ * Maps a library marker-menu item to the overlay service's command-palette item shape. Passive
+ * palettes filter on raw `label` strings (see `filterPaletteItems`), so `label` must stay a plain
+ * string rather than a `LocalizeKey` — the marker code itself, not a localized description.
+ */
+function toCommandPaletteItem(item: MarkerMenuItem): CommandPaletteItem {
+  return { id: item.marker, label: item.marker, description: item.description };
+}
+
 // Return the appropriate ViewOptions for the given webview `viewType`.
 // Centralizes the logic so initialization and effects can call the same helper
 // instead of duplicating the shallow-copy code.
@@ -341,6 +364,26 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   /** Stores the current editor selection, updated on every selection change. */
   const currentSelectionRef = useRef<SelectionRange | undefined>(undefined);
+
+  /**
+   * Session state for a standard-view marker-menu palette while it's open (single owner: the
+   * keydown flow in the effect below).
+   *
+   * `'backslash'` is only ever set for a _passive_ palette — the collapsed-caret `\` trigger, whose
+   * `\` (and subsequent marker characters) keep landing as literal text in the document while the
+   * palette stays open, so those keystrokes need the while-open forwarding table below to also
+   * drive the palette. The selection-wrap `\` trigger opens a _focused_ palette instead (nothing
+   * lands, typing filters the palette's own search box), so it's never tracked here.
+   *
+   * `'enter'` only guards against a second Enter re-opening a palette while the first request's
+   * round-trip to the overlay service is still in flight — its palette is always focused too, so
+   * there's no forwarding table for it either.
+   */
+  const paletteSession = useRef<
+    | { kind: 'backslash'; literalPrefixLanded: boolean; filter: string; items: MarkerMenuItem[] }
+    | { kind: 'enter'; items: MarkerMenuItem[] }
+    | undefined
+  >(undefined);
 
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
   const [decorations, setDecorations] = useWebViewState<EditorDecorations>(
@@ -1173,8 +1216,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         isStructureProtected,
         notifyStructureProtected,
         contextMarker,
+        styleInfo,
       ),
-    [contextMarker, localizedStrings, isStructureProtected, notifyStructureProtected],
+    [contextMarker, localizedStrings, isStructureProtected, notifyStructureProtected, styleInfo],
   );
 
   // When the marker menu closes, should refocus the editor
@@ -1218,18 +1262,191 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
   }, [showMarkersMenu]);
 
+  /**
+   * Opens a marker-menu palette (the standard-view `\` trigger's apply path — see
+   * `EditorRef.applyMarkerMenuSelection`). Takes the already-resolved context/items so it can be
+   * reused wherever a marker menu needs to be shown from a `MarkerMenuContext` (e.g. Task 11's
+   * marker-glyph click popover), not just from the live keydown flow below.
+   *
+   * `passive` sets up the `'backslash'` session used by the while-open forwarding table (only
+   * meaningful for the collapsed-caret trigger, whose keystrokes keep landing in the document).
+   * `literalPrefixLanded` is forwarded to `applyMarkerMenuSelection` as-is — see that method's
+   * docs.
+   */
+  const openMarkerPalette = useCallback(
+    (
+      ctx: MarkerMenuAnchorContext,
+      items: MarkerMenuItem[],
+      openOptions: { passive: boolean; literalPrefixLanded: boolean },
+    ) => {
+      const { passive, literalPrefixLanded } = openOptions;
+      paletteSession.current = passive
+        ? { kind: 'backslash', literalPrefixLanded, filter: '', items }
+        : undefined;
+
+      papi.overlays
+        .showCommandPalette(
+          { items: items.map(toCommandPaletteItem), anchor: ctx.anchorRect, passive },
+          webViewId,
+        )
+        .then((id) => {
+          paletteSession.current = undefined;
+          if (id !== undefined) {
+            const selected = items.find((item) => item.marker === id);
+            if (selected) {
+              editorRef.current?.applyMarkerMenuSelection(selected, {
+                trigger: 'backslash',
+                literalPrefixLanded,
+              });
+            }
+            editorRef.current?.focus();
+          } else if (!passive) {
+            // Focused palette dismissed: focus never left the passive case, but the focused
+            // palette's own search input had it, so bring it back to the editor.
+            editorRef.current?.focus();
+          }
+          return undefined;
+        })
+        .catch(() => {
+          // Replaced by a newer overlay request (PlatformError code ABORTED) or any other rejection
+          // — treat the same as an explicit dismissal.
+          paletteSession.current = undefined;
+          if (!passive) editorRef.current?.focus();
+        });
+    },
+    [webViewId],
+  );
+
+  /**
+   * Opens the Enter-triggered paragraph-split palette (`getEnterMenuItems` /
+   * `EditorRef.splitParagraphWithMarker`). Always a focused palette — nothing lands on the Enter
+   * keypress itself, so there's no forwarding table to drive and no literal prefix to clean up.
+   */
+  const openEnterPalette = useCallback(
+    (ctx: MarkerMenuAnchorContext, items: MarkerMenuItem[]) => {
+      paletteSession.current = { kind: 'enter', items };
+
+      papi.overlays
+        .showCommandPalette(
+          { items: items.map(toCommandPaletteItem), anchor: ctx.anchorRect, passive: false },
+          webViewId,
+        )
+        .then((id) => {
+          paletteSession.current = undefined;
+          if (id !== undefined) editorRef.current?.splitParagraphWithMarker(id);
+          editorRef.current?.focus();
+          return undefined;
+        })
+        .catch(() => {
+          paletteSession.current = undefined;
+          editorRef.current?.focus();
+        });
+    },
+    [webViewId],
+  );
+
   // Listen for Ctrl+F to open find dialog, for the marker menu trigger to open the marker menu,
   // for Ctrl+T / Ctrl+Shift+T to insert a footnote/cross-reference (spec §6/§9), and for
   // Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at selection
   useEffect(() => {
     const editorInput = document.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Standard-view `\`/Enter marker palettes (PT9 parity — markers type through as literal text
+      // rather than opening the legacy popover below). Checked first: while a passive backslash
+      // session is open, every keystroke is routed through the while-open forwarding table so the
+      // palette tracks what the user is typing into the document.
+      if (
+        viewType === 'standard' &&
+        !isReadOnlyEffective &&
+        editorInput &&
+        document.activeElement === editorInput
+      ) {
+        const session = paletteSession.current;
+
+        if (session?.kind === 'backslash') {
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            papi.overlays.updateCommandPalette(webViewId, {
+              moveSelection: event.key === 'ArrowDown' ? 1 : -1,
+            });
+            return;
+          }
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            papi.overlays.commitCommandPaletteSelection(webViewId);
+            return;
+          }
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            paletteSession.current = undefined;
+            papi.overlays.dismissCommandPalette(webViewId);
+            return;
+          }
+          if (event.key === ' ' || event.key === '*') {
+            // PT9 Space-commit / `*`-close: the key lands as literal text and is picked up by the
+            // engine's own Tier 2 marker-completion trigger, so our overlay is no longer relevant.
+            paletteSession.current = undefined;
+            papi.overlays.dismissCommandPalette(webViewId);
+            return;
+          }
+          if (event.key === 'Backspace' || /^[a-z0-9+*]$/.test(event.key)) {
+            // Filter mirroring is keydown-tracked and display-only: `applyMarkerMenuSelection` reads
+            // the real literal run from the document at apply time, so drift here (fast typing,
+            // IME composition) can never corrupt the actual insert.
+            session.filter =
+              event.key === 'Backspace' ? session.filter.slice(0, -1) : session.filter + event.key;
+            papi.overlays.updateCommandPalette(webViewId, { filterText: session.filter });
+            return;
+          }
+          // Any other key: what's about to land no longer matches what the palette is offering.
+          paletteSession.current = undefined;
+          papi.overlays.dismissCommandPalette(webViewId);
+          return;
+        }
+
+        if (!session && event.key === defaultMarkersMenuTrigger) {
+          const ctx = editorRef.current?.getMarkerMenuContext();
+          if (ctx) {
+            const items = getMarkerMenuItems(styleInfo ?? defaultStyleInfo, ctx);
+            if (items.length > 0) {
+              const passive = !ctx.hasTextSelection;
+              // Collapsed caret: don't prevent default — the `\` lands as literal text and the
+              // passive palette tracks it. Selection: prevent default (focused palette; nothing
+              // should land in place of the wrapped text).
+              if (!passive) event.preventDefault();
+              openMarkerPalette(ctx, items, { passive, literalPrefixLanded: passive });
+            }
+          }
+          return;
+        }
+
+        if (
+          !session &&
+          event.key === 'Enter' &&
+          !event.shiftKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          !event.metaKey
+        ) {
+          const ctx = editorRef.current?.getMarkerMenuContext();
+          // Pass through untouched when there's no context, inside a note, or inside marker glyph
+          // text — the library engine owns Enter in those cases (e.g. `\fp` inside a footnote).
+          if (!ctx || ctx.noteMarker || ctx.inMarkerText) return;
+          const items = getEnterMenuItems(styleInfo ?? defaultStyleInfo, ctx);
+          if (items.length === 0) return;
+          event.preventDefault();
+          openEnterPalette(ctx, items);
+          return;
+        }
+      }
+
       // Shows the marker menu if it isn't already being shown and if the editor is currently selected
       if (currentSelectionRef.current) {
         if (
           !showMarkersMenu &&
           editorInput &&
           document.activeElement === editorInput &&
+          viewType !== 'standard' &&
           event.key === defaultMarkersMenuTrigger
         ) {
           event.preventDefault();
@@ -1294,6 +1511,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     isMac,
     isReadOnlyEffective,
     viewType,
+    styleInfo,
+    openMarkerPalette,
+    openEnterPalette,
   ]);
 
   // Apply annotation styles from extensions

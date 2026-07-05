@@ -15,7 +15,6 @@ import {
   serialize,
   Unsubscriber,
   USFM_MARKERS_MAP_PARATEXT_3_0,
-  usfmMarkers,
   UsjDocumentLocation,
   UsjReaderWriter,
 } from 'platform-bible-utils';
@@ -23,7 +22,13 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { ScriptureRange } from 'platform-scripture-editor';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import { MutableRefObject } from 'react';
-import { DeltaOp, EditorRef } from '@eten-tech-foundation/platform-editor';
+import {
+  defaultStyleInfo,
+  DeltaOp,
+  EditorRef,
+  getMarkerMenuItems,
+  StyleInfo,
+} from '@eten-tech-foundation/platform-editor';
 import { MarkerMenuItem } from 'platform-bible-react';
 
 // Note: src/main/shutdown-tasks.ts has a copy of this value — keep them in sync.
@@ -401,9 +406,27 @@ export function generateParagraphMenuListItems(
 }
 
 /**
+ * Resolves the display title for a stylesheet-sourced marker-menu item: localizes `description`
+ * when it happens to be a `LocalizeKey` (`%...%`), uses it as-is otherwise — the bundled usfm.sty's
+ * descriptions are raw English text, not localization keys, so this is the common case — and falls
+ * back to the marker code itself when the stylesheet gives no description at all.
+ */
+function resolveMarkerMenuItemTitle(
+  marker: string,
+  description: string | undefined,
+  localizedStrings: LanguageStrings,
+): string {
+  if (!description) return marker;
+  return isLocalizeKey(description) ? (localizedStrings[description] ?? description) : description;
+}
+
+/**
  * Function that generates the inline marker menu items that will update as the cursor location
- * changes. In the future this function will take data from an `.sty` file so that users can define
- * their own markers.
+ * changes. Sourced from the project's stylesheet (usfm.sty + custom.sty, merged and serialized by
+ * the host) via the shared library's `getMarkerMenuItems` — the same PT9-derived classification
+ * used by the standard-view `\`/Enter palettes — so a project's custom.sty markers are offered and
+ * markers the project's stylesheet doesn't define are not, instead of walking a static built-in
+ * marker list.
  *
  * @param editorRef The ref for the editor component to be able to insert markers
  * @param closeMarkersMenu Callback to close the markers menu after an action
@@ -414,7 +437,10 @@ export function generateParagraphMenuListItems(
  * @param notifyStructureProtected Callback to invoke when the user attempts to insert a block-level
  *   marker while structure is protected
  * @param parentMarker The current parent marker which is used to determine which markers to include
- * @returns The list of inline marker menu items
+ * @param styleInfo The project's stylesheet data; falls back to the bundled default stylesheet when
+ *   absent (e.g. no project stylesheet loaded yet)
+ * @returns The list of inline marker menu items, in the library's PT9-derived order (basic markers
+ *   first)
  */
 export function generateInlineMarkerMenuListItems(
   editorRef: MutableRefObject<EditorRef | null>,
@@ -423,39 +449,39 @@ export function generateInlineMarkerMenuListItems(
   isStructureProtected: boolean,
   notifyStructureProtected: () => void,
   parentMarker?: string,
+  styleInfo?: StyleInfo,
 ): MarkerMenuItem[] {
   if (!parentMarker) return [];
 
-  const markerDetails = usfmMarkers[parentMarker];
-  if (!markerDetails?.children) return [];
-
-  const markerMenuItems: MarkerMenuItem[] = [];
-  Object.entries(markerDetails.children).forEach(([, markers]) => {
-    markerMenuItems.push(
-      ...markers.map((marker): MarkerMenuItem => {
-        const isDisallowed = isStructureProtected && isBlockMarker(marker);
-        return {
-          marker,
-          title:
-            localizedStrings[usfmMarkers[marker].description] ?? usfmMarkers[marker].description,
-          isDisallowed,
-          action: () => {
-            // Defense-in-depth: unreachable while the menu renders `isDisallowed` items as disabled
-            // `CommandItem`s (a disabled cmdk item never fires `onSelect`). Kept as a second layer of
-            // protection in case that disabled rendering is ever loosened or the menu wiring changes.
-            if (isDisallowed) {
-              notifyStructureProtected();
-              closeMarkersMenu();
-              return;
-            }
-            editorRef.current?.insertMarker(marker);
-            closeMarkersMenu();
-          },
-        };
-      }),
-    );
+  const items = getMarkerMenuItems(styleInfo ?? defaultStyleInfo, {
+    source: 'character',
+    paraMarker: parentMarker,
+    previousParaMarkers: [],
+    openCharMarkers: [],
+    hasTextSelection: false,
+    inMarkerText: false,
   });
-  return markerMenuItems.sort((a, b) => (a.marker ?? a.title).localeCompare(b.marker ?? b.title));
+
+  return items.map((item): MarkerMenuItem => {
+    const isDisallowed = isStructureProtected && isBlockMarker(item.marker);
+    return {
+      marker: item.marker,
+      title: resolveMarkerMenuItemTitle(item.marker, item.description, localizedStrings),
+      isDisallowed,
+      action: () => {
+        // Defense-in-depth: unreachable while the menu renders `isDisallowed` items as disabled
+        // `CommandItem`s (a disabled cmdk item never fires `onSelect`). Kept as a second layer of
+        // protection in case that disabled rendering is ever loosened or the menu wiring changes.
+        if (isDisallowed) {
+          notifyStructureProtected();
+          closeMarkersMenu();
+          return;
+        }
+        editorRef.current?.insertMarker(item.marker);
+        closeMarkersMenu();
+      },
+    };
+  });
 }
 
 // #region Open Editor Dispatch
