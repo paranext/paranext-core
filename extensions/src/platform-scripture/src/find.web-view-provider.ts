@@ -19,6 +19,11 @@ export interface FindWebViewOptions extends OpenWebViewOptions {
    * `platformScriptureEditor.react`
    */
   editorWebViewId?: string;
+  /**
+   * Text to pre-fill in the search field when the Find WebView opens. If provided, the find panel
+   * will populate the search input with this text and immediately run a search.
+   */
+  initialSearchText?: string;
 }
 
 export class FindWebViewProvider implements IWebViewProvider {
@@ -45,6 +50,9 @@ export class FindWebViewProvider implements IWebViewProvider {
       state: {
         ...savedWebView.state,
         editorWebViewId: getWebViewOptions.editorWebViewId ?? savedWebView.state?.editorWebViewId,
+        ...(getWebViewOptions.initialSearchText
+          ? { findSearchTerm: getWebViewOptions.initialSearchText }
+          : {}),
       },
     };
   }

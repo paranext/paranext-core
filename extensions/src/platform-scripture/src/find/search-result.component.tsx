@@ -1,9 +1,17 @@
-import { Copy, X } from 'lucide-react';
+import { ArrowRight, Copy, Minus, Plus, X } from 'lucide-react';
 import { Button, DropdownMenuItem, ResultsCard } from 'platform-bible-react';
 import { LocalizedStringValue, LocalizeKey, UsjReaderWriter } from 'platform-bible-utils';
 import { FindResult } from 'platform-scripture';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { LocalizedBookData } from './find-types';
+import { applyPreserveCase, preserveTrailingSpaces, renderWithInvisibleChars } from './find.utils';
+import {
+  getFindHighlightClasses,
+  getGoldFindHighlightClasses,
+  getReplaceHighlightClasses,
+  getReplaceTextColorClasses,
+} from './replace-preview-styles';
+import { DEFAULT_FIND_PREVIEW_OPTIONS, PreviewOptions } from './replace-preview-types';
 
 export type HidableFindResult = FindResult & { isHidden?: boolean; isReplaced?: boolean };
 
@@ -28,6 +36,14 @@ export const SEARCH_RESULT_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
  */
 export type FindLogger = { warn: (...args: unknown[]) => void };
 
+/** Configuration for the replacement preview shown in replace mode. */
+export interface ReplaceConfig {
+  /** The replacement string to use */
+  term: string;
+  /** Whether to apply preserve-case transformation to the replacement */
+  preserveCase: boolean;
+}
+
 /** Props interface for the SearchResult component */
 interface SearchResultProps {
   /** The search result data to display */
@@ -38,6 +54,11 @@ interface SearchResultProps {
   isSelected: boolean;
   /** UsjReaderWriter for the book this search result occurred in */
   usjReaderWriter: UsjReaderWriter | undefined;
+  /**
+   * Pre-serialized USFM string for the book, cached at the book level to avoid repeated toUsfm()
+   * calls across the results in a book.
+   */
+  cachedUsfm?: string;
   /** Map of book IDs to their localized display names */
   localizedBookData: Map<string, Pick<LocalizedBookData, 'localizedId'>>;
   /** Callback function called when the user clicks on this search result */
@@ -52,6 +73,16 @@ interface SearchResultProps {
   isReplaceMode: boolean;
   /** Whether a replace operation is currently in progress */
   isReplacing: boolean;
+  /** Configuration for the replacement preview (used in replace mode) */
+  replaceConfig?: ReplaceConfig;
+  /** Options controlling how the replace preview is displayed */
+  previewOptions?: PreviewOptions;
+  /**
+   * Whether the project has AllowInvisibleChars enabled. Controls whether the USFM tilde `~` is
+   * treated as a NBSP escape (false, the default) or as a literal tilde character (true). Passed
+   * through to {@link renderWithInvisibleChars} when `previewOptions.showInvisible` is true.
+   */
+  allowInvisibleCharacters?: boolean;
   localizedStrings: {
     [localizedInventoryKey in (typeof SEARCH_RESULT_LOCALIZED_STRING_KEYS)[number]]?: LocalizedStringValue;
   };
@@ -78,7 +109,8 @@ const truncateText = (text: string, maxWords: number, shouldCutFromStart: boolea
 /**
  * SearchResult component displays a single search result item with verse reference, matched text,
  * and contextual actions. When selected, it shows the full verse text with the search term
- * highlighted and provides options to copy reference, verse text, or both.
+ * highlighted and provides options to copy reference, verse text, or both. In replace mode it also
+ * renders a preview of the replacement according to {@link PreviewOptions}.
  *
  * @param props - The props for the SearchResult component
  * @returns JSX element representing a search result card
@@ -88,6 +120,7 @@ export default function SearchResult({
   globalResultsIndex,
   isSelected,
   usjReaderWriter,
+  cachedUsfm,
   localizedBookData,
   onResultClick,
   onHideResult,
@@ -96,6 +129,9 @@ export default function SearchResult({
   localizedStrings,
   isReplaceMode,
   isReplacing,
+  replaceConfig,
+  previewOptions = DEFAULT_FIND_PREVIEW_OPTIONS,
+  allowInvisibleCharacters = false,
   logger,
 }: SearchResultProps) {
   // useRef requires null as the initial value for DOM refs
@@ -126,7 +162,7 @@ export default function SearchResult({
     return () => cancelAnimationFrame(frame);
   }, [searchResult.isReplaced]);
 
-  // When this result becomes selected, we should calculate the context if we haven't already
+  // When this result becomes selected, scroll it into view.
   useEffect(() => {
     if (isSelected) {
       cardRef.current?.scrollIntoView({ block: 'nearest' });
@@ -140,7 +176,7 @@ export default function SearchResult({
       const startIndexInUsfm = usjReaderWriter.usfmVerseLocationToIndexInUsfm(searchResult.start);
       const endIndexInUsfm = usjReaderWriter.usfmVerseLocationToIndexInUsfm(searchResult.end);
 
-      const usfm = usjReaderWriter.toUsfm();
+      const usfm = cachedUsfm ?? usjReaderWriter.toUsfm();
 
       let beforeText = usfm.substring(0, startIndexInUsfm);
 
@@ -166,13 +202,29 @@ export default function SearchResult({
       );
       return undefined;
     }
-  }, [usjReaderWriter, searchResult, isVisible, logger]);
+  }, [usjReaderWriter, cachedUsfm, searchResult, isVisible, logger]);
+
+  /** Applies the showInvisible option to a string. */
+  const displayText = (text: string) =>
+    previewOptions.showInvisible ? renderWithInvisibleChars(text, allowInvisibleCharacters) : text;
+
+  const fontClass = previewOptions.monospace ? 'tw:font-mono' : 'scripture-font';
+
+  const { highlightShape, color } = previewOptions;
+  const findClass = `${fontClass} ${getFindHighlightClasses(color, highlightShape)}`;
+  const findHighlightClass = `${fontClass} ${getGoldFindHighlightClasses(highlightShape)}`;
+  const replaceClass = `${fontClass} ${getReplaceHighlightClasses(color, highlightShape)}`;
+  // In inline layout the find and replace spans are directly adjacent — only round the outer corners
+  // so the two spans look like one unified rectangle split by color.
+  const findClassInline = `${fontClass} ${getFindHighlightClasses(color, highlightShape, true, 'left')}`;
+  const replaceClassInline = `${fontClass} ${getReplaceHighlightClasses(color, highlightShape, 'right')}`;
+
+  // Invisible-chars mode replaces spaces with ·, leaving no wrap points, so break anywhere
+  const breakClass = previewOptions.showInvisible ? 'tw:break-all' : 'tw:break-words';
 
   /**
-   * Highlights the search term within the verse text by wrapping the specified occurrence in a
-   * <strong> tag. If the component is not selected, returns the plain verse text.
-   *
-   * @returns The verse text with the search term highlighted, or plain text if not selected
+   * Highlights the search term within the verse text, keeping leading/trailing spaces of the match
+   * visible inside the highlight.
    */
   const getFocusedVerseText = () => {
     if (!textParts) return localizedStrings['%webView_find_loadingVerseText%'];
@@ -181,11 +233,9 @@ export default function SearchResult({
 
     return (
       <>
-        {beforeText}
-        <mark className="tw:bg-amber-100 tw:ring-2 tw:rounded-sm tw:ring-offset-1 tw:ring-amber-400">
-          {text}
-        </mark>
-        {afterText}
+        {displayText(beforeText)}
+        <span className={findHighlightClass}>{displayText(preserveTrailingSpaces(text))}</span>
+        {displayText(afterText)}
       </>
     );
   };
@@ -251,6 +301,113 @@ export default function SearchResult({
     </>
   );
 
+  let previewReplacement: string | undefined;
+  if (isReplaceMode && !searchResult.isReplaced && replaceConfig) {
+    previewReplacement = replaceConfig.preserveCase
+      ? applyPreserveCase(searchResult.text ?? '', replaceConfig.term)
+      : replaceConfig.term;
+  }
+
+  /**
+   * Renders the replace preview element. Layout determines the visual style:
+   *
+   * - Arrow: [find-strikethrough] → [replace]
+   * - Inline: [before][find-strikethrough][replace][after] embedded in verse context
+   * - Block: two lines with - (find) and + (replace); context only when selected
+   */
+  const getReplacePreviewElement = () => {
+    if (previewReplacement === undefined) return undefined;
+    if (previewOptions.layout === 'find') return undefined;
+
+    const rawFindText = searchResult.text ?? '';
+    // When showInvisible is on, let renderWithInvisibleChars turn trailing spaces into · directly
+    // (same as replace text). preserveTrailingSpaces is only needed when showInvisible is off so
+    // that trailing spaces aren't collapsed inside the CSS-highlighted span.
+    const findText = previewOptions.showInvisible
+      ? displayText(rawFindText)
+      : preserveTrailingSpaces(rawFindText);
+    const replaceText = displayText(previewReplacement);
+
+    // When replacing with nothing, show a thin vertical bar using the replace color so the user
+    // can see where the deletion will occur without a space being implied.
+    const isEmptyReplace = replaceText === '';
+    const deletionBar = (
+      <span
+        className={`tw:inline-block tw:align-middle tw:bg-current ${getReplaceTextColorClasses(color)}`}
+        style={{ width: '2px', height: '1lh' }}
+        aria-hidden="true"
+      />
+    );
+
+    if (previewOptions.layout === 'inline') {
+      // Falls back to arrow if context not yet loaded
+      if (!textParts) {
+        return (
+          <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-1.5">
+            <span className={`${findClass} tw:min-w-0 ${breakClass}`}>{findText}</span>
+            <ArrowRight className="tw:h-3 tw:w-3 tw:shrink-0 tw:rtl:rotate-180" />
+            {isEmptyReplace ? (
+              deletionBar
+            ) : (
+              <span className={`${replaceClass} tw:min-w-0 ${breakClass}`}>{replaceText}</span>
+            )}
+          </div>
+        );
+      }
+      return (
+        <div className={`tw:text-muted-foreground ${fontClass} ${breakClass}`}>
+          {displayText(textParts.beforeText)}
+          <span className={findClassInline}>
+            {previewOptions.showInvisible
+              ? displayText(textParts.text)
+              : preserveTrailingSpaces(textParts.text)}
+          </span>
+          {isEmptyReplace ? deletionBar : <span className={replaceClassInline}>{replaceText}</span>}
+          {displayText(textParts.afterText)}
+        </div>
+      );
+    }
+
+    if (previewOptions.layout === 'block') {
+      const hasContext = isSelected && textParts;
+      const before = hasContext ? displayText(textParts.beforeText) : '';
+      const after = hasContext ? displayText(textParts.afterText) : '';
+      return (
+        <div className="tw:space-y-0.5">
+          <div className="tw:flex tw:items-baseline tw:gap-1">
+            <Minus className="tw:h-3 tw:w-3 tw:shrink-0 tw:text-muted-foreground" />
+            <span className={`tw:text-muted-foreground tw:min-w-0 ${breakClass} ${fontClass}`}>
+              {before}
+              <span className={findClass}>{findText}</span>
+              {after}
+            </span>
+          </div>
+          <div className="tw:flex tw:items-baseline tw:gap-1">
+            <Plus className="tw:h-3 tw:w-3 tw:shrink-0 tw:text-foreground" />
+            <span className={`tw:text-foreground tw:min-w-0 ${breakClass} ${fontClass}`}>
+              {before}
+              {isEmptyReplace ? deletionBar : <span className={replaceClass}>{replaceText}</span>}
+              {after}
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    // Default: arrow layout
+    return (
+      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-1.5">
+        <span className={`${findClass} tw:min-w-0 ${breakClass}`}>{findText}</span>
+        <ArrowRight className="tw:h-3 tw:w-3 tw:shrink-0 tw:rtl:rotate-180" />
+        {isEmptyReplace ? (
+          deletionBar
+        ) : (
+          <span className={`${replaceClass} tw:min-w-0 ${breakClass}`}>{replaceText}</span>
+        )}
+      </div>
+    );
+  };
+
   const cardContent = (
     <div className="tw:text-xs tw:font-medium tw:flex tw:items-center tw:gap-2 tw:min-h-8">
       <div className="tw:shrink-0">
@@ -289,10 +446,25 @@ export default function SearchResult({
     </div>
   );
 
+  // Verse text is shown for find mode and for the arrow/find preview layouts. Inline/block layouts
+  // embed the surrounding context inside the preview element itself, so the separate verse-text line
+  // is omitted to avoid duplication.
+  const showVerseTextInAdditional =
+    !isReplaceMode || previewOptions.layout === 'arrow' || previewOptions.layout === 'find';
+
   const additionalSelectedContent = (
-    <div className="tw:text-xs tw:m-1 tw:font-normal tw:text-muted-foreground scripture-font">
-      {getFocusedVerseText()}
-    </div>
+    <>
+      {showVerseTextInAdditional && (
+        <div
+          className={`tw:text-xs tw:m-1 tw:font-normal tw:text-muted-foreground ${fontClass} ${
+            previewOptions.showInvisible ? 'tw:break-all' : 'tw:break-words'
+          }`}
+        >
+          {getFocusedVerseText()}
+        </div>
+      )}
+      {isReplaceMode && isSelected && !searchResult.isReplaced && getReplacePreviewElement()}
+    </>
   );
 
   return (

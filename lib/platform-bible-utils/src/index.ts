@@ -61,6 +61,7 @@ export { Section } from './scripture/scripture-util';
 export {
   createSyncProxyForAsyncObject,
   debounce,
+  DEBOUNCE_CANCELED_ERROR_MESSAGE,
   deepClone,
   getAllObjectFunctionNames,
   getErrorMessage,
@@ -137,7 +138,14 @@ export { computeEffectiveStructureProtection } from './structure-protection.util
 // Types
 export type { EffectiveStructureProtectionInputs } from './structure-protection.util';
 export type { NameablePhysicalKey } from './keyboard-util';
-export type { DeepPartial, KebabCase, Prettify, ReplaceType, UnionToIntersection } from './util';
+export type {
+  DebouncedFunction,
+  DeepPartial,
+  KebabCase,
+  Prettify,
+  ReplaceType,
+  UnionToIntersection,
+} from './util';
 export type {
   Dispose,
   OnDidDispose,

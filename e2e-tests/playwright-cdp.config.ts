@@ -13,7 +13,9 @@ const config = defineConfig({
   // Electron instance; CDP tests connect to an already-running app. They cannot mix, so exclude
   // both here — run the isolated suite via `npm run test:e2e:isolated`.
   // _example/ contains reference templates, not runnable tests.
-  testIgnore: ['**/smoke/**', '**/isolated/**', '**/_example/**'],
+  // Find tests were migrated to launch fixtures and live under isolated/find; run them via
+  // `npm run test:e2e:isolated`.
+  testIgnore: ['**/smoke/**', '**/isolated/**', '**/_example/**', '**/find/**'],
   fullyParallel: false,
   workers: 1,
   reporter: [['html', { outputFolder: 'playwright-report' }], ['list']],

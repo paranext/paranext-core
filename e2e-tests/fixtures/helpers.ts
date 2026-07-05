@@ -103,6 +103,12 @@ export interface LaunchElectronAppOptions {
    * developer's machine and never read or write the developer's real projects.
    */
   isolatedProjectRoot?: boolean;
+  /**
+   * Override the `DEV_NOISY` environment variable. Pass `'false'` to suppress test extensions
+   * (helloRock3, helloSomeone, etc.) — useful for tests that need a clean layout without extra
+   * webviews. Defaults to `process.env.DEV_NOISY ?? 'true'`.
+   */
+  devNoisy?: string;
 }
 
 /**
@@ -134,8 +140,9 @@ export async function launchElectronApp(
     ...restEnv,
     NODE_ENV: 'development',
     // Enable noisy dev mode so test extensions (helloRock3, helloSomeone, etc.) are loaded.
-    // Only set if not already defined, so other E2E suites can override.
-    DEV_NOISY: process.env.DEV_NOISY ?? 'true',
+    // Callers can pass devNoisy: 'false' to suppress test extensions for a clean layout; otherwise
+    // only set if not already defined, so other E2E suites can override.
+    DEV_NOISY: opts.devNoisy ?? process.env.DEV_NOISY ?? 'true',
     // Placing the project root inside userDataDir means the existing teardown rmSync cleans it up.
     ...(opts.isolatedProjectRoot
       ? { PLATFORM_BIBLE_PROJECT_ROOT_FOLDER: path.join(userDataDir, 'projects') }
