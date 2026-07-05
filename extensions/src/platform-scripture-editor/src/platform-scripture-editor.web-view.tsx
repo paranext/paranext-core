@@ -220,6 +220,14 @@ const defaultProjectName = '';
  */
 const NO_UPDATE_TITLE = '__do_not_update_title_not_for_use__';
 
+/**
+ * Sentinel that is never a real {@link ScriptureEditorViewType}, used as the `defaultValue` in a
+ * one-off `globalThis.getWebViewState('viewType', ...)` probe (see the
+ * `hadPersistedViewTypeAtMount` computation below) to detect whether `viewType` was ever explicitly
+ * persisted for this web view.
+ */
+const VIEW_TYPE_UNSET = '__view_type_unset_not_a_real_view_type__';
+
 const defaultTextDirection = 'ltr';
 
 const defaultMarkersMenuTrigger = '\\';
@@ -398,7 +406,66 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     defaultEditorDecorations,
   );
 
-  const [viewType, setViewType] = useWebViewState<ScriptureEditorViewType>('viewType', 'formatted');
+  // `platform.interfaceMode` is read here (rather than down by its other consumers, `bcvControls`
+  // etc.) because the `viewType` state below needs `isPowerMode` for its default value.
+  const [interfaceModePossiblyError, , , isLoadingInterfaceMode] = useSetting(
+    'platform.interfaceMode',
+    'simple',
+  );
+
+  const isPowerMode = useMemo(() => {
+    if (isPlatformError(interfaceModePossiblyError)) return false;
+    return interfaceModePossiblyError === 'power';
+  }, [interfaceModePossiblyError]);
+
+  /**
+   * Whether `viewType` was ever explicitly persisted for this web view (as opposed to only ever
+   * having been the `useWebViewState` default below). Computed once via a lazy `useState`
+   * initializer, mirroring how `useWebViewState`'s own local state is seeded once at mount (see
+   * `use-web-view-state.hook.ts`): only an explicit `setViewType` call persists a value, so a
+   * `false` here means this web view has never had a real choice saved.
+   *
+   * We need this because `useSetting`'s `isLoading` starts `true` on every mount (see
+   * `create-use-data-hook.util.ts`), so `isPowerMode` is guaranteed `false` on this component's
+   * very first render regardless of the real, eventually-resolved setting value. `useWebViewState`
+   * captures its default into local state via a lazy initializer that runs only once, so a stale
+   * 'formatted' default captured on that first render will not self-correct once `isPowerMode`
+   * later resolves `true` -- it would otherwise be stuck at 'formatted' for the life of this
+   * webview instance. The correction effect below uses this flag to only ever nudge a genuinely
+   * fresh (never-saved) view, never a saved one.
+   */
+  const [hadPersistedViewTypeAtMount] = useState(
+    () => globalThis.getWebViewState('viewType', VIEW_TYPE_UNSET) !== VIEW_TYPE_UNSET,
+  );
+
+  const [viewType, setViewType] = useWebViewState<ScriptureEditorViewType>(
+    'viewType',
+    // Saved-state views never flip -- `useWebViewState` only reads this default when nothing is
+    // persisted yet. A first-ever-open power-mode view may still render one or more frames as
+    // 'formatted' before `platform.interfaceMode` resolves (see evidence above); the effect below
+    // corrects that once resolution completes, without ever touching a saved value.
+    isPowerMode ? 'standard' : 'formatted',
+  );
+
+  /**
+   * One-shot guard for the correction effect below, so it only ever applies the power-mode default
+   * once per webview instance -- even if `platform.interfaceMode` (an app-wide setting a user could
+   * toggle repeatedly while this webview stays open) flips power mode on, off, and on again later,
+   * we must never re-clobber a view type the user has since chosen (e.g. via
+   * `changeScriptureView`).
+   */
+  const hasAppliedInitialPowerDefaultRef = useRef(false);
+
+  useEffect(() => {
+    // Only ever correct a fresh (never-saved) view, and only once, and only when power mode is
+    // confirmed (not merely the not-yet-loaded default).
+    if (hasAppliedInitialPowerDefaultRef.current) return;
+    if (hadPersistedViewTypeAtMount) return;
+    if (isLoadingInterfaceMode) return;
+    if (!isPowerMode) return;
+    hasAppliedInitialPowerDefaultRef.current = true;
+    setViewType('standard');
+  }, [hadPersistedViewTypeAtMount, isLoadingInterfaceMode, isPowerMode, setViewType]);
 
   const [unformattedTitle] = useWebViewState<string | undefined>(
     'unformattedTitle',
@@ -437,13 +504,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // Using || to make sure we get default if it is an empty string or if it is undefined
     return textDirectionPossiblyError || defaultTextDirection;
   }, [textDirectionPossiblyError]);
-
-  const [interfaceModePossiblyError] = useSetting('platform.interfaceMode', 'simple');
-
-  const isPowerMode = useMemo(() => {
-    if (isPlatformError(interfaceModePossiblyError)) return false;
-    return interfaceModePossiblyError === 'power';
-  }, [interfaceModePossiblyError]);
 
   const textDirectionEffective = useMemo(() => {
     // OHEBGRK is a special case where we want to show the OT in RTL but the NT in LTR
