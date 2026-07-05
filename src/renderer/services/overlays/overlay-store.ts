@@ -128,3 +128,38 @@ export function updateOverlayContent(id: string, content: PopoverContent): boole
   notifyListeners();
   return true;
 }
+
+/**
+ * Updates the mutable `filterText`/`selectedIndex` state of a command palette overlay and notifies
+ * subscribers. `selectedIndex` is always clamped to `[0, itemCount - 1]` (or `0` when `itemCount`
+ * is `0`) — both when moved by `selectedIndexDelta` and when left alone, since a `filterText`
+ * change can shrink the filtered list out from under the previous index.
+ *
+ * @param id The overlay id to update
+ * @param patch `filterText` replaces the stored filter text (omit to leave it unchanged);
+ *   `selectedIndexDelta` moves the current `selectedIndex` by this many items before clamping;
+ *   `itemCount` is the length of the filtered item list used to clamp `selectedIndex`
+ * @returns True if the overlay was found and updated, false otherwise
+ */
+export function updateCommandPaletteState(
+  id: string,
+  patch: { filterText?: string; selectedIndexDelta?: number; itemCount: number },
+): boolean {
+  const entry = overlays.get(id);
+  if (!entry || entry.type !== 'commandPalette') return false;
+
+  const maxIndex = Math.max(0, patch.itemCount - 1);
+  const rawIndex =
+    patch.selectedIndexDelta !== undefined
+      ? entry.selectedIndex + patch.selectedIndexDelta
+      : entry.selectedIndex;
+  const selectedIndex = Math.min(Math.max(rawIndex, 0), maxIndex);
+
+  overlays.set(id, {
+    ...entry,
+    filterText: patch.filterText !== undefined ? patch.filterText : entry.filterText,
+    selectedIndex,
+  });
+  notifyListeners();
+  return true;
+}

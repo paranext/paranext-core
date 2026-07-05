@@ -133,6 +133,40 @@ export interface CommandPaletteRequest {
   maxHeight?: number;
   /** Whether clicking outside dismisses the palette. Defaults to true. */
   dismissOnClickOutside?: boolean;
+  /**
+   * When true, renders without a search input and without stealing focus from the requesting
+   * WebView. Filter text and the highlighted selection are driven externally via
+   * {@link IOverlayService.updateCommandPalette} and committed via
+   * {@link IOverlayService.commitCommandPaletteSelection} instead of the palette's own search box
+   * and keyboard handling. Defaults to false (the palette owns its own search input and focus, as
+   * today).
+   */
+  passive?: boolean;
+}
+
+/**
+ * Filters command palette items by prefix-matching `filterText` against each item's `label`,
+ * mirroring PT9's marker dropdown filtering (`MarkerDropdownControl.UpdateMarkerList`,
+ * MarkerDropdownControl.cs:105-114): a leading `+` in the filter text is stripped before matching
+ * (so a filter of `"+w"` matches the same items as `"w"`), and the match is case-insensitive.
+ * Returns `items` unchanged when `filterText` is empty or undefined.
+ *
+ * This is the single filtering implementation shared by {@link IOverlayService}'s host-side
+ * `commitCommandPaletteSelection` (to resolve the highlighted item) and the passive command palette
+ * component (to render the filtered list) — using one function for both keeps host-side selection
+ * and on-screen rendering from disagreeing about which items are visible.
+ *
+ * @param items The full, unfiltered list of command palette items
+ * @param filterText The current filter text, or undefined/empty for no filtering
+ * @returns The subset of `items` whose `label` starts with the (stripped, lowercased) filter text
+ */
+export function filterPaletteItems(
+  items: CommandPaletteItem[],
+  filterText: string | undefined,
+): CommandPaletteItem[] {
+  if (!filterText) return items;
+  const normalizedFilter = filterText.replace(/^\+/, '').toLowerCase();
+  return items.filter((item) => item.label.toLowerCase().startsWith(normalizedFilter));
 }
 
 // ── Service Interface ──
@@ -231,6 +265,49 @@ export interface IOverlayService {
     request: CommandPaletteRequest,
     webViewId: string,
   ): Promise<string | undefined>;
+  /**
+   * Updates the filter text and/or moves the highlighted selection of the active command palette
+   * for the given WebView. No-op if no command palette is active for that WebView.
+   *
+   * Unlike the popover family above (keyed by the overlay ID returned from `showPopover`), the
+   * command palette mutators are keyed by `webViewId` instead. The service enforces one command
+   * palette per WebView at a time (see this interface's class docs), so the requesting WebView's
+   * own ID is a sufficient handle — passive-mode callers drive the palette without ever seeing an
+   * overlay ID.
+   *
+   * @param webViewId The ID of the WebView whose command palette should be updated
+   * @param update `filterText` narrows the item list via {@link filterPaletteItems} — this is
+   *   passive-mode only; updating it on a non-passive (active) palette is a no-op (logged as a
+   *   warning), since the active palette's own search input already owns its filter text.
+   *   `moveSelection` moves the highlighted index by this many items, clamped to the filtered
+   *   list's bounds.
+   */
+  updateCommandPalette(
+    webViewId: string,
+    update: { filterText?: string; moveSelection?: number },
+  ): Promise<void>;
+  /**
+   * Commits the currently highlighted item of the active command palette for the given WebView,
+   * resolving its `showCommandPalette` promise with that item's `id` (mirrors how a click on a
+   * command palette item resolves the promise). If the highlighted item is `disabled`, moves
+   * forward to the next enabled item in the filtered list; if none are enabled, no-ops. No-op if no
+   * command palette is active for that WebView.
+   *
+   * Keyed by `webViewId` for the same reason as {@link updateCommandPalette}.
+   *
+   * @param webViewId The ID of the WebView whose command palette selection should be committed
+   */
+  commitCommandPaletteSelection(webViewId: string): Promise<void>;
+  /**
+   * Dismisses the active command palette for the given WebView, resolving its `showCommandPalette`
+   * promise with `undefined`. Works for both active and passive palettes. No-op if no command
+   * palette is active for that WebView.
+   *
+   * Keyed by `webViewId` for the same reason as {@link updateCommandPalette}.
+   *
+   * @param webViewId The ID of the WebView whose command palette should be dismissed
+   */
+  dismissCommandPalette(webViewId: string): Promise<void>;
 }
 
 // ── Internal Overlay Store Types ──
@@ -314,6 +391,18 @@ export type OverlayEntry =
       request: CommandPaletteRequest;
       /** Items to render */
       items: CommandPaletteItem[];
+      /**
+       * Current filter text. Mutable — updated in place by `updateCommandPalette`, which rejects
+       * (no-ops) filter text updates for non-passive palettes since only passive palettes drive
+       * their filter text externally. Undefined until first set.
+       */
+      filterText?: string;
+      /**
+       * Index of the highlighted item within `filterPaletteItems(items, filterText)`. Mutable —
+       * updated in place by `updateCommandPalette`'s `moveSelection`, clamped to the filtered
+       * list's bounds. Defaults to 0 at creation.
+       */
+      selectedIndex: number;
       /** Document-relative position (translated + clamped), or undefined for centered */
       position?: { x: number; y: number };
       /** Settles the caller's promise with the selected item ID, or undefined if dismissed */

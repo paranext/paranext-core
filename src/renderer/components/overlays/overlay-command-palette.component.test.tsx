@@ -251,4 +251,180 @@ describe('OverlayCommandPalettePresentational', () => {
       expect(screen.getByText('Edit')).toBeInTheDocument();
     });
   });
+
+  describe('passive mode', () => {
+    it('should not render a search input', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+      expect(screen.queryByPlaceholderText('Search...')).not.toBeInTheDocument();
+    });
+
+    it('should never steal focus on mount', () => {
+      const focusTarget = document.createElement('button');
+      document.body.appendChild(focusTarget);
+      focusTarget.focus();
+      expect(document.activeElement).toBe(focusTarget);
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(document.activeElement).toBe(focusTarget);
+      focusTarget.remove();
+    });
+
+    it('should still render all items via filterPaletteItems, grouped the same as active mode', () => {
+      const groupedItems: CommandPaletteItem[] = [
+        { id: 'open', label: 'Open File', group: 'File' },
+        { id: 'find', label: 'Find', group: 'Edit' },
+      ];
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={groupedItems}
+          passive
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByText('File')).toBeInTheDocument();
+      expect(screen.getByText('Edit')).toBeInTheDocument();
+      expect(screen.getByText('Open File')).toBeInTheDocument();
+      expect(screen.getByText('Find')).toBeInTheDocument();
+    });
+
+    it('should narrow the rendered items via the filterText prop', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          filterText="Sa"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByText('Save File')).toBeInTheDocument();
+      expect(screen.queryByText('Open File')).not.toBeInTheDocument();
+      expect(screen.queryByText('Close Tab')).not.toBeInTheDocument();
+    });
+
+    it('should show noResultsText when filterText matches nothing', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          filterText="zzzzz"
+          noResultsText="Nothing found"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByText('Nothing found')).toBeInTheDocument();
+    });
+
+    it('should highlight the item at selectedIndex', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          selectedIndex={1}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const highlighted = screen.getByText('Save File').closest('[data-slot="command-item"]');
+      const notHighlighted = screen.getByText('Open File').closest('[data-slot="command-item"]');
+      expect(highlighted).toHaveAttribute('aria-selected', 'true');
+      expect(notHighlighted).toHaveAttribute('aria-selected', 'false');
+    });
+
+    it('should move the highlight when selectedIndex changes (rerender)', () => {
+      const { rerender } = render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          selectedIndex={0}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+      expect(screen.getByText('Open File').closest('[data-slot="command-item"]')).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+
+      rerender(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          selectedIndex={2}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByText('Open File').closest('[data-slot="command-item"]')).toHaveAttribute(
+        'aria-selected',
+        'false',
+      );
+      expect(screen.getByText('Close Tab').closest('[data-slot="command-item"]')).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+    });
+
+    it('should call onSelect when an item is clicked', () => {
+      const onSelect = vi.fn();
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          onSelect={onSelect}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      fireEvent.click(screen.getByText('Close Tab'));
+
+      expect(onSelect).toHaveBeenCalledWith('close');
+    });
+
+    it('should not call onSelect when a disabled item is clicked', () => {
+      const onSelect = vi.fn();
+      const items: CommandPaletteItem[] = [
+        { id: 'disabled-item', label: 'Cannot Click', disabled: true },
+      ];
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={items}
+          passive
+          onSelect={onSelect}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      fireEvent.click(screen.getByText('Cannot Click'));
+
+      expect(onSelect).not.toHaveBeenCalled();
+    });
+  });
 });

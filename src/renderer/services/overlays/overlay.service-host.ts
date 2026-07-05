@@ -32,6 +32,7 @@ import type { PlatformError } from 'platform-bible-utils';
 import type { ReactElement } from 'react';
 import {
   CommandPaletteRequest,
+  filterPaletteItems,
   IOverlayService,
   OverlayEntry,
   PopoverContent,
@@ -51,6 +52,7 @@ import {
   getOverlays,
   getOverlayById,
   updateOverlayContent,
+  updateCommandPaletteState,
 } from './overlay-store';
 import { translateCoordinates, clampToViewport, isWebViewVisible } from './overlay-coordinates';
 
@@ -583,6 +585,7 @@ async function showCommandPalette(
       webViewId,
       request,
       items: request.items,
+      selectedIndex: 0,
       position,
       resolve: (selectedId) => {
         restoreFocus(overlayId);
@@ -596,6 +599,103 @@ async function showCommandPalette(
   });
 }
 
+/**
+ * A command palette overlay entry, narrowed from the {@link OverlayEntry} union. Alias for the
+ * command palette drivers below, which all operate on this variant.
+ */
+type CommandPaletteEntry = Extract<OverlayEntry, { type: 'commandPalette' }>;
+
+/**
+ * Finds the active command palette overlay for the given WebView, if any. The service enforces one
+ * command palette per WebView at a time, so a WebView ID alone is a sufficient handle for the
+ * `updateCommandPalette`/`commitCommandPaletteSelection`/`dismissCommandPalette` drivers below —
+ * unlike the popover family, which is keyed by the overlay ID returned from `showPopover`.
+ *
+ * @param webViewId The WebView to look up
+ * @returns The active command palette overlay entry, or undefined if none is active
+ */
+function getActiveCommandPalette(webViewId: string): CommandPaletteEntry | undefined {
+  return getOverlaysByWebView(webViewId).find(
+    (o): o is CommandPaletteEntry => o.type === 'commandPalette',
+  );
+}
+
+/**
+ * Updates the filter text and/or moves the highlighted selection of the active command palette for
+ * the given WebView. No-op if no command palette is active for that WebView.
+ *
+ * @param webViewId The WebView whose command palette should be updated
+ * @param update `filterText` (passive palettes only — no-op with a warning on active palettes) and/
+ *   or `moveSelection` (clamped to the filtered list's bounds)
+ */
+async function updateCommandPalette(
+  webViewId: string,
+  update: { filterText?: string; moveSelection?: number },
+): Promise<void> {
+  const entry = getActiveCommandPalette(webViewId);
+  if (!entry) return;
+
+  let nextFilterText = entry.filterText;
+  if (update.filterText !== undefined) {
+    if (entry.request.passive) {
+      nextFilterText = update.filterText;
+    } else {
+      logger.warn(
+        `updateCommandPalette: filterText updates are passive-only; ignoring for the active command palette on webView "${webViewId}"`,
+      );
+      if (update.moveSelection === undefined) return;
+    }
+  } else if (update.moveSelection === undefined) {
+    // Nothing to update
+    return;
+  }
+
+  const filteredCount = filterPaletteItems(entry.items, nextFilterText).length;
+  updateCommandPaletteState(entry.id, {
+    filterText: nextFilterText,
+    selectedIndexDelta: update.moveSelection,
+    itemCount: filteredCount,
+  });
+}
+
+/**
+ * Commits the currently highlighted item of the active command palette for the given WebView,
+ * resolving its promise with that item's `id`. Skips `disabled` items, moving forward to the next
+ * enabled item in the filtered list; no-ops if none are enabled. No-op if no command palette is
+ * active for that WebView.
+ *
+ * @param webViewId The WebView whose command palette selection should be committed
+ */
+async function commitCommandPaletteSelection(webViewId: string): Promise<void> {
+  const entry = getActiveCommandPalette(webViewId);
+  if (!entry) return;
+
+  const filtered = filterPaletteItems(entry.items, entry.filterText);
+  if (filtered.length === 0) return;
+
+  const startIndex = Math.min(Math.max(entry.selectedIndex, 0), filtered.length - 1);
+  let item = filtered[startIndex];
+  for (let step = 1; item?.disabled && step < filtered.length; step += 1) {
+    item = filtered[(startIndex + step) % filtered.length];
+  }
+  if (!item || item.disabled) return;
+
+  resolveAndRemoveOverlay(entry.id, 'commandPalette', item.id);
+}
+
+/**
+ * Dismisses the active command palette for the given WebView, resolving its promise with
+ * `undefined`. Works for both active and passive palettes. No-op if no command palette is active
+ * for that WebView.
+ *
+ * @param webViewId The WebView whose command palette should be dismissed
+ */
+async function dismissCommandPalette(webViewId: string): Promise<void> {
+  const entry = getActiveCommandPalette(webViewId);
+  if (!entry) return;
+  resolveAndRemoveOverlay(entry.id, 'commandPalette', undefined);
+}
+
 /** The overlay service instance exposed on papi */
 export const overlayService: IOverlayService = {
   showContextMenu,
@@ -604,6 +704,9 @@ export const overlayService: IOverlayService = {
   dismissPopover,
   onPopoverDismissed,
   showCommandPalette,
+  updateCommandPalette,
+  commitCommandPaletteSelection,
+  dismissCommandPalette,
 };
 
 // ── Event Listeners for Auto-Dismiss ──

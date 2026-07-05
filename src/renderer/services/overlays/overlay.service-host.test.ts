@@ -622,6 +622,164 @@ describe('overlay.service-host', () => {
     });
   });
 
+  describe('passive command palettes', () => {
+    const passiveRequest: CommandPaletteRequest = {
+      items: [
+        { id: 'ft', label: 'Footnote' },
+        { id: 'xt', label: 'Cross Reference' },
+        { id: 'fig', label: 'Figure' },
+      ],
+      passive: true,
+    };
+
+    it('should show passive, narrow via updateFilter, clamp via moveSelection, and commit the highlighted id', async () => {
+      const promise = overlayService.showCommandPalette(passiveRequest, 'test-webview');
+
+      // filterText narrows to items starting with "f": Footnote, Figure
+      await overlayService.updateCommandPalette('test-webview', { filterText: 'f' });
+
+      let overlay = getOverlayById(getOverlays()[0].id);
+      // TypeScript cannot narrow a discriminated union after getOverlayById(); cast needed to access typed fields
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      let palette = overlay as Extract<NonNullable<typeof overlay>, { type: 'commandPalette' }>;
+      expect(palette.filterText).toBe('f');
+      expect(palette.selectedIndex).toBe(0);
+
+      // moveSelection past the end of the filtered (2-item) list clamps to the last index
+      await overlayService.updateCommandPalette('test-webview', { moveSelection: 5 });
+
+      overlay = getOverlayById(palette.id);
+      // TypeScript cannot narrow a discriminated union after getOverlayById(); cast needed to access typed fields
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      palette = overlay as Extract<NonNullable<typeof overlay>, { type: 'commandPalette' }>;
+      expect(palette.selectedIndex).toBe(1);
+
+      await overlayService.commitCommandPaletteSelection('test-webview');
+
+      // Highlighted item at filtered index 1 (of [Footnote, Figure]) is Figure
+      const result = await promise;
+      expect(result).toBe('fig');
+    });
+
+    it('should skip disabled items when committing, selecting the next enabled item', async () => {
+      const request: CommandPaletteRequest = {
+        items: [
+          { id: 'a', label: 'Alpha' },
+          { id: 'b', label: 'Bravo', disabled: true },
+          { id: 'c', label: 'Charlie' },
+        ],
+        passive: true,
+      };
+      const promise = overlayService.showCommandPalette(request, 'test-webview');
+
+      await overlayService.updateCommandPalette('test-webview', { moveSelection: 1 });
+      await overlayService.commitCommandPaletteSelection('test-webview');
+
+      const result = await promise;
+      expect(result).toBe('c');
+    });
+
+    it('should no-op when committing and every item is disabled', async () => {
+      const request: CommandPaletteRequest = {
+        items: [
+          { id: 'a', label: 'Alpha', disabled: true },
+          { id: 'b', label: 'Bravo', disabled: true },
+        ],
+        passive: true,
+      };
+      const promise = overlayService.showCommandPalette(request, 'test-webview');
+
+      await overlayService.commitCommandPaletteSelection('test-webview');
+
+      // Overlay should still be present — commit was a no-op
+      expect(getOverlays()).toHaveLength(1);
+
+      getOverlays()[0].resolve(undefined);
+      await promise;
+    });
+
+    it('should no-op (and warn) when updating filterText on a non-passive (active) palette', async () => {
+      const { logger } = await import('@shared/services/logger.service');
+      const activeRequest: CommandPaletteRequest = {
+        items: [{ id: 'ft', label: 'Footnote' }],
+      };
+      const promise = overlayService.showCommandPalette(activeRequest, 'test-webview');
+
+      await overlayService.updateCommandPalette('test-webview', { filterText: 'f' });
+
+      const overlay = getOverlayById(getOverlays()[0].id);
+      // TypeScript cannot narrow a discriminated union after getOverlayById(); cast needed to access typed fields
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const palette = overlay as Extract<NonNullable<typeof overlay>, { type: 'commandPalette' }>;
+      expect(palette.filterText).toBeUndefined();
+      expect(logger.warn).toHaveBeenCalled();
+
+      getOverlays()[0].resolve(undefined);
+      await promise;
+    });
+
+    it('should no-op updateCommandPalette/commitCommandPaletteSelection/dismissCommandPalette when no palette is active', async () => {
+      await expect(
+        overlayService.updateCommandPalette('no-such-webview', { filterText: 'x' }),
+      ).resolves.toBeUndefined();
+      await expect(
+        overlayService.commitCommandPaletteSelection('no-such-webview'),
+      ).resolves.toBeUndefined();
+      await expect(
+        overlayService.dismissCommandPalette('no-such-webview'),
+      ).resolves.toBeUndefined();
+      expect(getOverlays()).toHaveLength(0);
+    });
+
+    it('should dismiss and resolve with undefined for a passive palette', async () => {
+      const promise = overlayService.showCommandPalette(passiveRequest, 'test-webview');
+
+      await overlayService.dismissCommandPalette('test-webview');
+
+      const result = await promise;
+      expect(result).toBeUndefined();
+      expect(getOverlays()).toHaveLength(0);
+    });
+
+    it('should dismiss and resolve with undefined for an active palette', async () => {
+      const activeRequest: CommandPaletteRequest = {
+        items: [{ id: 'ft', label: 'Footnote' }],
+      };
+      const promise = overlayService.showCommandPalette(activeRequest, 'test-webview');
+
+      await overlayService.dismissCommandPalette('test-webview');
+
+      const result = await promise;
+      expect(result).toBeUndefined();
+      expect(getOverlays()).toHaveLength(0);
+    });
+
+    it('should still ABORT the replaced palette when a new request replaces a passive one', async () => {
+      vi.useFakeTimers();
+
+      const promise1 = overlayService.showCommandPalette(passiveRequest, 'test-webview');
+
+      vi.advanceTimersByTime(DEBOUNCE_COOLDOWN_MS);
+
+      const request2: CommandPaletteRequest = {
+        items: [{ id: 'p', label: 'Paragraph' }],
+        passive: true,
+      };
+      const promise2 = overlayService.showCommandPalette(request2, 'test-webview');
+
+      await expect(promise1).rejects.toSatisfy(
+        (error: unknown) => isPlatformError(error) && error.code === ABORTED,
+      );
+
+      const palettes = getOverlays().filter((o) => o.type === 'commandPalette');
+      expect(palettes).toHaveLength(1);
+
+      getOverlays()[0].resolve(undefined);
+      vi.useRealTimers();
+      return promise2;
+    });
+  });
+
   describe('isWebViewVisible rejection', () => {
     it('should reject context menu with FAILED_PRECONDITION when webView is not visible', async () => {
       vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue(DEFAULT_WEB_VIEW_MENU);
