@@ -13,9 +13,11 @@ import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { resolveAndRemoveOverlay } from '@renderer/services/overlays/overlay-store';
 import {
   CommandPaletteItem,
+  filterPaletteItems,
   OverlayEntry,
 } from '@renderer/services/overlays/overlay.service-model';
 import {
+  cn,
   Command,
   CommandEmpty,
   CommandGroup,
@@ -27,7 +29,7 @@ import {
   PopoverContent,
   Z_INDEX_OVERLAY,
 } from 'platform-bible-react';
-import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef } from 'react';
+import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 import { isLocalizeKey, LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 
 // ── Public Types ──
@@ -50,6 +52,20 @@ export type OverlayCommandPalettePresentationalProps = {
   maxWidth?: number;
   /** Maximum height in pixels. Defaults to 400. */
   maxHeight?: number;
+  /**
+   * When true, renders without a search input and without stealing focus on mount. Items are
+   * filtered via {@link filterPaletteItems} using the externally-driven `filterText` prop, and
+   * highlighted via the externally-driven `selectedIndex` prop, instead of cmdk's own input-driven
+   * filter/keyboard navigation. Item click still selects. Defaults to false.
+   */
+  passive?: boolean;
+  /** Current filter text. Passive mode only — ignored when `passive` is false. */
+  filterText?: string;
+  /**
+   * Index of the highlighted item within the filtered list. Passive mode only — ignored when
+   * `passive` is false. Defaults to 0.
+   */
+  selectedIndex?: number;
   /** Called when the user selects an item */
   onSelect: (itemId: string) => void;
   /** Called when the palette is dismissed (Escape, click outside) */
@@ -63,24 +79,14 @@ const DEFAULT_MAX_HEIGHT = 400;
 
 // ── Internal Components ──
 
-/** Renders a single command palette item with label, description, icon, and badge */
-function PaletteItem({
-  item,
-  onSelect,
-}: {
-  item: CommandPaletteItem;
-  onSelect: (id: string) => void;
-}) {
-  // Build a searchable value from label + description + badge for cmdk filtering
-  const searchValue = [item.label, item.description, item.badge].filter(Boolean).join(' ');
-
+/**
+ * Renders the icon, label, description, and badge for a command palette item. Shared between the
+ * cmdk-driven active-mode {@link PaletteItem} and the plain-element passive-mode
+ * {@link PassivePaletteItem} so the two modes stay visually identical.
+ */
+function PaletteItemContent({ item }: { item: CommandPaletteItem }) {
   return (
-    <CommandItem
-      value={searchValue}
-      disabled={item.disabled}
-      onSelect={() => onSelect(item.id)}
-      className="tw:flex tw:items-center tw:gap-2"
-    >
+    <>
       {item.icon && (
         <span className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center tw:text-muted-foreground">
           {item.icon}
@@ -102,17 +108,85 @@ function PaletteItem({
           {item.badge}
         </span>
       )}
+    </>
+  );
+}
+
+/** Renders a single command palette item with label, description, icon, and badge */
+function PaletteItem({
+  item,
+  onSelect,
+}: {
+  item: CommandPaletteItem;
+  onSelect: (id: string) => void;
+}) {
+  // Build a searchable value from label + description + badge for cmdk filtering
+  const searchValue = [item.label, item.description, item.badge].filter(Boolean).join(' ');
+
+  return (
+    <CommandItem
+      value={searchValue}
+      disabled={item.disabled}
+      onSelect={() => onSelect(item.id)}
+      className="tw:flex tw:items-center tw:gap-2"
+    >
+      <PaletteItemContent item={item} />
     </CommandItem>
   );
 }
 
-/** Renders items grouped by their group key, or as a single default group */
-function GroupedItems({
-  items,
+/**
+ * Renders a single command palette item as a plain element rather than cmdk's `CommandItem` —
+ * passive mode bypasses cmdk's own filter/keyboard-navigation entirely (the host drives filtering
+ * and selection via `updateCommandPalette`), so highlighting is driven directly by the
+ * externally-computed `isHighlighted` flag instead of cmdk's internal hover/keyboard state. Styled
+ * with the same classes as `CommandItem` for visual parity. Click still selects.
+ */
+function PassivePaletteItem({
+  item,
+  isHighlighted,
   onSelect,
 }: {
-  items: CommandPaletteItem[];
+  item: CommandPaletteItem;
+  isHighlighted: boolean;
   onSelect: (id: string) => void;
+}) {
+  return (
+    // Passive-mode item: click selects (matching the centered-mode backdrop's click-to-dismiss
+    // pattern below); keyboard interaction is driven externally by the host via
+    // updateCommandPalette, not by this element itself, so it has no keyboard listener/focus of
+    // its own.
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
+    <div
+      data-slot="command-item"
+      aria-selected={isHighlighted}
+      aria-disabled={item.disabled}
+      onClick={() => {
+        if (item.disabled) return;
+        onSelect(item.id);
+      }}
+      className={cn(
+        'tw:relative tw:flex tw:cursor-default tw:items-center tw:gap-2 tw:rounded-sm tw:px-2 tw:py-1.5 tw:text-sm tw:outline-hidden tw:select-none',
+        item.disabled && 'tw:pointer-events-none tw:opacity-50',
+        isHighlighted && 'tw:bg-muted tw:text-foreground',
+      )}
+    >
+      <PaletteItemContent item={item} />
+    </div>
+  );
+}
+
+/**
+ * Renders items grouped by their group key, or as a single default group. `renderItem` determines
+ * how each item is rendered — the cmdk-driven {@link PaletteItem} in active mode, or
+ * {@link PassivePaletteItem} in passive mode.
+ */
+function GroupedItems({
+  items,
+  renderItem,
+}: {
+  items: CommandPaletteItem[];
+  renderItem: (item: CommandPaletteItem) => ReactNode;
 }) {
   const grouped = useMemo(() => {
     const groups = new Map<string, CommandPaletteItem[]>();
@@ -128,22 +202,14 @@ function GroupedItems({
   const hasGroups = grouped.size > 1 || (grouped.size === 1 && !grouped.has(''));
 
   if (!hasGroups) {
-    return (
-      <CommandGroup>
-        {items.map((item) => (
-          <PaletteItem key={item.id} item={item} onSelect={onSelect} />
-        ))}
-      </CommandGroup>
-    );
+    return <CommandGroup>{items.map((item) => renderItem(item))}</CommandGroup>;
   }
 
   return (
     <>
       {Array.from(grouped.entries()).map(([groupKey, groupItems]) => (
         <CommandGroup key={groupKey} heading={groupKey || undefined}>
-          {groupItems.map((item) => (
-            <PaletteItem key={item.id} item={item} onSelect={onSelect} />
-          ))}
+          {groupItems.map((item) => renderItem(item))}
         </CommandGroup>
       ))}
     </>
@@ -170,6 +236,9 @@ export function OverlayCommandPalettePresentational({
   noResultsText = 'No results found',
   maxWidth = DEFAULT_MAX_WIDTH,
   maxHeight = DEFAULT_MAX_HEIGHT,
+  passive = false,
+  filterText,
+  selectedIndex = 0,
   onSelect,
   onDismiss,
 }: OverlayCommandPalettePresentationalProps) {
@@ -178,10 +247,13 @@ export function OverlayCommandPalettePresentational({
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Auto-focus the search input on mount. Called synchronously after DOM commit so cmdk receives
-  // keyboard events (including arrow keys) immediately without a setTimeout tick delay.
+  // keyboard events (including arrow keys) immediately without a setTimeout tick delay. Skipped
+  // entirely in passive mode, which renders no search input and must never steal focus from the
+  // requesting WebView.
   useEffect(() => {
+    if (passive) return;
     inputRef.current?.focus();
-  }, []);
+  }, [passive]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -193,7 +265,43 @@ export function OverlayCommandPalettePresentational({
     [onDismiss],
   );
 
-  const paletteContent = (
+  // Passive mode bypasses cmdk's own input-driven filtering, so the filtered list is computed
+  // with the same filterPaletteItems function the host uses to resolve a commit — keeping what's
+  // on screen and what the host would select in agreement.
+  const passiveFilteredItems = useMemo(
+    () => (passive ? filterPaletteItems(items, filterText) : items),
+    [passive, items, filterText],
+  );
+  const passiveIndexById = useMemo(
+    () => new Map(passiveFilteredItems.map((item, index) => [item.id, index])),
+    [passiveFilteredItems],
+  );
+
+  const paletteContent = passive ? (
+    <Command
+      data-overlay-command-palette
+      className="tw:rounded-lg tw:border"
+      onKeyDown={handleKeyDown}
+    >
+      <CommandList style={{ maxHeight: maxHeight - 44 }}>
+        {passiveFilteredItems.length === 0 ? (
+          <div className="tw:py-6 tw:text-center tw:text-sm">{noResultsText}</div>
+        ) : (
+          <GroupedItems
+            items={passiveFilteredItems}
+            renderItem={(item) => (
+              <PassivePaletteItem
+                key={item.id}
+                item={item}
+                isHighlighted={passiveIndexById.get(item.id) === selectedIndex}
+                onSelect={onSelect}
+              />
+            )}
+          />
+        )}
+      </CommandList>
+    </Command>
+  ) : (
     <Command
       data-overlay-command-palette
       className="tw:rounded-lg tw:border"
@@ -202,7 +310,10 @@ export function OverlayCommandPalettePresentational({
       <CommandInput ref={inputRef} placeholder={placeholder} />
       <CommandList style={{ maxHeight: maxHeight - 44 }}>
         <CommandEmpty>{noResultsText}</CommandEmpty>
-        <GroupedItems items={items} onSelect={onSelect} />
+        <GroupedItems
+          items={items}
+          renderItem={(item) => <PaletteItem key={item.id} item={item} onSelect={onSelect} />}
+        />
       </CommandList>
     </Command>
   );
@@ -400,6 +511,9 @@ export function OverlayCommandPalette({ overlay }: OverlayCommandPaletteProps) {
       noResultsText={localizedNoResults}
       maxWidth={overlay.request.maxWidth}
       maxHeight={overlay.request.maxHeight}
+      passive={overlay.request.passive}
+      filterText={overlay.filterText}
+      selectedIndex={overlay.selectedIndex}
       onSelect={handleSelect}
       onDismiss={handleDismiss}
     />
