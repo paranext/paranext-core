@@ -314,6 +314,20 @@ describe('overlay-store', () => {
       expect((overlay as Extract<OverlayEntry, { type: 'commandPalette' }>).selectedIndex).toBe(0);
     });
 
+    it('should normalize empty-string filterText to undefined (cleared, never stored as "")', () => {
+      const entry = createCommandPaletteEntry('palette-1', 'webview-1', undefined, {
+        filterText: 'existing',
+      });
+      addOverlay(entry);
+
+      updateCommandPaletteState('palette-1', { filterText: '', itemCount: 1 });
+      const overlay = getOverlayById('palette-1');
+      // overlay is a union type and we know it's a commandPalette from setup
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const palette = overlay as Extract<OverlayEntry, { type: 'commandPalette' }>;
+      expect(palette.filterText).toBeUndefined();
+    });
+
     it('should leave filterText unchanged when not provided in the patch', () => {
       const entry = createCommandPaletteEntry('palette-1', 'webview-1', undefined, {
         filterText: 'existing',

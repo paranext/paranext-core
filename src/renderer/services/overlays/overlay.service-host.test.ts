@@ -635,14 +635,14 @@ describe('overlay.service-host', () => {
     it('should show passive, narrow via updateFilter, clamp via moveSelection, and commit the highlighted id', async () => {
       const promise = overlayService.showCommandPalette(passiveRequest, 'test-webview');
 
-      // filterText narrows to items starting with "f": Footnote, Figure
-      await overlayService.updateCommandPalette('test-webview', { filterText: 'f' });
+      // filterText narrows to items starting with "F" (ordinal, case-sensitive): Footnote, Figure
+      await overlayService.updateCommandPalette('test-webview', { filterText: 'F' });
 
       let overlay = getOverlayById(getOverlays()[0].id);
       // TypeScript cannot narrow a discriminated union after getOverlayById(); cast needed to access typed fields
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       let palette = overlay as Extract<NonNullable<typeof overlay>, { type: 'commandPalette' }>;
-      expect(palette.filterText).toBe('f');
+      expect(palette.filterText).toBe('F');
       expect(palette.selectedIndex).toBe(0);
 
       // moveSelection past the end of the filtered (2-item) list clamps to the last index

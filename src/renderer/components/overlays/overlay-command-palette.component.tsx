@@ -29,7 +29,15 @@ import {
   PopoverContent,
   Z_INDEX_OVERLAY,
 } from 'platform-bible-react';
-import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
+import {
+  type KeyboardEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+} from 'react';
 import { isLocalizeKey, LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 
 // ── Public Types ──
@@ -140,25 +148,30 @@ function PaletteItem({
  * passive mode bypasses cmdk's own filter/keyboard-navigation entirely (the host drives filtering
  * and selection via `updateCommandPalette`), so highlighting is driven directly by the
  * externally-computed `isHighlighted` flag instead of cmdk's internal hover/keyboard state. Styled
- * with the same classes as `CommandItem` for visual parity. Click still selects.
+ * with the same classes as `CommandItem` for visual parity, and carries the same `option` role cmdk
+ * items have; `id` is referenced by the passive listbox's `aria-activedescendant`. Click still
+ * selects.
  */
 function PassivePaletteItem({
+  id,
   item,
   isHighlighted,
   onSelect,
 }: {
+  id: string;
   item: CommandPaletteItem;
   isHighlighted: boolean;
   onSelect: (id: string) => void;
 }) {
   return (
-    // Passive-mode item: click selects (matching the centered-mode backdrop's click-to-dismiss
-    // pattern below); keyboard interaction is driven externally by the host via
-    // updateCommandPalette, not by this element itself, so it has no keyboard listener/focus of
-    // its own.
-    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
+    // Passive-mode option: click selects; keyboard interaction is driven externally by the host
+    // via updateCommandPalette (aria-activedescendant pattern — focus never enters the overlay),
+    // so the option itself has no keyboard listener and is intentionally not focusable.
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/interactive-supports-focus
     <div
+      id={id}
       data-slot="command-item"
+      role="option"
       aria-selected={isHighlighted}
       aria-disabled={item.disabled}
       onClick={() => {
@@ -272,9 +285,14 @@ export function OverlayCommandPalettePresentational({
     () => (passive ? filterPaletteItems(items, filterText) : items),
     [passive, items, filterText],
   );
-  const passiveIndexById = useMemo(
-    () => new Map(passiveFilteredItems.map((item, index) => [item.id, index])),
-    [passiveFilteredItems],
+  const highlightedItem: CommandPaletteItem | undefined = passiveFilteredItems[selectedIndex];
+
+  // Stable DOM ids for passive options so the listbox's aria-activedescendant can reference the
+  // highlighted item (focus never enters the palette, so this is the accessible-selection signal).
+  const passiveIdBase = useId();
+  const getPassiveItemDomId = useCallback(
+    (itemId: string) => `${passiveIdBase}-option-${encodeURIComponent(itemId)}`,
+    [passiveIdBase],
   );
 
   const paletteContent = passive ? (
@@ -283,23 +301,39 @@ export function OverlayCommandPalettePresentational({
       className="tw:rounded-lg tw:border"
       onKeyDown={handleKeyDown}
     >
-      <CommandList style={{ maxHeight: maxHeight - 44 }}>
+      {/* Not cmdk's CommandList: cmdk overrides a caller-supplied aria-activedescendant with its
+          own (empty in passive mode, which registers no cmdk items), so passive mode renders its
+          own listbox with CommandList's classes. tabIndex matches CommandList; focus stays in the
+          requesting WebView. */}
+      <div
+        data-slot="command-list"
+        role="listbox"
+        tabIndex={-1}
+        aria-activedescendant={
+          highlightedItem ? getPassiveItemDomId(highlightedItem.id) : undefined
+        }
+        className="pr-twp tw:no-scrollbar tw:max-h-72 tw:scroll-py-1 tw:overflow-x-hidden tw:overflow-y-auto tw:outline-none"
+        style={{ maxHeight: maxHeight - 44 }}
+      >
         {passiveFilteredItems.length === 0 ? (
-          <div className="tw:py-6 tw:text-center tw:text-sm">{noResultsText}</div>
+          <div data-slot="command-empty" className="tw:py-6 tw:text-center tw:text-sm">
+            {noResultsText}
+          </div>
         ) : (
           <GroupedItems
             items={passiveFilteredItems}
             renderItem={(item) => (
               <PassivePaletteItem
                 key={item.id}
+                id={getPassiveItemDomId(item.id)}
                 item={item}
-                isHighlighted={passiveIndexById.get(item.id) === selectedIndex}
+                isHighlighted={item.id === highlightedItem?.id}
                 onSelect={onSelect}
               />
             )}
           />
         )}
-      </CommandList>
+      </div>
     </Command>
   ) : (
     <Command
