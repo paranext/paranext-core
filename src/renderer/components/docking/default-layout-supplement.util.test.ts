@@ -1,6 +1,9 @@
 import { BoxData, LayoutBase, PanelData } from 'rc-dock';
 import { SavedTabInfo } from '@shared/models/docking-framework.model';
-import { mergeDefaultLayoutSupplement } from './default-layout-supplement.util';
+import {
+  filterEnabledSupplementEntries,
+  mergeDefaultLayoutSupplement,
+} from './default-layout-supplement.util';
 import { DefaultLayoutSupplementEntry } from './default-layout-supplement.model';
 
 function baseLayout(): LayoutBase {
@@ -86,5 +89,82 @@ describe('mergeDefaultLayoutSupplement', () => {
   it('returns the layout unchanged for an empty supplement', () => {
     const merged = mergeDefaultLayoutSupplement(baseLayout(), []);
     expect(tabsInFirstPanel(merged).map((t) => t.id)).toEqual(['anchor-tab']);
+  });
+});
+
+/** Build a minimal flagged/unflagged supplement entry (tab id mirrors its webViewType). */
+function flagEntry(id: string, flagSetting?: string): DefaultLayoutSupplementEntry {
+  return {
+    anchorWebViewType: 'anchor.type',
+    tab: { id, tabType: 'webView', data: { webViewType: id } },
+    flagSetting,
+  };
+}
+
+describe('filterEnabledSupplementEntries', () => {
+  it('returns [] and reads no flags when there are no entries (the vanilla case)', async () => {
+    const readKeys: string[] = [];
+    const getFlag = async (key: string) => {
+      readKeys.push(key);
+      return true;
+    };
+    expect(await filterEnabledSupplementEntries([], getFlag)).toEqual([]);
+    expect(readKeys).toEqual([]);
+  });
+
+  it('always includes an entry with no flagSetting, without reading any flag', async () => {
+    const readKeys: string[] = [];
+    const getFlag = async (key: string) => {
+      readKeys.push(key);
+      return true;
+    };
+    const e = flagEntry('no-flag');
+    expect(await filterEnabledSupplementEntries([e], getFlag)).toEqual([e]);
+    expect(readKeys).toEqual([]);
+  });
+
+  it('includes a flagged entry only when its flag resolves to boolean true', async () => {
+    const on = flagEntry('on', 'flag.on');
+    const off = flagEntry('off', 'flag.off');
+    // Truthy but not === true — must be treated as disabled.
+    const truthy = flagEntry('truthy', 'flag.truthy');
+    const getFlag = async (key: string) => {
+      if (key === 'flag.on') return true;
+      if (key === 'flag.off') return false;
+      return 'true';
+    };
+    expect(await filterEnabledSupplementEntries([on, off, truthy], getFlag)).toEqual([on]);
+  });
+
+  it('skips an entry whose flag read rejects and reports it, without dropping the others', async () => {
+    const good = flagEntry('good', 'flag.good');
+    const bad = flagEntry('bad', 'flag.bad');
+    const error = new Error('No setting exists for key flag.bad');
+    const getFlag = async (key: string) => {
+      if (key === 'flag.bad') throw error;
+      return true;
+    };
+    const reported: Array<{ entry: DefaultLayoutSupplementEntry; error: unknown }> = [];
+    const onFlagError = (entry: DefaultLayoutSupplementEntry, err: unknown) =>
+      reported.push({ entry, error: err });
+
+    expect(await filterEnabledSupplementEntries([good, bad], getFlag, onFlagError)).toEqual([good]);
+    expect(reported).toEqual([{ entry: bad, error }]);
+  });
+
+  it('does not reject when a flag read fails and no onFlagError is provided', async () => {
+    const bad = flagEntry('bad', 'flag.bad');
+    const getFlag = async () => {
+      throw new Error('boom');
+    };
+    await expect(filterEnabledSupplementEntries([bad], getFlag)).resolves.toEqual([]);
+  });
+
+  it('preserves the original entry order', async () => {
+    const a = flagEntry('a', 'flag.a');
+    const b = flagEntry('b');
+    const c = flagEntry('c', 'flag.c');
+    const getFlag = async () => true;
+    expect(await filterEnabledSupplementEntries([a, b, c], getFlag)).toEqual([a, b, c]);
   });
 });

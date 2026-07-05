@@ -5,8 +5,10 @@
  *
  * - The view opens as a dock tab titled "Scripture Text" (single-cell title; the count-driven flip to
  *   "Text Collection" is wired to A3's contents selector).
- * - The tab is NON-CLOSABLE: it renders no `.dock-tab-close-btn`. Because the app registers no
- *   keyboard tab-close shortcut, the absent close button covers both close paths (X + keyboard).
+ * - The tab is NON-CLOSABLE: it renders no `.dock-tab-close-btn` (verified against a positive control
+ *   tab so the assertion can't pass vacuously if rc-dock renames the class). Because the app
+ *   registers no keyboard tab-close shortcut, the absent close button covers both close paths (X +
+ *   keyboard).
  *
  * There is no menu or command for this view (it ships in the PT10 Studio default layout), so the
  * test opens it directly through `window.papi.webViews.openWebView` — the renderer exposes `papi`
@@ -21,7 +23,7 @@
  */
 import { test, expect } from '../../fixtures/cdp.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
-import { closeAllNonHomeDockTabs } from './test-helpers';
+import { closeAllNonHomeDockTabs, openEnhancedResource } from './test-helpers';
 
 const SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE = 'platformScriptureEditor.scriptureTextGrid';
 const SCRIPTURE_TEXT_TAB_TITLE = /^Scripture Text$/;
@@ -56,7 +58,20 @@ test.describe('Scripture Text Grid (A1 scaffold)', () => {
     const tab = mainPage.locator('.dock-tab', { hasText: SCRIPTURE_TEXT_TAB_TITLE });
     await expect(tab).toBeVisible({ timeout: 15_000 });
 
-    // Non-closable: the tab must render no close button (rc-dock omits it when `closable` is false).
+    // Non-closable: the grid tab renders no close button (rc-dock omits it when `closable` is false).
+    await expect(tab.locator('.dock-tab-close-btn')).toHaveCount(0);
+
+    // Positive control so the assertion above can't pass vacuously: if rc-dock ever renamed
+    // `.dock-tab-close-btn`, a bare `toHaveCount(0)` would still pass (selector matches nothing) and
+    // silently stop testing anything. Open a normal, closable web view and confirm the SAME selector
+    // matches its close button exactly once — proving the selector is still valid, so the grid tab's
+    // zero-count genuinely means "no close button" rather than "selector broke".
+    await openEnhancedResource(mainPage);
+    const closableTab = mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i }).first();
+    await expect(closableTab).toBeVisible({ timeout: 15_000 });
+    await expect(closableTab.locator('.dock-tab-close-btn')).toHaveCount(1);
+
+    // The grid tab is still non-closable even with a closable tab now open alongside it.
     await expect(tab.locator('.dock-tab-close-btn')).toHaveCount(0);
   });
 });

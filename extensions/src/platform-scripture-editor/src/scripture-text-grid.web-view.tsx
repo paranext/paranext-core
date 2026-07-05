@@ -1,7 +1,7 @@
 import type { WebViewProps } from '@papi/core';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { LocalizeKey } from 'platform-bible-utils';
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 
 // Tab-title localized keys. The label is count-driven: "Scripture Text" when 0-1 cells are
 // displayed, "Text Collection" when 2 or more.
@@ -22,7 +22,9 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   updateWebViewDefinition,
   useWebViewState,
 }: WebViewProps) {
-  const [localizedStrings] = useLocalizedStrings(useMemo(() => ALL_STRING_KEYS, []));
+  // `ALL_STRING_KEYS` is a module-level constant, so its reference is already stable across renders
+  // (satisfying `useLocalizedStrings`'s stable-reference requirement) — no `useMemo` needed.
+  const [localizedStrings, isLoadingLocalizedStrings] = useLocalizedStrings(ALL_STRING_KEYS);
 
   // A1 SCAFFOLD SEAM: the real grid contents (checked resources) come from A3's
   // `getScriptureTextGridContents` effective-list selector. Until A3 lands, this persisted stub
@@ -33,14 +35,16 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 
   // Dynamic tab title: flips to "Text Collection" at 2+ displayed cells, "Scripture Text" otherwise.
   useEffect(() => {
+    // Wait until localization has resolved so we never flash a raw localize key into the tab.
+    // `useLocalizedStrings` returns the key itself as a placeholder while loading, so gate on
+    // `isLoading` — a truthiness check on the values wouldn't detect the not-yet-resolved state.
+    if (isLoadingLocalizedStrings) return;
     const singleTitle = localizedStrings[TITLE_SINGLE_KEY];
     const multipleTitle = localizedStrings[TITLE_MULTIPLE_KEY];
-    // Wait until the strings have resolved so we never flash an unlocalized key into the tab.
-    if (!singleTitle || !multipleTitle) return;
     updateWebViewDefinition({
       title: displayedCellCount >= TEXT_COLLECTION_THRESHOLD ? multipleTitle : singleTitle,
     });
-  }, [displayedCellCount, localizedStrings, updateWebViewDefinition]);
+  }, [displayedCellCount, isLoadingLocalizedStrings, localizedStrings, updateWebViewDefinition]);
 
   // Placeholder body. The empty-state directional copy (A6) and the VerseCell row (A4) replace this.
   return <div data-testid="scripture-text-grid" />;

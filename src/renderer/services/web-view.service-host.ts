@@ -6,7 +6,10 @@
  */
 import defaultLayoutSupplement from '@renderer/components/docking/default-layout-supplement.json';
 import { DefaultLayoutSupplementEntry } from '@renderer/components/docking/default-layout-supplement.model';
-import { mergeDefaultLayoutSupplement } from '@renderer/components/docking/default-layout-supplement.util';
+import {
+  filterEnabledSupplementEntries,
+  mergeDefaultLayoutSupplement,
+} from '@renderer/components/docking/default-layout-supplement.util';
 import {
   type SettingsTabData,
   TAB_TYPE_SETTINGS_TAB,
@@ -71,6 +74,7 @@ import { CommandNames } from 'papi-shared-types';
 import {
   AsyncVariable,
   deserialize,
+  getErrorMessage,
   getStylesheetForTheme,
   indexOf,
   isPlatformError,
@@ -719,21 +723,23 @@ const onLayoutChange: OnLayoutChange = async (newLayout, _currentTabId, changeIn
  * filtering out any entries whose {@link DefaultLayoutSupplementEntry.flagSetting} is not `true`.
  */
 async function getEnabledSupplementEntries(): Promise<DefaultLayoutSupplementEntry[]> {
-  const entries: DefaultLayoutSupplementEntry[] = defaultLayoutSupplement.tabs;
-  const resolved = await Promise.all(
-    entries.map(async (entry) => {
-      if (!entry.flagSetting) return entry;
-      // The flag key is a product-supplied dynamic string; `settingsService.get` is typed to the
-      // union of known setting keys (`SettingNames`), so cast to that rather than to one specific
-      // (unrelated) key. The value is treated as `unknown` below, so an unknown key is handled safely.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const flagKey = entry.flagSetting as SettingNames;
-      // Cast result to `unknown` so we can safely check the runtime boolean value without a type overlap error.
-      const value: unknown = await settingsService.get(flagKey);
-      return value === true ? entry : undefined;
-    }),
+  return filterEnabledSupplementEntries(
+    defaultLayoutSupplement.tabs,
+    // The flag key is a product-supplied dynamic string; `settingsService.get` is typed to the union
+    // of known setting keys (`SettingNames`), so cast to that rather than to one specific (unrelated)
+    // key. `filterEnabledSupplementEntries` checks the result as `unknown`, so an unknown key is
+    // handled safely and a rejected read is caught there.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    (flagSetting) => settingsService.get(flagSetting as SettingNames),
+    (entry, error) =>
+      // A not-yet-contributed or disabled-extension setting throws ("No setting exists for key ...").
+      // We skip just that entry rather than letting one bad flag take down layout loading.
+      logger.warn(
+        `getEnabledSupplementEntries: could not read flag setting '${
+          entry.flagSetting
+        }'; skipping supplement tab '${entry.tab.id}'. ${getErrorMessage(error)}`,
+      ),
   );
-  return resolved.filter((e): e is DefaultLayoutSupplementEntry => e !== undefined);
 }
 
 /**
@@ -746,6 +752,9 @@ async function loadLayout(layout?: LayoutInfo): Promise<void> {
   const dockLayoutVar = await getDockLayout();
   if (layout) {
     // Explicit layout change. `loadLayout` doesn't run `onLayoutChange`, so run it manually.
+    // NOTE: we intentionally do NOT apply the default-layout supplement here — a caller passing an
+    // explicit layout owns its full contents. If a future "reset to default layout" path routes
+    // through here and should include supplement tabs, merge `getEnabledSupplementEntries()` in too.
     dockLayoutVar.loadLayout(layout);
     await onLayoutChange(layout);
     return;
@@ -770,6 +779,19 @@ async function loadLayout(layout?: LayoutInfo): Promise<void> {
       ? dockLayoutVar.simpleLayout
       : getStorageValue(DOCK_LAYOUT_KEY, dockLayoutVar.testLayout);
   const enabledEntries = await getEnabledSupplementEntries();
+  if (enabledEntries.length === 0) {
+    // Nothing to merge (the common/vanilla case) — load the base layout directly and skip the clone.
+    dockLayoutVar.loadLayout(layoutToLoad);
+    return;
+  }
+  // KNOWN POWER-MODE LIMITATION (safe today; revisit when power-mode coverage lands): power mode
+  // persists the *merged* layout to `DOCK_LAYOUT_KEY`, so a supplement tab saved during a flag-ON
+  // run survives into a later flag-OFF run — the re-merge excludes it, but the already-saved copy
+  // remains, its provider now unregistered and (if `isClosable: false`) uncloseable. Likewise,
+  // changing a supplement tab's id across versions appends a second copy, since `mergeDefault-
+  // LayoutSupplement` dedups by exact tab id. Simple mode (the current default) is immune because it
+  // always reloads the static `simpleLayout` and no-ops `saveLayout`. When power mode is wired up,
+  // drop/replace persisted supplement tabs whose provider is unregistered, or don't persist them.
   // LayoutInfo is intentionally opaque in the shared model; cross to the concrete rc-dock shape here,
   // mirroring platform-dock-layout.component.tsx
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -830,8 +852,11 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
   dockLayout.onLayoutChangeRef.current = onLayoutChange;
 
   // Will we ever need to await this? For now, seems like it unnecessarily complicates registering
-  // because making this function async would probably be annoying in React
-  loadLayout();
+  // because making this function async would probably be annoying in React.
+  // Fire-and-forget, but guard the rejection: `loadLayout` now awaits `getEnabledSupplementEntries`
+  // (settings reads for product supplement flags), and an unhandled rejection here would leave the
+  // entire dock unloaded (blank window). Log and move on instead.
+  loadLayout().catch((err) => logger.warn(`Initial loadLayout failed: ${getErrorMessage(err)}`));
 
   // Reload the layout whenever `platform.interfaceMode` changes so the user-facing mode switcher
   // (see `UserProfilePopover`) can swap layouts live without a restart. Use
