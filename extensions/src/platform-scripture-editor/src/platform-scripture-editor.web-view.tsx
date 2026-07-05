@@ -1005,6 +1005,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const correctEditingNoteKeyAfterInsert = useCallback((insertedNoteKey: string | undefined) => {
     if (!insertedNoteKey) return;
     queueMicrotask(() => {
+      // Only correct a key the auto-open path actually set. If it early-returned (no popover
+      // opened - e.g. its ops/element checks failed - so editingNoteKey was never set), writing
+      // the true key here would wedge a truthy key with no editing session, permanently
+      // suppressing future auto-opens via handleEditorialUsjChange's editingNoteKey guard.
+      if (!editingNoteKey.current) return;
       editingNoteKey.current = insertedNoteKey;
     });
   }, []);
