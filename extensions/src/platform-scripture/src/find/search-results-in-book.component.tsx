@@ -26,11 +26,17 @@ type SearchResultsInBookProps = {
   /** The list of search results in this book */
   results: HidableFindResult[];
   /** Map of book IDs to their localized display names */
-  localizedBookData: Map<string, Pick<LocalizedBookData, 'localizedId'>>;
+  localizedBookData: Map<string, Pick<LocalizedBookData, 'localizedId' | 'localizedName'>>;
   /** The index of the currently focused/selected result in this list */
   focusedResultIndex: number | undefined;
-  /** Callback function called when the user clicks on a search result */
+  /** Callback function called when the user clicks on (selects) a search result */
   onResultClick: (searchResult: HidableFindResult, index: number) => void;
+  /** Called when a result card receives browser focus (e.g. Tab navigation) */
+  onResultFocus?: (searchResult: HidableFindResult, index: number) => void;
+  /** Called when the user double-clicks a result (focus shifts to the editor) */
+  onResultDoubleClick?: (searchResult: HidableFindResult, index: number) => void;
+  /** Called when the user clicks a result's scripture reference (focus shifts to the editor) */
+  onResultReferenceClick?: (searchResult: HidableFindResult, index: number) => void;
   /** Callback function called when the user chooses to hide/dismiss a result */
   onHideResult: (index: number) => void;
   /** Callback function called when the user clicks Replace on a result */
@@ -62,6 +68,9 @@ export function SearchResultsInBook({
   localizedBookData,
   focusedResultIndex,
   onResultClick,
+  onResultFocus,
+  onResultDoubleClick,
+  onResultReferenceClick,
   onHideResult,
   onReplace,
   onCancelReplace,
@@ -130,6 +139,9 @@ export function SearchResultsInBook({
           cachedUsfm={cachedUsfm}
           localizedBookData={localizedBookData}
           onResultClick={onResultClick}
+          onResultFocus={onResultFocus}
+          onResultDoubleClick={onResultDoubleClick}
+          onResultReferenceClick={onResultReferenceClick}
           onHideResult={onHideResult}
           onReplace={onReplace}
           onCancelReplace={index === firstReplacedIndex ? onCancelReplace : undefined}

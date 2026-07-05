@@ -60,9 +60,15 @@ interface SearchResultProps {
    */
   cachedUsfm?: string;
   /** Map of book IDs to their localized display names */
-  localizedBookData: Map<string, Pick<LocalizedBookData, 'localizedId'>>;
-  /** Callback function called when the user clicks on this search result */
+  localizedBookData: Map<string, Pick<LocalizedBookData, 'localizedId' | 'localizedName'>>;
+  /** Callback function called when the user clicks on (selects) this search result */
   onResultClick: (searchResult: HidableFindResult, index: number) => void;
+  /** Called when this result card receives browser focus (e.g. Tab navigation) */
+  onResultFocus?: (searchResult: HidableFindResult, index: number) => void;
+  /** Called when the user double-clicks the result — focus shifts to the editor at this match */
+  onResultDoubleClick?: (searchResult: HidableFindResult, index: number) => void;
+  /** Called when the user clicks the scripture reference — focus shifts to the editor */
+  onResultReferenceClick?: (searchResult: HidableFindResult, index: number) => void;
   /** Callback function called when the user chooses to hide/dismiss this result */
   onHideResult: (index: number) => void;
   /** Callback function called when the user clicks Replace on this result */
@@ -123,6 +129,9 @@ export default function SearchResult({
   cachedUsfm,
   localizedBookData,
   onResultClick,
+  onResultFocus,
+  onResultDoubleClick,
+  onResultReferenceClick,
   onHideResult,
   onReplace,
   onCancelReplace,
@@ -271,6 +280,13 @@ export default function SearchResult({
       variant="outline"
       size="sm"
       disabled={isReplacing}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          e.stopPropagation();
+          onReplace(globalResultsIndex);
+        }
+      }}
       onClick={(e) => {
         e.stopPropagation();
         onReplace(globalResultsIndex);
@@ -408,15 +424,27 @@ export default function SearchResult({
     );
   };
 
+  const bookData = localizedBookData.get(searchResult.start.verseRef.book);
   const cardContent = (
-    <div className="tw:text-xs tw:font-medium tw:flex tw:items-center tw:gap-2 tw:min-h-8">
-      <div className="tw:shrink-0">
-        {localizedBookData.get(searchResult.start.verseRef.book)?.localizedId ??
-          searchResult.start.verseRef.book}{' '}
+    <div className="tw:text-sm tw:font-medium tw:flex tw:items-center tw:gap-2 tw:min-h-8">
+      <button
+        type="button"
+        className="tw:shrink-0 tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:font-semibold tw:text-inherit tw:hover:underline"
+        onClick={(e) => {
+          e.stopPropagation();
+          onResultReferenceClick?.(searchResult, globalResultsIndex);
+        }}
+        onDoubleClick={(e) => e.stopPropagation()}
+      >
+        {bookData?.localizedName ?? bookData?.localizedId ?? searchResult.start.verseRef.book}{' '}
         {searchResult.start.verseRef.chapterNum}:
-        {searchResult.start.verseRef.verse || searchResult.start.verseRef.verseNum}{' '}
-        <span className="scripture-font">{searchResult.text ?? ''}</span>
-      </div>
+        {searchResult.start.verseRef.verse || searchResult.start.verseRef.verseNum}
+      </button>
+      {!searchResult.isReplaced && (
+        <span className="scripture-font tw:min-w-0 tw:truncate tw:font-normal tw:text-muted-foreground">
+          {searchResult.text ?? ''}
+        </span>
+      )}
       {searchResult.isReplaced && (
         <>
           <span className="tw:text-red-500 tw:font-semibold tw:shrink-0">
@@ -468,7 +496,38 @@ export default function SearchResult({
   );
 
   return (
-    <div ref={cardRef}>
+    // The card body is a decorative wrapper; the interactive control is the ResultsCard button
+    // inside it. These handlers add editor-navigation affordances (double-click / Tab focus) and a
+    // replace shortcut without adding a competing interactive role on the wrapper itself.
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+    <div
+      ref={cardRef}
+      onDoubleClick={() => onResultDoubleClick?.(searchResult, globalResultsIndex)}
+      onFocus={(e) => {
+        // Only fire when focus explicitly comes from outside the card (e.g. Tab navigation), not
+        // from an interaction with a child button.
+        if (!e.relatedTarget || !(e.relatedTarget instanceof Node)) return;
+        if (!cardRef.current?.contains(e.relatedTarget)) {
+          onResultFocus?.(searchResult, globalResultsIndex);
+        }
+      }}
+      onKeyDownCapture={(e) => {
+        // When the selected card is focused (not a child button) in replace mode, Enter/Space runs
+        // the replace instead of merely re-selecting.
+        if (
+          isSelected &&
+          isReplaceMode &&
+          !searchResult.isReplaced &&
+          !isReplacing &&
+          (e.key === 'Enter' || e.key === ' ') &&
+          !(e.target instanceof HTMLButtonElement)
+        ) {
+          e.preventDefault();
+          e.stopPropagation();
+          onReplace(globalResultsIndex);
+        }
+      }}
+    >
       <ResultsCard
         cardKey={`${searchResult.start.verseRef.book + searchResult.start.verseRef.chapterNum}:${
           searchResult.start.verseRef.verseNum

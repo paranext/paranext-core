@@ -14,6 +14,7 @@ import {
 } from './checklist.web-view-provider';
 import { CHECKLIST_OPEN_SETTINGS_EVENT } from './checklist.model';
 import { FindWebViewOptions, FindWebViewProvider, findWebViewType } from './find.web-view-provider';
+import { FindHistoryDataProviderEngine } from './find/find-history.data-provider';
 import {
   checkAggregatorService,
   notifyCheckResultsInvalidated,
@@ -677,6 +678,12 @@ export async function activate(context: ExecutionActivationContext) {
             'The ID of the triggering editor web view; the project to search in is resolved from it',
           schema: { type: 'string' },
         },
+        {
+          name: 'selectedText',
+          required: false,
+          summary: 'Text to pre-fill in the search field and immediately search for',
+          schema: { type: 'string' },
+        },
       ],
       result: {
         name: 'return value',
@@ -688,6 +695,14 @@ export async function activate(context: ExecutionActivationContext) {
   const openFindWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     findWebViewType,
     findWebViewProvider,
+  );
+
+  const findHistoryDataProviderPromise = papi.dataProviders.registerEngine(
+    'platformScripture.findHistory',
+    new FindHistoryDataProviderEngine({
+      readUserData: (key) => papi.storage.readUserData(context.executionToken, key),
+      writeUserData: (key, value) => papi.storage.writeUserData(context.executionToken, key, value),
+    }),
   );
 
   const invalidateResultsPromise = papi.commands.registerCommand(
@@ -776,6 +791,7 @@ export async function activate(context: ExecutionActivationContext) {
     openSettingsEventEmitter,
     await openFindPromise,
     await openFindWebViewProviderPromise,
+    await findHistoryDataProviderPromise,
     await openManageBooksPromise,
     await manageBooksWebViewProviderPromise,
     await invalidateResultsPromise,
