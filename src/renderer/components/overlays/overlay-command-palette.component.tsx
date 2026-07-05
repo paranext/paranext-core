@@ -100,7 +100,15 @@ function PaletteItemContent({ item }: { item: CommandPaletteItem }) {
           {item.icon}
         </span>
       )}
-      <div className="tw:flex tw:flex-1 tw:flex-col tw:overflow-hidden">
+      {/* `muted` de-emphasizes the text only (e.g. PT9's grey cue for non-basic markers) — unlike
+          `disabled`, the item stays highlightable/selectable, so the opacity lives here on the text
+          block rather than on the item container where the disabled styling goes. */}
+      <div
+        className={cn(
+          'tw:flex tw:flex-1 tw:flex-col tw:overflow-hidden',
+          item.muted && 'tw:opacity-60',
+        )}
+      >
         <span className="tw:truncate">{item.label}</span>
         {item.description && (
           <span className="tw:truncate tw:text-xs tw:text-muted-foreground">

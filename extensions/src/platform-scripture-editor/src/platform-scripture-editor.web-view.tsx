@@ -27,7 +27,7 @@ import {
   ViewOptions,
 } from '@eten-tech-foundation/platform-editor';
 import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
-import type { CommandPaletteItem, WebViewProps } from '@papi/core';
+import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
   useData,
@@ -120,11 +120,13 @@ import { FootnotesLayout } from './platform-scripture-editor-footnotes.component
 import {
   availableScrollGroupIds,
   blockMarkerToBlockNames,
+  clearPaletteSessionIfCurrent,
   deepEqualAcrossIframes,
   findNoteIndexByOps,
   formatEditorTitle,
   generateInlineMarkerMenuListItems,
   generateParagraphMenuListItems,
+  markerMenuItemToCommandPaletteItem,
   openCommentListAndSelectThreadSafe,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
 } from './platform-scripture-editor.utils';
@@ -229,15 +231,6 @@ const defaultMarkersMenuTrigger = '\\';
 type MarkerMenuAnchorContext = MarkerMenuContext & {
   anchorRect?: { x: number; y: number; width: number; height: number };
 };
-
-/**
- * Maps a library marker-menu item to the overlay service's command-palette item shape. Passive
- * palettes filter on raw `label` strings (see `filterPaletteItems`), so `label` must stay a plain
- * string rather than a `LocalizeKey` — the marker code itself, not a localized description.
- */
-function toCommandPaletteItem(item: MarkerMenuItem): CommandPaletteItem {
-  return { id: item.marker, label: item.marker, description: item.description };
-}
 
 // Return the appropriate ViewOptions for the given webview `viewType`.
 // Centralizes the logic so initialization and effects can call the same helper
@@ -378,12 +371,25 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * `'enter'` only guards against a second Enter re-opening a palette while the first request's
    * round-trip to the overlay service is still in flight — its palette is always focused too, so
    * there's no forwarding table for it either.
+   *
+   * `token` (allocated from the monotonic counter below) identifies which session an async
+   * show-promise settlement belongs to, so a stale promise's cleanup can only clear its own
+   * session, never a newer one (see `clearPaletteSessionIfCurrent`).
    */
   const paletteSession = useRef<
-    | { kind: 'backslash'; literalPrefixLanded: boolean; filter: string; items: MarkerMenuItem[] }
-    | { kind: 'enter'; items: MarkerMenuItem[] }
+    | {
+        kind: 'backslash';
+        token: number;
+        literalPrefixLanded: boolean;
+        filter: string;
+        items: MarkerMenuItem[];
+      }
+    | { kind: 'enter'; token: number; items: MarkerMenuItem[] }
     | undefined
   >(undefined);
+
+  /** Monotonic allocator for {@link paletteSession} tokens. */
+  const paletteSessionCounter = useRef(0);
 
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
   const [decorations, setDecorations] = useWebViewState<EditorDecorations>(
@@ -1280,17 +1286,19 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       openOptions: { passive: boolean; literalPrefixLanded: boolean },
     ) => {
       const { passive, literalPrefixLanded } = openOptions;
+      paletteSessionCounter.current += 1;
+      const token = paletteSessionCounter.current;
       paletteSession.current = passive
-        ? { kind: 'backslash', literalPrefixLanded, filter: '', items }
+        ? { kind: 'backslash', token, literalPrefixLanded, filter: '', items }
         : undefined;
 
       papi.overlays
         .showCommandPalette(
-          { items: items.map(toCommandPaletteItem), anchor: ctx.anchorRect, passive },
+          { items: items.map(markerMenuItemToCommandPaletteItem), anchor: ctx.anchorRect, passive },
           webViewId,
         )
         .then((id) => {
-          paletteSession.current = undefined;
+          clearPaletteSessionIfCurrent(paletteSession, token);
           if (id !== undefined) {
             const selected = items.find((item) => item.marker === id);
             if (selected) {
@@ -1310,7 +1318,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         .catch(() => {
           // Replaced by a newer overlay request (PlatformError code ABORTED) or any other rejection
           // — treat the same as an explicit dismissal.
-          paletteSession.current = undefined;
+          clearPaletteSessionIfCurrent(paletteSession, token);
           if (!passive) editorRef.current?.focus();
         });
     },
@@ -1324,21 +1332,27 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const openEnterPalette = useCallback(
     (ctx: MarkerMenuAnchorContext, items: MarkerMenuItem[]) => {
-      paletteSession.current = { kind: 'enter', items };
+      paletteSessionCounter.current += 1;
+      const token = paletteSessionCounter.current;
+      paletteSession.current = { kind: 'enter', token, items };
 
       papi.overlays
         .showCommandPalette(
-          { items: items.map(toCommandPaletteItem), anchor: ctx.anchorRect, passive: false },
+          {
+            items: items.map(markerMenuItemToCommandPaletteItem),
+            anchor: ctx.anchorRect,
+            passive: false,
+          },
           webViewId,
         )
         .then((id) => {
-          paletteSession.current = undefined;
+          clearPaletteSessionIfCurrent(paletteSession, token);
           if (id !== undefined) editorRef.current?.splitParagraphWithMarker(id);
           editorRef.current?.focus();
           return undefined;
         })
         .catch(() => {
-          paletteSession.current = undefined;
+          clearPaletteSessionIfCurrent(paletteSession, token);
           editorRef.current?.focus();
         });
     },
@@ -1364,6 +1378,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         const session = paletteSession.current;
 
         if (session?.kind === 'backslash') {
+          if (
+            event.key === 'Shift' ||
+            event.key === 'Control' ||
+            event.key === 'Alt' ||
+            event.key === 'Meta'
+          ) {
+            // Pure modifier keydowns aren't input — e.g. the Shift half of a `+` chord fires its
+            // own keydown before the `+` arrives. Falling through to the dismiss-on-any-other-key
+            // rule would kill the session mid-chord and break `\+w` nested-marker filtering.
+            return;
+          }
           if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
             event.preventDefault();
             papi.overlays.updateCommandPalette(webViewId, {
@@ -1373,6 +1398,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           }
           if (event.key === 'Enter') {
             event.preventDefault();
+            // The session ends here as far as keydown routing is concerned — the commit's
+            // resolution flows through the show-promise, which captured the items it needs, so
+            // clear synchronously like every other session-ending key rather than waiting for the
+            // async settlement.
+            paletteSession.current = undefined;
             papi.overlays.commitCommandPaletteSelection(webViewId);
             return;
           }
@@ -1389,7 +1419,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             papi.overlays.dismissCommandPalette(webViewId);
             return;
           }
-          if (event.key === 'Backspace' || /^[a-z0-9+*]$/.test(event.key)) {
+          if (event.key === 'Backspace' || /^[a-z0-9+]$/.test(event.key)) {
             // Filter mirroring is keydown-tracked and display-only: `applyMarkerMenuSelection` reads
             // the real literal run from the document at apply time, so drift here (fast typing,
             // IME composition) can never corrupt the actual insert.

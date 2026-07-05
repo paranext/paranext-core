@@ -449,4 +449,61 @@ describe('OverlayCommandPalettePresentational', () => {
       expect(onSelect).not.toHaveBeenCalled();
     });
   });
+
+  describe('muted items', () => {
+    const mutedAndNormalItems: CommandPaletteItem[] = [
+      { id: 'basic', label: 'Basic Marker' },
+      { id: 'non-basic', label: 'Non-Basic Marker', muted: true },
+    ];
+
+    /** The text block inside an item — where muted opacity is applied (not the item container). */
+    function getTextBlockClasses(label: string): string {
+      const textBlock = screen.getByText(label).parentElement;
+      expect(textBlock).not.toBeNull();
+      return textBlock?.className ?? '';
+    }
+
+    it('should render muted items with reduced-opacity text in active mode, normal items without', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={mutedAndNormalItems}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(getTextBlockClasses('Non-Basic Marker')).toContain('tw:opacity-60');
+      expect(getTextBlockClasses('Basic Marker')).not.toContain('tw:opacity-60');
+    });
+
+    it('should render muted items with reduced-opacity text in passive mode, normal items without', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={mutedAndNormalItems}
+          passive
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(getTextBlockClasses('Non-Basic Marker')).toContain('tw:opacity-60');
+      expect(getTextBlockClasses('Basic Marker')).not.toContain('tw:opacity-60');
+    });
+
+    it('should keep muted items selectable (unlike disabled)', () => {
+      const onSelect = vi.fn();
+      render(
+        <OverlayCommandPalettePresentational
+          items={mutedAndNormalItems}
+          passive
+          onSelect={onSelect}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      fireEvent.click(screen.getByText('Non-Basic Marker'));
+
+      expect(onSelect).toHaveBeenCalledWith('non-basic');
+    });
+  });
 });

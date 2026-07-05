@@ -112,6 +112,13 @@ export type CommandPaletteItem = {
   group?: string;
   /** Whether the item is grayed out and non-selectable. Defaults to false. */
   disabled?: boolean;
+  /**
+   * Whether the item's text is rendered de-emphasized (reduced opacity) while remaining fully
+   * selectable — e.g. PT9's grey cue for non-basic markers. Unlike
+   * {@link CommandPaletteItem.disabled}, a muted item can still be highlighted and selected.
+   * Defaults to false.
+   */
+  muted?: boolean;
 };
 
 /** Request payload for {@link IOverlayService.showCommandPalette}. */
