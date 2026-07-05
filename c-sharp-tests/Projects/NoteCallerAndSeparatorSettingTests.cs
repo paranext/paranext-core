@@ -27,6 +27,13 @@ namespace TestParanextDataProvider.Projects;
 /// </item>
 /// </list>
 ///
+/// "Registered default" above means the Platform.Bible default registered via the
+/// platform-scripture extension's projectSettings.json. For the two separators those values do
+/// match ParatextData's own source-level fallbacks (ProjectSettings.ChapterVerseSeparator "." and
+/// VerseRangeSeparator "-"). For the two callers, however, ParatextData's own GetSetting fallback
+/// is the empty string — the registered "+"/"-" defaults were chosen to match conventional
+/// Paratext usage and the editor's prior hard-coded fallbacks, not taken from ParatextData source.
+///
 /// All four are plain strings read through the generic <c>ParametersDictionary</c> fall-through in
 /// <c>ParatextProjectDataProvider.GetProjectSetting</c> — no dedicated per-setting branch was added
 /// for them, so these tests exercise the shared fall-through/registered-default plumbing rather than
@@ -47,10 +54,12 @@ internal class NoteCallerAndSeparatorSettingTests : PapiTestBase
     {
         await base.TestSetupAsync();
 
-        // Register a stub for ProjectSettingsService.getDefault that returns the registered
-        // default for each of the four settings under test, keyed by Platform.Bible setting name
-        // (GetProjectSetting's fall-through calls ProjectSettingsService.GetDefault(PapiClient,
-        // settingName) using the PB name, not the Paratext name).
+        // Register a stub for ProjectSettingsService.getDefault that returns the platform's
+        // registered default (from projectSettings.json) for each of the four settings under
+        // test, keyed by Platform.Bible setting name (GetProjectSetting's fall-through calls
+        // ProjectSettingsService.GetDefault(PapiClient, settingName) using the PB name, not the
+        // Paratext name). Note the "+"/"-" caller defaults are the platform's choice (conventional
+        // Paratext usage / prior editor fallbacks) — ParatextData's own fallback for them is "".
         await Client.RegisterRequestHandlerAsync(
             "object:ProjectSettingsService.getDefault",
             new Func<string, object?>(

@@ -125,9 +125,9 @@ public sealed class ProjectSettingsNames
 
     /// <summary>
     /// The separator string Paratext inserts between chapter and verse numbers when formatting a
-    /// Scripture reference (e.g. the ":" in "Mt 1:3"). Stored in Settings.xml as
-    /// "ChapterVerseSeparator"; Paratext's registered default is "." (see
-    /// ProjectSettings.ChapterVerseSeparator).
+    /// Scripture reference (e.g. the ":" in "Mt 1:3" — an illustration of where the separator
+    /// appears, not the default value). Stored in Settings.xml as "ChapterVerseSeparator";
+    /// Paratext's default is "." (see ProjectSettings.ChapterVerseSeparator).
     /// </summary>
     public const string PB_CHAPTER_VERSE_SEPARATOR = "platformScripture.chapterVerseSeparator";
     public const string PT_CHAPTER_VERSE_SEPARATOR = "ChapterVerseSeparator";
