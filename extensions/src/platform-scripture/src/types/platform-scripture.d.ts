@@ -2655,6 +2655,33 @@ declare module 'papi-shared-types' {
      * Corresponds to the `StructureProtected` field in Paratext's `Settings.xml`.
      */
     'platformScripture.structureProtected': boolean;
+
+    /**
+     * The separator string inserted between chapter and verse numbers when formatting a Scripture
+     * reference (e.g. the `:` in `Mt 1:3`). Corresponds to `ChapterVerseSeparator` in Paratext's
+     * `Settings.xml`. Paratext's registered default is `.`.
+     */
+    'platformScripture.chapterVerseSeparator': string;
+
+    /**
+     * The separator string inserted between the start and end verse numbers of a verse range (e.g.
+     * the `-` in `Mt 1:3-5`). Corresponds to `RangeIndicator` in Paratext's `Settings.xml` (the
+     * Paratext 9 C# property is named `VerseRangeSeparator`, but the underlying Settings.xml tag is
+     * `RangeIndicator`).
+     */
+    'platformScripture.verseRangeSeparator': string;
+
+    /**
+     * The default caller character assigned to newly inserted footnotes (`\f`). Corresponds to
+     * `DefaultFootnoteCaller` in Paratext's `Settings.xml`.
+     */
+    'platformScripture.defaultFootnoteCaller': string;
+
+    /**
+     * The default caller character assigned to newly inserted cross-references (`\x`). Corresponds
+     * to `DefaultCrossRefCaller` in Paratext's `Settings.xml`.
+     */
+    'platformScripture.defaultCrossRefCaller': string;
   }
 
   export interface NetworkEvents {

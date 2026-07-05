@@ -124,6 +124,38 @@ public sealed class ProjectSettingsNames
     public const string PT_SHARED_LAYOUT_DEFAULT_TAB = "SharedLayoutDefaultTab";
 
     /// <summary>
+    /// The separator string Paratext inserts between chapter and verse numbers when formatting a
+    /// Scripture reference (e.g. the ":" in "Mt 1:3"). Stored in Settings.xml as
+    /// "ChapterVerseSeparator"; Paratext's registered default is "." (see
+    /// ProjectSettings.ChapterVerseSeparator).
+    /// </summary>
+    public const string PB_CHAPTER_VERSE_SEPARATOR = "platformScripture.chapterVerseSeparator";
+    public const string PT_CHAPTER_VERSE_SEPARATOR = "ChapterVerseSeparator";
+
+    /// <summary>
+    /// The separator string Paratext inserts between the start and end verse numbers of a verse
+    /// range (e.g. the "-" in "Mt 1:3-5"). Stored in Settings.xml as "RangeIndicator" (Paratext's
+    /// C# property is named VerseRangeSeparator, but the underlying Settings.xml tag and Setting
+    /// enum member are RangeIndicator).
+    /// </summary>
+    public const string PB_VERSE_RANGE_SEPARATOR = "platformScripture.verseRangeSeparator";
+    public const string PT_VERSE_RANGE_SEPARATOR = "RangeIndicator";
+
+    /// <summary>
+    /// The default caller character Paratext assigns to newly inserted footnotes (\f). Stored in
+    /// Settings.xml as "DefaultFootnoteCaller".
+    /// </summary>
+    public const string PB_DEFAULT_FOOTNOTE_CALLER = "platformScripture.defaultFootnoteCaller";
+    public const string PT_DEFAULT_FOOTNOTE_CALLER = "DefaultFootnoteCaller";
+
+    /// <summary>
+    /// The default caller character Paratext assigns to newly inserted cross-references (\x).
+    /// Stored in Settings.xml as "DefaultCrossRefCaller".
+    /// </summary>
+    public const string PB_DEFAULT_CROSS_REF_CALLER = "platformScripture.defaultCrossRefCaller";
+    public const string PT_DEFAULT_CROSS_REF_CALLER = "DefaultCrossRefCaller";
+
+    /// <summary>
     /// Paratext setting names that are either T or F and need to be converted to booleans
     /// </summary>
     private static readonly HashSet<string> s_ptSettingBooleans =
@@ -161,6 +193,10 @@ public sealed class ProjectSettingsNames
             { PB_REFERENCED_PROJECTS_AND_RESOURCES, PT_REFERENCED_PROJECTS_AND_RESOURCES },
             { PB_STRUCTURE_PROTECTED, PT_STRUCTURE_PROTECTED },
             { PB_SHARED_LAYOUT_DEFAULT_TAB, PT_SHARED_LAYOUT_DEFAULT_TAB },
+            { PB_CHAPTER_VERSE_SEPARATOR, PT_CHAPTER_VERSE_SEPARATOR },
+            { PB_VERSE_RANGE_SEPARATOR, PT_VERSE_RANGE_SEPARATOR },
+            { PB_DEFAULT_FOOTNOTE_CALLER, PT_DEFAULT_FOOTNOTE_CALLER },
+            { PB_DEFAULT_CROSS_REF_CALLER, PT_DEFAULT_CROSS_REF_CALLER },
         };
 
     private static readonly Dictionary<string, string> s_paratextToPlatformBibleSettingsNames =

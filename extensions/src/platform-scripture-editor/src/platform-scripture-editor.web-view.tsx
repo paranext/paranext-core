@@ -539,17 +539,78 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     { index: number } | undefined
   >(undefined);
 
+  // Project-settings-sourced separators/callers for `nodeOptions` below (PT9
+  // ChapterVerseSeparator / RangeIndicator / DefaultFootnoteCaller / DefaultCrossRefCaller). Each
+  // fallback matches the pre-C#-restart `UsjNodeOptions` default so behavior is unchanged if the
+  // setting can't be read. `noteCallers` is intentionally left unset so the editor's built-in
+  // default (lowercase Latin a-z) applies; `crossRefCallers` has no corresponding Paratext setting
+  // and stays hard-coded.
+  const [chapterVerseSeparatorPossiblyError] = useProjectSetting(
+    projectId,
+    'platformScripture.chapterVerseSeparator',
+    ':',
+  );
+  const chapterVerseSeparator = useMemo(() => {
+    if (isPlatformError(chapterVerseSeparatorPossiblyError)) {
+      logger.warn(
+        `Error getting chapter/verse separator: ${getErrorMessage(chapterVerseSeparatorPossiblyError)}`,
+      );
+      return ':';
+    }
+    return chapterVerseSeparatorPossiblyError;
+  }, [chapterVerseSeparatorPossiblyError]);
+
+  const [verseRangeSeparatorPossiblyError] = useProjectSetting(
+    projectId,
+    'platformScripture.verseRangeSeparator',
+    '-',
+  );
+  const verseRangeSeparator = useMemo(() => {
+    if (isPlatformError(verseRangeSeparatorPossiblyError)) {
+      logger.warn(
+        `Error getting verse range separator: ${getErrorMessage(verseRangeSeparatorPossiblyError)}`,
+      );
+      return '-';
+    }
+    return verseRangeSeparatorPossiblyError;
+  }, [verseRangeSeparatorPossiblyError]);
+
+  const [defaultFootnoteCallerPossiblyError] = useProjectSetting(
+    projectId,
+    'platformScripture.defaultFootnoteCaller',
+    GENERATOR_NOTE_CALLER,
+  );
+  const defaultFootnoteCaller = useMemo(() => {
+    if (isPlatformError(defaultFootnoteCallerPossiblyError)) {
+      logger.warn(
+        `Error getting default footnote caller: ${getErrorMessage(defaultFootnoteCallerPossiblyError)}`,
+      );
+      return GENERATOR_NOTE_CALLER;
+    }
+    return defaultFootnoteCallerPossiblyError;
+  }, [defaultFootnoteCallerPossiblyError]);
+
+  const [defaultCrossRefCallerPossiblyError] = useProjectSetting(
+    projectId,
+    'platformScripture.defaultCrossRefCaller',
+    HIDDEN_NOTE_CALLER,
+  );
+  const defaultCrossRefCaller = useMemo(() => {
+    if (isPlatformError(defaultCrossRefCallerPossiblyError)) {
+      logger.warn(
+        `Error getting default cross-reference caller: ${getErrorMessage(defaultCrossRefCallerPossiblyError)}`,
+      );
+      return HIDDEN_NOTE_CALLER;
+    }
+    return defaultCrossRefCallerPossiblyError;
+  }, [defaultCrossRefCallerPossiblyError]);
+
   const nodeOptions = useMemo<UsjNodeOptions>(
     () => ({
-      // TODO(phase5): source chapter/verse separator and default note callers from project
-      // settings (PT9 ChapterVerseSeparator / DefaultFootnoteCaller / DefaultCrossRefCaller).
-      // Fallbacks below match the `UsjNodeOptions` defaults documented in platform-editor.
-      // `noteCallers` is intentionally left unset so the editor's built-in default (lowercase
-      // Latin a-z) applies.
-      chapterVerseSeparator: ':',
-      verseRangeSeparator: '-',
-      defaultFootnoteCaller: GENERATOR_NOTE_CALLER,
-      defaultCrossRefCaller: HIDDEN_NOTE_CALLER,
+      chapterVerseSeparator,
+      verseRangeSeparator,
+      defaultFootnoteCaller,
+      defaultCrossRefCaller,
       crossRefCallers: ['†'],
       noteCallerOnClick: isReadOnly
         ? undefined
@@ -578,7 +639,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             setShowFootnoteEditor(true);
           },
     }),
-    [isReadOnly, editingNoteKey],
+    [
+      isReadOnly,
+      editingNoteKey,
+      chapterVerseSeparator,
+      verseRangeSeparator,
+      defaultFootnoteCaller,
+      defaultCrossRefCaller,
+    ],
   );
 
   /**
