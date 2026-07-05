@@ -126,15 +126,12 @@ import {
   blockMarkerToBlockNames,
   buildChapterScaffoldOps,
   canAddChapterNumber,
-  clearPaletteSessionIfCurrent,
   correctEditorUsjVersion,
   deepEqualAcrossIframes,
   findNoteIndexByOps,
   formatEditorTitle,
-  generateInlineMarkerMenuListItems,
   generateParagraphMenuListItems,
   isChapterBlank,
-  markerMenuItemToCommandPaletteItem,
   openCommentListAndSelectThreadSafe,
   resolveAddChapterNumberClick,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
@@ -142,6 +139,11 @@ import {
 } from './platform-scripture-editor.utils';
 import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.component';
+import {
+  clearPaletteSessionIfCurrent,
+  generateInlineMarkerMenuListItems,
+  markerMenuItemToCommandPaletteItem,
+} from './platform-scripture-editor.web-view.utils';
 import { ParagraphMarkerTooltipOverlay } from './paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component';
 import { TwoStepDeleteTooltipOverlay } from './two-step-delete-tooltip/two-step-delete-tooltip-overlay.component';
 import { CharacterMarkerBarOverlay } from './character-marker-bar/character-marker-bar-overlay.component';
