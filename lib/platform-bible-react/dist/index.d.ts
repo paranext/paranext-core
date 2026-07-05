@@ -985,13 +985,65 @@ export interface FootnoteEditorProps {
 	 * parent editor, so the client does not need to handle this in the `onChange` callback.
 	 */
 	parentEditorRef?: React$1.RefObject<EditorRef | null>;
+	/**
+	 * Optional marker-palette driver (standard-view host wiring — Task 10/11 PT9 parity). When
+	 * provided in editable marker mode, a typed `\` inside this popover's own editor opens the same
+	 * palette the main editor uses instead of the built-in inline markers menu below; when absent,
+	 * editable mode falls back to pass-through-only behavior (literal typing works, no menu) — a
+	 * graceful degradation for hosts that haven't wired one up. Never consulted outside editable
+	 * marker mode — the built-in `MarkerMenu` popup below owns that path unconditionally.
+	 */
+	markerPalette?: FootnoteEditorMarkerPalette;
+}
+/**
+ * Structural subset of the overlay service's `CommandPaletteItem` (`overlay.service-model.ts` in
+ * the renderer) — defined locally because platform-bible-react must not import renderer or
+ * extension types. Mirrors the extension's `markerMenuItemToCommandPaletteItem` mapping (Task 10):
+ * close-tag items get an `'end'` badge, non-basic items are muted.
+ */
+export interface PaletteItemLike {
+	id: string;
+	label: string;
+	description?: string;
+	badge?: string;
+	muted?: boolean;
+	disabled?: boolean;
+}
+/**
+ * Driver for the standard-view `\` marker palette (Task 10/11 PT9 parity), supplied by a host that
+ * wires it to its own overlay/command-palette implementation (e.g. `papi.overlays.*` keyed by
+ * `webViewId` in the platform-scripture-editor web view).
+ */
+export interface FootnoteEditorMarkerPalette {
+	/**
+	 * Shows the palette anchored at the given position. `passive` mirrors
+	 * `CommandPaletteRequest.passive` — when true, the palette never steals focus and its filter and
+	 * highlighted selection are driven externally via {@link FootnoteEditorMarkerPalette.update}.
+	 *
+	 * @returns The selected item's `id`, or `undefined` if dismissed.
+	 */
+	show(items: PaletteItemLike[], anchor: {
+		x: number;
+		y: number;
+		width?: number;
+		height?: number;
+	}, passive: boolean): Promise<string | undefined>;
+	/** Updates the filter text and/or moves the highlighted selection of the active palette. */
+	update(update: {
+		filterText?: string;
+		moveSelection?: number;
+	}): Promise<void>;
+	/** Commits the currently highlighted item, resolving the `show` promise with its `id`. */
+	commit(): Promise<void>;
+	/** Dismisses the active palette, resolving the `show` promise with `undefined`. */
+	dismiss(): Promise<void>;
 }
 /**
  * Component to edit footnotes from within the editor component
  *
  * @param FootnoteEditorProps - The properties for the footnote editor component
  */
-export function FootnoteEditor({ classNameForEditor, noteOps, onChange, onClose, scrRef, noteKey, isNewNote, editorOptions, defaultMarkerMenuTrigger, localizedStrings, parentEditorRef, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
+export function FootnoteEditor({ classNameForEditor, noteOps, onChange, onClose, scrRef, noteKey, isNewNote, editorOptions, defaultMarkerMenuTrigger, localizedStrings, parentEditorRef, markerPalette, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
 /** `FootnoteItem` is a component that provides a read-only display of a single USFM/JSX footnote. */
 export declare function FootnoteItem({ footnote, layout, formatCaller, showMarkers, }: FootnoteItemProps): import("react/jsx-runtime").JSX.Element;
 /** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */

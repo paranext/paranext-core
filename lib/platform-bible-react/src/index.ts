@@ -73,6 +73,8 @@ export type {
 export {
   default as FootnoteEditor,
   type FootnoteEditorProps,
+  type FootnoteEditorMarkerPalette,
+  type PaletteItemLike,
 } from './components/advanced/footnote-editor/footnote-editor.component';
 export {
   FOOTNOTE_EDITOR_STRING_KEYS,

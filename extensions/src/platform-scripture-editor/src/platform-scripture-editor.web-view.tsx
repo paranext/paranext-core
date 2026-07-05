@@ -51,6 +51,7 @@ import {
   EditorKeyboardShortcuts,
   FOOTNOTE_EDITOR_STRING_KEYS,
   FootnoteEditor,
+  type FootnoteEditorMarkerPalette,
   MarkdownRenderer,
   MARKER_MENU_STRING_KEYS,
   MarkerMenu,
@@ -1359,6 +1360,27 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [webViewId],
   );
 
+  /**
+   * `FootnoteEditor`'s marker-palette driver (Task 11), wrapping `papi.overlays.*` with this web
+   * view's `webViewId`. Built once and passed down so the popover's own editor gets the same
+   * PT9-parity `\` palette as the main editor (Task 10) without `platform-bible-react` depending on
+   * the overlay service directly. Unlike `openMarkerPalette`/`openEnterPalette` above, this carries
+   * no session tracking of its own — the popover's `FootnoteEditor` owns its own session state and
+   * only needs the four overlay primitives forwarded through. Anchor coordinates from the popover's
+   * own inner editor are already iframe-relative (same iframe as this web view), so they're passed
+   * straight through with no translation.
+   */
+  const footnoteMarkerPalette = useMemo<FootnoteEditorMarkerPalette>(
+    () => ({
+      show: (items, anchor, passive) =>
+        papi.overlays.showCommandPalette({ items, anchor, passive }, webViewId),
+      update: (update) => papi.overlays.updateCommandPalette(webViewId, update),
+      commit: () => papi.overlays.commitCommandPaletteSelection(webViewId),
+      dismiss: () => papi.overlays.dismissCommandPalette(webViewId),
+    }),
+    [webViewId],
+  );
+
   // Listen for Ctrl+F to open find dialog, for the marker menu trigger to open the marker menu,
   // for Ctrl+T / Ctrl+Shift+T to insert a footnote/cross-reference (spec §6/§9), and for
   // Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at selection
@@ -2454,6 +2476,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             defaultMarkerMenuTrigger={defaultMarkersMenuTrigger}
             localizedStrings={localizedStrings}
             parentEditorRef={editorRef}
+            markerPalette={footnoteMarkerPalette}
           />
         </PopoverContent>
       </Popover>
