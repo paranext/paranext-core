@@ -273,7 +273,10 @@ async function openManageBooks(
   return papi.webViews.openWebView(MANAGE_BOOKS_WEB_VIEW_TYPE, floatingLayout, options);
 }
 
-async function openFind(editorWebViewId: string | undefined): Promise<string | undefined> {
+async function openFind(
+  editorWebViewId: string | undefined,
+  selectedText?: string,
+): Promise<string | undefined> {
   let projectId: FindWebViewOptions['projectId'];
   let tabIdFromWebViewId: string | undefined;
   let editorScrollGroupId: FindWebViewOptions['editorScrollGroupId'];
@@ -297,6 +300,7 @@ async function openFind(editorWebViewId: string | undefined): Promise<string | u
     editorScrollGroupId,
     bringToFront: true,
     editorWebViewId,
+    initialSearchText: selectedText,
   };
 
   // First tries to open an existing find web view

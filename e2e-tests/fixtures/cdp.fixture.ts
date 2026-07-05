@@ -52,7 +52,7 @@ import * as fs from 'fs';
 
 export { expect } from '@playwright/test';
 
-const CDP_URL = process.env.CDP_URL || 'http://localhost:9223';
+const CDP_URL = process.env.CDP_URL || 'http://127.0.0.1:9223';
 
 /**
  * Minimum acceptable screenshot dimensions for UI evidence captures. Aligns with `pw-server.mjs`

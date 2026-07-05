@@ -2316,12 +2316,15 @@ declare module 'papi-shared-types' {
     ) => Promise<string | undefined>;
 
     /**
-     * Open the Find / Replace UI for a project. The single optional argument is the calling
-     * editor's `webViewId` (when invoked from an editor's menu, so the Find UI can inherit the
-     * editor's project + scroll group). Pass `undefined` to open without an editor context.
+     * Open the Find / Replace UI for a project. The first optional argument is the calling editor's
+     * `webViewId` (when invoked from an editor's menu, so the Find UI can inherit the editor's
+     * project + scroll group). The second optional argument is text to pre-fill the search box with
+     * (e.g. the editor's current selection when invoked via Ctrl+F). Pass `undefined` for both to
+     * open without an editor context or pre-filled search.
      */
     'platformScripture.openFind': (
       editorWebViewId?: string | undefined,
+      selectedText?: string | undefined,
     ) => Promise<string | undefined>;
 
     /**

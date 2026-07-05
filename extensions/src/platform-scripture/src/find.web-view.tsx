@@ -38,6 +38,7 @@ import {
   HidableFindResult,
   SEARCH_RESULT_LOCALIZED_STRING_KEYS,
 } from './find/search-result.component';
+import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './find/replace-preview-types';
 
 // Strings used by the webview's own replace / version-history-commit / toast logic, in addition to
 // the strings the presentational Find component needs (FIND_LOCALIZED_STRING_KEYS).
@@ -163,6 +164,10 @@ global.webViewComponent = function FindWebView({
   const [activeMode, setActiveMode] = useWebViewState<'find' | 'replace'>('findActiveMode', 'find');
   const [replaceTerm, setReplaceTerm] = useWebViewState<string>('findReplaceTerm', '');
   const [preserveCase, setPreserveCase] = useWebViewState<boolean>('findPreserveCase', false);
+  const [previewOptions, setPreviewOptions] = useWebViewState<PreviewOptions>(
+    'findPreviewOptions',
+    DEFAULT_REPLACE_PREVIEW_OPTIONS,
+  );
   /**
    * True while a replace operation is executing (including the mandatory re-find afterward). Keeps
    * replace buttons disabled during the gap between replace() completing and searchStatus becoming
@@ -1245,6 +1250,8 @@ global.webViewComponent = function FindWebView({
       activeMode={activeMode}
       replaceTerm={replaceTerm}
       preserveCase={preserveCase}
+      previewOptions={previewOptions}
+      onPreviewOptionsChange={setPreviewOptions}
       isReplacing={isReplacing}
       isStructureProtected={isStructureProtected}
       isReplacementStructureChanging={isReplacementStructureChanging}

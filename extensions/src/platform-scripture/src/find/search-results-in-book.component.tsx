@@ -9,8 +9,10 @@ import { LocalizedBookData } from './find-types';
 import SearchResult, {
   FindLogger,
   HidableFindResult,
+  ReplaceConfig,
   SEARCH_RESULT_LOCALIZED_STRING_KEYS,
 } from './search-result.component';
+import { PreviewOptions } from './replace-preview-types';
 
 type SearchResultsInBookProps = {
   /**
@@ -39,6 +41,12 @@ type SearchResultsInBookProps = {
   isReplaceMode: boolean;
   /** Whether a replace operation is currently in progress */
   isReplacing: boolean;
+  /** Configuration for the replacement preview (used in replace mode). Forwarded to each result. */
+  replaceConfig?: ReplaceConfig;
+  /** Options controlling how the replace preview is displayed. Forwarded to each result. */
+  previewOptions?: PreviewOptions;
+  /** Whether the project has AllowInvisibleChars enabled. Forwarded to each result. */
+  allowInvisibleCharacters?: boolean;
   localizedStrings: {
     [localizedInventoryKey in (typeof SEARCH_RESULT_LOCALIZED_STRING_KEYS)[number]]?: LocalizedStringValue;
   };
@@ -60,6 +68,9 @@ export function SearchResultsInBook({
   localizedStrings,
   isReplaceMode,
   isReplacing,
+  replaceConfig,
+  previewOptions,
+  allowInvisibleCharacters,
   logger,
 }: SearchResultsInBookProps) {
   const [usjBook, setUsjBook] = useState<Usj | undefined>(undefined);
@@ -94,6 +105,17 @@ export function SearchResultsInBook({
     }
   }, [usjBook, bookId, logger]);
 
+  // Cache the USFM string once per book so individual result cards don't each serialize the book.
+  const cachedUsfm = useMemo(() => {
+    if (!usjReaderWriter) return undefined;
+    try {
+      return usjReaderWriter.toUsfm();
+    } catch (error) {
+      logger?.warn(`Find: failed to serialize USFM for book ${bookId}:`, error);
+      return undefined;
+    }
+  }, [usjReaderWriter, bookId, logger]);
+
   const firstReplacedIndex = results.findIndex((r) => r.isReplaced);
 
   return (
@@ -105,6 +127,7 @@ export function SearchResultsInBook({
           globalResultsIndex={index}
           isSelected={index === focusedResultIndex}
           usjReaderWriter={usjReaderWriter}
+          cachedUsfm={cachedUsfm}
           localizedBookData={localizedBookData}
           onResultClick={onResultClick}
           onHideResult={onHideResult}
@@ -113,6 +136,9 @@ export function SearchResultsInBook({
           localizedStrings={localizedStrings}
           isReplaceMode={isReplaceMode}
           isReplacing={isReplacing}
+          replaceConfig={replaceConfig}
+          previewOptions={previewOptions}
+          allowInvisibleCharacters={allowInvisibleCharacters}
           logger={logger}
         />
       ))}
