@@ -2241,6 +2241,60 @@
   color: rgba(204, 30, 20, 1);
 }
 
+/* UnknownNode (§7): lossless carrier for content this editor doesn't model directly — tables,
+   figures, sidebars (\esb), \periph, \ref, \optbreak, etc. Hidden by default in every view
+   (preserves formatted/markers behavior); standard view (.marker-editable) reveals it as a subdued
+   read-only container with its lead marker shown as a label, so the content is visible/inert instead
+   of silently invisible. Ported from the library's packages/platform/src/usj-nodes.css §7. The
+   source colors it via hsl(var(--muted-foreground, 215 16% 65%) / alpha), but this fork already uses
+   --muted-foreground with a DIFFERENT contract (a full color + hex fallback, lines below), so the
+   subdued grays are written as literal rgba(140, 140, 140, ...) here — matching the fork's own
+   subdued-marker convention (see `.marker-editable .book .marker` above) and avoiding the invalid
+   hsl(var()) that the contract mismatch would produce. Two corpus-proven mid-paragraph constructs
+   get inline treatment instead of a block box (\optbreak → literal `//` via ::before keyed off
+   data-tag; \ref → its own inline child text, no label). */
+.unknown-block,
+.unknown-inline {
+  display: none;
+}
+
+.marker-editable .unknown-block {
+  display: block;
+  margin: 0.25em 0;
+  padding: 0.25em 0.5em;
+  border: 1px dashed rgba(140, 140, 140, 0.5);
+  background-color: rgba(140, 140, 140, 0.08);
+  color: rgba(140, 140, 140, 0.85);
+  /* Whole-block selection/deletion only (§7): a selection can be made within the container but is
+     contained by it rather than merging with the surrounding text. */
+  user-select: contain;
+}
+
+.marker-editable .unknown-block::before {
+  content: '\\' attr(data-marker);
+  display: block;
+  font-size: 0.7em;
+  font-weight: bold;
+  color: rgba(140, 140, 140, 1);
+  margin-bottom: 0.2em;
+}
+
+.marker-editable .unknown-inline {
+  display: inline;
+  color: rgba(140, 140, 140, 0.85);
+  /* Same containment as the block variant. */
+  user-select: contain;
+}
+
+/* \optbreak carries no USFM marker text of its own (data-marker is empty) — PT9 renders it as a
+   literal `//` token, so the label is hard-coded rather than driven by attr(data-marker). Keyed off
+   data-tag so it applies ONLY to optbreak: \ref shares the unknown-inline class but displays its own
+   child text and must not grow a `//` prefix. */
+.marker-editable .unknown-inline[data-tag='optbreak']::before {
+  content: '//';
+  color: rgba(140, 140, 140, 1);
+}
+
 .caption {
   text-align: center;
   font-style: italic;

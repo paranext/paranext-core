@@ -1556,11 +1556,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at selection
   useEffect(() => {
     const editorInput = document.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Standard-view `\`/Enter marker palettes (PT9 parity — markers type through as literal text
-      // rather than opening the legacy popover below). Checked first: while a passive backslash
-      // session is open, every keystroke is routed through the while-open forwarding table so the
-      // palette tracks what the user is typing into the document.
+    // CAPTURE phase: the Standard-view `\`/Enter marker palettes must run BEFORE Lexical's own
+    // root-element keydown listener. Lexical dispatches KEY_ENTER_COMMAND synchronously from that
+    // listener, so a window BUBBLE-phase handler runs too late — the paragraph has already split
+    // before it can preventDefault (QA item 6). Registering in capture puts this ahead of Lexical.
+    // Keys we fully claim (Enter trigger, selection `\`, and the in-session Arrow/Enter/Escape
+    // controls) additionally stopPropagation so Lexical never processes them; keys that must land as
+    // literal document text (the collapsed `\`, filter characters, Space/`*`) are deliberately left
+    // to propagate — capture phase doesn't change that, the literal still lands. The legacy
+    // non-standard-view interception stays in the bubble-phase `handleKeyDown` below, unchanged.
+    const handleStandardViewTriggers = (event: KeyboardEvent) => {
       if (
         viewType === 'standard' &&
         !isReadOnlyEffective &&
@@ -1583,6 +1588,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           }
           if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
             event.preventDefault();
+            event.stopPropagation(); // in capture, keep Lexical from moving the doc caret
             papi.overlays.updateCommandPalette(webViewId, {
               moveSelection: event.key === 'ArrowDown' ? 1 : -1,
             });
@@ -1590,6 +1596,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           }
           if (event.key === 'Enter') {
             event.preventDefault();
+            event.stopPropagation(); // in capture, keep Lexical from splitting the paragraph
             // The session ends here as far as keydown routing is concerned — the commit's
             // resolution flows through the show-promise, which captured the items it needs, so
             // clear synchronously like every other session-ending key rather than waiting for the
@@ -1600,6 +1607,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           }
           if (event.key === 'Escape') {
             event.preventDefault();
+            event.stopPropagation(); // in capture, keep Lexical from handling Escape
             paletteSession.current = undefined;
             papi.overlays.dismissCommandPalette(webViewId);
             return;
@@ -1633,9 +1641,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             if (items.length > 0) {
               const passive = !ctx.hasTextSelection;
               // Collapsed caret: don't prevent default — the `\` lands as literal text and the
-              // passive palette tracks it. Selection: prevent default (focused palette; nothing
-              // should land in place of the wrapped text).
-              if (!passive) event.preventDefault();
+              // passive palette tracks it. Selection: prevent default AND stopPropagation (focused
+              // palette; in capture phase this now actually keeps Lexical from typing `\` over the
+              // selected text, fixing item 5's text loss).
+              if (!passive) {
+                event.preventDefault();
+                event.stopPropagation();
+              }
               openMarkerPalette(ctx, items, { passive, literalPrefixLanded: passive });
             }
           }
@@ -1657,11 +1669,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           const items = getEnterMenuItems(styleInfo ?? defaultStyleInfo, ctx);
           if (items.length === 0) return;
           event.preventDefault();
+          event.stopPropagation();
           openEnterPalette(ctx, items);
-          return;
         }
       }
+    };
 
+    const handleKeyDown = (event: KeyboardEvent) => {
       // Shows the marker menu if it isn't already being shown and if the editor is currently selected
       if (currentSelectionRef.current) {
         if (
@@ -1718,9 +1732,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       }
     };
 
+    window.addEventListener('keydown', handleStandardViewTriggers, { capture: true });
     window.addEventListener('keydown', handleKeyDown);
 
     return () => {
+      window.removeEventListener('keydown', handleStandardViewTriggers, { capture: true });
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [
