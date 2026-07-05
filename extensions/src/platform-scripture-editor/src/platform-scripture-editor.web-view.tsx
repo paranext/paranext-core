@@ -987,6 +987,29 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [scrRef, canUserCreateComments]);
 
   /**
+   * Corrects `editingNoteKey.current` to the newly-inserted note's TRUE Lexical key after
+   * `insertMarker` creates it (Ctrl+T footnote/cross-reference insertion). `insertMarker`'s return
+   * value IS that true key (`platform-editor`'s `EditorRef.insertMarker`, Task 14b), but the
+   * auto-open path below (`handleEditorialUsjChange` -> `openFootnoteEditorOnNewNote`) hasn't run
+   * yet at this point: Lexical's `editor.update()` callback runs synchronously, but the DOM
+   * reconciliation + update-listener dispatch that fires `onUsjChange` is deferred to a microtask
+   * (confirmed empirically against `lexical@0.43`'s `updateEditor`/`scheduleMicroTask` - see the
+   * Task 14b report). `openFootnoteEditorOnNewNote` therefore runs on an EARLIER-queued microtask
+   * and sets `editingNoteKey.current` to the WRONG key - derived from "delta-doc" OT coordinates
+   * via `getInsertedNodeKey`, which double-counts editable VerseNodes and lands past the note when
+   * one precedes it (root cause of Cancel's `replaceEmbedUpdate` silently no-opping on the wrong
+   * key). Queuing this correction as a SECOND microtask guarantees FIFO ordering behind that first
+   * one, so it runs after and overwrites it - fixing the bug without touching
+   * `openFootnoteEditorOnNewNote`, `DeltaOnChangePlugin`, or any other OT coordinate code.
+   */
+  const correctEditingNoteKeyAfterInsert = useCallback((insertedNoteKey: string | undefined) => {
+    if (!insertedNoteKey) return;
+    queueMicrotask(() => {
+      editingNoteKey.current = insertedNoteKey;
+    });
+  }, []);
+
+  /**
    * Inserts a footnote at the current selection (spec §6/§9). Shared by the "Insert footnote"
    * context-menu item, the Ctrl+T keyboard shortcut, and the top-menu
    * `platformScriptureEditor.insertFootnoteAtSelection` command (via the `webViewMessageListener`
@@ -1017,8 +1040,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }
       }
 
-    editorRef.current?.insertMarker('f');
-  }, [projectId, localizedStrings]);
+    correctEditingNoteKeyAfterInsert(editorRef.current?.insertMarker('f'));
+  }, [projectId, localizedStrings, correctEditingNoteKeyAfterInsert]);
 
   /**
    * Inserts a cross-reference at the current selection (spec §6/§9). Shared by the "Insert
@@ -1050,8 +1073,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }
       }
 
-    editorRef.current?.insertMarker('x');
-  }, [projectId, localizedStrings]);
+    correctEditingNoteKeyAfterInsert(editorRef.current?.insertMarker('x'));
+  }, [projectId, localizedStrings, correctEditingNoteKeyAfterInsert]);
 
   const options = useMemo<EditorOptions>(
     () => ({
