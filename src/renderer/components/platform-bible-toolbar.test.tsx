@@ -42,6 +42,22 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useDataProvider: vi.fn(() => undefined),
   useDialogCallback: vi.fn(() => vi.fn()),
   useSetting: vi.fn(() => ['simple', vi.fn(), vi.fn(), false]),
+  useProjectSetting: vi.fn(() => ['', vi.fn(), vi.fn(), false]),
+}));
+
+vi.mock('@renderer/hooks/use-last-selected-web-view-id.hook', () => ({
+  useLastSelectedWebViewId: vi.fn(() => undefined),
+}));
+
+vi.mock('@renderer/services/web-view.service-host', () => ({
+  getSavedWebViewDefinitionSync: vi.fn(() => undefined),
+  updateWebViewDefinitionSync: vi.fn(() => true),
+  onDidUpdateWebView: vi.fn(() => vi.fn()),
+}));
+
+vi.mock('@renderer/services/book-chapter-control.registry', () => ({
+  registerBookChapterControlHandle: vi.fn(() => vi.fn()),
+  TOP_TOOLBAR_BOOK_CHAPTER_CONTROL_OWNER_ID: 'top-toolbar',
 }));
 
 vi.mock('@renderer/services/papi-frontend.service', () => ({

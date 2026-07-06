@@ -49,14 +49,16 @@ import {
   getWebViewMessageRequestType,
   WebViewMessageRequestHandler,
 } from '@shared/services/web-view.service-model';
-import { Canon } from '@sillsdev/scripture';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import { menuDataService } from '@shared/services/menu-data.service';
 import { windowService } from '@shared/services/window.service';
+import {
+  BOOKS_PRESENT_DEFAULT,
+  getBookIdsFromBooksPresent,
+} from '@renderer/utils/books-present.util';
 
 export const TAB_TYPE_WEBVIEW = 'webView';
 
-const BOOKS_PRESENT_DEFAULT = '';
 const WEB_VIEW_MENU_DEFAULT = {
   topMenu: undefined,
   includeDefaults: true,
@@ -481,15 +483,7 @@ export function WebView({
     return booksPresentPossiblyError;
   }, [booksPresentPossiblyError]);
 
-  const fetchActiveBooks = () => {
-    return Array.from(booksPresent).reduce((ids: string[], char, index) => {
-      if (char === '1') {
-        ids.push(Canon.bookNumberToId(index + 1));
-      }
-
-      return ids;
-    }, []);
-  };
+  const fetchActiveBooks = () => getBookIdsFromBooksPresent(booksPresent);
 
   const projectMenuCommandHandler = useCallback<SelectMenuItemHandler>(
     (projectMenuCommand) => {
