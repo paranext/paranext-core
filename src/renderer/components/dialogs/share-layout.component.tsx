@@ -99,7 +99,7 @@ function hasStringId(ref: ResourceReference): ref is Extract<ResourceReference, 
   return 'id' in ref && typeof ref.id === 'string';
 }
 
-function isShareLayoutActiveTab(value: string): value is ShareLayoutActiveTab {
+export function isShareLayoutActiveTab(value: string): value is ShareLayoutActiveTab {
   return value === 'ScriptureResource' || value === 'CommentaryResource' || value === 'Comments';
 }
 

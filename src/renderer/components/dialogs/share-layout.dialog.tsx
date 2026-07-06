@@ -16,9 +16,9 @@ import {
 } from '@renderer/components/dialogs/dialog-definition.model';
 import {
   ShareLayoutDialogContent,
-  ShareLayoutActiveTab,
   ShareLayoutResult,
   SHARE_LAYOUT_DIALOG_STRING_KEYS,
+  isShareLayoutActiveTab,
 } from '@renderer/components/dialogs/share-layout.component';
 import {
   seedResourceList,
@@ -27,10 +27,6 @@ import {
 } from '@renderer/components/dialogs/share-layout.utils';
 
 const EMPTY_RESOURCE_LIST: ResourceReferenceList = { dataVersion: '1.0.0', items: [] };
-
-function isShareLayoutActiveTab(value: string): value is ShareLayoutActiveTab {
-  return value === 'ScriptureResource' || value === 'CommentaryResource' || value === 'Comments';
-}
 
 /**
  * `projectId` is required on `ShareLayoutDialogOptions`, but `DialogDefinitionBase['Component']`'s
