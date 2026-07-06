@@ -74,6 +74,9 @@ export type ScrollGroupSelectorProps = {
 
   /** Optional id for the select element */
   id?: string;
+
+  /** When true, the selector is disabled */
+  disabled?: boolean;
 };
 
 /** Selector component for choosing a scroll group */
@@ -85,6 +88,7 @@ export function ScrollGroupSelector({
   size = 'sm',
   className,
   id,
+  disabled,
 }: ScrollGroupSelectorProps) {
   const localizedStringsDefaulted = {
     ...DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS,
@@ -111,6 +115,7 @@ export function ScrollGroupSelector({
           newScrollGroupString === 'undefined' ? undefined : parseInt(newScrollGroupString, 10),
         )
       }
+      disabled={disabled}
     >
       <SelectTrigger size={size} className={cn('pr-twp tw:w-auto', className)}>
         <SelectValue

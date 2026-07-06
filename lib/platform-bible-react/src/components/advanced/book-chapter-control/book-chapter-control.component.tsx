@@ -25,6 +25,7 @@ import {
   KeyboardEvent,
   useCallback,
   useEffect,
+  useImperativeHandle,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -73,6 +74,8 @@ export function BookChapterControl({
   onCloseAutoFocus,
   modal = false,
   align = 'center',
+  ref,
+  disabled,
 }: BookChapterControlProps) {
   const direction: Direction = readDirection();
 
@@ -124,6 +127,20 @@ export function BookChapterControl({
   const chapterRefs = useRef<Record<number, HTMLDivElement | null>>({});
   // References to the verses that are shown as CommandItems
   const verseRefs = useRef<Record<number, HTMLDivElement | null>>({});
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      open: () => {
+        setIsCommandOpen(true);
+        // Focus the search input once the popover has rendered
+        setTimeout(() => {
+          commandInputRef.current?.focus();
+        }, 0);
+      },
+    }),
+    [],
+  );
 
   // Wrapper function to handle submit and add to recent searches
   const handleSubmitAndAddToRecent = useCallback(
@@ -861,6 +878,7 @@ export function BookChapterControl({
           variant={triggerVariant}
           role="combobox"
           aria-expanded={isCommandOpen}
+          disabled={disabled}
           className={cn(
             'tw:h-8 tw:w-full tw:min-w-16 tw:max-w-48 tw:overflow-hidden tw:px-1',
             className,
@@ -966,23 +984,25 @@ export function BookChapterControl({
               </div>
               {/* Navigation buttons for previous/next chapter/book */}
               <div className="tw:flex tw:items-center tw:gap-1 tw:border-b tw:pe-2">
-                {quickNavButtons.map(({ onClick, disabled, title, icon: Icon }) => (
-                  <Button
-                    key={title}
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setIsCommandListHidden(true);
-                      onClick();
-                    }}
-                    disabled={disabled}
-                    className="tw:h-10 tw:w-4 tw:p-0"
-                    title={title}
-                    onKeyDown={handleQuickNavButtonKeyDown}
-                  >
-                    <Icon />
-                  </Button>
-                ))}
+                {quickNavButtons.map(
+                  ({ onClick, disabled: isQuickNavDisabled, title, icon: Icon }) => (
+                    <Button
+                      key={title}
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setIsCommandListHidden(true);
+                        onClick();
+                      }}
+                      disabled={isQuickNavDisabled}
+                      className="tw:h-10 tw:w-4 tw:p-0"
+                      title={title}
+                      onKeyDown={handleQuickNavButtonKeyDown}
+                    >
+                      <Icon />
+                    </Button>
+                  ),
+                )}
               </div>
             </div>
           ) : (

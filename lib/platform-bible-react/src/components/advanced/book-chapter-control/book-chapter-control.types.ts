@@ -1,6 +1,6 @@
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { LanguageStrings } from 'platform-bible-utils';
-import { ComponentPropsWithoutRef, ReactNode } from 'react';
+import { ComponentPropsWithoutRef, ReactNode, Ref } from 'react';
 import { ButtonProps } from '@/components/shadcn-ui/button';
 import { Popover as PopoverPrimitive } from 'radix-ui';
 
@@ -29,6 +29,15 @@ export type BookWithOptionalChapterAndVerse = Omit<SerializedVerseRef, 'chapterN
   Partial<Pick<SerializedVerseRef, 'chapterNum' | 'verseNum'>>;
 
 export type ViewMode = 'books' | 'chapters' | 'verses';
+
+/**
+ * Imperative handle for controlling a {@link BookChapterControl} from outside React — e.g. the
+ * `platform.openBookChapterControl` command opening it in response to Ctrl+B
+ */
+export type BookChapterControlHandle = {
+  /** Opens the reference dropdown and focuses its search input, ready for typing */
+  open: () => void;
+};
 
 export type BookChapterControlProps = {
   /** The current scripture reference */
@@ -120,4 +129,8 @@ export type BookChapterControlProps = {
    * keep the popover anchored to the trigger's leading edge rather than spilling off-screen.
    */
   align?: ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>['align'];
+  /** Ref that receives a {@link BookChapterControlHandle} for imperative control */
+  ref?: Ref<BookChapterControlHandle>;
+  /** When true, the trigger button is disabled (e.g. no target to navigate) */
+  disabled?: boolean;
 };
