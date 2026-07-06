@@ -21,7 +21,10 @@ declare module 'papi-shared-types' {
     NetworkableObject,
     NetworkObjectDetails,
   } from '@shared/models/network-object.model';
-  import type { ScrollGroupUpdateInfo } from '@shared/services/scroll-group.service-model';
+  import type {
+    ReferenceHistoryUpdateInfo,
+    ScrollGroupUpdateInfo,
+  } from '@shared/services/scroll-group.service-model';
   import type {
     CloseWebViewEvent,
     OpenWebViewEvent,
@@ -864,6 +867,7 @@ declare module 'papi-shared-types' {
     'platform.onDidReloadExtensions': boolean;
     /** Emitted when the Scripture reference for a scroll group changes. */
     'scrollGroup:onDidUpdateScrRef': ScrollGroupUpdateInfo;
+    'scrollGroup:onDidChangeReferenceHistory': ReferenceHistoryUpdateInfo;
     /** @deprecated 13 November 2024. Use the `webView:onDidOpenWebView` event instead. */
     'webView:onDidAddWebView': OpenWebViewEvent;
     /** Emitted when a WebView is created. */

@@ -537,6 +537,10 @@ const scrollGroupService: IScrollGroupRemoteService = {
   getScrRef,
   setScrRef,
   getScrRefForProject,
+  // Implemented properly in the reference-history integration (see plan Task 3 in
+  // docs/plans/2026-07-06-reference-history.md)
+  getReferenceHistory: async () => ({ back: [], forward: [] }),
+  navigateReferenceHistory: async () => false,
 };
 
 /** Register the network object that backs the scroll group service */
