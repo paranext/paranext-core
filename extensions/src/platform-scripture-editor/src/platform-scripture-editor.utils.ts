@@ -944,7 +944,8 @@ export async function syncOnProjectSwitch(
 // #region Text Connection Panels
 
 /**
- * Opens or updates the model text, commentary, and scripture resource panels for a project.
+ * Opens or updates the model text and the various views to be displayed in tabs in "column 3" (
+ * reference texts, commentaries, comments, etc.) for a project.
  *
  * @param papi The instance of papi to send the commands
  * @param projectId The id of the project to open the text connections for

@@ -197,8 +197,8 @@ const commentListPanelProvider: IWebViewProvider = {
  * @returns The webView ID of the panel, or `undefined` if opening failed
  */
 async function openCommentListPanel(projectId: string | undefined): Promise<string | undefined> {
-  // Use existingId: '?' to detect-and-reuse the fixed Column 3 tab without calling
-  // getAllOpenWebViewDefinitions (which is not reliably available from extension context).
+  // Use existingId: '?' to passively probe for the existing Column 3 tab (returns its id, or
+  // undefined if not found) without bringing it to front or creating one if absent.
   const existingId = await papi.webViews.openWebView(
     COMMENT_LIST_PANEL_WEBVIEW_TYPE,
     { type: 'tab' },

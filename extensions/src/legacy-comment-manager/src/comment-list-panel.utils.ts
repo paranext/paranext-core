@@ -1,11 +1,14 @@
 /**
  * Resolves the projectId to display in the Comment List Panel.
  *
- * Priority: pending sentinel (set by openCommentListPanel before reloadWebView) >
- * openWebViewOptions
+ * Priority order (highest to lowest):
  *
- * > SavedWebView. The sentinel exists because reloadWebView has no way to forward extra data into
- * > getWebView; the caller writes to the sentinel and getWebView reads and clears it.
+ * 1. Pending sentinel (set by openCommentListPanel before reloadWebView)
+ * 2. OpenWebViewOptions
+ * 3. SavedWebView
+ *
+ * The sentinel exists because reloadWebView has no way to forward extra data into getWebView; the
+ * caller writes to the sentinel and getWebView reads and clears it.
  *
  * @param pending The module-level sentinel set by openCommentListPanel, or undefined if not set
  * @param fromOptions The projectId from OpenWebViewOptions passed to getWebView

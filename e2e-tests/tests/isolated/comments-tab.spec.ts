@@ -181,6 +181,11 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
         SETTINGS_TIMEOUT_MS,
       );
 
+      // Project A and B are opened via command rather than the active project dropdown in the title
+      // bar since newly created test projects won't be in the recent list, so there will be no easy
+      // and reliable UI path for project switching in this mode. The Home UI might also fail to
+      // display them without a force refresh, but in any case that will eventually not be available
+      // in Simple mode.
       // Open Project A — triggers openOrUpdateRelatedPanels(projectA.projectId)
       await sendPapiRequestOnce(
         'command:platformScriptureEditor.openResourceViewer',
