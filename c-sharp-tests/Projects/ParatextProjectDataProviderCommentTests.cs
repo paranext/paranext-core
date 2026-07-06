@@ -2190,10 +2190,10 @@ namespace TestParanextDataProvider.Projects
         private CommentThread SeedVerseTextConflict() => SeedVerseTextConflict(_scrText, null);
 
         // The exact verse text GetText returns for the seeded winner USFM, captured from a throwaway
-        // project. Reading it there (rather than from _scrText between seed and resolve) avoids the
-        // transient CommentManager desync documented in task-1-report.md, and round-trips the same
-        // PutText -> GetText the test uses so the expected value matches byte-for-byte regardless of
-        // any USFM normalization.
+        // project. Reading it there (rather than from _scrText between seed and resolve) avoids a
+        // transient CommentManager desync seen when _scrText is read between seeding the conflict
+        // comment and resolving it, and round-trips the same PutText -> GetText the test uses so the
+        // expected value matches byte-for-byte regardless of any USFM normalization.
         private static string ExpectedWinnerVerseText()
         {
             using var reference = CreateDummyProject();
@@ -2241,7 +2241,7 @@ namespace TestParanextDataProvider.Projects
                 Throws.TypeOf<InvalidOperationException>().With.Message.Contains("already resolved")
             );
             // The guard fired before any verse write, so the winner text is untouched. (GetText is
-            // read only here, after both resolves, to avoid the mid-sequence desync from task-1.)
+            // read only here, after both resolves, to avoid the mid-sequence CommentManager desync.)
             string after = _scrText.GetText(vref, true, true);
             Assert.That(after, Does.Contain("big village"));
             Assert.That(after, Does.Not.Contain("small village"));
@@ -2292,7 +2292,7 @@ namespace TestParanextDataProvider.Projects
             Assert.That(thread.ThreadNeedsCreatorResolve, Is.False);
         }
 
-        // --- data-update events (spec section 9) --------------------------------------------------
+        // --- data-update events --------------------------------------------------------------------
         // ResolveConflict fires via SendDataUpdateEvent, which dispatches through fire-and-forget
         // ThreadingUtils.RunTask. In this harness DummyPapiClient.SendEventAsync enqueues synchronously
         // and returns a completed task, so the events are already queued when ResolveConflict returns;
@@ -2380,7 +2380,7 @@ namespace TestParanextDataProvider.Projects
             );
         }
 
-        // --- admin-or-assignee permission gate (NN4) ---------------------------------------------
+        // --- admin-or-assignee permission gate ---------------------------------------------------
         // The tests above all run on the default admin project (_scrText), so they only cover the
         // admin branch of ResolveConflict's gate. The two tests below cover the non-admin branches:
         // denied (non-admin, unassigned) and assignee-succeeds (non-admin, assigned).
@@ -2543,7 +2543,7 @@ namespace TestParanextDataProvider.Projects
         public void ResolveConflict_NonAdminAssignedUser_RejectWritesLoserAndResolves()
         {
             // Non-admin to whom the conflict is assigned -> allowed by the admin-or-assignee gate.
-            // Uses "reject" (the NN4 primary flow) so this exercises SaveEdits' chapter-edit path
+            // Uses "reject" (the primary resolution flow) so this exercises SaveEdits' chapter-edit path
             // (EnsureCanEditChapter grant/restore + loser-USFM splice) under the non-admin
             // PermissionManager fixture, not just the no-write accept path.
             using var nonAdmin = new NonAdminDummyScrText();
@@ -2569,6 +2569,34 @@ namespace TestParanextDataProvider.Projects
             string after = nonAdmin.GetText(vref, true, true);
             Assert.That(after, Does.Contain("small village"));
             Assert.That(after, Does.Not.Contain("big village"));
+        }
+
+        [Test]
+        public void ResolveConflict_NonAdminTeamAssigned_Allowed()
+        {
+            // A conflict assigned to the whole team (CommentThread.teamUser, "Team") is an
+            // assign-to-everyone sentinel, not a specific user, so any non-admin team member may
+            // resolve it. A raw name compare in the admin-or-assignee gate would treat "Team" as one
+            // (non-matching) user and wrongly deny every team member.
+            using var nonAdmin = new NonAdminDummyScrText();
+            var details = CreateProjectDetails(nonAdmin);
+            ParatextProjects.FakeAddProject(details, nonAdmin);
+            var provider = new DummyParatextProjectDataProvider(
+                PdpName + "-team",
+                Client,
+                details,
+                ParatextProjects
+            );
+
+            // Assign the conflict to the team, not to this specific user. "accept" isolates the gate:
+            // it writes nothing, so the test turns only on the permission decision.
+            CommentThread thread = SeedVerseTextConflict(nonAdmin, CommentThread.teamUser);
+
+            Assert.That(() => provider.ResolveConflict(thread.Id, "accept"), Throws.Nothing);
+            Assert.That(
+                CommentManager.Get(nonAdmin).FindThread(thread.Id).Status,
+                Is.EqualTo(NoteStatus.Resolved)
+            );
         }
 
         [Test]

@@ -715,7 +715,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
 
-        // Permission: base resolve check, then restrict to admin OR the assigned resolver (NN4).
+        // Permission: run the base resolve check, then restrict resolving to a project administrator
+        // or the user (or team) the conflict is assigned to.
         VerifyUserCanResolveThread(threadId);
         if (
             !IsUserProjectAdministrator()
@@ -758,15 +759,24 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     }
 
     /// <summary>
-    /// True when the thread's most-recent assignment targets <paramref name="userName"/>.
+    /// True when the thread's most-recent assignment lets <paramref name="userName"/> resolve it:
+    /// either the thread is assigned to that user, or it is assigned to the whole team
+    /// (<see cref="CommentThread.teamUser"/>), which counts every team member as an assignee.
     /// </summary>
     private static bool IsThreadAssignedToCurrentUser(CommentThread thread, string userName)
     {
+        // Scan comments newest-first for the effective assignment. We don't defer to
+        // CommentThread.AssignedUser because its no-assignment fallback ("(Reviewed)"/unassigned)
+        // would blur "unassigned" into the compare; here a thread with no assignment must be "not
+        // assigned to this user" (false).
         for (int i = thread.Comments.Count - 1; i >= 0; i--)
         {
             string? assigned = thread.Comments[i].AssignedUser;
             if (assigned != null)
-                return string.Equals(assigned, userName, StringComparison.Ordinal);
+                // "Team" assigns to everyone, so any team member counts as the assignee; otherwise
+                // the assignment must name this user exactly.
+                return assigned == CommentThread.teamUser
+                    || string.Equals(assigned, userName, StringComparison.Ordinal);
         }
         return false;
     }
