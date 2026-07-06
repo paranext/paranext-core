@@ -27,6 +27,7 @@ import {
 } from 'platform-bible-utils';
 import {
   BookChapterControl,
+  BookChapterControlHandle,
   SelectMenuItemHandler,
   ScrollGroupSelector,
   TabToolbar,
@@ -42,6 +43,7 @@ import {
 } from '@renderer/hooks/papi-hooks';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
+import { registerBookChapterControlHandle } from '@renderer/services/book-chapter-control.registry';
 import { getNetworkEvent, registerRequestHandler } from '@shared/services/network.service';
 import {
   getWebViewMessageRequestType,
@@ -447,6 +449,19 @@ export function WebView({
 
   const isPowerMode = useIsPowerMode();
 
+  const bookChapterControlRef = useRef<BookChapterControlHandle>(null);
+
+  // Register this tab's BookChapterControl (power mode only — that is when it renders) so
+  // platform.openBookChapterControl can open it when this web view is active
+  useEffect(() => {
+    const handle = bookChapterControlRef.current;
+    if (!handle) return undefined;
+    const unsubscribe = registerBookChapterControlHandle(id, handle);
+    return () => {
+      unsubscribe();
+    };
+  }, [id, isPowerMode, shouldShowToolbar]);
+
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
   const { recentScriptureRefs, addRecentScriptureRef } = useRecentScriptureRefs();
@@ -523,6 +538,7 @@ export function WebView({
           startAreaChildren={
             isPowerMode ? (
               <BookChapterControl
+                ref={bookChapterControlRef}
                 scrRef={scrRef}
                 handleSubmit={setScrRef}
                 getActiveBookIds={booksPresent ? fetchActiveBooks : undefined}
