@@ -18,9 +18,11 @@ import {
   deepEqual,
   getErrorMessage,
   debounce,
+  PlatformEventEmitter,
 } from 'platform-bible-utils';
-import { getDockLayout } from '@renderer/services/web-view.service-host';
+import { getDockLayout, onDidCloseWebView } from '@renderer/services/web-view.service-host';
 import { isDirectionFromTab } from '@shared/models/docking-framework.model';
+import { WebViewId } from '@shared/models/web-view.model';
 
 const FOCUS_SUBJECT_OTHER: FocusSubjectOther = Object.freeze({
   focusType: 'other',
@@ -36,6 +38,35 @@ type FocusSubjectElement = {
   focusType: 'element';
   element: Element;
 };
+
+/**
+ * The web view the user most recently selected (focused). Retained when focus moves to something
+ * that is not a web view (the toolbar, a dialog, nothing) so top-toolbar navigation keeps targeting
+ * the tab the user was just working in. Cleared when that web view closes.
+ */
+let lastSelectedWebViewId: WebViewId | undefined;
+
+const onDidChangeLastSelectedWebViewIdEmitter = new PlatformEventEmitter<WebViewId | undefined>();
+
+/** Event that fires with the new id when the last selected web view changes */
+export const onDidChangeLastSelectedWebViewId = onDidChangeLastSelectedWebViewIdEmitter.event;
+
+/** Gets the id of the web view the user most recently selected, if any is open */
+export function getLastSelectedWebViewId(): WebViewId | undefined {
+  return lastSelectedWebViewId;
+}
+
+function setLastSelectedWebViewId(newWebViewId: WebViewId | undefined): void {
+  if (newWebViewId === lastSelectedWebViewId) return;
+  lastSelectedWebViewId = newWebViewId;
+  onDidChangeLastSelectedWebViewIdEmitter.emit(newWebViewId);
+}
+
+// Clear the tracked web view when it closes. Guarded by id so a stale close event for a
+// previously selected web view does not clear a newer selection.
+onDidCloseWebView(({ webView }) => {
+  if (webView.id === lastSelectedWebViewId) setLastSelectedWebViewId(undefined);
+});
 
 class WindowDataProviderEngine
   extends DataProviderEngine<WindowDataTypes>
@@ -195,6 +226,10 @@ class WindowDataProviderEngine
     if (deepEqual(this.#focusSubject, newFocusSubject)) return false;
 
     this.#focusSubject = newFocusSubject;
+
+    if (newFocusSubject && newFocusSubject.focusType === 'webView')
+      setLastSelectedWebViewId(newFocusSubject.id);
+
     return true;
   }
 
