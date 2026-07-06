@@ -182,4 +182,46 @@ describe('MarkerMenu — disallowed items', () => {
     expect(item).toBeInTheDocument();
     expect(item).toHaveAttribute('aria-disabled', 'true');
   });
+
+  it('shows disallowed items disabled when the query is empty and every item is disallowed', () => {
+    render(
+      <MarkerMenu
+        localizedStrings={DISALLOWED_STRINGS}
+        markerMenuItems={[
+          { marker: 'b', title: 'Blank Line', isDisallowed: true, action: vi.fn() },
+          { marker: 'mte1', title: 'Major Title Ending 1', isDisallowed: true, action: vi.fn() },
+        ]}
+      />,
+    );
+
+    // When no markers can be inserted, the menu surfaces the disallowed markers (disabled) instead
+    // of hiding everything and reading as an empty "No results" state.
+    const blankLine = screen.getByRole('option', { name: /Blank Line/ });
+    const majorTitle = screen.getByRole('option', { name: /Major Title Ending 1/ });
+    expect(blankLine).toHaveAttribute('aria-disabled', 'true');
+    expect(majorTitle).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('shows an item matching by both code and title exactly once, with a separator before the title-only matches', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <MarkerMenu
+        localizedStrings={DISALLOWED_STRINGS}
+        markerMenuItems={[
+          { marker: 'p', title: 'Paragraph', action: vi.fn() },
+          { marker: 'f', title: 'Poetry', action: vi.fn() },
+        ]}
+      />,
+    );
+
+    await user.type(screen.getByPlaceholderText('Type a style or search.'), 'p');
+
+    // 'p' matches "Paragraph" by both its code and its title, but the title group excludes anything
+    // already matched by code, so the item renders exactly once (in the code group).
+    expect(screen.getAllByRole('option', { name: /Paragraph/ })).toHaveLength(1);
+    // "Poetry" matches only by title, so both the code and title groups are populated and the
+    // separator between them renders.
+    expect(screen.getByRole('option', { name: /Poetry/ })).toBeInTheDocument();
+    expect(screen.getByRole('separator')).toBeInTheDocument();
+  });
 });
