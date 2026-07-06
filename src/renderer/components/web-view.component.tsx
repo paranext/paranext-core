@@ -449,18 +449,19 @@ export function WebView({
 
   const isPowerMode = useIsPowerMode();
 
-  const bookChapterControlRef = useRef<BookChapterControlHandle>(null);
-
   // Register this tab's BookChapterControl (power mode only — that is when it renders) so
-  // platform.openBookChapterControl can open it when this web view is active
-  useEffect(() => {
-    const handle = bookChapterControlRef.current;
-    if (!handle) return undefined;
-    const unsubscribe = registerBookChapterControlHandle(id, handle);
-    return () => {
-      unsubscribe();
-    };
-  }, [id, isPowerMode, shouldShowToolbar]);
+  // platform.openBookChapterControl can open it when this web view is active. React 19 cleanup
+  // callback ref so registration tracks the control's mount/unmount exactly
+  const registerBookChapterControl = useCallback(
+    (handle: BookChapterControlHandle | null) => {
+      if (!handle) return undefined;
+      const unsubscribe = registerBookChapterControlHandle(id, handle);
+      return () => {
+        unsubscribe();
+      };
+    },
+    [id],
+  );
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
@@ -538,7 +539,7 @@ export function WebView({
           startAreaChildren={
             isPowerMode ? (
               <BookChapterControl
-                ref={bookChapterControlRef}
+                ref={registerBookChapterControl}
                 scrRef={scrRef}
                 handleSubmit={setScrRef}
                 getActiveBookIds={booksPresent ? fetchActiveBooks : undefined}

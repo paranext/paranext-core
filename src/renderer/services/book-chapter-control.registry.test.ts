@@ -17,6 +17,16 @@ describe('book chapter control registry', () => {
     expect(getBookChapterControlHandle('web-view-1')).toBeUndefined();
   });
 
+  test('a stale unsubscriber does not remove a newer registration under the same owner id', () => {
+    const handleA = { open: () => {} };
+    const handleB = { open: () => {} };
+    const unsubscribeA = registerBookChapterControlHandle('x', handleA);
+    registerBookChapterControlHandle('x', handleB);
+
+    expect(unsubscribeA()).toBe(false);
+    expect(getBookChapterControlHandle('x')).toBe(handleB);
+  });
+
   test('exposes the top toolbar owner id', () => {
     expect(TOP_TOOLBAR_BOOK_CHAPTER_CONTROL_OWNER_ID).toBe('top-toolbar');
   });

@@ -20,7 +20,12 @@ export function registerBookChapterControlHandle(
   handle: BookChapterControlHandle,
 ): Unsubscriber {
   handlesByOwnerId.set(ownerId, handle);
-  return () => handlesByOwnerId.delete(ownerId);
+  return () => {
+    // Only remove the registration if it is still this handle — a stale unsubscriber must not
+    // remove a newer registration under the same owner id
+    if (handlesByOwnerId.get(ownerId) !== handle) return false;
+    return handlesByOwnerId.delete(ownerId);
+  };
 }
 
 /** Gets the registered BookChapterControl handle for an owner, if any is mounted */
