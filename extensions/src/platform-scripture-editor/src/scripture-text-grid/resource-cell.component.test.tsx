@@ -18,8 +18,8 @@ vi.mock('@papi/frontend/react', () => ({
   useLocalizedStrings: () => [
     {
       '%webView_scriptureTextGrid_cell_unavailable%': 'Resource unavailable',
-      '%webView_scriptureTextGrid_cell_unavailable_downloading%': 'Downloading…',
-      '%webView_scriptureTextGrid_cell_unavailable_failed%': 'Download failed',
+      '%webView_scriptureTextGrid_cell_status_downloading%': 'Downloading…',
+      '%webView_scriptureTextGrid_cell_status_failed%': 'Download failed',
     },
     false,
   ],

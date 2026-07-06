@@ -1,7 +1,7 @@
 import { isPlatformError } from 'platform-bible-utils';
 
 /** The three visual states a ResourceCell can be in; only `ready` renders Editorial. */
-export type VerseCellState = 'downloading' | 'ready' | 'failed';
+export type ResourceCellState = 'downloading' | 'ready' | 'failed';
 
 /**
  * Derives a cell's offline state from observable data. A2/A13 own the actual download; this only
@@ -10,7 +10,7 @@ export type VerseCellState = 'downloading' | 'ready' | 'failed';
 export function deriveCellState(args: {
   usjPossiblyError: unknown;
   isLoading: boolean;
-}): VerseCellState {
+}): ResourceCellState {
   const { usjPossiblyError, isLoading } = args;
   if (isPlatformError(usjPossiblyError)) return 'failed';
   if (isLoading || usjPossiblyError === undefined) return 'downloading';
