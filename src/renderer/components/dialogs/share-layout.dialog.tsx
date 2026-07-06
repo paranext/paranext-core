@@ -28,6 +28,10 @@ import {
 
 const EMPTY_RESOURCE_LIST: ResourceReferenceList = { dataVersion: '1.0.0', items: [] };
 
+function isShareLayoutActiveTab(value: string): value is ShareLayoutActiveTab {
+  return value === 'ScriptureResource' || value === 'CommentaryResource' || value === 'Comments';
+}
+
 /**
  * `projectId` is required on `ShareLayoutDialogOptions`, but `DialogDefinitionBase['Component']`'s
  * generic base signature is `(props: DialogProps<unknown>) => ReactElement` — a required field on
@@ -117,17 +121,13 @@ function ShareLayoutDialogWrapper({
   const seededModelText: ResourceReference | undefined = seededModelTextItems[0];
 
   // `seedScalar` is generic over `string | ResourceReference | undefined`, so it returns the plain
-  // `string | undefined` type of the persisted setting rather than the narrower
-  // `ShareLayoutActiveTab` union `ShareLayoutDialogContent` expects. `ShareLayoutDialogContent`
-  // already guards any string it receives against that union at the UI layer (see
-  // `isShareLayoutActiveTab` in `share-layout.component.tsx`) before ever using it as a `Select`
-  // value, so a stale/invalid persisted value here can only affect which tab is initially
-  // preselected, not cause a crash — narrowing it for real would require exporting that guard from
-  // Task 6's presentational component, which is out of scope for this wiring task.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const seededActiveTab = seedScalar(projectActiveTab, undefined) as
-    | ShareLayoutActiveTab
-    | undefined;
+  // `string | undefined` type of the persisted setting. Narrow it using the type guard to ensure
+  // only known tab values are trusted.
+  const seededActiveTabRaw = seedScalar(projectActiveTab, undefined);
+  const seededActiveTab =
+    seededActiveTabRaw && isShareLayoutActiveTab(seededActiveTabRaw)
+      ? seededActiveTabRaw
+      : undefined;
 
   const handleConfirm = useCallback(
     (result: ShareLayoutResult) => {
