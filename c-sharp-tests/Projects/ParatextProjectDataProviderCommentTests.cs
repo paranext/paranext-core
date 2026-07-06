@@ -2275,6 +2275,57 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
+        public void ResolveConflict_ConcurrentRejects_ApplyExactlyOnce()
+        {
+            // Several resolveConflict calls racing on the same thread must not both write the verse.
+            // The per-project lock makes the already-resolved guard atomic with the write, so exactly
+            // one call resolves and the rest observe the resolved thread and are rejected. Without the
+            // lock the bodies interleave and can both splice the loser text, corrupting a settled note.
+            CommentThread thread = SeedVerseTextConflict();
+            var vref = new VerseRef("MAT", "2", "1", _scrText.Settings.Versification);
+
+            const int racers = 8;
+            var outcomes = new Exception?[racers];
+            var tasks = new Task[racers];
+            for (int i = 0; i < racers; i++)
+            {
+                int idx = i;
+                tasks[i] = Task.Run(() =>
+                {
+                    try
+                    {
+                        _provider.ResolveConflict(thread.Id, "reject");
+                        outcomes[idx] = null; // this racer won
+                    }
+                    catch (Exception ex)
+                    {
+                        outcomes[idx] = ex;
+                    }
+                });
+            }
+            Task.WaitAll(tasks);
+
+            // Exactly one racer resolved; every other was rejected by the already-resolved guard.
+            Assert.That(
+                outcomes.Count(e => e == null),
+                Is.EqualTo(1),
+                "exactly one concurrent resolve must succeed"
+            );
+            var errors = outcomes.Where(e => e != null).Cast<Exception>().ToList();
+            Assert.That(errors, Is.All.InstanceOf<InvalidOperationException>());
+            Assert.That(
+                errors.All(e => e.Message.Contains("already resolved")),
+                Is.True,
+                "every losing racer must hit the already-resolved guard, not a partial/garbled write"
+            );
+            // The loser text was applied exactly once - not doubled or garbled by overlapping writes.
+            Assert.That(ReloadThread(thread.Id).Status, Is.EqualTo(NoteStatus.Resolved));
+            string after = _scrText.GetText(vref, true, true);
+            Assert.That(after, Does.Contain("small village"));
+            Assert.That(after, Does.Not.Contain("big village"));
+        }
+
+        [Test]
         public void ResolveConflict_NonConflictThread_Throws()
         {
             var mgr = CommentManager.Get(_scrText);

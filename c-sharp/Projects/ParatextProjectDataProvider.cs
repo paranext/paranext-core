@@ -65,6 +65,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     // every published PDP creation.
     private readonly Lazy<CommentManager> _commentManager;
 
+    // Serializes ResolveConflict so its already-resolved guard is atomic with the verse write (see
+    // ResolveConflict). One lock per PDP instance, i.e. per project.
+    private readonly object _resolveConflictLock = new();
+
     private UserProjectSettings? _userProjectSettings;
     private string? _cachedUserId;
 
@@ -702,44 +706,52 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 $"Invalid resolution '{resolution}' for ResolveConflict; expected 'accept' or 'reject'."
             );
 
-        VerifyUserCanResolveConflict(threadId);
-
-        CommentThread? thread = _commentManager.Value.FindThread(threadId);
-        if (thread == null)
-            throw new InvalidDataException($"Thread with id {threadId} does not exist");
-
-        // Reject writes the loser text over the current verse; refuse when the verse was edited
-        // after the merge (stale) so post-merge edits can't be clobbered. Accept stays available
-        // as the exit path (it writes nothing).
-        if (resolution == "reject" && IsConflictVerseStale(thread))
-            throw new InvalidOperationException(
-                $"Conflict thread '{threadId}' cannot be rejected: the verse text has changed since the conflict was recorded. Only 'accept' (keep the current text) is available."
-            );
-
-        // Reuse PT9's orchestration (grant edit -> splice loser USFM -> resolve -> restore) via SaveEdits.
-        var state = new ThreadEditState
+        // Serialize resolves so the already-resolved guard (in VerifyUserCanResolveConflict) is
+        // atomic with the SaveEdits that applies the resolution. Without this, two concurrent
+        // resolveConflict calls on the same thread could both pass the guard and both write the
+        // verse, corrupting an already-settled conflict.
+        lock (_resolveConflictLock)
         {
-            Status = NoteStatus.Resolved,
-            ConflictResolution =
-                resolution == "reject"
-                    ? NoteConflictResolutions.Replaced
-                    : NoteConflictResolutions.None,
-        };
-        // SaveEdits returns false when the user cancels resolving (the creator-resolve path). Surface
-        // that so we don't fire "resolved" events and report success for a thread that is still open.
-        bool resolved = CommentEditHelper.SaveEdits(
-            null,
-            _commentManager.Value,
-            thread,
-            state,
-            true,
-            out _,
-            out _
-        );
-        if (!resolved)
-            throw new InvalidOperationException(
-                $"Resolving conflict thread '{threadId}' was canceled; the thread was not resolved."
+            VerifyUserCanResolveConflict(threadId);
+
+            CommentThread? thread = _commentManager.Value.FindThread(threadId);
+            if (thread == null)
+                throw new InvalidDataException($"Thread with id {threadId} does not exist");
+
+            // Reject writes the loser text over the current verse; refuse when the verse was edited
+            // after the merge (stale) so post-merge edits can't be clobbered. Accept stays available
+            // as the exit path (it writes nothing).
+            if (resolution == "reject" && IsConflictVerseStale(thread))
+                throw new InvalidOperationException(
+                    $"Conflict thread '{threadId}' cannot be rejected: the verse text has changed since the conflict was recorded. Only 'accept' (keep the current text) is available."
+                );
+
+            // Reuse PT9's orchestration (grant edit -> splice loser USFM -> resolve -> restore) via SaveEdits.
+            var state = new ThreadEditState
+            {
+                Status = NoteStatus.Resolved,
+                ConflictResolution =
+                    resolution == "reject"
+                        ? NoteConflictResolutions.Replaced
+                        : NoteConflictResolutions.None,
+            };
+            // SaveEdits returns false when the user cancels resolving (the creator-resolve path).
+            // Surface that so we don't fire "resolved" events and report success for a thread that
+            // is still open.
+            bool resolved = CommentEditHelper.SaveEdits(
+                null,
+                _commentManager.Value,
+                thread,
+                state,
+                true,
+                out _,
+                out _
             );
+            if (!resolved)
+                throw new InvalidOperationException(
+                    $"Resolving conflict thread '{threadId}' was canceled; the thread was not resolved."
+                );
+        }
 
         // Refresh the comment list; on reject the verse text changed via a raw PutText that bypasses
         // the Set* methods, so also refresh Scripture-text subscribers (the open editor).
