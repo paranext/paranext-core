@@ -1,6 +1,14 @@
 import { renderHook, act } from '@testing-library/react';
 import { vi } from 'vitest';
-import { useQuickNavButtons } from './book-chapter-control.navigation';
+import {
+  useQuickNavButtons,
+  getPreviousChapterRef,
+  getNextChapterRef,
+  getPreviousBookRef,
+  getNextBookRef,
+  getPreviousVerseRef,
+  getNextVerseRef,
+} from './book-chapter-control.navigation';
 import { fetchEndChapter } from './book-chapter-control.utils';
 
 // Mock the fetchEndChapter function
@@ -520,6 +528,127 @@ describe('book-chapter-control.navigation', () => {
 
         // Should handle gracefully and not crash
         expect(result.current).toHaveLength(4);
+      });
+    });
+  });
+
+  describe('pure navigation functions', () => {
+    const BOOKS = ['GEN', 'EXO', 'LEV'];
+
+    describe('getPreviousChapterRef', () => {
+      test('returns previous chapter verse 1 within a book', () => {
+        expect(getPreviousChapterRef({ book: 'EXO', chapterNum: 5, verseNum: 7 }, BOOKS)).toEqual({
+          book: 'EXO',
+          chapterNum: 4,
+          verseNum: 1,
+        });
+      });
+
+      test('rolls to previous book last chapter at chapter 1', () => {
+        vi.mocked(fetchEndChapter).mockReturnValue(50);
+        expect(getPreviousChapterRef({ book: 'EXO', chapterNum: 1, verseNum: 1 }, BOOKS)).toEqual({
+          book: 'GEN',
+          chapterNum: 50,
+          verseNum: 1,
+        });
+      });
+
+      test('returns undefined at chapter 1 of the first book', () => {
+        expect(
+          getPreviousChapterRef({ book: 'GEN', chapterNum: 1, verseNum: 1 }, BOOKS),
+        ).toBeUndefined();
+      });
+
+      test('returns undefined at chapter 1 of a book not in availableBooks', () => {
+        expect(
+          getPreviousChapterRef({ book: 'MAT', chapterNum: 1, verseNum: 1 }, BOOKS),
+        ).toBeUndefined();
+      });
+    });
+
+    describe('getNextChapterRef', () => {
+      test('returns next chapter verse 1 within a book', () => {
+        vi.mocked(fetchEndChapter).mockReturnValue(40);
+        expect(getNextChapterRef({ book: 'EXO', chapterNum: 5, verseNum: 7 }, BOOKS)).toEqual({
+          book: 'EXO',
+          chapterNum: 6,
+          verseNum: 1,
+        });
+      });
+
+      test('rolls to next book chapter 1 at the last chapter', () => {
+        vi.mocked(fetchEndChapter).mockReturnValue(40);
+        expect(getNextChapterRef({ book: 'EXO', chapterNum: 40, verseNum: 3 }, BOOKS)).toEqual({
+          book: 'LEV',
+          chapterNum: 1,
+          verseNum: 1,
+        });
+      });
+
+      test('returns undefined at the last chapter of the last book', () => {
+        vi.mocked(fetchEndChapter).mockReturnValue(27);
+        expect(
+          getNextChapterRef({ book: 'LEV', chapterNum: 27, verseNum: 1 }, BOOKS),
+        ).toBeUndefined();
+      });
+
+      test('returns undefined when availableBooks is empty', () => {
+        vi.mocked(fetchEndChapter).mockReturnValue(1);
+        expect(getNextChapterRef({ book: 'GEN', chapterNum: 1, verseNum: 1 }, [])).toBeUndefined();
+      });
+    });
+
+    describe('getPreviousBookRef / getNextBookRef', () => {
+      test('moves to chapter 1 verse 1 of the adjacent book', () => {
+        expect(getPreviousBookRef({ book: 'EXO', chapterNum: 5, verseNum: 7 }, BOOKS)).toEqual({
+          book: 'GEN',
+          chapterNum: 1,
+          verseNum: 1,
+        });
+        expect(getNextBookRef({ book: 'EXO', chapterNum: 5, verseNum: 7 }, BOOKS)).toEqual({
+          book: 'LEV',
+          chapterNum: 1,
+          verseNum: 1,
+        });
+      });
+
+      test('clamps at the ends of availableBooks', () => {
+        expect(
+          getPreviousBookRef({ book: 'GEN', chapterNum: 2, verseNum: 1 }, BOOKS),
+        ).toBeUndefined();
+        expect(getNextBookRef({ book: 'LEV', chapterNum: 2, verseNum: 1 }, BOOKS)).toBeUndefined();
+      });
+
+      test('returns undefined for a book not in availableBooks', () => {
+        expect(
+          getPreviousBookRef({ book: 'MAT', chapterNum: 1, verseNum: 1 }, BOOKS),
+        ).toBeUndefined();
+        expect(getNextBookRef({ book: 'MAT', chapterNum: 1, verseNum: 1 }, BOOKS)).toBeUndefined();
+      });
+    });
+
+    describe('getPreviousVerseRef / getNextVerseRef', () => {
+      test('moves verse by one, flooring at 0', () => {
+        expect(getPreviousVerseRef({ book: 'GEN', chapterNum: 1, verseNum: 5 })).toEqual({
+          book: 'GEN',
+          chapterNum: 1,
+          verseNum: 4,
+        });
+        expect(getPreviousVerseRef({ book: 'GEN', chapterNum: 1, verseNum: 1 })).toEqual({
+          book: 'GEN',
+          chapterNum: 1,
+          verseNum: 0,
+        });
+        expect(getPreviousVerseRef({ book: 'GEN', chapterNum: 1, verseNum: 0 })).toEqual({
+          book: 'GEN',
+          chapterNum: 1,
+          verseNum: 0,
+        });
+        expect(getNextVerseRef({ book: 'GEN', chapterNum: 1, verseNum: 5 })).toEqual({
+          book: 'GEN',
+          chapterNum: 1,
+          verseNum: 6,
+        });
       });
     });
   });

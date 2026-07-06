@@ -34,3 +34,12 @@ export {
 } from './components/basics/linked-scr-ref-button.component';
 export type { ScopeWithRange } from './components/utils/scripture.util';
 export { Z_INDEX_TOOLTIP } from './components/z-index';
+export {
+  getPreviousChapterRef,
+  getNextChapterRef,
+  getPreviousBookRef,
+  getNextBookRef,
+  getPreviousVerseRef,
+  getNextVerseRef,
+} from './components/advanced/book-chapter-control/book-chapter-control.navigation';
+export { ALL_BOOK_IDS } from './components/shared/book.utils';

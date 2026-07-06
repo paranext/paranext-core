@@ -11,6 +11,74 @@ export interface QuickNavButton {
   icon: ComponentType<{ className?: string }>;
 }
 
+/** Previous chapter (verse 1), rolling into the previous book's last chapter at chapter 1. */
+export function getPreviousChapterRef(
+  scrRef: SerializedVerseRef,
+  availableBooks: string[],
+): SerializedVerseRef | undefined {
+  if (scrRef.chapterNum > 1)
+    return { book: scrRef.book, chapterNum: scrRef.chapterNum - 1, verseNum: 1 };
+
+  const currentBookIndex = availableBooks.indexOf(scrRef.book);
+  if (currentBookIndex <= 0) return undefined;
+
+  const previousBook = availableBooks[currentBookIndex - 1];
+  return {
+    book: previousBook,
+    chapterNum: Math.max(fetchEndChapter(previousBook), 1),
+    verseNum: 1,
+  };
+}
+
+/** Next chapter (verse 1), rolling into the next book's chapter 1 at the last chapter. */
+export function getNextChapterRef(
+  scrRef: SerializedVerseRef,
+  availableBooks: string[],
+): SerializedVerseRef | undefined {
+  const maxChapter = fetchEndChapter(scrRef.book);
+  if (scrRef.chapterNum < maxChapter)
+    return { book: scrRef.book, chapterNum: scrRef.chapterNum + 1, verseNum: 1 };
+
+  const currentBookIndex = availableBooks.indexOf(scrRef.book);
+  if (currentBookIndex >= availableBooks.length - 1) return undefined;
+
+  return { book: availableBooks[currentBookIndex + 1], chapterNum: 1, verseNum: 1 };
+}
+
+/** Previous book (chapter 1 verse 1), clamped at the first available book. */
+export function getPreviousBookRef(
+  scrRef: SerializedVerseRef,
+  availableBooks: string[],
+): SerializedVerseRef | undefined {
+  const currentBookIndex = availableBooks.indexOf(scrRef.book);
+  if (currentBookIndex <= 0) return undefined;
+  return { book: availableBooks[currentBookIndex - 1], chapterNum: 1, verseNum: 1 };
+}
+
+/** Next book (chapter 1 verse 1), clamped at the last available book. */
+export function getNextBookRef(
+  scrRef: SerializedVerseRef,
+  availableBooks: string[],
+): SerializedVerseRef | undefined {
+  const currentBookIndex = availableBooks.indexOf(scrRef.book);
+  if (currentBookIndex === -1 || currentBookIndex >= availableBooks.length - 1) return undefined;
+  return { book: availableBooks[currentBookIndex + 1], chapterNum: 1, verseNum: 1 };
+}
+
+/** Previous verse in the same chapter, flooring at verse 0. */
+export function getPreviousVerseRef(scrRef: SerializedVerseRef): SerializedVerseRef {
+  return {
+    book: scrRef.book,
+    chapterNum: scrRef.chapterNum,
+    verseNum: scrRef.verseNum > 1 ? scrRef.verseNum - 1 : 0,
+  };
+}
+
+/** Next verse in the same chapter (no upper bound). */
+export function getNextVerseRef(scrRef: SerializedVerseRef): SerializedVerseRef {
+  return { book: scrRef.book, chapterNum: scrRef.chapterNum, verseNum: scrRef.verseNum + 1 };
+}
+
 export function useQuickNavButtons(
   scrRef: SerializedVerseRef,
   availableBooks: string[],
@@ -18,63 +86,21 @@ export function useQuickNavButtons(
   handleSubmit: (scrRef: SerializedVerseRef) => void,
 ): QuickNavButton[] {
   const handlePreviousChapter = useCallback(() => {
-    if (scrRef.chapterNum > 1) {
-      handleSubmit({
-        book: scrRef.book,
-        chapterNum: scrRef.chapterNum - 1,
-        verseNum: 1,
-      });
-    } else {
-      // Go to previous book's last chapter
-      const currentBookIndex = availableBooks.indexOf(scrRef.book);
-      if (currentBookIndex > 0) {
-        const previousBook = availableBooks[currentBookIndex - 1];
-        const lastChapter = Math.max(fetchEndChapter(previousBook), 1);
-        handleSubmit({
-          book: previousBook,
-          chapterNum: lastChapter,
-          verseNum: 1,
-        });
-      }
-    }
+    const newRef = getPreviousChapterRef(scrRef, availableBooks);
+    if (newRef) handleSubmit(newRef);
   }, [scrRef, availableBooks, handleSubmit]);
 
   const handleNextChapter = useCallback(() => {
-    const maxChapter = fetchEndChapter(scrRef.book);
-    if (scrRef.chapterNum < maxChapter) {
-      handleSubmit({
-        book: scrRef.book,
-        chapterNum: scrRef.chapterNum + 1,
-        verseNum: 1,
-      });
-    } else {
-      // Go to next book's first chapter
-      const currentBookIndex = availableBooks.indexOf(scrRef.book);
-      if (currentBookIndex < availableBooks.length - 1) {
-        const nextBook = availableBooks[currentBookIndex + 1];
-        handleSubmit({
-          book: nextBook,
-          chapterNum: 1,
-          verseNum: 1,
-        });
-      }
-    }
+    const newRef = getNextChapterRef(scrRef, availableBooks);
+    if (newRef) handleSubmit(newRef);
   }, [scrRef, availableBooks, handleSubmit]);
 
   const handlePreviousVerse = useCallback(() => {
-    handleSubmit({
-      book: scrRef.book,
-      chapterNum: scrRef.chapterNum,
-      verseNum: scrRef.verseNum > 1 ? scrRef.verseNum - 1 : 0,
-    });
+    handleSubmit(getPreviousVerseRef(scrRef));
   }, [scrRef, handleSubmit]);
 
   const handleNextVerse = useCallback(() => {
-    handleSubmit({
-      book: scrRef.book,
-      chapterNum: scrRef.chapterNum,
-      verseNum: scrRef.verseNum + 1,
-    });
+    handleSubmit(getNextVerseRef(scrRef));
   }, [scrRef, handleSubmit]);
 
   return useMemo(() => {
