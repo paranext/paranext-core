@@ -86,7 +86,7 @@ function ShareLayoutDialogWrapper({
   );
 
   useEffect(() => {
-    if (!isCanWriteLoading && canWrite !== true) cancelDialog();
+    if (!isCanWriteLoading && canWrite === false) cancelDialog();
   }, [isCanWriteLoading, canWrite, cancelDialog]);
 
   const [personalResources] = usePromise(
