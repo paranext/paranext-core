@@ -113,12 +113,13 @@ describe('useEditorPdpSync', () => {
 
   // Task 15 (standard-view fix wave): the PDP round-trips USJ through USFM, so a save made
   // MID-marker-typing (a pending literal like `\q1` still in plain text) echoes back
-  // NORMALIZED-different from what we sent. Hard-replacing the editor with that echo while the
-  // user is typing nulls the selection and eats the keystrokes typed during the round trip
-  // (observed live: `\q1<space>` type-through lost q/1/space ~150-250ms after the `\`). When the
-  // update is the completion echo of OUR OWN write AND the user is actively editing, the editor -
-  // not the echo - has the newest content: keep it and save the newer edits instead.
-  it('does not replace the editor with the echo of its own write while the user is typing', () => {
+  // NORMALIZED-different from what we sent - sometimes across multiple subscription deliveries
+  // per save, so an in-flight-write flag cannot classify them. Hard-replacing the editor with
+  // such an echo while the user is typing nulls the selection and eats the keystrokes typed
+  // during the round trip (observed live: `\q1<space>` type-through lost q/1/space ~150-250ms
+  // after the `\`). While actively editing, the editor owns the freshest content: differing
+  // echoes defer to it (and push local content up); matching echoes are pure confirmations.
+  it('does not replace the actively-edited editor with a differing echo; saves the newer local content', () => {
     const normalizedEcho: Usj = {
       ...levUsj,
       content: [
@@ -133,13 +134,30 @@ describe('useEditorPdpSync', () => {
         },
       ],
     };
+    const newerEditorContent: Usj = {
+      ...levUsj,
+      content: [
+        ...levUsj.content.slice(0, 2),
+        {
+          type: 'para',
+          marker: 'q1',
+          content: [
+            { type: 'verse', marker: 'v', number: '2' },
+            'This is the law of the leper. typed more',
+          ],
+        },
+      ],
+    };
 
     const setUsjSpy = vi.fn();
     const saveUsjToPdpIfUpdated = vi.fn();
     const editorRef: { current: EditorRef | null } = {
       // EditorRef has many members; casting from a minimal stub is intentional in tests
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      current: { setUsj: setUsjSpy } as unknown as EditorRef,
+      current: {
+        setUsj: setUsjSpy,
+        getUsj: () => newerEditorContent,
+      } as unknown as EditorRef,
     };
     const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
     const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
@@ -169,14 +187,21 @@ describe('useEditorPdpSync', () => {
     setUsjSpy.mockClear();
     saveUsjToPdpIfUpdated.mockClear();
 
-    // Our save is in flight; its (PDP-normalized, content-different) echo arrives.
-    currentlyWritingUsjToPdp.current = true;
+    // A (PDP-normalized, content-different) echo arrives while the editor holds newer typing.
     act(() => rerender({ usjFromPdp: normalizedEcho }));
 
     expect(setUsjSpy).not.toHaveBeenCalled(); // editor NOT clobbered mid-typing
     expect(saveUsjToPdpIfUpdated).toHaveBeenCalled(); // newer local edits get saved instead
     expect(usjSentToPdp.current).toBe(normalizedEcho); // echo adopted as the new PDP baseline
-    expect(currentlyWritingUsjToPdp.current).toBe(false);
+
+    // A confirmation echo matching the editor's live content arrives: nothing to do (no replace
+    // - which would reset the selection - and no save loop).
+    setUsjSpy.mockClear();
+    saveUsjToPdpIfUpdated.mockClear();
+    const confirmationEcho = { ...newerEditorContent, content: [...newerEditorContent.content] };
+    act(() => rerender({ usjFromPdp: confirmationEcho }));
+    expect(setUsjSpy).not.toHaveBeenCalled();
+    expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled();
 
     document.body.removeChild(editorInput);
   });

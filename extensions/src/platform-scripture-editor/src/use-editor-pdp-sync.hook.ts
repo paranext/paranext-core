@@ -40,7 +40,6 @@ export function useEditorPdpSync({
     }
 
     // The PDP informed us of updates, so writing to it must be complete (if we were writing)
-    const wasOurWriteEcho = currentlyWritingUsjToPdp.current;
     currentlyWritingUsjToPdp.current = false;
 
     // If what the PDP provided is different than the last thing we sent to the PDP, assume the PDP
@@ -50,21 +49,26 @@ export function useEditorPdpSync({
       usjSentToPdp.current = usjFromPdp;
       // Task 15 (standard-view fix wave): the PDP round-trips USJ through USFM, so a save made
       // MID-marker-typing (a pending literal like `\q1` still in plain text) echoes back
-      // NORMALIZED-different from what we sent even though nobody else wrote. Hard-replacing the
-      // editor with that echo while the user is typing nulls the Lexical selection and eats the
-      // keystrokes typed during the round trip (observed live: `\q1<space>` type-through lost
-      // q/1/space, arriving ~150-250ms after the `\`). When this update is the completion echo of
-      // OUR OWN write (a write of ours was in flight) AND the user is actively editing (focus on
-      // the main editor's content-editable root - same gate as the keydown handlers), the editor,
-      // not the echo, has the newest content: keep it, adopt the echoed value as the new PDP
-      // baseline (above), and save any edits that landed since the write started. Once typing
-      // rests, the editor's well-formed USJ round-trips stably, the contents compare equal, and
-      // the save-if-updated becomes a no-op - converged. When the editor is NOT focused (idle,
-      // blurred, popover open), the PDP echo replaces as before.
+      // NORMALIZED-different from what we sent even though nobody else wrote — sometimes across
+      // MULTIPLE subscription deliveries per save (whichUpdates '*'), so a one-shot "our write is
+      // in flight" flag cannot classify them. Hard-replacing the editor with such an echo while
+      // the user is typing nulls the Lexical selection and eats the keystrokes typed during the
+      // round trip (observed live: `\q1<space>` type-through lost q/1/space ~150-250ms after the
+      // `\`). While the user is ACTIVELY EDITING (focus on the main editor's content-editable
+      // root — the same gate the keydown handlers use), the editor owns the freshest content:
+      // an echo that equals it is a pure confirmation (nothing to do — replacing would still
+      // reset the selection), and an echo that differs defers to the editor and pushes the newer
+      // local content up instead. Once typing rests, well-formed USJ round-trips stably, the
+      // echo matches the editor, and this settles. When the editor is NOT focused (idle,
+      // blurred, popover open), the PDP echo replaces as before — including genuine external
+      // co-edits, whose replace-while-focused case is deliberately deferred to the next update
+      // that arrives outside active typing.
       const mainEditorInput = document.querySelector('.editor-input') ?? undefined;
       const isActivelyEditing =
         mainEditorInput !== undefined && document.activeElement === mainEditorInput;
-      if (wasOurWriteEcho && isActivelyEditing) {
+      if (isActivelyEditing) {
+        const editorUsj = editorRef.current.getUsj();
+        if (areUsjContentsEqualExceptWhitespace(usjFromPdp, editorUsj)) return;
         saveUsjToPdpIfUpdated();
         return;
       }
