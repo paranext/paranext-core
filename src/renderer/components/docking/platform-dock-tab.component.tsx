@@ -32,7 +32,9 @@ export function createRCDockTabFromTabInfo(tabInfo: TabInfo, shouldFlash = false
     ),
     content: <PlatformPanel id={tabInfo.id}>{tabInfo.content}</PlatformPanel>,
     group: TAB_GROUP,
-    closable: true,
+    // Tabs are closable by default; a WebView can opt out by setting `isClosable: false`
+    // (e.g. views that are part of the default layout and must always remain open).
+    closable: tabInfo.isClosable ?? true,
   };
 }
 

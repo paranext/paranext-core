@@ -442,6 +442,7 @@ export function WebView({
         updateWebViewDefinitionSync(id, { scrollGroupScrRef: newScrollGroupScrRef }),
       [id],
     ),
+    projectId,
   );
 
   const isPowerMode = useIsPowerMode();
@@ -583,6 +584,7 @@ export function updateWebViewTab(savedTabInfo: SavedTabInfo, data: WebViewDefini
     tabIconUrl: data.iconUrl,
     tabTitle: data.title ?? '%tab_title_unknown%',
     tabTooltip: data.tooltip ?? '',
+    isClosable: data.isClosable,
     content: <WebView {...data} />,
   };
 }

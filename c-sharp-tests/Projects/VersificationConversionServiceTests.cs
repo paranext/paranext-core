@@ -1,0 +1,215 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Linq;
+using Paranext.DataProvider.Projects;
+using Paratext.Data;
+using SIL.Scripture;
+
+namespace TestParanextDataProvider.Projects;
+
+/// <summary>
+/// Unit tests for <see cref="VersificationConversionService.MapVerseRefBetweenProjects"/>.
+/// Two dummy projects with different versifications are registered; the tests verify the
+/// command resolves each project's versification, grounds the SOURCE frame in the source
+/// project (ignoring any versification carried on the input ref), and delegates to libpalaso's
+/// ChangeVersification / ChangeVersificationWithRanges. Assertions compare against a direct
+/// libpalaso conversion so they verify our wiring, not libpalaso's mapping tables.
+/// Unmapped-verse behavior (a verse returned unchanged rather than zeroed) is libpalaso's
+/// <c>ChangeVersification</c> behavior; it is not unit-tested here because a robust assertion
+/// requires .vrs table specifics — it is covered by integration/manual testing. Contract: an
+/// unknown source frame (null sourceProjectId) returns the reference unchanged (see
+/// <c>NullSource_ReturnsUnchanged</c>), but a NAMED project whose versification cannot be resolved
+/// throws <see cref="VersificationConversionException"/> so the caller falls back to the raw
+/// reference without caching a transient failure (see the *_Throws tests).
+/// </summary>
+[ExcludeFromCodeCoverage]
+[TestFixture]
+internal class VersificationConversionServiceTests : PapiTestBase
+{
+    private ScrText _englishScrText = null!;
+    private ScrText _orthodoxScrText = null!;
+    private string _englishId = null!;
+    private string _orthodoxId = null!;
+    private VersificationConversionService _service = null!;
+
+    [SetUp]
+    public override async Task TestSetupAsync()
+    {
+        await base.TestSetupAsync();
+
+        _englishScrText = CreateDummyProject();
+        _englishScrText.Settings.Versification = new ScrVers(ScrVersType.English);
+        var englishDetails = CreateProjectDetails(_englishScrText);
+        ParatextProjects.FakeAddProject(englishDetails, _englishScrText);
+        _englishId = englishDetails.Metadata.Id;
+
+        _orthodoxScrText = CreateDummyProject();
+        _orthodoxScrText.Settings.Versification = new ScrVers(ScrVersType.RussianOrthodox);
+        var orthodoxDetails = CreateProjectDetails(_orthodoxScrText);
+        ParatextProjects.FakeAddProject(orthodoxDetails, _orthodoxScrText);
+        _orthodoxId = orthodoxDetails.Metadata.Id;
+
+        _service = new VersificationConversionService(Client);
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        _englishScrText?.Dispose();
+        _orthodoxScrText?.Dispose();
+    }
+
+    [Test]
+    [Description("Same source and target project → reference is returned unchanged.")]
+    public void SameProject_ReturnsUnchanged()
+    {
+        var input = new VerseRef("PSA 23:1", new ScrVers(ScrVersType.English));
+
+        var result = _service.MapVerseRefBetweenProjects(input, _englishId, _englishId);
+
+        Assert.That(result.BookNum, Is.EqualTo(input.BookNum));
+        Assert.That(result.ChapterNum, Is.EqualTo(input.ChapterNum));
+        Assert.That(result.VerseNum, Is.EqualTo(input.VerseNum));
+        Assert.That(result.Versification, Is.EqualTo(_englishScrText.Settings.Versification));
+    }
+
+    [Test]
+    [Description(
+        "Source versification is grounded in the SOURCE PROJECT, not the input ref's own "
+            + "versification. Input is tagged Orthodox but sourceProjectId is the English "
+            + "project, so the result must equal an English→Orthodox conversion."
+    )]
+    public void GroundsSourceInProject_NotInRefVersification()
+    {
+        var englishVers = _englishScrText.Settings.Versification;
+        var orthodoxVers = _orthodoxScrText.Settings.Versification;
+
+        // Tag the input with the WRONG (target) versification on purpose.
+        var input = new VerseRef("PSA 147:1", orthodoxVers);
+
+        var expected = new VerseRef("PSA 147:1", englishVers);
+        expected.ChangeVersification(orthodoxVers);
+
+        var result = _service.MapVerseRefBetweenProjects(input, _englishId, _orthodoxId);
+
+        Assert.That(result.Versification, Is.EqualTo(orthodoxVers));
+        Assert.That(result.BBBCCCVVV, Is.EqualTo(expected.BBBCCCVVV));
+    }
+
+    [Test]
+    [Description(
+        "Null sourceProjectId means the source frame is unknown, so the reference is returned "
+            + "unchanged rather than assumed English and converted."
+    )]
+    public void NullSource_ReturnsUnchanged()
+    {
+        var englishVers = new ScrVers(ScrVersType.English);
+
+        var input = new VerseRef("PSA 147:1", englishVers);
+
+        var result = _service.MapVerseRefBetweenProjects(input, null, _orthodoxId);
+
+        // Not converted: versification and numbers are exactly the input's.
+        Assert.That(result.Versification, Is.EqualTo(englishVers));
+        Assert.That(result.BBBCCCVVV, Is.EqualTo(input.BBBCCCVVV));
+    }
+
+    [Test]
+    [Description(
+        "Unresolvable target project (not registered / not a Scripture project) → throws so the "
+            + "caller falls back to the raw reference WITHOUT caching a transient failure. The thrown "
+            + "exception carries the (known) source and (failing) target project ids."
+    )]
+    public void UnresolvableTarget_Throws()
+    {
+        var englishVers = _englishScrText.Settings.Versification;
+        var input = new VerseRef("PSA 147:1", englishVers);
+
+        var ex = Assert.Throws<VersificationConversionException>(
+            () => _service.MapVerseRefBetweenProjects(input, _englishId, "not-a-real-project")
+        );
+        // Assert the structured payload (the reason the custom type exists), not just the type, so a
+        // swapped source/target or wrong id is caught and this stays distinguishable from the
+        // source-failure case.
+        Assert.That(ex!.SourceProjectId, Is.EqualTo(_englishId));
+        Assert.That(ex.TargetProjectId, Is.EqualTo("not-a-real-project"));
+    }
+
+    [Test]
+    [Description(
+        "Unresolvable source project → throws so the caller falls back to the raw reference "
+            + "WITHOUT caching a transient failure. The thrown exception carries the (failing) source "
+            + "and (known) target project ids."
+    )]
+    public void UnresolvableSource_Throws()
+    {
+        var orthodoxVers = _orthodoxScrText.Settings.Versification;
+        var input = new VerseRef("PSA 147:1", orthodoxVers);
+
+        var ex = Assert.Throws<VersificationConversionException>(
+            () => _service.MapVerseRefBetweenProjects(input, "not-a-real-project", _orthodoxId)
+        );
+        Assert.That(ex!.SourceProjectId, Is.EqualTo("not-a-real-project"));
+        Assert.That(ex.TargetProjectId, Is.EqualTo(_orthodoxId));
+    }
+
+    [Test]
+    [Description(
+        "HasMultiple/bridge ref: ChangeVersificationWithRanges branch is exercised. "
+            + "Must not throw; result versification must equal the target."
+    )]
+    public void HasMultiple_BridgeRef_ConvertedWithRanges()
+    {
+        var englishVers = _englishScrText.Settings.Versification;
+        var orthodoxVers = _orthodoxScrText.Settings.Versification;
+
+        var input = new VerseRef("PSA", "14", "1-3", englishVers);
+        Assert.That(input.HasMultiple, Is.True, "Premise: input must be a bridge ref");
+
+        var result = _service.MapVerseRefBetweenProjects(input, _englishId, _orthodoxId);
+
+        Assert.That(result.Versification, Is.EqualTo(orthodoxVers));
+    }
+
+    [Test]
+    [Description(
+        "Segmented ref ('1a'): segment letter is preserved after same-versification round-trip."
+    )]
+    public void Segment_Preserved_AfterConversion()
+    {
+        var englishVers = _englishScrText.Settings.Versification;
+
+        var input = new VerseRef("PSA", "23", "1a", englishVers);
+        Assert.That(input.Segment(), Is.EqualTo("a"), "Premise: segment must be 'a'");
+
+        var result = _service.MapVerseRefBetweenProjects(input, _englishId, _englishId);
+
+        Assert.That(result.Segment(), Is.EqualTo("a"));
+    }
+
+    [Test]
+    [Description(
+        "InitializeAsync registers the mapVerseRefBetweenProjects command under its exact wire "
+            + "name with experimental OpenRPC docs describing its three positional parameters."
+    )]
+    public async Task InitializeAsync_RegistersCommandWithExperimentalDocs()
+    {
+        const string wireName = "command:platformScripture.mapVerseRefBetweenProjects";
+
+        await _service.InitializeAsync();
+
+        Assert.That(
+            Client.IsHandlerRegistered(wireName),
+            Is.True,
+            "command handler registered under its exact wire name"
+        );
+
+        var docs = Client.GetDocumentationFor(wireName);
+        Assert.That(docs, Is.Not.Null, "command registered with OpenRPC documentation");
+        Assert.That(docs!.Method.Experimental, Is.True, "command marked experimental");
+        Assert.That(
+            docs.Method.Params.Select(p => p.Name),
+            Is.EqualTo(new[] { "verseRef", "sourceProjectId", "targetProjectId" }),
+            "documents verseRef, sourceProjectId, targetProjectId in positional order"
+        );
+    }
+}
