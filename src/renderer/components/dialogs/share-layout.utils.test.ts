@@ -51,10 +51,7 @@ describe('splitResourcesByTab', () => {
   });
 
   it('puts a project reference in scriptureResources', () => {
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const items: ResourceReference[] = [
-      { type: 'project', name: 'My Project', id: 'proj-id' } as never,
-    ];
+    const items: ResourceReference[] = [{ type: 'project', name: 'My Project', id: 'proj-id' }];
 
     const result = splitResourcesByTab(items, []);
 
