@@ -136,6 +136,13 @@ declare module 'legacy-comment-manager' {
     /** Filter by read status */
     isRead?: boolean;
     /**
+     * Filter by resolved status. This filters on the THREAD's status — the note-lifecycle sense of
+     * "resolved" — not on any conflict-specific state. `false` matches threads whose status is
+     * anything other than `Resolved` (`Todo`, `Done`, or unspecified), mirroring Paratext 9's
+     * "unresolved" filter semantics.
+     */
+    isResolved?: boolean;
+    /**
      * Specifies which category of note threads to include in results.
      *
      * - `'general'` _(default)_: Regular user-created notes only. Excludes Biblical Term notes and
