@@ -117,6 +117,31 @@ const scrRefSourceProjectIdsSerialized = localStorage.getItem(
 const scrRefSourceProjectIds: { [scrollGroupId: ScrollGroupId]: string | undefined } =
   scrRefSourceProjectIdsSerialized ? (deserialize(scrRefSourceProjectIdsSerialized) ?? {}) : {};
 
+/**
+ * Verse-number keys of `platform.verseRef` values THIS host mirrored out (see the mirror in
+ * {@link setScrRefSync}), so the setting subscription in {@link startScrollGroupService} can
+ * recognize its own echoes and skip them. Reprocessing a self-mirrored value — which the
+ * subscription does with an undefined, frame-unknown source — can CLEAR a known versification
+ * source; and when several group-0 writes happen in quick succession (e.g. a toolbar navigation
+ * immediately followed by an editor settling on the chapter), a stale echo arrives after the stored
+ * ref has already moved on, so the no-op guard in `setScrRefSync` no longer catches it. Bounded:
+ * only very recent writes can still be echoing, so old keys are pruned.
+ */
+const recentlyMirroredVerseRefKeys = new Set<string>();
+const RECENTLY_MIRRORED_VERSE_REF_MAX = 20;
+/** Frame-blind key (book/chapter/verse only) for {@link recentlyMirroredVerseRefKeys}. */
+function verseRefKey(scrRef: SerializedVerseRef): string {
+  return `${scrRef.book}|${scrRef.chapterNum}|${scrRef.verseNum}`;
+}
+function rememberMirroredVerseRef(scrRef: SerializedVerseRef): void {
+  recentlyMirroredVerseRefKeys.add(verseRefKey(scrRef));
+  // Bound memory: drop the oldest (Set preserves insertion order) once over the cap.
+  if (recentlyMirroredVerseRefKeys.size > RECENTLY_MIRRORED_VERSE_REF_MAX) {
+    const oldestKey = recentlyMirroredVerseRefKeys.values().next().value;
+    if (oldestKey !== undefined) recentlyMirroredVerseRefKeys.delete(oldestKey);
+  }
+}
+
 // The scrRefs object might contain old values that are of older types that are no longer supported.
 // We need to check if this is the case, and convert them to `SerializedVerseRef`.
 Object.entries(scrRefs).forEach(([key, value]) => {
@@ -533,7 +558,11 @@ export function setScrRefSync(
   // event above so followers re-convert, but must NOT rewrite the setting: platform.verseRef tracks
   // the verse, not the frame, and settingsService.set fans out to every settings subscriber — an
   // identical-value write would be a needless app-wide notification.
-  if (shouldSetVerseRefSetting && scrollGroupIdDefaulted === 0 && !scrRefUnchanged)
+  if (shouldSetVerseRefSetting && scrollGroupIdDefaulted === 0 && !scrRefUnchanged) {
+    // Record what we're about to mirror so the setting subscription can skip the echo this write
+    // triggers (see recentlyMirroredVerseRefKeys). Done synchronously — before the async set below —
+    // so the key is already present when the echo fires.
+    rememberMirroredVerseRef(scrRefClone);
     (async () => {
       try {
         settingsService.set('platform.verseRef', scrRefClone);
@@ -543,6 +572,7 @@ export function setScrRefSync(
         );
       }
     })();
+  }
 
   return true;
 }
@@ -573,6 +603,15 @@ export async function startScrollGroupService(): Promise<void> {
       );
       return;
     }
+    // Skip our own mirror echoes. setScrRefSync mirrors every group-0 verse change out to this
+    // setting, so most notifications here are values this host just wrote. Reprocessing one (with an
+    // undefined source, below) can CLEAR a known versification source — and when several group-0
+    // writes race (e.g. a toolbar navigation immediately followed by an editor settling on the
+    // chapter), a stale echo arrives after the stored ref has moved on, so setScrRefSync's no-op
+    // guard no longer catches it and it wrongly clears the frame, leaving followers unable to convert
+    // (both panels then show the same raw ref). Recognize the echo by the key recorded when mirroring
+    // and consume it; genuine external writers (values this host never mirrored) still flow through.
+    if (recentlyMirroredVerseRefKeys.delete(verseRefKey(newScrRef))) return;
     // Pass `undefined` for the source: the setting carries no source-project frame, so a restored /
     // external platform.verseRef value has an unknown versification and must NOT be assumed to be in
     // the previous source project's frame. When the numbers match the stored ref this is a harmless

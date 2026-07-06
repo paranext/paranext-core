@@ -2,10 +2,11 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import React from 'react';
-import { useSetting } from '@renderer/hooks/papi-hooks';
+import { useSetting, useScrollGroupScrRef } from '@renderer/hooks/papi-hooks';
 import { sendCommand } from '@shared/services/command.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { PlatformBibleToolbar } from './platform-bible-toolbar';
+import { useActiveTabScrollGroup } from './use-active-tab-scroll-group.hook';
 
 // Mock asset
 vi.mock('@assets/icon.png', () => ({ default: 'icon.png' }));
@@ -70,6 +71,15 @@ vi.mock('@renderer/services/theme.service-host', () => ({
 
 vi.mock('@renderer/services/scroll-group.service-host', () => ({
   availableScrollGroupIds: [1, 2, 3, 4, 5],
+  getScrRefSourceProjectIdSync: vi.fn(() => 'group-source-proj'),
+}));
+
+vi.mock('./use-active-tab-scroll-group.hook', () => ({
+  useActiveTabScrollGroup: vi.fn(() => ({
+    webViewId: undefined,
+    scrollGroupId: undefined,
+    projectId: undefined,
+  })),
 }));
 
 vi.mock('@shared/data/platform-bible-menu.commands', () => ({
@@ -451,5 +461,79 @@ describe('PlatformBibleToolbar — project picker Select visibility by interface
     await waitFor(() => {
       expect(screen.queryByTestId('project-picker-select')).not.toBeInTheDocument();
     });
+  });
+});
+
+describe('PlatformBibleToolbar — follows the active tab', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    mockSendCommand(true);
+    vi.mocked(useScrollGroupScrRef).mockReturnValue([
+      { book: 'GEN', chapterNum: 1, verseNum: 1 },
+      vi.fn(),
+      0,
+      vi.fn(),
+    ]);
+  });
+
+  it("adopts the active tab's numbered scroll group and passes its project", async () => {
+    vi.mocked(useActiveTabScrollGroup).mockReturnValue({
+      webViewId: 'wv1',
+      scrollGroupId: 2,
+      projectId: 'active-proj',
+    });
+
+    render(<PlatformBibleToolbar />);
+
+    // Follow-effect adopts group 2; attached (2===2) so the active tab's project is passed.
+    await waitFor(() =>
+      expect(vi.mocked(useScrollGroupScrRef)).toHaveBeenLastCalledWith(
+        2,
+        expect.any(Function),
+        'active-proj',
+      ),
+    );
+  });
+
+  it("attaches to the active tab's default group 0 and passes its project", async () => {
+    // A freshly-opened scripture reader/resource sits on the default group 0; useActiveTabScrollGroup
+    // reports scrollGroupId 0 (not undefined) for it. The toolbar must treat 0 as attached and pass
+    // the tab's project so a toolbar navigation stamps that project as the source and followers
+    // convert versification. Regression guard for PT-2602 (toolbar ignored the active tab's project).
+    vi.mocked(useActiveTabScrollGroup).mockReturnValue({
+      webViewId: 'wv1',
+      scrollGroupId: 0,
+      projectId: 'active-proj',
+    });
+
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() =>
+      expect(vi.mocked(useScrollGroupScrRef)).toHaveBeenLastCalledWith(
+        0,
+        expect.any(Function),
+        'active-proj',
+      ),
+    );
+  });
+
+  it('keeps the last group and uses the group source project when the active tab has no numbered group', async () => {
+    vi.mocked(useActiveTabScrollGroup).mockReturnValue({
+      webViewId: 'settings',
+      scrollGroupId: undefined,
+      projectId: 'irrelevant',
+    });
+
+    render(<PlatformBibleToolbar />);
+
+    // Group stays at the persisted default (0); not attached, so the group's own source is used.
+    await waitFor(() =>
+      expect(vi.mocked(useScrollGroupScrRef)).toHaveBeenLastCalledWith(
+        0,
+        expect.any(Function),
+        'group-source-proj',
+      ),
+    );
   });
 });

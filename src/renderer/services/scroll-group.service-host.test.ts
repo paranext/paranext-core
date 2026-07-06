@@ -19,9 +19,22 @@ vi.mock('@shared/services/network.service', () => ({
 vi.mock('@shared/services/network-object.service', () => ({
   networkObjectService: { set: vi.fn() },
 }));
-const settingsSet = vi.fn();
+const { settingsSet, verseRefSubscriberRef } = vi.hoisted(() => {
+  // Captures the callback the host registers for the `platform.verseRef` setting so tests can drive
+  // its echoes directly.
+  const capturedVerseRefSubscriber: { current: ((value: unknown) => void) | undefined } = {
+    current: undefined,
+  };
+  return { settingsSet: vi.fn(), verseRefSubscriberRef: capturedVerseRefSubscriber };
+});
 vi.mock('@shared/services/settings.service', () => ({
-  settingsService: { set: (...args: unknown[]) => settingsSet(...args), subscribe: vi.fn() },
+  settingsService: {
+    set: (...args: unknown[]) => settingsSet(...args),
+    subscribe: vi.fn(async (key: string, callback: (value: unknown) => void) => {
+      if (key === 'platform.verseRef') verseRefSubscriberRef.current = callback;
+      return () => {};
+    }),
+  },
 }));
 vi.mock('@shared/services/logger.service', () => ({ logger: { warn: vi.fn(), error: vi.fn() } }));
 
@@ -52,6 +65,7 @@ describe('scroll-group.service-host source project tracking', () => {
       delete projectVersifications[key];
     });
     Object.keys(emitters).forEach((key) => delete emitters[key]);
+    verseRefSubscriberRef.current = undefined;
     pdpGet.mockReset();
     pdpGet.mockImplementation(async (_projectInterface: string, projectId: string) => ({
       subscribeSetting: (_key: string, callback: (value: unknown) => void) => {
@@ -339,5 +353,46 @@ describe('scroll-group.service-host source project tracking', () => {
     callbacks.sourceProj('a-different-versification'); // genuine mid-session change
     expect(emit).toHaveBeenCalledTimes(1);
     expect(emit).toHaveBeenCalledWith({ projectId: 'sourceProj' });
+  });
+
+  it('ignores its own platform.verseRef mirror echoes so a stale echo cannot clear a known source', async () => {
+    const host = await import('@renderer/services/scroll-group.service-host');
+    await host.startScrollGroupService();
+    const verseRefEcho = verseRefSubscriberRef.current;
+    expect(verseRefEcho).toBeDefined();
+    if (!verseRefEcho) throw new Error('verseRef subscriber was not captured');
+
+    // A group-0 navigation stamps a source and mirrors the ref out to platform.verseRef.
+    host.setScrRefSync(0, { book: 'PSA', chapterNum: 40, verseNum: 5 }, 'projSource');
+    // A second group-0 write (e.g. the editor settling on the chapter after a scroll) moves the ref
+    // and re-mirrors it. Both writes carry a known source.
+    host.setScrRefSync(0, { book: 'PSA', chapterNum: 40, verseNum: 0 }, 'projSource');
+    expect(host.getScrRefSourceProjectIdSync(0)).toBe('projSource');
+
+    // The setting echoes arrive out of order. Previously the STALE echo (40:5) — no longer matching
+    // the stored 40:0 — was treated as an external, frame-unknown change and CLEARED the source,
+    // leaving followers unable to convert (both panels show the raw ref). Both echoes are ours and
+    // must be ignored.
+    verseRefEcho({ book: 'PSA', chapterNum: 40, verseNum: 5 });
+    verseRefEcho({ book: 'PSA', chapterNum: 40, verseNum: 0 });
+
+    expect(host.getScrRefSourceProjectIdSync(0)).toBe('projSource'); // source preserved
+    expect(host.getScrRefSync(0)).toEqual({ book: 'PSA', chapterNum: 40, verseNum: 0 });
+  });
+
+  it('still applies a genuine external platform.verseRef change it never mirrored', async () => {
+    const host = await import('@renderer/services/scroll-group.service-host');
+    await host.startScrollGroupService();
+    const verseRefEcho = verseRefSubscriberRef.current;
+    if (!verseRefEcho) throw new Error('verseRef subscriber was not captured');
+
+    host.setScrRefSync(0, { book: 'PSA', chapterNum: 40, verseNum: 5 }, 'projSource');
+
+    // An external writer sets a reference this host never mirrored: it must still take effect, and
+    // (frame unknown) clear the source so followers do not mis-frame it — the documented behavior.
+    verseRefEcho({ book: 'GEN', chapterNum: 1, verseNum: 1 });
+
+    expect(host.getScrRefSync(0)).toEqual({ book: 'GEN', chapterNum: 1, verseNum: 1 });
+    expect(host.getScrRefSourceProjectIdSync(0)).toBeUndefined();
   });
 });

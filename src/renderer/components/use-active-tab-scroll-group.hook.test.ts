@@ -1,0 +1,269 @@
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Controllable focus subject the mocked useData(...).Focus() returns.
+let currentFocus: unknown;
+// Captures the onDidUpdateWebView handler the hook registers via useEvent.
+let lastWebViewUpdateHandler: ((event: unknown) => void) | undefined;
+
+const getSavedWebViewDefinitionSync = vi.fn();
+
+vi.mock('@renderer/hooks/papi-hooks', () => ({
+  useData: () => ({ Focus: () => [currentFocus, vi.fn()] }),
+}));
+
+vi.mock('@renderer/services/web-view.service-host', () => ({
+  getSavedWebViewDefinitionSync: (...args: unknown[]) => getSavedWebViewDefinitionSync(...args),
+  onDidUpdateWebView: vi.fn(),
+}));
+
+vi.mock('@shared/services/window.service', () => ({
+  windowService: { dataProviderName: 'platform.windowServiceDataProvider' },
+}));
+
+vi.mock('@shared/services/logger.service', () => ({
+  logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
+}));
+
+vi.mock('platform-bible-react', () => ({
+  useEvent: (_event: unknown, handler: (event: unknown) => void) => {
+    lastWebViewUpdateHandler = handler;
+  },
+}));
+
+async function importHook() {
+  return (await import('./use-active-tab-scroll-group.hook')).useActiveTabScrollGroup;
+}
+
+describe('useActiveTabScrollGroup', () => {
+  beforeEach(() => {
+    currentFocus = undefined;
+    lastWebViewUpdateHandler = undefined;
+    getSavedWebViewDefinitionSync.mockReset();
+  });
+
+  it('returns the group and project of the focused webView', async () => {
+    currentFocus = { focusType: 'webView', id: 'wv1' };
+    getSavedWebViewDefinitionSync.mockReturnValue({
+      id: 'wv1',
+      webViewType: 'scriptureEditor',
+      scrollGroupScrRef: 2,
+      projectId: 'projA',
+    });
+    const useActiveTabScrollGroup = await importHook();
+
+    const { result } = renderHook(() => useActiveTabScrollGroup());
+
+    await waitFor(() =>
+      expect(result.current).toEqual({ webViewId: 'wv1', scrollGroupId: 2, projectId: 'projA' }),
+    );
+  });
+
+  it('treats a focused webView-type tab the same as the webView iframe', async () => {
+    currentFocus = { focusType: 'tab', tabType: 'webView', id: 'wv1' };
+    getSavedWebViewDefinitionSync.mockReturnValue({
+      id: 'wv1',
+      webViewType: 'scriptureEditor',
+      scrollGroupScrRef: 3,
+      projectId: 'projA',
+    });
+    const useActiveTabScrollGroup = await importHook();
+
+    const { result } = renderHook(() => useActiveTabScrollGroup());
+
+    await waitFor(() => expect(result.current.scrollGroupId).toBe(3));
+  });
+
+  it('reports no scrollGroupId when the active tab is on an independent ref', async () => {
+    currentFocus = { focusType: 'webView', id: 'wv1' };
+    getSavedWebViewDefinitionSync.mockReturnValue({
+      id: 'wv1',
+      webViewType: 'scriptureEditor',
+      scrollGroupScrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+      projectId: 'projA',
+    });
+    const useActiveTabScrollGroup = await importHook();
+
+    const { result } = renderHook(() => useActiveTabScrollGroup());
+
+    await waitFor(() => expect(result.current.webViewId).toBe('wv1'));
+    expect(result.current.scrollGroupId).toBeUndefined();
+    expect(result.current.projectId).toBe('projA');
+  });
+
+  it('treats a project tab with no scrollGroupScrRef as the default group 0', async () => {
+    currentFocus = { focusType: 'webView', id: 'wv1' };
+    // A freshly-opened scripture reader/editor persists no scrollGroupScrRef until the user changes
+    // its group, but is effectively on the default scroll group 0 (matching the use-open-project-tabs
+    // convention and useScrollGroupScrRef's own `?? 0` default). The toolbar must see it as group 0
+    // so it recognizes the tab as attached and adopts its project for versification framing.
+    getSavedWebViewDefinitionSync.mockReturnValue({
+      id: 'wv1',
+      webViewType: 'scriptureEditor',
+      projectId: 'projA',
+    });
+    const useActiveTabScrollGroup = await importHook();
+
+    const { result } = renderHook(() => useActiveTabScrollGroup());
+
+    await waitFor(() => expect(result.current.webViewId).toBe('wv1'));
+    expect(result.current.scrollGroupId).toBe(0);
+    expect(result.current.projectId).toBe('projA');
+  });
+
+  it('leaves a non-project tab with no scrollGroupScrRef unattached (keeps last)', async () => {
+    currentFocus = { focusType: 'webView', id: 'settings' };
+    // A non-scripture webview (settings/home) has no projectId and no scroll group; it must NOT be
+    // treated as group 0, so the toolbar keeps its last group instead of attaching to a projectless
+    // tab (which would stamp an undefined source and break follower conversion).
+    getSavedWebViewDefinitionSync.mockReturnValue({
+      id: 'settings',
+      webViewType: 'platformSettings',
+    });
+    const useActiveTabScrollGroup = await importHook();
+
+    const { result } = renderHook(() => useActiveTabScrollGroup());
+
+    await waitFor(() => expect(result.current.webViewId).toBe('settings'));
+    expect(result.current.scrollGroupId).toBeUndefined();
+    expect(result.current.projectId).toBeUndefined();
+  });
+
+  it('keeps the last active tab when focus moves to "other"', async () => {
+    currentFocus = { focusType: 'webView', id: 'wv1' };
+    getSavedWebViewDefinitionSync.mockReturnValue({
+      id: 'wv1',
+      webViewType: 'scriptureEditor',
+      scrollGroupScrRef: 2,
+      projectId: 'projA',
+    });
+    const useActiveTabScrollGroup = await importHook();
+
+    const { result, rerender } = renderHook(() => useActiveTabScrollGroup());
+    await waitFor(() => expect(result.current.scrollGroupId).toBe(2));
+
+    // Focus leaves all tabs (e.g. user clicked the toolbar) -> keep last.
+    currentFocus = { focusType: 'other' };
+    rerender();
+
+    expect(result.current).toEqual({ webViewId: 'wv1', scrollGroupId: 2, projectId: 'projA' });
+  });
+
+  it('ignores focus on a non-webview tab (keeps last)', async () => {
+    currentFocus = { focusType: 'webView', id: 'wv1' };
+    getSavedWebViewDefinitionSync.mockReturnValue({
+      id: 'wv1',
+      webViewType: 'scriptureEditor',
+      scrollGroupScrRef: 2,
+      projectId: 'projA',
+    });
+    const useActiveTabScrollGroup = await importHook();
+
+    const { result, rerender } = renderHook(() => useActiveTabScrollGroup());
+    await waitFor(() => expect(result.current.webViewId).toBe('wv1'));
+
+    currentFocus = { focusType: 'tab', tabType: 'someOtherType', id: 'other-tab' };
+    rerender();
+
+    expect(result.current.webViewId).toBe('wv1');
+  });
+
+  it('refreshes when the tracked webview definition updates', async () => {
+    currentFocus = { focusType: 'webView', id: 'wv1' };
+    getSavedWebViewDefinitionSync.mockReturnValue({
+      id: 'wv1',
+      webViewType: 'scriptureEditor',
+      scrollGroupScrRef: 2,
+      projectId: 'projA',
+    });
+    const useActiveTabScrollGroup = await importHook();
+
+    const { result } = renderHook(() => useActiveTabScrollGroup());
+    await waitFor(() => expect(result.current.scrollGroupId).toBe(2));
+
+    // The tracked tab is moved to group 4; the update event fires.
+    getSavedWebViewDefinitionSync.mockReturnValue({
+      id: 'wv1',
+      webViewType: 'scriptureEditor',
+      scrollGroupScrRef: 4,
+      projectId: 'projA',
+    });
+    act(() =>
+      lastWebViewUpdateHandler?.({ webView: { id: 'wv1', webViewType: 'scriptureEditor' } }),
+    );
+
+    await waitFor(() => expect(result.current.scrollGroupId).toBe(4));
+  });
+
+  it('ignores update events for other webviews', async () => {
+    currentFocus = { focusType: 'webView', id: 'wv1' };
+    getSavedWebViewDefinitionSync.mockReturnValue({
+      id: 'wv1',
+      webViewType: 'scriptureEditor',
+      scrollGroupScrRef: 2,
+      projectId: 'projA',
+    });
+    const useActiveTabScrollGroup = await importHook();
+
+    const { result } = renderHook(() => useActiveTabScrollGroup());
+    await waitFor(() => expect(result.current.scrollGroupId).toBe(2));
+
+    getSavedWebViewDefinitionSync.mockClear();
+    act(() =>
+      lastWebViewUpdateHandler?.({ webView: { id: 'other', webViewType: 'scriptureEditor' } }),
+    );
+
+    // A different webview's update must not trigger a re-read of the tracked tab.
+    expect(getSavedWebViewDefinitionSync).not.toHaveBeenCalled();
+    expect(result.current.scrollGroupId).toBe(2);
+  });
+
+  it('does not throw when the definition read throws (dock layout not registered yet)', async () => {
+    currentFocus = { focusType: 'webView', id: 'wv1' };
+    getSavedWebViewDefinitionSync.mockImplementation(() => {
+      throw new Error('papi dock layout has not been registered');
+    });
+    const useActiveTabScrollGroup = await importHook();
+
+    const { result } = renderHook(() => useActiveTabScrollGroup());
+
+    // webViewId still tracked; group/project simply unresolved.
+    await waitFor(() => expect(result.current.webViewId).toBe('wv1'));
+    expect(result.current.scrollGroupId).toBeUndefined();
+  });
+
+  it('never pairs a new webViewId with the previous tab definition on a direct switch', async () => {
+    currentFocus = { focusType: 'webView', id: 'wv1' };
+    getSavedWebViewDefinitionSync.mockImplementation((id: string) =>
+      id === 'wv2'
+        ? { id: 'wv2', webViewType: 'scriptureEditor', scrollGroupScrRef: 3, projectId: 'projB' }
+        : { id: 'wv1', webViewType: 'scriptureEditor', scrollGroupScrRef: 1, projectId: 'projA' },
+    );
+    const useActiveTabScrollGroup = await importHook();
+
+    const observed: Array<{ webViewId?: string; scrollGroupId?: number; projectId?: string }> = [];
+    const { rerender } = renderHook(() => {
+      const value = useActiveTabScrollGroup();
+      observed.push(value);
+      return value;
+    });
+    await waitFor(() =>
+      expect(observed.at(-1)).toEqual({ webViewId: 'wv1', scrollGroupId: 1, projectId: 'projA' }),
+    );
+
+    currentFocus = { focusType: 'webView', id: 'wv2' };
+    rerender();
+    await waitFor(() =>
+      expect(observed.at(-1)).toEqual({ webViewId: 'wv2', scrollGroupId: 3, projectId: 'projB' }),
+    );
+
+    // The definition is derived synchronously from trackedWebViewId, so no render ever pairs the new
+    // tab's id with the previous tab's group/project.
+    expect(observed).not.toContainEqual(
+      expect.objectContaining({ webViewId: 'wv2', projectId: 'projA' }),
+    );
+    expect(observed).not.toContainEqual(
+      expect.objectContaining({ webViewId: 'wv2', scrollGroupId: 1 }),
+    );
+  });
+});
