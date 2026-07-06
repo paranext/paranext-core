@@ -133,9 +133,9 @@
       "%webView_resourcePanel_noProject%": "No project selected.",
       "%webView_selectDblResource_installFailed%": "Failed to install resource. Please try again.",
       "%webView_scriptureTextGrid_title_multiple%": "Text Collection",
-      "%webView_scriptureTextGrid_title_single%": "Scripture Text",
-      "%settings_platformScriptureEditor_enableScriptureTextGrid_description%": "Show the Scripture Text Grid view for viewing multiple resources side by side.",
-      "%settings_platformScriptureEditor_enableScriptureTextGrid_label%": "Enable Scripture Text Grid",
+      "%webView_scriptureTextGrid_title_single%": "Scripture text",
+      "%settings_platformScriptureEditor_enableScriptureTextGrid_description%": "Show the scripture text grid view for viewing multiple resources side by side.",
+      "%settings_platformScriptureEditor_enableScriptureTextGrid_label%": "Enable scripture text grid",
       "%settings_platformScriptureEditor_group_description%": "Settings for the Scripture Editor and Resource Viewer.",
       "%settings_platformScriptureEditor_group_label%": "Scripture Editor"
     },

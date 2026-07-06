@@ -2,15 +2,13 @@ import type { WebViewProps } from '@papi/core';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { LocalizeKey } from 'platform-bible-utils';
 import { useEffect } from 'react';
+import { selectScriptureTextGridTitle } from './scripture-text-grid.utils';
 
-// Tab-title localized keys. The label is count-driven: "Scripture Text" when 0-1 cells are
-// displayed, "Text Collection" when 2 or more.
+// Tab-title localized keys. The label is count-driven: "Scripture text" when 0-1 cells are
+// displayed, "Text Collection" when 2 or more (see `selectScriptureTextGridTitle`).
 const TITLE_SINGLE_KEY = '%webView_scriptureTextGrid_title_single%';
 const TITLE_MULTIPLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
 const ALL_STRING_KEYS: LocalizeKey[] = [TITLE_SINGLE_KEY, TITLE_MULTIPLE_KEY];
-
-/** Number of displayed cells at or above which the tab title becomes "Text Collection". */
-const TEXT_COLLECTION_THRESHOLD = 2;
 
 /**
  * Scripture Text Grid web view (PT-4049 / A1 scaffold).
@@ -33,15 +31,16 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   const [gridContentsIds] = useWebViewState<string[]>('gridContentsIds', []);
   const displayedCellCount = gridContentsIds.length;
 
-  // Dynamic tab title: flips to "Text Collection" at 2+ displayed cells, "Scripture Text" otherwise.
+  // Dynamic tab title: flips to "Text Collection" at 2+ displayed cells, "Scripture text" otherwise.
   useEffect(() => {
     // Wait for localization so we never flash a raw key into the tab. `useLocalizedStrings` returns
     // the key itself while loading, so gate on `isLoading` (a truthiness check couldn't detect that).
     if (isLoadingLocalizedStrings) return;
-    const singleTitle = localizedStrings[TITLE_SINGLE_KEY];
-    const multipleTitle = localizedStrings[TITLE_MULTIPLE_KEY];
     updateWebViewDefinition({
-      title: displayedCellCount >= TEXT_COLLECTION_THRESHOLD ? multipleTitle : singleTitle,
+      title: selectScriptureTextGridTitle(displayedCellCount, {
+        single: localizedStrings[TITLE_SINGLE_KEY],
+        multiple: localizedStrings[TITLE_MULTIPLE_KEY],
+      }),
     });
   }, [displayedCellCount, isLoadingLocalizedStrings, localizedStrings, updateWebViewDefinition]);
 

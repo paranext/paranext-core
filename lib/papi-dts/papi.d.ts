@@ -337,6 +337,9 @@ declare module 'shared/models/web-view.model' {
      * `false` for tabs that must always remain open, such as views that are part of the default
      * layout.
      *
+     * Note: this default is applied by consumers (treat `undefined` as `true`, e.g. `isClosable ??
+     * true`), not enforced by the type.
+     *
      * @default true
      */
     isClosable?: boolean;
@@ -3187,6 +3190,9 @@ declare module 'shared/models/docking-framework.model' {
     /**
      * Whether this tab can be closed by the user (shows the tab's close button). Set to `false` for
      * tabs that must always remain open, such as views that are part of the default layout.
+     *
+     * Note: this default is applied by consumers (treat `undefined` as `true`, e.g. `isClosable ??
+     * true`), not enforced by the type.
      *
      * @default true
      */
