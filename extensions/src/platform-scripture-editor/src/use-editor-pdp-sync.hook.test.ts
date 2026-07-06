@@ -111,6 +111,122 @@ describe('useEditorPdpSync', () => {
     expect(saveUsjToPdpIfUpdated).toHaveBeenCalled();
   });
 
+  // Task 15 (standard-view fix wave): the PDP round-trips USJ through USFM, so a save made
+  // MID-marker-typing (a pending literal like `\q1` still in plain text) echoes back
+  // NORMALIZED-different from what we sent. Hard-replacing the editor with that echo while the
+  // user is typing nulls the selection and eats the keystrokes typed during the round trip
+  // (observed live: `\q1<space>` type-through lost q/1/space ~150-250ms after the `\`). When the
+  // update is the completion echo of OUR OWN write AND the user is actively editing, the editor -
+  // not the echo - has the newest content: keep it and save the newer edits instead.
+  it('does not replace the editor with the echo of its own write while the user is typing', () => {
+    const normalizedEcho: Usj = {
+      ...levUsj,
+      content: [
+        ...levUsj.content.slice(0, 2),
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            { type: 'verse', marker: 'v', number: '2' },
+            'This is the law of the leper. \\q1',
+          ],
+        },
+      ],
+    };
+
+    const setUsjSpy = vi.fn();
+    const saveUsjToPdpIfUpdated = vi.fn();
+    const editorRef: { current: EditorRef | null } = {
+      // EditorRef has many members; casting from a minimal stub is intentional in tests
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      current: { setUsj: setUsjSpy } as unknown as EditorRef,
+    };
+    const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
+    const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
+    const currentlyWritingUsjToPdp = { current: false };
+
+    // The user is actively editing: focus sits on the main editor's content-editable root.
+    const editorInput = document.createElement('div');
+    editorInput.className = 'editor-input';
+    editorInput.tabIndex = 0;
+    document.body.appendChild(editorInput);
+    editorInput.focus();
+    expect(document.activeElement).toBe(editorInput);
+
+    const { rerender } = renderHook(
+      ({ usjFromPdp }: { usjFromPdp: Usj }) => {
+        useEditorPdpSync({
+          usjFromPdp,
+          editorRef,
+          usjSentToPdp,
+          setEditorUsj,
+          currentlyWritingUsjToPdp,
+          saveUsjToPdpIfUpdated,
+        });
+      },
+      { initialProps: { usjFromPdp: levUsj } },
+    );
+    setUsjSpy.mockClear();
+    saveUsjToPdpIfUpdated.mockClear();
+
+    // Our save is in flight; its (PDP-normalized, content-different) echo arrives.
+    currentlyWritingUsjToPdp.current = true;
+    act(() => rerender({ usjFromPdp: normalizedEcho }));
+
+    expect(setUsjSpy).not.toHaveBeenCalled(); // editor NOT clobbered mid-typing
+    expect(saveUsjToPdpIfUpdated).toHaveBeenCalled(); // newer local edits get saved instead
+    expect(usjSentToPdp.current).toBe(normalizedEcho); // echo adopted as the new PDP baseline
+    expect(currentlyWritingUsjToPdp.current).toBe(false);
+
+    document.body.removeChild(editorInput);
+  });
+
+  it('still replaces the editor for a content-different update that is not our own write echo', () => {
+    const externalChange: Usj = {
+      ...levUsj,
+      content: [
+        ...levUsj.content.slice(0, 2),
+        {
+          type: 'para',
+          marker: 'p',
+          content: [{ type: 'verse', marker: 'v', number: '2' }, 'Externally edited text.'],
+        },
+      ],
+    };
+
+    const setUsjSpy = vi.fn();
+    const saveUsjToPdpIfUpdated = vi.fn();
+    const editorRef: { current: EditorRef | null } = {
+      // EditorRef has many members; casting from a minimal stub is intentional in tests
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      current: { setUsj: setUsjSpy } as unknown as EditorRef,
+    };
+    const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
+    const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
+    const currentlyWritingUsjToPdp = { current: false };
+
+    const { rerender } = renderHook(
+      ({ usjFromPdp }: { usjFromPdp: Usj }) => {
+        useEditorPdpSync({
+          usjFromPdp,
+          editorRef,
+          usjSentToPdp,
+          setEditorUsj,
+          currentlyWritingUsjToPdp,
+          saveUsjToPdpIfUpdated,
+        });
+      },
+      { initialProps: { usjFromPdp: levUsj } },
+    );
+    setUsjSpy.mockClear();
+
+    // No write of ours is in flight: a different-content update is a genuine external change.
+    act(() => rerender({ usjFromPdp: externalChange }));
+
+    expect(setUsjSpy).toHaveBeenCalledOnce();
+    expect(setUsjSpy).toHaveBeenCalledWith(externalChange);
+  });
+
   it('calls setEditorUsj again after the editor unmounts and remounts with the same chapter data (regression: non-existent book navigation)', () => {
     // Reproduces: LEV → 2KI (does not exist) → LEV
     //
