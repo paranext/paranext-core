@@ -683,8 +683,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             target.AssignedUser = source.AssignedUser;
         if (!string.IsNullOrEmpty(source.BiblicalTermId))
             target.BiblicalTermId = source.BiblicalTermId;
-        if (source.ConflictType != default)
-            target.ConflictType = source.ConflictType;
+        // ConflictType is deliberately NOT copied: it is merger-authored, root-comment-only
+        // metadata (PT9 BookFileMerger.RecordConflict). No papi client can legitimately author it,
+        // and copying it here let replies carry a client-supplied ConflictType, which the wrapper
+        // then decoded into phantom conflict fields. It is also omitted from the NewLegacyComment
+        // and LegacyCommentReply write contracts. Note the FirstComment.Type inheritance done by
+        // ParatextData's AddNewComment is separate and intentionally left intact.
         if (source.Deleted)
             target.Deleted = source.Deleted;
         if (source.HideInTextWindow)
@@ -1006,8 +1010,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 $"Cannot edit or delete comment {commentId} in thread {thread.Id} - comment is a conflict resolution action."
             );
 
-        // Cannot edit/delete the first comment of a conflict note
-        if (thread.Type == NoteType.Conflict && thread.Comments[0].Id == comment.Id)
+        // Cannot edit/delete the first comment of a conflict note. Root identified by date via the
+        // shared helper, not by list position (see PlatformCommentThreadWrapper.RootCommentId).
+        if (
+            thread.Type == NoteType.Conflict
+            && PlatformCommentThreadWrapper.GetRootCommentId(thread.Comments) == comment.Id
+        )
             throw new InvalidOperationException(
                 $"Cannot edit or delete comment {commentId} in thread {thread.Id} - cannot edit or delete the first comment of a conflict note."
             );

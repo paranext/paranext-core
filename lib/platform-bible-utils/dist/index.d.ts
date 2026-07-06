@@ -3999,8 +3999,8 @@ export type EffectiveStructureProtectionInputs = {
  * and the `platform-scripture` Scripture Finder PDP both call it.
  *
  * The feature applies in simple interface mode only; in power mode it is always inactive. Within
- * simple mode, an admin project lock that the user cannot toggle forces protection on; otherwise the
- * user's own preference governs (defaulting to on when never set).
+ * simple mode, an admin project lock that the user cannot toggle forces protection on; otherwise
+ * the user's own preference governs (defaulting to on when never set).
  */
 export declare function computeEffectiveStructureProtection({ interfaceMode, isAdminProtected, canAdminToggle, userSetting, }: EffectiveStructureProtectionInputs): boolean;
 /** Localized string value associated with this key */
@@ -5894,13 +5894,23 @@ export type CommentType = "Normal" | "Conflict";
  * This is the C# Comment type from Paratext.Data.ProjectComments
  */
 export type LegacyComment = {
+	/**
+	 * Only present on the FIRST comment of a `verseText` conflict thread: HTML diff of the accepted
+	 * (winning) side (same `<u>`/`<s>` markup as {@link rejectedText}). Also absent for `verseText`
+	 * conflicts that have no common ancestor (two translators independently drafted the same
+	 * previously-absent verse, so no accepted-side diff exists), and when the accepted-side diff has
+	 * no visible content. Never present on replies. Consumers must treat this field as optional even
+	 * on `verseText` conflict notes.
+	 */
+	acceptedText?: string;
 	/** Present in a note when it has been assigned to a particular user */
 	assignedUser?: string;
 	/** Present when there is a Biblical Term Id associated with the note */
 	biblicalTermId?: string;
 	/**
 	 * Type of conflict. Only applicable for conflict notes and it used to give a more specific
-	 * message when displaying the note.
+	 * message when displaying the note. Only meaningful on the first comment of a thread; never
+	 * present on replies.
 	 */
 	conflictType?: string;
 	/** Contents of the comment, represented in HTML that includes some Paratext 9 specific tags */
@@ -5929,8 +5939,36 @@ export type LegacyComment = {
 	isRead: boolean;
 	/** Language of note */
 	language: string;
+	/**
+	 * Only present on the FIRST comment of a `verseText` conflict thread (never on replies): the
+	 * resulting verse USFM (plain, no diff markup) if the change is REJECTED — i.e. the losing side.
+	 * Pairs with {@link resultText} (the accepted outcome) to drive a dynamic result preview. Absent
+	 * when the reject outcome decodes to an empty verse (e.g. the losing side deleted the verse) or
+	 * the note carries no decodable diff. May be absent even when {@link rejectedText} is present —
+	 * the two are independently optional.
+	 */
+	rejectedResultText?: string;
+	/**
+	 * Only present on the FIRST comment of a `verseText` conflict thread, and only when the rejected
+	 * (losing) side's rendered diff has visible content: HTML diff of the rejected side, using
+	 * Paratext 9's `<u>` (inserted) and `<s>` (deleted) markup. This is full HTML,
+	 * `<blockquote>`-wrapped like {@link contents}. Coloring is applied by the UI, not carried in the
+	 * markup. Absent for normal notes, non-`verseText` conflicts, replies, and conflicts whose
+	 * rejected-side diff body is empty.
+	 */
+	rejectedText?: string;
 	/** Present in a note when it has been assigned to reply-to a particular user */
 	replyToUser?: string;
+	/**
+	 * Only present on the first comment of a `verseText` conflict thread when the merged result verse
+	 * USFM is non-empty: the resulting verse USFM (plain, no diff markup) already written into the
+	 * text at merge time. Equals the accepted side in v1. Absent otherwise. On a `verseText` conflict
+	 * ROOT this value equals the serialized {@link verse} field, but the two are deliberately
+	 * distinct: `verse` is ungated per-comment verse-history data whose meaning varies by position
+	 * (on a reply it is the verse text captured at reply time, possibly stale), while `resultText` is
+	 * root-only conflict metadata. Conflict-card consumers must read `resultText`, never `verse`.
+	 */
+	resultText?: string;
 	/** Text which was selected in comment, or "" for none */
 	selectedText?: string;
 	/** Present in a note when it has been marked to be shared in teh Global Consultant Notes */
@@ -5952,7 +5990,12 @@ export type LegacyComment = {
 	type?: string;
 	/** Name of the user who created this comment */
 	user: string;
-	/** Original USFM content of verse */
+	/**
+	 * The verse USFM captured on this comment. Per-comment history data, present on replies too:
+	 * Paratext 9 stores the current verse text on any comment written after the verse changed. Only
+	 * on a conflict thread's ROOT comment does it hold the merged result — conflict-card consumers
+	 * should read {@link resultText} instead of this field.
+	 */
 	verse?: string;
 	/** Verse reference in which comment appears */
 	verseRef: string;

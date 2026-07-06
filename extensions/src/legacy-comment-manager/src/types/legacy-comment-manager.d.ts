@@ -172,7 +172,23 @@ declare module 'legacy-comment-manager' {
    * {@link ILegacyCommentProjectDataProvider.createComment} method.
    */
   export type NewLegacyComment = Prettify<
-    Partial<Omit<LegacyComment, 'id' | 'user' | 'date' | 'thread' | 'isRead'>> & {
+    Partial<
+      Omit<
+        LegacyComment,
+        | 'id'
+        | 'user'
+        | 'date'
+        | 'thread'
+        | 'isRead'
+        // Merger-authored, root-comment-only metadata — never set when creating a comment.
+        | 'conflictType'
+        // Read-only, decoded display fields — never set when creating a comment.
+        | 'rejectedText'
+        | 'acceptedText'
+        | 'resultText'
+        | 'rejectedResultText'
+      >
+    > & {
       contents: string;
     }
   >;
@@ -201,7 +217,21 @@ declare module 'legacy-comment-manager' {
    * {@link ILegacyCommentProjectDataProvider.addCommentToThread} method.
    */
   export type LegacyCommentReply = Prettify<
-    Partial<Omit<LegacyComment, 'id' | 'user' | 'date'>> & { thread: string }
+    Partial<
+      Omit<
+        LegacyComment,
+        // 'conflictType' is merger-authored, root-comment-only metadata; the rest are read-only,
+        // decoded display fields. None may be set when replying to a thread.
+        | 'id'
+        | 'user'
+        | 'date'
+        | 'conflictType'
+        | 'rejectedText'
+        | 'acceptedText'
+        | 'resultText'
+        | 'rejectedResultText'
+      >
+    > & { thread: string }
   >;
 
   // #endregion
