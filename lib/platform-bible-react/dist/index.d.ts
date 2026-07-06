@@ -2518,7 +2518,7 @@ export declare function ContextMenuSub({ ...props }: React$1.ComponentProps<type
 /** @inheritdoc ContextMenu */
 export declare function ContextMenuRadioGroup({ ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.RadioGroup>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc ContextMenu */
-export declare function ContextMenuContent({ className, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.Content> & {
+export declare function ContextMenuContent({ className, style, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.Content> & {
 	side?: "top" | "right" | "bottom" | "left";
 }): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc ContextMenu */
@@ -2531,7 +2531,7 @@ export declare function ContextMenuSubTrigger({ className, inset, children, ...p
 	inset?: boolean;
 }): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc ContextMenu */
-export declare function ContextMenuSubContent({ className, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.SubContent>): import("react/jsx-runtime").JSX.Element;
+export declare function ContextMenuSubContent({ className, style, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.SubContent>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc ContextMenu */
 export declare function ContextMenuCheckboxItem({ className, children, checked, inset, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.CheckboxItem> & {
 	inset?: boolean;
@@ -2710,6 +2710,13 @@ export declare function Input({ className, type, ...props }: React$1.ComponentPr
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/kbd}
  */
 export declare function Kbd({ className, ...props }: React$1.ComponentProps<"kbd">): import("react/jsx-runtime").JSX.Element;
+/**
+ * Groups multiple {@link Kbd} components together to represent a key combination or sequence (for
+ * example, `Ctrl + K`). This component is from Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/kbd}
+ */
+export declare function KbdGroup({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
 /**
  * The Label component renders an accessible label associated with controls. This component is built
  * on Radix UI primitives and styled with Shadcn UI.
