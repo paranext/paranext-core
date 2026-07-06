@@ -2409,6 +2409,29 @@ namespace TestParanextDataProvider.Projects
             }
         }
 
+        // Like NonAdminDummyScrText, but this team member also lacks Spellings edit permission. On a
+        // spelling note CanCurrentUserResolve delegates to CanEdit(Spellings), so this makes
+        // VerifyUserCanResolveThread throw while VerifyUserCanAddCommentToThread (non-observer only)
+        // still passes - isolating the resolve/re-open gate for the PT-4107 test.
+        private sealed class NoResolvePermissionDummyScrText : DummyScrText
+        {
+            private readonly PermissionManager _permissions = new NoResolvePermissionManager();
+
+            public override PermissionManager Permissions => _permissions;
+
+            private sealed class NoResolvePermissionManager : PermissionManager
+            {
+                public override bool AmAdministrator => false;
+
+                public override bool HaveRoleNotObserver => true;
+
+                public override bool CanEdit(
+                    PtxUtils.Enum<Paratext.Data.Users.PermissionType> permission,
+                    string userName = null
+                ) => false;
+            }
+        }
+
         // Mirrors SeedVerseTextConflict() but seeds the conflict on a caller-supplied project (the
         // non-admin fixture), optionally pre-assigning the conflict note to a user. Returns the
         // freshly built thread.
@@ -2453,6 +2476,66 @@ namespace TestParanextDataProvider.Projects
             Assert.That(
                 CommentManager.Get(nonAdmin).FindThread(thread.Id).Status,
                 Is.Not.EqualTo(NoteStatus.Resolved)
+            );
+        }
+
+        [Test]
+        public void AddCommentToThread_ReplyReopeningResolvedThread_RequiresResolvePermission()
+        {
+            // PT-4107: adding a plain comment to a resolved thread implicitly re-opens it, so it must
+            // clear the SAME gate as an explicit status change - otherwise a user who can comment but
+            // not resolve could re-open by replying. Lever: a spelling note, whose CanCurrentUserResolve
+            // falls back to CanEdit(Spellings) - false for this non-admin, non-observer team member -
+            // while VerifyUserCanAddCommentToThread only requires non-observer (passes).
+            using var nonAdmin = new NoResolvePermissionDummyScrText();
+            var details = CreateProjectDetails(nonAdmin);
+            ParatextProjects.FakeAddProject(details, nonAdmin);
+            var provider = new DummyParatextProjectDataProvider(
+                PdpName + "-reopen-gate",
+                Client,
+                details,
+                ParatextProjects
+            );
+
+            // Seed a RESOLVED spelling-note thread directly, bypassing the provider's gates.
+            var mgr = CommentManager.Get(nonAdmin);
+            var first = new Comment(nonAdmin.User)
+            {
+                Thread = "reopen-gate-thread",
+                VerseRefStr = "GEN 1:1",
+                TagsAddedIds = new[] { CommentTag.spellingTagId },
+            };
+            first.SetContentsFromHtml("spelling note");
+            mgr.AddComment(first);
+            var resolving = new Comment(nonAdmin.User)
+            {
+                Thread = first.Thread,
+                Status = NoteStatus.Resolved,
+            };
+            resolving.SetContentsFromHtml("resolved");
+            mgr.AddComment(resolving);
+            mgr.SaveUser(nonAdmin.User.Name, false);
+            Assert.That(
+                mgr.FindThread(first.Thread).Status,
+                Is.EqualTo(NoteStatus.Resolved),
+                "precondition: thread is resolved"
+            );
+
+            // A plain reply (no status) would implicitly re-open the thread -> must be gated.
+            var reply = new Comment(nonAdmin.User) { Thread = first.Thread };
+            reply.SetContentsFromHtml("please reopen");
+            Assert.That(
+                () => provider.AddCommentToThread(new PlatformCommentWrapper(reply)),
+                Throws
+                    .TypeOf<InvalidOperationException>()
+                    .With.Message.Contains("resolve or re-open")
+            );
+
+            // The blocked reply must not have re-opened (or been added to) the thread.
+            Assert.That(
+                mgr.FindThread(first.Thread).Status,
+                Is.EqualTo(NoteStatus.Resolved),
+                "denied reply must leave the thread resolved"
             );
         }
 

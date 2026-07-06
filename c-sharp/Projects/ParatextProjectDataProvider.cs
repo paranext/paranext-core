@@ -618,10 +618,19 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         VerifyUserCanAddCommentToThread();
 
-        // Validate permissions for status changes (resolve/re-open)
+        // Adding a content comment to a resolved thread implicitly re-opens it (applied further below).
+        bool willReopenResolvedThread =
+            comment.Status == NoteStatus.Unspecified
+            && existingThread.Status == NoteStatus.Resolved
+            && hasContents;
+
+        // Validate permissions for status changes (resolve/re-open). An implicit re-open — adding a
+        // comment to a resolved thread — must clear the same gate as an explicit status change
+        // (PT-4107); otherwise a user who cannot resolve/re-open could bypass it by replying.
         if (
-            comment.Status != NoteStatus.Unspecified
-            && (comment.Status == NoteStatus.Resolved || comment.Status == NoteStatus.Todo)
+            comment.Status == NoteStatus.Resolved
+            || comment.Status == NoteStatus.Todo
+            || willReopenResolvedThread
         )
         {
             VerifyUserCanResolveThread(comment.Thread);
@@ -644,11 +653,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         CopyCommentProperties(comment, newComment);
 
-        if (
-            comment.Status == NoteStatus.Unspecified
-            && existingThread.Status == NoteStatus.Resolved
-            && hasContents
-        )
+        if (willReopenResolvedThread)
         {
             Console.WriteLine(
                 $"Reopening resolved thread {existingThread.Id} because a new comment is being added to it."
