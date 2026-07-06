@@ -202,8 +202,7 @@ public class PlatformCommentWrapper
                 )
                 : _comment.GetContentsAsHtml(
                     _thread.ThreadInternal,
-                    // TODO (PT-4104): this comparison is never true (comment ID vs thread ID); replace with IsFirstCommentInThread — behavior-neutral, see ticket.
-                    _comment.Id == _thread?.Id,
+                    IsFirstCommentInThread,
                     false,
                     false
                 );
