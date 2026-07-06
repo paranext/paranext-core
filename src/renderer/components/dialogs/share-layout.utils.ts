@@ -4,6 +4,7 @@ import type { ResourceReference, ResourceReferenceList } from 'platform-scriptur
 export type SplitResourcesByTabResult = {
   scriptureResources: ResourceReference[];
   commentaryResources: ResourceReference[];
+  otherResources: ResourceReference[];
 };
 
 function isDblResourceReference(ref: ResourceReference): ref is ResourceReference & { id: string } {
@@ -18,7 +19,10 @@ function isProjectReference(ref: ResourceReference): boolean {
  * Splits a flat `referencedProjectsAndResources` list into per-tab sub-lists, mirroring the
  * filtering `resource-text-panel.web-view.tsx` already applies for display: `dblResource` items are
  * typed via the cached DBL resource catalog, `project` items always belong to the Scripture tab,
- * and any other reference type is dropped from both tabs.
+ * and any other reference type — including a `dblResource` item whose id isn't (currently) found in
+ * the catalog — is routed into `otherResources` instead of being dropped. The dialog doesn't
+ * display or let the admin edit `otherResources`, but callers must round-trip it unchanged when
+ * writing the setting back out, or those references are permanently lost.
  */
 export function splitResourcesByTab(
   items: ResourceReference[],
@@ -26,18 +30,21 @@ export function splitResourcesByTab(
 ): SplitResourcesByTabResult {
   const scriptureResources: ResourceReference[] = [];
   const commentaryResources: ResourceReference[] = [];
+  const otherResources: ResourceReference[] = [];
 
   items.forEach((item) => {
     if (isDblResourceReference(item)) {
       const dblType = dblResources.find((r) => r.dblEntryUid === item.id)?.type;
       if (dblType === 'CommentaryResource') commentaryResources.push(item);
       else if (dblType === 'ScriptureResource') scriptureResources.push(item);
+      else otherResources.push(item);
       return;
     }
     if (isProjectReference(item)) scriptureResources.push(item);
+    else otherResources.push(item);
   });
 
-  return { scriptureResources, commentaryResources };
+  return { scriptureResources, commentaryResources, otherResources };
 }
 
 /**

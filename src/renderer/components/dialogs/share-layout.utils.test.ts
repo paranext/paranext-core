@@ -27,6 +27,7 @@ describe('splitResourcesByTab', () => {
 
     expect(result.scriptureResources).toEqual(items);
     expect(result.commentaryResources).toEqual([]);
+    expect(result.otherResources).toEqual([]);
   });
 
   it('puts a dblResource item in commentaryResources when the catalog says CommentaryResource', () => {
@@ -37,9 +38,10 @@ describe('splitResourcesByTab', () => {
 
     expect(result.commentaryResources).toEqual(items);
     expect(result.scriptureResources).toEqual([]);
+    expect(result.otherResources).toEqual([]);
   });
 
-  it('drops a dblResource item whose id is not found in the catalog', () => {
+  it('routes a dblResource item whose id is not found in the catalog into otherResources', () => {
     const items: ResourceReference[] = [
       { type: 'dblResource', name: 'Unknown', id: 'missing-uid' },
     ];
@@ -48,6 +50,7 @@ describe('splitResourcesByTab', () => {
 
     expect(result.scriptureResources).toEqual([]);
     expect(result.commentaryResources).toEqual([]);
+    expect(result.otherResources).toEqual(items);
   });
 
   it('puts a project reference in scriptureResources', () => {
@@ -57,21 +60,66 @@ describe('splitResourcesByTab', () => {
 
     expect(result.scriptureResources).toEqual(items);
     expect(result.commentaryResources).toEqual([]);
+    expect(result.otherResources).toEqual([]);
   });
 
-  it('drops reference types that are neither dblResource nor project', () => {
+  it('routes reference types that are neither dblResource nor project into otherResources', () => {
     const items: ResourceReference[] = [{ type: 'xmlResource', name: 'Some XML' }];
 
     const result = splitResourcesByTab(items, []);
 
     expect(result.scriptureResources).toEqual([]);
     expect(result.commentaryResources).toEqual([]);
+    expect(result.otherResources).toEqual(items);
+  });
+
+  it('routes an UnknownResourceReference into otherResources', () => {
+    const items: ResourceReference[] = [
+      // `UnknownResourceReference` is the catch-all variant for reference types this dialog does
+      // not (yet) model; it must round-trip unchanged rather than being dropped.
+      { type: 'somethingNovel', unexpectedField: 42 },
+    ];
+
+    const result = splitResourcesByTab(items, []);
+
+    expect(result.scriptureResources).toEqual([]);
+    expect(result.commentaryResources).toEqual([]);
+    expect(result.otherResources).toEqual(items);
+  });
+
+  it('handles a mix of scripture, commentary, and other references in one call', () => {
+    const scriptureItem: ResourceReference = { type: 'dblResource', name: 'ESV', id: 'esv-uid' };
+    const commentaryItem: ResourceReference = { type: 'dblResource', name: 'IVP', id: 'ivp-uid' };
+    const projectItem: ResourceReference = { type: 'project', name: 'My Project', id: 'proj-id' };
+    const unmatchedDblItem: ResourceReference = {
+      type: 'dblResource',
+      name: 'Unknown',
+      id: 'missing-uid',
+    };
+    const xmlItem: ResourceReference = { type: 'xmlResource', name: 'Some XML' };
+    const dblResources = [
+      makeDblResource({ dblEntryUid: 'esv-uid', type: 'ScriptureResource' }),
+      makeDblResource({ dblEntryUid: 'ivp-uid', type: 'CommentaryResource' }),
+    ];
+
+    const result = splitResourcesByTab(
+      [scriptureItem, commentaryItem, projectItem, unmatchedDblItem, xmlItem],
+      dblResources,
+    );
+
+    expect(result.scriptureResources).toEqual([scriptureItem, projectItem]);
+    expect(result.commentaryResources).toEqual([commentaryItem]);
+    expect(result.otherResources).toEqual([unmatchedDblItem, xmlItem]);
   });
 
   it('returns empty lists for empty input', () => {
     const result = splitResourcesByTab([], []);
 
-    expect(result).toEqual({ scriptureResources: [], commentaryResources: [] });
+    expect(result).toEqual({
+      scriptureResources: [],
+      commentaryResources: [],
+      otherResources: [],
+    });
   });
 });
 

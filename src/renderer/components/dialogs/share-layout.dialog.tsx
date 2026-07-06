@@ -118,7 +118,7 @@ function ShareLayoutDialogWrapper({
     () => seedResourceList(projectResources, personalResources),
     [projectResources, personalResources],
   );
-  const { scriptureResources, commentaryResources } = useMemo(
+  const { scriptureResources, commentaryResources, otherResources } = useMemo(
     () => splitResourcesByTab(seededItems, allResources ?? []),
     [seededItems, allResources],
   );
@@ -142,7 +142,7 @@ function ShareLayoutDialogWrapper({
     (result: ShareLayoutResult) => {
       setProjectResources?.({
         dataVersion: projectResources?.dataVersion ?? EMPTY_RESOURCE_LIST.dataVersion,
-        items: [...result.scriptureResources, ...result.commentaryResources],
+        items: [...result.scriptureResources, ...result.commentaryResources, ...otherResources],
       });
       setProjectModelTexts?.({
         dataVersion: projectModelTexts?.dataVersion ?? EMPTY_RESOURCE_LIST.dataVersion,
@@ -154,6 +154,7 @@ function ShareLayoutDialogWrapper({
     [
       projectResources,
       projectModelTexts,
+      otherResources,
       setProjectResources,
       setProjectModelTexts,
       setProjectActiveTab,
