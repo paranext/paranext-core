@@ -36,6 +36,7 @@ import {
   convertScriptureRangeToEditorRange,
   formatEditorTitle,
   openCommentListAndSelectThread,
+  type OpenEditorDispatch,
   openOrUpdateRelatedPanels,
   resolveOpenEditorDispatch,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
@@ -323,11 +324,39 @@ async function open(
     if (interfaceMode === 'simple' && projectForWebView.projectId)
       await openOrUpdateRelatedPanels(papi, projectForWebView.projectId);
 
+    // Re-check the replace-tab target after openOrUpdateRelatedPanels: concurrent panel
+    // operations can remove the target tab between when the dispatch was resolved (above) and
+    // when openWebView runs. If the target is gone, re-resolve with fresh dock state so we
+    // don't throw "Replacing tab failed".
+    let finalDispatch: OpenEditorDispatch = dispatch;
+    if (dispatch.kind === 'replace-tab') {
+      const freshDefs = await papi.webViews.getAllOpenWebViewDefinitions();
+      if (!freshDefs.some((def) => def.id === dispatch.targetTabId)) {
+        const freshEditors = freshDefs
+          .filter((def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE)
+          .map((def) => ({
+            id: def.id,
+            projectId: def.projectId,
+            // WebView state isn't statically typed, but `getWebViewDefinition` always stores
+            // `isReadOnly` as boolean here. Treat any other value as `false` for safety.
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
+            isReadOnly: !!(def.state?.isReadOnly as boolean | undefined),
+          }));
+        finalDispatch = resolveOpenEditorDispatch(
+          freshEditors,
+          projectForWebView.projectId,
+          requestedIsReadOnly,
+          interfaceMode,
+          existingTabIdToReplace,
+        );
+      }
+    }
+
     const openedWebViewId = await papi.webViews
       .openWebView(
         SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-        dispatch.kind === 'replace-tab'
-          ? { type: 'replace-tab', targetTabId: dispatch.targetTabId }
+        finalDispatch.kind === 'replace-tab'
+          ? { type: 'replace-tab', targetTabId: finalDispatch.targetTabId }
           : undefined,
         openWebViewOptions,
       )

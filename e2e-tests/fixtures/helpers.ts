@@ -482,16 +482,23 @@ export function addUsersToProject(projectDir: string, users: string[]): void {
 /**
  * Wait for the Platform.Bible UI to be fully ready beyond just React mounting. Waits for the
  * platform-dock layout to appear, then for the dialog service to finish registering menu commands
- * like `platform.about` (the dock can render before that async work completes).
+ * like `platform.about` (the dock can render before that async work completes), and finally for the
+ * full-screen initialization overlay to clear. The overlay lingers while async services (settings,
+ * theme) finish initializing — it must be gone before tests interact with the UI.
  */
-export async function waitForAppReady(page: Page, timeout = 60_000): Promise<void> {
+export async function waitForAppReady(page: Page, timeout = 90_000): Promise<void> {
   const start = Date.now();
   await page.waitForSelector('div[class*="dock-layout"]', {
     state: 'attached',
     timeout,
   });
-  const remaining = Math.max(0, timeout - (Date.now() - start));
-  await waitForPapiMethodRegistered(PLATFORM_ABOUT_COMMAND, DEFAULT_WEBSOCKET_PORT, remaining);
+  const remaining1 = Math.max(1000, timeout - (Date.now() - start));
+  await waitForPapiMethodRegistered(PLATFORM_ABOUT_COMMAND, DEFAULT_WEBSOCKET_PORT, remaining1);
+  const remaining2 = Math.max(1000, timeout - (Date.now() - start));
+  // The overlay (<div role="status" class="tw:fixed tw:inset-0 …">) intercepts pointer events
+  // while it is visible. Services like settings and theme finish async work after dock-layout
+  // mounts and platform.about registers, so the overlay can outlast both earlier signals.
+  await expect(page.locator('.pr-twp [role="status"]')).not.toBeVisible({ timeout: remaining2 });
 }
 
 /** Options accepted by {@link openFromEditorHamburger}. */
