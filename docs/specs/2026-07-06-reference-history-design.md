@@ -169,8 +169,10 @@ synchronously before async dispatch):
   Finder). We deliberately do **not** bind Option+Left/Right: Option (which Electron reports
   as `input.alt`) + arrows is the system-wide move-by-word shortcut and intercepting it would
   break text editing everywhere. Cmd+Shift+[ / ] are already taken by tab focus in this
-  handler; plain Cmd+[ / ] are free. The bracket pair does **not** swap in RTL (matches
-  browser behavior; the physical-direction argument only applies to arrow keys).
+  handler; plain Cmd+[ / ] are free. The bracket pair **also swaps in RTL**: Chromium's
+  `accelerators_cocoa.mm` explicitly swaps ⌘[ / ⌘] between History Back and Forward when the
+  UI is RTL, so the physical-direction-preserving rule applies uniformly to both key pairs,
+  and the dispatch queries `platform.getInterfaceDirection` on every platform.
 - Both dispatch `platform.navigateBackInReferenceHistory` / `...Forward...` with
   `INTERIM_KEYBOARD_HISTORY_SCROLL_GROUP_ID = 0` — a named constant with a comment stating it
   is temporary until the toolbar-sync PR provides an "active scroll group" to resolve. Group 0
@@ -199,9 +201,9 @@ surface, importable from `platform-bible-react/experimental`).
   `navigator.userAgent` like `UndoRedoButtons`: macOS `⌘[` / `⌘]`; Windows/Linux `Alt+Left` /
   `Alt+Right`.
 - **RTL** (via `readDirection()`, manual because nothing sets `document.dir`): mirror the
-  pair's order and arrow icons, and on Windows/Linux swap the tooltip shortcut hints (back
-  shows `Alt+Right` in RTL, matching the swapped physical keys); macOS bracket hints do not
-  swap. `DropdownMenu` already handles RTL via its CUSTOM `readDirection()` support.
+  pair's order and arrow icons, and swap the tooltip shortcut hints on all platforms (in RTL,
+  back shows `Alt+Right` on Windows/Linux and `⌘]` on macOS, matching the swapped physical
+  keys). `DropdownMenu` already handles RTL via its CUSTOM `readDirection()` support.
 - Accessibility: localized `aria-label`s on all four interactive elements (two action buttons,
   two dropdown triggers).
 
@@ -212,9 +214,12 @@ Simple and Power modes. It:
 - Receives the toolbar's `scrollGroupId`; reads history via `getReferenceHistorySync` and
   subscribes to `onDidChangeReferenceHistory` (also refreshing when the group changes).
 - Computes enablement: back enabled when `back.length > 1`, forward when `forward.length > 0`.
-- Builds PT9-style labels: `<localized book id> <chapter>:<verse>` using
-  `localizationService.getLocalizedIdFromBookNumber`, and offsets: back list = `back[1..]`
-  (offsets −1, −2, …), forward list = all of `forward` (offsets +1, +2, …).
+- Builds labels with `formatScrRef` from `platform-bible-utils` — the same formatter the
+  adjacent BCV control uses for its current value and its recent-searches dropdown
+  (`formatScrRef(verseRef, 'English')` in `book-chapter-control.component.tsx`), keeping the
+  two dropdowns consistent; when localized book names get threaded into the toolbar later,
+  both controls pick them up the same way. Offsets: back list = `back[1..]` (offsets −1, −2,
+  …), forward list = all of `forward` (offsets +1, +2, …).
 - Calls `navigateReferenceHistorySync(scrollGroupId, offset)` on click.
 
 **Localization:** new keys in `assets/localization/en.json` for the two tooltips/aria-labels
