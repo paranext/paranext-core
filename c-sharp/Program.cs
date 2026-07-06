@@ -2,6 +2,8 @@ using System.Diagnostics;
 using Paranext.DataProvider.Checklists;
 using Paranext.DataProvider.Checks;
 using Paranext.DataProvider.EnhancedResources;
+using Paranext.DataProvider.KeyboardSwitching;
+using Paranext.DataProvider.KeyboardSwitching.Keyboarding;
 using Paranext.DataProvider.ManageBooks;
 using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.ParatextUtils;
@@ -105,6 +107,10 @@ public static class Program
                 paratextProjects,
                 new MarbleDataLoader()
             );
+            var osKeyboardDataProvider = new OsKeyboardDataProvider(
+                papi,
+                KeyboardingPrimitiveFactory.Create()
+            );
             await Task.WhenAll(
                 paratextFactory.InitializeAsync(),
                 paratextPublishedFactory.InitializeAsync(),
@@ -115,7 +121,8 @@ public static class Program
                 paratextSendReceiveService.InitializeAsync(),
                 checklistNetworkObject.InitializeAsync(),
                 manageBooksService.RegisterNetworkObjectAsync(),
-                enhancedResourceFactory.InitializeAsync()
+                enhancedResourceFactory.InitializeAsync(),
+                osKeyboardDataProvider.RegisterDataProviderAsync()
             );
 
             // Things that only run in our "noisy dev mode" go here

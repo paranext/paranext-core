@@ -34,6 +34,7 @@ declare module 'papi-shared-types' {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import type { IWebViewProvider } from '@shared/models/web-view-provider.model';
   import { WebViewId } from '@shared/models/web-view.model';
+  import { SurfaceKeyboardMap } from '@shared/services/keyboard.service-model';
   import { SerializedVerseRef } from '@sillsdev/scripture';
 
   // #region Commands
@@ -192,6 +193,13 @@ declare module 'papi-shared-types' {
      * 0.5 to 3.0.
      */
     'platform.zoomFactor': number;
+    /**
+     * Per-project keyboard associations, keyed by project id (`ScrText.Guid` string form) with one
+     * optional keyboard id per editing surface (keyboard-switching CAP-009 / EXT-100). User-scoped
+     * and machine-local — matches Paratext 9 `Settings.Default.ProjectKeyboards` semantics; NOT
+     * Send/Receive synced. Managed by `KeyboardAssociationStore`; not intended for direct editing.
+     */
+    'platform.keyboardsByProject': { [projectId: string]: SurfaceKeyboardMap };
     /**
      * The interface mode for the application. `simple` provides a streamlined experience, while
      * `power` exposes advanced features.

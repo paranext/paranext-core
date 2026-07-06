@@ -12,7 +12,11 @@ import {
   getDataProviderDataTypeFromFunctionName,
   DataProviderDataType,
 } from '@shared/models/data-provider.model';
-import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
+import {
+  DataProviderEngine,
+  getDataProviderEngineDataTypeFunctions,
+  IDataProviderEngine,
+} from '@shared/models/data-provider-engine.model';
 import {
   AsyncVariable,
   CannotHaveOnDidDispose,
@@ -20,9 +24,7 @@ import {
   PlatformEventEmitter,
   deepEqual,
   endsWith,
-  getAllObjectFunctionNames,
   getErrorMessage,
-  groupBy,
   isErrorMessageAboutParatextBlockingInternetAccess,
   isErrorMessageAboutRegistryAuthFailure,
   isString,
@@ -678,37 +680,9 @@ function buildDataProvider<DataProviderName extends DataProviderNames>(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [key: string]: any;
   };
-  // Figure out the available get/set methods' data types
-  const dataTypes = groupBy<
-    string,
-    'get' | 'set' | 'other',
-    DataTypeNames<DataProviderTypes[DataProviderName]>
-  >(
-    [...getAllObjectFunctionNames(dataProviderEngine)],
-    (fnName) => {
-      // If the function was decorated with @ignore, do not consider it a special function
-      if (dataProviderEngineUntyped[fnName].isIgnored) return 'other';
-
-      if (startsWith(fnName, 'get')) return 'get';
-      if (startsWith(fnName, 'set')) return 'set';
-      return 'other';
-    },
-    (fnName, fnType) => {
-      // If it's not a get or a set, just return an empty string. We aren't planning to use this
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      if (fnType === 'other') return '' as DataTypeNames<DataProviderTypes[DataProviderName]>;
-
-      // Grab the data type out of the function names
-      return getDataProviderDataTypeFromFunctionName<DataProviderTypes[DataProviderName]>(fnName);
-    },
-  );
-
-  // Validate that the data provider engine has matching get and set functions
-  if (
-    dataTypes.get('get')?.length !== dataTypes.get('set')?.length ||
-    dataTypes.get('get')?.some((getDataType) => !dataTypes.get('set')?.includes(getDataType))
-  )
-    throw new Error('Data provider engine does not have matching get and set functions!');
+  // Figure out the available get/set methods' data types and validate that the engine has matching
+  // get and set functions (throws otherwise)
+  const dataTypes = getDataProviderEngineDataTypeFunctions(dataProviderEngine);
 
   // Layer over data provider engine methods to give it control over emitting updates
 

@@ -127,6 +127,20 @@ export interface WebViewServiceType {
    */
   getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]>;
 
+  // === NEW IN PT10 === (keyboard-switching CAP-017)
+  // Reason: PT9 closed windows via WinForms form lifecycle; PT10 needs a PAPI-exposed
+  // webview-scoped close (consumed by the direct-commit dialog and CAP-UI-001). Hosted in the
+  // renderer service-host's papiWebViewService; the network proxy forwards it unchanged.
+  // Maps to: CAP-017
+  /**
+   * Closes the WebView with the specified ID, removing its tab from the dock layout.
+   *
+   * @param webViewId The ID of the WebView to close
+   * @returns Promise that resolves to `true` if a WebView with the specified ID was found and
+   *   closed; `false` if no WebView with that ID was found (does not throw in that case)
+   */
+  closeWebView(webViewId: WebViewId): Promise<boolean>;
+
   /**
    * Get an existing web view controller for an open web view.
    *

@@ -53,9 +53,26 @@ export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabTy
 /** Instructions that indicate how to change the app window focus */
 export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | undefined;
 
+// === NEW IN PT10 === (keyboard-switching CAP-017)
+// Reason: PT9 observed OS-level app focus via WinForms `Form.Activated`/`Deactivate`; PT10
+// models it as the `AppFocus` data type (get + subscribe only) on the window service, mutated
+// solely by the main process's focus/blur emitter via the `setAppFocus` proxy (RM-020).
+// Maps to: CAP-017
+/** Whether the main application window itself currently has OS-level focus */
+export type AppFocusSubject = { isAppFocused: boolean };
+
 // Data Type to initialize data provider engine with
 export type WindowDataTypes = {
   Focus: DataProviderDataType<undefined, FocusSubject | undefined, SetFocusSpecifier>;
+  // === NEW IN PT10 === (keyboard-switching CAP-017)
+  // Reason: see AppFocusSubject above. Maps to: CAP-017
+  /**
+   * Whether the main application window has OS-level focus (`get` + `subscribe`; `set` data type is
+   * `never` — PAPI consumers cannot push arbitrary data through the generic set path. Only the
+   * main-process focus/blur emitter mutates this via the {@link IWindowService.setAppFocus} proxy
+   * method)
+   */
+  AppFocus: DataProviderDataType<undefined, AppFocusSubject, never>;
 };
 
 declare module 'papi-shared-types' {
@@ -127,6 +144,60 @@ export type IWindowService = {
   subscribeFocus(
     selector: undefined,
     callback: (focusSubject: FocusSubject | PlatformError) => void,
+    options?: DataProviderSubscriberOptions,
+  ): Promise<UnsubscriberAsync>;
+  // === NEW IN PT10 === (keyboard-switching CAP-017)
+  // Reason: AppFocus surface on IWindowService — get/subscribe for PAPI consumers plus the
+  // internal `setAppFocus` proxy used only by the main-process focus/blur emitter (RM-020).
+  // Maps to: CAP-017
+  /**
+   * JSDOC SOURCE getAppFocus
+   *
+   * Get whether the main application window currently has OS-level focus
+   *
+   * @param selector `undefined`. Does not have to be provided
+   * @returns Whether the main app window is focused
+   */
+  getAppFocus(selector: undefined): Promise<AppFocusSubject>;
+  /** JSDOC DESTINATION getAppFocus */
+  getAppFocus(): Promise<AppFocusSubject>;
+  /**
+   * Sets whether the main application window has OS-level focus.
+   *
+   * Note: this is an internal proxy method for the main process's window `focus`/`blur` emitter
+   * (mirror of `setFocus('detect')`). Setting the same value twice in a row does not emit a second
+   * `AppFocus` update.
+   *
+   * @param isAppFocused Whether the main app window is focused
+   * @returns `true` or an array of strings if the app focus state changed; `false` otherwise
+   * @see {@link DataProviderUpdateInstructions} for more info on what to return
+   */
+  setAppFocus(isAppFocused: boolean): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
+  /**
+   * Sets whether the main application window has OS-level focus.
+   *
+   * @param selector `undefined`. Does not have to be provided
+   * @param isAppFocused Whether the main app window is focused
+   * @returns `true` or an array of strings if the app focus state changed; `false` otherwise
+   * @see {@link DataProviderUpdateInstructions} for more info on what to return
+   */
+  setAppFocus(
+    selector: undefined,
+    isAppFocused: boolean,
+  ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
+  /**
+   * Subscribe to run a callback function when the main app window gains or loses OS-level focus
+   *
+   * @param selector `undefined`. Does not have to be provided
+   * @param callback Function to run with the updated app focus state. If there is an error while
+   *   retrieving the updated data, the function will run with a {@link PlatformError} instead of the
+   *   data. You can call {@link isPlatformError} on this value to check if it is an error.
+   * @param options Various options to adjust how the subscriber emits updates
+   * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+   */
+  subscribeAppFocus(
+    selector: undefined,
+    callback: (appFocus: AppFocusSubject | PlatformError) => void,
     options?: DataProviderSubscriberOptions,
   ): Promise<UnsubscriberAsync>;
 } & OnDidDispose &

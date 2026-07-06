@@ -2359,6 +2359,21 @@ declare module 'papi-shared-types' {
     'platformScripture.openManageBooks': (
       webViewIdOrProjectId?: string | undefined,
     ) => Promise<string | undefined>;
+
+    /**
+     * Open the per-project keyboard-selection dialog (keyboard-switching CAP-UI-002) where the user
+     * configures the default keyboard for each editing surface (vernacular text and, when the
+     * project supports them, comments/notes).
+     *
+     * The single optional argument is either an editor's `webViewId` (when invoked from the
+     * scripture-editor project tab menu) or a literal project id (when invoked from another
+     * extension). The handler probes the value with `papi.webViews.getOpenWebViewDefinition` — if
+     * it resolves, the dialog opens for that web view's project; otherwise the value is treated as
+     * a project id directly. Pass `undefined` to open without project context.
+     */
+    'platform.openKeyboardSelection': (
+      webViewIdOrProjectId?: string | undefined,
+    ) => Promise<string | undefined>;
   }
 
   export interface ProjectSettingTypes {

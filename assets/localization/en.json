@@ -369,6 +369,7 @@
   "%settings_platform_interfaceMode_description%": "Controls the complexity of features shown. 'simple' provides a streamlined experience; 'power' exposes advanced features.",
   "%settings_platform_interfaceMode_invalidValue%": "Invalid interface mode. Allowed values are 'simple' and 'power'.",
   "%settings_platform_interfaceMode_label%": "Interface mode",
+  "%settings_platform_keyboardsByProject_label%": "Keyboards by Project",
   "%settings_platform_paratextDataLastRegistryDataCachedTimes_label%": "ParatextData Last Registry Data Cached Times",
   "%settings_platform_ptxUtilsMementoData_label%": "PtxUtils Memento Data",
   "%settings_platform_requestTimeout_description%": "Number of seconds to allow internal requests to resolve. Requests that take longer than this will be aborted. Set to 0 to never abort requests.",

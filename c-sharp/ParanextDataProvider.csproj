@@ -41,6 +41,16 @@
     <PackageReference Include="StreamJsonRpc" Version="2.22.11" />
     <PackageReference Include="System.Net.WebSockets" Version="4.3.0" />
     <PackageReference Include="System.Text.Encoding.CodePages" Version="9.0.9" />
+    <!--
+      Linux IBus keyboard integration (keyboard-switching CAP-005; decision-registry
+      libraries.csharp.dbusClient). Deliberately UNCONDITIONAL: a RuntimeIdentifier-conditional
+      reference would break RID-less builds (plain `dotnet build`/`dotnet test`) on every
+      platform, and an IsOsPlatform build-host condition would break compiling the
+      always-compiled IbusKeyboardApi.cs adapter on Windows/macOS hosts. The library is pure
+      managed code (cross-platform safe); only the [SupportedOSPlatform("linux")] adapter uses
+      it. See .context/features/keyboard-switching/implementation/decisions/keyboarding-linux.md
+    -->
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.94.1" />
   </ItemGroup>
 
   <!--

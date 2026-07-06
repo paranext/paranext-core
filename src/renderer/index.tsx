@@ -5,6 +5,7 @@ import '@renderer/global-this.model';
 
 import { App } from '@renderer/app.component';
 import { startDialogService } from '@renderer/services/dialog.service-host';
+import { initialize as initializeKeyboardService } from '@renderer/services/keyboard.service-host';
 import { startNotificationService } from '@renderer/services/notification.service-host';
 import { startOverlayService } from '@renderer/services/overlays/overlay.service-host';
 import { blockWebSocketsToPapiNetwork } from '@renderer/services/renderer-web-socket.service';
@@ -94,6 +95,19 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
     // This needs to run before the web view service host starts running and blocks us from creating
     // an iframe for the Usersnap feedback forms
     await initializeUsersnapApi();
+
+    // === NEW IN PT10 === (keyboard-switching CAP-016): the renderer-hosted `platform.keyboard`
+    // DataProvider engine registers at renderer-process startup. Deliberately fire-and-forget and
+    // NOT inside `runPromisesAndThrowIfRejected` below: keyboard init awaits the C# process's
+    // `platform.osKeyboard` provider, which can take many seconds to register — keyboard
+    // switching is non-critical and must not delay or break the critical startup path (web views,
+    // dialogs, and especially the theme subscription below). A failure logs and degrades
+    // gracefully; `papi.keyboard` consumers retry until the engine registers.
+    initializeKeyboardService().catch((e) =>
+      logger.warn(
+        `Keyboard service failed to initialize! Keyboard switching is unavailable. Error: ${getErrorMessage(e)}`,
+      ),
+    );
 
     await runPromisesAndThrowIfRejected(
       webViewProviderService.initialize(),
