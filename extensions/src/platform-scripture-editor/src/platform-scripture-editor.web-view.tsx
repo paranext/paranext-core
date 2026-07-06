@@ -78,6 +78,7 @@ import {
   formatReplacementString,
   getErrorMessage,
   getLocalizeKeysForScrollGroupIds,
+  debounce,
   isPlatformError,
   isString,
   isWhiteSpace,
@@ -2012,9 +2013,35 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
   }, []);
 
+  /**
+   * Latest save function behind a stable ref: `saveUsjToPdpIfUpdated`'s identity changes with every
+   * `usjFromPdp` update, and recreating the debounced wrapper on each change would drop the pending
+   * trailing-edge timer (losing the save of the final keystrokes).
+   */
+  const saveUsjToPdpIfUpdatedRef = useRef(saveUsjToPdpIfUpdated);
+  useEffect(() => {
+    saveUsjToPdpIfUpdatedRef.current = saveUsjToPdpIfUpdated;
+  }, [saveUsjToPdpIfUpdated]);
+
+  /**
+   * Task 15 (fluent marker typing): saving on EVERY editor change round-trips a mid-marker-typing
+   * doc (pending literal `\q1` still in plain text) through the PDP's USFM normalization; the
+   * content-different echoes then fight the editor for the doc under the caret ~150-250ms after
+   * each keystroke (`useEditorPdpSync` defends the focused editor, but the echo storm itself is the
+   * disease). PT9's equivalent reformat/save is ~1s debounced. Debounce the keystroke-driven save
+   * the same way — trailing edge, so the save always fires once typing rests; only the save half is
+   * debounced (the footnote-editor bookkeeping in `handleEditorialUsjChange` must stay
+   * synchronous). Imperative saves elsewhere (explicit flows, `useEditorPdpSync`'s push-back) are
+   * unaffected.
+   */
+  const saveUsjToPdpDebounced = useMemo(
+    () => debounce((usj: Usj) => saveUsjToPdpIfUpdatedRef.current(usj), 700),
+    [],
+  );
+
   const handleEditorialUsjChange = useCallback(
     (usj: Usj, ops?: DeltaOp[], _source?: DeltaSource, insertedNodeKey?: string) => {
-      saveUsjToPdpIfUpdated(usj);
+      saveUsjToPdpDebounced(usj);
       if (editingNoteKey.current) {
         // When the FootnoteEditor saves, Lexical emits a replaceEmbedUpdate. This triggers
         // onUsjChange with an insertedNodeKey.
@@ -2028,7 +2055,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         else if (!editorRef.current?.getNoteOps(editingNoteKey.current)) closeFootnoteEditor(false); // false => the note caller is already gone.
       } else openFootnoteEditorOnNewNote(ops, insertedNodeKey);
     },
-    [closeFootnoteEditor, openFootnoteEditorOnNewNote, saveUsjToPdpIfUpdated],
+    [closeFootnoteEditor, openFootnoteEditorOnNewNote, saveUsjToPdpDebounced],
   );
 
   /**
