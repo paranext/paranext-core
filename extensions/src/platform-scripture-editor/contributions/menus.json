@@ -78,6 +78,13 @@
             "command": "platformScripture.openManageBooks"
           },
           {
+            "label": "%shareLayoutDialog_openMenuItem%",
+            "localizeNotes": "Scripture editor top menu > Project > Share Layout with Team… (opens the Share Layout dialog for the editor's active project; the reserved platform.projectTop default group places it in the Project section near Open Project Settings...)",
+            "group": "platform.projectTop",
+            "order": 2,
+            "command": "platformScriptureEditor.shareLayoutWithTeam"
+          },
+          {
             "label": "%webView_platformScriptureEditor_openFind%",
             "group": "platformScriptureEditor.find",
             "order": 3,

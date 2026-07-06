@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import {
   useLocalizedStrings,
   useProjectDataProvider,
@@ -76,6 +76,19 @@ function ShareLayoutDialogWrapper({
     'platformScripture.textConnectionSettings',
     projectId,
   );
+
+  const [canWrite, isCanWriteLoading] = usePromise(
+    useCallback(
+      async () => textConnectionsProvider?.canUserWriteProjectTextConnectionSettings(),
+      [textConnectionsProvider],
+    ),
+    undefined,
+  );
+
+  useEffect(() => {
+    if (!isCanWriteLoading && canWrite === false) cancelDialog();
+  }, [isCanWriteLoading, canWrite, cancelDialog]);
+
   const [personalResources] = usePromise(
     useCallback(
       async () => textConnectionsProvider?.getUserReferencedProjectsAndResources(),
@@ -147,6 +160,18 @@ function ShareLayoutDialogWrapper({
       submitDialog,
     ],
   );
+
+  // Defense-in-depth admin gate: menu items in this codebase have no declarative
+  // visibility/condition mechanism, so a non-admin can still trigger the command that opens this
+  // dialog. Reject here instead. This check must run after all hooks above (Rules of Hooks
+  // forbids an early return between hook calls), so it sits just before the render branch.
+  if (isCanWriteLoading || canWrite === false) {
+    // `DialogDefinitionBase['Component']` requires a `ReactElement` return, not `ReactElement |
+    // null` — widening that shared type would affect every dialog in the codebase, so an empty
+    // fragment is the narrowest way to render nothing here.
+    // eslint-disable-next-line react/jsx-no-useless-fragment -- see comment above
+    return <></>;
+  }
 
   return (
     <ShareLayoutDialogContent
