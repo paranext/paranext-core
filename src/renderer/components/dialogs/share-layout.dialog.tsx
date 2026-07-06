@@ -86,7 +86,7 @@ function ShareLayoutDialogWrapper({
   );
 
   useEffect(() => {
-    if (!isCanWriteLoading && canWrite === false) cancelDialog();
+    if (!isCanWriteLoading && canWrite !== true) cancelDialog();
   }, [isCanWriteLoading, canWrite, cancelDialog]);
 
   const [personalResources] = usePromise(
@@ -165,7 +165,7 @@ function ShareLayoutDialogWrapper({
   // visibility/condition mechanism, so a non-admin can still trigger the command that opens this
   // dialog. Reject here instead. This check must run after all hooks above (Rules of Hooks
   // forbids an early return between hook calls), so it sits just before the render branch.
-  if (isCanWriteLoading || canWrite === false) {
+  if (isCanWriteLoading || canWrite !== true) {
     // `DialogDefinitionBase['Component']` requires a `ReactElement` return, not `ReactElement |
     // null` — widening that shared type would affect every dialog in the codebase, so an empty
     // fragment is the narrowest way to render nothing here.
