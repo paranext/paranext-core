@@ -2711,6 +2711,13 @@ export declare function Input({ className, type, ...props }: React$1.ComponentPr
  */
 export declare function Kbd({ className, ...props }: React$1.ComponentProps<"kbd">): import("react/jsx-runtime").JSX.Element;
 /**
+ * Groups multiple {@link Kbd} components together to represent a key combination or sequence (for
+ * example, `Ctrl + K`). This component is from Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/kbd}
+ */
+export declare function KbdGroup({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
+/**
  * The Label component renders an accessible label associated with controls. This component is built
  * on Radix UI primitives and styled with Shadcn UI.
  *

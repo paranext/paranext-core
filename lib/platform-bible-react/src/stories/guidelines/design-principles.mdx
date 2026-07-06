@@ -1,7 +1,5 @@
 import { Meta } from '@storybook/addon-docs/blocks';
 import { Button } from '@/components/shadcn-ui/button';
-import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/shadcn-ui/tooltip';
-import { Save } from 'lucide-react';
 import { ExampleBlock, ExampleBlockGroup } from '@/storybook/example-block.component';
 
 <Meta title="Guidelines/Design Principles" />
@@ -107,121 +105,12 @@ Every icon-only button must have an `aria-label`. Screen readers cannot infer me
 
 ## Tooltips
 
-Tooltips are required for every icon button and any control without a visible label — including toolbar items. At the same time, tooltips are supplementary. If the tooltip would only repeat the visible label, omit it.
+Tooltips are required for every icon button and any control without a visible label — including
+toolbar items. Tooltips are supplementary: if the tooltip would only repeat the visible label,
+omit it. Keep tooltip text short enough to scan at a glance.
 
-<ExampleBlockGroup>
-  <ExampleBlock
-    variant="avoid"
-    previewClassName="tw:pb-8"
-    preview={
-<Button variant="outline" size="icon" aria-label="Save" >
-<Save />
-</Button>
-}
-  >
-    This icon button lacks a tooltip, so users can't learn what it means.
-  </ExampleBlock>
-
-  <ExampleBlock
-    title="Avoid redundant tooltips"
-    variant="avoid"
-    previewClassName="tw:pb-8"
-    preview={
-<TooltipProvider>
-<Tooltip open>
-<TooltipTrigger asChild>
-<Button>Save</Button>
-</TooltipTrigger>
-<TooltipContent side="bottom">Save</TooltipContent>
-</Tooltip>
-</TooltipProvider>
-}
-  >
-    The tooltip only repeats the visible label — omit it.
-  </ExampleBlock>
-</ExampleBlockGroup>
-
-Keep tooltip text short enough to scan at a glance. A tooltip is a hint, not an explanation.
-
-<ExampleBlockGroup>
-  <ExampleBlock
-    variant="avoid"
-    previewClassName="tw:pb-16"
-    preview={
-<TooltipProvider>
-<Tooltip open>
-<TooltipTrigger asChild>
-<Button variant="outline" size="icon" aria-label="Save">
-<Save />
-</Button>
-</TooltipTrigger>
-<TooltipContent side="bottom" className="tw:max-w-[200px]">Click this button to apply your changes and save the current document</TooltipContent>
-</Tooltip>
-</TooltipProvider>
-}
-  >
-    Too long to scan — a tooltip is a hint, not a sentence.
-  </ExampleBlock>
-
-  <ExampleBlock
-    variant="prefer"
-    previewClassName="tw:pb-16"
-    preview={
-<TooltipProvider>
-<Tooltip open>
-<TooltipTrigger asChild>
-<Button variant="outline" size="icon" aria-label="Save">
-<Save />
-</Button>
-</TooltipTrigger>
-<TooltipContent side="bottom">Save changes</TooltipContent>
-</Tooltip>
-</TooltipProvider>
-}
-  >
-    The tooltip adds meaning an icon alone cannot convey, and it's short enough to read at a glance.
-  </ExampleBlock>
-</ExampleBlockGroup>
-
-### Keyboard shortcuts in tooltips
-
-Render keyboard shortcut hints using the HTML `<kbd>` element, not plain text in parentheses. The `<kbd>` styling provides sufficient visual distinction on its own — no parentheses needed.
-
-<ExampleBlockGroup>
-  <ExampleBlock
-    variant="prefer"
-    preview={<span>Undo <kbd className="tw:rounded tw:border tw:border-border tw:bg-muted tw:px-1 tw:py-0.5 tw:text-xs tw:font-mono">
-⌘Z
-</kbd></span>}
-    code="Undo <kbd>⌘</kbd><kbd>Z</kbd>"
-  >
-    The <code>kbd</code> element provides visual distinction without extra punctuation.
-  </ExampleBlock>
-
-  <ExampleBlock variant="avoid" preview={<span>Undo (⌘Z)</span>} code="Undo (⌘Z)">
-    Parentheses blend into prose and don't signal "keyboard shortcut" to the reader.
-  </ExampleBlock>
-
-  <ExampleBlock
-    variant="avoid"
-    preview={<span>Undo <kbd className="tw:rounded tw:border tw:border-border tw:bg-muted tw:px-1 tw:py-0.5 tw:text-xs tw:font-mono">
-Cmd+Z
-</kbd></span>}
-    code="Undo <kbd>Cmd+Z</kbd>  // on macOS"
-  >
-    Each OS has its own convention for writing shortcuts. On macOS, modifier keys are symbols with no separator (<code>⌘Z</code>), not spelled-out words joined with <code>+</code>. See <a href="./keyboard-shortcuts.mdx">Keyboard shortcuts</a> for the full per-OS reference.
-  </ExampleBlock>
-</ExampleBlockGroup>
-
-Caveat: The shared `Kbd` component doesn't exist yet and won't until after we upgrade shadcn/ui, so style `<kbd>` inline:
-
-```tsx
-<kbd className="tw:rounded tw:border tw:border-border tw:bg-muted tw:px-1 tw:py-0.5 tw:text-xs tw:font-mono">
-  ⌘Z
-</kbd>
-```
-
-For which symbol or word to use per key on each OS — Command, Option, Control, Shift, Tab, Caps Lock, Space, Return, Delete, Escape, and more — see [Keyboard shortcuts](./keyboard-shortcuts.mdx).
+For full tooltip guidance — when to use a tooltip vs. a popover, keyboard-shortcut formatting,
+and patterns under consideration — see [Tooltips](./tooltips.mdx).
 
 ---
 
@@ -230,5 +119,11 @@ For which symbol or word to use per key on each OS — Command, Option, Control,
 All interactive UI must be keyboard navigable. Focus should be indicated by a focus ring by default, unless UX specifies otherwise for a specific component.
 
 Be aware that the focus ring sometimes goes on a **container** rather than the interactive element itself. For example, when a text input field contains buttons, the focus ring wraps the entire container — not each individual button.
+
+### Keyboard shortcut catalog
+
+Every keyboard shortcut in the entire application — main process, bundled extensions, and this component library — is documented in one curated catalog, so there is a single place to see what shortcuts exist, what they do, and where they are handled in code. It lives in the main Platform.Bible Storybook under **Reference → Keyboard shortcuts**.
+
+**Definition of Done:** when you add, change, or remove any keyboard shortcut — a `keydown`/`keyup` handler, an Electron accelerator or `before-input-event` branch, or a `useHotkeys` binding — you must add, update, or remove its entry in the single catalog data file `src/stories/keyboard-shortcuts.data.ts` as part of the same change. A shortcut change that leaves the catalog stale is not done.
 
 See also: [Responsiveness](./responsiveness.mdx) for minimum width requirements and container query guidance.

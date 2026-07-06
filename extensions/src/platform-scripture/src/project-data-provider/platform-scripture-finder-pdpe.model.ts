@@ -50,6 +50,28 @@ function getBookAndChapterFromLocation(location: UsjChapterLocation | UsfmVerseL
   return { book: verseRef.book, chapterNum: verseRef.chapterNum };
 }
 
+/**
+ * Error name marking the "scripture absent from the project" condition thrown by
+ * {@link ScriptureFinderProjectDataProviderEngine} internals when the underlying USX PDP returns no
+ * data for a requested book/chapter. Find uses {@link isScriptureNotFoundError} to skip scopes that
+ * reference books not present in the project instead of aborting the entire find job. See PT-4089.
+ */
+const SCRIPTURE_NOT_FOUND_ERROR_NAME = 'ScriptureNotFoundError';
+
+/** Creates the sentinel error thrown when a requested book/chapter is not present in the project. */
+function createScriptureNotFoundError(bookId: string, chapter: number | undefined): Error {
+  const error = new Error(
+    `No scripture found for: ${JSON.stringify({ bookId, chapter: chapter ?? 'entire book' })}`,
+  );
+  error.name = SCRIPTURE_NOT_FOUND_ERROR_NAME;
+  return error;
+}
+
+/** Whether an unknown thrown value is the "scripture not present in the project" sentinel. */
+function isScriptureNotFoundError(error: unknown): boolean {
+  return error instanceof Error && error.name === SCRIPTURE_NOT_FOUND_ERROR_NAME;
+}
+
 // This interface doesn't provide any normal data types that PDPs use
 export const SCRIPTURE_FINDER_PROJECT_INTERFACES = [
   'platformScripture.findInScripture',
@@ -906,11 +928,27 @@ export class ScriptureFinderProjectDataProviderEngine
 
   /** Find results within a single scope. Stop requests will not stop a scope in progress. */
   async #findInScope(scope: FindScope, job: FindJob): Promise<FindResult[]> {
-    // Fetch the reader writer and character categorizer in parallel
-    const [usj, characterCategorizer] = await Promise.all([
-      this.#getOrCreateCachedReaderWriter(scope.bookId, scope.chapter),
-      this.#getOrCreateCachedCharacterCategorizer(),
-    ]);
+    // A scope that references a book/chapter not present in this project has no scripture to
+    // search, so skip it (yielding no results) rather than aborting the whole find job — e.g. when
+    // the Find web view retains a selected-books scope that includes a book from a previous project
+    // the current project does not contain (PT-4089). Only the reader-writer fetch can raise the
+    // "not present" sentinel, so it is the only call wrapped here; a genuine failure from the
+    // categorizer fetch below still propagates and errors the job.
+    let usj: UsjReaderWriter;
+    try {
+      usj = await this.#getOrCreateCachedReaderWriter(scope.bookId, scope.chapter);
+    } catch (err) {
+      if (isScriptureNotFoundError(err)) {
+        logger.info(
+          `Scripture Finder: skipping scope for book "${scope.bookId}"${
+            scope.chapter !== undefined ? ` chapter ${scope.chapter}` : ''
+          } — not present in the project`,
+        );
+        return [];
+      }
+      throw err;
+    }
+    const characterCategorizer = await this.#getOrCreateCachedCharacterCategorizer();
 
     const matches = usj.search(buildSearchRegex(job.options, characterCategorizer), {
       markerStylesToInclude: job.options.verseTextOnly ? USFM_VERSE_TEXT_MARKERS_SET : undefined,
@@ -1015,10 +1053,7 @@ export class ScriptureFinderProjectDataProviderEngine
         const usx = isChapterLevel
           ? await this.#pdps['platformScripture.USX_Chapter'].getChapterUSX(verseRef)
           : await this.#pdps['platformScripture.USX_Book'].getBookUSX(verseRef);
-        if (!usx)
-          throw new Error(
-            `No scripture found for: ${JSON.stringify({ bookId, chapter: chapter ?? 'entire book' })}`,
-          );
+        if (!usx) throw createScriptureNotFoundError(bookId, chapter);
 
         // If the cache was invalidated during the fetch, the data we just got may be stale.
         // The retried USX is known to be out-of-date when this happens on the final retry, but

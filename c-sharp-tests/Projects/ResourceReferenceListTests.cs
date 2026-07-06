@@ -124,6 +124,113 @@ public class ResourceReferenceListTests
         Assert.That(item!.Name, Is.EqualTo("Greek"));
     }
 
+    [Test]
+    public void ProjectReference_IsResourceShownByDefaultTrue_SerializesAndDeserializesCorrectly()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new ProjectReference { Name = "My Project", Id = "aabbcc", IsResourceShownByDefault = true }],
+        };
+        string json = list.SerializeToJson();
+        var result = json.DeserializeFromJson<ResourceReferenceList>();
+
+        Assert.That(result, Is.Not.Null);
+        var item = result!.Items[0] as ProjectReference;
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.IsResourceShownByDefault, Is.EqualTo(true));
+    }
+
+    [Test]
+    public void ProjectReference_IsResourceShownByDefaultAbsent_DeserializesAsNull()
+    {
+        const string json =
+            """{"dataVersion":"1.0.0","items":[{"type":"project","name":"My Project","id":"aabbcc"}]}""";
+        var result = json.DeserializeFromJson<ResourceReferenceList>();
+
+        var item = result!.Items[0] as ProjectReference;
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.IsResourceShownByDefault, Is.Null);
+    }
+
+    [Test]
+    public void ProjectReference_IsResourceShownByDefaultNull_NotPresentInSerializedJson()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new ProjectReference { Name = "P", Id = "abc" }],
+        };
+        string json = list.SerializeToJson();
+        Assert.That(json, Does.Not.Contain("isResourceShownByDefault"));
+    }
+
+    [Test]
+    public void DblResourceReference_IsResourceShownByDefaultFalse_SerializesAndDeserializesCorrectly()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items =
+            [
+                new DblResourceReference
+                {
+                    Name = "Web English",
+                    Id = "aabbccddeeff00112233445566778899aabbccddeeff0011",
+                    IsResourceShownByDefault = false,
+                },
+            ],
+        };
+        string json = list.SerializeToJson();
+        var result = json.DeserializeFromJson<ResourceReferenceList>();
+
+        var item = result!.Items[0] as DblResourceReference;
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.IsResourceShownByDefault, Is.EqualTo(false));
+    }
+
+    [Test]
+    public void EnhancedResourceReference_IsResourceShownByDefaultTrue_SerializesAndDeserializesCorrectly()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new EnhancedResourceReference { Name = "BDAG", IsResourceShownByDefault = true }],
+        };
+        string json = list.SerializeToJson();
+        var result = json.DeserializeFromJson<ResourceReferenceList>();
+
+        var item = result!.Items[0] as EnhancedResourceReference;
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.IsResourceShownByDefault, Is.EqualTo(true));
+    }
+
+    [Test]
+    public void XmlResourceReference_IsResourceShownByDefaultFalse_SerializesAndDeserializesCorrectly()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new XmlResourceReference { Name = "SomeXml", IsResourceShownByDefault = false }],
+        };
+        string json = list.SerializeToJson();
+        var result = json.DeserializeFromJson<ResourceReferenceList>();
+
+        var item = result!.Items[0] as XmlResourceReference;
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.IsResourceShownByDefault, Is.EqualTo(false));
+    }
+
+    [Test]
+    public void SourceLanguageResourceReference_IsResourceShownByDefaultTrue_SerializesAndDeserializesCorrectly()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new SourceLanguageResourceReference { Name = "Greek", IsResourceShownByDefault = true }],
+        };
+        string json = list.SerializeToJson();
+        var result = json.DeserializeFromJson<ResourceReferenceList>();
+
+        var item = result!.Items[0] as SourceLanguageResourceReference;
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.IsResourceShownByDefault, Is.EqualTo(true));
+    }
+
     #endregion
 
     #region Serialization — unknown type round-trip
