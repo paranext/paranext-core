@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { createRef } from 'react';
 import { beforeAll, describe, expect, test } from 'vitest';
 import '@testing-library/jest-dom';
@@ -39,6 +40,11 @@ beforeAll(() => {
   if (typeof Element.prototype.scrollTo !== 'function') {
     Element.prototype.scrollTo = () => {};
   }
+  // Chapters view schedules a `scrollIntoView` on the target chapter cell after opening,
+  // which jsdom also doesn't implement.
+  if (typeof Element.prototype.scrollIntoView !== 'function') {
+    Element.prototype.scrollIntoView = () => {};
+  }
 });
 
 describe('BookChapterControl imperative handle', () => {
@@ -60,6 +66,48 @@ describe('BookChapterControl imperative handle', () => {
     await waitFor(() => {
       const input = screen.getByRole('combobox', { name: 'book-chapter-trigger' });
       expect(input).toHaveAttribute('aria-expanded', 'true');
+    });
+  });
+
+  test('open() resets a stale chapters view back to books view and focuses the search input', async () => {
+    const handleRef = createRef<BookChapterControlHandle>();
+    // Radix popovers rely on PointerEvent sequences that jsdom lays out poorly;
+    // `pointerEventsCheck: 0` is the established workaround (see scope-selector tests).
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        ref={handleRef}
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+      />,
+    );
+
+    // Open via the trigger and drill into chapters view by picking a multi-chapter book
+    await user.click(screen.getByRole('combobox', { name: 'book-chapter-trigger' }));
+    await user.click(await screen.findByText('Genesis'));
+    // CommandInput only renders in books view — its absence proves we're in chapters view
+    await waitFor(() => {
+      expect(document.querySelector('[cmdk-input]')).toBeNull();
+    });
+
+    // Close while chapters view is still active, leaving the stale view state behind
+    await user.keyboard('{Escape}');
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: 'book-chapter-trigger' })).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      );
+    });
+
+    // Imperative open() must reset to books view so the search input exists and gets focus
+    act(() => {
+      handleRef.current?.open();
+    });
+
+    await waitFor(() => {
+      const input = document.querySelector('[cmdk-input]');
+      expect(input).not.toBeNull();
+      expect(input).toHaveFocus();
     });
   });
 

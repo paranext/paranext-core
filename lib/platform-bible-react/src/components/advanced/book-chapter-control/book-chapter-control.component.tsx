@@ -128,20 +128,6 @@ export function BookChapterControl({
   // References to the verses that are shown as CommandItems
   const verseRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
-  useImperativeHandle(
-    ref,
-    () => ({
-      open: () => {
-        setIsCommandOpen(true);
-        // Focus the search input once the popover has rendered
-        setTimeout(() => {
-          commandInputRef.current?.focus();
-        }, 0);
-      },
-    }),
-    [],
-  );
-
   // Wrapper function to handle submit and add to recent searches
   const handleSubmitAndAddToRecent = useCallback(
     (newScrRef: SerializedVerseRef) => {
@@ -372,6 +358,25 @@ export function BookChapterControl({
       setInputValue('');
     }
   }, []);
+
+  // Imperative `open()` goes through handleOpenChange (not setIsCommandOpen directly) so the
+  // deferred view-state reset runs: the control deliberately leaves stale chapters/verses view
+  // state behind on close (see handleVerseSelect / handleChapterSelect) and only resets it when
+  // the popover opens. Callers like the Ctrl+B command can't know what view the control was last
+  // left in, and CommandInput only renders in 'books' view — without the reset, focus would no-op.
+  useImperativeHandle(
+    ref,
+    () => ({
+      open: () => {
+        handleOpenChange(true);
+        // Focus the search input once the popover has rendered
+        setTimeout(() => {
+          commandInputRef.current?.focus();
+        }, 0);
+      },
+    }),
+    [handleOpenChange],
+  );
 
   // #endregion
 
