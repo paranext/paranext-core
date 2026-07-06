@@ -4,6 +4,7 @@ import type { ResourceReference } from 'platform-scripture';
 import {
   Button,
   Checkbox,
+  Dialog,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -198,14 +199,23 @@ export function ShareLayoutDialogContent({
             </Button>
           </PopoverTrigger>
           <PopoverContent className="tw:w-[32rem] tw:p-0">
-            <ResourcePickerDialog
-              allResources={allResources}
-              isResourcesLoading={isResourcesLoading}
-              resourceType={tab}
-              selectedResourceIds={resources.filter(hasStringId).map((r) => r.id)}
-              localizedStrings={resourcePickerLocalizedStrings}
-              onSelect={(resource) => handleAddResource(tab, resource)}
-            />
+            {/*
+              ResourcePickerDialog renders its own DialogTitle internally but has no Dialog.Root of
+              its own by design (it's meant to be embedded in a host-provided Dialog context). Since
+              this popover is rendered inside the outer ShareLayoutDialogContent's Dialog.Root, wrap
+              it in its own isolated Dialog.Root here so its DialogTitle gets a distinct id from the
+              outer dialog's title instead of colliding with it.
+            */}
+            <Dialog open modal={false}>
+              <ResourcePickerDialog
+                allResources={allResources}
+                isResourcesLoading={isResourcesLoading}
+                resourceType={tab}
+                selectedResourceIds={resources.filter(hasStringId).map((r) => r.id)}
+                localizedStrings={resourcePickerLocalizedStrings}
+                onSelect={(resource) => handleAddResource(tab, resource)}
+              />
+            </Dialog>
           </PopoverContent>
         </Popover>
       </div>
@@ -236,14 +246,21 @@ export function ShareLayoutDialogContent({
               </Button>
             </PopoverTrigger>
             <PopoverContent className="tw:w-[32rem] tw:p-0">
-              <ResourcePickerDialog
-                allResources={allResources}
-                isResourcesLoading={isResourcesLoading}
-                resourceType="ScriptureResource"
-                selectedResourceIds={modelText && hasStringId(modelText) ? [modelText.id] : []}
-                localizedStrings={resourcePickerLocalizedStrings}
-                onSelect={handleSelectModelText}
-              />
+              {/*
+                See the comment on the other ResourcePickerDialog usage above: wrap in its own
+                Dialog.Root so its internal DialogTitle gets a distinct id from the outer dialog's
+                title.
+              */}
+              <Dialog open modal={false}>
+                <ResourcePickerDialog
+                  allResources={allResources}
+                  isResourcesLoading={isResourcesLoading}
+                  resourceType="ScriptureResource"
+                  selectedResourceIds={modelText && hasStringId(modelText) ? [modelText.id] : []}
+                  localizedStrings={resourcePickerLocalizedStrings}
+                  onSelect={handleSelectModelText}
+                />
+              </Dialog>
             </PopoverContent>
           </Popover>
         </div>

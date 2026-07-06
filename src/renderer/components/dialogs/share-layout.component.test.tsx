@@ -26,6 +26,17 @@ const ALL_RESOURCES: DblResourceData[] = [
     updateAvailable: false,
     projectId: 'esv-proj',
   },
+  {
+    dblEntryUid: 'nlt-uid',
+    displayName: 'NLT',
+    fullName: 'New Living Translation',
+    bestLanguageName: 'English',
+    type: 'ScriptureResource',
+    size: 10,
+    installed: true,
+    updateAvailable: false,
+    projectId: 'nlt-proj',
+  },
 ];
 
 function renderContent(overrides: Partial<Parameters<typeof ShareLayoutDialogContent>[0]> = {}) {
@@ -101,5 +112,35 @@ describe('ShareLayoutDialogContent', () => {
     expect(result.scriptureResources).toContainEqual(
       expect.objectContaining({ id: 'niv-uid', isResourceShownByDefault: true }),
     );
+  });
+
+  it('adds a resource to the Bible Texts list via the Add resource popover', () => {
+    const { onConfirm } = renderContent();
+
+    // The Bible Texts section is rendered first, so its "Add resource…" button is the first match.
+    const [addResourceButton] = screen.getAllByText('%shareLayoutDialog_addResource_label%');
+    fireEvent.click(addResourceButton);
+
+    // The popover's ResourcePickerDialog renders NLT (not yet selected) as a clickable row.
+    fireEvent.click(screen.getByRole('button', { name: 'NLT' }));
+    fireEvent.click(screen.getByText('%shareLayoutDialog_confirm_label%'));
+
+    const [result] = onConfirm.mock.calls[0];
+    expect(result.scriptureResources).toContainEqual(
+      expect.objectContaining({ type: 'dblResource', id: 'nlt-uid', name: 'NLT' }),
+    );
+  });
+
+  it('does not render two elements with the same id when the Add resource popover is open', () => {
+    renderContent();
+
+    const [addResourceButton] = screen.getAllByText('%shareLayoutDialog_addResource_label%');
+    fireEvent.click(addResourceButton);
+
+    // Sanity-check the popover actually opened before asserting on ids.
+    expect(screen.getByRole('button', { name: 'NLT' })).toBeInTheDocument();
+
+    const ids = Array.from(document.querySelectorAll('[id]')).map((el) => el.id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });
