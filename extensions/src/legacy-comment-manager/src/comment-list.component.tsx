@@ -10,44 +10,25 @@ import {
 } from 'platform-bible-react';
 import type { LanguageStrings } from 'platform-bible-utils';
 import { ComponentProps } from 'react';
-
-// Filter constants and types — shared between this presentational panel (which renders the filter
-// toolbar) and the web view (which uses the values to build its comment-thread query).
-
-export const UNFILTERED = 'unfiltered';
-export const FILTER_UNRESOLVED_ASSIGNED = 'unresolved-assigned-to-me';
-export const FILTER_UNREAD_ASSIGNED = 'unread-assigned-to-me';
-export const SCOPE_FILTER_CURRENT_CHAPTER = 'current-chapter';
-
-export const commentFilterToLabelKey = {
-  [FILTER_UNRESOLVED_ASSIGNED]: '%comment_filter_unresolved_assigned_to_me%',
-  [FILTER_UNREAD_ASSIGNED]: '%comment_filter_unread_assigned_to_me%',
-  [UNFILTERED]: '%comment_filter_all%',
-} as const;
-
-export type CommentFilter = keyof typeof commentFilterToLabelKey;
-
-export const scopeFilterToLabelKey = {
-  [SCOPE_FILTER_CURRENT_CHAPTER]: '%comment_filter_scope_current_chapter%',
-  [UNFILTERED]: '%comment_filter_scope_all_books%',
-} as const;
-
-export type ScopeFilter = keyof typeof scopeFilterToLabelKey;
-
-export function isCommentFilter(value: string): value is CommentFilter {
-  return value in commentFilterToLabelKey;
-}
-export function isScopeFilter(value: string): value is ScopeFilter {
-  return value in scopeFilterToLabelKey;
-}
+import {
+  CommentFilter,
+  commentFilterToLabelKey,
+  isCommentFilter,
+  isScopeFilter,
+  ScopeFilter,
+  scopeFilterToLabelKey,
+  UNFILTERED,
+} from './comment-list-filters.model';
 
 /** Extra localization keys this panel needs beyond `COMMENT_LIST_STRING_KEYS`. */
 export const COMMENT_LIST_PANEL_EXTRA_STRING_KEYS = [
   '%comment_filter_all%',
+  '%comment_filter_conflicts%',
   '%comment_filter_scope_all_books%',
   '%comment_filter_scope_current_chapter%',
   '%comment_filter_unread_assigned_to_me%',
   '%comment_filter_unresolved_assigned_to_me%',
+  '%comment_filter_unresolved_conflicts%',
   '%no_comments%',
   '%no_comments_match_filter%',
 ] as const;
