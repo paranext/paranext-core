@@ -1,32 +1,170 @@
-import { DialogHeader, DialogTitle, DialogFooter, Button } from 'platform-bible-react';
+import { useCallback, useMemo } from 'react';
+import {
+  useLocalizedStrings,
+  useProjectDataProvider,
+  useProjectSetting,
+} from '@renderer/hooks/papi-hooks';
+import { sendCommand } from '@shared/services/command.service';
+import { isPlatformError } from 'platform-bible-utils';
+import { usePromise, RESOURCE_PICKER_DIALOG_STRING_KEYS } from 'platform-bible-react';
+import type { ResourceReference, ResourceReferenceList } from 'platform-scripture';
 import { DIALOG_BASE, DialogProps } from '@renderer/components/dialogs/dialog-base.data';
 import {
   DialogDefinition,
   ShareLayoutDialogOptions,
   SHARE_LAYOUT_DIALOG_TYPE,
 } from '@renderer/components/dialogs/dialog-definition.model';
+import {
+  ShareLayoutDialogContent,
+  ShareLayoutActiveTab,
+  ShareLayoutResult,
+  SHARE_LAYOUT_DIALOG_STRING_KEYS,
+} from '@renderer/components/dialogs/share-layout.component';
+import {
+  seedResourceList,
+  seedScalar,
+  splitResourcesByTab,
+} from '@renderer/components/dialogs/share-layout.utils';
 
-// This skeleton doesn't use `projectId` yet (Task 7 adds the real data-fetching wrapper that
-// consumes it), so it's omitted here rather than destructured. Omitting it also keeps this
-// Component's prop type assignable to `DialogDefinitionBase['Component']`'s generic
-// `(props: DialogProps<unknown>) => ReactElement` signature, since `projectId` is required on
-// `ShareLayoutDialogOptions`.
-function ShareLayoutDialogComponent({
+const EMPTY_RESOURCE_LIST: ResourceReferenceList = { dataVersion: '1.0.0', items: [] };
+
+/**
+ * `projectId` is required on `ShareLayoutDialogOptions`, but `DialogDefinitionBase['Component']`'s
+ * generic base signature is `(props: DialogProps<unknown>) => ReactElement` — a required field on
+ * the options type breaks assignability to that generic signature. Mirror the same workaround
+ * `AlertDialog` uses in `alert-dialog.component.tsx` for its required `prompt` field: omit
+ * `projectId` from the intersected options type and re-add it as optional here. `projectId` will
+ * always actually be provided at runtime by the command handler that opens this dialog; the PAPI
+ * hooks below already tolerate `projectId: string | undefined`, matching their normal usage
+ * elsewhere in the codebase.
+ */
+function ShareLayoutDialogWrapper({
+  projectId,
   submitDialog,
   cancelDialog,
-}: DialogProps<boolean> & Omit<ShareLayoutDialogOptions, 'projectId'>) {
+}: DialogProps<boolean> &
+  Omit<ShareLayoutDialogOptions, 'projectId'> & {
+    projectId?: ShareLayoutDialogOptions['projectId'];
+  }) {
+  const [localizedStrings] = useLocalizedStrings([...SHARE_LAYOUT_DIALOG_STRING_KEYS]);
+  const [resourcePickerLocalizedStrings] = useLocalizedStrings([
+    ...RESOURCE_PICKER_DIALOG_STRING_KEYS,
+  ]);
+
+  const [allResources, isResourcesLoading] = usePromise(
+    useCallback(async () => sendCommand('platformGetResources.getCachedResources'), []),
+    undefined,
+  );
+
+  const [projectResourcesSetting, setProjectResources] = useProjectSetting(
+    projectId,
+    'platformScripture.referencedProjectsAndResources',
+    EMPTY_RESOURCE_LIST,
+  );
+  const [projectModelTextsSetting, setProjectModelTexts] = useProjectSetting(
+    projectId,
+    'platformScripture.modelTexts',
+    EMPTY_RESOURCE_LIST,
+  );
+  const [projectActiveTabSetting, setProjectActiveTab] = useProjectSetting(
+    projectId,
+    'platformScripture.sharedLayoutDefaultTab',
+    '',
+  );
+
+  const textConnectionsProvider = useProjectDataProvider(
+    'platformScripture.textConnectionSettings',
+    projectId,
+  );
+  const [personalResources] = usePromise(
+    useCallback(
+      async () => textConnectionsProvider?.getUserReferencedProjectsAndResources(),
+      [textConnectionsProvider],
+    ),
+    undefined,
+  );
+  const [personalModelTexts] = usePromise(
+    useCallback(
+      async () => textConnectionsProvider?.getUserModelTexts(),
+      [textConnectionsProvider],
+    ),
+    undefined,
+  );
+
+  const projectResources = isPlatformError(projectResourcesSetting)
+    ? undefined
+    : projectResourcesSetting;
+  const projectModelTexts = isPlatformError(projectModelTextsSetting)
+    ? undefined
+    : projectModelTextsSetting;
+  const projectActiveTab = isPlatformError(projectActiveTabSetting)
+    ? undefined
+    : projectActiveTabSetting;
+
+  const seededItems = useMemo(
+    () => seedResourceList(projectResources, personalResources),
+    [projectResources, personalResources],
+  );
+  const { scriptureResources, commentaryResources } = useMemo(
+    () => splitResourcesByTab(seededItems, allResources ?? []),
+    [seededItems, allResources],
+  );
+
+  const seededModelTextItems = useMemo(
+    () => seedResourceList(projectModelTexts, personalModelTexts),
+    [projectModelTexts, personalModelTexts],
+  );
+  const seededModelText: ResourceReference | undefined = seededModelTextItems[0];
+
+  // `seedScalar` is generic over `string | ResourceReference | undefined`, so it returns the plain
+  // `string | undefined` type of the persisted setting rather than the narrower
+  // `ShareLayoutActiveTab` union `ShareLayoutDialogContent` expects. `ShareLayoutDialogContent`
+  // already guards any string it receives against that union at the UI layer (see
+  // `isShareLayoutActiveTab` in `share-layout.component.tsx`) before ever using it as a `Select`
+  // value, so a stale/invalid persisted value here can only affect which tab is initially
+  // preselected, not cause a crash — narrowing it for real would require exporting that guard from
+  // Task 6's presentational component, which is out of scope for this wiring task.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const seededActiveTab = seedScalar(projectActiveTab, undefined) as
+    | ShareLayoutActiveTab
+    | undefined;
+
+  const handleConfirm = useCallback(
+    (result: ShareLayoutResult) => {
+      setProjectResources?.({
+        dataVersion: projectResources?.dataVersion ?? EMPTY_RESOURCE_LIST.dataVersion,
+        items: [...result.scriptureResources, ...result.commentaryResources],
+      });
+      setProjectModelTexts?.({
+        dataVersion: projectModelTexts?.dataVersion ?? EMPTY_RESOURCE_LIST.dataVersion,
+        items: result.modelText ? [result.modelText] : [],
+      });
+      setProjectActiveTab?.(result.activeTab ?? '');
+      submitDialog(true);
+    },
+    [
+      projectResources,
+      projectModelTexts,
+      setProjectResources,
+      setProjectModelTexts,
+      setProjectActiveTab,
+      submitDialog,
+    ],
+  );
+
   return (
-    <>
-      <DialogHeader>
-        <DialogTitle>%shareLayoutDialog_title%</DialogTitle>
-      </DialogHeader>
-      <DialogFooter>
-        <Button variant="outline" onClick={cancelDialog}>
-          Cancel
-        </Button>
-        <Button onClick={() => submitDialog(true)}>Share with team</Button>
-      </DialogFooter>
-    </>
+    <ShareLayoutDialogContent
+      initialModelText={seededModelText}
+      initialActiveTab={seededActiveTab}
+      initialScriptureResources={scriptureResources}
+      initialCommentaryResources={commentaryResources}
+      allResources={allResources ?? []}
+      isResourcesLoading={isResourcesLoading}
+      resourcePickerLocalizedStrings={resourcePickerLocalizedStrings}
+      localizedStrings={localizedStrings}
+      onConfirm={handleConfirm}
+      onCancel={cancelDialog}
+    />
   );
 }
 
@@ -36,7 +174,7 @@ export const SHARE_LAYOUT_DIALOG: DialogDefinition<typeof SHARE_LAYOUT_DIALOG_TY
     tabType: SHARE_LAYOUT_DIALOG_TYPE,
     defaultTitle: '%shareLayoutDialog_title%',
     initialSize: { width: 640, height: 720 },
-    Component: ShareLayoutDialogComponent,
+    Component: ShareLayoutDialogWrapper,
   },
 );
 
