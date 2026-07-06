@@ -44,7 +44,11 @@ test.describe('Scripture Text Grid shown-by-default schema (A2)', () => {
               projectId: string,
             ) => Promise<{
               setSetting: (key: string, value: unknown) => Promise<boolean>;
-              getSetting: (key: string) => Promise<unknown>;
+              // This test only reads `platformScripture.modelTexts`, so narrow the return here
+              // to that shape. This lets the assertions below avoid a type assertion on `unknown`.
+              getSetting: (
+                key: string,
+              ) => Promise<{ items: { id?: string; isResourceShownByDefault?: boolean }[] }>;
               resetShownByDefaultOverlay: () => Promise<boolean>;
               initializeShownByDefaultOverlay: () => Promise<boolean>;
               getShownByDefaultOverlay: () => Promise<Record<string, boolean>>;
@@ -81,16 +85,13 @@ test.describe('Scripture Text Grid shown-by-default schema (A2)', () => {
       return { stored, didInit, overlay };
     }, TEST_PROJECT_ID);
 
-    // Guard before the cast so a null/absent setting fails with a clear assertion,
+    // Guard so a null/absent setting fails with a clear assertion,
     // not a confusing TypeError during the .find() below.
     expect(result.stored).toBeTruthy();
 
-    const storedList = result.stored as {
-      items: { id?: string; isResourceShownByDefault?: boolean }[];
-    };
-    const flaggedItem = storedList.items.find((i) => i.id === 'aabbccddeeff00112233');
+    const flaggedItem = result.stored.items.find((i) => i.id === 'aabbccddeeff00112233');
     expect(flaggedItem?.isResourceShownByDefault).toBe(true);
     expect(result.didInit).toBe(true);
-    expect(result.overlay['aabbccddeeff00112233']).toBe(true);
+    expect(result.overlay.aabbccddeeff00112233).toBe(true);
   });
 });
