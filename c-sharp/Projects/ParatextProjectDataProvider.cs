@@ -687,10 +687,11 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <see cref="CommentEditHelper.SaveEdits"/>, then resolves the note.
     /// </summary>
     /// <remarks>
-    /// The reject verse write is best-effort inside PT9's <see cref="CommentEditHelper.SaveEdits"/>
-    /// orchestration: PT9's <c>ReplaceAcceptedText</c> silently no-ops (it traces an error and
-    /// leaves the thread still resolved) if it cannot find the verse marker in the chapter. We do
-    /// not add compensating logic here.
+    /// The reject verse write happens inside PT9's <see cref="CommentEditHelper.SaveEdits"/>
+    /// orchestration, where PT9's <c>ReplaceAcceptedText</c> silently no-ops (it traces an error and
+    /// leaves the thread still resolved) if it cannot find the verse marker in the chapter. Reject is
+    /// therefore pre-gated by <see cref="IsConflictVerseStale"/>, which refuses the resolution when the
+    /// verse is missing or has changed since the merge, so that no-op path is not reached.
     /// </remarks>
     /// <exception cref="InvalidDataException">Unknown resolution, or the thread doesn't exist.</exception>
     /// <exception cref="InvalidOperationException">Not a verseText conflict, the thread is already resolved, the user lacks permission, the resolve was canceled, or resolution is 'reject' and the verse text has changed since the conflict was recorded (stale).</exception>
