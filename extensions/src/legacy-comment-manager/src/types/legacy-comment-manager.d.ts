@@ -436,7 +436,7 @@ declare module 'papi-shared-types' {
      * is already open, reloads it in place without bringing it to the front.
      *
      * @param projectId The project whose comments to display
-     * @returns The webView ID of the panel
+     * @returns The webView ID of the panel, or `undefined` if opening failed
      */
     'legacyCommentManager.openCommentListPanel': (
       projectId?: string | undefined,
