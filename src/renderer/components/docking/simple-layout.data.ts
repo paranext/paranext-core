@@ -1,6 +1,12 @@
 import { SavedTabInfo } from '@shared/models/docking-framework.model';
 import { LayoutBase } from 'rc-dock';
-import { TAB_TYPE_WEBVIEW } from '@renderer/components/web-view.component';
+
+// `TAB_TYPE_WEBVIEW` is inlined here rather than imported from `web-view.component`. The builder
+// in `simple-layout.builder.ts` imports `simpleLayout` from this file, and `web-view.service-host`
+// imports the builder — importing from `web-view.component` would close a dependency cycle. The
+// string literal `'webView'` is the docking-framework contract — duplicating it here is safe and
+// keeps the cycle broken.
+const TAB_TYPE_WEBVIEW = 'webView';
 
 // Using `as` here simplifies type changes.
 /* eslint-disable no-type-assertion/no-type-assertion */
