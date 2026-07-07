@@ -381,8 +381,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * lands, typing filters the palette's own search box), so it's never tracked here.
    *
    * `'enter'` only guards against a second Enter re-opening a palette while the first request's
-   * round-trip to the overlay service is still in flight — its palette is always focused too, so
-   * there's no forwarding table for it either.
+   * round-trip to the overlay service is still in flight — its palette is always focused too. It
+   * and `'selection'` also carry a capture-phase forwarding table as a SAFETY NET: focused palettes
+   * are designed to be driven by the renderer overlay's own input, but the cross-frame focus
+   * handoff can lose (the editor iframe re-grabs focus on Lexical commits), and pre-fix the
+   * keystrokes then hit the document instead — typing REPLACED the wrapped selection and Escape
+   * fell through to Lexical (QA run 3 items 4/5).
    *
    * `token` (allocated from the monotonic counter below) identifies which session an async
    * show-promise settlement belongs to, so a stale promise's cleanup can only clear its own
@@ -397,6 +401,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         items: MarkerMenuItem[];
       }
     | { kind: 'enter'; token: number; items: MarkerMenuItem[] }
+    | { kind: 'selection'; token: number; filter: string; items: MarkerMenuItem[] }
     | undefined
   >(undefined);
 
@@ -1462,7 +1467,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       const token = paletteSessionCounter.current;
       paletteSession.current = passive
         ? { kind: 'backslash', token, literalPrefixLanded, filter: '', items }
-        : undefined;
+        : { kind: 'selection', token, filter: '', items };
 
       papi.overlays
         .showCommandPalette(
@@ -1635,13 +1640,55 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           return;
         }
 
-        // Enter-menu safety net (Task 15 round 3, QA run 3 item 5): the Enter palette is a
-        // FOCUSED palette designed to be driven by the renderer overlay's own input, but if the
-        // cross-frame focus handoff loses (or the user clicks back into the editor), keys land
-        // HERE — pre-fix, Escape then reached Lexical instead of cancelling (the split committed
-        // and the palette zombied because nothing ever dismissed the 'enter' session). Forward
-        // the session-control keys; any other typing means the user resumed editing, so dismiss
-        // and let the keystroke land.
+        // Focused-palette safety net (Task 15 round 3, QA run 3 items 4/5): focused palettes are
+        // designed to be driven by the renderer overlay's own input, but the cross-frame focus
+        // handoff can lose (the editor iframe re-grabs focus on Lexical commits) and keys land
+        // HERE. For the SELECTION-wrap palette every key is claimed — nothing may land in the
+        // document while it is open (typing would replace the wrapped selection, the very text
+        // loss QA observed): filter characters are forwarded to the palette's search box,
+        // arrows/Enter/Escape drive it, anything else dismisses without landing.
+        if (session?.kind === 'selection') {
+          if (
+            event.key === 'Shift' ||
+            event.key === 'Control' ||
+            event.key === 'Alt' ||
+            event.key === 'Meta'
+          )
+            return;
+          event.preventDefault();
+          event.stopPropagation();
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            papi.overlays.updateCommandPalette(webViewId, {
+              moveSelection: event.key === 'ArrowDown' ? 1 : -1,
+            });
+            return;
+          }
+          if (event.key === 'Enter') {
+            paletteSession.current = undefined;
+            papi.overlays.commitCommandPaletteSelection(webViewId);
+            return;
+          }
+          if (event.key === 'Escape') {
+            paletteSession.current = undefined;
+            papi.overlays.dismissCommandPalette(webViewId);
+            return;
+          }
+          if (event.key === 'Backspace' || /^[a-z0-9+*-]$/i.test(event.key)) {
+            session.filter =
+              event.key === 'Backspace' ? session.filter.slice(0, -1) : session.filter + event.key;
+            papi.overlays.updateCommandPalette(webViewId, { filterText: session.filter });
+            return;
+          }
+          // Any other key: close the palette; the keystroke is still swallowed (claimed above) so
+          // it cannot replace the selection.
+          paletteSession.current = undefined;
+          papi.overlays.dismissCommandPalette(webViewId);
+          return;
+        }
+
+        // Enter-menu safety net (Task 15 round 3, QA run 3 item 5): same design as above, but
+        // with a collapsed caret there is no selection to protect — any non-control key means
+        // the user resumed editing, so dismiss and let the keystroke land.
         if (session?.kind === 'enter') {
           if (
             event.key === 'Shift' ||

@@ -37,6 +37,7 @@ import {
   useId,
   useMemo,
   useRef,
+  useState,
 } from 'react';
 import { isLocalizeKey, LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 
@@ -297,6 +298,16 @@ export function OverlayCommandPalettePresentational({
     };
   }, [passive]);
 
+  // Active-mode search text: locally typed AND externally driven. The `filterText` prop only
+  // filtered passive mode; the focused (active) palette relied on the user typing into the cmdk
+  // input directly — but when the cross-frame focus fight loses (the editor iframe re-grabs focus
+  // on every Lexical commit), the extension forwards keystrokes via updateCommandPalette instead,
+  // and those must narrow the ACTIVE list too. Controlled value, external updates win.
+  const [inputValue, setInputValue] = useState(filterText ?? '');
+  useEffect(() => {
+    setInputValue(filterText ?? '');
+  }, [filterText]);
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -370,7 +381,12 @@ export function OverlayCommandPalettePresentational({
       className="tw:rounded-lg tw:border"
       onKeyDown={handleKeyDown}
     >
-      <CommandInput ref={inputRef} placeholder={placeholder} />
+      <CommandInput
+        ref={inputRef}
+        placeholder={placeholder}
+        value={inputValue}
+        onValueChange={setInputValue}
+      />
       <CommandList style={{ maxHeight: maxHeight - 44 }}>
         <CommandEmpty>{noResultsText}</CommandEmpty>
         <GroupedItems
