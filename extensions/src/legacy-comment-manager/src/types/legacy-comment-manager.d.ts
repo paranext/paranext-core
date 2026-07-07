@@ -117,7 +117,11 @@ declare module 'legacy-comment-manager' {
    * The resolution actions the current user may take on a conflict thread. Must stay textually
    * identical to the union declared in platform-bible-react's conflict-note-card.types.ts.
    */
-  export type ConflictResolutionOptions = 'none' | 'accept' | 'acceptOrReject';
+  export type ConflictResolutionOptions =
+    | 'none'
+    | 'accept'
+    | 'acceptOrReject'
+    | 'acceptRejectOrMerge';
 
   /**
    * Selector for retrieving comment threads
@@ -191,6 +195,7 @@ declare module 'legacy-comment-manager' {
         // Read-only, decoded display fields — never set when creating a comment.
         | 'rejectedText'
         | 'acceptedText'
+        | 'mergedText'
         | 'resultText'
         | 'rejectedResultText'
       >
@@ -234,6 +239,7 @@ declare module 'legacy-comment-manager' {
         | 'conflictType'
         | 'rejectedText'
         | 'acceptedText'
+        | 'mergedText'
         | 'resultText'
         | 'rejectedResultText'
       >
@@ -301,20 +307,22 @@ declare module 'legacy-comment-manager' {
        * - `'accept'` keeps the auto-merged (winning) verse text and resolves the note (no verse
        *   write).
        * - `'reject'` writes the losing side's text into the verse, then resolves the note.
+       * - `'merge'` writes PT9's auto-merged both-sides text into the verse; only valid when
+       *   `getConflictResolutionOptions` returned `'acceptRejectOrMerge'`.
        *
        * Only a project administrator, or the user the admin assigned to the conflict, may resolve.
        *
        * @param threadId The conflict thread to resolve
-       * @param resolution `'accept'` (keep the current/winning text) or `'reject'` (take the other
-       *   side)
-       * @throws If `resolution` is neither `'accept'` nor `'reject'`
+       * @param resolution `'accept'` (keep the current/winning text), `'reject'` (take the other
+       *   side), or `'merge'` (combine both sides)
+       * @throws If `resolution` is neither `'accept'`, `'reject'`, nor `'merge'`
        * @throws If the thread doesn't exist or isn't a `verseText` conflict
        * @throws If the conflict thread is already resolved
        * @throws If the current user is neither a project administrator nor the assigned resolver
-       * @throws If resolution is 'reject' and the verse text has changed since the conflict was
-       *   recorded (stale)
+       * @throws If resolution is `'reject'` or `'merge'` and the verse text has changed since the
+       *   conflict was recorded (stale)
        */
-      resolveConflict(threadId: string, resolution: 'accept' | 'reject'): Promise<void>;
+      resolveConflict(threadId: string, resolution: 'accept' | 'reject' | 'merge'): Promise<void>;
 
       /**
        * The resolution actions the current user may take on the given conflict thread — the
@@ -327,6 +335,8 @@ declare module 'legacy-comment-manager' {
        *   recorded (stale), so only `'accept'` (keep the current text) is available —
        *   `resolveConflict(threadId, 'reject')` would throw.
        * - `'acceptOrReject'`: fully available.
+       * - `'acceptRejectOrMerge'`: the user may resolve, and the two changes are independent so
+       *   `'merge'` (combine both) is also available.
        *
        * @param threadId The conflict thread to query
        * @returns The available resolution actions

@@ -66,6 +66,11 @@ export type LegacyComment = {
   /** Language of note */
   language: string;
   /**
+   * The PT9 "merge all changes" diff preview (same markup as {@link acceptedText}/
+   * {@link rejectedText}); present only when the two changes are independent.
+   */
+  mergedText?: string;
+  /**
    * Only present on the FIRST comment of a `verseText` conflict thread (never on replies): the
    * resulting verse USFM (plain, no diff markup) if the change is REJECTED — i.e. the losing side.
    * Pairs with {@link resultText} (the accepted outcome) to drive a dynamic result preview. Absent
