@@ -22,6 +22,7 @@ Read these when you need depth on a topic. Keep them in mind when writing or rev
 | Localization            | [Localization-Guide.md](.context/standards/Localization-Guide.md)         | i18n store/APIs, fallback chain, RTL, immutable strings, C# localization |
 | Git and GitHub          | [Git-Guide.md](.context/standards/Git-Guide.md)                           | Branch structure, squash-merge, template merges              |
 | Code Review             | [Code-Review-Guide.md](.context/standards/Code-Review-Guide.md)           | Reviewable, code-steward, review workflow, auto-merge        |
+| Current Epic            | [Current-Epic.md](.context/standards/Current-Epic.md)                     | What the current epic is, where it is articulated (roadmap, JIRA sprint board, Discord), epic-membership judgment |
 | Security                | [Security-Guide.md](.context/standards/Security-Guide.md)                 | CSP, module import restrictions, extension sandboxing        |
 
 ## Terminology

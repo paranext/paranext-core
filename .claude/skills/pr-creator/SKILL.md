@@ -97,11 +97,6 @@ Key code steward areas:
 
 ## PR Templates
 
-For PRs that are not part of the current epic, insert a `## Why review this`
-section immediately after `## Summary` in whichever template you use — see
-["Why review this" Section (Non-Epic PRs)](#why-review-this-section-non-epic-prs)
-below.
-
 ### Minimal Template (Simple Changes)
 
 ```bash
@@ -111,6 +106,14 @@ gh pr create \
 ## Summary
 
 [Brief description of what this PR does]
+
+### Why review this
+
+[Only when this PR is not part of the current epic (side fixes, tooling,
+refactors, dependency bumps, cleanup) — otherwise delete this section.
+Start with "Not part of the current epic." then 1–2 sentences: what
+prompted this change and why it is worth reviewer time now. What the
+current epic is: .context/standards/Current-Epic.md]
 
 ## Changes
 
@@ -134,6 +137,14 @@ gh pr create \
 ## Summary
 
 [Description of what this PR does and why]
+
+### Why review this
+
+[Only when this PR is not part of the current epic (side fixes, tooling,
+refactors, dependency bumps, cleanup) — otherwise delete this section.
+Start with "Not part of the current epic." then 1–2 sentences: what
+prompted this change and why it is worth reviewer time now. What the
+current epic is: .context/standards/Current-Epic.md]
 
 ## Changes
 
@@ -186,33 +197,6 @@ Merge latest changes from paranext-extension-template.
 EOF
 )"
 ```
-
-### "Why review this" Section (Non-Epic PRs)
-
-If the PR is not directly part of the current epic (side fixes, tooling,
-refactors, dependency bumps, cleanup), add a `Why review this` section
-immediately after `## Summary` so reviewers can prioritize it against epic
-work. Use this exact format:
-
-```markdown
-## Why review this
-
-Not part of the current epic. [1–2 sentences: what prompted this change and
-why it is worth reviewer time now — e.g., unblocks PT-1234, fixes recurring
-CI flake, five-minute review.]
-```
-
-Skip this section when the PR's JIRA ticket belongs to the current epic.
-
-The current epic is articulated in the
-[Paratext Roadmap](https://docs.google.com/spreadsheets/d/1DP9WcoTwzYQbGzKyOaULeotHRotyBFsrrHNngP1qyVI/edit?gid=1711193079#gid=1711193079)
-and on the JIRA
-[Dev Current Sprint board](https://paratextstudio.atlassian.net/jira/software/c/projects/PT/boards/63)
-(both show the same info), and is discussed in the 🔹-marked threads in the
-[#teamwide-epic-discussions](https://discord.com/channels/892072317436448768/1503454586432782407)
-channel on the Paratext Discord. Epic membership is the PR author's
-judgment: if it is unclear whether the ticket belongs to the current epic,
-ask the author rather than deciding from the ticket alone.
 
 ## AI Transparency
 
@@ -307,6 +291,7 @@ git push
 
 ## See Also
 
+- [Current-Epic.md](../../../.context/standards/Current-Epic.md) - What the current epic is and where it is articulated
 - [Git-Guide.md](../../../.context/standards/Git-Guide.md) - Branch naming, merge practices
 - [Code-Review-Guide.md](../../../.context/standards/Code-Review-Guide.md) - Review workflow
 - [test-runner skill](../test-runner/SKILL.md) - Run tests before PR
