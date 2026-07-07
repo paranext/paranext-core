@@ -2954,6 +2954,32 @@ namespace TestParanextDataProvider.Projects
             );
         }
 
+        [Test]
+        public void ResolveConflict_Merge_WritesMergedVerseAndResolves()
+        {
+            CommentThread thread = SeedIndependentVerseTextConflict(_scrText);
+            var vref = new VerseRef("MAT", "2", "1", _scrText.Settings.Versification);
+
+            _provider.ResolveConflict(thread.Id, "merge");
+
+            Assert.That(ReloadThread(thread.Id).Status, Is.EqualTo(NoteStatus.Resolved));
+            string after = _scrText.GetText(vref, true, true);
+            Assert.That(after, Does.Contain("small village")); // rejected-side word
+            Assert.That(after, Does.Contain("great king")); // accepted-side word
+        }
+
+        [Test]
+        public void ResolveConflict_MergeWhenStale_Throws()
+        {
+            CommentThread thread = SeedIndependentVerseTextConflict(_scrText);
+            _scrText.PutText(40, 0, false, "\\id MAT\n\\c 2\n\\v 1 Edited after the merge.\n", null); // make stale
+
+            Assert.That(
+                () => _provider.ResolveConflict(thread.Id, "merge"),
+                Throws.TypeOf<InvalidOperationException>().With.Message.Contains("changed since the conflict")
+            );
+        }
+
         #endregion
     }
 }

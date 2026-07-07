@@ -687,23 +687,25 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <summary>
     /// Applies a user's resolution to a verseText merge-conflict note and marks it resolved.
     /// <c>"accept"</c> keeps the auto-merged (winning) verse text and resolves the note (no verse
-    /// write). <c>"reject"</c> writes the losing side's USFM into the verse via PT9's
+    /// write). <c>"reject"</c> writes the losing side's USFM into the verse, and <c>"merge"</c>
+    /// writes PT9's auto-merged (both-sides) USFM into the verse, both via PT9's
     /// <see cref="CommentEditHelper.SaveEdits"/>, then resolves the note.
     /// </summary>
     /// <remarks>
-    /// The reject verse write happens inside PT9's <see cref="CommentEditHelper.SaveEdits"/>
-    /// orchestration, where PT9's <c>ReplaceAcceptedText</c> silently no-ops (it traces an error and
-    /// leaves the thread still resolved) if it cannot find the verse marker in the chapter. Reject is
-    /// therefore pre-gated by <see cref="IsConflictVerseStale"/>, which refuses the resolution when the
-    /// verse is missing or has changed since the merge, so that no-op path is not reached.
+    /// The reject/merge verse write happens inside PT9's <see cref="CommentEditHelper.SaveEdits"/>
+    /// orchestration, where PT9's <c>ReplaceAcceptedText</c>/<c>MergeAcceptedText</c> silently no-op
+    /// (they trace an error and leave the thread still resolved) if they cannot find the verse marker
+    /// in the chapter. Reject and merge are therefore pre-gated by <see cref="IsConflictVerseStale"/>,
+    /// which refuses the resolution when the verse is missing or has changed since the merge, so that
+    /// no-op path is not reached.
     /// </remarks>
     /// <exception cref="InvalidDataException">Unknown resolution, or the thread doesn't exist.</exception>
-    /// <exception cref="InvalidOperationException">Not a verseText conflict, the thread is already resolved, the user lacks permission, the resolve was canceled, or resolution is 'reject' and the verse text has changed since the conflict was recorded (stale).</exception>
+    /// <exception cref="InvalidOperationException">Not a verseText conflict, the thread is already resolved, the user lacks permission, the resolve was canceled, or resolution is 'reject' or 'merge' and the verse text has changed since the conflict was recorded (stale).</exception>
     public void ResolveConflict(string threadId, string resolution)
     {
-        if (resolution != "accept" && resolution != "reject")
+        if (resolution != "accept" && resolution != "reject" && resolution != "merge")
             throw new InvalidDataException(
-                $"Invalid resolution '{resolution}' for ResolveConflict; expected 'accept' or 'reject'."
+                $"Invalid resolution '{resolution}' for ResolveConflict; expected 'accept', 'reject', or 'merge'."
             );
 
         // Serialize resolves so the already-resolved guard (in VerifyUserCanResolveConflict) is
@@ -718,22 +720,25 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             if (thread == null)
                 throw new InvalidDataException($"Thread with id {threadId} does not exist");
 
-            // Reject writes the loser text over the current verse; refuse when the verse was edited
-            // after the merge (stale) so post-merge edits can't be clobbered. Accept stays available
-            // as the exit path (it writes nothing).
-            if (resolution == "reject" && IsConflictVerseStale(thread))
+            // Reject writes the loser text, and merge writes the auto-merged (both-sides) text, over
+            // the current verse; refuse both when the verse was edited after the merge (stale) so
+            // post-merge edits can't be clobbered. Accept stays available as the exit path (it writes
+            // nothing).
+            if ((resolution == "reject" || resolution == "merge") && IsConflictVerseStale(thread))
                 throw new InvalidOperationException(
-                    $"Conflict thread '{threadId}' cannot be rejected: the verse text has changed since the conflict was recorded. Only 'accept' (keep the current text) is available."
+                    $"Conflict thread '{threadId}' cannot be {resolution}ed: the verse text has changed since the conflict was recorded. Only 'accept' (keep the current text) is available."
                 );
 
             // Reuse PT9's orchestration (grant edit -> splice loser USFM -> resolve -> restore) via SaveEdits.
             var state = new ThreadEditState
             {
                 Status = NoteStatus.Resolved,
-                ConflictResolution =
-                    resolution == "reject"
-                        ? NoteConflictResolutions.Replaced
-                        : NoteConflictResolutions.None,
+                ConflictResolution = resolution switch
+                {
+                    "reject" => NoteConflictResolutions.Replaced,
+                    "merge" => NoteConflictResolutions.Merged,
+                    _ => NoteConflictResolutions.None,
+                },
             };
             // SaveEdits returns false when the user cancels resolving (the creator-resolve path).
             // Surface that so we don't fire "resolved" events and report success for a thread that
@@ -753,11 +758,11 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 );
         }
 
-        // Refresh the comment list; on reject the verse text changed via a raw PutText that bypasses
-        // the Set* methods, so also refresh Scripture-text subscribers (the open editor).
+        // Refresh the comment list; on reject/merge the verse text changed via a raw PutText that
+        // bypasses the Set* methods, so also refresh Scripture-text subscribers (the open editor).
         SendDataUpdateEvent(AllCommentDataTypes, "conflict resolved event");
-        if (resolution == "reject")
-            SendDataUpdateEvent(AllScriptureDataTypes, "conflict reject wrote verse text event");
+        if (resolution == "reject" || resolution == "merge")
+            SendDataUpdateEvent(AllScriptureDataTypes, "conflict resolve wrote verse text event");
     }
 
     /// <summary>
