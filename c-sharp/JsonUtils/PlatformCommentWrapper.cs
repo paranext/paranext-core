@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Paratext.Data.ProjectComments;
+using Paratext.Data.UsfmDiff;
 using PtxUtils;
 
 namespace Paranext.DataProvider.JsonUtils;
@@ -308,6 +309,39 @@ public class PlatformCommentWrapper
                 getChangedVersion: true
             );
             return IsBlankText(usfm) ? null : usfm;
+        }
+    }
+
+    /// <summary>
+    /// For a verseText conflict whose two sides are independent, the PT9 "merge all changes" preview:
+    /// the merged verse diffed against the base, rendered with the same &lt;u&gt;/&lt;s&gt; markup as the
+    /// accepted/rejected sides. Null when merge is not available (overlapping edits — GetMergedUsfm null)
+    /// or the render is empty. Computation is PT9's exact display path (CommentHtmlBuilderUI): GetMergedUsfm
+    /// + GetDiffVerseUsfm(base) + DiffToken.GetDiffString.
+    /// </summary>
+    public string? MergedText
+    {
+        get
+        {
+            if (!IsVerseTextConflict || _thread?.ThreadInternal == null)
+                return null;
+            var thread = _thread.ThreadInternal;
+            string? mergedUsfm = CommentEditHelper.GetMergedUsfm(thread);
+            if (mergedUsfm == null)
+                return null;
+            string baseUsfm = CommentEditHelper.GetDiffVerseUsfm(
+                _comment.Contents,
+                getChangedVersion: false
+            );
+            string differences = DiffToken.GetDiffString(
+                thread.ScrText,
+                thread.VerseRef.BookNum,
+                baseUsfm,
+                mergedUsfm
+            );
+            var doc = new System.Xml.XmlDocument();
+            doc.LoadXml("<contents>" + differences + "</contents>");
+            return RenderConflictSideHtml(doc.DocumentElement, skipLeadingMessage: false);
         }
     }
 
