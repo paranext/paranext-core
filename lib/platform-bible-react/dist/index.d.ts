@@ -446,8 +446,12 @@ export declare const CONFLICT_NOTE_STRING_KEYS: readonly [
 	"%conflictNote_rejectedLabel%",
 	"%conflictNote_acceptedLabel%",
 	"%conflictNote_resultLabel%",
-	"%conflictNote_resultEmpty%"
+	"%conflictNote_resultUnavailable%"
 ];
+/** Type definition for the localized strings used in the ConflictNoteCard component */
+export type ConflictNoteCardLocalizedStrings = {
+	[localizedKey in (typeof CONFLICT_NOTE_STRING_KEYS)[number]]?: string;
+};
 /** Props for the ConflictNoteCard component */
 export interface ConflictNoteCardProps {
 	/**
@@ -456,7 +460,7 @@ export interface ConflictNoteCardProps {
 	 */
 	comment: LegacyComment;
 	/** Optional localized strings for the component; English fallbacks apply when omitted */
-	localizedStrings?: LanguageStrings;
+	localizedStrings?: ConflictNoteCardLocalizedStrings;
 	/**
 	 * Controlled selected resolution. When omitted, the card manages its own state (default
 	 * 'accept').
