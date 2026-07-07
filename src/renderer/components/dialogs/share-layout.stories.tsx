@@ -1,8 +1,44 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { Dialog } from 'platform-bible-react';
+import type { ResourcePickerDialogLocalizedStrings } from 'platform-bible-react';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { ResourceReference } from 'platform-scripture';
-import { ShareLayoutDialogContent } from './share-layout.component';
+import {
+  ShareLayoutDialogContent,
+  ShareLayoutDialogLocalizedStrings,
+} from './share-layout.component';
+
+const SHARE_LAYOUT_STRINGS: ShareLayoutDialogLocalizedStrings = {
+  '%shareLayoutDialog_title%': 'Share Layout with Team',
+  '%shareLayoutDialog_description%':
+    "Review what you're about to share with your team before confirming.",
+  '%shareLayoutDialog_modelText_label%': 'Model text',
+  '%shareLayoutDialog_modelText_none%': 'None selected',
+  '%shareLayoutDialog_modelText_change%': 'Change…',
+  '%shareLayoutDialog_activeTab_label%': 'Active tab (column 3)',
+  '%shareLayoutDialog_activeTab_scriptureResource%': 'Bible Texts',
+  '%shareLayoutDialog_activeTab_commentaryResource%': 'Commentaries',
+  '%shareLayoutDialog_activeTab_comments%': 'Comments',
+  '%shareLayoutDialog_scriptureResources_label%': 'Bible Texts',
+  '%shareLayoutDialog_commentaryResources_label%': 'Commentaries',
+  '%shareLayoutDialog_shownByDefault_label%': 'Shown by default',
+  '%shareLayoutDialog_addResource_label%': 'Add resource…',
+  '%shareLayoutDialog_removeResource_label%': 'Remove',
+  '%shareLayoutDialog_cancel_label%': 'Cancel',
+  '%shareLayoutDialog_confirm_label%': 'Share with team',
+};
+
+const RESOURCE_PICKER_STRINGS: ResourcePickerDialogLocalizedStrings = {
+  '%resourcePicker_title%': 'Resource picker',
+  '%resourcePicker_section_already_selected%': 'Included',
+  '%resourcePicker_section_installed%': 'Installed',
+  '%resourcePicker_section_available_to_download%': 'Available to download',
+  '%resourcePicker_no_results%': 'No results found',
+  '%resourcePicker_search_placeholder%': 'Search resources…',
+  '%resourcePicker_language_filter_any%': 'Any language',
+  '%resourcePicker_language_filter_multipleSelected%': '{selectCount} languages',
+  '%resourcePicker_showing_count%': 'Showing {filtered} of {total} resources',
+};
 
 const ESV: ResourceReference = {
   type: 'dblResource',
@@ -74,8 +110,8 @@ const meta: Meta<typeof ShareLayoutDialogContent> = {
     initialCommentaryResources: [IVP],
     allResources: ALL_RESOURCES,
     isResourcesLoading: false,
-    resourcePickerLocalizedStrings: {},
-    localizedStrings: {},
+    resourcePickerLocalizedStrings: RESOURCE_PICKER_STRINGS,
+    localizedStrings: SHARE_LAYOUT_STRINGS,
     // Storybook story — console.log is the intended demo handler
     // eslint-disable-next-line no-console
     onConfirm: (result) => console.log('Confirmed:', result),
