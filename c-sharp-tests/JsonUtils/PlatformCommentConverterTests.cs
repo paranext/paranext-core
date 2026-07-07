@@ -264,6 +264,12 @@ internal class PlatformCommentConverterTests : PapiTestBase
         var (commentWrapper, _) = CreateCommentWithThread(testComment);
 
         Assert.That(commentWrapper.MergedText, Is.Not.Null.And.Not.Empty);
+
+        var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
+            commentWrapper,
+            _serializationOptions
+        );
+        Assert.That(json, Does.Contain(@"""mergedText"":"));
     }
 
     [Test]
@@ -275,6 +281,12 @@ internal class PlatformCommentConverterTests : PapiTestBase
         var (commentWrapper, _) = CreateCommentWithThread(testComment);
 
         Assert.That(commentWrapper.MergedText, Is.Null);
+
+        var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
+            commentWrapper,
+            _serializationOptions
+        );
+        Assert.That(json, Does.Not.Contain(@"""mergedText"":"));
     }
 
     [Test]
