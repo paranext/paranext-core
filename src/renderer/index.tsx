@@ -5,6 +5,7 @@ import '@renderer/global-this.model';
 
 import { App } from '@renderer/app.component';
 import { startDialogService } from '@renderer/services/dialog.service-host';
+import { startInterfaceDirectionCommand } from '@renderer/services/interface-direction.command';
 import { startNotificationService } from '@renderer/services/notification.service-host';
 import { startOverlayService } from '@renderer/services/overlays/overlay.service-host';
 import { blockWebSocketsToPapiNetwork } from '@renderer/services/renderer-web-socket.service';
@@ -102,6 +103,7 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
       startDialogService(),
       startScrollGroupService(),
       startScrollGroupNavigationCommands(),
+      startInterfaceDirectionCommand(),
       startNotificationService(),
       startOverlayService(),
       initializeThemeService(),

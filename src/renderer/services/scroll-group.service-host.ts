@@ -653,7 +653,7 @@ const scrollGroupService: IScrollGroupRemoteService = {
   navigateReferenceHistory,
 };
 
-/** Register the network object that backs the scroll group service */
+/** Register the network object and PAPI commands that back the scroll group service */
 export async function startScrollGroupService(): Promise<void> {
   await networkObjectService.set(NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE, scrollGroupService);
 

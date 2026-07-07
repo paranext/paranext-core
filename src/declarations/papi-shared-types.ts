@@ -186,12 +186,20 @@ declare module 'papi-shared-types' {
      *
      * @param scrollGroupId Scroll group whose history to navigate
      * @param offset Signed number of steps: negative = back, positive = forward
-     * @returns `true` if navigation happened; `false` if the offset was 0 or out of range
+     * @returns `true` if navigation happened; `false` if the offset was 0, non-integer, or out of
+     *   range
      */
     'platform.navigateToReferenceHistoryEntry': (
       scrollGroupId: ScrollGroupId,
       offset: number,
     ) => Promise<boolean>;
+
+    // This command is provided in `src/renderer/services/interface-direction.command.ts`
+    /**
+     * Get the current UI layout direction ('ltr' or 'rtl'). This is the user's global UI direction
+     * preference (the same source RTL-aware components use), NOT any project's text direction.
+     */
+    'platform.getInterfaceDirection': () => Promise<'ltr' | 'rtl'>;
 
     // These commands are provided in `extension-host.ts`. They are only here because I needed them to
     // use in other places, but building `papi-dts` wasn't working because it didn't see
