@@ -1,4 +1,5 @@
 import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { useLastSelectedWebViewId } from '@renderer/hooks/use-last-selected-web-view-id.hook';
 import { floatTab, updateTabPartialSync } from '@renderer/services/web-view.service-host';
 import { logger } from '@shared/services/logger.service';
 import { windowService } from '@shared/services/window.service';
@@ -40,6 +41,13 @@ const cssClassTabContentHighlight = 'platform-dock-tabpane-active-highlight';
 /** CSS class for highlighting the focused tab header */
 const cssClassTabHeaderWindowFocus = 'platform-dock-tab-window-focus';
 const cssClassTabContentWindowFocus = 'platform-dock-tabpane-window-focus';
+
+/**
+ * CSS class for tinting the tab header of the last-selected web view (the navigation target of the
+ * top toolbar's book/chapter/verse controls and navigation commands) while it is not the focused
+ * tab
+ */
+const cssClassTabHeaderLastSelected = 'platform-dock-tab-last-selected';
 
 // This duration must be ≥ the tabTitleBarFlash animation duration in dock-layout-wrapper.component.scss
 const cssHighlightDurationMilliseconds = 3000;
@@ -134,6 +142,8 @@ export function PlatformTabTitle({
     return focusSubjectPossiblyError;
   }, [focusSubjectPossiblyError]);
 
+  const lastSelectedWebViewId = useLastSelectedWebViewId();
+
   // Attach a click listener to the tab to focus this tab. Unfortunately rc-dock doesn't expose
   // rc-tabs onTabClick https://github.com/fis-components/rc-tabs/tree/master?tab=readme-ov-file#props
   // in its use of Tabs https://github.com/ticlo/rc-dock/blob/master/src/DockTabs.tsx#L347
@@ -195,6 +205,32 @@ export function PlatformTabTitle({
       if (activeTabContent) activeTabContent.classList.remove(cssClassTabContentWindowFocus);
     };
   }, [focusSubject, id]);
+
+  // Handle applying and removing the CSS style that tints this tab's header when it is the
+  // navigation target (the last-selected web view driving the top toolbar's BCV controls and
+  // navigation commands) but is not the currently focused tab
+  useEffect(() => {
+    const isThisTabFocused =
+      !!focusSubject &&
+      (focusSubject.focusType === 'tab' || focusSubject.focusType === 'webView') &&
+      focusSubject.id === id;
+
+    // do nothing if this tab is not the navigation target, or if it is already focused
+    if (id !== lastSelectedWebViewId || isThisTabFocused) return;
+
+    // We need to walk the DOM to find the header to apply the last-selected style
+    const containerElement = containerRef.current;
+    if (!containerElement) return;
+
+    // Walk up the DOM to the active tab header
+    const activeTabHeader = containerElement.closest('.dock-tab-active');
+
+    if (activeTabHeader) activeTabHeader.classList.add(cssClassTabHeaderLastSelected);
+
+    return () => {
+      if (activeTabHeader) activeTabHeader.classList.remove(cssClassTabHeaderLastSelected);
+    };
+  }, [focusSubject, id, lastSelectedWebViewId]);
 
   const icon = (
     <div
