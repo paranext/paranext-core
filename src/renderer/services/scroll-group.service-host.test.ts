@@ -307,3 +307,60 @@ describe('scroll-group.service-host source project tracking', () => {
     expect(emit).toHaveBeenCalledWith({ projectId: 'sourceProj' });
   });
 });
+
+describe('reference history integration', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.resetModules();
+  });
+
+  it('setScrRefSync records history seeded with the starting reference', async () => {
+    const host = await import('@renderer/services/scroll-group.service-host');
+    host.setScrRefSync(1, { book: 'MRK', chapterNum: 4, verseNum: 1 });
+    const history = host.getReferenceHistorySync(1);
+    // Seeded with the group's starting ref (default GEN 1:1), then MRK 4 pushed on top
+    expect(history.back).toEqual([
+      { scrRef: { book: 'MRK', chapterNum: 4, verseNum: 1 }, sourceProjectId: undefined },
+      { scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 }, sourceProjectId: undefined },
+    ]);
+    expect(history.forward).toEqual([]);
+  });
+
+  it('navigateReferenceHistorySync(-1) restores the previous ref without re-recording', async () => {
+    const host = await import('@renderer/services/scroll-group.service-host');
+    host.setScrRefSync(1, { book: 'MRK', chapterNum: 4, verseNum: 1 });
+    const didNavigate = host.navigateReferenceHistorySync(1, -1);
+    expect(didNavigate).toBe(true);
+    expect(host.getScrRefSync(1)).toEqual({ book: 'GEN', chapterNum: 1, verseNum: 1 });
+    const history = host.getReferenceHistorySync(1);
+    expect(history.back).toEqual([
+      { scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 }, sourceProjectId: undefined },
+    ]);
+    expect(history.forward).toEqual([
+      { scrRef: { book: 'MRK', chapterNum: 4, verseNum: 1 }, sourceProjectId: undefined },
+    ]);
+  });
+
+  it('navigateReferenceHistorySync returns false when there is nothing to navigate to', async () => {
+    const host = await import('@renderer/services/scroll-group.service-host');
+    expect(host.navigateReferenceHistorySync(1, -1)).toBe(false);
+    expect(host.navigateReferenceHistorySync(1, 1)).toBe(false);
+  });
+
+  it('histories are per scroll group', async () => {
+    const host = await import('@renderer/services/scroll-group.service-host');
+    host.setScrRefSync(1, { book: 'MRK', chapterNum: 4, verseNum: 1 });
+    host.setScrRefSync(2, { book: 'LUK', chapterNum: 2, verseNum: 1 });
+    expect(host.getReferenceHistorySync(1).back[0].scrRef.book).toBe('MRK');
+    expect(host.getReferenceHistorySync(2).back[0].scrRef.book).toBe('LUK');
+    expect(host.getReferenceHistorySync(1).back).toHaveLength(2);
+  });
+
+  it('getReferenceHistorySync returns copies, not live state', async () => {
+    const host = await import('@renderer/services/scroll-group.service-host');
+    host.setScrRefSync(1, { book: 'MRK', chapterNum: 4, verseNum: 1 });
+    const history = host.getReferenceHistorySync(1);
+    history.back.length = 0;
+    expect(host.getReferenceHistorySync(1).back).toHaveLength(2);
+  });
+});

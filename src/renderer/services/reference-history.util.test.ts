@@ -82,6 +82,8 @@ describe('recordNavigation', () => {
       recordNavigation(history, entry(i % 2 === 0 ? 'GEN' : 'EXO', i));
     }
     expect(history.back.length).toBe(REFERENCE_HISTORY_MAX_DEPTH);
+    expect(history.back[0]).toEqual(entry('EXO', REFERENCE_HISTORY_MAX_DEPTH + 5));
+    expect(history.back[REFERENCE_HISTORY_MAX_DEPTH - 1]).toEqual(entry('GEN', 6));
   });
 });
 
@@ -133,5 +135,19 @@ describe('navigateHistory', () => {
   test('back requires at least 2 back entries (top is the current location)', () => {
     const history = historyOf(entry('GEN', 1));
     expect(navigateHistory(history, -1)).toBeUndefined();
+  });
+
+  test('sourceProjectId survives a back/forward round trip', () => {
+    const history = createEmptyReferenceHistory();
+    recordNavigation(history, {
+      scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+      sourceProjectId: 'project-a',
+    });
+    recordNavigation(history, {
+      scrRef: { book: 'MRK', chapterNum: 4, verseNum: 1 },
+      sourceProjectId: 'project-b',
+    });
+    expect(navigateHistory(history, -1)?.sourceProjectId).toBe('project-a');
+    expect(navigateHistory(history, 1)?.sourceProjectId).toBe('project-b');
   });
 });

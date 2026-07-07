@@ -1,3 +1,8 @@
+import {
+  createEmptyReferenceHistory,
+  navigateHistory,
+  recordNavigation,
+} from '@renderer/services/reference-history.util';
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { networkObjectService } from '@shared/services/network-object.service';
@@ -7,10 +12,13 @@ import {
   getNetworkEvent,
 } from '@shared/services/network.service';
 import {
+  EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY,
   EVENT_NAME_ON_DID_CHANGE_VERSIFICATION,
   EVENT_NAME_ON_DID_UPDATE_SCR_REF,
   IScrollGroupRemoteService,
   NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
+  ReferenceHistory,
+  ReferenceHistoryUpdateInfo,
   ScrollGroupUpdateInfo,
 } from '@shared/services/scroll-group.service-model';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
@@ -47,6 +55,28 @@ const onDidUpdateScrRefBufferedEmitter = createBufferedNetworkEventEmitter(
           name: 'update',
           required: true,
           summary: 'The scroll group and its new Scripture reference.',
+          schema: { type: 'object' },
+        },
+      ],
+    },
+  },
+  { bufferStrategy: { latestByKey: (update) => String(update.scrollGroupId) } },
+);
+
+/**
+ * Buffered emitter for changes to a scroll group's reference history. Buffered latest-per-group
+ * like {@link onDidUpdateScrRefBufferedEmitter}; consumers only need the latest state.
+ */
+const onDidChangeReferenceHistoryBufferedEmitter = createBufferedNetworkEventEmitter(
+  EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY,
+  {
+    notification: {
+      summary: "Emitted when a scroll group's reference history changes.",
+      params: [
+        {
+          name: 'update',
+          required: true,
+          summary: 'The scroll group and its new reference history.',
           schema: { type: 'object' },
         },
       ],
@@ -174,6 +204,58 @@ export const onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo> = getNetwor
 export const onDidChangeVersification: PlatformEvent<{ projectId: string }> = getNetworkEvent(
   EVENT_NAME_ON_DID_CHANGE_VERSIFICATION,
 );
+
+/** Event that emits when a scroll group's reference history changes */
+export const onDidChangeReferenceHistory: PlatformEvent<ReferenceHistoryUpdateInfo> =
+  getNetworkEvent(EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY);
+
+/**
+ * Reference history per scroll group. Session-only BY DESIGN (in-memory; resets on app restart —
+ * matches Paratext 9): do NOT persist to localStorage or settings.
+ */
+const referenceHistories = new Map<ScrollGroupId, ReferenceHistory>();
+
+/**
+ * Get (lazily creating and seeding) the LIVE history object for a scroll group. The lazy seed with
+ * the group's current ref makes the first navigation immediately back-able (mirrors Paratext 9
+ * seeding history on layout restore). Internal only — external callers get copies via
+ * {@link getReferenceHistorySync}.
+ */
+function getOrCreateReferenceHistory(scrollGroupId: ScrollGroupId): ReferenceHistory {
+  let history = referenceHistories.get(scrollGroupId);
+  if (!history) {
+    history = createEmptyReferenceHistory();
+    recordNavigation(history, {
+      scrRef: getScrRefSync(scrollGroupId),
+      sourceProjectId: getScrRefSourceProjectIdSync(scrollGroupId),
+    });
+    referenceHistories.set(scrollGroupId, history);
+  }
+  return history;
+}
+
+function emitReferenceHistoryChange(scrollGroupId: ScrollGroupId, history: ReferenceHistory) {
+  onDidChangeReferenceHistoryBufferedEmitter.emit({ scrollGroupId, history: deepClone(history) });
+}
+
+/** See {@link IScrollGroupRemoteService.getReferenceHistory} */
+export function getReferenceHistorySync(scrollGroupId: ScrollGroupId): ReferenceHistory {
+  return deepClone(getOrCreateReferenceHistory(scrollGroupId));
+}
+
+/** See {@link IScrollGroupRemoteService.navigateReferenceHistory} */
+export function navigateReferenceHistorySync(
+  scrollGroupId: ScrollGroupId,
+  offset: number,
+): boolean {
+  const history = getOrCreateReferenceHistory(scrollGroupId);
+  const destination = navigateHistory(history, offset);
+  if (!destination) return false;
+  // The stacks already reflect the navigation; skip recording so it is not double-pushed
+  setScrRefSync(scrollGroupId, destination.scrRef, destination.sourceProjectId, false);
+  emitReferenceHistoryChange(scrollGroupId, history);
+  return true;
+}
 
 /** See {@link IScrollGroupRemoteService.getScrRef} */
 export function getScrRefSync(scrollGroupId: ScrollGroupId = 0): SerializedVerseRef {
@@ -475,11 +557,15 @@ async function getScrRef(scrollGroupScrRef: ScrollGroupId = 0): Promise<Serializ
  *
  * @param sourceProjectId Project whose versification `scrRef` is expressed in. `undefined` =
  *   unknown / canonical English.
+ * @param shouldRecordHistory If `true`, record this change in the scroll group's reference history.
+ *   Defaults to `true`. Only set to `false` when navigating within the history itself, where the
+ *   stacks already reflect the move.
  */
 export function setScrRefSync(
   scrollGroupId: ScrollGroupId | undefined,
   scrRef: SerializedVerseRef,
   sourceProjectId?: string,
+  shouldRecordHistory = true,
 ): boolean {
   if (
     !scrRef ||
@@ -505,6 +591,12 @@ export function setScrRefSync(
   )
     return false;
 
+  // Capture (lazily seeding) the history BEFORE mutating the stored ref so a first-touch seed
+  // records the location being navigated AWAY from, not the destination
+  const referenceHistory = shouldRecordHistory
+    ? getOrCreateReferenceHistory(scrollGroupIdDefaulted)
+    : undefined;
+
   // Update the scr ref and send out an event. The buffered emitter is usable immediately; if it
   // hasn't finished registering yet, the latest update per scroll group is buffered and flushed.
   const sourceProjectIdChanged = scrRefSourceProjectIds[scrollGroupIdDefaulted] !== sourceProjectId;
@@ -522,6 +614,11 @@ export function setScrRefSync(
     sourceProjectId,
   });
 
+  if (referenceHistory) {
+    recordNavigation(referenceHistory, { scrRef: scrRefClone, sourceProjectId });
+    emitReferenceHistoryChange(scrollGroupIdDefaulted, referenceHistory);
+  }
+
   return true;
 }
 
@@ -533,14 +630,23 @@ async function setScrRef(
   return setScrRefSync(scrollGroupId, scrRef, sourceProjectId);
 }
 
+async function getReferenceHistory(scrollGroupId: ScrollGroupId): Promise<ReferenceHistory> {
+  return getReferenceHistorySync(scrollGroupId);
+}
+
+async function navigateReferenceHistory(
+  scrollGroupId: ScrollGroupId,
+  offset: number,
+): Promise<boolean> {
+  return navigateReferenceHistorySync(scrollGroupId, offset);
+}
+
 const scrollGroupService: IScrollGroupRemoteService = {
   getScrRef,
   setScrRef,
   getScrRefForProject,
-  // Implemented properly in the reference-history integration (see plan Task 3 in
-  // docs/plans/2026-07-06-reference-history.md)
-  getReferenceHistory: async () => ({ back: [], forward: [] }),
-  navigateReferenceHistory: async () => false,
+  getReferenceHistory,
+  navigateReferenceHistory,
 };
 
 /** Register the network object that backs the scroll group service */
