@@ -196,6 +196,24 @@ add a brief, honest note in the PR body describing what AI contributed
 (for example, which files or portions were AI-generated and how they were
 reviewed). The "Full Template" above leaves room for such a note.
 
+### When there's no session URL (e.g. Claude Code CLI)
+
+A Claude Code CLI session is a local transcript, not a hosted page, so there is no
+shareable URL to link. Do **not** silently drop the attribution or invent a URL —
+instead record the command that reopens the exact session, so future-you (or a
+reviewer) can pull up the full history later:
+
+```text
+AI-assisted (Claude Code). Resume this session: `claude --resume <session-id>`
+(run from the `<worktree-or-project-dir>`).
+```
+
+Find `<session-id>` (a UUID) in the transcript path
+`~/.claude/projects/<encoded-cwd>/<session-id>.jsonl`. Resume is scoped to the working
+directory, so state which worktree/dir to run it from. Prefer a real shareable URL when
+one exists (e.g. a claude.ai web/desktop session); use the `--resume` command only as the
+fallback.
+
 ## Merge Strategy
 
 ### Default: Squash and Merge
