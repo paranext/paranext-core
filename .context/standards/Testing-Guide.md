@@ -319,11 +319,18 @@ export default defineConfig(async () => {
     test: {
       globals: true,
       environment: 'jsdom',
+      // Warms the lazy one-time ICU init behind Intl.* so it never lands inside a test's
+      // timeout window on a slow CI worker. See vitest.setup.ts for the rationale.
+      setupFiles: ['./vitest.setup.ts'],
       include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     },
   };
 });
 ```
+
+> The workspace configs (`extensions/vitest.config.ts`, `lib/platform-bible-utils/vite.config.ts`,
+> `lib/platform-bible-react/vitest.config.ts`) reference this same repo-root `vitest.setup.ts` via a
+> relative `setupFiles` path, so every vitest worker warms Intl once before any timed test.
 
 ### Key Dependencies
 
