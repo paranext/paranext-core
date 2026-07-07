@@ -206,6 +206,70 @@ describe('useEditorPdpSync', () => {
     document.body.removeChild(editorInput);
   });
 
+  // QA run 4 regression: chapter navigation while focus sits in the editor. The actively-editing
+  // deferral must apply ONLY to same-document updates - a DIFFERENT book/chapter arriving means
+  // navigation, and deferring would keep the editor on the old chapter forever (and save the old
+  // chapter's content through the new chapter's data selector).
+  it('replaces the actively-edited editor when a DIFFERENT chapter arrives (navigation)', () => {
+    const lev15: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        { type: 'book', marker: 'id', code: 'LEV' },
+        { type: 'chapter', marker: 'c', number: '15' },
+        {
+          type: 'para',
+          marker: 'p',
+          content: [{ type: 'verse', marker: 'v', number: '1' }, 'Chapter fifteen text.'],
+        },
+      ],
+    };
+
+    const setUsjSpy = vi.fn();
+    const saveUsjToPdpIfUpdated = vi.fn();
+    const editorRef: { current: EditorRef | null } = {
+      // EditorRef has many members; casting from a minimal stub is intentional in tests
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      current: { setUsj: setUsjSpy, getUsj: () => levUsj } as unknown as EditorRef,
+    };
+    const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
+    const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
+    const currentlyWritingUsjToPdp = { current: false };
+
+    const editorInput = document.createElement('div');
+    editorInput.className = 'editor-input';
+    editorInput.tabIndex = 0;
+    document.body.appendChild(editorInput);
+    editorInput.focus();
+    expect(document.activeElement).toBe(editorInput);
+
+    const { rerender } = renderHook(
+      ({ usjFromPdp }: { usjFromPdp: Usj }) => {
+        useEditorPdpSync({
+          usjFromPdp,
+          editorRef,
+          usjSentToPdp,
+          setEditorUsj,
+          currentlyWritingUsjToPdp,
+          saveUsjToPdpIfUpdated,
+        });
+      },
+      { initialProps: { usjFromPdp: levUsj } },
+    );
+    setUsjSpy.mockClear();
+    saveUsjToPdpIfUpdated.mockClear();
+
+    // The user picked LEV 15 in the BookChapter control; the new chapter's USJ arrives while
+    // focus is still on the editor input.
+    act(() => rerender({ usjFromPdp: lev15 }));
+
+    expect(setUsjSpy).toHaveBeenCalledOnce(); // editor navigates
+    expect(setUsjSpy).toHaveBeenCalledWith(lev15);
+    expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled(); // no cross-chapter save-back
+
+    document.body.removeChild(editorInput);
+  });
+
   it('still replaces the editor for a content-different update that is not our own write echo', () => {
     const externalChange: Usj = {
       ...levUsj,
