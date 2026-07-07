@@ -2934,6 +2934,26 @@ namespace TestParanextDataProvider.Projects
             Assert.That(CommentEditHelper.GetMergedUsfm(thread), Is.Not.Null.And.Not.Empty);
         }
 
+        [Test]
+        public void GetConflictResolutionOptions_IndependentChanges_ReturnsAcceptRejectOrMerge()
+        {
+            CommentThread thread = SeedIndependentVerseTextConflict(_scrText);
+            Assert.That(
+                _provider.GetConflictResolutionOptions(thread.Id),
+                Is.EqualTo("acceptRejectOrMerge")
+            );
+        }
+
+        [Test]
+        public void GetConflictResolutionOptions_OverlappingChanges_ReturnsAcceptOrReject()
+        {
+            CommentThread thread = SeedVerseTextConflict();
+            Assert.That(
+                _provider.GetConflictResolutionOptions(thread.Id),
+                Is.EqualTo("acceptOrReject")
+            );
+        }
+
         #endregion
     }
 }

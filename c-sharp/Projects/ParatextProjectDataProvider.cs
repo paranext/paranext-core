@@ -858,7 +858,13 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             CommentThread? thread = _commentManager.Value.FindThread(threadId);
             if (thread == null)
                 return "none";
-            return IsConflictVerseStale(thread) ? "accept" : "acceptOrReject";
+            if (IsConflictVerseStale(thread))
+                return "accept";
+            // Merge is offered only when PT9 can actually merge the two sides (independent changes);
+            // GetMergedUsfm returns null for overlapping edits. Same gate PT9's GetResolutionOptions uses.
+            return CommentEditHelper.GetMergedUsfm(thread) != null
+                ? "acceptRejectOrMerge"
+                : "acceptOrReject";
         }
         catch
         {
