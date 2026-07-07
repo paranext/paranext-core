@@ -1907,6 +1907,11 @@ declare module 'platform-scripture' {
     name: string;
     /** 20-byte (40-char) hex ID that uniquely identifies the project */
     id: string;
+    /**
+     * When set by a project admin, indicates this resource should be shown by default when the
+     * shared layout is applied. When `undefined`, no admin preference has been set.
+     */
+    isResourceShownByDefault?: boolean;
   };
 
   /** A reference to a DBL resource, identified by its 24-byte (48-char) hex ID */
@@ -1920,6 +1925,11 @@ declare module 'platform-scripture' {
     name: string;
     /** 24-byte (48-char) hex ID that uniquely identifies the resource */
     id: string;
+    /**
+     * When set by a project admin, indicates this resource should be shown by default when the
+     * shared layout is applied. When `undefined`, no admin preference has been set.
+     */
+    isResourceShownByDefault?: boolean;
   };
 
   /** A reference to an Enhanced resource, identified by name */
@@ -1928,6 +1938,11 @@ declare module 'platform-scripture' {
     type: 'enhancedResource';
     /** Name that uniquely identifies the resource */
     name: string;
+    /**
+     * When set by a project admin, indicates this resource should be shown by default when the
+     * shared layout is applied. When `undefined`, no admin preference has been set.
+     */
+    isResourceShownByDefault?: boolean;
   };
 
   /** A reference to an XML resource, identified by name */
@@ -1936,6 +1951,11 @@ declare module 'platform-scripture' {
     type: 'xmlResource';
     /** Name that uniquely identifies the resource */
     name: string;
+    /**
+     * When set by a project admin, indicates this resource should be shown by default when the
+     * shared layout is applied. When `undefined`, no admin preference has been set.
+     */
+    isResourceShownByDefault?: boolean;
   };
 
   /** A reference to a Source Language resource, identified by name */
@@ -1944,6 +1964,11 @@ declare module 'platform-scripture' {
     type: 'sourceLanguageResource';
     /** Name that uniquely identifies the resource */
     name: string;
+    /**
+     * When set by a project admin, indicates this resource should be shown by default when the
+     * shared layout is applied. When `undefined`, no admin preference has been set.
+     */
+    isResourceShownByDefault?: boolean;
   };
 
   /**
@@ -2182,6 +2207,7 @@ declare module 'platform-scripture' {
 
 declare module 'papi-shared-types' {
   import { UnsubscriberAsync } from 'platform-bible-utils';
+  import { SerializedVerseRef } from '@sillsdev/scripture';
 
   import type {
     IUSFMBookProjectDataProvider,
@@ -2334,6 +2360,32 @@ declare module 'papi-shared-types' {
     'platformScripture.openManageBooks': (
       webViewIdOrProjectId?: string | undefined,
     ) => Promise<string | undefined>;
+
+    /**
+     * Converts a Scripture reference from a source project's versification into a target project's
+     * versification. If the source frame is unknown (`undefined` sourceProjectId) the reference is
+     * returned unchanged. Best-effort and display-oriented: if a NAMED project's versification
+     * cannot be resolved (e.g. not a Scripture project, or still loading) or the mapping fails,
+     * this rejects rather than returning the reference unchanged — callers should fall back to the
+     * raw reference and should NOT cache the failure (it may be transient). Unmapped verses are
+     * returned unchanged; segments are preserved.
+     *
+     * @param verseRef The Scripture reference to convert
+     * @param sourceProjectId Project whose versification `verseRef` is currently expressed in. Pass
+     *   `undefined` when the source frame is unknown, in which case the reference is returned
+     *   unchanged (it is NOT assumed to be canonical English)
+     * @param targetProjectId Project into whose versification to convert the reference
+     * @returns The reference converted into `targetProjectId`'s versification (unchanged when the
+     *   source frame is unknown)
+     * @throws If a named project's versification cannot be resolved or the mapping fails — callers
+     *   fall back to the raw reference without caching
+     * @experimental
+     */
+    'platformScripture.mapVerseRefBetweenProjects': (
+      verseRef: SerializedVerseRef,
+      sourceProjectId: string | undefined,
+      targetProjectId: string,
+    ) => Promise<SerializedVerseRef>;
   }
 
   export interface ProjectSettingTypes {
@@ -2416,6 +2468,12 @@ declare module 'papi-shared-types' {
 
     /** Projects and resources useful to team members as general translation references */
     'platformScripture.referencedProjectsAndResources': ResourceReferenceList;
+
+    /**
+     * The active tab in column 3 set by the project admin's shared layout. Empty string means no
+     * admin preference is set.
+     */
+    'platformScripture.sharedLayoutDefaultTab': string;
 
     /**
      * Whether the project allows invisible characters to appear literally in USFM text. Corresponds

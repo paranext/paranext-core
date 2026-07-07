@@ -8,6 +8,12 @@ namespace Paranext.DataProvider.Projects;
 public abstract record ResourceReference
 {
     public string Name { get; init; } = string.Empty;
+
+    /// <summary>
+    /// When set by a project admin, indicates this resource should be shown by default
+    /// when the shared layout is applied. Null means no admin preference is set.
+    /// </summary>
+    public bool? IsResourceShownByDefault { get; init; }
 }
 
 public record ProjectReference : ResourceReference
@@ -96,6 +102,18 @@ public record ResourceReferenceList
                 else if (item is DblResourceReference dbl)
                     element.Add(new XAttribute("id", dbl.Id));
 
+                // XML attributes are untyped strings; booleans are emitted as "true"/"false"
+                // (lowercase) and parsed back with bool.TryParse. The JSON path uses a native
+                // JSON boolean via WriteBoolean/JsonValueKind — the difference is inherent to
+                // the respective serialization formats.
+                if (item.IsResourceShownByDefault.HasValue)
+                    element.Add(
+                        new XAttribute(
+                            "isResourceShownByDefault",
+                            item.IsResourceShownByDefault.Value.ToString().ToLowerInvariant()
+                        )
+                    );
+
                 return element;
             })
         );
@@ -124,17 +142,43 @@ public record ResourceReferenceList
                         {
                             Name = name,
                             Id = el.Attribute("id")?.Value ?? "",
+                            IsResourceShownByDefault = GetNullableBoolAttribute(
+                                el,
+                                "isResourceShownByDefault"
+                            ),
                         },
                         "dblResource" => new DblResourceReference
                         {
                             Name = name,
                             Id = el.Attribute("id")?.Value ?? "",
+                            IsResourceShownByDefault = GetNullableBoolAttribute(
+                                el,
+                                "isResourceShownByDefault"
+                            ),
                         },
-                        "enhancedResource" => new EnhancedResourceReference { Name = name },
-                        "xmlResource" => new XmlResourceReference { Name = name },
+                        "enhancedResource" => new EnhancedResourceReference
+                        {
+                            Name = name,
+                            IsResourceShownByDefault = GetNullableBoolAttribute(
+                                el,
+                                "isResourceShownByDefault"
+                            ),
+                        },
+                        "xmlResource" => new XmlResourceReference
+                        {
+                            Name = name,
+                            IsResourceShownByDefault = GetNullableBoolAttribute(
+                                el,
+                                "isResourceShownByDefault"
+                            ),
+                        },
                         "sourceLanguageResource" => new SourceLanguageResourceReference
                         {
                             Name = name,
+                            IsResourceShownByDefault = GetNullableBoolAttribute(
+                                el,
+                                "isResourceShownByDefault"
+                            ),
                         },
                         _ => new UnknownResourceReference
                         {
@@ -152,6 +196,9 @@ public record ResourceReferenceList
 
         return new ResourceReferenceList { Items = items, DataVersion = dataVersion };
     }
+
+    private static bool? GetNullableBoolAttribute(XElement el, string name) =>
+        bool.TryParse(el.Attribute(name)?.Value, out var value) ? value : null;
 
     private static string GetXmlType(ResourceReference item) =>
         item switch

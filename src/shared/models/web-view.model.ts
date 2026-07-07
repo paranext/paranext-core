@@ -223,6 +223,17 @@ type WebViewDefinitionBase = {
    * @default false
    */
   shouldShowToolbar?: boolean;
+  /**
+   * Whether this WebView's tab can be closed by the user (shows the tab's close button). Set to
+   * `false` for tabs that must always remain open, such as views that are part of the default
+   * layout.
+   *
+   * Note: this default is applied by consumers (treat `undefined` as `true`, e.g. `isClosable ??
+   * true`), not enforced by the type.
+   *
+   * @default true
+   */
+  isClosable?: boolean;
 };
 
 /** WebView representation using React */
@@ -310,6 +321,7 @@ export const WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS = [
   'projectId',
   'scrollGroupScrRef',
   'state',
+  'isClosable',
 ] as const;
 
 /** The properties on a WebViewDefinition that may be updated when that webview is already displayed */

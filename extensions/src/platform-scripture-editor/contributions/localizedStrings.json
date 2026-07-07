@@ -133,7 +133,13 @@
       "%webView_resourcePanel_installing%": "Installing resource…",
       "%webView_resourcePanel_selecting%": "Selecting resource…",
       "%webView_resourcePanel_noProject%": "No project selected.",
-      "%webView_selectDblResource_installFailed%": "Failed to install resource. Please try again."
+      "%webView_selectDblResource_installFailed%": "Failed to install resource. Please try again.",
+      "%webView_scriptureTextGrid_title_multiple%": "Text Collection",
+      "%webView_scriptureTextGrid_title_single%": "Scripture text",
+      "%settings_platformScriptureEditor_enableScriptureTextGrid_description%": "Show the scripture text grid view for viewing multiple resources side by side.",
+      "%settings_platformScriptureEditor_enableScriptureTextGrid_label%": "Enable scripture text grid",
+      "%settings_platformScriptureEditor_group_description%": "Settings for the Scripture Editor and Resource Viewer.",
+      "%settings_platformScriptureEditor_group_label%": "Scripture Editor"
     },
     "es": {
       "%mainMenu_openPlatformResourceViewer%": "Abrir el visor de recursos",
@@ -239,7 +245,13 @@
       "%webView_resourcePanel_downloadResources%": "Descargar recursos…",
       "%webView_resourcePanel_installing%": "Instalando recurso…",
       "%webView_resourcePanel_selecting%": "Seleccionando recurso…",
-      "%webView_resourcePanel_noProject%": "Ningún proyecto seleccionado."
+      "%webView_resourcePanel_noProject%": "Ningún proyecto seleccionado.",
+      "%webView_scriptureTextGrid_title_multiple%": "Colección de textos",
+      "%webView_scriptureTextGrid_title_single%": "Texto bíblico",
+      "%settings_platformScriptureEditor_enableScriptureTextGrid_description%": "Mostrar la vista de cuadrícula de textos bíblicos para ver varios recursos en paralelo.",
+      "%settings_platformScriptureEditor_enableScriptureTextGrid_label%": "Habilitar la cuadrícula de textos bíblicos",
+      "%settings_platformScriptureEditor_group_description%": "Configuración del editor de Escrituras y del visor de recursos.",
+      "%settings_platformScriptureEditor_group_label%": "Editor de Escrituras"
     }
   }
 }

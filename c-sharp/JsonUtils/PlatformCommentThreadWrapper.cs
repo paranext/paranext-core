@@ -71,6 +71,26 @@ public class PlatformCommentThreadWrapper
             : _thread.Comments.Concat(_additionalComments);
 
     /// <summary>
+    /// The Id of this thread's ROOT (first) comment: the earliest-dated comment in
+    /// <see cref="AllComments"/> (stable on ties). Do NOT identify the root positionally:
+    /// ParatextData's <c>SortAndGroupThreads</c> groups a sorted flat comment list by contiguity, so
+    /// a thread whose comments have divergent cross-thread sort keys (e.g. a reattached/moved note —
+    /// PT9 FB-22392) can split into two same-Id fragments, and deduplication tail-appends the older
+    /// fragment's comments onto the newer one, leaving the genuine root mid-list. Date order is the
+    /// stable identity: PT9 sorts same-thread comments by date (<c>Comment.CompareTo</c>) and
+    /// <c>CommentThread.AddNewComment</c> forces every reply's date past the newest existing comment.
+    /// </summary>
+    internal string? RootCommentId => GetRootCommentId(AllComments);
+
+    /// <summary>
+    /// Identifies the root (first) comment of a set of thread comments by earliest date. Shared so
+    /// every first-comment check uses the same notion of "first" (see <see cref="RootCommentId"/>
+    /// for why list position is not reliable).
+    /// </summary>
+    internal static string? GetRootCommentId(IEnumerable<Comment> comments) =>
+        comments.OrderBy(c => c.DateTime).FirstOrDefault()?.Id;
+
+    /// <summary>
     /// Adds comments from another wrapper that are not already present in this thread.
     /// Used during deduplication to combine unique comments without mutating the underlying
     /// ParatextData <see cref="CommentThread"/> objects.

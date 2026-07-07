@@ -1,8 +1,8 @@
-import { renderHook, waitFor, act, configure, getConfig } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import { EVENT_NAME_ON_DID_UPDATE_WEB_VIEW } from '@shared/services/web-view.service-model';
-import { useProjectPickerData } from './use-project-picker-data.hook';
+import { useProjectPickerData, type ProjectPickerData } from './use-project-picker-data.hook';
 
 // --- Mocks ---
 
@@ -56,10 +56,13 @@ vi.mock('@shared/services/project-data-provider.service', () => ({
 
 const EDITOR_WEB_VIEW_TYPE = 'platformScriptureEditor.react';
 
-// Stable reference across renders so rawRecentIds keeps the same array identity, preventing
+// Stable references across renders so rawRecentIds keeps the same array identity, preventing
 // useMemo from recomputing safeRecentIds every render which would recreate the useCallback
-// and trigger an infinite reload loop in usePromise.
+// and trigger an infinite reload loop in usePromise. This mirrors production, where useData
+// returns referentially-stable React state; a fresh array literal per render does not.
 const DEFAULT_RECENT_IDS: string[] = [];
+const RECENT_IDS_R1_R2: string[] = ['proj-r1', 'proj-r2'];
+const RECENT_IDS_R1: string[] = ['proj-r1'];
 
 async function importMocks() {
   const { getNetworkEvent } = await import('@shared/services/network.service');
@@ -78,26 +81,33 @@ async function importMocks() {
   };
 }
 
+/**
+ * Deterministically settle the hook's mocked async work. usePromise resolves purely through
+ * microtasks (no timers, polling, or retries), so draining the microtask queue inside act() drives
+ * the hook to completion regardless of CPU speed. This replaces RTL's waitFor, whose wall-clock
+ * deadline flaked on CPU-starved CI runners even though the underlying resolution order is fully
+ * deterministic. The iteration cap is a safety net against a genuine hang, not a tuned timeout - if
+ * it is ever hit, the follow-up assertions fail loudly rather than the whole test timing out.
+ */
+async function settle(result: { current: ProjectPickerData }) {
+  for (let i = 0; i < 20 && result.current.isLoading; i += 1) {
+    // Each turn must run sequentially so React commits the resulting state before the next check
+    // eslint-disable-next-line no-await-in-loop
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
+}
+
 // --- Tests ---
 
 // vitest mocks use as-never to coerce partial objects to the full inferred return type
 /* eslint-disable no-type-assertion/no-type-assertion */
 describe('useProjectPickerData', () => {
-  // The hook ORs four async loading flags (three usePromise calls + one useData). They resolve in
-  // ~60ms locally, but waitFor's deadline is wall-clock: on a starved CI runner the event loop can
-  // be blocked past RTL's 1000ms default before the (already-scheduled) resolutions run, producing
-  // spurious "isLoading still true" timeouts. There is no re-render loop (each callback runs exactly
-  // once), so a longer deadline only tolerates scheduler starvation - waitFor still returns the
-  // instant the condition is met, so the happy path is not slowed. Restored in afterAll so the
-  // raised timeout does not leak to other test files sharing the worker.
-  let originalAsyncUtilTimeout: number;
-  beforeAll(() => {
-    originalAsyncUtilTimeout = getConfig().asyncUtilTimeout;
-    configure({ asyncUtilTimeout: 5000 });
-  });
-  afterAll(() => {
-    configure({ asyncUtilTimeout: originalAsyncUtilTimeout });
-  });
+  // The hook ORs four async loading flags (three usePromise calls + one useData) that settle purely
+  // through microtasks - no timers, polling, or retries. Tests therefore drive it to completion with
+  // settle() (a deterministic microtask drain) rather than waitFor, whose wall-clock deadline flaked
+  // on CPU-starved CI runners even though the resolution order is fully deterministic.
 
   beforeEach(async () => {
     // resetAllMocks clears both call history and any mockReturnValue/mockImplementation overrides
@@ -132,7 +142,8 @@ describe('useProjectPickerData', () => {
   it('returns undefined currentProject when no Scripture Editor web view is open', async () => {
     const { result } = renderHook(() => useProjectPickerData());
 
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await settle(result);
+    expect(result.current.isLoading).toBe(false);
     expect(result.current.currentProject).toBeUndefined();
   });
 
@@ -147,10 +158,9 @@ describe('useProjectPickerData', () => {
 
     const { result } = renderHook(() => useProjectPickerData());
 
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false);
-      expect(result.current.currentProject?.fullName).toBe('Genesis Project');
-    });
+    await settle(result);
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.currentProject?.fullName).toBe('Genesis Project');
     expect(result.current.currentProject?.id).toBe('proj-abc');
   });
 
@@ -175,7 +185,8 @@ describe('useProjectPickerData', () => {
 
     const { result } = renderHook(() => useProjectPickerData());
 
-    await waitFor(() => expect(result.current.allProjects.length).toBe(2));
+    await settle(result);
+    expect(result.current.allProjects).toHaveLength(2);
     expect(result.current.allProjects[0]).toMatchObject({
       id: 'p1',
       fullName: 'Full p1',
@@ -193,7 +204,7 @@ describe('useProjectPickerData', () => {
   it('recentProjects reflects recent project IDs from data provider', async () => {
     const { papiFrontendProjectDataProviderService, useData } = await importMocks();
     vi.mocked(useData).mockImplementation(() => ({
-      RecentProjects: vi.fn().mockReturnValue([['proj-r1', 'proj-r2'], vi.fn(), false]),
+      RecentProjects: vi.fn().mockReturnValue([RECENT_IDS_R1_R2, vi.fn(), false]),
     }));
     vi.mocked(papiFrontendProjectDataProviderService.get).mockImplementation(
       async (_iface: string, projectId: string) =>
@@ -210,10 +221,9 @@ describe('useProjectPickerData', () => {
 
     const { result } = renderHook(() => useProjectPickerData());
 
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false);
-      expect(result.current.recentProjects).toHaveLength(2);
-    });
+    await settle(result);
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.recentProjects).toHaveLength(2);
     expect(result.current.recentProjects[0]).toMatchObject({
       id: 'proj-r1',
       fullName: 'Full proj-r1',
@@ -247,10 +257,9 @@ describe('useProjectPickerData', () => {
 
     const { result } = renderHook(() => useProjectPickerData());
 
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false);
-      expect(result.current.allProjects).toHaveLength(1);
-    });
+    await settle(result);
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.allProjects).toHaveLength(1);
     expect(result.current.allProjects[0].id).toBe('editable');
   });
 
@@ -258,7 +267,7 @@ describe('useProjectPickerData', () => {
     const { projectLookupService, papiFrontendProjectDataProviderService, useData } =
       await importMocks();
     vi.mocked(useData).mockImplementation(() => ({
-      RecentProjects: vi.fn().mockReturnValue([['proj-r1'], vi.fn(), false]),
+      RecentProjects: vi.fn().mockReturnValue([RECENT_IDS_R1, vi.fn(), false]),
     }));
     vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([
       { id: 'proj-r1', projectInterfaces: [], pdpFactoryInfo: {} },
@@ -279,10 +288,9 @@ describe('useProjectPickerData', () => {
 
     const { result } = renderHook(() => useProjectPickerData());
 
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false);
-      expect(result.current.allProjects).toHaveLength(1);
-    });
+    await settle(result);
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.allProjects).toHaveLength(1);
     expect(result.current.allProjects[0].id).toBe('proj-other');
     expect(result.current.recentProjects[0].id).toBe('proj-r1');
   });
@@ -309,13 +317,15 @@ describe('useProjectPickerData', () => {
     } as never);
 
     const { result } = renderHook(() => useProjectPickerData());
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await settle(result);
+    expect(result.current.isLoading).toBe(false);
     expect(result.current.currentProject).toBeUndefined();
 
     expect(capturedCallback).toBeDefined();
     act(() => capturedCallback!());
 
-    await waitFor(() => expect(result.current.currentProject?.fullName).toBe('Updated Project'));
+    await settle(result);
+    expect(result.current.currentProject?.fullName).toBe('Updated Project');
   });
 });
 /* eslint-enable no-type-assertion/no-type-assertion */

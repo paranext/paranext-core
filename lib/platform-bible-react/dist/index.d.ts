@@ -1067,9 +1067,20 @@ export interface MarkerMenuItem {
 	subtitle?: string;
 	/** Optional name of icon to use instead of the marker */
 	icon?: React$1.FC<MarkerIconProps>;
-	/** Whether the command/marker is deprecated */
+	/**
+	 * Whether the command/marker is deprecated. Deprecated items stay visible in the menu (even when
+	 * the search query is empty) but are rendered disabled so they cannot be selected.
+	 */
 	isDeprecated?: boolean;
-	/** Whether the command/marker is disallowed for this project */
+	/**
+	 * Whether the command/marker is disallowed for this project (e.g. blocked while structure is
+	 * protected). Unlike {@link MarkerMenuItem.isDeprecated}, this flag affects visibility as well as
+	 * selectability: while the search query is empty, disallowed items are hidden if any allowed
+	 * items exist (to reduce clutter) but are shown when every item is disallowed (so the menu isn't
+	 * empty). A non-empty query reveals a disallowed item only on an exact marker-code match or a
+	 * title match. Whenever a disallowed item is shown it is rendered disabled so it cannot be
+	 * selected.
+	 */
 	isDisallowed?: boolean;
 	/** Function to be triggered when the marker or command is selected */
 	action: () => void;
@@ -2518,7 +2529,7 @@ export declare function ContextMenuSub({ ...props }: React$1.ComponentProps<type
 /** @inheritdoc ContextMenu */
 export declare function ContextMenuRadioGroup({ ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.RadioGroup>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc ContextMenu */
-export declare function ContextMenuContent({ className, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.Content> & {
+export declare function ContextMenuContent({ className, style, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.Content> & {
 	side?: "top" | "right" | "bottom" | "left";
 }): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc ContextMenu */
@@ -2531,7 +2542,7 @@ export declare function ContextMenuSubTrigger({ className, inset, children, ...p
 	inset?: boolean;
 }): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc ContextMenu */
-export declare function ContextMenuSubContent({ className, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.SubContent>): import("react/jsx-runtime").JSX.Element;
+export declare function ContextMenuSubContent({ className, style, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.SubContent>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc ContextMenu */
 export declare function ContextMenuCheckboxItem({ className, children, checked, inset, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.CheckboxItem> & {
 	inset?: boolean;
@@ -2710,6 +2721,13 @@ export declare function Input({ className, type, ...props }: React$1.ComponentPr
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/kbd}
  */
 export declare function Kbd({ className, ...props }: React$1.ComponentProps<"kbd">): import("react/jsx-runtime").JSX.Element;
+/**
+ * Groups multiple {@link Kbd} components together to represent a key combination or sequence (for
+ * example, `Ctrl + K`). This component is from Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/kbd}
+ */
+export declare function KbdGroup({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
 /**
  * The Label component renders an accessible label associated with controls. This component is built
  * on Radix UI primitives and styled with Shadcn UI.
