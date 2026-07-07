@@ -40,3 +40,10 @@ export { Z_INDEX_TOOLTIP } from './components/z-index';
 // `./components/advanced/book-chapter-control/book-chapter-control.navigation`.
 export { ALL_BOOK_IDS } from './components/shared/book.utils';
 export { readDirection, persistDirection, type Direction } from './utils/dir-helper.util';
+export {
+  default as NavigationHistoryButtons,
+  NAVIGATION_HISTORY_BUTTONS_STRING_KEYS,
+  type NavigationHistoryButtonsProps,
+  type NavigationHistoryButtonsLocalizedStrings,
+  type NavigationHistoryItem,
+} from './components/advanced/navigation-history-buttons/navigation-history-buttons.component';
