@@ -7,7 +7,7 @@ import { Column, ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSort
 import { ClassValue } from 'clsx';
 import { Command as CommandPrimitive } from 'cmdk';
 import { LucideProps } from 'lucide-react';
-import { CommentStatus, DblResourceData, LanguageStrings, LegacyComment, LegacyCommentThread, LocalizeKey, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ResourceType, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
+import { CommentStatus, DblResourceData, LanguageStrings, LegacyComment, LegacyCommentThread, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ResourceType, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
 import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as RadixTabs, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import React$1 from 'react';
 import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithoutRef, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, RefObject } from 'react';
@@ -345,7 +345,36 @@ export type AddCommentToThreadOptions = {
  * this component in an extension, you can pass it into the useLocalizedStrings hook to easily
  * obtain the localized strings and pass them into the localizedStrings prop of this component
  */
-export declare const COMMENT_LIST_STRING_KEYS: LocalizeKey[];
+export declare const COMMENT_LIST_STRING_KEYS: readonly [
+	"%comment_assign_team%",
+	"%comment_assign_unassigned%",
+	"%comment_assigned_to%",
+	"%comment_assigning_to%",
+	"%comment_dateAtTime%",
+	"%comment_date_today%",
+	"%comment_date_yesterday%",
+	"%comment_deleteComment%",
+	"%comment_editComment%",
+	"%comment_replyOrAssign%",
+	"%comment_reopenResolved%",
+	"%comment_status_resolved%",
+	"%comment_status_todo%",
+	"%comment_thread_multiple_replies%",
+	"%comment_thread_single_reply%",
+	"%comment_aria_assign_user%",
+	"%comment_aria_submit_comment%",
+	"%comment_aria_mark_as_read%",
+	"%comment_aria_mark_as_unread%",
+	"%comment_aria_resolve_thread%"
+];
+/**
+ * Type definition for the localized strings used in the CommentList component. Handy for typing the
+ * object a consumer builds from `useLocalizedStrings(COMMENT_LIST_STRING_KEYS)`, so a mistyped key
+ * is caught at compile time.
+ */
+export type CommentListLocalizedStrings = {
+	[localizedKey in (typeof COMMENT_LIST_STRING_KEYS)[number]]?: string;
+};
 /** Props for the CommentList component */
 export interface CommentListProps {
 	/** Additional class name for the component */
