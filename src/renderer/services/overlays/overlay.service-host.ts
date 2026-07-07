@@ -625,8 +625,10 @@ function getActiveCommandPalette(webViewId: string): CommandPaletteEntry | undef
  * the given WebView. No-op if no command palette is active for that WebView.
  *
  * @param webViewId The WebView whose command palette should be updated
- * @param update `filterText` (passive palettes only — no-op with a warning on active palettes) and/
- *   or `moveSelection` (clamped to the filtered list's bounds)
+ * @param update `filterText` and/or `moveSelection` (clamped to the filtered list's bounds).
+ *   `filterText` drives passive palettes' list directly and, for ACTIVE palettes, the (controlled)
+ *   search input — the extension forwards keystrokes this way when the cross-frame focus handoff
+ *   loses and the user's typing lands in the editor instead of the palette (Task 15 round 3).
  */
 async function updateCommandPalette(
   webViewId: string,
@@ -637,14 +639,7 @@ async function updateCommandPalette(
 
   let nextFilterText = entry.filterText;
   if (update.filterText !== undefined) {
-    if (entry.request.passive) {
-      nextFilterText = update.filterText;
-    } else {
-      logger.warn(
-        `updateCommandPalette: filterText updates are passive-only; ignoring for the active command palette on webView "${webViewId}"`,
-      );
-      if (update.moveSelection === undefined) return;
-    }
+    nextFilterText = update.filterText;
   } else if (update.moveSelection === undefined) {
     // Nothing to update
     return;
