@@ -2186,6 +2186,14 @@ namespace TestParanextDataProvider.Projects
         private const string MatTwoWinnerUsfm =
             "\\id MAT\n\\c 2\n\\v 1 When Jesus was born in the big village of Bethlehem in Judea, Herod was king.\n";
 
+        // Winner (post-merge current) chapter text for the INDEPENDENT-changes MAT 2:1 conflict
+        // fixture. The accepted (winning) side inserted "great" before "king" (a late word); the
+        // rejected side independently inserted "small" before "village" (an early word). This is the
+        // accepted side alone, so it lacks the rejected "small" - "Merge all changes" would splice
+        // that in. See CommentTestHelper.CreateIndependentVerseTextConflictComment.
+        private const string MatTwoIndependentWinnerUsfm =
+            "\\id MAT\n\\c 2\n\\v 1 When Jesus was born in the village of Bethlehem in Judea, Herod was great king.\n";
+
         // The winner verse edited AFTER the merge (big -> enormous) - makes the conflict stale.
         private const string MatTwoEditedUsfm =
             "\\id MAT\n\\c 2\n\\v 1 When Jesus was born in the enormous village of Bethlehem in Judea, Herod was king.\n";
@@ -2904,6 +2912,26 @@ namespace TestParanextDataProvider.Projects
                 () => _provider.AddCommentToThread(new PlatformCommentWrapper(resolve)),
                 Throws.Nothing
             );
+        }
+
+        // Mirrors SeedVerseTextConflict() but seeds the INDEPENDENT-changes conflict (two
+        // non-overlapping word edits) so CommentEditHelper.GetMergedUsfm returns non-null. Puts the
+        // winner (accepted-side) text into the project first, exactly as the existing seed does.
+        private static CommentThread SeedIndependentVerseTextConflict(ScrText scrText)
+        {
+            scrText.PutText(40, 0, false, MatTwoIndependentWinnerUsfm, null);
+            var mgr = CommentManager.Get(scrText);
+            Comment conflict = CommentTestHelper.CreateIndependentVerseTextConflictComment();
+            mgr.AddComment(conflict);
+            mgr.SaveUser(conflict.User, false);
+            return mgr.FindThread(conflict.Thread);
+        }
+
+        [Test]
+        public void IndependentConflictFixture_IsMergeable()
+        {
+            CommentThread thread = SeedIndependentVerseTextConflict(_scrText);
+            Assert.That(CommentEditHelper.GetMergedUsfm(thread), Is.Not.Null.And.Not.Empty);
         }
 
         #endregion

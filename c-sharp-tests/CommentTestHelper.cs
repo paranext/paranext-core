@@ -163,6 +163,45 @@ internal static class CommentTestHelper
     }
 
     /// <summary>
+    /// A verseText merge-conflict Comment whose two sides edited INDEPENDENT (non-overlapping) words
+    /// of the same verse, so the two diffs against the base do not touch the same region and
+    /// <c>CommentEditHelper.GetMergedUsfm</c> returns non-null (PT9's "Merge all changes" is offered).
+    /// Contrast with <see cref="CreateVerseTextConflictComment"/>, whose sides both edit the SAME word
+    /// (before "village") so the merge is null. Here:
+    ///   base     = "\v 1 ...born in the village of Bethlehem in Judea, Herod was king."
+    ///   rejected = base + "small " before "village" (an early word; carried in Contents as &lt;bold&gt;)
+    ///   accepted = base + "great " before "king"    (a late word; carried in AcceptedChangeXml as &lt;bold&gt;)
+    /// The merged verse therefore contains BOTH "small" and "great".
+    /// </summary>
+    internal static Comment CreateIndependentVerseTextConflictComment()
+    {
+        // Reuse the base conflict comment's identity (Thread/VerseRef/Date/Status/Type/…) and override
+        // only the verseText-specific fields, exactly like CreateVerseTextConflictComment - but place
+        // the accepted-side change on a DIFFERENT, non-overlapping word than the rejected-side change.
+        Comment testComment = CreateConflictComment();
+        XmlDocument contentsDoc = new XmlDocument();
+        contentsDoc.LoadXml(
+            """
+            <Contents>Two different people edited this verse. The change shown here (in red) is not in the current copy of the text.<p>
+                <language name="es-015-vaidika">
+                <p>\v 1 When Jesus was born in the <bold><color name="red">small </color></bold>village of Bethlehem in Judea, Herod was king.</p>
+                </language>
+            </p>
+            </Contents>
+            """
+        );
+        testComment.Contents = contentsDoc.DocumentElement;
+        testComment.ConflictType = NoteConflictType.VerseTextConflict;
+        // Accepted (winning) side inserted "great " before "king." - a different word than the
+        // rejected side's "small " before "village", so the two diffs are independent.
+        testComment.AcceptedChangeXmlStr =
+            """<p><language name="es-015-vaidika"><p>\v 1 When Jesus was born in the village of Bethlehem in Judea, Herod was <bold><color name="red">great </color></bold>king.</p></language></p>""";
+        testComment.Verse =
+            @"\v 1 When Jesus was born in the village of Bethlehem in Judea, Herod was great king.";
+        return testComment;
+    }
+
+    /// <summary>
     /// A verseText merge-conflict Comment with NO common ancestor (parent == null in the merger),
     /// mirroring two people independently drafting the same previously-absent verse. In that case
     /// <c>BookFileMerger.AppendDiffXml</c> diffs <c>""</c> against the losing side, so the Contents
