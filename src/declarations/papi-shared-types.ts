@@ -1,5 +1,5 @@
 declare module 'papi-shared-types' {
-  import type { PlatformError, UnsubscriberAsync } from 'platform-bible-utils';
+  import type { PlatformError, ScrollGroupId, UnsubscriberAsync } from 'platform-bible-utils';
   import type {
     DataProviderDataType,
     DataProviderDataTypes,
@@ -162,6 +162,36 @@ declare module 'papi-shared-types' {
      * @experimental This command is unstable and may change or disappear without notice
      */
     'platform.openBookChapterControl': () => Promise<void>;
+
+    // These commands are provided in `src/renderer/services/scroll-group.service-host.ts`
+    /**
+     * Navigate one step back in the reference history of the given scroll group.
+     *
+     * @param scrollGroupId Scroll group whose history to navigate
+     * @returns `true` if navigation happened; `false` when there is no history to go back to
+     */
+    'platform.navigateBackInReferenceHistory': (scrollGroupId: ScrollGroupId) => Promise<boolean>;
+    /**
+     * Navigate one step forward in the reference history of the given scroll group.
+     *
+     * @param scrollGroupId Scroll group whose history to navigate
+     * @returns `true` if navigation happened; `false` when there is no history to go forward to
+     */
+    'platform.navigateForwardInReferenceHistory': (
+      scrollGroupId: ScrollGroupId,
+    ) => Promise<boolean>;
+    /**
+     * Navigate multiple steps within the reference history of the given scroll group,
+     * browser-`history.go` style.
+     *
+     * @param scrollGroupId Scroll group whose history to navigate
+     * @param offset Signed number of steps: negative = back, positive = forward
+     * @returns `true` if navigation happened; `false` if the offset was 0 or out of range
+     */
+    'platform.navigateToReferenceHistoryEntry': (
+      scrollGroupId: ScrollGroupId,
+      offset: number,
+    ) => Promise<boolean>;
 
     // These commands are provided in `extension-host.ts`. They are only here because I needed them to
     // use in other places, but building `papi-dts` wasn't working because it didn't see

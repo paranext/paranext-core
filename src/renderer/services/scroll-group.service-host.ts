@@ -3,7 +3,7 @@ import {
   navigateHistory,
   recordNavigation,
 } from '@renderer/services/reference-history.util';
-import { sendCommand } from '@shared/services/command.service';
+import { registerCommand, sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { networkObjectService } from '@shared/services/network-object.service';
 import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
@@ -656,4 +656,69 @@ const scrollGroupService: IScrollGroupRemoteService = {
 /** Register the network object that backs the scroll group service */
 export async function startScrollGroupService(): Promise<void> {
   await networkObjectService.set(NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE, scrollGroupService);
+
+  await Promise.all([
+    registerCommand(
+      'platform.navigateBackInReferenceHistory',
+      async (scrollGroupId) => navigateReferenceHistorySync(scrollGroupId, -1),
+      {
+        method: {
+          summary: 'Navigate one step back in the reference history of the given scroll group',
+          params: [
+            {
+              name: 'scrollGroupId',
+              required: true,
+              summary: 'Scroll group whose history to navigate',
+              schema: { type: 'number' },
+            },
+          ],
+          result: { name: 'didNavigate', schema: { type: 'boolean' } },
+        },
+      },
+    ),
+    registerCommand(
+      'platform.navigateForwardInReferenceHistory',
+      async (scrollGroupId) => navigateReferenceHistorySync(scrollGroupId, 1),
+      {
+        method: {
+          summary: 'Navigate one step forward in the reference history of the given scroll group',
+          params: [
+            {
+              name: 'scrollGroupId',
+              required: true,
+              summary: 'Scroll group whose history to navigate',
+              schema: { type: 'number' },
+            },
+          ],
+          result: { name: 'didNavigate', schema: { type: 'boolean' } },
+        },
+      },
+    ),
+    registerCommand(
+      'platform.navigateToReferenceHistoryEntry',
+      async (scrollGroupId, offset) => navigateReferenceHistorySync(scrollGroupId, offset),
+      {
+        method: {
+          summary:
+            'Navigate multiple steps in the reference history of the given scroll group ' +
+            '(negative offset = back, positive = forward)',
+          params: [
+            {
+              name: 'scrollGroupId',
+              required: true,
+              summary: 'Scroll group whose history to navigate',
+              schema: { type: 'number' },
+            },
+            {
+              name: 'offset',
+              required: true,
+              summary: 'Signed number of steps: negative = back, positive = forward',
+              schema: { type: 'number' },
+            },
+          ],
+          result: { name: 'didNavigate', schema: { type: 'boolean' } },
+        },
+      },
+    ),
+  ]);
 }
