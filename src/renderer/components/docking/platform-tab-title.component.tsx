@@ -48,6 +48,8 @@ const cssClassTabContentWindowFocus = 'platform-dock-tabpane-window-focus';
  * tab
  */
 const cssClassTabHeaderLastSelected = 'platform-dock-tab-last-selected';
+/** CSS class for tinting the tab content pane of the last-selected web view while it is not focused */
+const cssClassTabContentLastSelected = 'platform-dock-tabpane-last-selected';
 
 // This duration must be ≥ the tabTitleBarFlash animation duration in dock-layout-wrapper.component.scss
 const cssHighlightDurationMilliseconds = 3000;
@@ -218,17 +220,23 @@ export function PlatformTabTitle({
     // do nothing if this tab is not the navigation target, or if it is already focused
     if (id !== lastSelectedWebViewId || isThisTabFocused) return;
 
-    // We need to walk the DOM to find the header to apply the last-selected style
+    // We need to walk the DOM to find the header and content to apply the last-selected style
     const containerElement = containerRef.current;
     if (!containerElement) return;
 
     // Walk up the DOM to the active tab header
     const activeTabHeader = containerElement.closest('.dock-tab-active');
+    // Keep walking up to the common ancestor of the active tab header and content
+    const rcDockPanel = (activeTabHeader ?? containerElement).closest('.dock-panel');
+    // Walk back down to find the active tab content
+    const activeTabContent = rcDockPanel?.querySelector('.dock-tabpane-active');
 
     if (activeTabHeader) activeTabHeader.classList.add(cssClassTabHeaderLastSelected);
+    if (activeTabContent) activeTabContent.classList.add(cssClassTabContentLastSelected);
 
     return () => {
       if (activeTabHeader) activeTabHeader.classList.remove(cssClassTabHeaderLastSelected);
+      if (activeTabContent) activeTabContent.classList.remove(cssClassTabContentLastSelected);
     };
   }, [focusSubject, id, lastSelectedWebViewId]);
 

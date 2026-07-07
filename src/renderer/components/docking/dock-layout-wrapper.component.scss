@@ -43,6 +43,16 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
 .dock-tabpane-active {
   --tab-background: var(--tab-front-blur);
 
+  /* Tint the content pane when this tab is the last-selected web view (see the
+  `platform-dock-tab-last-selected` rule further down for the matching header tint and the full
+  explanation). This selector's specificity (two classes) ties with the
+  `platform-dock-tabpane-window-focus` rule immediately below; CSS breaks specificity ties by
+  source order, so this rule is declared ABOVE that one, ensuring window focus always wins when a
+  pane is both last-selected and focused. */
+  &.platform-dock-tabpane-last-selected {
+    --tab-background: var(--tab-highlight);
+  }
+
   // When a tab is the has focus within it, it gets a prominent color.
   &.platform-dock-tabpane-window-focus {
     --tab-background: var(--primary);
@@ -323,11 +333,11 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
 }
 
 /* "Last selected" = the web view that the top toolbar's book/chapter/verse controls and
-navigation commands currently target. Tint its tab so it stays easy to find after focus moves
-elsewhere. This selector's specificity (two classes) is intentionally lower than the
-`platform-dock-tab-window-focus` rule above (five classes, scoped under
-`.dock-style-platform-bible .dock-tab`), so window focus always wins when this tab is also the
-focused one. */
+navigation commands currently target. Tint its tab (and, via the paired rule near the top of this
+file, its content pane) so it stays easy to find after focus moves elsewhere. This selector's
+specificity (two classes) is intentionally lower than the `platform-dock-tab-window-focus` rule
+above (five classes, scoped under `.dock-style-platform-bible .dock-tab`), so window focus always
+wins when this tab is also the focused one. */
 .dock-tab-active.platform-dock-tab-last-selected {
   --tab-background: var(--tab-highlight);
 }
