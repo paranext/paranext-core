@@ -1635,6 +1635,49 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           return;
         }
 
+        // Enter-menu safety net (Task 15 round 3, QA run 3 item 5): the Enter palette is a
+        // FOCUSED palette designed to be driven by the renderer overlay's own input, but if the
+        // cross-frame focus handoff loses (or the user clicks back into the editor), keys land
+        // HERE — pre-fix, Escape then reached Lexical instead of cancelling (the split committed
+        // and the palette zombied because nothing ever dismissed the 'enter' session). Forward
+        // the session-control keys; any other typing means the user resumed editing, so dismiss
+        // and let the keystroke land.
+        if (session?.kind === 'enter') {
+          if (
+            event.key === 'Shift' ||
+            event.key === 'Control' ||
+            event.key === 'Alt' ||
+            event.key === 'Meta'
+          )
+            return;
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            event.stopPropagation();
+            papi.overlays.updateCommandPalette(webViewId, {
+              moveSelection: event.key === 'ArrowDown' ? 1 : -1,
+            });
+            return;
+          }
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            event.stopPropagation(); // keep Lexical from performing the default split
+            paletteSession.current = undefined;
+            papi.overlays.commitCommandPaletteSelection(webViewId);
+            return;
+          }
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            event.stopPropagation();
+            paletteSession.current = undefined;
+            papi.overlays.dismissCommandPalette(webViewId);
+            return;
+          }
+          // Any other key: the user resumed editing — close the palette, let the key land.
+          paletteSession.current = undefined;
+          papi.overlays.dismissCommandPalette(webViewId);
+          return;
+        }
+
         if (!session && event.key === defaultMarkersMenuTrigger) {
           const ctx = editorRef.current?.getMarkerMenuContext();
           if (ctx) {
