@@ -543,7 +543,7 @@ export function CommentThread({
             >
               {isRead ? <MailOpen /> : <Mail />}
             </Button>
-            {canResolve && threadStatus !== 'Resolved' && !isConflictThread && (
+            {canResolve && threadStatus !== 'Resolved' && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -554,10 +554,19 @@ export function CommentThread({
                 )}
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleAddCommentToThreadWithContents({
-                    threadId,
-                    status: 'Resolved',
-                  });
+                  // A conflict thread's generic status-change path
+                  // (`handleAddCommentToThreadWithContents({ status: 'Resolved' })`) is blocked by
+                  // the backend, so route conflicts through the same conflict-resolve handler
+                  // passed to ConflictNoteCard's `onResolve`, defaulting to 'accept' (keep the
+                  // current/accepted text) since this button offers no choice of resolution.
+                  if (isConflictThread) {
+                    handleResolveConflictClick('accept');
+                  } else {
+                    handleAddCommentToThreadWithContents({
+                      threadId,
+                      status: 'Resolved',
+                    });
+                  }
                 }}
                 aria-label={localizedStrings['%comment_aria_resolve_thread%'] ?? 'Resolve thread'}
               >
@@ -648,6 +657,13 @@ export function CommentThread({
           )}
           {isSelected && (
             <>
+              {/* Extra vertical spacing between the conflict card and its reply comments
+                  (Storybook feedback item 4). Only rendered when the conflict thread has at
+                  least one visible reply, so a conflict thread with no other comments doesn't
+                  get dead whitespace before the compose editor. */}
+              {isConflictThread && visibleReplies.length > 0 && (
+                <div className="tw:h-2" data-slot="conflict-reply-gap" aria-hidden="true" />
+              )}
               {/* Show "hidden replies" separator before the visible replies if there are hidden replies */}
               {hiddenReplyCount > 0 && (
                 <div

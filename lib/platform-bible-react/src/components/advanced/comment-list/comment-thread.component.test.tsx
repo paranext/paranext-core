@@ -311,12 +311,11 @@ describe('CommentThread conflict resolution', () => {
     expect(screen.queryByRole('radio')).not.toBeInTheDocument();
   });
 
-  test('hover resolve button shows on a normal thread but is suppressed on conflict threads', async () => {
-    // The same resolve-permission callback drives both renders. The positive control (normal
-    // thread) proves the callback actually produces the hover resolve button once it settles true;
-    // the conflict render then proves the button is gated off for conflicts even after that same
-    // settlement. Without the positive control the absence assertion is tautological — it would
-    // pass while `canResolve` was still its initial `false`, protecting nothing.
+  test('hover resolve button shows on both normal and conflict threads', async () => {
+    // The same resolve-permission callback drives both renders, proving the callback actually
+    // produces the hover resolve button once it settles true for each thread type. The ✓ used to
+    // be suppressed for conflicts (`!isConflictThread`); it is now restored (routed to the
+    // conflict-resolve path instead of the generic one — see the tests below).
     const canUserResolveThreadCallback = async () => true;
 
     const { container: normalContainer } = renderThread({
@@ -330,20 +329,58 @@ describe('CommentThread conflict resolution', () => {
       canUserResolveThreadCallback,
     });
 
-    // Positive control: wait for the permission check to settle. The button is hidden until hover
-    // (opacity styling) but is present in the DOM, so getByRole finds it once `canResolve` is true.
     await waitFor(() =>
       expect(
         within(normalContainer).getByRole('button', { name: 'Resolve thread' }),
       ).toBeInTheDocument(),
     );
+    await waitFor(() =>
+      expect(
+        within(conflictContainer).getByRole('button', { name: 'Resolve thread' }),
+      ).toBeInTheDocument(),
+    );
+  });
 
-    // Negative: the conflict render's identical permission check has settled by the time the
-    // positive control appeared, yet the generic resolve button must never appear for conflicts.
-    // If the `!isConflictThread` gate were removed this button would be present here too.
-    expect(
-      within(conflictContainer).queryByRole('button', { name: 'Resolve thread' }),
-    ).not.toBeInTheDocument();
+  test('clicking ✓ on an unresolved conflict thread routes to the conflict resolve path with accept, not the generic status path', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const handleResolveConflict = vi.fn().mockResolvedValue(true);
+    const handleAddCommentToThread = vi.fn().mockResolvedValue('comment-id');
+    renderThread({
+      thread: conflictThread,
+      comments: conflictThread.comments,
+      canUserResolveThreadCallback: async () => true,
+      handleResolveConflict,
+      handleAddCommentToThread,
+    });
+
+    await user.click(await screen.findByRole('button', { name: 'Resolve thread' }));
+
+    expect(handleResolveConflict).toHaveBeenCalledWith('conflict-sample', 'accept');
+    // The generic status-change path throws for conflict threads on the backend now — it must
+    // never be invoked for a conflict's ✓.
+    expect(handleAddCommentToThread).not.toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'Resolved' }),
+    );
+  });
+
+  test('clicking ✓ on a non-conflict thread still uses the generic status path', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const handleResolveConflict = vi.fn().mockResolvedValue(true);
+    const handleAddCommentToThread = vi.fn().mockResolvedValue('comment-id');
+    renderThread({
+      thread: baseThread,
+      comments: [baseComment],
+      canUserResolveThreadCallback: async () => true,
+      handleResolveConflict,
+      handleAddCommentToThread,
+    });
+
+    await user.click(await screen.findByRole('button', { name: 'Resolve thread' }));
+
+    expect(handleAddCommentToThread).toHaveBeenCalledWith(
+      expect.objectContaining({ threadId: 'thread-1', status: 'Resolved' }),
+    );
+    expect(handleResolveConflict).not.toHaveBeenCalled();
   });
 
   test('resolve flow calls handleResolveConflict and locks controls on success', async () => {
@@ -419,5 +456,61 @@ describe('CommentThread conflict resolution', () => {
     expect(
       screen.queryByText(verseTextConflictComment.rejectedResultText ?? ''),
     ).not.toBeInTheDocument();
+  });
+
+  // A plain reply (not a resolution reply) appended after the conflict comment, used to exercise
+  // the conditional gap between the conflict card and its replies.
+  const conflictReply: LegacyComment = {
+    id: 'conflict-sample/Reviewer/2011-08-17T00:00:00.000Z',
+    thread: 'conflict-sample',
+    user: 'Reviewer',
+    verseRef: 'MAT 2:1',
+    language: 'en',
+    date: '2011-08-17T00:00:00.000Z',
+    deleted: false,
+    hideInTextWindow: false,
+    isRead: true,
+    startPosition: 0,
+    selectedText: '',
+    contents: '<p>Looks fine to me.</p>',
+  };
+
+  test('shows the spacer between the conflict card and replies when the selected conflict thread has replies', async () => {
+    const threadWithReply: LegacyCommentThread = {
+      ...conflictThread,
+      comments: [verseTextConflictComment, conflictReply],
+    };
+    const { container } = renderThread({
+      thread: threadWithReply,
+      comments: threadWithReply.comments,
+      isSelected: true,
+      getConflictResolutionOptionsCallback: async () => 'acceptOrReject',
+    });
+
+    await screen.findByRole('radio', { name: 'Keep the current text' });
+    expect(container.querySelector('[data-slot="conflict-reply-gap"]')).toBeInTheDocument();
+  });
+
+  test('omits the spacer when the selected conflict thread has no replies', async () => {
+    const { container } = renderThread({
+      thread: conflictThread,
+      comments: conflictThread.comments,
+      isSelected: true,
+      getConflictResolutionOptionsCallback: async () => 'acceptOrReject',
+    });
+
+    await screen.findByRole('radio', { name: 'Keep the current text' });
+    expect(container.querySelector('[data-slot="conflict-reply-gap"]')).not.toBeInTheDocument();
+  });
+
+  test('omits the spacer for a non-conflict thread even when it has replies', () => {
+    const normalReply: LegacyComment = { ...baseComment, id: 'comment-2' };
+    const { container } = renderThread({
+      thread: baseThread,
+      comments: [baseComment, normalReply],
+      isSelected: true,
+    });
+
+    expect(container.querySelector('[data-slot="conflict-reply-gap"]')).not.toBeInTheDocument();
   });
 });
