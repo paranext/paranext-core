@@ -1,5 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { EVENT_NAME_ON_DID_CHANGE_VERSIFICATION } from '@shared/services/scroll-group.service-model';
+import {
+  EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY,
+  EVENT_NAME_ON_DID_CHANGE_VERSIFICATION,
+} from '@shared/services/scroll-group.service-model';
 
 // The host module reads localStorage and creates a network emitter at import time; stub those.
 // Emitters are captured by event name so tests can assert on a specific event (e.g.
@@ -362,5 +365,35 @@ describe('reference history integration', () => {
     const history = host.getReferenceHistorySync(1);
     history.back.length = 0;
     expect(host.getReferenceHistorySync(1).back).toHaveLength(2);
+  });
+
+  it('emits the reference-history-changed event on record and on navigation', async () => {
+    const host = await import('@renderer/services/scroll-group.service-host');
+    const { emit } = emitters[EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY];
+
+    host.setScrRefSync(1, { book: 'MRK', chapterNum: 4, verseNum: 1 });
+    expect(emit).toHaveBeenCalledTimes(1);
+    expect(emit).toHaveBeenLastCalledWith({
+      scrollGroupId: 1,
+      history: {
+        back: [
+          { scrRef: { book: 'MRK', chapterNum: 4, verseNum: 1 }, sourceProjectId: undefined },
+          { scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 }, sourceProjectId: undefined },
+        ],
+        forward: [],
+      },
+    });
+
+    host.navigateReferenceHistorySync(1, -1);
+    expect(emit).toHaveBeenCalledTimes(2);
+    expect(emit).toHaveBeenLastCalledWith({
+      scrollGroupId: 1,
+      history: {
+        back: [{ scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 }, sourceProjectId: undefined }],
+        forward: [
+          { scrRef: { book: 'MRK', chapterNum: 4, verseNum: 1 }, sourceProjectId: undefined },
+        ],
+      },
+    });
   });
 });
