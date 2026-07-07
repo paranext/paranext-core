@@ -111,4 +111,29 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
       cssClassTabContentLastSelected,
     );
   });
+
+  it('does not tint a sibling tab header or pane when the last-selected tab is not the front tab in its panel', () => {
+    // The last-selected web view's tab is NOT the active tab in its panel: a sibling tab (e.g.
+    // Settings) is active instead, so the sibling's header and pane carry
+    // .dock-tab-active/.dock-tabpane-active and this tab's header does not
+    vi.mocked(useLastSelectedWebViewId).mockReturnValue('web-view-1');
+    mockFocusSubject = { focusType: 'tab', id: 'settings-tab' };
+
+    const { container } = render(
+      <div className="dock-panel">
+        <div className="dock-tab-active" />
+        <div className="dock-tab">
+          <PlatformTabTitle id="web-view-1" text="Tab title" />
+        </div>
+        <div className="dock-tabpane-active" />
+      </div>,
+    );
+
+    expect(container.querySelector('.dock-tab-active')).not.toHaveClass(
+      cssClassTabHeaderLastSelected,
+    );
+    expect(container.querySelector('.dock-tabpane-active')).not.toHaveClass(
+      cssClassTabContentLastSelected,
+    );
+  });
 });

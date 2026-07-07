@@ -224,18 +224,22 @@ export function PlatformTabTitle({
     const containerElement = containerRef.current;
     if (!containerElement) return;
 
-    // Walk up the DOM to the active tab header
+    // Walk up the DOM to the active tab header. If this tab is not the front (active) tab in its
+    // panel, do nothing at all - falling back to walking up from the container would find the
+    // panel's `.dock-tabpane-active` belonging to a SIBLING tab and wrongly tint that pane
     const activeTabHeader = containerElement.closest('.dock-tab-active');
+    if (!activeTabHeader) return;
+
     // Keep walking up to the common ancestor of the active tab header and content
-    const rcDockPanel = (activeTabHeader ?? containerElement).closest('.dock-panel');
+    const rcDockPanel = activeTabHeader.closest('.dock-panel');
     // Walk back down to find the active tab content
     const activeTabContent = rcDockPanel?.querySelector('.dock-tabpane-active');
 
-    if (activeTabHeader) activeTabHeader.classList.add(cssClassTabHeaderLastSelected);
+    activeTabHeader.classList.add(cssClassTabHeaderLastSelected);
     if (activeTabContent) activeTabContent.classList.add(cssClassTabContentLastSelected);
 
     return () => {
-      if (activeTabHeader) activeTabHeader.classList.remove(cssClassTabHeaderLastSelected);
+      activeTabHeader.classList.remove(cssClassTabHeaderLastSelected);
       if (activeTabContent) activeTabContent.classList.remove(cssClassTabContentLastSelected);
     };
   }, [focusSubject, id, lastSelectedWebViewId]);
