@@ -122,6 +122,7 @@ import {
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
 } from './platform-scripture-editor.utils';
 import { ParagraphMarkerTooltipOverlay } from './paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component';
+import { VerseDeleteTooltipOverlay } from './verse-delete-tooltip/verse-delete-tooltip-overlay.component';
 import {
   SyncBlockedBanner,
   SYNC_BLOCKED_BANNER_STRING_KEYS,
@@ -501,7 +502,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // Effective structure-protection state for this project/user, used to gate keyboard edits to
   // paragraph/verse markers in the editor (passed to EditorOptions.isStructureProtected below). The
   // toolbar StructureProtectionButton subscribes to the same state independently.
-  const { isStructureProtected } = useStructureProtectionState(projectId);
+  const { isStructureProtected, isProtectionActive } = useStructureProtectionState(projectId);
 
   // Get the updated title. Note this is NO_UPDATE_TITLE if no update is needed
   const [newTitleIfUpdated] = usePromise(
@@ -766,6 +767,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     () => ({
       isReadonly: isReadOnlyEffective,
       isStructureProtected,
+      // Power mode leaves the feature inactive, so the two-step delete stays off there too.
+      isStructureProtectionActive: isProtectionActive,
       hasSpellCheck: false,
       nodes: nodeOptions,
       textDirection: textDirectionEffective,
@@ -784,6 +787,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [
       isReadOnlyEffective,
       isStructureProtected,
+      isProtectionActive,
       canUserCreateComments,
       isSyncBlocked,
       textDirectionEffective,
@@ -1808,23 +1812,25 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       <>
         {workaround}
         <ParagraphMarkerTooltipOverlay>
-          <EditorKeyboardShortcuts editorRef={editorRef}>
-            <Editorial
-              ref={editorRef}
-              scrRef={scrRef}
-              onScrRefChange={setScrRefNoScroll}
-              options={options}
-              logger={logger}
-              onUsjChange={isReadOnly ? undefined : handleEditorialUsjChange}
-              onSelectionChange={handleSelectionChange}
-              onStateChange={(state) => {
-                setCanUndo(state.canUndo);
-                setCanRedo(state.canRedo);
-                setBlockMarker(state.blockMarker);
-                setContextMarker(state.contextMarker);
-              }}
-            />
-          </EditorKeyboardShortcuts>
+          <VerseDeleteTooltipOverlay>
+            <EditorKeyboardShortcuts editorRef={editorRef}>
+              <Editorial
+                ref={editorRef}
+                scrRef={scrRef}
+                onScrRefChange={setScrRefNoScroll}
+                options={options}
+                logger={logger}
+                onUsjChange={isReadOnly ? undefined : handleEditorialUsjChange}
+                onSelectionChange={handleSelectionChange}
+                onStateChange={(state) => {
+                  setCanUndo(state.canUndo);
+                  setCanRedo(state.canRedo);
+                  setBlockMarker(state.blockMarker);
+                  setContextMarker(state.contextMarker);
+                }}
+              />
+            </EditorKeyboardShortcuts>
+          </VerseDeleteTooltipOverlay>
         </ParagraphMarkerTooltipOverlay>
       </>
     );

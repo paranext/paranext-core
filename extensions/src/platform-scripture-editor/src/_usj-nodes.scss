@@ -2310,29 +2310,8 @@
   }
 }
 
-/* Destructive tooltip naming the confirming keystroke. Rendered via portal to <body> by
-   VerseDeleteTooltip (shared-react); styled here. Opaque surface from --popover so it reads in
-   both light and dark themes. */
-.verse-delete-tooltip {
-  padding: 4px 8px;
-  font-size: 0.75rem;
-  line-height: 1.2;
-  color: var(--destructive);
-  background-color: color-mix(in srgb, var(--destructive) 12%, var(--popover));
-  border: 1px solid color-mix(in srgb, var(--destructive) 40%, transparent);
-  border-radius: 6px;
-  box-shadow: 0 2px 8px rgb(0 0 0 / 15%);
-  white-space: nowrap;
-  pointer-events: none;
-}
-.verse-delete-tooltip kbd {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.9em;
-  padding: 1px 4px;
-  border: 1px solid color-mix(in srgb, var(--destructive) 40%, transparent);
-  border-radius: 3px;
-  background-color: color-mix(in srgb, var(--destructive) 8%, var(--popover));
-}
+/* The destructive "press again" hint is rendered by VerseDeleteTooltipOverlay as a ShadCN Tooltip
+   (localized, theme-styled) — no bespoke tooltip CSS lives here anymore. */
 
 span.unread img {
   background-color: #ffff99;
