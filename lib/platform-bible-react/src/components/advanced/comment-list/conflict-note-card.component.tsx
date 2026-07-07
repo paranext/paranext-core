@@ -58,9 +58,9 @@ function DiffHtml({ html, className }: { html: string; className?: string }) {
  * direct-manipulation radio group — "Keep the current text" (accept, preselected), "Use the other
  * change" (reject), and, when the two edits are independent, "Combine both changes" (merge) — each
  * showing its inline red/green diff, plus a Save-and-Resolve button. Handles the stale state
- * (accept kept, the option carrying a disabled read-only explanation) and the already-resolved
- * read-only state (the chosen outcome's text plus a derived outcome line). Falls back to rendering
- * the raw note contents for any non-verseText conflict.
+ * (accept stays enabled and selected; reject is disabled and carries a read-only explanation) and
+ * the already-resolved read-only state (the chosen outcome's text plus a derived outcome line).
+ * Falls back to rendering the raw note contents for any non-verseText conflict.
  */
 export function ConflictNoteCard({
   comment,
@@ -195,24 +195,26 @@ export function ConflictNoteCard({
             {localizedStrings['%conflict_note_choose_prompt%'] ?? 'Select which change to keep:'}
           </p>
 
-          {/* The whole group is disabled while resolving, and read-only when stale. */}
+          {/* The whole group is disabled while resolving. When stale, accept stays enabled
+              (it's the only still-valid resolution) and only the reject option below is
+              individually disabled. */}
           <RadioGroup
             value={effectiveResolution}
             onValueChange={handleChange}
-            disabled={isResolving || isStale}
+            disabled={isResolving}
           >
             {radioOptions.map((option) => {
               const isSelected = effectiveResolution === option.value;
               const optionId = `${optionIdPrefix}-${option.value}`;
-              // Stale forces accept and disables the whole group; the accept option additionally
-              // carries the explanation of why the conflict is read-only.
-              const isStaleAccept = isStale && option.value === 'accept';
+              // Stale forces accept and disables reject (accepting the post-merge edit is the only
+              // valid choice); the reject option carries the explanation of why it's unavailable.
+              const isStaleReject = isStale && option.value === 'reject';
               const radio = (
                 <RadioGroupItem
                   id={optionId}
                   value={option.value}
-                  disabled={isStaleAccept}
-                  aria-describedby={isStaleAccept ? staleNoticeId : undefined}
+                  disabled={isStaleReject}
+                  aria-describedby={isStaleReject ? staleNoticeId : undefined}
                 />
               );
               return (
@@ -226,7 +228,7 @@ export function ConflictNoteCard({
                     isSelected && 'tw:border tw:border-border',
                   )}
                 >
-                  {isStaleAccept ? (
+                  {isStaleReject ? (
                     <TooltipProvider delayDuration={0}>
                       <Tooltip>
                         <TooltipTrigger asChild>

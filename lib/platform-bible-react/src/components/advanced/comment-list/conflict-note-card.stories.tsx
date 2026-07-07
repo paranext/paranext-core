@@ -87,8 +87,9 @@ export const AcceptRejectOrMerge: Story = {
 };
 
 /**
- * The verse was edited after the merge (stale): the options are read-only and the accept option
- * carries an explanation tooltip. There is no Save and Resolve action.
+ * The verse was edited after the merge (stale): "Keep the current text" stays enabled and selected,
+ * while "Use the other change" is disabled and carries an explanation tooltip. There is no Save and
+ * Resolve action.
  */
 export const StaleVerse: Story = {
   render: () => <ConflictNoteCardStory availableActions="accept" />,

@@ -164,7 +164,7 @@ test('isResolving disables the radio group and the Save and Resolve button', () 
   expect(screen.getByRole('button', { name: 'Save and Resolve' })).toBeDisabled();
 });
 
-test('stale (availableActions=accept) disables the accept radio with a notice and hides Combine', () => {
+test('stale (availableActions=accept) disables the reject radio with a notice, keeps accept enabled, and hides Combine', () => {
   render(
     <ConflictNoteCard
       comment={verseTextConflictComment}
@@ -176,13 +176,15 @@ test('stale (availableActions=accept) disables the accept radio with a notice an
   );
   const acceptRadio = screen.getByRole('radio', { name: 'Keep the current text' });
   expect(acceptRadio).toBeChecked();
-  expect(acceptRadio).toBeDisabled();
+  // Accept is the only still-valid resolution when stale, so it stays enabled.
+  expect(acceptRadio).toBeEnabled();
+  expect(screen.getByRole('radio', { name: 'Use the other change' })).toBeDisabled();
   // No Combine option in the stale state, and no enabled Save and Resolve.
   expect(screen.queryByRole('radio', { name: 'Combine both changes' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Save and Resolve' })).not.toBeInTheDocument();
 });
 
-test('stale accept option is programmatically described by the stale notice for screen readers', () => {
+test('stale reject option is programmatically described by the stale notice for screen readers', () => {
   render(
     <ConflictNoteCard
       comment={verseTextConflictComment}
@@ -193,7 +195,7 @@ test('stale accept option is programmatically described by the stale notice for 
   );
   // aria-describedby resolves to the visually-hidden notice, so the reason the choice is read-only
   // reaches assistive tech, not just the pointer-only Tooltip.
-  expect(screen.getByRole('radio', { name: 'Keep the current text' })).toHaveAccessibleDescription(
+  expect(screen.getByRole('radio', { name: 'Use the other change' })).toHaveAccessibleDescription(
     /the verse has been edited since this conflict was recorded/i,
   );
 });
