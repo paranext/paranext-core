@@ -4256,6 +4256,23 @@ declare module 'papi-shared-types' {
     'platform.isUsersnapFormCurrentlyOpen': () => Promise<boolean>;
     /** Call close function for Usersnap forms known to the application */
     'platform.closeOpenUsersnapForm': () => Promise<void>;
+    /** Navigate the active scroll group to the next chapter (rolls into the next book) */
+    'platform.goToNextChapter': () => Promise<void>;
+    /** Navigate the active scroll group to the previous chapter (rolls into the previous book) */
+    'platform.goToPreviousChapter': () => Promise<void>;
+    /** Navigate the active scroll group to the next book (chapter 1, verse 1) */
+    'platform.goToNextBook': () => Promise<void>;
+    /** Navigate the active scroll group to the previous book (chapter 1, verse 1) */
+    'platform.goToPreviousBook': () => Promise<void>;
+    /** Navigate the active scroll group to the next verse */
+    'platform.goToNextVerse': () => Promise<void>;
+    /** Navigate the active scroll group to the previous verse */
+    'platform.goToPreviousVerse': () => Promise<void>;
+    /**
+     * Open the appropriate Book Chapter Control (the active tab's if it shows one, else the top
+     * toolbar's) and focus its input, ready for typing a reference
+     */
+    'platform.openBookChapterControl': () => Promise<void>;
     'test.addMany': (...nums: number[]) => number;
     'test.throwErrorExtensionHost': (message: string) => void;
   }

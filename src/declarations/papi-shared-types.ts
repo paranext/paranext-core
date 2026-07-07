@@ -116,6 +116,25 @@ declare module 'papi-shared-types' {
     /** Call close function for Usersnap forms known to the application */
     'platform.closeOpenUsersnapForm': () => Promise<void>;
 
+    // These commands are provided in `scroll-group-navigation.commands.ts` (renderer)
+    /** Navigate the active scroll group to the next chapter (rolls into the next book) */
+    'platform.goToNextChapter': () => Promise<void>;
+    /** Navigate the active scroll group to the previous chapter (rolls into the previous book) */
+    'platform.goToPreviousChapter': () => Promise<void>;
+    /** Navigate the active scroll group to the next book (chapter 1, verse 1) */
+    'platform.goToNextBook': () => Promise<void>;
+    /** Navigate the active scroll group to the previous book (chapter 1, verse 1) */
+    'platform.goToPreviousBook': () => Promise<void>;
+    /** Navigate the active scroll group to the next verse */
+    'platform.goToNextVerse': () => Promise<void>;
+    /** Navigate the active scroll group to the previous verse */
+    'platform.goToPreviousVerse': () => Promise<void>;
+    /**
+     * Open the appropriate Book Chapter Control (the active tab's if it shows one, else the top
+     * toolbar's) and focus its input, ready for typing a reference
+     */
+    'platform.openBookChapterControl': () => Promise<void>;
+
     // These commands are provided in `extension-host.ts`. They are only here because I needed them to
     // use in other places, but building `papi-dts` wasn't working because it didn't see
     // `extension-host.ts`
