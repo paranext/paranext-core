@@ -150,6 +150,14 @@ if (!isFirstInstance) {
 
 const PROCESS_CLOSE_TIME_OUT_MS = 2000;
 
+/**
+ * Scroll group the reference-history keyboard shortcuts operate on. INTERIM: hardcoded to 0 (the
+ * top toolbar's default group, and effectively the only group Simple-mode users are on) until the
+ * toolbar tracks the active web view's scroll group, at which point this dispatch should resolve
+ * the active group instead.
+ */
+const INTERIM_KEYBOARD_HISTORY_SCROLL_GROUP_ID = 0;
+
 /** Height of the custom title bar buttons on Windows */
 const TITLE_BAR_BUTTON_HEIGHT = 47;
 /** Background color of the window buttons in the custom title bar on Windows */
@@ -660,6 +668,44 @@ async function main() {
             `Failed to send ${verseNavigationCommand} for keyboard shortcut: ${getErrorMessage(e)}`,
           );
         });
+        return;
+      }
+
+      // Reference history navigation (PT-4033). Windows/Linux: Alt+Left / Alt+Right (Paratext 9
+      // parity). macOS: Cmd+[ / Cmd+] — the platform's history convention; Option+arrows is the
+      // system-wide move-by-word shortcut and must not be intercepted. In RTL the pairs swap
+      // meaning (physical-direction-preserving, like Paratext 9 and Chromium — see
+      // docs/specs/2026-07-06-reference-history-design.md). The `!input.shift` guard keeps
+      // Cmd+Shift+[/] free for the tab-focus handler below.
+      const isHistoryNavigationKey =
+        process.platform === 'darwin'
+          ? input.meta &&
+            !input.shift &&
+            !input.alt &&
+            !input.control &&
+            (input.key === '[' || input.key === ']')
+          : input.alt &&
+            !input.control &&
+            !input.shift &&
+            !input.meta &&
+            (input.key === 'ArrowLeft' || input.key === 'ArrowRight');
+      if (isHistoryNavigationKey) {
+        event.preventDefault();
+        const isPhysicallyBackKey = input.key === 'ArrowLeft' || input.key === '[';
+        (async () => {
+          try {
+            const direction = await commandService.sendCommand('platform.getInterfaceDirection');
+            const isBack = direction === 'rtl' ? !isPhysicallyBackKey : isPhysicallyBackKey;
+            await commandService.sendCommand(
+              isBack
+                ? 'platform.navigateBackInReferenceHistory'
+                : 'platform.navigateForwardInReferenceHistory',
+              INTERIM_KEYBOARD_HISTORY_SCROLL_GROUP_ID,
+            );
+          } catch (e) {
+            logger.warn(`Reference history keyboard navigation failed. ${getErrorMessage(e)}`);
+          }
+        })();
         return;
       }
 

@@ -107,6 +107,24 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     locations: ['src/main/main.ts', 'src/main/verse-navigation-shortcuts.util.ts'],
   },
   {
+    id: 'reference-history-back',
+    purpose: 'Go back one Scripture reference in the active scroll group’s history',
+    category: 'Navigation',
+    context: 'Main process (global)',
+    // In RTL the back/forward pairs swap meaning (physical-direction-preserving, like Paratext 9)
+    keys: { macOS: '⌘[', windows: 'Alt+Left', linux: 'Alt+Left' },
+    locations: ['src/main/main.ts'],
+  },
+  {
+    id: 'reference-history-forward',
+    purpose: 'Go forward one Scripture reference in the active scroll group’s history',
+    category: 'Navigation',
+    context: 'Main process (global)',
+    // In RTL the back/forward pairs swap meaning (physical-direction-preserving, like Paratext 9)
+    keys: { macOS: '⌘]', windows: 'Alt+Right', linux: 'Alt+Right' },
+    locations: ['src/main/main.ts'],
+  },
+  {
     id: 'zoom-in',
     purpose: 'Zoom in',
     category: 'Zoom',
