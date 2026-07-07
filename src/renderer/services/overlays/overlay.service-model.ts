@@ -296,11 +296,10 @@ export interface IOverlayService {
    * overlay ID.
    *
    * @param webViewId The ID of the WebView whose command palette should be updated
-   * @param update `filterText` narrows the item list via {@link filterPaletteItems} — this is
-   *   passive-mode only; updating it on a non-passive (active) palette is a no-op (logged as a
-   *   warning), since the active palette's own search input already owns its filter text.
-   *   `moveSelection` moves the highlighted index by this many items, clamped to the filtered
-   *   list's bounds.
+   * @param update `filterText` and/or `moveSelection` (clamped to the filtered list's bounds).
+   *   `filterText` drives passive palettes' list directly and, for ACTIVE palettes, the
+   *   (controlled) search input — callers forward keystrokes this way when the cross-frame focus
+   *   handoff loses and the user's typing lands in their WebView instead of the palette.
    */
   updateCommandPalette(
     webViewId: string,

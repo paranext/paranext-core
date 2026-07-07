@@ -332,6 +332,84 @@ describe('FootnoteEditor marker palette wiring', () => {
       expect(markerPalette.update).not.toHaveBeenCalled();
     });
 
+    it('claims in-session Enter in CAPTURE so the editor never mutates before the commit (no double mutation)', () => {
+      // Final-review Important 1: pre-fix this handler was bubble-phase without stopPropagation,
+      // so an in-session Enter reached MarkerEditPlugin's KEY_ENTER first — the editor inserted
+      // `\fp`/plain-split BEFORE the palette commit applied (double mutation with an uncleaned
+      // literal). The claim must prevent default AND stop the event from propagating onward.
+      mockGetMarkerMenuItems.mockReturnValue([makeItem()]);
+      const markerPalette = makeMarkerPalette(
+        vi.fn(() => new Promise<string | undefined>(() => {})),
+      );
+      const { editorInput, editorRef } = renderFootnoteEditor(
+        { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
+        markerPalette,
+      );
+      mockMarkerMenuContext(editorRef, {
+        source: 'character',
+        previousParaMarkers: [],
+        openCharMarkers: [],
+        hasTextSelection: false,
+        inMarkerText: false,
+        anchorRect: { x: 1, y: 2, width: 3, height: 4 },
+      });
+
+      editorInput.ownerDocument.dispatchEvent(
+        new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
+      );
+      // A stand-in for Lexical's own root-element keydown handling: registered at the window
+      // ABOVE the document, bubble phase — stopPropagation from the capture-phase session table
+      // must keep it from ever seeing the Enter.
+      const editorSawEnter = vi.fn();
+      const doc = editorInput.ownerDocument;
+      doc.defaultView?.addEventListener('keydown', editorSawEnter);
+      const notPrevented = doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+      );
+      doc.defaultView?.removeEventListener('keydown', editorSawEnter);
+
+      expect(notPrevented).toBe(false); // claimed
+      expect(editorSawEnter).not.toHaveBeenCalled(); // propagation stopped
+      expect(markerPalette.commit).toHaveBeenCalledOnce(); // the palette applies, alone
+    });
+
+    it('tracks a SELECTION session for the focused wrap palette and claims typed keys', () => {
+      // Final-review Important 1 (round-3 port): the wrap palette previously set the session to
+      // undefined, so typing landed in the document and replaced the wrapped selection.
+      mockGetMarkerMenuItems.mockReturnValue([makeItem()]);
+      const markerPalette = makeMarkerPalette(
+        vi.fn(() => new Promise<string | undefined>(() => {})),
+      );
+      const { editorInput, editorRef } = renderFootnoteEditor(
+        { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
+        markerPalette,
+      );
+      mockMarkerMenuContext(editorRef, {
+        source: 'character',
+        previousParaMarkers: [],
+        openCharMarkers: [],
+        hasTextSelection: true, // selection-wrap -> focused palette
+        inMarkerText: false,
+        anchorRect: { x: 1, y: 2, width: 3, height: 4 },
+      });
+
+      const doc = editorInput.ownerDocument;
+      doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
+      );
+      const typedNotPrevented = doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'w', bubbles: true, cancelable: true }),
+      );
+      expect(typedNotPrevented).toBe(false); // claimed - must NOT replace the selection
+      expect(markerPalette.update).toHaveBeenCalledWith({ filterText: 'w' });
+
+      const escapeNotPrevented = doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+      expect(escapeNotPrevented).toBe(false);
+      expect(markerPalette.dismiss).toHaveBeenCalledOnce();
+    });
+
     it('lets Space land and dismisses the palette (PT9 Tier-2 commit takes over)', () => {
       mockGetMarkerMenuItems.mockReturnValue([makeItem()]);
       const markerPalette = makeMarkerPalette(

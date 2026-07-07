@@ -353,7 +353,9 @@ export function OverlayCommandPalettePresentational({
           highlightedItem ? getPassiveItemDomId(highlightedItem.id) : undefined
         }
         className="pr-twp tw:no-scrollbar tw:max-h-72 tw:scroll-py-1 tw:overflow-x-hidden tw:overflow-y-auto tw:outline-none"
-        style={{ maxHeight: maxHeight - 44 }}
+        // No search input is rendered in passive mode, so the full budget goes to the list (the
+        // -44 input reservation applies only to the active branch below).
+        style={{ maxHeight }}
       >
         {passiveFilteredItems.length === 0 ? (
           <div data-slot="command-empty" className="tw:py-6 tw:text-center tw:text-sm">

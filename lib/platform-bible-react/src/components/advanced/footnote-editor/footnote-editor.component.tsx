@@ -17,6 +17,7 @@ import {
   StateChangeSnapshot,
 } from '@eten-tech-foundation/platform-editor';
 import { Copy } from 'lucide-react';
+import { handleMarkerPaletteSessionKeyDown } from '@/components/advanced/marker-palette-keydown.util';
 import {
   MutableRefObject,
   useCallback,
@@ -318,12 +319,22 @@ export default function FootnoteEditor({
    * Session state for a `\`-triggered marker palette open inside this popover's own editor (single
    * owner: the keydown flow below). Mirrors the main editor's `paletteSession` in
    * `platform-scripture-editor.web-view.tsx` (Task 10) — see there for the full session-shape
-   * rationale — scoped to this popover's own `.editor-input` and driven by its own `editorRef`.
-   * Only ever set for the passive (collapsed-caret) trigger; the selection-wrap trigger opens a
-   * focused palette whose own search input owns typing, so nothing needs forwarding for it.
+   * rationale — scoped to this popover's own `.editor-input` and driven by its own `editorRef`. The
+   * collapsed-caret trigger opens a PASSIVE palette (`kind: 'backslash'`, literal keeps landing);
+   * the selection-wrap trigger opens a FOCUSED palette tracked as `kind: 'selection'` — its keys
+   * are forwarded through the shared capture-phase table (`handleMarkerPaletteSessionKeyDown`)
+   * because the cross-frame focus handoff can lose, and an unclaimed keystroke would replace the
+   * wrapped selection (Task 15 final review, Important 1: this copy had drifted behind the web
+   * view's round-3 semantics).
    */
   const paletteSession = useRef<
-    | { token: number; literalPrefixLanded: boolean; filter: string; items: EditorMarkerMenuItem[] }
+    | {
+        kind: 'backslash' | 'selection';
+        token: number;
+        literalPrefixLanded: boolean;
+        filter: string;
+        items: EditorMarkerMenuItem[];
+      }
     | undefined
   >(undefined);
 
@@ -633,9 +644,13 @@ export default function FootnoteEditor({
       const { passive, literalPrefixLanded } = openOptions;
       paletteSessionCounter.current += 1;
       const token = paletteSessionCounter.current;
-      paletteSession.current = passive
-        ? { token, literalPrefixLanded, filter: '', items }
-        : undefined;
+      paletteSession.current = {
+        kind: passive ? 'backslash' : 'selection',
+        token,
+        literalPrefixLanded,
+        filter: '',
+        items,
+      };
 
       markerPalette
         .show(items.map(markerMenuItemToPaletteItemLike), anchorRect, passive)
@@ -704,61 +719,19 @@ export default function FootnoteEditor({
       // intercepted below either way — it stays on the library's own `\fp` path.
       if (!markerPalette) return () => {};
 
+      // CAPTURE phase (Task 15 final review, Important 1 — the round-3 semantics ported from the
+      // web view): session-ending keys must be claimed BEFORE Lexical's own root-element keydown
+      // listener runs, otherwise an in-session Enter lets MarkerEditPlugin's KEY_ENTER insert
+      // `\fp`/split FIRST and the palette commit then applies on top (double mutation with an
+      // uncleaned `\fr`-style literal). The shared forwarding table also claims every key during
+      // a selection-wrap session so typing cannot replace the wrapped selection.
       const handleKeyDown = (event: KeyboardEvent) => {
         if (!editorInput || document.activeElement !== editorInput) return;
         const session = paletteSession.current;
 
         if (session) {
-          if (
-            event.key === 'Shift' ||
-            event.key === 'Control' ||
-            event.key === 'Alt' ||
-            event.key === 'Meta'
-          ) {
-            // Pure modifier keydowns aren't input — e.g. the Shift half of a `+` chord fires its
-            // own keydown before the `+` arrives. Falling through to the dismiss-on-any-other-key
-            // rule would kill the session mid-chord and break `\+w` nested-marker filtering.
-            return;
-          }
-          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-            event.preventDefault();
-            markerPalette.update({ moveSelection: event.key === 'ArrowDown' ? 1 : -1 });
-            return;
-          }
-          if (event.key === 'Enter') {
-            event.preventDefault();
-            // The session ends here as far as keydown routing is concerned — the commit's
-            // resolution flows through the show-promise, which captured the items it needs, so
-            // clear synchronously like every other session-ending key.
+          if (handleMarkerPaletteSessionKeyDown(event, session, markerPalette) === 'ended')
             paletteSession.current = undefined;
-            markerPalette.commit();
-            return;
-          }
-          if (event.key === 'Escape') {
-            event.preventDefault();
-            paletteSession.current = undefined;
-            markerPalette.dismiss();
-            return;
-          }
-          if (event.key === ' ' || event.key === '*') {
-            // PT9 Space-commit / `*`-close: the key lands as literal text and is picked up by the
-            // engine's own Tier 2 marker-completion trigger, so the palette is no longer relevant.
-            paletteSession.current = undefined;
-            markerPalette.dismiss();
-            return;
-          }
-          if (event.key === 'Backspace' || /^[a-z0-9+]$/.test(event.key)) {
-            // Filter mirroring is keydown-tracked and display-only: `applyMarkerMenuSelection`
-            // reads the real literal run from the document at apply time, so drift here (fast
-            // typing, IME composition) can never corrupt the actual insert.
-            session.filter =
-              event.key === 'Backspace' ? session.filter.slice(0, -1) : session.filter + event.key;
-            markerPalette.update({ filterText: session.filter });
-            return;
-          }
-          // Any other key: what's about to land no longer matches what the palette is offering.
-          paletteSession.current = undefined;
-          markerPalette.dismiss();
           return;
         }
 
@@ -769,16 +742,20 @@ export default function FootnoteEditor({
         if (items.length === 0) return;
         const passive = !ctx.hasTextSelection;
         // Collapsed caret: don't prevent default — the `\` lands as literal text and the passive
-        // palette tracks it. Selection: prevent default (focused palette; nothing should land in
-        // place of the wrapped text).
-        if (!passive) event.preventDefault();
+        // palette tracks it. Selection: prevent default AND stop propagation (focused palette;
+        // nothing should land in place of the wrapped text — in capture, this actually keeps
+        // Lexical from typing the `\` over the selection).
+        if (!passive) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
         openMarkerPalette(ctx, items, { passive, literalPrefixLanded: passive });
       };
 
-      document.addEventListener('keydown', handleKeyDown);
+      document.addEventListener('keydown', handleKeyDown, { capture: true });
 
       return () => {
-        document.removeEventListener('keydown', handleKeyDown);
+        document.removeEventListener('keydown', handleKeyDown, { capture: true });
       };
     }
 
