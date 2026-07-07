@@ -20,8 +20,11 @@ const localizedStrings: LanguageStrings = {
   '%conflict_note_option_keep_current%': 'Keep the current text',
   '%conflict_note_option_use_other%': 'Use the other change',
   '%conflict_note_option_combine%': 'Combine both changes',
-  '%conflict_note_save_and_resolve%': 'Save and Resolve',
-  '%conflict_note_save_disabled_tooltip%': "This can't be undone.",
+  '%conflict_note_choose_aria_label%': 'Choose resolution',
+  '%conflict_note_save_and_resolve%': 'Save and resolve',
+  '%conflict_note_save_disabled_tooltip%':
+    'Keeping the current text makes no change — resolve the thread with the ✓ to keep it.',
+  '%conflict_note_save_warning%': "This can't be undone.",
   '%conflict_note_outcome_used_other%': 'Used the other change instead of the current text.',
   '%conflict_note_outcome_combined%': 'Combined both changes.',
   '%conflict_note_stale_notice%':
@@ -66,8 +69,8 @@ type Story = StoryObj<typeof ConflictNoteCardStory>;
 
 /**
  * Default verseText conflict with a REPLACEMENT (both deletion and insertion). Each option shows
- * its inline diff: struck-red "town" and green "village"/"city". Pick "Use the other change" to
- * enable Save and Resolve.
+ * its inline diff: struck-red "town" and green "village"/"city". Click "Use the other change" to
+ * enable Save and resolve.
  */
 export const Default: Story = {
   render: () => <ConflictNoteCardStory comment={verseTextConflictReplacementSample} />,
@@ -88,8 +91,8 @@ export const AcceptRejectOrMerge: Story = {
 
 /**
  * The verse was edited after the merge (stale): "Keep the current text" stays enabled and selected,
- * while "Use the other change" is disabled and carries an explanation tooltip. There is no Save and
- * Resolve action.
+ * while "Use the other change" is disabled and carries an explanation tooltip. Save and resolve
+ * stays present but disabled (keeping the current text is a no-op).
  */
 export const StaleVerse: Story = {
   render: () => <ConflictNoteCardStory availableActions="accept" />,

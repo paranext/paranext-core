@@ -14,7 +14,8 @@ vi.mock('@/components/advanced/editor/editor', () => ({
 }));
 
 // jsdom doesn't implement ResizeObserver, hasPointerCapture, or scrollIntoView, all of which the
-// ConflictNoteCard's Radix Select uses. No-op stubs are enough for the conflict-branch tests below.
+// ConflictNoteCard's Radix RadioGroup and Tooltip (the clickable option cards) use. No-op stubs are
+// enough for the conflict-branch tests below.
 class NoopResizeObserver implements ResizeObserver {
   private readonly targets = new Set<Element>();
 
@@ -302,7 +303,7 @@ describe('CommentThread conflict resolution', () => {
     });
     // The card's resolution radios (falls back to English labels; the thread passes no card strings)
     expect(await screen.findByRole('radio', { name: 'Keep the current text' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save and Resolve' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save and resolve' })).toBeInTheDocument();
   });
 
   test('conflict thread renders plain CommentItem when collapsed', () => {
@@ -355,9 +356,9 @@ describe('CommentThread conflict resolution', () => {
       getConflictResolutionOptionsCallback: async () => 'acceptOrReject',
       handleResolveConflict,
     });
-    // Save and Resolve is disabled on the default 'accept'; choose the other change to enable it.
+    // Save and resolve is disabled on the default 'accept'; choose the other change to enable it.
     await user.click(await screen.findByRole('radio', { name: 'Use the other change' }));
-    await user.click(screen.getByRole('button', { name: 'Save and Resolve' }));
+    await user.click(screen.getByRole('button', { name: 'Save and resolve' }));
     expect(handleResolveConflict).toHaveBeenCalledWith('conflict-sample', 'reject');
     // Locked after success: controls disappear ('none') pending the data refresh.
     await waitFor(() => expect(screen.queryByRole('radio')).not.toBeInTheDocument());

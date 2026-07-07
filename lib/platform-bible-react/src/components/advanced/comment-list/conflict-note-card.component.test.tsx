@@ -47,8 +47,10 @@ const localizedStrings = {
   '%conflict_note_option_keep_current%': 'Keep the current text',
   '%conflict_note_option_use_other%': 'Use the other change',
   '%conflict_note_option_combine%': 'Combine both changes',
-  '%conflict_note_save_and_resolve%': 'Save and Resolve',
-  '%conflict_note_save_disabled_tooltip%': "This can't be undone.",
+  '%conflict_note_save_and_resolve%': 'Save and resolve',
+  '%conflict_note_save_disabled_tooltip%':
+    'Keeping the current text makes no change — resolve the thread with the ✓ to keep it.',
+  '%conflict_note_save_warning%': "This can't be undone.",
   '%conflict_note_outcome_used_other%': 'Used the other change instead of the current text.',
   '%conflict_note_outcome_combined%': 'Combined both changes.',
 };
@@ -122,19 +124,45 @@ test('the merge option renders the mergedText diff HTML', () => {
   expect(mergeRow?.querySelector('u')).toBeInTheDocument();
 });
 
-test('Save and Resolve is disabled on accept and enabled after choosing reject', async () => {
+test('clicking anywhere on the "Combine both changes" card selects merge and boxes that card', async () => {
+  const user = userEvent.setup({ pointerEventsCheck: 0 });
+  const onResolutionChange = vi.fn();
+  render(
+    <ConflictNoteCard
+      comment={verseTextConflictMergeSample}
+      localizedStrings={localizedStrings}
+      availableActions="acceptRejectOrMerge"
+      onResolutionChange={onResolutionChange}
+    />,
+  );
+  // Merge starts unselected (accept is the default).
+  expect(optionRow('merge')).not.toHaveClass('tw:border-border');
+
+  // Click the card itself (not the visually-hidden radio) — the whole card is the target.
+  const mergeCard = optionRow('merge');
+  if (!mergeCard) throw new Error('expected a "Combine both changes" option card');
+  await user.click(mergeCard);
+
+  expect(onResolutionChange).toHaveBeenCalledTimes(1);
+  expect(onResolutionChange).toHaveBeenCalledWith('merge');
+  // Uncontrolled, so the selection (and its box) follows the click to the merge card.
+  expect(optionRow('merge')).toHaveClass('tw:border-border');
+  expect(optionRow('accept')).not.toHaveClass('tw:border-border');
+});
+
+test('Save and resolve is disabled on accept and enabled after choosing reject', async () => {
   const user = userEvent.setup({ pointerEventsCheck: 0 });
   render(
     <ConflictNoteCard comment={verseTextConflictComment} localizedStrings={localizedStrings} />,
   );
-  const saveButton = screen.getByRole('button', { name: 'Save and Resolve' });
+  const saveButton = screen.getByRole('button', { name: 'Save and resolve' });
   // Accept is preselected -> nothing to save yet.
   expect(saveButton).toBeDisabled();
   await user.click(screen.getByRole('radio', { name: 'Use the other change' }));
   expect(saveButton).toBeEnabled();
 });
 
-test('Save and Resolve reports the current selection to onResolve', async () => {
+test('Save and resolve reports the current selection to onResolve', async () => {
   const user = userEvent.setup({ pointerEventsCheck: 0 });
   const onResolve = vi.fn();
   render(
@@ -145,12 +173,12 @@ test('Save and Resolve reports the current selection to onResolve', async () => 
       onResolve={onResolve}
     />,
   );
-  await user.click(screen.getByRole('button', { name: 'Save and Resolve' }));
+  await user.click(screen.getByRole('button', { name: 'Save and resolve' }));
   expect(onResolve).toHaveBeenCalledTimes(1);
   expect(onResolve).toHaveBeenCalledWith('reject');
 });
 
-test('isResolving disables the radio group and the Save and Resolve button', () => {
+test('isResolving disables the radio group and the Save and resolve button', () => {
   render(
     <ConflictNoteCard
       comment={verseTextConflictComment}
@@ -161,7 +189,7 @@ test('isResolving disables the radio group and the Save and Resolve button', () 
   );
   expect(screen.getByRole('radio', { name: 'Keep the current text' })).toBeDisabled();
   expect(screen.getByRole('radio', { name: 'Use the other change' })).toBeDisabled();
-  expect(screen.getByRole('button', { name: 'Save and Resolve' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Save and resolve' })).toBeDisabled();
 });
 
 test('stale (availableActions=accept) disables the reject radio with a notice, keeps accept enabled, and hides Combine', () => {
@@ -179,9 +207,44 @@ test('stale (availableActions=accept) disables the reject radio with a notice, k
   // Accept is the only still-valid resolution when stale, so it stays enabled.
   expect(acceptRadio).toBeEnabled();
   expect(screen.getByRole('radio', { name: 'Use the other change' })).toBeDisabled();
-  // No Combine option in the stale state, and no enabled Save and Resolve.
+  // No Combine option in the stale state.
   expect(screen.queryByRole('radio', { name: 'Combine both changes' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Save and Resolve' })).not.toBeInTheDocument();
+  // Save stays present (so the layout never shifts) but disabled — keeping the current text is a no-op.
+  expect(screen.getByRole('button', { name: 'Save and resolve' })).toBeDisabled();
+});
+
+test('the radio group has an accessible name', () => {
+  render(
+    <ConflictNoteCard comment={verseTextConflictComment} localizedStrings={localizedStrings} />,
+  );
+  expect(screen.getByRole('radiogroup', { name: 'Choose resolution' })).toBeInTheDocument();
+});
+
+test('the Save tooltip warns when enabled and explains the no-op when disabled', async () => {
+  const user = userEvent.setup({ pointerEventsCheck: 0 });
+  const { rerender } = render(
+    <ConflictNoteCard
+      comment={verseTextConflictComment}
+      localizedStrings={localizedStrings}
+      selectedResolution="reject"
+    />,
+  );
+  // Enabled (reject selected): the tooltip carries the irreversibility warning.
+  await user.hover(screen.getByRole('button', { name: 'Save and resolve' }));
+  expect(await screen.findByRole('tooltip')).toHaveTextContent("This can't be undone.");
+
+  // Disabled (keep-current selected): the tooltip explains that saving is a no-op instead.
+  rerender(
+    <ConflictNoteCard
+      comment={verseTextConflictComment}
+      localizedStrings={localizedStrings}
+      selectedResolution="accept"
+    />,
+  );
+  await user.hover(screen.getByText('Save and resolve'));
+  expect(await screen.findByRole('tooltip')).toHaveTextContent(
+    'Keeping the current text makes no change',
+  );
 });
 
 test('stale reject option is programmatically described by the stale notice for screen readers', () => {
@@ -211,7 +274,7 @@ test('non-verseText conflict falls back to rendering contents', () => {
   expect(screen.queryByRole('radio')).not.toBeInTheDocument();
 });
 
-test('availableActions none hides the radios and the Save and Resolve button', () => {
+test('availableActions none hides the radios and the Save and resolve button', () => {
   render(
     <ConflictNoteCard
       comment={verseTextConflictComment}
@@ -220,7 +283,7 @@ test('availableActions none hides the radios and the Save and Resolve button', (
     />,
   );
   expect(screen.queryByRole('radio')).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Save and Resolve' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Save and resolve' })).not.toBeInTheDocument();
 });
 
 test('resolved read-only accept shows the accepted result and no outcome line', () => {
