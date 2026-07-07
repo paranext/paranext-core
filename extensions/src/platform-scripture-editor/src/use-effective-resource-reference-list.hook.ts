@@ -7,10 +7,10 @@ import type {
   ResourceReferenceList,
 } from 'platform-scripture';
 import { useProjectSetting, useProjectDataProvider } from '@papi/frontend/react';
-
-const CURRENT_DATA_VERSION = '1.0.0';
-// Module-level constant avoids a useMemo with [] deps inside the hook
-const DEFAULT_LIST: ResourceReferenceList = { dataVersion: CURRENT_DATA_VERSION, items: [] };
+import {
+  CURRENT_DATA_VERSION,
+  DEFAULT_RESOURCE_REFERENCE_LIST as DEFAULT_LIST,
+} from './resource-reference-list.const';
 
 const KNOWN_RESOURCE_TYPES = new Set([
   'project',

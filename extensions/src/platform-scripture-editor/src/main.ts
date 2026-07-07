@@ -869,28 +869,35 @@ const modelTextPanelWebViewProvider: IWebViewProvider = {
 };
 
 const scriptureTextGridWebViewProvider: IWebViewProvider = {
-  async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
+  async getWebView(
+    savedWebView: SavedWebViewDefinition,
+    openWebViewOptions: OpenWebViewOptions & { projectId?: string },
+  ): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE)
       throw new Error(
         `${SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
+    // A2 seam: the grid is project-bound so it can fire first-open overlay init and (in A3+) select
+    // its contents. The PT10 default-layout open passes no projectId (dormant until A3).
+    const projectId = openWebViewOptions?.projectId ?? savedWebView.projectId ?? undefined;
     return {
       ...savedWebView,
       // A1 stubs the title as the single-cell form; the web view flips it to "Text Collection"
       // via updateWebViewDefinition once 2+ cells are displayed.
       title: '%webView_scriptureTextGrid_title_single%',
-      // Part of the default PT10 Studio layout and must always stay open, so the tab is non-closable
-      // (PT-4049 subsumes A8). No X-button and no keyboard close shortcut, so both paths are covered.
+      // Part of the default PT10 Studio layout and must always remain open, so the tab is
+      // non-closable (PT-4049 subsumes A8). The X-button is omitted and there is no keyboard
+      // close shortcut in the app, so this covers both close paths.
       isClosable: false,
       // No top toolbar in this view; the View Options icon button comes in A5.
       shouldShowToolbar: false,
+      projectId,
       content: scriptureTextGridWebView,
       // Lucide "Library" glyph (books on a shelf) for the tab icon.
       iconUrl: 'papi-extension://platformScriptureEditor/assets/library.svg',
     };
   },
 };
-
 /**
  * Pending projectIds to apply during the next resource panel getWebView call, keyed by web view
  * type. A Map entry present (even with value `undefined`) means a reload is in progress and the
