@@ -182,6 +182,23 @@ EOF
 )"
 ```
 
+### "Why Review This" Section (Non-Epic PRs)
+
+If the PR is not directly part of the current epic (side fixes, tooling,
+refactors, dependency bumps, cleanup), add a `Why review this` section
+immediately after `## Summary` so reviewers can prioritize it against epic
+work. Use this exact format:
+
+```markdown
+## Why review this
+
+Not part of the current epic. [1–2 sentences: what prompted this change and
+why it is worth reviewer time now — e.g., unblocks PT-1234, fixes recurring
+CI flake, five-minute review.]
+```
+
+Skip this section when the PR's JIRA ticket belongs to the current epic.
+
 ## AI Transparency
 
 When AI was involved in creating code, disclose it according to the
