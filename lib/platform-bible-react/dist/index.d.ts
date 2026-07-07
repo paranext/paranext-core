@@ -330,10 +330,10 @@ export interface CommentEditorProps {
  */
 export function CommentEditor({ assignableUsers, onSave, onClose, localizedStrings, initialAssignedUser, }: CommentEditorProps): import("react/jsx-runtime").JSX.Element;
 /**
- * The resolution a user picks for a conflict: keep the accepted (winning) side or take the rejected
- * (losing) side.
+ * The resolution a user picks for a conflict: keep the accepted (winning) side, take the rejected
+ * (losing) side, or merge (combine) both sides.
  */
-export type ConflictResolution = "accept" | "reject";
+export type ConflictResolution = "accept" | "reject" | "merge";
 type ConflictResolutionOutcome = "accept" | "reject" | "merged";
 /**
  * The resolution actions the current user may take on a conflict thread (from the comments data
@@ -344,8 +344,10 @@ type ConflictResolutionOutcome = "accept" | "reject" | "merged";
  * - 'accept': the verse was edited after the merge (stale) — Reject is disabled with an explanation;
  *   Accept keeps the current text.
  * - 'acceptOrReject': fully available.
+ * - 'acceptRejectOrMerge': fully available, and the two changes are independent so Combine both
+ *   changes is also offered.
  */
-export type ConflictResolutionOptions = "none" | "accept" | "acceptOrReject";
+export type ConflictResolutionOptions = "none" | "accept" | "acceptOrReject" | "acceptRejectOrMerge";
 /**
  * Localization keys used by the ConflictNoteCard. Pass into the useLocalizedStrings hook (in the
  * consuming extension) and forward the result via the localizedStrings prop.
@@ -376,9 +378,9 @@ export interface ConflictNoteCardProps {
 	/**
 	 * Which way an already-resolved conflict was resolved. Used ONLY when `availableActions` is
 	 * `'none'` (read-only): it makes the Result region show the outcome that was actually applied
-	 * ('accept' -> resultText, 'reject' -> rejectedResultText) instead of the live selector state,
-	 * and hides the Result region for a 'merged' outcome. Ignored while the conflict is still
-	 * resolvable.
+	 * ('accept' -> resultText, 'reject' -> rejectedResultText, 'merged' -> mergedText plus a
+	 * "combined both changes" outcome line) instead of the live selector state. Ignored while the
+	 * conflict is still resolvable.
 	 */
 	resolvedResolution?: ConflictResolutionOutcome;
 	/** Called when the user clicks Resolve, with the currently selected resolution. */
@@ -496,9 +498,16 @@ export interface CommentListProps {
  */
 export function CommentList({ className, classNameForVerseText, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, handleReadStatusChange, assignableUsers, canUserAddCommentToThread, canUserAssignThreadCallback, canUserResolveThreadCallback, canUserEditOrDeleteCommentCallback, selectedThreadId: externalSelectedThreadId, onSelectedThreadChange, onVerseRefClick, handleResolveConflict, getConflictResolutionOptionsCallback, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
 /**
- * Presentational card body for a verseText merge conflict: an Accept/Reject selector, the Rejected
- * and Accepted diff regions, and a read-only Result preview that tracks the selection. Falls back
- * to rendering the raw note contents for any non-verseText conflict.
+ * Presentational card body for a verseText merge conflict. Presents the resolution as a set of
+ * clickable option cards — "Keep the current text" (accept, preselected), "Use the other change"
+ * (reject), and, when the two edits are independent, "Combine both changes" (merge) — each showing
+ * its inline red/green diff. Clicking anywhere on an option card selects it; the cards keep radio
+ * semantics (a labelled radio group with role=radio / aria-checked and arrow-key navigation) via a
+ * visually-hidden radio inside each card. A Save-and-resolve button commits the choice. Handles the
+ * stale state (accept stays enabled and selected; reject is disabled and carries a read-only
+ * explanation; Save stays present but disabled) and the already-resolved read-only state (the
+ * chosen outcome's text plus a derived outcome line). Falls back to rendering the raw note contents
+ * for any non-verseText conflict.
  */
 export declare function ConflictNoteCard({ comment, localizedStrings, selectedResolution, onResolutionChange, availableActions, resolvedResolution, onResolve, isResolving, }: ConflictNoteCardProps): import("react/jsx-runtime").JSX.Element;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
@@ -2592,7 +2601,7 @@ export declare function ContextMenuSub({ ...props }: React$1.ComponentProps<type
 /** @inheritdoc ContextMenu */
 export declare function ContextMenuRadioGroup({ ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.RadioGroup>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc ContextMenu */
-export declare function ContextMenuContent({ className, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.Content> & {
+export declare function ContextMenuContent({ className, style, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.Content> & {
 	side?: "top" | "right" | "bottom" | "left";
 }): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc ContextMenu */
@@ -2605,7 +2614,7 @@ export declare function ContextMenuSubTrigger({ className, inset, children, ...p
 	inset?: boolean;
 }): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc ContextMenu */
-export declare function ContextMenuSubContent({ className, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.SubContent>): import("react/jsx-runtime").JSX.Element;
+export declare function ContextMenuSubContent({ className, style, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.SubContent>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc ContextMenu */
 export declare function ContextMenuCheckboxItem({ className, children, checked, inset, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.CheckboxItem> & {
 	inset?: boolean;
