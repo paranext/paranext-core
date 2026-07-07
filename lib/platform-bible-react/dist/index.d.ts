@@ -1067,9 +1067,20 @@ export interface MarkerMenuItem {
 	subtitle?: string;
 	/** Optional name of icon to use instead of the marker */
 	icon?: React$1.FC<MarkerIconProps>;
-	/** Whether the command/marker is deprecated */
+	/**
+	 * Whether the command/marker is deprecated. Deprecated items stay visible in the menu (even when
+	 * the search query is empty) but are rendered disabled so they cannot be selected.
+	 */
 	isDeprecated?: boolean;
-	/** Whether the command/marker is disallowed for this project */
+	/**
+	 * Whether the command/marker is disallowed for this project (e.g. blocked while structure is
+	 * protected). Unlike {@link MarkerMenuItem.isDeprecated}, this flag affects visibility as well as
+	 * selectability: while the search query is empty, disallowed items are hidden if any allowed
+	 * items exist (to reduce clutter) but are shown when every item is disallowed (so the menu isn't
+	 * empty). A non-empty query reveals a disallowed item only on an exact marker-code match or a
+	 * title match. Whenever a disallowed item is shown it is rendered disabled so it cannot be
+	 * selected.
+	 */
 	isDisallowed?: boolean;
 	/** Function to be triggered when the marker or command is selected */
 	action: () => void;

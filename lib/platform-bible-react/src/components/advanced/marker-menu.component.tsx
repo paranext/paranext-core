@@ -50,9 +50,20 @@ export interface MarkerMenuItem {
   subtitle?: string;
   /** Optional name of icon to use instead of the marker */
   icon?: FC<MarkerIconProps>;
-  /** Whether the command/marker is deprecated */
+  /**
+   * Whether the command/marker is deprecated. Deprecated items stay visible in the menu (even when
+   * the search query is empty) but are rendered disabled so they cannot be selected.
+   */
   isDeprecated?: boolean;
-  /** Whether the command/marker is disallowed for this project */
+  /**
+   * Whether the command/marker is disallowed for this project (e.g. blocked while structure is
+   * protected). Unlike {@link MarkerMenuItem.isDeprecated}, this flag affects visibility as well as
+   * selectability: while the search query is empty, disallowed items are hidden if any allowed
+   * items exist (to reduce clutter) but are shown when every item is disallowed (so the menu isn't
+   * empty). A non-empty query reveals a disallowed item only on an exact marker-code match or a
+   * title match. Whenever a disallowed item is shown it is rendered disabled so it cannot be
+   * selected.
+   */
   isDisallowed?: boolean;
   /** Function to be triggered when the marker or command is selected */
   action: () => void;
@@ -132,24 +143,33 @@ export function MarkerMenu({
 }: MarkerMenuProps) {
   const [commandSearch, setCommandSearch] = useState<string>('');
 
-  const [exactMatchItems, titleMatchItems] = useMemo(() => {
+  const [codeMatchItems, titleMatchItems] = useMemo(() => {
     const query = commandSearch.trim().toLowerCase();
     if (!query) {
-      return [markerMenuItems, []];
+      // Hide disallowed markers until specifically searched, so the menu isn't cluttered with
+      // entries the user cannot insert.
+      const allowedItems = markerMenuItems.filter((markerItem) => !markerItem.isDisallowed);
+      // ...but when every item is disallowed (e.g. all of a parent's markers are blocked while
+      // structure is protected), fall back to showing the disallowed items (disabled) so the menu
+      // surfaces the locked options instead of reading as an empty "No results" state.
+      return [allowedItems.length > 0 ? allowedItems : markerMenuItems, []];
     }
 
-    // Puts items with markers that have direct inclusions of the search query at the top
-    const filteredExactMatchItems = markerMenuItems.filter((markerItem) =>
-      markerItem.marker?.toLowerCase().includes(query),
-    );
-    // Then lists items with titles that includes the search query
+    // Marker-code matches first. Disallowed markers require an exact code match (never a substring),
+    // so a broad query doesn't surface sibling markers the user cannot use.
+    const filteredCodeMatchItems = markerMenuItems.filter((markerItem) => {
+      const code = markerItem.marker?.toLowerCase();
+      return markerItem.isDisallowed ? code === query : code?.includes(query);
+    });
+    // Then title matches. A disallowed marker's title match is itself its reveal condition, so it
+    // needs no extra gate here.
     const filteredTitleMatchItems = markerMenuItems.filter(
       (markerItem) =>
         markerItem.title.toLowerCase().includes(query) &&
-        !filteredExactMatchItems.includes(markerItem),
+        !filteredCodeMatchItems.includes(markerItem),
     );
 
-    return [filteredExactMatchItems, filteredTitleMatchItems];
+    return [filteredCodeMatchItems, filteredTitleMatchItems];
   }, [commandSearch, markerMenuItems]);
 
   return (
@@ -164,7 +184,7 @@ export function MarkerMenu({
       <CommandList>
         <CommandEmpty>{localizedStrings['%markerMenu_noResults%']}</CommandEmpty>
         <CommandGroup>
-          {exactMatchItems.map((item) => (
+          {codeMatchItems.map((item) => (
             <MarkerMenuCommandItem
               item={item}
               localizedStrings={localizedStrings}
@@ -174,7 +194,7 @@ export function MarkerMenu({
         </CommandGroup>
         {titleMatchItems.length > 0 && (
           <>
-            {exactMatchItems.length > 0 && <CommandSeparator alwaysRender />}
+            {codeMatchItems.length > 0 && <CommandSeparator alwaysRender />}
             <CommandGroup>
               {titleMatchItems.map((item) => (
                 <MarkerMenuCommandItem
