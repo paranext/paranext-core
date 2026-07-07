@@ -123,6 +123,30 @@ describe('go-to commands in power mode', () => {
     });
   });
 
+  test('goToNextBook uses the project books-present list, not the full canon', async () => {
+    mocks.getLastSelectedWebViewId.mockReturnValue('web-view-1');
+    mocks.getSavedWebViewDefinitionSync.mockReturnValue({
+      id: 'web-view-1',
+      scrollGroupScrRef: 0,
+      projectId: 'project-1',
+    });
+    mocks.getScrRefForProject.mockResolvedValue({ book: 'GEN', chapterNum: 1, verseNum: 1 });
+    // Books present = GEN and LEV (positions 1 and 3); EXO is absent
+    const getSetting = vi.fn(async () => '101');
+    mocks.pdpGet.mockResolvedValue({ getSetting });
+
+    await navigationCommandHandlers['platform.goToNextBook']();
+
+    expect(mocks.pdpGet).toHaveBeenCalledWith('platform.base', 'project-1');
+    expect(getSetting).toHaveBeenCalledWith('platformScripture.booksPresent');
+    // LEV, not EXO — proves the constrained book list was actually used
+    expect(mocks.setScrRefSync).toHaveBeenCalledWith(
+      0,
+      { book: 'LEV', chapterNum: 1, verseNum: 1 },
+      'project-1',
+    );
+  });
+
   test('goToPreviousBook no-ops at the first book', async () => {
     mocks.getLastSelectedWebViewId.mockReturnValue('web-view-1');
     mocks.getSavedWebViewDefinitionSync.mockReturnValue({
