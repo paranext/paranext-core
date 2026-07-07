@@ -468,7 +468,7 @@ global.webViewComponent = function FindWebView({
     } catch (error) {
       logger.error(`Error acquiring mutex to abandon find job: ${getErrorMessage(error)}`);
     }
-  }, [findPdp, setActiveJobId]);
+  }, [findPdp, findPdpMutex, setActiveJobId]);
 
   const beginFindJob = useCallback(
     async (findOptions: FindOptions) => {
@@ -491,7 +491,7 @@ global.webViewComponent = function FindWebView({
         logger.error(`Error acquiring mutex to begin find job: ${getErrorMessage(error)}`);
       }
     },
-    [findPdp, setActiveJobId],
+    [findPdp, findPdpMutex, setActiveJobId],
   );
 
   const stopFindJob = useCallback(async () => {
@@ -510,7 +510,7 @@ global.webViewComponent = function FindWebView({
       logger.error(`Error acquiring mutex to stop find job: ${getErrorMessage(error)}`);
       return false;
     }
-  }, [findPdp]);
+  }, [findPdp, findPdpMutex]);
 
   const retrieveFindJobUpdate = useCallback(
     async (maxResultsToInclude: number): Promise<FindJobStatusReport | undefined> => {
@@ -531,7 +531,7 @@ global.webViewComponent = function FindWebView({
         return undefined;
       }
     },
-    [findPdp],
+    [findPdp, findPdpMutex],
   );
 
   // #endregion
