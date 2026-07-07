@@ -22,13 +22,28 @@ test.describe('verse navigation keyboard shortcuts', () => {
     // documented no-ops — nothing to assert through the top toolbar
     test.skip(await trigger.isDisabled(), 'Top BookChapterControl is disabled (no active tab)');
 
-    // Normalize to a known reference via the UI so navigation targets are predictable
+    // Navigate to a reference that is NOT the app default (GEN 1:1) first, so the assertion
+    // proves the submit flow actually changes state — asserting only the default reference
+    // could pass even if submit silently broke.
     await trigger.click();
-    const searchInput = mainPage.locator('[cmdk-input]');
+    let searchInput = mainPage.locator('[cmdk-input]');
+    await expect(searchInput).toBeVisible();
+    await searchInput.fill('EXO 2:3');
+    await mainPage.keyboard.press('Enter');
+    await expect(trigger).toContainText('2:3');
+    const exodusLabel = (await trigger.innerText()).trim();
+
+    // Now navigate back to GEN 1:1 — a second real transition (book, chapter, and verse all
+    // change), asserting both the chapter:verse tail and the Genesis book name
+    await trigger.click();
+    searchInput = mainPage.locator('[cmdk-input]');
     await expect(searchInput).toBeVisible();
     await searchInput.fill('GEN 1:1');
     await mainPage.keyboard.press('Enter');
     await expect(trigger).toContainText('1:1');
+    await expect(trigger).toContainText(/Genesis|GEN/);
+    const genesisLabel = (await trigger.innerText()).trim();
+    expect(genesisLabel).not.toBe(exodusLabel);
   });
 
   // SKIPPED: Playwright's `keyboard.press` over CDP uses `Input.dispatchKeyEvent`, which injects
