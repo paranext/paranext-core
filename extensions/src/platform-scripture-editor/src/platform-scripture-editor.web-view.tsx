@@ -400,7 +400,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         filter: string;
         items: MarkerMenuItem[];
       }
-    | { kind: 'enter'; token: number; items: MarkerMenuItem[] }
+    | { kind: 'enter'; token: number; filter: string; items: MarkerMenuItem[] }
     | { kind: 'selection'; token: number; filter: string; items: MarkerMenuItem[] }
     | undefined
   >(undefined);
@@ -1511,7 +1511,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     (ctx: MarkerMenuAnchorContext, items: MarkerMenuItem[]) => {
       paletteSessionCounter.current += 1;
       const token = paletteSessionCounter.current;
-      paletteSession.current = { kind: 'enter', token, items };
+      paletteSession.current = { kind: 'enter', token, filter: '', items };
 
       papi.overlays
         .showCommandPalette(
@@ -1717,6 +1717,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             event.stopPropagation();
             paletteSession.current = undefined;
             papi.overlays.dismissCommandPalette(webViewId);
+            return;
+          }
+          if (event.key === 'Backspace' || /^[a-z0-9]$/i.test(event.key)) {
+            // Type-to-filter (QA run 4): claimed — the char must narrow the palette, not land in
+            // the document (pre-fix it landed AND closed the palette).
+            event.preventDefault();
+            event.stopPropagation();
+            session.filter =
+              event.key === 'Backspace' ? session.filter.slice(0, -1) : session.filter + event.key;
+            papi.overlays.updateCommandPalette(webViewId, { filterText: session.filter });
             return;
           }
           // Any other key: the user resumed editing — close the palette, let the key land.

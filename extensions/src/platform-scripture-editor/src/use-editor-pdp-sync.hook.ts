@@ -4,6 +4,22 @@ import { areUsjContentsEqualExceptWhitespace } from 'platform-bible-utils';
 import { MutableRefObject, useEffect } from 'react';
 
 /**
+ * `book|chapter` identity of a USJ document, for telling a SAME-document update (echo/refresh)
+ * apart from a DIFFERENT document arriving (book/chapter navigation). Content entries are either
+ * marker objects or plain strings; the book code and first chapter number identify the document.
+ */
+function getUsjBookChapterIdentity(usj: Usj | undefined): string {
+  let book = '';
+  let chapter = '';
+  usj?.content?.forEach((entry) => {
+    if (typeof entry === 'string') return;
+    if (!book && entry.type === 'book') book = String(entry.code ?? '');
+    if (!chapter && entry.type === 'chapter') chapter = String(entry.number ?? '');
+  });
+  return `${book}|${chapter}`;
+}
+
+/**
  * Synchronizes the editor's displayed content with data received from the PDP.
  *
  * Runs on every PDP update (even ones with unchanged content) so we know when a write we initiated
@@ -63,14 +79,24 @@ export function useEditorPdpSync({
       // blurred, popover open), the PDP echo replaces as before — including genuine external
       // co-edits, whose replace-while-focused case is deliberately deferred to the next update
       // that arrives outside active typing.
+      //
+      // QA run 4 regression guard: the deferral applies ONLY to the SAME document. When the
+      // incoming USJ is a DIFFERENT book/chapter (navigation via the BookChapter control while
+      // focus sits in the editor), deferring would keep the editor on the OLD chapter forever —
+      // and, worse, save-back would write the old chapter's content through the NEW chapter's
+      // data selector. A different-document update always replaces.
       const mainEditorInput = document.querySelector('.editor-input') ?? undefined;
       const isActivelyEditing =
         mainEditorInput !== undefined && document.activeElement === mainEditorInput;
       if (isActivelyEditing) {
         const editorUsj = editorRef.current.getUsj();
-        if (areUsjContentsEqualExceptWhitespace(usjFromPdp, editorUsj)) return;
-        saveUsjToPdpIfUpdated();
-        return;
+        const isSameDocument =
+          getUsjBookChapterIdentity(usjFromPdp) === getUsjBookChapterIdentity(editorUsj);
+        if (isSameDocument) {
+          if (areUsjContentsEqualExceptWhitespace(usjFromPdp, editorUsj)) return;
+          saveUsjToPdpIfUpdated();
+          return;
+        }
       }
       setEditorUsj.current(usjFromPdp);
     }

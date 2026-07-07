@@ -2262,6 +2262,10 @@
   display: block;
   margin: 0.25em 0;
   padding: 0.25em 0.5em;
+  /* An EMPTY opaque block (e.g. a bare \fig) must stay visible/selectable: without content the
+     box collapsed to 0 height (QA run 4). One line-height of room keeps the dashed frame and the
+     ::before marker label renderable. */
+  min-height: 1.5em;
   border: 1px dashed rgba(140, 140, 140, 0.5);
   background-color: rgba(140, 140, 140, 0.08);
   color: rgba(140, 140, 140, 0.85);
