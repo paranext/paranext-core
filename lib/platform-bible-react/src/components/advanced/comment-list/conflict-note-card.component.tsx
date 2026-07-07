@@ -1,12 +1,6 @@
 import { Button } from '@/components/shadcn-ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/shadcn-ui/select';
-import { Separator } from '@/components/shadcn-ui/separator';
+import { Label } from '@/components/shadcn-ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/shadcn-ui/radio-group';
 import {
   Tooltip,
   TooltipContent,
@@ -16,7 +10,11 @@ import {
 import { cn } from '@/utils/shadcn-ui/utils';
 import { sanitizeHtml } from 'platform-bible-utils';
 import { useId, useMemo, useState } from 'react';
-import { ConflictNoteCardProps, ConflictResolution } from './conflict-note-card.types';
+import {
+  ConflictNoteCardProps,
+  ConflictResolution,
+  ConflictResolutionOutcome,
+} from './conflict-note-card.types';
 
 const VERSE_TEXT_CONFLICT = 'verseText';
 
@@ -43,10 +41,26 @@ const DIFF_HTML_CLASSES = cn(
  */
 const trimDiffSpanWhitespace = (html: string) => html.replace(/(\s+)(<\/[us]>)/g, '$2$1');
 
+/** Renders already-sanitized PT9 diff HTML with the shared diff coloring. */
+function DiffHtml({ html, className }: { html: string; className?: string }) {
+  return (
+    <div
+      className={cn(DIFF_HTML_CLASSES, className)}
+      // The content is PT9 HTML; sanitized by the caller before injecting.
+      // eslint-disable-next-line react/no-danger
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
+
 /**
- * Presentational card body for a verseText merge conflict: an Accept/Reject selector, the Rejected
- * and Accepted diff regions, and a read-only Result preview that tracks the selection. Falls back
- * to rendering the raw note contents for any non-verseText conflict.
+ * Presentational card body for a verseText merge conflict. Presents the resolution as a
+ * direct-manipulation radio group — "Keep the current text" (accept, preselected), "Use the other
+ * change" (reject), and, when the two edits are independent, "Combine both changes" (merge) — each
+ * showing its inline red/green diff, plus a Save-and-Resolve button. Handles the stale state
+ * (accept kept, the option carrying a disabled read-only explanation) and the already-resolved
+ * read-only state (the chosen outcome's text plus a derived outcome line). Falls back to rendering
+ * the raw note contents for any non-verseText conflict.
  */
 export function ConflictNoteCard({
   comment,
@@ -60,15 +74,23 @@ export function ConflictNoteCard({
 }: ConflictNoteCardProps) {
   const [internalResolution, setInternalResolution] = useState<ConflictResolution>('accept');
   const resolution = selectedResolution ?? internalResolution;
-  // Stable id linking the disabled Reject option to its visually-hidden explanation via
-  // aria-describedby, so screen readers announce why Reject is unavailable (the visual Tooltip
-  // is pointer-only and never reaches assistive tech).
+  // Stable id linking the disabled accept option to its visually-hidden explanation via
+  // aria-describedby, so screen readers announce why the choice is read-only (the visual Tooltip is
+  // pointer-only and never reaches assistive tech).
   const staleNoticeId = useId();
+  // Prefix for the per-option radio/label id pairs (Label htmlFor -> RadioGroupItem id).
+  const optionIdPrefix = useId();
 
-  // When reject is unavailable (stale verse) force the visible selection to 'accept' so the
-  // selector can never display a choice the Resolve button would be refused for.
-  const effectiveResolution: ConflictResolution =
-    availableActions === 'accept' ? 'accept' : resolution;
+  // The verse was edited after the merge (stale): the choice is read-only and forced to accept.
+  const isStale = availableActions === 'accept';
+  // Already resolved (or no permission): show the read-only outcome rather than the radios.
+  const isReadOnly = availableActions === 'none';
+  // The two edits are independent, so combining them is offered as a third option.
+  const showMerge = availableActions === 'acceptRejectOrMerge';
+
+  // When reject is unavailable (stale verse) force the visible selection to 'accept' so the radio
+  // group can never display a choice the disabled state would refuse.
+  const effectiveResolution: ConflictResolution = isStale ? 'accept' : resolution;
 
   const sanitizedRejected = useMemo(
     () => trimDiffSpanWhitespace(sanitizeHtml(comment.rejectedText ?? '')),
@@ -78,49 +100,85 @@ export function ConflictNoteCard({
     () => trimDiffSpanWhitespace(sanitizeHtml(comment.acceptedText ?? '')),
     [comment.acceptedText],
   );
+  const sanitizedMerged = useMemo(
+    () => trimDiffSpanWhitespace(sanitizeHtml(comment.mergedText ?? '')),
+    [comment.mergedText],
+  );
   const sanitizedContents = useMemo(() => sanitizeHtml(comment.contents), [comment.contents]);
 
   const isVerseTextConflict = comment.conflictType === VERSE_TEXT_CONFLICT && !!comment.resultText;
 
   if (!isVerseTextConflict) {
-    return (
-      <div
-        className={DIFF_HTML_CLASSES}
-        // The content is PT9 HTML; sanitized above before injecting.
-        // eslint-disable-next-line react/no-danger
-        dangerouslySetInnerHTML={{ __html: sanitizedContents }}
-      />
-    );
+    return <DiffHtml html={sanitizedContents} />;
   }
 
   const handleChange = (value: string) => {
-    const next: ConflictResolution = value === 'reject' ? 'reject' : 'accept';
+    // RadioGroup only emits our known option values; narrow without a type assertion.
+    const next: ConflictResolution = value === 'reject' || value === 'merge' ? value : 'accept';
     setInternalResolution(next);
     onResolutionChange?.(next);
   };
-
-  // For an already-resolved conflict shown read-only (availableActions === 'none' with a known
-  // resolvedResolution), the Result must reflect the outcome that was actually applied, not the live
-  // selector (which the read-only card leaves at its 'accept' default). While the conflict is still
-  // resolvable, the Result tracks the selector as before.
-  const isResolvedReadOnly = availableActions === 'none' && resolvedResolution !== undefined;
-  // Which resolution the Result preview tracks: the outcome that was actually applied when the card
-  // is read-only-resolved, otherwise the live selector. ('merged' falls through to resultText but is
-  // never shown — hideResultRegion hides the whole region below.)
-  const resultResolution = isResolvedReadOnly ? resolvedResolution : effectiveResolution;
-  const resultText =
-    resultResolution === 'reject' ? comment.rejectedResultText : comment.resultText;
-  // A 'merged' outcome (only possible in PT9-synced data — PT10 never produces it) has NO stored
-  // field that represents the merged verse: resultText is the accepted side and rejectedResultText
-  // is the rejected side, and the true merged text is neither. So the Result region is hidden
-  // entirely rather than showing a misleading value.
-  const hideResultRegion = isResolvedReadOnly && resolvedResolution === 'merged';
 
   // Shared between the visible Tooltip and the visually-hidden aria-describedby target so both
   // surfaces always announce the same reason.
   const staleNotice =
     localizedStrings['%conflict_note_stale_notice%'] ??
     'The verse has been edited since this conflict was recorded, so rejecting is no longer available. Accept keeps the current text.';
+
+  // The resolution options offered, each with its inline diff. Merge is only offered when the two
+  // edits are independent.
+  const radioOptions: { value: ConflictResolution; label: string; html: string }[] = [
+    {
+      value: 'accept',
+      label: localizedStrings['%conflict_note_option_keep_current%'] ?? 'Keep the current text',
+      html: sanitizedAccepted,
+    },
+    {
+      value: 'reject',
+      label: localizedStrings['%conflict_note_option_use_other%'] ?? 'Use the other change',
+      html: sanitizedRejected,
+    },
+  ];
+  if (showMerge) {
+    radioOptions.push({
+      value: 'merge',
+      label: localizedStrings['%conflict_note_option_combine%'] ?? 'Combine both changes',
+      html: sanitizedMerged,
+    });
+  }
+
+  // For an already-resolved conflict shown read-only (availableActions === 'none'), collapse to the
+  // outcome that was actually applied plus a derived outcome line. Defaults to 'accept' (keep the
+  // current text, no outcome line) when the resolution is unknown.
+  const renderResolvedOutcome = () => {
+    const outcome: ConflictResolutionOutcome = resolvedResolution ?? 'accept';
+    if (outcome === 'merged') {
+      return (
+        <div className="tw:flex tw:flex-col tw:gap-1">
+          <DiffHtml html={sanitizedMerged} />
+          <p className="tw:text-muted-foreground">
+            {localizedStrings['%conflict_note_outcome_combined%'] ?? 'Combined both changes.'}
+          </p>
+        </div>
+      );
+    }
+    if (outcome === 'reject') {
+      return (
+        <div className="tw:flex tw:flex-col tw:gap-1">
+          <p className="tw:whitespace-pre-wrap tw:text-foreground">{comment.rejectedResultText}</p>
+          <p className="tw:text-muted-foreground">
+            {localizedStrings['%conflict_note_outcome_used_other%'] ??
+              'Used the other change instead of the current text.'}
+          </p>
+        </div>
+      );
+    }
+    return (
+      <div className="tw:flex tw:flex-col tw:gap-1">
+        <p className="tw:whitespace-pre-wrap tw:text-foreground">{comment.resultText}</p>
+      </div>
+    );
+  };
 
   return (
     <div className="tw:flex tw:flex-col tw:gap-3 tw:text-sm">
@@ -129,94 +187,101 @@ export function ConflictNoteCard({
           'Conflicting changes were made to the verse text.'}
       </p>
 
-      {availableActions !== 'none' && (
-        <div className="tw:flex tw:flex-row tw:items-center tw:gap-2">
-          <span>{localizedStrings['%conflict_note_choose_label%'] ?? 'Choose:'}</span>
-          <Select value={effectiveResolution} onValueChange={handleChange} disabled={isResolving}>
-            <SelectTrigger
-              className="tw:w-32"
-              aria-label={
-                localizedStrings['%conflict_note_choose_aria_label%'] ?? 'Choose resolution'
-              }
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="accept">
-                {localizedStrings['%conflict_note_accept%'] ?? 'Accept'}
-              </SelectItem>
-              {availableActions === 'accept' ? (
-                <TooltipProvider delayDuration={0}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      {/* span wrapper so the tooltip still receives pointer events over the
-                          disabled item */}
-                      <span className="tw:block">
-                        {/* aria-describedby links the option to the visually-hidden notice below
-                            so assistive tech announces why Reject is disabled; Radix's Select.Item
-                            forwards the attribute onto its role="option" element. */}
-                        <SelectItem value="reject" disabled aria-describedby={staleNoticeId}>
-                          {localizedStrings['%conflict_note_reject%'] ?? 'Reject'}
-                        </SelectItem>
-                        <span id={staleNoticeId} className="tw:sr-only">
-                          {staleNotice}
-                        </span>
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">{staleNotice}</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              ) : (
-                <SelectItem value="reject">
-                  {localizedStrings['%conflict_note_reject%'] ?? 'Reject'}
-                </SelectItem>
-              )}
-            </SelectContent>
-          </Select>
-          <Button size="sm" disabled={isResolving} onClick={() => onResolve?.(effectiveResolution)}>
-            {localizedStrings['%conflict_note_resolve%'] ?? 'Resolve'}
-          </Button>
-        </div>
-      )}
-
-      {/* Accepted region first, then Rejected — matches PT9's AppendConflictNoteDetails order
-          (winning/current text leads, and Accept is the default resolution). */}
-      {!!comment.acceptedText && (
-        <div className="tw:flex tw:flex-col tw:gap-1">
-          <span className="tw:font-medium">
-            {localizedStrings['%conflict_note_accepted_label%'] ?? 'Accepted'}
-          </span>
-          <div
-            className={DIFF_HTML_CLASSES}
-            // PT9 accepted-side diff HTML; sanitized above before injecting.
-            // eslint-disable-next-line react/no-danger
-            dangerouslySetInnerHTML={{ __html: sanitizedAccepted }}
-          />
-        </div>
-      )}
-
-      <div className="tw:flex tw:flex-col tw:gap-1">
-        <span className="tw:font-medium">
-          {localizedStrings['%conflict_note_rejected_label%'] ?? 'Rejected'}
-        </span>
-        <div
-          className={DIFF_HTML_CLASSES}
-          // PT9 rejected-side diff HTML; sanitized above before injecting.
-          // eslint-disable-next-line react/no-danger
-          dangerouslySetInnerHTML={{ __html: sanitizedRejected }}
-        />
-      </div>
-
-      {!hideResultRegion && (
+      {isReadOnly ? (
+        renderResolvedOutcome()
+      ) : (
         <>
-          <Separator />
+          <p>
+            {localizedStrings['%conflict_note_choose_prompt%'] ?? 'Select which change to keep:'}
+          </p>
 
-          <div className="tw:flex tw:flex-col tw:gap-1">
-            <span className="tw:font-medium">
-              {localizedStrings['%conflict_note_result_label%'] ?? 'Result'}
-            </span>
-            <p className="tw:whitespace-pre-wrap tw:text-foreground">{resultText}</p>
-          </div>
+          {/* The whole group is disabled while resolving, and read-only when stale. */}
+          <RadioGroup
+            value={effectiveResolution}
+            onValueChange={handleChange}
+            disabled={isResolving || isStale}
+          >
+            {radioOptions.map((option) => {
+              const isSelected = effectiveResolution === option.value;
+              const optionId = `${optionIdPrefix}-${option.value}`;
+              // Stale forces accept and disables the whole group; the accept option additionally
+              // carries the explanation of why the conflict is read-only.
+              const isStaleAccept = isStale && option.value === 'accept';
+              const radio = (
+                <RadioGroupItem
+                  id={optionId}
+                  value={option.value}
+                  disabled={isStaleAccept}
+                  aria-describedby={isStaleAccept ? staleNoticeId : undefined}
+                />
+              );
+              return (
+                <div
+                  key={option.value}
+                  data-slot="conflict-resolution-option"
+                  data-value={option.value}
+                  // The selected option is visually boxed to reinforce the direct-manipulation choice.
+                  className={cn(
+                    'tw:flex tw:flex-col tw:gap-1 tw:rounded-md tw:p-2',
+                    isSelected && 'tw:border tw:border-border',
+                  )}
+                >
+                  {isStaleAccept ? (
+                    <TooltipProvider delayDuration={0}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          {/* span wrapper so the tooltip still receives pointer events over the
+                              disabled radio */}
+                          <span className="tw:flex tw:items-center tw:gap-2">
+                            {radio}
+                            <Label htmlFor={optionId}>{option.label}</Label>
+                            {/* aria-describedby links the option to this visually-hidden notice so
+                                assistive tech announces why the choice is read-only. */}
+                            <span id={staleNoticeId} className="tw:sr-only">
+                              {staleNotice}
+                            </span>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="right">{staleNotice}</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ) : (
+                    <div className="tw:flex tw:items-center tw:gap-2">
+                      {radio}
+                      <Label htmlFor={optionId}>{option.label}</Label>
+                    </div>
+                  )}
+                  <DiffHtml html={option.html} className="tw:ps-6" />
+                </div>
+              );
+            })}
+          </RadioGroup>
+
+          {/* Not offered in the stale (read-only) state. Stays mounted while actionable so the
+              selection never shifts the layout. */}
+          {!isStale && (
+            <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  {/* span wrapper so the tooltip still receives pointer events when the button is
+                      disabled */}
+                  <span className="tw:inline-flex tw:self-start">
+                    <Button
+                      size="sm"
+                      disabled={isResolving || effectiveResolution === 'accept'}
+                      onClick={() => onResolve?.(effectiveResolution)}
+                    >
+                      {localizedStrings['%conflict_note_save_and_resolve%'] ?? 'Save and Resolve'}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {localizedStrings['%conflict_note_save_disabled_tooltip%'] ??
+                    "This can't be undone."}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
         </>
       )}
     </div>

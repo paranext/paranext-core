@@ -300,13 +300,14 @@ describe('CommentThread conflict resolution', () => {
       isSelected: true,
       getConflictResolutionOptionsCallback: async () => 'acceptOrReject',
     });
-    expect(await screen.findByRole('combobox')).toBeInTheDocument(); // the card's selector
-    expect(screen.getByRole('button', { name: 'Resolve' })).toBeInTheDocument();
+    // The card's resolution radios (falls back to English labels; the thread passes no card strings)
+    expect(await screen.findByRole('radio', { name: 'Keep the current text' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save and Resolve' })).toBeInTheDocument();
   });
 
   test('conflict thread renders plain CommentItem when collapsed', () => {
     renderThread({ thread: conflictThread, comments: conflictThread.comments, isSelected: false });
-    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
   });
 
   test('hover resolve button shows on a normal thread but is suppressed on conflict threads', async () => {
@@ -354,10 +355,12 @@ describe('CommentThread conflict resolution', () => {
       getConflictResolutionOptionsCallback: async () => 'acceptOrReject',
       handleResolveConflict,
     });
-    await user.click(await screen.findByRole('button', { name: 'Resolve' }));
-    expect(handleResolveConflict).toHaveBeenCalledWith('conflict-sample', 'accept');
+    // Save and Resolve is disabled on the default 'accept'; choose the other change to enable it.
+    await user.click(await screen.findByRole('radio', { name: 'Use the other change' }));
+    await user.click(screen.getByRole('button', { name: 'Save and Resolve' }));
+    expect(handleResolveConflict).toHaveBeenCalledWith('conflict-sample', 'reject');
     // Locked after success: controls disappear ('none') pending the data refresh.
-    await waitFor(() => expect(screen.queryByRole('combobox')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole('radio')).not.toBeInTheDocument());
   });
 
   // A resolution reply (empty body) appended after the conflict comment. conflictResolutionAction

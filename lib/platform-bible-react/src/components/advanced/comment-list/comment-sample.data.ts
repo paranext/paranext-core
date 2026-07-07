@@ -933,3 +933,37 @@ export const verseTextConflictReplacementSample: LegacyComment = {
   rejectedResultText:
     '\\v 1 When Jesus was born in the village of Bethlehem in Judea, Herod was king.',
 };
+
+/**
+ * A verseText merge-conflict comment whose two edits are INDEPENDENT, so a `mergedText` "combine
+ * both changes" preview is available (one side made the village "big", the other named the "royal"
+ * king). The four verseText fields plus `mergedText` are HAND-AUTHORED sample data in the
+ * captured-sample style — NOT converter-captured — to exercise the "Combine both changes" option
+ * and the resolved 'merged' outcome, which the captured fixtures above do not cover.
+ */
+export const verseTextConflictMergeSample: LegacyComment = {
+  id: 'conflict-merge/Tim Steenwyk/2011-08-16T15:49:18.4019847-04:00',
+  isRead: false,
+  thread: 'conflict-merge',
+  user: 'Tim Steenwyk',
+  verseRef: 'MAT 2:1',
+  language: '',
+  date: '2011-08-16T15:49:18.4019847-04:00',
+  deleted: false,
+  startPosition: 0,
+  status: 'Todo',
+  type: 'Conflict',
+  conflictType: 'verseText',
+  hideInTextWindow: false,
+  contents:
+    "<blockquote lang='dmy' style='text-align:left'><p>Two different people edited this verse. The change shown here (in red) is not in the current copy of the text.</p><p><span lang='es-015-vaidika'>\\v 1 When Jesus was born in the <u>big </u>village of Bethlehem in Judea, Herod was king.</span></p></blockquote>",
+  rejectedText:
+    "<blockquote lang='dmy' style='text-align:left'><p><span lang='es-015-vaidika'>\\v 1 When Jesus was born in the village of Bethlehem in Judea, Herod was <u>royal </u>king.</span></p></blockquote>",
+  acceptedText:
+    "<blockquote lang='dmy' style='text-align:left'><p><span lang='es-015-vaidika'>\\v 1 When Jesus was born in the <u>big </u>village of Bethlehem in Judea, Herod was king.</span></p></blockquote>",
+  mergedText:
+    "<blockquote lang='dmy' style='text-align:left'><p><span lang='es-015-vaidika'>\\v 1 When Jesus was born in the <u>big </u>village of Bethlehem in Judea, Herod was <u>royal </u>king.</span></p></blockquote>",
+  resultText: '\\v 1 When Jesus was born in the big village of Bethlehem in Judea, Herod was king.',
+  rejectedResultText:
+    '\\v 1 When Jesus was born in the village of Bethlehem in Judea, Herod was royal king.',
+};
