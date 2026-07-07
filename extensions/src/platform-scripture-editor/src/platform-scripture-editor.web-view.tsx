@@ -78,7 +78,6 @@ import {
   formatReplacementString,
   getErrorMessage,
   getLocalizeKeysForScrollGroupIds,
-  debounce,
   isPlatformError,
   isString,
   isWhiteSpace,
@@ -116,6 +115,7 @@ import {
   removeDecorations,
 } from './decorations.util';
 import { runOnFirstLoad, scrollToAnnotation, scrollToVerse } from './editor-dom.util';
+import { createFlushableDebouncer } from './flushable-debouncer.util';
 import { useEditorPdpSync } from './use-editor-pdp-sync.hook';
 import { useProjectStylesheet } from './use-project-stylesheet.hook';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
@@ -2028,20 +2028,54 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * doc (pending literal `\q1` still in plain text) through the PDP's USFM normalization; the
    * content-different echoes then fight the editor for the doc under the caret ~150-250ms after
    * each keystroke (`useEditorPdpSync` defends the focused editor, but the echo storm itself is the
-   * disease). PT9's equivalent reformat/save is ~1s debounced. Debounce the keystroke-driven save
-   * the same way — trailing edge, so the save always fires once typing rests; only the save half is
+   * disease). Debounce the keystroke-driven save — trailing edge, so the save always fires once
+   * typing rests. The 700ms interval is chosen to kill the per-keystroke echo storm; it is ballpark
+   * consistent with PT9's UI timer granularity, not a cited PT9 constant. Only the save half is
    * debounced (the footnote-editor bookkeeping in `handleEditorialUsjChange` must stay
    * synchronous). Imperative saves elsewhere (explicit flows, `useEditorPdpSync`'s push-back) are
    * unaffected.
+   *
+   * Uses the local flushable debouncer (not `platform-bible-utils`' `debounce`, which has no
+   * flush/cancel) so pending edits survive lifecycle boundaries — see the effects below.
    */
   const saveUsjToPdpDebounced = useMemo(
-    () => debounce((usj: Usj) => saveUsjToPdpIfUpdatedRef.current(usj), 700),
+    () => createFlushableDebouncer((usj: Usj) => saveUsjToPdpIfUpdatedRef.current(usj), 700),
     [],
   );
 
+  // Lifecycle for the debounced save (wave review, Important): a pending trailing call must never
+  // be LOST (crash-resilience vs. the prior per-change save) nor fire against the WRONG chapter's
+  // save context.
+  //
+  // (1) Chapter/book switch: flush in this effect's CLEANUP, which React runs when book/chapter
+  // change BEFORE the same render pass's later effects re-point `saveUsjToPdpIfUpdatedRef` (refs
+  // are only reassigned in the new effect pass), so the pending call — which captured the OLD
+  // chapter's USJ — resolves against the OLD chapter's save function. This ordering is the
+  // stale-write kill: without it the pending call would write the old chapter's USJ through the
+  // NEW chapter's data selector. Unmount runs the same cleanup, covering web-view dispose.
+  useEffect(() => {
+    return () => saveUsjToPdpDebounced.flush();
+  }, [saveUsjToPdpDebounced, scrRef.book, scrRef.chapterNum]);
+
+  // (2) Focus loss / page teardown: best-effort flush on window blur and pagehide/beforeunload.
+  // The underlying save is async (a papi network send); on teardown paths there is no guarantee
+  // the send completes before the renderer dies — this is deliberately best-effort, matching the
+  // reliability of any async work in these events. On plain blur the send proceeds normally.
+  useEffect(() => {
+    const flush = () => saveUsjToPdpDebounced.flush();
+    window.addEventListener('blur', flush);
+    window.addEventListener('pagehide', flush);
+    window.addEventListener('beforeunload', flush);
+    return () => {
+      window.removeEventListener('blur', flush);
+      window.removeEventListener('pagehide', flush);
+      window.removeEventListener('beforeunload', flush);
+    };
+  }, [saveUsjToPdpDebounced]);
+
   const handleEditorialUsjChange = useCallback(
     (usj: Usj, ops?: DeltaOp[], _source?: DeltaSource, insertedNodeKey?: string) => {
-      saveUsjToPdpDebounced(usj);
+      saveUsjToPdpDebounced.schedule(usj);
       if (editingNoteKey.current) {
         // When the FootnoteEditor saves, Lexical emits a replaceEmbedUpdate. This triggers
         // onUsjChange with an insertedNodeKey.
