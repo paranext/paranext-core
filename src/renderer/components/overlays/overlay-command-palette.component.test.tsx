@@ -456,11 +456,16 @@ describe('OverlayCommandPalettePresentational', () => {
       { id: 'non-basic', label: 'Non-Basic Marker', muted: true },
     ];
 
-    /** The text block inside an item — where muted opacity is applied (not the item container). */
-    function getTextBlockClasses(label: string): string {
+    /**
+     * The text block inside an item — where muted opacity is applied (not the item container).
+     * Muted uses an INLINE style, not a tw: utility: the renderer has no Tailwind build of its own
+     * (all tw: classes come from platform-bible-react's prebuilt stylesheet, which does not scan
+     * this component), so a class-based approach silently loses the CSS rule at runtime.
+     */
+    function getTextBlockOpacity(label: string): string {
       const textBlock = screen.getByText(label).parentElement;
-      expect(textBlock).not.toBeNull();
-      return textBlock?.className ?? '';
+      expect(textBlock).toBeInstanceOf(HTMLElement);
+      return textBlock instanceof HTMLElement ? textBlock.style.opacity : '';
     }
 
     it('should render muted items with reduced-opacity text in active mode, normal items without', () => {
@@ -472,8 +477,8 @@ describe('OverlayCommandPalettePresentational', () => {
         />,
       );
 
-      expect(getTextBlockClasses('Non-Basic Marker')).toContain('tw:opacity-60');
-      expect(getTextBlockClasses('Basic Marker')).not.toContain('tw:opacity-60');
+      expect(getTextBlockOpacity('Non-Basic Marker')).toBe('0.6');
+      expect(getTextBlockOpacity('Basic Marker')).toBe('');
     });
 
     it('should render muted items with reduced-opacity text in passive mode, normal items without', () => {
@@ -486,8 +491,8 @@ describe('OverlayCommandPalettePresentational', () => {
         />,
       );
 
-      expect(getTextBlockClasses('Non-Basic Marker')).toContain('tw:opacity-60');
-      expect(getTextBlockClasses('Basic Marker')).not.toContain('tw:opacity-60');
+      expect(getTextBlockOpacity('Non-Basic Marker')).toBe('0.6');
+      expect(getTextBlockOpacity('Basic Marker')).toBe('');
     });
 
     it('should keep muted items selectable (unlike disabled)', () => {

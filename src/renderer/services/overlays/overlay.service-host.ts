@@ -766,6 +766,20 @@ function registerAutoDismissListeners(): void {
       // changes that would otherwise immediately dismiss the just-created context menu
       if (Date.now() - lastOverlayCreatedAt < OVERLAY_CREATION_GRACE_MS) return;
 
+      // Focus moving INTO an overlay is not a reason to dismiss it (Task 15 round 3, QA run 3
+      // item 4: clicking a focused palette's own search input closed the palette). Overlays live
+      // in the parent document, so focusing one is classified as leaving the webview by
+      // detectFocus — check whether the newly active element actually sits inside the overlay
+      // host (OverlayHost's portal container) or a Radix popover portal (anchored palettes render
+      // through PopoverPrimitive.Portal directly under document.body, outside the host div).
+      const active = document.activeElement;
+      if (
+        active &&
+        (active.closest('[data-overlay-host]') ??
+          active.closest('[data-radix-popper-content-wrapper]'))
+      )
+        return;
+
       dismissAll('contextMenu', 'commandPalette', 'popover');
     })
     .catch((err) => logger.warn(`Failed to subscribe to window focus changes: ${err}`));
