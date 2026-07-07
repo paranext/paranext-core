@@ -1,10 +1,10 @@
 import { LanguageStrings, LegacyComment, LocalizeKey } from 'platform-bible-utils';
 
 /**
- * The resolution a user picks for a conflict: keep the accepted (winning) side or take the rejected
- * (losing) side.
+ * The resolution a user picks for a conflict: keep the accepted (winning) side, take the rejected
+ * (losing) side, or merge (combine) both sides.
  */
-export type ConflictResolution = 'accept' | 'reject';
+export type ConflictResolution = 'accept' | 'reject' | 'merge';
 
 /**
  * How an already-resolved conflict was resolved, derived from the resolution comment's
@@ -30,8 +30,14 @@ export type ConflictResolutionOutcome = 'accept' | 'reject' | 'merged';
  * - 'accept': the verse was edited after the merge (stale) — Reject is disabled with an explanation;
  *   Accept keeps the current text.
  * - 'acceptOrReject': fully available.
+ * - 'acceptRejectOrMerge': fully available, and the two changes are independent so Combine both
+ *   changes is also offered.
  */
-export type ConflictResolutionOptions = 'none' | 'accept' | 'acceptOrReject';
+export type ConflictResolutionOptions =
+  | 'none'
+  | 'accept'
+  | 'acceptOrReject'
+  | 'acceptRejectOrMerge';
 
 /**
  * Localization keys used by the ConflictNoteCard. Pass into the useLocalizedStrings hook (in the
@@ -51,6 +57,14 @@ export const CONFLICT_NOTE_STRING_KEYS: LocalizeKey[] = [
   '%conflict_note_resolve_failed%',
   '%conflict_note_outcome_replaced%',
   '%conflict_note_outcome_merged%',
+  '%conflict_note_choose_prompt%',
+  '%conflict_note_option_keep_current%',
+  '%conflict_note_option_use_other%',
+  '%conflict_note_option_combine%',
+  '%conflict_note_save_and_resolve%',
+  '%conflict_note_save_disabled_tooltip%',
+  '%conflict_note_outcome_used_other%',
+  '%conflict_note_outcome_combined%',
 ];
 
 /** Props for the ConflictNoteCard component */
