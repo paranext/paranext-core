@@ -97,6 +97,11 @@ Key code steward areas:
 
 ## PR Templates
 
+For PRs that are not part of the current epic, insert a `## Why review this`
+section immediately after `## Summary` in whichever template you use — see
+["Why review this" Section (Non-Epic PRs)](#why-review-this-section-non-epic-prs)
+below.
+
 ### Minimal Template (Simple Changes)
 
 ```bash
@@ -182,7 +187,7 @@ EOF
 )"
 ```
 
-### "Why Review This" Section (Non-Epic PRs)
+### "Why review this" Section (Non-Epic PRs)
 
 If the PR is not directly part of the current epic (side fixes, tooling,
 refactors, dependency bumps, cleanup), add a `Why review this` section
@@ -198,6 +203,16 @@ CI flake, five-minute review.]
 ```
 
 Skip this section when the PR's JIRA ticket belongs to the current epic.
+
+The current epic is articulated in the
+[Paratext Roadmap](https://docs.google.com/spreadsheets/d/1DP9WcoTwzYQbGzKyOaULeotHRotyBFsrrHNngP1qyVI/edit?gid=1711193079#gid=1711193079)
+and on the JIRA
+[Dev Current Sprint board](https://paratextstudio.atlassian.net/jira/software/c/projects/PT/boards/63)
+(both show the same info), and is discussed in the 🔹-marked threads in the
+[#teamwide-epic-discussions](https://discord.com/channels/892072317436448768/1503454586432782407)
+channel on the Paratext Discord. Epic membership is the PR author's
+judgment: if it is unclear whether the ticket belongs to the current epic,
+ask the author rather than deciding from the ticket alone.
 
 ## AI Transparency
 
