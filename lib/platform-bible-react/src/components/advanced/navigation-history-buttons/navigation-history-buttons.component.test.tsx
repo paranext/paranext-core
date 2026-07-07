@@ -1,12 +1,38 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import { persistDirection } from '@/utils/dir-helper.util';
 import {
   NavigationHistoryButtons,
   NavigationHistoryButtonsProps,
 } from './navigation-history-buttons.component';
+
+// jsdom doesn't ship ResizeObserver. Radix's Popper positioning (used by both the Tooltip and
+// DropdownMenu content here) instantiates one on mount — with TooltipProvider's delayDuration=0,
+// a plain click can open the tooltip synchronously, so this is needed even for click-only tests.
+// Same stub as project-selector.component.test.tsx.
+class NoopResizeObserver implements ResizeObserver {
+  private readonly targets = new Set<Element>();
+
+  observe(target: Element) {
+    this.targets.add(target);
+  }
+
+  unobserve(target: Element) {
+    this.targets.delete(target);
+  }
+
+  disconnect() {
+    this.targets.clear();
+  }
+}
+
+beforeAll(() => {
+  if (typeof globalThis.ResizeObserver === 'undefined') {
+    globalThis.ResizeObserver = NoopResizeObserver;
+  }
+});
 
 const defaultProps: NavigationHistoryButtonsProps = {
   canGoBack: true,
