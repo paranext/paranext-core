@@ -38,6 +38,33 @@ const DIFF_HTML_CLASSES = cn(
 const trimDiffSpanWhitespace = (html: string) => html.replace(/(\s+)(<\/[us]>)/g, '$2$1');
 
 /**
+ * One block of sanitized PT9 note/diff HTML. Sanitize + trim run here (memoized on `rawHtml`) so
+ * every `dangerouslySetInnerHTML` injection in this card flows through a single audited sink, and
+ * only for a block that actually renders. With a `label`, renders a titled diff region
+ * (Accepted/Rejected); without one, the bare note body (the non-verseText fallback). Callers gate
+ * an absent side before rendering, matching PT9, which prints a region's label only when its side
+ * is non-null.
+ */
+function DiffRegion({ label, rawHtml }: { label?: string; rawHtml: string }) {
+  const html = useMemo(() => trimDiffSpanWhitespace(sanitizeHtml(rawHtml)), [rawHtml]);
+  const body = (
+    <div
+      className={DIFF_HTML_CLASSES}
+      // PT9 note/diff HTML; sanitized above before injecting.
+      // eslint-disable-next-line react/no-danger
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+  if (!label) return body;
+  return (
+    <div className="tw:flex tw:flex-col tw:gap-1">
+      <span className="tw:font-medium">{label}</span>
+      {body}
+    </div>
+  );
+}
+
+/**
  * Presentational card body for a verseText merge conflict: an Accept/Reject selector, the Rejected
  * and Accepted diff regions, and a read-only Result preview that tracks the selection. Falls back
  * to rendering the raw note contents for any non-verseText conflict.
@@ -53,31 +80,12 @@ export function ConflictNoteCard({
   const resolution = selectedResolution ?? internalResolution;
   const resultLabelId = useId();
 
-  const sanitizedRejected = useMemo(
-    () => trimDiffSpanWhitespace(sanitizeHtml(comment.rejectedText ?? '')),
-    [comment.rejectedText],
-  );
-  const sanitizedAccepted = useMemo(
-    () => trimDiffSpanWhitespace(sanitizeHtml(comment.acceptedText ?? '')),
-    [comment.acceptedText],
-  );
-  const sanitizedContents = useMemo(() => sanitizeHtml(comment.contents), [comment.contents]);
-
   // Gate on conflictType alone to match PT9 (AppendConflictNoteDetails shows the resolution UI for
   // every verseText root, never gating on result-emptiness). Absent fields degrade per-region below;
   // the real accept/reject gating lives in canAcceptReject (the downstream capability query).
   const isVerseTextConflict = comment.conflictType === VERSE_TEXT_CONFLICT;
 
-  if (!isVerseTextConflict) {
-    return (
-      <div
-        className={DIFF_HTML_CLASSES}
-        // The content is PT9 HTML; sanitized above before injecting.
-        // eslint-disable-next-line react/no-danger
-        dangerouslySetInnerHTML={{ __html: sanitizedContents }}
-      />
-    );
-  }
+  if (!isVerseTextConflict) return <DiffRegion rawHtml={comment.contents} />;
 
   // Only track internal state when uncontrolled. In controlled mode the parent owns the value, so
   // writing internalResolution would let a choice the parent declined leak back into the UI if it
@@ -121,36 +129,19 @@ export function ConflictNoteCard({
       </div>
 
       {/* Accepted region first, then Rejected — matches PT9's AppendConflictNoteDetails order
-          (winning/current text leads, and Accept is the default resolution). */}
+          (winning/current text leads, and Accept is the default resolution). Each region renders
+          only when its side is present, so no orphan label over an empty body. */}
       {!!comment.acceptedText && (
-        <div className="tw:flex tw:flex-col tw:gap-1">
-          <span className="tw:font-medium">
-            {localizedStrings?.['%conflictNote_acceptedLabel%'] ?? 'Accepted'}
-          </span>
-          <div
-            className={DIFF_HTML_CLASSES}
-            // PT9 accepted-side diff HTML; sanitized above before injecting.
-            // eslint-disable-next-line react/no-danger
-            dangerouslySetInnerHTML={{ __html: sanitizedAccepted }}
-          />
-        </div>
+        <DiffRegion
+          label={localizedStrings?.['%conflictNote_acceptedLabel%'] ?? 'Accepted'}
+          rawHtml={comment.acceptedText}
+        />
       )}
-
-      {/* Gated on rejectedText like the Accepted region above — PT9 prints the reject label only when
-          the rejected side is non-null (AppendConflictNoteDetails), so no orphan heading over an
-          empty body when the rejected-side diff is blank. */}
       {!!comment.rejectedText && (
-        <div className="tw:flex tw:flex-col tw:gap-1">
-          <span className="tw:font-medium">
-            {localizedStrings?.['%conflictNote_rejectedLabel%'] ?? 'Rejected'}
-          </span>
-          <div
-            className={DIFF_HTML_CLASSES}
-            // PT9 rejected-side diff HTML; sanitized above before injecting.
-            // eslint-disable-next-line react/no-danger
-            dangerouslySetInnerHTML={{ __html: sanitizedRejected }}
-          />
-        </div>
+        <DiffRegion
+          label={localizedStrings?.['%conflictNote_rejectedLabel%'] ?? 'Rejected'}
+          rawHtml={comment.rejectedText}
+        />
       )}
 
       <Separator />
@@ -165,10 +156,13 @@ export function ConflictNoteCard({
           {resultText ? (
             <p className="tw:whitespace-pre-wrap tw:text-foreground">{resultText}</p>
           ) : (
-            // The chosen side has no result USFM (e.g. reject deletes the verse). Show a neutral
-            // empty-state rather than a blank <p>, which reads as a rendering bug.
+            // The chosen side has no result USFM to preview. Its absence has two causes we can't tell
+            // apart here (the outcome decodes to an empty verse, or the note carries no decodable
+            // diff — see rejectedResultText docs), so show a neutral "unavailable" state rather than
+            // asserting the verse will be empty.
             <p className="tw:italic tw:text-muted-foreground">
-              {localizedStrings?.['%conflictNote_resultEmpty%'] ?? 'The verse will be empty.'}
+              {localizedStrings?.['%conflictNote_resultUnavailable%'] ??
+                'No result preview available.'}
             </p>
           )}
         </div>

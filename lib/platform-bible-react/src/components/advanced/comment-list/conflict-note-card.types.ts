@@ -1,4 +1,4 @@
-import { LanguageStrings, LegacyComment } from 'platform-bible-utils';
+import { LegacyComment } from 'platform-bible-utils';
 
 /**
  * The resolution a user picks for a conflict: keep the accepted (winning) side or take the rejected
@@ -20,7 +20,7 @@ export const CONFLICT_NOTE_STRING_KEYS = Object.freeze([
   '%conflictNote_rejectedLabel%',
   '%conflictNote_acceptedLabel%',
   '%conflictNote_resultLabel%',
-  '%conflictNote_resultEmpty%',
+  '%conflictNote_resultUnavailable%',
 ] as const);
 
 /** Type definition for the localized strings used in the ConflictNoteCard component */
@@ -36,7 +36,7 @@ export interface ConflictNoteCardProps {
    */
   comment: LegacyComment;
   /** Optional localized strings for the component; English fallbacks apply when omitted */
-  localizedStrings?: LanguageStrings;
+  localizedStrings?: ConflictNoteCardLocalizedStrings;
   /**
    * Controlled selected resolution. When omitted, the card manages its own state (default
    * 'accept').

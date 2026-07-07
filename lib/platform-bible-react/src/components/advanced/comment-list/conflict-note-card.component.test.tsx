@@ -40,8 +40,14 @@ beforeAll(() => {
   }
 });
 
+// The description carries a SENTINEL value (not equal to the component's English fallback) so at
+// least one localizedStrings lookup is falsifiable: if the component dropped or mistyped the
+// %conflictNote_description_verseText% key, it would silently render the fallback and the sentinel
+// assertion below would fail. The remaining values match their fallbacks, which is fine — they're
+// exercised as the omitted-prop path by other tests.
+const DESCRIPTION_SENTINEL = 'CONFLICT_NOTE_DESCRIPTION_SENTINEL';
 const localizedStrings = {
-  '%conflictNote_description_verseText%': 'Conflicting changes were made to the verse text.',
+  '%conflictNote_description_verseText%': DESCRIPTION_SENTINEL,
   '%conflictNote_chooseLabel%': 'Choose:',
   '%conflictNote_chooseAriaLabel%': 'Choose resolution',
   '%conflictNote_accept%': 'Accept',
@@ -49,7 +55,7 @@ const localizedStrings = {
   '%conflictNote_rejectedLabel%': 'Rejected',
   '%conflictNote_acceptedLabel%': 'Accepted',
   '%conflictNote_resultLabel%': 'Result',
-  '%conflictNote_resultEmpty%': 'The verse will be empty.',
+  '%conflictNote_resultUnavailable%': 'No result preview available.',
 };
 
 test('renders the three region labels and the diff highlight', () => {
@@ -59,6 +65,9 @@ test('renders the three region labels and the diff highlight', () => {
   expect(screen.getByText('Rejected')).toBeInTheDocument();
   expect(screen.getByText('Accepted')).toBeInTheDocument();
   expect(screen.getByText('Result')).toBeInTheDocument();
+  // The provided localized description (a sentinel that differs from the English fallback) is
+  // rendered, proving the localizedStrings lookup is actually consumed rather than falling through.
+  expect(screen.getByText(DESCRIPTION_SENTINEL)).toBeInTheDocument();
   // The rejected/accepted regions render PT9 diff HTML with <u>/<s> markup
   expect(document.querySelector('u')).toBeInTheDocument();
   // Result value is a plain <p>, not an editable control
@@ -121,7 +130,7 @@ test('verseText conflict with resultText absent still renders the resolution UI 
   // ...and the raw contents fallback is NOT used.
   expect(screen.queryByText('SHOULD NOT SHOW AS FALLBACK')).not.toBeInTheDocument();
   // Accept outcome has no result USFM -> neutral empty-state, not a blank paragraph.
-  expect(screen.getByText('The verse will be empty.')).toBeInTheDocument();
+  expect(screen.getByText('No result preview available.')).toBeInTheDocument();
 });
 
 test('Rejected region is omitted when rejectedText is absent (no orphan heading)', () => {
@@ -136,7 +145,9 @@ test('Rejected region is omitted when rejectedText is absent (no orphan heading)
 });
 
 test('Result shows the empty-state when reject is selected and rejectedResultText is absent', () => {
-  // Reachable: the losing side emptied the verse, so its decoded reject outcome is empty.
+  // rejectedResultText is absent (the reject outcome decodes to an empty verse, or the note carries
+  // no decodable diff — the two causes are indistinguishable here). Either way the Result region
+  // shows the neutral "unavailable" state rather than a blank paragraph.
   const rejectDeletesComment: LegacyComment = {
     ...verseTextConflictComment,
     rejectedResultText: undefined,
@@ -148,7 +159,7 @@ test('Result shows the empty-state when reject is selected and rejectedResultTex
       selectedResolution="reject"
     />,
   );
-  expect(screen.getByText('The verse will be empty.')).toBeInTheDocument();
+  expect(screen.getByText('No result preview available.')).toBeInTheDocument();
 });
 
 test('canAcceptReject=false disables the selector', () => {

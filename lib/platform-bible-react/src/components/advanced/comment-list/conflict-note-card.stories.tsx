@@ -18,7 +18,7 @@ const localizedStrings: LanguageStrings = {
   '%conflictNote_rejectedLabel%': 'Rejected',
   '%conflictNote_acceptedLabel%': 'Accepted',
   '%conflictNote_resultLabel%': 'Result',
-  '%conflictNote_resultEmpty%': 'The verse will be empty.',
+  '%conflictNote_resultUnavailable%': 'No result preview available.',
 };
 
 function ConflictNoteCardStory({
