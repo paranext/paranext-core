@@ -698,8 +698,10 @@ describe('overlay.service-host', () => {
       await promise;
     });
 
-    it('should no-op (and warn) when updating filterText on a non-passive (active) palette', async () => {
-      const { logger } = await import('@shared/services/logger.service');
+    it('should apply filterText updates to a non-passive (active) palette (forwarded driving)', async () => {
+      // Task 15 round 3: the extension forwards keystrokes via updateCommandPalette when the
+      // cross-frame focus handoff loses; the active palette's controlled search input consumes
+      // the driven filterText, so the update must be stored (previously passive-only + warn).
       const activeRequest: CommandPaletteRequest = {
         items: [{ id: 'ft', label: 'Footnote' }],
       };
@@ -711,8 +713,7 @@ describe('overlay.service-host', () => {
       // TypeScript cannot narrow a discriminated union after getOverlayById(); cast needed to access typed fields
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const palette = overlay as Extract<NonNullable<typeof overlay>, { type: 'commandPalette' }>;
-      expect(palette.filterText).toBeUndefined();
-      expect(logger.warn).toHaveBeenCalled();
+      expect(palette.filterText).toBe('f');
 
       getOverlays()[0].resolve(undefined);
       await promise;
