@@ -146,6 +146,35 @@ const scrRefSourceProjectIdsSerialized = localStorage.getItem(
 const scrRefSourceProjectIds: { [scrollGroupId: ScrollGroupId]: string | undefined } =
   scrRefSourceProjectIdsSerialized ? (deserialize(scrRefSourceProjectIdsSerialized) ?? {}) : {};
 
+/**
+ * Reference history per scroll group. Session-only BY DESIGN (in-memory; resets on app restart —
+ * matches Paratext 9): do NOT persist to localStorage or settings.
+ *
+ * Declared ABOVE the scrRefs migration block below, which calls `setScrRefSync` during module
+ * evaluation — a migration write that passes the no-op guard reaches
+ * {@link getOrCreateReferenceHistory}, which must not hit this `const` in its temporal dead zone.
+ */
+const referenceHistories = new Map<ScrollGroupId, ReferenceHistory>();
+
+/**
+ * Get (lazily creating and seeding) the LIVE history object for a scroll group. The lazy seed with
+ * the group's current ref makes the first navigation immediately back-able (mirrors Paratext 9
+ * seeding history on layout restore). Internal only — external callers get copies via
+ * {@link getReferenceHistorySync}.
+ */
+function getOrCreateReferenceHistory(scrollGroupId: ScrollGroupId): ReferenceHistory {
+  let history = referenceHistories.get(scrollGroupId);
+  if (!history) {
+    history = createEmptyReferenceHistory();
+    recordNavigation(history, {
+      scrRef: getScrRefSync(scrollGroupId),
+      sourceProjectId: getScrRefSourceProjectIdSync(scrollGroupId),
+    });
+    referenceHistories.set(scrollGroupId, history);
+  }
+  return history;
+}
+
 // The scrRefs object might contain old values that are of older types that are no longer supported.
 // We need to check if this is the case, and convert them to `SerializedVerseRef`.
 Object.entries(scrRefs).forEach(([key, value]) => {
@@ -208,31 +237,6 @@ export const onDidChangeVersification: PlatformEvent<{ projectId: string }> = ge
 /** Event that emits when a scroll group's reference history changes */
 export const onDidChangeReferenceHistory: PlatformEvent<ReferenceHistoryUpdateInfo> =
   getNetworkEvent(EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY);
-
-/**
- * Reference history per scroll group. Session-only BY DESIGN (in-memory; resets on app restart —
- * matches Paratext 9): do NOT persist to localStorage or settings.
- */
-const referenceHistories = new Map<ScrollGroupId, ReferenceHistory>();
-
-/**
- * Get (lazily creating and seeding) the LIVE history object for a scroll group. The lazy seed with
- * the group's current ref makes the first navigation immediately back-able (mirrors Paratext 9
- * seeding history on layout restore). Internal only — external callers get copies via
- * {@link getReferenceHistorySync}.
- */
-function getOrCreateReferenceHistory(scrollGroupId: ScrollGroupId): ReferenceHistory {
-  let history = referenceHistories.get(scrollGroupId);
-  if (!history) {
-    history = createEmptyReferenceHistory();
-    recordNavigation(history, {
-      scrRef: getScrRefSync(scrollGroupId),
-      sourceProjectId: getScrRefSourceProjectIdSync(scrollGroupId),
-    });
-    referenceHistories.set(scrollGroupId, history);
-  }
-  return history;
-}
 
 function emitReferenceHistoryChange(scrollGroupId: ScrollGroupId, history: ReferenceHistory) {
   onDidChangeReferenceHistoryBufferedEmitter.emit({ scrollGroupId, history: deepClone(history) });
