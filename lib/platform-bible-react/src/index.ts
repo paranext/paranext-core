@@ -28,6 +28,7 @@ export {
 } from './components/advanced/comment-editor/comment-editor.types';
 export type {
   CommentListProps,
+  CommentListLocalizedStrings,
   AddCommentToThreadOptions,
 } from './components/advanced/comment-list/comment-list.types';
 export { COMMENT_LIST_STRING_KEYS } from './components/advanced/comment-list/comment-list.types';
