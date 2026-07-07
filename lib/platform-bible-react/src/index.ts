@@ -77,6 +77,13 @@ export {
   type PaletteItemLike,
 } from './components/advanced/footnote-editor/footnote-editor.component';
 export {
+  handleMarkerPaletteSessionKeyDown,
+  type MarkerPaletteKeyOutcome,
+  type MarkerPaletteSessionDriver,
+  type MarkerPaletteSessionKind,
+  type MarkerPaletteSessionState,
+} from './components/advanced/marker-palette-keydown.util';
+export {
   FOOTNOTE_EDITOR_STRING_KEYS,
   type FootnoteEditorLocalizedStrings,
   type FootnoteCallerType,

@@ -52,6 +52,7 @@ import {
   FOOTNOTE_EDITOR_STRING_KEYS,
   FootnoteEditor,
   type FootnoteEditorMarkerPalette,
+  handleMarkerPaletteSessionKeyDown,
   MarkdownRenderer,
   MARKER_MENU_STRING_KEYS,
   MarkerMenu,
@@ -1580,158 +1581,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       ) {
         const session = paletteSession.current;
 
-        if (session?.kind === 'backslash') {
-          if (
-            event.key === 'Shift' ||
-            event.key === 'Control' ||
-            event.key === 'Alt' ||
-            event.key === 'Meta'
-          ) {
-            // Pure modifier keydowns aren't input — e.g. the Shift half of a `+` chord fires its
-            // own keydown before the `+` arrives. Falling through to the dismiss-on-any-other-key
-            // rule would kill the session mid-chord and break `\+w` nested-marker filtering.
-            return;
-          }
-          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-            event.preventDefault();
-            event.stopPropagation(); // in capture, keep Lexical from moving the doc caret
-            papi.overlays.updateCommandPalette(webViewId, {
-              moveSelection: event.key === 'ArrowDown' ? 1 : -1,
-            });
-            return;
-          }
-          if (event.key === 'Enter') {
-            event.preventDefault();
-            event.stopPropagation(); // in capture, keep Lexical from splitting the paragraph
-            // The session ends here as far as keydown routing is concerned — the commit's
-            // resolution flows through the show-promise, which captured the items it needs, so
-            // clear synchronously like every other session-ending key rather than waiting for the
-            // async settlement.
-            paletteSession.current = undefined;
-            papi.overlays.commitCommandPaletteSelection(webViewId);
-            return;
-          }
-          if (event.key === 'Escape') {
-            event.preventDefault();
-            event.stopPropagation(); // in capture, keep Lexical from handling Escape
-            paletteSession.current = undefined;
-            papi.overlays.dismissCommandPalette(webViewId);
-            return;
-          }
-          if (event.key === ' ' || event.key === '*') {
-            // PT9 Space-commit / `*`-close: the key lands as literal text and is picked up by the
-            // engine's own Tier 2 marker-completion trigger, so our overlay is no longer relevant.
-            paletteSession.current = undefined;
-            papi.overlays.dismissCommandPalette(webViewId);
-            return;
-          }
-          if (event.key === 'Backspace' || /^[a-z0-9+]$/.test(event.key)) {
-            // Filter mirroring is keydown-tracked and display-only: `applyMarkerMenuSelection` reads
-            // the real literal run from the document at apply time, so drift here (fast typing,
-            // IME composition) can never corrupt the actual insert.
-            session.filter =
-              event.key === 'Backspace' ? session.filter.slice(0, -1) : session.filter + event.key;
-            papi.overlays.updateCommandPalette(webViewId, { filterText: session.filter });
-            return;
-          }
-          // Any other key: what's about to land no longer matches what the palette is offering.
-          paletteSession.current = undefined;
-          papi.overlays.dismissCommandPalette(webViewId);
-          return;
-        }
-
-        // Focused-palette safety net (Task 15 round 3, QA run 3 items 4/5): focused palettes are
-        // designed to be driven by the renderer overlay's own input, but the cross-frame focus
-        // handoff can lose (the editor iframe re-grabs focus on Lexical commits) and keys land
-        // HERE. For the SELECTION-wrap palette every key is claimed — nothing may land in the
-        // document while it is open (typing would replace the wrapped selection, the very text
-        // loss QA observed): filter characters are forwarded to the palette's search box,
-        // arrows/Enter/Escape drive it, anything else dismisses without landing.
-        if (session?.kind === 'selection') {
-          if (
-            event.key === 'Shift' ||
-            event.key === 'Control' ||
-            event.key === 'Alt' ||
-            event.key === 'Meta'
-          )
-            return;
-          event.preventDefault();
-          event.stopPropagation();
-          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-            papi.overlays.updateCommandPalette(webViewId, {
-              moveSelection: event.key === 'ArrowDown' ? 1 : -1,
-            });
-            return;
-          }
-          if (event.key === 'Enter') {
-            paletteSession.current = undefined;
-            papi.overlays.commitCommandPaletteSelection(webViewId);
-            return;
-          }
-          if (event.key === 'Escape') {
-            paletteSession.current = undefined;
-            papi.overlays.dismissCommandPalette(webViewId);
-            return;
-          }
-          if (event.key === 'Backspace' || /^[a-z0-9+*-]$/i.test(event.key)) {
-            session.filter =
-              event.key === 'Backspace' ? session.filter.slice(0, -1) : session.filter + event.key;
-            papi.overlays.updateCommandPalette(webViewId, { filterText: session.filter });
-            return;
-          }
-          // Any other key: close the palette; the keystroke is still swallowed (claimed above) so
-          // it cannot replace the selection.
-          paletteSession.current = undefined;
-          papi.overlays.dismissCommandPalette(webViewId);
-          return;
-        }
-
-        // Enter-menu safety net (Task 15 round 3, QA run 3 item 5): same design as above, but
-        // with a collapsed caret there is no selection to protect — any non-control key means
-        // the user resumed editing, so dismiss and let the keystroke land.
-        if (session?.kind === 'enter') {
-          if (
-            event.key === 'Shift' ||
-            event.key === 'Control' ||
-            event.key === 'Alt' ||
-            event.key === 'Meta'
-          )
-            return;
-          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-            event.preventDefault();
-            event.stopPropagation();
-            papi.overlays.updateCommandPalette(webViewId, {
-              moveSelection: event.key === 'ArrowDown' ? 1 : -1,
-            });
-            return;
-          }
-          if (event.key === 'Enter') {
-            event.preventDefault();
-            event.stopPropagation(); // keep Lexical from performing the default split
-            paletteSession.current = undefined;
-            papi.overlays.commitCommandPaletteSelection(webViewId);
-            return;
-          }
-          if (event.key === 'Escape') {
-            event.preventDefault();
-            event.stopPropagation();
-            paletteSession.current = undefined;
-            papi.overlays.dismissCommandPalette(webViewId);
-            return;
-          }
-          if (event.key === 'Backspace' || /^[a-z0-9]$/i.test(event.key)) {
-            // Type-to-filter (QA run 4): claimed — the char must narrow the palette, not land in
-            // the document (pre-fix it landed AND closed the palette).
-            event.preventDefault();
-            event.stopPropagation();
-            session.filter =
-              event.key === 'Backspace' ? session.filter.slice(0, -1) : session.filter + event.key;
-            papi.overlays.updateCommandPalette(webViewId, { filterText: session.filter });
-            return;
-          }
-          // Any other key: the user resumed editing — close the palette, let the key land.
-          paletteSession.current = undefined;
-          papi.overlays.dismissCommandPalette(webViewId);
+        if (session) {
+          // Shared while-open forwarding table (platform-bible-react), the single source of the
+          // session key semantics for BOTH this web view and the FootnoteEditor popover — the
+          // per-consumer copies drifted once already (Task 15 final review, Important 1). Driver
+          // wraps the overlay service for this web view.
+          const outcome = handleMarkerPaletteSessionKeyDown(event, session, {
+            update: (update) => papi.overlays.updateCommandPalette(webViewId, update),
+            commit: () => papi.overlays.commitCommandPaletteSelection(webViewId),
+            dismiss: () => papi.overlays.dismissCommandPalette(webViewId),
+          });
+          if (outcome === 'ended') paletteSession.current = undefined;
           return;
         }
 
