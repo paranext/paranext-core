@@ -20,7 +20,8 @@ const FORWARD_KEY = isMac ? 'Meta+BracketRight' : 'Alt+ArrowRight';
  * next-chapter quick-nav button instead).
  *
  * @param expectedRef Display-text pattern of the committed reference on the trigger (e.g. /Mark
- *   4/i), asserted at the end to confirm the navigation landed.
+ *   4\b/i — word-boundary anchored so e.g. "Mark 40" cannot false-pass), asserted at the end to
+ *   confirm the navigation landed.
  */
 async function navigateToRef(mainPage: Page, refText: string, expectedRef: RegExp) {
   const trigger = mainPage.locator('[aria-label="book-chapter-trigger"]');
@@ -30,10 +31,12 @@ async function navigateToRef(mainPage: Page, refText: string, expectedRef: RegEx
   await expect(commandInput).toBeVisible({ timeout: 5_000 });
   await commandInput.fill(refText);
   // Wait for cmdk to highlight the top match (its text starts with the typed reference, e.g.
-  // "MRK 4" → "MRK 4:1"). Only then is Enter guaranteed to activate it.
+  // "MRK 4" → "MRK 4:1"). Only then is Enter guaranteed to activate it. The `\b` anchor keeps a
+  // wrong-chapter highlight from false-passing: "MRK 4\b" accepts "MRK 4:1" but rejects
+  // "MRK 12:1" (and a hypothetical "MRK 40:1").
   const highlightedTopMatch = mainPage.locator(
     '[data-radix-popper-content-wrapper] [cmdk-item][data-selected="true"]',
-    { hasText: new RegExp(refText, 'i') },
+    { hasText: new RegExp(`${refText}\\b`, 'i') },
   );
   await expect(highlightedTopMatch).toBeVisible({ timeout: 5_000 });
   await commandInput.press('Enter');
@@ -83,16 +86,16 @@ test.describe('Reference history', () => {
 
     await expect(backButton).toBeVisible({ timeout: 10_000 });
 
-    await navigateToRef(mainPage, 'MRK 4', /Mark 4/i);
-    await navigateToRef(mainPage, 'LUK 2', /Luke 2/i);
+    await navigateToRef(mainPage, 'MRK 4', /Mark 4\b/i);
+    await navigateToRef(mainPage, 'LUK 2', /Luke 2\b/i);
 
     await expect(backButton).toBeEnabled();
     await backButton.click();
-    await expect(bcvTrigger).toContainText(/Mark 4/i, { timeout: 10_000 });
+    await expect(bcvTrigger).toContainText(/Mark 4\b/i, { timeout: 10_000 });
 
     await expect(forwardButton).toBeEnabled();
     await forwardButton.click();
-    await expect(bcvTrigger).toContainText(/Luke 2/i, { timeout: 10_000 });
+    await expect(bcvTrigger).toContainText(/Luke 2\b/i, { timeout: 10_000 });
     await expect(forwardButton).toBeDisabled();
   });
 
@@ -100,9 +103,9 @@ test.describe('Reference history', () => {
     await waitForAppReady(mainPage);
     const bcvTrigger = mainPage.locator('[aria-label="book-chapter-trigger"]');
 
-    await navigateToRef(mainPage, 'GEN 1', /Genesis 1/i);
-    await navigateToRef(mainPage, 'EXO 5', /Exodus 5/i);
-    await navigateToRef(mainPage, 'MRK 4', /Mark 4/i);
+    await navigateToRef(mainPage, 'GEN 1', /Genesis 1\b/i);
+    await navigateToRef(mainPage, 'EXO 5', /Exodus 5\b/i);
+    await navigateToRef(mainPage, 'MRK 4', /Mark 4\b/i);
 
     // History persists across tests in this shared app session (session-only by design — see
     // reference-history.util.ts), so the back stack can legitimately contain more than one
@@ -111,14 +114,14 @@ test.describe('Reference history', () => {
     // also the correct one to jump to for "two steps back" here) rather than requiring a unique
     // match, per the shared-session caveat for this suite.
     await mainPage.getByTestId('navigation-history-back-menu-trigger').click();
-    const twoBack = mainPage.getByRole('menuitem', { name: /Genesis 1/i }).first();
+    const twoBack = mainPage.getByRole('menuitem', { name: /Genesis 1\b/i }).first();
     await expect(twoBack).toBeVisible({ timeout: 5_000 });
     await twoBack.click();
-    await expect(bcvTrigger).toContainText(/Genesis 1/i, { timeout: 10_000 });
+    await expect(bcvTrigger).toContainText(/Genesis 1\b/i, { timeout: 10_000 });
 
     // The skipped entries are now on the forward stack
     await mainPage.getByTestId('navigation-history-forward-menu-trigger').click();
-    await expect(mainPage.getByRole('menuitem', { name: /Exodus 5/i }).first()).toBeVisible({
+    await expect(mainPage.getByRole('menuitem', { name: /Exodus 5\b/i }).first()).toBeVisible({
       timeout: 5_000,
     });
     await mainPage.keyboard.press('Escape');
@@ -139,22 +142,28 @@ test.describe('Reference history', () => {
     // (the two tests above) and plain-key input inside web content (Enter to submit the BCV
     // popover) both work fine via CDP — only main-process global accelerators are affected.
     // Skipping rather than fighting the harness, per the task's guidance.
+    //
+    // UNSKIP CONDITION: unskip if this suite ever runs via `_electron.launch` (which delivers
+    // native OS key events, e.g. through isolated.fixture) or the harness gains a way to dispatch
+    // keys that reach the main process's `before-input-event` listener.
     test.skip(
       true,
       'Alt+Left/Alt+Right are handled by a main-process before-input-event listener; keys ' +
         'dispatched via CDP (cdp.fixture) do not reliably reach it with correct modifier state ' +
-        'in this environment. See comment above for how this was verified.',
+        'in this environment. Unskip if this suite ever runs via _electron.launch (native OS ' +
+        'key events) or the harness gains main-process key dispatch. See comment above for ' +
+        'how this was verified.',
     );
 
     await waitForAppReady(mainPage);
     const bcvTrigger = mainPage.locator('[aria-label="book-chapter-trigger"]');
 
-    await navigateToRef(mainPage, 'MRK 4', /Mark 4/i);
-    await navigateToRef(mainPage, 'LUK 2', /Luke 2/i);
+    await navigateToRef(mainPage, 'MRK 4', /Mark 4\b/i);
+    await navigateToRef(mainPage, 'LUK 2', /Luke 2\b/i);
 
     await mainPage.keyboard.press(BACK_KEY);
-    await expect(bcvTrigger).toContainText(/Mark 4/i, { timeout: 10_000 });
+    await expect(bcvTrigger).toContainText(/Mark 4\b/i, { timeout: 10_000 });
     await mainPage.keyboard.press(FORWARD_KEY);
-    await expect(bcvTrigger).toContainText(/Luke 2/i, { timeout: 10_000 });
+    await expect(bcvTrigger).toContainText(/Luke 2\b/i, { timeout: 10_000 });
   });
 });
