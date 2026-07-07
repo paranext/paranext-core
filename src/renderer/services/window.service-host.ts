@@ -227,8 +227,19 @@ class WindowDataProviderEngine
 
     this.#focusSubject = newFocusSubject;
 
-    if (newFocusSubject && newFocusSubject.focusType === 'webView')
-      setLastSelectedWebViewId(newFocusSubject.id);
+    if (newFocusSubject) {
+      if (newFocusSubject.focusType === 'webView') setLastSelectedWebViewId(newFocusSubject.id);
+      // A tab click resolves and stamps `tabType` onto the subject synchronously (see `setFocus`
+      // above) and reaches here directly, bypassing the 250ms trailing-edge debounce that
+      // `detectFocus()` sits behind. Without this, clicking a web view's tab left the tracker
+      // (and thus the top toolbar's BCV) stale until the debounced detect path caught up.
+      // 'webView' here is the web view tab type (see `TAB_TYPE_WEBVIEW` in
+      // `web-view.component.tsx`, not imported here to avoid pulling that UI component's CSS into
+      // this service). For a web view tab, the tab id is the same as its `WebViewId` (see
+      // `FocusSubjectTab.id` and `addWebViewToDock` in `platform-dock-layout-storage.util.ts`).
+      else if (newFocusSubject.focusType === 'tab' && newFocusSubject.tabType === 'webView')
+        setLastSelectedWebViewId(newFocusSubject.id);
+    }
 
     return true;
   }
