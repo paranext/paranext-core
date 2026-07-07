@@ -78,22 +78,21 @@ When you modify any vendored shadcn component (under `lib/platform-bible-react/s
 
 **Verification**: before committing changes to any `shadcn-ui/` file, diff against the prior commit on the base branch and confirm every changed line is covered by a `CUSTOM` marker. Reviewers will grep for `CUSTOM` to find all customizations.
 
-## Linting: What CI Enforces vs. What It Doesn't
+## Linting: What Tooling Catches (and What It Doesn't)
 
-**Enforced by CI (`npm run lint`, via `.eslintrc.js`) — don't duplicate:**
+Don't assume these concerns are caught automatically in CI — most are not:
 
-- Tailwind `tw:` prefix on utility classes
+- **Tailwind `tw:` prefix** — required by the Tailwind v4 config (`prefix(tw)` in
+  `lib/platform-bible-react/src/index.css`, and `twMerge` in `utils/shadcn-ui/utils.ts`), **not** by
+  a lint rule. A missing prefix silently produces no styling — no build or lint error flags it.
+- **Localized strings** (`paranext/no-hardcoded-jsx-strings`), **ARIA localization**
+  (`paranext/require-localized-aria`), **theme colors** (`paranext/no-hardcoded-tailwind-colors`) —
+  all live in `.eslintrc.ai.js` (`npm run lint:ai-strict`), which **CI does not run**. The
+  localization/ARIA rules are additionally **off** for `*.stories.tsx` / test files, and target
+  hardcoded JSX literals, not missing localize keys.
 
-**NOT enforced by CI — advisory only.** These `paranext/*` rules live in `.eslintrc.ai.js`
-(`npm run lint:ai-strict`, which CI does not run), have varying severity (several are only `warn`),
-and are turned **off** for `*.stories.tsx` / test files. They also target hardcoded JSX literals,
-not missing localize keys — so none of them catch a raw-key leak:
-
-- `paranext/no-hardcoded-jsx-strings` — hardcoded strings in JSX
-- `paranext/require-localized-aria` — hardcoded ARIA labels
-- `paranext/no-hardcoded-tailwind-colors` — hardcoded theme colors
-
-Don't assume localized-string or ARIA mistakes are caught automatically. For the raw-key-leak class,
-see [localized-string-fallbacks.md](../code-quality/localized-string-fallbacks.md).
+CI's `npm run lint` uses `.eslintrc.js`, which enables only `paranext/require-disable-comment` among
+the `paranext/*` rules — so none of the above catch a raw-key leak. For that class, see
+[localized-string-fallbacks.md](../code-quality/localized-string-fallbacks.md).
 
 See [Component-Selection-Quick-Reference.md](../../../.context/standards/Component-Selection-Quick-Reference.md).
