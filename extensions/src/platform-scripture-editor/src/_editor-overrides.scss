@@ -46,6 +46,15 @@
   border-radius: 2px;
 }
 
+// The Find web view also calls selectRange on the current match, so the native ::selection color
+// (--primary when focused, --secondary when not) paints on top of the semi-transparent amber above
+// and hides it — the inactive --secondary reads as grayish-blue. Re-apply the amber to the selected
+// glyphs inside the find-result mark so the current result stays amber regardless of pane focus.
+.editor-typed-mark-external-find-result-highlight::selection,
+.editor-typed-mark-external-find-result-highlight ::selection {
+  background-color: rgb(255 213 0 / 40%);
+}
+
 // focus ring
 :focus-visible:not(.editor-input, .marker-menu-search) {
   outline: 2px solid transparent;
