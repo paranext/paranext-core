@@ -2378,6 +2378,34 @@ namespace TestParanextDataProvider.Projects
             );
         }
 
+        [Test]
+        public void GetCommentThreads_TypeNormal_ReturnsOnlyRegularThreads()
+        {
+            // Arrange - the "Comments" (non-conflict) dropdown query. A regular note must match; a
+            // conflict note must not. Regular notes default to NoteType.Normal (CommentList.cs), so
+            // filtering on Type == Normal cleanly separates them from Conflict-typed threads.
+            var regular = CreateTestComment("GEN", 1, 1, "Regular note");
+            string regularCommentId = _provider.CreateComment(new PlatformCommentWrapper(regular));
+            string regularThreadId = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == regularCommentId))
+                .Id;
+
+            CreateUnresolvedConflictThread("MAT 1:1");
+
+            var selector = new CommentThreadSelector { Type = NoteType.Normal };
+
+            // Act
+            var threads = _provider.GetCommentThreads(selector);
+
+            // Assert
+            Assert.That(
+                threads.Single().Id,
+                Is.EqualTo(regularThreadId),
+                "type: Normal must return only regular (non-conflict) threads"
+            );
+        }
+
         #endregion
     }
 }

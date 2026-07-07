@@ -19,7 +19,8 @@ import { CommentListWebViewMessage } from './comment-list-messages.model';
 import { CommentListPanel, COMMENT_LIST_PANEL_EXTRA_STRING_KEYS } from './comment-list.component';
 import {
   buildCommentThreadSelector,
-  CommentFilter,
+  CommentFilters,
+  DEFAULT_COMMENT_FILTERS,
   ScopeFilter,
   UNFILTERED,
 } from './comment-list-filters.model';
@@ -75,7 +76,7 @@ global.webViewComponent = function CommentListWebView({
     undefined,
   );
 
-  const [commentFilter, setCommentFilter] = useState<CommentFilter>(UNFILTERED);
+  const [filters, setFilters] = useState<CommentFilters>(DEFAULT_COMMENT_FILTERS);
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(UNFILTERED);
 
   const commentsPdp = useProjectDataProvider('legacyCommentManager.comments', projectId);
@@ -155,19 +156,12 @@ global.webViewComponent = function CommentListWebView({
     useMemo<LegacyCommentThreadSelector>(
       () =>
         buildCommentThreadSelector({
-          commentFilter,
+          filters,
           scopeFilter,
           scrRef: { book: scrRef.book, chapterNum: scrRef.chapterNum, verseNum: scrRef.verseNum },
           currentUserName,
         }),
-      [
-        scrRef.book,
-        scrRef.chapterNum,
-        scrRef.verseNum,
-        scopeFilter,
-        commentFilter,
-        currentUserName,
-      ],
+      [scrRef.book, scrRef.chapterNum, scrRef.verseNum, scopeFilter, filters, currentUserName],
     ),
     DEFAULT_LEGACY_COMMENT_THREADS,
   );
@@ -315,8 +309,8 @@ global.webViewComponent = function CommentListWebView({
       isLoading={isLoadingCommentThreads || !commentsPdp}
       threads={safeCommentThreads}
       currentUser={currentUserName}
-      commentFilter={commentFilter}
-      onCommentFilterChange={setCommentFilter}
+      filters={filters}
+      onFiltersChange={setFilters}
       scopeFilter={scopeFilter}
       onScopeFilterChange={setScopeFilter}
       handleAddCommentToThread={handleAddCommentToThread}

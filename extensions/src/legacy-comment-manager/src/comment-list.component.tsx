@@ -8,27 +8,40 @@ import {
   SelectValue,
   Skeleton,
 } from 'platform-bible-react';
-import type { LanguageStrings } from 'platform-bible-utils';
+import type { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import { ComponentProps } from 'react';
 import {
-  CommentFilter,
-  commentFilterToLabelKey,
-  isCommentFilter,
+  assignmentFilterToLabelKey,
+  CommentFilters,
+  isAssignmentFilter,
+  isReadFilter,
+  isResolvedFilter,
   isScopeFilter,
+  isTypeFilter,
+  readFilterToLabelKey,
+  resolvedFilterToLabelKey,
   ScopeFilter,
   scopeFilterToLabelKey,
+  typeFilterToLabelKey,
   UNFILTERED,
 } from './comment-list-filters.model';
 
 /** Extra localization keys this panel needs beyond `COMMENT_LIST_STRING_KEYS`. */
 export const COMMENT_LIST_PANEL_EXTRA_STRING_KEYS = [
-  '%comment_filter_all%',
-  '%comment_filter_conflicts%',
+  '%comment_filter_assignment_all%',
+  '%comment_filter_assignment_me%',
+  '%comment_filter_assignment_team%',
+  '%comment_filter_read_all%',
+  '%comment_filter_read_read%',
+  '%comment_filter_read_unread%',
+  '%comment_filter_resolved_all%',
+  '%comment_filter_resolved_resolved%',
+  '%comment_filter_resolved_unresolved%',
   '%comment_filter_scope_all_books%',
   '%comment_filter_scope_current_chapter%',
-  '%comment_filter_unread_assigned_to_me%',
-  '%comment_filter_unresolved_assigned_to_me%',
-  '%comment_filter_unresolved_conflicts%',
+  '%comment_filter_type_all%',
+  '%comment_filter_type_comments%',
+  '%comment_filter_type_conflicts%',
   '%no_comments%',
   '%no_comments_match_filter%',
 ] as const;
@@ -57,10 +70,10 @@ export type CommentListPanelProps = Pick<
   localizedStrings: LanguageStrings;
   /** Whether comment threads are still loading (renders skeletons). */
   isLoading: boolean;
-  /** Currently selected comment filter (controlled by the web view, which drives the query). */
-  commentFilter: CommentFilter;
-  /** Called when the comment filter changes. */
-  onCommentFilterChange: (filter: CommentFilter) => void;
+  /** Current comment-filter axis selections (controlled; the web view uses them to query threads). */
+  filters: CommentFilters;
+  /** Called when any comment-filter axis changes. */
+  onFiltersChange: (filters: CommentFilters) => void;
   /** Currently selected scope filter (controlled by the web view, which drives the query). */
   scopeFilter: ScopeFilter;
   /** Called when the scope filter changes. */
@@ -68,17 +81,65 @@ export type CommentListPanelProps = Pick<
 };
 
 /**
+ * A single filter dropdown for one axis. Renders each option's localized label and reports the
+ * chosen value through `onChange`, narrowed by `isValue` so no unsafe cast is needed. Generic over
+ * the axis's value union.
+ */
+function FilterDropdown<T extends string>({
+  value,
+  labelKeys,
+  isValue,
+  onChange,
+  localizedStrings,
+}: {
+  value: T;
+  labelKeys: Readonly<Record<T, LocalizeKey>>;
+  isValue: (value: string) => value is T;
+  onChange: (value: T) => void;
+  localizedStrings: LanguageStrings;
+}) {
+  return (
+    <Select
+      value={value}
+      onValueChange={(next) => {
+        if (isValue(next)) onChange(next);
+      }}
+    >
+      <SelectTrigger className="tw:w-auto tw:min-w-32">
+        <SelectValue>
+          <div className="tw:text-start tw:overflow-hidden tw:text-ellipsis tw:text-sm tw:font-normal">
+            {localizedStrings[labelKeys[value]]}
+          </div>
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent className="tw:max-w-sm" align="start">
+        {Object.keys(labelKeys)
+          .filter(isValue)
+          .map((option) => (
+            <SelectItem key={option} value={option}>
+              {localizedStrings[labelKeys[option]]}
+            </SelectItem>
+          ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+/**
  * Presentational half of the comment-list web view: a filter toolbar plus the comment list (or a
  * loading/empty state). All data and PAPI-backed callbacks are supplied by the web view via props;
  * the comment/scope filters are controlled because the web view uses them to query threads.
+ *
+ * The toolbar is a row of orthogonal filter dropdowns (resolved status, read status, note type,
+ * assignment) plus a scope dropdown; each defaults to "all" and they AND together.
  */
 export function CommentListPanel({
   localizedStrings,
   isLoading,
   threads,
   currentUser,
-  commentFilter,
-  onCommentFilterChange,
+  filters,
+  onFiltersChange,
   scopeFilter,
   onScopeFilterChange,
   handleAddCommentToThread,
@@ -109,59 +170,52 @@ export function CommentListPanel({
     );
   }
 
+  const noFiltersActive =
+    filters.resolved === 'all' &&
+    filters.read === 'all' &&
+    filters.type === 'all' &&
+    filters.assignment === 'all' &&
+    scopeFilter === UNFILTERED;
+
   return (
     <div className="tw:flex tw:flex-col tw:h-full">
-      {/* Filter toolbar */}
+      {/* Filter toolbar — orthogonal filter dropdowns plus the scope dropdown */}
       <div className="tw:flex tw:flex-row tw:flex-wrap tw:gap-1 tw:items-center tw:pb-2 tw:px-4 tw:pt-4">
-        {/* Comment filter dropdown */}
-        <Select
-          value={commentFilter}
-          onValueChange={(value) => {
-            if (isCommentFilter(value)) onCommentFilterChange(value);
-          }}
-        >
-          <SelectTrigger className="tw:w-auto tw:min-w-48">
-            <SelectValue>
-              <div className="tw:text-start tw:overflow-hidden tw:text-ellipsis tw:text-sm tw:font-normal">
-                {localizedStrings[commentFilterToLabelKey[commentFilter]]}
-              </div>
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent className="tw:max-w-sm" align="start">
-            {Object.keys(commentFilterToLabelKey)
-              .filter(isCommentFilter)
-              .map((value) => (
-                <SelectItem key={value} value={value}>
-                  {localizedStrings[commentFilterToLabelKey[value]]}
-                </SelectItem>
-              ))}
-          </SelectContent>
-        </Select>
-
-        {/* Scope filter dropdown */}
-        <Select
+        <FilterDropdown
+          value={filters.resolved}
+          labelKeys={resolvedFilterToLabelKey}
+          isValue={isResolvedFilter}
+          onChange={(resolved) => onFiltersChange({ ...filters, resolved })}
+          localizedStrings={localizedStrings}
+        />
+        <FilterDropdown
+          value={filters.read}
+          labelKeys={readFilterToLabelKey}
+          isValue={isReadFilter}
+          onChange={(read) => onFiltersChange({ ...filters, read })}
+          localizedStrings={localizedStrings}
+        />
+        <FilterDropdown
+          value={filters.type}
+          labelKeys={typeFilterToLabelKey}
+          isValue={isTypeFilter}
+          onChange={(type) => onFiltersChange({ ...filters, type })}
+          localizedStrings={localizedStrings}
+        />
+        <FilterDropdown
+          value={filters.assignment}
+          labelKeys={assignmentFilterToLabelKey}
+          isValue={isAssignmentFilter}
+          onChange={(assignment) => onFiltersChange({ ...filters, assignment })}
+          localizedStrings={localizedStrings}
+        />
+        <FilterDropdown
           value={scopeFilter}
-          onValueChange={(value) => {
-            if (isScopeFilter(value)) onScopeFilterChange(value);
-          }}
-        >
-          <SelectTrigger className="tw:w-auto tw:min-w-48">
-            <SelectValue>
-              <div className="tw:text-start tw:overflow-hidden tw:text-ellipsis tw:text-sm tw:font-normal">
-                {localizedStrings[scopeFilterToLabelKey[scopeFilter]]}
-              </div>
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent className="tw:max-w-sm" align="start">
-            {Object.keys(scopeFilterToLabelKey)
-              .filter(isScopeFilter)
-              .map((value) => (
-                <SelectItem key={value} value={value}>
-                  {localizedStrings[scopeFilterToLabelKey[value]]}
-                </SelectItem>
-              ))}
-          </SelectContent>
-        </Select>
+          labelKeys={scopeFilterToLabelKey}
+          isValue={isScopeFilter}
+          onChange={onScopeFilterChange}
+          localizedStrings={localizedStrings}
+        />
       </div>
 
       {/* Comments list */}
@@ -169,7 +223,7 @@ export function CommentListPanel({
         {threads.length === 0 ? (
           <div className="tw:m-4 tw:flex tw:justify-center">
             <Label>
-              {commentFilter === UNFILTERED && scopeFilter === UNFILTERED
+              {noFiltersActive
                 ? localizedStrings['%no_comments%']
                 : localizedStrings['%no_comments_match_filter%']}
             </Label>
