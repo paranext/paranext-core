@@ -95,4 +95,45 @@ describe('NavigationHistoryButtons', () => {
     // In RTL the forward split button renders first (back sits on the right, like Paratext 9)
     expect(buttons[0]).toBe('navigation-history-forward-button');
   });
+
+  test('RTL flips the arrow icons and swaps the shortcut hint in the back tooltip', async () => {
+    persistDirection('rtl');
+    const user = userEvent.setup();
+    render(<NavigationHistoryButtons {...defaultProps} />);
+
+    // Arrow glyphs mirror in RTL: back points right, forward points left
+    const backButton = screen.getByTestId('navigation-history-back-button');
+    const forwardButton = screen.getByTestId('navigation-history-forward-button');
+    expect(backButton.querySelector('.lucide-arrow-right')).not.toBeNull();
+    expect(backButton.querySelector('.lucide-arrow-left')).toBeNull();
+    expect(forwardButton.querySelector('.lucide-arrow-left')).not.toBeNull();
+    expect(forwardButton.querySelector('.lucide-arrow-right')).toBeNull();
+
+    // Shortcut hints swap in RTL (physical-direction preserving): back shows the physically-right
+    // key. jsdom's userAgent is non-Mac, so the Windows/Linux hints apply.
+    await user.hover(backButton);
+    // Radix Tooltip can render the content text more than once (a visually-hidden copy for screen
+    // readers), so assert on "at least one" rather than exactly one
+    const hints = await screen.findAllByText('Alt+Right');
+    expect(hints.length).toBeGreaterThan(0);
+    expect(screen.queryByText('Alt+Left')).toBeNull();
+  });
+
+  test('LTR back tooltip shows the unswapped shortcut hint', async () => {
+    const user = userEvent.setup();
+    render(<NavigationHistoryButtons {...defaultProps} />);
+    await user.hover(screen.getByTestId('navigation-history-back-button'));
+    const hints = await screen.findAllByText('Alt+Left');
+    expect(hints.length).toBeGreaterThan(0);
+    expect(screen.queryByText('Alt+Right')).toBeNull();
+  });
+
+  test('showKeyboardShortcuts={false} renders no Kbd hint in the opened tooltip', async () => {
+    const user = userEvent.setup();
+    render(<NavigationHistoryButtons {...defaultProps} showKeyboardShortcuts={false} />);
+    await user.hover(screen.getByTestId('navigation-history-back-button'));
+    // Wait until the tooltip content is open before asserting the hint is absent
+    await screen.findByRole('tooltip');
+    expect(document.querySelector('[data-slot="kbd"]')).toBeNull();
+  });
 });
