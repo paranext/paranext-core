@@ -2,7 +2,12 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import React from 'react';
-import { useSetting } from '@renderer/hooks/papi-hooks';
+import { useScrollGroupScrRef, useSetting } from '@renderer/hooks/papi-hooks';
+import { useLastSelectedWebViewId } from '@renderer/hooks/use-last-selected-web-view-id.hook';
+import {
+  getSavedWebViewDefinitionSync,
+  updateWebViewDefinitionSync,
+} from '@renderer/services/web-view.service-host';
 import { sendCommand } from '@shared/services/command.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { PlatformBibleToolbar } from './platform-bible-toolbar';
@@ -129,7 +134,17 @@ vi.mock('platform-bible-react', async (importOriginal) => {
         <div data-testid="toolbar-main-area">{children}</div>
       </div>
     ),
-    BookChapterControl: () => <div data-testid="book-chapter-control" />,
+    // Mirrors the real BookChapterControl's trigger (aria-label + disabled) so tests can assert on
+    // the disabled state that platform-bible-toolbar.tsx wires up, without pulling in the real
+    // component's Radix Popover/Command internals.
+    BookChapterControl: ({ disabled }: { disabled?: boolean }) => (
+      <button
+        type="button"
+        aria-label="book-chapter-trigger"
+        disabled={disabled}
+        data-testid="book-chapter-control"
+      />
+    ),
     ScrollGroupSelector: () => <div data-testid="scroll-group-selector" />,
     Select: ({ children, disabled }: { children?: React.ReactNode; disabled?: boolean }) => (
       <div data-testid="project-picker-select" aria-disabled={disabled}>
@@ -467,5 +482,149 @@ describe('PlatformBibleToolbar — project picker Select visibility by interface
     await waitFor(() => {
       expect(screen.queryByTestId('project-picker-select')).not.toBeInTheDocument();
     });
+  });
+});
+
+describe('PlatformBibleToolbar — top BookChapterControl mirrors the last-selected web view', () => {
+  const getTrigger = () => screen.getByRole('button', { name: 'book-chapter-trigger' });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // `clearAllMocks()` clears call history but does not reset `mockReturnValue`, so restore the
+    // defaults explicitly to prevent a per-test `mockReturnValue` from leaking (see the
+    // "Scroll group selector visibility" describe block above for precedent).
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    vi.mocked(useLastSelectedWebViewId).mockReturnValue(undefined);
+    vi.mocked(getSavedWebViewDefinitionSync).mockReturnValue(undefined);
+    vi.mocked(updateWebViewDefinitionSync).mockReturnValue(true);
+    mockSendCommand(true);
+  });
+
+  it('disables the trigger in power mode when there is no last-selected web view', async () => {
+    vi.mocked(useSetting).mockReturnValue(['power', vi.fn(), vi.fn(), false]);
+    vi.mocked(useLastSelectedWebViewId).mockReturnValue(undefined);
+
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(getTrigger()).toBeDisabled();
+    });
+  });
+
+  it('enables the trigger in power mode once the last-selected web view has a saved definition', async () => {
+    vi.mocked(useSetting).mockReturnValue(['power', vi.fn(), vi.fn(), false]);
+    vi.mocked(useLastSelectedWebViewId).mockReturnValue('wv1');
+    vi.mocked(getSavedWebViewDefinitionSync).mockReturnValue({
+      id: 'wv1',
+      webViewType: 'testWebViewType',
+      scrollGroupScrRef: 2,
+      projectId: 'proj1',
+    });
+
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(getTrigger()).toBeEnabled();
+    });
+  });
+
+  it('never disables the trigger in simple mode, even with no last-selected web view', async () => {
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    vi.mocked(useLastSelectedWebViewId).mockReturnValue(undefined);
+
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(getTrigger()).toBeEnabled();
+    });
+  });
+});
+
+describe('PlatformBibleToolbar — scroll group write-back to the active tab', () => {
+  // The toolbar hands `setScrollGroupScrRefTarget` to `useScrollGroupScrRef` as its second
+  // argument. `useScrollGroupScrRef` is mocked in this file (see the papi-hooks mock above), so the
+  // real hook's internal wiring from ScrollGroupSelector -> setScrollGroupId -> setScrollGroupScrRef
+  // isn't exercised here. Instead, capture that second argument directly and invoke it — this is
+  // `setScrollGroupScrRefTarget` itself, the function under test, without needing to drive the
+  // (also mocked) ScrollGroupSelector's Radix Select through jsdom.
+  const getLatestScrollGroupScrRefSetter = () => {
+    const { calls } = vi.mocked(useScrollGroupScrRef).mock;
+    const lastCall = calls.at(-1);
+    if (!lastCall) throw new Error('useScrollGroupScrRef was not called');
+    const [, setScrollGroupScrRefTarget] = lastCall;
+    return setScrollGroupScrRefTarget;
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useSetting).mockReturnValue(['power', vi.fn(), vi.fn(), false]);
+    vi.mocked(getSavedWebViewDefinitionSync).mockReturnValue({
+      id: 'wv1',
+      webViewType: 'testWebViewType',
+      scrollGroupScrRef: 2,
+      projectId: 'proj1',
+    });
+    vi.mocked(updateWebViewDefinitionSync).mockReturnValue(true);
+    mockSendCommand(true);
+  });
+
+  it('writes the new scroll group to the active web view definition in power mode', async () => {
+    vi.mocked(useLastSelectedWebViewId).mockReturnValue('wv1');
+
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('scroll-group-selector')).toBeInTheDocument();
+    });
+
+    const setScrollGroupScrRefTarget = getLatestScrollGroupScrRefSetter();
+    let result: boolean | undefined;
+    act(() => {
+      result = setScrollGroupScrRefTarget(3);
+    });
+
+    expect(result).toBe(true);
+    expect(vi.mocked(updateWebViewDefinitionSync)).toHaveBeenCalledWith('wv1', {
+      scrollGroupScrRef: 3,
+    });
+  });
+
+  it('does not write and returns false in simple mode', async () => {
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    vi.mocked(useLastSelectedWebViewId).mockReturnValue('wv1');
+
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'book-chapter-trigger' })).toBeInTheDocument();
+    });
+
+    const setScrollGroupScrRefTarget = getLatestScrollGroupScrRefSetter();
+    let result: boolean | undefined;
+    act(() => {
+      result = setScrollGroupScrRefTarget(3);
+    });
+
+    expect(result).toBe(false);
+    expect(vi.mocked(updateWebViewDefinitionSync)).not.toHaveBeenCalled();
+  });
+
+  it('does not write and returns false in power mode with no last-selected web view', async () => {
+    vi.mocked(useLastSelectedWebViewId).mockReturnValue(undefined);
+
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'book-chapter-trigger' })).toBeDisabled();
+    });
+
+    const setScrollGroupScrRefTarget = getLatestScrollGroupScrRefSetter();
+    let result: boolean | undefined;
+    act(() => {
+      result = setScrollGroupScrRefTarget(3);
+    });
+
+    expect(result).toBe(false);
+    expect(vi.mocked(updateWebViewDefinitionSync)).not.toHaveBeenCalled();
   });
 });
