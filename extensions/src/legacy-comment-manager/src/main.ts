@@ -154,7 +154,7 @@ async function openCommentList(
   webViewId: string | undefined,
   options: OpenCommentListWebViewOptions = {},
 ): Promise<string | undefined> {
-  let projectId: CommentListWebViewOptions['projectId'];
+  let triggerProjectId: string | undefined;
   let tabIdFromWebViewId: string | undefined;
   let editorScrollGroupId: CommentListWebViewOptions['editorScrollGroupId'];
   /** The ID of the comment list WebView that was opened or focused */
@@ -164,14 +164,21 @@ async function openCommentList(
 
   if (webViewId) {
     const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
-    projectId = webViewDefinition?.projectId;
+    triggerProjectId = webViewDefinition?.projectId;
     tabIdFromWebViewId = webViewDefinition?.id;
     editorScrollGroupId = webViewDefinition?.scrollGroupScrRef;
   }
 
   // A caller that isn't the project's own web view (e.g. the S/R results dialog) can target a
   // project directly. Takes precedence over the web-view-derived project.
-  projectId = options.projectId ?? projectId;
+  const projectId = options.projectId ?? triggerProjectId;
+
+  // If the caller targeted a different project than the triggering web view, that web view's editor
+  // context (scroll group + id) belongs to another project, so it must not wire this comment list to
+  // the wrong editor. The trigger's tab id is still used purely for docking placement.
+  const editorContextApplies = !options.projectId || options.projectId === triggerProjectId;
+  const editorWebViewId = editorContextApplies ? webViewId : undefined;
+  if (!editorContextApplies) editorScrollGroupId = undefined;
 
   if (!projectId) {
     logger.debug('No project!');
@@ -209,7 +216,7 @@ async function openCommentList(
     const webViewOptions: CommentListWebViewOptions = {
       projectId,
       editorScrollGroupId,
-      editorWebViewId: webViewId,
+      editorWebViewId,
       initialFilters: options.filtersToSet,
       initialScopeFilter: options.scopeFilterToSet,
     };
@@ -220,36 +227,29 @@ async function openCommentList(
     );
   }
 
-  // Scroll to the specified thread in the comment list
-  if (commentListWebViewId && options.threadIdToSelect) {
-    // Get the comment list controller and select the thread
+  // Apply post-open controller actions (select a thread, pre-apply filters) with a single
+  // controller lookup.
+  if (
+    commentListWebViewId &&
+    (options.threadIdToSelect || options.filtersToSet || options.scopeFilterToSet)
+  ) {
     const commentListController = await papi.webViews.getWebViewController(
       commentListWebViewType,
       commentListWebViewId,
     );
-    if (commentListController) {
-      await commentListController.selectThread(options.threadIdToSelect);
-    } else {
+    if (!commentListController)
       throw new Error(
-        `Could not get WebView Controller for comment list WebView ${commentListWebViewId} to scroll to thread ${options.threadIdToSelect}`,
+        `Could not get WebView Controller for comment list WebView ${commentListWebViewId}`,
       );
-    }
-  }
 
-  // Pre-apply filter axes / scope if requested (e.g. the S/R link opens the unresolved-conflicts
-  // view). Deterministic: unspecified axes reset to default (see setFilters docs).
-  if (commentListWebViewId && (options.filtersToSet || options.scopeFilterToSet)) {
-    const commentListController = await papi.webViews.getWebViewController(
-      commentListWebViewType,
-      commentListWebViewId,
-    );
-    if (commentListController) {
+    // Scroll to the specified thread in the comment list
+    if (options.threadIdToSelect)
+      await commentListController.selectThread(options.threadIdToSelect);
+
+    // Pre-apply filter axes / scope if requested (e.g. the S/R link opens the unresolved-conflicts
+    // view). Deterministic: unspecified axes reset to default (see setFilters docs).
+    if (options.filtersToSet || options.scopeFilterToSet)
       await commentListController.setFilters(options.filtersToSet, options.scopeFilterToSet);
-    } else {
-      throw new Error(
-        `Could not get WebView Controller for comment list WebView ${commentListWebViewId} to set filters`,
-      );
-    }
   }
 
   return commentListWebViewId;
