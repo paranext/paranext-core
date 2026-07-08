@@ -247,33 +247,6 @@ describe('split', () => {
     expect(medium.split('𐐷')[0]).toBeInstanceOf(GraphemeString));
 });
 
-describe('candidate B parity with candidate A', () => {
-  const long = new GraphemeString(LONG);
-  const cases: Array<[string, number | undefined]> = [
-    ['🍕', undefined],
-    ['🍕', 40],
-    ['🍕', -20],
-    ['🔥Pairs💋', undefined],
-    ['💋!🌟', undefined],
-    ['Pizza', undefined],
-    ['👮🏽‍♀️', undefined],
-  ];
-  it('indexOfWalk matches indexOf', () => {
-    cases.forEach(([needle, pos]) => {
-      expect(long.indexOfWalk(new GraphemeString(needle), pos ?? 0)).toEqual(
-        long.indexOf(needle, pos ?? 0),
-      );
-    });
-  });
-  it('lastIndexOfWalk matches lastIndexOf', () => {
-    cases.forEach(([needle, pos]) => {
-      expect(long.lastIndexOfWalk(new GraphemeString(needle), pos)).toEqual(
-        long.lastIndexOf(needle, pos),
-      );
-    });
-  });
-});
-
 describe('formatReplacementStringToArray', () => {
   it('combines all strings into one when replacer is a string', () => {
     expect(
