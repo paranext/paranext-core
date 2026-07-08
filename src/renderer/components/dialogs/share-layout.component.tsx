@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from 'platform-bible-react';
 import type { ResourcePickerDialogLocalizedStrings } from 'platform-bible-react';
-import { Trash2 } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 
 export type ShareLayoutActiveTab = 'ScriptureResource' | 'CommentaryResource' | 'Comments';
 
@@ -34,18 +34,17 @@ export type ShareLayoutResult = {
 export const SHARE_LAYOUT_DIALOG_STRING_KEYS = Object.freeze([
   '%shareLayoutDialog_title%',
   '%shareLayoutDialog_description%',
-  '%shareLayoutDialog_modelText_label%',
   '%shareLayoutDialog_modelText_none%',
-  '%shareLayoutDialog_modelText_change%',
   '%shareLayoutDialog_activeTab_label%',
+  '%shareLayoutDialog_activeTab_sublabel%',
   '%shareLayoutDialog_activeTab_scriptureResource%',
   '%shareLayoutDialog_activeTab_commentaryResource%',
   '%shareLayoutDialog_activeTab_comments%',
   '%shareLayoutDialog_scriptureResources_label%',
   '%shareLayoutDialog_commentaryResources_label%',
+  '%shareLayoutDialog_manageScriptureResources_label%',
+  '%shareLayoutDialog_manageCommentaryResources_label%',
   '%shareLayoutDialog_shownByDefault_label%',
-  '%shareLayoutDialog_addResource_label%',
-  '%shareLayoutDialog_removeResource_label%',
   '%shareLayoutDialog_cancel_label%',
   '%shareLayoutDialog_confirm_label%',
 ] as const);
@@ -90,13 +89,30 @@ function referenceName(ref: ResourceReference): string {
   return typeof name === 'string' ? name : ref.type;
 }
 
-function toResourceReference(resource: DblResourceData): ResourceReference {
-  return { type: 'dblResource', name: resource.displayName, id: resource.dblEntryUid };
-}
-
 /** Narrows a `ResourceReference` to the variants that carry a string `id`, without a type assertion. */
 function hasStringId(ref: ResourceReference): ref is Extract<ResourceReference, { id: string }> {
   return 'id' in ref && typeof ref.id === 'string';
+}
+
+/**
+ * Formats a resource for display as `FULL NAME (SHORT_NAME)`, looking the full name up from the
+ * cached DBL catalog by id. Falls back to just the short name when the reference has no id, or the
+ * id isn't found in the currently-loaded catalog (e.g. an uncached resource, or a non-dbl reference
+ * type).
+ */
+function formatResourceDisplayName(
+  ref: ResourceReference,
+  allResources: DblResourceData[],
+): string {
+  const shortName = referenceName(ref);
+  if (!hasStringId(ref)) return shortName;
+  const match = allResources.find((r) => r.dblEntryUid === ref.id);
+  if (!match) return shortName;
+  return `${match.fullName} (${match.displayName})`;
+}
+
+function toResourceReference(resource: DblResourceData): ResourceReference {
+  return { type: 'dblResource', name: resource.displayName, id: resource.dblEntryUid };
 }
 
 export function isShareLayoutActiveTab(value: string): value is ShareLayoutActiveTab {
@@ -140,12 +156,6 @@ export function ShareLayoutDialogContent({
     setOpenAddPickerTab(undefined);
   }, []);
 
-  const handleRemoveResource = useCallback((tab: TabKey, ref: ResourceReference) => {
-    const setResources =
-      tab === 'ScriptureResource' ? setScriptureResources : setCommentaryResources;
-    setResources((existing) => existing.filter((item) => referenceKey(item) !== referenceKey(ref)));
-  }, []);
-
   const handleToggleShownByDefault = useCallback(
     (tab: TabKey, ref: ResourceReference, checked: boolean) => {
       const setResources =
@@ -165,37 +175,26 @@ export function ShareLayoutDialogContent({
     onConfirm({ modelText, activeTab, scriptureResources, commentaryResources });
   }, [modelText, activeTab, scriptureResources, commentaryResources, onConfirm]);
 
-  const renderResourceList = (tab: TabKey, resources: ResourceReference[]) => {
-    const sorted = [...resources].sort(
-      (a, b) => Number(!!b.isResourceShownByDefault) - Number(!!a.isResourceShownByDefault),
-    );
-    return (
-      <div className="tw:flex tw:flex-col tw:gap-1">
-        {sorted.map((ref) => (
-          <div key={referenceKey(ref)} className="tw:flex tw:items-center tw:gap-2">
-            <Checkbox
-              checked={!!ref.isResourceShownByDefault}
-              onCheckedChange={(checked: boolean) => handleToggleShownByDefault(tab, ref, checked)}
-              aria-label={localizeString(strings, '%shareLayoutDialog_shownByDefault_label%')}
-            />
-            <span className="tw:flex-1">{referenceName(ref)}</span>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={localizeString(strings, '%shareLayoutDialog_removeResource_label%')}
-              onClick={() => handleRemoveResource(tab, ref)}
-            >
-              <Trash2 className="tw:h-4 tw:w-4" aria-hidden />
-            </Button>
-          </div>
-        ))}
+  const manageLabelKey: Record<TabKey, keyof ShareLayoutDialogLocalizedStrings> = {
+    ScriptureResource: '%shareLayoutDialog_manageScriptureResources_label%',
+    CommentaryResource: '%shareLayoutDialog_manageCommentaryResources_label%',
+  };
+
+  const renderResourceCard = (
+    tab: TabKey,
+    resources: ResourceReference[],
+    sectionLabelKey: keyof ShareLayoutDialogLocalizedStrings,
+  ) => (
+    <div className="tw:overflow-hidden tw:rounded-xl tw:border tw:bg-muted/30">
+      <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:border-b tw:border-border tw:px-4 tw:py-3">
+        <span className="tw:font-medium">{localizeString(strings, sectionLabelKey)}</span>
         <Popover
           open={openAddPickerTab === tab}
           onOpenChange={(open) => setOpenAddPickerTab(open ? tab : undefined)}
         >
           <PopoverTrigger asChild>
-            <Button variant="outline" size="sm">
-              {localizeString(strings, '%shareLayoutDialog_addResource_label%')}
+            <Button variant="outline" size="sm" className="tw:w-fit">
+              {localizeString(strings, manageLabelKey[tab])}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="tw:w-[32rem] tw:p-0">
@@ -219,12 +218,26 @@ export function ShareLayoutDialogContent({
           </PopoverContent>
         </Popover>
       </div>
-    );
-  };
+      <div className="tw:divide-y tw:divide-border">
+        {resources.map((ref) => (
+          <div key={referenceKey(ref)} className="tw:flex tw:items-center tw:gap-2 tw:px-4 tw:py-2">
+            <span className="tw:flex-1 tw:truncate">
+              {formatResourceDisplayName(ref, allResources)}
+            </span>
+            <Checkbox
+              checked={!!ref.isResourceShownByDefault}
+              onCheckedChange={(checked: boolean) => handleToggleShownByDefault(tab, ref, checked)}
+              aria-label={localizeString(strings, '%shareLayoutDialog_shownByDefault_label%')}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <>
-      <DialogHeader>
+      <DialogHeader className="tw:p-4 tw:pb-0">
         <DialogTitle>{localizeString(strings, '%shareLayoutDialog_title%')}</DialogTitle>
         <DialogDescription>
           {localizeString(strings, '%shareLayoutDialog_description%')}
@@ -232,77 +245,83 @@ export function ShareLayoutDialogContent({
       </DialogHeader>
 
       <div className="tw:flex tw:flex-col tw:gap-4 tw:overflow-y-auto tw:p-4">
-        <div className="tw:flex tw:items-center tw:justify-between">
-          <span>
-            {localizeString(strings, '%shareLayoutDialog_modelText_label%')}:{' '}
-            {modelText
-              ? referenceName(modelText)
-              : localizeString(strings, '%shareLayoutDialog_modelText_none%')}
-          </span>
-          <Popover open={isModelTextPickerOpen} onOpenChange={setIsModelTextPickerOpen}>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm">
-                {localizeString(strings, '%shareLayoutDialog_modelText_change%')}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="tw:w-[32rem] tw:p-0">
-              {/*
-                See the comment on the other ResourcePickerDialog usage above: wrap in its own
-                Dialog.Root so its internal DialogTitle gets a distinct id from the outer dialog's
-                title.
-              */}
-              <Dialog open modal={false}>
-                <ResourcePickerDialog
-                  allResources={allResources}
-                  isResourcesLoading={isResourcesLoading}
-                  resourceType="ScriptureResource"
-                  selectedResourceIds={modelText && hasStringId(modelText) ? [modelText.id] : []}
-                  localizedStrings={resourcePickerLocalizedStrings}
-                  onSelect={handleSelectModelText}
-                />
-              </Dialog>
-            </PopoverContent>
-          </Popover>
-        </div>
-
-        <div className="tw:flex tw:items-center tw:gap-2">
-          <span>{localizeString(strings, '%shareLayoutDialog_activeTab_label%')}:</span>
-          <Select
-            value={activeTab}
-            onValueChange={(value) => {
-              if (isShareLayoutActiveTab(value)) setActiveTab(value);
-            }}
-          >
-            <SelectTrigger className="tw:h-8 tw:min-w-0 tw:flex-1">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ScriptureResource">
-                {localizeString(strings, '%shareLayoutDialog_activeTab_scriptureResource%')}
-              </SelectItem>
-              <SelectItem value="CommentaryResource">
-                {localizeString(strings, '%shareLayoutDialog_activeTab_commentaryResource%')}
-              </SelectItem>
-              <SelectItem value="Comments">
-                {localizeString(strings, '%shareLayoutDialog_activeTab_comments%')}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div>
-          <div className="tw:mb-1 tw:font-medium">
-            {localizeString(strings, '%shareLayoutDialog_scriptureResources_label%')}
+        <div className="tw:divide-y tw:divide-border tw:overflow-hidden tw:rounded-xl tw:border tw:bg-muted/30">
+          <div className="tw:px-4 tw:py-3">
+            <Popover open={isModelTextPickerOpen} onOpenChange={setIsModelTextPickerOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="tw:w-full tw:justify-between tw:font-normal">
+                  <span className="tw:truncate">
+                    {modelText
+                      ? formatResourceDisplayName(modelText, allResources)
+                      : localizeString(strings, '%shareLayoutDialog_modelText_none%')}
+                  </span>
+                  <ChevronDown
+                    className="tw:size-4 tw:shrink-0 tw:text-muted-foreground"
+                    aria-hidden
+                  />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="tw:w-[32rem] tw:p-0">
+                {/*
+                  See the comment on the resource-card popovers below: wrap in its own Dialog.Root
+                  so its internal DialogTitle gets a distinct id from the outer dialog's title.
+                */}
+                <Dialog open modal={false}>
+                  <ResourcePickerDialog
+                    allResources={allResources}
+                    isResourcesLoading={isResourcesLoading}
+                    resourceType="ScriptureResource"
+                    selectedResourceIds={modelText && hasStringId(modelText) ? [modelText.id] : []}
+                    localizedStrings={resourcePickerLocalizedStrings}
+                    onSelect={handleSelectModelText}
+                  />
+                </Dialog>
+              </PopoverContent>
+            </Popover>
           </div>
-          {renderResourceList('ScriptureResource', scriptureResources)}
+
+          <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:px-4 tw:py-3">
+            <div className="tw:flex tw:flex-col">
+              <span>{localizeString(strings, '%shareLayoutDialog_activeTab_label%')}</span>
+              <span className="tw:text-xs tw:text-muted-foreground">
+                {localizeString(strings, '%shareLayoutDialog_activeTab_sublabel%')}
+              </span>
+            </div>
+            <Select
+              value={activeTab}
+              onValueChange={(value) => {
+                if (isShareLayoutActiveTab(value)) setActiveTab(value);
+              }}
+            >
+              <SelectTrigger className="tw:h-8">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ScriptureResource">
+                  {localizeString(strings, '%shareLayoutDialog_activeTab_scriptureResource%')}
+                </SelectItem>
+                <SelectItem value="CommentaryResource">
+                  {localizeString(strings, '%shareLayoutDialog_activeTab_commentaryResource%')}
+                </SelectItem>
+                <SelectItem value="Comments">
+                  {localizeString(strings, '%shareLayoutDialog_activeTab_comments%')}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
-        <div>
-          <div className="tw:mb-1 tw:font-medium">
-            {localizeString(strings, '%shareLayoutDialog_commentaryResources_label%')}
-          </div>
-          {renderResourceList('CommentaryResource', commentaryResources)}
-        </div>
+        {renderResourceCard(
+          'ScriptureResource',
+          scriptureResources,
+          '%shareLayoutDialog_scriptureResources_label%',
+        )}
+
+        {renderResourceCard(
+          'CommentaryResource',
+          commentaryResources,
+          '%shareLayoutDialog_commentaryResources_label%',
+        )}
       </div>
 
       <DialogFooter>

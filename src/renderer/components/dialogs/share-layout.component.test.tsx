@@ -85,25 +85,11 @@ describe('ShareLayoutDialogContent', () => {
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
-  it('removes a resource from the Bible Texts list when its remove button is clicked', () => {
-    const { onConfirm } = renderContent();
-
-    fireEvent.click(screen.getAllByLabelText('%shareLayoutDialog_removeResource_label%')[0]);
-    fireEvent.click(screen.getByText('%shareLayoutDialog_confirm_label%'));
-
-    const [result] = onConfirm.mock.calls[0];
-    expect(result.scriptureResources).not.toContainEqual(
-      expect.objectContaining({ id: 'esv-uid' }),
-    );
-    expect(result.scriptureResources).toContainEqual(expect.objectContaining({ id: 'niv-uid' }));
-  });
-
   it('toggles isResourceShownByDefault when the checkbox for a resource is toggled', () => {
     const { onConfirm } = renderContent();
 
-    // Resources are sorted with isResourceShownByDefault ones first, so ESV (shown by default) is
-    // index 0 and NIV (not shown by default) is index 1. NIV starts unchecked; toggling flips it to
-    // true.
+    // Rows render in array order (ESV, then NIV) — no sorting. NIV starts unchecked; toggling
+    // flips it to true.
     const [, nivCheckbox] = screen.getAllByRole('checkbox');
     fireEvent.click(nivCheckbox);
     fireEvent.click(screen.getByText('%shareLayoutDialog_confirm_label%'));
@@ -114,12 +100,14 @@ describe('ShareLayoutDialogContent', () => {
     );
   });
 
-  it('adds a resource to the Bible Texts list via the Add resource popover', () => {
+  it('adds a resource to the Bible Texts list via the manage popover', () => {
     const { onConfirm } = renderContent();
 
-    // The Bible Texts section is rendered first, so its "Add resource…" button is the first match.
-    const [addResourceButton] = screen.getAllByText('%shareLayoutDialog_addResource_label%');
-    fireEvent.click(addResourceButton);
+    // The Bible Texts card is rendered first, so its manage button is the first match.
+    const [manageButton] = screen.getAllByText(
+      '%shareLayoutDialog_manageScriptureResources_label%',
+    );
+    fireEvent.click(manageButton);
 
     // The popover's ResourcePickerDialog renders NLT (not yet selected) as a clickable row.
     fireEvent.click(screen.getByRole('button', { name: 'NLT' }));
@@ -131,11 +119,13 @@ describe('ShareLayoutDialogContent', () => {
     );
   });
 
-  it('does not render two elements with the same id when the Add resource popover is open', () => {
+  it('does not render two elements with the same id when the manage popover is open', () => {
     renderContent();
 
-    const [addResourceButton] = screen.getAllByText('%shareLayoutDialog_addResource_label%');
-    fireEvent.click(addResourceButton);
+    const [manageButton] = screen.getAllByText(
+      '%shareLayoutDialog_manageScriptureResources_label%',
+    );
+    fireEvent.click(manageButton);
 
     // Sanity-check the popover actually opened before asserting on ids.
     expect(screen.getByRole('button', { name: 'NLT' })).toBeInTheDocument();

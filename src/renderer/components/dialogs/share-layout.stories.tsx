@@ -12,20 +12,19 @@ const SHARE_LAYOUT_STRINGS: ShareLayoutDialogLocalizedStrings = {
   '%shareLayoutDialog_title%': 'Share Layout with Team',
   '%shareLayoutDialog_description%':
     "Review what you're about to share with your team before confirming.",
-  '%shareLayoutDialog_modelText_label%': 'Model text',
   '%shareLayoutDialog_modelText_none%': 'None selected',
-  '%shareLayoutDialog_modelText_change%': 'Change…',
-  '%shareLayoutDialog_activeTab_label%': 'Active tab (column 3)',
+  '%shareLayoutDialog_activeTab_label%': 'Default tab',
+  '%shareLayoutDialog_activeTab_sublabel%': 'For Third Column',
   '%shareLayoutDialog_activeTab_scriptureResource%': 'Bible Texts',
   '%shareLayoutDialog_activeTab_commentaryResource%': 'Commentaries',
   '%shareLayoutDialog_activeTab_comments%': 'Comments',
-  '%shareLayoutDialog_scriptureResources_label%': 'Bible Texts',
-  '%shareLayoutDialog_commentaryResources_label%': 'Commentaries',
+  '%shareLayoutDialog_scriptureResources_label%': 'Visible Bible Texts',
+  '%shareLayoutDialog_commentaryResources_label%': 'Visible Commentaries',
+  '%shareLayoutDialog_manageScriptureResources_label%': 'Manage Project Bible Texts',
+  '%shareLayoutDialog_manageCommentaryResources_label%': 'Manage Project Commentaries',
   '%shareLayoutDialog_shownByDefault_label%': 'Shown by default',
-  '%shareLayoutDialog_addResource_label%': 'Add resource…',
-  '%shareLayoutDialog_removeResource_label%': 'Remove',
   '%shareLayoutDialog_cancel_label%': 'Cancel',
-  '%shareLayoutDialog_confirm_label%': 'Share with team',
+  '%shareLayoutDialog_confirm_label%': 'Save',
 };
 
 const RESOURCE_PICKER_STRINGS: ResourcePickerDialogLocalizedStrings = {
