@@ -54,8 +54,8 @@ export interface ResourcePickerDialogProps {
   /** Localized strings — use RESOURCE_PICKER_DIALOG_STRING_KEYS with useLocalizedStrings */
   localizedStrings: ResourcePickerDialogLocalizedStrings;
   /**
-   * When true, clicking an "Already Selected" row calls `onSelect` just like any other row,
-   * letting the caller treat it as a deselect. Defaults to false (Already Selected rows stay
+   * When true, clicking an "Already Selected" row calls `onSelect` just like any other row, letting
+   * the caller treat it as a deselect. Defaults to false (Already Selected rows stay
    * non-interactive, showing only a checkmark) to preserve existing consumers' behavior.
    */
   allowDeselect?: boolean;

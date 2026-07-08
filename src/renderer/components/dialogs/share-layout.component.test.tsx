@@ -133,4 +133,49 @@ describe('ShareLayoutDialogContent', () => {
     const ids = Array.from(document.querySelectorAll('[id]')).map((el) => el.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
+
+  it('does not close the manage popover after selecting a resource', () => {
+    renderContent();
+
+    const [manageButton] = screen.getAllByText(
+      '%shareLayoutDialog_manageScriptureResources_label%',
+    );
+    fireEvent.click(manageButton);
+    fireEvent.click(screen.getByRole('button', { name: 'NLT' }));
+
+    // The picker (and the now-included NLT row within it) should still be in the document.
+    expect(screen.getByRole('button', { name: 'NLT' })).toBeInTheDocument();
+  });
+
+  it('removes an already-included resource when it is clicked again in the manage popover', () => {
+    const { onConfirm } = renderContent();
+
+    const [manageButton] = screen.getAllByText(
+      '%shareLayoutDialog_manageScriptureResources_label%',
+    );
+    fireEvent.click(manageButton);
+
+    // ESV is already included, so it renders as a clickable "Already Selected" row now that
+    // allowDeselect is on.
+    fireEvent.click(screen.getByRole('button', { name: 'ESV' }));
+    fireEvent.click(screen.getByText('%shareLayoutDialog_confirm_label%'));
+
+    const [result] = onConfirm.mock.calls[0];
+    expect(result.scriptureResources).not.toContainEqual(
+      expect.objectContaining({ id: 'esv-uid' }),
+    );
+  });
+
+  it('closes the manage popover when its close button is clicked', () => {
+    renderContent();
+
+    const [manageButton] = screen.getAllByText(
+      '%shareLayoutDialog_manageScriptureResources_label%',
+    );
+    fireEvent.click(manageButton);
+    expect(screen.getByRole('button', { name: 'NLT' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('%shareLayoutDialog_closePicker_label%'));
+    expect(screen.queryByRole('button', { name: 'NLT' })).not.toBeInTheDocument();
+  });
 });

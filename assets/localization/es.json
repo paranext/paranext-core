@@ -511,6 +511,7 @@
   "%shareLayoutDialog_activeTab_scriptureResource%": "Textos bíblicos",
   "%shareLayoutDialog_activeTab_sublabel%": "Para la tercera columna",
   "%shareLayoutDialog_cancel_label%": "Cancelar",
+  "%shareLayoutDialog_closePicker_label%": "Cerrar",
   "%shareLayoutDialog_commentaryResources_label%": "Comentarios bíblicos visibles",
   "%shareLayoutDialog_confirm_label%": "Guardar",
   "%shareLayoutDialog_description%": "Revise lo que está por compartir con su equipo antes de confirmar.",

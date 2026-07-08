@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from 'platform-bible-react';
 import type { ResourcePickerDialogLocalizedStrings } from 'platform-bible-react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, X } from 'lucide-react';
 
 export type ShareLayoutActiveTab = 'ScriptureResource' | 'CommentaryResource' | 'Comments';
 
@@ -46,6 +46,7 @@ export const SHARE_LAYOUT_DIALOG_STRING_KEYS = Object.freeze([
   '%shareLayoutDialog_manageCommentaryResources_label%',
   '%shareLayoutDialog_shownByDefault_label%',
   '%shareLayoutDialog_cancel_label%',
+  '%shareLayoutDialog_closePicker_label%',
   '%shareLayoutDialog_confirm_label%',
 ] as const);
 
@@ -145,15 +146,19 @@ export function ShareLayoutDialogContent({
     setIsModelTextPickerOpen(false);
   }, []);
 
-  const handleAddResource = useCallback((tab: TabKey, resource: DblResourceData) => {
+  const handleTogglePickedResource = useCallback((tab: TabKey, resource: DblResourceData) => {
     const newRef = toResourceReference(resource);
     const setResources =
       tab === 'ScriptureResource' ? setScriptureResources : setCommentaryResources;
-    setResources((existing) => [
-      ...existing.filter((item) => referenceKey(item) !== referenceKey(newRef)),
-      newRef,
-    ]);
-    setOpenAddPickerTab(undefined);
+    setResources((existing) => {
+      const isAlreadyIncluded = existing.some(
+        (item) => referenceKey(item) === referenceKey(newRef),
+      );
+      if (isAlreadyIncluded) {
+        return existing.filter((item) => referenceKey(item) !== referenceKey(newRef));
+      }
+      return [...existing, newRef];
+    });
   }, []);
 
   const handleToggleShownByDefault = useCallback(
@@ -198,23 +203,35 @@ export function ShareLayoutDialogContent({
             </Button>
           </PopoverTrigger>
           <PopoverContent className="tw:w-[32rem] tw:p-0">
-            {/*
-              ResourcePickerDialog renders its own DialogTitle internally but has no Dialog.Root of
-              its own by design (it's meant to be embedded in a host-provided Dialog context). Since
-              this popover is rendered inside the outer ShareLayoutDialogContent's Dialog.Root, wrap
-              it in its own isolated Dialog.Root here so its DialogTitle gets a distinct id from the
-              outer dialog's title instead of colliding with it.
-            */}
-            <Dialog open modal={false}>
-              <ResourcePickerDialog
-                allResources={allResources}
-                isResourcesLoading={isResourcesLoading}
-                resourceType={tab}
-                selectedResourceIds={resources.filter(hasStringId).map((r) => r.id)}
-                localizedStrings={resourcePickerLocalizedStrings}
-                onSelect={(resource) => handleAddResource(tab, resource)}
-              />
-            </Dialog>
+            <div className="tw:relative">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="tw:absolute tw:top-2 tw:right-2 tw:z-10"
+                onClick={() => setOpenAddPickerTab(undefined)}
+                aria-label={localizeString(strings, '%shareLayoutDialog_closePicker_label%')}
+              >
+                <X className="tw:size-4" aria-hidden />
+              </Button>
+              {/*
+                ResourcePickerDialog renders its own DialogTitle internally but has no Dialog.Root
+                of its own by design (it's meant to be embedded in a host-provided Dialog context).
+                Since this popover is rendered inside the outer ShareLayoutDialogContent's
+                Dialog.Root, wrap it in its own isolated Dialog.Root here so its DialogTitle gets a
+                distinct id from the outer dialog's title instead of colliding with it.
+              */}
+              <Dialog open modal={false}>
+                <ResourcePickerDialog
+                  allResources={allResources}
+                  isResourcesLoading={isResourcesLoading}
+                  resourceType={tab}
+                  selectedResourceIds={resources.filter(hasStringId).map((r) => r.id)}
+                  localizedStrings={resourcePickerLocalizedStrings}
+                  allowDeselect
+                  onSelect={(resource) => handleTogglePickedResource(tab, resource)}
+                />
+              </Dialog>
+            </div>
           </PopoverContent>
         </Popover>
       </div>
