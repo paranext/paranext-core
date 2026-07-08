@@ -23,6 +23,7 @@ const SHARE_LAYOUT_STRINGS: ShareLayoutDialogLocalizedStrings = {
   '%shareLayoutDialog_manageScriptureResources_label%': 'Manage Project Bible Texts',
   '%shareLayoutDialog_manageCommentaryResources_label%': 'Manage Project Commentaries',
   '%shareLayoutDialog_shownByDefault_label%': 'Shown by default',
+  '%shareLayoutDialog_closePicker_label%': 'Close',
   '%shareLayoutDialog_cancel_label%': 'Cancel',
   '%shareLayoutDialog_confirm_label%': 'Save',
 };
