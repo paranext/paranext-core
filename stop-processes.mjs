@@ -22,7 +22,13 @@ function killProcessesWithSearchTerm() {
   // Different platforms have different ways to get running process info
   let listCommand;
   if (process.platform === 'win32') {
-    listCommand = 'WMIC path win32_process get Commandline,Processid /format:csv';
+    // WMIC was removed in Windows 11 22H2+. Use PowerShell's Get-CimInstance instead.
+    // Output format matches WMIC's CSV so the parsing below (firstIndex/lastIndex) works unchanged:
+    //   node,<CommandLine>,<ProcessId>
+    listCommand =
+      'powershell -NoProfile -NonInteractive -Command "Write-Output \'Node,CommandLine,ProcessId\'; ' +
+      'Get-CimInstance Win32_Process | ForEach-Object { \'node,\' + ' +
+      '$(if ($_.CommandLine) { $_.CommandLine } else { \'\' }) + \',\' + $_.ProcessId }"';
   } else if (process.platform === 'darwin' || process.platform === 'linux') {
     listCommand = 'ps -A -o pid,command';
   } else {
