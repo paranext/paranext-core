@@ -120,13 +120,21 @@ global.webViewComponent = function CommentListWebView({
         // by the effect below once loading completes.
         trySelectThread(data.threadId, true);
       }
+
+      if (data.method === 'setFilters') {
+        logger.debug(`Comment list received setFilters message: ${serialize(data)}`);
+        // Merge onto DEFAULT (not current state) so a programmatic open shows exactly the requested
+        // view; unspecified axes reset to 'all'.
+        if (data.filters) setFilters({ ...DEFAULT_COMMENT_FILTERS, ...data.filters });
+        if (data.scopeFilter) setScopeFilter(data.scopeFilter);
+      }
     };
 
     window.addEventListener('message', messageListener);
     return () => {
       window.removeEventListener('message', messageListener);
     };
-  }, [trySelectThread]);
+  }, [trySelectThread, setFilters, setScopeFilter]);
 
   // Fetch current user's registration data on mount
   useEffect(() => {
