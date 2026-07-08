@@ -4,17 +4,19 @@
 // imports from `platform-bible-react` (circular), so we declare the narrow surface
 // the hook needs. It's externalized in `vite.config.ts`, so nothing here is bundled.
 //
-// Keep signatures in sync with `lib/papi-dts/papi.d.ts` MANUALLY. Unlike
-// text-connection-settings-pdp.shim.d.ts, this shim cannot be checked at compile time: loading it
-// alongside papi.d.ts would merge two ambient declarations of the same module (duplicate
-// identifiers), and these signatures are intentionally simplified versions of the real generics,
-// not exact copies.
+// These signatures are intentionally simplified versions of the real generics, not exact copies,
+// and this shim cannot be diffed against papi.d.ts at compile time (loading both would merge two
+// ambient declarations of the same module). Instead, the call shapes and return types the hook
+// relies on are pinned against the REAL papi hooks by the `PapiHookContractChecks` assertions in
+// extensions/src/platform-scripture/src/platform-bible-react-type-shim-sync.ts — if papi changes
+// these hooks incompatibly, that file fails to compile. Keep the simplified signatures here in
+// sync with `lib/papi-dts/papi.d.ts` when that happens.
 
 declare module '@papi/frontend/react' {
-  // Resolves via the tsconfig `paths` redirect to ./text-connection-settings-pdp.shim.d.ts — a
+  // Resolves via the tsconfig `paths` alias to ./text-connection-settings-pdp.shim.d.ts — a
   // relative import is not allowed inside an ambient module declaration (TS2439).
+  import type { ITextConnectionSettingsProjectDataProvider } from '@shims/text-connection-settings-pdp';
   import type { PlatformError } from 'platform-bible-utils';
-  import type { ITextConnectionSettingsProjectDataProvider } from 'platform-scripture';
 
   export const useProjectSetting: <T>(
     projectDataProviderSource: string | undefined,

@@ -3,5 +3,5 @@
   "compilerOptions": {
     "allowJs": true
   },
-  "include": [".eslintrc.cjs", "postcss.config.js", "*.ts", "src", "scripts"]
+  "include": [".eslintrc.cjs", "postcss.config.js", "*.ts", "src", "scripts", "__test-mocks__"]
 }

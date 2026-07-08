@@ -25,11 +25,11 @@
     "outDir": "",
     "paths": {
       "@/*": ["./src/*"],
-      // Redirect `platform-scripture` (an extension, not a real dep) to a narrow local shim of the
-      // one interface the experimental hook needs from it. The real declaration pulls in the papi
-      // type graph, which is circular here; the resource-reference DATA types live in
-      // platform-bible-utils and need no shim.
-      "platform-scripture": ["./src/types/text-connection-settings-pdp.shim.d.ts"]
+      // Virtual alias for the narrow project-data-provider shim, needed only because the ambient
+      // `@papi/frontend/react` declaration in experimental-papi-shim.d.ts cannot use a relative
+      // import (TS2439). Deliberately NOT named `platform-scripture`: this package must never
+      // resolve that extension's module, so real imports of it should fail loudly.
+      "@shims/text-connection-settings-pdp": ["./src/types/text-connection-settings-pdp.shim.d.ts"]
     }
   },
   "include": ["src"],

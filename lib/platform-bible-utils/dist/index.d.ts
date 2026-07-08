@@ -1794,14 +1794,14 @@ export declare function areUsjContentsEqualExceptWhitespace(a: Usj | undefined, 
  * `z...` custom marker as unconditionally valid.
  *
  * Because this returns every marker the document uses, the editor will not warn about any marker in
- * these panels — including genuine typos or bad data in the resource. That is an accepted trade-off:
- * the warning is a `logger.warn` diagnostic (warn-and-continue; rendering is identical whether or not
- * it fires), and these consumers are read-only resource viewers (`isReadonly: true`), not the
- * editable authoring editor — so typo-catching still works where authors actually edit. Do not narrow
- * this to an "extra-only" delta: that would require the editor's internal built-in marker lists, which
- * it deliberately doesn't export, forcing either a re-coupling to the editor package or a duplicated
- * list that drifts. Passing everything the document uses is the correct consequence of core not owning
- * the editor's marker definitions.
+ * these panels — including genuine typos or bad data in the resource. That is an accepted
+ * trade-off: the warning is a `logger.warn` diagnostic (warn-and-continue; rendering is identical
+ * whether or not it fires), and these consumers are read-only resource viewers (`isReadonly:
+ * true`), not the editable authoring editor — so typo-catching still works where authors actually
+ * edit. Do not narrow this to an "extra-only" delta: that would require the editor's internal
+ * built-in marker lists, which it deliberately doesn't export, forcing either a re-coupling to the
+ * editor package or a duplicated list that drifts. Passing everything the document uses is the
+ * correct consequence of core not owning the editor's marker definitions.
  *
  * @param usj The USJ document being displayed (e.g. the chapter USJ handed to the editor).
  * @returns The distinct non-`z` markers found anywhere in the document, in first-seen order. Empty
