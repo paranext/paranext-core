@@ -407,7 +407,7 @@ export type UseWebViewStateHook = <T>(
  *
  * Only used in WebView iframes. Please use `useScrollGroupScrRef` outside of WebViews.
  *
- * _＠returns_ `[scrRef, setScrRef, scrollGroupId, setScrollGroupId]`
+ * _＠returns_ `[scrRef, setScrRef, scrollGroupId, setScrollGroupId, sourceProjectId]`
  *
  * - `scrRef`: The current value for the Scripture reference this web view is on
  * - `setScrRef`: Function to use to update the Scripture reference this web view is on. If it is
@@ -415,11 +415,16 @@ export type UseWebViewStateHook = <T>(
  * - `scrollGroupId`: The current value for the scroll group this web view is synced with. If not
  *   synced to a scroll group, this is `undefined`
  * - `setScrollGroupId`: Function to use to update the scroll group with which this web view is synced
+ * - `sourceProjectId`: The id of the project that last set this web view's scroll group reference
+ *   (the source frame of `scrRef`); this web view's own project when not synced to a scroll group.
+ *   `undefined` when unknown. Useful for a web view that must follow whichever project is driving
+ *   the active Scripture reference
  *
  * _＠example_
  *
  * ```typescript
- * const [scrRef, setScrRef, scrollGroupId, setScrollGroupId] = useWebViewScrollGroupScrRef();
+ * const [scrRef, setScrRef, scrollGroupId, setScrollGroupId, sourceProjectId] =
+ *   useWebViewScrollGroupScrRef();
  * ```
  */
 export type UseWebViewScrollGroupScrRefHook = () => [
@@ -427,6 +432,7 @@ export type UseWebViewScrollGroupScrRefHook = () => [
   setScrRef: (newScrRef: SerializedVerseRef) => void,
   scrollGroupId: ScrollGroupId | undefined,
   setScrollGroupId: (newScrollGroupId: ScrollGroupId | undefined) => void,
+  sourceProjectId: string | undefined,
 ];
 
 // Note: the following comment uses ＠, not the actual @ character, to hackily provide @param and
