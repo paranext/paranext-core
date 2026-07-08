@@ -40,6 +40,12 @@ export type ViewOptionsTextEntry = {
    * the grid, but the row stays in the list and has no remove (hover-X) affordance.
    */
   isAdminLocked: boolean;
+  /**
+   * `true` only for genuine user-list entries — the only rows that show a remove (hover-X)
+   * affordance; `false` for every admin-owned row (top or bottom), which can be unchecked but never
+   * removed.
+   */
+  isUserRemovable: boolean;
 };
 
 /** An admin-owned entry: one Bible-text reference plus whether the admin currently flags it shown. */
@@ -158,6 +164,7 @@ export function getViewOptionsTexts(sources: TextCollectionSources): {
       reference: entry.reference,
       checked: isAdminEntryShown(overlay, entry),
       isAdminLocked: entry.adminFlagged,
+      isUserRemovable: false,
     };
     (entry.adminFlagged ? top : bottom).push(row);
   });
@@ -169,6 +176,7 @@ export function getViewOptionsTexts(sources: TextCollectionSources): {
       reference: item,
       checked: item.inTextCollectionUser === true,
       isAdminLocked: false,
+      isUserRemovable: true,
     });
   });
 
