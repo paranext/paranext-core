@@ -129,8 +129,7 @@ test.describe('UI Interaction', () => {
 
     // Wait for theme data provider to update the stylesheet.
     // Allow 10 s: on slow CI (Windows/Linux) the data provider can take
-    // longer than 5 s to propagate the change. This test failed all retries
-    // on two main-branch SHAs (cdb61fe6, 80130761) with a 5 s limit.
+    // longer than 5 s to propagate the change.
     await expect(async () => {
       const newThemeId = await getThemeId();
       expect(newThemeId).not.toBe(initialThemeId);
@@ -141,6 +140,7 @@ test.describe('UI Interaction', () => {
     const restoreButton = mainPage.getByTestId(`user-profile-appearance-${restoreTarget}`);
     await expect(restoreButton).toBeVisible({ timeout: 10_000 });
     await restoreButton.click();
+    // Same 10 s allowance as the flip wait above — identical propagation risk.
     await expect(async () => {
       const restoredThemeId = await getThemeId();
       expect(restoredThemeId).toBe(initialThemeId);
