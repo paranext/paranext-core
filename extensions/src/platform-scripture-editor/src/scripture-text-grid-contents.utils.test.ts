@@ -239,6 +239,7 @@ describe('getViewOptionsTexts', () => {
       section: 'top' as const,
       checked: true,
       isAdminLocked: true,
+      isUserRemovable: false,
     },
     {
       label: 'admin flagged true, overlay false → top, unchecked, locked',
@@ -250,6 +251,7 @@ describe('getViewOptionsTexts', () => {
       section: 'top' as const,
       checked: false,
       isAdminLocked: true,
+      isUserRemovable: false,
     },
     {
       label: 'admin flagged true, overlay absent → top, checked (fallback), locked',
@@ -261,6 +263,7 @@ describe('getViewOptionsTexts', () => {
       section: 'top' as const,
       checked: true,
       isAdminLocked: true,
+      isUserRemovable: false,
     },
     {
       label: 'flagged true only on modelTexts → top (proves union)',
@@ -273,9 +276,10 @@ describe('getViewOptionsTexts', () => {
       section: 'top' as const,
       checked: true,
       isAdminLocked: true,
+      isUserRemovable: false,
     },
     {
-      label: 'admin unflagged but overlay present → bottom (past-admin), not locked',
+      label: 'admin unflagged but overlay present → bottom (past-admin), not locked, not removable',
       sources: () =>
         makeSources({
           adminReferenced: list([project('a')]),
@@ -284,9 +288,10 @@ describe('getViewOptionsTexts', () => {
       section: 'bottom' as const,
       checked: true,
       isAdminLocked: false,
+      isUserRemovable: false,
     },
     {
-      label: 'admin flag false, no overlay → bottom, unchecked, not locked',
+      label: 'admin flag false, no overlay → bottom, unchecked, not locked, not removable',
       sources: () =>
         makeSources({
           adminReferenced: list([project('a', { isResourceShownByDefault: false })]),
@@ -295,9 +300,10 @@ describe('getViewOptionsTexts', () => {
       section: 'bottom' as const,
       checked: false,
       isAdminLocked: false,
+      isUserRemovable: false,
     },
     {
-      label: 'admin flag false, overlay true → bottom, checked, not locked',
+      label: 'admin flag false, overlay true → bottom, checked, not locked, not removable',
       sources: () =>
         makeSources({
           adminReferenced: list([project('a', { isResourceShownByDefault: false })]),
@@ -306,6 +312,7 @@ describe('getViewOptionsTexts', () => {
       section: 'bottom' as const,
       checked: true,
       isAdminLocked: false,
+      isUserRemovable: false,
     },
     {
       label: 'user entry inTextCollectionUser true → bottom, checked, removable',
@@ -314,6 +321,7 @@ describe('getViewOptionsTexts', () => {
       section: 'bottom' as const,
       checked: true,
       isAdminLocked: false,
+      isUserRemovable: true,
     },
     {
       label: 'user entry inTextCollectionUser false → bottom, unchecked, removable',
@@ -322,8 +330,9 @@ describe('getViewOptionsTexts', () => {
       section: 'bottom' as const,
       checked: false,
       isAdminLocked: false,
+      isUserRemovable: true,
     },
-  ])('$label', ({ sources, section, checked, isAdminLocked }) => {
+  ])('$label', ({ sources, section, checked, isAdminLocked, isUserRemovable }) => {
     const { top, bottom } = getViewOptionsTexts(sources());
     const entries = section === 'top' ? top : bottom;
     const other = section === 'top' ? bottom : top;
@@ -331,6 +340,7 @@ describe('getViewOptionsTexts', () => {
     expect(entries).toHaveLength(1);
     expect(entries[0].checked).toBe(checked);
     expect(entries[0].isAdminLocked).toBe(isAdminLocked);
+    expect(entries[0].isUserRemovable).toBe(isUserRemovable);
   });
 
   it('omits a resource that is in no list from both sections', () => {
