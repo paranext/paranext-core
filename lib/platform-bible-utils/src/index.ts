@@ -264,6 +264,7 @@ export { default as UsjReaderWriter } from './scripture/usj-reader-writer';
 export type {
   CommentStatus,
   CommentType,
+  ConflictResolutionOptions,
   LegacyComment,
   LegacyCommentThread,
 } from './comments.types';

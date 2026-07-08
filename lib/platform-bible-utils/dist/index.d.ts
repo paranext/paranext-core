@@ -5889,6 +5889,20 @@ export type CommentStatus = "Unspecified" | "Todo" | "Done" | "Resolved";
  */
 export type CommentType = "Normal" | "Conflict";
 /**
+ * The resolution actions the current user may take on a `verseText` conflict thread, as reported by
+ * the legacy comment data provider's `getConflictResolutionOptions`. Defined here so the comment
+ * data provider's type declaration and the conflict-note-card UI share a single source of truth.
+ *
+ * - `'none'`: no actions available — the thread is already resolved, is not a `verseText` conflict,
+ *   or the user lacks permission. UIs should hide the accept/reject controls entirely.
+ * - `'accept'`: the verse was edited after the merge (stale), so only "accept" (keep the current
+ *   text) is available; reject/merge are disabled.
+ * - `'acceptOrReject'`: accept and reject are available, but the two sides overlap and cannot be
+ *   auto-merged, so merge is not offered.
+ * - `'acceptRejectOrMerge'`: accept, reject, and merge are all available.
+ */
+export type ConflictResolutionOptions = "none" | "accept" | "acceptOrReject" | "acceptRejectOrMerge";
+/**
  * Represents a single comment/note in a scripture text
  *
  * This is the C# Comment type from Paratext.Data.ProjectComments

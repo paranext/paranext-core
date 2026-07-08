@@ -617,7 +617,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         CommentThread? existingThread = _commentManager.Value.FindThread(comment.Thread);
         if (existingThread == null)
-            throw new InvalidDataException($"Thread with id {comment.Thread} does not exist");
+            throw new InvalidDataException($"Thread with id {comment.Thread} does not exist.");
 
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
 
@@ -718,7 +718,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
             CommentThread? thread = _commentManager.Value.FindThread(threadId);
             if (thread == null)
-                throw new InvalidDataException($"Thread with id {threadId} does not exist");
+                throw new InvalidDataException($"Thread with id {threadId} does not exist.");
 
             // Reject writes the loser text, and merge writes the auto-merged (both-sides) text, over
             // the current verse; refuse both when the verse was edited after the merge (stale) so
@@ -727,6 +727,17 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             if ((resolution == "reject" || resolution == "merge") && IsConflictVerseStale(thread))
                 throw new InvalidOperationException(
                     $"Conflict thread '{threadId}' cannot be resolved with '{resolution}': the verse text has changed since the conflict was recorded. Only 'accept' (keep the current text) is available."
+                );
+
+            // Merge only works when PT9 can auto-merge the two sides (independent edits). For
+            // overlapping edits GetMergedUsfm returns null, and PT9's MergeAcceptedText would then
+            // splice that null into the chapter USFM (C# concatenates null as ""), silently erasing
+            // the whole verse. GetConflictResolutionOptions already withholds merge in this case;
+            // enforce the same invariant here so a caller that skips the capability query can't
+            // trigger the data loss.
+            if (resolution == "merge" && CommentEditHelper.GetMergedUsfm(thread) == null)
+                throw new InvalidOperationException(
+                    $"Conflict thread '{threadId}' cannot be resolved with 'merge': the two sides have overlapping edits that cannot be auto-merged. Use 'accept' or 'reject'."
                 );
 
             // Reuse PT9's orchestration (grant edit -> splice loser USFM -> resolve -> restore) via SaveEdits.
@@ -779,7 +790,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     {
         CommentThread? thread = _commentManager.Value.FindThread(threadId);
         if (thread == null)
-            throw new InvalidDataException($"Thread with id {threadId} does not exist");
+            throw new InvalidDataException($"Thread with id {threadId} does not exist.");
 
         // v1 resolves verseText conflicts only.
         Comment firstComment = thread.Comments[0];
@@ -804,13 +815,24 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // Permission: run the base resolve check, then restrict resolving to a project administrator
         // or the user (or team) the conflict is assigned to.
         VerifyUserCanResolveThread(threadId);
-        if (
-            !IsUserProjectAdministrator()
-            && !IsThreadAssignedToCurrentUser(thread, scrText.User.Name)
-        )
-            throw new InvalidOperationException(
-                $"User '{scrText.User.Name}' cannot resolve conflict thread '{threadId}' - only a project administrator or the assigned user may resolve it."
-            );
+        if (!IsUserProjectAdministrator())
+        {
+            if (!IsThreadAssignedToUser(thread, scrText.User.Name))
+                throw new InvalidOperationException(
+                    $"User '{scrText.User.Name}' cannot resolve conflict thread '{threadId}' - only a project administrator or the assigned user may resolve it."
+                );
+
+            // A non-admin resolver must also have edit rights on the conflict verse's chapter.
+            // Resolving (reject/merge) writes the verse; PT9's CommentHtmlBuilder.GetResolutionOptions
+            // gates the resolve controls on CanEdit(book, chapter) for the same reason. Without this,
+            // SaveEdits' EnsureCanEditChapter would temporarily grant the edit and let a user write to
+            // a chapter they are not permitted to edit.
+            VerseRef vref = thread.VerseRef;
+            if (!scrText.Permissions.CanEdit(vref.BookNum, vref.ChapterNum))
+                throw new InvalidOperationException(
+                    $"User '{scrText.User.Name}' cannot resolve conflict thread '{threadId}' - they do not have permission to edit {vref.Book} {vref.ChapterNum}."
+                );
+        }
     }
 
     /// <summary>
@@ -882,7 +904,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// either the thread is assigned to that user, or it is assigned to the whole team
     /// (<see cref="CommentThread.teamUser"/>), which counts every team member as an assignee.
     /// </summary>
-    private static bool IsThreadAssignedToCurrentUser(CommentThread thread, string userName)
+    private static bool IsThreadAssignedToUser(CommentThread thread, string userName)
     {
         // Scan comments newest-first for the effective assignment. We don't defer to
         // CommentThread.AssignedUser because its no-assignment fallback ("(Reviewed)"/unassigned)
