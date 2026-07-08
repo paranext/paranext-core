@@ -259,6 +259,39 @@ export class GraphemeString {
   }
 
   /**
+   * Split into an array of GraphemeStrings on `separator` (string or RegExp). An empty-string
+   * separator splits into individual graphemes. `splitLimit` caps the number of returned pieces.
+   */
+  split(separator: string | RegExp, splitLimit?: number): GraphemeString[] {
+    if (splitLimit !== undefined && splitLimit <= 0) return [this];
+
+    if (separator === '') {
+      const arr = splitLimit === undefined ? this.graphemes : this.graphemes.slice(0, splitLimit);
+      return arr.map((g) => new GraphemeString(g, [g]));
+    }
+
+    let regexSeparator = separator;
+    if (typeof separator === 'string' || !separator.flags.includes('g')) {
+      regexSeparator = new RegExp(separator, 'g');
+    }
+    const matches = this.str.match(regexSeparator);
+    if (!matches) return [this];
+
+    const result: GraphemeString[] = [];
+    let current = 0;
+    const limit = splitLimit ? splitLimit - 1 : matches.length;
+    for (let i = 0; i < limit; i++) {
+      const matchIndex = this.indexOf(matches[i], current);
+      if (matchIndex < 0) break;
+      result.push(this.substring(current, matchIndex));
+      current = matchIndex + stringzToArray(matches[i]).length;
+      if (splitLimit !== undefined && result.length === splitLimit) break;
+    }
+    result.push(this.substring(current));
+    return result;
+  }
+
+  /**
    * Resolve a range index: negative counts from the end, then clamp into `[0, length]`. Never
    * wraps. `length` (one past the last grapheme) is a valid result meaning "the end".
    */

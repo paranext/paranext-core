@@ -213,6 +213,36 @@ describe('ordinalCompare', () => {
   it('equal', () => expect(unicorn.ordinalCompare(unicorn.string)).toBe(0));
 });
 
+describe('split', () => {
+  const short = new GraphemeString('Look𐐷At👨‍👩‍👧‍👦👮🏽‍♀️');
+  const medium = new GraphemeString(MEDIUM);
+  const SHORT_ARRAY2 = ['L', 'o', 'o', 'k', '𐐷', 'A', 't', '👨‍👩‍👧‍👦', '👮🏽‍♀️'];
+  const strs = (parts: GraphemeString[]) => parts.map((p) => p.string);
+
+  it('by string separator', () =>
+    expect(strs(medium.split('𐐷'))).toEqual(['Look', 'At🦄This', 'Thing👮🏽‍♀️Its', 'Awesome']));
+  it('with splitLimit', () =>
+    expect(strs(medium.split('𐐷', 2))).toEqual(['Look', 'At🦄This𐐷Thing👮🏽‍♀️Its𐐷Awesome']));
+  it('by empty string yields graphemes', () => expect(strs(short.split(''))).toEqual(SHORT_ARRAY2));
+  it('by empty string with limit', () => expect(strs(short.split('', 3))).toEqual(['L', 'o', 'o']));
+  it('by regex', () =>
+    expect(strs(medium.split(/[A-Z]/))).toEqual([
+      '',
+      'ook𐐷',
+      't🦄',
+      'his𐐷',
+      'hing👮🏽‍♀️',
+      'ts𐐷',
+      'wesome',
+    ]));
+  it('by regex with surrogate pair', () =>
+    expect(strs(medium.split(/🦄/))).toEqual(['Look𐐷At', 'This𐐷Thing👮🏽‍♀️Its𐐷Awesome']));
+  it('regex that matches nothing returns the whole string', () =>
+    expect(strs(medium.split(/\d/))).toEqual([MEDIUM]));
+  it('returns GraphemeString instances', () =>
+    expect(medium.split('𐐷')[0]).toBeInstanceOf(GraphemeString));
+});
+
 describe('candidate B parity with candidate A', () => {
   const long = new GraphemeString(LONG);
   const cases: Array<[string, number | undefined]> = [
