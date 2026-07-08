@@ -2478,6 +2478,16 @@ namespace TestParanextDataProvider.Projects
                 public override bool AmAdministrator => false;
 
                 public override bool HaveRoleNotObserver => true;
+
+                // This non-admin team member has edit rights on the conflict's chapter, so the
+                // resolve-conflict chapter-edit gate passes and the outcome turns purely on the
+                // admin-or-assignee decision.
+                public override bool CanEdit(
+                    int bookNum,
+                    int chapterNum = 0,
+                    string userName = null,
+                    PermissionSet permissionSet = PermissionSet.Merged
+                ) => true;
             }
         }
 
@@ -2504,6 +2514,30 @@ namespace TestParanextDataProvider.Projects
             }
         }
 
+        // Like NonAdminDummyScrText (non-admin, non-observer team member) but WITHOUT edit rights on
+        // any chapter. Isolates the resolve-conflict chapter-edit gate: VerifyUserCanResolveThread and
+        // the admin-or-assignee check both pass, but CanEdit(book, chapter) is false.
+        private sealed class NoChapterEditDummyScrText : DummyScrText
+        {
+            private readonly PermissionManager _permissions = new NoChapterEditPermissionManager();
+
+            public override PermissionManager Permissions => _permissions;
+
+            private sealed class NoChapterEditPermissionManager : PermissionManager
+            {
+                public override bool AmAdministrator => false;
+
+                public override bool HaveRoleNotObserver => true;
+
+                public override bool CanEdit(
+                    int bookNum,
+                    int chapterNum = 0,
+                    string userName = null,
+                    PermissionSet permissionSet = PermissionSet.Merged
+                ) => false;
+            }
+        }
+
         // Mirrors SeedVerseTextConflict() but seeds the conflict on a caller-supplied project (the
         // non-admin fixture), optionally pre-assigning the conflict note to a user. Returns the
         // freshly built thread.
@@ -2514,6 +2548,22 @@ namespace TestParanextDataProvider.Projects
             Comment conflict = CommentTestHelper.CreateVerseTextConflictComment();
             if (assignedUser != null)
                 conflict.AssignedUser = assignedUser;
+            mgr.AddComment(conflict);
+            mgr.SaveUser(conflict.User, false);
+            return mgr.FindThread(conflict.Thread);
+        }
+
+        // Seeds a verseText conflict WITHOUT writing the verse (no PutText), so it works on a fixture
+        // whose user lacks chapter-edit permission (PutText would throw). The verse content is
+        // irrelevant to the permission-gate tests: the chapter-edit gate throws before any verse read.
+        private static CommentThread SeedConflictWithoutVerseWrite(
+            ScrText scrText,
+            string assignedUser
+        )
+        {
+            var mgr = CommentManager.Get(scrText);
+            Comment conflict = CommentTestHelper.CreateVerseTextConflictComment();
+            conflict.AssignedUser = assignedUser;
             mgr.AddComment(conflict);
             mgr.SaveUser(conflict.User, false);
             return mgr.FindThread(conflict.Thread);
@@ -2614,10 +2664,10 @@ namespace TestParanextDataProvider.Projects
         [Test]
         public void ResolveConflict_NonAdminAssignedUser_RejectWritesLoserAndResolves()
         {
-            // Non-admin to whom the conflict is assigned -> allowed by the admin-or-assignee gate.
-            // Uses "reject" (the primary resolution flow) so this exercises SaveEdits' chapter-edit path
-            // (EnsureCanEditChapter grant/restore + loser-USFM splice) under the non-admin
-            // PermissionManager fixture, not just the no-write accept path.
+            // Non-admin assignee WITH edit rights on the chapter -> allowed by the admin-or-assignee
+            // gate and the chapter-edit gate. Uses "reject" (the primary resolution flow) so this
+            // exercises SaveEdits' verse write (loser-USFM splice) under the non-admin PermissionManager
+            // fixture, not just the no-write accept path.
             using var nonAdmin = new NonAdminDummyScrText();
             var details = CreateProjectDetails(nonAdmin);
             ParatextProjects.FakeAddProject(details, nonAdmin);
@@ -2672,9 +2722,59 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
+        public void ResolveConflict_NonAdminAssignedButNoChapterEdit_Denied()
+        {
+            // A non-admin assignee WITHOUT edit rights on the conflict's chapter must be denied:
+            // resolving would write a chapter they cannot edit. "accept" isolates the gate (it writes
+            // nothing), so the test turns purely on the permission decision.
+            using var nonAdmin = new NoChapterEditDummyScrText();
+            var details = CreateProjectDetails(nonAdmin);
+            ParatextProjects.FakeAddProject(details, nonAdmin);
+            var provider = new DummyParatextProjectDataProvider(
+                PdpName + "-no-chapter-edit",
+                Client,
+                details,
+                ParatextProjects
+            );
+
+            CommentThread thread = SeedConflictWithoutVerseWrite(nonAdmin, nonAdmin.User.Name);
+
+            Assert.That(
+                () => provider.ResolveConflict(thread.Id, "accept"),
+                Throws
+                    .TypeOf<InvalidOperationException>()
+                    .With.Message.Contains("permission to edit")
+            );
+            // The conflict was not resolved.
+            Assert.That(
+                CommentManager.Get(nonAdmin).FindThread(thread.Id).Status,
+                Is.Not.EqualTo(NoteStatus.Resolved)
+            );
+        }
+
+        [Test]
+        public void GetConflictResolutionOptions_NonAdminNoChapterEdit_None()
+        {
+            // The capability query mirrors the enforcement gate: no chapter-edit rights -> no options.
+            using var nonAdmin = new NoChapterEditDummyScrText();
+            var details = CreateProjectDetails(nonAdmin);
+            ParatextProjects.FakeAddProject(details, nonAdmin);
+            var provider = new DummyParatextProjectDataProvider(
+                PdpName + "-no-chapter-edit-options",
+                Client,
+                details,
+                ParatextProjects
+            );
+
+            CommentThread thread = SeedConflictWithoutVerseWrite(nonAdmin, nonAdmin.User.Name);
+
+            Assert.That(provider.GetConflictResolutionOptions(thread.Id), Is.EqualTo("none"));
+        }
+
+        [Test]
         public void ResolveConflict_NonAdminMostRecentAssignmentToOther_Denied()
         {
-            // The gate keys off the MOST RECENT assignment (IsThreadAssignedToCurrentUser scans
+            // The gate keys off the MOST RECENT assignment (IsThreadAssignedToUser scans
             // comments last-to-first for the first non-null AssignedUser). Seed a conflict whose FIRST
             // comment is assigned to the current (non-admin) user but whose LATER comment reassigns it
             // to someone else. If the gate honored the earlier match it would wrongly allow; the
@@ -2972,12 +3072,42 @@ namespace TestParanextDataProvider.Projects
         public void ResolveConflict_MergeWhenStale_Throws()
         {
             CommentThread thread = SeedIndependentVerseTextConflict(_scrText);
-            _scrText.PutText(40, 0, false, "\\id MAT\n\\c 2\n\\v 1 Edited after the merge.\n", null); // make stale
+            _scrText.PutText(
+                40,
+                0,
+                false,
+                "\\id MAT\n\\c 2\n\\v 1 Edited after the merge.\n",
+                null
+            ); // make stale
 
             Assert.That(
                 () => _provider.ResolveConflict(thread.Id, "merge"),
-                Throws.TypeOf<InvalidOperationException>().With.Message.Contains("changed since the conflict")
+                Throws
+                    .TypeOf<InvalidOperationException>()
+                    .With.Message.Contains("changed since the conflict")
             );
+        }
+
+        [Test]
+        public void ResolveConflict_MergeOnOverlappingConflict_ThrowsAndLeavesVerseIntact()
+        {
+            // Overlapping edits: GetMergedUsfm returns null, so merge is NOT offered
+            // (GetConflictResolutionOptions -> "acceptOrReject"). ResolveConflict must refuse "merge"
+            // rather than let PT9's MergeAcceptedText splice the null and erase the verse.
+            string expectedWinner = ExpectedWinnerVerseText();
+            CommentThread thread = SeedVerseTextConflict();
+
+            Assert.That(
+                () => _provider.ResolveConflict(thread.Id, "merge"),
+                Throws.TypeOf<InvalidOperationException>().With.Message.Contains("overlapping")
+            );
+            // merge is refused before any verse write, so the chapter text is byte-for-byte the seeded
+            // winner - the verse is not erased. GetText is read only here, after the resolve attempt,
+            // to avoid the mid-sequence CommentManager desync the sibling tests document.
+            var vref = new VerseRef("MAT", "2", "1", _scrText.Settings.Versification);
+            string after = _scrText.GetText(vref, true, true);
+            Assert.That(after, Is.EqualTo(expectedWinner));
+            Assert.That(after, Does.Contain("big village"));
         }
 
         #endregion

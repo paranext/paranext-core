@@ -114,14 +114,11 @@ declare module 'legacy-comment-manager' {
   // #region Selector Types
 
   /**
-   * The resolution actions the current user may take on a conflict thread. Must stay textually
-   * identical to the union declared in platform-bible-react's conflict-note-card.types.ts.
+   * Re-exported from platform-bible-utils so this data provider's type declaration and
+   * platform-bible-react's conflict-note-card UI share a single definition rather than hand-synced
+   * copies (see the docs on the source type for the per-value meaning).
    */
-  export type ConflictResolutionOptions =
-    | 'none'
-    | 'accept'
-    | 'acceptOrReject'
-    | 'acceptRejectOrMerge';
+  export type ConflictResolutionOptions = import('platform-bible-utils').ConflictResolutionOptions;
 
   /**
    * Selector for retrieving comment threads
