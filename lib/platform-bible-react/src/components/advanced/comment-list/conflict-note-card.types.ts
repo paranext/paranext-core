@@ -62,6 +62,13 @@ export const CONFLICT_NOTE_STRING_KEYS: LocalizeKey[] = [
   // the neutral outcome line derived from conflictResolutionAction.
   '%conflict_note_outcome_used_other%',
   '%conflict_note_outcome_combined%',
+  // Consumed by ConflictThreadSummary (the collapsed conflict-thread preview): a status-aware
+  // one-liner shown instead of the raw PT9 note body. Unresolved shows the prompt plus the diff;
+  // resolved shows only the outcome sentence keyed off resolvedResolution.
+  '%conflict_note_summary_unresolved%',
+  '%conflict_note_summary_resolved_kept_current%',
+  '%conflict_note_summary_resolved_used_other%',
+  '%conflict_note_summary_resolved_combined%',
 ];
 
 /** Props for the ConflictNoteCard component */
