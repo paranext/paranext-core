@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CommentFilters, ScopeFilter } from './comment-list-filters.model';
 import {
+  applyFilterOverrides,
   buildCommentThreadSelector,
   DEFAULT_COMMENT_FILTERS,
   isTypeFilter,
@@ -59,6 +60,39 @@ describe('buildCommentThreadSelector', () => {
         end: { book: 'GEN', chapterNum: 1, verseNum: 1 },
       },
     ]);
+  });
+});
+
+describe('applyFilterOverrides', () => {
+  it('returns the defaults when given no overrides', () => {
+    expect(applyFilterOverrides()).toEqual(DEFAULT_COMMENT_FILTERS);
+    expect(applyFilterOverrides(undefined)).toEqual(DEFAULT_COMMENT_FILTERS);
+    expect(applyFilterOverrides({})).toEqual(DEFAULT_COMMENT_FILTERS);
+  });
+
+  it('applies the given axes over the defaults', () => {
+    expect(applyFilterOverrides({ type: 'conflicts', resolved: 'unresolved' })).toEqual({
+      resolved: 'unresolved',
+      read: 'all',
+      type: 'conflicts',
+      assignment: 'all',
+    });
+  });
+
+  it('resets unspecified axes to "all" rather than merging with a prior selection', () => {
+    // The whole point: overrides are applied onto DEFAULT, not onto the caller's current filters,
+    // so a programmatic open shows exactly the requested view.
+    expect(applyFilterOverrides({ read: 'unread' })).toEqual({
+      resolved: 'all',
+      read: 'unread',
+      type: 'all',
+      assignment: 'all',
+    });
+  });
+
+  it('does not mutate DEFAULT_COMMENT_FILTERS', () => {
+    applyFilterOverrides({ type: 'conflicts' });
+    expect(DEFAULT_COMMENT_FILTERS.type).toBe('all');
   });
 });
 

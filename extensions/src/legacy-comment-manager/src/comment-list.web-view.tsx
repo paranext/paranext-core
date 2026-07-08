@@ -18,9 +18,9 @@ import type { LegacyCommentThreadSelector } from 'legacy-comment-manager';
 import { CommentListWebViewMessage } from './comment-list-messages.model';
 import { CommentListPanel, COMMENT_LIST_PANEL_EXTRA_STRING_KEYS } from './comment-list.component';
 import {
+  applyFilterOverrides,
   buildCommentThreadSelector,
   CommentFilters,
-  DEFAULT_COMMENT_FILTERS,
   ScopeFilter,
   UNFILTERED,
 } from './comment-list-filters.model';
@@ -76,8 +76,23 @@ global.webViewComponent = function CommentListWebView({
     undefined,
   );
 
-  const [filters, setFilters] = useState<CommentFilters>(DEFAULT_COMMENT_FILTERS);
-  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(UNFILTERED);
+  // Initial filter/scope axes passed by openCommentList when opening a NEW comment list (e.g. the
+  // S/R conflict link). Read from web view state so a new view mounts already-filtered — avoiding the
+  // race where a setFilters message could arrive before this view's message listener attaches. An
+  // already-open (reused) view keeps its state and is updated via the setFilters message instead.
+  const [initialFilters] = useWebViewState<Partial<CommentFilters> | undefined>(
+    'initialFilters',
+    undefined,
+  );
+  const [initialScopeFilter] = useWebViewState<ScopeFilter | undefined>(
+    'initialScopeFilter',
+    undefined,
+  );
+
+  const [filters, setFilters] = useState<CommentFilters>(() =>
+    applyFilterOverrides(initialFilters),
+  );
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(initialScopeFilter ?? UNFILTERED);
 
   const commentsPdp = useProjectDataProvider('legacyCommentManager.comments', projectId);
 
@@ -125,7 +140,7 @@ global.webViewComponent = function CommentListWebView({
         logger.debug(`Comment list received setFilters message: ${serialize(data)}`);
         // Merge onto DEFAULT (not current state) so a programmatic open shows exactly the requested
         // view; unspecified axes reset to 'all'.
-        if (data.filters) setFilters({ ...DEFAULT_COMMENT_FILTERS, ...data.filters });
+        if (data.filters) setFilters(applyFilterOverrides(data.filters));
         if (data.scopeFilter) setScopeFilter(data.scopeFilter);
       }
     };
