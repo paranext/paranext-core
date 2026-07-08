@@ -63,7 +63,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Go to the previous chapter in the active scroll group',
     category: 'Navigation',
     context: 'Main process (global)',
-    keys: { macOS: '⌃F8', windows: 'Ctrl+F8', linux: 'Ctrl+F8' },
+    keys: { macOS: '⌘F8', windows: 'Ctrl+F8', linux: 'Ctrl+F8' },
     locations: ['src/main/main.ts', 'src/main/verse-navigation-shortcuts.util.ts'],
   },
   {
@@ -79,7 +79,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Go to the previous book in the active scroll group',
     category: 'Navigation',
     context: 'Main process (global)',
-    keys: { macOS: '⌃F9', windows: 'Ctrl+F9', linux: 'Ctrl+F9' },
+    keys: { macOS: '⌘F9', windows: 'Ctrl+F9', linux: 'Ctrl+F9' },
     locations: ['src/main/main.ts', 'src/main/verse-navigation-shortcuts.util.ts'],
   },
   {
@@ -87,7 +87,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Go to the next verse in the active scroll group',
     category: 'Navigation',
     context: 'Main process (global)',
-    keys: { macOS: '⌃↓', windows: 'Ctrl+Down', linux: 'Ctrl+Down' },
+    keys: { macOS: '⌘↓', windows: 'Ctrl+↓', linux: 'Ctrl+↓' },
     locations: ['src/main/main.ts', 'src/main/verse-navigation-shortcuts.util.ts'],
   },
   {
@@ -95,7 +95,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Go to the previous verse in the active scroll group',
     category: 'Navigation',
     context: 'Main process (global)',
-    keys: { macOS: '⌃↑', windows: 'Ctrl+Up', linux: 'Ctrl+Up' },
+    keys: { macOS: '⌘↑', windows: 'Ctrl+↑', linux: 'Ctrl+↑' },
     locations: ['src/main/main.ts', 'src/main/verse-navigation-shortcuts.util.ts'],
   },
   {
@@ -103,7 +103,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Open the Book Chapter Control ready to type a reference',
     category: 'Navigation',
     context: 'Main process (global)',
-    keys: { macOS: '⌃B', windows: 'Ctrl+B', linux: 'Ctrl+B' },
+    keys: { macOS: '⌘B', windows: 'Ctrl+B', linux: 'Ctrl+B' },
     locations: ['src/main/main.ts', 'src/main/verse-navigation-shortcuts.util.ts'],
   },
   {

@@ -3,9 +3,6 @@ import { BoxData, PanelData } from 'rc-dock';
 import { SavedTabInfo } from '@shared/models/docking-framework.model';
 import { simpleLayout } from './simple-layout.data';
 
-vi.mock('@renderer/components/web-view.component', () => ({
-  TAB_TYPE_WEBVIEW: 'webView',
-}));
 vi.mock('../../../shared/services/logger.service');
 
 describe('simple-layout.data', () => {

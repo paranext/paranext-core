@@ -26,7 +26,7 @@ import {
 import {
   BOOKS_PRESENT_DEFAULT,
   getBookIdsFromBooksPresent,
-} from '@renderer/utils/books-present.util';
+} from 'platform-bible-utils/experimental';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import { sendCommand } from '@shared/services/command.service';
 import { getNetworkEvent } from '@shared/services/network.service';

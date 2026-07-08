@@ -41,5 +41,6 @@ export {
   getNextBookRef,
   getPreviousVerseRef,
   getNextVerseRef,
+  type ScriptureBounds,
 } from './components/advanced/book-chapter-control/book-chapter-control.navigation';
 export { ALL_BOOK_IDS } from './components/shared/book.utils';

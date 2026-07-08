@@ -184,6 +184,29 @@ export const getChaptersForBook = (bookNum: number): number => {
 };
 
 /**
+ * Default `platformScripture.booksPresent` project setting value to use while loading or on error:
+ * no books present
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export const BOOKS_PRESENT_DEFAULT = '';
+
+/**
+ * Converts a `platformScripture.booksPresent` flag string ('1' per present book, indexed by
+ * canonical book number) into the list of present book ids
+ *
+ * @param booksPresent The `platformScripture.booksPresent` project setting value
+ * @returns The three-letter ids of the books flagged as present, in canonical order
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export function getBookIdsFromBooksPresent(booksPresent: string): string[] {
+  return Array.from(booksPresent).reduce((ids: string[], char, index) => {
+    if (char === '1') ids.push(Canon.bookNumberToId(index + 1));
+    return ids;
+  }, []);
+}
+
+/**
  * Adjusts the book of a Scripture reference by a specified offset.
  *
  * @param scrRef The Scripture reference whose book is to be adjusted.
@@ -191,7 +214,9 @@ export const getChaptersForBook = (bookNum: number): number => {
  *   negative values move backward.
  * @returns A new Scripture reference with the adjusted book. The chapter and verse numbers are
  *   reset to 1. If the resulting book number exceeds the bounds of available books, it is clamped
- *   to the nearest valid book.
+ *   to the nearest valid book. For books-present-aware stepping that rolls across chapter/book
+ *   boundaries (Paratext 9 style), see the `get*Ref` navigation functions in
+ *   `platform-bible-react/experimental`.
  */
 export const offsetBook = (scrRef: SerializedVerseRef, offset: number): SerializedVerseRef => ({
   book: Canon.bookNumberToId(
@@ -211,7 +236,9 @@ export const offsetBook = (scrRef: SerializedVerseRef, offset: number): Serializ
  * @param offset The number of chapters to offset the current chapter by. Positive values move
  *   forward, negative values move backward.
  * @returns A new Scripture reference with the adjusted chapter. The verse number is reset to 1. The
- *   chapter number is clamped to stay within valid bounds for the book.
+ *   chapter number is clamped to stay within valid bounds for the book. For books-present-aware
+ *   stepping that rolls across chapter/book boundaries (Paratext 9 style), see the `get*Ref`
+ *   navigation functions in `platform-bible-react/experimental`.
  */
 export const offsetChapter = (scrRef: SerializedVerseRef, offset: number): SerializedVerseRef => ({
   ...scrRef,
@@ -229,7 +256,9 @@ export const offsetChapter = (scrRef: SerializedVerseRef, offset: number): Seria
  * @param offset The number of verses to offset the current verse by. Positive values move forward,
  *   negative values move backward.
  * @returns A new Scripture reference with the adjusted verse. The verse number is clamped to stay
- *   within valid bounds for the chapter.
+ *   within valid bounds for the chapter. For books-present-aware stepping that rolls across
+ *   chapter/book boundaries (Paratext 9 style), see the `get*Ref` navigation functions in
+ *   `platform-bible-react/experimental`.
  */
 export const offsetVerse = (scrRef: SerializedVerseRef, offset: number): SerializedVerseRef => ({
   ...scrRef,

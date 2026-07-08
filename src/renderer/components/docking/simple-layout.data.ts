@@ -1,6 +1,5 @@
-import { SavedTabInfo } from '@shared/models/docking-framework.model';
+import { SavedTabInfo, TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
 import { LayoutBase } from 'rc-dock';
-import { TAB_TYPE_WEBVIEW } from '@renderer/components/web-view.component';
 
 // Using `as` here simplifies type changes.
 /* eslint-disable no-type-assertion/no-type-assertion */

@@ -3188,6 +3188,8 @@ declare module 'shared/models/docking-framework.model' {
     /** Data needed to load the tab */
     data?: unknown;
   };
+  /** {@link SavedTabInfo.tabType} for web view tabs. A web view tab's id matches its `WebViewId` */
+  export const TAB_TYPE_WEBVIEW = 'webView';
   /**
    * Information that Platform.Bible uses to create a tab in the dock layout.
    *

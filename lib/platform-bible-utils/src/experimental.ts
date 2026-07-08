@@ -8,4 +8,8 @@
 // Stable exports live in `./index.ts`. The two entry points are maintained
 // as separate, independent API surfaces with different support levels.
 
-export { DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS } from './scripture/scripture-util';
+export {
+  BOOKS_PRESENT_DEFAULT,
+  DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS,
+  getBookIdsFromBooksPresent,
+} from './scripture/scripture-util';

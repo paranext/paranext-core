@@ -55,9 +55,7 @@ import { windowService } from '@shared/services/window.service';
 import {
   BOOKS_PRESENT_DEFAULT,
   getBookIdsFromBooksPresent,
-} from '@renderer/utils/books-present.util';
-
-export const TAB_TYPE_WEBVIEW = 'webView';
+} from 'platform-bible-utils/experimental';
 
 const WEB_VIEW_MENU_DEFAULT = {
   topMenu: undefined,

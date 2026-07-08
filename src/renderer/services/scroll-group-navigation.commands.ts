@@ -12,7 +12,7 @@ import {
   updateWebViewDefinitionSync,
 } from '@renderer/services/web-view.service-host';
 import { getLastSelectedWebViewId } from '@renderer/services/window.service-host';
-import { getBookIdsFromBooksPresent } from '@renderer/utils/books-present.util';
+import { getBookIdsFromBooksPresent } from 'platform-bible-utils/experimental';
 import { WebViewId } from '@shared/models/web-view.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import { registerCommand } from '@shared/services/command.service';
@@ -20,8 +20,8 @@ import { logger } from '@shared/services/logger.service';
 import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { settingsService } from '@shared/services/settings.service';
-import { SerializedVerseRef } from '@sillsdev/scripture';
-import { CommandNames } from 'papi-shared-types';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
+import { CommandNames, SettingTypes } from 'papi-shared-types';
 import {
   ALL_BOOK_IDS,
   getNextBookRef,
@@ -30,6 +30,7 @@ import {
   getPreviousBookRef,
   getPreviousChapterRef,
   getPreviousVerseRef,
+  ScriptureBounds,
 } from 'platform-bible-react/experimental';
 import { getErrorMessage } from 'platform-bible-utils';
 
@@ -42,7 +43,7 @@ type NavigationTarget = {
   projectId?: string;
 };
 
-async function getInterfaceMode(): Promise<string> {
+async function getInterfaceMode(): Promise<SettingTypes['platform.interfaceMode']> {
   try {
     return await settingsService.get('platform.interfaceMode');
   } catch (e) {
@@ -100,6 +101,61 @@ async function getAvailableBooks(projectId: string | undefined): Promise<string[
   return ALL_BOOK_IDS;
 }
 
+/**
+ * Builds versification-aware chapter/verse bounds for `scrRef`'s neighborhood by prefetching the
+ * project's final-verse-per-chapter arrays from the `platformScripture.Versification` provider —
+ * the current book always, plus the previous available book when at chapter ≤ 1 (previous
+ * verse/chapter may roll into it). Fetched fresh per command so in-session versification changes
+ * are honored without subscription bookkeeping.
+ *
+ * Returns `undefined` (versification-unaware navigation, e.g. verses do not roll across chapters)
+ * when there is no project or the provider is unavailable.
+ */
+async function getScriptureBounds(
+  projectId: string | undefined,
+  scrRef: SerializedVerseRef,
+  availableBooks: string[],
+): Promise<ScriptureBounds | undefined> {
+  if (!projectId) return undefined;
+  try {
+    const versificationPdp = await papiFrontendProjectDataProviderService.get(
+      'platformScripture.Versification',
+      projectId,
+    );
+
+    const booksToFetch = [scrRef.book];
+    if (scrRef.chapterNum <= 1) {
+      const currentBookIndex = availableBooks.indexOf(scrRef.book);
+      if (currentBookIndex > 0) booksToFetch.push(availableBooks[currentBookIndex - 1]);
+    }
+
+    // Index n of each array is the last verse of chapter n; index 0 is filler, so length - 1 is
+    // the book's last chapter
+    const endVersesByBook = new Map<string, number[]>();
+    await Promise.all(
+      booksToFetch.map(async (book) => {
+        endVersesByBook.set(
+          book,
+          await versificationPdp.getFinalVerseNumbersInBook(Canon.bookIdToNumber(book)),
+        );
+      }),
+    );
+
+    return {
+      getEndChapter: (book) => {
+        const endVerses = endVersesByBook.get(book);
+        return endVerses ? endVerses.length - 1 : undefined;
+      },
+      getEndVerse: (book, chapterNum) => endVersesByBook.get(book)?.[chapterNum],
+    };
+  } catch (e) {
+    logger.debug(
+      `Navigation command falling back to versification-unaware navigation for project ${projectId}: ${getErrorMessage(e)}`,
+    );
+    return undefined;
+  }
+}
+
 function writeNewRef(target: NavigationTarget, newRef: SerializedVerseRef): void {
   if (typeof target.scrollGroupScrRef === 'number') {
     setScrRefSync(target.scrollGroupScrRef, newRef, target.projectId);
@@ -119,6 +175,7 @@ function makeGoToCommandHandler(
   getNewRef: (
     scrRef: SerializedVerseRef,
     availableBooks: string[],
+    bounds?: ScriptureBounds,
   ) => SerializedVerseRef | undefined,
 ): () => Promise<void> {
   return async () => {
@@ -131,7 +188,8 @@ function makeGoToCommandHandler(
       getCurrentRef(target),
       getAvailableBooks(target.projectId),
     ]);
-    const newRef = getNewRef(currentRef, availableBooks);
+    const bounds = await getScriptureBounds(target.projectId, currentRef, availableBooks);
+    const newRef = getNewRef(currentRef, availableBooks, bounds);
     if (!newRef) return;
     writeNewRef(target, newRef);
   };
@@ -168,8 +226,8 @@ export const navigationCommandHandlers: {
   'platform.goToPreviousChapter': makeGoToCommandHandler(getPreviousChapterRef),
   'platform.goToNextBook': makeGoToCommandHandler(getNextBookRef),
   'platform.goToPreviousBook': makeGoToCommandHandler(getPreviousBookRef),
-  'platform.goToNextVerse': makeGoToCommandHandler((scrRef) => getNextVerseRef(scrRef)),
-  'platform.goToPreviousVerse': makeGoToCommandHandler((scrRef) => getPreviousVerseRef(scrRef)),
+  'platform.goToNextVerse': makeGoToCommandHandler(getNextVerseRef),
+  'platform.goToPreviousVerse': makeGoToCommandHandler(getPreviousVerseRef),
   'platform.openBookChapterControl': openBookChapterControl,
 };
 

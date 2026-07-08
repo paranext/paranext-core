@@ -18,6 +18,7 @@ import {
   Layout,
   LayoutInfo,
   SavedTabInfo,
+  TAB_TYPE_WEBVIEW,
   TabInfo,
   TabLoader,
   TabSaver,
@@ -32,7 +33,6 @@ import {
   loadSettingsTab,
 } from '@renderer/components/settings-tabs/settings-tab.component';
 import {
-  TAB_TYPE_WEBVIEW,
   loadWebViewTab,
   saveWebViewTab,
   updateWebViewTab,

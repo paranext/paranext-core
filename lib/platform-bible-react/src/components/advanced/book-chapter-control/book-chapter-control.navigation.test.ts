@@ -628,7 +628,7 @@ describe('book-chapter-control.navigation', () => {
     });
 
     describe('getPreviousVerseRef / getNextVerseRef', () => {
-      test('moves verse by one, flooring at 0', () => {
+      test('moves verse by one, flooring at 0, when no bounds are provided', () => {
         expect(getPreviousVerseRef({ book: 'GEN', chapterNum: 1, verseNum: 5 })).toEqual({
           book: 'GEN',
           chapterNum: 1,
@@ -644,10 +644,139 @@ describe('book-chapter-control.navigation', () => {
           chapterNum: 1,
           verseNum: 0,
         });
+        // Without versification info there is no chapter boundary to roll across
+        expect(getPreviousVerseRef({ book: 'GEN', chapterNum: 5, verseNum: 1 })).toEqual({
+          book: 'GEN',
+          chapterNum: 5,
+          verseNum: 0,
+        });
         expect(getNextVerseRef({ book: 'GEN', chapterNum: 1, verseNum: 5 })).toEqual({
           book: 'GEN',
           chapterNum: 1,
           verseNum: 6,
+        });
+      });
+    });
+
+    describe('versification-aware navigation (with ScriptureBounds)', () => {
+      // Non-English verse counts to prove the bounds are honored: GEN has 3 chapters with last
+      // verses 8/25/24; EXO has 2 chapters with last verses 22/9. Index 0 is filler.
+      const verseCounts: Record<string, number[]> = {
+        GEN: [0, 8, 25, 24],
+        EXO: [0, 22, 9],
+      };
+      const bounds = {
+        getEndChapter: (book: string) =>
+          verseCounts[book] ? verseCounts[book].length - 1 : undefined,
+        getEndVerse: (book: string, chapterNum: number) => verseCounts[book]?.[chapterNum],
+      };
+      const BOUNDED_BOOKS = ['GEN', 'EXO', 'MAT', 'ROM'];
+
+      describe('getNextVerseRef', () => {
+        test('increments within the chapter below the last verse', () => {
+          expect(
+            getNextVerseRef({ book: 'GEN', chapterNum: 1, verseNum: 5 }, BOUNDED_BOOKS, bounds),
+          ).toEqual({ book: 'GEN', chapterNum: 1, verseNum: 6 });
+        });
+
+        test('rolls to the next chapter verse 1 at the last verse', () => {
+          expect(
+            getNextVerseRef({ book: 'GEN', chapterNum: 1, verseNum: 8 }, BOUNDED_BOOKS, bounds),
+          ).toEqual({ book: 'GEN', chapterNum: 2, verseNum: 1 });
+        });
+
+        test('rolls to the next chapter when the verse is already past the last verse', () => {
+          expect(
+            getNextVerseRef({ book: 'GEN', chapterNum: 1, verseNum: 40 }, BOUNDED_BOOKS, bounds),
+          ).toEqual({ book: 'GEN', chapterNum: 2, verseNum: 1 });
+        });
+
+        test('rolls into the next book at the last verse of the last chapter', () => {
+          expect(
+            getNextVerseRef({ book: 'GEN', chapterNum: 3, verseNum: 24 }, BOUNDED_BOOKS, bounds),
+          ).toEqual({ book: 'EXO', chapterNum: 1, verseNum: 1 });
+        });
+
+        test('returns undefined at the end of the last available book', () => {
+          expect(
+            getNextVerseRef({ book: 'EXO', chapterNum: 2, verseNum: 9 }, ['GEN', 'EXO'], bounds),
+          ).toBeUndefined();
+        });
+
+        test('increments without an upper bound when verse counts are unknown', () => {
+          expect(
+            getNextVerseRef({ book: 'MAT', chapterNum: 1, verseNum: 5 }, BOUNDED_BOOKS, bounds),
+          ).toEqual({ book: 'MAT', chapterNum: 1, verseNum: 6 });
+        });
+      });
+
+      describe('getPreviousVerseRef', () => {
+        test('decrements within the chapter above verse 1', () => {
+          expect(
+            getPreviousVerseRef({ book: 'GEN', chapterNum: 2, verseNum: 5 }, BOUNDED_BOOKS, bounds),
+          ).toEqual({ book: 'GEN', chapterNum: 2, verseNum: 4 });
+        });
+
+        test('rolls to the previous chapter last verse from verse 1 past chapter 1', () => {
+          expect(
+            getPreviousVerseRef({ book: 'GEN', chapterNum: 2, verseNum: 1 }, BOUNDED_BOOKS, bounds),
+          ).toEqual({ book: 'GEN', chapterNum: 1, verseNum: 8 });
+        });
+
+        test('rolls to the previous chapter last verse from verse 0 past chapter 1', () => {
+          expect(
+            getPreviousVerseRef({ book: 'GEN', chapterNum: 2, verseNum: 0 }, BOUNDED_BOOKS, bounds),
+          ).toEqual({ book: 'GEN', chapterNum: 1, verseNum: 8 });
+        });
+
+        test('goes to verse 0 from chapter 1 verse 1, matching Paratext 9', () => {
+          expect(
+            getPreviousVerseRef({ book: 'GEN', chapterNum: 1, verseNum: 1 }, BOUNDED_BOOKS, bounds),
+          ).toEqual({ book: 'GEN', chapterNum: 1, verseNum: 0 });
+        });
+
+        test('rolls into the previous book last chapter last verse from chapter 1 verse 0', () => {
+          expect(
+            getPreviousVerseRef({ book: 'EXO', chapterNum: 1, verseNum: 0 }, BOUNDED_BOOKS, bounds),
+          ).toEqual({ book: 'GEN', chapterNum: 3, verseNum: 24 });
+        });
+
+        test('returns undefined at chapter 1 verse 0 of the first available book', () => {
+          expect(
+            getPreviousVerseRef({ book: 'GEN', chapterNum: 1, verseNum: 0 }, BOUNDED_BOOKS, bounds),
+          ).toBeUndefined();
+        });
+
+        test('rolls to verse 1 of the previous chapter when its verse count is unknown', () => {
+          expect(
+            getPreviousVerseRef({ book: 'MAT', chapterNum: 2, verseNum: 1 }, BOUNDED_BOOKS, bounds),
+          ).toEqual({ book: 'MAT', chapterNum: 1, verseNum: 1 });
+        });
+
+        test('falls back to fetchEndChapter for the previous book when bounds do not know it', () => {
+          // ROM is not in verseCounts; fetchEndChapter mock says MAT has 28 chapters
+          expect(
+            getPreviousVerseRef({ book: 'ROM', chapterNum: 1, verseNum: 0 }, BOUNDED_BOOKS, bounds),
+          ).toEqual({ book: 'MAT', chapterNum: 28, verseNum: 1 });
+        });
+      });
+
+      describe('chapter navigation honors bounds over fetchEndChapter', () => {
+        test('getNextChapterRef rolls into the next book at the bounds end chapter', () => {
+          // fetchEndChapter mock says GEN has 50 chapters; bounds say 3 — bounds must win
+          expect(
+            getNextChapterRef({ book: 'GEN', chapterNum: 3, verseNum: 5 }, BOUNDED_BOOKS, bounds),
+          ).toEqual({ book: 'EXO', chapterNum: 1, verseNum: 1 });
+        });
+
+        test('getPreviousChapterRef uses the bounds end chapter of the previous book', () => {
+          expect(
+            getPreviousChapterRef(
+              { book: 'EXO', chapterNum: 1, verseNum: 1 },
+              BOUNDED_BOOKS,
+              bounds,
+            ),
+          ).toEqual({ book: 'GEN', chapterNum: 3, verseNum: 1 });
         });
       });
     });

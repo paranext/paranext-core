@@ -641,8 +641,12 @@ async function main() {
       }
 
       // PT9 verse navigation shortcuts: F8/Ctrl+F8 chapter, F9/Ctrl+F9 book,
-      // Ctrl+Up/Ctrl+Down verse, Ctrl+B open Book Chapter Control (PT-4033)
-      const verseNavigationCommand = getVerseNavigationCommand(input);
+      // Ctrl+Up/Ctrl+Down verse, Ctrl+B open Book Chapter Control (PT-4033).
+      // On macOS the modified shortcuts use Command instead of Control
+      const verseNavigationCommand = getVerseNavigationCommand(
+        input,
+        process.platform === 'darwin',
+      );
       if (verseNavigationCommand) {
         event.preventDefault();
         commandService.sendCommand(verseNavigationCommand).catch((e) => {

@@ -160,6 +160,99 @@ describe('go-to commands in power mode', () => {
   });
 });
 
+describe('versification-aware rollover in power mode', () => {
+  // Non-English verse counts (English GEN 1 ends at 31): GEN = 3 chapters ending 8/25/24,
+  // anything else = 1 chapter ending 10. Proves project versification is used, not a static table.
+  const getFinalVerseNumbersInBook = vi.fn(async (bookNum: number) =>
+    bookNum === 1 ? [0, 8, 25, 24] : [0, 10],
+  );
+
+  beforeEach(() => {
+    mocks.settingsGet.mockResolvedValue('power');
+    mocks.getLastSelectedWebViewId.mockReturnValue('web-view-1');
+    mocks.getSavedWebViewDefinitionSync.mockReturnValue({
+      id: 'web-view-1',
+      scrollGroupScrRef: 0,
+      projectId: 'project-1',
+    });
+    getFinalVerseNumbersInBook.mockClear();
+    mocks.pdpGet.mockImplementation(async (projectInterface: string) => {
+      if (projectInterface === 'platformScripture.Versification')
+        return { getFinalVerseNumbersInBook };
+      // platform.base for books present: GEN and EXO
+      return { getSetting: vi.fn(async () => '11') };
+    });
+  });
+
+  test('goToNextVerse rolls to the next chapter at the project versification last verse', async () => {
+    mocks.getScrRefForProject.mockResolvedValue({ book: 'GEN', chapterNum: 1, verseNum: 8 });
+
+    await navigationCommandHandlers['platform.goToNextVerse']();
+
+    expect(getFinalVerseNumbersInBook).toHaveBeenCalledWith(1);
+    expect(mocks.setScrRefSync).toHaveBeenCalledWith(
+      0,
+      { book: 'GEN', chapterNum: 2, verseNum: 1 },
+      'project-1',
+    );
+  });
+
+  test('goToPreviousVerse rolls to the previous chapter last verse', async () => {
+    mocks.getScrRefForProject.mockResolvedValue({ book: 'GEN', chapterNum: 2, verseNum: 1 });
+
+    await navigationCommandHandlers['platform.goToPreviousVerse']();
+
+    expect(mocks.setScrRefSync).toHaveBeenCalledWith(
+      0,
+      { book: 'GEN', chapterNum: 1, verseNum: 8 },
+      'project-1',
+    );
+  });
+
+  test('goToPreviousVerse goes to verse 0 at chapter 1 verse 1, matching Paratext 9', async () => {
+    mocks.getScrRefForProject.mockResolvedValue({ book: 'GEN', chapterNum: 1, verseNum: 1 });
+
+    await navigationCommandHandlers['platform.goToPreviousVerse']();
+
+    expect(mocks.setScrRefSync).toHaveBeenCalledWith(
+      0,
+      { book: 'GEN', chapterNum: 1, verseNum: 0 },
+      'project-1',
+    );
+  });
+
+  test('goToPreviousVerse rolls into the previous book from chapter 1 verse 0', async () => {
+    mocks.getScrRefForProject.mockResolvedValue({ book: 'EXO', chapterNum: 1, verseNum: 0 });
+
+    await navigationCommandHandlers['platform.goToPreviousVerse']();
+
+    // The previous available book (GEN) is prefetched because the current chapter is 1
+    expect(getFinalVerseNumbersInBook).toHaveBeenCalledWith(1);
+    expect(mocks.setScrRefSync).toHaveBeenCalledWith(
+      0,
+      { book: 'GEN', chapterNum: 3, verseNum: 24 },
+      'project-1',
+    );
+  });
+
+  test('falls back to unbounded verse navigation when the versification provider fails', async () => {
+    mocks.pdpGet.mockImplementation(async (projectInterface: string) => {
+      if (projectInterface === 'platformScripture.Versification')
+        throw new Error('no versification');
+      return { getSetting: vi.fn(async () => '11') };
+    });
+    mocks.getScrRefForProject.mockResolvedValue({ book: 'GEN', chapterNum: 1, verseNum: 8 });
+
+    await navigationCommandHandlers['platform.goToNextVerse']();
+
+    expect(mocks.setScrRefSync).toHaveBeenCalledWith(
+      0,
+      { book: 'GEN', chapterNum: 1, verseNum: 9 },
+      'project-1',
+    );
+  });
+});
+
 describe('platform.openBookChapterControl', () => {
   test('prefers the active tab handle, falls back to top toolbar', async () => {
     mocks.settingsGet.mockResolvedValue('power');

@@ -364,15 +364,23 @@ export function BookChapterControl({
   // state behind on close (see handleVerseSelect / handleChapterSelect) and only resets it when
   // the popover opens. Callers like the Ctrl+B command can't know what view the control was last
   // left in, and CommandInput only renders in 'books' view — without the reset, focus would no-op.
+  //
+  // Focusing the search input is driven by this request counter (each `open()` call increments
+  // it) rather than a `setTimeout` so the focus effect below runs after the commit that actually
+  // rendered the popover's books-view CommandInput, even if that render takes longer than a tick.
+  const [focusSearchInputRequestId, setFocusSearchInputRequestId] = useState(0);
+
+  useEffect(() => {
+    if (focusSearchInputRequestId === 0) return;
+    commandInputRef.current?.focus();
+  }, [focusSearchInputRequestId]);
+
   useImperativeHandle(
     ref,
     () => ({
       open: () => {
         handleOpenChange(true);
-        // Focus the search input once the popover has rendered
-        setTimeout(() => {
-          commandInputRef.current?.focus();
-        }, 0);
+        setFocusSearchInputRequestId((requestId) => requestId + 1);
       },
     }),
     [handleOpenChange],
