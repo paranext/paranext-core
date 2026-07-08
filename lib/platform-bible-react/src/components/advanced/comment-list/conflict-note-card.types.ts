@@ -1,4 +1,9 @@
-import { LanguageStrings, LegacyComment, LocalizeKey } from 'platform-bible-utils';
+import {
+  ConflictResolutionOptions,
+  LanguageStrings,
+  LegacyComment,
+  LocalizeKey,
+} from 'platform-bible-utils';
 
 /**
  * The resolution a user picks for a conflict: keep the accepted (winning) side, take the rejected
@@ -20,24 +25,6 @@ export type ConflictResolution = 'accept' | 'reject' | 'merge';
  * `'merged'` legacy outcome and is only meaningful for a conflict that is already resolved.
  */
 export type ConflictResolutionOutcome = 'accept' | 'reject' | 'merged';
-
-/**
- * The resolution actions the current user may take on a conflict thread (from the comments data
- * provider's getConflictResolutionOptions). Must stay textually identical to the union declared in
- * legacy-comment-manager.d.ts.
- *
- * - 'none': controls hidden entirely (already resolved, or no permission).
- * - 'accept': the verse was edited after the merge (stale) — Reject is disabled with an explanation;
- *   Accept keeps the current text.
- * - 'acceptOrReject': fully available.
- * - 'acceptRejectOrMerge': fully available, and the two changes are independent so Combine both
- *   changes is also offered.
- */
-export type ConflictResolutionOptions =
-  | 'none'
-  | 'accept'
-  | 'acceptOrReject'
-  | 'acceptRejectOrMerge';
 
 /**
  * Localization keys used by the ConflictNoteCard. Pass into the useLocalizedStrings hook (in the
