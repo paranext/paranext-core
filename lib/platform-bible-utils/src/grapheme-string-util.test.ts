@@ -104,3 +104,19 @@ describe('slice', () => {
     expect(empty.slice(0, 5).string).toEqual('');
   });
 });
+
+describe('padStart / padEnd', () => {
+  const long = new GraphemeString(LONG);
+  it('padStart default space', () =>
+    expect(long.padStart(long.length + 10).string).toEqual(`          ${long.string}`));
+  it('padStart single char', () =>
+    expect(long.padStart(long.length + 7, 'X').string).toEqual(`XXXXXXX${long.string}`));
+  it('padStart multi-grapheme pad truncates to fit', () =>
+    expect(long.padStart(long.length + 10, 'ha').string).toEqual(`hahahahaha${long.string}`));
+  it('padEnd default space', () =>
+    expect(long.padEnd(long.length + 10).string).toEqual(`${long.string}          `));
+  it('padEnd multi-grapheme pad', () =>
+    expect(long.padEnd(long.length + 10, 'ha').string).toEqual(`${long.string}hahahahaha`));
+  it('target <= length returns self unchanged', () =>
+    expect(long.padStart(long.length).string).toEqual(long.string));
+});
