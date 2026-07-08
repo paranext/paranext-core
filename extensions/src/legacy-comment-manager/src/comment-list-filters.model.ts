@@ -107,6 +107,17 @@ export function areCommentFiltersAtDefault(filters: CommentFilters): boolean {
   return deepEqual(filters, DEFAULT_COMMENT_FILTERS);
 }
 
+/**
+ * Applies partial filter overrides onto {@link DEFAULT_COMMENT_FILTERS}. Any axis not present in
+ * `overrides` is reset to its `'all'` default — the overrides are NOT merged with the user's
+ * current selection — so a programmatic open (e.g. the S/R conflict link) shows exactly the
+ * requested view. Shared by the web view's initial state and its `setFilters` message handler so
+ * both apply the same merge semantics.
+ */
+export function applyFilterOverrides(overrides?: Partial<CommentFilters>): CommentFilters {
+  return { ...DEFAULT_COMMENT_FILTERS, ...overrides };
+}
+
 // Paratext 9's literal "assigned to the whole team" token (UserFilter/CommentTags): threads assigned
 // to the team carry this exact `AssignedUser` value.
 export const TEAM_ASSIGNED_USER = 'Team';

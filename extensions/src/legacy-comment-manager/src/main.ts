@@ -31,6 +31,11 @@ interface CommentListWebViewOptions extends OpenWebViewOptions {
   projectId: string | undefined;
   editorScrollGroupId: ScrollGroupScrRef | undefined;
   editorWebViewId: string | undefined;
+  // One-shot initial filter/scope for a NEW view, seeded into web view state so the view mounts
+  // already-filtered instead of relying on a post-open setFilters message (which could race the
+  // view's message listener). Only set when creating a new view; undefined on reuse/restore.
+  initialFilters: Partial<CommentFilters> | undefined;
+  initialScopeFilter: ScopeFilter | undefined;
 }
 
 /** Map of projectId to comment list web view id for reusing existing web views */
@@ -80,6 +85,11 @@ class CommentListWebViewFactory extends WebViewFactory<typeof commentListWebView
       state: {
         ...savedWebView.state,
         editorWebViewId: getWebViewOptions.editorWebViewId ?? savedWebView.state?.editorWebViewId,
+        // Seeded only when opening a new view (undefined otherwise, which clears any persisted
+        // value). Deliberately NOT persisted across restarts: a restored view has these undefined
+        // and so mounts with default filters rather than re-applying a stale one-shot request.
+        initialFilters: getWebViewOptions.initialFilters,
+        initialScopeFilter: getWebViewOptions.initialScopeFilter,
       },
     };
   }
@@ -200,6 +210,8 @@ async function openCommentList(
       projectId,
       editorScrollGroupId,
       editorWebViewId: webViewId,
+      initialFilters: options.filtersToSet,
+      initialScopeFilter: options.scopeFilterToSet,
     };
     commentListWebViewId = await papi.webViews.openWebView(
       commentListWebViewType,
