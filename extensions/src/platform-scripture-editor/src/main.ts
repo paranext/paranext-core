@@ -43,6 +43,7 @@ import {
   selectProjectIdsForOpenMode,
   startDefaultProjectPicker,
   syncOnProjectSwitch,
+  toScriptureEditorInfos,
 } from './platform-scripture-editor.utils';
 import { MarkersViewNotifier } from './markers-view-notifier.model';
 
@@ -247,17 +248,17 @@ async function open(
     // Decide where to route this open. The dispatch helper centralizes the simple-mode invariants
     // (one editor slot, no duplicate-(project, readonly) tabs) and the empty-editor probe; see
     // resolveOpenEditorDispatch JSDoc for the priority order.
-    const allOpenDefs = await papi.webViews.getAllOpenWebViewDefinitions();
-    const allScriptureEditors = allOpenDefs
-      .filter((def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE)
-      .map((def) => ({
-        id: def.id,
-        projectId: def.projectId,
-        // WebView state isn't statically typed, but `getWebViewDefinition` always stores
-        // `isReadOnly` as boolean here. Treat any other value as `false` for safety.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        isReadOnly: !!(def.state?.isReadOnly as boolean | undefined),
-      }));
+    // getAllOpenWebViewDefinitions can time out under load; fall back to an empty list so that
+    // openResourceViewer still succeeds (opening a new editor tab) rather than throwing.
+    let allOpenDefs: SavedWebViewDefinition[] = [];
+    try {
+      allOpenDefs = await papi.webViews.getAllOpenWebViewDefinitions();
+    } catch (e) {
+      logger.warn(
+        `openResourceViewer: getAllOpenWebViewDefinitions timed out or failed (${getErrorMessage(e)}); opening as new tab`,
+      );
+    }
+    const allScriptureEditors = toScriptureEditorInfos(allOpenDefs);
     const interfaceMode = await papi.settings.get('platform.interfaceMode');
     const requestedIsReadOnly = !projectForWebView.isEditable;
 
@@ -320,34 +321,38 @@ async function open(
       options,
     };
 
-    // If in simple interface mode, open/update the model text, bible text, and commentary text panels
-    if (interfaceMode === 'simple' && projectForWebView.projectId)
+    // If in simple interface mode and opening an editable project, open/update the related panels
+    // (model text, bible texts, commentaries, comments). Gated on isEditable: the related panels
+    // follow the active translation project, so opening a read-only published resource in the
+    // editor column must not switch them over to the resource.
+    if (interfaceMode === 'simple' && projectForWebView.projectId && projectForWebView.isEditable)
       await openOrUpdateRelatedPanels(papi, projectForWebView.projectId);
 
     // Re-check the replace-tab target after openOrUpdateRelatedPanels: concurrent panel
     // operations can remove the target tab between when the dispatch was resolved (above) and
     // when openWebView runs. If the target is gone, re-resolve with fresh dock state so we
     // don't throw "Replacing tab failed".
+    // Only applies in simple mode: openOrUpdateRelatedPanels (the source of the race) only runs
+    // there, and in power mode re-resolving would return the same caller-supplied
+    // existingTabIdToReplace anyway, so the re-check couldn't help.
+    // getAllOpenWebViewDefinitions can time out under load; if that happens keep the original
+    // dispatch — the target tab may still be present and openWebView will proceed normally.
     let finalDispatch: OpenEditorDispatch = dispatch;
-    if (dispatch.kind === 'replace-tab') {
-      const freshDefs = await papi.webViews.getAllOpenWebViewDefinitions();
-      if (!freshDefs.some((def) => def.id === dispatch.targetTabId)) {
-        const freshEditors = freshDefs
-          .filter((def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE)
-          .map((def) => ({
-            id: def.id,
-            projectId: def.projectId,
-            // WebView state isn't statically typed, but `getWebViewDefinition` always stores
-            // `isReadOnly` as boolean here. Treat any other value as `false` for safety.
-            // eslint-disable-next-line no-type-assertion/no-type-assertion
-            isReadOnly: !!(def.state?.isReadOnly as boolean | undefined),
-          }));
-        finalDispatch = resolveOpenEditorDispatch(
-          freshEditors,
-          projectForWebView.projectId,
-          requestedIsReadOnly,
-          interfaceMode,
-          existingTabIdToReplace,
+    if (interfaceMode === 'simple' && dispatch.kind === 'replace-tab') {
+      try {
+        const freshDefs = await papi.webViews.getAllOpenWebViewDefinitions();
+        if (!freshDefs.some((def) => def.id === dispatch.targetTabId)) {
+          finalDispatch = resolveOpenEditorDispatch(
+            toScriptureEditorInfos(freshDefs),
+            projectForWebView.projectId,
+            requestedIsReadOnly,
+            interfaceMode,
+            existingTabIdToReplace,
+          );
+        }
+      } catch (e) {
+        logger.warn(
+          `openResourceViewer: re-check getAllOpenWebViewDefinitions timed out or failed (${getErrorMessage(e)}); using original dispatch`,
         );
       }
     }

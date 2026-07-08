@@ -8,6 +8,9 @@
     },
     "%webView_legacyCommentManager_commentList_title%": {
       "fallbackKey": "%Paratext.ProjectComments.CommentListForm.CommentListForm_11CommentListForm_ShortTitle%"
+    },
+    "%webView_legacyCommentManager_commentListPanel_title%": {
+      "fallbackKey": "%Paratext.ProjectComments.CommentListForm.CommentListForm_11CommentListForm_ShortTitle%"
     }
   },
   "localizedStrings": {
