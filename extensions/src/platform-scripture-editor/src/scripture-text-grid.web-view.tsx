@@ -50,10 +50,17 @@ const GRID_RESOURCE_TYPE = 'ScriptureResource';
 globalThis.webViewComponent = function ScriptureTextGridWebView({
   projectId,
   updateWebViewDefinition,
+  useWebViewScrollGroupScrRef,
 }: WebViewProps) {
   const [localizedStrings, isLoadingLocalizedStrings] = useLocalizedStrings(ALL_STRING_KEYS);
 
-  const { sources, textConnectionPdp } = useTextCollectionSources(projectId);
+  // Follow whichever project is driving the active Scripture reference (the editor's project) when
+  // opened without an explicit project — e.g. from the default layout, whose tab carries no
+  // projectId. An explicit `projectId` (e.g. a direct openWebView) takes precedence.
+  const [, , , , activeEditorProjectId] = useWebViewScrollGroupScrRef();
+  const effectiveProjectId = projectId ?? activeEditorProjectId;
+
+  const { sources, textConnectionPdp } = useTextCollectionSources(effectiveProjectId);
 
   // Latest sources for the async callbacks below — reading the render-closure `sources` would let a
   // rapid second toggle (or a toggle mid-install) compute its next-state from a pre-write snapshot
@@ -86,14 +93,16 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // here and should get a partial-failure/network-error test in A3 when it is actually driven.
   const initializedProjectIds = useRef(new Set<string>());
   useEffect(() => {
-    if (!projectId || !textConnectionPdp) return;
-    if (initializedProjectIds.current.has(projectId)) return;
-    initializedProjectIds.current.add(projectId);
+    if (!effectiveProjectId || !textConnectionPdp) return;
+    if (initializedProjectIds.current.has(effectiveProjectId)) return;
+    initializedProjectIds.current.add(effectiveProjectId);
     textConnectionPdp.initializeShownByDefaultOverlay().catch((error) => {
-      initializedProjectIds.current.delete(projectId);
-      logger.error(`Failed to initialize shown-by-default overlay for ${projectId}: ${error}`);
+      initializedProjectIds.current.delete(effectiveProjectId);
+      logger.error(
+        `Failed to initialize shown-by-default overlay for ${effectiveProjectId}: ${error}`,
+      );
     });
-  }, [projectId, textConnectionPdp]);
+  }, [effectiveProjectId, textConnectionPdp]);
 
   // Dynamic tab title: flips to "Text Collection" at 2+ displayed cells, "Scripture text" otherwise.
   useEffect(() => {
