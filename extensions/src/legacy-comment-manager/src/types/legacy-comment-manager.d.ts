@@ -458,9 +458,11 @@ declare module 'legacy-comment-manager' {
      */
     selectThread(threadId: string): Promise<void>;
     /**
-     * Set the comment-list filter axes and/or scope. Axes given in `filters` are applied on top of
-     * the default (all) filters — unspecified axes reset to 'all', they are NOT merged with the
-     * user's current selection. `scopeFilter` is set only when provided.
+     * Set the comment-list view deterministically, exactly as a fresh open would. `filters` is
+     * applied on top of the default (all) filters — unspecified axes reset to 'all', they are NOT
+     * merged with the user's current selection — and an omitted `scopeFilter` resets scope to
+     * 'unfiltered' (all books). The result is the requested view with nothing carried over from
+     * prior state.
      */
     setFilters(filters?: Partial<CommentFilters>, scopeFilter?: ScopeFilter): Promise<void>;
   }>;
@@ -475,7 +477,7 @@ declare module 'legacy-comment-manager' {
     projectId?: string | undefined;
     /** Comment-filter axes to pre-apply (unspecified axes reset to 'all'). */
     filtersToSet?: Partial<CommentFilters> | undefined;
-    /** Scope to pre-apply (e.g. `'unfiltered'` for all books). */
+    /** Scope to pre-apply; an omitted value resets scope to `'unfiltered'` (all books). */
     scopeFilterToSet?: ScopeFilter | undefined;
   };
 
