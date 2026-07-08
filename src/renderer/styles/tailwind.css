@@ -1,36 +1,24 @@
 /*
- * Tailwind entry for the paranext-core Electron app (renderer) build.
+ * Tailwind entry for the paranext-core Electron app (renderer) build (PT-3920).
  *
- * WHY THIS FILE EXISTS
- * --------------------
- * platform-bible-react (PBR) compiles Tailwind by scanning only its OWN source, then injects the
- * result at runtime. Any `tw:` utility that core's own source uses but PBR does not happen to also
- * use is therefore never emitted, so the class silently renders as nothing. This entry makes the
- * app build emit utilities from core's own source so core can rely on `tw:` utilities directly.
+ * platform-bible-react (PBR) scans only its OWN source, so `tw:` utilities that core uses but PBR
+ * doesn't also use are never emitted and silently render as nothing. This entry makes the app build
+ * emit utilities from core's own source (scanned via `@source` below).
  *
- * UTILITIES-ONLY
- * --------------
- * This entry emits the `theme` and `utilities` layers only. It intentionally does NOT emit
- * preflight/base, the concrete theme color values (`.light` / `.dark` / `.paratext-*`), fonts, or
- * `tw-animate-css` — all of those continue to come from PBR's runtime-injected CSS (scoped under
- * `.pr-twp`). The `@theme inline` block below only maps semantic tokens to the CSS variables PBR
- * defines at runtime, which is what lets utilities like `tw:bg-background` generate correctly.
- *
- * KEEP IN SYNC WITH PBR
- * ---------------------
- * The `@theme inline` block, the `dark` variant, and the typography config (via `@config`) mirror
- * platform-bible-react's `src/index.css` so core's utilities resolve identically to PBR's. If PBR's
- * shared theme region changes, update this block to match. See docs/tailwind.md.
+ * It emits the `theme` + `utilities` layers but NOT preflight/base or the concrete theme color
+ * values (`.light`/`.dark`/`.paratext-*`) — those stay PBR's job, injected at runtime under
+ * `.pr-twp`. The `@theme inline` block, `dark` variant, and typography (`@config`) mirror PBR's
+ * `src/index.css`; keep them in sync. Full rationale: docs/tailwind.md.
  */
 @layer theme, base, components, utilities;
+/* Import the default theme scale (text sizes, spacing, etc.) so core's utilities are self-sufficient
+ * rather than relying on PBR to emit the tokens they reference. */
 @import 'tailwindcss/theme.css' layer(theme) prefix(tw);
-/* `source(none)` disables Tailwind's automatic content detection so we can scope scanning to core's
- * renderer source explicitly (below), rather than the whole monorepo. */
+/* `source(none)` disables auto content-detection so scanning is scoped to core's renderer source. */
 @import 'tailwindcss/utilities.css' layer(utilities) prefix(tw) source(none);
 @source '../**/*.{ts,tsx}';
 
-/* Load PBR's Tailwind config for the typography plugin + theme-aware prose overrides so core's
- * `tw:prose*` utilities match PBR's. */
+/* PBR's config supplies the typography plugin + theme-aware prose overrides so `tw:prose*` matches PBR. */
 @config '../../../lib/platform-bible-react/tailwind.config.ts';
 
 @custom-variant dark (&:is(.dark *));
