@@ -43,9 +43,15 @@ vi.mock('@shared/services/window.service', () => ({
 
 // #endregion
 
-/** CSS class applied to the active tab header while it is the navigation target but unfocused */
+/**
+ * CSS class applied to the active tab header while it is the navigation target and focus is outside
+ * all tabs
+ */
 const cssClassTabHeaderLastSelected = 'platform-dock-tab-last-selected';
-/** CSS class applied to the active tab content pane while it is the navigation target but unfocused */
+/**
+ * CSS class applied to the active tab content pane while it is the navigation target and focus is
+ * outside all tabs
+ */
 const cssClassTabContentLastSelected = 'platform-dock-tabpane-last-selected';
 
 /**

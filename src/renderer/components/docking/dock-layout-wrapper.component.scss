@@ -47,8 +47,10 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
   `platform-dock-tab-last-selected` rule further down for the matching header tint and the full
   explanation). This selector's specificity (two classes) ties with the
   `platform-dock-tabpane-window-focus` rule immediately below; CSS breaks specificity ties by
-  source order, so this rule is declared ABOVE that one, ensuring window focus always wins when a
-  pane is both last-selected and focused. */
+  source order, so this rule is declared ABOVE that one so window focus would win if a pane were
+  ever both last-selected and focused — a defensive tie-breaker rather than a case the app can
+  currently reach, since the tint only shows while focus is outside all tabs (see the matching
+  header-rule comment further down). */
   &.platform-dock-tabpane-last-selected {
     --tab-background: var(--tab-highlight);
   }
