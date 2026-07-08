@@ -419,6 +419,26 @@ declare module 'legacy-comment-manager' {
 
   // #endregion
 
+  // #region Comment filter axis types (shared with comment-list-filters.model.ts)
+
+  export type ResolvedFilter = 'all' | 'unresolved' | 'resolved';
+  export type ReadFilter = 'all' | 'unread' | 'read';
+  export type TypeFilter = 'all' | 'conflicts' | 'comments';
+  export type AssignmentFilter = 'all' | 'assigned-to-me' | 'team';
+
+  /** The four orthogonal comment-filter axis selections. Each defaults to `'all'` (no filtering). */
+  export type CommentFilters = {
+    resolved: ResolvedFilter;
+    read: ReadFilter;
+    type: TypeFilter;
+    assignment: AssignmentFilter;
+  };
+
+  /** Scope axis: current chapter vs all books. */
+  export type ScopeFilter = 'unfiltered' | 'current-chapter';
+
+  // #endregion
+
   // #region Comment list WebView types
 
   /** Web view controller for the Comment List web view */
