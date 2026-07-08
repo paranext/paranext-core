@@ -120,3 +120,35 @@ describe('padStart / padEnd', () => {
   it('target <= length returns self unchanged', () =>
     expect(long.padStart(long.length).string).toEqual(long.string));
 });
+
+describe('indexOf', () => {
+  const long = new GraphemeString(LONG);
+  const pizza = new GraphemeString('🍕');
+  it('without position', () => expect(long.indexOf(pizza)).toEqual(25));
+  it('with position', () => expect(long.indexOf(pizza, 40)).toEqual(57));
+  it('position past length is -1', () => expect(long.indexOf(pizza, 100)).toEqual(-1));
+  it('negative position counts from end (uniform)', () =>
+    expect(long.indexOf(pizza, -20)).toEqual(57));
+  it('accepts a raw string needle', () => expect(long.indexOf('🍕')).toEqual(25));
+  it('empty needle is -1', () => expect(long.indexOf('')).toEqual(-1));
+  it('multi-grapheme needle', () => expect(long.indexOf('🔥Pairs💋')).toEqual(67));
+  it('needle at the very end', () => expect(long.indexOf('💋!🌟')).toEqual(73));
+  it('absent needle is -1', () => expect(long.indexOf('Pizza')).toEqual(-1));
+  it('needle longer than haystack is -1', () =>
+    expect(new GraphemeString(MEDIUM).indexOf(long)).toEqual(-1));
+});
+
+describe('lastIndexOf', () => {
+  const long = new GraphemeString(LONG);
+  const pizza = new GraphemeString('🍕');
+  it('without position', () => expect(long.lastIndexOf(pizza)).toEqual(57));
+  it('with position searches backward', () => expect(long.lastIndexOf(pizza, 5)).toEqual(-1));
+  it('position past length searches whole string', () =>
+    expect(long.lastIndexOf(pizza, 100)).toEqual(57));
+  it('negative position counts from end (uniform)', () =>
+    expect(long.lastIndexOf(pizza, -1)).toEqual(57));
+  it('empty needle is -1', () => expect(long.lastIndexOf('')).toEqual(-1));
+  it('multi-grapheme needle', () => expect(long.lastIndexOf('🔥Pairs💋')).toEqual(67));
+  it('needle at the end', () => expect(long.lastIndexOf('💋!🌟')).toEqual(73));
+  it('absent needle is -1', () => expect(long.lastIndexOf('Pizza')).toEqual(-1));
+});
