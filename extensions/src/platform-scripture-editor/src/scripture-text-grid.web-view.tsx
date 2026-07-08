@@ -104,11 +104,14 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     });
   }, [effectiveProjectId, textConnectionPdp]);
 
-  // Dynamic tab title: flips to "Text Collection" at 2+ displayed cells, "Scripture text" otherwise.
+  // Icon-only tab: no visible text label. The count-driven name ("Scripture text" for 0-1 cells,
+  // "Text Collection" for 2+) is kept as the hover tooltip so the tab stays identifiable and
+  // accessible.
   useEffect(() => {
     if (isLoadingLocalizedStrings) return;
     updateWebViewDefinition({
-      title: selectScriptureTextGridTitle(displayedCellCount, {
+      title: '',
+      tooltip: selectScriptureTextGridTitle(displayedCellCount, {
         single: localizedStrings[TITLE_SINGLE_KEY],
         multiple: localizedStrings[TITLE_MULTIPLE_KEY],
       }),
@@ -210,7 +213,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   const installingResourceNames = useMemo(() => installing.map((info) => info.name), [installing]);
 
   return (
-    <div data-testid="scripture-text-grid" className="tw:flex tw:h-full tw:flex-col">
+    <div data-testid="scripture-text-grid" className="tw:flex tw:h-screen tw:flex-col">
       <div className="tw:flex tw:items-center tw:justify-end tw:border-b tw:p-1">
         <Popover>
           <PopoverTrigger asChild>
