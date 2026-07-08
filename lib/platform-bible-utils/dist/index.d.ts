@@ -1778,6 +1778,37 @@ export declare function normalizeScriptureSpaces(str: string): string;
  * are shallow equaled.
  */
 export declare function areUsjContentsEqualExceptWhitespace(a: Usj | undefined, b: Usj | undefined): boolean;
+/**
+ * Collects the distinct markers actually present in a USJ document.
+ *
+ * The scripture editor warns "Unexpected <kind> marker" for any marker in the USJ it doesn't
+ * recognize as a built-in USFM marker. Handbook/commentary resources use extra markers (e.g. `pn`,
+ * `jmp`, `xtSee`) that aren't built-ins, so a consumer can pass this document-derived set to the
+ * editor as `options.nodes.extraValidMarkers` to suppress those warnings — scoped to the resource
+ * actually being displayed, never a global list.
+ *
+ * The editor's `isValidMarker` is additive (a marker is valid if it is built-in OR listed in
+ * `extraValidMarkers`), so returning markers that are already built-in valid is a harmless no-op;
+ * callers therefore don't need the editor's internal built-in list (which it doesn't export) to
+ * compute a "delta". `z`-prefixed markers are omitted because the editor already treats every
+ * `z...` custom marker as unconditionally valid.
+ *
+ * Because this returns every marker the document uses, the editor will not warn about any marker in
+ * these panels — including genuine typos or bad data in the resource. That is an accepted trade-off:
+ * the warning is a `logger.warn` diagnostic (warn-and-continue; rendering is identical whether or not
+ * it fires), and these consumers are read-only resource viewers (`isReadonly: true`), not the
+ * editable authoring editor — so typo-catching still works where authors actually edit. Do not narrow
+ * this to an "extra-only" delta: that would require the editor's internal built-in marker lists, which
+ * it deliberately doesn't export, forcing either a re-coupling to the editor package or a duplicated
+ * list that drifts. Passing everything the document uses is the correct consequence of core not owning
+ * the editor's marker definitions.
+ *
+ * @param usj The USJ document being displayed (e.g. the chapter USJ handed to the editor).
+ * @returns The distinct non-`z` markers found anywhere in the document, in first-seen order. Empty
+ *   when `usj` is undefined or contains no markers, so callers can omit the option (opt-in, no
+ *   behavior change) for content that needs nothing extra.
+ */
+export declare function collectUsjMarkers(usj: Usj | undefined): string[];
 /** WARNING: This file is generated in https://github.com/paranext/usfm-tools. Make changes there */
 /**
  * Information about a USFM marker that is just an attribute in USX/USJ. See {@link MarkerInfo} for
@@ -6054,6 +6085,7 @@ export {
 	MarkerCategoryType as CategoryType,
 	USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_0,
 	USFM_MARKERS_MAP_PARATEXT as USFM_MARKERS_MAP_PARATEXT_3_0,
+	Usj,
 };
 
 export {};

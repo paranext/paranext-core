@@ -19,9 +19,22 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
     // use-commentary-marker-styles.hook.ts). Keep these two lists in sync.
     private static readonly HashSet<string> CommentariesWhiteList =
     [
-        "97196133a859179b", // HBKENG
-        "090f7cbf7924b245", // TNN
-        "b58b80b798e22be6", // TND
+        // UBS Translator's Handbook
+        "97196133a859179b", // HBKENG — English
+        "6c21e835eb8ca3b2", // HBKCS — Chinese (Simplified)
+        "77dc05b26ce399dd", // HBKCT — Chinese (Traditional)
+        "815f988992157b10", // HBKFRA — French
+        "24daa5f24f0020b3", // HBKPT — Portuguese
+        "1ff24938918bd69e", // HBKESP — Spanish
+        // UBS Translator's Notes
+        "090f7cbf7924b245", // TNN — English
+        "0617c397f003127c", // TNNESP — Spanish
+        "233345361843ce8b", // TNNPTG — Portuguese
+        "d95fde28b4346e61", // TNNFR — French
+        // UBS Translator's Notes (Deuterocanon)
+        "b58b80b798e22be6", // TND — English
+        "943164c222f75687", // TNDESP — Spanish
+        "e0b3f20ff8677585", // TNDPTG — Portuguese
     ];
 
     #region Internal classes
