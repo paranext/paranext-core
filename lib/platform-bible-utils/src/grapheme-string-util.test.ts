@@ -152,3 +152,30 @@ describe('lastIndexOf', () => {
   it('needle at the end', () => expect(long.lastIndexOf('💋!🌟')).toEqual(73));
   it('absent needle is -1', () => expect(long.lastIndexOf('Pizza')).toEqual(-1));
 });
+
+describe('candidate B parity with candidate A', () => {
+  const long = new GraphemeString(LONG);
+  const cases: Array<[string, number | undefined]> = [
+    ['🍕', undefined],
+    ['🍕', 40],
+    ['🍕', -20],
+    ['🔥Pairs💋', undefined],
+    ['💋!🌟', undefined],
+    ['Pizza', undefined],
+    ['👮🏽‍♀️', undefined],
+  ];
+  it('indexOfWalk matches indexOf', () => {
+    cases.forEach(([needle, pos]) => {
+      expect(long.indexOfWalk(new GraphemeString(needle), pos ?? 0)).toEqual(
+        long.indexOf(needle, pos ?? 0),
+      );
+    });
+  });
+  it('lastIndexOfWalk matches lastIndexOf', () => {
+    cases.forEach(([needle, pos]) => {
+      expect(long.lastIndexOfWalk(new GraphemeString(needle), pos)).toEqual(
+        long.lastIndexOf(needle, pos),
+      );
+    });
+  });
+});
