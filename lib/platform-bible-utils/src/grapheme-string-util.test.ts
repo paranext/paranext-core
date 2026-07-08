@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { GraphemeString } from './grapheme-string-util';
+import {
+  GraphemeString,
+  formatReplacementString,
+  formatReplacementStringToArray,
+} from './grapheme-string-util';
 
 const SHORT = 'Look𐐷At👨‍👩‍👧‍👦👮🏽‍♀️';
 const SHORT_ARRAY = ['L', 'o', 'o', 'k', '𐐷', 'A', 't', '👨‍👩‍👧‍👦', '👮🏽‍♀️'];
@@ -267,5 +271,71 @@ describe('candidate B parity with candidate A', () => {
         long.lastIndexOf(needle, pos),
       );
     });
+  });
+});
+
+describe('formatReplacementStringToArray', () => {
+  it('combines all strings into one when replacer is a string', () => {
+    expect(
+      formatReplacementStringToArray('Look𐐷At🦄This𐐷{one-horned}Thing👮🏽‍♀️Its𐐷Awesome', {
+        'one-horned': 'Unicorn',
+      }),
+    ).toEqual(['Look𐐷At🦄This𐐷UnicornThing👮🏽‍♀️Its𐐷Awesome']);
+  });
+  it('keeps non-string replacers as separate entries', () => {
+    expect(
+      formatReplacementStringToArray('Look𐐷At🦄This𐐷{one-horned}Thing👮🏽‍♀️Its𐐷Awesome', {
+        'one-horned': ['Unicorn'],
+      }),
+    ).toEqual(['Look𐐷At🦄This𐐷', ['Unicorn'], 'Thing👮🏽‍♀️Its𐐷Awesome']);
+  });
+  it('handles surrogate pairs inside the replacer key', () => {
+    expect(
+      formatReplacementStringToArray('Look𐐷At🦄This𐐷{one👮🏽‍♀️horned}Thing👮🏽‍♀️Its𐐷Awesome', {
+        'one👮🏽‍♀️horned': ['Unicorn'],
+      }),
+    ).toEqual(['Look𐐷At🦄This𐐷', ['Unicorn'], 'Thing👮🏽‍♀️Its𐐷Awesome']);
+  });
+  it('unescapes escaped curly braces', () => {
+    expect(
+      formatReplacementStringToArray('Hi, this is {name}! I like \\{curly braces\\}!', {
+        name: ['Jim'],
+      }),
+    ).toEqual(['Hi, this is ', ['Jim'], '! I like {curly braces}!']);
+  });
+  it('empty curly braces are removed', () => {
+    expect(
+      formatReplacementStringToArray('Look𐐷At🦄This𐐷{}', { 'one-horned': ['Unicorn'] }),
+    ).toEqual(['Look𐐷At🦄This𐐷']);
+  });
+  it('unknown key returns the key without braces', () => {
+    expect(
+      formatReplacementStringToArray('Look𐐷At🦄This𐐷{UFO}', { 'one-horned': ['Unicorn'] }),
+    ).toEqual(['Look𐐷At🦄This𐐷UFO']);
+  });
+  it('curly braces at the start', () => {
+    expect(
+      formatReplacementStringToArray('{one-horned}Thing👮🏽‍♀️Its𐐷Awesome', {
+        'one-horned': ['Unicorn'],
+      }),
+    ).toEqual([['Unicorn'], 'Thing👮🏽‍♀️Its𐐷Awesome']);
+  });
+});
+
+describe('formatReplacementString', () => {
+  it('substitutes string replacers', () => {
+    expect(
+      formatReplacementString('Look𐐷At🦄This𐐷{one-horned}Thing👮🏽‍♀️Its𐐷Awesome', {
+        'one-horned': 'Unicorn',
+      }),
+    ).toEqual('Look𐐷At🦄This𐐷UnicornThing👮🏽‍♀️Its𐐷Awesome');
+  });
+  it('handles escaped braces', () => {
+    expect(
+      formatReplacementString('Hi, this is {name}! I like \\{curly braces\\}!', { name: 'Jim' }),
+    ).toEqual('Hi, this is Jim! I like {curly braces}!');
+  });
+  it('coerces non-string replacers and joins', () => {
+    expect(formatReplacementString('a{n}b', { n: 9000 })).toEqual('a9000b');
   });
 });
