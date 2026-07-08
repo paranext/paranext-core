@@ -73,14 +73,17 @@ function getAdminOwnedEntries(
 
   const consider = (item: ResourceReference) => {
     if (!isProjectReference(item) && !isDblResourceReference(item)) return;
+
     const isFlagSet = item.isResourceShownByDefault !== undefined;
     if (!isFlagSet && !Object.hasOwn(overlay, item.id)) return;
+
     const flagged = item.isResourceShownByDefault === true;
     const existing = byId.get(item.id);
     if (existing) {
       if (flagged) existing.adminFlagged = true;
       return;
     }
+
     const entry: AdminOwnedEntry = { reference: item, adminFlagged: flagged };
     byId.set(item.id, entry);
     entries.push(entry);
