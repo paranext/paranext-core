@@ -45,35 +45,48 @@ type FocusSubjectElement = {
 };
 
 /**
- * The web view the user most recently selected (focused). Retained when focus moves to something
- * that is not a web view (the toolbar, a dialog, nothing) so top-toolbar navigation keeps targeting
- * the tab the user was just working in. Cleared when that web view closes.
+ * The scripture-navigable web view the user most recently selected (focused) — the navigation
+ * target of the top toolbar's book/chapter/verse controls and the navigation commands (see
+ * {@link isScriptureNavigableWebView}). Selecting a web view that is NOT scripture-navigable retains
+ * the previous value, as does focus moving to something that is not a web view (the toolbar, a
+ * dialog, nothing), so navigation keeps targeting the navigable tab the user was most recently
+ * working in. Cleared when that web view closes.
  */
-let lastSelectedWebViewId: WebViewId | undefined;
+let lastSelectedScriptureNavigableWebViewId: WebViewId | undefined;
 
-const onDidChangeLastSelectedWebViewIdEmitter = new PlatformEventEmitter<WebViewId | undefined>();
+const onDidChangeLastSelectedScriptureNavigableWebViewIdEmitter = new PlatformEventEmitter<
+  WebViewId | undefined
+>();
 
-/** Event that fires with the new id when the last selected web view changes */
-export const onDidChangeLastSelectedWebViewId = onDidChangeLastSelectedWebViewIdEmitter.event;
+/**
+ * Event that fires with the new id when the last selected scripture-navigable web view changes
+ * (including to `undefined` when it closes)
+ */
+export const onDidChangeLastSelectedScriptureNavigableWebViewId =
+  onDidChangeLastSelectedScriptureNavigableWebViewIdEmitter.event;
 
-/** Gets the id of the web view the user most recently selected, if any is open */
-export function getLastSelectedWebViewId(): WebViewId | undefined {
-  return lastSelectedWebViewId;
+/**
+ * Gets the id of the scripture-navigable web view the user most recently selected, if one has been
+ * selected and is still open
+ */
+export function getLastSelectedScriptureNavigableWebViewId(): WebViewId | undefined {
+  return lastSelectedScriptureNavigableWebViewId;
 }
 
-function setLastSelectedWebViewId(newWebViewId: WebViewId | undefined): void {
-  if (newWebViewId === lastSelectedWebViewId) return;
-  lastSelectedWebViewId = newWebViewId;
-  onDidChangeLastSelectedWebViewIdEmitter.emit(newWebViewId);
+function setLastSelectedScriptureNavigableWebViewId(newWebViewId: WebViewId | undefined): void {
+  if (newWebViewId === lastSelectedScriptureNavigableWebViewId) return;
+  lastSelectedScriptureNavigableWebViewId = newWebViewId;
+  onDidChangeLastSelectedScriptureNavigableWebViewIdEmitter.emit(newWebViewId);
 }
 
 /**
  * The tab or web view that most recently had focus, regardless of whether it is
- * scripture-navigable. Unlike {@link lastSelectedWebViewId}, this follows the user's focus to every
- * tab. Retained when focus moves outside all tabs so the last-selected tab tint can tell whether
- * the tracked web view was also the tab the user was most recently in — if the user visited some
- * other tab in between, the tracked web view keeps driving navigation but should not be tinted. (A
- * web view's tab id is the same as its web view id, so the two trackers are comparable.)
+ * scripture-navigable. Unlike {@link lastSelectedScriptureNavigableWebViewId}, this follows the
+ * user's focus to every tab. Retained when focus moves outside all tabs so the last-selected tab
+ * tint can tell whether the tracked web view was also the tab the user was most recently in — if
+ * the user visited some other tab in between, the tracked web view keeps driving navigation but
+ * should not be tinted. (A web view's tab id is the same as its web view id, so the two trackers
+ * are comparable.)
  */
 let lastFocusedTabId: string | undefined;
 
@@ -117,7 +130,8 @@ function isScriptureNavigableWebView(webViewId: WebViewId): boolean {
 // Clear the tracked web view when it closes. Guarded by id so a stale close event for a
 // previously selected web view does not clear a newer selection.
 onDidCloseWebView(({ webView }) => {
-  if (webView.id === lastSelectedWebViewId) setLastSelectedWebViewId(undefined);
+  if (webView.id === lastSelectedScriptureNavigableWebViewId)
+    setLastSelectedScriptureNavigableWebViewId(undefined);
 });
 
 class WindowDataProviderEngine
@@ -289,7 +303,7 @@ class WindowDataProviderEngine
       // before, same as focus moving to something that is not a web view at all.
       if (newFocusSubject.focusType === 'webView') {
         if (isScriptureNavigableWebView(newFocusSubject.id))
-          setLastSelectedWebViewId(newFocusSubject.id);
+          setLastSelectedScriptureNavigableWebViewId(newFocusSubject.id);
       }
       // A tab click resolves and stamps `tabType` onto the subject synchronously (see `setFocus`
       // above) and reaches here directly, bypassing the 250ms trailing-edge debounce that
@@ -302,7 +316,7 @@ class WindowDataProviderEngine
         newFocusSubject.tabType === TAB_TYPE_WEBVIEW &&
         isScriptureNavigableWebView(newFocusSubject.id)
       )
-        setLastSelectedWebViewId(newFocusSubject.id);
+        setLastSelectedScriptureNavigableWebViewId(newFocusSubject.id);
     }
 
     return true;

@@ -5,7 +5,7 @@ import { navigationCommandHandlers } from '@renderer/services/scroll-group-navig
 // vi.mock and vi.hoisted calls are hoisted by vitest above the imports above at transform time, so
 // the static imports can be written first here to satisfy import/first.
 const mocks = vi.hoisted(() => ({
-  getLastSelectedWebViewId: vi.fn(),
+  getLastSelectedScriptureNavigableWebViewId: vi.fn(),
   getSavedWebViewDefinitionSync: vi.fn(),
   getAllOpenWebViewDefinitionsSync: vi.fn(),
   updateWebViewDefinitionSync: vi.fn(() => true),
@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@renderer/services/window.service-host', () => ({
-  getLastSelectedWebViewId: mocks.getLastSelectedWebViewId,
+  getLastSelectedScriptureNavigableWebViewId: mocks.getLastSelectedScriptureNavigableWebViewId,
 }));
 vi.mock('@renderer/services/web-view.service-host', () => ({
   getSavedWebViewDefinitionSync: mocks.getSavedWebViewDefinitionSync,
@@ -52,7 +52,7 @@ beforeEach(() => {
   mocks.updateWebViewDefinitionSync.mockReturnValue(true);
   mocks.setScrRefSync.mockReturnValue(true);
   // No tracked web view and no open editor by default — individual describe blocks override.
-  mocks.getLastSelectedWebViewId.mockReturnValue(undefined);
+  mocks.getLastSelectedScriptureNavigableWebViewId.mockReturnValue(undefined);
   mocks.getAllOpenWebViewDefinitionsSync.mockReturnValue([]);
   mocks.windowServiceGetFocus.mockResolvedValue(undefined);
   // No project → book list falls back to ALL_BOOK_IDS
@@ -67,7 +67,7 @@ describe('go-to commands with a tracked web view', () => {
   });
 
   test('writes to the tracked web view scroll group with its project as source', async () => {
-    mocks.getLastSelectedWebViewId.mockReturnValue('web-view-1');
+    mocks.getLastSelectedScriptureNavigableWebViewId.mockReturnValue('web-view-1');
     mocks.getSavedWebViewDefinitionSync.mockReturnValue({
       id: 'web-view-1',
       scrollGroupScrRef: 2,
@@ -88,7 +88,7 @@ describe('go-to commands with a tracked web view', () => {
   });
 
   test('updates the web view definition when the tracked tab is detached', async () => {
-    mocks.getLastSelectedWebViewId.mockReturnValue('web-view-1');
+    mocks.getLastSelectedScriptureNavigableWebViewId.mockReturnValue('web-view-1');
     mocks.getSavedWebViewDefinitionSync.mockReturnValue({
       id: 'web-view-1',
       scrollGroupScrRef: GEN_5_3,
@@ -103,7 +103,7 @@ describe('go-to commands with a tracked web view', () => {
   });
 
   test('goToNextBook uses the project books-present list, not the full canon', async () => {
-    mocks.getLastSelectedWebViewId.mockReturnValue('web-view-1');
+    mocks.getLastSelectedScriptureNavigableWebViewId.mockReturnValue('web-view-1');
     mocks.getSavedWebViewDefinitionSync.mockReturnValue({
       id: 'web-view-1',
       scrollGroupScrRef: 0,
@@ -127,7 +127,7 @@ describe('go-to commands with a tracked web view', () => {
   });
 
   test('goToPreviousBook no-ops at the first book', async () => {
-    mocks.getLastSelectedWebViewId.mockReturnValue('web-view-1');
+    mocks.getLastSelectedScriptureNavigableWebViewId.mockReturnValue('web-view-1');
     mocks.getSavedWebViewDefinitionSync.mockReturnValue({
       id: 'web-view-1',
       scrollGroupScrRef: 0,
@@ -143,7 +143,7 @@ describe('go-to commands falling back to the main project editor', () => {
   // No web view tracked in any test in this block — the tracked-web-view step (step 1) must be a
   // no-op so the main-editor fallback (step 2) actually runs.
   beforeEach(() => {
-    mocks.getLastSelectedWebViewId.mockReturnValue(undefined);
+    mocks.getLastSelectedScriptureNavigableWebViewId.mockReturnValue(undefined);
   });
 
   test('no tracked web view + open main editor → target is the editor group and project', async () => {
@@ -222,7 +222,7 @@ describe('versification-aware rollover', () => {
   );
 
   beforeEach(() => {
-    mocks.getLastSelectedWebViewId.mockReturnValue('web-view-1');
+    mocks.getLastSelectedScriptureNavigableWebViewId.mockReturnValue('web-view-1');
     mocks.getSavedWebViewDefinitionSync.mockReturnValue({
       id: 'web-view-1',
       scrollGroupScrRef: 0,
@@ -309,7 +309,7 @@ describe('versification-aware rollover', () => {
 describe('platform.openBookChapterControl', () => {
   test("prefers the currently focused web view's handle over the tracked web view", async () => {
     mocks.windowServiceGetFocus.mockResolvedValue({ focusType: 'webView', id: 'focused-1' });
-    mocks.getLastSelectedWebViewId.mockReturnValue('tracked-1');
+    mocks.getLastSelectedScriptureNavigableWebViewId.mockReturnValue('tracked-1');
 
     const focusedHandle = { open: vi.fn() };
     const trackedHandle = { open: vi.fn() };
@@ -349,7 +349,7 @@ describe('platform.openBookChapterControl', () => {
       tabType: 'settings-tab',
       id: 'settings-1',
     });
-    mocks.getLastSelectedWebViewId.mockReturnValue('tracked-1');
+    mocks.getLastSelectedScriptureNavigableWebViewId.mockReturnValue('tracked-1');
 
     const trackedHandle = { open: vi.fn() };
     mocks.getBookChapterControlHandle.mockImplementation((ownerId: string) =>
@@ -363,7 +363,7 @@ describe('platform.openBookChapterControl', () => {
 
   test("falls back to the top toolbar's handle when neither the focused nor tracked web view has one", async () => {
     mocks.windowServiceGetFocus.mockResolvedValue(undefined);
-    mocks.getLastSelectedWebViewId.mockReturnValue(undefined);
+    mocks.getLastSelectedScriptureNavigableWebViewId.mockReturnValue(undefined);
 
     const toolbarHandle = { open: vi.fn() };
     mocks.getBookChapterControlHandle.mockImplementation((ownerId: string) =>
@@ -377,7 +377,7 @@ describe('platform.openBookChapterControl', () => {
 
   test('no-ops without throwing when no handle is registered anywhere', async () => {
     mocks.windowServiceGetFocus.mockResolvedValue(undefined);
-    mocks.getLastSelectedWebViewId.mockReturnValue(undefined);
+    mocks.getLastSelectedScriptureNavigableWebViewId.mockReturnValue(undefined);
     mocks.getBookChapterControlHandle.mockReturnValue(undefined);
 
     await expect(

@@ -2,7 +2,7 @@ import '@testing-library/jest-dom';
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useLastFocusedTabId } from '@renderer/hooks/use-last-focused-tab-id.hook';
-import { useLastSelectedWebViewId } from '@renderer/hooks/use-last-selected-web-view-id.hook';
+import { useLastSelectedScriptureNavigableWebViewId } from '@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook';
 import { PlatformTabTitle } from './platform-tab-title.component';
 
 // #region mocks
@@ -25,8 +25,8 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   })),
 }));
 
-vi.mock('@renderer/hooks/use-last-selected-web-view-id.hook', () => ({
-  useLastSelectedWebViewId: vi.fn(() => undefined),
+vi.mock('@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook', () => ({
+  useLastSelectedScriptureNavigableWebViewId: vi.fn(() => undefined),
 }));
 
 vi.mock('@renderer/hooks/use-last-focused-tab-id.hook', () => ({
@@ -79,13 +79,13 @@ function renderTabTitle(id: string) {
 describe('PlatformTabTitle last-selected web view highlighting', () => {
   afterEach(() => {
     cleanup();
-    vi.mocked(useLastSelectedWebViewId).mockReturnValue(undefined);
+    vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue(undefined);
     vi.mocked(useLastFocusedTabId).mockReturnValue(undefined);
     mockFocusSubject = undefined;
   });
 
   it('adds the last-selected class to the header and content pane when this tab is the last-selected web view, was the last focused tab, and focus is outside all tabs (undefined focus subject)', () => {
-    vi.mocked(useLastSelectedWebViewId).mockReturnValue('web-view-1');
+    vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue('web-view-1');
     vi.mocked(useLastFocusedTabId).mockReturnValue('web-view-1');
     mockFocusSubject = undefined;
 
@@ -98,7 +98,7 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
   });
 
   it('adds the last-selected class to the header and content pane when this tab is the last-selected web view, was the last focused tab, and focus is outside all tabs (focusType "other")', () => {
-    vi.mocked(useLastSelectedWebViewId).mockReturnValue('web-view-1');
+    vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue('web-view-1');
     vi.mocked(useLastFocusedTabId).mockReturnValue('web-view-1');
     mockFocusSubject = { focusType: 'other' };
 
@@ -114,7 +114,7 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
     // Reproduces: click scripture-navigable web view 1, click non-navigable web view 2 (tracker
     // retains web view 1), click the top toolbar (focus outside all tabs). Web view 1 still drives
     // BCV navigation but must not be tinted because it was not the tab the user was last in.
-    vi.mocked(useLastSelectedWebViewId).mockReturnValue('web-view-1');
+    vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue('web-view-1');
     vi.mocked(useLastFocusedTabId).mockReturnValue('web-view-2');
     mockFocusSubject = { focusType: 'other' };
 
@@ -129,7 +129,7 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
   });
 
   it('removes the last-selected class from the header and content pane when this tab becomes focused', () => {
-    vi.mocked(useLastSelectedWebViewId).mockReturnValue('web-view-1');
+    vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue('web-view-1');
     mockFocusSubject = { focusType: 'webView', id: 'web-view-1' };
 
     const { container } = renderTabTitle('web-view-1');
@@ -143,7 +143,7 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
   });
 
   it('removes the last-selected class from the header and content pane when a DIFFERENT tab is focused (PT9 parity: no dual highlight)', () => {
-    vi.mocked(useLastSelectedWebViewId).mockReturnValue('web-view-1');
+    vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue('web-view-1');
     mockFocusSubject = { focusType: 'tab', tabType: 'webView', id: 'some-other-tab' };
 
     const { container } = renderTabTitle('web-view-1');
@@ -157,7 +157,7 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
   });
 
   it('removes the last-selected class from the header and content pane when a DIFFERENT web view is focused (PT9 parity: no dual highlight)', () => {
-    vi.mocked(useLastSelectedWebViewId).mockReturnValue('web-view-1');
+    vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue('web-view-1');
     mockFocusSubject = { focusType: 'webView', id: 'some-other-web-view' };
 
     const { container } = renderTabTitle('web-view-1');
@@ -171,7 +171,7 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
   });
 
   it('does not add the last-selected class to the header or content pane when this tab is not the last-selected web view', () => {
-    vi.mocked(useLastSelectedWebViewId).mockReturnValue('some-other-web-view');
+    vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue('some-other-web-view');
     mockFocusSubject = undefined;
 
     const { container } = renderTabTitle('web-view-1');
@@ -188,7 +188,7 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
     // The last-selected web view's tab is NOT the active tab in its panel: a sibling tab (e.g.
     // Settings) is active instead, so the sibling's header and pane carry
     // .dock-tab-active/.dock-tabpane-active and this tab's header does not
-    vi.mocked(useLastSelectedWebViewId).mockReturnValue('web-view-1');
+    vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue('web-view-1');
     mockFocusSubject = { focusType: 'tab', id: 'settings-tab' };
 
     const { container } = render(

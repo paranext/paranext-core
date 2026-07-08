@@ -8,7 +8,7 @@ import {
   setScrRefSync,
 } from '@renderer/services/scroll-group.service-host';
 import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-host';
-import { getLastSelectedWebViewId } from '@renderer/services/window.service-host';
+import { getLastSelectedScriptureNavigableWebViewId } from '@renderer/services/window.service-host';
 import { resolveTargetWebView } from '@renderer/services/navigation-target.util';
 import { getBookIdsFromBooksPresent } from 'platform-bible-utils/experimental';
 import { WebViewId } from '@shared/models/web-view.model';
@@ -49,7 +49,7 @@ type NavigationTarget = {
 };
 
 function resolveNavigationTarget(): NavigationTarget | undefined {
-  const target = resolveTargetWebView(getLastSelectedWebViewId());
+  const target = resolveTargetWebView(getLastSelectedScriptureNavigableWebViewId());
   if (!target) return undefined;
 
   return {
@@ -209,7 +209,7 @@ async function openBookChapterControl(): Promise<void> {
   let handle = focusedWebViewId ? getBookChapterControlHandle(focusedWebViewId) : undefined;
 
   if (!handle) {
-    const trackedWebViewId = getLastSelectedWebViewId();
+    const trackedWebViewId = getLastSelectedScriptureNavigableWebViewId();
     if (trackedWebViewId) handle = getBookChapterControlHandle(trackedWebViewId);
   }
 

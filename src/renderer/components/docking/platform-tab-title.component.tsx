@@ -1,6 +1,6 @@
 import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { useLastFocusedTabId } from '@renderer/hooks/use-last-focused-tab-id.hook';
-import { useLastSelectedWebViewId } from '@renderer/hooks/use-last-selected-web-view-id.hook';
+import { useLastSelectedScriptureNavigableWebViewId } from '@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook';
 import { floatTab, updateTabPartialSync } from '@renderer/services/web-view.service-host';
 import { logger } from '@shared/services/logger.service';
 import { windowService } from '@shared/services/window.service';
@@ -148,7 +148,7 @@ export function PlatformTabTitle({
     return focusSubjectPossiblyError;
   }, [focusSubjectPossiblyError]);
 
-  const lastSelectedWebViewId = useLastSelectedWebViewId();
+  const lastSelectedScriptureNavigableWebViewId = useLastSelectedScriptureNavigableWebViewId();
   const lastFocusedTabId = useLastFocusedTabId();
 
   // Attach a click listener to the tab to focus this tab. Unfortunately rc-dock doesn't expose
@@ -230,7 +230,12 @@ export function PlatformTabTitle({
 
     // do nothing if this tab is not the navigation target, was not the last focused tab, or if
     // focus is on any tab or web view
-    if (id !== lastSelectedWebViewId || id !== lastFocusedTabId || isFocusOnATabOrWebView) return;
+    if (
+      id !== lastSelectedScriptureNavigableWebViewId ||
+      id !== lastFocusedTabId ||
+      isFocusOnATabOrWebView
+    )
+      return;
 
     // We need to walk the DOM to find the header and content to apply the last-selected style
     const containerElement = containerRef.current;
@@ -254,7 +259,7 @@ export function PlatformTabTitle({
       activeTabHeader.classList.remove(cssClassTabHeaderLastSelected);
       if (activeTabContent) activeTabContent.classList.remove(cssClassTabContentLastSelected);
     };
-  }, [focusSubject, id, lastSelectedWebViewId, lastFocusedTabId]);
+  }, [focusSubject, id, lastSelectedScriptureNavigableWebViewId, lastFocusedTabId]);
 
   const icon = (
     <div

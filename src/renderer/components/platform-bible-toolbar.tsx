@@ -10,7 +10,7 @@ import {
 } from '@renderer/hooks/papi-hooks';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useProjectPickerData } from '@renderer/hooks/use-project-picker-data.hook';
-import { useLastSelectedWebViewId } from '@renderer/hooks/use-last-selected-web-view-id.hook';
+import { useLastSelectedScriptureNavigableWebViewId } from '@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook';
 import { PROJECT_PICKER_DIALOG_TYPE } from '@renderer/components/dialogs/dialog-definition.model';
 import { app, dataProviders } from '@renderer/services/papi-frontend.service';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
@@ -92,14 +92,16 @@ export function PlatformBibleToolbar() {
     useProjectPickerData();
 
   const isPowerMode = useIsPowerMode();
-  const lastSelectedWebViewId = useLastSelectedWebViewId();
+  const lastSelectedScriptureNavigableWebViewId = useLastSelectedScriptureNavigableWebViewId();
 
   // Bumped by web view lifecycle events to force a re-read of `resolvedWebView` below
   const [definitionRefresh, setDefinitionRefresh] = useState(0);
 
   // Ref so the (deps-stable) event handlers always see the current tracked id
-  const lastSelectedWebViewIdRef = useRef(lastSelectedWebViewId);
-  lastSelectedWebViewIdRef.current = lastSelectedWebViewId;
+  const lastSelectedScriptureNavigableWebViewIdRef = useRef(
+    lastSelectedScriptureNavigableWebViewId,
+  );
+  lastSelectedScriptureNavigableWebViewIdRef.current = lastSelectedScriptureNavigableWebViewId;
 
   useEvent(
     onDidUpdateWebView,
@@ -107,7 +109,10 @@ export function PlatformBibleToolbar() {
       // Bump on an update to the tracked web view (its definition may have changed) or, when
       // nothing is tracked, on any update (the main-editor fallback's own definition may have
       // changed, e.g. its scrollGroupScrRef or projectId).
-      if (webView.id === lastSelectedWebViewIdRef.current || !lastSelectedWebViewIdRef.current)
+      if (
+        webView.id === lastSelectedScriptureNavigableWebViewIdRef.current ||
+        !lastSelectedScriptureNavigableWebViewIdRef.current
+      )
         setDefinitionRefresh((n) => n + 1);
     }, []),
   );
@@ -117,13 +122,13 @@ export function PlatformBibleToolbar() {
   useEvent(
     onDidOpenWebView,
     useCallback(() => {
-      if (!lastSelectedWebViewIdRef.current) setDefinitionRefresh((n) => n + 1);
+      if (!lastSelectedScriptureNavigableWebViewIdRef.current) setDefinitionRefresh((n) => n + 1);
     }, []),
   );
   useEvent(
     onDidCloseWebView,
     useCallback(() => {
-      if (!lastSelectedWebViewIdRef.current) setDefinitionRefresh((n) => n + 1);
+      if (!lastSelectedScriptureNavigableWebViewIdRef.current) setDefinitionRefresh((n) => n + 1);
     }, []),
   );
 
@@ -136,8 +141,8 @@ export function PlatformBibleToolbar() {
     // Referenced so this memo re-runs whenever a relevant web view lifecycle event bumps it
     // eslint-disable-next-line no-unused-expressions
     definitionRefresh;
-    return resolveTargetWebView(lastSelectedWebViewId);
-  }, [lastSelectedWebViewId, definitionRefresh]);
+    return resolveTargetWebView(lastSelectedScriptureNavigableWebViewId);
+  }, [lastSelectedScriptureNavigableWebViewId, definitionRefresh]);
 
   // No resolved target (no eligible tracked tab and no main-project editor open): nothing to
   // navigate — controls are disabled
