@@ -8,9 +8,12 @@ import type {
   WebViewDefinition,
 } from '@papi/core';
 import type {
+  CommentFilters,
   CommentListWebViewController,
   OpenCommentListWebViewOptions,
+  ScopeFilter,
 } from 'legacy-comment-manager';
+import { serialize } from 'platform-bible-utils';
 import commentListWebView from './comment-list.web-view?inline';
 import tailwindStyles from './tailwind.css?inline';
 import { CommentListWebViewMessage } from './comment-list-messages.model';
@@ -101,6 +104,20 @@ class CommentListWebViewFactory extends WebViewFactory<typeof commentListWebView
           message,
         );
       },
+      async setFilters(
+        filters?: Partial<CommentFilters>,
+        scopeFilter?: ScopeFilter,
+      ): Promise<void> {
+        logger.debug(
+          `Comment List WebView Controller ${webViewDefinition.id} received setFilters ${serialize({ filters, scopeFilter })}`,
+        );
+        const message: CommentListWebViewMessage = { method: 'setFilters', filters, scopeFilter };
+        await papi.webViewProviders.postMessageToWebView(
+          webViewDefinition.id,
+          webViewNonce,
+          message,
+        );
+      },
       async dispose(): Promise<boolean> {
         return true;
       },
@@ -141,6 +158,10 @@ async function openCommentList(
     tabIdFromWebViewId = webViewDefinition?.id;
     editorScrollGroupId = webViewDefinition?.scrollGroupScrRef;
   }
+
+  // A caller that isn't the project's own web view (e.g. the S/R results dialog) can target a
+  // project directly. Takes precedence over the web-view-derived project.
+  projectId = options.projectId ?? projectId;
 
   if (!projectId) {
     logger.debug('No project!');
@@ -203,6 +224,22 @@ async function openCommentList(
     }
   }
 
+  // Pre-apply filter axes / scope if requested (e.g. the S/R link opens the unresolved-conflicts
+  // view). Deterministic: unspecified axes reset to default (see setFilters docs).
+  if (commentListWebViewId && (options.filtersToSet || options.scopeFilterToSet)) {
+    const commentListController = await papi.webViews.getWebViewController(
+      commentListWebViewType,
+      commentListWebViewId,
+    );
+    if (commentListController) {
+      await commentListController.setFilters(options.filtersToSet, options.scopeFilterToSet);
+    } else {
+      throw new Error(
+        `Could not get WebView Controller for comment list WebView ${commentListWebViewId} to set filters`,
+      );
+    }
+  }
+
   return commentListWebViewId;
 }
 
@@ -261,6 +298,26 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
               threadIdToSelect: {
                 type: 'string',
                 description: 'ID of the thread to select and scroll to in the comment list',
+              },
+              projectId: {
+                type: 'string',
+                description:
+                  'Project whose comments to show (overrides the webViewId-derived project)',
+              },
+              filtersToSet: {
+                type: 'object',
+                description: 'Comment-filter axes to pre-apply; unspecified axes reset to all',
+                properties: {
+                  resolved: { type: 'string', enum: ['all', 'unresolved', 'resolved'] },
+                  read: { type: 'string', enum: ['all', 'unread', 'read'] },
+                  type: { type: 'string', enum: ['all', 'conflicts', 'comments'] },
+                  assignment: { type: 'string', enum: ['all', 'assigned-to-me', 'team'] },
+                },
+              },
+              scopeFilterToSet: {
+                type: 'string',
+                enum: ['unfiltered', 'current-chapter'],
+                description: 'Scope to pre-apply (e.g. unfiltered for all books)',
               },
             },
           },

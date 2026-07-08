@@ -449,11 +449,26 @@ declare module 'legacy-comment-manager' {
      * @param threadId The ID of the thread to scroll to and select
      */
     selectThread(threadId: string): Promise<void>;
+    /**
+     * Set the comment-list filter axes and/or scope. Axes given in `filters` are applied on top of
+     * the default (all) filters — unspecified axes reset to 'all', they are NOT merged with the
+     * user's current selection. `scopeFilter` is set only when provided.
+     */
+    setFilters(filters?: Partial<CommentFilters>, scopeFilter?: ScopeFilter): Promise<void>;
   }>;
 
   export type OpenCommentListWebViewOptions = {
     /** ID of the thread to select and scroll to in the comment list */
     threadIdToSelect?: string | undefined;
+    /**
+     * Project whose comments to show. Use when the caller is not the project's own web view (e.g.
+     * the S/R results dialog). Takes precedence over the project derived from `webViewId`.
+     */
+    projectId?: string | undefined;
+    /** Comment-filter axes to pre-apply (unspecified axes reset to 'all'). */
+    filtersToSet?: Partial<CommentFilters> | undefined;
+    /** Scope to pre-apply (e.g. `'unfiltered'` for all books). */
+    scopeFilterToSet?: ScopeFilter | undefined;
   };
 
   // #endregion Comment list WebView types
@@ -478,7 +493,10 @@ declare module 'papi-shared-types' {
      * WebView ID
      *
      * @param webViewId The ID of the WebView whose project comments to display
-     * @param options Additional options for opening the comment list WebView
+     * @param options Additional options for opening the comment list WebView. `options.projectId`
+     *   targets a project directly, taking precedence over the project derived from `webViewId`
+     *   (e.g. for callers that are not that project's own web view). `options.filtersToSet` and
+     *   `options.scopeFilterToSet` pre-apply comment-filter axes/scope on open or focus.
      * @returns The ID of the comment list WebView that was opened or focused, or `undefined` if no
      *   project ID could be determined
      * @throws If something goes wrong with selecting the provided thread ID
