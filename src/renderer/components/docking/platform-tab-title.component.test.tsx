@@ -72,9 +72,21 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
     mockFocusSubject = undefined;
   });
 
-  it('adds the last-selected class to the header and content pane when this tab is the last-selected web view and is not focused', () => {
+  it('adds the last-selected class to the header and content pane when this tab is the last-selected web view and focus is outside all tabs (undefined focus subject)', () => {
     vi.mocked(useLastSelectedWebViewId).mockReturnValue('web-view-1');
     mockFocusSubject = undefined;
+
+    const { container } = renderTabTitle('web-view-1');
+
+    expect(container.querySelector('.dock-tab-active')).toHaveClass(cssClassTabHeaderLastSelected);
+    expect(container.querySelector('.dock-tabpane-active')).toHaveClass(
+      cssClassTabContentLastSelected,
+    );
+  });
+
+  it('adds the last-selected class to the header and content pane when this tab is the last-selected web view and focus is outside all tabs (focusType "other")', () => {
+    vi.mocked(useLastSelectedWebViewId).mockReturnValue('web-view-1');
+    mockFocusSubject = { focusType: 'other' };
 
     const { container } = renderTabTitle('web-view-1');
 
@@ -87,6 +99,34 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
   it('removes the last-selected class from the header and content pane when this tab becomes focused', () => {
     vi.mocked(useLastSelectedWebViewId).mockReturnValue('web-view-1');
     mockFocusSubject = { focusType: 'webView', id: 'web-view-1' };
+
+    const { container } = renderTabTitle('web-view-1');
+
+    expect(container.querySelector('.dock-tab-active')).not.toHaveClass(
+      cssClassTabHeaderLastSelected,
+    );
+    expect(container.querySelector('.dock-tabpane-active')).not.toHaveClass(
+      cssClassTabContentLastSelected,
+    );
+  });
+
+  it('removes the last-selected class from the header and content pane when a DIFFERENT tab is focused (PT9 parity: no dual highlight)', () => {
+    vi.mocked(useLastSelectedWebViewId).mockReturnValue('web-view-1');
+    mockFocusSubject = { focusType: 'tab', tabType: 'webView', id: 'some-other-tab' };
+
+    const { container } = renderTabTitle('web-view-1');
+
+    expect(container.querySelector('.dock-tab-active')).not.toHaveClass(
+      cssClassTabHeaderLastSelected,
+    );
+    expect(container.querySelector('.dock-tabpane-active')).not.toHaveClass(
+      cssClassTabContentLastSelected,
+    );
+  });
+
+  it('removes the last-selected class from the header and content pane when a DIFFERENT web view is focused (PT9 parity: no dual highlight)', () => {
+    vi.mocked(useLastSelectedWebViewId).mockReturnValue('web-view-1');
+    mockFocusSubject = { focusType: 'webView', id: 'some-other-web-view' };
 
     const { container } = renderTabTitle('web-view-1');
 

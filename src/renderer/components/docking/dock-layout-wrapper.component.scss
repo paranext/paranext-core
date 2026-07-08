@@ -334,10 +334,11 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
 
 /* "Last selected" = the web view that the top toolbar's book/chapter/verse controls and
 navigation commands currently target. Tint its tab (and, via the paired rule near the top of this
-file, its content pane) so it stays easy to find after focus moves elsewhere. This selector's
-specificity (two classes) is intentionally lower than the `platform-dock-tab-window-focus` rule
-above (five classes, scoped under `.dock-style-platform-bible .dock-tab`), so window focus always
-wins when this tab is also the focused one. */
+file, its content pane) so it stays easy to find once focus leaves every tab entirely (PT9
+parity) - e.g. to a toolbar control or dialog. While any tab or web view is focused, that tab's
+own focus highlight is the only marker, so this tint and the window-focus highlight never apply
+to a tab at the same time; the lower specificity below is a defensive tie-breaker rather than a
+case this app can currently reach. */
 .dock-tab-active.platform-dock-tab-last-selected {
   --tab-background: var(--tab-highlight);
 }

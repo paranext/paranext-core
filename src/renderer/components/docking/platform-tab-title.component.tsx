@@ -44,11 +44,14 @@ const cssClassTabContentWindowFocus = 'platform-dock-tabpane-window-focus';
 
 /**
  * CSS class for tinting the tab header of the last-selected web view (the navigation target of the
- * top toolbar's book/chapter/verse controls and navigation commands) while it is not the focused
- * tab
+ * top toolbar's book/chapter/verse controls and navigation commands) while focus is outside every
+ * tab (PT9 parity)
  */
 const cssClassTabHeaderLastSelected = 'platform-dock-tab-last-selected';
-/** CSS class for tinting the tab content pane of the last-selected web view while it is not focused */
+/**
+ * CSS class for tinting the tab content pane of the last-selected web view while focus is outside
+ * every tab (PT9 parity)
+ */
 const cssClassTabContentLastSelected = 'platform-dock-tabpane-last-selected';
 
 // This duration must be ≥ the tabTitleBarFlash animation duration in dock-layout-wrapper.component.scss
@@ -210,15 +213,17 @@ export function PlatformTabTitle({
 
   // Handle applying and removing the CSS style that tints this tab's header when it is the
   // navigation target (the last-selected web view driving the top toolbar's BCV controls and
-  // navigation commands) but is not the currently focused tab
+  // navigation commands) and focus is currently outside every tab (PT9 parity). Restricting the
+  // tint to this case - rather than merely "not this tab" - avoids two tabs being visually marked
+  // at once: whenever any tab or web view is focused, that tab's own focus highlight is the only
+  // marker, and the tint reappears only once focus leaves all tabs (e.g. to a toolbar control or
+  // dialog).
   useEffect(() => {
-    const isThisTabFocused =
-      !!focusSubject &&
-      (focusSubject.focusType === 'tab' || focusSubject.focusType === 'webView') &&
-      focusSubject.id === id;
+    const isFocusOnATabOrWebView =
+      !!focusSubject && (focusSubject.focusType === 'tab' || focusSubject.focusType === 'webView');
 
-    // do nothing if this tab is not the navigation target, or if it is already focused
-    if (id !== lastSelectedWebViewId || isThisTabFocused) return;
+    // do nothing if this tab is not the navigation target, or if focus is on any tab or web view
+    if (id !== lastSelectedWebViewId || isFocusOnATabOrWebView) return;
 
     // We need to walk the DOM to find the header and content to apply the last-selected style
     const containerElement = containerRef.current;
