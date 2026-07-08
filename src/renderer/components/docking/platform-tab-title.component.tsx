@@ -31,6 +31,12 @@ type PlatformTabTitleProps = {
   flashTriggerTime?: number;
   /** ID of the tab */
   id: string;
+  /**
+   * ID of the WebView this tab hosts, if it is a WebView tab (equals the tab ID); `undefined` for
+   * non-WebView tabs. Emitted as a `data-web-view-id` attribute to give tests a stable,
+   * locale-independent selector.
+   */
+  webViewId?: string;
 };
 
 // CSS classes for highlighting the active tab header and content
@@ -61,6 +67,7 @@ const handleFloatTab = async (tabId: string) => {
  * @param flashTriggerTime Trigger to make the tab flash. Each time this value changes to a truthy
  *   value, it will trigger a new flash animation.
  * @param id ID of the tab
+ * @param webViewId ID of the WebView this tab hosts, if it is a WebView tab; `undefined` otherwise
  */
 export function PlatformTabTitle({
   iconUrl,
@@ -68,6 +75,7 @@ export function PlatformTabTitle({
   tooltip,
   flashTriggerTime,
   id,
+  webViewId,
 }: PlatformTabTitleProps) {
   const lastFlashTriggerTimeRef = useRef<number | undefined>(undefined);
 
@@ -215,7 +223,12 @@ export function PlatformTabTitle({
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <div ref={containerRef} className="platform-tab-title" aria-label={tabLabel}>
+              <div
+                ref={containerRef}
+                className="platform-tab-title"
+                aria-label={tabLabel}
+                data-web-view-id={webViewId}
+              >
                 <span>{icon}</span>
                 <span>{title}</span>
               </div>

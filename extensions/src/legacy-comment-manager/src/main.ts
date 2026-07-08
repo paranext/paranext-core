@@ -22,7 +22,7 @@ import { LEGACY_COMMENT_USJ_PROJECT_INTERFACES } from './project-data-provider/l
 import { resolveCommentListPanelProjectId } from './comment-list-panel.utils';
 
 const commentListWebViewType = 'legacyCommentManager.commentList';
-const COMMENT_LIST_PANEL_WEBVIEW_TYPE = 'legacyCommentManager.commentListPanel';
+const commentListPanelWebViewType = 'legacyCommentManager.commentListPanel';
 
 // #region Comment List WebView
 
@@ -120,7 +120,13 @@ interface CommentListPanelOptions extends OpenWebViewOptions {
   projectId?: string;
 }
 
-/** Pending projectId consumed by commentListPanelProvider.getWebView() after reloadWebView() */
+/**
+ * Pending projectId consumed by commentListPanelProvider.getWebView() after reloadWebView().
+ *
+ * Note: `undefined` doubles as the "no pending value" sentinel, so a pending `undefined` cannot
+ * clear an already-open panel's project — resolution falls back to the saved projectId. This is an
+ * accepted limitation; see {@link openCommentListPanel}.
+ */
 let currentCommentListPanelProjectId: string | undefined;
 
 const commentListPanelProvider: IWebViewProvider = {
@@ -128,9 +134,9 @@ const commentListPanelProvider: IWebViewProvider = {
     savedWebView: SavedWebViewDefinition,
     openWebViewOptions: CommentListPanelOptions,
   ): Promise<WebViewDefinition | undefined> {
-    if (savedWebView.webViewType !== COMMENT_LIST_PANEL_WEBVIEW_TYPE)
+    if (savedWebView.webViewType !== commentListPanelWebViewType)
       throw new Error(
-        `${COMMENT_LIST_PANEL_WEBVIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} web view`,
+        `${commentListPanelWebViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
 
     const projectId = resolveCommentListPanelProjectId(
@@ -160,28 +166,32 @@ const commentListPanelProvider: IWebViewProvider = {
  *
  * This implements the `legacyCommentManager.openCommentListPanel` command.
  *
- * @param projectId The project whose comments to display, or `undefined` to show an empty panel
+ * @param projectId The project whose comments to display. If `undefined`, a newly created panel
+ *   opens empty, but an already-open panel keeps its current project (`undefined` is
+ *   indistinguishable from "no pending value" in the sentinel, so resolution falls back to the
+ *   saved projectId). This is an accepted limitation: in Simple mode there is no scenario where an
+ *   active project needs to be cleared after having been set.
  * @returns The webView ID of the panel, or `undefined` if opening failed
  */
 async function openCommentListPanel(projectId: string | undefined): Promise<string | undefined> {
   // Use existingId: '?' to passively probe for the existing Column 3 tab (returns its id, or
   // undefined if not found) without bringing it to front or creating one if absent.
   const existingId = await papi.webViews.openWebView(
-    COMMENT_LIST_PANEL_WEBVIEW_TYPE,
+    commentListPanelWebViewType,
     { type: 'tab' },
     { existingId: '?', createNewIfNotFound: false, bringToFront: false },
   );
 
   if (existingId) {
     currentCommentListPanelProjectId = projectId;
-    return papi.webViews.reloadWebView(COMMENT_LIST_PANEL_WEBVIEW_TYPE, existingId, {
+    return papi.webViews.reloadWebView(commentListPanelWebViewType, existingId, {
       bringToFront: false, // Don't steal focus from the scripture editor on project switch
     });
   }
 
   // Panel not yet open (shouldn't happen in Simple mode where it's always in the layout).
   const openOptions: CommentListPanelOptions = { projectId };
-  return papi.webViews.openWebView(COMMENT_LIST_PANEL_WEBVIEW_TYPE, { type: 'tab' }, openOptions);
+  return papi.webViews.openWebView(commentListPanelWebViewType, { type: 'tab' }, openOptions);
 }
 
 // #endregion Comment List Panel WebView
@@ -289,7 +299,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   );
 
   const commentListPanelWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
-    COMMENT_LIST_PANEL_WEBVIEW_TYPE,
+    commentListPanelWebViewType,
     commentListPanelProvider,
   );
 

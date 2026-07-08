@@ -19,5 +19,5 @@ export function resolveCommentListPanelProjectId(
   fromOptions: string | undefined,
   fromSaved: string | undefined,
 ): string | undefined {
-  return pending !== undefined ? pending : (fromOptions ?? fromSaved);
+  return pending ?? fromOptions ?? fromSaved;
 }

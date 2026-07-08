@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { ScriptureRange } from 'platform-scripture-editor';
 import type PapiBackend from '@papi/backend';
 import { UsjTextContentLocation } from 'platform-bible-utils';
+import type { SavedWebViewDefinition } from '@papi/core';
 import {
   convertScriptureRangeToEditorRange,
   openDefaultActiveProjectIfApplicable,
@@ -11,6 +12,7 @@ import {
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   selectProjectIdsForOpenMode,
   startDefaultProjectPicker,
+  toScriptureEditorInfos,
 } from './platform-scripture-editor.utils';
 
 // Sample USJ chapter data for Genesis chapter 1 with multiple verses
@@ -2001,6 +2003,61 @@ describe('resolveOpenEditorDispatch', () => {
 });
 
 // #endregion resolveOpenEditorDispatch
+
+// #region toScriptureEditorInfos
+
+describe('toScriptureEditorInfos', () => {
+  it('filters out web views that are not Scripture Editors', () => {
+    const defs: SavedWebViewDefinition[] = [
+      { id: 'editor-1', webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: 'PROJ_A' },
+      { id: 'model-text', webViewType: 'platformScriptureEditor.modelText', projectId: 'PROJ_A' },
+      { id: 'comments', webViewType: 'legacyCommentManager.commentListPanel' },
+    ];
+    expect(toScriptureEditorInfos(defs)).toEqual([
+      { id: 'editor-1', projectId: 'PROJ_A', isReadOnly: false },
+    ]);
+  });
+
+  it('maps id and projectId through, including an undefined projectId (empty editor slot)', () => {
+    const defs: SavedWebViewDefinition[] = [
+      { id: 'editor-empty', webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE },
+    ];
+    expect(toScriptureEditorInfos(defs)).toEqual([
+      { id: 'editor-empty', projectId: undefined, isReadOnly: false },
+    ]);
+  });
+
+  it('reads isReadOnly from state, defaulting to false when state or the flag is missing', () => {
+    const defs: SavedWebViewDefinition[] = [
+      {
+        id: 'viewer',
+        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+        projectId: 'PROJ_A',
+        state: { isReadOnly: true },
+      },
+      {
+        id: 'editor',
+        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+        projectId: 'PROJ_B',
+        state: { isReadOnly: false },
+      },
+      { id: 'no-state', webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: 'PROJ_C' },
+      { id: 'no-flag', webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: 'PROJ_D', state: {} },
+    ];
+    expect(toScriptureEditorInfos(defs).map((e) => e.isReadOnly)).toEqual([
+      true,
+      false,
+      false,
+      false,
+    ]);
+  });
+
+  it('returns an empty array for empty input', () => {
+    expect(toScriptureEditorInfos([])).toEqual([]);
+  });
+});
+
+// #endregion toScriptureEditorInfos
 
 // #region selectProjectIdsForOpenMode
 

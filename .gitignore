@@ -63,8 +63,6 @@ e2e-tests/.dev-server.pid
 docs/superpowers/
 .superpowers/
 .review
-/.claude/*.lock
-/.claude/settings.local.json
 
 # cursor
 .cursor/

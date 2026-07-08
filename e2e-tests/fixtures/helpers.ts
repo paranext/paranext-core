@@ -430,6 +430,49 @@ export async function waitForAtLeastOneProjectMetadata(
 }
 
 /**
+ * Path to the shared dev-appdata settings file. Platform.Bible reads this file at startup in
+ * development mode to restore user settings. Writing it before launching Electron is the correct
+ * way to pre-configure locale and interface mode for E2E tests — it avoids triggering the
+ * mid-session locale reload path, which sequentially reloads every open WebView.
+ */
+const DEV_APPDATA_SETTINGS_PATH = path.resolve(__dirname, '../../dev-appdata/data/settings.json');
+
+/**
+ * Merge the given key-value pairs into the dev-appdata settings file before launching the app.
+ * Preserves any existing settings (e.g. `platform.verseRef`) so the app session starts from the
+ * developer's saved state plus the overrides.
+ *
+ * Must be called BEFORE `launchElectronApp` so the app reads the correct values at startup.
+ *
+ * @returns A restore function that writes the settings file back to its exact pre-call contents (or
+ *   deletes it if it did not exist). Call it in worker teardown, AFTER the app has closed, so the
+ *   developer's saved settings are not permanently replaced by test values.
+ */
+export function preConfigureSettings(overrides: Record<string, unknown>): () => void {
+  const settingsDir = path.dirname(DEV_APPDATA_SETTINGS_PATH);
+  let originalContents: string | undefined;
+  let existing: Record<string, unknown> = {};
+  if (fs.existsSync(DEV_APPDATA_SETTINGS_PATH)) {
+    originalContents = fs.readFileSync(DEV_APPDATA_SETTINGS_PATH, 'utf-8');
+    try {
+      // JSON.parse returns `any`; asserting the known shape of the settings file
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      existing = JSON.parse(originalContents) as Record<string, unknown>;
+    } catch {
+      // Corrupt file — start fresh with only the overrides
+    }
+  }
+  fs.mkdirSync(settingsDir, { recursive: true });
+  fs.writeFileSync(DEV_APPDATA_SETTINGS_PATH, JSON.stringify({ ...existing, ...overrides }));
+
+  return () => {
+    if (originalContents !== undefined)
+      fs.writeFileSync(DEV_APPDATA_SETTINGS_PATH, originalContents);
+    else fs.rmSync(DEV_APPDATA_SETTINGS_PATH, { force: true });
+  };
+}
+
+/**
  * Adds the given usernames as team members of the specified Paratext project so they appear in the
  * "Assign to" dropdown.
  *
@@ -466,6 +509,16 @@ export function addUsersToProject(projectDir: string, users: string[]): void {
 }
 
 /**
+ * Wait for the full-screen workspace-updating overlay to be gone. The overlay (`<div role="status"
+ * class="tw:fixed tw:inset-0 …">`) intercepts pointer events while it is visible; it appears during
+ * app initialization and during dock rebuilds (e.g. project switches in simple mode). Clicks and
+ * iframe loads fail while it is up.
+ */
+export async function waitForOverlayGone(page: Page, timeout: number): Promise<void> {
+  await expect(page.locator('.pr-twp [role="status"]')).not.toBeVisible({ timeout });
+}
+
+/**
  * Wait for the Platform.Bible UI to be fully ready beyond just React mounting. Waits for the
  * platform-dock layout to appear, then for the dialog service to finish registering menu commands
  * like `platform.about` (the dock can render before that async work completes), and finally for the
@@ -481,10 +534,9 @@ export async function waitForAppReady(page: Page, timeout = 90_000): Promise<voi
   const remaining1 = Math.max(1000, timeout - (Date.now() - start));
   await waitForPapiMethodRegistered(PLATFORM_ABOUT_COMMAND, DEFAULT_WEBSOCKET_PORT, remaining1);
   const remaining2 = Math.max(1000, timeout - (Date.now() - start));
-  // The overlay (<div role="status" class="tw:fixed tw:inset-0 …">) intercepts pointer events
-  // while it is visible. Services like settings and theme finish async work after dock-layout
-  // mounts and platform.about registers, so the overlay can outlast both earlier signals.
-  await expect(page.locator('.pr-twp [role="status"]')).not.toBeVisible({ timeout: remaining2 });
+  // Services like settings and theme finish async work after dock-layout mounts and platform.about
+  // registers, so the overlay can outlast both earlier signals.
+  await waitForOverlayGone(page, remaining2);
 }
 
 /** Options accepted by {@link openFromEditorHamburger}. */
