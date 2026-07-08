@@ -9,13 +9,31 @@ type CloseWebViewCallback = (event: { webView: { id: string } }) => void;
 
 // vi.mock and vi.hoisted calls are hoisted by vitest above the imports above at transform time, so
 // the static imports can be written first here to satisfy import/first.
-const { closeWebViewCallbacks, getTabInfoByIdMock } = vi.hoisted(() => {
-  const callbacks: CloseWebViewCallback[] = [];
-  // Shared (not per-`getDockLayout()`-call) mock so individual tests can control what tab info
-  // comes back for a given tab id, e.g. to simulate a web view tab vs. a non-web-view tab.
-  const tabInfoMock = vi.fn((): { id: string; tabType: string } | undefined => undefined);
-  return { closeWebViewCallbacks: callbacks, getTabInfoByIdMock: tabInfoMock };
-});
+const { closeWebViewCallbacks, getTabInfoByIdMock, getSavedWebViewDefinitionSyncMock } = vi.hoisted(
+  () => {
+    const callbacks: CloseWebViewCallback[] = [];
+    // Shared (not per-`getDockLayout()`-call) mock so individual tests can control what tab info
+    // comes back for a given tab id, e.g. to simulate a web view tab vs. a non-web-view tab.
+    const tabInfoMock = vi.fn((): { id: string; tabType: string } | undefined => undefined);
+    // Defaults every web view to an eligible (project-bearing) definition so existing tests that
+    // don't care about the eligibility gate keep passing; tests for the gate itself override this.
+    // Typed loosely (both fields optional, possibly `undefined` altogether) so individual tests
+    // can return definition-less / ineligible / missing definitions.
+    const definitionMock = vi.fn(
+      (
+        id: string,
+      ): { id: string; projectId?: string; shouldShowToolbar?: boolean } | undefined => ({
+        id,
+        projectId: 'project-1',
+      }),
+    );
+    return {
+      closeWebViewCallbacks: callbacks,
+      getTabInfoByIdMock: tabInfoMock,
+      getSavedWebViewDefinitionSyncMock: definitionMock,
+    };
+  },
+);
 
 vi.mock('@renderer/services/web-view.service-host', () => ({
   getDockLayout: vi.fn(async () => ({
@@ -28,6 +46,7 @@ vi.mock('@renderer/services/web-view.service-host', () => ({
     closeWebViewCallbacks.push(callback);
     return () => true;
   },
+  getSavedWebViewDefinitionSync: getSavedWebViewDefinitionSyncMock,
 }));
 
 vi.mock('@shared/services/data-provider.service', () => ({
@@ -45,6 +64,11 @@ describe('last selected web view tracking', () => {
     if (tracked) emitCloseWebView(tracked);
     getTabInfoByIdMock.mockReset();
     getTabInfoByIdMock.mockReturnValue(undefined);
+    getSavedWebViewDefinitionSyncMock.mockReset();
+    getSavedWebViewDefinitionSyncMock.mockImplementation((id: string) => ({
+      id,
+      projectId: 'project-1',
+    }));
   });
 
   test('remembers the most recently focused web view', async () => {
@@ -109,5 +133,77 @@ describe('last selected web view tracking', () => {
     await engine.setFocus({ focusType: 'tab', id: 'settings-tab-1' });
 
     expect(getLastSelectedWebViewId()).toBe('web-view-1');
+  });
+
+  describe('scripture-navigable eligibility gate', () => {
+    test('tracks a web view whose definition has only projectId', async () => {
+      getSavedWebViewDefinitionSyncMock.mockReturnValue({ id: 'web-view-1', projectId: 'proj-1' });
+
+      const engine = testingWindowService.implementWindowDataProviderEngine();
+      await engine.setFocus({ focusType: 'webView', id: 'web-view-1' });
+
+      expect(getLastSelectedWebViewId()).toBe('web-view-1');
+    });
+
+    test('tracks a web view whose definition has only shouldShowToolbar', async () => {
+      getSavedWebViewDefinitionSyncMock.mockReturnValue({
+        id: 'web-view-1',
+        shouldShowToolbar: true,
+      });
+
+      const engine = testingWindowService.implementWindowDataProviderEngine();
+      await engine.setFocus({ focusType: 'webView', id: 'web-view-1' });
+
+      expect(getLastSelectedWebViewId()).toBe('web-view-1');
+    });
+
+    test('retains the previous tracked web view when focusing a web view with no projectId or shouldShowToolbar', async () => {
+      const engine = testingWindowService.implementWindowDataProviderEngine();
+      // First track an eligible web view (default mock: has projectId)
+      await engine.setFocus({ focusType: 'webView', id: 'web-view-1' });
+      expect(getLastSelectedWebViewId()).toBe('web-view-1');
+
+      // Now focus an ineligible web view (definition has neither projectId nor shouldShowToolbar)
+      getSavedWebViewDefinitionSyncMock.mockReturnValue({ id: 'web-view-2' });
+      await engine.setFocus({ focusType: 'webView', id: 'web-view-2' });
+
+      expect(getLastSelectedWebViewId()).toBe('web-view-1');
+    });
+
+    test('retains the previous tracked web view when the definition cannot be found (undefined)', async () => {
+      const engine = testingWindowService.implementWindowDataProviderEngine();
+      await engine.setFocus({ focusType: 'webView', id: 'web-view-1' });
+      expect(getLastSelectedWebViewId()).toBe('web-view-1');
+
+      getSavedWebViewDefinitionSyncMock.mockReturnValue(undefined);
+      await engine.setFocus({ focusType: 'webView', id: 'web-view-2' });
+
+      expect(getLastSelectedWebViewId()).toBe('web-view-1');
+    });
+
+    test('retains the previous tracked web view when reading the definition throws', async () => {
+      const engine = testingWindowService.implementWindowDataProviderEngine();
+      await engine.setFocus({ focusType: 'webView', id: 'web-view-1' });
+      expect(getLastSelectedWebViewId()).toBe('web-view-1');
+
+      getSavedWebViewDefinitionSyncMock.mockImplementation(() => {
+        throw new Error('dock layout not registered');
+      });
+      await engine.setFocus({ focusType: 'webView', id: 'web-view-2' });
+
+      expect(getLastSelectedWebViewId()).toBe('web-view-1');
+    });
+
+    test('retains the previous tracked web view when an ineligible web view tab is focused via setFocus tab path', async () => {
+      const engine = testingWindowService.implementWindowDataProviderEngine();
+      await engine.setFocus({ focusType: 'webView', id: 'web-view-1' });
+      expect(getLastSelectedWebViewId()).toBe('web-view-1');
+
+      getTabInfoByIdMock.mockReturnValueOnce({ id: 'web-view-tab-2', tabType: 'webView' });
+      getSavedWebViewDefinitionSyncMock.mockReturnValue({ id: 'web-view-tab-2' });
+      await engine.setFocus({ focusType: 'tab', id: 'web-view-tab-2' });
+
+      expect(getLastSelectedWebViewId()).toBe('web-view-1');
+    });
   });
 });

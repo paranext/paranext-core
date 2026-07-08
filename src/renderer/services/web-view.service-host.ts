@@ -1141,6 +1141,24 @@ async function getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]>
   });
 }
 
+/**
+ * Synchronous version of {@link getAllOpenWebViewDefinitions} for renderer-internal callers (e.g.
+ * navigation target resolution) that need the current list of open web view definitions without an
+ * async round trip through the dock layout's async variable. Mirrors the sync/async pairing already
+ * established by {@link getSavedWebViewDefinitionSync} / `getOpenWebViewDefinition`.
+ *
+ * @throws If the papi dock layout has not been registered
+ */
+export function getAllOpenWebViewDefinitionsSync(): SavedWebViewDefinition[] {
+  return getDockLayoutSync()
+    .getAllWebViewDefinitions()
+    .map((webViewData) => {
+      const savedWebViewDefinition = convertWebViewDefinitionToSaved(webViewData);
+      getFullWebViewStateById(savedWebViewDefinition.id);
+      return savedWebViewDefinition;
+    });
+}
+
 // #endregion WebView definitions
 
 // #region WebViewState

@@ -5,6 +5,7 @@ import React from 'react';
 import { useScrollGroupScrRef, useSetting } from '@renderer/hooks/papi-hooks';
 import { useLastSelectedWebViewId } from '@renderer/hooks/use-last-selected-web-view-id.hook';
 import {
+  getAllOpenWebViewDefinitionsSync,
   getSavedWebViewDefinitionSync,
   updateWebViewDefinitionSync,
 } from '@renderer/services/web-view.service-host';
@@ -56,8 +57,11 @@ vi.mock('@renderer/hooks/use-last-selected-web-view-id.hook', () => ({
 
 vi.mock('@renderer/services/web-view.service-host', () => ({
   getSavedWebViewDefinitionSync: vi.fn(() => undefined),
+  getAllOpenWebViewDefinitionsSync: vi.fn(() => []),
   updateWebViewDefinitionSync: vi.fn(() => true),
   onDidUpdateWebView: vi.fn(() => vi.fn()),
+  onDidOpenWebView: vi.fn(() => vi.fn()),
+  onDidCloseWebView: vi.fn(() => vi.fn()),
 }));
 
 vi.mock('@renderer/services/book-chapter-control.registry', () => ({
@@ -485,7 +489,7 @@ describe('PlatformBibleToolbar — project picker Select visibility by interface
   });
 });
 
-describe('PlatformBibleToolbar — top BookChapterControl mirrors the last-selected web view', () => {
+describe('PlatformBibleToolbar — top BookChapterControl mirrors the resolved navigation target', () => {
   const getTrigger = () => screen.getByRole('button', { name: 'book-chapter-trigger' });
 
   beforeEach(() => {
@@ -496,13 +500,13 @@ describe('PlatformBibleToolbar — top BookChapterControl mirrors the last-selec
     vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
     vi.mocked(useLastSelectedWebViewId).mockReturnValue(undefined);
     vi.mocked(getSavedWebViewDefinitionSync).mockReturnValue(undefined);
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([]);
     vi.mocked(updateWebViewDefinitionSync).mockReturnValue(true);
     mockSendCommand(true);
   });
 
-  it('disables the trigger in power mode when there is no last-selected web view', async () => {
+  it('disables the trigger when there is no tracked web view and no main editor open, in power mode', async () => {
     vi.mocked(useSetting).mockReturnValue(['power', vi.fn(), vi.fn(), false]);
-    vi.mocked(useLastSelectedWebViewId).mockReturnValue(undefined);
 
     render(<PlatformBibleToolbar />);
 
@@ -511,7 +515,19 @@ describe('PlatformBibleToolbar — top BookChapterControl mirrors the last-selec
     });
   });
 
-  it('enables the trigger in power mode once the last-selected web view has a saved definition', async () => {
+  it('disables the trigger when there is no tracked web view and no main editor open, in simple mode', async () => {
+    // The resolution chain (and therefore disabled state) no longer depends on interface mode —
+    // it is disabled only when the chain finds no target in either mode.
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(getTrigger()).toBeDisabled();
+    });
+  });
+
+  it('enables the trigger once the tracked web view has a saved definition', async () => {
     vi.mocked(useSetting).mockReturnValue(['power', vi.fn(), vi.fn(), false]);
     vi.mocked(useLastSelectedWebViewId).mockReturnValue('wv1');
     vi.mocked(getSavedWebViewDefinitionSync).mockReturnValue({
@@ -528,9 +544,17 @@ describe('PlatformBibleToolbar — top BookChapterControl mirrors the last-selec
     });
   });
 
-  it('never disables the trigger in simple mode, even with no last-selected web view', async () => {
+  it('enables the trigger and mirrors the main editor when no web view is tracked but an editor is open', async () => {
     vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
     vi.mocked(useLastSelectedWebViewId).mockReturnValue(undefined);
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
+      {
+        id: 'editor-1',
+        webViewType: 'platformScriptureEditor.react',
+        projectId: 'proj1',
+        scrollGroupScrRef: 2,
+      },
+    ]);
 
     render(<PlatformBibleToolbar />);
 
@@ -540,7 +564,7 @@ describe('PlatformBibleToolbar — top BookChapterControl mirrors the last-selec
   });
 });
 
-describe('PlatformBibleToolbar — scroll group write-back to the active tab', () => {
+describe('PlatformBibleToolbar — scroll group write-back to the resolved target', () => {
   // The toolbar hands `setScrollGroupScrRefTarget` to `useScrollGroupScrRef` as its second
   // argument. `useScrollGroupScrRef` is mocked in this file (see the papi-hooks mock above), so the
   // real hook's internal wiring from ScrollGroupSelector -> setScrollGroupId -> setScrollGroupScrRef
@@ -564,11 +588,12 @@ describe('PlatformBibleToolbar — scroll group write-back to the active tab', (
       scrollGroupScrRef: 2,
       projectId: 'proj1',
     });
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([]);
     vi.mocked(updateWebViewDefinitionSync).mockReturnValue(true);
     mockSendCommand(true);
   });
 
-  it('writes the new scroll group to the active web view definition in power mode', async () => {
+  it('writes the new scroll group to the tracked web view definition', async () => {
     vi.mocked(useLastSelectedWebViewId).mockReturnValue('wv1');
 
     render(<PlatformBibleToolbar />);
@@ -589,14 +614,23 @@ describe('PlatformBibleToolbar — scroll group write-back to the active tab', (
     });
   });
 
-  it('does not write and returns false in simple mode', async () => {
+  it('writes the new scroll group to the main editor definition when nothing is tracked', async () => {
     vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
-    vi.mocked(useLastSelectedWebViewId).mockReturnValue('wv1');
+    vi.mocked(useLastSelectedWebViewId).mockReturnValue(undefined);
+    vi.mocked(getSavedWebViewDefinitionSync).mockReturnValue(undefined);
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
+      {
+        id: 'editor-1',
+        webViewType: 'platformScriptureEditor.react',
+        projectId: 'proj1',
+        scrollGroupScrRef: 2,
+      },
+    ]);
 
     render(<PlatformBibleToolbar />);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'book-chapter-trigger' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'book-chapter-trigger' })).toBeEnabled();
     });
 
     const setScrollGroupScrRefTarget = getLatestScrollGroupScrRefSetter();
@@ -605,12 +639,16 @@ describe('PlatformBibleToolbar — scroll group write-back to the active tab', (
       result = setScrollGroupScrRefTarget(3);
     });
 
-    expect(result).toBe(false);
-    expect(vi.mocked(updateWebViewDefinitionSync)).not.toHaveBeenCalled();
+    expect(result).toBe(true);
+    expect(vi.mocked(updateWebViewDefinitionSync)).toHaveBeenCalledWith('editor-1', {
+      scrollGroupScrRef: 3,
+    });
   });
 
-  it('does not write and returns false in power mode with no last-selected web view', async () => {
+  it('does not write and returns false when nothing is tracked and no main editor is open', async () => {
     vi.mocked(useLastSelectedWebViewId).mockReturnValue(undefined);
+    vi.mocked(getSavedWebViewDefinitionSync).mockReturnValue(undefined);
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([]);
 
     render(<PlatformBibleToolbar />);
 

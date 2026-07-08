@@ -15,7 +15,10 @@ import { PROJECT_PICKER_DIALOG_TYPE } from '@renderer/components/dialogs/dialog-
 import { app, dataProviders } from '@renderer/services/papi-frontend.service';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
 import {
+  getAllOpenWebViewDefinitionsSync,
   getSavedWebViewDefinitionSync,
+  onDidCloseWebView,
+  onDidOpenWebView,
   onDidUpdateWebView,
   updateWebViewDefinitionSync,
 } from '@renderer/services/web-view.service-host';
@@ -32,6 +35,7 @@ import { sendCommand } from '@shared/services/command.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { logger } from '@shared/services/logger.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
+import { SavedWebViewDefinition, WebViewId } from '@shared/models/web-view.model';
 import { UpdateWebViewEvent } from '@shared/services/web-view.service-model';
 import { CircleCheck, HomeIcon } from 'lucide-react';
 import {
@@ -85,6 +89,14 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%projectPicker_toolbar_more_projects%',
 ];
 
+// Must match SCRIPTURE_EDITOR_WEBVIEW_TYPE in platform-scripture-editor.utils.ts. Core code cannot
+// import from extension source, so this is intentionally duplicated (see the same pattern in
+// `use-project-picker-data.hook.ts`, `shutdown-tasks.ts`, and `scroll-group-navigation.commands.ts`).
+const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
+
+/** A web view id paired with its current saved definition */
+type ResolvedWebView = { id: WebViewId; definition: SavedWebViewDefinition };
+
 export function PlatformBibleToolbar() {
   const { currentProject, recentProjects, allProjects, currentProjectError } =
     useProjectPickerData();
@@ -92,72 +104,102 @@ export function PlatformBibleToolbar() {
   const isPowerMode = useIsPowerMode();
   const lastSelectedWebViewId = useLastSelectedWebViewId();
 
-  // Bumped by an onDidUpdateWebView event for the tracked web view to force a definition re-read
+  // Bumped by web view lifecycle events to force a re-read of `resolvedWebView` below
   const [definitionRefresh, setDefinitionRefresh] = useState(0);
 
-  // Ref so the (deps-stable) update handler always sees the current tracked id
+  // Ref so the (deps-stable) event handlers always see the current tracked id
   const lastSelectedWebViewIdRef = useRef(lastSelectedWebViewId);
   lastSelectedWebViewIdRef.current = lastSelectedWebViewId;
 
   useEvent(
     onDidUpdateWebView,
     useCallback(({ webView }: UpdateWebViewEvent) => {
-      if (webView.id === lastSelectedWebViewIdRef.current) setDefinitionRefresh((n) => n + 1);
+      // Bump on an update to the tracked web view (its definition may have changed) or, when
+      // nothing is tracked, on any update (the main-editor fallback's own definition may have
+      // changed, e.g. its scrollGroupScrRef or projectId).
+      if (webView.id === lastSelectedWebViewIdRef.current || !lastSelectedWebViewIdRef.current)
+        setDefinitionRefresh((n) => n + 1);
+    }, []),
+  );
+  // A newly opened or closed web view can change which web view is the main-editor fallback
+  // target, but only matters while nothing is tracked — with a tracked web view, its own
+  // definition is used regardless of what else opens or closes.
+  useEvent(
+    onDidOpenWebView,
+    useCallback(() => {
+      if (!lastSelectedWebViewIdRef.current) setDefinitionRefresh((n) => n + 1);
+    }, []),
+  );
+  useEvent(
+    onDidCloseWebView,
+    useCallback(() => {
+      if (!lastSelectedWebViewIdRef.current) setDefinitionRefresh((n) => n + 1);
     }, []),
   );
 
-  // The active tab's saved definition, mirrored by the top BCV in power mode. Derived
-  // synchronously so the id and its definition always update in the same render (no transient
-  // stale pairing / disabled flash); definitionRefresh re-reads after an external update.
-  const activeWebViewDefinition = useMemo(() => {
-    // Referenced so this memo re-runs whenever an onDidUpdateWebView event bumps it
+  // The resolved navigation target: the tracked (last-selected) web view's saved definition or,
+  // failing that, the main project editor's — same rule `useProjectPickerData` uses to find the
+  // current project (first open Scripture editor web view with a project). Derived synchronously
+  // so the id and its definition always update in the same render (no transient stale pairing /
+  // disabled flash); definitionRefresh re-reads after a relevant external update.
+  const resolvedWebView = useMemo((): ResolvedWebView | undefined => {
+    // Referenced so this memo re-runs whenever a relevant web view lifecycle event bumps it
     // eslint-disable-next-line no-unused-expressions
     definitionRefresh;
-    if (!lastSelectedWebViewId) return undefined;
-    try {
-      return getSavedWebViewDefinitionSync(lastSelectedWebViewId);
-    } catch (e) {
-      logger.warn(
-        `Toolbar could not get web view definition for ${lastSelectedWebViewId}: ${getErrorMessage(e)}`,
-      );
-      return undefined;
+    if (lastSelectedWebViewId) {
+      try {
+        const definition = getSavedWebViewDefinitionSync(lastSelectedWebViewId);
+        if (definition) return { id: lastSelectedWebViewId, definition };
+      } catch (e) {
+        logger.warn(
+          `Toolbar could not get web view definition for ${lastSelectedWebViewId}: ${getErrorMessage(e)}`,
+        );
+      }
     }
+    try {
+      const editorDefinition = getAllOpenWebViewDefinitionsSync().find(
+        (definition) =>
+          definition.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && definition.projectId,
+      );
+      if (editorDefinition) return { id: editorDefinition.id, definition: editorDefinition };
+    } catch (e) {
+      logger.warn(`Toolbar could not enumerate open web views: ${getErrorMessage(e)}`);
+    }
+    return undefined;
   }, [lastSelectedWebViewId, definitionRefresh]);
 
-  // Power mode with no selected web view: nothing to navigate — controls are disabled
-  const isBookChapterControlDisabled = isPowerMode && !activeWebViewDefinition;
+  // No resolved target (no eligible tracked tab and no main-project editor open): nothing to
+  // navigate — controls are disabled
+  const isBookChapterControlDisabled = !resolvedWebView;
 
-  // Power mode mirrors the active tab's scroll group / independent ref; simple mode is pinned
-  // to scroll group 0 (what the single simple-mode editor follows)
-  const scrollGroupScrRefTarget: ScrollGroupScrRef = isPowerMode
-    ? (activeWebViewDefinition?.scrollGroupScrRef ?? 0)
-    : 0;
+  const scrollGroupScrRefTarget: ScrollGroupScrRef =
+    resolvedWebView?.definition.scrollGroupScrRef ?? 0;
 
   const setScrollGroupScrRefTarget = useCallback(
     (newScrollGroupScrRef: ScrollGroupScrRef) => {
-      if (!isPowerMode || !lastSelectedWebViewId) return false;
+      if (!resolvedWebView) return false;
       try {
-        return updateWebViewDefinitionSync(lastSelectedWebViewId, {
+        return updateWebViewDefinitionSync(resolvedWebView.id, {
           scrollGroupScrRef: newScrollGroupScrRef,
         });
       } catch (e) {
         logger.warn(
-          `Toolbar could not update scroll group for web view ${lastSelectedWebViewId}: ${getErrorMessage(e)}`,
+          `Toolbar could not update scroll group for web view ${resolvedWebView.id}: ${getErrorMessage(e)}`,
         );
         return false;
       }
     },
-    [isPowerMode, lastSelectedWebViewId],
+    [resolvedWebView],
   );
 
   const [scrRef, setScrRef, scrollGroupId, setScrollGroupId] = useScrollGroupScrRef(
     scrollGroupScrRefTarget,
     setScrollGroupScrRefTarget,
-    isPowerMode ? activeWebViewDefinition?.projectId : currentProject?.id,
+    resolvedWebView?.definition.projectId,
   );
 
   const [booksPresentPossiblyError] = useProjectSetting(
-    isPowerMode ? activeWebViewDefinition?.projectId : undefined,
+    resolvedWebView?.definition.projectId,
     'platformScripture.booksPresent',
     BOOKS_PRESENT_DEFAULT,
   );

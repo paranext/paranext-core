@@ -8,20 +8,22 @@ import {
   setScrRefSync,
 } from '@renderer/services/scroll-group.service-host';
 import {
+  getAllOpenWebViewDefinitionsSync,
   getSavedWebViewDefinitionSync,
   updateWebViewDefinitionSync,
 } from '@renderer/services/web-view.service-host';
 import { getLastSelectedWebViewId } from '@renderer/services/window.service-host';
 import { getBookIdsFromBooksPresent } from 'platform-bible-utils/experimental';
-import { WebViewId } from '@shared/models/web-view.model';
+import { SavedWebViewDefinition, WebViewId } from '@shared/models/web-view.model';
+import { TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import { registerCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
-import { settingsService } from '@shared/services/settings.service';
+import { windowService } from '@shared/services/window.service';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { CommandNames, SettingTypes } from 'papi-shared-types';
+import { CommandNames } from 'papi-shared-types';
 import {
   ALL_BOOK_IDS,
   getNextBookRef,
@@ -34,45 +36,82 @@ import {
 } from 'platform-bible-react/experimental';
 import { getErrorMessage } from 'platform-bible-utils';
 
-/** What a navigation command mutates: the active tab's scroll group ref (power) or group 0 (simple) */
+/**
+ * What a navigation command mutates: the resolved target web view's scroll group ref (or its
+ * detached ref) and project
+ */
 type NavigationTarget = {
-  /** Set in power mode: the active web view (needed to write a detached ref back) */
+  /**
+   * The resolved web view (tracked last-selected web view or, failing that, the main project
+   * editor) — needed to write a detached ref back
+   */
   webViewId?: WebViewId;
   scrollGroupScrRef: ScrollGroupScrRef;
-  /** The active web view's project — versification frame for reads and writes */
+  /** The resolved web view's project — versification frame for reads and writes */
   projectId?: string;
 };
 
-async function getInterfaceMode(): Promise<SettingTypes['platform.interfaceMode']> {
-  try {
-    return await settingsService.get('platform.interfaceMode');
-  } catch (e) {
-    logger.warn(`Navigation command could not read interface mode: ${getErrorMessage(e)}`);
-    return 'simple';
-  }
-}
+// Must match SCRIPTURE_EDITOR_WEBVIEW_TYPE in platform-scripture-editor.utils.ts. Core code
+// cannot import from extension source, so this is intentionally duplicated (see the same pattern
+// in `use-project-picker-data.hook.ts` and `shutdown-tasks.ts`).
+const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 
-async function resolveNavigationTarget(): Promise<NavigationTarget | undefined> {
-  if ((await getInterfaceMode()) !== 'power') return { scrollGroupScrRef: 0 };
+/** A web view id paired with its current saved definition */
+type ResolvedWebView = { id: WebViewId; definition: SavedWebViewDefinition };
 
+/** Step 1 of target resolution: the tracked last-selected (scripture-navigable) web view, if any */
+function resolveTrackedWebView(): ResolvedWebView | undefined {
   const webViewId = getLastSelectedWebViewId();
   if (!webViewId) return undefined;
 
-  let definition;
   try {
-    definition = getSavedWebViewDefinitionSync(webViewId);
+    const definition = getSavedWebViewDefinitionSync(webViewId);
+    if (!definition) return undefined;
+    return { id: webViewId, definition };
   } catch (e) {
     logger.warn(
       `Navigation command could not get web view definition for ${webViewId}: ${getErrorMessage(e)}`,
     );
     return undefined;
   }
-  if (!definition) return undefined;
+}
+
+/**
+ * Step 2 of target resolution: the "main project" editor fallback — the first open Scripture editor
+ * web view with a project, same rule `useProjectPickerData` uses to find the current project. Used
+ * when nothing is tracked yet (e.g. at fresh app start) but an editor is open, possibly restored on
+ * a persisted scroll group other than 0.
+ */
+function resolveMainEditorWebView(): ResolvedWebView | undefined {
+  let definitions: SavedWebViewDefinition[];
+  try {
+    definitions = getAllOpenWebViewDefinitionsSync();
+  } catch (e) {
+    logger.warn(`Navigation command could not enumerate open web views: ${getErrorMessage(e)}`);
+    return undefined;
+  }
+
+  const editorDefinition = definitions.find(
+    (definition) =>
+      definition.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && definition.projectId,
+  );
+  if (!editorDefinition) return undefined;
+  return { id: editorDefinition.id, definition: editorDefinition };
+}
+
+/** Resolves the web view navigation commands and the top toolbar should target, in both modes */
+function resolveTargetWebView(): ResolvedWebView | undefined {
+  return resolveTrackedWebView() ?? resolveMainEditorWebView();
+}
+
+function resolveNavigationTarget(): NavigationTarget | undefined {
+  const target = resolveTargetWebView();
+  if (!target) return undefined;
 
   return {
-    webViewId,
-    scrollGroupScrRef: definition.scrollGroupScrRef ?? 0,
-    projectId: definition.projectId,
+    webViewId: target.id,
+    scrollGroupScrRef: target.definition.scrollGroupScrRef ?? 0,
+    projectId: target.definition.projectId,
   };
 }
 
@@ -179,7 +218,7 @@ function makeGoToCommandHandler(
   ) => SerializedVerseRef | undefined,
 ): () => Promise<void> {
   return async () => {
-    const target = await resolveNavigationTarget();
+    const target = resolveNavigationTarget();
     if (!target) {
       logger.debug('Navigation command ignored: no active web view to navigate');
       return;
@@ -195,12 +234,41 @@ function makeGoToCommandHandler(
   };
 }
 
-async function openBookChapterControl(): Promise<void> {
-  let handle;
-  if ((await getInterfaceMode()) === 'power') {
-    const webViewId = getLastSelectedWebViewId();
-    if (webViewId) handle = getBookChapterControlHandle(webViewId);
+/**
+ * Gets the web view id of the currently focused subject, if focus is on a web view or a web view's
+ * tab. Used by {@link openBookChapterControl} to prefer the focused tab's own BookChapterControl
+ * over the tracked last-selected web view, e.g. when focus has moved to a dialog or another
+ * non-web-view tab that itself isn't scripture-navigable.
+ */
+async function getFocusedWebViewId(): Promise<WebViewId | undefined> {
+  try {
+    const focusSubject = await windowService.getFocus();
+    if (focusSubject?.focusType === 'webView') return focusSubject.id;
+    if (focusSubject?.focusType === 'tab' && focusSubject.tabType === TAB_TYPE_WEBVIEW)
+      return focusSubject.id;
+    return undefined;
+  } catch (e) {
+    logger.warn(
+      `platform.openBookChapterControl could not read current focus: ${getErrorMessage(e)}`,
+    );
+    return undefined;
   }
+}
+
+/**
+ * Opens a BookChapterControl to let the user pick a new reference, preferring — in order — (a) the
+ * currently focused web view's own control, (b) the tracked last-selected web view's control, (c)
+ * the top toolbar's control. No-ops if none of those has a registered control.
+ */
+async function openBookChapterControl(): Promise<void> {
+  const focusedWebViewId = await getFocusedWebViewId();
+  let handle = focusedWebViewId ? getBookChapterControlHandle(focusedWebViewId) : undefined;
+
+  if (!handle) {
+    const trackedWebViewId = getLastSelectedWebViewId();
+    if (trackedWebViewId) handle = getBookChapterControlHandle(trackedWebViewId);
+  }
+
   handle = handle ?? getBookChapterControlHandle(TOP_TOOLBAR_BOOK_CHAPTER_CONTROL_OWNER_ID);
   if (!handle) {
     logger.debug('platform.openBookChapterControl ignored: no BookChapterControl is available');

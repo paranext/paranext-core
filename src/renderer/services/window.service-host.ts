@@ -20,9 +20,14 @@ import {
   debounce,
   PlatformEventEmitter,
 } from 'platform-bible-utils';
-import { getDockLayout, onDidCloseWebView } from '@renderer/services/web-view.service-host';
+import {
+  getDockLayout,
+  getSavedWebViewDefinitionSync,
+  onDidCloseWebView,
+} from '@renderer/services/web-view.service-host';
 import { isDirectionFromTab, TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
 import { WebViewId } from '@shared/models/web-view.model';
+import { logger } from '@shared/services/logger.service';
 
 const FOCUS_SUBJECT_OTHER: FocusSubjectOther = Object.freeze({
   focusType: 'other',
@@ -60,6 +65,27 @@ function setLastSelectedWebViewId(newWebViewId: WebViewId | undefined): void {
   if (newWebViewId === lastSelectedWebViewId) return;
   lastSelectedWebViewId = newWebViewId;
   onDidChangeLastSelectedWebViewIdEmitter.emit(newWebViewId);
+}
+
+/**
+ * Whether a web view is a candidate for BCV navigation: it either belongs to a project
+ * (`projectId`) or shows its own BookChapterControl/ScrollGroupSelector toolbar
+ * (`shouldShowToolbar`). Web views that are neither (e.g. Find, a settings-style panel) must not
+ * become the tracked web view, since navigation commands and the top toolbar would otherwise target
+ * a tab with nothing to navigate.
+ *
+ * Returns `false` (do not track) if the web view's saved definition cannot be read.
+ */
+function isScriptureNavigableWebView(webViewId: WebViewId): boolean {
+  try {
+    const definition = getSavedWebViewDefinitionSync(webViewId);
+    return !!(definition?.projectId || definition?.shouldShowToolbar);
+  } catch (e) {
+    logger.warn(
+      `window.service-host could not get web view definition for ${webViewId} to check navigability: ${getErrorMessage(e)}`,
+    );
+    return false;
+  }
 }
 
 // Clear the tracked web view when it closes. Guarded by id so a stale close event for a
@@ -228,14 +254,24 @@ class WindowDataProviderEngine
     this.#focusSubject = newFocusSubject;
 
     if (newFocusSubject) {
-      if (newFocusSubject.focusType === 'webView') setLastSelectedWebViewId(newFocusSubject.id);
+      // Only track web views that are actually scripture-navigable (see
+      // `isScriptureNavigableWebView`). An ineligible web view retains whatever was tracked
+      // before, same as focus moving to something that is not a web view at all.
+      if (newFocusSubject.focusType === 'webView') {
+        if (isScriptureNavigableWebView(newFocusSubject.id))
+          setLastSelectedWebViewId(newFocusSubject.id);
+      }
       // A tab click resolves and stamps `tabType` onto the subject synchronously (see `setFocus`
       // above) and reaches here directly, bypassing the 250ms trailing-edge debounce that
       // `detectFocus()` sits behind. Without this, clicking a web view's tab left the tracker
       // (and thus the top toolbar's BCV) stale until the debounced detect path caught up.
       // For a web view tab, the tab id is the same as its `WebViewId` (see
       // `FocusSubjectTab.id` and `addWebViewToDock` in `platform-dock-layout-storage.util.ts`).
-      else if (newFocusSubject.focusType === 'tab' && newFocusSubject.tabType === TAB_TYPE_WEBVIEW)
+      else if (
+        newFocusSubject.focusType === 'tab' &&
+        newFocusSubject.tabType === TAB_TYPE_WEBVIEW &&
+        isScriptureNavigableWebView(newFocusSubject.id)
+      )
         setLastSelectedWebViewId(newFocusSubject.id);
     }
 
