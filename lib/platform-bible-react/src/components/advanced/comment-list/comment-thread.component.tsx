@@ -28,6 +28,7 @@ import {
   ConflictResolution,
   ConflictResolutionOptions,
   ConflictResolutionOutcome,
+  VERSE_TEXT_CONFLICT,
 } from './conflict-note-card.types';
 import { didPressCtrlOrCmdEnter, getAssignedUserDisplayName } from './comment-list.utils';
 
@@ -297,7 +298,9 @@ export function CommentThread({
   // runs before the empty-thread guard below), so guard the access — a Conflict thread with no
   // active comments must simply not be a verseText-conflict render.
   const isVerseTextConflictThread =
-    isConflictThread && firstComment?.conflictType === 'verseText' && !!firstComment?.resultText;
+    isConflictThread &&
+    firstComment?.conflictType === VERSE_TEXT_CONFLICT &&
+    !!firstComment?.resultText;
 
   // </p> expects null and not undefined
   // eslint-disable-next-line no-null/no-null

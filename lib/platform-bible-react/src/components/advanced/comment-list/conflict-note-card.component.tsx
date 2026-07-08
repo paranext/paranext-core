@@ -13,10 +13,9 @@ import {
   ConflictNoteCardProps,
   ConflictResolution,
   ConflictResolutionOutcome,
+  VERSE_TEXT_CONFLICT,
 } from './conflict-note-card.types';
 import { DiffHtml, sanitizeDiffHtml } from './conflict-diff';
-
-const VERSE_TEXT_CONFLICT = 'verseText';
 
 /** One selectable resolution option (a clickable card) with its localized label and inline diff. */
 type ConflictOption = { value: ConflictResolution; label: string; html: string };
@@ -95,7 +94,7 @@ export function ConflictNoteCard({
   // surfaces always announce the same reason.
   const staleNotice =
     localizedStrings['%conflict_note_stale_notice%'] ??
-    'The verse has been edited since this conflict was recorded, so rejecting is no longer available. Accept keeps the current text.';
+    "The verse was edited after this conflict was recorded, so 'Use the other change' is no longer available. Keep the current text to resolve.";
 
   // The resolution options offered, each with its inline diff. Merge is only offered when the two
   // edits are independent (built as a spread so the array is never mutated after construction).

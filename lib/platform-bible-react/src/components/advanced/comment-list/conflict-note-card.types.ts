@@ -10,6 +10,12 @@ import {
 export type { ConflictResolutionOptions };
 
 /**
+ * The one conflict type whose root note carries discrete diff/result text and drives the
+ * ConflictNoteCard. Shared so the card and the comment thread test the same literal.
+ */
+export const VERSE_TEXT_CONFLICT = 'verseText';
+
+/**
  * The resolution a user picks for a conflict: keep the accepted (winning) side, take the rejected
  * (losing) side, or merge (combine) both sides.
  */

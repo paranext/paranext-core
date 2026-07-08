@@ -274,7 +274,7 @@ test('stale reject option is programmatically described by the stale notice for 
   // aria-describedby resolves to the visually-hidden notice, so the reason the choice is read-only
   // reaches assistive tech, not just the pointer-only Tooltip.
   expect(screen.getByRole('radio', { name: 'Use the other change' })).toHaveAccessibleDescription(
-    /the verse has been edited since this conflict was recorded/i,
+    /the verse was edited after this conflict was recorded/i,
   );
 });
 
