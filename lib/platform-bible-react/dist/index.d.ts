@@ -3262,11 +3262,11 @@ export declare function useStylesheet(stylesheet: string | undefined): void;
  * The returned array keeps a **stable identity as long as the SET of markers doesn't change**, even
  * across new `usj` object identities (every fetch produces a fresh `usj` object). This matters
  * because editor `options` are typically memoized on this array: a churning identity would rebuild
- * `options` on every fetch and force the editor to reconcile its Lexical config (a full re-serialize
- * when `view` is part of those options, and — for panes that apply external annotation marks — the
- * destruction of every applied mark). Keying on the sorted marker VALUE avoids that churn; sorting
- * makes the key depend only on the set, not first-seen order, and order does not affect marker
- * validity so this is behavior-neutral for the editor.
+ * `options` on every fetch and force the editor to reconcile its Lexical config (a full
+ * re-serialize when `view` is part of those options, and — for panes that apply external annotation
+ * marks — the destruction of every applied mark). Keying on the sorted marker VALUE avoids that
+ * churn; sorting makes the key depend only on the set, not first-seen order, and order does not
+ * affect marker validity so this is behavior-neutral for the editor.
  *
  * Intentionally returns every marker the resource uses — appropriate for a read-only panel where
  * `extraValidMarkers` only silences a warn-only diagnostic. See `collectUsjMarkers` for the
