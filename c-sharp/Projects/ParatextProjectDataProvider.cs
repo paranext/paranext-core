@@ -726,7 +726,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             // nothing).
             if ((resolution == "reject" || resolution == "merge") && IsConflictVerseStale(thread))
                 throw new InvalidOperationException(
-                    $"Conflict thread '{threadId}' cannot be {resolution}ed: the verse text has changed since the conflict was recorded. Only 'accept' (keep the current text) is available."
+                    $"Conflict thread '{threadId}' cannot be resolved with '{resolution}': the verse text has changed since the conflict was recorded. Only 'accept' (keep the current text) is available."
                 );
 
             // Reuse PT9's orchestration (grant edit -> splice loser USFM -> resolve -> restore) via SaveEdits.
