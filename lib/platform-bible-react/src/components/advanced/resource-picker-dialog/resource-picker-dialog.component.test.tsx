@@ -64,6 +64,25 @@ describe('ResourcePickerDialog', () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
+  it('allows selecting an already-selected resource when allowDeselect is true', () => {
+    const { onSelect } = renderDialog({ allowDeselect: true });
+    const nivText = screen.getByText('NIV');
+    const nivRow = nivText.closest('tr');
+    if (!nivRow) throw new Error('NIV row not found');
+    fireEvent.click(nivRow);
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ dblEntryUid: 'selected-1' }));
+  });
+
+  it('keeps the already-selected row clickable (not pointer-events-none) when allowDeselect is true', () => {
+    renderDialog({ allowDeselect: true });
+    const nivText = screen.getByText('NIV');
+    const nivRow = nivText.closest('tr');
+    if (!nivRow) throw new Error('NIV row not found');
+    expect(nivRow.className).not.toContain('pointer-events-none');
+    expect(nivRow.className).toContain('cursor-pointer');
+  });
+
   it('shows "Installed" section with selectable rows for installed, non-selected resources', () => {
     renderDialog();
     expect(screen.getByText('Installed')).toBeInTheDocument();
