@@ -3,9 +3,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import type { ResourceReferenceList } from 'platform-bible-utils';
-// Resolves to the narrow local shim via the tsconfig `paths` redirect
-import type { ITextConnectionSettingsProjectDataProvider } from 'platform-scripture';
 import { useProjectSetting, useProjectDataProvider } from '@papi/frontend/react';
+import type { ITextConnectionSettingsProjectDataProvider } from '../types/text-connection-settings-pdp.shim';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 
 vi.mock('@papi/frontend/react', () => ({
@@ -282,11 +281,9 @@ describe('useEffectiveResourceReferenceList', () => {
       callback(platformError);
       return () => Promise.resolve(true);
     });
-    // Mock object literal cannot satisfy the full PDP interface — cast needed for test isolation
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
     mockUseProjectDataProvider.mockReturnValue({
       subscribeUserModelTexts: mockSubscribe,
-    } as unknown as ReturnType<typeof useProjectDataProvider>);
+    });
 
     const { result } = renderHook(() =>
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
