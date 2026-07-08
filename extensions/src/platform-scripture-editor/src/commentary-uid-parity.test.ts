@@ -7,9 +7,22 @@ import { fileURLToPath } from 'node:url';
 // `CommentariesWhiteList` in DblDownloadableDataProvider.cs. Comments alone can't stop them drifting,
 // so this test reads both sources and asserts they hold exactly the same DBL-entry-UID set.
 
-/** Every lowercase 16-hex DBL entry UID appearing in a slice of source text. */
+/**
+ * Every lowercase 16-hex DBL entry UID appearing in a slice of source text.
+ *
+ * The 16 hex chars must stand alone (not be part of a longer hex run), so a stray longer token like
+ * a 40-char git SHA in a comment isn't chopped into fake 16-char "UIDs". Note this still cannot
+ * tell a real registry entry from a UID that only appears in a comment (e.g. "keep in sync with
+ * 97196133a859179b") — it scrapes source text, so a comment-only mention counts as if it were an
+ * entry. Don't rely on this test to catch a genuinely-missing entry that a comment happens to
+ * name.
+ */
 function uidsIn(text: string): Set<string> {
-  return new Set((text.match(/[0-9a-fA-F]{16}/g) ?? []).map((uid) => uid.toLowerCase()));
+  return new Set(
+    (text.match(/(?<![0-9a-fA-F])[0-9a-fA-F]{16}(?![0-9a-fA-F])/g) ?? []).map((uid) =>
+      uid.toLowerCase(),
+    ),
+  );
 }
 
 function regionUids(source: string, regionRe: RegExp, label: string): Set<string> {
