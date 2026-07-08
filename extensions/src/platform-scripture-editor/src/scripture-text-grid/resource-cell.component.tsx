@@ -11,7 +11,7 @@ import { RESOURCE_CELL_STRING_KEYS, ResourceCellView } from './resource-cell.vie
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 const STRING_KEYS: LocalizeKey[] = [...RESOURCE_CELL_STRING_KEYS];
 
-type GridResource = { projectId: string; label: string };
+export type GridResource = { projectId: string; label: string };
 type ResourceCellProps = {
   resourceRef: GridResource;
   scrRef: SerializedVerseRef;

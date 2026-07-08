@@ -95,3 +95,113 @@ test.describe('Scripture Text Grid (A1 scaffold)', () => {
     await expect(tab.locator('.dock-tab-close-btn')).toHaveCount(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// A4 (PT-4052) — ScriptureTextGrid renderer (chapter-first).
+//
+// Honest runnability: there is NO dev-fixture plumbing for web-view content (a web view is a
+// renderer iframe with no injected env), and the grid needs real flagged resources. So only
+// non-negotiable #1 is scripted to run, and only when E2E_TEST_PROJECT_ID names an editable admin
+// project — mirroring the A2 shown-by-default spec's real-data pattern. It flags a Bible-text ref
+// via papi, opens the grid, and asserts the row renders a gridcell (offline state is fine — the
+// point of #1 is "no blank-out"). RTL row reversal, frame budget, scrRef-sync, and partial-failure
+// need harness support this CDP fixture lacks (UI-locale switching, >=5 real resources with USJ,
+// controlled per-cell failure), so they are `test.fixme` with reasons — DEFERRED at PR merge.
+// ---------------------------------------------------------------------------
+const A4_TEST_PROJECT_ID = process.env.E2E_TEST_PROJECT_ID ?? '';
+
+test.describe('Scripture Text Grid renderer (A4)', () => {
+  test.beforeEach(async ({ mainPage }) => {
+    await closeAllNonHomeDockTabs(mainPage);
+  });
+
+  test('non-negotiable #1: a shown resource renders a gridcell (no blank-out, no empty toolbar)', async ({
+    mainPage,
+  }) => {
+    test.skip(
+      !A4_TEST_PROJECT_ID,
+      'No editable admin test project configured for this run (set E2E_TEST_PROJECT_ID)',
+    );
+    await waitForAppReady(mainPage);
+
+    // Admin flags one Bible-text ref shown-by-default, then seeds the per-user overlay to match, so
+    // the A3 selector includes it. A synthetic id is fine here: an unresolvable id renders the
+    // cell's OFFLINE state, which still proves the row renders a cell (no blank-out) — the point of
+    // non-negotiable #1. Then open the grid (`existingId: '?'` reuses the default-layout instance).
+    await mainPage.evaluate(
+      async ({ projectId, webViewType }) => {
+        // The renderer sets `globalThis.papi`; it is untyped in the Playwright context.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const { papi } = window as unknown as {
+          papi: {
+            projectDataProviders: {
+              get: (
+                pdpType: string,
+                id: string,
+              ) => Promise<{
+                setSetting: (key: string, value: unknown) => Promise<boolean>;
+                resetShownByDefaultOverlay: () => Promise<boolean>;
+                initializeShownByDefaultOverlay: () => Promise<boolean>;
+              }>;
+            };
+            webViews: {
+              openWebView: (
+                type: string,
+                layout?: unknown,
+                options?: { existingId?: string },
+              ) => Promise<string | undefined>;
+            };
+          };
+        };
+        const pdp = await papi.projectDataProviders.get(
+          'platformScripture.textConnectionSettings',
+          projectId,
+        );
+        await pdp.setSetting('platformScripture.modelTexts', {
+          dataVersion: '1.1.0',
+          items: [
+            {
+              type: 'project',
+              name: 'STG A4 smoke',
+              id: 'aabbccddeeff00112233',
+              isResourceShownByDefault: true,
+            },
+          ],
+        });
+        await pdp.resetShownByDefaultOverlay();
+        await pdp.initializeShownByDefaultOverlay();
+        await papi.webViews.openWebView(webViewType, undefined, { existingId: '?' });
+      },
+      { projectId: A4_TEST_PROJECT_ID, webViewType: SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE },
+    );
+
+    const tab = mainPage.locator('.dock-tab', { hasText: SCRIPTURE_TEXT_TAB_TITLE });
+    await expect(tab).toBeVisible({ timeout: 15_000 });
+
+    // Web-view content lives in an iframe titled with the (single-cell) grid tab title.
+    const frame = mainPage.frameLocator('iframe[title="Scripture Text"]');
+    // The row structure renders...
+    await expect(frame.locator('[role="grid"]')).toBeVisible({ timeout: 15_000 });
+    // ...with at least one cell (ready or offline — never a blank pane): non-negotiable #1.
+    await expect(frame.locator('[role="gridcell"]').first()).toBeVisible({ timeout: 15_000 });
+    // No empty top toolbar: this web view renders no toolbar by construction; assert none leaked in.
+    await expect(frame.locator('[role="toolbar"]')).toHaveCount(0);
+  });
+
+  test.fixme(
+    'RTL: an RTL UI locale reverses the row via logical properties — needs UI-locale switching in the CDP harness',
+    async () => {},
+  );
+  test.fixme(
+    'frame budget: >=5 shown resources at MAT 5:3 render under threshold (re-baselined for full chapters) — needs >=5 real resources',
+    async () => {},
+  );
+  test.fixme(
+    'scrRef sync: changing the reference navigates every cell; a missing verse in one resource does not blank the others — needs multiple real resources',
+    async () => {},
+  );
+  test.fixme(
+    'partial-failure: 3 shown, 1 fails -> 2 render chapters, 1 shows the offline label — needs controlled per-cell failure',
+    async () => {},
+  );
+});
