@@ -547,6 +547,10 @@ export function CommentThread({
               <Button
                 variant="ghost"
                 size="icon"
+                // Guards against a fast double-click firing two resolveConflict('accept') calls
+                // while the first is still in flight (isResolvingConflict is only ever set for a
+                // conflict thread, so this never disables the button for a non-conflict thread).
+                disabled={isResolvingConflict}
                 className={cn(
                   'tw:ms-auto',
                   'tw:text-primary tw:transition-opacity tw:duration-200 tw:hover:bg-primary/10',

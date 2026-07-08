@@ -161,14 +161,21 @@ export function ConflictNoteCard({
     ...mergeOption,
   ];
 
-  // Save is disabled when there is nothing to write: 'accept' keeps the current text (and stale
-  // forces 'accept'). The tooltip explains the reason — a no-change disable points at the thread ✓,
-  // while an enabled Save carries the irreversibility warning.
+  // Save is disabled when there is nothing to write ('accept' keeps the current text, and stale
+  // forces 'accept') or while a resolve call is in flight. The tooltip explains the reason: a
+  // no-change disable points at the thread ✓; an enabled Save carries the irreversibility warning;
+  // and a disable caused solely by isResolving shows no tooltip at all, since the irreversibility
+  // warning would be misleading over a button the user can't currently press.
   const isNoChangeSelected = effectiveResolution === 'accept';
-  const saveTooltip = isNoChangeSelected
-    ? (localizedStrings['%conflict_note_save_disabled_tooltip%'] ??
-      'Keeping the current text makes no change — resolve the thread with the ✓ to keep it.')
-    : (localizedStrings['%conflict_note_save_warning%'] ?? "This can't be undone.");
+  const isSaveDisabled = isResolving || isNoChangeSelected;
+  let saveTooltip: string | undefined;
+  if (isNoChangeSelected) {
+    saveTooltip =
+      localizedStrings['%conflict_note_save_disabled_tooltip%'] ??
+      'Keeping the current text makes no change — resolve the thread with the ✓ to keep it.';
+  } else if (!isResolving) {
+    saveTooltip = localizedStrings['%conflict_note_save_warning%'] ?? "This can't be undone.";
+  }
 
   // For an already-resolved conflict shown read-only (availableActions === 'none'), collapse to the
   // Result text that was actually applied. Defaults to 'accept' (keep the current text) when the
@@ -200,9 +207,9 @@ export function ConflictNoteCard({
       // row (a `gap`, not a directional margin, so the browser's own RTL mirroring of `flex-row`
       // puts the radio on the correct logical side without extra dir-aware classes), with the diff
       // below as a sibling.
-      // eslint-disable-next-line jsx-a11y/label-has-associated-control -- the label wraps the RadioGroupItem control, but the plugin does not recognize that custom component as a control
       <label
         key={option.value}
+        htmlFor={optionId}
         data-slot="conflict-resolution-option"
         data-value={option.value}
         className={cn(
@@ -295,14 +302,14 @@ export function ConflictNoteCard({
                 <span className="tw:inline-flex tw:self-start">
                   <Button
                     size="sm"
-                    disabled={isResolving || isNoChangeSelected}
+                    disabled={isSaveDisabled}
                     onClick={() => onResolve?.(effectiveResolution)}
                   >
                     {localizedStrings['%conflict_note_save_and_resolve%'] ?? 'Save and resolve'}
                   </Button>
                 </span>
               </TooltipTrigger>
-              <TooltipContent>{saveTooltip}</TooltipContent>
+              {saveTooltip && <TooltipContent>{saveTooltip}</TooltipContent>}
             </Tooltip>
           </TooltipProvider>
         </>
