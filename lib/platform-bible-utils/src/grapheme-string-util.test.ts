@@ -153,6 +153,35 @@ describe('lastIndexOf', () => {
   it('absent needle is -1', () => expect(long.lastIndexOf('Pizza')).toEqual(-1));
 });
 
+describe('includes', () => {
+  const long = new GraphemeString(LONG);
+  const cool = new GraphemeString('🦄All😎');
+  it('present', () => expect(long.includes(new GraphemeString('🍕Symbols💩'))).toBe(true));
+  it('with position at the match', () => expect(long.includes(cool, 7)).toBe(true));
+  it('with position past the match', () => expect(long.includes(cool, 10)).toBe(false));
+  it('with position past length', () => expect(long.includes(cool, 100)).toBe(false));
+  it('grapheme present', () => expect(long.includes('👮🏽‍♀️')).toBe(true));
+  it('absent', () => expect(long.includes('🧑‍🚀')).toBe(false));
+});
+
+describe('startsWith', () => {
+  const long = new GraphemeString(LONG);
+  it('at start', () => expect(long.startsWith('Look𐐷')).toBe(true));
+  it('wrong at position 5', () => expect(long.startsWith('Look𐐷', 5)).toBe(false));
+  it('right at position 5', () => expect(long.startsWith('At🦄', 5)).toBe(true));
+});
+
+describe('endsWith', () => {
+  const long = new GraphemeString(LONG);
+  it('at end', () => expect(long.endsWith('💋!🌟')).toBe(true));
+  it('absent at end', () => expect(long.endsWith('Pizza')).toBe(false));
+  it('with endPosition', () => expect(long.endsWith('At🦄', 8)).toBe(true));
+  it('with endPosition, wrong', () => expect(long.endsWith('Pizza', 8)).toBe(false));
+  it('with endPosition and grapheme', () => expect(long.endsWith('👮🏽‍♀️', 55)).toBe(true));
+  it('needle longer than string', () =>
+    expect(new GraphemeString(MEDIUM).endsWith(long)).toBe(false));
+});
+
 describe('candidate B parity with candidate A', () => {
   const long = new GraphemeString(LONG);
   const cases: Array<[string, number | undefined]> = [
