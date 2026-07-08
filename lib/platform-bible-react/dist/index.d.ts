@@ -502,10 +502,10 @@ export function CommentList({ className, classNameForVerseText, threads, current
  * (reject), and, when the two edits are independent, "Combine both changes" (merge) — each showing
  * its inline red/green diff. Clicking anywhere on an option card selects it; the cards keep radio
  * semantics (a labelled radio group with role=radio / aria-checked and arrow-key navigation) via a
- * visually-hidden radio inside each card. A Save-and-resolve button commits the choice. Handles the
- * stale state (accept stays enabled and selected; reject is disabled and carries a read-only
- * explanation; Save stays present but disabled) and the already-resolved read-only state (just the
- * chosen outcome's Result text — the outcome itself is stated in prose by CommentItem's
+ * visible radio inline with each card's title. A Save-and-resolve button commits the choice.
+ * Handles the stale state (accept stays enabled and selected; reject is disabled and carries a
+ * read-only explanation; Save stays present but disabled) and the already-resolved read-only state
+ * (just the chosen outcome's Result text — the outcome itself is stated in prose by CommentItem's
  * resolution-reply banner). Falls back to rendering the raw note contents for any non-verseText
  * conflict.
  */
