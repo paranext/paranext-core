@@ -1,11 +1,12 @@
 import type { ViewOptionsTextEntry } from '../scripture-text-grid-contents.utils';
 
-// Re-exported so consumers (this component's tests, the PT-4039 dialog) get the row type from one
-// place. A3's `ViewOptionsTextEntry` carries `isUserRemovable` — the hover-✕ display gate (true only
-// for genuine user rows) — so no wrapper type is needed.
+// Re-exported so consumers (this component's tests, the share-layout dialog on another branch) get
+// the row type from one place. `ViewOptionsTextEntry` (from the View Options data layer) carries
+// `isUserRemovable` — the hover-✕ display gate (true only for genuine user rows) — so no wrapper
+// type is needed.
 export type { ViewOptionsTextEntry };
 
-/** The grid's display mode. `'chapter'` rendering lands in B4 (PT-4062). */
+/** The grid's display mode. `'chapter'` rendering is built separately, later. */
 export type ScriptureTextGridViewMode = 'verse' | 'chapter';
 
 /** Localization keys used by `ScriptureTextGridOptions`. */
@@ -30,9 +31,9 @@ export type ScriptureTextGridOptionsLocalizedStrings = {
 
 /**
  * Props for the reusable, presentational View Options inner component. Data and callbacks only — no
- * PAPI, popover, or persistence coupling — so both the Scripture Text Grid popover (A5) and the
- * PT-4039 share-layout dialog can render it. Callers compute the rows (via A3's
- * `getViewOptionsTexts`) and own persistence.
+ * PAPI, popover, or persistence coupling — so both the Scripture Text Grid popover and a separate
+ * share-layout dialog can render it. Callers compute the rows (via `getViewOptionsTexts`) and own
+ * persistence.
  */
 export interface ScriptureTextGridOptionsProps {
   /** The currently selected view mode. */
@@ -40,8 +41,8 @@ export interface ScriptureTextGridOptionsProps {
   /** Called when the user picks a different, enabled view mode. */
   onViewModeChange: (mode: ScriptureTextGridViewMode) => void;
   /**
-   * When `false` (default) the Chapter toggle is disabled with a "coming soon" hint. A4/PT-4062
-   * enable it once chapter rendering exists.
+   * When `false` (default) the Chapter toggle is disabled with a "coming soon" hint. It is enabled
+   * once chapter rendering exists.
    */
   isChapterEnabled?: boolean;
   /** Admin-shared rows (top section): checkbox reflects the per-user overlay; never removable. */

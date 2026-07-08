@@ -1,46 +1,81 @@
 import type { WebViewProps } from '@papi/core';
-import { logger } from '@papi/frontend';
-import { useLocalizedStrings, useProjectDataProvider } from '@papi/frontend/react';
-import { LocalizeKey } from 'platform-bible-utils';
-import { useEffect, useRef } from 'react';
+import papi, { logger } from '@papi/frontend';
+import { useDataProvider, useDialogCallback, useLocalizedStrings } from '@papi/frontend/react';
+import { Button, Popover, PopoverContent, PopoverTrigger } from 'platform-bible-react';
+import { Settings2 } from 'lucide-react';
+import { DblResourceData, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
+import type { DblResourceReference } from 'platform-scripture';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { selectScriptureTextGridTitle } from './scripture-text-grid.utils';
+import {
+  addToUserResources,
+  getScriptureTextGridContents,
+  getViewOptionsTexts,
+  removeFromUserResources,
+  setUserDisplay,
+} from './scripture-text-grid-contents.utils';
+import { useTextCollectionSources } from './use-text-collection-sources.hook';
+import {
+  ScriptureTextGridOptions,
+  SCRIPTURE_TEXT_GRID_OPTIONS_STRING_KEYS,
+  type ScriptureTextGridViewMode,
+} from './scripture-text-grid-options/scripture-text-grid-options.component';
 
 // Tab-title localized keys. The label is count-driven: "Scripture text" when 0-1 cells are
 // displayed, "Text Collection" when 2 or more (see `selectScriptureTextGridTitle`).
 const TITLE_SINGLE_KEY = '%webView_scriptureTextGrid_title_single%';
 const TITLE_MULTIPLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
-const ALL_STRING_KEYS: LocalizeKey[] = [TITLE_SINGLE_KEY, TITLE_MULTIPLE_KEY];
+const VIEW_OPTIONS_BUTTON_KEY = '%webView_scriptureTextGrid_viewOptions_openPanel%';
+const INSTALL_FAILED_KEY = '%webView_selectDblResource_installFailed%';
+
+const ALL_STRING_KEYS: LocalizeKey[] = [
+  TITLE_SINGLE_KEY,
+  TITLE_MULTIPLE_KEY,
+  VIEW_OPTIONS_BUTTON_KEY,
+  ...SCRIPTURE_TEXT_GRID_OPTIONS_STRING_KEYS,
+];
+
+// The Scripture Text Grid shows Bible-text resources.
+const GRID_RESOURCE_TYPE = 'ScriptureResource';
 
 /**
- * Scripture Text Grid web view (PT-4049 / A1 scaffold; PT-4050 / A2 first-open trigger).
+ * Scripture Text Grid web view: the tab shell, per-user first-open overlay initialization, and the
+ * View Options panel.
  *
- * A1 shell: no toolbar, a placeholder body, and a dynamic tab title driven by the number of
- * displayed cells (the `VerseCell` row renderer lands in A4 / PT-4052). A2 adds a minimal
- * first-open trigger that initializes the per-user shown-by-default overlay once per project.
- * Correctness (no double-init) is enforced server-side by an idempotent per-user-per-project
- * marker; this effect is a thin trigger. Richer UI wiring (contents selector, project selection)
- * lands in A3/A5.
+ * Renders the header View Options icon button + popover wrapping the reusable
+ * `ScriptureTextGridOptions` component, wired to the View Options data-layer helpers and persisted
+ * through the per-user text-connection PDP setters. The grid body (the verse-cell row renderer) is
+ * built separately; this file owns only the header and leaves the body placeholder below the seam.
  */
 globalThis.webViewComponent = function ScriptureTextGridWebView({
   projectId,
   updateWebViewDefinition,
-  useWebViewState,
 }: WebViewProps) {
-  // `ALL_STRING_KEYS` is a module-level constant, so its reference is already stable across renders
-  // (satisfying `useLocalizedStrings`'s stable-reference requirement) — no `useMemo` needed.
   const [localizedStrings, isLoadingLocalizedStrings] = useLocalizedStrings(ALL_STRING_KEYS);
 
-  // A1 SCAFFOLD SEAM: the real grid contents (checked resources) come from A3's
-  // `getScriptureTextGridContents` effective-list selector. Until A3 lands, this persisted stub
-  // both drives the dynamic-title threshold and exercises restart-persistence (`useWebViewState`
-  // round-trips across app restart). Replace this state with the A3 selector when it lands.
-  const [gridContentsIds] = useWebViewState<string[]>('gridContentsIds', []);
-  const displayedCellCount = gridContentsIds.length;
+  const { sources, textConnectionPdp } = useTextCollectionSources(projectId);
 
-  const textConnectionPdp = useProjectDataProvider(
-    'platformScripture.textConnectionSettings',
-    projectId,
+  // Latest sources for the async callbacks below — reading the render-closure `sources` would let a
+  // rapid second toggle (or a toggle mid-install) compute its next-state from a pre-write snapshot
+  // and clobber the first write. A ref always hands the callbacks the freshest snapshot.
+  const sourcesRef = useRef(sources);
+  sourcesRef.current = sources;
+
+  const [viewMode, setViewMode] = useState<ScriptureTextGridViewMode>('verse');
+  // Resources whose install is in flight after a Get Resources pick (keyed by id so duplicate
+  // display names can't drop each other's row); their names drive the "Installing {name}…" rows.
+  const [installing, setInstalling] = useState<Array<{ id: string; name: string }>>([]);
+
+  const { top, bottom } = useMemo(
+    () => (sources ? getViewOptionsTexts(sources) : { top: [], bottom: [] }),
+    [sources],
   );
+  const displayedCellCount = useMemo(
+    () => (sources ? getScriptureTextGridContents(sources).length : 0),
+    [sources],
+  );
+
+  const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
 
   // Fire first-open overlay init once per resolved projectId. The server-side marker makes repeated
   // calls safe; this guard just avoids redundant round-trips within a single web-view lifetime.
@@ -55,7 +90,6 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     if (initializedProjectIds.current.has(projectId)) return;
     initializedProjectIds.current.add(projectId);
     textConnectionPdp.initializeShownByDefaultOverlay().catch((error) => {
-      // Non-fatal: drop the id from the local guard so a later open can retry; the server-side marker was never written.
       initializedProjectIds.current.delete(projectId);
       logger.error(`Failed to initialize shown-by-default overlay for ${projectId}: ${error}`);
     });
@@ -63,8 +97,6 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 
   // Dynamic tab title: flips to "Text Collection" at 2+ displayed cells, "Scripture text" otherwise.
   useEffect(() => {
-    // Wait for localization so we never flash a raw key into the tab. `useLocalizedStrings` returns
-    // the key itself while loading, so gate on `isLoading` (a truthiness check couldn't detect that).
     if (isLoadingLocalizedStrings) return;
     updateWebViewDefinition({
       title: selectScriptureTextGridTitle(displayedCellCount, {
@@ -74,6 +106,130 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     });
   }, [displayedCellCount, isLoadingLocalizedStrings, localizedStrings, updateWebViewDefinition]);
 
-  // Placeholder body. The empty-state directional copy (A6) and the VerseCell row (A4) replace this.
-  return <div data-testid="scripture-text-grid" />;
+  const handleCheckedChange = useCallback(
+    (resourceId: string, checked: boolean) => {
+      const { current } = sourcesRef;
+      if (!current || !textConnectionPdp) return;
+      const next = setUserDisplay(resourceId, checked, current);
+      if (next.userReferenced !== current.userReferenced) {
+        textConnectionPdp
+          .setUserReferencedProjectsAndResources(next.userReferenced)
+          .catch((e) => logger.warn(`Failed to persist user list: ${getErrorMessage(e)}`));
+      }
+      if (next.overlay !== current.overlay) {
+        textConnectionPdp
+          .setShownByDefaultOverlay(next.overlay)
+          .catch((e) => logger.warn(`Failed to persist overlay: ${getErrorMessage(e)}`));
+      }
+    },
+    [textConnectionPdp],
+  );
+
+  const handleRemoveFromList = useCallback(
+    (resourceId: string) => {
+      const { current } = sourcesRef;
+      if (!current || !textConnectionPdp) return;
+      const next = removeFromUserResources(resourceId, current.userReferenced);
+      if (next !== current.userReferenced) {
+        textConnectionPdp
+          .setUserReferencedProjectsAndResources(next)
+          .catch((e) => logger.warn(`Failed to persist removal: ${getErrorMessage(e)}`));
+      }
+    },
+    [textConnectionPdp],
+  );
+
+  const handleResourceSelect = useCallback(
+    async (resource: DblResourceData) => {
+      if (!textConnectionPdp) return;
+
+      if (!resource.installed) {
+        if (!dblResourcesProvider) return;
+        const pending = { id: resource.dblEntryUid, name: resource.displayName };
+        setInstalling((prev) => [...prev, pending]);
+        try {
+          await dblResourcesProvider.installDblResource(resource.dblEntryUid);
+        } catch (e: unknown) {
+          papi.notifications.send({ message: INSTALL_FAILED_KEY, severity: 'error' });
+          logger.warn(`Failed to install resource ${resource.dblEntryUid}: ${getErrorMessage(e)}`);
+          return;
+        } finally {
+          setInstalling((prev) => prev.filter((info) => info.id !== resource.dblEntryUid));
+        }
+      }
+
+      // Re-read after the await: the subscription may have advanced during the install.
+      const { current } = sourcesRef;
+      if (!current) return;
+      const reference: DblResourceReference = {
+        type: 'dblResource',
+        name: resource.displayName,
+        id: resource.dblEntryUid,
+      };
+      const next = addToUserResources(reference, current.userReferenced);
+      if (next !== current.userReferenced) {
+        textConnectionPdp
+          .setUserReferencedProjectsAndResources(next)
+          .catch((e) => logger.warn(`Failed to persist added resource: ${getErrorMessage(e)}`));
+      }
+    },
+    [dblResourcesProvider, textConnectionPdp],
+  );
+
+  const selectedResourceIds = useMemo(
+    () => [...top, ...bottom].map((entry) => entry.reference.id),
+    [top, bottom],
+  );
+
+  const showResourcePicker = useDialogCallback(
+    'platform.resourcePicker',
+    useMemo(
+      () => ({ resourceType: GRID_RESOURCE_TYPE, selectedResourceIds, isModal: true }),
+      [selectedResourceIds],
+    ),
+    useCallback(
+      (resource: DblResourceData | undefined) => {
+        if (!resource) return;
+        handleResourceSelect(resource).catch((e) =>
+          logger.error(`Resource selection failed: ${getErrorMessage(e)}`),
+        );
+      },
+      [handleResourceSelect],
+    ),
+  );
+
+  const installingResourceNames = useMemo(() => installing.map((info) => info.name), [installing]);
+
+  return (
+    <div data-testid="scripture-text-grid" className="tw:flex tw:h-full tw:flex-col">
+      <div className="tw:flex tw:items-center tw:justify-end tw:border-b tw:p-1">
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={localizedStrings[VIEW_OPTIONS_BUTTON_KEY]}
+            >
+              <Settings2 className="tw:h-4 tw:w-4" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="tw:max-h-[70vh] tw:overflow-y-auto">
+            <ScriptureTextGridOptions
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+              top={top}
+              bottom={bottom}
+              installingResourceNames={installingResourceNames}
+              onCheckedChange={handleCheckedChange}
+              onRemoveFromList={handleRemoveFromList}
+              onGetResources={showResourcePicker}
+              localizedStrings={localizedStrings}
+            />
+          </PopoverContent>
+        </Popover>
+      </div>
+      {/* The grid body (verse-cell rows) renders below this header seam; this file owns the header. */}
+      <div className="tw:flex-1" />
+    </div>
+  );
 };
