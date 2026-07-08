@@ -157,6 +157,60 @@ export class GraphemeString {
   }
 
   /**
+   * TEMPORARY (benchmark candidate B): {@link indexOf} implemented as a grapheme-array walk with a
+   * cheap first-grapheme reject. The needle is segmented (reused for free when a GraphemeString is
+   * passed). Removed once the perf benchmark picks a winner.
+   */
+  indexOfWalk(searchString: string | GraphemeString, position: number = 0): number {
+    const ng =
+      typeof searchString === 'string' ? stringzToArray(searchString) : searchString.graphemes;
+    const k = ng.length;
+    if (k === 0) return -1;
+    let p = position < 0 ? position + this.graphemes.length : position;
+    if (p < 0) p = 0;
+    const maxStart = this.graphemes.length - k;
+    for (let i = p; i <= maxStart; i++) {
+      // PERF: cheap single-grapheme reject before the full whole-grapheme compare.
+      if (this.graphemes[i] === ng[0]) {
+        let match = true;
+        for (let j = 1; j < k; j++) {
+          if (this.graphemes[i + j] !== ng[j]) {
+            match = false;
+            break;
+          }
+        }
+        if (match) return i;
+      }
+    }
+    return -1;
+  }
+
+  /** TEMPORARY (benchmark candidate B): {@link lastIndexOf} as a backward grapheme walk. */
+  lastIndexOfWalk(searchString: string | GraphemeString, position?: number): number {
+    const ng =
+      typeof searchString === 'string' ? stringzToArray(searchString) : searchString.graphemes;
+    const k = ng.length;
+    if (k === 0 || this.graphemes.length === 0) return -1;
+    let p = position === undefined ? this.graphemes.length - 1 : position;
+    if (p < 0) p += this.graphemes.length;
+    if (p < 0) return -1;
+    const start = Math.min(p, this.graphemes.length - k);
+    for (let i = start; i >= 0; i--) {
+      if (this.graphemes[i] === ng[0]) {
+        let match = true;
+        for (let j = 1; j < k; j++) {
+          if (this.graphemes[i + j] !== ng[j]) {
+            match = false;
+            break;
+          }
+        }
+        if (match) return i;
+      }
+    }
+    return -1;
+  }
+
+  /**
    * Resolve a range index: negative counts from the end, then clamp into `[0, length]`. Never
    * wraps. `length` (one past the last grapheme) is a valid result meaning "the end".
    */
