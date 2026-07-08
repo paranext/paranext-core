@@ -24,9 +24,9 @@ const platformSettings: SettingsContribution = {
   label: '%platform_group1%',
   description: '%platform_group1_description%',
   properties: {
-    'platform.verseRef': {
-      label: '%settings_platform_verseRef_label%',
-      default: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+    'platform.requestTimeout': {
+      label: '%settings_platform_requestTimeout_label%',
+      default: 30,
     },
     'platform.interfaceLanguage': {
       label: '%settings_platform_interfaceLanguage_label%',
@@ -38,9 +38,9 @@ const platformSettingsLocalized: Localized<SettingsContribution> = {
   label: 'platform_group1',
   description: 'platform_group1_description',
   properties: {
-    'platform.verseRef': {
-      label: 'settings_platform_verseRef_label',
-      default: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+    'platform.requestTimeout': {
+      label: 'settings_platform_requestTimeout_label',
+      default: 30,
     },
     'platform.interfaceLanguage': {
       label: 'settings_platform_interfaceLanguage_label',
