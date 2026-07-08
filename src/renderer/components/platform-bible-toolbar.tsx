@@ -32,7 +32,6 @@ import { sendCommand } from '@shared/services/command.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { logger } from '@shared/services/logger.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
-import { SavedWebViewDefinition } from '@shared/models/web-view.model';
 import { UpdateWebViewEvent } from '@shared/services/web-view.service-model';
 import { CircleCheck, HomeIcon } from 'lucide-react';
 import {
@@ -93,35 +92,37 @@ export function PlatformBibleToolbar() {
   const isPowerMode = useIsPowerMode();
   const lastSelectedWebViewId = useLastSelectedWebViewId();
 
-  // The active tab's saved definition, mirrored by the top BCV in power mode
-  const [activeWebViewDefinition, setActiveWebViewDefinition] = useState<
-    SavedWebViewDefinition | undefined
-  >(undefined);
+  // Bumped by an onDidUpdateWebView event for the tracked web view to force a definition re-read
+  const [definitionRefresh, setDefinitionRefresh] = useState(0);
 
-  useEffect(() => {
-    if (!lastSelectedWebViewId) {
-      setActiveWebViewDefinition(undefined);
-      return;
-    }
+  // Ref so the (deps-stable) update handler always sees the current tracked id
+  const lastSelectedWebViewIdRef = useRef(lastSelectedWebViewId);
+  lastSelectedWebViewIdRef.current = lastSelectedWebViewId;
+
+  useEvent(
+    onDidUpdateWebView,
+    useCallback(({ webView }: UpdateWebViewEvent) => {
+      if (webView.id === lastSelectedWebViewIdRef.current) setDefinitionRefresh((n) => n + 1);
+    }, []),
+  );
+
+  // The active tab's saved definition, mirrored by the top BCV in power mode. Derived
+  // synchronously so the id and its definition always update in the same render (no transient
+  // stale pairing / disabled flash); definitionRefresh re-reads after an external update.
+  const activeWebViewDefinition = useMemo(() => {
+    // Referenced so this memo re-runs whenever an onDidUpdateWebView event bumps it
+    // eslint-disable-next-line no-unused-expressions
+    definitionRefresh;
+    if (!lastSelectedWebViewId) return undefined;
     try {
-      setActiveWebViewDefinition(getSavedWebViewDefinitionSync(lastSelectedWebViewId));
+      return getSavedWebViewDefinitionSync(lastSelectedWebViewId);
     } catch (e) {
       logger.warn(
         `Toolbar could not get web view definition for ${lastSelectedWebViewId}: ${getErrorMessage(e)}`,
       );
-      setActiveWebViewDefinition(undefined);
+      return undefined;
     }
-  }, [lastSelectedWebViewId]);
-
-  useEvent(
-    onDidUpdateWebView,
-    useCallback(
-      ({ webView }: UpdateWebViewEvent) => {
-        if (webView.id === lastSelectedWebViewId) setActiveWebViewDefinition(webView);
-      },
-      [lastSelectedWebViewId],
-    ),
-  );
+  }, [lastSelectedWebViewId, definitionRefresh]);
 
   // Power mode with no selected web view: nothing to navigate — controls are disabled
   const isBookChapterControlDisabled = isPowerMode && !activeWebViewDefinition;
