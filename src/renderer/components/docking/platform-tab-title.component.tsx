@@ -1,4 +1,5 @@
 import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { useLastFocusedTabId } from '@renderer/hooks/use-last-focused-tab-id.hook';
 import { useLastSelectedWebViewId } from '@renderer/hooks/use-last-selected-web-view-id.hook';
 import { floatTab, updateTabPartialSync } from '@renderer/services/web-view.service-host';
 import { logger } from '@shared/services/logger.service';
@@ -44,13 +45,13 @@ const cssClassTabContentWindowFocus = 'platform-dock-tabpane-window-focus';
 
 /**
  * CSS class for tinting the tab header of the last-selected web view (the navigation target of the
- * top toolbar's book/chapter/verse controls and navigation commands) while focus is outside every
- * tab (PT9 parity)
+ * top toolbar's book/chapter/verse controls and navigation commands) while it is also the tab the
+ * user most recently focused and focus is outside every tab (PT9 parity)
  */
 const cssClassTabHeaderLastSelected = 'platform-dock-tab-last-selected';
 /**
- * CSS class for tinting the tab content pane of the last-selected web view while focus is outside
- * every tab (PT9 parity)
+ * CSS class for tinting the tab content pane of the last-selected web view while it is also the tab
+ * the user most recently focused and focus is outside every tab (PT9 parity)
  */
 const cssClassTabContentLastSelected = 'platform-dock-tabpane-last-selected';
 
@@ -148,6 +149,7 @@ export function PlatformTabTitle({
   }, [focusSubjectPossiblyError]);
 
   const lastSelectedWebViewId = useLastSelectedWebViewId();
+  const lastFocusedTabId = useLastFocusedTabId();
 
   // Attach a click listener to the tab to focus this tab. Unfortunately rc-dock doesn't expose
   // rc-tabs onTabClick https://github.com/fis-components/rc-tabs/tree/master?tab=readme-ov-file#props
@@ -213,17 +215,22 @@ export function PlatformTabTitle({
 
   // Handle applying and removing the CSS style that tints this tab's header when it is the
   // navigation target (the last-selected web view driving the top toolbar's BCV controls and
-  // navigation commands) and focus is currently outside every tab (PT9 parity). Restricting the
-  // tint to this case - rather than merely "not this tab" - avoids two tabs being visually marked
-  // at once: whenever any tab or web view is focused, that tab's own focus highlight is the only
-  // marker, and the tint reappears only once focus leaves all tabs (e.g. to a toolbar control or
-  // dialog).
+  // navigation commands), it was also the tab the user was most recently in, and focus is
+  // currently outside every tab (PT9 parity). Restricting the tint to focus-outside-all-tabs -
+  // rather than merely "not this tab" - avoids two tabs being visually marked at once: whenever
+  // any tab or web view is focused, that tab's own focus highlight is the only marker, and the
+  // tint reappears only once focus leaves all tabs (e.g. to a toolbar control or dialog).
+  // Additionally requiring this tab to be the last FOCUSED tab keeps the tint off when the user
+  // visited some other (e.g. non-navigable) tab in between: the tracked web view keeps driving
+  // navigation, but the tab the user was last in was a different one, so tinting this one would
+  // wrongly suggest the user just came from it.
   useEffect(() => {
     const isFocusOnATabOrWebView =
       !!focusSubject && (focusSubject.focusType === 'tab' || focusSubject.focusType === 'webView');
 
-    // do nothing if this tab is not the navigation target, or if focus is on any tab or web view
-    if (id !== lastSelectedWebViewId || isFocusOnATabOrWebView) return;
+    // do nothing if this tab is not the navigation target, was not the last focused tab, or if
+    // focus is on any tab or web view
+    if (id !== lastSelectedWebViewId || id !== lastFocusedTabId || isFocusOnATabOrWebView) return;
 
     // We need to walk the DOM to find the header and content to apply the last-selected style
     const containerElement = containerRef.current;
@@ -247,7 +254,7 @@ export function PlatformTabTitle({
       activeTabHeader.classList.remove(cssClassTabHeaderLastSelected);
       if (activeTabContent) activeTabContent.classList.remove(cssClassTabContentLastSelected);
     };
-  }, [focusSubject, id, lastSelectedWebViewId]);
+  }, [focusSubject, id, lastSelectedWebViewId, lastFocusedTabId]);
 
   const icon = (
     <div

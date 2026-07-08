@@ -68,6 +68,32 @@ function setLastSelectedWebViewId(newWebViewId: WebViewId | undefined): void {
 }
 
 /**
+ * The tab or web view that most recently had focus, regardless of whether it is
+ * scripture-navigable. Unlike {@link lastSelectedWebViewId}, this follows the user's focus to every
+ * tab. Retained when focus moves outside all tabs so the last-selected tab tint can tell whether
+ * the tracked web view was also the tab the user was most recently in — if the user visited some
+ * other tab in between, the tracked web view keeps driving navigation but should not be tinted. (A
+ * web view's tab id is the same as its web view id, so the two trackers are comparable.)
+ */
+let lastFocusedTabId: string | undefined;
+
+const onDidChangeLastFocusedTabIdEmitter = new PlatformEventEmitter<string | undefined>();
+
+/** Event that fires with the new id when the last focused tab changes */
+export const onDidChangeLastFocusedTabId = onDidChangeLastFocusedTabIdEmitter.event;
+
+/** Gets the id of the tab or web view that most recently had focus, if any ever has */
+export function getLastFocusedTabId(): string | undefined {
+  return lastFocusedTabId;
+}
+
+function setLastFocusedTabId(newTabId: string | undefined): void {
+  if (newTabId === lastFocusedTabId) return;
+  lastFocusedTabId = newTabId;
+  onDidChangeLastFocusedTabIdEmitter.emit(newTabId);
+}
+
+/**
  * Whether a web view is a candidate for BCV navigation: it either belongs to a project
  * (`projectId`) or shows its own BookChapterControl/ScrollGroupSelector toolbar
  * (`shouldShowToolbar`). Web views that are neither (e.g. Find, a settings-style panel) must not
@@ -254,6 +280,10 @@ class WindowDataProviderEngine
     this.#focusSubject = newFocusSubject;
 
     if (newFocusSubject) {
+      // Follow focus to every tab and web view with no eligibility gate (see `lastFocusedTabId`)
+      if (newFocusSubject.focusType === 'webView' || newFocusSubject.focusType === 'tab')
+        setLastFocusedTabId(newFocusSubject.id);
+
       // Only track web views that are actually scripture-navigable (see
       // `isScriptureNavigableWebView`). An ineligible web view retains whatever was tracked
       // before, same as focus moving to something that is not a web view at all.

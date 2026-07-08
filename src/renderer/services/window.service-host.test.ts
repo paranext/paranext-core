@@ -1,6 +1,8 @@
 import { describe, expect, test, vi, beforeEach } from 'vitest';
 import {
+  getLastFocusedTabId,
   getLastSelectedWebViewId,
+  onDidChangeLastFocusedTabId,
   onDidChangeLastSelectedWebViewId,
   testingWindowService,
 } from '@renderer/services/window.service-host';
@@ -205,5 +207,61 @@ describe('last selected web view tracking', () => {
 
       expect(getLastSelectedWebViewId()).toBe('web-view-1');
     });
+  });
+});
+
+describe('last focused tab tracking', () => {
+  beforeEach(() => {
+    getTabInfoByIdMock.mockReset();
+    getTabInfoByIdMock.mockReturnValue(undefined);
+    getSavedWebViewDefinitionSyncMock.mockReset();
+    getSavedWebViewDefinitionSyncMock.mockImplementation((id: string) => ({
+      id,
+      projectId: 'project-1',
+    }));
+  });
+
+  test('remembers the most recently focused web view even when it is not scripture-navigable', async () => {
+    const engine = testingWindowService.implementWindowDataProviderEngine();
+    // Track an eligible web view (default mock: has projectId)
+    await engine.setFocus({ focusType: 'webView', id: 'web-view-focus-1' });
+    expect(getLastFocusedTabId()).toBe('web-view-focus-1');
+    expect(getLastSelectedWebViewId()).toBe('web-view-focus-1');
+
+    // Focus an ineligible web view: the last-selected tracker retains the previous web view, but
+    // the last-FOCUSED tracker follows the user's focus
+    getSavedWebViewDefinitionSyncMock.mockReturnValue({ id: 'web-view-focus-2' });
+    await engine.setFocus({ focusType: 'webView', id: 'web-view-focus-2' });
+
+    expect(getLastFocusedTabId()).toBe('web-view-focus-2');
+    expect(getLastSelectedWebViewId()).toBe('web-view-focus-1');
+  });
+
+  test('remembers a focused non-web-view tab', async () => {
+    const engine = testingWindowService.implementWindowDataProviderEngine();
+    getTabInfoByIdMock.mockReturnValueOnce({ id: 'settings-tab-focus', tabType: 'settings-tab' });
+    await engine.setFocus({ focusType: 'tab', id: 'settings-tab-focus' });
+
+    expect(getLastFocusedTabId()).toBe('settings-tab-focus');
+  });
+
+  test('retains the last focused tab when focus moves outside all tabs', async () => {
+    const engine = testingWindowService.implementWindowDataProviderEngine();
+    await engine.setFocus({ focusType: 'webView', id: 'web-view-focus-3' });
+    await engine.setFocus(undefined);
+
+    expect(getLastFocusedTabId()).toBe('web-view-focus-3');
+  });
+
+  test('emits onDidChangeLastFocusedTabId on change', async () => {
+    const received: (string | undefined)[] = [];
+    const unsubscribe = onDidChangeLastFocusedTabId((id) => {
+      received.push(id);
+    });
+    const engine = testingWindowService.implementWindowDataProviderEngine();
+    await engine.setFocus({ focusType: 'webView', id: 'web-view-focus-4' });
+    await engine.setFocus({ focusType: 'webView', id: 'web-view-focus-4' });
+    expect(received).toEqual(['web-view-focus-4']);
+    unsubscribe();
   });
 });
