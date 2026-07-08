@@ -4,7 +4,7 @@ import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import { LegacyComment, LegacyCommentThread } from 'platform-bible-utils';
 import { CommentThread } from './comment-thread.component';
-import { verseTextConflictComment } from './comment-sample.data';
+import { verseTextConflictComment, verseTextConflictMergeSample } from './comment-sample.data';
 
 vi.mock('@/components/advanced/editor/editor', () => ({
   Editor: vi.fn(({ onClear }: { onClear?: (fn: () => void) => void }) => {
@@ -363,6 +363,34 @@ describe('CommentThread conflict resolution', () => {
     );
   });
 
+  test('a fast double-click on ✓ fires resolveConflict only once while the first call is in flight', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    let resolveHandleResolveConflict: (success: boolean) => void = () => {};
+    const handleResolveConflict = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveHandleResolveConflict = resolve;
+        }),
+    );
+    renderThread({
+      thread: conflictThread,
+      comments: conflictThread.comments,
+      canUserResolveThreadCallback: async () => true,
+      handleResolveConflict,
+    });
+
+    const resolveButton = await screen.findByRole('button', { name: 'Resolve thread' });
+    await user.click(resolveButton);
+    // The first call is still pending (isResolvingConflict), so the button is now disabled — a
+    // second click must not fire a second resolveConflict('accept') call.
+    expect(resolveButton).toBeDisabled();
+    await user.click(resolveButton);
+    expect(handleResolveConflict).toHaveBeenCalledTimes(1);
+
+    resolveHandleResolveConflict(true);
+    await waitFor(() => expect(resolveButton).not.toBeDisabled());
+  });
+
   test('clicking ✓ on a non-conflict thread still uses the generic status path', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     const handleResolveConflict = vi.fn().mockResolvedValue(true);
@@ -456,6 +484,36 @@ describe('CommentThread conflict resolution', () => {
     expect(
       screen.queryByText(verseTextConflictComment.rejectedResultText ?? ''),
     ).not.toBeInTheDocument();
+  });
+
+  test("resolved-by-merge thread ('merged') shows the merged text in the read-only card and the resolution reply's 'combined' banner", async () => {
+    // Unlike the other resolutionReply() calls above (which ride the 'conflict-sample' thread of
+    // verseTextConflictComment), this exercises verseTextConflictMergeSample — the only sample with
+    // a mergedText "combine both changes" preview — so the reply's thread id is overridden to match.
+    const mergeResolutionReply: LegacyComment = {
+      ...resolutionReply('merged'),
+      thread: verseTextConflictMergeSample.thread,
+    };
+    const resolvedThread: LegacyCommentThread = {
+      ...conflictThread,
+      id: verseTextConflictMergeSample.thread,
+      comments: [verseTextConflictMergeSample, mergeResolutionReply],
+      status: 'Resolved',
+    };
+    renderThread({
+      thread: resolvedThread,
+      comments: resolvedThread.comments,
+      isSelected: true,
+      threadStatus: 'Resolved',
+    });
+    // Derivation maps 'merged' -> 'merged', so the card's read-only Result region shows the merged
+    // verse text (with its diff markup) instead of being hidden.
+    await screen.findByText(/royal/);
+    expect(document.querySelector('u')).toBeInTheDocument();
+    // The outcome itself is stated in prose by the resolution reply's CommentItem banner, not on
+    // the card (asserts the thread-level wiring between the two, each of which is also unit-tested
+    // in isolation).
+    expect(screen.getByText('Combined both changes.')).toBeInTheDocument();
   });
 
   // A plain reply (not a resolution reply) appended after the conflict comment, used to exercise

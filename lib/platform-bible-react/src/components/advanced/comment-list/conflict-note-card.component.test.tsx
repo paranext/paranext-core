@@ -245,6 +245,23 @@ test('the Save tooltip warns when enabled and explains the no-op when disabled',
   );
 });
 
+test('the Save tooltip is suppressed when Save is disabled solely by isResolving', async () => {
+  const user = userEvent.setup({ pointerEventsCheck: 0 });
+  render(
+    <ConflictNoteCard
+      comment={verseTextConflictComment}
+      localizedStrings={localizedStrings}
+      // Reject selected (an enabled Save would otherwise warn "This can't be undone."), but
+      // isResolving disables the button — showing that warning here would misleadingly suggest
+      // clicking a button the user currently can't press.
+      selectedResolution="reject"
+      isResolving
+    />,
+  );
+  await user.hover(screen.getByText('Save and resolve'));
+  expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+});
+
 test('stale reject option is programmatically described by the stale notice for screen readers', () => {
   render(
     <ConflictNoteCard
