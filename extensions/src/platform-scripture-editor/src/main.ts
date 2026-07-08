@@ -882,14 +882,16 @@ const scriptureTextGridWebViewProvider: IWebViewProvider = {
     const projectId = openWebViewOptions?.projectId ?? savedWebView.projectId ?? undefined;
     return {
       ...savedWebView,
-      // A1 stubs the title as the single-cell form; the web view flips it to "Text Collection"
-      // via updateWebViewDefinition once 2+ cells are displayed.
-      title: '%webView_scriptureTextGrid_title_single%',
+      // Icon-only tab: no visible text label. The web view sets a count-driven tooltip
+      // ("Scripture text" / "Text Collection") via updateWebViewDefinition; this initial empty
+      // title avoids flashing a label before that runs.
+      title: '',
+      tooltip: '%webView_scriptureTextGrid_title_single%',
       // Part of the default PT10 Studio layout and must always remain open, so the tab is
-      // non-closable (PT-4049 subsumes A8). The X-button is omitted and there is no keyboard
-      // close shortcut in the app, so this covers both close paths.
+      // non-closable. The X-button is omitted and there is no keyboard close shortcut in the app,
+      // so this covers both close paths.
       isClosable: false,
-      // No top toolbar in this view; the View Options icon button comes in A5.
+      // No top toolbar in this view; the View Options icon button lives in the web view's header.
       shouldShowToolbar: false,
       projectId,
       content: scriptureTextGridWebView,

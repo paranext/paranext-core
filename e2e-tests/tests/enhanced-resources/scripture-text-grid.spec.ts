@@ -1,10 +1,10 @@
 /**
  * E2E scaffold checks for the Scripture Text Grid web view (PT-4049 / A1).
  *
- * Covered: the view opens as a non-closable dock tab titled "Scripture Text" — no
- * `.dock-tab-close-btn`, checked against a positive-control tab so a class rename can't make the
- * assertion pass vacuously. The app has no keyboard close shortcut, so the missing button covers
- * both close paths.
+ * Covered: the view opens as a non-closable, icon-only dock tab (located by the opened web view id,
+ * since the tab has no text label) — no `.dock-tab-close-btn`, checked against a positive-control
+ * tab so a class rename can't make the assertion pass vacuously. The app has no keyboard close
+ * shortcut, so the missing button covers both close paths.
  *
  * There is no menu/command for this view (it ships in the PT10 Studio default layout), so the test
  * opens it directly via `window.papi.webViews.openWebView` (renderer exposes `papi` on
@@ -18,7 +18,6 @@ import { waitForAppReady } from '../../fixtures/helpers';
 import { closeAllNonHomeDockTabs, openEnhancedResource } from './test-helpers';
 
 const SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE = 'platformScriptureEditor.scriptureTextGrid';
-const SCRIPTURE_TEXT_TAB_TITLE = /^Scripture Text$/;
 
 test.describe('Scripture Text Grid (A1 scaffold)', () => {
   test.beforeEach(async ({ mainPage }) => {
@@ -55,12 +54,12 @@ test.describe('Scripture Text Grid (A1 scaffold)', () => {
     await closeAllNonHomeDockTabs(mainPage);
   });
 
-  test('opens as a non-closable "Scripture Text" tab', async ({ mainPage }) => {
+  test('opens as a non-closable, icon-only tab', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
 
     // No menu/command exists for this view (it comes from the default layout), so open it directly
     // through the renderer's global `papi`. `existingId: '?'` reuses an already-open instance.
-    await mainPage.evaluate(async (webViewType) => {
+    const webViewId = await mainPage.evaluate(async (webViewType) => {
       // The renderer sets `globalThis.papi`; it is untyped in the Playwright context.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const { papi } = window as unknown as {
@@ -74,10 +73,14 @@ test.describe('Scripture Text Grid (A1 scaffold)', () => {
           };
         };
       };
-      await papi.webViews.openWebView(webViewType, undefined, { existingId: '?' });
+      return papi.webViews.openWebView(webViewType, undefined, { existingId: '?' });
     }, SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE);
+    expect(webViewId).toBeTruthy();
 
-    const tab = mainPage.locator('.dock-tab', { hasText: SCRIPTURE_TEXT_TAB_TITLE });
+    // The tab shows only an icon (no text label), so locate it by the opened web view id rather than
+    // by title text. rc-dock renders each tab nav button with `data-node-key` set to the tab id
+    // (which equals the web view id).
+    const tab = mainPage.locator(`.dock-tab[data-node-key="${webViewId}"]`);
     await expect(tab).toBeVisible({ timeout: 15_000 });
 
     // Non-closable: the grid tab renders no close button (rc-dock omits it when `closable` is false).
