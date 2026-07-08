@@ -136,7 +136,7 @@ test('clicking anywhere on the "Combine both changes" card selects merge and box
   // Merge starts unselected (accept is the default).
   expect(optionRow('merge')).not.toHaveClass('tw:border-border');
 
-  // Click the card itself (not the visually-hidden radio) — the whole card is the target.
+  // Click the card itself (not the radio) — the whole card is the target.
   const mergeCard = optionRow('merge');
   if (!mergeCard) throw new Error('expected a "Combine both changes" option card');
   await user.click(mergeCard);

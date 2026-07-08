@@ -29,6 +29,10 @@ const DIFF_HTML_CLASSES = cn(
   'tw:prose tw:max-w-none tw:break-words tw:text-sm tw:font-normal tw:text-foreground',
   'tw:[&>blockquote]:border-s-0 tw:[&>blockquote]:p-0 tw:[&>blockquote]:ps-0 tw:[&>blockquote]:font-normal tw:[&>blockquote]:not-italic tw:[&>blockquote]:text-foreground',
   'tw:prose-quoteless',
+  // `prose` gives block children (the top-level blockquote wrapper, and any p — whether nested
+  // inside that blockquote or, in the non-verseText fallback, a direct child) vertical margins that
+  // make these already-compact cards feel bulky. Zero both so the diff sits flush inside the card.
+  'tw:[&>blockquote]:my-0 tw:[&_p]:my-0',
   'tw:[&_u]:font-semibold tw:[&_u]:text-success-foreground tw:[&_u]:no-underline',
   'tw:[&_s]:text-destructive tw:[&_s]:line-through',
 );
@@ -61,10 +65,10 @@ function DiffHtml({ html, className }: { html: string; className?: string }) {
  * (reject), and, when the two edits are independent, "Combine both changes" (merge) — each showing
  * its inline red/green diff. Clicking anywhere on an option card selects it; the cards keep radio
  * semantics (a labelled radio group with role=radio / aria-checked and arrow-key navigation) via a
- * visually-hidden radio inside each card. A Save-and-resolve button commits the choice. Handles the
- * stale state (accept stays enabled and selected; reject is disabled and carries a read-only
- * explanation; Save stays present but disabled) and the already-resolved read-only state (just the
- * chosen outcome's Result text — the outcome itself is stated in prose by CommentItem's
+ * visible radio inline with each card's title. A Save-and-resolve button commits the choice.
+ * Handles the stale state (accept stays enabled and selected; reject is disabled and carries a
+ * read-only explanation; Save stays present but disabled) and the already-resolved read-only state
+ * (just the chosen outcome's Result text — the outcome itself is stated in prose by CommentItem's
  * resolution-reply banner). Falls back to rendering the raw note contents for any non-verseText
  * conflict.
  */
@@ -188,11 +192,14 @@ export function ConflictNoteCard({
     // choice); the reject option carries the explanation of why it's unavailable.
     const isStaleReject = isStale && option.value === 'reject';
     return (
-      // The whole card is a label, so a click anywhere in it forwards to the visually-hidden radio
-      // and selects the option (no separate click handler needed). The radio keeps role=radio /
-      // aria-checked / arrow-key navigation; its aria-label names the option so the inline diff isn't
-      // pulled into the accessible name. The visible label text is aria-hidden to avoid announcing it
-      // twice (once as the radio's name, once as adjacent text).
+      // The whole card is a label, so a click anywhere in it forwards to the radio and selects the
+      // option (no separate click handler needed). The radio keeps role=radio / aria-checked /
+      // arrow-key navigation; its aria-label names the option so the inline diff isn't pulled into
+      // the accessible name. The visible label text is aria-hidden to avoid announcing it twice (once
+      // as the radio's name, once as adjacent text). The radio and title sit side by side on one flex
+      // row (a `gap`, not a directional margin, so the browser's own RTL mirroring of `flex-row`
+      // puts the radio on the correct logical side without extra dir-aware classes), with the diff
+      // below as a sibling.
       // eslint-disable-next-line jsx-a11y/label-has-associated-control -- the label wraps the RadioGroupItem control, but the plugin does not recognize that custom component as a control
       <label
         key={option.value}
@@ -207,17 +214,18 @@ export function ConflictNoteCard({
           isStaleReject ? 'tw:cursor-not-allowed tw:opacity-60' : 'tw:cursor-pointer',
         )}
       >
-        <RadioGroupItem
-          id={optionId}
-          value={option.value}
-          aria-label={option.label}
-          disabled={isStaleReject}
-          aria-describedby={isStaleReject ? staleNoticeId : undefined}
-          className="tw:sr-only"
-        />
-        <span aria-hidden className="tw:font-medium">
-          {option.label}
-        </span>
+        <div className="tw:flex tw:items-center tw:gap-2">
+          <RadioGroupItem
+            id={optionId}
+            value={option.value}
+            aria-label={option.label}
+            disabled={isStaleReject}
+            aria-describedby={isStaleReject ? staleNoticeId : undefined}
+          />
+          <span aria-hidden className="tw:font-medium">
+            {option.label}
+          </span>
+        </div>
         {isStaleReject && (
           // aria-describedby links the option to this visually-hidden notice so assistive tech
           // announces why the choice is read-only.
