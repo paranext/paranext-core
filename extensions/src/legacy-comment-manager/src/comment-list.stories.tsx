@@ -14,6 +14,7 @@ import {
   DEFAULT_COMMENT_FILTERS,
   ScopeFilter,
   SCOPE_FILTER_CURRENT_CHAPTER,
+  TEAM_ASSIGNED_USER,
   UNFILTERED,
 } from './comment-list-filters.model';
 
@@ -144,7 +145,7 @@ function filterThreads(
     if (filters.type === 'comments' && thread.type !== 'Normal') return false;
     if (filters.assignment === 'assigned-to-me' && thread.assignedUser !== currentUser)
       return false;
-    if (filters.assignment === 'team' && thread.assignedUser !== 'Team') return false;
+    if (filters.assignment === 'team' && thread.assignedUser !== TEAM_ASSIGNED_USER) return false;
     return true;
   });
 }

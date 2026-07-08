@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { CommentFilters, ScopeFilter } from './comment-list-filters.model';
 import {
+  areCommentFiltersAtDefault,
   buildCommentThreadSelector,
   DEFAULT_COMMENT_FILTERS,
+  isAssignmentFilter,
+  isReadFilter,
+  isResolvedFilter,
+  isScopeFilter,
   isTypeFilter,
   SCOPE_FILTER_CURRENT_CHAPTER,
   UNFILTERED,
@@ -62,11 +67,38 @@ describe('buildCommentThreadSelector', () => {
   });
 });
 
-describe('isTypeFilter', () => {
-  it('accepts known type values and rejects unknown ones', () => {
-    expect(isTypeFilter('all')).toBe(true);
-    expect(isTypeFilter('conflicts')).toBe(true);
-    expect(isTypeFilter('comments')).toBe(true);
-    expect(isTypeFilter('bogus')).toBe(false);
+// Each axis type-guard should accept exactly its own label-key values and reject anything else. A
+// typo in one of the `*ToLabelKey` maps would surface as a guard no longer accepting a known value.
+const guardCases: [string, (value: string) => boolean, string[]][] = [
+  ['isScopeFilter', isScopeFilter, ['current-chapter', 'unfiltered']],
+  ['isResolvedFilter', isResolvedFilter, ['all', 'unresolved', 'resolved']],
+  ['isReadFilter', isReadFilter, ['all', 'unread', 'read']],
+  ['isTypeFilter', isTypeFilter, ['all', 'conflicts', 'comments']],
+  ['isAssignmentFilter', isAssignmentFilter, ['all', 'assigned-to-me', 'team']],
+];
+
+describe.each(guardCases)('%s', (_name, guard, validValues) => {
+  it('accepts its known values', () => {
+    validValues.forEach((value) => expect(guard(value)).toBe(true));
+  });
+
+  it('rejects unknown values', () => {
+    expect(guard('bogus')).toBe(false);
+    expect(guard('')).toBe(false);
+  });
+});
+
+describe('areCommentFiltersAtDefault', () => {
+  it('is true when every axis is at its "all" default', () => {
+    expect(areCommentFiltersAtDefault(DEFAULT_COMMENT_FILTERS)).toBe(true);
+  });
+
+  it('is false when any axis is not "all"', () => {
+    expect(areCommentFiltersAtDefault({ ...DEFAULT_COMMENT_FILTERS, resolved: 'unresolved' })).toBe(
+      false,
+    );
+    expect(areCommentFiltersAtDefault({ ...DEFAULT_COMMENT_FILTERS, assignment: 'team' })).toBe(
+      false,
+    );
   });
 });

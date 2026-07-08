@@ -96,9 +96,23 @@ export const DEFAULT_COMMENT_FILTERS: CommentFilters = {
   assignment: 'all',
 };
 
+/**
+ * True when every comment-filter axis is at its `'all'` default — i.e. no axis is actively
+ * filtering. Does not consider the separate scope axis. Co-locates the axis-default knowledge with
+ * the axis definitions instead of duplicating the per-axis checks at call sites.
+ */
+export function areCommentFiltersAtDefault(filters: CommentFilters): boolean {
+  return (
+    filters.resolved === DEFAULT_COMMENT_FILTERS.resolved &&
+    filters.read === DEFAULT_COMMENT_FILTERS.read &&
+    filters.type === DEFAULT_COMMENT_FILTERS.type &&
+    filters.assignment === DEFAULT_COMMENT_FILTERS.assignment
+  );
+}
+
 // Paratext 9's literal "assigned to the whole team" token (UserFilter/CommentTags): threads assigned
 // to the team carry this exact `AssignedUser` value.
-const TEAM_ASSIGNED_USER = 'Team';
+export const TEAM_ASSIGNED_USER = 'Team';
 
 /**
  * Builds the comment-thread query from the current filter selections. Each axis contributes at most

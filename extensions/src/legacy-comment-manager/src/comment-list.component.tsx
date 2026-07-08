@@ -11,6 +11,7 @@ import {
 import type { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import { ComponentProps } from 'react';
 import {
+  areCommentFiltersAtDefault,
   assignmentFilterToLabelKey,
   CommentFilters,
   isAssignmentFilter,
@@ -170,12 +171,7 @@ export function CommentListPanel({
     );
   }
 
-  const noFiltersActive =
-    filters.resolved === 'all' &&
-    filters.read === 'all' &&
-    filters.type === 'all' &&
-    filters.assignment === 'all' &&
-    scopeFilter === UNFILTERED;
+  const noFiltersActive = areCommentFiltersAtDefault(filters) && scopeFilter === UNFILTERED;
 
   return (
     <div className="tw:flex tw:flex-col tw:h-full">
