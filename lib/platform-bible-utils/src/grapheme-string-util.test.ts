@@ -58,3 +58,49 @@ describe('codePointAt', () => {
   it('past end is undefined', () => expect(med.codePointAt(50)).toBeUndefined());
   it('at length is undefined', () => expect(med.codePointAt(med.length)).toBeUndefined());
 });
+
+describe('substring', () => {
+  const long = new GraphemeString(LONG);
+  const FIRST_PIZZA = 25;
+  const SECOND_PIZZA = 57;
+  it('with begin only', () =>
+    expect(long.substring(FIRST_PIZZA).string).toEqual(
+      '🍕Symbols💩That🚀Are📷Represented👮🏽‍♀️By🍕Surrogate🔥Pairs💋!🌟',
+    ));
+  it('with begin and end', () =>
+    expect(long.substring(0, FIRST_PIZZA).string).toEqual('Look𐐷At🦄All😎These😁Awesome'));
+  it('returns a GraphemeString instance', () =>
+    expect(long.substring(0, 4)).toBeInstanceOf(GraphemeString));
+  it('end < begin is empty', () =>
+    expect(long.substring(SECOND_PIZZA, FIRST_PIZZA).string).toEqual(''));
+});
+
+describe('slice', () => {
+  const m = new GraphemeString(MEDIUM);
+  it('past -length clamps to start', () => expect(m.slice(-100).string).toEqual(MEDIUM));
+  it('small negative counts from end', () => expect(m.slice(-3).string).toEqual('ome'));
+  it('positive begin', () => expect(m.slice(3).string).toEqual('k𐐷At🦄This𐐷Thing👮🏽‍♀️Its𐐷Awesome'));
+  it('begin past end is empty', () => expect(m.slice(50).string).toEqual(''));
+  it('negative begin and end, begin<end', () => expect(m.slice(-10, -5).string).toEqual('ts𐐷Aw'));
+  it('negative begin and end, begin>end is empty', () =>
+    expect(m.slice(-5, -10).string).toEqual(''));
+  it('positive begin, negative end', () =>
+    expect(m.slice(5, -10).string).toEqual('At🦄This𐐷Thing👮🏽‍♀️I'));
+  it('begin>end is empty', () => expect(m.slice(8, 5).string).toEqual(''));
+  it('end past length clamps to end', () =>
+    expect(m.slice(5, 100).string).toEqual('At🦄This𐐷Thing👮🏽‍♀️Its𐐷Awesome'));
+  it('starting index 0 variants', () => {
+    const s = new GraphemeString('hello-someone.d.ts');
+    expect(s.slice(0).string).toBe('hello-someone.d.ts');
+    expect(s.slice(0, 2).string).toBe('he');
+    expect(s.slice(0, -new GraphemeString('.d.ts').length).string).toBe('hello-someone');
+  });
+  it('explicit end at length exercises the offsets end-guard', () =>
+    expect(m.slice(5, m.length).string).toEqual('At🦄This𐐷Thing👮🏽‍♀️Its𐐷Awesome'));
+  it('begin === end is empty', () => expect(m.slice(3, 3).string).toEqual(''));
+  it('empty source string', () => {
+    const empty = new GraphemeString('');
+    expect(empty.slice(0).string).toEqual('');
+    expect(empty.slice(0, 5).string).toEqual('');
+  });
+});
