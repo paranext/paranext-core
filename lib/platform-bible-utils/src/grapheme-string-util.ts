@@ -245,6 +245,20 @@ export class GraphemeString {
   }
 
   /**
+   * Unicode normalization of the raw string. `'none'` returns it unchanged; otherwise delegates to
+   * `String.prototype.normalize`.
+   */
+  normalize(form: 'NFC' | 'NFD' | 'NFKC' | 'NFKD' | 'none'): string {
+    if (form === 'none') return this.str;
+    return this.str.normalize(form);
+  }
+
+  /** Ordinal comparison against another raw string using `localeCompare('en', ...)`. */
+  ordinalCompare(otherString: string, options?: Intl.CollatorOptions): number {
+    return this.str.localeCompare(otherString, 'en', options);
+  }
+
+  /**
    * Resolve a range index: negative counts from the end, then clamp into `[0, length]`. Never
    * wraps. `length` (one past the last grapheme) is a valid result meaning "the end".
    */
