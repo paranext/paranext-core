@@ -4,6 +4,7 @@ export { Collator } from './intl/intl-collator';
 export { DateTimeFormat } from './intl/intl-date-time-format';
 export { DocumentCombiner } from './document-combiner';
 export { EventRollingTimeCounter } from './event-rolling-time-counter';
+export { GraphemeString } from './grapheme-string-util';
 export { Mutex } from './promises/mutex';
 export { MutexMap } from './promises/mutex-map';
 export { NonValidatingDocumentCombiner } from './non-validating-document-combiner';
