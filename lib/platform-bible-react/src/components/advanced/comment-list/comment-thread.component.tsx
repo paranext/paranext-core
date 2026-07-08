@@ -293,8 +293,11 @@ export function CommentThread({
   // A verseText merge conflict — the only conflict type for which the root note carries discrete
   // diff/result text. Gates the collapsed conflict summary; other conflict types keep the default
   // CommentItem preview. Mirrors ConflictNoteCard's own verseText check.
+  // `firstComment` is `activeComments[0]`, which is undefined when every comment is deleted (this
+  // runs before the empty-thread guard below), so guard the access — a Conflict thread with no
+  // active comments must simply not be a verseText-conflict render.
   const isVerseTextConflictThread =
-    isConflictThread && firstComment.conflictType === 'verseText' && !!firstComment.resultText;
+    isConflictThread && firstComment?.conflictType === 'verseText' && !!firstComment?.resultText;
 
   // </p> expects null and not undefined
   // eslint-disable-next-line no-null/no-null

@@ -334,7 +334,20 @@ export function CommentEditor({ assignableUsers, onSave, onClose, localizedStrin
  * (losing) side, or merge (combine) both sides.
  */
 export type ConflictResolution = "accept" | "reject" | "merge";
-type ConflictResolutionOutcome = "accept" | "reject" | "merged";
+/**
+ * How an already-resolved conflict was resolved, derived from the resolution comment's
+ * `conflictResolutionAction`:
+ *
+ * - `'accept'`: resolved by accepting (no text was written); the accepted side stands.
+ * - `'reject'`: resolved by rejecting (the rejected side was written into the verse).
+ * - `'merged'`: resolved by combining both changes (PT10's "Combine both changes" option, or a PT9
+ *   three-way merge). The card shows the merged verse text (`mergedText`); the outcome itself is
+ *   stated in prose by CommentItem's resolution-reply banner, not on the card.
+ *
+ * Distinct from {@link ConflictResolution} (the live accept/reject choice) because it adds the
+ * `'merged'` legacy outcome and is only meaningful for a conflict that is already resolved.
+ */
+export type ConflictResolutionOutcome = "accept" | "reject" | "merged";
 /**
  * Localization keys used by the ConflictNoteCard. Pass into the useLocalizedStrings hook (in the
  * consuming extension) and forward the result via the localizedStrings prop.

@@ -294,6 +294,19 @@ describe('CommentThread conflict resolution', () => {
     vi.clearAllMocks();
   });
 
+  test('does not crash when a Conflict thread has no active (non-deleted) comments', () => {
+    // `isConflictThread` comes from `thread.type`, but `firstComment` is the first *non-deleted*
+    // comment, so an all-deleted Conflict thread has `firstComment === undefined`. Rendering must
+    // not throw while deriving `isVerseTextConflictThread`.
+    const deletedConflictComment: LegacyComment = { ...verseTextConflictComment, deleted: true };
+    expect(() =>
+      renderThread({
+        thread: { ...conflictThread, comments: [deletedConflictComment] },
+        comments: [deletedConflictComment],
+      }),
+    ).not.toThrow();
+  });
+
   test('conflict thread renders ConflictNoteCard when selected', async () => {
     renderThread({
       thread: conflictThread,
