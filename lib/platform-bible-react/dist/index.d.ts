@@ -7,7 +7,7 @@ import { Column, ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSort
 import { ClassValue } from 'clsx';
 import { Command as CommandPrimitive } from 'cmdk';
 import { LucideProps } from 'lucide-react';
-import { CommentStatus, DblResourceData, LanguageStrings, LegacyComment, LegacyCommentThread, LocalizeKey, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ResourceType, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
+import { CommentStatus, ConflictResolutionOptions, DblResourceData, LanguageStrings, LegacyComment, LegacyCommentThread, LocalizeKey, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ResourceType, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
 import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as RadixTabs, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import React$1 from 'react';
 import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithoutRef, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, RefObject } from 'react';
@@ -335,19 +335,6 @@ export function CommentEditor({ assignableUsers, onSave, onClose, localizedStrin
  */
 export type ConflictResolution = "accept" | "reject" | "merge";
 type ConflictResolutionOutcome = "accept" | "reject" | "merged";
-/**
- * The resolution actions the current user may take on a conflict thread (from the comments data
- * provider's getConflictResolutionOptions). Must stay textually identical to the union declared in
- * legacy-comment-manager.d.ts.
- *
- * - 'none': controls hidden entirely (already resolved, or no permission).
- * - 'accept': the verse was edited after the merge (stale) — Reject is disabled with an explanation;
- *   Accept keeps the current text.
- * - 'acceptOrReject': fully available.
- * - 'acceptRejectOrMerge': fully available, and the two changes are independent so Combine both
- *   changes is also offered.
- */
-export type ConflictResolutionOptions = "none" | "accept" | "acceptOrReject" | "acceptRejectOrMerge";
 /**
  * Localization keys used by the ConflictNoteCard. Pass into the useLocalizedStrings hook (in the
  * consuming extension) and forward the result via the localizedStrings prop.
@@ -3344,6 +3331,7 @@ export declare const Z_INDEX_MODAL = 500;
 export declare function cn(...inputs: ClassValue[]): string;
 
 export {
+	ConflictResolutionOptions,
 	TabNavigationContentSearch as NavigationContentSearch,
 	Toaster as Sonner,
 	sonner,

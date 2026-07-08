@@ -5,6 +5,10 @@ import {
   LocalizeKey,
 } from 'platform-bible-utils';
 
+// Re-export so this module (and the platform-bible-react barrel) stays the import site for the
+// ConflictNoteCard's resolution types. The single definition lives in platform-bible-utils.
+export type { ConflictResolutionOptions };
+
 /**
  * The resolution a user picks for a conflict: keep the accepted (winning) side, take the rejected
  * (losing) side, or merge (combine) both sides.
