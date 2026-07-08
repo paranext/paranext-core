@@ -49,7 +49,7 @@ function ConflictNoteCardStory({
           onResolutionChange={setResolution}
           availableActions={availableActions}
           resolvedResolution={resolvedResolution}
-          onResolve={(chosen) => console.log(`Save and Resolve clicked: ${chosen}`)}
+          onResolve={(chosen) => console.log(`Save and resolve clicked: ${chosen}`)}
         />
       </CardContent>
     </Card>
