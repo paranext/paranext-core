@@ -92,6 +92,25 @@ export class GraphemeString {
   }
 
   /**
+   * Pad the start to reach `targetLength` graphemes. If `targetLength <= length`, returns this
+   * instance unchanged. Returns a new GraphemeString.
+   */
+  padStart(targetLength: number, padString: string = ' '): GraphemeString {
+    if (targetLength <= this.graphemes.length) return this;
+    const pad = buildPad(targetLength - this.graphemes.length, padString);
+    if (pad.length === 0) return this;
+    return new GraphemeString(pad.join('') + this.str, pad.concat(this.graphemes));
+  }
+
+  /** Pad the end to reach `targetLength` graphemes. See {@link padStart}. */
+  padEnd(targetLength: number, padString: string = ' '): GraphemeString {
+    if (targetLength <= this.graphemes.length) return this;
+    const pad = buildPad(targetLength - this.graphemes.length, padString);
+    if (pad.length === 0) return this;
+    return new GraphemeString(this.str + pad.join(''), this.graphemes.concat(pad));
+  }
+
+  /**
    * Resolve a range index: negative counts from the end, then clamp into `[0, length]`. Never
    * wraps. `length` (one past the last grapheme) is a valid result meaning "the end".
    */
@@ -117,4 +136,15 @@ export class GraphemeString {
       this.graphemes.slice(begin, end),
     );
   }
+}
+
+/** Build a pad grapheme array of exactly `count` graphemes from `padString`. */
+function buildPad(count: number, padString: string): string[] {
+  // Documented exception to "strict GraphemeString args": padString is segmented here.
+  // It is tiny and never a hot-loop culprit, so accepting a raw string is the ergonomic choice.
+  const padGraphemes = stringzToArray(padString);
+  if (padGraphemes.length === 0) return [];
+  const pad: string[] = new Array(count);
+  for (let i = 0; i < count; i++) pad[i] = padGraphemes[i % padGraphemes.length];
+  return pad;
 }
