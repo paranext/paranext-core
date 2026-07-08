@@ -14,8 +14,8 @@ type BibleTextReference = ProjectReference | DblResourceReference;
 /**
  * The four data sources that together determine what a given user sees in the Text Collection.
  *
- * Two admin lists are read, not one: A2's auto-promote strips the `isResourceShownByDefault` flag
- * off the download copy it adds to `referencedProjectsAndResources`, so the flag survives on
+ * Two admin lists are read, not one: the auto-promote step strips the `isResourceShownByDefault`
+ * flag off the download copy it adds to `referencedProjectsAndResources`, so the flag survives on
  * `modelTexts`.
  */
 export type TextCollectionSources = {
@@ -211,8 +211,14 @@ export function setUserDisplay(
 }
 
 /**
- * Removes a resource from the user's per-user list entirely (the A5 hover-X). No-op when the id is
- * not in the user list — including admin entries, which never live there (defense-in-depth).
+ * Removes a resource from the user's per-user list entirely (the hover-X remove affordance). No-op
+ * when the id is not in the user list — including admin entries, which never live there
+ * (defense-in-depth).
+ *
+ * Only Bible-text references (project / DBL resource) can be removed: matching is by
+ * {@link getBibleTextId}, which returns `undefined` for non-Bible-text references (e.g.
+ * `enhancedResource`), so those never match `resourceId` and are left untouched. By design the Text
+ * Collection holds only Bible-text references, so this is not a gap.
  */
 export function removeFromUserResources(
   resourceId: string,
@@ -225,13 +231,12 @@ export function removeFromUserResources(
 
 /**
  * Appends a Bible-text reference to the user's per-user list with `inTextCollectionUser === true`
- * (the A5 Get Resources flow). Idempotent: returns the list unchanged when the id is already
- * present.
+ * (the Get Resources flow). Idempotent: returns the list unchanged when the id is already present.
  *
  * Precondition: `reference` must not be an admin-owned resource. Admin-owned resources are
  * overlay-driven — toggle them with {@link setUserDisplay}; a user-list entry for one is ignored by
- * the read helpers. A5 only adds resources the user picked that aren't already in the admin
- * selection.
+ * the read helpers. The Get Resources flow only adds resources the user picked that aren't already
+ * in the admin selection.
  */
 export function addToUserResources(
   reference: BibleTextReference,
