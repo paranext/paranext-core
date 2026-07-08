@@ -12,6 +12,7 @@ import baseConfig from './webpack.config.base';
 import webpackPaths from './webpack.paths';
 import checkNodeEnv from '../scripts/check-node-env';
 import deleteSourceMaps from '../scripts/delete-source-maps';
+import { buildTailwindCssRule, tailwindEntryTest } from './tailwind-css-rule';
 
 checkNodeEnv('production');
 deleteSourceMaps();
@@ -65,11 +66,14 @@ const configuration: webpack.Configuration = {
         ],
         include: /\.module\.s?(c|a)ss$/,
       },
+      // Core's Tailwind entry: process through @tailwindcss/postcss so the app emits utilities from
+      // core's own source (PT-3920). Must precede the general `.css` rule below.
+      buildTailwindCssRule(MiniCssExtractPlugin.loader),
       {
         test: /\.css$/,
         resourceQuery: { not: [/raw/] },
         use: [MiniCssExtractPlugin.loader, 'css-loader'],
-        exclude: /\.module\.s?(c|a)ss$/,
+        exclude: [/\.module\.s?(c|a)ss$/, tailwindEntryTest],
       },
       {
         test: /\.s(a|c)ss$/,
