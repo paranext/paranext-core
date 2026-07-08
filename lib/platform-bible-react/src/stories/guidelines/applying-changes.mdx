@@ -1,6 +1,7 @@
 import { Meta } from '@storybook/addon-docs/blocks';
 import { Button } from '@/components/shadcn-ui/button';
 import { ExampleBlock, ExampleBlockGroup } from '@/storybook/example-block.component';
+import LinkTo from '@storybook/addon-links/react';
 
 <Meta title="Guidelines/Applying Changes" />
 
@@ -28,7 +29,7 @@ The case for it is not only that it feels modern — it is that it is **simpler*
 
 - **Cheaper to design and build.** No draft state to hold, no commit step to wire up, no dirty tracking, no unsaved-changes guard.
 - **Fewer clicks.** A lower priority, but users have asked for it directly.
-- **It matches the platform we resemble.** [GNOME's Human Interface Guidelines](https://developer.gnome.org/hig/patterns/feedback/dialogs.html) — a desktop platform like ours — say instant apply "should be used wherever possible," and that explicit apply "is only necessary if changes have to be applied simultaneously to have the desired behaviour." A web app like [GitLab defaults the other way](https://design.gitlab.com/patterns/saving-and-feedback/) (manual save) because it is data-entry heavy; we are not.
+- **It matches the platform we resemble.** [GNOME's Human Interface Guidelines](https://developer.gnome.org/hig/) — a desktop platform like ours — have long favored instant apply: the classic GNOME HIG recommends it "should be used wherever possible," with explicit apply "only necessary if changes have to be applied simultaneously to have the desired behaviour" (this wording is from the older GNOME 2 HIG). A web app like [GitLab defaults the other way](https://design.gitlab.com/patterns/saving-and-feedback/) (manual save) because it is data-entry heavy; we are not.
 
 **Migration honesty.** Paratext 9 users learned that nothing is committed until they press a button — a Windows-era expectation. Moving them to immediate apply is the right call, but it is a real change in mental model, and we should not pretend otherwise. That is exactly why the exceptions below must be predictable, and why reversibility (undo) matters so much.
 
@@ -42,7 +43,7 @@ Pick **exactly one** model per surface. These are named so the whole team — an
 
 | Model                           | What it means                                                                                                                                                                         | Use it when                                                                                                | Example                                                      |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| **Immediate apply** *(default)* | Every change takes effect as soon as it is made; the effect is visible immediately. Also called *instant apply* / *auto-apply*.                                                       | The effect is visible and easily reversible: sliders, theme, layout toggles, live filters.                 | Theme switcher; view/layout toggles                          |
+| **Immediate apply** *(default)* | Every change takes effect as soon as it is made; the effect is visible immediately. Also called *instant apply* / *auto-apply*.                                                       | The effect is visible and easily reversible (e.g., a toggle, slider, theme switcher, panel/layout toggle, or live filter). | Theme switcher; view/layout toggles                          |
 | **Auto-save draft**             | Freeform edits persist continuously on their own (on pause or blur), with a save-state indicator. Publishing or sharing is a separate step from editing. Also called a *local draft*. | The user is authoring continuous, freeform content that would be painful to lose.                          | Scripture editor (Lexical); comment and footnote text fields |
 | **Explicit apply**              | Edits stage locally and take effect only when the user commits them (an **Apply**, **Save**, or **Confirm** action). Also called *deferred apply*.                                    | Changes only make sense **as a group**, or the user needs a **contained preview** before they take effect. | A settings sub-dialog; a grouped multi-value picker          |
 
@@ -78,7 +79,7 @@ If more than one seems to fit, prefer the earliest — immediate apply is the ch
 
 This is a hard rule, not a preference. The danger was never explicit apply itself; it is **mixing the two models in one visual field**, so the user cannot tell which controls take effect now and which are waiting. Nesting is the *mechanism*; non-interleaving is the *invariant*.
 
-GNOME calls this the "mixed approach": group the controls that need grouping, give that group its own Apply, and leave the rest instant. In practice this means explicit apply tends to live **deeper** in the interface than its immediate-apply siblings — hidden away from the easy-to-reach surface, not mixed in with it.
+GNOME's guidance takes a mixed approach here: group the controls that need grouping, give that group its own Apply, and leave the rest instant. In practice this means explicit apply tends to live **deeper** in the interface than its immediate-apply siblings — hidden away from the easy-to-reach surface, not mixed in with it.
 
 <ExampleBlockGroup>
   <ExampleBlock variant="avoid">
@@ -103,19 +104,19 @@ Users make two kinds of errors ([Norman, via NN/g](https://www.nngroup.com/artic
 
 Immediate apply reduces slips (the effect is visible, so a wrong move is caught immediately) but makes a slip on a *destructive* action more costly. We answer that with four tools, in rough order of preference:
 
-1. **Undo — the safety net.** [User control and freedom](https://www.nngroup.com/articles/user-control-and-freedom/) (Nielsen's heuristic #3) calls undo an "emergency exit" that makes errors "less costly." For a reversible action, offering undo afterward is usually **better than blocking with a prompt**. Undo is a **requirement** for a change that is not self-evidently reversible — **but not where the control is its own undo.** A control whose effect is visible on screen and reversed by simply re-operating it — a toggle, slider, theme switcher, panel/layout toggle, or live filter — needs no separate undo affordance; adding one is redundant. Require an explicit recovery path only for changes that are **destructive, costly, hard to reverse, applied in bulk, or whose result is off-screen or hidden** at the moment of the change. Where such a change defaults to immediate apply, some undo affordance must exist for it — see the [known gap](#known-gap-app-wide-undo) below for what that means today.
+1. **Undo — the safety net.** [User control and freedom](https://www.nngroup.com/articles/user-control-and-freedom/) (Nielsen's heuristic #3) frames undo as an emergency exit that makes errors less costly to recover from. For a reversible action, offering undo afterward is usually **better than blocking with a prompt**. **Carve-out:** a control that is *its own undo* — its effect is visible and reversed simply by re-operating it (e.g., a toggle, slider, theme switcher, panel/layout toggle, or live filter) — needs no separate undo affordance; adding one is redundant. Other reversible immediate-apply changes should have undo behind them (see the [known gap](#known-gap-app-wide-undo)); irreversible or consequential changes use friction *before* instead (below).
 2. **Warn before the error** — passive, contextual awareness that an action is consequential (a `destructive` button variant, inline copy) before the user commits it.
 3. **Remove memory burden** — "remove conditions that require users to keep information in their own memory." Show the state; don't make the user remember what they changed.
 4. **Intentional friction — a confirmation step — used sparingly.** For actions that are **consequential, irreversible, expensive, or easy to mis-trigger**, interrupt with a confirm step. But NN/g is explicit that overusing confirmation makes users "instinctively click" it without reading — so a confirmation dialog on a routine action does **not** protect anyone. This is the same reason we avoid **OK** (below).
 
 ### Friction before, or recovery after — not both
 
-Choose one, based on reversibility:
+Default to one, based on reversibility:
 
-- **Irreversible / consequential** → **friction before** (a confirmation dialog, and where useful a **consequence-preview confirmation** that shows what will happen).
-- **Reversible** → **recovery after** (an undo affordance).
+- **Irreversible / consequential** → **friction before** (e.g., a confirmation dialog, or a **consequence-preview confirmation** that shows what will happen).
+- **Reversible** → **recovery after** (e.g., an undo affordance).
 
-Stacking a confirmation dialog *and* an undo toast on the same action is belt-and-suspenders noise. A confirmation dialog's mechanism isn't the only kind of friction, either — hold-to-delete, type-the-name-to-confirm, and a `destructive` variant are all valid, lighter forms.
+Usually one is enough, and stacking a confirmation dialog *and* an undo toast on a routine action is just belt-and-suspenders noise. Both is reasonable, though, on a high-consequence but reversible action when the confirm and the undo genuinely guard different mistakes — the confirm catches a click-time slip, the undo catches immediate regret. Friction also isn't only a confirmation dialog: hold-to-delete, type-the-name-to-confirm, and a `destructive` variant are all lighter forms.
 
 ---
 
@@ -137,7 +138,7 @@ If an immediate-apply change is visible on screen, the change **is** its own con
 
 Two consequences:
 
-- **For a reversible immediate-apply change whose effect is already visible, don't spawn an undo toast on every action.** If the control is its own undo (a toggle, slider, theme switcher, layout toggle — see the carve-out under [Preventing and recovering from errors](#preventing-and-recovering-from-errors)), nothing more is needed. Otherwise the change still needs a recovery path: the goal state is app-wide undo (`Ctrl+Z`), which does not yet exist (see the [known gap](#known-gap-app-wide-undo)), so until it lands the feature must provide its own local undo (a revert control, a feature-scoped `Ctrl+Z`, or a scoped undo toast). Reserve undo toasts for changes that are off-screen, bulk, or not obviously reversible via the control itself — a toast on every toggle is noise that trains users to ignore it.
+- **For a visible reversible immediate-apply change, don't toast every action.** If the control is its own undo (the [carve-out](#preventing-and-recovering-from-errors) above), nothing more is needed. Otherwise the change still needs a recovery path — reserve undo toasts for effects that are off-screen, bulk, or not obviously reversible via the control itself; until app-wide undo exists, a feature-local undo fills the gap.
 - **Do not auto-save data with financial, security, or privacy impact** ([GitLab](https://design.gitlab.com/patterns/saving-and-feedback/)) — those want an explicit, deliberate commit.
 
 ### Known gap: app-wide undo
@@ -147,13 +148,13 @@ The guidance above assumes a single, app-wide undo (`Ctrl+Z`) that can reverse a
 This is a deliberate **aspiration + known gap**, not a claim about the current build:
 
 - **Aspiration:** app-wide undo becomes the default recovery net for reversible immediate-apply changes, so most such changes need no per-change affordance.
-- **Until then:** the undo requirement still holds. A feature that defaults a reversible change to immediate apply **must build its own** undo (feature-local revert, a scoped `Ctrl+Z`, or a scoped undo toast) rather than assume a global one it can lean on. Do not read "rely on app-wide undo" as permission to ship no recovery.
+- **Until then:** the undo requirement above still holds _where it applies_ — a change that needs recovery (i.e., not a self-reversing control) and defaults to immediate apply **must provide its own** undo (feature-local revert, a scoped `Ctrl+Z`, or a scoped undo toast) rather than assume a global one it can lean on. Don't read "rely on app-wide undo" as permission to ship no recovery.
 
 ---
 
 ## Microcopy
 
-Button *labels* — the words, and which apply model they express — live here. (How dialog buttons **look and arrange** — order, variant hierarchy, the `Trash2` icon — is owned by [Design Principles](./design-principles.mdx).)
+Button *labels* — the words, and which apply model they express — live here. (How dialog buttons **look and arrange** — order, variant hierarchy, the `Trash2` icon — is owned by <LinkTo title="Guidelines/Design Principles">Design Principles</LinkTo>.)
 
 **Avoid OK.** Users learn to dismiss **OK** without reading it, which turns a decision into an interruption — the same "instinctive click" failure that makes over-used confirmation useless. A label should say what will happen, even if the user skips every other word on screen.
 
@@ -183,9 +184,9 @@ They are not the same action, and users read them differently ([NN/g](https://ww
 - **Cancel** — abandon the process; discard everything staged.
 - **Close** — dismiss the view but **preserve** the work.
 
-A bare **✕** reads as *Close* (preserve), not *Cancel* (discard). So do **not** let a **✕** silently throw away staged edits — if closing discards, either label the intent or confirm it.
+A bare **✕** is ambiguous — many users assume it *closes* and preserves their work, not that it *cancels* and discards. So do **not** let a **✕** silently throw away staged edits — if closing discards, either label the intent or confirm it.
 
-See also: [Ellipses](./ellipses.mdx) — a trailing `…` already signals "this won't execute immediately"; [Capitalization](./capitalization.mdx) — sentence case for all labels; [Vocabulary](./vocabulary.mdx) — standard UI terminology.
+See also: <LinkTo title="Guidelines/Ellipses">Ellipses</LinkTo> — a trailing `…` already signals "this won't execute immediately"; <LinkTo title="Guidelines/Capitalization Rules">Capitalization</LinkTo> — sentence case for all labels; <LinkTo title="Guidelines/Vocabulary">Vocabulary</LinkTo> — standard UI terminology.
 
 ---
 
