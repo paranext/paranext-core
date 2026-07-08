@@ -403,7 +403,36 @@ export type AddCommentToThreadOptions = {
  * this component in an extension, you can pass it into the useLocalizedStrings hook to easily
  * obtain the localized strings and pass them into the localizedStrings prop of this component
  */
-export declare const COMMENT_LIST_STRING_KEYS: LocalizeKey[];
+export declare const COMMENT_LIST_STRING_KEYS: readonly [
+	"%comment_assign_team%",
+	"%comment_assign_unassigned%",
+	"%comment_assigned_to%",
+	"%comment_assigning_to%",
+	"%comment_dateAtTime%",
+	"%comment_date_today%",
+	"%comment_date_yesterday%",
+	"%comment_deleteComment%",
+	"%comment_editComment%",
+	"%comment_replyOrAssign%",
+	"%comment_reopenResolved%",
+	"%comment_status_resolved%",
+	"%comment_status_todo%",
+	"%comment_thread_multiple_replies%",
+	"%comment_thread_single_reply%",
+	"%comment_aria_assign_user%",
+	"%comment_aria_submit_comment%",
+	"%comment_aria_mark_as_read%",
+	"%comment_aria_mark_as_unread%",
+	"%comment_aria_resolve_thread%"
+];
+/**
+ * Type definition for the localized strings used in the CommentList component. Handy for typing the
+ * object a consumer builds from `useLocalizedStrings(COMMENT_LIST_STRING_KEYS)`, so a mistyped key
+ * is caught at compile time.
+ */
+export type CommentListLocalizedStrings = {
+	[localizedKey in (typeof COMMENT_LIST_STRING_KEYS)[number]]?: string;
+};
 /** Props for the CommentList component */
 export interface CommentListProps {
 	/** Additional class name for the component */
@@ -1150,9 +1179,20 @@ export interface MarkerMenuItem {
 	subtitle?: string;
 	/** Optional name of icon to use instead of the marker */
 	icon?: React$1.FC<MarkerIconProps>;
-	/** Whether the command/marker is deprecated */
+	/**
+	 * Whether the command/marker is deprecated. Deprecated items stay visible in the menu (even when
+	 * the search query is empty) but are rendered disabled so they cannot be selected.
+	 */
 	isDeprecated?: boolean;
-	/** Whether the command/marker is disallowed for this project */
+	/**
+	 * Whether the command/marker is disallowed for this project (e.g. blocked while structure is
+	 * protected). Unlike {@link MarkerMenuItem.isDeprecated}, this flag affects visibility as well as
+	 * selectability: while the search query is empty, disallowed items are hidden if any allowed
+	 * items exist (to reduce clutter) but are shown when every item is disallowed (so the menu isn't
+	 * empty). A non-empty query reveals a disallowed item only on an exact marker-code match or a
+	 * title match. Whenever a disallowed item is shown it is rendered disabled so it cannot be
+	 * selected.
+	 */
 	isDisallowed?: boolean;
 	/** Function to be triggered when the marker or command is selected */
 	action: () => void;
@@ -2793,6 +2833,13 @@ export declare function Input({ className, type, ...props }: React$1.ComponentPr
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/kbd}
  */
 export declare function Kbd({ className, ...props }: React$1.ComponentProps<"kbd">): import("react/jsx-runtime").JSX.Element;
+/**
+ * Groups multiple {@link Kbd} components together to represent a key combination or sequence (for
+ * example, `Ctrl + K`). This component is from Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/kbd}
+ */
+export declare function KbdGroup({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
 /**
  * The Label component renders an accessible label associated with controls. This component is built
  * on Radix UI primitives and styled with Shadcn UI.

@@ -91,15 +91,16 @@ export function PlatformBibleToolbar() {
     return true;
   }, []);
 
+  const { currentProject, recentProjects, allProjects, currentProjectError } =
+    useProjectPickerData();
+
   const [scrRef, setScrRef, scrollGroupId, setScrollGroupId] = useScrollGroupScrRef(
     scrollGroupIdInternal,
     updateScrollGroupIdInternal,
+    currentProject?.id,
   );
 
   const isPowerMode = useIsPowerMode();
-
-  const { currentProject, recentProjects, allProjects, currentProjectError } =
-    useProjectPickerData();
 
   const openProject = useCallback(async (projectId: string) => {
     // This command comes from an extension and is not typed in CommandHandlers.

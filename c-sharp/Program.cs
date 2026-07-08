@@ -105,9 +105,11 @@ public static class Program
                 paratextProjects,
                 new MarbleDataLoader()
             );
+            var versificationConversionService = new VersificationConversionService(papi);
             await Task.WhenAll(
                 paratextFactory.InitializeAsync(),
                 paratextPublishedFactory.InitializeAsync(),
+                versificationConversionService.InitializeAsync(),
                 inventoryDataProvider.RegisterDataProviderAsync(),
                 checkRunner.RegisterDataProviderAsync(),
                 dblResources.RegisterDataProviderAsync(),
