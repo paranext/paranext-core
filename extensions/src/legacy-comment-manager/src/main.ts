@@ -246,8 +246,9 @@ async function openCommentList(
     if (options.threadIdToSelect)
       await commentListController.selectThread(options.threadIdToSelect);
 
-    // Pre-apply filter axes / scope if requested (e.g. the S/R link opens the unresolved-conflicts
-    // view). Deterministic: unspecified axes reset to default (see setFilters docs).
+    // Pre-apply the requested filter axes / scope (e.g. the S/R link opens the unresolved-conflicts
+    // view). Deterministic: this sets the whole view — unspecified filter axes reset to 'all' and an
+    // omitted scope resets to all-books (see the setFilters controller docs).
     if (options.filtersToSet || options.scopeFilterToSet)
       await commentListController.setFilters(options.filtersToSet, options.scopeFilterToSet);
   }
@@ -329,7 +330,8 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
               scopeFilterToSet: {
                 type: 'string',
                 enum: ['unfiltered', 'current-chapter'],
-                description: 'Scope to pre-apply (e.g. unfiltered for all books)',
+                description:
+                  'Scope to pre-apply; omitting it resets scope to all-books (unfiltered)',
               },
             },
           },

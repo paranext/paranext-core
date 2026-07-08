@@ -138,10 +138,12 @@ global.webViewComponent = function CommentListWebView({
 
       if (data.method === 'setFilters') {
         logger.debug(`Comment list received setFilters message: ${serialize(data)}`);
-        // Merge onto DEFAULT (not current state) so a programmatic open shows exactly the requested
-        // view; unspecified axes reset to 'all'.
-        if (data.filters) setFilters(applyFilterOverrides(data.filters));
-        if (data.scopeFilter) setScopeFilter(data.scopeFilter);
+        // A setFilters message sets the ENTIRE view deterministically, exactly like a fresh open:
+        // unspecified filter axes reset to 'all' and an omitted scope resets to UNFILTERED, so the
+        // programmatic open (e.g. the S/R conflict link) shows exactly the requested view — nothing
+        // carries over from prior state.
+        setFilters(applyFilterOverrides(data.filters));
+        setScopeFilter(data.scopeFilter ?? UNFILTERED);
       }
     };
 
