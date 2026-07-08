@@ -50,6 +50,11 @@ import {
   SEARCH_RESULT_LOCALIZED_STRING_KEYS,
 } from './search-result.component';
 import { SearchResultsInBook } from './search-results-in-book.component';
+import {
+  ReplacePreviewOptions,
+  ReplacePreviewOptionsStrings,
+} from './replace-preview-options.component';
+import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './replace-preview-types';
 
 /** Localization keys used by the {@link Find} component itself (excludes child component keys). */
 export const FIND_LOCALIZED_STRING_KEYS = [
@@ -90,6 +95,25 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_showRecentSearches%',
   '%webView_find_toggleFilters%',
   '%webView_find_verseTextOnly%',
+  '%webView_find_previewOptions_toggle%',
+  '%webView_find_previewOptions_layout%',
+  '%webView_find_previewOptions_layout_arrow%',
+  '%webView_find_previewOptions_layout_inline%',
+  '%webView_find_previewOptions_layout_block%',
+  '%webView_find_previewOptions_shape%',
+  '%webView_find_previewOptions_shape_bar%',
+  '%webView_find_previewOptions_shape_rounded%',
+  '%webView_find_previewOptions_shape_plain%',
+  '%webView_find_previewOptions_color%',
+  '%webView_find_previewOptions_color_redCyan%',
+  '%webView_find_previewOptions_color_redGreen%',
+  '%webView_find_previewOptions_color_greyBlue%',
+  '%webView_find_previewOptions_monospace%',
+  '%webView_find_previewOptions_monospaceDescription%',
+  '%webView_find_previewOptions_showInvisible%',
+  '%webView_find_previewOptions_showInvisibleDescription%',
+  '%webView_find_previewOptions_swatchOld%',
+  '%webView_find_previewOptions_swatchNew%',
 ] as const;
 
 /**
@@ -203,6 +227,12 @@ export type FindProps = {
   onPreserveCaseChange: (value: boolean) => void;
   /** Called when the user focuses a result (by clicking or keyboard navigation). */
   onFocusedResultChange: (searchResult: HidableFindResult, index: number) => void;
+  /** Called when a result card receives browser focus (e.g. Tab navigation), by original index. */
+  onResultFocus?: (searchResult: HidableFindResult, index: number) => void;
+  /** Called when the user double-clicks a result (jump to editor), by original index. */
+  onResultDoubleClick?: (searchResult: HidableFindResult, index: number) => void;
+  /** Called when the user clicks a result's scripture reference (jump to editor), by original index. */
+  onResultReferenceClick?: (searchResult: HidableFindResult, index: number) => void;
   /** Called when the user hides/dismisses a result, by its original index. */
   onHideResult: (index: number) => void;
   /** Called when the user replaces a single result, by its original index (defaults to focused). */
@@ -220,6 +250,15 @@ export type FindProps = {
    * webview supplies the PAPI logger; stories may omit it. The component stays `@papi`-free.
    */
   logger?: FindLogger;
+  /** Options controlling how the replace preview is displayed in result cards. */
+  previewOptions?: PreviewOptions;
+  /**
+   * Called when the user changes the replace preview options. When omitted, the preview-options
+   * picker is hidden (result cards still render with `previewOptions` or the default).
+   */
+  onPreviewOptionsChange?: (options: PreviewOptions) => void;
+  /** Whether the project has AllowInvisibleChars enabled. Forwarded to the result cards. */
+  allowInvisibleCharacters?: boolean;
 };
 
 /**
@@ -271,6 +310,9 @@ export function Find({
   onReplaceTermChange,
   onPreserveCaseChange,
   onFocusedResultChange,
+  onResultFocus,
+  onResultDoubleClick,
+  onResultReferenceClick,
   onHideResult,
   onReplace,
   onReplaceAll,
@@ -278,6 +320,9 @@ export function Find({
   onResultsScroll,
   getBookUsj,
   logger,
+  previewOptions = DEFAULT_REPLACE_PREVIEW_OPTIONS,
+  onPreviewOptionsChange,
+  allowInvisibleCharacters = false,
 }: FindProps) {
   // useRef requires null as the initial value when used with a DOM element ref
   // eslint-disable-next-line no-null/no-null
@@ -444,6 +489,35 @@ export function Find({
     }
   }, [scope, selectedBookIds, verseRef, localizedBookData]);
 
+  // Configuration for the per-result replace preview. Only present in replace mode with a
+  // replacement term entered, mirroring when a preview is meaningful.
+  const replaceConfig =
+    activeMode === 'replace' && replaceTerm ? { term: replaceTerm, preserveCase } : undefined;
+
+  // Map the flat localized-string bag into the shape the preview-options picker expects.
+  const previewOptionsStrings: ReplacePreviewOptionsStrings = {
+    togglePreviewOptions: localizedStrings['%webView_find_previewOptions_toggle%'],
+    layout: localizedStrings['%webView_find_previewOptions_layout%'],
+    layoutArrow: localizedStrings['%webView_find_previewOptions_layout_arrow%'],
+    layoutInline: localizedStrings['%webView_find_previewOptions_layout_inline%'],
+    layoutBlock: localizedStrings['%webView_find_previewOptions_layout_block%'],
+    highlightShape: localizedStrings['%webView_find_previewOptions_shape%'],
+    highlightShapeBar: localizedStrings['%webView_find_previewOptions_shape_bar%'],
+    highlightShapeRounded: localizedStrings['%webView_find_previewOptions_shape_rounded%'],
+    highlightShapePlain: localizedStrings['%webView_find_previewOptions_shape_plain%'],
+    color: localizedStrings['%webView_find_previewOptions_color%'],
+    colorRedCyan: localizedStrings['%webView_find_previewOptions_color_redCyan%'],
+    colorRedGreen: localizedStrings['%webView_find_previewOptions_color_redGreen%'],
+    colorGreyBlue: localizedStrings['%webView_find_previewOptions_color_greyBlue%'],
+    monospace: localizedStrings['%webView_find_previewOptions_monospace%'],
+    monospaceDescription: localizedStrings['%webView_find_previewOptions_monospaceDescription%'],
+    showInvisible: localizedStrings['%webView_find_previewOptions_showInvisible%'],
+    showInvisibleDescription:
+      localizedStrings['%webView_find_previewOptions_showInvisibleDescription%'],
+    swatchOld: localizedStrings['%webView_find_previewOptions_swatchOld%'],
+    swatchNew: localizedStrings['%webView_find_previewOptions_swatchNew%'],
+  };
+
   return (
     <div className="pr-twp tw:mx-auto tw:flex tw:flex-col tw:gap-4 tw:p-4 tw:min-w-[10rem] tw:max-h-screen">
       {/* Header with searchbar and filters */}
@@ -579,6 +653,13 @@ export function Find({
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
+                {onPreviewOptionsChange && (
+                  <ReplacePreviewOptions
+                    previewOptions={previewOptions}
+                    setPreviewOptions={onPreviewOptionsChange}
+                    localizedStrings={previewOptionsStrings}
+                  />
+                )}
               </div>
               <TooltipProvider>
                 <Tooltip>
@@ -766,8 +847,20 @@ export function Find({
                 focusedResultIndex={bookResults.findIndex(
                   ({ originalIndex }) => originalIndex === focusedResultIndex,
                 )}
-                onResultClick={(result, indexInBookResults) =>
-                  onFocusedResultChange(result, bookResults[indexInBookResults].originalIndex)
+                onResultClick={(result, indexInBookResults) => {
+                  onFocusedResultChange(result, bookResults[indexInBookResults].originalIndex);
+                  // Return focus to the scroll container so arrow-key navigation keeps working
+                  // after a single click selects/previews a result.
+                  setTimeout(() => resultsContainerRef.current?.focus(), 0);
+                }}
+                onResultFocus={(result, indexInBookResults) =>
+                  onResultFocus?.(result, bookResults[indexInBookResults].originalIndex)
+                }
+                onResultDoubleClick={(result, indexInBookResults) =>
+                  onResultDoubleClick?.(result, bookResults[indexInBookResults].originalIndex)
+                }
+                onResultReferenceClick={(result, indexInBookResults) =>
+                  onResultReferenceClick?.(result, bookResults[indexInBookResults].originalIndex)
                 }
                 onHideResult={(indexInBookResults) =>
                   onHideResult(bookResults[indexInBookResults].originalIndex)
@@ -779,6 +872,9 @@ export function Find({
                 localizedStrings={searchResultLocalizedStrings}
                 isReplaceMode={activeMode === 'replace'}
                 isReplacing={isReplacing}
+                replaceConfig={replaceConfig}
+                previewOptions={previewOptions}
+                allowInvisibleCharacters={allowInvisibleCharacters}
                 logger={logger}
               />
             );

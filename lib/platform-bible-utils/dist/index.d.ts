@@ -931,6 +931,24 @@ export declare function isString(o: unknown): o is string;
  */
 export declare function deepClone<T>(obj: T): T;
 /**
+ * Message of the error with which a pending debounced invocation's promise rejects when
+ * {@link DebouncedFunction.cancel} is called. Compare a caught error's message against this to
+ * distinguish cancellation from real errors.
+ */
+export declare const DEBOUNCE_CANCELED_ERROR_MESSAGE = "Debounced function invocation was canceled";
+/**
+ * A debounced function with a `cancel` method to abandon any pending invocation.
+ *
+ * @template TFunc - The type of the function being debounced.
+ */
+export type DebouncedFunction<TFunc extends (...args: any[]) => any> = ((...args: Parameters<TFunc>) => Promise<ReturnType<TFunc>>) & {
+	/**
+	 * Cancel any pending debounced invocation. The promise returned by the most recent call rejects
+	 * with an error whose message is {@link DEBOUNCE_CANCELED_ERROR_MESSAGE}.
+	 */
+	cancel: () => void;
+};
+/**
  * Get a function that reduces calls to the function passed in
  *
  * @template TFunc - A function type that takes any arguments and returns void. This is the type of
@@ -938,9 +956,12 @@ export declare function deepClone<T>(obj: T): T;
  * @param fn The function to debounce
  * @param delay How much delay in milliseconds after the most recent call to the debounced function
  *   to call the function
- * @returns Function that, when called, only calls the function passed in at maximum every delay ms
+ * @returns Function that, when called, only calls the function passed in at maximum every delay ms.
+ *   The returned function also has a `cancel` method to abandon any pending invocation; canceling
+ *   makes the pending invocation's promise reject with an error whose message is
+ *   {@link DEBOUNCE_CANCELED_ERROR_MESSAGE}.
  */
-export declare function debounce<TFunc extends (...args: any[]) => any>(fn: TFunc, delay?: number): (...args: Parameters<TFunc>) => Promise<ReturnType<TFunc>>;
+export declare function debounce<TFunc extends (...args: any[]) => any>(fn: TFunc, delay?: number): DebouncedFunction<TFunc>;
 /**
  * Groups each item in the array of items into a map according to the keySelector
  *

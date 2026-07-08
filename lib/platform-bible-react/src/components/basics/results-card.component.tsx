@@ -1,6 +1,6 @@
 import { cn } from '@/utils/shadcn-ui/utils';
 import { MoreVertical } from 'lucide-react';
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useState } from 'react';
 import { Button } from '../shadcn-ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '../shadcn-ui/dropdown-menu';
 
@@ -56,10 +56,18 @@ export function ResultsCard({
 }: ResultsCardProps) {
   const handleKeyDown = (event: React.KeyboardEvent) => {
     if (event.key === 'Enter' || event.key === ' ') {
+      // Only handle keyboard activation on the card itself, not on focusable children
+      // (e.g. buttons inside the card). Child elements handle their own keyboard events.
+      if (event.target !== event.currentTarget) return;
       event.preventDefault();
       onSelect();
     }
   };
+
+  // Only mount the DropdownMenu (and its portal) once the card has been hovered or selected.
+  // This prevents dozens of DropdownMenuContent portals from mounting and crashing on teardown
+  // when the webview is closed while many results are visible.
+  const [hasBeenHovered, setHasBeenHovered] = useState(false);
 
   return (
     <div
@@ -67,6 +75,7 @@ export function ResultsCard({
       key={cardKey}
       onClick={onSelect}
       onKeyDown={handleKeyDown}
+      onMouseEnter={() => setHasBeenHovered(true)}
       role="button"
       tabIndex={0}
       aria-pressed={isSelected}
@@ -85,27 +94,27 @@ export function ResultsCard({
           {!isSelected && hoverButtons && (
             <div className="tw:invisible tw:group-hover:visible">{hoverButtons}</div>
           )}
-          {!isSelected && showDropdownOnHover && dropdownContent && (
-            <div className="tw:invisible tw:group-hover:visible">
+          {dropdownContent && (isSelected || (showDropdownOnHover && hasBeenHovered)) && (
+            <div
+              className={cn(
+                !isSelected && showDropdownOnHover && 'tw:invisible tw:group-hover:visible',
+              )}
+            >
               <DropdownMenu>
                 <DropdownMenuTrigger className={cn(accentColor && 'tw:me-1')} asChild>
-                  <Button className="tw:m-1 tw:h-6 tw:w-6" variant="ghost" size="icon">
+                  <Button
+                    className="tw:m-1 tw:h-6 tw:w-6"
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => e.stopPropagation()}
+                    onFocus={(e) => e.stopPropagation()}
+                  >
                     <MoreVertical />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">{dropdownContent}</DropdownMenuContent>
               </DropdownMenu>
             </div>
-          )}
-          {isSelected && dropdownContent && (
-            <DropdownMenu>
-              <DropdownMenuTrigger className={cn(accentColor && 'tw:me-1')} asChild>
-                <Button className="tw:m-1 tw:h-6 tw:w-6" variant="ghost" size="icon">
-                  <MoreVertical />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">{dropdownContent}</DropdownMenuContent>
-            </DropdownMenu>
           )}
         </div>
         {additionalContent && (

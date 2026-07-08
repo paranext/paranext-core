@@ -90,6 +90,12 @@ export interface LaunchElectronAppOptions {
    * defaults. Keys present here override the defaults (e.g. `{ DEV_NOISY: 'false' }`).
    */
   envOverrides?: Record<string, string>;
+  /**
+   * Override the `DEV_NOISY` environment variable. Pass `'false'` to suppress test extensions
+   * (helloRock3, helloSomeone, etc.) — useful for tests that need a clean layout without extra
+   * webviews. Defaults to `process.env.DEV_NOISY ?? 'true'`.
+   */
+  devNoisy?: string;
 }
 
 /**
@@ -114,8 +120,9 @@ export async function launchElectronApp(
     ...restEnv,
     NODE_ENV: 'development',
     // Enable noisy dev mode so test extensions (helloRock3, helloSomeone, etc.) are loaded.
-    // Only set if not already defined, so other E2E suites can override.
-    DEV_NOISY: process.env.DEV_NOISY ?? 'true',
+    // Callers can pass devNoisy: 'false' to suppress test extensions for a clean layout; otherwise
+    // only set if not already defined, so other E2E suites can override.
+    DEV_NOISY: opts.devNoisy ?? process.env.DEV_NOISY ?? 'true',
     // Caller-supplied overrides take precedence over all defaults above.
     ...opts.envOverrides,
   };

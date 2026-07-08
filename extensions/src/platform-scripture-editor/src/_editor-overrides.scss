@@ -35,6 +35,26 @@
   background-color: var(--secondary);
 }
 
+// Find/Replace current-result highlight.
+// Applied to the matched text via setAnnotation(range, 'find-result-highlight',
+// 'find-current-result') from the Find web view (platform-scripture/src/find.web-view.tsx), which
+// wraps the match in a TypedMarkNode carrying this class. Semi-transparent amber so it reads on top
+// of the ::selection color above (selectRange selects the same match) and stays distinct from the
+// primary/secondary selection in both light and dark mode.
+.editor-typed-mark-external-find-result-highlight {
+  background-color: rgb(255 213 0 / 40%);
+  border-radius: 2px;
+}
+
+// The Find web view also calls selectRange on the current match, so the native ::selection color
+// (--primary when focused, --secondary when not) paints on top of the semi-transparent amber above
+// and hides it — the inactive --secondary reads as grayish-blue. Re-apply the amber to the selected
+// glyphs inside the find-result mark so the current result stays amber regardless of pane focus.
+.editor-typed-mark-external-find-result-highlight::selection,
+.editor-typed-mark-external-find-result-highlight ::selection {
+  background-color: rgb(255 213 0 / 40%);
+}
+
 // focus ring
 :focus-visible:not(.editor-input, .marker-menu-search) {
   outline: 2px solid transparent;
