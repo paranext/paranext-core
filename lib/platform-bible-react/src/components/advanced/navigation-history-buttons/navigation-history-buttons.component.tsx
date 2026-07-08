@@ -14,8 +14,9 @@ import {
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
 import { readDirection } from '@/utils/dir-helper.util';
+import { isMacOs } from '@/utils/platform.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { ArrowLeft, ArrowRight, ChevronDown } from 'lucide-react';
-import { useMemo } from 'react';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -87,7 +88,7 @@ export function NavigationHistoryButtons({
   className,
   variant = 'ghost',
 }: NavigationHistoryButtonsProps) {
-  const isMac = useMemo(() => /Macintosh/i.test(navigator.userAgent), []);
+  const isMac = isMacOs();
   const isRtl = readDirection() === 'rtl';
 
   const backLocalized = localizeString(localizedStrings, '%navigationHistory_back_tooltip%');
@@ -109,8 +110,8 @@ export function NavigationHistoryButtons({
     backShortcut = isRtl ? '⌘]' : '⌘[';
     forwardShortcut = isRtl ? '⌘[' : '⌘]';
   } else {
-    backShortcut = isRtl ? 'Alt+Right' : 'Alt+Left';
-    forwardShortcut = isRtl ? 'Alt+Left' : 'Alt+Right';
+    backShortcut = isRtl ? 'Alt+→' : 'Alt+←';
+    forwardShortcut = isRtl ? 'Alt+←' : 'Alt+→';
   }
 
   const renderSplitButton = (direction: 'back' | 'forward') => {
@@ -127,18 +128,24 @@ export function NavigationHistoryButtons({
       <ButtonGroup key={direction}>
         <TooltipProvider>
           <Tooltip>
+            {/* The span wrapper keeps tooltips working while the button is disabled (a disabled
+                button gets pointer-events-none, so it can't be the trigger itself). The
+                ButtonGroup corner-merging styles land on the span, so the buttons carry the
+                equivalent logical rounding classes directly. */}
             <TooltipTrigger asChild>
-              <Button
-                aria-label={tooltip}
-                data-testid={`navigation-history-${direction}-button`}
-                className={className}
-                size="icon"
-                variant={variant}
-                disabled={!enabled}
-                onClick={() => onNavigate(isBack ? -1 : 1)}
-              >
-                {showLeftArrow ? <ArrowLeft /> : <ArrowRight />}
-              </Button>
+              <span className="tw:inline-flex">
+                <Button
+                  aria-label={tooltip}
+                  data-testid={`navigation-history-${direction}-button`}
+                  className={cn('tw:rounded-e-none', className)}
+                  size="icon"
+                  variant={variant}
+                  disabled={!enabled}
+                  onClick={() => onNavigate(isBack ? -1 : 1)}
+                >
+                  {showLeftArrow ? <ArrowLeft /> : <ArrowRight />}
+                </Button>
+              </span>
             </TooltipTrigger>
             <TooltipContent>
               <p>
@@ -154,18 +161,29 @@ export function NavigationHistoryButtons({
           </Tooltip>
         </TooltipProvider>
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              aria-label={listAriaLabel}
-              data-testid={`navigation-history-${direction}-menu-trigger`}
-              className={className}
-              size="icon"
-              variant={variant}
-              disabled={items.length === 0}
-            >
-              <ChevronDown />
-            </Button>
-          </DropdownMenuTrigger>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="tw:inline-flex">
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      aria-label={listAriaLabel}
+                      data-testid={`navigation-history-${direction}-menu-trigger`}
+                      className={cn('tw:rounded-s-none', className)}
+                      size="icon"
+                      variant={variant}
+                      disabled={items.length === 0}
+                    >
+                      <ChevronDown />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{listAriaLabel}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <DropdownMenuContent>
             {items.map((item) => (
               <DropdownMenuItem key={item.offset} onSelect={() => onNavigate(item.offset)}>

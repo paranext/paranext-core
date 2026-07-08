@@ -114,18 +114,38 @@ describe('NavigationHistoryButtons', () => {
     await user.hover(backButton);
     // Radix Tooltip can render the content text more than once (a visually-hidden copy for screen
     // readers), so assert on "at least one" rather than exactly one
-    const hints = await screen.findAllByText('Alt+Right');
+    const hints = await screen.findAllByText('Alt+→');
     expect(hints.length).toBeGreaterThan(0);
-    expect(screen.queryByText('Alt+Left')).toBeNull();
+    expect(screen.queryByText('Alt+←')).toBeNull();
   });
 
   test('LTR back tooltip shows the unswapped shortcut hint', async () => {
     const user = userEvent.setup();
     render(<NavigationHistoryButtons {...defaultProps} />);
     await user.hover(screen.getByTestId('navigation-history-back-button'));
-    const hints = await screen.findAllByText('Alt+Left');
+    const hints = await screen.findAllByText('Alt+←');
     expect(hints.length).toBeGreaterThan(0);
-    expect(screen.queryByText('Alt+Right')).toBeNull();
+    expect(screen.queryByText('Alt+→')).toBeNull();
+  });
+
+  test('hovering a disabled button still shows its tooltip (span wrapper is the trigger)', async () => {
+    const user = userEvent.setup();
+    render(<NavigationHistoryButtons {...defaultProps} canGoForward={false} forwardItems={[]} />);
+    // A disabled button gets pointer-events-none, so the cursor actually hits the span wrapper
+    const wrapper = screen.getByTestId('navigation-history-forward-button').parentElement;
+    if (!wrapper) throw new Error('expected a tooltip-trigger wrapper around the disabled button');
+    await user.hover(wrapper);
+    const tooltip = await screen.findByRole('tooltip');
+    expect(tooltip).toHaveTextContent('%navigationHistory_forward_tooltip%');
+  });
+
+  test('hovering a dropdown chevron shows its history-list tooltip', async () => {
+    const user = userEvent.setup();
+    render(<NavigationHistoryButtons {...defaultProps} />);
+    await user.hover(screen.getByTestId('navigation-history-back-menu-trigger'));
+    // No localizedStrings passed, so the tooltip falls back to the key itself
+    const tooltip = await screen.findByRole('tooltip');
+    expect(tooltip).toHaveTextContent('%navigationHistory_backList_ariaLabel%');
   });
 
   test('showKeyboardShortcuts={false} renders no Kbd hint in the opened tooltip', async () => {

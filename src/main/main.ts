@@ -15,6 +15,10 @@ import '@main/global-this.model';
 import '@node/utils/log-archiver.util';
 import { subscribeCurrentMacosMenubar } from '@main/platform-macos-menubar.util';
 import { getVerseNavigationCommand } from '@main/verse-navigation-shortcuts.util';
+import {
+  getPhysicalHistoryNavigationDirection,
+  resolveHistoryNavigationDirection,
+} from '@main/reference-history-keyboard.util';
 import chroma from 'chroma-js';
 import {
   APP_NAME,
@@ -671,31 +675,21 @@ async function main() {
         return;
       }
 
-      // Reference history navigation (PT-4033). Windows/Linux: Alt+Left / Alt+Right (Paratext 9
-      // parity). macOS: Cmd+[ / Cmd+] — the platform's history convention; Option+arrows is the
-      // system-wide move-by-word shortcut and must not be intercepted. In RTL the pairs swap
-      // meaning (physical-direction-preserving, like Paratext 9 and Chromium — see
-      // docs/specs/2026-07-06-reference-history-design.md). The `!input.shift` guard keeps
-      // Cmd+Shift+[/] free for the tab-focus handler below.
-      const isHistoryNavigationKey =
-        process.platform === 'darwin'
-          ? input.meta &&
-            !input.shift &&
-            !input.alt &&
-            !input.control &&
-            (input.key === '[' || input.key === ']')
-          : input.alt &&
-            !input.control &&
-            !input.shift &&
-            !input.meta &&
-            (input.key === 'ArrowLeft' || input.key === 'ArrowRight');
-      if (isHistoryNavigationKey) {
+      // Reference history navigation (PT-4033). Key detection and the RTL swap live in
+      // reference-history-keyboard.util.ts so they can be unit tested (synthesized CDP input
+      // cannot reach this handler — see the skipped keyboard test in
+      // e2e-tests/tests/isolated/navigation-history/navigation-history.spec.ts).
+      const physicalHistoryDirection = getPhysicalHistoryNavigationDirection(
+        input,
+        process.platform,
+      );
+      if (physicalHistoryDirection) {
         event.preventDefault();
-        const isPhysicallyBackKey = input.key === 'ArrowLeft' || input.key === '[';
         (async () => {
           try {
             const direction = await commandService.sendCommand('platform.getInterfaceDirection');
-            const isBack = direction === 'rtl' ? !isPhysicallyBackKey : isPhysicallyBackKey;
+            const isBack =
+              resolveHistoryNavigationDirection(physicalHistoryDirection, direction) === 'back';
             await commandService.sendCommand(
               isBack
                 ? 'platform.navigateBackInReferenceHistory'

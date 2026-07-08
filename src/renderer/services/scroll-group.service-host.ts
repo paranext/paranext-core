@@ -253,6 +253,9 @@ export function navigateReferenceHistorySync(
   offset: number,
 ): boolean {
   const history = getOrCreateReferenceHistory(scrollGroupId);
+  // `navigateHistory` mutates the stacks before `setScrRefSync` runs. That ordering is safe
+  // because `setScrRefSync` cannot fail for entries recorded through the normal path: adjacent
+  // stack entries always differ in book+chapter and were valid when recorded.
   const destination = navigateHistory(history, offset);
   if (!destination) return false;
   // The stacks already reflect the navigation; skip recording so it is not double-pushed
@@ -695,7 +698,7 @@ export async function startScrollGroupService(): Promise<void> {
       },
     ),
     registerCommand(
-      'platform.navigateToReferenceHistoryEntry',
+      'platform.navigateReferenceHistoryByOffset',
       async (scrollGroupId, offset) => navigateReferenceHistorySync(scrollGroupId, offset),
       {
         method: {

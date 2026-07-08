@@ -112,8 +112,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     category: 'Navigation',
     context: 'Main process (global)',
     // In RTL the back/forward pairs swap meaning (physical-direction-preserving, like Paratext 9)
-    keys: { macOS: '⌘[', windows: 'Alt+Left', linux: 'Alt+Left' },
-    locations: ['src/main/main.ts'],
+    keys: { macOS: '⌘[', windows: 'Alt+←', linux: 'Alt+←' },
+    locations: ['src/main/main.ts', 'src/main/reference-history-keyboard.util.ts'],
   },
   {
     id: 'reference-history-forward',
@@ -121,8 +121,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     category: 'Navigation',
     context: 'Main process (global)',
     // In RTL the back/forward pairs swap meaning (physical-direction-preserving, like Paratext 9)
-    keys: { macOS: '⌘]', windows: 'Alt+Right', linux: 'Alt+Right' },
-    locations: ['src/main/main.ts'],
+    keys: { macOS: '⌘]', windows: 'Alt+→', linux: 'Alt+→' },
+    locations: ['src/main/main.ts', 'src/main/reference-history-keyboard.util.ts'],
   },
   {
     id: 'zoom-in',

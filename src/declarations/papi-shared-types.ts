@@ -189,7 +189,7 @@ declare module 'papi-shared-types' {
      * @returns `true` if navigation happened; `false` if the offset was 0, non-integer, or out of
      *   range
      */
-    'platform.navigateToReferenceHistoryEntry': (
+    'platform.navigateReferenceHistoryByOffset': (
       scrollGroupId: ScrollGroupId,
       offset: number,
     ) => Promise<boolean>;

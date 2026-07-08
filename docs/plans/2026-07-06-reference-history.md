@@ -743,7 +743,7 @@ In `CommandHandlers` in `src/declarations/papi-shared-types.ts`, after the `web-
      * @param offset Signed number of steps: negative = back, positive = forward
      * @returns `true` if navigation happened; `false` if the offset was 0 or out of range
      */
-    'platform.navigateToReferenceHistoryEntry': (
+    'platform.navigateReferenceHistoryByOffset': (
       scrollGroupId: ScrollGroupId,
       offset: number,
     ) => Promise<boolean>;
@@ -792,7 +792,7 @@ await Promise.all([
     },
   ),
   registerCommand(
-    'platform.navigateToReferenceHistoryEntry',
+    'platform.navigateReferenceHistoryByOffset',
     async (scrollGroupId, offset) => navigateReferenceHistorySync(scrollGroupId, offset),
     {
       method: {

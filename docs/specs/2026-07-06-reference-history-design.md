@@ -130,7 +130,7 @@ scroll group service host at startup (same pattern as `platform.about`), and
   wrapper over offset −1.
 - `platform.navigateForwardInReferenceHistory(scrollGroupId: ScrollGroupId): Promise<boolean>` —
   wrapper over offset +1.
-- `platform.navigateToReferenceHistoryEntry(scrollGroupId: ScrollGroupId, offset: number): Promise<boolean>`
+- `platform.navigateReferenceHistoryByOffset(scrollGroupId: ScrollGroupId, offset: number): Promise<boolean>`
   — the jump-to command.
 
 `scrollGroupId` is **mandatory** on all three. We deliberately do not resolve a default from
