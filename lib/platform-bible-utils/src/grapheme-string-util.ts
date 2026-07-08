@@ -1,4 +1,5 @@
 import { toArray as stringzToArray } from 'stringz';
+import { isString } from './util';
 
 /**
  * A string pre-segmented into Unicode grapheme clusters. Segmentation happens once in the
@@ -357,3 +358,123 @@ function buildPad(count: number, padString: string): string[] {
   for (let i = 0; i < count; i++) pad[i] = padGraphemes[i % padGraphemes.length];
   return pad;
 }
+
+/**
+ * Index of the closest closing curly brace at/after `index`, or -1. When `escaped`, targets `\}`
+ * and returns the index of the brace (not the backslash).
+ */
+function indexOfClosestClosingCurlyBrace(
+  gs: GraphemeString,
+  index: number,
+  escaped: boolean,
+): number {
+  if (index < 0) return -1;
+  if (escaped) {
+    // Guard i-1: charAt(-1) would return the LAST grapheme under uniform indexing.
+    const prev = index > 0 ? gs.charAt(index - 1) : '';
+    if (gs.charAt(index) === '}' && prev === '\\') return index;
+    const closeIndex = gs.indexOf('\\}', index);
+    return closeIndex >= 0 ? closeIndex + 1 : closeIndex;
+  }
+
+  let i = index;
+  const len = gs.length;
+  while (i < len) {
+    i = gs.indexOf('}', i);
+    const prev = i > 0 ? gs.charAt(i - 1) : '';
+    if (i === -1 || prev !== '\\') break;
+    i += 1;
+  }
+  return i >= len ? -1 : i;
+}
+
+/**
+ * Grapheme-accurate version of `formatReplacementStringToArray`. Segments the input once, then
+ * walks it. Replaces `{key}` with `replacers[key]`; unescapes `\{`/`\}`. Adjacent strings are
+ * concatenated into one array entry.
+ */
+export function formatReplacementStringToArray<T = unknown>(
+  str: string,
+  replacers: { [key: string | number]: T } | object,
+): (string | T)[] {
+  const gs = new GraphemeString(str);
+  const contents: (string | T)[] = [];
+  let i = 0;
+  let nextIntermediateStartIndex = 0;
+
+  function addToContents(
+    newContent: string | T,
+    newContentIndex: number,
+    newContentLength: number,
+  ) {
+    const intermediateContent = gs.substring(nextIntermediateStartIndex, newContentIndex).string;
+    const baseSubstring =
+      contents.length > 0 && isString(contents[contents.length - 1])
+        ? `${contents.pop()}${intermediateContent}`
+        : intermediateContent;
+    if (isString(newContent)) {
+      contents.push(`${baseSubstring}${newContent}`);
+    } else {
+      if (baseSubstring) contents.push(baseSubstring);
+      contents.push(newContent);
+    }
+    nextIntermediateStartIndex = newContentIndex + newContentLength;
+  }
+
+  const strLength = gs.length;
+  while (i < strLength) {
+    const prev = i > 0 ? gs.charAt(i - 1) : '';
+    switch (gs.charAt(i)) {
+      case '{':
+        if (prev !== '\\') {
+          const closeCurlyBraceIndex = indexOfClosestClosingCurlyBrace(gs, i, false);
+          if (closeCurlyBraceIndex >= 0) {
+            const replacerKey = gs.substring(i + 1, closeCurlyBraceIndex).string;
+            const replacerContent =
+              replacerKey in replacers
+                ? // `replacerKey in replacers` is a narrowing check; the cast is sound.
+                  // eslint-disable-next-line no-type-assertion/no-type-assertion
+                  replacers[replacerKey as keyof typeof replacers]
+                : replacerKey;
+            addToContents(replacerContent, i, closeCurlyBraceIndex + 1 - i);
+            i = closeCurlyBraceIndex;
+            nextIntermediateStartIndex = closeCurlyBraceIndex + 1;
+          }
+        } else {
+          addToContents('{', i - 1, 2);
+        }
+        break;
+      case '}':
+        if (prev === '\\') addToContents('}', i - 1, 2);
+        break;
+      default:
+        break;
+    }
+    i += 1;
+  }
+
+  if (nextIntermediateStartIndex < strLength) {
+    const endContent = gs.substring(nextIntermediateStartIndex).string;
+    contents.push(
+      contents.length > 0 && isString(contents[contents.length - 1])
+        ? `${contents.pop()}${endContent}`
+        : endContent,
+    );
+  }
+  return contents;
+}
+
+/** Grapheme-accurate `formatReplacementString`: coerces all parts to strings and joins. */
+export function formatReplacementString(
+  str: string,
+  replacers: { [key: string | number]: string | unknown } | object,
+): string {
+  return formatReplacementStringToArray(str, replacers)
+    .map((content) => `${content}`)
+    .join('');
+}
+
+/** Internal-only export for testing. Do not use in application code. */
+export const testingGraphemeStringUtils = {
+  indexOfClosestClosingCurlyBrace,
+};
