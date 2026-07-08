@@ -28,10 +28,18 @@ export {
 } from './components/advanced/comment-editor/comment-editor.types';
 export type {
   CommentListProps,
+  CommentListLocalizedStrings,
   AddCommentToThreadOptions,
 } from './components/advanced/comment-list/comment-list.types';
 export { COMMENT_LIST_STRING_KEYS } from './components/advanced/comment-list/comment-list.types';
 export { default as CommentList } from './components/advanced/comment-list/comment-list.component';
+export type {
+  ConflictNoteCardProps,
+  ConflictNoteCardLocalizedStrings,
+  ConflictResolution,
+} from './components/advanced/comment-list/conflict-note-card.types';
+export { CONFLICT_NOTE_STRING_KEYS } from './components/advanced/comment-list/conflict-note-card.types';
+export { ConflictNoteCard } from './components/advanced/comment-list/conflict-note-card.component';
 export { default as DataTable } from './components/advanced/data-table/data-table.component';
 export type {
   ColumnDef,
@@ -241,7 +249,7 @@ export * from './components/shadcn-ui/button-group';
 export * from './components/shadcn-ui/drawer';
 export * from './components/shadcn-ui/dropdown-menu';
 export { Input } from './components/shadcn-ui/input';
-export { Kbd } from './components/shadcn-ui/kbd';
+export { Kbd, KbdGroup } from './components/shadcn-ui/kbd';
 export { Label } from './components/shadcn-ui/label';
 export * from './components/shadcn-ui/popover';
 export { Progress } from './components/shadcn-ui/progress';

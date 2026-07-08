@@ -4,6 +4,7 @@ import {
 } from '@/components/advanced/marker-menu.component';
 import { Meta, StoryObj } from '@storybook/react-vite';
 import { ClipboardPaste } from 'lucide-react';
+import { expect } from 'storybook/test';
 
 const meta: Meta<typeof MarkerMenu> = {
   title: 'Advanced/MarkerMenu',
@@ -84,5 +85,27 @@ export const Default: Story = {
         isDeprecated: true,
       },
     ],
+  },
+};
+
+/**
+ * Disallowed markers (for example, styles blocked while the document's structure is protected) are
+ * hidden until the search query matches them, so on an empty query the "Disallowed" badge is not
+ * visible. This story types the disallowed marker's code to reveal it, demonstrating that a
+ * revealed disallowed item is rendered disabled with a "Disallowed" badge.
+ */
+export const DisallowedMarker: Story = {
+  args: Default.args,
+  play: async ({ canvas, userEvent, step }) => {
+    await step('Search for the disallowed "Indented Paragraph" (pi) marker', async () => {
+      const searchInput = canvas.getByPlaceholderText('Type a style or search.');
+      await userEvent.type(searchInput, 'pi');
+    });
+
+    await step('Verify the disallowed marker is revealed, disabled, with its badge', async () => {
+      const item = await canvas.findByRole('option', { name: /Indented Paragraph/ });
+      await expect(item).toHaveAttribute('aria-disabled', 'true');
+      await expect(canvas.getByText('Disallowed')).toBeInTheDocument();
+    });
   },
 };

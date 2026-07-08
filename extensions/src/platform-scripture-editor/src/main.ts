@@ -30,6 +30,7 @@ import modelTextPanelWebViewStyles from './model-text-panel.web-view.scss?inline
 import modelTextPanelWebView from './model-text-panel.web-view?inline';
 import resourceTextPanelWebViewStyles from './resource-text-panel.web-view.scss?inline';
 import resourceTextPanelWebView from './resource-text-panel.web-view?inline';
+import scriptureTextGridWebView from './scripture-text-grid.web-view?inline';
 import {
   convertScriptureRangeToEditorRange,
   formatEditorTitle,
@@ -48,6 +49,7 @@ logger.debug('Scripture Editor is importing!');
 const MODEL_TEXT_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.modelText';
 const BIBLE_TEXTS_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.bibleTexts';
 const COMMENTARIES_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.commentaries';
+const SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE = 'platformScriptureEditor.scriptureTextGrid';
 
 // #region Editor Selection Tracking
 
@@ -866,6 +868,29 @@ const modelTextPanelWebViewProvider: IWebViewProvider = {
   },
 };
 
+const scriptureTextGridWebViewProvider: IWebViewProvider = {
+  async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
+    if (savedWebView.webViewType !== SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE)
+      throw new Error(
+        `${SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} web view`,
+      );
+    return {
+      ...savedWebView,
+      // A1 stubs the title as the single-cell form; the web view flips it to "Text Collection"
+      // via updateWebViewDefinition once 2+ cells are displayed.
+      title: '%webView_scriptureTextGrid_title_single%',
+      // Part of the default PT10 Studio layout and must always stay open, so the tab is non-closable
+      // (PT-4049 subsumes A8). No X-button and no keyboard close shortcut, so both paths are covered.
+      isClosable: false,
+      // No top toolbar in this view; the View Options icon button comes in A5.
+      shouldShowToolbar: false,
+      content: scriptureTextGridWebView,
+      // Lucide "Library" glyph (books on a shelf) for the tab icon.
+      iconUrl: 'papi-extension://platformScriptureEditor/assets/library.svg',
+    };
+  },
+};
+
 /**
  * Pending projectIds to apply during the next resource panel getWebView call, keyed by web view
  * type. A Map entry present (even with value `undefined`) means a reload is in progress and the
@@ -1171,6 +1196,15 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     commentariesPanelWebViewProvider,
   );
 
+  // Feature flag (default on): gate the Scripture Text Grid web view. When off, the provider is
+  // not registered so the view cannot be opened or restored. The PT10 Studio default-layout
+  // inclusion is gated by the same setting in the paratext-10-studio repo.
+  // Kick off the settings read now but DON'T await it here — awaiting would serialize every
+  // registration below this line behind a single settings round-trip. It is resolved at the end.
+  const isScriptureTextGridEnabledPromise = papi.settings.get(
+    'platformScriptureEditor.enableScriptureTextGrid',
+  );
+
   const openResourceTextPromise = papi.commands.registerCommand(
     'platformScriptureEditor.openResourceText',
     openResourceText,
@@ -1254,6 +1288,16 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   const markerNotifier = new MarkersViewNotifier(papi, context.executionToken);
   const markerNotifierUnsubscribers = await markerNotifier.start();
 
+  // Resolve the feature flag (kicked off above so it overlapped the other registrations) and, only
+  // if enabled, register the provider. Awaiting the flag here rather than up front keeps every
+  // registration above running in parallel instead of behind this one settings round-trip.
+  const scriptureTextGridRegistration = (await isScriptureTextGridEnabledPromise)
+    ? await papi.webViewProviders.registerWebViewProvider(
+        SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+        scriptureTextGridWebViewProvider,
+      )
+    : undefined;
+
   context.registrations.add(
     await scriptureEditorWebViewProviderPromise,
     await openPlatformScriptureEditorPromise,
@@ -1269,6 +1313,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await openModelTextPanelPromise,
     await bibleTextsPanelWebViewProviderPromise,
     await commentariesPanelWebViewProviderPromise,
+    ...(scriptureTextGridRegistration ? [scriptureTextGridRegistration] : []),
     await openResourceTextPromise,
     selectionChangedEventEmitter,
     {

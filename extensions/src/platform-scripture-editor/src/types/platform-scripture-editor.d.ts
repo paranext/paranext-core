@@ -687,6 +687,14 @@ declare module 'papi-shared-types' {
     'platformScriptureEditor.onDidSelectionChange': SelectionChangeEvent;
   }
 
+  export interface SettingTypes {
+    /**
+     * Feature flag (default `true`) that gates the Scripture Text Grid web view. When `false`, the
+     * web view is not registered and cannot be opened or restored.
+     */
+    'platformScriptureEditor.enableScriptureTextGrid': boolean;
+  }
+
   export interface CommandHandlers {
     /**
      * Opens a new editor WebView and returns the WebView id

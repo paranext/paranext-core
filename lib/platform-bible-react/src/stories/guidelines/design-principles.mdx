@@ -120,4 +120,10 @@ All interactive UI must be keyboard navigable. Focus should be indicated by a fo
 
 Be aware that the focus ring sometimes goes on a **container** rather than the interactive element itself. For example, when a text input field contains buttons, the focus ring wraps the entire container — not each individual button.
 
+### Keyboard shortcut catalog
+
+Every keyboard shortcut in the entire application — main process, bundled extensions, and this component library — is documented in one curated catalog, so there is a single place to see what shortcuts exist, what they do, and where they are handled in code. It lives in the main Platform.Bible Storybook under **Reference → Keyboard shortcuts**.
+
+**Definition of Done:** when you add, change, or remove any keyboard shortcut — a `keydown`/`keyup` handler, an Electron accelerator or `before-input-event` branch, or a `useHotkeys` binding — you must add, update, or remove its entry in the single catalog data file `src/stories/keyboard-shortcuts.data.ts` as part of the same change. A shortcut change that leaves the catalog stale is not done.
+
 See also: [Responsiveness](./responsiveness.mdx) for minimum width requirements and container query guidance.

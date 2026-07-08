@@ -40,7 +40,7 @@ export type ConflictResolutionOptions =
  */
 export type LegacyComment = {
   /**
-   * Only present on the FIRST comment of a `verseText` conflict thread: HTML diff of the accepted
+   * Only present on the ROOT comment of a `verseText` conflict thread: HTML diff of the accepted
    * (winning) side (same `<u>`/`<s>` markup as {@link rejectedText}). Also absent for `verseText`
    * conflicts that have no common ancestor (two translators independently drafted the same
    * previously-absent verse, so no accepted-side diff exists), and when the accepted-side diff has
@@ -54,8 +54,8 @@ export type LegacyComment = {
   biblicalTermId?: string;
   /**
    * Type of conflict. Only applicable for conflict notes and it used to give a more specific
-   * message when displaying the note. Only meaningful on the first comment of a thread; never
-   * present on replies.
+   * message when displaying the note. Only meaningful on a thread's ROOT comment (not necessarily
+   * `comments[0]` — see {@link LegacyCommentThread.comments}); never present on replies.
    */
   conflictType?: string;
   /** Contents of the comment, represented in HTML that includes some Paratext 9 specific tags */
@@ -90,7 +90,7 @@ export type LegacyComment = {
    */
   mergedText?: string;
   /**
-   * Only present on the FIRST comment of a `verseText` conflict thread (never on replies): the
+   * Only present on the ROOT comment of a `verseText` conflict thread (never on replies): the
    * resulting verse USFM (plain, no diff markup) if the change is REJECTED — i.e. the losing side.
    * Pairs with {@link resultText} (the accepted outcome) to drive a dynamic result preview. Absent
    * when the reject outcome decodes to an empty verse (e.g. the losing side deleted the verse) or
@@ -99,7 +99,7 @@ export type LegacyComment = {
    */
   rejectedResultText?: string;
   /**
-   * Only present on the FIRST comment of a `verseText` conflict thread, and only when the rejected
+   * Only present on the ROOT comment of a `verseText` conflict thread, and only when the rejected
    * (losing) side's rendered diff has visible content: HTML diff of the rejected side, using
    * Paratext 9's `<u>` (inserted) and `<s>` (deleted) markup. This is full HTML,
    * `<blockquote>`-wrapped like {@link contents}. Coloring is applied by the UI, not carried in the
@@ -110,7 +110,7 @@ export type LegacyComment = {
   /** Present in a note when it has been assigned to reply-to a particular user */
   replyToUser?: string;
   /**
-   * Only present on the first comment of a `verseText` conflict thread when the merged result verse
+   * Only present on the ROOT comment of a `verseText` conflict thread when the merged result verse
    * USFM is non-empty: the resulting verse USFM (plain, no diff markup) already written into the
    * text at merge time. Equals the accepted side in v1. Absent otherwise. On a `verseText` conflict
    * ROOT this value equals the serialized {@link verse} field, but the two are deliberately
@@ -159,7 +159,16 @@ export type LegacyComment = {
 export type LegacyCommentThread = {
   /** Thread identifier (from first comment) */
   id: string;
-  /** All comments in this thread */
+  /**
+   * All comments in this thread.
+   *
+   * The conflict-only fields ({@link LegacyComment.conflictType}, {@link LegacyComment.rejectedText},
+   * {@link LegacyComment.acceptedText}, {@link LegacyComment.resultText}, and
+   * {@link LegacyComment.rejectedResultText}) live on this thread's ROOT comment — the
+   * earliest-`date` comment — which after thread-fragment deduplication is NOT necessarily
+   * `comments[0]`. Locate the root by earliest `date` (or simply read whichever comment carries the
+   * fields); never assume a fixed array position.
+   */
   comments: LegacyComment[];
   /** Thread status (aggregated from most recent non-Unspecified comment) */
   status: CommentStatus;

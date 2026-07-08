@@ -232,6 +232,28 @@ internal class PlatformCommentConverterTests : PapiTestBase
         Assert.That(json, Does.Contain(@"""acceptedText"":"));
         Assert.That(json, Does.Contain(@"""resultText"":"));
 
+        // Each serialized VALUE must match its own getter, so a converter key<->value mis-binding
+        // (e.g. writing AcceptedText under "rejectedText") fails here rather than shipping green —
+        // key-presence alone can't catch a swap, and the getter asserts below bypass the converter.
+        using var doc = JsonDocument.Parse(json);
+        JsonElement root = doc.RootElement;
+        Assert.That(
+            root.GetProperty("rejectedText").GetString(),
+            Is.EqualTo(commentWrapper.RejectedText)
+        );
+        Assert.That(
+            root.GetProperty("acceptedText").GetString(),
+            Is.EqualTo(commentWrapper.AcceptedText)
+        );
+        Assert.That(
+            root.GetProperty("resultText").GetString(),
+            Is.EqualTo(commentWrapper.ResultText)
+        );
+        Assert.That(
+            root.GetProperty("rejectedResultText").GetString(),
+            Is.EqualTo(commentWrapper.RejectedResultText)
+        );
+
         // rejectedText: losing side inserted "small" (rendered <u>), message paragraph excluded
         Assert.That(commentWrapper.RejectedText, Does.Contain("small"));
         Assert.That(commentWrapper.RejectedText, Does.Contain("<u>"));
@@ -304,6 +326,38 @@ internal class PlatformCommentConverterTests : PapiTestBase
 
         Assert.That(json, Does.Not.Contain(@"""acceptedText"":"));
         Assert.That(json, Does.Contain(@"""rejectedText"":"));
+        Assert.That(json, Does.Contain(@"""resultText"":"));
+        Assert.That(json, Does.Contain(@"""rejectedResultText"":"));
+    }
+
+    [Test]
+    public void Serialize_VerseTextConflictReplacementBothSides_IncludesStrikethroughAndUnderline()
+    {
+        // Replacement on both sides: loser "town"→"village", winner "town"→"city". Both diffs show
+        // <s> (deleted "town") and <u> (inserted word), so this exercises the deletion (<s>) path.
+        Comment testComment =
+            CommentTestHelper.CreateVerseTextConflictCommentReplacementBothSides();
+        var (commentWrapper, _) = CreateCommentWithThread(testComment);
+
+        var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
+            commentWrapper,
+            _serializationOptions
+        );
+        // Both rejected and accepted diffs contain a deletion (<s>) AND an insertion (<u>)
+        Assert.That(commentWrapper.RejectedText, Does.Contain("<s>"));
+        Assert.That(commentWrapper.RejectedText, Does.Contain("<u>"));
+        Assert.That(commentWrapper.AcceptedText, Does.Contain("<s>"));
+        Assert.That(commentWrapper.AcceptedText, Does.Contain("<u>"));
+
+        // resultText is the winner's plain USFM: "city"
+        Assert.That(commentWrapper.ResultText, Does.Contain("city"));
+
+        // rejectedResultText is the loser's plain USFM: "village"
+        Assert.That(commentWrapper.RejectedResultText, Does.Contain("village"));
+
+        // The serialized payload emits all four conflict fields
+        Assert.That(json, Does.Contain(@"""rejectedText"":"));
+        Assert.That(json, Does.Contain(@"""acceptedText"":"));
         Assert.That(json, Does.Contain(@"""resultText"":"));
         Assert.That(json, Does.Contain(@"""rejectedResultText"":"));
     }
