@@ -210,6 +210,40 @@ export class GraphemeString {
     return -1;
   }
 
+  /** Case-sensitive containment. See {@link indexOf} for `position` semantics. */
+  includes(searchString: string | GraphemeString, position: number = 0): boolean {
+    return this.indexOf(searchString, position) !== -1;
+  }
+
+  /**
+   * Whether the grapheme at `position` begins an occurrence of `searchString`. Negative `position`
+   * counts from the end. An empty needle returns `true`.
+   */
+  startsWith(searchString: string | GraphemeString, position: number = 0): boolean {
+    const needle = rawNeedle(searchString);
+    if (needle === '') return true;
+    const p = this.resolveRangeIndex(position);
+    const from = p < this.offsets.length ? this.offsets[p] : this.str.length;
+    if (!this.str.startsWith(needle, from)) return false;
+    return this.isBoundary(from + needle.length);
+  }
+
+  /**
+   * Whether `searchString` ends exactly at grapheme `endPosition` (default: the end). Negative
+   * `endPosition` counts from the end. An empty needle returns `true`.
+   */
+  endsWith(
+    searchString: string | GraphemeString,
+    endPosition: number = this.graphemes.length,
+  ): boolean {
+    const needle = rawNeedle(searchString);
+    if (needle === '') return true;
+    const p = this.resolveRangeIndex(endPosition);
+    const end = p < this.offsets.length ? this.offsets[p] : this.str.length;
+    if (!this.str.endsWith(needle, end)) return false;
+    return this.isBoundary(end - needle.length);
+  }
+
   /**
    * Resolve a range index: negative counts from the end, then clamp into `[0, length]`. Never
    * wraps. `length` (one past the last grapheme) is a valid result meaning "the end".
