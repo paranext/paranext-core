@@ -36,6 +36,13 @@ const commentListLocalizedStrings: LanguageStrings = {
     'The verse has been edited since this conflict was recorded, so rejecting is no longer available. Accept keeps the current text.',
   '%conflict_note_outcome_used_other%': 'Used the other change instead of the current text.',
   '%conflict_note_outcome_combined%': 'Combined both changes.',
+  '%conflict_note_summary_unresolved%': 'Conflicting edits. Choose which change to keep.',
+  '%conflict_note_summary_resolved_kept_current%':
+    'Conflicting edits were resolved. Kept the current text.',
+  '%conflict_note_summary_resolved_used_other%':
+    'Conflicting edits were resolved. Used the other change.',
+  '%conflict_note_summary_resolved_combined%':
+    'Conflicting edits were resolved. Combined both changes.',
 };
 
 const mockAssignableUsers: string[] = ['', 'Team', 'Alice', 'Bob', 'Charlie', 'Current User'];

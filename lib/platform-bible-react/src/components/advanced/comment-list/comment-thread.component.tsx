@@ -23,6 +23,7 @@ import { Command, CommandItem, CommandList } from '@/components/shadcn-ui/comman
 import { CommentItem } from './comment-item.component';
 import { AddCommentToThreadOptions, CommentThreadProps } from './comment-list.types';
 import { ConflictNoteCard } from './conflict-note-card.component';
+import { ConflictThreadSummary } from './conflict-thread-summary.component';
 import {
   ConflictResolution,
   ConflictResolutionOptions,
@@ -289,6 +290,12 @@ export function CommentThread({
     return threadStatus === 'Resolved' ? 'accept' : undefined;
   }, [isConflictThread, activeComments, threadStatus]);
 
+  // A verseText merge conflict — the only conflict type for which the root note carries discrete
+  // diff/result text. Gates the collapsed conflict summary; other conflict types keep the default
+  // CommentItem preview. Mirrors ConflictNoteCard's own verseText check.
+  const isVerseTextConflictThread =
+    isConflictThread && firstComment.conflictType === 'verseText' && !!firstComment.resultText;
+
   // </p> expects null and not undefined
   // eslint-disable-next-line no-null/no-null
   const verseTextRef = useRef<HTMLParagraphElement | null>(null);
@@ -499,6 +506,31 @@ export function CommentThread({
   // If all comments have been deleted there is nothing to render
   if (activeComments.length === 0) return undefined;
 
+  // The root comment's rendering when the ConflictNoteCard is not shown: a collapsed verseText
+  // conflict shows the status-aware summary; everything else shows the standard CommentItem.
+  const nonCardRootComment = isVerseTextConflictThread ? (
+    <ConflictThreadSummary
+      comment={firstComment}
+      localizedStrings={localizedStrings}
+      resolvedResolution={resolvedResolution}
+    />
+  ) : (
+    <CommentItem
+      comment={firstComment}
+      localizedStrings={localizedStrings}
+      isThreadExpanded={isSelected}
+      threadStatus={threadStatus}
+      handleAddCommentToThread={handleAddCommentToThreadWithContents}
+      handleUpdateComment={handleUpdateComment}
+      handleDeleteComment={handleDeleteComment}
+      onEditingChange={setIsAnyCommentEditing}
+      canEditOrDelete={
+        (!isAnyCommentEditing && commentEditDeletePermissions.get(firstComment.id)) ?? false
+      }
+      canUserResolveThread={canResolve}
+    />
+  );
+
   return (
     <Card
       role="option"
@@ -626,20 +658,7 @@ export function CommentThread({
               isResolving={isResolvingConflict}
             />
           ) : (
-            <CommentItem
-              comment={firstComment}
-              localizedStrings={localizedStrings}
-              isThreadExpanded={isSelected}
-              threadStatus={threadStatus}
-              handleAddCommentToThread={handleAddCommentToThreadWithContents}
-              handleUpdateComment={handleUpdateComment}
-              handleDeleteComment={handleDeleteComment}
-              onEditingChange={setIsAnyCommentEditing}
-              canEditOrDelete={
-                (!isAnyCommentEditing && commentEditDeletePermissions.get(firstComment.id)) ?? false
-              }
-              canUserResolveThread={canResolve}
-            />
+            nonCardRootComment
           )}
         </div>
         <>

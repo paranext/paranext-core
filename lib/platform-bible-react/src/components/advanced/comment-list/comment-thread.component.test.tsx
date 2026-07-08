@@ -306,8 +306,17 @@ describe('CommentThread conflict resolution', () => {
     expect(screen.getByRole('button', { name: 'Save and resolve' })).toBeInTheDocument();
   });
 
-  test('conflict thread renders plain CommentItem when collapsed', () => {
+  test('collapsed unresolved conflict shows the status-aware summary, not the raw PT9 note body', () => {
     renderThread({ thread: conflictThread, comments: conflictThread.comments, isSelected: false });
+    // The collapsed preview is our summary: the prompt shows, the note's diff renders (inserted
+    // "small") through the shared green/red coloring, and the PT9 "in red / not in the current copy"
+    // prose never appears. Collapsed, so there is no resolution radio.
+    expect(screen.getByText('Conflicting edits. Choose which change to keep.')).toBeInTheDocument();
+    const inserted = document.querySelector('u');
+    expect(inserted).toHaveTextContent('small');
+    expect(inserted?.closest('div')?.className).toContain('text-success-foreground');
+    expect(screen.queryByText(/in red/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/current copy of the text/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('radio')).not.toBeInTheDocument();
   });
 
@@ -465,6 +474,28 @@ describe('CommentThread conflict resolution', () => {
       await screen.findByText(verseTextConflictComment.rejectedResultText ?? ''),
     ).toBeInTheDocument();
     expect(screen.queryByText(verseTextConflictComment.resultText ?? '')).not.toBeInTheDocument();
+  });
+
+  test('collapsed resolved conflict shows the outcome sentence, not the stale note diff', () => {
+    const resolvedThread: LegacyCommentThread = {
+      ...conflictThread,
+      comments: [verseTextConflictComment, resolutionReply('replaced')],
+      status: 'Resolved',
+    };
+    renderThread({
+      thread: resolvedThread,
+      comments: resolvedThread.comments,
+      isSelected: false,
+      threadStatus: 'Resolved',
+    });
+    // 'replaced' -> reject: the collapsed summary states the outcome and shows NO verse text, so the
+    // frozen note diff can no longer misrepresent the resolved result.
+    expect(screen.getByText(/Used the other change\.$/)).toBeInTheDocument();
+    expect(document.querySelector('u')).toBeNull();
+    expect(
+      screen.queryByText('Conflicting edits. Choose which change to keep.'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/current copy of the text/i)).not.toBeInTheDocument();
   });
 
   test('resolved-without-action thread shows the accepted side in the read-only card', async () => {

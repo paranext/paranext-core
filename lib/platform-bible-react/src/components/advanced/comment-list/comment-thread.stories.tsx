@@ -45,6 +45,13 @@ const localizedStrings: LanguageStrings = {
     'The verse has been edited since this conflict was recorded, so rejecting is no longer available. Accept keeps the current text.',
   '%conflict_note_outcome_used_other%': 'Used the other change instead of the current text.',
   '%conflict_note_outcome_combined%': 'Combined both changes.',
+  '%conflict_note_summary_unresolved%': 'Conflicting edits. Choose which change to keep.',
+  '%conflict_note_summary_resolved_kept_current%':
+    'Conflicting edits were resolved. Kept the current text.',
+  '%conflict_note_summary_resolved_used_other%':
+    'Conflicting edits were resolved. Used the other change.',
+  '%conflict_note_summary_resolved_combined%':
+    'Conflicting edits were resolved. Combined both changes.',
 };
 
 const CURRENT_USER = 'Current User';
@@ -153,6 +160,8 @@ type CommentThreadStoryProps = {
   threadType?: CommentType;
   /** Overrides which resolution actions are offered; defaults to the fully-available case. */
   getConflictResolutionOptionsCallback?: (threadId: string) => Promise<ConflictResolutionOptions>;
+  /** Whether the thread starts expanded (default true). Set false to show the collapsed summary. */
+  initiallySelected?: boolean;
 };
 
 /**
@@ -165,11 +174,15 @@ function CommentThreadStory({
   initialStatus,
   threadType = 'Conflict',
   getConflictResolutionOptionsCallback,
+  initiallySelected = true,
 }: CommentThreadStoryProps) {
   const [comments, setComments] = useState<LegacyComment[]>(initialComments);
   const [status, setStatus] = useState<CommentStatus>(initialStatus);
-  // Start expanded so the card, replies, and reply editor are all visible immediately.
-  const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>(THREAD_ID);
+  // Start expanded so the card, replies, and reply editor are all visible immediately, unless the
+  // story opts into the collapsed state to show the ConflictThreadSummary preview.
+  const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>(
+    initiallySelected ? THREAD_ID : undefined,
+  );
 
   const handleSelectThread = (threadId: string) => {
     setSelectedThreadId((current) => (current === threadId ? undefined : threadId));
@@ -403,6 +416,41 @@ export const StaleConflictThread: Story = {
       initialComments={[verseTextConflictReplacementSample, ...discussionReplies]}
       initialStatus="Todo"
       getConflictResolutionOptionsCallback={async () => 'accept'}
+    />
+  ),
+};
+
+/**
+ * The COLLAPSED preview of an unresolved conflict thread (click the header to expand). Instead of
+ * the raw PT9 note body — which referenced an "in red" coloring the collapsed view never applied —
+ * it shows the ConflictThreadSummary: a prompt plus the note's diff rendered with the same
+ * green/red coloring as the expanded card.
+ */
+export const CollapsedConflictSummary: Story = {
+  render: () => (
+    <CommentThreadStory
+      initialComments={[verseTextConflictReplacementSample, ...discussionReplies]}
+      initialStatus="Todo"
+      initiallySelected={false}
+    />
+  ),
+};
+
+/**
+ * The COLLAPSED preview of an already-resolved conflict thread. The summary states the outcome
+ * ("Conflicting edits were resolved. Used the other change.") and shows no verse text, so it can no
+ * longer misrepresent the resolved result the way the frozen note body did.
+ */
+export const CollapsedResolvedConflictSummary: Story = {
+  render: () => (
+    <CommentThreadStory
+      initialComments={[
+        verseTextConflictReplacementSample,
+        ...discussionReplies,
+        preExistingResolutionReply,
+      ]}
+      initialStatus="Resolved"
+      initiallySelected={false}
     />
   ),
 };
