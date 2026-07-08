@@ -49,4 +49,29 @@ export class GraphemeString {
   toArray(): string[] {
     return this.graphemes;
   }
+
+  /**
+   * The grapheme at `index`, or `undefined` if out of bounds. Negative indexes count
+   * from the end (`-1` is the last grapheme). No wraparound: an index outside
+   * `[-length, length-1]` returns `undefined`.
+   */
+  at(index: number): string | undefined {
+    const i = index < 0 ? index + this.graphemes.length : index;
+    if (i < 0 || i >= this.graphemes.length) return undefined;
+    return this.graphemes[i];
+  }
+
+  /** Like {@link at} but returns `''` (not `undefined`) when out of bounds. */
+  charAt(index: number): string {
+    return this.at(index) ?? '';
+  }
+
+  /**
+   * The Unicode code point of the first code point of the grapheme at `index`, or
+   * `undefined` if out of bounds. For multi-code-point graphemes this is only the
+   * first code point.
+   */
+  codePointAt(index: number): number | undefined {
+    return this.at(index)?.codePointAt(0);
+  }
 }
