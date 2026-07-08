@@ -21,9 +21,10 @@ import {
   AlertTitle,
   Card,
   Skeleton,
+  useExtraValidMarkers,
   useStylesheet,
 } from 'platform-bible-react';
-import { collectUsjMarkers, type LocalizedStringValue } from 'platform-bible-utils';
+import { type LocalizedStringValue } from 'platform-bible-utils';
 import type { MarbleAnnotation } from '../../lib/marble-converter';
 import type { EnhancedResourcesNetworkObject } from '../../lib/use-enhanced-resources-proxy';
 import {
@@ -613,25 +614,18 @@ export function EnhancedScripturePane({
 
   // Tell the editor which markers this resource's content uses so it doesn't warn "Unexpected
   // <kind> marker" for non-built-in markers — scoped per-resource to the displayed USJ, never a
-  // global list. Keyed on the marker-set VALUE (not the array identity) so `options` stays a stable
-  // reference across chapter changes that don't change the set: changing the `options` prop identity
-  // forces Editorial to reconcile its Lexical config, which destroys the Marble annotation marks
-  // (see EDITORIAL_OPTIONS note above). When the set genuinely changes, the annotation effect
-  // re-applies marks on the new USJ anyway. The key is sorted so it depends only on the SET of
-  // markers, not their first-seen order — two chapters that use the same markers in a different
-  // order keep the same key (and stable options), avoiding a needless reconcile. Order doesn't
-  // affect marker validity, so sorting is behavior-neutral for the editor.
-  // Intentionally every marker the resource uses — read-only panel, warn-only diagnostic. See collectUsjMarkers JSDoc.
-  const extraValidMarkersKey = useMemo(
-    () => collectUsjMarkers(usj).slice().sort().join(' '),
-    [usj],
-  );
+  // global list. `useExtraValidMarkers` keeps a stable array identity across chapter changes that
+  // don't change the marker set, so `editorialOptions` stays a stable reference: changing the
+  // `options` prop identity forces Editorial to reconcile its Lexical config, which destroys the
+  // Marble annotation marks (see EDITORIAL_OPTIONS note above). When the set genuinely changes, the
+  // annotation effect re-applies marks on the new USJ anyway.
+  const extraValidMarkers = useExtraValidMarkers(usj);
   const editorialOptions = useMemo(
     () => ({
       ...EDITORIAL_OPTIONS,
-      nodes: { extraValidMarkers: extraValidMarkersKey ? extraValidMarkersKey.split(' ') : [] },
+      nodes: { extraValidMarkers },
     }),
-    [extraValidMarkersKey],
+    [extraValidMarkers],
   );
 
   // Hold the latest scrRef + localizer in refs so the annotation effect's hover callbacks

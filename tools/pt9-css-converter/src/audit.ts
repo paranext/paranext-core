@@ -81,9 +81,13 @@ export function auditScss(
  * the two strings are not equal (callers only invoke it on a known mismatch).
  */
 export function firstDifference(expected: string, actual: string): string {
-  // Guard the documented precondition: if a future caller passes equal strings, say so plainly
-  // rather than returning the misleading "differ only in length" fallback below.
-  if (expected === actual) return '    (no difference — inputs are identical)';
+  // Enforce the documented precondition: the only caller invokes this on a known mismatch. If a
+  // future caller passes equal strings, that's a bug in its inSync bookkeeping — fail loudly rather
+  // than returning a polite "no difference" message that would hide it.
+  if (expected === actual)
+    throw new Error(
+      'firstDifference called with identical inputs — caller inSync bookkeeping is wrong',
+    );
   const expectedLines = expected.split('\n');
   const actualLines = actual.split('\n');
   const max = Math.max(expectedLines.length, actualLines.length);

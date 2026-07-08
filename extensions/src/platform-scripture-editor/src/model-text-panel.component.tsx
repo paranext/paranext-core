@@ -6,12 +6,8 @@ import {
 } from '@eten-tech-foundation/platform-editor';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { Button, Spinner } from 'platform-bible-react';
-import {
-  collectUsjMarkers,
-  type DblResourceData,
-  type LocalizedStringValue,
-} from 'platform-bible-utils';
+import { Button, Spinner, useExtraValidMarkers } from 'platform-bible-react';
+import { type DblResourceData, type LocalizedStringValue } from 'platform-bible-utils';
 import type {
   DblResourceReference,
   EffectiveResourceReference,
@@ -23,6 +19,12 @@ import { selectTextConnection } from './select-dbl-resource';
 import { scrollToVerse } from './editor-dom.util';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
+
+// The editor's default view options never change, so build them once at module scope. Rebuilding a
+// fresh `view` object inside the `options` memo would give `options` a new identity on every fetch,
+// and the editor reloads (re-serialize + setEditorState) whenever the `view` object's identity
+// changes — so a refetch of identical content would force a pointless full reload.
+const VIEW_OPTIONS = getDefaultViewOptions();
 
 /** Max ms to retry scrolling via rAF before giving up (e.g. verse marker missing from USJ) */
 const SCROLL_MAX_WAIT_MS = 2000;
@@ -243,9 +245,10 @@ export function ModelTextPanel({
   const editorRef = useRef<EditorRef | null>(null);
   // Markers this resource's content actually uses, so the editor doesn't warn "Unexpected <kind>
   // marker" for handbook/commentary markers (e.g. \pn, \jmp). Scoped per-resource from the displayed
-  // USJ — never a global list — and additive, so listing built-in markers is a harmless no-op.
-  // Intentionally every marker the resource uses — read-only panel, warn-only diagnostic. See collectUsjMarkers JSDoc.
-  const extraValidMarkers = useMemo(() => collectUsjMarkers(usj), [usj]);
+  // USJ — never a global list — and additive, so listing built-in markers is a harmless no-op. The
+  // returned array keeps a stable identity while the marker set is unchanged, so `options` below
+  // doesn't churn (and reload the editor) on every fetch of identical content.
+  const extraValidMarkers = useExtraValidMarkers(usj);
 
   const options: EditorOptions = useMemo(
     () => ({
@@ -256,7 +259,7 @@ export function ModelTextPanel({
       ...(extraValidMarkers.length > 0 ? { nodes: { extraValidMarkers } } : {}),
       // Narrow the resource's (string) text-direction setting to the editor's union without a cast.
       textDirection: textDirection === 'rtl' || textDirection === 'auto' ? textDirection : 'ltr',
-      view: getDefaultViewOptions(),
+      view: VIEW_OPTIONS,
     }),
     [textDirection, extraValidMarkers],
   );

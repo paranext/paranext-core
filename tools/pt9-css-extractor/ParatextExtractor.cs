@@ -36,7 +36,7 @@ internal static class ParatextExtractor
         // `useCommentaryMarkerStyles` hook and the C# `CommentariesWhiteList`), so surface it
         // here — it saves a manual lookup when wiring a freshly-extracted resource into those
         // registries. Resources always have one; guard anyway so a non-DBL project still extracts.
-        string dblId = scrText.Settings.DBLId.ToString();
+        string dblId = scrText.Settings.DBLId?.ToString() ?? "";
         Console.Error.WriteLine(
             $"DBL entry UID    : {(string.IsNullOrEmpty(dblId) ? "(none — not a DBL resource)" : dblId)}");
 
