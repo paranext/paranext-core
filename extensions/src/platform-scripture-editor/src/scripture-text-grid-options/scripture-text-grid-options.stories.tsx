@@ -12,13 +12,12 @@ import type {
 /**
  * The reusable View Options inner component: a VIEW toggle (Verse / Chapter), a TEXTS list split
  * into an admin-shared top section and a user bottom section, and a Get Resources button. In the
- * app it renders inside the Scripture Text Grid popover (A5); the PT-4039 share-layout dialog
- * renders the same component. These stories drive it with local state so every interaction works
- * without a backend.
+ * app it renders inside the Scripture Text Grid popover; a separate share-layout dialog renders the
+ * same component. These stories drive it with local state so every interaction works without a
+ * backend.
  *
  * **Try it**: toggle the checkboxes, hover a user row to reveal the remove (✕) button, and click
- * Get Resources. Chapter is disabled with a "coming soon" hint until its renderer ships
- * (B4/PT-4062).
+ * Get Resources. Chapter is disabled with a "coming soon" hint until its renderer ships.
  */
 const meta: Meta<typeof ScriptureTextGridOptions> = {
   title: 'Bundled Extensions/platform-scripture-editor/ScriptureTextGridOptions',
@@ -126,7 +125,7 @@ export const Installing: Story = {
   ),
 };
 
-/** With Chapter enabled (the state A4/PT-4062 unlock) — both modes selectable, no "coming soon". */
+/** With Chapter enabled (the state a later chapter renderer unlocks) — both modes selectable. */
 export const ChapterEnabled: Story = {
   render: () => <Harness initialTop={ADMIN_ROWS} initialBottom={USER_ROWS} isChapterEnabled />,
 };

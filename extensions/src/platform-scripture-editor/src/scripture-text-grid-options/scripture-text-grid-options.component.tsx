@@ -35,7 +35,7 @@ const localize = (
  * Reusable, presentational View Options inner component: a VIEW toggle (Verse / Chapter), a TEXTS
  * list (admin-shared top section + user bottom section), and a Get Resources button. It holds no
  * PAPI/popover/persistence state — callers pass the computed rows and callbacks — so it renders
- * both inside the Scripture Text Grid popover (A5) and inside the PT-4039 share-layout dialog.
+ * both inside the Scripture Text Grid popover and inside a separate share-layout dialog.
  *
  * Chapter is disabled with a "coming soon" hint unless `isChapterEnabled` is set. The hover-✕
  * renders only on rows with `isUserRemovable === true`.
