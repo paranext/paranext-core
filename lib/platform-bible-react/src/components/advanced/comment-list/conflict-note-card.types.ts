@@ -12,9 +12,9 @@ export type ConflictResolution = 'accept' | 'reject' | 'merge';
  *
  * - `'accept'`: resolved by accepting (no text was written); the accepted side stands.
  * - `'reject'`: resolved by rejecting (the rejected side was written into the verse).
- * - `'merged'`: a PT9 three-way merge (only possible in data synced from PT9; PT10 never produces
- *   it). The card shows the merged verse text (`mergedText`); the outcome itself is stated in prose
- *   by CommentItem's resolution-reply banner, not on the card.
+ * - `'merged'`: resolved by combining both changes (PT10's "Combine both changes" option, or a PT9
+ *   three-way merge). The card shows the merged verse text (`mergedText`); the outcome itself is
+ *   stated in prose by CommentItem's resolution-reply banner, not on the card.
  *
  * Distinct from {@link ConflictResolution} (the live accept/reject choice) because it adds the
  * `'merged'` legacy outcome and is only meaningful for a conflict that is already resolved.

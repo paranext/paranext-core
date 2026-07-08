@@ -272,7 +272,7 @@ export function CommentItem({
               // neutral outcome line here instead of the (empty) contents, styled like the italic
               // status lines above. These are the same neutral keys ConflictNoteCard's Result region
               // used to render inline; this banner is now the only place the outcome is stated in
-              // prose. 'merged' only occurs in PT9-synced data; anything else is a reject.
+              // prose.
               <div className="tw:text-sm tw:italic">
                 {comment.conflictResolutionAction === 'merged'
                   ? (localizedStrings['%conflict_note_outcome_combined%'] ??
