@@ -109,9 +109,9 @@ gh pr create \
 
 ### Why review this
 
-[Only when this PR is not part of the current epic (side fixes, tooling,
-refactors, dependency bumps, cleanup) — otherwise delete this section.
-Start with "Not part of the current epic." then 1–2 sentences: what
+[Either: (a) which current epic (side fixes, tooling,
+refactors, dependency bumps, cleanup) this PR part of, xor
+(b) "Not part of current epic." then 1–2 sentences: what
 prompted this change and why it is worth reviewer time now. What the
 current epic is: .context/standards/Current-Epic.md]
 
