@@ -7,14 +7,11 @@ import {
   getScrRefSync,
   setScrRefSync,
 } from '@renderer/services/scroll-group.service-host';
-import {
-  getAllOpenWebViewDefinitionsSync,
-  getSavedWebViewDefinitionSync,
-  updateWebViewDefinitionSync,
-} from '@renderer/services/web-view.service-host';
+import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-host';
 import { getLastSelectedWebViewId } from '@renderer/services/window.service-host';
+import { resolveTargetWebView } from '@renderer/services/navigation-target.util';
 import { getBookIdsFromBooksPresent } from 'platform-bible-utils/experimental';
-import { SavedWebViewDefinition, WebViewId } from '@shared/models/web-view.model';
+import { WebViewId } from '@shared/models/web-view.model';
 import { TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import { registerCommand } from '@shared/services/command.service';
@@ -51,61 +48,8 @@ type NavigationTarget = {
   projectId?: string;
 };
 
-// Must match SCRIPTURE_EDITOR_WEBVIEW_TYPE in platform-scripture-editor.utils.ts. Core code
-// cannot import from extension source, so this is intentionally duplicated (see the same pattern
-// in `use-project-picker-data.hook.ts` and `shutdown-tasks.ts`).
-const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
-
-/** A web view id paired with its current saved definition */
-type ResolvedWebView = { id: WebViewId; definition: SavedWebViewDefinition };
-
-/** Step 1 of target resolution: the tracked last-selected (scripture-navigable) web view, if any */
-function resolveTrackedWebView(): ResolvedWebView | undefined {
-  const webViewId = getLastSelectedWebViewId();
-  if (!webViewId) return undefined;
-
-  try {
-    const definition = getSavedWebViewDefinitionSync(webViewId);
-    if (!definition) return undefined;
-    return { id: webViewId, definition };
-  } catch (e) {
-    logger.warn(
-      `Navigation command could not get web view definition for ${webViewId}: ${getErrorMessage(e)}`,
-    );
-    return undefined;
-  }
-}
-
-/**
- * Step 2 of target resolution: the "main project" editor fallback — the first open Scripture editor
- * web view with a project, same rule `useProjectPickerData` uses to find the current project. Used
- * when nothing is tracked yet (e.g. at fresh app start) but an editor is open, possibly restored on
- * a persisted scroll group other than 0.
- */
-function resolveMainEditorWebView(): ResolvedWebView | undefined {
-  let definitions: SavedWebViewDefinition[];
-  try {
-    definitions = getAllOpenWebViewDefinitionsSync();
-  } catch (e) {
-    logger.warn(`Navigation command could not enumerate open web views: ${getErrorMessage(e)}`);
-    return undefined;
-  }
-
-  const editorDefinition = definitions.find(
-    (definition) =>
-      definition.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && definition.projectId,
-  );
-  if (!editorDefinition) return undefined;
-  return { id: editorDefinition.id, definition: editorDefinition };
-}
-
-/** Resolves the web view navigation commands and the top toolbar should target, in both modes */
-function resolveTargetWebView(): ResolvedWebView | undefined {
-  return resolveTrackedWebView() ?? resolveMainEditorWebView();
-}
-
 function resolveNavigationTarget(): NavigationTarget | undefined {
-  const target = resolveTargetWebView();
+  const target = resolveTargetWebView(getLastSelectedWebViewId());
   if (!target) return undefined;
 
   return {

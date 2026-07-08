@@ -15,13 +15,12 @@ import { PROJECT_PICKER_DIALOG_TYPE } from '@renderer/components/dialogs/dialog-
 import { app, dataProviders } from '@renderer/services/papi-frontend.service';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
 import {
-  getAllOpenWebViewDefinitionsSync,
-  getSavedWebViewDefinitionSync,
   onDidCloseWebView,
   onDidOpenWebView,
   onDidUpdateWebView,
   updateWebViewDefinitionSync,
 } from '@renderer/services/web-view.service-host';
+import { ResolvedWebView, resolveTargetWebView } from '@renderer/services/navigation-target.util';
 import {
   registerBookChapterControlHandle,
   TOP_TOOLBAR_BOOK_CHAPTER_CONTROL_OWNER_ID,
@@ -35,7 +34,6 @@ import { sendCommand } from '@shared/services/command.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { logger } from '@shared/services/logger.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
-import { SavedWebViewDefinition, WebViewId } from '@shared/models/web-view.model';
 import { UpdateWebViewEvent } from '@shared/services/web-view.service-model';
 import { CircleCheck, HomeIcon } from 'lucide-react';
 import {
@@ -89,14 +87,6 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%projectPicker_toolbar_more_projects%',
 ];
 
-// Must match SCRIPTURE_EDITOR_WEBVIEW_TYPE in platform-scripture-editor.utils.ts. Core code cannot
-// import from extension source, so this is intentionally duplicated (see the same pattern in
-// `use-project-picker-data.hook.ts`, `shutdown-tasks.ts`, and `scroll-group-navigation.commands.ts`).
-const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
-
-/** A web view id paired with its current saved definition */
-type ResolvedWebView = { id: WebViewId; definition: SavedWebViewDefinition };
-
 export function PlatformBibleToolbar() {
   const { currentProject, recentProjects, allProjects, currentProjectError } =
     useProjectPickerData();
@@ -146,26 +136,7 @@ export function PlatformBibleToolbar() {
     // Referenced so this memo re-runs whenever a relevant web view lifecycle event bumps it
     // eslint-disable-next-line no-unused-expressions
     definitionRefresh;
-    if (lastSelectedWebViewId) {
-      try {
-        const definition = getSavedWebViewDefinitionSync(lastSelectedWebViewId);
-        if (definition) return { id: lastSelectedWebViewId, definition };
-      } catch (e) {
-        logger.warn(
-          `Toolbar could not get web view definition for ${lastSelectedWebViewId}: ${getErrorMessage(e)}`,
-        );
-      }
-    }
-    try {
-      const editorDefinition = getAllOpenWebViewDefinitionsSync().find(
-        (definition) =>
-          definition.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && definition.projectId,
-      );
-      if (editorDefinition) return { id: editorDefinition.id, definition: editorDefinition };
-    } catch (e) {
-      logger.warn(`Toolbar could not enumerate open web views: ${getErrorMessage(e)}`);
-    }
-    return undefined;
+    return resolveTargetWebView(lastSelectedWebViewId);
   }, [lastSelectedWebViewId, definitionRefresh]);
 
   // No resolved target (no eligible tracked tab and no main-project editor open): nothing to
