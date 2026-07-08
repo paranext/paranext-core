@@ -377,10 +377,9 @@ export interface ConflictNoteCardProps {
 	availableActions?: ConflictResolutionOptions;
 	/**
 	 * Which way an already-resolved conflict was resolved. Used ONLY when `availableActions` is
-	 * `'none'` (read-only): it makes the Result region show the outcome that was actually applied
-	 * ('accept' -> resultText, 'reject' -> rejectedResultText, 'merged' -> mergedText plus a
-	 * "combined both changes" outcome line) instead of the live selector state. Ignored while the
-	 * conflict is still resolvable.
+	 * `'none'` (read-only): it makes the Result region show the text that was actually applied
+	 * ('accept' -> resultText, 'reject' -> rejectedResultText, 'merged' -> mergedText) instead of the
+	 * live selector state. Ignored while the conflict is still resolvable.
 	 */
 	resolvedResolution?: ConflictResolutionOutcome;
 	/** Called when the user clicks Resolve, with the currently selected resolution. */
@@ -505,9 +504,10 @@ export function CommentList({ className, classNameForVerseText, threads, current
  * semantics (a labelled radio group with role=radio / aria-checked and arrow-key navigation) via a
  * visually-hidden radio inside each card. A Save-and-resolve button commits the choice. Handles the
  * stale state (accept stays enabled and selected; reject is disabled and carries a read-only
- * explanation; Save stays present but disabled) and the already-resolved read-only state (the
- * chosen outcome's text plus a derived outcome line). Falls back to rendering the raw note contents
- * for any non-verseText conflict.
+ * explanation; Save stays present but disabled) and the already-resolved read-only state (just the
+ * chosen outcome's Result text — the outcome itself is stated in prose by CommentItem's
+ * resolution-reply banner). Falls back to rendering the raw note contents for any non-verseText
+ * conflict.
  */
 export declare function ConflictNoteCard({ comment, localizedStrings, selectedResolution, onResolutionChange, availableActions, resolvedResolution, onResolve, isResolving, }: ConflictNoteCardProps): import("react/jsx-runtime").JSX.Element;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
