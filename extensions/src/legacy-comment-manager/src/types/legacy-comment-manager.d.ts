@@ -507,7 +507,8 @@ declare module 'papi-shared-types' {
      *   `options.scopeFilterToSet` pre-apply comment-filter axes/scope on open or focus.
      * @returns The ID of the comment list WebView that was opened or focused, or `undefined` if no
      *   project ID could be determined
-     * @throws If something goes wrong with selecting the provided thread ID
+     * @throws If the comment list WebView controller cannot be obtained to apply the requested
+     *   thread selection or filters
      */
     'legacyCommentManager.openCommentList': (
       webViewId?: string | undefined,
