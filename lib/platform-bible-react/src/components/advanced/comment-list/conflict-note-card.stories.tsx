@@ -25,8 +25,6 @@ const localizedStrings: LanguageStrings = {
   '%conflict_note_save_disabled_tooltip%':
     'Keeping the current text makes no change — resolve the thread with the ✓ to keep it.',
   '%conflict_note_save_warning%': "This can't be undone.",
-  '%conflict_note_outcome_used_other%': 'Used the other change instead of the current text.',
-  '%conflict_note_outcome_combined%': 'Combined both changes.',
   '%conflict_note_stale_notice%':
     'The verse has been edited since this conflict was recorded, so rejecting is no longer available. Accept keeps the current text.',
 };
@@ -109,12 +107,18 @@ export const NoAncestor: Story = {
   ),
 };
 
-/** Already resolved by rejecting: collapses to the rejected result plus the derived outcome line. */
+/**
+ * Already resolved by rejecting: collapses to just the rejected result — no outcome line (the
+ * CommentItem resolution-reply banner states the outcome instead).
+ */
 export const ResolvedUsedOtherChange: Story = {
   render: () => <ConflictNoteCardStory availableActions="none" resolvedResolution="reject" />,
 };
 
-/** Already resolved by a PT9 three-way merge: shows the merged text plus the "combined" outcome. */
+/**
+ * Already resolved by a PT9 three-way merge: shows just the merged text — no outcome line (the
+ * CommentItem resolution-reply banner states the outcome instead).
+ */
 export const ResolvedCombined: Story = {
   render: () => (
     <ConflictNoteCardStory

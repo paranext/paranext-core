@@ -51,8 +51,6 @@ const localizedStrings = {
   '%conflict_note_save_disabled_tooltip%':
     'Keeping the current text makes no change — resolve the thread with the ✓ to keep it.',
   '%conflict_note_save_warning%': "This can't be undone.",
-  '%conflict_note_outcome_used_other%': 'Used the other change instead of the current text.',
-  '%conflict_note_outcome_combined%': 'Combined both changes.',
 };
 
 /** The container div that boxes a single resolution option (carries the selected border). */
@@ -306,7 +304,7 @@ test('resolved read-only accept shows the accepted result and no outcome line', 
   expect(screen.queryByText('Combined both changes.')).not.toBeInTheDocument();
 });
 
-test('resolved read-only reject shows the rejected result and the "used the other change" outcome', () => {
+test('resolved read-only reject shows the rejected result and no outcome line', () => {
   render(
     <ConflictNoteCard
       comment={verseTextConflictComment}
@@ -318,11 +316,11 @@ test('resolved read-only reject shows the rejected result and the "used the othe
   expect(screen.getByText(verseTextConflictComment.rejectedResultText ?? '')).toBeInTheDocument();
   expect(screen.queryByText(verseTextConflictComment.resultText ?? '')).not.toBeInTheDocument();
   expect(
-    screen.getByText('Used the other change instead of the current text.'),
-  ).toBeInTheDocument();
+    screen.queryByText('Used the other change instead of the current text.'),
+  ).not.toBeInTheDocument();
 });
 
-test('resolved read-only merged shows the merged text and the "combined both changes" outcome', () => {
+test('resolved read-only merged shows the merged text and no outcome line', () => {
   render(
     <ConflictNoteCard
       comment={verseTextConflictMergeSample}
@@ -334,7 +332,7 @@ test('resolved read-only merged shows the merged text and the "combined both cha
   // The merged verse (with its diff markup) is shown rather than being hidden.
   expect(document.querySelector('u')).toBeInTheDocument();
   expect(document.body.textContent).toContain('royal');
-  expect(screen.getByText('Combined both changes.')).toBeInTheDocument();
+  expect(screen.queryByText('Combined both changes.')).not.toBeInTheDocument();
 });
 
 test('trims trailing whitespace out of diff spans so the strikethrough does not dangle', () => {

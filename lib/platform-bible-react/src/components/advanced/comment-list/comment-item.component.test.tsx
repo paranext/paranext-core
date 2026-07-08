@@ -10,18 +10,16 @@ vi.mock('@/components/advanced/editor/editor', () => ({
   Editor: vi.fn(() => <div data-testid="mock-editor" />),
 }));
 
-const OUTCOME_REPLACED =
-  'Replaced the changes that Paratext ACCEPTED with the changes that Paratext REJECTED';
-const OUTCOME_MERGED =
-  'Merged the changes that Paratext ACCEPTED with the changes that Paratext REJECTED';
+const OUTCOME_USED_OTHER = 'Used the other change instead of the current text.';
+const OUTCOME_COMBINED = 'Combined both changes.';
 
 const localizedStrings = {
   '%comment_dateAtTime%': '{date} at {time}',
   '%comment_date_today%': 'today',
   '%comment_date_yesterday%': 'yesterday',
   '%comment_status_resolved%': 'Marked as resolved',
-  '%conflict_note_outcome_replaced%': OUTCOME_REPLACED,
-  '%conflict_note_outcome_merged%': OUTCOME_MERGED,
+  '%conflict_note_outcome_used_other%': OUTCOME_USED_OTHER,
+  '%conflict_note_outcome_combined%': OUTCOME_COMBINED,
 };
 
 const baseComment: LegacyComment = {
@@ -39,7 +37,7 @@ const baseComment: LegacyComment = {
   verseRef: 'GEN 1:1',
 };
 
-test("renders the 'replaced' outcome line INSTEAD of the body when conflictResolutionAction is 'replaced'", () => {
+test("renders the 'used the other change' outcome line INSTEAD of the body when conflictResolutionAction is 'replaced'", () => {
   render(
     <CommentItem
       comment={{
@@ -52,23 +50,23 @@ test("renders the 'replaced' outcome line INSTEAD of the body when conflictResol
       localizedStrings={localizedStrings}
     />,
   );
-  expect(screen.getByText(OUTCOME_REPLACED)).toBeInTheDocument();
+  expect(screen.getByText(OUTCOME_USED_OTHER)).toBeInTheDocument();
   expect(screen.queryByText('SHOULD NOT SHOW')).not.toBeInTheDocument();
 });
 
-test("renders the 'merged' outcome line when conflictResolutionAction is 'merged'", () => {
+test("renders the 'combined' outcome line when conflictResolutionAction is 'merged'", () => {
   render(
     <CommentItem
       comment={{ ...baseComment, status: 'Resolved', conflictResolutionAction: 'merged' }}
       localizedStrings={localizedStrings}
     />,
   );
-  expect(screen.getByText(OUTCOME_MERGED)).toBeInTheDocument();
+  expect(screen.getByText(OUTCOME_COMBINED)).toBeInTheDocument();
 });
 
 test('renders the contents body (no outcome line) when conflictResolutionAction is absent', () => {
   render(<CommentItem comment={baseComment} localizedStrings={localizedStrings} />);
   expect(screen.getByText('ORDINARY BODY')).toBeInTheDocument();
-  expect(screen.queryByText(OUTCOME_REPLACED)).not.toBeInTheDocument();
-  expect(screen.queryByText(OUTCOME_MERGED)).not.toBeInTheDocument();
+  expect(screen.queryByText(OUTCOME_USED_OTHER)).not.toBeInTheDocument();
+  expect(screen.queryByText(OUTCOME_COMBINED)).not.toBeInTheDocument();
 });

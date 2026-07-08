@@ -13,8 +13,8 @@ export type ConflictResolution = 'accept' | 'reject' | 'merge';
  * - `'accept'`: resolved by accepting (no text was written); the accepted side stands.
  * - `'reject'`: resolved by rejecting (the rejected side was written into the verse).
  * - `'merged'`: a PT9 three-way merge (only possible in data synced from PT9; PT10 never produces
- *   it). The card shows the merged verse text (`mergedText`) plus a "combined both changes" outcome
- *   line.
+ *   it). The card shows the merged verse text (`mergedText`); the outcome itself is stated in prose
+ *   by CommentItem's resolution-reply banner, not on the card.
  *
  * Distinct from {@link ConflictResolution} (the live accept/reject choice) because it adds the
  * `'merged'` legacy outcome and is only meaningful for a conflict that is already resolved.
@@ -49,10 +49,6 @@ export const CONFLICT_NOTE_STRING_KEYS: LocalizeKey[] = [
   '%conflict_note_choose_aria_label%',
   '%conflict_note_stale_notice%',
   '%conflict_note_resolve_failed%',
-  // Consumed by CommentItem for a conflict thread's resolution banner (not by ConflictNoteCard):
-  // the outcome line derived from conflictResolutionAction.
-  '%conflict_note_outcome_replaced%',
-  '%conflict_note_outcome_merged%',
   '%conflict_note_choose_prompt%',
   '%conflict_note_option_keep_current%',
   '%conflict_note_option_use_other%',
@@ -62,6 +58,8 @@ export const CONFLICT_NOTE_STRING_KEYS: LocalizeKey[] = [
   '%conflict_note_save_disabled_tooltip%',
   // Tooltip when Save is enabled (the resolution is irreversible).
   '%conflict_note_save_warning%',
+  // Consumed by CommentItem for a conflict thread's resolution banner (not by ConflictNoteCard):
+  // the neutral outcome line derived from conflictResolutionAction.
   '%conflict_note_outcome_used_other%',
   '%conflict_note_outcome_combined%',
 ];
@@ -90,10 +88,9 @@ export interface ConflictNoteCardProps {
   availableActions?: ConflictResolutionOptions;
   /**
    * Which way an already-resolved conflict was resolved. Used ONLY when `availableActions` is
-   * `'none'` (read-only): it makes the Result region show the outcome that was actually applied
-   * ('accept' -> resultText, 'reject' -> rejectedResultText, 'merged' -> mergedText plus a
-   * "combined both changes" outcome line) instead of the live selector state. Ignored while the
-   * conflict is still resolvable.
+   * `'none'` (read-only): it makes the Result region show the text that was actually applied
+   * ('accept' -> resultText, 'reject' -> rejectedResultText, 'merged' -> mergedText) instead of the
+   * live selector state. Ignored while the conflict is still resolvable.
    */
   resolvedResolution?: ConflictResolutionOutcome;
   /** Called when the user clicks Resolve, with the currently selected resolution. */

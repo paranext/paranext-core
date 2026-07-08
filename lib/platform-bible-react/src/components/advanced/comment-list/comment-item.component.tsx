@@ -268,15 +268,17 @@ export function CommentItem({
             )}
             {comment.conflictResolutionAction ? (
               // A conflict thread's resolution comment carries an empty body — PT9 renders its banner
-              // UI-side from conflictResolutionAction, it never stores text. So render the localized
-              // outcome line here instead of the (empty) contents, styled like the italic status
-              // lines above. 'merged' only occurs in PT9-synced data; anything else is a reject.
+              // UI-side from conflictResolutionAction, it never stores text. So render the localized,
+              // neutral outcome line here instead of the (empty) contents, styled like the italic
+              // status lines above. These are the same neutral keys ConflictNoteCard's Result region
+              // used to render inline; this banner is now the only place the outcome is stated in
+              // prose. 'merged' only occurs in PT9-synced data; anything else is a reject.
               <div className="tw:text-sm tw:italic">
                 {comment.conflictResolutionAction === 'merged'
-                  ? (localizedStrings['%conflict_note_outcome_merged%'] ??
-                    'Merged the changes that Paratext ACCEPTED with the changes that Paratext REJECTED')
-                  : (localizedStrings['%conflict_note_outcome_replaced%'] ??
-                    'Replaced the changes that Paratext ACCEPTED with the changes that Paratext REJECTED')}
+                  ? (localizedStrings['%conflict_note_outcome_combined%'] ??
+                    'Combined both changes.')
+                  : (localizedStrings['%conflict_note_outcome_used_other%'] ??
+                    'Used the other change instead of the current text.')}
               </div>
             ) : (
               <div

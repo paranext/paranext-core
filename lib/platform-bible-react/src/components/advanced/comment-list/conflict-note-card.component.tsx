@@ -63,9 +63,10 @@ function DiffHtml({ html, className }: { html: string; className?: string }) {
  * semantics (a labelled radio group with role=radio / aria-checked and arrow-key navigation) via a
  * visually-hidden radio inside each card. A Save-and-resolve button commits the choice. Handles the
  * stale state (accept stays enabled and selected; reject is disabled and carries a read-only
- * explanation; Save stays present but disabled) and the already-resolved read-only state (the
- * chosen outcome's text plus a derived outcome line). Falls back to rendering the raw note contents
- * for any non-verseText conflict.
+ * explanation; Save stays present but disabled) and the already-resolved read-only state (just the
+ * chosen outcome's Result text — the outcome itself is stated in prose by CommentItem's
+ * resolution-reply banner). Falls back to rendering the raw note contents for any non-verseText
+ * conflict.
  */
 export function ConflictNoteCard({
   comment,
@@ -166,36 +167,18 @@ export function ConflictNoteCard({
     : (localizedStrings['%conflict_note_save_warning%'] ?? "This can't be undone.");
 
   // For an already-resolved conflict shown read-only (availableActions === 'none'), collapse to the
-  // outcome that was actually applied plus a derived outcome line. Defaults to 'accept' (keep the
-  // current text, no outcome line) when the resolution is unknown.
-  const renderResolvedOutcome = () => {
+  // Result text that was actually applied. Defaults to 'accept' (keep the current text) when the
+  // resolution is unknown. The outcome itself is stated in prose by CommentItem's resolution-reply
+  // banner, not here — this only shows the resulting text.
+  const renderResolvedResult = () => {
     const outcome: ConflictResolutionOutcome = resolvedResolution ?? 'accept';
-    if (outcome === 'merged') {
-      return (
-        <div className="tw:flex tw:flex-col tw:gap-1">
-          <DiffHtml html={sanitizedMerged} />
-          <p className="tw:text-muted-foreground">
-            {localizedStrings['%conflict_note_outcome_combined%'] ?? 'Combined both changes.'}
-          </p>
-        </div>
-      );
-    }
+    if (outcome === 'merged') return <DiffHtml html={sanitizedMerged} />;
     if (outcome === 'reject') {
       return (
-        <div className="tw:flex tw:flex-col tw:gap-1">
-          <p className="tw:whitespace-pre-wrap tw:text-foreground">{comment.rejectedResultText}</p>
-          <p className="tw:text-muted-foreground">
-            {localizedStrings['%conflict_note_outcome_used_other%'] ??
-              'Used the other change instead of the current text.'}
-          </p>
-        </div>
+        <p className="tw:whitespace-pre-wrap tw:text-foreground">{comment.rejectedResultText}</p>
       );
     }
-    return (
-      <div className="tw:flex tw:flex-col tw:gap-1">
-        <p className="tw:whitespace-pre-wrap tw:text-foreground">{comment.resultText}</p>
-      </div>
-    );
+    return <p className="tw:whitespace-pre-wrap tw:text-foreground">{comment.resultText}</p>;
   };
 
   const renderOptionCard = (option: ConflictOption) => {
@@ -260,7 +243,7 @@ export function ConflictNoteCard({
       </p>
 
       {isReadOnly ? (
-        renderResolvedOutcome()
+        renderResolvedResult()
       ) : (
         <>
           <p>

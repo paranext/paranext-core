@@ -42,10 +42,8 @@ const localizedStrings: LanguageStrings = {
   '%conflict_note_resolve%': 'Resolve',
   '%conflict_note_stale_notice%':
     'The verse has been edited since this conflict was recorded, so rejecting is no longer available. Accept keeps the current text.',
-  '%conflict_note_outcome_replaced%':
-    'Replaced the changes that Paratext ACCEPTED with the changes that Paratext REJECTED',
-  '%conflict_note_outcome_merged%':
-    'Merged the changes that Paratext ACCEPTED with the changes that Paratext REJECTED',
+  '%conflict_note_outcome_used_other%': 'Used the other change instead of the current text.',
+  '%conflict_note_outcome_combined%': 'Combined both changes.',
 };
 
 const CURRENT_USER = 'Current User';
@@ -378,7 +376,7 @@ export const CompleteConflictThread: Story = {
  * The same thread already Resolved by REJECT, including the pre-existing resolution reply (which
  * carries conflictResolutionAction: 'replaced'). The ConflictNoteCard renders read-only (selector
  * and Resolve button hidden) and its Result shows the rejected side ("village"), while the
- * resolution reply renders the localized outcome line ("Replaced the changes...") instead of an
+ * resolution reply renders the localized outcome line ("Used the other change...") instead of an
  * empty body. The full discussion stays visible.
  */
 export const ResolvedConflictThread: Story = {

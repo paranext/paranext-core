@@ -33,10 +33,8 @@ const commentListLocalizedStrings: LanguageStrings = {
   '%conflict_note_resolve%': 'Resolve',
   '%conflict_note_stale_notice%':
     'The verse has been edited since this conflict was recorded, so rejecting is no longer available. Accept keeps the current text.',
-  '%conflict_note_outcome_replaced%':
-    'Replaced the changes that Paratext ACCEPTED with the changes that Paratext REJECTED',
-  '%conflict_note_outcome_merged%':
-    'Merged the changes that Paratext ACCEPTED with the changes that Paratext REJECTED',
+  '%conflict_note_outcome_used_other%': 'Used the other change instead of the current text.',
+  '%conflict_note_outcome_combined%': 'Combined both changes.',
 };
 
 const mockAssignableUsers: string[] = ['', 'Team', 'Alice', 'Bob', 'Charlie', 'Current User'];
