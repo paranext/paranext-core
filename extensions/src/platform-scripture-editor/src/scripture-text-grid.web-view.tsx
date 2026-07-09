@@ -2,7 +2,7 @@ import type { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
 import { useLocalizedStrings, useProjectDataProvider } from '@papi/frontend/react';
 import { LocalizeKey } from 'platform-bible-utils';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { selectScriptureTextGridTitle } from './scripture-text-grid.utils';
 import { ScriptureTextGrid } from './scripture-text-grid/scripture-text-grid.component';
 import { GridResource } from './scripture-text-grid/resource-cell.component';
@@ -70,28 +70,33 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   );
   // #endregion
 
-  const [displayedCellCount, setDisplayedCellCount] = useState(0);
+  // Count-driven tab title, flipping to "Text Collection" at 2+ shown cells and "Scripture text"
+  // otherwise. `ScriptureTextGrid` always renders exactly `resources.length` cells, so the count is
+  // read straight from `resources` here — no round-trip through a child callback. `undefined` while
+  // localization loads so we never flash a raw key into the tab or the grid's accessible name.
+  const title = useMemo(
+    () =>
+      isLoadingLocalizedStrings
+        ? undefined
+        : selectScriptureTextGridTitle(resources.length, {
+            single: localizedStrings[TITLE_SINGLE_KEY],
+            multiple: localizedStrings[TITLE_MULTIPLE_KEY],
+          }),
+    [isLoadingLocalizedStrings, localizedStrings, resources.length],
+  );
 
-  // Dynamic tab title: flips to "Text Collection" at 2+ displayed cells, "Scripture text" otherwise.
   useEffect(() => {
-    // Wait for localization so we never flash a raw key into the tab. `useLocalizedStrings` returns
-    // the key itself while loading, so gate on `isLoading` (a truthiness check couldn't detect that).
-    if (isLoadingLocalizedStrings) return;
-    updateWebViewDefinition({
-      title: selectScriptureTextGridTitle(displayedCellCount, {
-        single: localizedStrings[TITLE_SINGLE_KEY],
-        multiple: localizedStrings[TITLE_MULTIPLE_KEY],
-      }),
-    });
-  }, [displayedCellCount, isLoadingLocalizedStrings, localizedStrings, updateWebViewDefinition]);
+    if (title === undefined) return;
+    updateWebViewDefinition({ title });
+  }, [title, updateWebViewDefinition]);
 
   return (
     <div className="tw:flex tw:h-screen tw:flex-col">
       <ScriptureTextGrid
+        ariaLabel={title}
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
-        onDisplayedCountChange={setDisplayedCellCount}
       />
     </div>
   );

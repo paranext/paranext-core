@@ -18,7 +18,7 @@ import { waitForAppReady } from '../../fixtures/helpers';
 import { closeAllNonHomeDockTabs, openEnhancedResource } from './test-helpers';
 
 const SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE = 'platformScriptureEditor.scriptureTextGrid';
-const SCRIPTURE_TEXT_TAB_TITLE = /^Scripture Text$/;
+const SCRIPTURE_TEXT_TAB_TITLE = /^Scripture text$/;
 
 test.describe('Scripture Text Grid (A1 scaffold)', () => {
   test.beforeEach(async ({ mainPage }) => {
@@ -179,7 +179,7 @@ test.describe('Scripture Text Grid renderer (A4)', () => {
     await expect(tab).toBeVisible({ timeout: 15_000 });
 
     // Web-view content lives in an iframe titled with the (single-cell) grid tab title.
-    const frame = mainPage.frameLocator('iframe[title="Scripture Text"]');
+    const frame = mainPage.frameLocator('iframe[title="Scripture text"]');
     // The row structure renders...
     await expect(frame.locator('[role="grid"]')).toBeVisible({ timeout: 15_000 });
     // ...with at least one cell (ready or offline — never a blank pane): non-negotiable #1.

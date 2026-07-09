@@ -41,17 +41,16 @@ describe('ScriptureTextGrid', () => {
     expect(screen.getByText('WEB@3')).toBeInTheDocument();
     expect(screen.getByText('KJV@3')).toBeInTheDocument();
   });
-  it('reports the displayed count for the dynamic title', () => {
-    const onCount = vi.fn();
+  it('names the grid region with the provided accessible label', () => {
     render(
       <ScriptureTextGrid
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
-        onDisplayedCountChange={onCount}
+        ariaLabel="Text Collection"
       />,
     );
-    expect(onCount).toHaveBeenCalledWith(3);
+    expect(screen.getByRole('grid', { name: 'Text Collection' })).toBeInTheDocument();
   });
   it('has grid and row roles', () => {
     render(<ScriptureTextGrid resources={resources} scrRef={scrRef} setScrRef={setScrRef} />);

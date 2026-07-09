@@ -40,13 +40,12 @@ vi.mock('./use-text-collection-sources.hook', () => ({
 vi.mock('./scripture-text-grid/scripture-text-grid.component', () => ({
   ScriptureTextGrid: ({
     resources,
-    onDisplayedCountChange,
+    ariaLabel,
   }: {
     resources: { label: string }[];
-    onDisplayedCountChange?: (n: number) => void;
+    ariaLabel?: string;
   }) => {
-    gridSpy({ resources, onDisplayedCountChange });
-    onDisplayedCountChange?.(resources.length);
+    gridSpy({ resources, ariaLabel });
     return <div data-testid="grid">{resources.map((r) => r.label).join(',')}</div>;
   },
 }));
