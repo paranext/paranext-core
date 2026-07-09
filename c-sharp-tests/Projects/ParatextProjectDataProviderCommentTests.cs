@@ -2593,7 +2593,7 @@ namespace TestParanextDataProvider.Projects
             var vref = new VerseRef("MAT", "2", "1", _scrText.Settings.Versification);
 
             _provider.ResolveConflict(thread.Id, "reject");
-            _provider.UnresolveConflict(thread.Id);
+            _provider.UnresolveConflict(thread.Id, "Resolution undone.");
 
             // Verse restored to the winner byte-for-byte (a stray/partial write can't slip through).
             string after = _scrText.GetText(vref, true, true);
@@ -2617,7 +2617,7 @@ namespace TestParanextDataProvider.Projects
             var vref = new VerseRef("MAT", "2", "1", _scrText.Settings.Versification);
 
             _provider.ResolveConflict(thread.Id, "accept");
-            _provider.UnresolveConflict(thread.Id);
+            _provider.UnresolveConflict(thread.Id, "Resolution undone.");
 
             Assert.That(_scrText.GetText(vref, true, true), Is.EqualTo(expectedWinner));
             Assert.That(ReloadThread(thread.Id).Status, Is.Not.EqualTo(NoteStatus.Resolved));
@@ -2646,7 +2646,7 @@ namespace TestParanextDataProvider.Projects
             );
 
             Assert.That(
-                () => _provider.UnresolveConflict(thread.Id),
+                () => _provider.UnresolveConflict(thread.Id, "Resolution undone."),
                 Throws
                     .TypeOf<InvalidOperationException>()
                     .With.Message.Contains("changed since it was resolved")
@@ -2661,8 +2661,26 @@ namespace TestParanextDataProvider.Projects
             // Nothing to undo on a conflict that was never resolved.
             CommentThread thread = SeedVerseTextConflict();
             Assert.That(
-                () => _provider.UnresolveConflict(thread.Id),
+                () => _provider.UnresolveConflict(thread.Id, "Resolution undone."),
                 Throws.TypeOf<InvalidOperationException>().With.Message.Contains("not resolved")
+            );
+        }
+
+        [Test]
+        public void UnresolveConflict_AppendsSuppliedAuditText_AndKeepsResolutionComment()
+        {
+            CommentThread thread = SeedVerseTextConflict();
+            _provider.ResolveConflict(thread.Id, "reject");
+
+            _provider.UnresolveConflict(thread.Id, "Resolution undone.");
+
+            PlatformCommentThreadWrapper reloaded = ReloadThread(thread.Id);
+            // The reopening (last) comment carries the supplied text...
+            Assert.That(reloaded.Comments.Last().ContentsHtml, Does.Contain("Resolution undone."));
+            // ...and the original 'replaced' resolution comment is retained, not deleted.
+            Assert.That(
+                reloaded.Comments.Any(c => c.ConflictResolutionAction == "replaced"),
+                Is.True
             );
         }
 

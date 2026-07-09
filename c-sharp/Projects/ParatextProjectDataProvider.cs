@@ -836,10 +836,13 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// write the loser/merged side). The undo is refused by <see cref="ConflictVerseMatches"/> when the
     /// verse was edited after resolution, so a later edit is never clobbered.
     /// </remarks>
+    /// <param name="threadId">The conflict thread to undo the resolution of.</param>
+    /// <param name="undoneCommentText">The already-localized audit text to write on the reopening
+    /// comment (the caller/frontend supplies it localized).</param>
     /// <exception cref="InvalidDataException">The thread doesn't exist or has no comments.</exception>
     /// <exception cref="InvalidOperationException">Not a verseText conflict, the thread is not resolved,
     /// the user lacks permission, or the verse was edited since it was resolved (stale).</exception>
-    public void UnresolveConflict(string threadId)
+    public void UnresolveConflict(string threadId, string undoneCommentText)
     {
         bool restoredVerse;
         // Same lock as ResolveConflict: the not-resolved guard must be atomic with the verse write and
@@ -875,7 +878,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             // Re-open the note and append an audit comment. We deliberately KEEP the resolution comment
             // (it may already be synced to teammates) and append rather than delete; the Todo status on
             // the new comment flips the thread back to unresolved (same mechanism as reply-reopen).
-            ReopenConflictWithAuditComment(thread);
+            ReopenConflictWithAuditComment(thread, undoneCommentText);
         }
 
         // Refresh the comment list always; refresh Scripture-text subscribers only when the verse was
@@ -1036,21 +1039,21 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     }
 
     /// <summary>
-    /// SPIKE (PT-4141): re-opens the conflict note and appends an audit comment recording the undo.
-    /// The Todo status on the new comment flips the thread back to unresolved (same mechanism as
-    /// reply-reopen); the original resolution comment is intentionally kept, not deleted.
+    /// Re-opens the conflict note and appends an audit comment recording the undo. The Todo status
+    /// on the new comment flips the thread back to unresolved (same mechanism as reply-reopen); the
+    /// original resolution comment is intentionally kept, not deleted.
     /// </summary>
-    private void ReopenConflictWithAuditComment(CommentThread thread)
+    /// <param name="undoneCommentText">The already-localized audit text to write on the reopening
+    /// comment, supplied by the caller (frontend). Escaped before being written so a stray
+    /// <c>&lt;</c>/<c>&amp;</c> can't corrupt the note XML.</param>
+    private void ReopenConflictWithAuditComment(CommentThread thread, string undoneCommentText)
     {
         Comment auditComment = thread.AddNewComment();
         auditComment.Status = NoteStatus.Todo;
         auditComment.ConflictResolutionAction = NoteConflictResolutions.None;
-        // ponytail: hard-coded English audit text for the spike; productionization localizes this.
-        var contentsDoc = new XmlDocument();
-        contentsDoc.LoadXml(
-            "<Contents>Conflict resolution undone; the conflict has been re-opened.</Contents>"
+        auditComment.SetContentsFromHtml(
+            $"<p>{System.Security.SecurityElement.Escape(undoneCommentText)}</p>"
         );
-        auditComment.Contents = contentsDoc.DocumentElement;
         _commentManager.Value.AddComment(auditComment);
         _commentManager.Value.SaveUser(auditComment.User, false);
         ThreadStatus.MarkThreadRead(thread);
