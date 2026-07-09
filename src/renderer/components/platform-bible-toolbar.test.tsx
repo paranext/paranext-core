@@ -95,7 +95,7 @@ vi.mock('@renderer/services/theme.service-host', () => ({
 
 vi.mock('@renderer/services/scroll-group.service-host', () => ({
   availableScrollGroupIds: [1, 2, 3, 4, 5],
-  getReferenceHistorySync: vi.fn(() => ({ back: [], forward: [] })),
+  getReferenceHistorySync: vi.fn(() => ({ current: undefined, back: [], forward: [] })),
   navigateReferenceHistorySync: vi.fn(() => false),
   onDidChangeReferenceHistory: vi.fn(() => vi.fn()),
 }));

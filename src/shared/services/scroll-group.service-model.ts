@@ -88,9 +88,11 @@ export type ReferenceHistoryEntry = {
  * @experimental
  */
 export type ReferenceHistory = {
-  /** Back stack. Index 0 is the CURRENT location; index 1 is one step back */
+  /** The current location, or `undefined` when nothing has been recorded yet */
+  current: ReferenceHistoryEntry | undefined;
+  /** Entries strictly behind the current location, nearest first (offsets -1, -2, ...) */
   back: ReferenceHistoryEntry[];
-  /** Forward stack. Index 0 is one step forward */
+  /** Entries strictly ahead of the current location, nearest first (offsets +1, +2, ...) */
   forward: ReferenceHistoryEntry[];
 };
 

@@ -260,7 +260,7 @@ export function navigateReferenceHistorySync(
   const history = getOrCreateReferenceHistory(groupId);
   // `navigateHistory` mutates the stacks before `setScrRefSync` runs. Safe for the verse position:
   // adjacent entries always differ in book+chapter, so a single-step move is never a no-op and the
-  // stored ref ends up matching back[0]. CAVEAT: a multi-step jump can land on a NON-adjacent entry
+  // stored ref ends up matching `current`. CAVEAT: a multi-step jump can land on a NON-adjacent entry
   // with the same book/chapter/verse but a different `sourceProjectId` (e.g. a sourceless
   // duplicate); setScrRefSync's no-op guard then returns without rewriting the stored source frame,
   // so it can briefly lag this entry's. Low impact — no onDidUpdateScrRef emit, self-heals on the

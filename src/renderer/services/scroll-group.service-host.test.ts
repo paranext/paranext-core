@@ -321,9 +321,12 @@ describe('reference history integration', () => {
     const host = await import('@renderer/services/scroll-group.service-host');
     host.setScrRefSync(1, { book: 'MRK', chapterNum: 4, verseNum: 1 });
     const history = host.getReferenceHistorySync(1);
-    // Seeded with the group's starting ref (default GEN 1:1), then MRK 4 pushed on top
+    // Seeded with the group's starting ref (default GEN 1:1); MRK 4 is now current, GEN 1:1 is back
+    expect(history.current).toEqual({
+      scrRef: { book: 'MRK', chapterNum: 4, verseNum: 1 },
+      sourceProjectId: undefined,
+    });
     expect(history.back).toEqual([
-      { scrRef: { book: 'MRK', chapterNum: 4, verseNum: 1 }, sourceProjectId: undefined },
       { scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 }, sourceProjectId: undefined },
     ]);
     expect(history.forward).toEqual([]);
@@ -336,9 +339,11 @@ describe('reference history integration', () => {
     expect(didNavigate).toBe(true);
     expect(host.getScrRefSync(1)).toEqual({ book: 'GEN', chapterNum: 1, verseNum: 1 });
     const history = host.getReferenceHistorySync(1);
-    expect(history.back).toEqual([
-      { scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 }, sourceProjectId: undefined },
-    ]);
+    expect(history.current).toEqual({
+      scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+      sourceProjectId: undefined,
+    });
+    expect(history.back).toEqual([]);
     expect(history.forward).toEqual([
       { scrRef: { book: 'MRK', chapterNum: 4, verseNum: 1 }, sourceProjectId: undefined },
     ]);
@@ -354,9 +359,9 @@ describe('reference history integration', () => {
     const host = await import('@renderer/services/scroll-group.service-host');
     host.setScrRefSync(1, { book: 'MRK', chapterNum: 4, verseNum: 1 });
     host.setScrRefSync(2, { book: 'LUK', chapterNum: 2, verseNum: 1 });
-    expect(host.getReferenceHistorySync(1).back[0].scrRef.book).toBe('MRK');
-    expect(host.getReferenceHistorySync(2).back[0].scrRef.book).toBe('LUK');
-    expect(host.getReferenceHistorySync(1).back).toHaveLength(2);
+    expect(host.getReferenceHistorySync(1).current?.scrRef.book).toBe('MRK');
+    expect(host.getReferenceHistorySync(2).current?.scrRef.book).toBe('LUK');
+    expect(host.getReferenceHistorySync(1).back).toHaveLength(1);
   });
 
   it('getReferenceHistorySync returns copies, not live state', async () => {
@@ -364,7 +369,7 @@ describe('reference history integration', () => {
     host.setScrRefSync(1, { book: 'MRK', chapterNum: 4, verseNum: 1 });
     const history = host.getReferenceHistorySync(1);
     history.back.length = 0;
-    expect(host.getReferenceHistorySync(1).back).toHaveLength(2);
+    expect(host.getReferenceHistorySync(1).back).toHaveLength(1);
   });
 
   it('emits the reference-history-changed event on record and on navigation', async () => {
@@ -376,10 +381,11 @@ describe('reference history integration', () => {
     expect(emit).toHaveBeenLastCalledWith({
       scrollGroupId: 1,
       history: {
-        back: [
-          { scrRef: { book: 'MRK', chapterNum: 4, verseNum: 1 }, sourceProjectId: undefined },
-          { scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 }, sourceProjectId: undefined },
-        ],
+        current: {
+          scrRef: { book: 'MRK', chapterNum: 4, verseNum: 1 },
+          sourceProjectId: undefined,
+        },
+        back: [{ scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 }, sourceProjectId: undefined }],
         forward: [],
       },
     });
@@ -389,7 +395,11 @@ describe('reference history integration', () => {
     expect(emit).toHaveBeenLastCalledWith({
       scrollGroupId: 1,
       history: {
-        back: [{ scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 }, sourceProjectId: undefined }],
+        current: {
+          scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+          sourceProjectId: undefined,
+        },
+        back: [],
         forward: [
           { scrRef: { book: 'MRK', chapterNum: 4, verseNum: 1 }, sourceProjectId: undefined },
         ],

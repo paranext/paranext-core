@@ -57,7 +57,7 @@ export function ReferenceHistoryButtons({ scrollGroupId }: ReferenceHistoryButto
   // thread them through to these labels too.
   const backItems: NavigationHistoryItem[] = useMemo(
     () =>
-      history.back.slice(1).map((entry, i) => ({
+      history.back.map((entry, i) => ({
         label: formatScrRef(entry.scrRef, 'English'),
         offset: -(i + 1),
       })),
@@ -81,7 +81,7 @@ export function ReferenceHistoryButtons({ scrollGroupId }: ReferenceHistoryButto
 
   return (
     <NavigationHistoryButtons
-      canGoBack={history.back.length > 1}
+      canGoBack={history.back.length > 0}
       canGoForward={history.forward.length > 0}
       backItems={backItems}
       forwardItems={forwardItems}

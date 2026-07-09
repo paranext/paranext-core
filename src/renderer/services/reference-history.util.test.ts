@@ -22,21 +22,24 @@ function historyOf(...entries: ReferenceHistoryEntry[]): ReferenceHistory {
 }
 
 describe('recordNavigation', () => {
-  test('first record seeds the back stack', () => {
+  test('first record becomes the current location with empty stacks', () => {
     const history = createEmptyReferenceHistory();
     recordNavigation(history, entry('GEN', 1));
-    expect(history.back).toEqual([entry('GEN', 1)]);
+    expect(history.current).toEqual(entry('GEN', 1));
+    expect(history.back).toEqual([]);
     expect(history.forward).toEqual([]);
   });
 
-  test('new chapter pushes a new entry with previous location retained', () => {
+  test('new chapter pushes the previous location onto the back stack', () => {
     const history = historyOf(entry('GEN', 1), entry('GEN', 2));
-    expect(history.back).toEqual([entry('GEN', 2), entry('GEN', 1)]);
+    expect(history.current).toEqual(entry('GEN', 2));
+    expect(history.back).toEqual([entry('GEN', 1)]);
   });
 
-  test('same book and chapter replaces the top entry in place (verse-only move)', () => {
+  test('same book and chapter replaces the current entry in place (verse-only move)', () => {
     const history = historyOf(entry('GEN', 1, 1), entry('GEN', 2, 1), entry('GEN', 2, 15));
-    expect(history.back).toEqual([entry('GEN', 2, 15), entry('GEN', 1, 1)]);
+    expect(history.current).toEqual(entry('GEN', 2, 15));
+    expect(history.back).toEqual([entry('GEN', 1, 1)]);
   });
 
   test('same-chapter replace preserves the forward stack', () => {
@@ -44,18 +47,19 @@ describe('recordNavigation', () => {
     navigateHistory(history, -1); // back to GEN 1; forward now has GEN 2
     recordNavigation(history, entry('GEN', 1, 20)); // verse move within GEN 1
     expect(history.forward).toEqual([entry('GEN', 2)]);
-    expect(history.back[0]).toEqual(entry('GEN', 1, 20));
+    expect(history.current).toEqual(entry('GEN', 1, 20));
   });
 
   test('a genuinely new entry clears the forward stack', () => {
     const history = historyOf(entry('GEN', 1), entry('GEN', 2));
-    navigateHistory(history, -1); // forward = [GEN 2]
+    navigateHistory(history, -1); // current GEN 1, forward = [GEN 2]
     recordNavigation(history, entry('EXO', 5));
     expect(history.forward).toEqual([]);
-    expect(history.back).toEqual([entry('EXO', 5), entry('GEN', 1)]);
+    expect(history.current).toEqual(entry('EXO', 5));
+    expect(history.back).toEqual([entry('GEN', 1)]);
   });
 
-  test('caps runs of the same book: with 4 same-book entries on top, index 3 is removed', () => {
+  test('caps runs of the same book: with 4 same-book entries at the top, the oldest is removed', () => {
     const history = historyOf(
       entry('MAT', 1),
       entry('MRK', 1),
@@ -63,11 +67,11 @@ describe('recordNavigation', () => {
       entry('MRK', 3),
       entry('MRK', 4),
     );
-    // back = [MRK 4, MRK 3, MRK 2, MRK 1, MAT 1] — top 4 all MRK, incoming MRK
+    // current = MRK 4, back = [MRK 3, MRK 2, MRK 1, MAT 1] — current + top 3 back all MRK, incoming MRK
     recordNavigation(history, entry('MRK', 5));
-    // MRK 1 (index 3 before insert) removed, then MRK 5 inserted
+    // MRK 4 becomes back[0]; the run MRK 4..MRK 1 exceeds the cap, so MRK 1 is dropped
+    expect(history.current).toEqual(entry('MRK', 5));
     expect(history.back).toEqual([
-      entry('MRK', 5),
       entry('MRK', 4),
       entry('MRK', 3),
       entry('MRK', 2),
@@ -75,24 +79,27 @@ describe('recordNavigation', () => {
     ]);
   });
 
-  test('back stack is trimmed to max depth', () => {
+  test('back stack is trimmed so the total stays within max depth', () => {
     const history = createEmptyReferenceHistory();
     // Alternate books so neither same-chapter replace nor same-book-run trim kicks in
     for (let i = 1; i <= REFERENCE_HISTORY_MAX_DEPTH + 5; i += 1) {
       recordNavigation(history, entry(i % 2 === 0 ? 'GEN' : 'EXO', i));
     }
-    expect(history.back.length).toBe(REFERENCE_HISTORY_MAX_DEPTH);
-    expect(history.back[0]).toEqual(entry('EXO', REFERENCE_HISTORY_MAX_DEPTH + 5));
-    expect(history.back[REFERENCE_HISTORY_MAX_DEPTH - 1]).toEqual(entry('GEN', 6));
+    // The current location plus the back stack must not exceed REFERENCE_HISTORY_MAX_DEPTH total.
+    expect(history.current).toEqual(entry('EXO', REFERENCE_HISTORY_MAX_DEPTH + 5));
+    expect(history.back.length).toBe(REFERENCE_HISTORY_MAX_DEPTH - 1);
+    expect(history.back[0]).toEqual(entry('GEN', REFERENCE_HISTORY_MAX_DEPTH + 4));
+    expect(history.back[REFERENCE_HISTORY_MAX_DEPTH - 2]).toEqual(entry('GEN', 6));
   });
 });
 
 describe('navigateHistory', () => {
-  test('back one step moves current to forward and returns the previous entry', () => {
+  test('back one step moves the current onto forward and returns the previous entry', () => {
     const history = historyOf(entry('GEN', 1), entry('GEN', 2), entry('EXO', 3));
     const destination = navigateHistory(history, -1);
     expect(destination).toEqual(entry('GEN', 2));
-    expect(history.back).toEqual([entry('GEN', 2), entry('GEN', 1)]);
+    expect(history.current).toEqual(entry('GEN', 2));
+    expect(history.back).toEqual([entry('GEN', 1)]);
     expect(history.forward).toEqual([entry('EXO', 3)]);
   });
 
@@ -100,7 +107,8 @@ describe('navigateHistory', () => {
     const history = historyOf(entry('GEN', 1), entry('GEN', 2), entry('EXO', 3), entry('LEV', 4));
     const destination = navigateHistory(history, -3);
     expect(destination).toEqual(entry('GEN', 1));
-    expect(history.back).toEqual([entry('GEN', 1)]);
+    expect(history.current).toEqual(entry('GEN', 1));
+    expect(history.back).toEqual([]);
     expect(history.forward).toEqual([entry('GEN', 2), entry('EXO', 3), entry('LEV', 4)]);
   });
 
@@ -109,16 +117,18 @@ describe('navigateHistory', () => {
     navigateHistory(history, -1);
     const destination = navigateHistory(history, 1);
     expect(destination).toEqual(entry('GEN', 2));
-    expect(history.back).toEqual([entry('GEN', 2), entry('GEN', 1)]);
+    expect(history.current).toEqual(entry('GEN', 2));
+    expect(history.back).toEqual([entry('GEN', 1)]);
     expect(history.forward).toEqual([]);
   });
 
   test('multi-step forward lands on the target and re-stacks intervening entries', () => {
     const history = historyOf(entry('GEN', 1), entry('GEN', 2), entry('EXO', 3), entry('LEV', 4));
-    navigateHistory(history, -3); // back = [GEN 1], forward = [GEN 2, EXO 3, LEV 4]
+    navigateHistory(history, -3); // current GEN 1, back = [], forward = [GEN 2, EXO 3, LEV 4]
     const destination = navigateHistory(history, 2);
     expect(destination).toEqual(entry('EXO', 3));
-    expect(history.back).toEqual([entry('EXO', 3), entry('GEN', 2), entry('GEN', 1)]);
+    expect(history.current).toEqual(entry('EXO', 3));
+    expect(history.back).toEqual([entry('GEN', 2), entry('GEN', 1)]);
     expect(history.forward).toEqual([entry('LEV', 4)]);
   });
 
@@ -128,13 +138,20 @@ describe('navigateHistory', () => {
     expect(navigateHistory(history, 1)).toBeUndefined(); // no forward
     expect(navigateHistory(history, 0)).toBeUndefined();
     expect(navigateHistory(history, 1.5)).toBeUndefined();
-    expect(history.back).toEqual([entry('GEN', 2), entry('GEN', 1)]);
+    expect(history.current).toEqual(entry('GEN', 2));
+    expect(history.back).toEqual([entry('GEN', 1)]);
     expect(history.forward).toEqual([]);
   });
 
-  test('back requires at least 2 back entries (top is the current location)', () => {
+  test('back requires at least one back entry', () => {
     const history = historyOf(entry('GEN', 1));
     expect(navigateHistory(history, -1)).toBeUndefined();
+  });
+
+  test('navigating an empty (unseeded) history returns undefined', () => {
+    const history = createEmptyReferenceHistory();
+    expect(navigateHistory(history, -1)).toBeUndefined();
+    expect(navigateHistory(history, 1)).toBeUndefined();
   });
 
   test('sourceProjectId survives a back/forward round trip', () => {
