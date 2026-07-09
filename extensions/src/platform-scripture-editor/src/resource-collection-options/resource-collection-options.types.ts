@@ -1,24 +1,40 @@
 import type { ViewOptionsTextEntry } from '../scripture-text-grid-contents.utils';
 
-// Re-exported so consumers (this component's tests, the share-layout dialog on another branch) get
-// the row type from one place. `ViewOptionsTextEntry` (from the View Options data layer) carries
+// Re-exported so consumers (this component's tests, a dialog that reuses the component) get the row
+// type from one place. `ViewOptionsTextEntry` (from the View Options data layer) already carries
 // `isUserRemovable` — the hover-✕ display gate (true only for genuine user rows) — so no wrapper
 // type is needed.
 export type { ViewOptionsTextEntry };
 
-/** The grid's display mode. `'chapter'` rendering is built separately, later. */
+/** The display mode. `'chapter'` rendering is added by a later subtask. */
 export type ResourceCollectionViewMode = 'verse' | 'chapter';
 
-/** Localization keys used by `ResourceCollectionOptions`. */
+/**
+ * Localization keys this component reads, keyed by role. This is the single source for the key
+ * strings — {@link RESOURCE_COLLECTION_OPTIONS_STRING_KEYS} and the component both reference it, so
+ * they cannot drift (a drift would surface as a raw key rendered in the UI).
+ */
+export const RESOURCE_COLLECTION_OPTIONS_KEYS = {
+  viewHeader: '%webView_scriptureTextGrid_viewOptions_viewHeader%',
+  verse: '%webView_scriptureTextGrid_viewOptions_verse%',
+  chapter: '%webView_scriptureTextGrid_viewOptions_chapter%',
+  comingSoon: '%webView_scriptureTextGrid_viewOptions_comingSoon%',
+  textsHeader: '%webView_scriptureTextGrid_viewOptions_textsHeader%',
+  getResources: '%webView_scriptureTextGrid_viewOptions_getResources%',
+  removeFromList: '%webView_scriptureTextGrid_viewOptions_removeFromList%',
+  installing: '%webView_scriptureTextGrid_viewOptions_installing%',
+} as const;
+
+/** All localization keys this component reads (spread into the host web view's string-key list). */
 export const RESOURCE_COLLECTION_OPTIONS_STRING_KEYS = Object.freeze([
-  '%webView_scriptureTextGrid_viewOptions_viewHeader%',
-  '%webView_scriptureTextGrid_viewOptions_verse%',
-  '%webView_scriptureTextGrid_viewOptions_chapter%',
-  '%webView_scriptureTextGrid_viewOptions_comingSoon%',
-  '%webView_scriptureTextGrid_viewOptions_textsHeader%',
-  '%webView_scriptureTextGrid_viewOptions_getResources%',
-  '%webView_scriptureTextGrid_viewOptions_removeFromList%',
-  '%webView_scriptureTextGrid_viewOptions_installing%',
+  RESOURCE_COLLECTION_OPTIONS_KEYS.viewHeader,
+  RESOURCE_COLLECTION_OPTIONS_KEYS.verse,
+  RESOURCE_COLLECTION_OPTIONS_KEYS.chapter,
+  RESOURCE_COLLECTION_OPTIONS_KEYS.comingSoon,
+  RESOURCE_COLLECTION_OPTIONS_KEYS.textsHeader,
+  RESOURCE_COLLECTION_OPTIONS_KEYS.getResources,
+  RESOURCE_COLLECTION_OPTIONS_KEYS.removeFromList,
+  RESOURCE_COLLECTION_OPTIONS_KEYS.installing,
 ] as const);
 
 export type ResourceCollectionOptionsStringKey =
@@ -31,8 +47,8 @@ export type ResourceCollectionOptionsLocalizedStrings = {
 
 /**
  * Props for the reusable, presentational View Options inner component. Data and callbacks only — no
- * PAPI, popover, or persistence coupling — so both the Scripture Text Grid popover and a separate
- * share-layout dialog can render it. Callers compute the rows (via `getViewOptionsTexts`) and own
+ * PAPI, popover, or persistence coupling — so it can be rendered both inside the Scripture Text
+ * Grid popover and inside a dialog. Callers compute the rows (via `getViewOptionsTexts`) and own
  * persistence.
  */
 export interface ResourceCollectionOptionsProps {
