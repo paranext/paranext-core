@@ -34,6 +34,7 @@ export type ShareLayoutResult = {
 export const SHARE_LAYOUT_DIALOG_STRING_KEYS = Object.freeze([
   '%shareLayoutDialog_title%',
   '%shareLayoutDialog_description%',
+  '%shareLayoutDialog_modelText_label%',
   '%shareLayoutDialog_modelText_none%',
   '%shareLayoutDialog_activeTab_label%',
   '%shareLayoutDialog_activeTab_sublabel%',
@@ -263,10 +264,14 @@ export function ShareLayoutDialogContent({
 
       <div className="tw:flex tw:flex-col tw:gap-4 tw:overflow-y-auto tw:p-4">
         <div className="tw:divide-y tw:divide-border tw:overflow-hidden tw:rounded-xl tw:border tw:bg-muted/30">
-          <div className="tw:px-4 tw:py-3">
+          <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:px-4 tw:py-3">
+            <span>{localizeString(strings, '%shareLayoutDialog_modelText_label%')}</span>
             <Popover open={isModelTextPickerOpen} onOpenChange={setIsModelTextPickerOpen}>
               <PopoverTrigger asChild>
-                <Button variant="outline" className="tw:w-full tw:justify-between tw:font-normal">
+                <Button
+                  variant="outline"
+                  className="tw:w-fit tw:justify-between tw:gap-2 tw:font-normal"
+                >
                   <span className="tw:truncate">
                     {modelText
                       ? formatResourceDisplayName(modelText, allResources)

@@ -517,6 +517,7 @@
   "%shareLayoutDialog_description%": "Revise lo que está por compartir con su equipo antes de confirmar.",
   "%shareLayoutDialog_manageCommentaryResources_label%": "Administrar comentarios del proyecto",
   "%shareLayoutDialog_manageScriptureResources_label%": "Administrar textos bíblicos del proyecto",
+  "%shareLayoutDialog_modelText_label%": "Texto modelo",
   "%shareLayoutDialog_modelText_none%": "Ninguno seleccionado",
   "%shareLayoutDialog_scriptureResources_label%": "Textos bíblicos visibles",
   "%shareLayoutDialog_shownByDefault_label%": "Mostrado de forma predeterminada",

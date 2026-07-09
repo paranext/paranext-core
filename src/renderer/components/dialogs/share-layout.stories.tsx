@@ -12,6 +12,7 @@ const SHARE_LAYOUT_STRINGS: ShareLayoutDialogLocalizedStrings = {
   '%shareLayoutDialog_title%': 'Share Layout with Team',
   '%shareLayoutDialog_description%':
     "Review what you're about to share with your team before confirming.",
+  '%shareLayoutDialog_modelText_label%': 'Model text',
   '%shareLayoutDialog_modelText_none%': 'None selected',
   '%shareLayoutDialog_activeTab_label%': 'Default tab',
   '%shareLayoutDialog_activeTab_sublabel%': 'For Third Column',
