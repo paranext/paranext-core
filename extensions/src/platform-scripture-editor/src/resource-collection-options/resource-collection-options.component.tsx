@@ -43,6 +43,8 @@ export function ResourceCollectionOptions({
   onCheckedChange,
   onRemoveFromList,
   onGetResources,
+  disabled = false,
+  disabledMessage,
   localizedStrings = {},
 }: ResourceCollectionOptionsProps) {
   const handleViewModeChange = (value: string) => {
@@ -58,14 +60,20 @@ export function ResourceCollectionOptions({
         <Label className="tw:flex tw:flex-1 tw:items-center tw:gap-2 tw:font-normal">
           <Checkbox
             checked={row.checked}
+            disabled={disabled}
             onCheckedChange={(checked) => onCheckedChange(id, checked === true)}
           />
-          <span className="tw:flex-1 tw:truncate">{name}</span>
+          {/* `title` carries the untruncated name so long DBL names stay readable in the narrow panel
+              (native tooltip on overflow — same read path as project-selector). */}
+          <span className="tw:flex-1 tw:truncate" title={name}>
+            {name}
+          </span>
         </Label>
         {row.isUserRemovable && (
           <Button
             variant="ghost"
             size="icon-sm"
+            disabled={disabled}
             aria-label={formatReplacementString(
               localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.removeFromList),
               { resourceName: name },
@@ -112,6 +120,9 @@ export function ResourceCollectionOptions({
         <Label className="tw:text-xs tw:font-semibold tw:text-muted-foreground">
           {localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.textsHeader)}
         </Label>
+        {disabled && disabledMessage && (
+          <p className="tw:py-1 tw:text-sm tw:text-muted-foreground tw:italic">{disabledMessage}</p>
+        )}
         {top.map(renderRow)}
         {bottom.map(renderRow)}
         {installingResourceNames.map((name) => (
@@ -127,7 +138,7 @@ export function ResourceCollectionOptions({
         ))}
       </section>
 
-      <Button variant="outline" onClick={onGetResources}>
+      <Button variant="outline" disabled={disabled} onClick={onGetResources}>
         {localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.getResources)}
       </Button>
     </div>

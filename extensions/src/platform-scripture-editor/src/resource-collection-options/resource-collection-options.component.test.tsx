@@ -33,12 +33,12 @@ const STRINGS: Record<string, string> = Object.fromEntries(
   RESOURCE_COLLECTION_OPTIONS_STRING_KEYS.map((key) => [key, key]),
 );
 // Human-readable overrides for the strings the tests assert on.
-STRINGS['%webView_scriptureTextGrid_viewOptions_viewHeader%'] = 'VIEW';
+STRINGS['%webView_scriptureTextGrid_viewOptions_viewHeader%'] = 'View';
 STRINGS['%webView_scriptureTextGrid_viewOptions_verse%'] = 'Verse';
 STRINGS['%webView_scriptureTextGrid_viewOptions_chapter%'] = 'Chapter';
 STRINGS['%webView_scriptureTextGrid_viewOptions_comingSoon%'] = 'Coming soon';
-STRINGS['%webView_scriptureTextGrid_viewOptions_textsHeader%'] = 'TEXTS';
-STRINGS['%webView_scriptureTextGrid_viewOptions_getResources%'] = 'Get Resources';
+STRINGS['%webView_scriptureTextGrid_viewOptions_textsHeader%'] = 'Texts';
+STRINGS['%webView_scriptureTextGrid_viewOptions_getResources%'] = 'Get resources…';
 STRINGS['%webView_scriptureTextGrid_viewOptions_removeFromList%'] =
   'Remove {resourceName} from list';
 STRINGS['%webView_scriptureTextGrid_viewOptions_installing%'] = 'Installing {resourceName}…';
@@ -156,7 +156,37 @@ describe('ResourceCollectionOptions — TEXTS list', () => {
 describe('ResourceCollectionOptions — Get Resources', () => {
   it('fires onGetResources when the button is clicked', () => {
     const props = renderComponent();
-    fireEvent.click(screen.getByRole('button', { name: 'Get Resources' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Get resources…' }));
     expect(props.onGetResources).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ResourceCollectionOptions — disabled (no project/PDP bound)', () => {
+  it('disables Get Resources, checkboxes, and the remove control when disabled', () => {
+    renderComponent({
+      disabled: true,
+      bottom: [row('u1', 'My Text', { isUserRemovable: true })],
+    });
+    expect(screen.getByRole('button', { name: 'Get resources…' })).toBeDisabled();
+    expect(screen.getByRole('checkbox', { name: 'My Text' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Remove My Text from list' })).toBeDisabled();
+  });
+
+  it('shows the disabled message when disabled', () => {
+    renderComponent({ disabled: true, disabledMessage: 'No project selected.' });
+    expect(screen.getByText('No project selected.')).toBeInTheDocument();
+  });
+
+  it('does not show the disabled message when enabled', () => {
+    renderComponent({ disabled: false, disabledMessage: 'No project selected.' });
+    expect(screen.queryByText('No project selected.')).not.toBeInTheDocument();
+  });
+});
+
+describe('ResourceCollectionOptions — truncated names', () => {
+  it('exposes the full name via a title attribute so truncation stays readable', () => {
+    const longName = 'A Very Long Digital Bible Library Resource Display Name';
+    renderComponent({ bottom: [row('u1', longName)] });
+    expect(screen.getByText(longName)).toHaveAttribute('title', longName);
   });
 });

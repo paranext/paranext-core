@@ -102,7 +102,7 @@ test.describe('Scripture Text Grid — View Options panel', () => {
 
     // TEXTS section header and the Get Resources button are always present (the list itself is empty
     // without a bound project).
-    await expect(grid.getByText('TEXTS')).toBeVisible();
-    await expect(grid.getByRole('button', { name: 'Get Resources' })).toBeVisible();
+    await expect(grid.getByText('Texts')).toBeVisible();
+    await expect(grid.getByRole('button', { name: 'Get resources…' })).toBeVisible();
   });
 });

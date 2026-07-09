@@ -73,6 +73,17 @@ export interface ResourceCollectionOptionsProps {
   onRemoveFromList: (resourceId: string) => void;
   /** Called when the Get Resources button is clicked. */
   onGetResources: () => void;
+  /**
+   * When `true`, the panel is not bound to a project/PDP yet, so no action can persist: the
+   * checkboxes, remove (✕) controls, and Get Resources button are disabled. Pair with
+   * `disabledMessage` to explain why the list is empty. Defaults to `false`.
+   */
+  disabled?: boolean;
+  /**
+   * Optional message shown in the TEXTS section while `disabled` (e.g. "No project selected."), so
+   * an empty, non-interactive panel explains itself instead of looking broken.
+   */
+  disabledMessage?: string;
   /** Localized strings; each falls back to its key when absent. */
   localizedStrings?: ResourceCollectionOptionsLocalizedStrings;
 }
