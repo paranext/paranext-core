@@ -2292,7 +2292,7 @@ namespace TestParanextDataProvider.Projects
         [Test]
         public void ResolveConflict_RejectWholeVerseDeletion_AppliesPt9DeletionWritePath()
         {
-            // Characterization (PT-4029 review B1): when the losing side deleted the WHOLE verse
+            // Characterization: when the losing side deleted the WHOLE verse
             // (marker included), reject writes the loser's text = "" via PT9's ReplaceAcceptedText,
             // which we call unmodified. This pins PT9's actual output so a future change to our
             // delegation is caught. It is faithful PT9 behavior: a guard that instead left an empty
@@ -2565,7 +2565,7 @@ namespace TestParanextDataProvider.Projects
         // Like NonAdminDummyScrText, but this team member also lacks Spellings edit permission. On a
         // spelling note CanCurrentUserResolve delegates to CanEdit(Spellings), so this makes
         // VerifyUserCanResolveThread throw while VerifyUserCanAddCommentToThread (non-observer only)
-        // still passes - isolating the resolve/re-open gate for the PT-4107 test.
+        // still passes - isolating the resolve/re-open gate under test.
         private sealed class NoResolvePermissionDummyScrText : DummyScrText
         {
             private readonly PermissionManager _permissions = new NoResolvePermissionManager();
@@ -2675,7 +2675,7 @@ namespace TestParanextDataProvider.Projects
         [Test]
         public void AddCommentToThread_ReplyReopeningResolvedThread_RequiresResolvePermission()
         {
-            // PT-4107: adding a plain comment to a resolved thread implicitly re-opens it, so it must
+            // Adding a plain comment to a resolved thread implicitly re-opens it, so it must
             // clear the SAME gate as an explicit status change - otherwise a user who can comment but
             // not resolve could re-open by replying. Lever: a spelling note, whose CanCurrentUserResolve
             // falls back to CanEdit(Spellings) - false for this non-admin, non-observer team member -
@@ -3047,7 +3047,7 @@ namespace TestParanextDataProvider.Projects
         [Test]
         public void AddCommentToThread_ResolveNonVerseTextConflictViaStatus_StillWorks()
         {
-            // Regression (PT-4029 review): the resolve-via-status guard must fire ONLY for verseText
+            // Regression: the resolve-via-status guard must fire ONLY for verseText
             // conflicts (which must be resolved through ResolveConflict). Other conflict types
             // (invalidVerses, readError, verseBridge, ...) have no ResolveConflict path, so blocking
             // them here left them permanently unresolvable through any API - they must stay resolvable

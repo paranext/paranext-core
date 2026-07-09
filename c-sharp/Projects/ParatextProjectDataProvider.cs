@@ -645,8 +645,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 && hasContents;
 
             // Validate permissions for status changes (resolve/re-open). An implicit re-open - adding a
-            // comment to a resolved thread - must clear the same gate as an explicit status change
-            // (PT-4107); otherwise a user who cannot resolve/re-open could bypass it by replying.
+            // comment to a resolved thread - must clear the same gate as an explicit status change;
+            // otherwise a user who cannot resolve/re-open could bypass it by replying.
             if (
                 comment.Status == NoteStatus.Resolved
                 || comment.Status == NoteStatus.Todo
