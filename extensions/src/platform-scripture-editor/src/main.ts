@@ -879,7 +879,7 @@ const scriptureTextGridWebViewProvider: IWebViewProvider = {
       );
     // A2 seam: the grid is project-bound so it can fire first-open overlay init and (in A3+) select
     // its contents. The PT10 default-layout open passes no projectId (dormant until A3).
-    const projectId = openWebViewOptions?.projectId ?? savedWebView.projectId ?? undefined;
+    const projectId = openWebViewOptions?.projectId ?? savedWebView.projectId;
     return {
       ...savedWebView,
       // Icon-only tab: no visible text label, just the "Text Collection" tooltip (the web view keeps

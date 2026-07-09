@@ -2,12 +2,12 @@ import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { useMemo, useState } from 'react';
 import type { DblResourceReference } from 'platform-scripture';
 import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
-import { ScriptureTextGridOptions } from './scripture-text-grid-options.component';
-import { SCRIPTURE_TEXT_GRID_OPTIONS_STRING_KEYS } from './scripture-text-grid-options.types';
+import { ResourceCollectionOptions } from './resource-collection-options.component';
+import { RESOURCE_COLLECTION_OPTIONS_STRING_KEYS } from './resource-collection-options.types';
 import type {
-  ScriptureTextGridViewMode,
+  ResourceCollectionViewMode,
   ViewOptionsTextEntry,
-} from './scripture-text-grid-options.types';
+} from './resource-collection-options.types';
 
 /**
  * The reusable View Options inner component: a VIEW toggle (Verse / Chapter), a TEXTS list split
@@ -19,16 +19,16 @@ import type {
  * **Try it**: toggle the checkboxes, hover a user row to reveal the remove (✕) button, and click
  * Get Resources. Chapter is disabled with a "coming soon" hint until its renderer ships.
  */
-const meta: Meta<typeof ScriptureTextGridOptions> = {
-  title: 'Bundled Extensions/platform-scripture-editor/ScriptureTextGridOptions',
-  component: ScriptureTextGridOptions,
+const meta: Meta<typeof ResourceCollectionOptions> = {
+  title: 'Bundled Extensions/platform-scripture-editor/ResourceCollectionOptions',
+  component: ResourceCollectionOptions,
   tags: ['autodocs'],
 };
 export default meta;
 
-type Story = StoryObj<typeof ScriptureTextGridOptions>;
+type Story = StoryObj<typeof ResourceCollectionOptions>;
 
-const localizedStrings = getLocalizedStrings([...SCRIPTURE_TEXT_GRID_OPTIONS_STRING_KEYS]);
+const localizedStrings = getLocalizedStrings([...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS]);
 
 const dblRef = (id: string, name: string): DblResourceReference => ({
   type: 'dblResource',
@@ -69,7 +69,7 @@ function Harness({
   isChapterEnabled?: boolean;
   installingResourceNames?: string[];
 }) {
-  const [viewMode, setViewMode] = useState<ScriptureTextGridViewMode>('verse');
+  const [viewMode, setViewMode] = useState<ResourceCollectionViewMode>('verse');
   const [top, setTop] = useState(initialTop);
   const [bottom, setBottom] = useState(initialBottom);
 
@@ -82,7 +82,7 @@ function Harness({
 
   return useMemo(
     () => (
-      <ScriptureTextGridOptions
+      <ResourceCollectionOptions
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         isChapterEnabled={isChapterEnabled}

@@ -2,20 +2,20 @@ import { Button, Checkbox, Label, ToggleGroup, ToggleGroupItem } from 'platform-
 import { X } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
 import type {
-  ScriptureTextGridOptionsLocalizedStrings,
-  ScriptureTextGridOptionsProps,
-  ScriptureTextGridOptionsStringKey,
+  ResourceCollectionOptionsLocalizedStrings,
+  ResourceCollectionOptionsProps,
+  ResourceCollectionOptionsStringKey,
   ViewOptionsTextEntry,
-} from './scripture-text-grid-options.types';
+} from './resource-collection-options.types';
 
 export {
-  SCRIPTURE_TEXT_GRID_OPTIONS_STRING_KEYS,
-  type ScriptureTextGridOptionsStringKey,
-  type ScriptureTextGridOptionsLocalizedStrings,
-  type ScriptureTextGridOptionsProps,
-  type ScriptureTextGridViewMode,
+  RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
+  type ResourceCollectionOptionsStringKey,
+  type ResourceCollectionOptionsLocalizedStrings,
+  type ResourceCollectionOptionsProps,
+  type ResourceCollectionViewMode,
   type ViewOptionsTextEntry,
-} from './scripture-text-grid-options.types';
+} from './resource-collection-options.types';
 
 const VIEW_HEADER_KEY = '%webView_scriptureTextGrid_viewOptions_viewHeader%';
 const VERSE_KEY = '%webView_scriptureTextGrid_viewOptions_verse%';
@@ -27,8 +27,8 @@ const REMOVE_FROM_LIST_KEY = '%webView_scriptureTextGrid_viewOptions_removeFromL
 const INSTALLING_KEY = '%webView_scriptureTextGrid_viewOptions_installing%';
 
 const localize = (
-  strings: ScriptureTextGridOptionsLocalizedStrings,
-  key: ScriptureTextGridOptionsStringKey,
+  strings: ResourceCollectionOptionsLocalizedStrings,
+  key: ResourceCollectionOptionsStringKey,
 ) => strings[key] ?? key;
 
 /**
@@ -40,7 +40,7 @@ const localize = (
  * Chapter is disabled with a "coming soon" hint unless `isChapterEnabled` is set. The hover-✕
  * renders only on rows with `isUserRemovable === true`.
  */
-export function ScriptureTextGridOptions({
+export function ResourceCollectionOptions({
   viewMode,
   onViewModeChange,
   isChapterEnabled = false,
@@ -51,7 +51,7 @@ export function ScriptureTextGridOptions({
   onRemoveFromList,
   onGetResources,
   localizedStrings = {},
-}: ScriptureTextGridOptionsProps) {
+}: ResourceCollectionOptionsProps) {
   const handleViewModeChange = (value: string) => {
     // Radix single-toggle emits '' when the active item is clicked again; ignore that (a view mode
     // is always selected) and any unexpected value.

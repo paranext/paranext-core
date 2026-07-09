@@ -83,12 +83,6 @@ export function useTextCollectionSources(projectId: string | undefined) {
     };
   }, [textConnectionPdp]);
 
-  const isLoading =
-    isModelTextsLoading ||
-    isReferencedLoading ||
-    userReferenced === undefined ||
-    overlay === undefined;
-
   const sources = useMemo<TextCollectionSources | undefined>(() => {
     if (isModelTextsLoading || isReferencedLoading) return undefined;
     if (isPlatformError(adminModelTexts) || isPlatformError(adminReferenced)) return undefined;
@@ -103,7 +97,7 @@ export function useTextCollectionSources(projectId: string | undefined) {
     overlay,
   ]);
 
-  return { sources, isLoading, textConnectionPdp };
+  return { sources, textConnectionPdp };
 }
 
 export default useTextCollectionSources;

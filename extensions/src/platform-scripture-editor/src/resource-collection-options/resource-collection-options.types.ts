@@ -7,10 +7,10 @@ import type { ViewOptionsTextEntry } from '../scripture-text-grid-contents.utils
 export type { ViewOptionsTextEntry };
 
 /** The grid's display mode. `'chapter'` rendering is built separately, later. */
-export type ScriptureTextGridViewMode = 'verse' | 'chapter';
+export type ResourceCollectionViewMode = 'verse' | 'chapter';
 
-/** Localization keys used by `ScriptureTextGridOptions`. */
-export const SCRIPTURE_TEXT_GRID_OPTIONS_STRING_KEYS = Object.freeze([
+/** Localization keys used by `ResourceCollectionOptions`. */
+export const RESOURCE_COLLECTION_OPTIONS_STRING_KEYS = Object.freeze([
   '%webView_scriptureTextGrid_viewOptions_viewHeader%',
   '%webView_scriptureTextGrid_viewOptions_verse%',
   '%webView_scriptureTextGrid_viewOptions_chapter%',
@@ -21,12 +21,12 @@ export const SCRIPTURE_TEXT_GRID_OPTIONS_STRING_KEYS = Object.freeze([
   '%webView_scriptureTextGrid_viewOptions_installing%',
 ] as const);
 
-export type ScriptureTextGridOptionsStringKey =
-  (typeof SCRIPTURE_TEXT_GRID_OPTIONS_STRING_KEYS)[number];
+export type ResourceCollectionOptionsStringKey =
+  (typeof RESOURCE_COLLECTION_OPTIONS_STRING_KEYS)[number];
 
-/** Localized strings for `ScriptureTextGridOptions`; each falls back to its key when absent. */
-export type ScriptureTextGridOptionsLocalizedStrings = {
-  [key in ScriptureTextGridOptionsStringKey]?: string;
+/** Localized strings for `ResourceCollectionOptions`; each falls back to its key when absent. */
+export type ResourceCollectionOptionsLocalizedStrings = {
+  [key in ResourceCollectionOptionsStringKey]?: string;
 };
 
 /**
@@ -35,11 +35,11 @@ export type ScriptureTextGridOptionsLocalizedStrings = {
  * share-layout dialog can render it. Callers compute the rows (via `getViewOptionsTexts`) and own
  * persistence.
  */
-export interface ScriptureTextGridOptionsProps {
+export interface ResourceCollectionOptionsProps {
   /** The currently selected view mode. */
-  viewMode: ScriptureTextGridViewMode;
+  viewMode: ResourceCollectionViewMode;
   /** Called when the user picks a different, enabled view mode. */
-  onViewModeChange: (mode: ScriptureTextGridViewMode) => void;
+  onViewModeChange: (mode: ResourceCollectionViewMode) => void;
   /**
    * When `false` (default) the Chapter toggle is disabled with a "coming soon" hint. It is enabled
    * once chapter rendering exists.
@@ -58,5 +58,5 @@ export interface ScriptureTextGridOptionsProps {
   /** Called when the Get Resources button is clicked. */
   onGetResources: () => void;
   /** Localized strings; each falls back to its key when absent. */
-  localizedStrings?: ScriptureTextGridOptionsLocalizedStrings;
+  localizedStrings?: ResourceCollectionOptionsLocalizedStrings;
 }
