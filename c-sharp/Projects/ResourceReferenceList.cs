@@ -22,7 +22,7 @@ public abstract record ResourceReference
     /// resources list. Nullable/absent by default; meaningful only for Bible-text references.
     /// Serialized only when non-null.
     /// </summary>
-    public bool? InTextCollectionUser { get; init; }
+    public bool? IsResourceShownForUser { get; init; }
 
     /// <summary>
     /// Forward-compat passthrough for JSON/XML properties this build does not recognize, so a
@@ -82,7 +82,7 @@ public record ResourceReferenceList
         "name",
         "id",
         "isResourceShownByDefault",
-        "inTextCollectionUser",
+        "isResourceShownForUser",
     };
 
     /// <summary>
@@ -90,7 +90,7 @@ public record ResourceReferenceList
     /// (<see cref="EnhancedResourceReference"/>, <see cref="XmlResourceReference"/>,
     /// <see cref="SourceLanguageResourceReference"/>). Narrower than
     /// <see cref="KnownBibleTextPropertyNames"/> because these types never carry <c>id</c> or
-    /// <c>inTextCollectionUser</c>; properties outside this set flow through
+    /// <c>isResourceShownForUser</c>; properties outside this set flow through
     /// <see cref="ResourceReference.ExtraData"/>. Includes <c>isResourceShownByDefault</c>, which is
     /// understood on every reference type (see PT-4040).
     /// </summary>
@@ -156,9 +156,9 @@ public record ResourceReferenceList
                     element.Add(
                         new XAttribute("isResourceShownByDefault", shown ? "true" : "false")
                     );
-                if (item.InTextCollectionUser is bool inCollection)
+                if (item.IsResourceShownForUser is bool shownForUser)
                     element.Add(
-                        new XAttribute("inTextCollectionUser", inCollection ? "true" : "false")
+                        new XAttribute("isResourceShownForUser", shownForUser ? "true" : "false")
                     );
 
                 AddExtraDataAttributes(element, item.ExtraData);
@@ -214,7 +214,7 @@ public record ResourceReferenceList
 
                 // Capture unknown attributes against the per-type known-name set (everything else ->
                 // ExtraData). Name-only types use the narrower set so a Bible-text-only attribute such
-                // as "id" or "inTextCollectionUser" round-trips instead of being silently dropped.
+                // as "id" or "isResourceShownForUser" round-trips instead of being silently dropped.
                 static Dictionary<string, JsonElement>? CaptureExtras(
                     XElement el,
                     IReadOnlySet<string> known
@@ -237,7 +237,7 @@ public record ResourceReferenceList
                             Name = name,
                             Id = el.Attribute("id")?.Value ?? "",
                             IsResourceShownByDefault = ParseFlag(el, "isResourceShownByDefault"),
-                            InTextCollectionUser = ParseFlag(el, "inTextCollectionUser"),
+                            IsResourceShownForUser = ParseFlag(el, "isResourceShownForUser"),
                             ExtraData = CaptureExtras(el, KnownBibleTextPropertyNames),
                         },
                         "dblResource" => new DblResourceReference
@@ -245,7 +245,7 @@ public record ResourceReferenceList
                             Name = name,
                             Id = el.Attribute("id")?.Value ?? "",
                             IsResourceShownByDefault = ParseFlag(el, "isResourceShownByDefault"),
-                            InTextCollectionUser = ParseFlag(el, "inTextCollectionUser"),
+                            IsResourceShownForUser = ParseFlag(el, "isResourceShownForUser"),
                             ExtraData = CaptureExtras(el, KnownBibleTextPropertyNames),
                         },
                         "enhancedResource" => new EnhancedResourceReference

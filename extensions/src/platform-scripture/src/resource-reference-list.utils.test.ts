@@ -74,7 +74,7 @@ describe('isValidResourceReference', () => {
         name: 'P',
         id: 'aabbcc',
         isResourceShownByDefault: true,
-        inTextCollectionUser: false,
+        isResourceShownForUser: false,
       }),
     ).toBe(true);
   });
@@ -90,13 +90,13 @@ describe('isValidResourceReference', () => {
     ).toBe(false);
   });
 
-  it('rejects a dblResource reference with a non-boolean inTextCollectionUser', () => {
+  it('rejects a dblResource reference with a non-boolean isResourceShownForUser', () => {
     expect(
       isValidResourceReference({
         type: 'dblResource',
         name: 'D',
         id: '112233445566',
-        inTextCollectionUser: 3,
+        isResourceShownForUser: 3,
       }),
     ).toBe(false);
   });

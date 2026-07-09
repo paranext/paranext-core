@@ -1954,7 +1954,7 @@ declare module 'platform-scripture' {
      * User-scope (NOT Send/Receive'd) per-resource checkbox state on the current user's personal
      * resources list. Absent by default; only meaningful on Bible-text references.
      */
-    inTextCollectionUser?: boolean;
+    isResourceShownForUser?: boolean;
   };
 
   /** A reference to a DBL resource, identified by its 24-byte (48-char) hex ID */
@@ -1978,7 +1978,7 @@ declare module 'platform-scripture' {
      * User-scope (NOT Send/Receive'd) per-resource checkbox state on the current user's personal
      * resources list. Absent by default; only meaningful on Bible-text references.
      */
-    inTextCollectionUser?: boolean;
+    isResourceShownForUser?: boolean;
   };
 
   /** A reference to an Enhanced resource, identified by name */
@@ -2056,8 +2056,8 @@ declare module 'platform-scripture' {
      * breaking changes.
      *
      * Current version is `1.1.0`: the `1.1.0` minor bump added the optional Bible-text flags
-     * `isResourceShownByDefault` (project-scope) and `inTextCollectionUser` (user-scope). Both are
-     * additive and backwards-compatible — files lacking them read cleanly.
+     * `isResourceShownByDefault` (project-scope) and `isResourceShownForUser` (user-scope). Both
+     * are additive and backwards-compatible — files lacking them read cleanly.
      */
     dataVersion: string;
     /** Ordered list of project and resource references */
