@@ -2992,6 +2992,24 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
+        public void GetConflictResolutionOptions_SurvivesCommentManagerReload()
+        {
+            // Regression: CommentManager.Load() (triggered in production by a WriteLockManager
+            // notification, e.g. when the verse is edited) rebuilds the comment list purely from the
+            // persisted Notes_*.xml files it finds via FileManager.ProjectFiles. The dummy file manager
+            // used to report no project files, so a reload dropped every seeded comment and the provider
+            // intermittently failed with "Thread ... does not exist" (masked to "none" here). Force a
+            // reload and confirm the seeded conflict thread survives and stays resolvable.
+            CommentThread thread = SeedVerseTextConflict();
+            CommentManager.Get(_scrText).Load();
+            Assert.That(
+                _provider.GetConflictResolutionOptions(thread.Id),
+                Is.EqualTo("acceptOrReject"),
+                "a seeded conflict thread must survive a CommentManager reload"
+            );
+        }
+
+        [Test]
         public void ResolveConflict_RejectStaleVerse_ThrowsAndKeepsEditedText()
         {
             CommentThread thread = SeedVerseTextConflict();
