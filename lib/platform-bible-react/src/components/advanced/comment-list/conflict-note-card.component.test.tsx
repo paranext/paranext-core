@@ -391,6 +391,21 @@ test('hides Undo when canUnresolve is false', () => {
   expect(screen.queryByRole('button', { name: /undo resolution/i })).toBeNull();
 });
 
+test('disables the Undo button while isUnresolving', () => {
+  render(
+    <ConflictNoteCard
+      comment={verseTextConflictComment}
+      localizedStrings={localizedStrings}
+      availableActions="none"
+      resolvedResolution="reject"
+      canUnresolve
+      onUnresolve={vi.fn()}
+      isUnresolving
+    />,
+  );
+  expect(screen.getByRole('button', { name: /undo resolution/i })).toBeDisabled();
+});
+
 test('trims trailing whitespace out of diff spans so the strikethrough does not dangle', () => {
   // The replacement sample removes "town": its diff HTML is `<s>town </s>` (trailing space inside).
   render(

@@ -67,6 +67,7 @@ global.webViewComponent = function CommentListWebView({
         ...Array.from(CONFLICT_NOTE_STRING_KEYS),
         ...COMMENT_LIST_PANEL_EXTRA_STRING_KEYS,
         '%conflict_note_undo_audit_comment%',
+        '%conflict_note_undo_failed%',
       ];
     }, []),
   );
@@ -320,6 +321,10 @@ global.webViewComponent = function CommentListWebView({
           return true;
         } catch (error) {
           logger.error(`Failed to undo conflict thread ${threadId}:`, error);
+          sonner.error(
+            localizedStrings['%conflict_note_undo_failed%'] ??
+              "Couldn't undo this resolution because the verse changed after it was resolved. Use Verse History to restore it.",
+          );
           return false;
         }
       }),

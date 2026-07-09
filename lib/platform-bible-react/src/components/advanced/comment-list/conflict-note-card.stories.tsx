@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { LanguageStrings, LegacyComment } from 'platform-bible-utils';
+import { fn } from 'storybook/test';
 import { Card, CardContent } from '@/components/shadcn-ui/card';
 import { ConflictNoteCard } from './conflict-note-card.component';
 import { ConflictResolutionOptions, ConflictResolutionOutcome } from './conflict-note-card.types';
@@ -28,10 +29,14 @@ function ConflictNoteCardStory({
   availableActions = 'acceptOrReject',
   comment = verseTextConflictComment,
   resolvedResolution,
+  canUnresolve,
+  onUnresolve,
 }: {
   availableActions?: ConflictResolutionOptions;
   comment?: LegacyComment;
   resolvedResolution?: ConflictResolutionOutcome;
+  canUnresolve?: boolean;
+  onUnresolve?: () => void;
 }) {
   return (
     <Card className="tw:max-w-md">
@@ -42,6 +47,8 @@ function ConflictNoteCardStory({
           availableActions={availableActions}
           resolvedResolution={resolvedResolution}
           onResolve={(chosen) => console.log(`Save and resolve clicked: ${chosen}`)}
+          canUnresolve={canUnresolve}
+          onUnresolve={onUnresolve}
         />
       </CardContent>
     </Card>
@@ -105,6 +112,21 @@ export const NoAncestor: Story = {
  */
 export const ResolvedUsedOtherChange: Story = {
   render: () => <ConflictNoteCardStory availableActions="none" resolvedResolution="reject" />,
+};
+
+/**
+ * Already resolved by rejecting, and the current user is allowed to undo the resolution: shows the
+ * rejected result plus a visible "Undo resolution" button (canUnresolve is true).
+ */
+export const ResolvedRejectWithUndo: Story = {
+  render: () => (
+    <ConflictNoteCardStory
+      availableActions="none"
+      resolvedResolution="reject"
+      canUnresolve
+      onUnresolve={fn()}
+    />
+  ),
 };
 
 /**
