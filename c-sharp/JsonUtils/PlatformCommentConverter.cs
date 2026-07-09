@@ -41,6 +41,11 @@ public class PlatformCommentConverter : JsonConverter<PlatformCommentWrapper>
     private const string VERSE = "verse";
     private const string VERSE_REF = "verseRef";
 
+    // PT-4110: written into a note's body when its stored content can't be rendered, so one
+    // unrenderable note doesn't fail the whole getCommentThreads response. Fixed English by design.
+    private const string ContentsUnavailablePlaceholder =
+        "<p>This note could not be displayed.</p>";
+
     /// <summary>
     /// Deserializes a <see cref="PlatformCommentWrapper"/> from JSON.
     /// </summary>
@@ -317,18 +322,68 @@ public class PlatformCommentConverter : JsonConverter<PlatformCommentWrapper>
             value.ExtraHeadingInfo.ToString()
         );
         writer.WriteBoolean(HIDE_IN_TEXT_WINDOW, value.HideInTextWindow);
-        writer.WriteString(CONTENTS, value.ContentsHtml);
+        // Degrade rather than fail: a note whose stored content can't be rendered must not abort the
+        // whole getCommentThreads response (PT-4110). Body render failure → placeholder.
+        string contents;
+        try
+        {
+            contents = value.ContentsHtml;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(
+                $"WARNING: could not render contents for comment {value.Id}; using placeholder. {e}"
+            );
+            contents = ContentsUnavailablePlaceholder;
+        }
+        writer.WriteString(CONTENTS, contents);
         // Conflict-note decode fields (verseText conflicts only; null for all other notes → skipped).
-        JsonConverterUtils.TryWriteString(writer, REJECTED_TEXT, value.RejectedText);
-        JsonConverterUtils.TryWriteString(writer, ACCEPTED_TEXT, value.AcceptedText);
-        JsonConverterUtils.TryWriteString(writer, RESULT_TEXT, value.ResultText);
-        JsonConverterUtils.TryWriteString(writer, REJECTED_RESULT_TEXT, value.RejectedResultText);
+        // An optional decode field that throws is omitted (same wire shape as null) rather than failing.
+        JsonConverterUtils.TryWriteString(
+            writer,
+            REJECTED_TEXT,
+            TryRender(() => value.RejectedText, value.Id, REJECTED_TEXT)
+        );
+        JsonConverterUtils.TryWriteString(
+            writer,
+            ACCEPTED_TEXT,
+            TryRender(() => value.AcceptedText, value.Id, ACCEPTED_TEXT)
+        );
+        JsonConverterUtils.TryWriteString(
+            writer,
+            RESULT_TEXT,
+            TryRender(() => value.ResultText, value.Id, RESULT_TEXT)
+        );
+        JsonConverterUtils.TryWriteString(
+            writer,
+            REJECTED_RESULT_TEXT,
+            TryRender(() => value.RejectedResultText, value.Id, REJECTED_RESULT_TEXT)
+        );
         JsonConverterUtils.TryWriteString(writer, BIBLICAL_TERM_ID, value.BiblicalTermId);
         if (value.TagsAdded != null)
             JsonConverterUtils.TryWriteString(writer, TAG_ADDED, TryJoin(",", value.TagsAdded));
         if (value.TagsRemoved != null)
             JsonConverterUtils.TryWriteString(writer, TAG_REMOVED, TryJoin(",", value.TagsRemoved));
         writer.WriteEndObject();
+    }
+
+    /// <summary>
+    /// Reads an optional rendered field, logging and returning null instead of throwing so one
+    /// unrenderable field can't abort serialization of the whole note (PT-4110).
+    /// </summary>
+    private static string? TryRender(Func<string?> get, string commentId, string field)
+    {
+        try
+        {
+            return get();
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(
+                $"WARNING: could not render {field} for comment {commentId}; omitting it. {e}"
+            );
+            return null;
+        }
     }
 
     private static string? TryJoin(string? separator, string[] stringArray)

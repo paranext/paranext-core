@@ -50,6 +50,28 @@ internal class PlatformCommentConverterTests : PapiTestBase
     }
 
     [Test]
+    public void Serialize_CommentWhoseBodyCannotRender_DegradesToPlaceholderAndKeepsMetadata()
+    {
+        // A wrapper with no thread makes ContentsHtml throw (the documented "Cannot get ContentsHtml
+        // without a valid thread" path) — a deterministic stand-in for any note whose stored content
+        // can't be rendered. In production the throw comes from corrupt content; the isolation is the same.
+        Comment testComment = CommentTestHelper.CreateBasicComment(); // Thread "4217dff8"
+        var wrapper = new PlatformCommentWrapper(testComment, null);
+
+        var json = JsonSerializer.Serialize<PlatformCommentWrapper>(wrapper, _serializationOptions);
+
+        using var doc = JsonDocument.Parse(json);
+        Assert.That(
+            doc.RootElement.GetProperty("contents").GetString(),
+            Is.EqualTo("<p>This note could not be displayed.</p>")
+        );
+        // The note is not lost — only its body is degraded; metadata still serializes.
+        Assert.That(doc.RootElement.GetProperty("thread").GetString(), Is.EqualTo("4217dff8"));
+        Assert.That(doc.RootElement.GetProperty("user").GetString(), Is.EqualTo("Tim Steenwyk"));
+        Assert.That(doc.RootElement.GetProperty("verseRef").GetString(), Is.EqualTo("GEN 1:24"));
+    }
+
+    [Test]
     public void Serialize_CommentWithBasicFields_CorrectJsonProduced()
     {
         Comment testComment = CommentTestHelper.CreateBasicComment();
