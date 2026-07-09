@@ -171,5 +171,6 @@ describe('ResourceCell viewMode', () => {
     // The empty label is rendered; the editor is not.
     expect(await screen.findByText(/no text for this verse/i)).toBeInTheDocument();
     expect(setUsjSpy).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
   });
 });

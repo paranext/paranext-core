@@ -27,6 +27,9 @@ describe('verseRangeIncludes', () => {
   it('excludes a verse outside the range', () => {
     expect(verseRangeIncludes('14-15', 16)).toBe(false);
   });
+  it('includes the lower bound of a combined range', () => {
+    expect(verseRangeIncludes('14-15', 14)).toBe(true);
+  });
   it('is false for a non-numeric marker', () => {
     expect(verseRangeIncludes('abc', 1)).toBe(false);
   });
