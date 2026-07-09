@@ -565,6 +565,69 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
+        public void GetCommentThreads_StatusAndIsResolvedBothSet_Throws()
+        {
+            // Status and IsResolved both constrain thread status; setting both is ambiguous and used
+            // to silently AND to zero results. It must now fail fast. See PT-4027 review.
+            var selector = new CommentThreadSelector
+            {
+                Status = NoteStatus.Resolved,
+                IsResolved = true,
+            };
+
+            Assert.That(
+                () => _provider.GetCommentThreads(selector),
+                Throws.ArgumentException.With.Message.Contains("both filter thread status")
+            );
+        }
+
+        [Test]
+        public void GetCommentThreads_FilterByAssignedToEmpty_ReturnsOnlyUnassignedThreads()
+        {
+            // Arrange - one thread assigned to Team, one left unassigned.
+            var assignedComment = CreateTestComment("GEN", 1, 1, "Assigned to team");
+            string assignedCommentId = _provider.CreateComment(
+                new PlatformCommentWrapper(assignedComment)
+            );
+            string assignedThreadId = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == assignedCommentId))
+                .Id;
+            _provider.AddCommentToThread(
+                new PlatformCommentWrapper(
+                    new Comment(_scrText.User) { Thread = assignedThreadId, AssignedUser = "Team" }
+                )
+            );
+
+            var unassignedComment = CreateTestComment("GEN", 1, 2, "Unassigned");
+            string unassignedCommentId = _provider.CreateComment(
+                new PlatformCommentWrapper(unassignedComment)
+            );
+            string unassignedThreadId = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == unassignedCommentId))
+                .Id;
+
+            // Act - empty string is the "unassigned" filter (CommentThread.unassignedUser), not "no
+            // filter". Before the PT-4027 fix this returned every thread.
+            var threads = _provider.GetCommentThreads(
+                new CommentThreadSelector { AssignedTo = "" }
+            );
+
+            // Assert - only the unassigned thread, NOT the Team-assigned one.
+            Assert.That(
+                threads.Select(t => t.Id),
+                Has.Member(unassignedThreadId),
+                "Unassigned thread should match the empty-string assignment filter"
+            );
+            Assert.That(
+                threads.Select(t => t.Id),
+                Has.No.Member(assignedThreadId),
+                "Team-assigned thread should be excluded by the empty-string (unassigned) filter"
+            );
+        }
+
+        [Test]
         public void GetCommentThreads_FilterByIsReadTrue_ReturnsOnlyReadThreads()
         {
             // Arrange - Create multiple threads with different read statuses

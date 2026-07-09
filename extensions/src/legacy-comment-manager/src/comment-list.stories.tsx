@@ -146,6 +146,9 @@ function filterThreads(
     if (filters.assignment === 'assigned-to-me' && thread.assignedUser !== currentUser)
       return false;
     if (filters.assignment === 'team' && thread.assignedUser !== TEAM_ASSIGNED_USER) return false;
+    // "Unassigned" = no assignee. Sample threads omit `assignedUser` (undefined); real threads carry
+    // the empty-string UNASSIGNED_USER sentinel. Both are falsy.
+    if (filters.assignment === 'unassigned' && thread.assignedUser) return false;
     return true;
   });
 }

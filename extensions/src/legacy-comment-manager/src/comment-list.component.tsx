@@ -32,6 +32,7 @@ export const COMMENT_LIST_PANEL_EXTRA_STRING_KEYS = [
   '%comment_filter_assignment_all%',
   '%comment_filter_assignment_me%',
   '%comment_filter_assignment_team%',
+  '%comment_filter_assignment_unassigned%',
   '%comment_filter_read_all%',
   '%comment_filter_read_read%',
   '%comment_filter_read_unread%',

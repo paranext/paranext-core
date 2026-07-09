@@ -1,4 +1,5 @@
 import type { LegacyCommentThreadSelector } from 'legacy-comment-manager';
+import { deepEqual } from 'platform-bible-utils';
 
 // Filter constants, types, and the selector mapping — shared between the presentational panel (which
 // renders the filter toolbar) and the web view (which uses the values to build its comment-thread
@@ -22,7 +23,7 @@ export const scopeFilterToLabelKey = {
 export type ScopeFilter = keyof typeof scopeFilterToLabelKey;
 
 export function isScopeFilter(value: string): value is ScopeFilter {
-  return value in scopeFilterToLabelKey;
+  return Object.hasOwn(scopeFilterToLabelKey, value);
 }
 
 // --- Resolved-status axis (the thread's note-lifecycle Resolved state) ---
@@ -36,7 +37,7 @@ export const resolvedFilterToLabelKey = {
 export type ResolvedFilter = keyof typeof resolvedFilterToLabelKey;
 
 export function isResolvedFilter(value: string): value is ResolvedFilter {
-  return value in resolvedFilterToLabelKey;
+  return Object.hasOwn(resolvedFilterToLabelKey, value);
 }
 
 // --- Read-status axis (the current user's per-thread read state) ---
@@ -50,7 +51,7 @@ export const readFilterToLabelKey = {
 export type ReadFilter = keyof typeof readFilterToLabelKey;
 
 export function isReadFilter(value: string): value is ReadFilter {
-  return value in readFilterToLabelKey;
+  return Object.hasOwn(readFilterToLabelKey, value);
 }
 
 // --- Note-type axis (conflict notes vs regular comments) ---
@@ -64,7 +65,7 @@ export const typeFilterToLabelKey = {
 export type TypeFilter = keyof typeof typeFilterToLabelKey;
 
 export function isTypeFilter(value: string): value is TypeFilter {
-  return value in typeFilterToLabelKey;
+  return Object.hasOwn(typeFilterToLabelKey, value);
 }
 
 // --- Assignment axis (who the thread is assigned to) ---
@@ -73,12 +74,13 @@ export const assignmentFilterToLabelKey = {
   all: '%comment_filter_assignment_all%',
   'assigned-to-me': '%comment_filter_assignment_me%',
   team: '%comment_filter_assignment_team%',
+  unassigned: '%comment_filter_assignment_unassigned%',
 } as const;
 
 export type AssignmentFilter = keyof typeof assignmentFilterToLabelKey;
 
 export function isAssignmentFilter(value: string): value is AssignmentFilter {
-  return value in assignmentFilterToLabelKey;
+  return Object.hasOwn(assignmentFilterToLabelKey, value);
 }
 
 /** The four orthogonal comment-filter axis selections. Each defaults to `'all'` (no filtering). */
@@ -102,17 +104,17 @@ export const DEFAULT_COMMENT_FILTERS: CommentFilters = {
  * the axis definitions instead of duplicating the per-axis checks at call sites.
  */
 export function areCommentFiltersAtDefault(filters: CommentFilters): boolean {
-  return (
-    filters.resolved === DEFAULT_COMMENT_FILTERS.resolved &&
-    filters.read === DEFAULT_COMMENT_FILTERS.read &&
-    filters.type === DEFAULT_COMMENT_FILTERS.type &&
-    filters.assignment === DEFAULT_COMMENT_FILTERS.assignment
-  );
+  return deepEqual(filters, DEFAULT_COMMENT_FILTERS);
 }
 
 // Paratext 9's literal "assigned to the whole team" token (UserFilter/CommentTags): threads assigned
 // to the team carry this exact `AssignedUser` value.
 export const TEAM_ASSIGNED_USER = 'Team';
+
+// Paratext 9's "unassigned" token (`CommentThread.unassignedUser`): threads with no assignee carry
+// this exact empty-string `AssignedUser` value. Distinct from omitting the assignment filter
+// entirely (an absent `assignedTo`), which the provider treats as "any assignee".
+export const UNASSIGNED_USER = '';
 
 /**
  * Builds the comment-thread query from the current filter selections. Each axis contributes at most
@@ -159,8 +161,13 @@ export function buildCommentThreadSelector({
   else if (filters.type === 'comments') selector.type = 'Normal';
 
   // Assignment
-  if (filters.assignment === 'assigned-to-me') selector.assignedTo = currentUserName;
-  else if (filters.assignment === 'team') selector.assignedTo = TEAM_ASSIGNED_USER;
+  if (filters.assignment === 'assigned-to-me') {
+    // Only filter once the current user's name has loaded. While it is still empty we must NOT fall
+    // through to an empty `assignedTo`, which now means "unassigned" (UNASSIGNED_USER) — the web
+    // view holds a loading state during this window (see comment-list.web-view.tsx).
+    if (currentUserName) selector.assignedTo = currentUserName;
+  } else if (filters.assignment === 'team') selector.assignedTo = TEAM_ASSIGNED_USER;
+  else if (filters.assignment === 'unassigned') selector.assignedTo = UNASSIGNED_USER;
 
   return selector;
 }

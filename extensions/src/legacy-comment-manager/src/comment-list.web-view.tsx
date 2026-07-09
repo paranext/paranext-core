@@ -149,6 +149,20 @@ global.webViewComponent = function CommentListWebView({
     };
   }, []);
 
+  // The selector only uses scrRef when the scope is the current chapter; in the all-books view a
+  // verse move must not tear down and re-establish the subscription (which re-runs the C# query and
+  // flashes the skeletons). Freeze the scrRef inputs to constants unless the chapter scope is
+  // active. (PT-4027 review)
+  const usesChapterScope = scopeFilter !== UNFILTERED;
+  const scopeBook = usesChapterScope ? scrRef.book : '';
+  const scopeChapterNum = usesChapterScope ? scrRef.chapterNum : 0;
+  const scopeVerseNum = usesChapterScope ? scrRef.verseNum : 0;
+
+  // While the "assigned to me" axis is selected but the current user's name hasn't loaded yet, the
+  // query can't filter by user and would briefly show every thread. Hold the loading state until the
+  // name resolves so the panel shows skeletons instead of that flash. (PT-4027 review)
+  const isAwaitingCurrentUserName = filters.assignment === 'assigned-to-me' && !currentUserName;
+
   const [commentThreads, , isLoadingCommentThreads] = useProjectData(
     'legacyCommentManager.comments',
     projectId,
@@ -158,10 +172,10 @@ global.webViewComponent = function CommentListWebView({
         buildCommentThreadSelector({
           filters,
           scopeFilter,
-          scrRef: { book: scrRef.book, chapterNum: scrRef.chapterNum, verseNum: scrRef.verseNum },
+          scrRef: { book: scopeBook, chapterNum: scopeChapterNum, verseNum: scopeVerseNum },
           currentUserName,
         }),
-      [scrRef.book, scrRef.chapterNum, scrRef.verseNum, scopeFilter, filters, currentUserName],
+      [scopeBook, scopeChapterNum, scopeVerseNum, scopeFilter, filters, currentUserName],
     ),
     DEFAULT_LEGACY_COMMENT_THREADS,
   );
@@ -306,7 +320,7 @@ global.webViewComponent = function CommentListWebView({
   return (
     <CommentListPanel
       localizedStrings={localizedStrings}
-      isLoading={isLoadingCommentThreads || !commentsPdp}
+      isLoading={isLoadingCommentThreads || !commentsPdp || isAwaitingCurrentUserName}
       threads={safeCommentThreads}
       currentUser={currentUserName}
       filters={filters}

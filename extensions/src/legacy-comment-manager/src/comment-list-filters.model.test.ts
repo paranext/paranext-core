@@ -38,6 +38,19 @@ describe('buildCommentThreadSelector', () => {
     expect(build({ type: 'comments' })).toEqual({ type: 'Normal' });
     expect(build({ assignment: 'assigned-to-me' })).toEqual({ assignedTo: 'Donna' });
     expect(build({ assignment: 'team' })).toEqual({ assignedTo: 'Team' });
+    expect(build({ assignment: 'unassigned' })).toEqual({ assignedTo: '' });
+  });
+
+  it('holds the assigned-to-me filter until the current user name has loaded', () => {
+    // While the name is still empty we must not emit assignedTo:'' — that now means UNASSIGNED_USER
+    // ("unassigned"), so we'd query the wrong threads. The web view shows a loading state instead.
+    const selector = buildCommentThreadSelector({
+      filters: { ...DEFAULT_COMMENT_FILTERS, assignment: 'assigned-to-me' },
+      scopeFilter: UNFILTERED,
+      scrRef,
+      currentUserName: '',
+    });
+    expect(selector).toEqual({});
   });
 
   it('ANDs axes together — the PT-4027 unresolved-conflicts view', () => {
@@ -74,7 +87,7 @@ const guardCases: [string, (value: string) => boolean, string[]][] = [
   ['isResolvedFilter', isResolvedFilter, ['all', 'unresolved', 'resolved']],
   ['isReadFilter', isReadFilter, ['all', 'unread', 'read']],
   ['isTypeFilter', isTypeFilter, ['all', 'conflicts', 'comments']],
-  ['isAssignmentFilter', isAssignmentFilter, ['all', 'assigned-to-me', 'team']],
+  ['isAssignmentFilter', isAssignmentFilter, ['all', 'assigned-to-me', 'team', 'unassigned']],
 ];
 
 describe.each(guardCases)('%s', (_name, guard, validValues) => {
