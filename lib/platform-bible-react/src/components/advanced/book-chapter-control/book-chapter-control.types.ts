@@ -33,6 +33,8 @@ export type ViewMode = 'books' | 'chapters' | 'verses';
 /**
  * Imperative handle for controlling a {@link BookChapterControl} from outside React — e.g. the
  * `platform.openBookChapterControl` command opening it in response to Ctrl+B
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
  */
 export type BookChapterControlHandle = {
   /**
@@ -132,7 +134,11 @@ export type BookChapterControlProps = {
    * keep the popover anchored to the trigger's leading edge rather than spilling off-screen.
    */
   align?: ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>['align'];
-  /** Ref that receives a {@link BookChapterControlHandle} for imperative control */
+  /**
+   * Ref that receives a {@link BookChapterControlHandle} for imperative control
+   *
+   * @experimental This property is unstable and may change shape or disappear without notice
+   */
   ref?: Ref<BookChapterControlHandle>;
   /**
    * When true, the control is disabled (e.g. no target to navigate): the trigger button cannot be

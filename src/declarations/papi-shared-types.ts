@@ -117,21 +117,47 @@ declare module 'papi-shared-types' {
     'platform.closeOpenUsersnapForm': () => Promise<void>;
 
     // These commands are provided in `scroll-group-navigation.commands.ts` (renderer)
-    /** Navigate the active scroll group to the next chapter (rolls into the next book) */
+    /**
+     * Navigate the active scroll group to the next chapter (rolls into the next book)
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
     'platform.goToNextChapter': () => Promise<void>;
-    /** Navigate the active scroll group to the previous chapter (rolls into the previous book) */
+    /**
+     * Navigate the active scroll group to the previous chapter (rolls into the previous book)
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
     'platform.goToPreviousChapter': () => Promise<void>;
-    /** Navigate the active scroll group to the next book (chapter 1, verse 1) */
+    /**
+     * Navigate the active scroll group to the next book (chapter 1, verse 1)
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
     'platform.goToNextBook': () => Promise<void>;
-    /** Navigate the active scroll group to the previous book (chapter 1, verse 1) */
+    /**
+     * Navigate the active scroll group to the previous book (chapter 1, verse 1)
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
     'platform.goToPreviousBook': () => Promise<void>;
-    /** Navigate the active scroll group to the next verse */
+    /**
+     * Navigate the active scroll group to the next verse
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
     'platform.goToNextVerse': () => Promise<void>;
-    /** Navigate the active scroll group to the previous verse */
+    /**
+     * Navigate the active scroll group to the previous verse
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
     'platform.goToPreviousVerse': () => Promise<void>;
     /**
      * Open the appropriate Book Chapter Control (the active tab's if it shows one, else the top
      * toolbar's) and focus its input, ready for typing a reference
+     *
+     * @experimental This command is unstable and may change or disappear without notice
      */
     'platform.openBookChapterControl': () => Promise<void>;
 
