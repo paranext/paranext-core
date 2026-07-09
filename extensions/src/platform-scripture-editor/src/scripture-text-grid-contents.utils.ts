@@ -111,6 +111,17 @@ function isAdminEntryShown(overlay: ShownByDefaultOverlay, entry: AdminOwnedEntr
 }
 
 /**
+ * Whether `resourceId` is an admin-owned entry for the given sources (see
+ * {@link getAdminOwnedEntries}).
+ */
+function isAdminOwnedId(resourceId: string, sources: TextCollectionSources): boolean {
+  const { adminModelTexts, adminReferenced, overlay } = sources;
+  return getAdminOwnedEntries(adminModelTexts, adminReferenced, overlay).some(
+    (entry) => entry.reference.id === resourceId,
+  );
+}
+
+/**
  * Computes the Bible-text references that render in the Scripture Text Grid for the current user:
  * admin-owned entries the user has shown (overlay choice, falling back to the admin flag), followed
  * by the user's own list entries with `inTextCollectionUser === true`. Deduplicated by `id` with
@@ -194,12 +205,10 @@ export function setUserDisplay(
   shown: boolean,
   sources: TextCollectionSources,
 ): { userReferenced: ResourceReferenceList; overlay: ShownByDefaultOverlay } {
-  const { adminModelTexts, adminReferenced, userReferenced, overlay } = sources;
-  const isAdminOwned = getAdminOwnedEntries(adminModelTexts, adminReferenced, overlay).some(
-    (entry) => entry.reference.id === resourceId,
-  );
+  const { userReferenced, overlay } = sources;
 
-  if (isAdminOwned) return { userReferenced, overlay: { ...overlay, [resourceId]: shown } };
+  if (isAdminOwnedId(resourceId, sources))
+    return { userReferenced, overlay: { ...overlay, [resourceId]: shown } };
 
   const index = userReferenced.items.findIndex((item) => getBibleTextId(item) === resourceId);
   if (index < 0) return { userReferenced, overlay };
