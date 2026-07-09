@@ -15,6 +15,13 @@ describe('parseVerseRange', () => {
   it('strips a partial-verse letter on a single verse', () => {
     expect(parseVerseRange('3a')).toEqual({ start: 3, end: 3 });
   });
+  it('uses start as end for a single-segment marker (no hyphen branch)', () => {
+    expect(parseVerseRange('12')).toEqual({ start: 12, end: 12 });
+    expect(parseVerseRange('12').end).toBe(parseVerseRange('12').start);
+  });
+  it('returns NaN bounds for a non-numeric marker', () => {
+    expect(parseVerseRange('abc')).toEqual({ start: NaN, end: NaN });
+  });
 });
 
 describe('verseRangeIncludes', () => {
@@ -32,6 +39,12 @@ describe('verseRangeIncludes', () => {
   });
   it('is false for a non-numeric marker', () => {
     expect(verseRangeIncludes('abc', 1)).toBe(false);
+  });
+  it('is false when only the start bound is non-numeric', () => {
+    expect(verseRangeIncludes('abc-5', 3)).toBe(false);
+  });
+  it('is false when only the end bound is non-numeric', () => {
+    expect(verseRangeIncludes('5-abc', 5)).toBe(false);
   });
 });
 
@@ -231,5 +244,111 @@ describe('sliceUsjToVerse — boundaries and empty', () => {
       { marker: 'p', text: '1Chapter one verse one.' },
       { marker: 'p', text: '1Chapter two verse one.' },
     ]);
+  });
+
+  it('closes an open verse at a chapter marker so it does not bleed into the next chapter', () => {
+    // Chapter one's verse 3 has no closer (usxStringToUsj drops eid closers), then a chapter break,
+    // then chapter two opens with a continuation paragraph carrying NO verse marker. The chapter
+    // marker must close chapter one's still-open verse 3; otherwise that orphan line leaks into it.
+    // This is the fixture that makes the chapter-marker `active = false` reset load-bearing.
+    const usxOpenAcrossChapter = `<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.1">
+  <book code="MAT" style="id">WEB</book>
+  <chapter number="1" style="c" sid="MAT 1" />
+  <para style="p">
+    <verse number="3" style="v" sid="MAT 1:3" />Chapter one verse three.<verse eid="MAT 1:3" /></para>
+  <chapter eid="MAT 1" />
+  <chapter number="2" style="c" sid="MAT 2" />
+  <para style="q1">Orphan continuation with no verse marker.</para>
+  <para style="p">
+    <verse number="3" style="v" sid="MAT 2:3" />Chapter two verse three.<verse eid="MAT 2:3" /></para>
+</usx>
+`;
+    const { usj, isEmpty } = sliceUsjToVerse(usxStringToUsj(usxOpenAcrossChapter), 3);
+    expect(isEmpty).toBe(false);
+    // Both chapters' verse 3 survive (chrome dropped); the orphan continuation between them does
+    // NOT leak — the chapter marker closed chapter one's verse 3.
+    expect(paragraphs(usj)).toEqual([
+      { marker: 'p', text: '3Chapter one verse three.' },
+      { marker: 'p', text: '3Chapter two verse three.' },
+    ]);
+    expect(paragraphs(usj).some((p) => p.text.includes('Orphan'))).toBe(false);
+  });
+
+  it('is empty when the verse has only whitespace text', () => {
+    const usxWhitespace = `<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.1">
+  <book code="GEN" style="id">Sample</book>
+  <chapter number="1" style="c" sid="GEN 1" />
+  <para style="p">
+    <verse number="4" style="v" sid="GEN 1:4" />   <verse eid="GEN 1:4" /></para>
+</usx>
+`;
+    const { isEmpty } = sliceUsjToVerse(usxStringToUsj(usxWhitespace), 4);
+    expect(isEmpty).toBe(true);
+  });
+
+  it('does not leak a following reference paragraph (r) into the prior verse', () => {
+    // Verse 1 is immediately followed by a cross-reference paragraph (r) with no intervening verse
+    // closer. If `r` were not a boundary, its text would bleed into verse 1 — so this makes the
+    // `r` entry in STRUCTURAL_MARKERS load-bearing (unlike a case where a heading already closed
+    // the verse first).
+    const usxRef = `<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.1">
+  <book code="MAT" style="id">WEB</book>
+  <chapter number="1" style="c" sid="MAT 1" />
+  <para style="p">
+    <verse number="1" style="v" sid="MAT 1:1" />The book of the genealogy.<verse eid="MAT 1:1" /></para>
+  <para style="r">(Luke 3:23-38)</para>
+  <para style="p">
+    <verse number="2" style="v" sid="MAT 1:2" />Abraham became the father of Isaac.<verse eid="MAT 1:2" /></para>
+</usx>
+`;
+    const { usj } = sliceUsjToVerse(usxStringToUsj(usxRef), 1);
+    expect(paragraphs(usj)).toEqual([{ marker: 'p', text: '1The book of the genealogy.' }]);
+    expect(paragraphs(usj).some((p) => p.text.includes('Luke'))).toBe(false);
+  });
+
+  it('does not leak a speaker paragraph into the prior verse', () => {
+    const usxSpeaker = `<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.1">
+  <book code="JOB" style="id">WEB</book>
+  <chapter number="1" style="c" sid="JOB 1" />
+  <para style="p">
+    <verse number="1" style="v" sid="JOB 1:1" />Verse one text.<verse eid="JOB 1:1" /></para>
+  <para style="sp">Job</para>
+  <para style="p">
+    <verse number="2" style="v" sid="JOB 1:2" />Verse two text.<verse eid="JOB 1:2" /></para>
+</usx>
+`;
+    const { usj } = sliceUsjToVerse(usxStringToUsj(usxSpeaker), 1);
+    expect(paragraphs(usj)).toEqual([{ marker: 'p', text: '1Verse one text.' }]);
+    expect(paragraphs(usj).some((p) => p.marker === 'sp')).toBe(false);
+  });
+
+  it('counts char-wrapped text as renderable', () => {
+    const usxChar = `<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.1">
+  <book code="MAT" style="id">WEB</book>
+  <chapter number="1" style="c" sid="MAT 1" />
+  <para style="p">
+    <verse number="1" style="v" sid="MAT 1:1" /><char style="nd">Jesus</char> Christ.<verse eid="MAT 1:1" /></para>
+</usx>
+`;
+    const { isEmpty } = sliceUsjToVerse(usxStringToUsj(usxChar), 1);
+    expect(isEmpty).toBe(false);
+  });
+
+  it('is empty when char-wrapped content is whitespace only', () => {
+    const usxCharWhitespace = `<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.1">
+  <book code="MAT" style="id">WEB</book>
+  <chapter number="1" style="c" sid="MAT 1" />
+  <para style="p">
+    <verse number="5" style="v" sid="MAT 1:5" /><char style="nd">   </char><verse eid="MAT 1:5" /></para>
+</usx>
+`;
+    const { isEmpty } = sliceUsjToVerse(usxStringToUsj(usxCharWhitespace), 5);
+    expect(isEmpty).toBe(true);
   });
 });
