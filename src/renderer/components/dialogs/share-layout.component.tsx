@@ -21,6 +21,14 @@ import {
 import type { ResourcePickerDialogLocalizedStrings } from 'platform-bible-react';
 import { ChevronDown, X } from 'lucide-react';
 
+// Tailwind arbitrary-value width overrides on PopoverContent (`tw:w-[32rem]`, with or without the
+// `!` important modifier) do not take effect in the running app — the class shows up in the DOM but
+// no matching CSS rule is generated, even though the same syntax works in Storybook's build. An
+// inline style sidesteps the class-generation/tailwind-merge dependency entirely and is guaranteed
+// to apply. Sized to match ResourcePickerDialog's own Storybook decorator (560x600) so the resource
+// list has room to show many entries and scroll within a bounded area instead of growing unbounded.
+const RESOURCE_PICKER_POPOVER_STYLE = { width: 560, maxHeight: 400 };
+
 export type ShareLayoutActiveTab = 'ScriptureResource' | 'CommentaryResource' | 'Comments';
 
 export type ShareLayoutResult = {
@@ -203,12 +211,15 @@ export function ShareLayoutDialogContent({
               {localizeString(strings, manageLabelKey[tab])}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="tw:w-[32rem]! tw:p-0">
-            <div className="tw:relative">
+          <PopoverContent className="tw:p-0" style={RESOURCE_PICKER_POPOVER_STYLE}>
+            {/* flex/h-full/min-h-0 so this fills the fixed-height PopoverContent above, giving
+            ResourcePickerDialog's internal `flex-1 overflow-y-auto` list a bounded height to scroll
+            within instead of growing to fit every resource. */}
+            <div className="tw:relative tw:flex tw:h-full tw:min-h-0 tw:flex-col">
               <Button
                 variant="ghost"
                 size="icon"
-                className="tw:absolute tw:top-2 tw:right-2 tw:z-10"
+                className="tw:absolute tw:end-2 tw:top-2 tw:z-10"
                 onClick={() => setOpenAddPickerTab(undefined)}
                 aria-label={localizeString(strings, '%shareLayoutDialog_closePicker_label%')}
               >
@@ -283,7 +294,7 @@ export function ShareLayoutDialogContent({
                   />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="tw:w-[32rem]! tw:p-0">
+              <PopoverContent className="tw:p-0" style={RESOURCE_PICKER_POPOVER_STYLE}>
                 {/*
                   See the comment on the resource-card popovers below: wrap in its own Dialog.Root
                   so its internal DialogTitle gets a distinct id from the outer dialog's title.

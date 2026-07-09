@@ -270,7 +270,7 @@ export default function ResourcePickerDialog({
           })}
         </p>
       )}
-      <div className="tw:flex-1 tw:overflow-y-auto tw:px-4 tw:pb-4">
+      <div className="tw:min-h-0 tw:flex-1 tw:overflow-y-auto tw:px-4 tw:pb-4">
         {isResourcesLoading && (
           <p className="tw:py-8 tw:text-center">
             <Spinner />
