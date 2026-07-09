@@ -16,10 +16,12 @@ import { ResourceCellState } from './resource-cell.utils';
 export const UNAVAILABLE_KEY = '%webView_scriptureTextGrid_cell_unavailable%';
 export const DOWNLOADING_KEY = '%webView_scriptureTextGrid_cell_status_downloading%';
 export const FAILED_KEY = '%webView_scriptureTextGrid_cell_status_failed%';
+export const EMPTY_KEY = '%webView_scriptureTextGrid_cell_verse_empty%';
 export const RESOURCE_CELL_STRING_KEYS = Object.freeze([
   UNAVAILABLE_KEY,
   DOWNLOADING_KEY,
   FAILED_KEY,
+  EMPTY_KEY,
 ] as const);
 
 type ResourceCellLocalizedStringKey = (typeof RESOURCE_CELL_STRING_KEYS)[number];
@@ -38,6 +40,8 @@ export type ResourceCellViewProps = {
   localizedStrings: ResourceCellLocalizedStrings;
   /** The editor rendered when `state` is `ready` (the connected cell supplies `Editorial`). */
   editor: ReactNode;
+  /** When true (verse mode, slice empty), render the empty label instead of the editor. */
+  isVerseEmpty?: boolean;
 };
 
 /**
@@ -51,7 +55,17 @@ export function ResourceCellView({
   textDirection,
   localizedStrings,
   editor,
+  isVerseEmpty,
 }: ResourceCellViewProps) {
+  let readyContent: ReactNode = editor;
+  if (isVerseEmpty) {
+    readyContent = (
+      <div className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:text-center">
+        <span className="tw:text-sm tw:text-muted-foreground">{localizedStrings[EMPTY_KEY]}</span>
+      </div>
+    );
+  }
+
   return (
     <div role="gridcell" aria-label={label} className="tw:flex tw:min-w-0 tw:flex-col">
       <TooltipProvider>
@@ -67,7 +81,7 @@ export function ResourceCellView({
       </TooltipProvider>
       <div className="tw:flex-1 tw:overflow-auto tw:p-2" dir={textDirection}>
         {state === 'ready' ? (
-          editor
+          readyContent
         ) : (
           <div className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:gap-2 tw:text-center">
             {state === 'downloading' && <Spinner />}
