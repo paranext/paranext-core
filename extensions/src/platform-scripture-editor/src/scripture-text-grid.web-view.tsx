@@ -36,11 +36,16 @@ import {
 // The tab is icon-only; this is the hover tooltip / accessible name for it.
 const TITLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
 const VIEW_OPTIONS_BUTTON_KEY = '%webView_scriptureTextGrid_viewOptions_openPanel%';
+// Notification keys are localized by the notification service, so they are NOT fetched via
+// `useLocalizedStrings`; only keys rendered directly in JSX go in `ALL_STRING_KEYS` below.
 const INSTALL_FAILED_KEY = '%webView_selectDblResource_installFailed%';
+const PERSIST_FAILED_KEY = '%webView_scriptureTextGrid_viewOptions_persistFailed%';
+const NO_PROJECT_KEY = '%webView_resourcePanel_noProject%';
 
 const ALL_STRING_KEYS: LocalizeKey[] = [
   TITLE_KEY,
   VIEW_OPTIONS_BUTTON_KEY,
+  NO_PROJECT_KEY,
   ...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
 ];
 
@@ -148,11 +153,13 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     (resourceId: string, checked: boolean) => {
       const { current } = sourcesRef;
       if (!current || !textConnectionPdp) return;
-      persistUserDisplay(textConnectionPdp, resourceId, checked, current).forEach((write) =>
-        write.catch((e) =>
-          logger.warn(`Failed to persist view-options change: ${getErrorMessage(e)}`),
-        ),
-      );
+      const writes = persistUserDisplay(textConnectionPdp, resourceId, checked, current);
+      // `Promise.all` rejects on the first failed write, so a failed toggle notifies once (not once
+      // per underlying list/overlay write).
+      Promise.all(writes).catch((e) => {
+        papi.notifications.send({ message: PERSIST_FAILED_KEY, severity: 'error' });
+        logger.warn(`Failed to persist view-options change: ${getErrorMessage(e)}`);
+      });
     },
     [textConnectionPdp],
   );
@@ -161,9 +168,10 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     (resourceId: string) => {
       const { current } = sourcesRef;
       if (!current || !textConnectionPdp) return;
-      persistUserRemoval(textConnectionPdp, resourceId, current.userReferenced)?.catch((e) =>
-        logger.warn(`Failed to persist removal: ${getErrorMessage(e)}`),
-      );
+      persistUserRemoval(textConnectionPdp, resourceId, current.userReferenced)?.catch((e) => {
+        papi.notifications.send({ message: PERSIST_FAILED_KEY, severity: 'error' });
+        logger.warn(`Failed to persist removal: ${getErrorMessage(e)}`);
+      });
     },
     [textConnectionPdp],
   );
@@ -195,9 +203,10 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
         name: resource.displayName,
         id: resource.dblEntryUid,
       };
-      persistUserAddition(textConnectionPdp, reference, current.userReferenced)?.catch((e) =>
-        logger.warn(`Failed to persist added resource: ${getErrorMessage(e)}`),
-      );
+      persistUserAddition(textConnectionPdp, reference, current.userReferenced)?.catch((e) => {
+        papi.notifications.send({ message: PERSIST_FAILED_KEY, severity: 'error' });
+        logger.warn(`Failed to persist added resource: ${getErrorMessage(e)}`);
+      });
     },
     [dblResourcesProvider, textConnectionPdp],
   );
@@ -263,6 +272,11 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
               onCheckedChange={handleCheckedChange}
               onRemoveFromList={handleRemoveFromList}
               onGetResources={showResourcePicker}
+              // No project/PDP bound yet → every action would silently no-op, so disable the
+              // controls. Show the "no project" prompt only when there is genuinely no project (not
+              // during the brief load after one is bound).
+              disabled={!sources || !textConnectionPdp}
+              disabledMessage={effectiveProjectId ? undefined : localizedStrings[NO_PROJECT_KEY]}
               localizedStrings={localizedStrings}
             />
           </PopoverContent>
