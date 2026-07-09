@@ -1,7 +1,16 @@
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import { useDataProvider, useDialogCallback, useLocalizedStrings } from '@papi/frontend/react';
-import { Button, Popover, PopoverContent, PopoverTrigger } from 'platform-bible-react';
+import {
+  Button,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from 'platform-bible-react';
 import { Settings2 } from 'lucide-react';
 import {
   DblResourceData,
@@ -224,18 +233,26 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     >
       <div className="tw:flex tw:items-center tw:justify-end tw:border-b tw:p-1">
         <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={localizedStrings[VIEW_OPTIONS_BUTTON_KEY]}
-              // Explicit themed colors so the icon is visible in both light and dark themes; a plain
-              // ghost button inherits the (un-themed) default color and vanishes on dark tabs.
-              className="tw:text-muted-foreground tw:hover:text-foreground"
-            >
-              <Settings2 className="tw:h-4 tw:w-4" />
-            </Button>
-          </PopoverTrigger>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={localizedStrings[VIEW_OPTIONS_BUTTON_KEY]}
+                    // Explicit themed colors so the icon is visible in both light and dark themes; a
+                    // plain ghost button inherits the (un-themed) default color and vanishes on dark
+                    // tabs.
+                    className="tw:text-muted-foreground tw:hover:text-foreground"
+                  >
+                    <Settings2 className="tw:h-4 tw:w-4" />
+                  </Button>
+                </PopoverTrigger>
+              </TooltipTrigger>
+              <TooltipContent>{localizedStrings[VIEW_OPTIONS_BUTTON_KEY]}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <PopoverContent className="tw:max-h-[70vh] tw:overflow-y-auto">
             <ResourceCollectionOptions
               viewMode={viewMode}
