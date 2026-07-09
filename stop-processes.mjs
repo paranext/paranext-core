@@ -28,9 +28,9 @@ function killProcessesWithSearchTerm() {
     // everything before the first comma), so we just emit a literal "node,":
     //   <ignored>,<CommandLine>,<ProcessId>
     listCommand =
-      'powershell -NoProfile -NonInteractive -Command "Write-Output \'Node,CommandLine,ProcessId\'; ' +
-      'Get-CimInstance Win32_Process | ForEach-Object { \'node,\' + ' +
-      '$(if ($_.CommandLine) { $_.CommandLine } else { \'\' }) + \',\' + $_.ProcessId }"';
+      "powershell -NoProfile -NonInteractive -Command \"Write-Output 'Node,CommandLine,ProcessId'; " +
+      "Get-CimInstance Win32_Process | ForEach-Object { 'node,' + " +
+      "$(if ($_.CommandLine) { $_.CommandLine } else { '' }) + ',' + $_.ProcessId }\"";
   } else if (process.platform === 'darwin' || process.platform === 'linux') {
     listCommand = 'ps -A -o pid,command';
   } else {
