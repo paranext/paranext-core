@@ -104,12 +104,18 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   }, [isLoadingLocalizedStrings, localizedStrings, updateWebViewDefinition]);
 
   // Pick the tab icon variant from the web view's themed foreground brightness (light text ⇒ dark
-  // theme). getComputedStyle serializes colors to `rgb(...)`, so parsing is reliable; the observer
-  // re-checks when the theme toggles the root class/attribute.
+  // theme). Read the root element, which carries `tw:text-foreground`, so the color follows the
+  // theme (reading `document.body` returns the un-themed default). getComputedStyle serializes colors
+  // to `rgb(...)`, so parsing is reliable; the observer re-checks when the theme toggles the root
+  // class/attribute.
+  // A DOM ref requires a `null` initial value per React convention.
+  // eslint-disable-next-line no-null/no-null
+  const rootRef = useRef<HTMLDivElement>(null);
   const [isDarkTheme, setIsDarkTheme] = useState(false);
   useEffect(() => {
     const recompute = () => {
-      const channels = getComputedStyle(document.body).color.match(/\d+/g);
+      if (!rootRef.current) return;
+      const channels = getComputedStyle(rootRef.current).color.match(/\d+/g);
       if (!channels || channels.length < 3) return;
       const [r, g, b] = channels.map(Number);
       setIsDarkTheme(0.299 * r + 0.587 * g + 0.114 * b > 140);
@@ -222,7 +228,11 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   const installingResourceNames = useMemo(() => installing.map((info) => info.name), [installing]);
 
   return (
-    <div data-testid="scripture-text-grid" className="tw:flex tw:h-screen tw:flex-col">
+    <div
+      data-testid="scripture-text-grid"
+      ref={rootRef}
+      className="tw:flex tw:h-screen tw:flex-col tw:bg-background tw:text-foreground"
+    >
       <div className="tw:flex tw:items-center tw:justify-end tw:border-b tw:p-1">
         <Popover>
           <PopoverTrigger asChild>
@@ -230,6 +240,9 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
               variant="ghost"
               size="icon"
               aria-label={localizedStrings[VIEW_OPTIONS_BUTTON_KEY]}
+              // Explicit themed colors so the icon is visible in both light and dark themes; a plain
+              // ghost button inherits the (un-themed) default color and vanishes on dark tabs.
+              className="tw:text-muted-foreground tw:hover:text-foreground"
             >
               <Settings2 className="tw:h-4 tw:w-4" />
             </Button>
