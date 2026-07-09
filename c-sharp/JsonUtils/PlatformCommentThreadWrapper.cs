@@ -12,6 +12,14 @@ public class PlatformCommentThreadWrapper
     private readonly CommentThread _thread;
     private List<Comment>? _additionalComments;
 
+    // Memoized RootCommentId. It is read once per comment (via
+    // PlatformCommentWrapper.IsFirstCommentInThread) plus several more times per conflict root, so
+    // recomputing its O(n) scan on every read made serializing an n-comment thread O(n^2). Computed
+    // lazily at serialization time (after any dedup merges) and reset by MergeCommentsFrom so a value
+    // cached before a merge cannot go stale.
+    private string? _rootCommentId;
+    private bool _rootCommentIdComputed;
+
     /// <summary>
     /// Maps comment IDs of merged comments to their original <see cref="CommentThread"/> so that
     /// <see cref="IsCommentRead"/> evaluates read status against the correct object. Without this,
@@ -80,7 +88,18 @@ public class PlatformCommentThreadWrapper
     /// stable identity: PT9 sorts same-thread comments by date (<c>Comment.CompareTo</c>) and
     /// <c>CommentThread.AddNewComment</c> forces every reply's date past the newest existing comment.
     /// </summary>
-    internal string? RootCommentId => GetRootCommentId(AllComments);
+    internal string? RootCommentId
+    {
+        get
+        {
+            if (!_rootCommentIdComputed)
+            {
+                _rootCommentId = GetRootCommentId(AllComments);
+                _rootCommentIdComputed = true;
+            }
+            return _rootCommentId;
+        }
+    }
 
     /// <summary>
     /// Identifies the root (first) comment of a set of thread comments by earliest date. Shared so
@@ -88,7 +107,7 @@ public class PlatformCommentThreadWrapper
     /// for why list position is not reliable).
     /// </summary>
     internal static string? GetRootCommentId(IEnumerable<Comment> comments) =>
-        comments.OrderBy(c => c.DateTime).FirstOrDefault()?.Id;
+        comments.MinBy(c => c.DateTime)?.Id;
 
     /// <summary>
     /// Adds comments from another wrapper that are not already present in this thread.
@@ -111,6 +130,8 @@ public class PlatformCommentThreadWrapper
                 _mergedCommentSourceThreads[comment.Id] =
                     other._mergedCommentSourceThreads?.GetValueOrDefault(comment.Id)
                     ?? other._thread;
+                // AllComments changed, so any memoized root is stale.
+                _rootCommentIdComputed = false;
             }
         }
     }

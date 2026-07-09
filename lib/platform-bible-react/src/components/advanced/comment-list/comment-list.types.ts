@@ -3,7 +3,6 @@ import {
   LanguageStrings,
   LegacyComment,
   LegacyCommentThread,
-  LocalizeKey,
 } from 'platform-bible-utils';
 
 /** Options for adding a comment to a thread */
@@ -23,7 +22,7 @@ export type AddCommentToThreadOptions = {
  * this component in an extension, you can pass it into the useLocalizedStrings hook to easily
  * obtain the localized strings and pass them into the localizedStrings prop of this component
  */
-export const COMMENT_LIST_STRING_KEYS: LocalizeKey[] = [
+export const COMMENT_LIST_STRING_KEYS = Object.freeze([
   '%comment_assign_team%',
   '%comment_assign_unassigned%',
   '%comment_assigned_to%',
@@ -44,9 +43,13 @@ export const COMMENT_LIST_STRING_KEYS: LocalizeKey[] = [
   '%comment_aria_mark_as_read%',
   '%comment_aria_mark_as_unread%',
   '%comment_aria_resolve_thread%',
-];
+] as const);
 
-/** Type definition for the localized strings used in the CommentList component */
+/**
+ * Type definition for the localized strings used in the CommentList component. Handy for typing the
+ * object a consumer builds from `useLocalizedStrings(COMMENT_LIST_STRING_KEYS)`, so a mistyped key
+ * is caught at compile time.
+ */
 export type CommentListLocalizedStrings = {
   [localizedKey in (typeof COMMENT_LIST_STRING_KEYS)[number]]?: string;
 };

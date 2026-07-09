@@ -40,6 +40,10 @@ const config = defineConfig({
   },
   test: {
     globals: true,
+    // Warm the lazy one-time ICU init behind Intl.* so it never lands inside a test's timeout window
+    // on a slow CI worker. This workspace's intl/* tests construct Intl.NumberFormat/DateTimeFormat/
+    // Collator directly. Shares the repo-root setup file. See vitest.setup.ts for rationale.
+    setupFiles: [path.resolve(__dirname, '../../vitest.setup.ts')],
   },
 });
 export default config;

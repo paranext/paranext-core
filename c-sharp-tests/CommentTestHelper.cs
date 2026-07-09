@@ -163,6 +163,47 @@ internal static class CommentTestHelper
     }
 
     /// <summary>
+    /// Creates a verseText merge-conflict Comment where BOTH sides replaced a word, so both
+    /// strikethrough (deletion) and bold (insertion) tokens appear in the accepted AND rejected
+    /// diffs. Distinct from <see cref="CreateVerseTextConflictCommentReplacement"/>, which is
+    /// loser-only (no common ancestor, <c>AcceptedChangeXmlStr == null</c>).
+    /// Common ancestor word: "town". Loser replaced it with "village"; winner replaced it with "city".
+    /// Contents (parent→loser diff): town struck through, village bolded.
+    /// AcceptedChangeXmlStr (parent→winner diff): town struck through, city bolded.
+    /// Verse: winner plain USFM (city).
+    /// </summary>
+    internal static Comment CreateVerseTextConflictCommentReplacementBothSides()
+    {
+        XmlDocument contentsDoc = new XmlDocument();
+        contentsDoc.LoadXml(
+            """
+            <Contents>Two different people edited this verse. The change shown here (in red) is not in the current copy of the text.<p>
+                <language name="es-015-vaidika">
+                <p>\v 1 When Jesus was born in the <strikethrough><color name="red">town </color></strikethrough><bold><color name="red">village </color></bold>of Bethlehem in Judea, Herod was king.</p>
+                </language>
+            </p>
+            </Contents>
+            """
+        );
+
+        DummyUser user = new DummyUser("Tim Steenwyk");
+        Comment testComment = new Comment(user);
+        testComment.Thread = "a1b2c3d4";
+        testComment.VerseRefStr = "MAT 2:1";
+        testComment.Date = "2011-08-16T15:49:18.4019847-04:00";
+        testComment.Status = NoteStatus.Todo;
+        testComment.HideInTextWindow = false;
+        testComment.Contents = contentsDoc.DocumentElement;
+        testComment.Type = NoteType.Conflict;
+        testComment.ConflictType = NoteConflictType.VerseTextConflict;
+        testComment.AcceptedChangeXmlStr =
+            """<p><language name="es-015-vaidika"><p>\v 1 When Jesus was born in the <strikethrough><color name="red">town </color></strikethrough><bold><color name="red">city </color></bold>of Bethlehem in Judea, Herod was king.</p></language></p>""";
+        testComment.Verse =
+            @"\v 1 When Jesus was born in the city of Bethlehem in Judea, Herod was king.";
+        return testComment;
+    }
+
+    /// <summary>
     /// A verseText merge-conflict Comment with NO common ancestor (parent == null in the merger),
     /// mirroring two people independently drafting the same previously-absent verse. In that case
     /// <c>BookFileMerger.AppendDiffXml</c> diffs <c>""</c> against the losing side, so the Contents

@@ -20,6 +20,7 @@ import {
   DropdownMenuTrigger,
   Spinner,
   usePromise,
+  useExtraValidMarkers,
 } from 'platform-bible-react';
 import {
   DblResourceData,
@@ -446,13 +447,21 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // EditorRef requires null initial value per React ref convention
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | null>(null);
+  // Markers this resource's content actually uses. Passed to the editor as extraValidMarkers so it
+  // doesn't warn "Unexpected <kind> marker" for handbook/commentary markers (e.g. \pn, \jmp) — scoped
+  // per-resource from the USJ being displayed, never a global list. Empty for content that needs
+  // nothing extra, so the option is omitted (opt-in, no behavior change). The returned array keeps a
+  // stable identity while the marker set is unchanged, so `options` doesn't churn on every fetch.
+  const extraValidMarkers = useExtraValidMarkers(usjFromPdp);
+
   const options: EditorOptions = useMemo(
     () => ({
       isReadonly: true,
       hasSpellCheck: false,
       textDirection,
+      ...(extraValidMarkers.length > 0 ? { nodes: { extraValidMarkers } } : {}),
     }),
-    [textDirection],
+    [textDirection, extraValidMarkers],
   );
 
   useEffect(() => {

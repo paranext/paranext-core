@@ -1,21 +1,46 @@
 import { useStylesheet } from 'platform-bible-react';
 import hbkengStyles from './marker-styles/hbkeng.scss?inline';
+import hbkcsStyles from './marker-styles/hbkcs.scss?inline';
+import hbkctStyles from './marker-styles/hbkct.scss?inline';
+import hbkfraStyles from './marker-styles/hbkfra.scss?inline';
+import hbkptStyles from './marker-styles/hbkpt.scss?inline';
+import hbkespStyles from './marker-styles/hbkesp.scss?inline';
 import tnnStyles from './marker-styles/tnn.scss?inline';
+import tnnespStyles from './marker-styles/tnnesp.scss?inline';
+import tnnptgStyles from './marker-styles/tnnptg.scss?inline';
+import tnnfrStyles from './marker-styles/tnnfr.scss?inline';
 import tndStyles from './marker-styles/tnd.scss?inline';
+import tndespStyles from './marker-styles/tndesp.scss?inline';
+import tndptgStyles from './marker-styles/tndptg.scss?inline';
 import commentaryOverrides from './marker-styles/commentary-overrides.scss?inline';
 
 // Keyed on DBL entry UID (lowercase). A locally-installed DBL resource's projectId is the
 // dblEntryUid plus a suffix, so we match by `startsWith`. The same UIDs back the C#
 // `CommentariesWhiteList` in DblResourcesDataProvider.cs — keep these two lists in sync.
 const COMMENTARY_STYLES_BY_DBL_ENTRY_UID: Record<string, string> = {
-  '97196133a859179b': hbkengStyles, // HBKENG — UBS Translator's Handbook (English)
-  '090f7cbf7924b245': tnnStyles, // TNN    — UBS Translator's Notes
-  b58b80b798e22be6: tndStyles, // TND    — UBS Translator's Notes (Deuterocanon)
+  // UBS Translator's Handbook
+  '97196133a859179b': hbkengStyles, // HBKENG — English
+  '6c21e835eb8ca3b2': hbkcsStyles, // HBKCS — Chinese (Simplified)
+  '77dc05b26ce399dd': hbkctStyles, // HBKCT — Chinese (Traditional)
+  '815f988992157b10': hbkfraStyles, // HBKFRA — French
+  '24daa5f24f0020b3': hbkptStyles, // HBKPT — Portuguese
+  '1ff24938918bd69e': hbkespStyles, // HBKESP — Spanish
+  // UBS Translator's Notes
+  '090f7cbf7924b245': tnnStyles, // TNN — English
+  '0617c397f003127c': tnnespStyles, // TNNESP — Spanish
+  '233345361843ce8b': tnnptgStyles, // TNNPTG — Portuguese
+  d95fde28b4346e61: tnnfrStyles, // TNNFR — French
+  // UBS Translator's Notes (Deuterocanon)
+  b58b80b798e22be6: tndStyles, // TND — English
+  '943164c222f75687': tndespStyles, // TNDESP — Spanish
+  e0b3f20ff8677585: tndptgStyles, // TNDPTG — Portuguese
 };
 
 /**
- * Loads the marker stylesheet for a supported commentary (HBKENG, TNN, TND) when the project being
- * displayed in this WebView is one of those commentaries. No-op for any other project.
+ * Loads the marker stylesheet for a supported UBS Translator's Handbook/Notes commentary (see
+ * {@link COMMENTARY_STYLES_BY_DBL_ENTRY_UID} for the current set of resources and languages) when
+ * the project being displayed in this WebView is one of those commentaries. No-op for any other
+ * project.
  *
  * The stylesheet is injected into the WebView's iframe via a `<style>` element, so the rules only
  * affect the current iframe and do not leak into other open WebViews (project editor, other
