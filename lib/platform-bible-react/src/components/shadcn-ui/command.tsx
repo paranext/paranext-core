@@ -143,8 +143,10 @@ function CommandList({ className, ...props }: React.ComponentProps<typeof Comman
     <CommandPrimitive.List
       data-slot="command-list"
       className={cn(
-        // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
-        'pr-twp tw:no-scrollbar tw:max-h-72 tw:scroll-py-1 tw:overflow-x-hidden tw:overflow-y-auto tw:outline-none',
+        // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation.
+        // CUSTOM: Removed tw:no-scrollbar so the vertical scrollbar is visible when the
+        // list overflows tw:max-h-72 (needed for long filter lists like language pickers).
+        'pr-twp tw:max-h-72 tw:scroll-py-1 tw:overflow-x-hidden tw:overflow-y-auto tw:outline-none',
         className,
       )}
       {...props}
