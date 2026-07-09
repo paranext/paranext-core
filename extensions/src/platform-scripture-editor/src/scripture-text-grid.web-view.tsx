@@ -44,6 +44,11 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 
   // Fire first-open overlay init once per resolved projectId. The server-side marker makes repeated
   // calls safe; this guard just avoids redundant round-trips within a single web-view lifetime.
+  //
+  // NOTE (test coverage): the .catch retry path below is not exercised end-to-end in A2. The grid
+  // opens in the PT10 default layout with no projectId, so this effect returns early and the retry
+  // handler never runs until A3 wires real project selection. The path is deliberately left untested
+  // here and should get a partial-failure/network-error test in A3 when it is actually driven.
   const initializedProjectIds = useRef(new Set<string>());
   useEffect(() => {
     if (!projectId || !textConnectionPdp) return;

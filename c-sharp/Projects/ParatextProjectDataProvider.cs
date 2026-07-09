@@ -77,8 +77,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     private UserProjectSettings? _userProjectSettings;
     private string? _cachedUserId;
 
-    private const string OverlaySettingName = "ShownByDefaultOverlay";
-    private const string OverlayInitializedMarkerName = "ShownByDefaultOverlayInitialized";
+    // Reference the shared data-type constant so the storage key and the data-type name can't drift.
+    private const string OverlaySettingName = ProjectDataType.SHOWN_BY_DEFAULT_OVERLAY;
+    private const string OverlayInitializedMarkerName = OverlaySettingName + "Initialized";
     private const string OverlaySchemaVersion = "1.0.0";
 
     #endregion
@@ -1893,93 +1894,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     }
 
     /// <summary>
-    /// When <paramref name="writtenList"/> contains Bible-text references flagged
-    /// <c>IsResourceShownByDefault == true</c> that are not already present (by reference type + Id)
-    /// in PT_REFERENCED_PROJECTS_AND_RESOURCES, appends them to that list so the existing (private)
-    /// download path installs them. Idempotent; the appended copy carries no flags (it exists only to
-    /// drive download) and preserves the original <c>Name</c> (and any <c>ExtraData</c>).
-    /// <para>
-    /// Guard contract: if PT_REFERENCED_PROJECTS_AND_RESOURCES is present-but-unparseable (wrong
-    /// major version, missing version prefix, or corrupt JSON) the promote is skipped entirely with a
-    /// warning and the stored value is left untouched. Absent/empty stored values still mean "empty
-    /// list, proceed" (the normal first-promote case). This lenient-with-guard contract is
-    /// intentionally distinct from <see cref="GetProjectSetting"/>'s strict throwing contract —
-    /// promote is a best-effort background operation, while GetProjectSetting is a user-visible read
-    /// that must surface errors.
-    /// </para>
-    /// </summary>
-    private void AutoPromoteShownByDefaultResources(
-        ScrText scrText,
-        string writtenPtSettingName,
-        ResourceReferenceList writtenList
-    )
-    {
-        // Carry the full ResourceReference items (not just keys) so the promoted copy can preserve Name.
-        var flaggedItems = writtenList
-            .Items.Where(i =>
-                i.IsResourceShownByDefault == true && TryGetBibleTextKey(i) is not null
-            )
-            .ToList();
-        if (flaggedItems.Count == 0)
-            return;
-
-        if (
-            !TryReadRawResourceReferenceList(
-                scrText,
-                ProjectSettingsNames.PT_REFERENCED_PROJECTS_AND_RESOURCES,
-                out var referenced
-            )
-        )
-        {
-            Console.WriteLine(
-                $"AutoPromote skipped: {ProjectSettingsNames.PT_REFERENCED_PROJECTS_AND_RESOURCES} "
-                    + "is present but has an unrecognized major version or could not be deserialized. "
-                    + "The stored value has been left untouched."
-            );
-            return;
-        }
-
-        // Present = all items currently stored in PT_REFERENCED_PROJECTS_AND_RESOURCES.
-        // "referenced" already reflects the just-written value when writtenPtSettingName is
-        // PT_REFERENCED_PROJECTS_AND_RESOURCES (SetSetting+Save ran before this helper).
-        var present = new HashSet<(string, string)>();
-        foreach (var i in referenced.Items)
-        {
-            var key = TryGetBibleTextKey(i);
-            if (key is not null)
-                present.Add(key.Value);
-        }
-
-        var toAppend = flaggedItems
-            .Where(i => TryGetBibleTextKey(i) is (string, string) k && !present.Contains(k))
-            .ToList();
-        if (toAppend.Count == 0)
-            return;
-
-        var appended = referenced.Items.ToList();
-        foreach (var item in toAppend)
-            // Strip flags from the promoted copy: it exists only to drive download.
-            appended.Add(
-                item with
-                {
-                    IsResourceShownByDefault = null,
-                    IsResourceShownForUser = null,
-                }
-            );
-
-        var updated = referenced with
-        {
-            Items = appended,
-            DataVersion = ResourceReferenceList.CurrentDataVersion,
-        };
-        scrText.Settings.SetSetting(
-            ProjectSettingsNames.PT_REFERENCED_PROJECTS_AND_RESOURCES,
-            $"{ResourceReferenceList.CurrentFormatVersion} {updated.SerializeToJson()}"
-        );
-        scrText.Settings.Save(false);
-    }
-
-    /// <summary>
     /// Returns the (discriminant, Id) match key for a Bible-text reference
     /// (<see cref="ProjectReference"/> = "project", <see cref="DblResourceReference"/> =
     /// "dblResource"); <c>null</c> for all other reference types.
@@ -1991,53 +1905,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             DblResourceReference d => ("dblResource", d.Id),
             _ => null,
         };
-
-    /// <summary>
-    /// Reads a project-scope resource-reference-list setting straight from ScrText settings.
-    /// Returns <c>true</c> with an empty list when absent/empty (normal first-promote case).
-    /// Returns <c>false</c> (leaving <paramref name="list"/> as <c>default</c>) when the stored
-    /// value is non-empty but (a) has no space-separated version prefix, (b) has an unparseable
-    /// version, (c) has a major version != <see cref="ResourceReferenceList.CurrentMajorVersion"/>,
-    /// or (d) fails JSON deserialization — so the caller can skip rather than clobber.
-    /// </summary>
-    private static bool TryReadRawResourceReferenceList(
-        ScrText scrText,
-        string ptSettingName,
-        out ResourceReferenceList list
-    )
-    {
-        if (
-            !scrText.Settings.ParametersDictionary.TryGetValue(ptSettingName, out string? stored)
-            || string.IsNullOrEmpty(stored)
-        )
-        {
-            list = new ResourceReferenceList();
-            return true;
-        }
-        int spaceIndex = stored.IndexOf(' ');
-        if (spaceIndex < 0)
-        {
-            list = default!;
-            return false;
-        }
-        string versionStr = stored[..spaceIndex];
-        if (
-            !System.Version.TryParse(versionStr, out var parsedVersion)
-            || parsedVersion.Major != ResourceReferenceList.CurrentMajorVersion
-        )
-        {
-            list = default!;
-            return false;
-        }
-        var deserialized = stored[(spaceIndex + 1)..].DeserializeFromJson<ResourceReferenceList>();
-        if (deserialized is null)
-        {
-            list = default!;
-            return false;
-        }
-        list = deserialized;
-        return true;
-    }
 
     /// <summary>
     /// Determines if the current user can write the project settings for "text connections"
@@ -2250,12 +2117,11 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     /// <summary>
     /// First-open initialization of the current user's shown-by-default overlay for this project.
-    /// For each project-scope Bible-text reference whose <c>IsResourceShownByDefault</c> is set,
-    /// records overlay[resourceId] = that value. Idempotent: a per-user-per-project marker prevents
-    /// re-initialization, so later opens (and user un-checks) are preserved. Returns <c>false</c>
-    /// when already initialized. When a resource is flagged in both
-    /// <c>PT_MODEL_TEXTS</c> and <c>PT_REFERENCED_PROJECTS_AND_RESOURCES</c> with different values,
-    /// the <c>PT_REFERENCED_PROJECTS_AND_RESOURCES</c> value wins (iteration order).
+    /// For each Bible-text reference in <c>PT_REFERENCED_PROJECTS_AND_RESOURCES</c> whose
+    /// <c>IsResourceShownByDefault</c> is set, records overlay[resourceId] = that value. Idempotent:
+    /// a per-user-per-project marker prevents re-initialization, so later opens (and user un-checks)
+    /// are preserved. Returns <c>false</c> when already initialized. Model texts do NOT participate
+    /// in shown-by-default and are intentionally not read here.
     /// </summary>
     public bool InitializeShownByDefaultOverlay(object? param = null)
     {
@@ -2265,23 +2131,20 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             return false;
 
         var overlay = GetShownByDefaultOverlay();
-        foreach (
-            var pbSettingName in new[]
-            {
-                ProjectSettingsNames.PB_MODEL_TEXTS,
-                ProjectSettingsNames.PB_REFERENCED_PROJECTS_AND_RESOURCES,
-            }
+        if (
+            GetProjectSetting(ProjectSettingsNames.PB_REFERENCED_PROJECTS_AND_RESOURCES)
+            is ResourceReferenceList list
         )
-        {
-            if (GetProjectSetting(pbSettingName) is not ResourceReferenceList list)
-                continue;
             foreach (var item in list.Items)
                 if (
                     item.IsResourceShownByDefault is bool shown
                     && TryGetBibleTextKey(item) is (_, string id)
                 )
+                    // Overlay is keyed by resource id only (matching the TS `{ [id]: boolean }`
+                    // shape), while Bible-text refs are dedup-keyed by (type, id). Safe because
+                    // project ids are 40-char hex and DBL ids 48-char hex, so ids never collide
+                    // across the two types; revisit this if a future ref type reuses id strings.
                     overlay[id] = shown;
-        }
 
         WriteOverlay(overlay);
         settings.SetSetting(
@@ -2296,6 +2159,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return true;
     }
 
+    // The overlay is a flat { id -> bool } map, so it is stored as a JSON blob inside <Items> rather
+    // than as the structured XML the sibling user-list settings use (ResourceReferenceList.ToXml).
+    // Structured XML earns its keep for the resource-reference lists (nested, typed items); for a
+    // flat map it would add ceremony without benefit, and JSON round-trips the map directly.
     private void WriteOverlay(Dictionary<string, bool> map)
     {
         GetUserProjectSettings()

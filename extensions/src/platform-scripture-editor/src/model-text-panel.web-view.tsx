@@ -23,7 +23,7 @@ import type {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { isDblResourceReference } from './resource-reference.utils';
-import { DEFAULT_RESOURCE_REFERENCE_LIST } from './select-dbl-resource';
+import { DEFAULT_RESOURCE_REFERENCE_LIST } from './resource-reference-list.const';
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
