@@ -50,6 +50,11 @@ export function ReferenceHistoryButtons({ scrollGroupId }: ReferenceHistoryButto
     ),
   );
 
+  // TODO (localization): labels hardcode `formatScrRef(_, 'English')`, so book names do not
+  // localize — matching the adjacent BookChapterControl's still-English recent-searches list.
+  // Localizing these (and the many other `formatScrRef(_, 'English')` sites across the app) is
+  // bigger-picture work to tackle together; when BookChapterControl gains localized book names,
+  // thread them through to these labels too.
   const backItems: NavigationHistoryItem[] = useMemo(
     () =>
       history.back.slice(1).map((entry, i) => ({

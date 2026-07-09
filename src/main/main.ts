@@ -684,6 +684,11 @@ async function main() {
         process.platform,
       );
       if (physicalHistoryDirection) {
+        // NOTE (PT-4143): this preventDefault is global and focus-blind — it fires for any focus
+        // context, including inside WebView iframes, and even when there is no history to navigate
+        // to. No shipping keybinding is shadowed today (the Lexical editor indents with Tab), but a
+        // future editor/extension binding ⌘[ / ⌘] or Alt+Arrow would be silently swallowed here.
+        // Tracked in PT-4143.
         event.preventDefault();
         (async () => {
           try {

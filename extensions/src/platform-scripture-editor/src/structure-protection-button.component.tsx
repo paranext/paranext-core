@@ -2,6 +2,7 @@ import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 're
 import {
   Button,
   ButtonGroup,
+  isMacOs,
   Kbd,
   Tooltip,
   TooltipContent,
@@ -216,8 +217,8 @@ export function StructureProtectionButton({
     setUserProtection,
   } = useStructureProtectionState(projectId);
 
-  // OS-appropriate shortcut symbols, matching the editor web-view's `/Macintosh/i` detection.
-  const isMac = useMemo(() => /Macintosh/i.test(navigator.userAgent), []);
+  // OS-appropriate shortcut symbols.
+  const isMac = isMacOs();
   // Windows orders modifiers Ctrl, Shift, Alt; Linux/GNOME orders them Ctrl, Alt, Shift. This only
   // affects the project shortcut, which is the one combo with both Shift and Alt.
   const isWindows = useMemo(() => /Windows/i.test(navigator.userAgent), []);

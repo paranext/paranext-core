@@ -307,3 +307,4 @@ export {
 // Utils
 export { cn } from './utils/shadcn-ui/utils';
 export { getToolbarOSReservedSpaceClassName } from './components/advanced/toolbar.component';
+export { isMacOs } from './utils/platform.util';

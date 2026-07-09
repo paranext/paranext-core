@@ -162,12 +162,14 @@ const referenceHistories = new Map<ScrollGroupId, ReferenceHistory>();
  * seeding history on layout restore). Internal only — external callers get copies via
  * {@link getReferenceHistorySync}.
  */
-function getOrCreateReferenceHistory(scrollGroupId: ScrollGroupId): ReferenceHistory {
+function getOrCreateReferenceHistory(scrollGroupId: ScrollGroupId = 0): ReferenceHistory {
   let history = referenceHistories.get(scrollGroupId);
   if (!history) {
     history = createEmptyReferenceHistory();
     recordNavigation(history, {
-      scrRef: getScrRefSync(scrollGroupId),
+      // deepClone so the seed entry never aliases the live stored ref that getScrRefSync returns by
+      // reference (callers such as the module-load migration mutate stored refs in place)
+      scrRef: deepClone(getScrRefSync(scrollGroupId)),
       sourceProjectId: getScrRefSourceProjectIdSync(scrollGroupId),
     });
     referenceHistories.set(scrollGroupId, history);
@@ -243,24 +245,32 @@ function emitReferenceHistoryChange(scrollGroupId: ScrollGroupId, history: Refer
 }
 
 /** See {@link IScrollGroupRemoteService.getReferenceHistory} */
-export function getReferenceHistorySync(scrollGroupId: ScrollGroupId): ReferenceHistory {
+export function getReferenceHistorySync(scrollGroupId: ScrollGroupId = 0): ReferenceHistory {
   return deepClone(getOrCreateReferenceHistory(scrollGroupId));
 }
 
 /** See {@link IScrollGroupRemoteService.navigateReferenceHistory} */
 export function navigateReferenceHistorySync(
-  scrollGroupId: ScrollGroupId,
+  scrollGroupId: ScrollGroupId | undefined,
   offset: number,
 ): boolean {
-  const history = getOrCreateReferenceHistory(scrollGroupId);
-  // `navigateHistory` mutates the stacks before `setScrRefSync` runs. That ordering is safe
-  // because `setScrRefSync` cannot fail for entries recorded through the normal path: adjacent
-  // stack entries always differ in book+chapter and were valid when recorded.
+  // Default undefined -> 0, matching getScrRefSync / setScrRefSync, so an undefined id navigates
+  // group 0 rather than a phantom history keyed under `undefined`.
+  const groupId = scrollGroupId ?? 0;
+  const history = getOrCreateReferenceHistory(groupId);
+  // `navigateHistory` mutates the stacks before `setScrRefSync` runs. Safe for the verse position:
+  // adjacent entries always differ in book+chapter, so a single-step move is never a no-op and the
+  // stored ref ends up matching back[0]. CAVEAT: a multi-step jump can land on a NON-adjacent entry
+  // with the same book/chapter/verse but a different `sourceProjectId` (e.g. a sourceless
+  // duplicate); setScrRefSync's no-op guard then returns without rewriting the stored source frame,
+  // so it can briefly lag this entry's. Low impact — no onDidUpdateScrRef emit, self-heals on the
+  // next navigation, and only affects a versification-divergent ref read by a freshly-mounted
+  // follower. See PR #2520 review finding #6.
   const destination = navigateHistory(history, offset);
   if (!destination) return false;
-  // The stacks already reflect the navigation; skip recording so it is not double-pushed
-  setScrRefSync(scrollGroupId, destination.scrRef, destination.sourceProjectId, false);
-  emitReferenceHistoryChange(scrollGroupId, history);
+  // The stacks already reflect the navigation; skip recording so it is not double-pushed.
+  setScrRefSync(groupId, destination.scrRef, destination.sourceProjectId, false);
+  emitReferenceHistoryChange(groupId, history);
   return true;
 }
 
@@ -658,9 +668,10 @@ const scrollGroupService: IScrollGroupRemoteService = {
 
 /** Register the network object and PAPI commands that back the scroll group service */
 export async function startScrollGroupService(): Promise<void> {
-  await networkObjectService.set(NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE, scrollGroupService);
-
+  // Registering the network object and the history-navigation commands are independent, so run
+  // them concurrently.
   await Promise.all([
+    networkObjectService.set(NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE, scrollGroupService),
     registerCommand(
       'platform.navigateBackInReferenceHistory',
       async (scrollGroupId) => navigateReferenceHistorySync(scrollGroupId, -1),

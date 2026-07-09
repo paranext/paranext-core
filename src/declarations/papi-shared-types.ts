@@ -169,6 +169,7 @@ declare module 'papi-shared-types' {
      *
      * @param scrollGroupId Scroll group whose history to navigate
      * @returns `true` if navigation happened; `false` when there is no history to go back to
+     * @experimental
      */
     'platform.navigateBackInReferenceHistory': (scrollGroupId: ScrollGroupId) => Promise<boolean>;
     /**
@@ -176,6 +177,7 @@ declare module 'papi-shared-types' {
      *
      * @param scrollGroupId Scroll group whose history to navigate
      * @returns `true` if navigation happened; `false` when there is no history to go forward to
+     * @experimental
      */
     'platform.navigateForwardInReferenceHistory': (
       scrollGroupId: ScrollGroupId,
@@ -188,6 +190,7 @@ declare module 'papi-shared-types' {
      * @param offset Signed number of steps: negative = back, positive = forward
      * @returns `true` if navigation happened; `false` if the offset was 0, non-integer, or out of
      *   range
+     * @experimental
      */
     'platform.navigateReferenceHistoryByOffset': (
       scrollGroupId: ScrollGroupId,
@@ -198,6 +201,8 @@ declare module 'papi-shared-types' {
     /**
      * Get the current UI layout direction ('ltr' or 'rtl'). This is the user's global UI direction
      * preference (the same source RTL-aware components use), NOT any project's text direction.
+     *
+     * @experimental
      */
     'platform.getInterfaceDirection': () => Promise<'ltr' | 'rtl'>;
 
@@ -905,7 +910,11 @@ declare module 'papi-shared-types' {
     'platform.onDidReloadExtensions': boolean;
     /** Emitted when the Scripture reference for a scroll group changes. */
     'scrollGroup:onDidUpdateScrRef': ScrollGroupUpdateInfo;
-    /** Emitted when a scroll group's back/forward reference history changes. */
+    /**
+     * Emitted when a scroll group's back/forward reference history changes.
+     *
+     * @experimental
+     */
     'scrollGroup:onDidChangeReferenceHistory': ReferenceHistoryUpdateInfo;
     /** @deprecated 13 November 2024. Use the `webView:onDidOpenWebView` event instead. */
     'webView:onDidAddWebView': OpenWebViewEvent;

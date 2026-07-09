@@ -66,7 +66,11 @@ export type ScrollGroupUpdateInfo = {
   sourceProjectId?: string;
 };
 
-/** One visited location in a scroll group's reference history */
+/**
+ * One visited location in a scroll group's reference history
+ *
+ * @experimental
+ */
 export type ReferenceHistoryEntry = {
   /** The visited Scripture reference */
   scrRef: SerializedVerseRef;
@@ -80,6 +84,8 @@ export type ReferenceHistoryEntry = {
 /**
  * Back/forward reference history for one scroll group. Session-only (in-memory; resets on app
  * restart)
+ *
+ * @experimental
  */
 export type ReferenceHistory = {
   /** Back stack. Index 0 is the CURRENT location; index 1 is one step back */
@@ -88,7 +94,11 @@ export type ReferenceHistory = {
   forward: ReferenceHistoryEntry[];
 };
 
-/** Information about a change to a scroll group's reference history */
+/**
+ * Information about a change to a scroll group's reference history
+ *
+ * @experimental
+ */
 export type ReferenceHistoryUpdateInfo = {
   /** The scroll group whose history changed */
   scrollGroupId: ScrollGroupId;
@@ -148,6 +158,7 @@ export interface IScrollGroupRemoteService {
    *
    * @param scrollGroupId Scroll group whose history to get
    * @returns Copy of the scroll group's reference history
+   * @experimental
    */
   getReferenceHistory(scrollGroupId: ScrollGroupId): Promise<ReferenceHistory>;
   /**
@@ -157,6 +168,7 @@ export interface IScrollGroupRemoteService {
    * @param scrollGroupId Scroll group whose history to navigate
    * @param offset Signed number of steps. -1 = back one, +1 = forward one
    * @returns `true` if navigation happened; `false` if the offset was 0 or out of range
+   * @experimental
    */
   navigateReferenceHistory(scrollGroupId: ScrollGroupId, offset: number): Promise<boolean>;
 }
@@ -171,6 +183,10 @@ export interface IScrollGroupService extends IScrollGroupRemoteService {
    * versification should call {@link getScrRefForProject} for that project.
    */
   onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo>;
-  /** Event that emits when a scroll group's reference history changes */
+  /**
+   * Event that emits when a scroll group's reference history changes
+   *
+   * @experimental
+   */
   onDidChangeReferenceHistory: PlatformEvent<ReferenceHistoryUpdateInfo>;
 }

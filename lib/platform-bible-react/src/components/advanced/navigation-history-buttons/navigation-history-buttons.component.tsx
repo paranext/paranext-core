@@ -102,17 +102,15 @@ export function NavigationHistoryButtons({
     '%navigationHistory_forwardList_ariaLabel%',
   );
 
-  // Physical keys swap meaning in RTL (matching the main-process handler), so the hint shown for
-  // "back" in RTL is the physically-right key.
-  let backShortcut: string;
-  let forwardShortcut: string;
-  if (isMac) {
-    backShortcut = isRtl ? '⌘]' : '⌘[';
-    forwardShortcut = isRtl ? '⌘[' : '⌘]';
-  } else {
-    backShortcut = isRtl ? 'Alt+→' : 'Alt+←';
-    forwardShortcut = isRtl ? 'Alt+←' : 'Alt+→';
-  }
+  // Physical back/forward shortcut keys for this OS. In RTL the pair swaps meaning
+  // (physical-direction preserving), so the hint shown for "back" in RTL is the physically-right
+  // key. This swap MUST stay in sync with `resolveHistoryNavigationDirection` in
+  // src/main/reference-history-keyboard.util.ts, which applies the same swap to the real keypress.
+  // Expressed as one pair-pick + one swap so the rule lives in a single place here.
+  const [physicalBackKey, physicalForwardKey] = isMac ? ['⌘[', '⌘]'] : ['Alt+←', 'Alt+→'];
+  const [backShortcut, forwardShortcut] = isRtl
+    ? [physicalForwardKey, physicalBackKey]
+    : [physicalBackKey, physicalForwardKey];
 
   const renderSplitButton = (direction: 'back' | 'forward') => {
     const isBack = direction === 'back';
@@ -126,64 +124,60 @@ export function NavigationHistoryButtons({
 
     return (
       <ButtonGroup key={direction}>
-        <TooltipProvider>
+        <Tooltip>
+          {/* The span wrapper keeps tooltips working while the button is disabled (a disabled
+              button gets pointer-events-none, so it can't be the trigger itself). The
+              ButtonGroup corner-merging styles land on the span, so the buttons carry the
+              equivalent logical rounding classes directly. */}
+          <TooltipTrigger asChild>
+            <span className="tw:inline-flex">
+              <Button
+                aria-label={tooltip}
+                data-testid={`navigation-history-${direction}-button`}
+                className={cn('tw:rounded-e-none', className)}
+                size="icon"
+                variant={variant}
+                disabled={!enabled}
+                onClick={() => onNavigate(isBack ? -1 : 1)}
+              >
+                {showLeftArrow ? <ArrowLeft /> : <ArrowRight />}
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>
+              {tooltip}
+              {showKeyboardShortcuts && (
+                <>
+                  {' '}
+                  <Kbd>{shortcut}</Kbd>
+                </>
+              )}
+            </p>
+          </TooltipContent>
+        </Tooltip>
+        <DropdownMenu>
           <Tooltip>
-            {/* The span wrapper keeps tooltips working while the button is disabled (a disabled
-                button gets pointer-events-none, so it can't be the trigger itself). The
-                ButtonGroup corner-merging styles land on the span, so the buttons carry the
-                equivalent logical rounding classes directly. */}
             <TooltipTrigger asChild>
               <span className="tw:inline-flex">
-                <Button
-                  aria-label={tooltip}
-                  data-testid={`navigation-history-${direction}-button`}
-                  className={cn('tw:rounded-e-none', className)}
-                  size="icon"
-                  variant={variant}
-                  disabled={!enabled}
-                  onClick={() => onNavigate(isBack ? -1 : 1)}
-                >
-                  {showLeftArrow ? <ArrowLeft /> : <ArrowRight />}
-                </Button>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    aria-label={listAriaLabel}
+                    data-testid={`navigation-history-${direction}-menu-trigger`}
+                    className={cn('tw:rounded-s-none', className)}
+                    size="icon"
+                    variant={variant}
+                    disabled={items.length === 0}
+                  >
+                    <ChevronDown />
+                  </Button>
+                </DropdownMenuTrigger>
               </span>
             </TooltipTrigger>
             <TooltipContent>
-              <p>
-                {tooltip}
-                {showKeyboardShortcuts && (
-                  <>
-                    {' '}
-                    <Kbd>{shortcut}</Kbd>
-                  </>
-                )}
-              </p>
+              <p>{listAriaLabel}</p>
             </TooltipContent>
           </Tooltip>
-        </TooltipProvider>
-        <DropdownMenu>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="tw:inline-flex">
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      aria-label={listAriaLabel}
-                      data-testid={`navigation-history-${direction}-menu-trigger`}
-                      className={cn('tw:rounded-s-none', className)}
-                      size="icon"
-                      variant={variant}
-                      disabled={items.length === 0}
-                    >
-                      <ChevronDown />
-                    </Button>
-                  </DropdownMenuTrigger>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{listAriaLabel}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
           <DropdownMenuContent>
             {items.map((item) => (
               <DropdownMenuItem key={item.offset} onSelect={() => onNavigate(item.offset)}>
@@ -201,10 +195,15 @@ export function NavigationHistoryButtons({
   const second = isRtl ? 'back' : 'forward';
 
   return (
-    <div className="tw:flex tw:items-center tw:gap-1" data-testid="navigation-history-buttons">
-      {renderSplitButton(first)}
-      {renderSplitButton(second)}
-    </div>
+    // One TooltipProvider for the whole pair (rather than one per tooltip) so Radix's skip-delay
+    // coordinates across all four buttons — moving the pointer between them doesn't re-incur the
+    // full open delay.
+    <TooltipProvider>
+      <div className="tw:flex tw:items-center tw:gap-1" data-testid="navigation-history-buttons">
+        {renderSplitButton(first)}
+        {renderSplitButton(second)}
+      </div>
+    </TooltipProvider>
   );
 }
 

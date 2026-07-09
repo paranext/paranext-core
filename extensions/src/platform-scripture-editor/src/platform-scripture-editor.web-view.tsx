@@ -59,6 +59,7 @@ import {
   TooltipTrigger,
   UNDO_REDO_BUTTONS_STRING_KEYS,
   UndoRedoButtons,
+  isMacOs,
   usePromise,
 } from 'platform-bible-react';
 import {
@@ -297,7 +298,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [blockMarker, setBlockMarker] = useState<string | undefined>();
   const [contextMarker, setContextMarker] = useState<string | undefined>();
 
-  const isMac = useMemo(() => /Macintosh/i.test(navigator.userAgent), []);
+  const isMac = isMacOs();
 
   /**
    * Stores the annotation range for the pending comment being created. This is captured when the
