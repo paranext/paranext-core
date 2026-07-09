@@ -6,7 +6,7 @@ import { getErrorMessage, isPlatformError, LocalizeKey } from 'platform-bible-ut
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { useEffect, useMemo, useRef } from 'react';
 import { deriveCellState } from './resource-cell.utils';
-import { RESOURCE_CELL_STRING_KEYS, ResourceCellView } from './resource-cell.view';
+import { RESOURCE_CELL_STRING_KEYS, ResourceCellView } from './resource-cell-view.component';
 import { sliceUsjToVerse } from './verse-display.utils';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';

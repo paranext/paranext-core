@@ -6,7 +6,7 @@ import {
   TooltipTrigger,
 } from 'platform-bible-react';
 import { LocalizedStringValue } from 'platform-bible-utils';
-import { ReactNode } from 'react';
+import { ReactNode, useCallback, useRef, useState } from 'react';
 import { ResourceCellState } from './resource-cell.utils';
 
 /**
@@ -57,6 +57,20 @@ export function ResourceCellView({
   editor,
   isVerseEmpty,
 }: ResourceCellViewProps) {
+  // The tooltip only repeats the visible label, so it should show only when the label is actually
+  // truncated. Radix's auto-detection cannot know that, so control `open` manually and measure the
+  // header on pointer enter (same pattern as `ProjectRowView` in platform-bible-react).
+  const [isHeaderTooltipOpen, setIsHeaderTooltipOpen] = useState(false);
+  // React's ref API requires `null` as the initial value for DOM refs.
+  // eslint-disable-next-line no-null/no-null
+  const headerRef = useRef<HTMLDivElement>(null);
+
+  const handleHeaderPointerEnter = useCallback(() => {
+    const headerElement = headerRef.current;
+    if (!headerElement) return;
+    if (headerElement.scrollWidth > headerElement.clientWidth) setIsHeaderTooltipOpen(true);
+  }, []);
+
   let readyContent: ReactNode = editor;
   if (isVerseEmpty) {
     readyContent = (
@@ -69,10 +83,16 @@ export function ResourceCellView({
   return (
     <div role="gridcell" aria-label={label} className="tw:flex tw:min-w-0 tw:flex-col">
       <TooltipProvider>
-        <Tooltip>
+        <Tooltip open={isHeaderTooltipOpen}>
           <TooltipTrigger asChild>
-            {/* Single-line header; long labels truncate. The tooltip reveals the full name. */}
-            <div className="tw:truncate tw:border-b tw:px-2 tw:py-1 tw:text-sm tw:font-medium">
+            {/* Single-line header; long labels truncate. The tooltip reveals the full name and
+                shows only when the label is actually clipped. */}
+            <div
+              ref={headerRef}
+              onPointerEnter={handleHeaderPointerEnter}
+              onPointerLeave={() => setIsHeaderTooltipOpen(false)}
+              className="tw:truncate tw:border-b tw:px-2 tw:py-1 tw:text-sm tw:font-medium"
+            >
               {label}
             </div>
           </TooltipTrigger>

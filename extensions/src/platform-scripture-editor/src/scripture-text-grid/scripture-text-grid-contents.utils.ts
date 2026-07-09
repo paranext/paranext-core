@@ -5,8 +5,8 @@ import type {
   ResourceReferenceList,
   ShownByDefaultOverlay,
 } from 'platform-scripture';
-import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
-import { CURRENT_DATA_VERSION } from './resource-reference-list.const';
+import { isDblResourceReference, isProjectReference } from '../resource-reference.utils';
+import { CURRENT_DATA_VERSION } from '../resource-reference-list.const';
 
 /** A Bible-text reference — the only reference types that carry `id` and `inTextCollectionUser`. */
 type BibleTextReference = ProjectReference | DblResourceReference;
@@ -55,6 +55,31 @@ type AdminOwnedEntry = { reference: BibleTextReference; adminFlagged: boolean };
 function getBibleTextId(reference: unknown): string | undefined {
   if (isProjectReference(reference) || isDblResourceReference(reference)) return reference.id;
   return undefined;
+}
+
+/**
+ * The `dataVersion` to stamp on a modified copy of `list`: the incoming version is preserved when
+ * its major.minor is at or above {@link CURRENT_DATA_VERSION}, otherwise it is lifted to
+ * {@link CURRENT_DATA_VERSION} (the write adds current-version semantics like
+ * `inTextCollectionUser`). Preserving newer versions mirrors the C# project-setting path — stamping
+ * `CURRENT_DATA_VERSION` unconditionally would make the write a downgrade the validator rejects
+ * once a future build has stored a higher version. A malformed incoming version is also lifted.
+ */
+function getPreservedDataVersion(list: ResourceReferenceList): string {
+  const parse = (version: string) => {
+    const parts = version.split('.').map(Number);
+    if (parts.length < 2 || parts.some(Number.isNaN)) return undefined;
+    return { major: parts[0], minor: parts[1] };
+  };
+  const incoming = parse(list.dataVersion);
+  const current = parse(CURRENT_DATA_VERSION);
+  if (!incoming || !current) return CURRENT_DATA_VERSION;
+  if (
+    incoming.major > current.major ||
+    (incoming.major === current.major && incoming.minor >= current.minor)
+  )
+    return list.dataVersion;
+  return CURRENT_DATA_VERSION;
 }
 
 /**
@@ -207,7 +232,10 @@ export function setUserDisplay(
   const items = userReferenced.items.map((item, itemIndex) =>
     itemIndex === index ? { ...item, inTextCollectionUser: shown } : item,
   );
-  return { userReferenced: { dataVersion: CURRENT_DATA_VERSION, items }, overlay };
+  return {
+    userReferenced: { dataVersion: getPreservedDataVersion(userReferenced), items },
+    overlay,
+  };
 }
 
 /**
@@ -226,7 +254,7 @@ export function removeFromUserResources(
 ): ResourceReferenceList {
   const items = userReferenced.items.filter((item) => getBibleTextId(item) !== resourceId);
   if (items.length === userReferenced.items.length) return userReferenced;
-  return { dataVersion: CURRENT_DATA_VERSION, items };
+  return { dataVersion: getPreservedDataVersion(userReferenced), items };
 }
 
 /**
@@ -246,7 +274,7 @@ export function addToUserResources(
     return userReferenced;
   }
   return {
-    dataVersion: CURRENT_DATA_VERSION,
+    dataVersion: getPreservedDataVersion(userReferenced),
     items: [...userReferenced.items, { ...reference, inTextCollectionUser: true }],
   };
 }

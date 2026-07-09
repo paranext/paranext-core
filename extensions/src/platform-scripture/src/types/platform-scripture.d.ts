@@ -2055,8 +2055,9 @@ declare module 'platform-scripture' {
      * hints). Use minor bumps for additive, backwards-compatible changes. Use major bumps for
      * breaking changes.
      *
-     * Current version is `1.1.0`: the `1.1.0` minor bump added the optional Bible-text flags
-     * `isResourceShownByDefault` (project-scope) and `inTextCollectionUser` (user-scope). Both are
+     * Current version is `1.1.0`: the `1.1.0` minor bump formally versions the optional Bible-text
+     * flags `isResourceShownByDefault` (project-scope) and `inTextCollectionUser` (user-scope).
+     * (`isResourceShownByDefault` was briefly written by interim builds under `1.0.0`.) Both are
      * additive and backwards-compatible — files lacking them read cleanly.
      */
     dataVersion: string;
