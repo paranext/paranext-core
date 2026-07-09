@@ -1,4 +1,4 @@
-import { WEBSOCKET_PORT } from '@shared/data/rpc.model';
+import { isPotentialConnectionToPapiNetwork } from '@shared/data/rpc.model';
 
 // Allow system networking components to create web sockets that connect back to localhost at first
 let allowWebSocketsBackToPapiNetwork: boolean = true;
@@ -7,19 +7,6 @@ let allowWebSocketsBackToPapiNetwork: boolean = true;
 export const blockWebSocketsToPapiNetwork = (): void => {
   allowWebSocketsBackToPapiNetwork = false;
 };
-
-// We are just filtering by port number on purpose to allow other connections to localhost
-function isPotentialConnectionToPapiNetwork(url: string | URL): boolean {
-  let urlObj: URL;
-  if (typeof url === 'string') {
-    urlObj = new URL(url);
-  } else {
-    urlObj = url;
-  }
-
-  const { port } = urlObj;
-  return parseInt(port, 10) === parseInt(`${WEBSOCKET_PORT}`, 10);
-}
 
 /**
  * JSDOC SOURCE PapiRendererWebSocket This wraps the browser's WebSocket implementation to provide

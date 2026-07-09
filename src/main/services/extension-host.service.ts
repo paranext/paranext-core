@@ -5,6 +5,7 @@ import {
   CommandLineArgs,
   commandLineArgumentsAliases,
 } from '@node/utils/command-line.util';
+import { getWebSocketPort } from '@shared/data/rpc.model';
 import { logger } from '@shared/services/logger.service';
 import { AsyncVariable, debounce, waitForDuration } from 'platform-bible-utils';
 import { ChildProcess, ChildProcessByStdio, fork } from 'child_process';
@@ -187,6 +188,10 @@ async function startExtensionHost(maxWaitTimeInMS: number, isRestarting = false)
     globalThis.resourcesPath,
     commandLineArgumentsAliases[CommandLineArgs.LogLevel][0],
     globalThis.logLevel,
+    // Advertise the PAPI WebSocket server's port so the extension host connects to this app's own
+    // network even when the default port was in use by another app
+    commandLineArgumentsAliases[CommandLineArgs.WebSocketPort][0],
+    `${getWebSocketPort()}`,
     ...getCommandLineArgumentsToForward(),
   ];
   if (isRestarting) sharedArgs.push(commandLineArgumentsAliases[CommandLineArgs.DidRestart][0]);

@@ -22,10 +22,10 @@ Platform.Bible uses **JSON-RPC 2.0 over WebSocket** for inter-process communicat
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    Main Process (Electron)               │
-│  • WebSocket server on port 8876                         │
+│  • WebSocket server (default port 8876)                  │
 │  • Routes messages between processes                     │
 └────────────────┬────────────────────────────────────────┘
-                 │ JSON-RPC over WebSocket (port 8876)
+                 │ JSON-RPC over WebSocket (default port 8876)
     ┌────────────┼────────────┬───────────────────┐
     │            │            │                   │
 ┌───▼────────┐ ┌─▼──────────┐ ┌▼────────────────┐
@@ -33,6 +33,15 @@ Platform.Bible uses **JSON-RPC 2.0 over WebSocket** for inter-process communicat
 │ (React UI) │ │ Host       │ │ Provider        │
 └────────────┘ └────────────┘ └─────────────────┘
 ```
+
+Each app instance runs its own isolated PAPI network. Main prefers port 8876 (overridable with the
+`--webSocketPort` command-line argument or `PAPI_WEBSOCKET_PORT` environment variable) and falls
+back to an automatically assigned free port when it is in use — e.g. when another paranext-based
+app is running. Main advertises the actual port to the processes it spawns (renderer query
+parameter, extension host `--webSocketPort` argument, .NET `PAPI_WEBSOCKET_PORT` environment
+variable), so clients never attach to another app's network. In code, always resolve the port with
+`getWebSocketPort()` / `getWebSocketUrl()` from `src/shared/data/rpc.model.ts` instead of the
+`WEBSOCKET_PORT` constant.
 
 ### Communication Patterns
 

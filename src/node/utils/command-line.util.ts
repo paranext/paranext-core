@@ -30,6 +30,10 @@ type CommandLineArgumentAliases = {
  *   1920x1080). Overrides the saved window state dimensions.
  * - Maximize - Command-line switch that specifies that the renderer should be maximized on launch.
  *   Only on main process
+ * - WebSocketPort - Command-line argument that specifies which port to use for the PAPI WebSocket. On
+ *   main, this is the preferred port for the WebSocket server (falls back to a free port if it is
+ *   in use). On the extension host, main passes this to advertise the port the server is actually
+ *   listening on
  */
 export enum CommandLineArgs {
   Extensions = 'extensions',
@@ -41,6 +45,7 @@ export enum CommandLineArgs {
   DidRestart = 'didRestart',
   WindowSize = 'window_size',
   Maximize = 'maximize',
+  WebSocketPort = 'web_socket_port',
 }
 
 /**
@@ -57,6 +62,7 @@ export const commandLineArgumentsAliases: CommandLineArgumentAliases = {
   [CommandLineArgs.DidRestart]: ['--didRestart'],
   [CommandLineArgs.WindowSize]: ['--windowSize', '--window-size'],
   [CommandLineArgs.Maximize]: ['--maximize'],
+  [CommandLineArgs.WebSocketPort]: ['--webSocketPort', '--web-socket-port'],
 };
 
 /** Get the index of the next command-line argument after the startIndex */

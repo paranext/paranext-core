@@ -15,6 +15,7 @@ import {
   createRequest,
   deserializeMessage,
   EventHandler,
+  getWebSocketUrl,
   InternalRequestHandler,
   REGISTER_EVENT,
   REGISTER_METHOD,
@@ -22,7 +23,6 @@ import {
   sendPayloadToWebSocket,
   UNREGISTER_EVENT,
   UNREGISTER_METHOD,
-  WEBSOCKET_PORT,
 } from '@shared/data/rpc.model';
 import { createWebSocket } from '@client/services/web-socket.factory';
 import { AsyncVariable, getErrorMessage, Mutex, MutexMap } from 'platform-bible-utils';
@@ -93,7 +93,7 @@ export class RpcClient implements IRpcMethodRegistrar {
 
       try {
         this.connectionStatus = ConnectionStatus.Connecting;
-        this.ws = await createWebSocket(`ws://localhost:${WEBSOCKET_PORT}`);
+        this.ws = await createWebSocket(getWebSocketUrl());
         this.addEventListenersToWebSocket();
 
         // Wait for the socket to finish connecting before continuing (0 means connecting)

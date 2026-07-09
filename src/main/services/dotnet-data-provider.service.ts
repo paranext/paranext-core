@@ -1,5 +1,7 @@
 import { ChildProcessWithoutNullStreams, SpawnOptionsWithoutStdio, spawn } from 'child_process';
 import path from 'path';
+import { getWebSocketPort } from '@shared/data/rpc.model';
+import { WEBSOCKET_PORT_ENV_VAR } from '@main/services/web-socket-server.factory';
 import { logger } from '@shared/services/logger.service';
 import { waitForDuration } from 'platform-bible-utils';
 import { formatLog } from '@shared/utils/logger.utils';
@@ -113,6 +115,13 @@ function startDotnetDataProvider() {
     }
     options = { cwd: dotnetPath };
   }
+
+  // Advertise the PAPI WebSocket server's port so the data provider connects to this app's own
+  // network even when the default port was in use by another app
+  options = {
+    ...options,
+    env: { ...process.env, [WEBSOCKET_PORT_ENV_VAR]: `${getWebSocketPort()}` },
+  };
 
   dotnet = spawn(command, args, options);
 

@@ -1,7 +1,12 @@
 /** Module to set up globalThis and polyfills in the renderer */
 
 import { ProcessType } from '@shared/global-this.model';
-import { DEV_MODE_QUERY_PARAMETER, LOG_LEVEL_QUERY_PARAMETER } from '@shared/data/platform.data';
+import {
+  DEV_MODE_QUERY_PARAMETER,
+  LOG_LEVEL_QUERY_PARAMETER,
+  parseWebSocketPort,
+  WEBSOCKET_PORT_QUERY_PARAMETER,
+} from '@shared/data/platform.data';
 import type { LogLevel } from 'electron-log';
 
 // #region webpack DefinePlugin types setup - these should be from the renderer webpack DefinePlugin
@@ -32,5 +37,12 @@ globalThis.logLevel = (searchParams.get(LOG_LEVEL_QUERY_PARAMETER) as LogLevel) 
 // null is used in this API meaning the param is not present
 // eslint-disable-next-line no-null/no-null
 globalThis.isNoisyDevModeEnabled = searchParams.get(DEV_MODE_QUERY_PARAMETER) !== null;
+
+// Main advertises the port its PAPI WebSocket server is actually listening on, which may differ
+// from the default port when the default was in use by another app. Leave undefined if absent or
+// invalid so consumers fall back to the default port
+globalThis.webSocketPort = parseWebSocketPort(
+  searchParams.get(WEBSOCKET_PORT_QUERY_PARAMETER) ?? undefined,
+);
 
 // #endregion

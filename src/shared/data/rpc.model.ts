@@ -10,8 +10,51 @@ import {
 } from 'json-rpc-2.0';
 import { deserialize, getErrorMessage, serialize, wait } from 'platform-bible-utils';
 
-/** Port to use for the WebSocket */
+/**
+ * Default port to use for the WebSocket. The port actually used may differ - see
+ * {@link getWebSocketPort}
+ */
 export const WEBSOCKET_PORT = 8876;
+
+/**
+ * Get the port this app's PAPI WebSocket network is using.
+ *
+ * Each app instance runs its own isolated PAPI network. The main process starts the WebSocket
+ * server on {@link WEBSOCKET_PORT} (or the port specified by the `--webSocketPort` command-line
+ * argument or `PAPI_WEBSOCKET_PORT` environment variable) and falls back to an automatically
+ * assigned free port when that port is already in use, e.g. when another paranext-based app is
+ * running. Main advertises the port it is actually listening on to the processes it spawns, and
+ * each process records it in `globalThis.webSocketPort`.
+ */
+export function getWebSocketPort(): number {
+  return globalThis.webSocketPort ?? WEBSOCKET_PORT;
+}
+
+/** Get the URL of this app's PAPI WebSocket server. See {@link getWebSocketPort} */
+export function getWebSocketUrl(): string {
+  return `ws://localhost:${getWebSocketPort()}`;
+}
+
+/**
+ * Determine whether a WebSocket URL might connect to a PAPI network so such connections can be
+ * blocked. Checks against this app's own PAPI port ({@link getWebSocketPort}) and also the default
+ * PAPI port ({@link WEBSOCKET_PORT}): when this app is running on a fallback port, a raw web socket
+ * to the default port could reach another paranext-based app's PAPI network.
+ *
+ * We are just filtering by port number on purpose to allow other connections to localhost.
+ */
+export function isPotentialConnectionToPapiNetwork(url: string | URL): boolean {
+  let urlObj: URL;
+  if (typeof url === 'string') {
+    urlObj = new URL(url);
+  } else {
+    urlObj = url;
+  }
+
+  const { port } = urlObj;
+  const portNumber = parseInt(port, 10);
+  return portNumber === getWebSocketPort() || portNumber === WEBSOCKET_PORT;
+}
 
 /** How many times to try sending a request before giving up if the request is not yet registered */
 const MAX_REQUEST_ATTEMPTS = 10;
