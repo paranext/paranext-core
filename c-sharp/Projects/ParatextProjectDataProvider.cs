@@ -884,12 +884,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             SendDataUpdateEvent(AllScriptureDataTypes, "conflict undo restored verse text event");
     }
 
-    /// <summary>
-    /// SPIKE (PT-4141): mirror of <see cref="VerifyUserCanResolveConflict"/> but requires the thread to
-    /// BE resolved (there must be a decision to undo). Productionization TODO: extract the shared
-    /// verseText-conflict + admin-or-assignee + chapter-edit checks into one helper instead of copying.
-    /// </summary>
-    private CommentThread VerifyUserCanUnresolveConflict(string threadId)
+    /// <summary>Finds a thread and asserts it is a verseText conflict (v1's only resolvable kind).</summary>
+    private CommentThread FindVerseTextConflictThread(string threadId)
     {
         CommentThread? thread = _commentManager.Value.FindThread(threadId);
         if (thread == null)
@@ -901,8 +897,38 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             || thread.Comments[0].ConflictType != NoteConflictType.VerseTextConflict
         )
             throw new InvalidOperationException(
-                $"Thread '{threadId}' is not a verseText conflict and cannot be unresolved here."
+                $"Thread '{threadId}' is not a verseText conflict and cannot be resolved or undone here."
             );
+        return thread;
+    }
+
+    /// <summary>Base-resolve + admin-or-assignee + chapter-edit gate shared by resolve and undo (both
+    /// write the verse). No status assertion - callers add their own (unresolved for resolve, resolved
+    /// for undo).</summary>
+    private void VerifyUserMayResolveOrUndoConflict(CommentThread thread)
+    {
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        VerifyUserCanResolveThread(thread.Id);
+        if (IsUserProjectAdministrator())
+            return;
+        if (!IsThreadAssignedToUser(thread, scrText.User.Name))
+            throw new InvalidOperationException(
+                $"User '{scrText.User.Name}' cannot resolve or undo conflict thread '{thread.Id}' - only a project administrator or the assigned user may."
+            );
+        VerseRef vref = thread.VerseRef;
+        if (!scrText.Permissions.CanEdit(vref.BookNum, vref.ChapterNum))
+            throw new InvalidOperationException(
+                $"User '{scrText.User.Name}' cannot resolve or undo conflict thread '{thread.Id}' - no permission to edit {vref.Book} {vref.ChapterNum}."
+            );
+    }
+
+    /// <summary>
+    /// SPIKE (PT-4141): mirror of <see cref="VerifyUserCanResolveConflict"/> but requires the thread to
+    /// BE resolved (there must be a decision to undo).
+    /// </summary>
+    private CommentThread VerifyUserCanUnresolveConflict(string threadId)
+    {
+        CommentThread thread = FindVerseTextConflictThread(threadId);
 
         // Inverse of the resolve guard: only a resolved conflict has a decision to roll back.
         if (thread.Status != NoteStatus.Resolved)
@@ -910,22 +936,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 $"Conflict thread '{threadId}' is not resolved; there is no conflict resolution to undo."
             );
 
-        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
-        VerifyUserCanResolveThread(threadId);
-        if (!IsUserProjectAdministrator())
-        {
-            if (!IsThreadAssignedToUser(thread, scrText.User.Name))
-                throw new InvalidOperationException(
-                    $"User '{scrText.User.Name}' cannot undo conflict thread '{threadId}' - only a project administrator or the assigned user may."
-                );
-            // Undoing reject/merge rewrites the verse, so a non-admin also needs chapter-edit rights.
-            VerseRef vref = thread.VerseRef;
-            if (!scrText.Permissions.CanEdit(vref.BookNum, vref.ChapterNum))
-                throw new InvalidOperationException(
-                    $"User '{scrText.User.Name}' cannot undo conflict thread '{threadId}' - no permission to edit {vref.Book} {vref.ChapterNum}."
-                );
-        }
-
+        VerifyUserMayResolveOrUndoConflict(thread);
         return thread;
     }
 
@@ -1057,23 +1068,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// user lacks permission.</exception>
     private CommentThread VerifyUserCanResolveConflict(string threadId)
     {
-        CommentThread? thread = _commentManager.Value.FindThread(threadId);
-        if (thread == null)
-            throw new InvalidDataException($"Thread with id {threadId} does not exist.");
-
-        // v1 resolves verseText conflicts only. Guard the first-comment access: PT9's
-        // CommentThread.FirstComment is private, so index defensively - an empty thread would
-        // otherwise throw IndexOutOfRangeException (masked to "none" by GetConflictResolutionOptions).
-        if (thread.Comments is not { Count: > 0 })
-            throw new InvalidDataException($"Thread with id {threadId} has no comments.");
-        Comment firstComment = thread.Comments[0];
-        if (
-            thread.Type != NoteType.Conflict
-            || firstComment.ConflictType != NoteConflictType.VerseTextConflict
-        )
-            throw new InvalidOperationException(
-                $"Thread '{threadId}' is not a verseText conflict and cannot be resolved here."
-            );
+        CommentThread thread = FindVerseTextConflictThread(threadId);
 
         // A resolved conflict has already had its resolution applied. Re-resolving would rewrite the
         // verse of an already-settled thread (e.g. reject-after-accept) - a transition PT9's UI never
@@ -1083,30 +1078,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 $"Conflict thread '{threadId}' is already resolved and cannot be resolved again."
             );
 
-        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
-
-        // Permission: run the base resolve check, then restrict resolving to a project administrator
-        // or the user (or team) the conflict is assigned to.
-        VerifyUserCanResolveThread(threadId);
-        if (!IsUserProjectAdministrator())
-        {
-            if (!IsThreadAssignedToUser(thread, scrText.User.Name))
-                throw new InvalidOperationException(
-                    $"User '{scrText.User.Name}' cannot resolve conflict thread '{threadId}' - only a project administrator or the assigned user may resolve it."
-                );
-
-            // A non-admin resolver must also have edit rights on the conflict verse's chapter.
-            // Resolving (reject/merge) writes the verse; PT9's CommentHtmlBuilder.GetResolutionOptions
-            // gates the resolve controls on CanEdit(book, chapter) for the same reason. Without this,
-            // SaveEdits' EnsureCanEditChapter would temporarily grant the edit and let a user write to
-            // a chapter they are not permitted to edit.
-            VerseRef vref = thread.VerseRef;
-            if (!scrText.Permissions.CanEdit(vref.BookNum, vref.ChapterNum))
-                throw new InvalidOperationException(
-                    $"User '{scrText.User.Name}' cannot resolve conflict thread '{threadId}' - they do not have permission to edit {vref.Book} {vref.ChapterNum}."
-                );
-        }
-
+        VerifyUserMayResolveOrUndoConflict(thread);
         return thread;
     }
 
