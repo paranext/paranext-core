@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { parseVerseRange, verseRangeIncludes, sliceUsjToVerse } from './verse-display.utils';
 import { usxStringToUsj, Usj, MarkerObject } from '@eten-tech-foundation/scripture-utilities';
+import { parseVerseRange, verseRangeIncludes, sliceUsjToVerse } from './verse-display.utils';
 
 describe('parseVerseRange', () => {
   it('parses a single verse number', () => {
@@ -32,25 +32,29 @@ describe('verseRangeIncludes', () => {
   });
 });
 
+// Test helper: narrows an unknown USJ content node to a MarkerObject without an `as` assertion.
+function isMarkerObjectNode(value: unknown): value is MarkerObject {
+  return typeof value === 'object' && !!value;
+}
+
 // Test helper: flatten a USJ into [{ marker, text }] per top-level paragraph, for readable asserts.
 function paragraphs(usj: Usj): { marker: string; text: string }[] {
   const textOf = (content: unknown): string => {
     if (typeof content === 'string') return content;
     if (Array.isArray(content)) return content.map(textOf).join('');
-    if (content && typeof content === 'object') {
-      const obj = content as Record<string, unknown>;
-      if ('content' in obj) {
-        return textOf((content as MarkerObject).content);
+    if (isMarkerObjectNode(content)) {
+      if ('content' in content) {
+        return textOf(content.content);
       }
       // Extract verse number from verse markers
-      if (obj.type === 'verse' && obj.number) {
-        return String(obj.number);
+      if (content.type === 'verse' && content.number) {
+        return String(content.number);
       }
     }
     return '';
   };
   return usj.content
-    .filter((n): n is MarkerObject => typeof n === 'object' && n !== null && n.type === 'para')
+    .filter((n): n is MarkerObject => isMarkerObjectNode(n) && n.type === 'para')
     .map((p) => ({ marker: p.marker ?? '', text: textOf(p.content).replace(/\s+/g, ' ').trim() }));
 }
 
@@ -139,10 +143,10 @@ function verseOpenerNumbers(usj: Usj): string[] {
   const nums: string[] = [];
   const walk = (content: unknown) => {
     if (Array.isArray(content)) content.forEach(walk);
-    else if (content && typeof content === 'object') {
-      const node = content as MarkerObject;
-      if (node.type === 'verse' && node.number != undefined) nums.push(String(node.number));
-      if ('content' in node) walk(node.content);
+    else if (isMarkerObjectNode(content)) {
+      if (content.type === 'verse' && content.number !== undefined)
+        nums.push(String(content.number));
+      if ('content' in content) walk(content.content);
     }
   };
   walk(usj.content);
