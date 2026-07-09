@@ -305,6 +305,12 @@ global.webViewComponent = function CommentListWebView({
     [commentsPdp, localizedStrings],
   );
 
+  // Bundle the two conflict callbacks into the single slot CommentList/ConflictThread consume.
+  const conflictResolution = useMemo(
+    () => ({ resolve: handleResolveConflict, getOptions: getConflictResolutionOptionsCallback }),
+    [handleResolveConflict, getConflictResolutionOptionsCallback],
+  );
+
   const handleUpdateComment = useCallback(
     async (commentId: string, contents: string): Promise<boolean> =>
       withPdp(commentsPdp, 'handleUpdateComment', false, async (pdp) => {
@@ -389,8 +395,7 @@ global.webViewComponent = function CommentListWebView({
         selectedThreadId={selectedThreadId}
         onSelectedThreadChange={setSelectedThreadId}
         onVerseRefClick={handleVerseRefClick}
-        handleResolveConflict={handleResolveConflict}
-        getConflictResolutionOptionsCallback={getConflictResolutionOptionsCallback}
+        conflictResolution={conflictResolution}
       />
       <Sonner />
     </>

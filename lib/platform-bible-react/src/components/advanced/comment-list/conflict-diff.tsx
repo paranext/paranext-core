@@ -1,5 +1,6 @@
 import { cn } from '@/utils/shadcn-ui/utils';
 import { sanitizeHtml } from 'platform-bible-utils';
+import { COMMENT_BODY_PROSE_CLASSES } from './comment-list.utils';
 
 // Renders the PT9 diff HTML the same way CommentItem renders note contents, plus theme-token coloring
 // for the diff markup: <u> = inserted → green + semibold; <s> = deleted → red + strikethrough. This is
@@ -9,9 +10,7 @@ import { sanitizeHtml } from 'platform-bible-utils';
 // Shared by the expanded ConflictNoteCard and the collapsed ConflictThreadSummary so both render the
 // conflict diff identically.
 export const DIFF_HTML_CLASSES = cn(
-  'tw:prose tw:max-w-none tw:break-words tw:text-sm tw:font-normal tw:text-foreground',
-  'tw:[&>blockquote]:border-s-0 tw:[&>blockquote]:p-0 tw:[&>blockquote]:ps-0 tw:[&>blockquote]:font-normal tw:[&>blockquote]:not-italic tw:[&>blockquote]:text-foreground',
-  'tw:prose-quoteless',
+  COMMENT_BODY_PROSE_CLASSES,
   // `prose` gives block children (the top-level blockquote wrapper, and any p — whether nested
   // inside that blockquote or, in the non-verseText fallback, a direct child) vertical margins that
   // make these already-compact cards feel bulky. Zero both so the diff sits flush inside the card.

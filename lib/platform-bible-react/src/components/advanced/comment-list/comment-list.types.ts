@@ -4,7 +4,26 @@ import {
   LegacyComment,
   LegacyCommentThread,
 } from 'platform-bible-utils';
+import { ReactNode } from 'react';
 import { ConflictResolution, ConflictResolutionOptions } from './conflict-note-card.types';
+
+/**
+ * Conflict-resolution callbacks a conflict thread needs: apply a resolution, and query which
+ * resolutions are available. Bundled into one optional slot so the generic list/thread props stay
+ * conflict-agnostic - only ConflictThread reads it.
+ */
+export interface ConflictResolutionCallbacks {
+  /**
+   * Applies a conflict resolution via the comments data provider's resolveConflict. Returns true on
+   * success, false on failure (the card re-enables its controls).
+   */
+  resolve: (threadId: string, resolution: ConflictResolution) => Promise<boolean>;
+  /**
+   * Returns which resolution actions the current user may take on a conflict thread (the
+   * getConflictResolutionOptions capability). Treat missing as 'none'.
+   */
+  getOptions: (threadId: string) => Promise<ConflictResolutionOptions>;
+}
 
 /** Options for adding a comment to a thread */
 export type AddCommentToThreadOptions = {
@@ -130,16 +149,10 @@ export interface CommentListProps {
   /** Callback when the user clicks a verse reference in a comment thread. */
   onVerseRefClick?: (thread: LegacyCommentThread) => void;
   /**
-   * Handler that applies a conflict resolution via the comments data provider's resolveConflict.
-   * Returns true on success, false on failure (the thread re-enables its controls). Conflict
-   * threads render a read-only card when this (or the options callback) is not provided.
+   * Conflict-resolution callbacks (resolve + getOptions). Conflict threads render a read-only card
+   * when this is not provided.
    */
-  handleResolveConflict?: (threadId: string, resolution: ConflictResolution) => Promise<boolean>;
-  /**
-   * Callback returning which resolution actions the current user may take on a conflict thread (the
-   * getConflictResolutionOptions capability). Treat missing as 'none'.
-   */
-  getConflictResolutionOptionsCallback?: (threadId: string) => Promise<ConflictResolutionOptions>;
+  conflictResolution?: ConflictResolutionCallbacks;
 }
 
 /** Props for the CommentThread component */
@@ -221,16 +234,28 @@ export interface CommentThreadProps {
   /** Callback when the user clicks a verse reference in a comment thread. */
   onVerseRefClick?: (thread: LegacyCommentThread) => void;
   /**
-   * Handler that applies a conflict resolution via the comments data provider's resolveConflict.
-   * Returns true on success, false on failure (the thread re-enables its controls). Conflict
-   * threads render a read-only card when this (or the options callback) is not provided.
+   * Conflict-resolution callbacks (resolve + getOptions), forwarded by ConflictThread. Omitted for
+   * non-conflict threads; the generic CommentThread never reads it.
    */
-  handleResolveConflict?: (threadId: string, resolution: ConflictResolution) => Promise<boolean>;
+  conflictResolution?: ConflictResolutionCallbacks;
   /**
-   * Callback returning which resolution actions the current user may take on a conflict thread (the
-   * getConflictResolutionOptions capability). Treat missing as 'none'.
+   * Overrides the root-comment render (the collapsed root area). When omitted, the thread renders
+   * the standard CommentItem for its first comment. ConflictThread uses this to show the conflict
+   * summary (collapsed) or the ConflictNoteCard (expanded) for verseText conflicts.
    */
-  getConflictResolutionOptionsCallback?: (threadId: string) => Promise<ConflictResolutionOptions>;
+  rootContentSlot?: ReactNode;
+  /**
+   * Overrides the header hover resolve affordance. When omitted, the thread renders its generic
+   * status-resolve check (gated on canUserResolveThreadCallback). Pass a node to replace it, or
+   * `false` to render nothing. ConflictThread uses this to supply the conflict-gated resolve
+   * check.
+   */
+  resolveActionSlot?: ReactNode;
+  /**
+   * Adds a small vertical gap between the root content and the replies when the thread is expanded
+   * and has visible replies, so a resolution card isn't flush against its replies.
+   */
+  spaceRootContentFromReplies?: boolean;
 }
 
 /** Props for the CommentItem component */

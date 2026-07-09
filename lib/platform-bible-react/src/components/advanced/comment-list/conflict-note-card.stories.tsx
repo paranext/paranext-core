@@ -1,13 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { LanguageStrings, LegacyComment } from 'platform-bible-utils';
-import { useState } from 'react';
 import { Card, CardContent } from '@/components/shadcn-ui/card';
 import { ConflictNoteCard } from './conflict-note-card.component';
-import {
-  ConflictResolution,
-  ConflictResolutionOptions,
-  ConflictResolutionOutcome,
-} from './conflict-note-card.types';
+import { ConflictResolutionOptions, ConflictResolutionOutcome } from './conflict-note-card.types';
 import {
   verseTextConflictComment,
   verseTextConflictMergeSample,
@@ -38,15 +33,12 @@ function ConflictNoteCardStory({
   comment?: LegacyComment;
   resolvedResolution?: ConflictResolutionOutcome;
 }) {
-  const [resolution, setResolution] = useState<ConflictResolution>('accept');
   return (
     <Card className="tw:max-w-md">
       <CardContent className="tw:pt-4">
         <ConflictNoteCard
           comment={comment}
           localizedStrings={localizedStrings}
-          selectedResolution={resolution}
-          onResolutionChange={setResolution}
           availableActions={availableActions}
           resolvedResolution={resolvedResolution}
           onResolve={(chosen) => console.log(`Save and resolve clicked: ${chosen}`)}

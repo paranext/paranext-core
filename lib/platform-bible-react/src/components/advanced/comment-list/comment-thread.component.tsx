@@ -15,21 +15,14 @@ import {
   SerializedParagraphNode,
   SerializedTextNode,
 } from 'lexical';
-import { ArrowUp, AtSign, Check, ChevronDown, ChevronUp, Mail, MailOpen } from 'lucide-react';
+import { ArrowUp, AtSign, ChevronDown, ChevronUp, Mail, MailOpen } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
 import { MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import { Command, CommandItem, CommandList } from '@/components/shadcn-ui/command';
 import { CommentItem } from './comment-item.component';
 import { AddCommentToThreadOptions, CommentThreadProps } from './comment-list.types';
-import { ConflictNoteCard } from './conflict-note-card.component';
-import { ConflictThreadSummary } from './conflict-thread-summary.component';
-import {
-  ConflictResolution,
-  ConflictResolutionOptions,
-  ConflictResolutionOutcome,
-  VERSE_TEXT_CONFLICT,
-} from './conflict-note-card.types';
+import { ResolveCheckButton } from './resolve-check-button.component';
 import { didPressCtrlOrCmdEnter, getAssignedUserDisplayName } from './comment-list.utils';
 
 const initialValue: SerializedEditorState<
@@ -96,8 +89,9 @@ export function CommentThread({
   autoReadDelay = 5,
   onVerseRefClick,
   initialAssignedUser,
-  handleResolveConflict,
-  getConflictResolutionOptionsCallback,
+  rootContentSlot,
+  resolveActionSlot,
+  spaceRootContentFromReplies = false,
 }: CommentThreadProps) {
   const [pendingCommentEditorState, setPendingCommentEditorState] =
     useState<SerializedEditorState>(initialValue);
@@ -118,11 +112,6 @@ export function CommentThread({
     Map<string, boolean>
   >(new Map());
 
-  const isConflictThread = thread.type === 'Conflict';
-  const [conflictOptions, setConflictOptions] = useState<ConflictResolutionOptions>('none');
-  const [selectedResolution, setSelectedResolution] = useState<ConflictResolution>('accept');
-  const [isResolvingConflict, setIsResolvingConflict] = useState<boolean>(false);
-
   // Check resolve permission on mount so the button can appear on hover
   useEffect(() => {
     let isPromiseCurrent = true;
@@ -141,26 +130,6 @@ export function CommentThread({
       isPromiseCurrent = false;
     };
   }, [threadId, canUserResolveThreadCallback]);
-
-  // Which conflict resolution actions the user may take; re-checked when the thread status
-  // changes (resolve/reopen both change what is available).
-  useEffect(() => {
-    let isPromiseCurrent = true;
-    if (!isConflictThread) return undefined;
-
-    const checkConflictOptions = async () => {
-      const options = getConflictResolutionOptionsCallback
-        ? await getConflictResolutionOptionsCallback(threadId)
-        : 'none';
-      if (!isPromiseCurrent) return;
-      setConflictOptions(options);
-    };
-
-    checkConflictOptions();
-    return () => {
-      isPromiseCurrent = false;
-    };
-  }, [isConflictThread, threadId, threadStatus, getConflictResolutionOptionsCallback]);
 
   // Check remaining async permissions when thread is selected
   useEffect(() => {
@@ -274,33 +243,6 @@ export function CommentThread({
   }, [isSelected, activeComments, canUserEditOrDeleteCommentCallback]);
 
   const firstComment = useMemo(() => activeComments[0], [activeComments]);
-
-  // Which way an already-resolved conflict was resolved, read off the resolution comment's
-  // conflictResolutionAction (scanning last-to-first for the first one present, mirroring how the
-  // backend records it on the appended comment): 'replaced' -> reject, 'merged' -> merged. If none
-  // is present but the thread is Resolved, it was an accept (which writes no action). Undefined for
-  // non-conflict threads and for conflicts that are not yet resolved. Consumed by ConflictNoteCard
-  // only in its read-only ('none') state.
-  const resolvedResolution = useMemo<ConflictResolutionOutcome | undefined>(() => {
-    if (!isConflictThread) return undefined;
-    for (let i = activeComments.length - 1; i >= 0; i -= 1) {
-      const action = activeComments[i].conflictResolutionAction;
-      if (action === 'replaced') return 'reject';
-      if (action === 'merged') return 'merged';
-    }
-    return threadStatus === 'Resolved' ? 'accept' : undefined;
-  }, [isConflictThread, activeComments, threadStatus]);
-
-  // A verseText merge conflict — the only conflict type for which the root note carries discrete
-  // diff/result text. Gates the collapsed conflict summary; other conflict types keep the default
-  // CommentItem preview. Mirrors ConflictNoteCard's own verseText check.
-  // `firstComment` is `activeComments[0]`, which is undefined when every comment is deleted (this
-  // runs before the empty-thread guard below), so guard the access — a Conflict thread with no
-  // active comments must simply not be a verseText-conflict render.
-  const isVerseTextConflictThread =
-    isConflictThread &&
-    firstComment?.conflictType === VERSE_TEXT_CONFLICT &&
-    !!firstComment?.resultText;
 
   // </p> expects null and not undefined
   // eslint-disable-next-line no-null/no-null
@@ -490,37 +432,12 @@ export function CommentThread({
     [clearEditor, pendingCommentEditorState, handleAddCommentToThread, pendingCommentAssignedUser],
   );
 
-  const handleResolveConflictClick = useCallback(
-    async (resolution: ConflictResolution) => {
-      if (!handleResolveConflict) return;
-      setIsResolvingConflict(true);
-      try {
-        const success = await handleResolveConflict(threadId, resolution);
-        // Lock the controls immediately on success; the data-update re-fetch confirms via
-        // threadStatus. Prevents a double resolve during the stale-props window (and stays
-        // correct even if the fire-and-forget update event never arrives).
-        if (success) setConflictOptions('none');
-      } finally {
-        // Always clear the busy state, even if a consumer-supplied handleResolveConflict rejects
-        // (contract violation) — otherwise the card would stay locked in its isResolving state.
-        setIsResolvingConflict(false);
-      }
-    },
-    [handleResolveConflict, threadId],
-  );
-
   // If all comments have been deleted there is nothing to render
   if (activeComments.length === 0) return undefined;
 
-  // The root comment's rendering when the ConflictNoteCard is not shown: a collapsed verseText
-  // conflict shows the status-aware summary; everything else shows the standard CommentItem.
-  const nonCardRootComment = isVerseTextConflictThread ? (
-    <ConflictThreadSummary
-      comment={firstComment}
-      localizedStrings={localizedStrings}
-      resolvedResolution={resolvedResolution}
-    />
-  ) : (
+  // The default root-comment render, used unless a rootContentSlot override is supplied (e.g. a
+  // conflict thread's summary or resolution card).
+  const defaultRootComment = (
     <CommentItem
       comment={firstComment}
       localizedStrings={localizedStrings}
@@ -581,39 +498,19 @@ export function CommentThread({
             >
               {isRead ? <MailOpen /> : <Mail />}
             </Button>
-            {canResolve && threadStatus !== 'Resolved' && (
-              <Button
-                variant="ghost"
-                size="icon"
-                // Guards against a fast double-click firing two resolveConflict('accept') calls
-                // while the first is still in flight (isResolvingConflict is only ever set for a
-                // conflict thread, so this never disables the button for a non-conflict thread).
-                disabled={isResolvingConflict}
-                className={cn(
-                  'tw:ms-auto',
-                  'tw:text-primary tw:transition-opacity tw:duration-200 tw:hover:bg-primary/10',
-                  'tw:opacity-0 tw:group-hover:opacity-100',
-                )}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // A conflict thread's generic status-change path
-                  // (`handleAddCommentToThreadWithContents({ status: 'Resolved' })`) is blocked by
-                  // the backend, so route conflicts through the same conflict-resolve handler
-                  // passed to ConflictNoteCard's `onResolve`, defaulting to 'accept' (keep the
-                  // current/accepted text) since this button offers no choice of resolution.
-                  if (isConflictThread) {
-                    handleResolveConflictClick('accept');
-                  } else {
-                    handleAddCommentToThreadWithContents({
-                      threadId,
-                      status: 'Resolved',
-                    });
-                  }
-                }}
-                aria-label={localizedStrings['%comment_aria_resolve_thread%'] ?? 'Resolve thread'}
-              >
-                <Check className="tw:h-4 tw:w-4" />
-              </Button>
+            {resolveActionSlot === undefined ? (
+              // Generic status-resolve check (used by non-conflict threads and, via ConflictThread
+              // leaving this slot undefined, by non-verseText conflicts, which resolve through a
+              // plain status change). ConflictThread overrides this slot for verseText conflicts.
+              <ResolveCheckButton
+                show={canResolve && threadStatus !== 'Resolved'}
+                onClick={() =>
+                  handleAddCommentToThreadWithContents({ threadId, status: 'Resolved' })
+                }
+                ariaLabel={localizedStrings['%comment_aria_resolve_thread%'] ?? 'Resolve thread'}
+              />
+            ) : (
+              resolveActionSlot
             )}
           </div>
           <div className="tw:flex tw:max-w-full tw:flex-wrap tw:items-baseline tw:gap-2">
@@ -652,20 +549,7 @@ export function CommentThread({
               </span>
             </p>
           </div>
-          {isConflictThread && isSelected ? (
-            <ConflictNoteCard
-              comment={firstComment}
-              localizedStrings={localizedStrings}
-              selectedResolution={selectedResolution}
-              onResolutionChange={setSelectedResolution}
-              availableActions={threadStatus === 'Resolved' ? 'none' : conflictOptions}
-              resolvedResolution={resolvedResolution}
-              onResolve={handleResolveConflictClick}
-              isResolving={isResolvingConflict}
-            />
-          ) : (
-            nonCardRootComment
-          )}
+          {rootContentSlot ?? defaultRootComment}
         </div>
         <>
           {hasReplies && !isSelected && (
@@ -686,12 +570,12 @@ export function CommentThread({
           )}
           {isSelected && (
             <>
-              {/* Extra vertical spacing between the conflict card and its reply comments
-                  (Storybook feedback item 4). Only rendered when the conflict thread has at
-                  least one visible reply, so a conflict thread with no other comments doesn't
-                  get dead whitespace before the compose editor. */}
-              {isConflictThread && visibleReplies.length > 0 && (
-                <div className="tw:h-2" data-slot="conflict-reply-gap" aria-hidden="true" />
+              {/* Extra vertical spacing between custom root content (e.g. a conflict resolution
+                  card) and the reply comments. Only rendered when there is at least one visible
+                  reply, so a thread with no other comments doesn't get dead whitespace before the
+                  compose editor. */}
+              {spaceRootContentFromReplies && visibleReplies.length > 0 && (
+                <div className="tw:h-2" data-slot="root-content-reply-gap" aria-hidden="true" />
               )}
               {/* Show "hidden replies" separator before the visible replies if there are hidden replies */}
               {hiddenReplyCount > 0 && (

@@ -257,10 +257,10 @@ function CommentListStory({
       canUserEditOrDeleteCommentCallback={
         canUserEditOrDeleteCommentCallback ?? defaultCanUserEditOrDeleteCallback
       }
-      handleResolveConflict={handleResolveConflict}
-      getConflictResolutionOptionsCallback={
-        getConflictResolutionOptionsCallback ?? (async () => 'acceptOrReject')
-      }
+      conflictResolution={{
+        resolve: handleResolveConflict,
+        getOptions: getConflictResolutionOptionsCallback ?? (async () => 'acceptOrReject'),
+      }}
     />
   );
 }

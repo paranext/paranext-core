@@ -8,6 +8,7 @@ import {
 } from 'platform-bible-utils';
 import { useMemo, useState } from 'react';
 import { CommentThread } from './comment-thread.component';
+import { ConflictThread } from './conflict-thread.component';
 import { verseTextConflictReplacementSample } from './comment-sample.data';
 import { AddCommentToThreadOptions } from './comment-list.types';
 import { ConflictResolution, ConflictResolutionOptions } from './conflict-note-card.types';
@@ -303,9 +304,11 @@ function CommentThreadStory({
     [comments, status, threadType],
   );
 
+  // Conflict threads render through ConflictThread; everything else through CommentThread directly.
+  const ThreadComponent = threadType === 'Conflict' ? ConflictThread : CommentThread;
   return (
     <div className="tw:max-w-md tw:rounded-md tw:border">
-      <CommentThread
+      <ThreadComponent
         comments={comments}
         localizedStrings={localizedStrings}
         currentUser={CURRENT_USER}
@@ -328,10 +331,10 @@ function CommentThreadStory({
         canUserResolveThreadCallback={async () => true}
         canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
         isRead={false}
-        handleResolveConflict={handleResolveConflict}
-        getConflictResolutionOptionsCallback={
-          getConflictResolutionOptionsCallback ?? (async () => 'acceptOrReject')
-        }
+        conflictResolution={{
+          resolve: handleResolveConflict,
+          getOptions: getConflictResolutionOptionsCallback ?? (async () => 'acceptOrReject'),
+        }}
       />
     </div>
   );

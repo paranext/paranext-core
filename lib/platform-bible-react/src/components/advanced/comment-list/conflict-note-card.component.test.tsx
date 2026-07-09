@@ -84,15 +84,10 @@ test('acceptOrReject shows two radios and no "Combine both changes" option', () 
   expect(screen.queryByRole('radio', { name: 'Combine both changes' })).not.toBeInTheDocument();
 });
 
-test('selecting "Use the other change" reports reject and boxes the reject option', async () => {
+test('selecting "Use the other change" (uncontrolled) boxes the reject option', async () => {
   const user = userEvent.setup({ pointerEventsCheck: 0 });
-  const onResolutionChange = vi.fn();
   render(
-    <ConflictNoteCard
-      comment={verseTextConflictComment}
-      localizedStrings={localizedStrings}
-      onResolutionChange={onResolutionChange}
-    />,
+    <ConflictNoteCard comment={verseTextConflictComment} localizedStrings={localizedStrings} />,
   );
   // Selected border starts on accept, not reject.
   expect(optionRow('accept')).toHaveClass('tw:border-border');
@@ -100,9 +95,7 @@ test('selecting "Use the other change" reports reject and boxes the reject optio
 
   await user.click(screen.getByRole('radio', { name: 'Use the other change' }));
 
-  expect(onResolutionChange).toHaveBeenCalledTimes(1);
-  expect(onResolutionChange).toHaveBeenCalledWith('reject');
-  // The selected border follows the choice to the reject option.
+  // The card manages its own selection: the selected border follows the choice to reject.
   expect(optionRow('reject')).toHaveClass('tw:border-border');
   expect(optionRow('accept')).not.toHaveClass('tw:border-border');
 });
@@ -124,13 +117,11 @@ test('the merge option renders the mergedText diff HTML', () => {
 
 test('clicking anywhere on the "Combine both changes" card selects merge and boxes that card', async () => {
   const user = userEvent.setup({ pointerEventsCheck: 0 });
-  const onResolutionChange = vi.fn();
   render(
     <ConflictNoteCard
       comment={verseTextConflictMergeSample}
       localizedStrings={localizedStrings}
       availableActions="acceptRejectOrMerge"
-      onResolutionChange={onResolutionChange}
     />,
   );
   // Merge starts unselected (accept is the default).
@@ -141,8 +132,6 @@ test('clicking anywhere on the "Combine both changes" card selects merge and box
   if (!mergeCard) throw new Error('expected a "Combine both changes" option card');
   await user.click(mergeCard);
 
-  expect(onResolutionChange).toHaveBeenCalledTimes(1);
-  expect(onResolutionChange).toHaveBeenCalledWith('merge');
   // Uncontrolled, so the selection (and its box) follows the click to the merge card.
   expect(optionRow('merge')).toHaveClass('tw:border-border');
   expect(optionRow('accept')).not.toHaveClass('tw:border-border');
@@ -167,10 +156,10 @@ test('Save and resolve reports the current selection to onResolve', async () => 
     <ConflictNoteCard
       comment={verseTextConflictComment}
       localizedStrings={localizedStrings}
-      selectedResolution="reject"
       onResolve={onResolve}
     />,
   );
+  await user.click(screen.getByRole('radio', { name: 'Use the other change' }));
   await user.click(screen.getByRole('button', { name: 'Save and resolve' }));
   expect(onResolve).toHaveBeenCalledTimes(1);
   expect(onResolve).toHaveBeenCalledWith('reject');
@@ -181,7 +170,6 @@ test('isResolving disables the radio group and the Save and resolve button', () 
     <ConflictNoteCard
       comment={verseTextConflictComment}
       localizedStrings={localizedStrings}
-      selectedResolution="reject"
       isResolving
     />,
   );
@@ -196,8 +184,6 @@ test('stale (availableActions=accept) disables the reject radio with a notice, k
       comment={verseTextConflictComment}
       localizedStrings={localizedStrings}
       availableActions="accept"
-      // Forced to accept even though the parent passed 'reject'.
-      selectedResolution="reject"
     />,
   );
   const acceptRadio = screen.getByRole('radio', { name: 'Keep the current text' });
@@ -220,41 +206,34 @@ test('the radio group has an accessible name', () => {
 
 test('the Save tooltip warns when enabled and explains the no-op when disabled', async () => {
   const user = userEvent.setup({ pointerEventsCheck: 0 });
-  const { rerender } = render(
-    <ConflictNoteCard
-      comment={verseTextConflictComment}
-      localizedStrings={localizedStrings}
-      selectedResolution="reject"
-    />,
+  render(
+    <ConflictNoteCard comment={verseTextConflictComment} localizedStrings={localizedStrings} />,
   );
-  // Enabled (reject selected): the tooltip carries the irreversibility warning.
-  await user.hover(screen.getByRole('button', { name: 'Save and resolve' }));
-  expect(await screen.findByRole('tooltip')).toHaveTextContent("This can't be undone.");
-
-  // Disabled (keep-current selected): the tooltip explains that saving is a no-op instead.
-  rerender(
-    <ConflictNoteCard
-      comment={verseTextConflictComment}
-      localizedStrings={localizedStrings}
-      selectedResolution="accept"
-    />,
-  );
+  // Default accept -> Save disabled -> the tooltip explains that saving is a no-op.
   await user.hover(screen.getByText('Save and resolve'));
   expect(await screen.findByRole('tooltip')).toHaveTextContent(
     'Keeping the current text makes no change',
   );
+
+  // Choose the other change -> Save enabled -> the tooltip carries the irreversibility warning.
+  await user.click(screen.getByRole('radio', { name: 'Use the other change' }));
+  await user.hover(screen.getByRole('button', { name: 'Save and resolve' }));
+  expect(await screen.findByRole('tooltip')).toHaveTextContent("This can't be undone.");
 });
 
 test('the Save tooltip is suppressed when Save is disabled solely by isResolving', async () => {
   const user = userEvent.setup({ pointerEventsCheck: 0 });
-  render(
+  const { rerender } = render(
+    <ConflictNoteCard comment={verseTextConflictComment} localizedStrings={localizedStrings} />,
+  );
+  // Choose reject first (an enabled Save would otherwise warn "This can't be undone.")...
+  await user.click(screen.getByRole('radio', { name: 'Use the other change' }));
+  // ...then flip on isResolving, which disables the button - showing that warning here would
+  // misleadingly suggest clicking a button the user currently can't press.
+  rerender(
     <ConflictNoteCard
       comment={verseTextConflictComment}
       localizedStrings={localizedStrings}
-      // Reject selected (an enabled Save would otherwise warn "This can't be undone."), but
-      // isResolving disables the button — showing that warning here would misleadingly suggest
-      // clicking a button the user currently can't press.
-      selectedResolution="reject"
       isResolving
     />,
   );

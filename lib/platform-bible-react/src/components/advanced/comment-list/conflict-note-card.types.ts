@@ -1,13 +1,17 @@
-import {
-  ConflictResolutionOptions,
-  LanguageStrings,
-  LegacyComment,
-  LocalizeKey,
-} from 'platform-bible-utils';
+import { ConflictResolutionOptions, LanguageStrings, LegacyComment } from 'platform-bible-utils';
 
 // Re-export so this module (and the platform-bible-react barrel) stays the import site for the
 // ConflictNoteCard's resolution types. The single definition lives in platform-bible-utils.
 export type { ConflictResolutionOptions };
+
+/**
+ * The conflict card's action state. Extends the backend {@link ConflictResolutionOptions} with a
+ * client-only `'loading'` sentinel used while the getConflictResolutionOptions result is in flight,
+ * so the card can render a skeleton instead of momentarily flashing the read-only "resolved" view.
+ * `'loading'` is deliberately NOT part of the platform-bible-utils contract - it never crosses the
+ * C#<->TS boundary.
+ */
+export type ConflictCardActions = ConflictResolutionOptions | 'loading';
 
 /**
  * The one conflict type whose root note carries discrete diff/result text and drives the
@@ -40,7 +44,7 @@ export type ConflictResolutionOutcome = 'accept' | 'reject' | 'merged';
  * Localization keys used by the ConflictNoteCard. Pass into the useLocalizedStrings hook (in the
  * consuming extension) and forward the result via the localizedStrings prop.
  */
-export const CONFLICT_NOTE_STRING_KEYS: LocalizeKey[] = [
+export const CONFLICT_NOTE_STRING_KEYS = Object.freeze([
   '%conflict_note_description_verseText%',
   // Accessible name for the resolution radio group (the group has no other visible <label>).
   '%conflict_note_choose_aria_label%',
@@ -55,6 +59,8 @@ export const CONFLICT_NOTE_STRING_KEYS: LocalizeKey[] = [
   '%conflict_note_save_disabled_tooltip%',
   // Tooltip when Save is enabled (the resolution is irreversible).
   '%conflict_note_save_warning%',
+  // Neutral placeholder when an already-resolved conflict's Result region has no text to show.
+  '%conflict_note_no_result%',
   // Consumed by CommentItem for a conflict thread's resolution banner (not by ConflictNoteCard):
   // the neutral outcome line derived from conflictResolutionAction.
   '%conflict_note_outcome_used_other%',
@@ -66,7 +72,7 @@ export const CONFLICT_NOTE_STRING_KEYS: LocalizeKey[] = [
   '%conflict_note_summary_resolved_kept_current%',
   '%conflict_note_summary_resolved_used_other%',
   '%conflict_note_summary_resolved_combined%',
-];
+] as const);
 
 /** Props for the ConflictNoteCard component */
 export interface ConflictNoteCardProps {
@@ -78,18 +84,12 @@ export interface ConflictNoteCardProps {
   /** Localized strings for the component */
   localizedStrings: LanguageStrings;
   /**
-   * Controlled selected resolution. When omitted, the card manages its own state (default
-   * 'accept').
+   * Which resolution actions are available (default 'acceptOrReject'). 'loading' shows a skeleton
+   * while the options are being fetched; 'none' hides the selector and Resolve button entirely
+   * (read-only regions); 'accept' disables the Reject option with a stale-verse explanation
+   * tooltip. The card manages its own selection state (uncontrolled, default 'accept').
    */
-  selectedResolution?: ConflictResolution;
-  /** Called when the user changes the Accept/Reject selection */
-  onResolutionChange?: (resolution: ConflictResolution) => void;
-  /**
-   * Which resolution actions are available (default 'acceptOrReject'). 'none' hides the selector
-   * and Resolve button entirely (read-only regions); 'accept' disables the Reject option with a
-   * stale-verse explanation tooltip.
-   */
-  availableActions?: ConflictResolutionOptions;
+  availableActions?: ConflictCardActions;
   /**
    * Which way an already-resolved conflict was resolved. Used ONLY when `availableActions` is
    * `'none'` (read-only): it makes the Result region show the text that was actually applied

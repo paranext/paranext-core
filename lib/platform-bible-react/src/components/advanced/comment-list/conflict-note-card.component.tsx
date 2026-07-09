@@ -1,5 +1,6 @@
 import { Button } from '@/components/shadcn-ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/shadcn-ui/radio-group';
+import { Skeleton } from '@/components/shadcn-ui/skeleton';
 import {
   Tooltip,
   TooltipContent,
@@ -13,8 +14,8 @@ import {
   ConflictNoteCardProps,
   ConflictResolution,
   ConflictResolutionOutcome,
-  VERSE_TEXT_CONFLICT,
 } from './conflict-note-card.types';
+import { isVerseTextConflictNote } from './comment-list.utils';
 import { DiffHtml, sanitizeDiffHtml } from './conflict-diff';
 
 /** One selectable resolution option (a clickable card) with its localized label and inline diff. */
@@ -36,15 +37,12 @@ type ConflictOption = { value: ConflictResolution; label: string; html: string }
 export function ConflictNoteCard({
   comment,
   localizedStrings,
-  selectedResolution,
-  onResolutionChange,
   availableActions = 'acceptOrReject',
   resolvedResolution,
   onResolve,
   isResolving = false,
 }: ConflictNoteCardProps) {
   const [internalResolution, setInternalResolution] = useState<ConflictResolution>('accept');
-  const resolution = selectedResolution ?? internalResolution;
   // Stable id linking the disabled accept option to its visually-hidden explanation via
   // aria-describedby, so screen readers announce why the choice is read-only (the visual Tooltip is
   // pointer-only and never reaches assistive tech).
@@ -52,6 +50,9 @@ export function ConflictNoteCard({
   // Prefix for the per-option radio id (used for the stale reject aria-describedby wiring).
   const optionIdPrefix = useId();
 
+  // Options are still being fetched: render a skeleton, never the option cards or (worse) the
+  // read-only "resolved" view, which would flash the accepted text before the real state lands.
+  const isLoading = availableActions === 'loading';
   // The verse was edited after the merge (stale): the choice is read-only and forced to accept.
   const isStale = availableActions === 'accept';
   // Already resolved (or no permission): show the read-only outcome rather than the option cards.
@@ -61,7 +62,7 @@ export function ConflictNoteCard({
 
   // When reject is unavailable (stale verse) force the visible selection to 'accept' so the radio
   // group can never display a choice the disabled state would refuse.
-  const effectiveResolution: ConflictResolution = isStale ? 'accept' : resolution;
+  const effectiveResolution: ConflictResolution = isStale ? 'accept' : internalResolution;
 
   const sanitizedRejected = useMemo(
     () => sanitizeDiffHtml(comment.rejectedText ?? ''),
@@ -77,9 +78,9 @@ export function ConflictNoteCard({
   );
   const sanitizedContents = useMemo(() => sanitizeHtml(comment.contents), [comment.contents]);
 
-  const isVerseTextConflict = comment.conflictType === VERSE_TEXT_CONFLICT && !!comment.resultText;
-
-  if (!isVerseTextConflict) {
+  // Gate on conflictType alone (not resultText): an empty-result verseText conflict must still show
+  // the resolve UI, or it is unresolvable (the backend blocks resolving it via a status change).
+  if (!isVerseTextConflictNote(comment)) {
     return <DiffHtml html={sanitizedContents} />;
   }
 
@@ -87,7 +88,6 @@ export function ConflictNoteCard({
     // RadioGroup only emits our known option values; narrow without a type assertion.
     const next: ConflictResolution = value === 'reject' || value === 'merge' ? value : 'accept';
     setInternalResolution(next);
-    onResolutionChange?.(next);
   };
 
   // Shared between the visible Tooltip and the visually-hidden aria-describedby target so both
@@ -142,15 +142,26 @@ export function ConflictNoteCard({
   // Result text that was actually applied. Defaults to 'accept' (keep the current text) when the
   // resolution is unknown. The outcome itself is stated in prose by CommentItem's resolution-reply
   // banner, not here — this only shows the resulting text.
+  // A blank result field (e.g. a reject that decoded to an empty verse) shows a neutral notice
+  // instead of an empty Result region.
+  const noResultText =
+    localizedStrings['%conflict_note_no_result%'] ?? 'No result preview available.';
+  const renderResolvedText = (text: string | undefined) =>
+    text ? (
+      <p className="tw:whitespace-pre-wrap tw:text-foreground">{text}</p>
+    ) : (
+      <p className="tw:text-muted-foreground">{noResultText}</p>
+    );
   const renderResolvedResult = () => {
     const outcome: ConflictResolutionOutcome = resolvedResolution ?? 'accept';
-    if (outcome === 'merged') return <DiffHtml html={sanitizedMerged} />;
-    if (outcome === 'reject') {
-      return (
-        <p className="tw:whitespace-pre-wrap tw:text-foreground">{comment.rejectedResultText}</p>
+    if (outcome === 'merged')
+      return comment.mergedText ? (
+        <DiffHtml html={sanitizedMerged} />
+      ) : (
+        renderResolvedText(undefined)
       );
-    }
-    return <p className="tw:whitespace-pre-wrap tw:text-foreground">{comment.resultText}</p>;
+    if (outcome === 'reject') return renderResolvedText(comment.rejectedResultText);
+    return renderResolvedText(comment.resultText);
   };
 
   const renderOptionCard = (option: ConflictOption) => {
@@ -218,9 +229,15 @@ export function ConflictNoteCard({
           'Conflicting changes were made to the verse text.'}
       </p>
 
-      {isReadOnly ? (
-        renderResolvedResult()
-      ) : (
+      {isLoading && (
+        <div className="tw:flex tw:flex-col tw:gap-2" data-slot="conflict-loading">
+          <Skeleton className="tw:h-8 tw:w-full" />
+          <Skeleton className="tw:h-8 tw:w-full" />
+          <Skeleton className="tw:h-8 tw:w-24" />
+        </div>
+      )}
+      {!isLoading && isReadOnly && renderResolvedResult()}
+      {!isLoading && !isReadOnly && (
         <>
           <p>
             {localizedStrings['%conflict_note_choose_prompt%'] ?? 'Select which change to keep:'}

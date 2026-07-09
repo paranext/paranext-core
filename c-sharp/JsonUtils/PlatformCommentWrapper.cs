@@ -134,8 +134,9 @@ public class PlatformCommentWrapper
     /// <summary>
     /// The conflict-resolution action recorded on this comment, if any: <c>null</c> (accept, or not
     /// a resolution comment at all), <c>"replaced"</c> (a reject wrote the losing side into the
-    /// verse), or <c>"merged"</c> (a PT9 three-way merge — PT10 never produces this, but PT9-synced
-    /// data may carry it). Comes straight from the underlying <see cref="Comment"/> field.
+    /// verse), or <c>"merged"</c> (PT10's merge resolution wrote PT9's auto-merged, both-sides text
+    /// into the verse - data synced from a PT9 three-way merge may also carry it). Comes straight
+    /// from the underlying <see cref="Comment"/> field.
     ///
     /// UNGATED on purpose (unlike the four verseText decode fields below, which are gated on
     /// <see cref="IsVerseTextConflict"/>): PT9's SaveEdits stamps this on the resolution comment it

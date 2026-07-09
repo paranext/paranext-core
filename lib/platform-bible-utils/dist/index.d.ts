@@ -5933,15 +5933,15 @@ export type LegacyComment = {
 	 *
 	 * - `'replaced'` — the conflict was rejected, so the previously-rejected side was written into the
 	 *   text (replacing what Paratext had accepted).
-	 * - `'merged'` — a PT9 three-way merge. PT10 never produces this, but data synced from PT9 may
-	 *   contain it.
+	 * - `'merged'` - the conflict was resolved via PT10's merge action, which writes PT9's auto-merged
+	 *   (both-sides) text into the verse; data synced from a PT9 three-way merge may also carry it.
 	 *
 	 * Absent means the conflict was accepted (no text write) or this is not a resolution comment.
 	 * Unlike the four `verseText` decode fields, this is NOT gated on `conflictType`: the resolution
 	 * comment has type `Conflict` but no `conflictType`, so it must be read directly from this
 	 * field.
 	 */
-	conflictResolutionAction?: string;
+	conflictResolutionAction?: "replaced" | "merged";
 	/** Contents of the comment, represented in HTML that includes some Paratext 9 specific tags */
 	contents: string;
 	/**

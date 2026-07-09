@@ -1,4 +1,5 @@
 import { LanguageStrings, LegacyComment, LocalizeKey } from 'platform-bible-utils';
+import { useMemo } from 'react';
 import { ConflictResolutionOutcome } from './conflict-note-card.types';
 import { DiffHtml, sanitizeDiffHtml } from './conflict-diff';
 
@@ -44,6 +45,13 @@ export function ConflictThreadSummary({
   localizedStrings,
   resolvedResolution,
 }: ConflictThreadSummaryProps) {
+  // Hooks must run unconditionally on every render, so this is computed before the early return
+  // below even though it's only used in the unresolved branch.
+  const diffHtml = useMemo(
+    () => sanitizeDiffHtml(comment.rejectedText ?? ''),
+    [comment.rejectedText],
+  );
+
   if (resolvedResolution) {
     const { key, fallback } = RESOLVED_SUMMARY[resolvedResolution];
     return (
@@ -56,7 +64,6 @@ export function ConflictThreadSummary({
   const prompt =
     localizedStrings['%conflict_note_summary_unresolved%'] ??
     'Conflicting edits. Choose which change to keep.';
-  const diffHtml = sanitizeDiffHtml(comment.rejectedText ?? '');
 
   return (
     <div className="tw:flex tw:flex-col tw:gap-1">
