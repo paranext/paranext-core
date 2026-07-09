@@ -112,3 +112,55 @@ describe('sliceUsjToVerse — multi-paragraph poetry', () => {
     expect(paragraphs(usj)).toEqual([{ marker: 'q1', text: '2but his delight is in the law.' }]);
   });
 });
+
+// Matt 17:14-15 — a combined (bridged) verse rendered from one marker.
+const usxCombined = `<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.1">
+  <book code="MAT" style="id">WEB</book>
+  <chapter number="17" style="c" sid="MAT 17" />
+  <para style="p">
+    <verse number="13" style="v" sid="MAT 17:13" />Then the disciples understood.<verse eid="MAT 17:13" /><verse number="14-15" style="v" sid="MAT 17:14-15" />A man came, kneeling.<verse eid="MAT 17:14-15" /><verse number="16" style="v" sid="MAT 17:16" />I brought him.<verse eid="MAT 17:16" /></para>
+</usx>
+`;
+const usjCombined = usxStringToUsj(usxCombined);
+
+// Luke 1:1-3a — a partial combined range.
+const usxPartial = `<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.1">
+  <book code="LUK" style="id">WEB</book>
+  <chapter number="1" style="c" sid="LUK 1" />
+  <para style="p">
+    <verse number="1-3a" style="v" sid="LUK 1:1-3a" />Many have undertaken to draw up an account.<verse eid="LUK 1:1-3a" /><verse number="3b-4" style="v" sid="LUK 1:3b-4" />It seemed good to me also.<verse eid="LUK 1:3b-4" /></para>
+</usx>
+`;
+const usjPartial = usxStringToUsj(usxPartial);
+
+function verseOpenerNumbers(usj: Usj): string[] {
+  const nums: string[] = [];
+  const walk = (content: unknown) => {
+    if (Array.isArray(content)) content.forEach(walk);
+    else if (content && typeof content === 'object') {
+      const node = content as MarkerObject;
+      if (node.type === 'verse' && node.number != undefined) nums.push(String(node.number));
+      if ('content' in node) walk(node.content);
+    }
+  };
+  walk(usj.content);
+  return nums;
+}
+
+describe('sliceUsjToVerse — combined and partial ranges', () => {
+  it('renders a combined verse when focus falls inside the range, once (PT-3495)', () => {
+    const { usj, isEmpty } = sliceUsjToVerse(usjCombined, 15); // focus 15 inside 14-15
+    expect(isEmpty).toBe(false);
+    expect(paragraphs(usj)).toEqual([{ marker: 'p', text: '14-15A man came, kneeling.' }]);
+    expect(verseOpenerNumbers(usj)).toEqual(['14-15']); // emitted exactly once
+  });
+
+  it('renders a partial combined range for a focus inside it', () => {
+    const { usj } = sliceUsjToVerse(usjPartial, 2); // 2 inside 1-3a
+    expect(paragraphs(usj)).toEqual([
+      { marker: 'p', text: '1-3aMany have undertaken to draw up an account.' },
+    ]);
+  });
+});
