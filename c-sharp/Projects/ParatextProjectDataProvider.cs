@@ -65,9 +65,14 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     // every published PDP creation.
     private readonly Lazy<CommentManager> _commentManager;
 
-    // Serializes ResolveConflict so its already-resolved guard is atomic with the verse write (see
-    // ResolveConflict). One lock per PDP instance, i.e. per project.
-    private readonly object _resolveConflictLock = new();
+    // Serializes all comment mutations (ResolveConflict, AddCommentToThread, CreateComment,
+    // UpdateComment, DeleteComment) so their read-modify-write of the shared CommentManager (and the
+    // Comments_*.xml files it saves) is atomic. The PDP is a per-project singleton whose PAPI methods
+    // can be invoked concurrently, and PT9's CommentManager is not thread-safe - it was only ever
+    // driven by Paratext's single UI thread, so this concurrency is new in PT10. One lock per PDP
+    // instance, i.e. per project. Reads (GetCommentThreads) are intentionally not serialized: they
+    // can observe a transient in-progress view but cannot corrupt data.
+    private readonly object _commentMutationLock = new();
 
     private UserProjectSettings? _userProjectSettings;
     private string? _cachedUserId;
@@ -446,20 +451,23 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool DeleteComment(string commentId)
     {
-        // Find the comment by ID and its parent thread
-        var (commentToDelete, parentThread) = FindCommentByIdWithThread(commentId);
-        if (commentToDelete == null || parentThread == null)
-            return false;
+        lock (_commentMutationLock)
+        {
+            // Find the comment by ID and its parent thread
+            var (commentToDelete, parentThread) = FindCommentByIdWithThread(commentId);
+            if (commentToDelete == null || parentThread == null)
+                return false;
 
-        VerifyUserCanEditOrDeleteComment(commentId);
+            VerifyUserCanEditOrDeleteComment(commentId);
 
-        // Remove the comment using CommentManager
-        _commentManager.Value.RemoveComment(commentToDelete);
+            // Remove the comment using CommentManager
+            _commentManager.Value.RemoveComment(commentToDelete);
 
-        _commentManager.Value.SaveUser(commentToDelete.User, false);
+            _commentManager.Value.SaveUser(commentToDelete.User, false);
 
-        SendDataUpdateEvent(AllCommentDataTypes, "comment deleted event");
-        return true;
+            SendDataUpdateEvent(AllCommentDataTypes, "comment deleted event");
+            return true;
+        }
     }
 
     /// <summary>
@@ -583,11 +591,16 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (string.IsNullOrEmpty(newComment.Language))
             newComment.Language = scrText.Language.Id;
 
-        _commentManager.Value.AddComment(newComment);
-        _commentManager.Value.SaveUser(newComment.User, false);
-        ThreadStatus.MarkThreadRead(_commentManager.Value.FindThread(newComment.Thread));
+        // Only the CommentManager mutation needs serializing (see _commentMutationLock); the
+        // selection processing above builds the new comment without touching shared state.
+        lock (_commentMutationLock)
+        {
+            _commentManager.Value.AddComment(newComment);
+            _commentManager.Value.SaveUser(newComment.User, false);
+            ThreadStatus.MarkThreadRead(_commentManager.Value.FindThread(newComment.Thread));
 
-        SendDataUpdateEvent(AllCommentDataTypes, "comment created event");
+            SendDataUpdateEvent(AllCommentDataTypes, "comment created event");
+        }
 
         return newComment.Id;
     }
@@ -602,86 +615,97 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <exception cref="InvalidDataException">If the thread ID is missing or doesn't exist</exception>
     public string AddCommentToThread(PlatformCommentWrapper comment)
     {
-        if (string.IsNullOrEmpty(comment.Thread))
-            throw new InvalidDataException("Thread ID is required for AddCommentToThread");
-
-        bool hasContents =
-            comment.Contents != null && !string.IsNullOrEmpty(comment.Contents.InnerText);
-        bool hasStatus = comment.Status != NoteStatus.Unspecified;
-        bool hasAssignedUser = comment.AssignedUser != null;
-
-        if (!hasContents && !hasStatus && !hasAssignedUser)
-            throw new InvalidDataException(
-                "At least one of Contents, Status, or AssignedUser must be provided for AddCommentToThread"
-            );
-
-        CommentThread? existingThread = _commentManager.Value.FindThread(comment.Thread);
-        if (existingThread == null)
-            throw new InvalidDataException($"Thread with id {comment.Thread} does not exist.");
-
-        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
-
-        VerifyUserCanAddCommentToThread();
-
-        // Adding a content comment to a resolved thread implicitly re-opens it (applied further below).
-        bool willReopenResolvedThread =
-            comment.Status == NoteStatus.Unspecified
-            && existingThread.Status == NoteStatus.Resolved
-            && hasContents;
-
-        // Validate permissions for status changes (resolve/re-open). An implicit re-open — adding a
-        // comment to a resolved thread — must clear the same gate as an explicit status change
-        // (PT-4107); otherwise a user who cannot resolve/re-open could bypass it by replying.
-        if (
-            comment.Status == NoteStatus.Resolved
-            || comment.Status == NoteStatus.Todo
-            || willReopenResolvedThread
-        )
+        lock (_commentMutationLock)
         {
-            VerifyUserCanResolveThread(comment.Thread);
+            if (string.IsNullOrEmpty(comment.Thread))
+                throw new InvalidDataException("Thread ID is required for AddCommentToThread");
 
-            // Conflict threads must be resolved through ResolveConflict (accept/reject), which
-            // applies the chosen text and enforces the admin-or-assignee gate. This generic path
-            // would mark the conflict resolved without applying anything, and the already-resolved
-            // guard would then lock out the real flow. Reopening (Todo) stays allowed.
-            if (comment.Status == NoteStatus.Resolved && existingThread.Type == NoteType.Conflict)
-                throw new InvalidOperationException(
-                    $"Thread '{comment.Thread}' is a merge conflict; use resolveConflict to accept or reject it instead of setting its status directly."
+            bool hasContents =
+                comment.Contents != null && !string.IsNullOrEmpty(comment.Contents.InnerText);
+            bool hasStatus = comment.Status != NoteStatus.Unspecified;
+            bool hasAssignedUser = comment.AssignedUser != null;
+
+            if (!hasContents && !hasStatus && !hasAssignedUser)
+                throw new InvalidDataException(
+                    "At least one of Contents, Status, or AssignedUser must be provided for AddCommentToThread"
                 );
-        }
 
-        // Validate assigned user has permission to be assigned and is in the assignable users list
-        if (comment.AssignedUser != null)
-        {
-            VerifyUserCanAssignThread(comment.Thread);
-            var assignableUsers = CommentThread
-                .GetAssignToUsers(scrText, includeCurrentUserInUnsharedProject: true)
-                .ToList();
-            if (!assignableUsers.Contains(comment.AssignedUser))
-                throw new InvalidOperationException(
-                    $"User '{comment.AssignedUser}' cannot be assigned to threads in this project."
+            CommentThread? existingThread = _commentManager.Value.FindThread(comment.Thread);
+            if (existingThread == null)
+                throw new InvalidDataException($"Thread with id {comment.Thread} does not exist.");
+
+            var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+
+            VerifyUserCanAddCommentToThread();
+
+            // Adding a content comment to a resolved thread implicitly re-opens it (applied further below).
+            bool willReopenResolvedThread =
+                comment.Status == NoteStatus.Unspecified
+                && existingThread.Status == NoteStatus.Resolved
+                && hasContents;
+
+            // Validate permissions for status changes (resolve/re-open). An implicit re-open - adding a
+            // comment to a resolved thread - must clear the same gate as an explicit status change
+            // (PT-4107); otherwise a user who cannot resolve/re-open could bypass it by replying.
+            if (
+                comment.Status == NoteStatus.Resolved
+                || comment.Status == NoteStatus.Todo
+                || willReopenResolvedThread
+            )
+            {
+                VerifyUserCanResolveThread(comment.Thread);
+
+                // A verseText conflict must be resolved through ResolveConflict (accept/reject/merge),
+                // which applies the chosen text and enforces the admin-or-assignee gate. This generic
+                // path would mark it resolved without applying anything, and the already-resolved guard
+                // would then lock out the real flow. Other conflict types (invalidVerses, readError,
+                // verseBridge, ...) have no ResolveConflict path, so they must stay resolvable here;
+                // gating on Type == Conflict alone left them permanently unresolvable. Reopening (Todo)
+                // stays allowed.
+                if (
+                    comment.Status == NoteStatus.Resolved
+                    && existingThread.Type == NoteType.Conflict
+                    && existingThread.Comments is { Count: > 0 }
+                    && existingThread.Comments[0].ConflictType == NoteConflictType.VerseTextConflict
+                )
+                    throw new InvalidOperationException(
+                        $"Thread '{comment.Thread}' is a verseText merge conflict; use resolveConflict to accept or reject it instead of setting its status directly."
+                    );
+            }
+
+            // Validate assigned user has permission to be assigned and is in the assignable users list
+            if (comment.AssignedUser != null)
+            {
+                VerifyUserCanAssignThread(comment.Thread);
+                var assignableUsers = CommentThread
+                    .GetAssignToUsers(scrText, includeCurrentUserInUnsharedProject: true)
+                    .ToList();
+                if (!assignableUsers.Contains(comment.AssignedUser))
+                    throw new InvalidOperationException(
+                        $"User '{comment.AssignedUser}' cannot be assigned to threads in this project."
+                    );
+            }
+
+            Comment newComment = existingThread.AddNewComment();
+
+            CopyCommentProperties(comment, newComment);
+
+            if (willReopenResolvedThread)
+            {
+                Console.WriteLine(
+                    $"Reopening resolved thread {existingThread.Id} because a new comment is being added to it."
                 );
+                newComment.Status = NoteStatus.Todo;
+            }
+
+            _commentManager.Value.AddComment(newComment);
+            _commentManager.Value.SaveUser(newComment.User, false);
+            ThreadStatus.MarkThreadRead(existingThread);
+
+            SendDataUpdateEvent(AllCommentDataTypes, "comment added to thread event");
+
+            return newComment.Id;
         }
-
-        Comment newComment = existingThread.AddNewComment();
-
-        CopyCommentProperties(comment, newComment);
-
-        if (willReopenResolvedThread)
-        {
-            Console.WriteLine(
-                $"Reopening resolved thread {existingThread.Id} because a new comment is being added to it."
-            );
-            newComment.Status = NoteStatus.Todo;
-        }
-
-        _commentManager.Value.AddComment(newComment);
-        _commentManager.Value.SaveUser(newComment.User, false);
-        ThreadStatus.MarkThreadRead(existingThread);
-
-        SendDataUpdateEvent(AllCommentDataTypes, "comment added to thread event");
-
-        return newComment.Id;
     }
 
     /// <summary>
@@ -708,23 +732,26 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 $"Invalid resolution '{resolution}' for ResolveConflict; expected 'accept', 'reject', or 'merge'."
             );
 
-        // Serialize resolves so the already-resolved guard (in VerifyUserCanResolveConflict) is
-        // atomic with the SaveEdits that applies the resolution. Without this, two concurrent
-        // resolveConflict calls on the same thread could both pass the guard and both write the
-        // verse, corrupting an already-settled conflict.
-        lock (_resolveConflictLock)
-        {
-            VerifyUserCanResolveConflict(threadId);
+        // reject writes the loser text and merge the auto-merged text; both mutate the verse, while
+        // accept writes nothing. Computed once so the staleness gate and the Scripture-update event
+        // below cannot drift apart if a future resolution is added.
+        bool writesVerse = resolution is "reject" or "merge";
 
-            CommentThread? thread = _commentManager.Value.FindThread(threadId);
-            if (thread == null)
-                throw new InvalidDataException($"Thread with id {threadId} does not exist.");
+        // Take the shared comment-mutation lock so the already-resolved guard (in
+        // VerifyUserCanResolveConflict) is atomic with the SaveEdits that applies the resolution, and
+        // so a concurrent AddCommentToThread reopen (or any other comment mutation) can't interleave
+        // with it. Without this, two callers could both pass the guard and both write the verse,
+        // corrupting an already-settled conflict.
+        lock (_commentMutationLock)
+        {
+            // Verify proves the thread exists (throws otherwise) and returns it, so no re-find here.
+            CommentThread thread = VerifyUserCanResolveConflict(threadId);
 
             // Reject writes the loser text, and merge writes the auto-merged (both-sides) text, over
             // the current verse; refuse both when the verse was edited after the merge (stale) so
             // post-merge edits can't be clobbered. Accept stays available as the exit path (it writes
             // nothing).
-            if ((resolution == "reject" || resolution == "merge") && IsConflictVerseStale(thread))
+            if (writesVerse && IsConflictVerseStale(thread))
                 throw new InvalidOperationException(
                     $"Conflict thread '{threadId}' cannot be resolved with '{resolution}': the verse text has changed since the conflict was recorded. Only 'accept' (keep the current text) is available."
                 );
@@ -772,7 +799,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // Refresh the comment list; on reject/merge the verse text changed via a raw PutText that
         // bypasses the Set* methods, so also refresh Scripture-text subscribers (the open editor).
         SendDataUpdateEvent(AllCommentDataTypes, "conflict resolved event");
-        if (resolution == "reject" || resolution == "merge")
+        if (writesVerse)
             SendDataUpdateEvent(AllScriptureDataTypes, "conflict resolve wrote verse text event");
     }
 
@@ -783,16 +810,21 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// message otherwise. Shared by <see cref="ResolveConflict"/> (enforcement) and
     /// <see cref="GetConflictResolutionOptions"/> (capability query).
     /// </summary>
-    /// <exception cref="InvalidDataException">The thread doesn't exist.</exception>
+    /// <returns>The verified conflict thread (never null); callers reuse it instead of re-finding.</returns>
+    /// <exception cref="InvalidDataException">The thread doesn't exist or has no comments.</exception>
     /// <exception cref="InvalidOperationException">Not an unresolved verseText conflict, or the
     /// user lacks permission.</exception>
-    private void VerifyUserCanResolveConflict(string threadId)
+    private CommentThread VerifyUserCanResolveConflict(string threadId)
     {
         CommentThread? thread = _commentManager.Value.FindThread(threadId);
         if (thread == null)
             throw new InvalidDataException($"Thread with id {threadId} does not exist.");
 
-        // v1 resolves verseText conflicts only.
+        // v1 resolves verseText conflicts only. Guard the first-comment access: PT9's
+        // CommentThread.FirstComment is private, so index defensively - an empty thread would
+        // otherwise throw IndexOutOfRangeException (masked to "none" by GetConflictResolutionOptions).
+        if (thread.Comments is not { Count: > 0 })
+            throw new InvalidDataException($"Thread with id {threadId} has no comments.");
         Comment firstComment = thread.Comments[0];
         if (
             thread.Type != NoteType.Conflict
@@ -833,6 +865,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                     $"User '{scrText.User.Name}' cannot resolve conflict thread '{threadId}' - they do not have permission to edit {vref.Book} {vref.ChapterNum}."
                 );
         }
+
+        return thread;
     }
 
     /// <summary>
@@ -862,9 +896,14 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             string conflictUsfm = UsfmToken.RegularizeSpaces(thread.Comments[0].Verse).Trim();
             return currentVerseUsfm != conflictUsfm;
         }
-        catch
+        catch (Exception e)
         {
-            // Unreadable text -> treat as stale: reject becomes unavailable, accept remains.
+            // Unreadable text -> treat as stale: reject/merge become unavailable, accept remains.
+            // This runs only after the thread is validated, so an exception here is a genuine read
+            // failure (parser/NRE) - log it so it isn't silently masked as a benign "stale".
+            Console.WriteLine(
+                $"IsConflictVerseStale: treating conflict thread '{thread.Id}' as stale due to an error: {e}"
+            );
             return true;
         }
     }
@@ -877,14 +916,21 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// permitted and the verse still matches the recorded merge winner. Never throws; this is the
     /// capability query for <see cref="ResolveConflict"/>.
     /// </summary>
+    /// <remarks>
+    /// This resolvability policy mirrors a slice of PT9's <c>CommentHtmlBuilder.GetResolutionOptions</c>
+    /// (the canonical version lives in ParatextInternalShared and is not referenceable here).
+    /// Intentional divergences to keep in mind if that upstream method changes: (1) a Team-assigned
+    /// conflict is resolvable by any team member (see <see cref="IsThreadAssignedToUser"/>); (2) there
+    /// is no study-bible-additions gate; (3) staleness regularizes and trims whitespace before
+    /// comparing (see <see cref="IsConflictVerseStale"/>), so a pure leading/trailing whitespace
+    /// change is not treated as stale.
+    /// </remarks>
     public string GetConflictResolutionOptions(string threadId)
     {
         try
         {
-            VerifyUserCanResolveConflict(threadId);
-            CommentThread? thread = _commentManager.Value.FindThread(threadId);
-            if (thread == null)
-                return "none";
+            // Verify proves the thread exists (throws otherwise) and returns it, so no re-find here.
+            CommentThread thread = VerifyUserCanResolveConflict(threadId);
             if (IsConflictVerseStale(thread))
                 return "accept";
             // Merge is offered only when PT9 can actually merge the two sides (independent changes);
@@ -893,8 +939,19 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 ? "acceptRejectOrMerge"
                 : "acceptOrReject";
         }
-        catch
+        catch (Exception e) when (e is InvalidOperationException or InvalidDataException)
         {
+            // Expected domain outcomes (not an unresolved verseText conflict, no permission, no
+            // comments) mean "no resolve options" - return quietly, this is a capability query.
+            return "none";
+        }
+        catch (Exception e)
+        {
+            // Unexpected failure (parser, NRE, ...). Still degrade to "none" so the query never
+            // throws, but log so the root cause isn't invisible to logs/telemetry.
+            Console.WriteLine(
+                $"GetConflictResolutionOptions: unexpected error for thread '{threadId}', returning 'none': {e}"
+            );
             return "none";
         }
     }
@@ -906,10 +963,13 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// </summary>
     private static bool IsThreadAssignedToUser(CommentThread thread, string userName)
     {
-        // Scan comments newest-first for the effective assignment. We don't defer to
-        // CommentThread.AssignedUser because its no-assignment fallback ("(Reviewed)"/unassigned)
-        // would blur "unassigned" into the compare; here a thread with no assignment must be "not
-        // assigned to this user" (false).
+        // Scan comments newest-first for the effective assignment, inspecting the raw per-comment
+        // AssignedUser. We deliberately do NOT reuse CommentThread.AssignedUser: that property
+        // collapses "no assignment" (null) into its unassigned sentinel (unassignedUser = ""), which
+        // is then indistinguishable from an explicit assignment to an empty-named user - so an
+        // unassigned thread could spuriously read as assigned (the non-admin permission tests exercise
+        // exactly this via an empty-named dummy user). The raw per-comment value preserves the null vs
+        // "" distinction; a thread with no assignment must be "not assigned to this user" (false).
         for (int i = thread.Comments.Count - 1; i >= 0; i--)
         {
             string? assigned = thread.Comments[i].AssignedUser;
@@ -977,31 +1037,34 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool UpdateComment(string commentId, string updatedContentHtml)
     {
-        if (string.IsNullOrEmpty(commentId))
-            return false;
+        lock (_commentMutationLock)
+        {
+            if (string.IsNullOrEmpty(commentId))
+                return false;
 
-        // Find the comment by ID and its parent thread
-        var (commentToUpdate, parentThread) = FindCommentByIdWithThread(commentId);
-        if (commentToUpdate == null || parentThread == null)
-            return false;
+            // Find the comment by ID and its parent thread
+            var (commentToUpdate, parentThread) = FindCommentByIdWithThread(commentId);
+            if (commentToUpdate == null || parentThread == null)
+                return false;
 
-        VerifyUserCanEditOrDeleteComment(commentId);
+            VerifyUserCanEditOrDeleteComment(commentId);
 
-        // Update the comment contents from HTML
-        var commentWrapper = new PlatformCommentWrapper(
-            commentToUpdate,
-            new PlatformCommentThreadWrapper(parentThread)
-        );
-        commentWrapper.ContentsHtml = updatedContentHtml;
+            // Update the comment contents from HTML
+            var commentWrapper = new PlatformCommentWrapper(
+                commentToUpdate,
+                new PlatformCommentThreadWrapper(parentThread)
+            );
+            commentWrapper.ContentsHtml = updatedContentHtml;
 
-        // Reset the status field to Unspecified when a comment is edited
-        commentToUpdate.Status = NoteStatus.Unspecified;
+            // Reset the status field to Unspecified when a comment is edited
+            commentToUpdate.Status = NoteStatus.Unspecified;
 
-        _commentManager.Value.SaveUser(commentToUpdate.User, false);
+            _commentManager.Value.SaveUser(commentToUpdate.User, false);
 
-        SendDataUpdateEvent(AllCommentDataTypes, "comment updated");
+            SendDataUpdateEvent(AllCommentDataTypes, "comment updated");
 
-        return true;
+            return true;
+        }
     }
 
     public void SetIsCommentThreadRead(string threadId, bool markRead)
