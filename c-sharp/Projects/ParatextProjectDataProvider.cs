@@ -296,6 +296,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             { "canUserAssignThread", CanUserAssignThread },
             { "canUserResolveThread", CanUserResolveThread },
             { "getConflictResolutionOptions", GetConflictResolutionOptions },
+            { "canUnresolveConflict", CanUnresolveConflict },
             { "canUserEditOrDeleteComment", CanUserEditOrDeleteComment },
         };
 
@@ -1166,6 +1167,32 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 $"GetConflictResolutionOptions: unexpected error for thread '{threadId}', returning 'none': {e}"
             );
             return "none";
+        }
+    }
+
+    /// <summary>
+    /// True when the current user may undo the resolution of the given conflict: it is a resolved
+    /// verseText conflict and the user is admin or the assignee with chapter-edit rights. Never throws
+    /// (capability query). Does NOT check staleness - a verse edited since resolution still shows the
+    /// Undo control; UnresolveConflict then refuses it so the card can explain (Verse History).
+    /// </summary>
+    public bool CanUnresolveConflict(string threadId)
+    {
+        try
+        {
+            VerifyUserCanUnresolveConflict(threadId);
+            return true;
+        }
+        catch (Exception e) when (e is InvalidOperationException or InvalidDataException)
+        {
+            return false;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(
+                $"CanUnresolveConflict: unexpected error for thread '{threadId}', returning false: {e}"
+            );
+            return false;
         }
     }
 

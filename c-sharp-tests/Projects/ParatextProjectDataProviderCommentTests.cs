@@ -2666,6 +2666,33 @@ namespace TestParanextDataProvider.Projects
             );
         }
 
+        // --- canUnresolveConflict capability query (PT-4141) -----------------------------------
+
+        [Test]
+        public void CanUnresolveConflict_ResolvedConflictAsAdmin_True()
+        {
+            CommentThread thread = SeedVerseTextConflict();
+            _provider.ResolveConflict(thread.Id, "reject");
+            Assert.That(_provider.CanUnresolveConflict(thread.Id), Is.True);
+        }
+
+        [Test]
+        public void CanUnresolveConflict_UnresolvedConflict_False()
+        {
+            CommentThread thread = SeedVerseTextConflict();
+            Assert.That(_provider.CanUnresolveConflict(thread.Id), Is.False);
+        }
+
+        [Test]
+        public void CanUnresolveConflict_NormalThread_False()
+        {
+            var mgr = CommentManager.Get(_scrText);
+            Comment normal = CommentTestHelper.CreateBasicComment();
+            mgr.AddComment(normal);
+            mgr.SaveUser(normal.User, false);
+            Assert.That(_provider.CanUnresolveConflict(normal.Thread), Is.False);
+        }
+
         [Test]
         public void ResolveConflict_RejectWholeVerseDeletion_AppliesPt9DeletionWritePath()
         {
