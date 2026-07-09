@@ -6,7 +6,7 @@ import {
 } from '@renderer/hooks/papi-hooks';
 import { sendCommand } from '@shared/services/command.service';
 import { isPlatformError } from 'platform-bible-utils';
-import { usePromise, RESOURCE_PICKER_DIALOG_STRING_KEYS } from 'platform-bible-react';
+import { Spinner, usePromise, RESOURCE_PICKER_DIALOG_STRING_KEYS } from 'platform-bible-react';
 import type { ResourceReference, ResourceReferenceList } from 'platform-scripture';
 import { DIALOG_BASE, DialogProps } from '@renderer/components/dialogs/dialog-base.data';
 import {
@@ -170,10 +170,19 @@ function ShareLayoutDialogWrapper({
   // visibility/condition mechanism, so a non-admin can still trigger the command that opens this
   // dialog. Reject here instead. This check must run after all hooks above (Rules of Hooks
   // forbids an early return between hook calls), so it sits just before the render branch.
-  if (isCanWriteLoading || canWrite !== true) {
+  if (isCanWriteLoading) {
+    return (
+      <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
+        <Spinner />
+      </div>
+    );
+  }
+
+  if (canWrite !== true) {
     // `DialogDefinitionBase['Component']` requires a `ReactElement` return, not `ReactElement |
     // null` — widening that shared type would affect every dialog in the codebase, so an empty
-    // fragment is the narrowest way to render nothing here.
+    // fragment is the narrowest way to render nothing here. The dialog is cancelled a moment later
+    // by the effect above, so this only shows briefly.
     // eslint-disable-next-line react/jsx-no-useless-fragment -- see comment above
     return <></>;
   }

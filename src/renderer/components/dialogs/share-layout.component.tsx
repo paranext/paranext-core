@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { formatReplacementString } from 'platform-bible-utils';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { ResourceReference } from 'platform-scripture';
 import {
@@ -17,6 +18,10 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
 } from 'platform-bible-react';
 import type { ResourcePickerDialogLocalizedStrings } from 'platform-bible-react';
 import { ChevronDown, X } from 'lucide-react';
@@ -216,15 +221,24 @@ export function ShareLayoutDialogContent({
             ResourcePickerDialog's internal `flex-1 overflow-y-auto` list a bounded height to scroll
             within instead of growing to fit every resource. */}
             <div className="tw:relative tw:flex tw:h-full tw:min-h-0 tw:flex-col">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="tw:absolute tw:end-2 tw:top-2 tw:z-10"
-                onClick={() => setOpenAddPickerTab(undefined)}
-                aria-label={localizeString(strings, '%shareLayoutDialog_closePicker_label%')}
-              >
-                <X className="tw:size-4" aria-hidden />
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="tw:absolute tw:end-2 tw:top-2 tw:z-10"
+                      onClick={() => setOpenAddPickerTab(undefined)}
+                      aria-label={localizeString(strings, '%shareLayoutDialog_closePicker_label%')}
+                    >
+                      <X className="tw:size-4" aria-hidden />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {localizeString(strings, '%shareLayoutDialog_closePicker_label%')}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               {/*
                 ResourcePickerDialog renders its own DialogTitle internally but has no Dialog.Root
                 of its own by design (it's meant to be embedded in a host-provided Dialog context).
@@ -256,7 +270,10 @@ export function ShareLayoutDialogContent({
             <Checkbox
               checked={!!ref.isResourceShownByDefault}
               onCheckedChange={(checked: boolean) => handleToggleShownByDefault(tab, ref, checked)}
-              aria-label={localizeString(strings, '%shareLayoutDialog_shownByDefault_label%')}
+              aria-label={formatReplacementString(
+                localizeString(strings, '%shareLayoutDialog_shownByDefault_label%'),
+                { resourceName: formatResourceDisplayName(ref, allResources) },
+              )}
             />
           </div>
         ))}

@@ -3,7 +3,6 @@
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import type { CanShareLayoutWithTeam } from './use-can-share-layout-with-team.hook';
 import { ShareLayoutButton } from './share-layout-button.component';
 
 // jsdom does not implement ResizeObserver; platform-bible-react's Tooltip wires ResizeObservers.
@@ -21,18 +20,25 @@ beforeAll(() => {
   }
 });
 
-const { mockShowDialog } = vi.hoisted(() => ({ mockShowDialog: vi.fn() }));
+const { mockShowDialog, mockUsePromise } = vi.hoisted(() => ({
+  mockShowDialog: vi.fn(),
+  mockUsePromise: vi.fn(),
+}));
 
 vi.mock('@papi/frontend', () => ({
   default: { dialogs: { showDialog: mockShowDialog } },
 }));
 
-// Mutable mock return; each test sets the fields it cares about.
-const mockState: CanShareLayoutWithTeam = { canShareLayout: false, isLoading: true };
-
-vi.mock('./use-can-share-layout-with-team.hook', () => ({
-  useCanShareLayoutWithTeam: () => mockState,
+vi.mock('@papi/frontend/react', () => ({
+  useProjectDataProvider: vi.fn(),
 }));
+
+// Real Button/Tooltip/etc. still come from the actual module; only usePromise is mocked, mirroring
+// the [value, isLoading] contract share-layout.dialog.tsx relies on for the same admin check.
+vi.mock('platform-bible-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('platform-bible-react')>();
+  return { ...actual, usePromise: mockUsePromise };
+});
 
 const STRINGS = {
   '%webView_platformScriptureEditor_shareLayout_ariaLabel%': 'Share layout with team',
@@ -40,36 +46,36 @@ const STRINGS = {
 
 const LABEL = 'Share layout with team';
 
-function setState(next: Partial<CanShareLayoutWithTeam>) {
-  Object.assign(mockState, next);
+/** `usePromise` returns `[value, isLoading]`; `canShareLayout` is `undefined` while unresolved. */
+function setPermission(canShareLayout: boolean | undefined, isLoading: boolean) {
+  mockUsePromise.mockReturnValue([canShareLayout, isLoading]);
 }
 
 afterEach(() => {
   vi.clearAllMocks();
-  setState({ canShareLayout: false, isLoading: true });
 });
 
 describe('ShareLayoutButton', () => {
   it('renders nothing while the permission check is loading', () => {
-    setState({ canShareLayout: false, isLoading: true });
+    setPermission(undefined, true);
     const { container } = render(<ShareLayoutButton projectId="p1" localizedStrings={STRINGS} />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it('renders nothing for a non-administrator', () => {
-    setState({ canShareLayout: false, isLoading: false });
+    setPermission(false, false);
     const { container } = render(<ShareLayoutButton projectId="p1" localizedStrings={STRINGS} />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it('renders the button with the localized aria-label for an administrator', () => {
-    setState({ canShareLayout: true, isLoading: false });
+    setPermission(true, false);
     render(<ShareLayoutButton projectId="p1" localizedStrings={STRINGS} />);
     expect(screen.getByRole('button', { name: LABEL })).toBeInTheDocument();
   });
 
   it('opens the Share Layout dialog for the project on click', () => {
-    setState({ canShareLayout: true, isLoading: false });
+    setPermission(true, false);
     render(<ShareLayoutButton projectId="p1" localizedStrings={STRINGS} />);
     fireEvent.click(screen.getByRole('button', { name: LABEL }));
     expect(mockShowDialog).toHaveBeenCalledWith('platform.shareLayoutDialog', {
@@ -79,7 +85,7 @@ describe('ShareLayoutButton', () => {
   });
 
   it('falls back to the key text when no localized string is provided', () => {
-    setState({ canShareLayout: true, isLoading: false });
+    setPermission(true, false);
     render(<ShareLayoutButton projectId="p1" />);
     expect(
       screen.getByRole('button', {

@@ -1,10 +1,25 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { vi, describe, it, expect } from 'vitest';
+import { vi, describe, it, expect, beforeAll } from 'vitest';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { ResourceReference } from 'platform-scripture';
 import { Dialog } from 'platform-bible-react';
 import { ShareLayoutDialogContent } from './share-layout.component';
+
+// jsdom does not implement ResizeObserver; platform-bible-react's Tooltip wires ResizeObservers.
+beforeAll(() => {
+  if (typeof globalThis.ResizeObserver === 'undefined') {
+    const stubResizeObserver = vi.fn(() => ({
+      observe: vi.fn(),
+      unobserve: vi.fn(),
+      disconnect: vi.fn(),
+    }));
+    // ResizeObserver constructor as a vi.fn factory satisfies runtime contract but not structural
+    // typing; we cast through unknown to adapt it to the required type
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    globalThis.ResizeObserver = stubResizeObserver as unknown as typeof ResizeObserver;
+  }
+});
 
 const ESV: ResourceReference = {
   type: 'dblResource',

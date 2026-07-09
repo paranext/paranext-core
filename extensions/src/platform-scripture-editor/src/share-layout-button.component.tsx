@@ -4,10 +4,12 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  usePromise,
 } from 'platform-bible-react';
+import { useProjectDataProvider } from '@papi/frontend/react';
+import { useCallback } from 'react';
 import { Share2 } from 'lucide-react';
 import papi from '@papi/frontend';
-import { useCanShareLayoutWithTeam } from './use-can-share-layout-with-team.hook';
 
 const ARIA_LABEL_KEY = '%webView_platformScriptureEditor_shareLayout_ariaLabel%';
 
@@ -49,9 +51,22 @@ export function ShareLayoutButton({
   localizedStrings = {},
   className,
 }: ShareLayoutButtonProps) {
-  const { canShareLayout, isLoading } = useCanShareLayoutWithTeam(projectId);
+  const textConnectionsPdp = useProjectDataProvider(
+    'platformScripture.textConnectionSettings',
+    projectId,
+  );
 
-  if (isLoading || !canShareLayout) return undefined;
+  // Same canUserWriteProjectTextConnectionSettings()-via-usePromise pattern as the identical check
+  // in share-layout.dialog.tsx's admin gate.
+  const [canShareLayout, isLoading] = usePromise(
+    useCallback(
+      async () => textConnectionsPdp?.canUserWriteProjectTextConnectionSettings(),
+      [textConnectionsPdp],
+    ),
+    undefined,
+  );
+
+  if (isLoading || canShareLayout !== true) return undefined;
 
   const label = localize(localizedStrings, ARIA_LABEL_KEY);
 
