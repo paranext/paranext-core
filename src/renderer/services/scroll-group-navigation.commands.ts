@@ -8,8 +8,10 @@ import {
   setScrRefSync,
 } from '@renderer/services/scroll-group.service-host';
 import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-host';
-import { getLastSelectedScriptureNavigableWebViewId } from '@renderer/services/window.service-host';
-import { resolveTargetWebView } from '@renderer/services/navigation-target.util';
+import {
+  getLastSelectedScriptureNavigableWebViewId,
+  getNavigationTargetWebView,
+} from '@renderer/services/window.service-host';
 import { getBookIdsFromBooksPresent } from 'platform-bible-utils/experimental';
 import { WebViewId } from '@shared/models/web-view.model';
 import { getWebViewIdFromFocusSubject } from '@shared/services/window.service-model';
@@ -49,7 +51,9 @@ type NavigationTarget = {
 };
 
 function resolveNavigationTarget(): NavigationTarget | undefined {
-  const target = resolveTargetWebView(getLastSelectedScriptureNavigableWebViewId());
+  // The window service resolves the target and keeps it current from web view lifecycle events —
+  // the same value the top toolbar mirrors, so the two can never disagree
+  const target = getNavigationTargetWebView();
   if (!target) return undefined;
 
   return {

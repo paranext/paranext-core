@@ -10,17 +10,11 @@ import {
 } from '@renderer/hooks/papi-hooks';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useProjectPickerData } from '@renderer/hooks/use-project-picker-data.hook';
-import { useLastSelectedScriptureNavigableWebViewId } from '@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook';
+import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
 import { PROJECT_PICKER_DIALOG_TYPE } from '@renderer/components/dialogs/dialog-definition.model';
 import { app, dataProviders } from '@renderer/services/papi-frontend.service';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
-import {
-  onDidCloseWebView,
-  onDidOpenWebView,
-  onDidUpdateWebView,
-  updateWebViewDefinitionSync,
-} from '@renderer/services/web-view.service-host';
-import { ResolvedWebView, resolveTargetWebView } from '@renderer/services/navigation-target.util';
+import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-host';
 import {
   registerBookChapterControlHandle,
   TOP_TOOLBAR_BOOK_CHAPTER_CONTROL_OWNER_ID,
@@ -34,7 +28,6 @@ import { sendCommand } from '@shared/services/command.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { logger } from '@shared/services/logger.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
-import { UpdateWebViewEvent } from '@shared/services/web-view.service-model';
 import { CircleCheck, HomeIcon } from 'lucide-react';
 import {
   Badge,
@@ -92,57 +85,12 @@ export function PlatformBibleToolbar() {
     useProjectPickerData();
 
   const isPowerMode = useIsPowerMode();
-  const lastSelectedScriptureNavigableWebViewId = useLastSelectedScriptureNavigableWebViewId();
-
-  // Bumped by web view lifecycle events to force a re-read of `resolvedWebView` below
-  const [definitionRefresh, setDefinitionRefresh] = useState(0);
-
-  // Ref so the (deps-stable) event handlers always see the current tracked id
-  const lastSelectedScriptureNavigableWebViewIdRef = useRef(
-    lastSelectedScriptureNavigableWebViewId,
-  );
-  lastSelectedScriptureNavigableWebViewIdRef.current = lastSelectedScriptureNavigableWebViewId;
-
-  useEvent(
-    onDidUpdateWebView,
-    useCallback(({ webView }: UpdateWebViewEvent) => {
-      // Bump on an update to the tracked web view (its definition may have changed) or, when
-      // nothing is tracked, on any update (the main-editor fallback's own definition may have
-      // changed, e.g. its scrollGroupScrRef or projectId).
-      if (
-        webView.id === lastSelectedScriptureNavigableWebViewIdRef.current ||
-        !lastSelectedScriptureNavigableWebViewIdRef.current
-      )
-        setDefinitionRefresh((n) => n + 1);
-    }, []),
-  );
-  // A newly opened or closed web view can change which web view is the main-editor fallback
-  // target, but only matters while nothing is tracked — with a tracked web view, its own
-  // definition is used regardless of what else opens or closes.
-  useEvent(
-    onDidOpenWebView,
-    useCallback(() => {
-      if (!lastSelectedScriptureNavigableWebViewIdRef.current) setDefinitionRefresh((n) => n + 1);
-    }, []),
-  );
-  useEvent(
-    onDidCloseWebView,
-    useCallback(() => {
-      if (!lastSelectedScriptureNavigableWebViewIdRef.current) setDefinitionRefresh((n) => n + 1);
-    }, []),
-  );
 
   // The resolved navigation target: the tracked (last-selected) web view's saved definition or,
   // failing that, the main project editor's — same rule `useProjectPickerData` uses to find the
-  // current project (first open Scripture editor web view with a project). Derived synchronously
-  // so the id and its definition always update in the same render (no transient stale pairing /
-  // disabled flash); definitionRefresh re-reads after a relevant external update.
-  const resolvedWebView = useMemo((): ResolvedWebView | undefined => {
-    // Referenced so this memo re-runs whenever a relevant web view lifecycle event bumps it
-    // eslint-disable-next-line no-unused-expressions
-    definitionRefresh;
-    return resolveTargetWebView(lastSelectedScriptureNavigableWebViewId);
-  }, [lastSelectedScriptureNavigableWebViewId, definitionRefresh]);
+  // current project. The window service resolves it and keeps it current from web view lifecycle
+  // events, so the toolbar and the navigation commands can never disagree on the target.
+  const resolvedWebView = useNavigationTargetWebView();
 
   // No resolved target (no eligible tracked tab and no main-project editor open): nothing to
   // navigate — controls are disabled

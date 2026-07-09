@@ -3,12 +3,9 @@ import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import React from 'react';
 import { useScrollGroupScrRef, useSetting } from '@renderer/hooks/papi-hooks';
-import { useLastSelectedScriptureNavigableWebViewId } from '@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook';
-import {
-  getAllOpenWebViewDefinitionsSync,
-  getSavedWebViewDefinitionSync,
-  updateWebViewDefinitionSync,
-} from '@renderer/services/web-view.service-host';
+import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
+import { ResolvedWebView } from '@renderer/services/navigation-target.util';
+import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-host';
 import { sendCommand } from '@shared/services/command.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { PlatformBibleToolbar } from './platform-bible-toolbar';
@@ -51,17 +48,14 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useProjectSetting: vi.fn(() => ['', vi.fn(), vi.fn(), false]),
 }));
 
-vi.mock('@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook', () => ({
-  useLastSelectedScriptureNavigableWebViewId: vi.fn(() => undefined),
+vi.mock('@renderer/hooks/use-navigation-target-web-view.hook', () => ({
+  // Typed so tests can mockReturnValue a resolved target (the factory's inferred return type
+  // would otherwise be plain `undefined`)
+  useNavigationTargetWebView: vi.fn((): ResolvedWebView | undefined => undefined),
 }));
 
 vi.mock('@renderer/services/web-view.service-host', () => ({
-  getSavedWebViewDefinitionSync: vi.fn(() => undefined),
-  getAllOpenWebViewDefinitionsSync: vi.fn(() => []),
   updateWebViewDefinitionSync: vi.fn(() => true),
-  onDidUpdateWebView: vi.fn(() => vi.fn()),
-  onDidOpenWebView: vi.fn(() => vi.fn()),
-  onDidCloseWebView: vi.fn(() => vi.fn()),
 }));
 
 vi.mock('@renderer/services/book-chapter-control.registry', () => ({
@@ -498,14 +492,12 @@ describe('PlatformBibleToolbar — top BookChapterControl mirrors the resolved n
     // defaults explicitly to prevent a per-test `mockReturnValue` from leaking (see the
     // "Scroll group selector visibility" describe block above for precedent).
     vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
-    vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue(undefined);
-    vi.mocked(getSavedWebViewDefinitionSync).mockReturnValue(undefined);
-    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([]);
+    vi.mocked(useNavigationTargetWebView).mockReturnValue(undefined);
     vi.mocked(updateWebViewDefinitionSync).mockReturnValue(true);
     mockSendCommand(true);
   });
 
-  it('disables the trigger when there is no tracked web view and no main editor open, in power mode', async () => {
+  it('disables the trigger when there is no navigation target, in power mode', async () => {
     vi.mocked(useSetting).mockReturnValue(['power', vi.fn(), vi.fn(), false]);
 
     render(<PlatformBibleToolbar />);
@@ -515,9 +507,9 @@ describe('PlatformBibleToolbar — top BookChapterControl mirrors the resolved n
     });
   });
 
-  it('disables the trigger when there is no tracked web view and no main editor open, in simple mode', async () => {
-    // The resolution chain (and therefore disabled state) no longer depends on interface mode —
-    // it is disabled only when the chain finds no target in either mode.
+  it('disables the trigger when there is no navigation target, in simple mode', async () => {
+    // The resolved target (and therefore disabled state) does not depend on interface mode — the
+    // control is disabled only when there is no target, in either mode.
     vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
 
     render(<PlatformBibleToolbar />);
@@ -527,14 +519,16 @@ describe('PlatformBibleToolbar — top BookChapterControl mirrors the resolved n
     });
   });
 
-  it('enables the trigger once the tracked web view has a saved definition', async () => {
+  it('enables the trigger when the resolved target is the tracked web view', async () => {
     vi.mocked(useSetting).mockReturnValue(['power', vi.fn(), vi.fn(), false]);
-    vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue('wv1');
-    vi.mocked(getSavedWebViewDefinitionSync).mockReturnValue({
+    vi.mocked(useNavigationTargetWebView).mockReturnValue({
       id: 'wv1',
-      webViewType: 'testWebViewType',
-      scrollGroupScrRef: 2,
-      projectId: 'proj1',
+      definition: {
+        id: 'wv1',
+        webViewType: 'testWebViewType',
+        scrollGroupScrRef: 2,
+        projectId: 'proj1',
+      },
     });
 
     render(<PlatformBibleToolbar />);
@@ -544,17 +538,17 @@ describe('PlatformBibleToolbar — top BookChapterControl mirrors the resolved n
     });
   });
 
-  it('enables the trigger and mirrors the main editor when no web view is tracked but an editor is open', async () => {
+  it('enables the trigger and mirrors the main editor when it is the resolved target', async () => {
     vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
-    vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue(undefined);
-    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
-      {
+    vi.mocked(useNavigationTargetWebView).mockReturnValue({
+      id: 'editor-1',
+      definition: {
         id: 'editor-1',
         webViewType: 'platformScriptureEditor.react',
         projectId: 'proj1',
         scrollGroupScrRef: 2,
       },
-    ]);
+    });
 
     render(<PlatformBibleToolbar />);
 
@@ -582,19 +576,22 @@ describe('PlatformBibleToolbar — scroll group write-back to the resolved targe
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(useSetting).mockReturnValue(['power', vi.fn(), vi.fn(), false]);
-    vi.mocked(getSavedWebViewDefinitionSync).mockReturnValue({
-      id: 'wv1',
-      webViewType: 'testWebViewType',
-      scrollGroupScrRef: 2,
-      projectId: 'proj1',
-    });
-    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([]);
+    // No navigation target by default — individual tests arrange the resolved target they need
+    vi.mocked(useNavigationTargetWebView).mockReturnValue(undefined);
     vi.mocked(updateWebViewDefinitionSync).mockReturnValue(true);
     mockSendCommand(true);
   });
 
   it('writes the new scroll group to the tracked web view definition', async () => {
-    vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue('wv1');
+    vi.mocked(useNavigationTargetWebView).mockReturnValue({
+      id: 'wv1',
+      definition: {
+        id: 'wv1',
+        webViewType: 'testWebViewType',
+        scrollGroupScrRef: 2,
+        projectId: 'proj1',
+      },
+    });
 
     render(<PlatformBibleToolbar />);
 
@@ -614,18 +611,17 @@ describe('PlatformBibleToolbar — scroll group write-back to the resolved targe
     });
   });
 
-  it('writes the new scroll group to the main editor definition when nothing is tracked', async () => {
+  it('writes the new scroll group to the main editor definition when it is the resolved target', async () => {
     vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
-    vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue(undefined);
-    vi.mocked(getSavedWebViewDefinitionSync).mockReturnValue(undefined);
-    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
-      {
+    vi.mocked(useNavigationTargetWebView).mockReturnValue({
+      id: 'editor-1',
+      definition: {
         id: 'editor-1',
         webViewType: 'platformScriptureEditor.react',
         projectId: 'proj1',
         scrollGroupScrRef: 2,
       },
-    ]);
+    });
 
     render(<PlatformBibleToolbar />);
 
@@ -645,10 +641,8 @@ describe('PlatformBibleToolbar — scroll group write-back to the resolved targe
     });
   });
 
-  it('does not write and returns false when nothing is tracked and no main editor is open', async () => {
-    vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue(undefined);
-    vi.mocked(getSavedWebViewDefinitionSync).mockReturnValue(undefined);
-    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([]);
+  it('does not write and returns false when there is no navigation target', async () => {
+    vi.mocked(useNavigationTargetWebView).mockReturnValue(undefined);
 
     render(<PlatformBibleToolbar />);
 

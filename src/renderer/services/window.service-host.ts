@@ -25,7 +25,14 @@ import {
   getDockLayout,
   getSavedWebViewDefinitionSync,
   onDidCloseWebView,
+  onDidOpenWebView,
+  onDidUpdateWebView,
 } from '@renderer/services/web-view.service-host';
+import {
+  isScriptureNavigableWebViewDefinition,
+  ResolvedWebView,
+  resolveTargetWebView,
+} from '@renderer/services/navigation-target.util';
 import { isDirectionFromTab } from '@shared/models/docking-framework.model';
 import { WebViewId } from '@shared/models/web-view.model';
 import { logger } from '@shared/services/logger.service';
@@ -84,6 +91,7 @@ function setLastSelectedScriptureNavigableWebViewId(newWebViewId: WebViewId | un
   if (newWebViewId === lastSelectedScriptureNavigableWebViewId) return;
   lastSelectedScriptureNavigableWebViewId = newWebViewId;
   onDidChangeLastSelectedScriptureNavigableWebViewIdEmitter.emit(newWebViewId);
+  recomputeNavigationTargetWebView();
 }
 
 /**
@@ -114,18 +122,17 @@ function setLastFocusedTabId(newTabId: string | undefined): void {
 }
 
 /**
- * Whether a web view is a candidate for BCV navigation: it either belongs to a project
- * (`projectId`) or shows its own BookChapterControl/ScrollGroupSelector toolbar
- * (`shouldShowToolbar`). Web views that are neither (e.g. Find, a settings-style panel) must not
- * become the tracked web view, since navigation commands and the top toolbar would otherwise target
- * a tab with nothing to navigate.
+ * Whether a web view is a candidate for BCV navigation (see
+ * {@link isScriptureNavigableWebViewDefinition}). Web views that are not must not become the tracked
+ * web view, since navigation commands and the top toolbar would otherwise target a tab with nothing
+ * to navigate.
  *
  * Returns `false` (do not track) if the web view's saved definition cannot be read.
  */
 function isScriptureNavigableWebView(webViewId: WebViewId): boolean {
   try {
     const definition = getSavedWebViewDefinitionSync(webViewId);
-    return !!(definition?.projectId || definition?.shouldShowToolbar);
+    return !!definition && isScriptureNavigableWebViewDefinition(definition);
   } catch (e) {
     logger.warn(
       `window.service-host could not get web view definition for ${webViewId} to check navigability: ${getErrorMessage(e)}`,
@@ -134,11 +141,55 @@ function isScriptureNavigableWebView(webViewId: WebViewId): boolean {
   }
 }
 
+/**
+ * The web view BCV navigation currently targets, resolved via {@link resolveTargetWebView}: the
+ * tracked last-selected scripture-navigable web view's saved definition or, failing that, the first
+ * open Scripture editor with a project. Kept current by the web view lifecycle subscriptions below
+ * so consumers (the top toolbar, the navigation commands) read ONE resolved value instead of each
+ * re-deriving the chain from lifecycle events — deriving it in multiple places is how the toolbar
+ * and the commands previously fell out of sync. Deliberately renderer-internal, like the trackers
+ * above.
+ */
+let navigationTargetWebView: ResolvedWebView | undefined;
+
+const onDidChangeNavigationTargetWebViewEmitter = new PlatformEventEmitter<
+  ResolvedWebView | undefined
+>();
+
+/** Event that fires with the new resolved target when the navigation target web view changes */
+export const onDidChangeNavigationTargetWebView = onDidChangeNavigationTargetWebViewEmitter.event;
+
+/** Gets the web view BCV navigation currently targets (with its current saved definition), if any */
+export function getNavigationTargetWebView(): ResolvedWebView | undefined {
+  return navigationTargetWebView;
+}
+
+/**
+ * Recomputes the resolved navigation target and notifies subscribers when it actually changed.
+ * Cheap (synchronous renderer-local reads), so it can run on every web view lifecycle event and
+ * tracker change; the deepEqual gate keeps no-op events from rippling downstream.
+ */
+function recomputeNavigationTargetWebView(): void {
+  const newTarget = resolveTargetWebView(lastSelectedScriptureNavigableWebViewId);
+  if (deepEqual(newTarget, navigationTargetWebView)) return;
+  navigationTargetWebView = newTarget;
+  onDidChangeNavigationTargetWebViewEmitter.emit(navigationTargetWebView);
+}
+
+// Any web view opening or updating can change the resolved target: which editor is the fallback,
+// the tracked web view's own definition (e.g. its scroll group ref), or a definition's
+// navigability (see `isScriptureNavigableWebViewDefinition`)
+onDidOpenWebView(() => recomputeNavigationTargetWebView());
+onDidUpdateWebView(() => recomputeNavigationTargetWebView());
+
 // Clear the tracked web view when it closes. Guarded by id so a stale close event for a
-// previously selected web view does not clear a newer selection.
+// previously selected web view does not clear a newer selection. Any other close can still change
+// the resolved target (the fallback editor may have closed), so recompute regardless — the
+// setter's own recompute covers the tracked case.
 onDidCloseWebView(({ webView }) => {
   if (webView.id === lastSelectedScriptureNavigableWebViewId)
     setLastSelectedScriptureNavigableWebViewId(undefined);
+  else recomputeNavigationTargetWebView();
 });
 
 class WindowDataProviderEngine

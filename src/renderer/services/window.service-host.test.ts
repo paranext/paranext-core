@@ -2,40 +2,58 @@ import { afterEach, describe, expect, test, vi, beforeEach } from 'vitest';
 import {
   getLastFocusedTabId,
   getLastSelectedScriptureNavigableWebViewId,
+  getNavigationTargetWebView,
   onDidChangeLastFocusedTabId,
   onDidChangeLastSelectedScriptureNavigableWebViewId,
+  onDidChangeNavigationTargetWebView,
   testingWindowService,
 } from '@renderer/services/window.service-host';
+import { ResolvedWebView } from '@renderer/services/navigation-target.util';
 
 type CloseWebViewCallback = (event: { webView: { id: string } }) => void;
+/** The service ignores open/update event payloads, so the collected callbacks take no arguments */
+type WebViewLifecycleCallback = () => void;
 
 // vi.mock and vi.hoisted calls are hoisted by vitest above the imports above at transform time, so
 // the static imports can be written first here to satisfy import/first.
-const { closeWebViewCallbacks, getTabInfoByIdMock, getSavedWebViewDefinitionSyncMock } = vi.hoisted(
-  () => {
-    const callbacks: CloseWebViewCallback[] = [];
-    // Shared (not per-`getDockLayout()`-call) mock so individual tests can control what tab info
-    // comes back for a given tab id, e.g. to simulate a web view tab vs. a non-web-view tab.
-    const tabInfoMock = vi.fn((): { id: string; tabType: string } | undefined => undefined);
-    // Defaults every web view to an eligible (project-bearing) definition so existing tests that
-    // don't care about the eligibility gate keep passing; tests for the gate itself override this.
-    // Typed loosely (both fields optional, possibly `undefined` altogether) so individual tests
-    // can return definition-less / ineligible / missing definitions.
-    const definitionMock = vi.fn(
-      (
-        id: string,
-      ): { id: string; projectId?: string; shouldShowToolbar?: boolean } | undefined => ({
-        id,
-        projectId: 'project-1',
-      }),
-    );
-    return {
-      closeWebViewCallbacks: callbacks,
-      getTabInfoByIdMock: tabInfoMock,
-      getSavedWebViewDefinitionSyncMock: definitionMock,
-    };
-  },
-);
+const {
+  closeWebViewCallbacks,
+  openWebViewCallbacks,
+  updateWebViewCallbacks,
+  getTabInfoByIdMock,
+  getSavedWebViewDefinitionSyncMock,
+  getAllOpenWebViewDefinitionsSyncMock,
+} = vi.hoisted(() => {
+  const callbacks: CloseWebViewCallback[] = [];
+  const openCallbacks: WebViewLifecycleCallback[] = [];
+  const updateCallbacks: WebViewLifecycleCallback[] = [];
+  // Shared (not per-`getDockLayout()`-call) mock so individual tests can control what tab info
+  // comes back for a given tab id, e.g. to simulate a web view tab vs. a non-web-view tab.
+  const tabInfoMock = vi.fn((): { id: string; tabType: string } | undefined => undefined);
+  // Defaults every web view to an eligible (project-bearing) definition so existing tests that
+  // don't care about the eligibility gate keep passing; tests for the gate itself override this.
+  // Typed loosely (both fields optional, possibly `undefined` altogether) so individual tests
+  // can return definition-less / ineligible / missing definitions.
+  const definitionMock = vi.fn(
+    (id: string): { id: string; projectId?: string; shouldShowToolbar?: boolean } | undefined => ({
+      id,
+      projectId: 'project-1',
+    }),
+  );
+  // No open web views by default, so the main-editor fallback of navigation target resolution
+  // resolves to nothing; navigation-target tests override this to open an editor.
+  const allOpenDefinitionsMock = vi.fn(
+    (): { id: string; webViewType: string; projectId?: string }[] => [],
+  );
+  return {
+    closeWebViewCallbacks: callbacks,
+    openWebViewCallbacks: openCallbacks,
+    updateWebViewCallbacks: updateCallbacks,
+    getTabInfoByIdMock: tabInfoMock,
+    getSavedWebViewDefinitionSyncMock: definitionMock,
+    getAllOpenWebViewDefinitionsSyncMock: allOpenDefinitionsMock,
+  };
+});
 
 vi.mock('@renderer/services/web-view.service-host', () => ({
   getDockLayout: vi.fn(async () => ({
@@ -48,7 +66,16 @@ vi.mock('@renderer/services/web-view.service-host', () => ({
     closeWebViewCallbacks.push(callback);
     return () => true;
   },
+  onDidOpenWebView: (callback: WebViewLifecycleCallback) => {
+    openWebViewCallbacks.push(callback);
+    return () => true;
+  },
+  onDidUpdateWebView: (callback: WebViewLifecycleCallback) => {
+    updateWebViewCallbacks.push(callback);
+    return () => true;
+  },
   getSavedWebViewDefinitionSync: getSavedWebViewDefinitionSyncMock,
+  getAllOpenWebViewDefinitionsSync: getAllOpenWebViewDefinitionsSyncMock,
 }));
 
 vi.mock('@shared/services/data-provider.service', () => ({
@@ -57,6 +84,14 @@ vi.mock('@shared/services/data-provider.service', () => ({
 
 function emitCloseWebView(id: string) {
   closeWebViewCallbacks.forEach((callback) => callback({ webView: { id } }));
+}
+
+function emitOpenWebView() {
+  openWebViewCallbacks.forEach((callback) => callback());
+}
+
+function emitUpdateWebView() {
+  updateWebViewCallbacks.forEach((callback) => callback());
 }
 
 /**
@@ -81,9 +116,6 @@ afterEach(async () => {
 
 describe('last selected scripture-navigable web view tracking', () => {
   beforeEach(() => {
-    // Reset tracker state between tests by "closing" whatever is tracked
-    const tracked = getLastSelectedScriptureNavigableWebViewId();
-    if (tracked) emitCloseWebView(tracked);
     getTabInfoByIdMock.mockReset();
     getTabInfoByIdMock.mockReturnValue(undefined);
     getSavedWebViewDefinitionSyncMock.mockReset();
@@ -91,6 +123,13 @@ describe('last selected scripture-navigable web view tracking', () => {
       id,
       projectId: 'project-1',
     }));
+    // No open web views, so clearing the tracker below recomputes the navigation target to
+    // undefined instead of latching onto a leftover editor from a previous test
+    getAllOpenWebViewDefinitionsSyncMock.mockReset();
+    getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([]);
+    // Reset tracker state between tests by "closing" whatever is tracked
+    const tracked = getLastSelectedScriptureNavigableWebViewId();
+    if (tracked) emitCloseWebView(tracked);
   });
 
   test('remembers the most recently focused web view', async () => {
@@ -239,6 +278,8 @@ describe('last focused tab tracking', () => {
       id,
       projectId: 'project-1',
     }));
+    getAllOpenWebViewDefinitionsSyncMock.mockReset();
+    getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([]);
   });
 
   test('remembers the most recently focused web view even when it is not scripture-navigable', async () => {
@@ -283,5 +324,104 @@ describe('last focused tab tracking', () => {
     await engine.setFocus({ focusType: 'webView', id: 'web-view-focus-4' });
     expect(received).toEqual(['web-view-focus-4']);
     unsubscribe();
+  });
+});
+
+describe('navigation target web view', () => {
+  const EDITOR_DEFINITION = {
+    id: 'editor-1',
+    webViewType: 'platformScriptureEditor.react',
+    projectId: 'project-1',
+  };
+
+  beforeEach(() => {
+    getTabInfoByIdMock.mockReset();
+    getTabInfoByIdMock.mockReturnValue(undefined);
+    getSavedWebViewDefinitionSyncMock.mockReset();
+    getSavedWebViewDefinitionSyncMock.mockImplementation((id: string) => ({
+      id,
+      projectId: 'project-1',
+    }));
+    // No open web views, so both resolution steps below land on undefined
+    getAllOpenWebViewDefinitionsSyncMock.mockReset();
+    getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([]);
+    // Reset tracker state between tests by "closing" whatever is tracked (the setter recomputes
+    // the cached target)...
+    const tracked = getLastSelectedScriptureNavigableWebViewId();
+    if (tracked) emitCloseWebView(tracked);
+    // ...and force a recompute regardless, since the cached target can be a fallback editor from a
+    // previous test even when nothing is tracked
+    emitUpdateWebView();
+  });
+
+  test('resolves the tracked web view with its saved definition once one is focused', async () => {
+    expect(getNavigationTargetWebView()).toBeUndefined();
+
+    const engine = createTestEngine();
+    await engine.setFocus({ focusType: 'webView', id: 'web-view-nav-1' });
+
+    expect(getNavigationTargetWebView()).toEqual({
+      id: 'web-view-nav-1',
+      definition: { id: 'web-view-nav-1', projectId: 'project-1' },
+    });
+  });
+
+  test('falls back to the first open scripture editor with a project when nothing is tracked', () => {
+    getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([EDITOR_DEFINITION]);
+    // A web view opening is what makes the editor discoverable — the open event drives the
+    // recompute
+    emitOpenWebView();
+
+    expect(getLastSelectedScriptureNavigableWebViewId()).toBeUndefined();
+    expect(getNavigationTargetWebView()).toEqual({
+      id: 'editor-1',
+      definition: EDITOR_DEFINITION,
+    });
+  });
+
+  test('re-validates the tracked definition on update and falls back when it is no longer navigable', async () => {
+    const engine = createTestEngine();
+    await engine.setFocus({ focusType: 'webView', id: 'web-view-nav-2' });
+    expect(getNavigationTargetWebView()?.id).toBe('web-view-nav-2');
+
+    // The tracked web view's definition loses its project (and shows no toolbar) — it was eligible
+    // when focused, but it now has nothing to navigate
+    getSavedWebViewDefinitionSyncMock.mockReturnValue({ id: 'web-view-nav-2' });
+    getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([EDITOR_DEFINITION]);
+    emitUpdateWebView();
+
+    // The tracked id is retained, but resolution falls through to the main editor
+    expect(getLastSelectedScriptureNavigableWebViewId()).toBe('web-view-nav-2');
+    expect(getNavigationTargetWebView()).toEqual({
+      id: 'editor-1',
+      definition: EDITOR_DEFINITION,
+    });
+  });
+
+  test('emits onDidChangeNavigationTargetWebView only when the resolved target actually changes', () => {
+    const received: (ResolvedWebView | undefined)[] = [];
+    const unsubscribe = onDidChangeNavigationTargetWebView((target) => {
+      received.push(target);
+    });
+
+    getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([EDITOR_DEFINITION]);
+    emitUpdateWebView();
+    // Same open web views, same resolved target — must not re-emit
+    emitUpdateWebView();
+
+    expect(received).toEqual([{ id: 'editor-1', definition: EDITOR_DEFINITION }]);
+    unsubscribe();
+  });
+
+  test('recomputes to undefined when a non-tracked fallback editor closes', () => {
+    getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([EDITOR_DEFINITION]);
+    emitOpenWebView();
+    expect(getNavigationTargetWebView()?.id).toBe('editor-1');
+
+    // The editor was never tracked, so its close skips the tracker but must still recompute
+    getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([]);
+    emitCloseWebView('editor-1');
+
+    expect(getNavigationTargetWebView()).toBeUndefined();
   });
 });

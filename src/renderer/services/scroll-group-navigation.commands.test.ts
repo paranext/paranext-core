@@ -6,8 +6,7 @@ import { navigationCommandHandlers } from '@renderer/services/scroll-group-navig
 // the static imports can be written first here to satisfy import/first.
 const mocks = vi.hoisted(() => ({
   getLastSelectedScriptureNavigableWebViewId: vi.fn(),
-  getSavedWebViewDefinitionSync: vi.fn(),
-  getAllOpenWebViewDefinitionsSync: vi.fn(),
+  getNavigationTargetWebView: vi.fn(),
   updateWebViewDefinitionSync: vi.fn(() => true),
   getScrRefSync: vi.fn(),
   getScrRefForProject: vi.fn(),
@@ -20,10 +19,9 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@renderer/services/window.service-host', () => ({
   getLastSelectedScriptureNavigableWebViewId: mocks.getLastSelectedScriptureNavigableWebViewId,
+  getNavigationTargetWebView: mocks.getNavigationTargetWebView,
 }));
 vi.mock('@renderer/services/web-view.service-host', () => ({
-  getSavedWebViewDefinitionSync: mocks.getSavedWebViewDefinitionSync,
-  getAllOpenWebViewDefinitionsSync: mocks.getAllOpenWebViewDefinitionsSync,
   updateWebViewDefinitionSync: mocks.updateWebViewDefinitionSync,
 }));
 vi.mock('@renderer/services/scroll-group.service-host', () => ({
@@ -52,27 +50,25 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.updateWebViewDefinitionSync.mockReturnValue(true);
   mocks.setScrRefSync.mockReturnValue(true);
-  // No tracked web view and no open editor by default — individual describe blocks override.
+  // No resolved navigation target by default — individual describe blocks override.
+  mocks.getNavigationTargetWebView.mockReturnValue(undefined);
   mocks.getLastSelectedScriptureNavigableWebViewId.mockReturnValue(undefined);
-  mocks.getAllOpenWebViewDefinitionsSync.mockReturnValue([]);
   mocks.windowServiceGetFocus.mockResolvedValue(undefined);
   // No project → book list falls back to ALL_BOOK_IDS
   mocks.pdpGet.mockRejectedValue(new Error('no project'));
 });
 
-describe('go-to commands with a tracked web view', () => {
-  test('no-ops when no web view is tracked and no editor is open', async () => {
+describe('go-to commands with a tracked web view target', () => {
+  test('no-ops when there is no navigation target', async () => {
     await navigationCommandHandlers['platform.goToNextVerse']();
     expect(mocks.setScrRefSync).not.toHaveBeenCalled();
     expect(mocks.updateWebViewDefinitionSync).not.toHaveBeenCalled();
   });
 
-  test('writes to the tracked web view scroll group with its project as source', async () => {
-    mocks.getLastSelectedScriptureNavigableWebViewId.mockReturnValue('web-view-1');
-    mocks.getSavedWebViewDefinitionSync.mockReturnValue({
+  test('writes to the target web view scroll group with its project as source', async () => {
+    mocks.getNavigationTargetWebView.mockReturnValue({
       id: 'web-view-1',
-      scrollGroupScrRef: 2,
-      projectId: 'project-1',
+      definition: { id: 'web-view-1', scrollGroupScrRef: 2, projectId: 'project-1' },
     });
     mocks.getScrRefForProject.mockResolvedValue(GEN_5_3);
 
@@ -84,15 +80,12 @@ describe('go-to commands with a tracked web view', () => {
       { book: 'GEN', chapterNum: 5, verseNum: 4 },
       'project-1',
     );
-    // The tracked web view resolved a target on its own — the main-editor fallback must not run.
-    expect(mocks.getAllOpenWebViewDefinitionsSync).not.toHaveBeenCalled();
   });
 
-  test('updates the web view definition when the tracked tab is detached', async () => {
-    mocks.getLastSelectedScriptureNavigableWebViewId.mockReturnValue('web-view-1');
-    mocks.getSavedWebViewDefinitionSync.mockReturnValue({
+  test('updates the web view definition when the target tab is detached', async () => {
+    mocks.getNavigationTargetWebView.mockReturnValue({
       id: 'web-view-1',
-      scrollGroupScrRef: GEN_5_3,
+      definition: { id: 'web-view-1', scrollGroupScrRef: GEN_5_3 },
     });
 
     await navigationCommandHandlers['platform.goToNextVerse']();
@@ -104,11 +97,9 @@ describe('go-to commands with a tracked web view', () => {
   });
 
   test('goToNextBook uses the project books-present list, not the full canon', async () => {
-    mocks.getLastSelectedScriptureNavigableWebViewId.mockReturnValue('web-view-1');
-    mocks.getSavedWebViewDefinitionSync.mockReturnValue({
+    mocks.getNavigationTargetWebView.mockReturnValue({
       id: 'web-view-1',
-      scrollGroupScrRef: 0,
-      projectId: 'project-1',
+      definition: { id: 'web-view-1', scrollGroupScrRef: 0, projectId: 'project-1' },
     });
     mocks.getScrRefForProject.mockResolvedValue({ book: 'GEN', chapterNum: 1, verseNum: 1 });
     // Books present = GEN and LEV (positions 1 and 3); EXO is absent
@@ -128,10 +119,9 @@ describe('go-to commands with a tracked web view', () => {
   });
 
   test('goToPreviousBook no-ops at the first book', async () => {
-    mocks.getLastSelectedScriptureNavigableWebViewId.mockReturnValue('web-view-1');
-    mocks.getSavedWebViewDefinitionSync.mockReturnValue({
+    mocks.getNavigationTargetWebView.mockReturnValue({
       id: 'web-view-1',
-      scrollGroupScrRef: 0,
+      definition: { id: 'web-view-1', scrollGroupScrRef: 0 },
     });
     mocks.getScrRefSync.mockReturnValue({ book: 'GEN', chapterNum: 5, verseNum: 3 });
 
@@ -140,22 +130,22 @@ describe('go-to commands with a tracked web view', () => {
   });
 });
 
-describe('go-to commands falling back to the main project editor', () => {
-  // No web view tracked in any test in this block — the tracked-web-view step (step 1) must be a
-  // no-op so the main-editor fallback (step 2) actually runs.
-  beforeEach(() => {
-    mocks.getLastSelectedScriptureNavigableWebViewId.mockReturnValue(undefined);
-  });
+describe('go-to commands with a main-editor target', () => {
+  // The resolution chain that picks the main project editor when no web view is tracked lives in
+  // window.service-host (`getNavigationTargetWebView`) — resolution-order coverage lives in
+  // window.service-host.test.ts. These tests cover the command behavior once an editor IS the
+  // resolved target.
 
-  test('no tracked web view + open main editor → target is the editor group and project', async () => {
-    mocks.getAllOpenWebViewDefinitionsSync.mockReturnValue([
-      {
+  test("uses the editor's own scroll group and project", async () => {
+    mocks.getNavigationTargetWebView.mockReturnValue({
+      id: 'editor-1',
+      definition: {
         id: 'editor-1',
         webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
         projectId: 'project-1',
         scrollGroupScrRef: 3,
       },
-    ]);
+    });
     mocks.getScrRefForProject.mockResolvedValue(GEN_5_3);
 
     await navigationCommandHandlers['platform.goToNextVerse']();
@@ -169,42 +159,16 @@ describe('go-to commands falling back to the main project editor', () => {
     );
   });
 
-  test('no tracked web view + no editor open → no-op', async () => {
-    mocks.getAllOpenWebViewDefinitionsSync.mockReturnValue([]);
-
-    await navigationCommandHandlers['platform.goToNextVerse']();
-
-    expect(mocks.setScrRefSync).not.toHaveBeenCalled();
-    expect(mocks.updateWebViewDefinitionSync).not.toHaveBeenCalled();
-  });
-
-  test('picks the first scripture editor with a project, skipping other web view types and project-less editors', async () => {
-    mocks.getAllOpenWebViewDefinitionsSync.mockReturnValue([
-      { id: 'other-1', webViewType: 'someOtherType', projectId: 'project-x' },
-      { id: 'editor-no-project', webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE },
-      {
-        id: 'editor-1',
-        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-        projectId: 'project-1',
-        scrollGroupScrRef: 0,
-      },
-    ]);
-    mocks.getScrRefForProject.mockResolvedValue(GEN_5_3);
-
-    await navigationCommandHandlers['platform.goToNextVerse']();
-
-    expect(mocks.getScrRefForProject).toHaveBeenCalledWith(0, 'project-1');
-  });
-
   test("writes a detached editor ref back to the editor's own web view id", async () => {
-    mocks.getAllOpenWebViewDefinitionsSync.mockReturnValue([
-      {
+    mocks.getNavigationTargetWebView.mockReturnValue({
+      id: 'editor-1',
+      definition: {
         id: 'editor-1',
         webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
         projectId: 'project-1',
         scrollGroupScrRef: GEN_5_3,
       },
-    ]);
+    });
 
     await navigationCommandHandlers['platform.goToNextVerse']();
 
@@ -223,11 +187,9 @@ describe('versification-aware rollover', () => {
   );
 
   beforeEach(() => {
-    mocks.getLastSelectedScriptureNavigableWebViewId.mockReturnValue('web-view-1');
-    mocks.getSavedWebViewDefinitionSync.mockReturnValue({
+    mocks.getNavigationTargetWebView.mockReturnValue({
       id: 'web-view-1',
-      scrollGroupScrRef: 0,
-      projectId: 'project-1',
+      definition: { id: 'web-view-1', scrollGroupScrRef: 0, projectId: 'project-1' },
     });
     getFinalVerseNumbersInBook.mockClear();
     mocks.pdpGet.mockImplementation(async (projectInterface: string) => {
@@ -345,11 +307,9 @@ describe('versification-aware rollover', () => {
 
 describe('books-present handling', () => {
   test('goToNextBook does not substitute the full canon when booksPresent marks no books', async () => {
-    mocks.getLastSelectedScriptureNavigableWebViewId.mockReturnValue('web-view-1');
-    mocks.getSavedWebViewDefinitionSync.mockReturnValue({
+    mocks.getNavigationTargetWebView.mockReturnValue({
       id: 'web-view-1',
-      scrollGroupScrRef: 0,
-      projectId: 'project-1',
+      definition: { id: 'web-view-1', scrollGroupScrRef: 0, projectId: 'project-1' },
     });
     mocks.getScrRefForProject.mockResolvedValue({ book: 'GEN', chapterNum: 1, verseNum: 1 });
     // All-zeros = the project genuinely has no books (the C# provider returns a fixed-width flag
@@ -368,11 +328,9 @@ describe('books-present handling', () => {
 
 describe('command serialization', () => {
   test('overlapping invocations run one after another so each press advances exactly one step', async () => {
-    mocks.getLastSelectedScriptureNavigableWebViewId.mockReturnValue('web-view-1');
-    mocks.getSavedWebViewDefinitionSync.mockReturnValue({
+    mocks.getNavigationTargetWebView.mockReturnValue({
       id: 'web-view-1',
-      scrollGroupScrRef: 2,
-      projectId: 'project-1',
+      definition: { id: 'web-view-1', scrollGroupScrRef: 2, projectId: 'project-1' },
     });
     // Stateful current ref: each read returns the last written ref, so the assertions can tell
     // whether the second run read the first run's result (serialized) or the original ref (raced)

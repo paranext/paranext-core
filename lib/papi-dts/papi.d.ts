@@ -9799,8 +9799,8 @@ declare module 'shared/services/window.service-model' {
   /**
    * Gets the id of the web view a focus subject refers to, if it refers to one: either the web view
    * itself (`focusType: 'webView'`) or a web view's tab (`focusType: 'tab'` with
-   * {@link TAB_TYPE_WEBVIEW}; a web view tab's id is the same as its `WebViewId`). Returns
-   * `undefined` for focus subjects that do not refer to a web view.
+   * {@link TAB_TYPE_WEBVIEW}; a web view tab's id is the same as its `WebViewId`). Returns `undefined`
+   * for focus subjects that do not refer to a web view.
    *
    * Shared so every consumer that projects a focus subject to a web view id (e.g. the window
    * service's last-selected tracking and `platform.openBookChapterControl`) stays in lockstep when

@@ -13,6 +13,20 @@ import { getErrorMessage } from 'platform-bible-utils';
 /** A web view id paired with its current saved definition */
 export type ResolvedWebView = { id: WebViewId; definition: SavedWebViewDefinition };
 
+/**
+ * Whether a web view definition is a candidate for BCV navigation: it either belongs to a project
+ * (`projectId`) or shows its own BookChapterControl/ScrollGroupSelector toolbar
+ * (`shouldShowToolbar`). Web views that are neither (e.g. Find, a settings-style panel) have
+ * nothing to navigate.
+ *
+ * Shared by the window service's focus-time tracking gate and by {@link resolveTargetWebView}, which
+ * re-checks it at resolution time because `projectId` is a runtime-updatable definition property —
+ * a web view can stop being navigable after it was tracked.
+ */
+export function isScriptureNavigableWebViewDefinition(definition: SavedWebViewDefinition): boolean {
+  return !!(definition.projectId || definition.shouldShowToolbar);
+}
+
 /** Step 1 of target resolution: the tracked last-selected (scripture-navigable) web view, if any */
 function resolveTrackedWebView(
   trackedWebViewId: WebViewId | undefined,
@@ -22,6 +36,11 @@ function resolveTrackedWebView(
   try {
     const definition = getSavedWebViewDefinitionSync(trackedWebViewId);
     if (!definition) return undefined;
+    // Re-validate navigability at resolution time — the tracking gate admitted this web view when
+    // it was focused, but its definition may have changed since (see
+    // `isScriptureNavigableWebViewDefinition`). Fall through to the editor fallback rather than
+    // navigating a target with nothing to navigate.
+    if (!isScriptureNavigableWebViewDefinition(definition)) return undefined;
     return { id: trackedWebViewId, definition };
   } catch (e) {
     logger.warn(
