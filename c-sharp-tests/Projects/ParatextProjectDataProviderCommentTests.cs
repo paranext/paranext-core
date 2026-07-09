@@ -4,6 +4,7 @@ using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
 using Paratext.Data.ProjectComments;
+using Paratext.Data.Users;
 using SIL.Scripture;
 
 namespace TestParanextDataProvider.Projects
@@ -2466,6 +2467,1052 @@ namespace TestParanextDataProvider.Projects
                 Is.EqualTo(regularThreadId),
                 "type: Normal must return only regular (non-conflict) threads"
             );
+        }
+
+        #endregion
+
+        #region ResolveConflict Tests
+
+        // Winner (post-merge) chapter text for the MAT 2:1 conflict fixture.
+        private const string MatTwoWinnerUsfm =
+            "\\id MAT\n\\c 2\n\\v 1 When Jesus was born in the big village of Bethlehem in Judea, Herod was king.\n";
+
+        // Winner (post-merge current) chapter text for the INDEPENDENT-changes MAT 2:1 conflict
+        // fixture. The accepted (winning) side inserted "great" before "king" (a late word); the
+        // rejected side independently inserted "small" before "village" (an early word). This is the
+        // accepted side alone, so it lacks the rejected "small" - "Merge all changes" would splice
+        // that in. See CommentTestHelper.CreateIndependentVerseTextConflictComment.
+        private const string MatTwoIndependentWinnerUsfm =
+            "\\id MAT\n\\c 2\n\\v 1 When Jesus was born in the village of Bethlehem in Judea, Herod was great king.\n";
+
+        // The winner verse edited AFTER the merge (big -> enormous) - makes the conflict stale.
+        private const string MatTwoEditedUsfm =
+            "\\id MAT\n\\c 2\n\\v 1 When Jesus was born in the enormous village of Bethlehem in Judea, Herod was king.\n";
+
+        // The winner verse re-saved with ONLY interior whitespace changed (extra spaces between two
+        // words). RegularizeSpaces().Trim() on both sides collapses this away, so it is NOT a real
+        // verse edit and the conflict must stay fully resolvable.
+        private const string MatTwoWinnerWhitespaceUsfm =
+            "\\id MAT\n\\c 2\n\\v 1 When Jesus was born in the big   village of Bethlehem in Judea, Herod was king.\n";
+
+        // Chapter 2 with NO verse 1 at all, so reading MAT 2:1 yields no USFM (unreadable verse).
+        private const string MatTwoMissingVerseUsfm = "\\id MAT\n\\c 2\n";
+
+        // Chapter 2 whose \v 1 the losing side deleted ENTIRELY (marker included; see
+        // CommentTestHelper.CreateVerseTextConflictCommentDeletion). \v 2 follows so the reject
+        // splice boundary (\v 1 -> next \v) is observable. The winner kept \v 1, and its text matches
+        // the fixture's recorded winner Verse, so the reject is not stale.
+        private const string MatTwoDeletionWinnerUsfm =
+            "\\id MAT\n\\c 2\n\\v 1 When Jesus was born in the village of Bethlehem in Judea, Herod was king.\n\\v 2 Then wise men from the east came to Jerusalem.\n";
+
+        // Delegates to the static overload (below) to avoid duplicating the seeding logic.
+        private CommentThread SeedVerseTextConflict() => SeedVerseTextConflict(_scrText, null);
+
+        // The exact verse text GetText returns for the seeded winner USFM, captured from a throwaway
+        // project. Reading it there (rather than from _scrText between seed and resolve) avoids a
+        // transient CommentManager desync seen when _scrText is read between seeding the conflict
+        // comment and resolving it, and round-trips the same PutText -> GetText the test uses so the
+        // expected value matches byte-for-byte regardless of any USFM normalization.
+        private static string ExpectedWinnerVerseText()
+        {
+            using var reference = CreateDummyProject();
+            reference.PutText(40, 0, false, MatTwoWinnerUsfm, null);
+            var vref = new VerseRef("MAT", "2", "1", reference.Settings.Versification);
+            return reference.GetText(vref, true, true);
+        }
+
+        // Re-reads the (post-resolution) thread. CommentManager.FindThread builds a fresh
+        // CommentThread each call and SaveEdits records the resolution on a new comment, so a
+        // reference captured before resolving is stale - re-query, as the other mutation tests do.
+        private PlatformCommentThreadWrapper ReloadThread(string threadId) =>
+            _provider.GetCommentThreads(new CommentThreadSelector { ThreadId = threadId }).Single();
+
+        [Test]
+        public void ResolveConflict_Accept_ResolvesThreadAndLeavesVerseUnchanged()
+        {
+            string expectedWinner = ExpectedWinnerVerseText();
+            CommentThread thread = SeedVerseTextConflict();
+            var vref = new VerseRef("MAT", "2", "1", _scrText.Settings.Versification);
+
+            _provider.ResolveConflict(thread.Id, "accept");
+
+            Assert.That(ReloadThread(thread.Id).Status, Is.EqualTo(NoteStatus.Resolved));
+            // accept keeps the auto-merged (winning) verse text and writes nothing: the chapter text
+            // must be byte-for-byte the seeded winner (strict, so a stray write can't slip through).
+            string after = _scrText.GetText(vref, true, true);
+            Assert.That(after, Is.EqualTo(expectedWinner));
+            Assert.That(after, Does.Contain("big village"));
+            Assert.That(after, Does.Not.Contain("small village"));
+        }
+
+        [Test]
+        public void ResolveConflict_RejectAfterAccept_ThrowsAndDoesNotRewriteVerse()
+        {
+            // A resolved thread must not be re-resolvable: reject-after-accept would otherwise rewrite
+            // the verse of an already-settled conflict. The already-resolved guard rejects it.
+            CommentThread thread = SeedVerseTextConflict();
+            var vref = new VerseRef("MAT", "2", "1", _scrText.Settings.Versification);
+
+            _provider.ResolveConflict(thread.Id, "accept");
+
+            Assert.That(
+                () => _provider.ResolveConflict(thread.Id, "reject"),
+                Throws.TypeOf<InvalidOperationException>().With.Message.Contains("already resolved")
+            );
+            // The guard fired before any verse write, so the winner text is untouched. (GetText is
+            // read only here, after both resolves, to avoid the mid-sequence CommentManager desync.)
+            string after = _scrText.GetText(vref, true, true);
+            Assert.That(after, Does.Contain("big village"));
+            Assert.That(after, Does.Not.Contain("small village"));
+        }
+
+        [Test]
+        public void ResolveConflict_Reject_WritesLoserTextAndResolvesThread()
+        {
+            CommentThread thread = SeedVerseTextConflict();
+            var vref = new VerseRef("MAT", "2", "1", _scrText.Settings.Versification);
+
+            _provider.ResolveConflict(thread.Id, "reject");
+
+            Assert.That(ReloadThread(thread.Id).Status, Is.EqualTo(NoteStatus.Resolved));
+            string after = _scrText.GetText(vref, true, true);
+            Assert.That(after, Does.Contain("small village")); // loser text written
+            Assert.That(after, Does.Not.Contain("big village"));
+        }
+
+        [Test]
+        public void ResolveConflict_RejectWholeVerseDeletion_AppliesPt9DeletionWritePath()
+        {
+            // Characterization: when the losing side deleted the WHOLE verse
+            // (marker included), reject writes the loser's text = "" via PT9's ReplaceAcceptedText,
+            // which we call unmodified. This pins PT9's actual output so a future change to our
+            // delegation is caught. It is faithful PT9 behavior: a guard that instead left an empty
+            // "\v 1 " would DIVERGE from Paratext, which we do not want. Here the reject removes \v 1
+            // entirely (marker + text) and leaves \v 2 untouched.
+            _scrText.PutText(40, 0, false, MatTwoDeletionWinnerUsfm, null);
+            var mgr = CommentManager.Get(_scrText);
+            Comment conflict = CommentTestHelper.CreateVerseTextConflictCommentDeletion();
+            mgr.AddComment(conflict);
+            mgr.SaveUser(conflict.User, false);
+            CommentThread thread = mgr.FindThread(conflict.Thread);
+            var chapterRef = new VerseRef("MAT", "2", "0", _scrText.Settings.Versification);
+
+            _provider.ResolveConflict(thread.Id, "reject");
+
+            Assert.That(ReloadThread(thread.Id).Status, Is.EqualTo(NoteStatus.Resolved));
+            string after = _scrText.GetText(chapterRef, true, true);
+            // Verse 1 is gone entirely - both its text and its \v 1 marker were spliced out...
+            Assert.That(after, Does.Not.Contain("When Jesus was born"));
+            Assert.That(after, Does.Not.Contain("\\v 1"));
+            // ...while verse 2 (after the splice boundary) is untouched.
+            Assert.That(after, Does.Contain("\\v 2"));
+            Assert.That(after, Does.Contain("wise men from the east"));
+        }
+
+        [Test]
+        public void ResolveConflict_ConcurrentRejects_ApplyExactlyOnce()
+        {
+            // Several resolveConflict calls racing on the same thread must not both write the verse.
+            // The per-project lock makes the already-resolved guard atomic with the write, so exactly
+            // one call resolves and the rest observe the resolved thread and are rejected. Without the
+            // lock the bodies interleave and can both splice the loser text, corrupting a settled note.
+            CommentThread thread = SeedVerseTextConflict();
+            var vref = new VerseRef("MAT", "2", "1", _scrText.Settings.Versification);
+
+            const int racers = 8;
+            var outcomes = new Exception?[racers];
+            var tasks = new Task[racers];
+            for (int i = 0; i < racers; i++)
+            {
+                int idx = i;
+                tasks[i] = Task.Run(() =>
+                {
+                    try
+                    {
+                        _provider.ResolveConflict(thread.Id, "reject");
+                        outcomes[idx] = null; // this racer won
+                    }
+                    catch (Exception ex)
+                    {
+                        outcomes[idx] = ex;
+                    }
+                });
+            }
+            Task.WaitAll(tasks);
+
+            // Exactly one racer resolved; every other was rejected by the already-resolved guard.
+            Assert.That(
+                outcomes.Count(e => e == null),
+                Is.EqualTo(1),
+                "exactly one concurrent resolve must succeed"
+            );
+            var errors = outcomes.Where(e => e != null).Cast<Exception>().ToList();
+            Assert.That(errors, Is.All.InstanceOf<InvalidOperationException>());
+            Assert.That(
+                errors.All(e => e.Message.Contains("already resolved")),
+                Is.True,
+                "every losing racer must hit the already-resolved guard, not a partial/garbled write"
+            );
+            // The loser text was applied exactly once - not doubled or garbled by overlapping writes.
+            Assert.That(ReloadThread(thread.Id).Status, Is.EqualTo(NoteStatus.Resolved));
+            string after = _scrText.GetText(vref, true, true);
+            Assert.That(after, Does.Contain("small village"));
+            Assert.That(after, Does.Not.Contain("big village"));
+        }
+
+        [Test]
+        public void AddCommentToThread_ConcurrentReplies_AllPersistNoneLost()
+        {
+            // The comment-mutation lock must serialize concurrent AddCommentToThread calls so no
+            // reply is lost. Without it, concurrent read-modify-write of the shared CommentManager's
+            // comment list can drop replies or corrupt it. Fire N replies at one thread and assert all
+            // N land. (Resolve-vs-resolve is covered by ConcurrentRejects; this covers a non-resolve
+            // mutator - the gap the previously one-sided lock left open.)
+            CommentThread thread = SeedVerseTextConflict();
+            int Count() => CommentManager.Get(_scrText).FindThread(thread.Id).Comments.Count;
+            int baseCount = Count();
+
+            const int repliers = 8;
+            var tasks = new Task[repliers];
+            for (int i = 0; i < repliers; i++)
+            {
+                tasks[i] = Task.Run(() =>
+                {
+                    var reply = new Comment(_scrText.User)
+                    {
+                        Thread = thread.Id,
+                        Status = NoteStatus.Todo,
+                    };
+                    _provider.AddCommentToThread(new PlatformCommentWrapper(reply));
+                });
+            }
+            Task.WaitAll(tasks);
+
+            Assert.That(
+                Count(),
+                Is.EqualTo(baseCount + repliers),
+                "every concurrent reply must persist - none dropped by an unsynchronized list mutation"
+            );
+        }
+
+        [Test]
+        public void ResolveConflict_NonConflictThread_Throws()
+        {
+            var mgr = CommentManager.Get(_scrText);
+            Comment normal = CommentTestHelper.CreateBasicComment(); // a normal note, not a conflict
+            mgr.AddComment(normal);
+            Assert.That(
+                () => _provider.ResolveConflict(normal.Thread, "accept"),
+                Throws.TypeOf<InvalidOperationException>()
+            );
+        }
+
+        [Test]
+        public void ResolveConflict_InvalidResolution_Throws()
+        {
+            CommentThread thread = SeedVerseTextConflict();
+            Assert.That(
+                () => _provider.ResolveConflict(thread.Id, "bogus"),
+                Throws.TypeOf<InvalidDataException>()
+            );
+        }
+
+        [Test]
+        public void ResolveConflict_ConflictNote_NeedsNoCreatorResolve()
+        {
+            // Headless safety: SaveEdits(owner: null) only touches the IComponent inside Alert.Show,
+            // which is gated by ThreadNeedsCreatorResolve. Pin that conflict threads never require it.
+            CommentThread thread = SeedVerseTextConflict();
+            Assert.That(thread.ThreadNeedsCreatorResolve, Is.False);
+        }
+
+        // --- data-update events --------------------------------------------------------------------
+        // ResolveConflict fires via SendDataUpdateEvent, which dispatches through fire-and-forget
+        // ThreadingUtils.RunTask. In this harness DummyPapiClient.SendEventAsync enqueues synchronously
+        // and returns a completed task, so the events are already queued when ResolveConflict returns;
+        // we still drain-then-poll (never bare-sleep) so the assertions hold even if that ever changes.
+        private static readonly TimeSpan EventWaitTimeout = TimeSpan.FromSeconds(5);
+
+        // How long to watch for an unwanted event before concluding none will arrive.
+        private static readonly TimeSpan EventSettleWindow = TimeSpan.FromMilliseconds(500);
+
+        // Discard any events queued by setup/seeding so post-action assertions see only new events.
+        private void DrainEvents()
+        {
+            while (Client.SentEventCount > 0)
+                _ = Client.NextSentEvent;
+        }
+
+        // A data-update event carries its changed data types as a List<string> payload (see
+        // DataProvider.SendDataUpdateEventAsync). Classify by which data types it names.
+        private static bool IsCommentUpdate((string eventType, object? eventParameters) ev) =>
+            ev.eventParameters is List<string> types && types.Contains(ProjectDataType.COMMENTS);
+
+        private static bool IsScriptureUpdate((string eventType, object? eventParameters) ev) =>
+            ev.eventParameters is List<string> types
+            && types.Contains(ProjectDataType.CHAPTER_USFM);
+
+        [Test]
+        public void ResolveConflict_Accept_FiresCommentUpdateNotScriptureUpdate()
+        {
+            CommentThread thread = SeedVerseTextConflict();
+            DrainEvents();
+
+            _provider.ResolveConflict(thread.Id, "accept");
+
+            // accept refreshes comment subscribers (the note list) ...
+            Assert.That(
+                SpinWait.SpinUntil(() => Client.SentEventCount >= 1, EventWaitTimeout),
+                Is.True,
+                "accept must fire a comment data-update event"
+            );
+            var ev = Client.NextSentEvent;
+            Assert.That(
+                IsCommentUpdate(ev),
+                Is.True,
+                "the fired event must carry the comment data types"
+            );
+            Assert.That(
+                IsScriptureUpdate(ev),
+                Is.False,
+                "the comment event must not carry Scripture data types"
+            );
+            // ... and, since accept writes no verse text, it must NOT fire a Scripture data-update.
+            Assert.That(
+                SpinWait.SpinUntil(() => Client.SentEventCount > 0, EventSettleWindow),
+                Is.False,
+                "accept must not fire a Scripture (or any further) data-update event"
+            );
+        }
+
+        [Test]
+        public void ResolveConflict_Reject_FiresBothCommentAndScriptureUpdates()
+        {
+            CommentThread thread = SeedVerseTextConflict();
+            DrainEvents();
+
+            _provider.ResolveConflict(thread.Id, "reject");
+
+            // reject refreshes comment subscribers AND Scripture-text subscribers (the verse changed).
+            Assert.That(
+                SpinWait.SpinUntil(() => Client.SentEventCount >= 2, EventWaitTimeout),
+                Is.True,
+                "reject must fire both a comment and a Scripture data-update event"
+            );
+            var events = new List<(string eventType, object? eventParameters)>();
+            while (Client.SentEventCount > 0)
+                events.Add(Client.NextSentEvent);
+            Assert.That(
+                events.Any(IsCommentUpdate),
+                Is.True,
+                "reject must fire a comment data-update"
+            );
+            Assert.That(
+                events.Any(IsScriptureUpdate),
+                Is.True,
+                "reject must fire a Scripture data-update"
+            );
+        }
+
+        // --- admin-or-assignee permission gate ---------------------------------------------------
+        // The tests above all run on the default admin project (_scrText), so they only cover the
+        // admin branch of ResolveConflict's gate. The two tests below cover the non-admin branches:
+        // denied (non-admin, unassigned) and assignee-succeeds (non-admin, assigned).
+
+        // A project whose current user is a non-admin *team member* (not an Observer). The gate reads
+        // scrText.Permissions.AmAdministrator (see ParatextProjectDataProvider.IsUserProjectAdministrator),
+        // NOT scrText.AmAdministrator, so we swap in a PermissionManager rather than overriding
+        // AmAdministrator on the ScrText itself (adaptation from the brief's sketch). This follows
+        // ManageBooks' NonAdminSharedScrText pattern, but that pattern's empty
+        // InternalProjectUserAccessData makes HaveRoleNotObserver false - which would make the base
+        // VerifyUserCanResolveThread / CommentEditHelper.AllowEditLast checks throw for BOTH tests and
+        // hide the gate. Overriding both properties expresses "non-admin, non-observer team member"
+        // directly, leaving only the admin-or-assignee gate to decide the outcome. DummyScrText has no
+        // (string name) constructor, so this uses the parameterless base.
+        private sealed class NonAdminDummyScrText : DummyScrText
+        {
+            private readonly PermissionManager _permissions = new NonAdminPermissionManager();
+
+            public override PermissionManager Permissions => _permissions;
+
+            private sealed class NonAdminPermissionManager : PermissionManager
+            {
+                public override bool AmAdministrator => false;
+
+                public override bool HaveRoleNotObserver => true;
+
+                // This non-admin team member has edit rights on the conflict's chapter, so the
+                // resolve-conflict chapter-edit gate passes and the outcome turns purely on the
+                // admin-or-assignee decision.
+                public override bool CanEdit(
+                    int bookNum,
+                    int chapterNum = 0,
+                    string userName = null,
+                    PermissionSet permissionSet = PermissionSet.Merged
+                ) => true;
+            }
+        }
+
+        // Like NonAdminDummyScrText, but this team member also lacks Spellings edit permission. On a
+        // spelling note CanCurrentUserResolve delegates to CanEdit(Spellings), so this makes
+        // VerifyUserCanResolveThread throw while VerifyUserCanAddCommentToThread (non-observer only)
+        // still passes - isolating the resolve/re-open gate under test.
+        private sealed class NoResolvePermissionDummyScrText : DummyScrText
+        {
+            private readonly PermissionManager _permissions = new NoResolvePermissionManager();
+
+            public override PermissionManager Permissions => _permissions;
+
+            private sealed class NoResolvePermissionManager : PermissionManager
+            {
+                public override bool AmAdministrator => false;
+
+                public override bool HaveRoleNotObserver => true;
+
+                public override bool CanEdit(
+                    PtxUtils.Enum<Paratext.Data.Users.PermissionType> permission,
+                    string userName = null
+                ) => false;
+            }
+        }
+
+        // Like NonAdminDummyScrText (non-admin, non-observer team member) but WITHOUT edit rights on
+        // any chapter. Isolates the resolve-conflict chapter-edit gate: VerifyUserCanResolveThread and
+        // the admin-or-assignee check both pass, but CanEdit(book, chapter) is false.
+        private sealed class NoChapterEditDummyScrText : DummyScrText
+        {
+            private readonly PermissionManager _permissions = new NoChapterEditPermissionManager();
+
+            public override PermissionManager Permissions => _permissions;
+
+            private sealed class NoChapterEditPermissionManager : PermissionManager
+            {
+                public override bool AmAdministrator => false;
+
+                public override bool HaveRoleNotObserver => true;
+
+                public override bool CanEdit(
+                    int bookNum,
+                    int chapterNum = 0,
+                    string userName = null,
+                    PermissionSet permissionSet = PermissionSet.Merged
+                ) => false;
+            }
+        }
+
+        // Mirrors SeedVerseTextConflict() but seeds the conflict on a caller-supplied project (the
+        // non-admin fixture), optionally pre-assigning the conflict note to a user. Returns the
+        // freshly built thread.
+        private static CommentThread SeedVerseTextConflict(ScrText scrText, string? assignedUser)
+        {
+            scrText.PutText(40, 0, false, MatTwoWinnerUsfm, null);
+            var mgr = CommentManager.Get(scrText);
+            Comment conflict = CommentTestHelper.CreateVerseTextConflictComment();
+            if (assignedUser != null)
+                conflict.AssignedUser = assignedUser;
+            mgr.AddComment(conflict);
+            mgr.SaveUser(conflict.User, false);
+            return mgr.FindThread(conflict.Thread);
+        }
+
+        // Seeds a verseText conflict WITHOUT writing the verse (no PutText), so it works on a fixture
+        // whose user lacks chapter-edit permission (PutText would throw). The verse content is
+        // irrelevant to the permission-gate tests: the chapter-edit gate throws before any verse read.
+        private static CommentThread SeedConflictWithoutVerseWrite(
+            ScrText scrText,
+            string assignedUser
+        )
+        {
+            var mgr = CommentManager.Get(scrText);
+            Comment conflict = CommentTestHelper.CreateVerseTextConflictComment();
+            conflict.AssignedUser = assignedUser;
+            mgr.AddComment(conflict);
+            mgr.SaveUser(conflict.User, false);
+            return mgr.FindThread(conflict.Thread);
+        }
+
+        [Test]
+        public void ResolveConflict_NonAdminNonAssignee_Throws()
+        {
+            // Non-admin, non-observer team member with an UNASSIGNED verseText conflict -> denied.
+            using var nonAdmin = new NonAdminDummyScrText();
+            var details = CreateProjectDetails(nonAdmin);
+            ParatextProjects.FakeAddProject(details, nonAdmin);
+            var provider = new DummyParatextProjectDataProvider(
+                PdpName + "-nonadmin",
+                Client,
+                details,
+                ParatextProjects
+            );
+
+            CommentThread thread = SeedVerseTextConflict(nonAdmin, null);
+
+            // The throw comes from the admin-or-assignee gate, not the base VerifyUserCanResolveThread
+            // (which passes here: HaveRoleNotObserver == true). The gate-specific message proves it -
+            // were the gate deleted, this non-admin resolve would succeed and Throws.TypeOf would fail.
+            Assert.That(
+                () => provider.ResolveConflict(thread.Id, "accept"),
+                Throws
+                    .TypeOf<InvalidOperationException>()
+                    .With.Message.Contains("administrator or the assigned user")
+            );
+            // And the denied attempt left the thread unresolved (no partial side effect).
+            Assert.That(
+                CommentManager.Get(nonAdmin).FindThread(thread.Id).Status,
+                Is.Not.EqualTo(NoteStatus.Resolved)
+            );
+        }
+
+        [Test]
+        public void AddCommentToThread_ReplyReopeningResolvedThread_RequiresResolvePermission()
+        {
+            // Adding a plain comment to a resolved thread implicitly re-opens it, so it must
+            // clear the SAME gate as an explicit status change - otherwise a user who can comment but
+            // not resolve could re-open by replying. Lever: a spelling note, whose CanCurrentUserResolve
+            // falls back to CanEdit(Spellings) - false for this non-admin, non-observer team member -
+            // while VerifyUserCanAddCommentToThread only requires non-observer (passes).
+            using var nonAdmin = new NoResolvePermissionDummyScrText();
+            var details = CreateProjectDetails(nonAdmin);
+            ParatextProjects.FakeAddProject(details, nonAdmin);
+            var provider = new DummyParatextProjectDataProvider(
+                PdpName + "-reopen-gate",
+                Client,
+                details,
+                ParatextProjects
+            );
+
+            // Seed a RESOLVED spelling-note thread directly, bypassing the provider's gates.
+            var mgr = CommentManager.Get(nonAdmin);
+            var first = new Comment(nonAdmin.User)
+            {
+                Thread = "reopen-gate-thread",
+                VerseRefStr = "GEN 1:1",
+                TagsAddedIds = new[] { CommentTag.spellingTagId },
+            };
+            first.SetContentsFromHtml("spelling note");
+            mgr.AddComment(first);
+            var resolving = new Comment(nonAdmin.User)
+            {
+                Thread = first.Thread,
+                Status = NoteStatus.Resolved,
+            };
+            resolving.SetContentsFromHtml("resolved");
+            mgr.AddComment(resolving);
+            mgr.SaveUser(nonAdmin.User.Name, false);
+            Assert.That(
+                mgr.FindThread(first.Thread).Status,
+                Is.EqualTo(NoteStatus.Resolved),
+                "precondition: thread is resolved"
+            );
+
+            // A plain reply (no status) would implicitly re-open the thread -> must be gated.
+            var reply = new Comment(nonAdmin.User) { Thread = first.Thread };
+            reply.SetContentsFromHtml("please reopen");
+            Assert.That(
+                () => provider.AddCommentToThread(new PlatformCommentWrapper(reply)),
+                Throws
+                    .TypeOf<InvalidOperationException>()
+                    .With.Message.Contains("resolve or re-open")
+            );
+
+            // The blocked reply must not have re-opened (or been added to) the thread.
+            Assert.That(
+                mgr.FindThread(first.Thread).Status,
+                Is.EqualTo(NoteStatus.Resolved),
+                "denied reply must leave the thread resolved"
+            );
+        }
+
+        [Test]
+        public void ResolveConflict_NonAdminAssignedUser_RejectWritesLoserAndResolves()
+        {
+            // Non-admin assignee WITH edit rights on the chapter -> allowed by the admin-or-assignee
+            // gate and the chapter-edit gate. Uses "reject" (the primary resolution flow) so this
+            // exercises SaveEdits' verse write (loser-USFM splice) under the non-admin PermissionManager
+            // fixture, not just the no-write accept path.
+            using var nonAdmin = new NonAdminDummyScrText();
+            var details = CreateProjectDetails(nonAdmin);
+            ParatextProjects.FakeAddProject(details, nonAdmin);
+            var provider = new DummyParatextProjectDataProvider(
+                PdpName + "-assignee",
+                Client,
+                details,
+                ParatextProjects
+            );
+
+            // Assign the conflict to the current (non-admin) user before adding it.
+            CommentThread thread = SeedVerseTextConflict(nonAdmin, nonAdmin.User.Name);
+            var vref = new VerseRef("MAT", "2", "1", nonAdmin.Settings.Versification);
+
+            Assert.That(() => provider.ResolveConflict(thread.Id, "reject"), Throws.Nothing);
+            Assert.That(
+                CommentManager.Get(nonAdmin).FindThread(thread.Id).Status,
+                Is.EqualTo(NoteStatus.Resolved)
+            );
+            // The losing side's text was written into the verse under the non-admin user.
+            string after = nonAdmin.GetText(vref, true, true);
+            Assert.That(after, Does.Contain("small village"));
+            Assert.That(after, Does.Not.Contain("big village"));
+        }
+
+        [Test]
+        public void ResolveConflict_NonAdminTeamAssigned_Allowed()
+        {
+            // A conflict assigned to the whole team (CommentThread.teamUser, "Team") is an
+            // assign-to-everyone sentinel, not a specific user, so any non-admin team member may
+            // resolve it. A raw name compare in the admin-or-assignee gate would treat "Team" as one
+            // (non-matching) user and wrongly deny every team member.
+            using var nonAdmin = new NonAdminDummyScrText();
+            var details = CreateProjectDetails(nonAdmin);
+            ParatextProjects.FakeAddProject(details, nonAdmin);
+            var provider = new DummyParatextProjectDataProvider(
+                PdpName + "-team",
+                Client,
+                details,
+                ParatextProjects
+            );
+
+            // Assign the conflict to the team, not to this specific user. "accept" isolates the gate:
+            // it writes nothing, so the test turns only on the permission decision.
+            CommentThread thread = SeedVerseTextConflict(nonAdmin, CommentThread.teamUser);
+
+            Assert.That(() => provider.ResolveConflict(thread.Id, "accept"), Throws.Nothing);
+            Assert.That(
+                CommentManager.Get(nonAdmin).FindThread(thread.Id).Status,
+                Is.EqualTo(NoteStatus.Resolved)
+            );
+        }
+
+        [Test]
+        public void ResolveConflict_NonAdminAssignedButNoChapterEdit_Denied()
+        {
+            // A non-admin assignee WITHOUT edit rights on the conflict's chapter must be denied:
+            // resolving would write a chapter they cannot edit. "accept" isolates the gate (it writes
+            // nothing), so the test turns purely on the permission decision.
+            using var nonAdmin = new NoChapterEditDummyScrText();
+            var details = CreateProjectDetails(nonAdmin);
+            ParatextProjects.FakeAddProject(details, nonAdmin);
+            var provider = new DummyParatextProjectDataProvider(
+                PdpName + "-no-chapter-edit",
+                Client,
+                details,
+                ParatextProjects
+            );
+
+            CommentThread thread = SeedConflictWithoutVerseWrite(nonAdmin, nonAdmin.User.Name);
+
+            Assert.That(
+                () => provider.ResolveConflict(thread.Id, "accept"),
+                Throws
+                    .TypeOf<InvalidOperationException>()
+                    .With.Message.Contains("permission to edit")
+            );
+            // The conflict was not resolved.
+            Assert.That(
+                CommentManager.Get(nonAdmin).FindThread(thread.Id).Status,
+                Is.Not.EqualTo(NoteStatus.Resolved)
+            );
+        }
+
+        [Test]
+        public void GetConflictResolutionOptions_NonAdminNoChapterEdit_None()
+        {
+            // The capability query mirrors the enforcement gate: no chapter-edit rights -> no options.
+            using var nonAdmin = new NoChapterEditDummyScrText();
+            var details = CreateProjectDetails(nonAdmin);
+            ParatextProjects.FakeAddProject(details, nonAdmin);
+            var provider = new DummyParatextProjectDataProvider(
+                PdpName + "-no-chapter-edit-options",
+                Client,
+                details,
+                ParatextProjects
+            );
+
+            CommentThread thread = SeedConflictWithoutVerseWrite(nonAdmin, nonAdmin.User.Name);
+
+            Assert.That(provider.GetConflictResolutionOptions(thread.Id), Is.EqualTo("none"));
+        }
+
+        [Test]
+        public void ResolveConflict_NonAdminMostRecentAssignmentToOther_Denied()
+        {
+            // The gate keys off the MOST RECENT assignment (IsThreadAssignedToUser scans
+            // comments last-to-first for the first non-null AssignedUser). Seed a conflict whose FIRST
+            // comment is assigned to the current (non-admin) user but whose LATER comment reassigns it
+            // to someone else. If the gate honored the earlier match it would wrongly allow; the
+            // most-recent reassignment must win -> denied.
+            using var nonAdmin = new NonAdminDummyScrText();
+            var details = CreateProjectDetails(nonAdmin);
+            ParatextProjects.FakeAddProject(details, nonAdmin);
+            var provider = new DummyParatextProjectDataProvider(
+                PdpName + "-reassigned",
+                Client,
+                details,
+                ParatextProjects
+            );
+
+            nonAdmin.PutText(40, 0, false, MatTwoWinnerUsfm, null);
+            var mgr = CommentManager.Get(nonAdmin);
+            Comment conflict = CommentTestHelper.CreateVerseTextConflictComment();
+            conflict.AssignedUser = nonAdmin.User.Name; // earliest assignment: the current user
+            mgr.AddComment(conflict);
+            // A later comment reassigns the thread to a DIFFERENT user. Comments in a thread sort by
+            // date (Comment.CompareTo), so the later date makes this the most-recent assignment.
+            Comment reassign = new Comment(nonAdmin.User)
+            {
+                Thread = conflict.Thread,
+                VerseRefStr = conflict.VerseRefStr,
+                Date = "2011-08-16T15:50:00.0000000-04:00", // after the conflict comment's date
+                AssignedUser = "SomeOtherUser",
+            };
+            mgr.AddComment(reassign);
+            mgr.SaveUser(conflict.User, false);
+            CommentThread thread = mgr.FindThread(conflict.Thread);
+            // Precondition: the reassignment sorts last, so it is the most-recent assignment.
+            Assert.That(thread.Comments[^1].AssignedUser, Is.EqualTo("SomeOtherUser"));
+
+            // Denied by the admin-or-assignee gate (gate-specific message), not the base check.
+            Assert.That(
+                () => provider.ResolveConflict(thread.Id, "accept"),
+                Throws
+                    .TypeOf<InvalidOperationException>()
+                    .With.Message.Contains("administrator or the assigned user")
+            );
+            Assert.That(
+                CommentManager.Get(nonAdmin).FindThread(thread.Id).Status,
+                Is.Not.EqualTo(NoteStatus.Resolved)
+            );
+        }
+
+        // --- getConflictResolutionOptions capability + reject-only staleness guard ----------------
+
+        [Test]
+        public void GetConflictResolutionOptions_AdminFreshConflict_AcceptOrReject()
+        {
+            CommentThread thread = SeedVerseTextConflict();
+            Assert.That(
+                _provider.GetConflictResolutionOptions(thread.Id),
+                Is.EqualTo("acceptOrReject")
+            );
+        }
+
+        [Test]
+        public void GetConflictResolutionOptions_ResolvedConflict_None()
+        {
+            CommentThread thread = SeedVerseTextConflict();
+            _provider.ResolveConflict(thread.Id, "accept");
+            Assert.That(_provider.GetConflictResolutionOptions(thread.Id), Is.EqualTo("none"));
+        }
+
+        [Test]
+        public void GetConflictResolutionOptions_NormalThread_None()
+        {
+            var mgr = CommentManager.Get(_scrText);
+            Comment normal = CommentTestHelper.CreateBasicComment();
+            mgr.AddComment(normal);
+            mgr.SaveUser(normal.User, false);
+            Assert.That(_provider.GetConflictResolutionOptions(normal.Thread), Is.EqualTo("none"));
+        }
+
+        [Test]
+        public void GetConflictResolutionOptions_NonAdminAssignee_AcceptOrReject()
+        {
+            using var nonAdmin = new NonAdminDummyScrText();
+            var details = CreateProjectDetails(nonAdmin);
+            ParatextProjects.FakeAddProject(details, nonAdmin);
+            var provider = new DummyParatextProjectDataProvider(
+                PdpName + "-options-assignee",
+                Client,
+                details,
+                ParatextProjects
+            );
+            CommentThread thread = SeedVerseTextConflict(nonAdmin, nonAdmin.User.Name);
+            Assert.That(
+                provider.GetConflictResolutionOptions(thread.Id),
+                Is.EqualTo("acceptOrReject")
+            );
+        }
+
+        [Test]
+        public void GetConflictResolutionOptions_NonAdminNonAssignee_None()
+        {
+            using var nonAdmin = new NonAdminDummyScrText();
+            var details = CreateProjectDetails(nonAdmin);
+            ParatextProjects.FakeAddProject(details, nonAdmin);
+            var provider = new DummyParatextProjectDataProvider(
+                PdpName + "-options-denied",
+                Client,
+                details,
+                ParatextProjects
+            );
+            CommentThread thread = SeedVerseTextConflict(nonAdmin, null);
+            Assert.That(provider.GetConflictResolutionOptions(thread.Id), Is.EqualTo("none"));
+        }
+
+        [Test]
+        public void GetConflictResolutionOptions_StaleVerse_AcceptOnly()
+        {
+            CommentThread thread = SeedVerseTextConflict();
+            _scrText.PutText(40, 0, false, MatTwoEditedUsfm, null); // edit the verse post-merge
+            Assert.That(_provider.GetConflictResolutionOptions(thread.Id), Is.EqualTo("accept"));
+        }
+
+        [Test]
+        public void GetConflictResolutionOptions_WhitespaceOnlyEdit_StillAcceptOrReject()
+        {
+            // Pins the documented, deliberate PT9 divergence: IsConflictVerseStale RegularizeSpaces()
+            // .Trim()'s BOTH the current and recorded verse USFM, so re-saving the winner with only
+            // interior whitespace differences is NOT counted as a stale edit (reject stays available).
+            CommentThread thread = SeedVerseTextConflict();
+            _scrText.PutText(40, 0, false, MatTwoWinnerWhitespaceUsfm, null); // same winner, extra spaces
+            Assert.That(
+                _provider.GetConflictResolutionOptions(thread.Id),
+                Is.EqualTo("acceptOrReject")
+            );
+        }
+
+        [Test]
+        public void GetConflictResolutionOptions_UnreadableVerse_AcceptOnly()
+        {
+            // Pins the invalid/unreadable-verse branch of IsConflictVerseStale: when MAT 2:1 can no
+            // longer be read (its verse marker is gone), the current verse USFM can't match the
+            // recorded merge winner, so reject is withdrawn and only accept remains.
+            CommentThread thread = SeedVerseTextConflict();
+            _scrText.PutText(40, 0, false, MatTwoMissingVerseUsfm, null); // chapter 2 without verse 1
+            Assert.That(_provider.GetConflictResolutionOptions(thread.Id), Is.EqualTo("accept"));
+        }
+
+        [Test]
+        public void GetConflictResolutionOptions_SurvivesCommentManagerReload()
+        {
+            // Regression: CommentManager.Load() (triggered in production by a WriteLockManager
+            // notification, e.g. when the verse is edited) rebuilds the comment list purely from the
+            // persisted Notes_*.xml files it finds via FileManager.ProjectFiles. The dummy file manager
+            // used to report no project files, so a reload dropped every seeded comment and the provider
+            // intermittently failed with "Thread ... does not exist" (masked to "none" here). Force a
+            // reload and confirm the seeded conflict thread survives and stays resolvable.
+            CommentThread thread = SeedVerseTextConflict();
+            CommentManager.Get(_scrText).Load();
+            Assert.That(
+                _provider.GetConflictResolutionOptions(thread.Id),
+                Is.EqualTo("acceptOrReject"),
+                "a seeded conflict thread must survive a CommentManager reload"
+            );
+        }
+
+        [Test]
+        public void ResolveConflict_RejectStaleVerse_ThrowsAndKeepsEditedText()
+        {
+            CommentThread thread = SeedVerseTextConflict();
+            _scrText.PutText(40, 0, false, MatTwoEditedUsfm, null);
+            var vref = new VerseRef("MAT", "2", "1", _scrText.Settings.Versification);
+
+            Assert.That(
+                () => _provider.ResolveConflict(thread.Id, "reject"),
+                Throws.TypeOf<InvalidOperationException>().With.Message.Contain("has changed")
+            );
+            Assert.That(
+                ReloadThread(thread.Id).Status,
+                Is.Not.EqualTo(NoteStatus.Resolved),
+                "a refused stale reject must leave the thread unresolved"
+            );
+            Assert.That(_scrText.GetText(vref, true, true), Does.Contain("enormous village"));
+        }
+
+        [Test]
+        public void ResolveConflict_AcceptStaleVerse_SucceedsAndKeepsEditedText()
+        {
+            CommentThread thread = SeedVerseTextConflict();
+            _scrText.PutText(40, 0, false, MatTwoEditedUsfm, null);
+            var vref = new VerseRef("MAT", "2", "1", _scrText.Settings.Versification);
+
+            _provider.ResolveConflict(thread.Id, "accept");
+
+            Assert.That(ReloadThread(thread.Id).Status, Is.EqualTo(NoteStatus.Resolved));
+            Assert.That(_scrText.GetText(vref, true, true), Does.Contain("enormous village"));
+        }
+
+        // --- generic resolved-status is blocked on conflict threads (must go through ResolveConflict) ---
+        // PlatformCommentWrapper has no default constructor and its Thread/Status are get-only (backed by
+        // the wrapped Comment), so these mirror the other AddCommentToThread tests: build a Comment with
+        // the desired Thread/Status, then wrap it.
+
+        [Test]
+        public void AddCommentToThread_ResolveConflictThreadViaStatus_Throws()
+        {
+            CommentThread thread = SeedVerseTextConflict();
+            var comment = new Comment(_scrText.User)
+            {
+                Thread = thread.Id,
+                Status = NoteStatus.Resolved,
+            };
+            Assert.That(
+                () => _provider.AddCommentToThread(new PlatformCommentWrapper(comment)),
+                Throws.TypeOf<InvalidOperationException>().With.Message.Contain("resolveConflict")
+            );
+            Assert.That(ReloadThread(thread.Id).Status, Is.Not.EqualTo(NoteStatus.Resolved));
+        }
+
+        [Test]
+        public void AddCommentToThread_ResolveNonVerseTextConflictViaStatus_StillWorks()
+        {
+            // Regression: the resolve-via-status guard must fire ONLY for verseText
+            // conflicts (which must be resolved through ResolveConflict). Other conflict types
+            // (invalidVerses, readError, verseBridge, ...) have no ResolveConflict path, so blocking
+            // them here left them permanently unresolvable through any API - they must stay resolvable
+            // by setting status directly, as they were before this guard existed.
+            var mgr = CommentManager.Get(_scrText);
+            Comment conflict = CommentTestHelper.CreateConflictComment();
+            conflict.ConflictType = NoteConflictType.InvalidVerses;
+            mgr.AddComment(conflict);
+            mgr.SaveUser(conflict.User, false);
+            var resolve = new Comment(_scrText.User)
+            {
+                Thread = conflict.Thread,
+                Status = NoteStatus.Resolved,
+            };
+            Assert.That(
+                () => _provider.AddCommentToThread(new PlatformCommentWrapper(resolve)),
+                Throws.Nothing
+            );
+            Assert.That(ReloadThread(conflict.Thread).Status, Is.EqualTo(NoteStatus.Resolved));
+        }
+
+        [Test]
+        public void AddCommentToThread_ReopenResolvedConflictViaTodo_Allowed()
+        {
+            CommentThread thread = SeedVerseTextConflict();
+            _provider.ResolveConflict(thread.Id, "accept");
+            var reopen = new Comment(_scrText.User)
+            {
+                Thread = thread.Id,
+                Status = NoteStatus.Todo,
+            };
+
+            Assert.That(
+                () => _provider.AddCommentToThread(new PlatformCommentWrapper(reopen)),
+                Throws.Nothing
+            );
+            Assert.That(ReloadThread(thread.Id).Status, Is.Not.EqualTo(NoteStatus.Resolved));
+            // After reopening, the conflict is resolvable again (verse untouched by accept -> fresh).
+            Assert.That(
+                _provider.GetConflictResolutionOptions(thread.Id),
+                Is.EqualTo("acceptOrReject")
+            );
+        }
+
+        [Test]
+        public void AddCommentToThread_ResolveNormalThreadViaStatus_StillWorks()
+        {
+            var mgr = CommentManager.Get(_scrText);
+            Comment normal = CommentTestHelper.CreateBasicComment();
+            mgr.AddComment(normal);
+            mgr.SaveUser(normal.User, false);
+            var resolve = new Comment(_scrText.User)
+            {
+                Thread = normal.Thread,
+                Status = NoteStatus.Resolved,
+            };
+            Assert.That(
+                () => _provider.AddCommentToThread(new PlatformCommentWrapper(resolve)),
+                Throws.Nothing
+            );
+        }
+
+        // Mirrors SeedVerseTextConflict() but seeds the INDEPENDENT-changes conflict (two
+        // non-overlapping word edits) so CommentEditHelper.GetMergedUsfm returns non-null. Puts the
+        // winner (accepted-side) text into the project first, exactly as the existing seed does.
+        private static CommentThread SeedIndependentVerseTextConflict(ScrText scrText)
+        {
+            scrText.PutText(40, 0, false, MatTwoIndependentWinnerUsfm, null);
+            var mgr = CommentManager.Get(scrText);
+            Comment conflict = CommentTestHelper.CreateIndependentVerseTextConflictComment();
+            mgr.AddComment(conflict);
+            mgr.SaveUser(conflict.User, false);
+            return mgr.FindThread(conflict.Thread);
+        }
+
+        [Test]
+        public void IndependentConflictFixture_IsMergeable()
+        {
+            CommentThread thread = SeedIndependentVerseTextConflict(_scrText);
+            Assert.That(CommentEditHelper.GetMergedUsfm(thread), Is.Not.Null.And.Not.Empty);
+        }
+
+        [Test]
+        public void GetConflictResolutionOptions_IndependentChanges_ReturnsAcceptRejectOrMerge()
+        {
+            CommentThread thread = SeedIndependentVerseTextConflict(_scrText);
+            Assert.That(
+                _provider.GetConflictResolutionOptions(thread.Id),
+                Is.EqualTo("acceptRejectOrMerge")
+            );
+        }
+
+        [Test]
+        public void GetConflictResolutionOptions_OverlappingChanges_ReturnsAcceptOrReject()
+        {
+            CommentThread thread = SeedVerseTextConflict();
+            Assert.That(
+                _provider.GetConflictResolutionOptions(thread.Id),
+                Is.EqualTo("acceptOrReject")
+            );
+        }
+
+        [Test]
+        public void ResolveConflict_Merge_WritesMergedVerseAndResolves()
+        {
+            CommentThread thread = SeedIndependentVerseTextConflict(_scrText);
+            var vref = new VerseRef("MAT", "2", "1", _scrText.Settings.Versification);
+
+            _provider.ResolveConflict(thread.Id, "merge");
+
+            Assert.That(ReloadThread(thread.Id).Status, Is.EqualTo(NoteStatus.Resolved));
+            string after = _scrText.GetText(vref, true, true);
+            Assert.That(after, Does.Contain("small village")); // rejected-side word
+            Assert.That(after, Does.Contain("great king")); // accepted-side word
+        }
+
+        [Test]
+        public void ResolveConflict_MergeWhenStale_Throws()
+        {
+            CommentThread thread = SeedIndependentVerseTextConflict(_scrText);
+            _scrText.PutText(
+                40,
+                0,
+                false,
+                "\\id MAT\n\\c 2\n\\v 1 Edited after the merge.\n",
+                null
+            ); // make stale
+
+            Assert.That(
+                () => _provider.ResolveConflict(thread.Id, "merge"),
+                Throws
+                    .TypeOf<InvalidOperationException>()
+                    .With.Message.Contains("changed since the conflict")
+            );
+        }
+
+        [Test]
+        public void ResolveConflict_MergeOnOverlappingConflict_ThrowsAndLeavesVerseIntact()
+        {
+            // Overlapping edits: GetMergedUsfm returns null, so merge is NOT offered
+            // (GetConflictResolutionOptions -> "acceptOrReject"). ResolveConflict must refuse "merge"
+            // rather than let PT9's MergeAcceptedText splice the null and erase the verse.
+            string expectedWinner = ExpectedWinnerVerseText();
+            CommentThread thread = SeedVerseTextConflict();
+
+            Assert.That(
+                () => _provider.ResolveConflict(thread.Id, "merge"),
+                Throws.TypeOf<InvalidOperationException>().With.Message.Contains("overlapping")
+            );
+            // merge is refused before any verse write, so the chapter text is byte-for-byte the seeded
+            // winner - the verse is not erased. GetText is read only here, after the resolve attempt,
+            // to avoid the mid-sequence CommentManager desync the sibling tests document.
+            var vref = new VerseRef("MAT", "2", "1", _scrText.Settings.Versification);
+            string after = _scrText.GetText(vref, true, true);
+            Assert.That(after, Is.EqualTo(expectedWinner));
+            Assert.That(after, Does.Contain("big village"));
         }
 
         #endregion
