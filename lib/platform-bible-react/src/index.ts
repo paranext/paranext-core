@@ -114,12 +114,6 @@ export {
 } from './components/advanced/multi-select-combo-box.component';
 export type { SelectMenuItemHandler } from './components/advanced/menus/platform-menubar.component';
 export {
-  default as ResourcePickerDialog,
-  type ResourcePickerDialogProps,
-  type ResourcePickerDialogLocalizedStrings,
-  RESOURCE_PICKER_DIALOG_STRING_KEYS,
-} from './components/advanced/resource-picker-dialog/resource-picker-dialog.component';
-export {
   default as SettingsSidebar,
   type SettingsSidebarProps,
   type ProjectInfo,

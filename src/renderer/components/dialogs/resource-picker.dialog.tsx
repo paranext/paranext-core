@@ -1,9 +1,9 @@
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { usePromise } from 'platform-bible-react';
 import {
   ResourcePickerDialog,
   RESOURCE_PICKER_DIALOG_STRING_KEYS,
-  usePromise,
-} from 'platform-bible-react';
+} from 'platform-bible-react/experimental';
 import { DIALOG_BASE } from '@renderer/components/dialogs/dialog-base.data';
 import {
   DialogDefinition,

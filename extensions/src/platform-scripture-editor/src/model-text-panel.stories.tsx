@@ -1,12 +1,11 @@
 import { usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
+import { Dialog, DialogContent } from 'platform-bible-react';
 import {
-  Dialog,
-  DialogContent,
   ResourcePickerDialog,
   RESOURCE_PICKER_DIALOG_STRING_KEYS,
-} from 'platform-bible-react';
+} from 'platform-bible-react/experimental';
 import type { DblResourceData } from 'platform-bible-utils';
 import type {
   DblResourceReference,

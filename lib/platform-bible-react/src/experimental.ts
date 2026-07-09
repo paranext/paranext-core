@@ -19,6 +19,12 @@ export {
   type ProjectSelectorProjectPair,
   type ProjectSelectorLocalizedStrings,
 } from './components/advanced/project-selector/project-selector.component';
+export {
+  default as ResourcePickerDialog,
+  type ResourcePickerDialogProps,
+  type ResourcePickerDialogLocalizedStrings,
+  RESOURCE_PICKER_DIALOG_STRING_KEYS,
+} from './components/advanced/resource-picker-dialog/resource-picker-dialog.component';
 export type { ScopeSelectorVariant } from './components/advanced/scope-selector/scope-selector.component';
 export { default as SourceLanguageIndexedList } from './components/advanced/source-language-indexed-list/source-language-indexed-list.component';
 export type {
