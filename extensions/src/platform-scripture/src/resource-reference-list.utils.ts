@@ -7,7 +7,13 @@ export const isValidResourceReference = (item: unknown): boolean => {
     case 'project':
     case 'dblResource': {
       if (!('name' in item) || !('id' in item)) return false;
-      return typeof item.name === 'string' && typeof item.id === 'string';
+      if (typeof item.name !== 'string' || typeof item.id !== 'string') return false;
+      // Optional flags, when present, must be booleans.
+      if ('isResourceShownByDefault' in item && typeof item.isResourceShownByDefault !== 'boolean')
+        return false;
+      if ('inTextCollectionUser' in item && typeof item.inTextCollectionUser !== 'boolean')
+        return false;
+      return true;
     }
     case 'enhancedResource':
     case 'xmlResource':
