@@ -21,6 +21,12 @@ export function verseRangeIncludes(marker: string, verseNum: number): boolean {
 /**
  * Paragraph markers that begin a heading/structural block (not verse content). Slicing stops at
  * these so a following section header does not leak into the prior verse.
+ *
+ * Deliberately hand-scoped to heading markers that can appear MID-CHAPTER (chapter-interior
+ * structural boundaries). Not derived from `usfmMarkers`' TitlesHeadings category in
+ * `platform-bible-utils`, which also includes book-front titles (`mt`, `mte`, ...) that cannot
+ * interrupt a verse mid-chapter (and categorizes `qa` as Poetry, so it would need a special case
+ * anyway).
  */
 const STRUCTURAL_MARKERS = new Set([
   's',
