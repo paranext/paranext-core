@@ -389,7 +389,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         // Status and IsResolved both constrain the thread's status (IsResolved is the negatable
         // "== Resolved" form), so setting both can silently AND to zero results. Reject the
-        // ambiguous combination instead of returning a confusing empty set. See PT-4027 review.
+        // ambiguous combination instead of returning a confusing empty set.
         if (selector.Status != Enum<NoteStatus>.Null && selector.IsResolved is not null)
             throw new ArgumentException(
                 "CommentThreadSelector.Status and IsResolved both filter thread status; set only one."
@@ -415,7 +415,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         // Filter by assigned user. null (absent) means "any assignee"; an empty string is the real
         // "unassigned" value (CommentThread.unassignedUser), so it must still filter rather than be
-        // treated as "no filter". See PT-4027 review.
+        // treated as "no filter".
         if (selector.AssignedTo != null)
             filteredThreads = filteredThreads.Where(t => t.AssignedUser == selector.AssignedTo);
 

@@ -567,8 +567,8 @@ namespace TestParanextDataProvider.Projects
         [Test]
         public void GetCommentThreads_StatusAndIsResolvedBothSet_Throws()
         {
-            // Status and IsResolved both constrain thread status; setting both is ambiguous and used
-            // to silently AND to zero results. It must now fail fast. See PT-4027 review.
+            // Status and IsResolved both constrain thread status; setting both is ambiguous and
+            // would silently AND to zero results, so it must fail fast.
             var selector = new CommentThreadSelector
             {
                 Status = NoteStatus.Resolved,
@@ -609,7 +609,7 @@ namespace TestParanextDataProvider.Projects
                 .Id;
 
             // Act - empty string is the "unassigned" filter (CommentThread.unassignedUser), not "no
-            // filter". Before the PT-4027 fix this returned every thread.
+            // filter", so it must return only unassigned threads, not every thread.
             var threads = _provider.GetCommentThreads(
                 new CommentThreadSelector { AssignedTo = "" }
             );
@@ -2255,8 +2255,7 @@ namespace TestParanextDataProvider.Projects
 
         // Resolves a thread by appending a Resolved comment through CommentManager directly. Not via
         // AddCommentToThread: the provider's generic status path rejects Status=Resolved on conflict
-        // threads once the conflict-resolution stack (PT-4029/PT-4030) lands, and these tests must
-        // survive that.
+        // threads, and this helper must keep working regardless.
         private void ResolveThreadViaCommentManager(string threadId)
         {
             CommentManager commentManager = CommentManager.Get(_scrText);

@@ -8,7 +8,7 @@ import { deepEqual } from 'platform-bible-utils';
 // The comment filters are orthogonal axes (resolved status, read status, note type, assignment) that
 // AND together, plus a separate scope axis. Each axis defaults to 'all' (no filtering), so the
 // out-of-the-box view is every thread. This mirrors the axes of Paratext 9's "Define Filter" dialog;
-// PT9's own presets are reachable by combining axes (see buildCommentThreadSelector). PT-4027.
+// PT9's own presets are reachable by combining axes (see buildCommentThreadSelector).
 
 // --- Scope axis (current chapter vs all books) ---
 
@@ -122,7 +122,7 @@ export const UNASSIGNED_USER = '';
  *
  * Paratext 9's notes-filter presets are reached by composition — e.g. "Unresolved conflicts" = `{
  * type: 'conflicts', resolved: 'unresolved' }`; "Unresolved assigned to me" = `{ resolved:
- * 'unresolved', assignment: 'assigned-to-me' }`. See PT-4027.
+ * 'unresolved', assignment: 'assigned-to-me' }`.
  */
 export function buildCommentThreadSelector({
   filters,
