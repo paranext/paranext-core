@@ -41,7 +41,7 @@ const STRUCTURAL_MARKERS = new Set([
 ]);
 
 function isMarkerObject(node: MarkerContent): node is MarkerObject {
-  return typeof node === 'object' && node !== null;
+  return typeof node === 'object';
 }
 function isVerseOpener(node: MarkerContent): node is MarkerObject {
   return isMarkerObject(node) && node.type === 'verse' && node.number !== undefined;
