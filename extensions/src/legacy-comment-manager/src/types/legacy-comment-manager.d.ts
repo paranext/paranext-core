@@ -114,6 +114,13 @@ declare module 'legacy-comment-manager' {
   // #region Selector Types
 
   /**
+   * Re-exported from platform-bible-utils so this data provider's type declaration and
+   * platform-bible-react's conflict-note-card UI share a single definition rather than hand-synced
+   * copies (see the docs on the source type for the per-value meaning).
+   */
+  export type ConflictResolutionOptions = import('platform-bible-utils').ConflictResolutionOptions;
+
+  /**
    * Selector for retrieving comment threads
    *
    * All properties are optional - if none are specified, returns all threads
@@ -200,6 +207,7 @@ declare module 'legacy-comment-manager' {
         // Read-only, decoded display fields — never set when creating a comment.
         | 'rejectedText'
         | 'acceptedText'
+        | 'mergedText'
         | 'resultText'
         | 'rejectedResultText'
       >
@@ -243,6 +251,7 @@ declare module 'legacy-comment-manager' {
         | 'conflictType'
         | 'rejectedText'
         | 'acceptedText'
+        | 'mergedText'
         | 'resultText'
         | 'rejectedResultText'
       >
@@ -297,9 +306,54 @@ declare module 'legacy-comment-manager' {
        *   "threadId/userName/date")
        * @throws If the thread ID is missing or doesn't exist
        * @throws If trying to resolve/unresolve without permission
+       * @throws If trying to set status 'Resolved' on a merge-conflict thread - use resolveConflict
+       *   instead
        * @throws If the assignedUser is not a valid assignable user for this project
        */
       addCommentToThread(comment: LegacyCommentReply): Promise<string>;
+
+      /**
+       * Resolves a `verseText` merge conflict by applying the user's choice and marking the note
+       * resolved.
+       *
+       * - `'accept'` keeps the auto-merged (winning) verse text and resolves the note (no verse
+       *   write).
+       * - `'reject'` writes the losing side's text into the verse, then resolves the note.
+       * - `'merge'` writes PT9's auto-merged both-sides text into the verse; only valid when
+       *   `getConflictResolutionOptions` returned `'acceptRejectOrMerge'`.
+       *
+       * Only a project administrator, or the user the admin assigned to the conflict, may resolve.
+       *
+       * @param threadId The conflict thread to resolve
+       * @param resolution `'accept'` (keep the current/winning text), `'reject'` (take the other
+       *   side), or `'merge'` (combine both sides)
+       * @throws If `resolution` is neither `'accept'`, `'reject'`, nor `'merge'`
+       * @throws If the thread doesn't exist or isn't a `verseText` conflict
+       * @throws If the conflict thread is already resolved
+       * @throws If the current user is neither a project administrator nor the assigned resolver
+       * @throws If resolution is `'reject'` or `'merge'` and the verse text has changed since the
+       *   conflict was recorded (stale)
+       */
+      resolveConflict(threadId: string, resolution: 'accept' | 'reject' | 'merge'): Promise<void>;
+
+      /**
+       * The resolution actions the current user may take on the given conflict thread - the
+       * capability query for {@link resolveConflict}. Never rejects; failures map to `'none'`.
+       *
+       * - `'none'`: not an unresolved `verseText` conflict, or the current user is neither a project
+       *   administrator nor the assigned resolver. UIs should hide the accept/reject controls
+       *   entirely.
+       * - `'accept'`: the user may resolve, but the verse has been edited since the conflict was
+       *   recorded (stale), so only `'accept'` (keep the current text) is available -
+       *   `resolveConflict(threadId, 'reject')` would throw.
+       * - `'acceptOrReject'`: fully available.
+       * - `'acceptRejectOrMerge'`: the user may resolve, and the two changes are independent so
+       *   `'merge'` (combine both) is also available.
+       *
+       * @param threadId The conflict thread to query
+       * @returns The available resolution actions
+       */
+      getConflictResolutionOptions(threadId: string): Promise<ConflictResolutionOptions>;
 
       /**
        * Deletes a comment by its ID

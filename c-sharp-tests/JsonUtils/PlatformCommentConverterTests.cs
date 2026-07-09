@@ -278,6 +278,40 @@ internal class PlatformCommentConverterTests : PapiTestBase
     }
 
     [Test]
+    public void Serialize_VerseTextConflictIndependentChanges_MergedTextPresent()
+    {
+        // Independent (non-overlapping) edits: CommentEditHelper.GetMergedUsfm can combine both sides,
+        // so MergedText renders PT9's "merge all changes" preview (same diff markup as accepted/rejected).
+        Comment testComment = CommentTestHelper.CreateIndependentVerseTextConflictComment();
+        var (commentWrapper, _) = CreateCommentWithThread(testComment);
+
+        Assert.That(commentWrapper.MergedText, Is.Not.Null.And.Not.Empty);
+
+        var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
+            commentWrapper,
+            _serializationOptions
+        );
+        Assert.That(json, Does.Contain(@"""mergedText"":"));
+    }
+
+    [Test]
+    public void Serialize_VerseTextConflictOverlappingChanges_MergedTextNull()
+    {
+        // Overlapping edits (both sides change the same word): GetMergedUsfm returns null because the
+        // changes conflict, so MergedText must be null (merge is not offered for this thread).
+        Comment testComment = CommentTestHelper.CreateVerseTextConflictComment();
+        var (commentWrapper, _) = CreateCommentWithThread(testComment);
+
+        Assert.That(commentWrapper.MergedText, Is.Null);
+
+        var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
+            commentWrapper,
+            _serializationOptions
+        );
+        Assert.That(json, Does.Not.Contain(@"""mergedText"":"));
+    }
+
+    [Test]
     public void Serialize_VerseTextConflictNoAncestor_OmitsAcceptedTextButKeepsOtherConflictFields()
     {
         // A verseText conflict where parent == null in the merger: Verse is set but

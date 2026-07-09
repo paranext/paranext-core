@@ -268,6 +268,7 @@ export type { Usj } from '@eten-tech-foundation/scripture-utilities';
 export type {
   CommentStatus,
   CommentType,
+  ConflictResolutionOptions,
   LegacyComment,
   LegacyCommentThread,
 } from './comments.types';
