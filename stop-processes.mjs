@@ -23,8 +23,10 @@ function killProcessesWithSearchTerm() {
   let listCommand;
   if (process.platform === 'win32') {
     // WMIC was removed in Windows 11 22H2+. Use PowerShell's Get-CimInstance instead.
-    // Output format matches WMIC's CSV so the parsing below (firstIndex/lastIndex) works unchanged:
-    //   node,<CommandLine>,<ProcessId>
+    // Output matches WMIC's CSV so the parser below (firstIndex/lastIndex) is unchanged.
+    // Column 1 is an ignored placeholder (WMIC put the hostname there; the parser drops
+    // everything before the first comma), so we just emit a literal "node,":
+    //   <ignored>,<CommandLine>,<ProcessId>
     listCommand =
       'powershell -NoProfile -NonInteractive -Command "Write-Output \'Node,CommandLine,ProcessId\'; ' +
       'Get-CimInstance Win32_Process | ForEach-Object { \'node,\' + ' +
