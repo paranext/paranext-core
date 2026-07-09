@@ -16,6 +16,9 @@ import { isString } from './util';
  *
  * Finds the Unicode code point at the given index.
  *
+ * @deprecated Use the {@link GraphemeString} class instead (e.g. `new
+ *   GraphemeString(string).at(...)`), which segments the string once and reuses the result instead
+ *   of re-segmenting on every call.
  * @param string String to index
  * @param index Position of the character to be returned in range of -length(string) to
  *   length(string)
@@ -33,6 +36,9 @@ export function at(string: string, index: number): string | undefined {
  *
  * Returns a new string consisting of the single unicode code point at the given index.
  *
+ * @deprecated Use the {@link GraphemeString} class instead (e.g. `new
+ *   GraphemeString(string).charAt(...)`), which segments the string once and reuses the result
+ *   instead of re-segmenting on every call.
  * @param string String to index
  * @param index Position of the string character to be returned, in the range of 0 to
  *   length(string)-1
@@ -51,6 +57,9 @@ export function charAt(string: string, index: number): string {
  * Returns a non-negative integer that is the Unicode code point value of the character starting at
  * the given index.
  *
+ * @deprecated Use the {@link GraphemeString} class instead (e.g. `new
+ *   GraphemeString(string).codePointAt(...)`), which segments the string once and reuses the result
+ *   instead of re-segmenting on every call.
  * @param string String to index
  * @param index Position of the string character to be returned, in the range of 0 to
  *   length(string)-1
@@ -68,6 +77,9 @@ export function codePointAt(string: string, index: number): number | undefined {
  *
  * Determines whether a string ends with the characters of this string.
  *
+ * @deprecated Use the {@link GraphemeString} class instead (e.g. `new
+ *   GraphemeString(string).endsWith(...)`), which segments the string once and reuses the result
+ *   instead of re-segmenting on every call.
  * @param string String to search through
  * @param searchString Characters to search for at the end of the string
  * @param endPosition End position where searchString is expected to be found. Default is
@@ -130,6 +142,8 @@ function indexOfClosestClosingCurlyBrace(str: string, index: number, escaped: bo
  *
  * Note: React elements can be used as replacer values.
  *
+ * @deprecated Use `formatReplacementStringToArray` from `./grapheme-string-util` (built on
+ *   {@link GraphemeString}) instead, which segments the string once instead of on every character.
  * @example
  *
  * ```tsx
@@ -294,6 +308,8 @@ export function formatReplacementStringToArray<T = unknown>(
  * curly braces will just return a string without the braces e.g. ('I am {Nemo}', { 'name': 'Jim'})
  * would return 'I am Nemo'.
  *
+ * @deprecated Use `formatReplacementString` from `./grapheme-string-util` (built on
+ *   {@link GraphemeString}) instead, which segments the string once instead of on every character.
  * @example
  *
  * ```typescript
@@ -328,6 +344,9 @@ export function formatReplacementString(
  *
  * Performs a case-sensitive search to determine if searchString is found in string.
  *
+ * @deprecated Use the {@link GraphemeString} class instead (e.g. `new
+ *   GraphemeString(string).includes(...)`), which segments the string once and reuses the result
+ *   instead of re-segmenting on every call.
  * @param string String to search through
  * @param searchString String to search for
  * @param position Position within the string to start searching for searchString. Default is `0`
@@ -346,6 +365,9 @@ export function includes(string: string, searchString: string, position: number 
  *
  * Returns the index of the first occurrence of a given string.
  *
+ * @deprecated Use the {@link GraphemeString} class instead (e.g. `new
+ *   GraphemeString(string).indexOf(...)`), which segments the string once and reuses the result
+ *   instead of re-segmenting on every call.
  * @param string String to search through
  * @param searchString The string to search for
  * @param position Start of searching. Default is `0`
@@ -365,6 +387,9 @@ export function indexOf(
  *
  * Searches this string and returns the index of the last occurrence of the specified substring.
  *
+ * @deprecated Use the {@link GraphemeString} class instead (e.g. `new
+ *   GraphemeString(string).lastIndexOf(...)`), which segments the string once and reuses the result
+ *   instead of re-segmenting on every call.
  * @param string String to search through
  * @param searchString Substring to search for
  * @param position The index at which to begin searching. If omitted, the search begins at the end
@@ -396,6 +421,8 @@ export function lastIndexOf(string: string, searchString: string, position?: num
  *
  * Returns the length of a string.
  *
+ * @deprecated Use the {@link GraphemeString} class instead (`new GraphemeString(string).length`),
+ *   which segments the string once and reuses the result instead of re-segmenting on every call.
  * @param string String to return the length for
  * @returns Number that is length of the starting string
  */
@@ -409,6 +436,9 @@ export function stringLength(string: string): number {
  *
  * Returns the Unicode Normalization Form of this string.
  *
+ * @deprecated Use the {@link GraphemeString} class instead (e.g. `new
+ *   GraphemeString(string).normalize(...)`), which segments the string once and reuses the result
+ *   instead of re-segmenting on every call.
  * @param string The starting string
  * @param form Form specifying the Unicode Normalization Form. Default is `'NFC'`
  * @returns A string containing the Unicode Normalization Form of the given string.
@@ -426,6 +456,9 @@ export function normalize(string: string, form: 'NFC' | 'NFD' | 'NFKC' | 'NFKD' 
  * options. This function uses the built-in `localeCompare` method with the 'en' locale and the
  * provided collation options to compare the strings.
  *
+ * @deprecated Use the {@link GraphemeString} class instead (e.g. `new
+ *   GraphemeString(string).ordinalCompare(...)`), which segments the string once and reuses the
+ *   result instead of re-segmenting on every call.
  * @param string1 The first string to compare.
  * @param string2 The second string to compare.
  * @param options Optional. The collation options used for comparison.
@@ -448,6 +481,9 @@ export function ordinalCompare(
  * Pads this string with another string (multiple times, if needed) until the resulting string
  * reaches the given length. The padding is applied from the end of this string.
  *
+ * @deprecated Use the {@link GraphemeString} class instead (e.g. `new
+ *   GraphemeString(string).padEnd(...)`), which segments the string once and reuses the result
+ *   instead of re-segmenting on every call.
  * @param string String to add padding too
  * @param targetLength The length of the resulting string once the starting string has been padded.
  *   If value is less than or equal to length(string), then string is returned as is.
@@ -468,6 +504,9 @@ export function padEnd(string: string, targetLength: number, padString: string =
  * Pads this string with another string (multiple times, if needed) until the resulting string
  * reaches the given length. The padding is applied from the start of this string.
  *
+ * @deprecated Use the {@link GraphemeString} class instead (e.g. `new
+ *   GraphemeString(string).padStart(...)`), which segments the string once and reuses the result
+ *   instead of re-segmenting on every call.
  * @param string String to add padding too
  * @param targetLength The length of the resulting string once the starting string has been padded.
  *   If value is less than or equal to length(string), then string is returned as is.
@@ -497,6 +536,9 @@ function correctSliceIndex(length: number, index: number) {
  * Extracts a section of this string and returns it as a new string, without modifying the original
  * string.
  *
+ * @deprecated Use the {@link GraphemeString} class instead (e.g. `new
+ *   GraphemeString(string).slice(...)`), which segments the string once and reuses the result
+ *   instead of re-segmenting on every call.
  * @param string The starting string
  * @param indexStart The index of the first character to include in the returned substring.
  * @param indexEnd The index of the first character to exclude from the returned substring.
@@ -526,6 +568,9 @@ export function slice(string: string, indexStart: number, indexEnd?: number): st
  * Takes a pattern and divides the string into an ordered list of substrings by searching for the
  * pattern, puts these substrings into an array, and returns the array.
  *
+ * @deprecated Use the {@link GraphemeString} class instead (e.g. `new
+ *   GraphemeString(string).split(...)`), which segments the string once and reuses the result
+ *   instead of re-segmenting on every call.
  * @param string The string to split
  * @param separator The pattern describing where each split should occur
  * @param splitLimit Limit on the number of substrings to be included in the array. Splits the
@@ -581,6 +626,9 @@ export function split(string: string, separator: string | RegExp, splitLimit?: n
  * Determines whether the string begins with the characters of a specified string, returning true or
  * false as appropriate.
  *
+ * @deprecated Use the {@link GraphemeString} class instead (e.g. `new
+ *   GraphemeString(string).startsWith(...)`), which segments the string once and reuses the result
+ *   instead of re-segmenting on every call.
  * @param string String to search through
  * @param searchString The characters to be searched for at the start of this string.
  * @param position The start position at which searchString is expected to be found (the index of
@@ -621,6 +669,9 @@ function substr(
  *
  * Returns a substring by providing start and end position.
  *
+ * @deprecated Use the {@link GraphemeString} class instead (e.g. `new
+ *   GraphemeString(string).substring(...)`), which segments the string once and reuses the result
+ *   instead of re-segmenting on every call.
  * @param string String to be divided
  * @param begin Start position
  * @param end End position. Default is `End of string`
@@ -640,6 +691,9 @@ export function substring(
  *
  * Converts a string to an array of string characters.
  *
+ * @deprecated Use the {@link GraphemeString} class instead (e.g. `new
+ *   GraphemeString(string).toArray(...)`), which segments the string once and reuses the result
+ *   instead of re-segmenting on every call.
  * @param string String to convert to array
  * @returns An array of characters from the starting string
  */
