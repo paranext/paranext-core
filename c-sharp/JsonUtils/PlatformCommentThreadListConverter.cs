@@ -5,7 +5,7 @@ namespace Paranext.DataProvider.JsonUtils;
 
 /// <summary>
 /// Serializes the getCommentThreads response so a single thread that cannot be serialized does not
-/// abort the whole response (PT-4110). Each thread is serialized into its own buffer; only threads
+/// abort the whole response. Each thread is serialized into its own buffer; only threads
 /// that serialize successfully are written to the output. A thread that throws is dropped and logged.
 /// </summary>
 public class PlatformCommentThreadListConverter : JsonConverter<List<PlatformCommentThreadWrapper>>

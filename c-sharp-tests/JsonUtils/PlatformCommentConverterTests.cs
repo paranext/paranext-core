@@ -74,7 +74,7 @@ internal class PlatformCommentConverterTests : PapiTestBase
     [Test]
     public void TryRender_WhenAConflictDecodeGetterThrows_ReturnsNullInsteadOfPropagating()
     {
-        // PT-4110 Layer 1 routes the four conflict-decode getters (RejectedText/AcceptedText/
+        // Layer 1 routes the four conflict-decode getters (RejectedText/AcceptedText/
         // ResultText/RejectedResultText) through TryRender so one that throws on corrupt content is
         // omitted (null → field dropped by TryWriteString) rather than aborting the whole note.
         // Exercised on the helper directly because ParatextData's decoders return empty rather than
@@ -96,6 +96,48 @@ internal class PlatformCommentConverterTests : PapiTestBase
             PlatformCommentConverter.TryRender(() => "rendered", "comment-id", "acceptedText"),
             Is.EqualTo("rendered")
         );
+    }
+
+    [Test]
+    public void IsContentsUnavailablePlaceholder_MatchesExactAndReserializedVariants()
+    {
+        // The byte-exact placeholder is recognized.
+        Assert.That(
+            PlatformCommentConverter.IsContentsUnavailablePlaceholder(
+                PlatformCommentConverter.ContentsUnavailablePlaceholder
+            ),
+            Is.True
+        );
+
+        // Editor-reserialized variants (added attributes, span wrappers, extra whitespace) that
+        // preserve the text are still recognized — this is the hardening over an exact-HTML match,
+        // since the comment editor round-trips saved content through Lexical.
+        Assert.That(
+            PlatformCommentConverter.IsContentsUnavailablePlaceholder(
+                "<p dir=\"ltr\">This note could not be displayed.</p>"
+            ),
+            Is.True
+        );
+        Assert.That(
+            PlatformCommentConverter.IsContentsUnavailablePlaceholder(
+                "<p><span>This note could not be displayed.</span></p>"
+            ),
+            Is.True
+        );
+        Assert.That(
+            PlatformCommentConverter.IsContentsUnavailablePlaceholder(
+                "  <p>This note could not be displayed.</p>  "
+            ),
+            Is.True
+        );
+
+        // Real note content and empty input are not affected.
+        Assert.That(
+            PlatformCommentConverter.IsContentsUnavailablePlaceholder("<p>A real comment.</p>"),
+            Is.False
+        );
+        Assert.That(PlatformCommentConverter.IsContentsUnavailablePlaceholder(null), Is.False);
+        Assert.That(PlatformCommentConverter.IsContentsUnavailablePlaceholder(""), Is.False);
     }
 
     [Test]

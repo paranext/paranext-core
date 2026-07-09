@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using System.Xml;
 using Paratext.Data.ProjectComments;
 using Paratext.Data.Users;
@@ -41,7 +42,7 @@ public class PlatformCommentConverter : JsonConverter<PlatformCommentWrapper>
     private const string VERSE = "verse";
     private const string VERSE_REF = "verseRef";
 
-    // PT-4110: written into a note's body when its stored content can't be rendered, so one
+    // Written into a note's body when its stored content can't be rendered, so one
     // unrenderable note doesn't fail the whole getCommentThreads response. Deliberately a fixed
     // English literal, NOT localized: this is a stateless JsonConverter with no access to the
     // localization service or the caller's UI language, and localizing it would mean exposing a
@@ -51,6 +52,26 @@ public class PlatformCommentConverter : JsonConverter<PlatformCommentWrapper>
     // note's real content.
     internal const string ContentsUnavailablePlaceholder =
         "<p>This note could not be displayed.</p>";
+
+    /// <summary>
+    /// Whether <paramref name="html"/> is the "content could not be displayed" placeholder
+    /// (see <see cref="ContentsUnavailablePlaceholder"/>). Compares on stripped, whitespace-collapsed
+    /// text rather than exact HTML: the comment editor round-trips saved content through Lexical,
+    /// which can re-serialize the placeholder with different markup (added attributes, span wrappers,
+    /// whitespace) while preserving the text. An exact-HTML match would miss those variants and let
+    /// the placeholder overwrite a note's real content.
+    /// </summary>
+    internal static bool IsContentsUnavailablePlaceholder(string? html) =>
+        NormalizeToComparableText(html)
+        == NormalizeToComparableText(ContentsUnavailablePlaceholder);
+
+    // Strips tags (replacing each with a space so words aren't glued across tag boundaries) and
+    // collapses whitespace. Deliberately a blunt comparison helper for the fixed placeholder above,
+    // not a general-purpose HTML sanitizer.
+    private static string NormalizeToComparableText(string? html) =>
+        html is null
+            ? string.Empty
+            : Regex.Replace(Regex.Replace(html, "<[^>]*>", " "), @"\s+", " ").Trim();
 
     /// <summary>
     /// Deserializes a <see cref="PlatformCommentWrapper"/> from JSON.
@@ -329,7 +350,7 @@ public class PlatformCommentConverter : JsonConverter<PlatformCommentWrapper>
         );
         writer.WriteBoolean(HIDE_IN_TEXT_WINDOW, value.HideInTextWindow);
         // Degrade rather than fail: a note whose stored content can't be rendered must not abort the
-        // whole getCommentThreads response (PT-4110). Body render failure → placeholder.
+        // whole getCommentThreads response. Body render failure → placeholder.
         string contents;
         try
         {
@@ -375,7 +396,7 @@ public class PlatformCommentConverter : JsonConverter<PlatformCommentWrapper>
 
     /// <summary>
     /// Reads an optional rendered field, logging and returning null instead of throwing so one
-    /// unrenderable field can't abort serialization of the whole note (PT-4110).
+    /// unrenderable field can't abort serialization of the whole note.
     /// </summary>
     // `internal` for direct unit testing of the catch contract: reliably forcing the underlying
     // ParatextData conflict-decode getters to throw on demand isn't readily available (they return

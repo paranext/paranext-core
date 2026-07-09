@@ -25,7 +25,7 @@ internal static class SerializationOptions
         options.Converters.Add(new CommentThreadSelectorConverter());
         options.Converters.Add(new PlatformCommentConverter());
         options.Converters.Add(new PlatformCommentThreadConverter());
-        // PT-4110: isolates per-thread serialization failures in the getCommentThreads response.
+        // Isolates per-thread serialization failures in the getCommentThreads response.
         options.Converters.Add(new PlatformCommentThreadListConverter());
         options.Converters.Add(new ConcurrentHashSetConverter<string>());
         options.Converters.Add(new InternetSettingsMementoConverter());

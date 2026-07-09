@@ -722,12 +722,13 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (string.IsNullOrEmpty(commentId))
             return false;
 
-        // PT-4110: never persist the "content could not be displayed" placeholder back over a note's
+        // Never persist the "content could not be displayed" placeholder back over a note's
         // real stored content. A note whose content can't be rendered is served to the client as
         // PlatformCommentConverter.ContentsUnavailablePlaceholder; if the user opens that degraded
         // note and saves, the frontend sends the placeholder here, which would silently overwrite the
-        // (unrenderable but present) original. Reject that update.
-        if (updatedContentHtml == PlatformCommentConverter.ContentsUnavailablePlaceholder)
+        // (unrenderable but present) original. Matched on normalized text rather than exact HTML
+        // because the editor may re-serialize the placeholder markup on save. Reject that update.
+        if (PlatformCommentConverter.IsContentsUnavailablePlaceholder(updatedContentHtml))
             return false;
 
         // Find the comment by ID and its parent thread

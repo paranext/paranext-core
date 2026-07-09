@@ -34,7 +34,7 @@ public class PlatformCommentThreadWrapper
     }
 
     // `Id` is virtual only so a test can subclass with a throwing override to exercise the per-thread
-    // serialization backstop (PlatformCommentThreadListConverter, PT-4110). No production subclass exists.
+    // serialization backstop (PlatformCommentThreadListConverter). No production subclass exists.
     public virtual string Id => _thread.Id;
 
     /// <summary>
