@@ -68,6 +68,8 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
   --font-heading: var(--font-sans);
+  /* Font family stays a literal (not a `var()` map); the actual @font-face is loaded by PBR at runtime. */
   --font-sans: 'IBM Plex Sans Variable', sans-serif;
+  /* Lets the spacing scale be overridden by the concrete `--spacing` PBR injects at runtime. */
   --spacing: calc(var(--spacing));
 }
