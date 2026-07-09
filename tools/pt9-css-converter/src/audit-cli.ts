@@ -6,7 +6,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
-import { auditScss, firstDifference } from './audit';
+import { auditScss, firstDifference, type AuditResult } from './audit';
 import { isMainModule } from './is-main-module';
 
 // tools/pt9-css-converter/src -> repo root. Resolved from the script location so the audit works
@@ -26,33 +26,47 @@ const BASE_SCSS = path.join(
 // every `<id>.css` except the `*-manual.css` manual references (which are the audit baseline, not a
 // converter input). Deriving the list here means there's no hand-maintained resource list to keep
 // in sync with the directory contents.
-function resourceIds(): string[] {
+export function resourceIds(): string[] {
   return readdirSync(CSS_DIR)
     .filter((file) => file.endsWith('.css') && !file.endsWith('-manual.css'))
     .map((file) => file.replace(/\.css$/, ''))
     .sort();
 }
 
+/** One commentary's audit outcome, with its id attached for reporting. */
+export interface CommentaryAuditResult extends AuditResult {
+  id: string;
+}
+
+/**
+ * Audits every committed pipeline stylesheet against its source CSS and returns the results. Pure
+ * file IO + comparison with no console/exit side effects, so it is testable directly; {@link main}
+ * is the console/exit shell around it.
+ */
+export function auditAll(): CommentaryAuditResult[] {
+  const baseScss = readFileSync(BASE_SCSS, 'utf-8');
+  return resourceIds().map((id) => {
+    const css = readFileSync(path.join(CSS_DIR, `${id}.css`), 'utf-8');
+    const committedScss = readFileSync(path.join(MARKER_STYLES_DIR, `${id}.scss`), 'utf-8');
+    return { id, ...auditScss(committedScss, css, { baseScss }) };
+  });
+}
+
 function main(): void {
-  const ids = resourceIds();
-  if (!ids.length) {
+  const results = auditAll();
+  if (!results.length) {
     console.error(`No pipeline CSS snapshots found in ${CSS_DIR} — nothing to audit.`);
     process.exit(1);
   }
 
-  const baseScss = readFileSync(BASE_SCSS, 'utf-8');
   let drift = false;
-
-  ids.forEach((id) => {
-    const css = readFileSync(path.join(CSS_DIR, `${id}.css`), 'utf-8');
-    const committedScss = readFileSync(path.join(MARKER_STYLES_DIR, `${id}.scss`), 'utf-8');
-    const result = auditScss(committedScss, css, { baseScss });
-    if (result.inSync) {
+  results.forEach(({ id, inSync, expected, actual }) => {
+    if (inSync) {
       console.log(`✓ ${id}: marker-styles/${id}.scss matches data/pt9-css/${id}.css`);
     } else {
       drift = true;
       console.error(`✗ ${id}: marker-styles/${id}.scss is OUT OF SYNC with data/pt9-css/${id}.css`);
-      console.error(firstDifference(result.expected, result.actual));
+      console.error(firstDifference(expected, actual));
     }
   });
 
@@ -62,7 +76,7 @@ function main(): void {
     );
     process.exit(1);
   }
-  console.log(`\nAll ${ids.length} commentary stylesheets are in sync with their source CSS.`);
+  console.log(`\nAll ${results.length} commentary stylesheets are in sync with their source CSS.`);
 }
 
 if (isMainModule(import.meta.url)) main();

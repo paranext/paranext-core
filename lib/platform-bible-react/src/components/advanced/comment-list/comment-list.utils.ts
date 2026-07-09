@@ -2,6 +2,19 @@ import { LanguageStrings } from 'platform-bible-utils';
 import { KeyboardEvent } from 'react';
 
 /**
+ * Tailwind classes that render note-body HTML (PT9 blockquote/prose markup) the way both
+ * CommentItem and ConflictNoteCard display note contents. Shared so the two stay in lockstep — a
+ * change to the blockquote/prose treatment here reaches both. Callers layer their own extras on top
+ * (CommentItem adds `tw:items-start tw:gap-2` + line-clamp; ConflictNoteCard adds its `<u>`/`<s>`
+ * diff coloring).
+ */
+export const COMMENT_BODY_PROSE_CLASSES = [
+  'tw:prose tw:max-w-none tw:break-words tw:text-sm tw:font-normal tw:text-foreground',
+  'tw:[&>blockquote]:border-s-0 tw:[&>blockquote]:p-0 tw:[&>blockquote]:ps-0 tw:[&>blockquote]:font-normal tw:[&>blockquote]:not-italic tw:[&>blockquote]:text-foreground',
+  'tw:prose-quoteless',
+].join(' ');
+
+/**
  * Gets the display name for an assigned user, with localized names for special values.
  *
  * @param user - The user identifier (empty string for unassigned, 'Team' for team)

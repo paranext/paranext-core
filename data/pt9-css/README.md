@@ -1,27 +1,42 @@
 # PT9 Commentary CSS Snapshots
 
 This directory holds `.css` snapshots of the Paratext 9.5 commentary styling
-for HBKENG, TNN, and TND. Two kinds of snapshot live here, captured by two
+for the UBS Translator's Handbook, Notes, and Notes (Deuterocanon) resources in
+each supported language. Two kinds of snapshot live here, captured by two
 different methods, kept side-by-side so the automated extraction pipeline can
-be audited against the original manual capture.
+be audited against the original manual capture. The hand-captured
+`*-manual.css` references exist only for the three original English MVP
+resources (HBKENG, TNN, TND); the other languages were never manually captured
+and rely on the extractor output alone (the converter audit still verifies
+their generated SCSS reproduces from the committed `.css`).
 
 ## Files
 
-| File                | Kind             | Source resource                              |
-| ------------------- | ---------------- | -------------------------------------------- |
-| `hbkeng.css`        | extractor output | UBS Translator's Handbook (English) — HBKENG |
-| `tnn.css`           | extractor output | UBS Translator's Notes — TNN                 |
-| `tnd.css`           | extractor output | UBS Translator's Notes (Deuterocanon) — TND  |
-| `hbkeng-manual.css` | manual reference | UBS Translator's Handbook (English) — HBKENG |
-| `tnn-manual.css`    | manual reference | UBS Translator's Notes — TNN                 |
-| `tnd-manual.css`    | manual reference | UBS Translator's Notes (Deuterocanon) — TND  |
+| File                | Kind             | Source resource                                            |
+| ------------------- | ---------------- | ---------------------------------------------------------- |
+| `hbkeng.css`        | extractor output | UBS Translator's Handbook (English) — HBKENG               |
+| `hbkcs.css`         | extractor output | UBS Translator's Handbook (Chinese, Simplified) — HBKCS    |
+| `hbkct.css`         | extractor output | UBS Translator's Handbook (Chinese, Traditional) — HBKCT   |
+| `hbkfra.css`        | extractor output | UBS Translator's Handbook (French) — HBKFRA                |
+| `hbkpt.css`         | extractor output | UBS Translator's Handbook (Portuguese) — HBKPT             |
+| `hbkesp.css`        | extractor output | UBS Translator's Handbook (Spanish) — HBKESP               |
+| `tnn.css`           | extractor output | UBS Translator's Notes (English) — TNN                     |
+| `tnnesp.css`        | extractor output | UBS Translator's Notes (Spanish) — TNNESP                  |
+| `tnnptg.css`        | extractor output | UBS Translator's Notes (Portuguese) — TNNPTG               |
+| `tnnfr.css`         | extractor output | UBS Translator's Notes (French) — TNNFR                    |
+| `tnd.css`           | extractor output | UBS Translator's Notes (Deuterocanon, English) — TND       |
+| `tndesp.css`        | extractor output | UBS Translator's Notes (Deuterocanon, Spanish) — TNDESP    |
+| `tndptg.css`        | extractor output | UBS Translator's Notes (Deuterocanon, Portuguese) — TNDPTG |
+| `hbkeng-manual.css` | manual reference | UBS Translator's Handbook (English) — HBKENG               |
+| `tnn-manual.css`    | manual reference | UBS Translator's Notes — TNN                               |
+| `tnd-manual.css`    | manual reference | UBS Translator's Notes (Deuterocanon) — TND                |
 
 ### `<id>.css` — extractor output (the live converter source)
 
 Produced by the PT9 CSS extractor CLI ([`tools/pt9-css-extractor`](../../tools/pt9-css-extractor/README.md),
 which runs PT9's `CSSCreator.CreateDefaultCSS`). **These are the authoritative
 input** that the committed marker SCSS in
-`extensions/src/platform-scripture-editor/src/marker-styles/{hbkeng,tnn,tnd}.scss`
+`extensions/src/platform-scripture-editor/src/marker-styles/<id>.scss` (one per resource)
 is generated from (via the [`pt9-css-converter`](../../tools/pt9-css-converter/README.md)).
 The [`audit`](../../tools/pt9-css-converter/README.md#auditing) tool re-runs that
 conversion and verifies the committed SCSS still reproduces from these files.
