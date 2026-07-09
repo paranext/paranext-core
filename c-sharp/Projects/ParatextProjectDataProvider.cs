@@ -286,6 +286,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             { "createComment", CreateComment },
             { "addCommentToThread", AddCommentToThread },
             { "resolveConflict", ResolveConflict },
+            { "unresolveConflict", UnresolveConflict },
             { "deleteComment", DeleteComment },
             { "updateComment", UpdateComment },
             { "setIsCommentThreadRead", SetIsCommentThreadRead },
@@ -817,6 +818,230 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         SendDataUpdateEvent(AllCommentDataTypes, "conflict resolved event");
         if (writesVerse)
             SendDataUpdateEvent(AllScriptureDataTypes, "conflict resolve wrote verse text event");
+    }
+
+    /// <summary>
+    /// SPIKE (PT-4141): Undoes the conflict DECISION on a resolved verseText conflict - restores the
+    /// auto-merge winner text into the verse (for a prior reject/merge) and re-opens the note so the
+    /// user can choose again. This is distinct from re-opening a comment thread: it rolls back the
+    /// verse write, not just the note status. No merge re-run is needed because the winner USFM and
+    /// both diffs survive on the root comment through resolution (PT9's ReplaceAcceptedText/
+    /// MergeAcceptedText never mutate <c>Comments[0].Verse</c>/<c>Contents</c>/<c>AcceptedChangeXml</c>).
+    /// </summary>
+    /// <remarks>
+    /// The only logic NOT reused from ParatextData is the winner-write splice in
+    /// <see cref="RestoreWinnerVerse"/>: PT9's <see cref="CommentEditHelper.SaveEdits"/> has no
+    /// "write winner" path (accept never writes; ReplaceAcceptedText/MergeAcceptedText are private and
+    /// write the loser/merged side). The undo is refused by <see cref="ConflictVerseMatches"/> when the
+    /// verse was edited after resolution, so a later edit is never clobbered.
+    /// </remarks>
+    /// <exception cref="InvalidDataException">The thread doesn't exist or has no comments.</exception>
+    /// <exception cref="InvalidOperationException">Not a verseText conflict, the thread is not resolved,
+    /// the user lacks permission, or the verse was edited since it was resolved (stale).</exception>
+    public void UnresolveConflict(string threadId)
+    {
+        bool restoredVerse;
+        // Same lock as ResolveConflict: the not-resolved guard must be atomic with the verse write and
+        // the re-open, and no other comment mutation (or a concurrent undo) may interleave.
+        lock (_commentMutationLock)
+        {
+            CommentThread thread = VerifyUserCanUnresolveConflict(threadId);
+
+            // What the resolution wrote is recorded on the resolution (last) comment: accept -> None
+            // (null), reject -> Replaced, merge -> Merged. NoteConflictResolutions are string
+            // constants (None == null), so ConflictResolutionAction is a string.
+            string? action = thread.LastComment.ConflictResolutionAction;
+            restoredVerse = action != NoteConflictResolutions.None;
+
+            if (restoredVerse)
+            {
+                // Safety gate (the core precaution): only roll back when the verse still holds exactly
+                // what the resolution produced. If it was edited since, refuse rather than clobber it -
+                // Verse History is the manual path in that case. Mirrors IsConflictVerseStale, but
+                // compares against the resolution OUTPUT (loser/merged) instead of the merge winner.
+                string? expected =
+                    action == NoteConflictResolutions.Merged
+                        ? CommentEditHelper.GetMergedUsfm(thread)
+                        : CommentEditHelper.GetDiffVerseUsfm(thread.Comments[0].Contents, true);
+                if (!ConflictVerseMatches(thread, expected))
+                    throw new InvalidOperationException(
+                        $"Conflict thread '{threadId}' cannot be undone: the verse text has changed since it was resolved. Use Verse History to revert it manually."
+                    );
+
+                RestoreWinnerVerse(thread);
+            }
+
+            // Re-open the note and append an audit comment. We deliberately KEEP the resolution comment
+            // (it may already be synced to teammates) and append rather than delete; the Todo status on
+            // the new comment flips the thread back to unresolved (same mechanism as reply-reopen).
+            ReopenConflictWithAuditComment(thread);
+        }
+
+        // Refresh the comment list always; refresh Scripture-text subscribers only when the verse was
+        // rewritten (raw PutText bypasses the Set* methods that normally notify).
+        SendDataUpdateEvent(AllCommentDataTypes, "conflict resolution undone event");
+        if (restoredVerse)
+            SendDataUpdateEvent(AllScriptureDataTypes, "conflict undo restored verse text event");
+    }
+
+    /// <summary>
+    /// SPIKE (PT-4141): mirror of <see cref="VerifyUserCanResolveConflict"/> but requires the thread to
+    /// BE resolved (there must be a decision to undo). Productionization TODO: extract the shared
+    /// verseText-conflict + admin-or-assignee + chapter-edit checks into one helper instead of copying.
+    /// </summary>
+    private CommentThread VerifyUserCanUnresolveConflict(string threadId)
+    {
+        CommentThread? thread = _commentManager.Value.FindThread(threadId);
+        if (thread == null)
+            throw new InvalidDataException($"Thread with id {threadId} does not exist.");
+        if (thread.Comments is not { Count: > 0 })
+            throw new InvalidDataException($"Thread with id {threadId} has no comments.");
+        if (
+            thread.Type != NoteType.Conflict
+            || thread.Comments[0].ConflictType != NoteConflictType.VerseTextConflict
+        )
+            throw new InvalidOperationException(
+                $"Thread '{threadId}' is not a verseText conflict and cannot be unresolved here."
+            );
+
+        // Inverse of the resolve guard: only a resolved conflict has a decision to roll back.
+        if (thread.Status != NoteStatus.Resolved)
+            throw new InvalidOperationException(
+                $"Conflict thread '{threadId}' is not resolved; there is no conflict resolution to undo."
+            );
+
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        VerifyUserCanResolveThread(threadId);
+        if (!IsUserProjectAdministrator())
+        {
+            if (!IsThreadAssignedToUser(thread, scrText.User.Name))
+                throw new InvalidOperationException(
+                    $"User '{scrText.User.Name}' cannot undo conflict thread '{threadId}' - only a project administrator or the assigned user may."
+                );
+            // Undoing reject/merge rewrites the verse, so a non-admin also needs chapter-edit rights.
+            VerseRef vref = thread.VerseRef;
+            if (!scrText.Permissions.CanEdit(vref.BookNum, vref.ChapterNum))
+                throw new InvalidOperationException(
+                    $"User '{scrText.User.Name}' cannot undo conflict thread '{threadId}' - no permission to edit {vref.Book} {vref.ChapterNum}."
+                );
+        }
+
+        return thread;
+    }
+
+    /// <summary>
+    /// SPIKE (PT-4141): true when the verse currently holds exactly <paramref name="expectedVerseUsfm"/>
+    /// (regularized + trimmed, like <see cref="IsConflictVerseStale"/>). Used to confirm nothing edited
+    /// the verse since resolution before an undo restores the winner.
+    /// </summary>
+    private bool ConflictVerseMatches(CommentThread thread, string? expectedVerseUsfm)
+    {
+        if (expectedVerseUsfm == null)
+            return false;
+        try
+        {
+            var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+            VerseRef vref = thread.VerseRef;
+            if (!vref.Valid || vref.IsDefault)
+                return false;
+            string? currentRaw = scrText.Parser.GetVerseUsfmText(vref, true, true);
+            if (currentRaw == null)
+                return false;
+            return UsfmToken.RegularizeSpaces(currentRaw).Trim()
+                == UsfmToken.RegularizeSpaces(expectedVerseUsfm).Trim();
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(
+                $"ConflictVerseMatches: treating conflict thread '{thread.Id}' as changed due to an error: {e}"
+            );
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// SPIKE (PT-4141): writes the retained merge winner (<c>Comments[0].Verse</c>) back into the verse,
+    /// replicating PT9's private <c>CommentEditHelper.ReplaceAcceptedText</c> splice + temporary
+    /// chapter-edit grant. This ~12-line splice is the only text logic not reused from ParatextData.
+    /// </summary>
+    private void RestoreWinnerVerse(CommentThread thread)
+    {
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        VerseRef vref = thread.VerseRef;
+        string winnerVerseUsfm = thread.Comments[0].Verse;
+
+        // Temporarily grant chapter-edit if the resolver lacks it, restored in finally (mirrors
+        // SaveEdits' EnsureCanEditChapter). Permission is authorized in VerifyUserCanUnresolveConflict.
+        bool permissionGranted = false;
+        if (!scrText.Permissions.CanEdit(vref.BookNum, vref.ChapterNum))
+        {
+            scrText.Permissions.SetPermission(
+                scrText.User.Name,
+                vref.BookNum,
+                vref.ChapterNum,
+                scrText.Settings.Versification,
+                Paratext.Data.Users.PermissionSet.Automatic,
+                true
+            );
+            permissionGranted = true;
+        }
+        try
+        {
+            string chapterUsfm = scrText.GetText(vref, true, true);
+            int verseStartIndex =
+                vref.VerseNum > 0
+                    ? chapterUsfm.IndexOf("\\v " + vref.Verse, StringComparison.Ordinal)
+                    : 0;
+            if (verseStartIndex < 0)
+                throw new InvalidOperationException(
+                    $"Could not find verse {vref} in the chapter to restore the winner text."
+                );
+            int verseEndIndex = chapterUsfm.IndexOf(
+                "\\v ",
+                verseStartIndex + 1,
+                StringComparison.Ordinal
+            );
+            if (verseEndIndex == -1)
+                verseEndIndex = chapterUsfm.Length;
+            chapterUsfm =
+                chapterUsfm.Substring(0, verseStartIndex)
+                + winnerVerseUsfm
+                + chapterUsfm.Substring(verseEndIndex);
+            scrText.PutText(vref.BookNum, vref.ChapterNum, true, chapterUsfm, null);
+        }
+        finally
+        {
+            if (permissionGranted)
+                scrText.Permissions.SetPermission(
+                    scrText.User.Name,
+                    vref.BookNum,
+                    vref.ChapterNum,
+                    scrText.Settings.Versification,
+                    Paratext.Data.Users.PermissionSet.Automatic,
+                    false
+                );
+        }
+    }
+
+    /// <summary>
+    /// SPIKE (PT-4141): re-opens the conflict note and appends an audit comment recording the undo.
+    /// The Todo status on the new comment flips the thread back to unresolved (same mechanism as
+    /// reply-reopen); the original resolution comment is intentionally kept, not deleted.
+    /// </summary>
+    private void ReopenConflictWithAuditComment(CommentThread thread)
+    {
+        Comment auditComment = thread.AddNewComment();
+        auditComment.Status = NoteStatus.Todo;
+        auditComment.ConflictResolutionAction = NoteConflictResolutions.None;
+        // ponytail: hard-coded English audit text for the spike; productionization localizes this.
+        var contentsDoc = new XmlDocument();
+        contentsDoc.LoadXml(
+            "<Contents>Conflict resolution undone; the conflict has been re-opened.</Contents>"
+        );
+        auditComment.Contents = contentsDoc.DocumentElement;
+        _commentManager.Value.AddComment(auditComment);
+        _commentManager.Value.SaveUser(auditComment.User, false);
+        ThreadStatus.MarkThreadRead(thread);
     }
 
     /// <summary>

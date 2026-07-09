@@ -2580,6 +2580,92 @@ namespace TestParanextDataProvider.Projects
             Assert.That(after, Does.Not.Contain("big village"));
         }
 
+        // --- UnresolveConflict spike (PT-4141) -------------------------------------------------
+
+        [Test]
+        public void UnresolveConflict_AfterReject_RestoresWinnerReopensAndReoffersOptions()
+        {
+            // The headline feasibility proof: a reject wrote the loser into the verse; undo must roll
+            // the verse back to the auto-merge WINNER (recovered from the retained Comments[0].Verse),
+            // re-open the note, and make the card actionable again.
+            string expectedWinner = ExpectedWinnerVerseText();
+            CommentThread thread = SeedVerseTextConflict();
+            var vref = new VerseRef("MAT", "2", "1", _scrText.Settings.Versification);
+
+            _provider.ResolveConflict(thread.Id, "reject");
+            _provider.UnresolveConflict(thread.Id);
+
+            // Verse restored to the winner byte-for-byte (a stray/partial write can't slip through).
+            string after = _scrText.GetText(vref, true, true);
+            Assert.That(after, Is.EqualTo(expectedWinner));
+            Assert.That(after, Does.Contain("big village"));
+            Assert.That(after, Does.Not.Contain("small village"));
+            // Thread is no longer resolved, and options are re-offered (winner restored -> not stale).
+            Assert.That(ReloadThread(thread.Id).Status, Is.Not.EqualTo(NoteStatus.Resolved));
+            Assert.That(
+                _provider.GetConflictResolutionOptions(thread.Id),
+                Is.EqualTo("acceptOrReject")
+            );
+        }
+
+        [Test]
+        public void UnresolveConflict_AfterAccept_ReopensWithoutRewritingVerse()
+        {
+            // Accept never wrote the verse, so undo must not write either: it only re-opens the note.
+            string expectedWinner = ExpectedWinnerVerseText();
+            CommentThread thread = SeedVerseTextConflict();
+            var vref = new VerseRef("MAT", "2", "1", _scrText.Settings.Versification);
+
+            _provider.ResolveConflict(thread.Id, "accept");
+            _provider.UnresolveConflict(thread.Id);
+
+            Assert.That(_scrText.GetText(vref, true, true), Is.EqualTo(expectedWinner));
+            Assert.That(ReloadThread(thread.Id).Status, Is.Not.EqualTo(NoteStatus.Resolved));
+            Assert.That(
+                _provider.GetConflictResolutionOptions(thread.Id),
+                Is.EqualTo("acceptOrReject")
+            );
+        }
+
+        [Test]
+        public void UnresolveConflict_VerseEditedAfterResolution_RefusesAndKeepsVerse()
+        {
+            // The core precaution: if the verse was edited AFTER the conflict was resolved, undo must
+            // refuse rather than clobber that later edit by writing the winner back over it.
+            CommentThread thread = SeedVerseTextConflict();
+            var vref = new VerseRef("MAT", "2", "1", _scrText.Settings.Versification);
+
+            _provider.ResolveConflict(thread.Id, "reject"); // verse now holds the loser
+            // A later legitimate edit changes the verse away from the reject output.
+            _scrText.PutText(
+                40,
+                0,
+                false,
+                "\\id MAT\n\\c 2\n\\v 1 When Jesus was born in the tiny village of Bethlehem in Judea, Herod was king.\n",
+                null
+            );
+
+            Assert.That(
+                () => _provider.UnresolveConflict(thread.Id),
+                Throws
+                    .TypeOf<InvalidOperationException>()
+                    .With.Message.Contains("changed since it was resolved")
+            );
+            // The post-resolution edit is preserved, not rolled back to the winner.
+            Assert.That(_scrText.GetText(vref, true, true), Does.Contain("tiny village"));
+        }
+
+        [Test]
+        public void UnresolveConflict_UnresolvedConflict_Throws()
+        {
+            // Nothing to undo on a conflict that was never resolved.
+            CommentThread thread = SeedVerseTextConflict();
+            Assert.That(
+                () => _provider.UnresolveConflict(thread.Id),
+                Throws.TypeOf<InvalidOperationException>().With.Message.Contains("not resolved")
+            );
+        }
+
         [Test]
         public void ResolveConflict_RejectWholeVerseDeletion_AppliesPt9DeletionWritePath()
         {
