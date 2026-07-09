@@ -34,7 +34,6 @@ declare module 'papi-shared-types' {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import type { IWebViewProvider } from '@shared/models/web-view-provider.model';
   import { WebViewId } from '@shared/models/web-view.model';
-  import { SerializedVerseRef } from '@sillsdev/scripture';
 
   // #region Commands
 
@@ -159,11 +158,6 @@ declare module 'papi-shared-types' {
    */
   export interface SettingTypes {
     /**
-     * Current Verse Reference for Scroll Group A. Deprecated - please use `papi.scrollGroups` and
-     * `useWebViewScrollGroupScrRef`
-     */
-    'platform.verseRef': SerializedVerseRef;
-    /**
      * List of locales to use when localizing the interface. First in the list receives highest
      * priority. Please always add 'en' (English) at the end when using this setting so everything
      * localizes to English if it does not have a localization in a higher-priority locale.
@@ -210,7 +204,7 @@ declare module 'papi-shared-types' {
    *
    * Automatically includes all extensions' user settings that are added to {@link SettingTypes}.
    *
-   * @example 'platform.verseRef'
+   * @example 'platform.interfaceLanguage'
    */
   export type SettingNames = keyof SettingTypes;
 

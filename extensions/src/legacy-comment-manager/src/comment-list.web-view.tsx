@@ -16,16 +16,14 @@ import { isPlatformError, LegacyCommentThread, serialize } from 'platform-bible-
 import { VerseRef } from '@sillsdev/scripture';
 import type { LegacyCommentThreadSelector } from 'legacy-comment-manager';
 import { CommentListWebViewMessage } from './comment-list-messages.model';
+import { CommentListPanel, COMMENT_LIST_PANEL_EXTRA_STRING_KEYS } from './comment-list.component';
 import {
-  CommentFilter,
-  CommentListPanel,
-  COMMENT_LIST_PANEL_EXTRA_STRING_KEYS,
-  FILTER_UNREAD_ASSIGNED,
-  FILTER_UNRESOLVED_ASSIGNED,
+  buildCommentThreadSelector,
+  CommentFilters,
+  DEFAULT_COMMENT_FILTERS,
   ScopeFilter,
-  SCOPE_FILTER_CURRENT_CHAPTER,
   UNFILTERED,
-} from './comment-list.component';
+} from './comment-list-filters.model';
 
 const DEFAULT_LEGACY_COMMENT_THREADS: LegacyCommentThread[] = [];
 
@@ -78,7 +76,7 @@ global.webViewComponent = function CommentListWebView({
     undefined,
   );
 
-  const [commentFilter, setCommentFilter] = useState<CommentFilter>(UNFILTERED);
+  const [filters, setFilters] = useState<CommentFilters>(DEFAULT_COMMENT_FILTERS);
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(UNFILTERED);
 
   const commentsPdp = useProjectDataProvider('legacyCommentManager.comments', projectId);
@@ -151,42 +149,34 @@ global.webViewComponent = function CommentListWebView({
     };
   }, []);
 
+  // The selector only uses scrRef when the scope is the current chapter; in the all-books view a
+  // verse move must not tear down and re-establish the subscription (which re-runs the C# query and
+  // flashes the skeletons). Freeze the scrRef inputs to constants unless the chapter scope is
+  // active.
+  const usesChapterScope = scopeFilter !== UNFILTERED;
+  const scopeBook = usesChapterScope ? scrRef.book : '';
+  const scopeChapterNum = usesChapterScope ? scrRef.chapterNum : 0;
+  const scopeVerseNum = usesChapterScope ? scrRef.verseNum : 0;
+
+  // While the "assigned to me" axis is selected but the current user's name hasn't loaded yet, the
+  // query can't filter by user and would briefly show every thread. Hold the loading state until the
+  // name resolves so the panel shows skeletons instead of that flash.
+  const isAwaitingCurrentUserName = filters.assignment === 'assigned-to-me' && !currentUserName;
+
   const [commentThreads, , isLoadingCommentThreads] = useProjectData(
     'legacyCommentManager.comments',
     projectId,
   ).CommentThreads(
-    useMemo<LegacyCommentThreadSelector>(() => {
-      const selector: LegacyCommentThreadSelector = {};
-
-      // Apply scope (Scripture ranges) filter
-      if (scopeFilter === SCOPE_FILTER_CURRENT_CHAPTER) {
-        selector.scriptureRanges = [
-          {
-            granularity: 'chapter' as const,
-            start: { book: scrRef.book, chapterNum: scrRef.chapterNum, verseNum: scrRef.verseNum },
-            end: { book: scrRef.book, chapterNum: scrRef.chapterNum, verseNum: scrRef.verseNum },
-          },
-        ];
-      }
-
-      // Apply comment filter
-      if (commentFilter === FILTER_UNRESOLVED_ASSIGNED) {
-        selector.status = 'Todo';
-        selector.assignedTo = currentUserName;
-      } else if (commentFilter === FILTER_UNREAD_ASSIGNED) {
-        selector.isRead = false;
-        selector.assignedTo = currentUserName;
-      }
-
-      return selector;
-    }, [
-      scrRef.book,
-      scrRef.chapterNum,
-      scrRef.verseNum,
-      scopeFilter,
-      commentFilter,
-      currentUserName,
-    ]),
+    useMemo<LegacyCommentThreadSelector>(
+      () =>
+        buildCommentThreadSelector({
+          filters,
+          scopeFilter,
+          scrRef: { book: scopeBook, chapterNum: scopeChapterNum, verseNum: scopeVerseNum },
+          currentUserName,
+        }),
+      [scopeBook, scopeChapterNum, scopeVerseNum, scopeFilter, filters, currentUserName],
+    ),
     DEFAULT_LEGACY_COMMENT_THREADS,
   );
 
@@ -330,11 +320,11 @@ global.webViewComponent = function CommentListWebView({
   return (
     <CommentListPanel
       localizedStrings={localizedStrings}
-      isLoading={isLoadingCommentThreads || !commentsPdp}
+      isLoading={isLoadingCommentThreads || !commentsPdp || isAwaitingCurrentUserName}
       threads={safeCommentThreads}
       currentUser={currentUserName}
-      commentFilter={commentFilter}
-      onCommentFilterChange={setCommentFilter}
+      filters={filters}
+      onFiltersChange={setFilters}
       scopeFilter={scopeFilter}
       onScopeFilterChange={setScopeFilter}
       handleAddCommentToThread={handleAddCommentToThread}
