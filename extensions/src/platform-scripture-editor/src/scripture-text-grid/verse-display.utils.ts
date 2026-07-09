@@ -44,22 +44,17 @@ function isMarkerObject(node: MarkerContent): node is MarkerObject {
   return typeof node === 'object' && node !== null;
 }
 function isVerseOpener(node: MarkerContent): node is MarkerObject {
-  // eslint-disable-next-line eqeqeq
-  return isMarkerObject(node) && node.type === 'verse' && node.number != undefined;
-}
-function isVerseCloser(node: MarkerContent): node is MarkerObject {
-  // A closing verse marker carries `eid` and no `number`.
-  // eslint-disable-next-line eqeqeq
-  return isMarkerObject(node) && node.type === 'verse' && node.number == undefined;
+  return isMarkerObject(node) && node.type === 'verse' && node.number !== undefined;
 }
 
 /**
  * Slices a chapter USJ down to a single verse. Walks the chapter's top-level paragraphs in document
  * order, collecting the target verse's content PER PARAGRAPH (so poetry `q1`/`q2` stay as separate
- * paragraphs); stops at the next verse marker or a structural/heading marker; drops
- * `book`/`chapter` chrome. Emits a combined-verse marker (e.g. `"14-15"`) exactly once (PT-3495).
- * `isEmpty` is true when the verse has no renderable text — e.g. verse-0 or a verse missing from
- * this resource (PT-3133).
+ * paragraphs). `usxStringToUsj` (the only USJ producer we consume) drops eid-only verse closers, so
+ * there is no closer marker to look for; collection for a verse ends when the next verse opener is
+ * hit or a structural/heading paragraph is reached; drops `book`/`chapter` chrome. Emits a
+ * combined-verse marker (e.g. `"14-15"`) exactly once (PT-3495). `isEmpty` is true when the verse
+ * has no renderable text — e.g. verse-0 or a verse missing from this resource (PT-3133).
  */
 export function sliceUsjToVerse(usj: Usj, verseNum: number): { usj: Usj; isEmpty: boolean } {
   const resultContent: MarkerContent[] = [];
@@ -73,9 +68,6 @@ export function sliceUsjToVerse(usj: Usj, verseNum: number): { usj: Usj; isEmpty
       if (isVerseOpener(item)) {
         active = verseRangeIncludes(String(item.number), verseNum);
         if (active) collected.push(item);
-      } else if (isVerseCloser(item)) {
-        if (active) collected.push(item);
-        active = false;
       } else if (active) {
         collected.push(item);
       }
