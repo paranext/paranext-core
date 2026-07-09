@@ -223,8 +223,10 @@ describe('sliceUsjToVerse — boundaries and empty', () => {
     expect(isEmpty).toBe(false);
     // Both chapters have a verse 1; the naive slice includes both verse-1 paragraphs (chrome
     // dropped). The consuming cell fetches a single chapter, so in practice only one is present;
-    // this asserts chrome is dropped and content is preserved, not cross-chapter disambiguation.
-    expect(paragraphs(usj).every((p) => p.marker === 'p')).toBe(true);
-    expect(paragraphs(usj).some((p) => p.text.includes('Chapter'))).toBe(true);
+    // this asserts both paragraphs survive and chrome is dropped.
+    expect(paragraphs(usj)).toEqual([
+      { marker: 'p', text: '1Chapter one verse one.' },
+      { marker: 'p', text: '1Chapter two verse one.' },
+    ]);
   });
 });
