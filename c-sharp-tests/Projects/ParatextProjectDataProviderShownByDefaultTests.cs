@@ -75,19 +75,42 @@ internal class ParatextProjectDataProviderShownByDefaultTests : PapiTestBase
         );
     }
 
-    [TestCase(ProjectSettingsNames.PB_MODEL_TEXTS)]
-    [TestCase(ProjectSettingsNames.PB_REFERENCED_PROJECTS_AND_RESOURCES)]
-    public void SetProjectSetting_NonAdmin_Rejected(string pbSettingName)
+    [Test]
+    public void SetProjectSetting_NonAdmin_ReferencedList_Rejected()
     {
+        // Only the referenced-resources list carries the admin-only shown-by-default default, so it
+        // is the only project-scope write gated to administrators.
         var nonAdmin = BuildNonAdminProvider(out var scrText);
         try
         {
             Assert.Throws<UnauthorizedAccessException>(
                 () =>
                     nonAdmin.SetProjectSetting(
-                        pbSettingName,
+                        ProjectSettingsNames.PB_REFERENCED_PROJECTS_AND_RESOURCES,
                         Json(new ProjectReference { Name = "P", Id = "aabbcc" })
                     )
+            );
+        }
+        finally
+        {
+            scrText.Dispose();
+        }
+    }
+
+    [Test]
+    public void SetProjectSetting_NonAdmin_ModelTexts_Allowed()
+    {
+        // Model texts do NOT participate in shown-by-default and keep their pre-existing ungated
+        // behavior, so a non-admin write must succeed (not throw).
+        var nonAdmin = BuildNonAdminProvider(out var scrText);
+        try
+        {
+            Assert.That(
+                nonAdmin.SetProjectSetting(
+                    ProjectSettingsNames.PB_MODEL_TEXTS,
+                    Json(new ProjectReference { Name = "P", Id = "aabbcc" })
+                ),
+                Is.True
             );
         }
         finally
@@ -110,112 +133,41 @@ internal class ParatextProjectDataProviderShownByDefaultTests : PapiTestBase
         );
     }
 
+    [Test]
+    public void SetProjectSetting_NonAdmin_ReferencedList_GateRunsBeforeValidation()
+    {
+        // The admin gate is enforced ahead of the ProjectSettingsService.isValid round-trip, so an
+        // unauthorized write is rejected even when validation would fail. Stub isValid -> false and
+        // assert the UnauthorizedAccessException (not an InvalidDataException) surfaces.
+        Client.RemoveRequestHandler("object:ProjectSettingsService.isValid");
+        Client
+            .RegisterRequestHandlerAsync(
+                "object:ProjectSettingsService.isValid",
+                new Func<string, object?, object?, object?, bool>((k, n, c, a) => false),
+                null
+            )
+            .GetAwaiter()
+            .GetResult();
+
+        var nonAdmin = BuildNonAdminProvider(out var scrText);
+        try
+        {
+            Assert.Throws<UnauthorizedAccessException>(
+                () =>
+                    nonAdmin.SetProjectSetting(
+                        ProjectSettingsNames.PB_REFERENCED_PROJECTS_AND_RESOURCES,
+                        Json(new ProjectReference { Name = "P", Id = "aabbcc" })
+                    )
+            );
+        }
+        finally
+        {
+            scrText.Dispose();
+        }
+    }
+
     private ResourceReferenceList GetList(string pbSettingName) =>
         (ResourceReferenceList)_provider.GetProjectSetting(pbSettingName)!;
-
-    [Test]
-    public void AutoPromote_FlaggedModelText_NotInReferenced_IsAppendedToReferenced()
-    {
-        // Admin flags a model text shown-by-default that is not yet a referenced resource.
-        _provider.SetProjectSetting(
-            ProjectSettingsNames.PB_MODEL_TEXTS,
-            Json(
-                new DblResourceReference
-                {
-                    Name = "D",
-                    Id = "112233445566",
-                    IsResourceShownByDefault = true,
-                }
-            )
-        );
-
-        var referenced = GetList(ProjectSettingsNames.PB_REFERENCED_PROJECTS_AND_RESOURCES);
-        Assert.That(referenced.Items, Has.Count.EqualTo(1));
-        var promoted = referenced.Items[0] as DblResourceReference;
-        Assert.That(promoted!.Id, Is.EqualTo("112233445566"));
-        // The promoted copy preserves the original display name.
-        Assert.That(promoted.Name, Is.EqualTo("D"));
-        // The promoted copy exists only to drive download; it does not carry the flags.
-        Assert.That(promoted.IsResourceShownByDefault, Is.Null);
-        Assert.That(promoted.IsResourceShownForUser, Is.Null);
-    }
-
-    [Test]
-    public void AutoPromote_FlaggedResourceAlreadyInReferenced_IsNoOp()
-    {
-        _provider.SetProjectSetting(
-            ProjectSettingsNames.PB_REFERENCED_PROJECTS_AND_RESOURCES,
-            Json(new DblResourceReference { Name = "D", Id = "112233445566" })
-        );
-
-        // Flag the same resource in model texts; it is already referenced -> no duplicate.
-        _provider.SetProjectSetting(
-            ProjectSettingsNames.PB_MODEL_TEXTS,
-            Json(
-                new DblResourceReference
-                {
-                    Name = "D",
-                    Id = "112233445566",
-                    IsResourceShownByDefault = true,
-                }
-            )
-        );
-
-        var referenced = GetList(ProjectSettingsNames.PB_REFERENCED_PROJECTS_AND_RESOURCES);
-        Assert.That(referenced.Items, Has.Count.EqualTo(1));
-    }
-
-    [Test]
-    public void AutoPromote_UnflaggedResources_AreNotPromoted()
-    {
-        _provider.SetProjectSetting(
-            ProjectSettingsNames.PB_MODEL_TEXTS,
-            Json(new DblResourceReference { Name = "D", Id = "112233445566" })
-        );
-
-        var referenced = GetList(ProjectSettingsNames.PB_REFERENCED_PROJECTS_AND_RESOURCES);
-        Assert.That(referenced.Items, Is.Empty);
-    }
-
-    [Test]
-    public void AutoPromote_WritingReferencedListWithFlaggedEntry_DoesNotDuplicate()
-    {
-        // The flagged entry is in the very list being written -> already present -> no-op.
-        _provider.SetProjectSetting(
-            ProjectSettingsNames.PB_REFERENCED_PROJECTS_AND_RESOURCES,
-            Json(
-                new ProjectReference
-                {
-                    Name = "P",
-                    Id = "aabbcc",
-                    IsResourceShownByDefault = true,
-                }
-            )
-        );
-
-        var referenced = GetList(ProjectSettingsNames.PB_REFERENCED_PROJECTS_AND_RESOURCES);
-        Assert.That(referenced.Items, Has.Count.EqualTo(1));
-    }
-
-    [Test]
-    public void AutoPromote_IsIdempotentAcrossRepeatedWrites()
-    {
-        for (int i = 0; i < 3; i++)
-            _provider.SetProjectSetting(
-                ProjectSettingsNames.PB_MODEL_TEXTS,
-                Json(
-                    new DblResourceReference
-                    {
-                        Name = "D",
-                        Id = "112233445566",
-                        IsResourceShownByDefault = true,
-                    }
-                )
-            );
-
-        var referenced = GetList(ProjectSettingsNames.PB_REFERENCED_PROJECTS_AND_RESOURCES);
-        Assert.That(referenced.Items, Has.Count.EqualTo(1));
-    }
 
     [Test]
     public void Overlay_Get_WhenUnset_ReturnsEmptyMap()
@@ -254,6 +206,16 @@ internal class ParatextProjectDataProviderShownByDefaultTests : PapiTestBase
         Assert.Throws<InvalidDataException>(() => _provider.GetShownByDefaultOverlay());
     }
 
+    [TestCase("null")] // JSON null literal -> deserializes to null
+    [TestCase("")] // empty value -> treated as nothing to store
+    public void Overlay_Set_WithNullOrEmptyValue_Throws(string json)
+    {
+        // SetShownByDefaultOverlay must reject a value that does not yield a { id -> bool } map
+        // rather than storing garbage. (Wrong-shape JSON such as an array or number throws a
+        // JsonException earlier in deserialization; this covers the explicit null-map guard.)
+        Assert.Throws<InvalidDataException>(() => _provider.SetShownByDefaultOverlay(json));
+    }
+
     [Test]
     public void Overlay_Reset_ClearsMap()
     {
@@ -268,7 +230,7 @@ internal class ParatextProjectDataProviderShownByDefaultTests : PapiTestBase
     public void Initialize_FirstOpen_SeedsOverlayFromProjectFlags()
     {
         _provider.SetProjectSetting(
-            ProjectSettingsNames.PB_MODEL_TEXTS,
+            ProjectSettingsNames.PB_REFERENCED_PROJECTS_AND_RESOURCES,
             Json(
                 new ProjectReference
                 {
@@ -296,7 +258,7 @@ internal class ParatextProjectDataProviderShownByDefaultTests : PapiTestBase
     public void Initialize_IgnoresUnflaggedAndNonBibleTextEntries()
     {
         _provider.SetProjectSetting(
-            ProjectSettingsNames.PB_MODEL_TEXTS,
+            ProjectSettingsNames.PB_REFERENCED_PROJECTS_AND_RESOURCES,
             Json(
                 new ProjectReference { Name = "P", Id = "aabbcc" }, // unflagged -> skipped
                 new EnhancedResourceReference { Name = "Enh" } // non-Bible-text -> skipped
@@ -312,7 +274,7 @@ internal class ParatextProjectDataProviderShownByDefaultTests : PapiTestBase
     public void Initialize_SubsequentOpen_IsNoOp_AndDoesNotClobber()
     {
         _provider.SetProjectSetting(
-            ProjectSettingsNames.PB_MODEL_TEXTS,
+            ProjectSettingsNames.PB_REFERENCED_PROJECTS_AND_RESOURCES,
             Json(
                 new ProjectReference
                 {
@@ -338,7 +300,7 @@ internal class ParatextProjectDataProviderShownByDefaultTests : PapiTestBase
     public void Initialize_AfterReset_ReInitializes()
     {
         _provider.SetProjectSetting(
-            ProjectSettingsNames.PB_MODEL_TEXTS,
+            ProjectSettingsNames.PB_REFERENCED_PROJECTS_AND_RESOURCES,
             Json(
                 new ProjectReference
                 {
@@ -356,14 +318,10 @@ internal class ParatextProjectDataProviderShownByDefaultTests : PapiTestBase
     }
 
     [Test]
-    public void AutoPromote_UnparseableReferencedList_IsLeftUntouched()
+    public void Initialize_IgnoresModelTextFlags()
     {
-        // A future-major or corrupted stored value must never be clobbered by auto-promote
-        // (the downstream private S/R reader keys on the major version).
-        _scrText.Settings.ParametersDictionary[
-            ProjectSettingsNames.PT_REFERENCED_PROJECTS_AND_RESOURCES
-        ] = """2.0.0 {"dataVersion":"2.0.0","items":[{"type":"futureType","name":"F"}]}""";
-
+        // Model texts are decoupled from shown-by-default: a flag set on the model-texts list must
+        // NOT seed the overlay. Only PB_REFERENCED_PROJECTS_AND_RESOURCES feeds first-open init.
         _provider.SetProjectSetting(
             ProjectSettingsNames.PB_MODEL_TEXTS,
             Json(
@@ -376,17 +334,14 @@ internal class ParatextProjectDataProviderShownByDefaultTests : PapiTestBase
             )
         );
 
-        string stored = _scrText.Settings.ParametersDictionary[
-            ProjectSettingsNames.PT_REFERENCED_PROJECTS_AND_RESOURCES
-        ];
-        Assert.That(stored, Does.StartWith("2.0.0 "));
-        Assert.That(stored, Does.Contain("futureType"));
+        Assert.That(_provider.InitializeShownByDefaultOverlay(), Is.True);
+        Assert.That(_provider.GetShownByDefaultOverlay(), Is.Empty);
     }
 
     [Test]
     public void Initialize_ReadsFlagsFromReferencedProjectsAndResources()
     {
-        // Regression guard: the init loop must read BOTH project-scope lists, not just ModelTexts.
+        // Regression guard: the init loop reads the referenced-projects-and-resources list.
         _provider.SetProjectSetting(
             ProjectSettingsNames.PB_REFERENCED_PROJECTS_AND_RESOURCES,
             Json(

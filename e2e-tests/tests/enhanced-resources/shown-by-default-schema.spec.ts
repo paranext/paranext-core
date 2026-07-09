@@ -1,17 +1,19 @@
 /**
  * E2E checks for the PT-4050 (A2) two-flag schema + overlay init + admin gate.
  *
+ * MANUAL-ONLY: this spec does not run in CI. It lives in the `enhanced-resources` Playwright
+ * project (not the CI `smoke` run) and is `test.skip`-gated on `E2E_TEST_PROJECT_ID`, which is set
+ * nowhere in the repo. To run it locally, boot the app with CDP enabled, set `E2E_TEST_PROJECT_ID`
+ * to a known editable admin project, and run the `enhanced-resources` project (see the run command
+ * in `e2e-tests/playwright.config.ts`). Regression protection for this feature comes from the C#
+ * unit tests (ParatextProjectDataProviderShownByDefaultTests); this spec is a manual smoke check.
+ *
  * Scope — vanilla-core-observable only:
  *
- * - `isResourceShownByDefault` persists through the project setting round-trip.
+ * - `isResourceShownByDefault` persists through the referenced-resources setting round-trip.
  * - First-open init writes the per-user overlay to match the project's flags.
- * - The admin gate on the project-scope write is enforced server-side; it is covered by C# unit tests
- *   (ParatextProjectDataProviderShownByDefaultTests), not asserted here — this fixture runs as the
- *   default (admin) user.
- *
- * NOT covered here (requires the PRIVATE Send/Receive auto-download patch, which vanilla core does
- * not include — verified manually in the Studio build): the real DBL auto-download that the
- * auto-promoted Referenced entry triggers. See PT-4050 DoD "verified in the Studio build".
+ * - The admin gate on the referenced-resources write is enforced server-side; it is covered by the C#
+ *   unit tests, not asserted here — this fixture runs as the default (admin) user.
  */
 import { test, expect } from '../../fixtures/cdp.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
@@ -44,8 +46,8 @@ test.describe('Scripture Text Grid shown-by-default schema (A2)', () => {
               projectId: string,
             ) => Promise<{
               setSetting: (key: string, value: unknown) => Promise<boolean>;
-              // This test only reads `platformScripture.modelTexts`, so narrow the return here
-              // to that shape. This lets the assertions below avoid a type assertion on `unknown`.
+              // This test only reads `platformScripture.referencedProjectsAndResources`, so narrow
+              // the return here to that shape. This lets the assertions below avoid a type assertion.
               getSetting: (
                 key: string,
               ) => Promise<{ items: { id?: string; isResourceShownByDefault?: boolean }[] }>;
@@ -62,8 +64,8 @@ test.describe('Scripture Text Grid shown-by-default schema (A2)', () => {
         projectId,
       );
 
-      // Admin writes the project-scope model-texts list with a flagged Bible text.
-      await pdp.setSetting('platformScripture.modelTexts', {
+      // Admin writes the project-scope referenced-resources list with a flagged Bible text.
+      await pdp.setSetting('platformScripture.referencedProjectsAndResources', {
         dataVersion: '1.1.0',
         items: [
           {
@@ -75,7 +77,7 @@ test.describe('Scripture Text Grid shown-by-default schema (A2)', () => {
         ],
       });
 
-      const stored = await pdp.getSetting('platformScripture.modelTexts');
+      const stored = await pdp.getSetting('platformScripture.referencedProjectsAndResources');
 
       // First open initializes the overlay to match the project's flags.
       await pdp.resetShownByDefaultOverlay();

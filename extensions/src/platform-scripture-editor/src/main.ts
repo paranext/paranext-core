@@ -871,7 +871,7 @@ const modelTextPanelWebViewProvider: IWebViewProvider = {
 const scriptureTextGridWebViewProvider: IWebViewProvider = {
   async getWebView(
     savedWebView: SavedWebViewDefinition,
-    openWebViewOptions: OpenWebViewOptions & { projectId?: string },
+    openWebViewOptions: ResourceViewerOptions,
   ): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE)
       throw new Error(
@@ -879,7 +879,7 @@ const scriptureTextGridWebViewProvider: IWebViewProvider = {
       );
     // A2 seam: the grid is project-bound so it can fire first-open overlay init and (in A3+) select
     // its contents. The PT10 default-layout open passes no projectId (dormant until A3).
-    const projectId = openWebViewOptions?.projectId ?? savedWebView.projectId ?? undefined;
+    const projectId = openWebViewOptions.projectId ?? savedWebView.projectId;
     return {
       ...savedWebView,
       // A1 stubs the title as the single-cell form; the web view flips it to "Text Collection"
@@ -898,6 +898,7 @@ const scriptureTextGridWebViewProvider: IWebViewProvider = {
     };
   },
 };
+
 /**
  * Pending projectIds to apply during the next resource panel getWebView call, keyed by web view
  * type. A Map entry present (even with value `undefined`) means a reload is in progress and the
