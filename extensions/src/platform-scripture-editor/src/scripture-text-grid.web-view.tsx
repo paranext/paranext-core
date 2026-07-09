@@ -6,10 +6,8 @@ import { Settings2 } from 'lucide-react';
 import { DblResourceData, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import type { DblResourceReference } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { selectScriptureTextGridTitle } from './scripture-text-grid.utils';
 import {
   addToUserResources,
-  getScriptureTextGridContents,
   getViewOptionsTexts,
   removeFromUserResources,
   setUserDisplay,
@@ -21,22 +19,25 @@ import {
   type ScriptureTextGridViewMode,
 } from './scripture-text-grid-options/scripture-text-grid-options.component';
 
-// Tab-title localized keys. The label is count-driven: "Scripture text" when 0-1 cells are
-// displayed, "Text Collection" when 2 or more (see `selectScriptureTextGridTitle`).
-const TITLE_SINGLE_KEY = '%webView_scriptureTextGrid_title_single%';
-const TITLE_MULTIPLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
+// The tab is icon-only; this is the hover tooltip / accessible name for it.
+const TITLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
 const VIEW_OPTIONS_BUTTON_KEY = '%webView_scriptureTextGrid_viewOptions_openPanel%';
 const INSTALL_FAILED_KEY = '%webView_selectDblResource_installFailed%';
 
 const ALL_STRING_KEYS: LocalizeKey[] = [
-  TITLE_SINGLE_KEY,
-  TITLE_MULTIPLE_KEY,
+  TITLE_KEY,
   VIEW_OPTIONS_BUTTON_KEY,
   ...SCRIPTURE_TEXT_GRID_OPTIONS_STRING_KEYS,
 ];
 
 // The Scripture Text Grid shows Bible-text resources.
 const GRID_RESOURCE_TYPE = 'ScriptureResource';
+
+// Theme-adaptive tab icon: the platform paints the tab icon as a static CSS background-image, so a
+// `currentColor` SVG can't follow the theme. Swap between a dark-stroke (light theme) and a
+// light-stroke (dark theme) variant based on the web view's themed foreground brightness.
+const LIGHT_THEME_ICON_URL = 'papi-extension://platformScriptureEditor/assets/library.svg';
+const DARK_THEME_ICON_URL = 'papi-extension://platformScriptureEditor/assets/library-dark.svg';
 
 /**
  * Scripture Text Grid web view: the tab shell, per-user first-open overlay initialization, and the
@@ -77,10 +78,6 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     () => (sources ? getViewOptionsTexts(sources) : { top: [], bottom: [] }),
     [sources],
   );
-  const displayedCellCount = useMemo(
-    () => (sources ? getScriptureTextGridContents(sources).length : 0),
-    [sources],
-  );
 
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
 
@@ -104,19 +101,36 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     });
   }, [effectiveProjectId, textConnectionPdp]);
 
-  // Icon-only tab: no visible text label. The count-driven name ("Scripture text" for 0-1 cells,
-  // "Text Collection" for 2+) is kept as the hover tooltip so the tab stays identifiable and
-  // accessible.
+  // Icon-only tab: no visible text label, with "Text Collection" as the hover tooltip / accessible
+  // name so the tab stays identifiable.
   useEffect(() => {
     if (isLoadingLocalizedStrings) return;
-    updateWebViewDefinition({
-      title: '',
-      tooltip: selectScriptureTextGridTitle(displayedCellCount, {
-        single: localizedStrings[TITLE_SINGLE_KEY],
-        multiple: localizedStrings[TITLE_MULTIPLE_KEY],
-      }),
+    updateWebViewDefinition({ title: '', tooltip: localizedStrings[TITLE_KEY] });
+  }, [isLoadingLocalizedStrings, localizedStrings, updateWebViewDefinition]);
+
+  // Pick the tab icon variant from the web view's themed foreground brightness (light text ⇒ dark
+  // theme). getComputedStyle serializes colors to `rgb(...)`, so parsing is reliable; the observer
+  // re-checks when the theme toggles the root class/attribute.
+  const [isDarkTheme, setIsDarkTheme] = useState(false);
+  useEffect(() => {
+    const recompute = () => {
+      const channels = getComputedStyle(document.body).color.match(/\d+/g);
+      if (!channels || channels.length < 3) return;
+      const [r, g, b] = channels.map(Number);
+      setIsDarkTheme(0.299 * r + 0.587 * g + 0.114 * b > 140);
+    };
+    recompute();
+    const observer = new MutationObserver(recompute);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class', 'style', 'data-theme'],
     });
-  }, [displayedCellCount, isLoadingLocalizedStrings, localizedStrings, updateWebViewDefinition]);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    updateWebViewDefinition({ iconUrl: isDarkTheme ? DARK_THEME_ICON_URL : LIGHT_THEME_ICON_URL });
+  }, [isDarkTheme, updateWebViewDefinition]);
 
   const handleCheckedChange = useCallback(
     (resourceId: string, checked: boolean) => {
