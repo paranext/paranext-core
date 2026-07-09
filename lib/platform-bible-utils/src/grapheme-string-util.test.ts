@@ -3,6 +3,7 @@ import {
   GraphemeString,
   formatReplacementString,
   formatReplacementStringToArray,
+  testingGraphemeStringUtils,
 } from './grapheme-string-util';
 
 const SHORT = 'Look𐐷At👨‍👩‍👧‍👦👮🏽‍♀️';
@@ -175,6 +176,9 @@ describe('startsWith', () => {
   it('at start', () => expect(long.startsWith('Look𐐷')).toBe(true));
   it('wrong at position 5', () => expect(long.startsWith('Look𐐷', 5)).toBe(false));
   it('right at position 5', () => expect(long.startsWith('At🦄', 5)).toBe(true));
+  // Empty-needle policy: prefix/suffix boolean checks trivially match (native-consistent),
+  // whereas indexOf/lastIndexOf/includes report "not found" (-1/false) for an empty needle.
+  it('empty needle is true', () => expect(long.startsWith('')).toBe(true));
 });
 
 describe('endsWith', () => {
@@ -186,6 +190,7 @@ describe('endsWith', () => {
   it('with endPosition and grapheme', () => expect(long.endsWith('👮🏽‍♀️', 55)).toBe(true));
   it('needle longer than string', () =>
     expect(new GraphemeString(MEDIUM).endsWith(long)).toBe(false));
+  it('empty needle is true', () => expect(long.endsWith('')).toBe(true));
 });
 
 describe('normalize', () => {
@@ -245,6 +250,26 @@ describe('split', () => {
     expect(strs(medium.split(/\d/))).toEqual([MEDIUM]));
   it('returns GraphemeString instances', () =>
     expect(medium.split('𐐷')[0]).toBeInstanceOf(GraphemeString));
+  it('splitLimit larger than the number of matches does not throw', () => {
+    expect(strs(new GraphemeString('a,b').split(',', 10))).toEqual(['a', 'b']);
+    expect(strs(new GraphemeString('a1b2c3d').split(/\d/, 10))).toEqual(['a', 'b', 'c', 'd']);
+  });
+});
+
+describe('indexOfClosestClosingCurlyBrace', () => {
+  const { indexOfClosestClosingCurlyBrace } = testingGraphemeStringUtils;
+  it('finds an unescaped closing brace', () =>
+    expect(indexOfClosestClosingCurlyBrace(new GraphemeString('a{b}c'), 0, false)).toEqual(3));
+  it('skips an escaped brace when searching for an unescaped one', () =>
+    expect(indexOfClosestClosingCurlyBrace(new GraphemeString('a\\}b}c'), 0, false)).toEqual(4));
+  it('returns -1 when no unescaped brace exists', () =>
+    expect(indexOfClosestClosingCurlyBrace(new GraphemeString('abc'), 0, false)).toEqual(-1));
+  it('returns -1 for a negative index', () =>
+    expect(indexOfClosestClosingCurlyBrace(new GraphemeString('a{b}c'), -1, false)).toEqual(-1));
+  it('finds an escaped brace and returns the brace index (not the backslash)', () =>
+    expect(indexOfClosestClosingCurlyBrace(new GraphemeString('a\\}c'), 0, true)).toEqual(2));
+  it('returns the escaped brace when starting exactly on it', () =>
+    expect(indexOfClosestClosingCurlyBrace(new GraphemeString('a\\}c'), 2, true)).toEqual(2));
 });
 
 describe('formatReplacementStringToArray', () => {
