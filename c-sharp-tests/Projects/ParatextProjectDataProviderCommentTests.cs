@@ -2684,6 +2684,36 @@ namespace TestParanextDataProvider.Projects
             );
         }
 
+        [Test]
+        public void UnresolveConflict_AuditTextWithSpecialCharacters_DoesNotCorruptNote()
+        {
+            // Review finding: undoneCommentText is caller-supplied (localized UI copy today, but
+            // nothing stops it from carrying '<', '&', or quotes). ReopenConflictWithAuditComment
+            // escapes it via System.Security.SecurityElement.Escape before embedding it in the
+            // comment's XML. Prove that escaping actually protects the persisted note: a stray
+            // '<'/'&' must not corrupt the XML such that the thread becomes unreadable or the text
+            // is silently dropped. Robust to HTML-encoding of '<'/'&' - assert safe substrings and
+            // that nothing throws, rather than an exact literal (per review guidance).
+            CommentThread thread = SeedVerseTextConflict();
+            _provider.ResolveConflict(thread.Id, "reject");
+
+            Assert.That(
+                () => _provider.UnresolveConflict(thread.Id, "<script> A & B \"q\" 'x'"),
+                Throws.Nothing
+            );
+
+            // The thread must still be readable - a corrupted note XML would throw here instead.
+            PlatformCommentThreadWrapper reloaded = null!;
+            Assert.That(() => reloaded = ReloadThread(thread.Id), Throws.Nothing);
+
+            string lastCommentHtml = reloaded.Comments.Last().ContentsHtml;
+            // These substrings survive the round trip whether '<'/'&' end up HTML-encoded or decoded
+            // back to literals - only the markup-significant characters can legitimately move.
+            Assert.That(lastCommentHtml, Does.Contain("A"));
+            Assert.That(lastCommentHtml, Does.Contain("B"));
+            Assert.That(lastCommentHtml, Does.Contain("script"));
+        }
+
         // --- canUnresolveConflict capability query (PT-4141) -----------------------------------
 
         [Test]
@@ -2789,6 +2819,61 @@ namespace TestParanextDataProvider.Projects
             string after = _scrText.GetText(vref, true, true);
             Assert.That(after, Does.Contain("small village"));
             Assert.That(after, Does.Not.Contain("big village"));
+        }
+
+        [Test]
+        public void UnresolveConflict_ConcurrentUndos_ApplyExactlyOnce()
+        {
+            // Mirror of ResolveConflict_ConcurrentRejects_ApplyExactlyOnce, but resolve first, then
+            // race UnresolveConflict: the per-project lock makes the not-resolved guard atomic with
+            // the verse restore and re-open, so exactly one racer succeeds. The first undo reopens
+            // the thread, so every other racer must hit the not-resolved guard (not a partial/garbled
+            // write), same as a stale/duplicate undo would.
+            string expectedWinner = ExpectedWinnerVerseText();
+            CommentThread thread = SeedVerseTextConflict();
+            var vref = new VerseRef("MAT", "2", "1", _scrText.Settings.Versification);
+            _provider.ResolveConflict(thread.Id, "reject");
+
+            const int racers = 8;
+            var outcomes = new Exception?[racers];
+            var tasks = new Task[racers];
+            for (int i = 0; i < racers; i++)
+            {
+                int idx = i;
+                tasks[i] = Task.Run(() =>
+                {
+                    try
+                    {
+                        _provider.UnresolveConflict(thread.Id, "Resolution undone.");
+                        outcomes[idx] = null; // this racer won
+                    }
+                    catch (Exception ex)
+                    {
+                        outcomes[idx] = ex;
+                    }
+                });
+            }
+            Task.WaitAll(tasks);
+
+            // Exactly one racer undid the resolution; every other was rejected by the not-resolved
+            // guard once the first racer reopened the thread.
+            Assert.That(
+                outcomes.Count(e => e == null),
+                Is.EqualTo(1),
+                "exactly one concurrent undo must succeed"
+            );
+            var errors = outcomes.Where(e => e != null).Cast<Exception>().ToList();
+            Assert.That(errors, Is.All.InstanceOf<InvalidOperationException>());
+            Assert.That(
+                errors.All(e => e.Message.Contains("not resolved")),
+                Is.True,
+                "every losing racer must hit the not-resolved guard, not a partial/garbled write"
+            );
+            // The verse was restored to the winner exactly once - not doubled or garbled by
+            // overlapping writes/re-writes.
+            Assert.That(ReloadThread(thread.Id).Status, Is.Not.EqualTo(NoteStatus.Resolved));
+            string after = _scrText.GetText(vref, true, true);
+            Assert.That(after, Is.EqualTo(expectedWinner));
         }
 
         [Test]
@@ -2945,6 +3030,75 @@ namespace TestParanextDataProvider.Projects
             );
         }
 
+        [Test]
+        public void UnresolveConflict_FiresOnlyCommentUpdateOnAccept()
+        {
+            // Mirror of ResolveConflict_Accept_FiresCommentUpdateNotScriptureUpdate: undoing an accept
+            // re-opens the note but writes no verse text (accept never wrote it), so only comment
+            // subscribers must refresh.
+            CommentThread thread = SeedVerseTextConflict();
+            _provider.ResolveConflict(thread.Id, "accept");
+            DrainEvents();
+
+            _provider.UnresolveConflict(thread.Id, "Resolution undone.");
+
+            Assert.That(
+                SpinWait.SpinUntil(() => Client.SentEventCount >= 1, EventWaitTimeout),
+                Is.True,
+                "undoing an accept must fire a comment data-update event"
+            );
+            var ev = Client.NextSentEvent;
+            Assert.That(
+                IsCommentUpdate(ev),
+                Is.True,
+                "the fired event must carry the comment data types"
+            );
+            Assert.That(
+                IsScriptureUpdate(ev),
+                Is.False,
+                "the comment event must not carry Scripture data types"
+            );
+            // ... and, since undoing an accept writes no verse text, it must NOT fire a Scripture
+            // data-update.
+            Assert.That(
+                SpinWait.SpinUntil(() => Client.SentEventCount > 0, EventSettleWindow),
+                Is.False,
+                "undoing an accept must not fire a Scripture (or any further) data-update event"
+            );
+        }
+
+        [Test]
+        public void UnresolveConflict_FiresCommentAndScriptureUpdatesOnReject()
+        {
+            // Mirror of ResolveConflict_Reject_FiresBothCommentAndScriptureUpdates: undoing a reject
+            // rewrites the verse (restores the winner), so both comment and Scripture subscribers
+            // must refresh.
+            CommentThread thread = SeedVerseTextConflict();
+            _provider.ResolveConflict(thread.Id, "reject");
+            DrainEvents();
+
+            _provider.UnresolveConflict(thread.Id, "Resolution undone.");
+
+            Assert.That(
+                SpinWait.SpinUntil(() => Client.SentEventCount >= 2, EventWaitTimeout),
+                Is.True,
+                "undoing a reject must fire both a comment and a Scripture data-update event"
+            );
+            var events = new List<(string eventType, object? eventParameters)>();
+            while (Client.SentEventCount > 0)
+                events.Add(Client.NextSentEvent);
+            Assert.That(
+                events.Any(IsCommentUpdate),
+                Is.True,
+                "undo must fire a comment data-update"
+            );
+            Assert.That(
+                events.Any(IsScriptureUpdate),
+                Is.True,
+                "undo must fire a Scripture data-update"
+            );
+        }
+
         // --- admin-or-assignee permission gate ---------------------------------------------------
         // The tests above all run on the default admin project (_scrText), so they only cover the
         // admin branch of ResolveConflict's gate. The two tests below cover the non-admin branches:
@@ -3095,6 +3249,63 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
+        public void UnresolveConflict_NonAdminNonAssignee_Throws()
+        {
+            // Non-admin, non-observer team member with a RESOLVED, UNASSIGNED verseText conflict ->
+            // denied on undo, mirroring ResolveConflict_NonAdminNonAssignee_Throws. Unlike that test,
+            // VerifyUserCanUnresolveConflict checks "is the thread resolved" BEFORE the admin-or-
+            // assignee gate, so the thread must already be resolved before this user's denial (rather
+            // than the not-resolved guard) is what fires. This non-admin fixture can't resolve it
+            // itself through the provider (it would hit the very same gate), so resolve it directly
+            // via CommentEditHelper.SaveEdits(owner: null) - the exact call ResolveConflict makes
+            // internally once its gate passes - standing in for "an admin already resolved this".
+            using var nonAdmin = new NonAdminDummyScrText();
+            var details = CreateProjectDetails(nonAdmin);
+            ParatextProjects.FakeAddProject(details, nonAdmin);
+            var provider = new DummyParatextProjectDataProvider(
+                PdpName + "-nonadmin-undo",
+                Client,
+                details,
+                ParatextProjects
+            );
+
+            CommentThread thread = SeedVerseTextConflict(nonAdmin, null);
+            var mgr = CommentManager.Get(nonAdmin);
+            bool resolved = CommentEditHelper.SaveEdits(
+                null,
+                mgr,
+                thread,
+                new ThreadEditState
+                {
+                    Status = NoteStatus.Resolved,
+                    ConflictResolution = NoteConflictResolutions.Replaced,
+                },
+                true,
+                out _,
+                out _
+            );
+            Assert.That(
+                resolved,
+                Is.True,
+                "precondition: the direct SaveEdits resolve must succeed"
+            );
+            Assert.That(
+                mgr.FindThread(thread.Id).Status,
+                Is.EqualTo(NoteStatus.Resolved),
+                "precondition: thread is resolved"
+            );
+
+            Assert.That(
+                () => provider.UnresolveConflict(thread.Id, "Resolution undone."),
+                Throws
+                    .TypeOf<InvalidOperationException>()
+                    .With.Message.Contains("only a project administrator")
+            );
+            // The denied attempt left the thread resolved (no partial side effect).
+            Assert.That(mgr.FindThread(thread.Id).Status, Is.EqualTo(NoteStatus.Resolved));
+        }
+
+        [Test]
         public void AddCommentToThread_ReplyReopeningResolvedThread_RequiresResolvePermission()
         {
             // Adding a plain comment to a resolved thread implicitly re-opens it, so it must
@@ -3184,6 +3395,41 @@ namespace TestParanextDataProvider.Projects
             string after = nonAdmin.GetText(vref, true, true);
             Assert.That(after, Does.Contain("small village"));
             Assert.That(after, Does.Not.Contain("big village"));
+        }
+
+        [Test]
+        public void UnresolveConflict_NonAdminAssignee_Succeeds()
+        {
+            // Non-admin assignee WITH edit rights on the chapter can also undo their own reject,
+            // restoring the winner - VerifyUserMayResolveOrUndoConflict is the same admin-or-assignee
+            // + chapter-edit gate shared by resolve and undo.
+            using var nonAdmin = new NonAdminDummyScrText();
+            var details = CreateProjectDetails(nonAdmin);
+            ParatextProjects.FakeAddProject(details, nonAdmin);
+            var provider = new DummyParatextProjectDataProvider(
+                PdpName + "-assignee-undo",
+                Client,
+                details,
+                ParatextProjects
+            );
+
+            // Assign the conflict to the current (non-admin) user before adding it.
+            CommentThread thread = SeedVerseTextConflict(nonAdmin, nonAdmin.User.Name);
+            var vref = new VerseRef("MAT", "2", "1", nonAdmin.Settings.Versification);
+            provider.ResolveConflict(thread.Id, "reject");
+
+            Assert.That(
+                () => provider.UnresolveConflict(thread.Id, "Resolution undone."),
+                Throws.Nothing
+            );
+            Assert.That(
+                CommentManager.Get(nonAdmin).FindThread(thread.Id).Status,
+                Is.Not.EqualTo(NoteStatus.Resolved)
+            );
+            // The verse was rolled back to the winner under the non-admin user.
+            string after = nonAdmin.GetText(vref, true, true);
+            Assert.That(after, Does.Contain("big village"));
+            Assert.That(after, Does.Not.Contain("small village"));
         }
 
         [Test]
@@ -3646,7 +3892,6 @@ namespace TestParanextDataProvider.Projects
             Assert.That(after, Does.Contain("big village"));
         }
 
-
         [Test]
         public void ResolveConflict_Reject_StampsReplacedResolutionActionOnResolutionComment()
         {
@@ -3700,6 +3945,30 @@ namespace TestParanextDataProvider.Projects
                 "merge must record a 'merged' resolution action on the resolution comment"
             );
         }
+
+        [Test]
+        public void UnresolveConflict_AfterMerge_RestoresWinnerAndReopens()
+        {
+            // Independent-changes fixture makes merge available; merge writes both sides ("small
+            // village" from the rejected side + "great king" from the accepted side), so undo must
+            // roll the verse back to the accepted-side-only WINNER, not the merged text, and re-open
+            // the note so merge is offered again (still independent, so still mergeable).
+            CommentThread thread = SeedIndependentVerseTextConflict(_scrText);
+            var vref = new VerseRef("MAT", "2", "1", _scrText.Settings.Versification);
+
+            _provider.ResolveConflict(thread.Id, "merge");
+            _provider.UnresolveConflict(thread.Id, "Resolution undone.");
+
+            string after = _scrText.GetText(vref, true, true);
+            Assert.That(after, Does.Contain("great king")); // winner restored
+            Assert.That(after, Does.Not.Contain("small village")); // merged-in loser side gone
+            Assert.That(ReloadThread(thread.Id).Status, Is.Not.EqualTo(NoteStatus.Resolved));
+            Assert.That(
+                _provider.GetConflictResolutionOptions(thread.Id),
+                Is.EqualTo("acceptRejectOrMerge")
+            );
+        }
+
         #endregion
     }
 }
