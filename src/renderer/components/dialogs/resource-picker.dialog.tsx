@@ -15,6 +15,10 @@ import { sendCommand } from '@shared/services/command.service';
 
 const STRING_KEYS = [...RESOURCE_PICKER_DIALOG_STRING_KEYS];
 
+/**
+ * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
+ *   It is not yet a stable contract.
+ */
 function ResourcePickerDialogWrapper({
   resourceType,
   selectedResourceIds,
@@ -40,6 +44,10 @@ function ResourcePickerDialogWrapper({
   );
 }
 
+/**
+ * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
+ *   It is not yet a stable contract.
+ */
 export const RESOURCE_PICKER_DIALOG: DialogDefinition<typeof RESOURCE_PICKER_DIALOG_TYPE> =
   Object.freeze({
     ...DIALOG_BASE,
