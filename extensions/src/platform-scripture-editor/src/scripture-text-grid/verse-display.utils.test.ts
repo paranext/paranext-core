@@ -80,3 +80,35 @@ describe('sliceUsjToVerse — single prose verse', () => {
     expect(paragraphs(usj)[0].text).not.toContain('earth');
   });
 });
+
+// WEB PSA 1:1 — verse 1 spans one q1 + two q2 paragraphs (the spike's poetry case).
+const usxPoetry = `<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.1">
+  <book code="PSA" style="id">WEB</book>
+  <chapter number="1" style="c" sid="PSA 1" />
+  <para style="q1">
+    <verse number="1" style="v" sid="PSA 1:1" />Blessed is the man,</para>
+  <para style="q2" vid="PSA 1:1">nor stand on the path of sinners,</para>
+  <para style="q2" vid="PSA 1:1">nor sit in the seat of scoffers;<verse eid="PSA 1:1" /></para>
+  <para style="q1">
+    <verse number="2" style="v" sid="PSA 1:2" />but his delight is in the law.<verse eid="PSA 1:2" /></para>
+</usx>
+`;
+const usjPoetry = usxStringToUsj(usxPoetry);
+
+describe('sliceUsjToVerse — multi-paragraph poetry', () => {
+  it('preserves each poetry line as its own paragraph', () => {
+    const { usj, isEmpty } = sliceUsjToVerse(usjPoetry, 1);
+    expect(isEmpty).toBe(false);
+    expect(paragraphs(usj)).toEqual([
+      { marker: 'q1', text: '1Blessed is the man,' },
+      { marker: 'q2', text: 'nor stand on the path of sinners,' },
+      { marker: 'q2', text: 'nor sit in the seat of scoffers;' },
+    ]);
+  });
+
+  it('does not bleed verse 1 poetry into verse 2', () => {
+    const { usj } = sliceUsjToVerse(usjPoetry, 2);
+    expect(paragraphs(usj)).toEqual([{ marker: 'q1', text: '2but his delight is in the law.' }]);
+  });
+});
