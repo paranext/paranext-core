@@ -203,7 +203,7 @@ export function ShareLayoutDialogContent({
               {localizeString(strings, manageLabelKey[tab])}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="tw:w-[32rem] tw:p-0">
+          <PopoverContent className="tw:w-[32rem]! tw:p-0">
             <div className="tw:relative">
               <Button
                 variant="ghost"
@@ -283,7 +283,7 @@ export function ShareLayoutDialogContent({
                   />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="tw:w-[32rem] tw:p-0">
+              <PopoverContent className="tw:w-[32rem]! tw:p-0">
                 {/*
                   See the comment on the resource-card popovers below: wrap in its own Dialog.Root
                   so its internal DialogTitle gets a distinct id from the outer dialog's title.
